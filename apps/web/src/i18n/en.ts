@@ -4004,7 +4004,6 @@ export const en = {
   "project.missing.deadlineOrder": "The deadline must come after the start.",
   "project.missing.duration": "Enter a number of days, from 1 to 400.",
   "project.missing.grace": "Enter a number of minutes between 0 and 1440.",
-  "project.missing.groupMaxSize": "Enter a size between 1 and 50, or leave it empty.",
   "project.refusal.sourceNotFound": "This repository can no longer be handed out: it left the organization, or it is one of Quiz's own. Choose another one.",
   "project.refusal.branchesMissing": "The repository no longer has the branch {branches}. Choose the branches again under Advanced options.",
   "project.refusal.deadlinePast": "This deadline has already passed.",
@@ -4042,9 +4041,6 @@ export const en = {
   "project.protected": "Protected files",
   "project.protected.gradingWarning": "Unprotected, the grading workflow can be changed by the student, and the score with it.",
   "project.groups": "Groups",
-  "project.groupMaxSize": "Maximum group size",
-  "project.groupMaxSize.desc": "A hint, not a rule: a larger group only shows a warning.",
-  "project.groupMaxSize.unit": "members",
 
   // The project page (F-PROJ-13, M3-12, `project/ProjectPage.tsx` and its
   // sections). "Project", never "assignment".

@@ -65,6 +65,7 @@ import {
 
 import { users } from "./auth.js";
 import { githubOrganizations } from "./github.js";
+import { groupSets, studentGroups } from "./group.js";
 import { classrooms, enrollments } from "./org.js";
 
 /** A project of a classroom (F-PROJ-01, F-PROJ-03). */
@@ -109,8 +110,20 @@ export const projects = pgTable(
     durationMinutes: integer("duration_minutes"),
     /** One repository per group (ADR-048); chosen while a draft. */
     groupMode: boolean("group_mode").notNull().default(false),
-    /** Advisory: exceeding it warns, never blocks. */
-    groupMaxSize: integer("group_max_size"),
+    /**
+     * The classroom's group set a group project follows (ADR-070 §4), chosen
+     * while a draft; its copy is `project_groups`. A set's deletion is
+     * refused while a project that is not archived names it (`set_in_use`),
+     * hence `set null` for an archived one.
+     */
+    groupSetId: uuid("group_set_id").references(() => groupSets.id, { onDelete: "set null" }),
+    /**
+     * The copy of the set stopped following it (ADR-070 §4, M3-15a): written
+     * with the project's deadline applied, or its archive, and NEVER cleared
+     * — not by a reopen, nor by an unarchive (a stopped copy does not follow
+     * again by itself; *Resync* is M3-15b's).
+     */
+    groupsStoppedAt: timestamp("groups_stopped_at", { withTimezone: true }),
     branches: text("branches").array().notNull(),
     protectedFiles: text("protected_files").array().notNull(),
     /** The source's head when it is ahead of the distribution repository (F-PROJ-12). */
@@ -164,6 +177,8 @@ export const projects = pgTable(
       .where(sql`${t.distributionRepoId} IS NOT NULL`),
     // An organization renamed, deleted or uninstalled (F-PROJ-18).
     index("projects_org_idx").on(t.orgId),
+    // The projects that follow a set, read by each of its writes (ADR-070).
+    index("projects_group_set_idx").on(t.groupSetId),
     // The ticker's scans: deadlines due and not applied,
     index("projects_deadline_due_idx")
       .on(t.deadlineAt)
@@ -205,9 +220,11 @@ export const projectCheckpoints = pgTable(
 );
 
 /**
- * A group of a project (ADR-048): its name for the staff, its slug for the
- * repository (`<project-slug>-<group-slug>`), frozen once that repository
- * exists; `position` keeps the creation order across renames.
+ * A group of a project's copy of its group set (ADR-048, ADR-070 §4): its
+ * name for the staff, its slug for the repository
+ * (`<project-slug>-<group-slug>`), frozen once that repository exists;
+ * `position` keeps the set's order. `source_group_id` is the set's group it
+ * follows; null once that group is deleted (a stopped copy keeps its own).
  */
 export const projectGroups = pgTable(
   "project_groups",
@@ -219,11 +236,13 @@ export const projectGroups = pgTable(
     name: text("name").notNull(),
     slug: text("slug").notNull(),
     position: integer("position").notNull(),
+    sourceGroupId: uuid("source_group_id").references(() => studentGroups.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("project_groups_project_name_uq").on(t.projectId, t.name),
     uniqueIndex("project_groups_project_slug_uq").on(t.projectId, t.slug),
+    index("project_groups_source_idx").on(t.sourceGroupId),
   ],
 );
 

@@ -27,7 +27,7 @@ describe("projectFieldRefusal (F-PROJ-03)", () => {
   });
 
   it("freezes the grace, the grading, the start and the groups at publication (ADR-048)", () => {
-    for (const field of ["startAt", "graceMinutes", "gradingMode", "gradingScale", "groupMode", "groupMaxSize"] as const) {
+    for (const field of ["startAt", "graceMinutes", "gradingMode", "gradingScale", "groupMode", "groupSetId"] as const) {
       expect(projectFieldRefusal(project(), field, NOW), field).toBe("not_draft");
     }
   });

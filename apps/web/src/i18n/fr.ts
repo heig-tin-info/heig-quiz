@@ -3996,7 +3996,6 @@ export const fr: Record<keyof Dict, string> = {
   "project.missing.deadlineOrder": "L'échéance doit suivre le début.",
   "project.missing.duration": "Indiquez un nombre de jours, de 1 à 400.",
   "project.missing.grace": "Indiquez un nombre de minutes entre 0 et 1440.",
-  "project.missing.groupMaxSize": "Indiquez une taille entre 1 et 50, ou laissez vide.",
   "project.refusal.sourceNotFound": "Ce dépôt ne peut plus être distribué : il a quitté l'organisation, ou c'est un dépôt de Quiz. Choisissez-en un autre.",
   "project.refusal.branchesMissing": "Le dépôt n'a plus la branche {branches}. Choisissez de nouveau les branches sous Options avancées.",
   "project.refusal.deadlinePast": "Cette échéance est déjà passée.",
@@ -4034,9 +4033,6 @@ export const fr: Record<keyof Dict, string> = {
   "project.protected": "Fichiers protégés",
   "project.protected.gradingWarning": "Non protégé, le workflow d'évaluation peut être modifié par l'étudiant, et le score avec lui.",
   "project.groups": "Groupes",
-  "project.groupMaxSize": "Taille maximale d'un groupe",
-  "project.groupMaxSize.desc": "Une indication, pas une règle : un groupe plus grand affiche seulement un avertissement.",
-  "project.groupMaxSize.unit": "membres",
 
   // The project page (F-PROJ-13, M3-12).
   "project.page": "Projet",

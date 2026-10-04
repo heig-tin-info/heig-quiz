@@ -40,7 +40,7 @@ export async function projectSummary(db: Db, row: ProjectRow, now: Date): Promis
     branches: row.branches,
     protectedFiles: row.protectedFiles,
     groupMode: row.groupMode,
-    groupMaxSize: row.groupMaxSize,
+    groupSetId: row.groupSetId,
     source: { fullName: row.sourceFullName },
     distribution: row.distributionFullName === null ? null : { fullName: row.distributionFullName },
     deadlineAppliedAt: isoOrNull(row.deadlineAppliedAt),

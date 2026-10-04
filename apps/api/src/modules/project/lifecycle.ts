@@ -22,7 +22,7 @@ import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 
 import type { FastifyBaseLogger } from "fastify";
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { defaultProjectGradingScale, type ProjectCreate, type ProjectPatch } from "@quiz/contracts";
 import { PROJECT_PATCH_FIELDS, projectFieldRefusal, repoName, SLUG_MAX, slugify, type ProjectPatchField } from "@quiz/domain";
@@ -30,13 +30,14 @@ import { PROJECT_PATCH_FIELDS, projectFieldRefusal, repoName, SLUG_MAX, slugify,
 import { audit, type AuditActor } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { isUniqueViolation, type Db, type Tx } from "../../db/client.js";
-import { enrollments, projectGroupMembers, projectGroups, projects } from "../../db/schema.js";
+import { enrollments, groupSets, projectGroupMembers, projectGroups, projects } from "../../db/schema.js";
 import { githubStatus, type InstallationClient } from "../../github/app.js";
 import { createSquashedRepo } from "../../github/squash.js";
 import { purgeProjectReceipts, type InstalledOrg } from "../github/service.js";
 import { DomainError } from "../http.js";
-import { projectDeadlineMoved, rescheduleCheckpoints } from "./deadline.js";
+import { projectDeadlineMoved, rescheduleCheckpoints, ts } from "./deadline.js";
 import { ProjectError } from "./errors.js";
+import { replaceGroupCopy } from "./groupCopy.js";
 import { classroomClient, fetchSource, type Source } from "./sources.js";
 import type { ProjectRow } from "./views.js";
 
@@ -98,7 +99,7 @@ function draftDates(body: ProjectCreate, now: Date): { startAt: Date; deadlineAt
  * (classroom, slug) decides, so two creations racing never take the same
  * one. The row reserves the slug while the distribution is built.
  */
-async function reserveDraft(db: Db, values: Omit<typeof projects.$inferInsert, "id" | "slug">, name: string): Promise<ProjectRow> {
+async function reserveDraft(db: Db | Tx, values: Omit<typeof projects.$inferInsert, "id" | "slug">, name: string): Promise<ProjectRow> {
   const base = slugify(name);
   for (let n = 1; n <= MAX_SUFFIX; n++) {
     const slug = n === 1 ? base : `${base.slice(0, SLUG_MAX - 3).replace(/-+$/, "")}-${n}`;
@@ -170,41 +171,51 @@ async function buildDistribution(
  * `POST /app/api/classrooms/:id/projects` (F-PROJ-01, F-PROJ-02): a draft
  * with its distribution repository. Refused before anything is written:
  * `not_connected`, `app_not_installed`, `source_not_found`,
- * `deadline_past`, `duplicate_slug`; after: `distribution_failed`, the row
- * deleted and nothing on GitHub.
+ * `deadline_past`, `unknown_group_set`, `duplicate_slug`; after:
+ * `distribution_failed`, the row deleted and nothing on GitHub. A group
+ * set named is copied as soon as the row exists (ADR-070 §4), so the set's
+ * writes keep the copy in step while the distribution is built.
  */
 export async function createProject(db: Db, config: AppConfig, input: CreateInput): Promise<ProjectRow> {
   const { body, now } = input;
   const dates = draftDates(body, now);
   if (dates.deadlineAt.getTime() <= now.getTime()) throw new ProjectError("deadline_past", "The deadline has passed");
+  const groupSetId = body.groupSetId ?? null;
   const { org, client } = await classroomClient(db, config, input.classroomId);
   const { source, branches } = await readSource(db, client, org, body.sourceRepo, body.branches);
 
-  const draft = await reserveDraft(
-    db,
-    {
-      classroomId: input.classroomId,
-      orgId: org.id,
-      name: body.name,
-      ...dates,
-      graceMinutes: body.graceMinutes,
-      sourceRepoId: source.id,
-      sourceFullName: source.fullName,
-      sourceStrategy: body.sourceStrategy,
-      deadlineStrategy: body.deadlineStrategy,
-      gradingMode: body.gradingMode,
-      publishMode: body.publishMode,
-      durationMinutes: body.durationMinutes ?? null,
-      groupMode: body.groupMode,
-      groupMaxSize: body.groupMaxSize ?? null,
-      branches,
-      protectedFiles: body.protectedFiles,
-      gradingScale: body.gradingScale ?? defaultProjectGradingScale(),
-      createdBy: input.userId,
-      createdAt: now,
-    },
-    body.name,
-  );
+  const values: Omit<typeof projects.$inferInsert, "id" | "slug"> = {
+    classroomId: input.classroomId,
+    orgId: org.id,
+    name: body.name,
+    ...dates,
+    graceMinutes: body.graceMinutes,
+    sourceRepoId: source.id,
+    sourceFullName: source.fullName,
+    sourceStrategy: body.sourceStrategy,
+    deadlineStrategy: body.deadlineStrategy,
+    gradingMode: body.gradingMode,
+    publishMode: body.publishMode,
+    durationMinutes: body.durationMinutes ?? null,
+    groupMode: body.groupMode,
+    groupSetId,
+    branches,
+    protectedFiles: body.protectedFiles,
+    gradingScale: body.gradingScale ?? defaultProjectGradingScale(),
+    createdBy: input.userId,
+    createdAt: now,
+  };
+  // The set checked under its lock in the draft's own transaction: a set
+  // deleted meanwhile is a 422, and its writes step the copy from now on.
+  const draft =
+    groupSetId === null
+      ? await reserveDraft(db, values, body.name)
+      : await db.transaction(async (tx) => {
+          if ((await groupSetOf(tx, groupSetId))?.classroomId !== input.classroomId) throw unknownGroupSet();
+          const row = await reserveDraft(tx, values, body.name);
+          await replaceGroupCopy(tx, row.id, groupSetId, now);
+          return row;
+        });
 
   let built: { repoId: number; fullName: string };
   try {
@@ -237,6 +248,21 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
   return row;
 }
 
+// ---------------------------------------------------------------- the group set (ADR-070)
+
+const unknownGroupSet = () => new ProjectError("unknown_group_set", "No such group set in the project's classroom");
+
+/**
+ * The set a project is about to name, and its classroom, locked FOR SHARE
+ * BEFORE the project's row: the order of the set's own writes
+ * (`groupCopy.ts`), so that a write of the set waits for the copy it must
+ * step, or the copy for the write. Every caller names it to write it.
+ */
+async function groupSetOf(tx: Tx, setId: string): Promise<{ classroomId: string } | undefined> {
+  const [set] = await tx.select({ classroomId: groupSets.classroomId }).from(groupSets).where(eq(groupSets.id, setId)).for("share");
+  return set;
+}
+
 // ---------------------------------------------------------------- patch
 
 /** The patch's values as the row's, dates as dates. */
@@ -260,6 +286,11 @@ function asColumns(body: ProjectPatch): Partial<Record<ProjectPatchField, unknow
  * and the runs of the repositories following it along, and one already
  * applied reopens the project (`projectDeadlineMoved`, M3-05a): the route
  * then asks for the deadline work, which lifts the locks.
+ *
+ * The group set (ADR-070 §4, §7): only in group mode (400), one of the
+ * project's classroom (`422 unknown_group_set`); naming it makes the copy,
+ * naming another replaces it, and leaving group mode clears it and deletes
+ * the copy.
  */
 export async function patchProject(
   db: Db,
@@ -269,6 +300,7 @@ export async function patchProject(
   now: Date,
 ): Promise<ProjectRow> {
   return db.transaction(async (tx) => {
+    const askedSet = body.groupSetId ? await groupSetOf(tx, body.groupSetId) : undefined;
     const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
     if (!project) throw notFound();
     const changed: Partial<Record<ProjectPatchField, unknown>> = {};
@@ -278,7 +310,14 @@ export async function patchProject(
       if (refusal) throw new ProjectError(refusal, `${field} can no longer change`);
       changed[field] = value;
     }
+    // Leaving group mode leaves the set too, and its copy.
+    if (changed.groupMode === false && body.groupSetId === undefined && project.groupSetId !== null) changed.groupSetId = null;
     const next = { ...project, ...changed } as ProjectRow;
+    // `ProjectCreate` refuses the same in its schema; a patch needs the row.
+    if (next.groupSetId !== null && !next.groupMode) {
+      throw new DomainError("validation", 400, "A group set only applies to a group project");
+    }
+    if (changed.groupSetId && askedSet?.classroomId !== project.classroomId) throw unknownGroupSet();
     // A duration on a manual draft keeps a provisional deadline, so that the
     // lists stay meaningful; Publish counts it again from the publication.
     if (changed.durationMinutes !== undefined && next.durationMinutes !== null) {
@@ -304,6 +343,7 @@ export async function patchProject(
         .where(eq(projects.id, project.id))
         .returning()) as [ProjectRow];
     }
+    if (changed.groupSetId !== undefined) await replaceGroupCopy(tx, project.id, row.groupSetId, now);
     // The checkpoints, the repositories following it, and the reopen of a
     // deadline already applied (F-PROJ-09, M3-05a).
     if (movedTo !== undefined) row = await projectDeadlineMoved(tx, row, movedTo as Date, actor, now);
@@ -350,10 +390,12 @@ export async function unassignedStudents(db: Db | Tx, project: Pick<ProjectRow, 
  * person) or at its start by the ticker (M3-05, `SYSTEM_ACTOR`, audited
  * `project.auto_publish`). A manual publication starts now and counts its
  * duration from now; a scheduled one published early keeps its dates.
- * Refused: `not_draft`, `distribution_missing`, `unassigned_students` (a
- * group project with a claimed student in no group, or no group at all,
- * ADR-048; `students` the ones left out), `deadline_past`. Nothing is sent
- * to the students yet (M3-09).
+ * Refused: `not_draft`, `distribution_missing`, `no_group_set` (a group
+ * project that names no group set, ADR-070 §7), `unassigned_students` (a
+ * group project with a claimed student in no group of its copy, or no
+ * group at all, ADR-048; `students` the ones left out), `deadline_past`.
+ * The ticker's publication meets the same refusals and leaves the draft as
+ * it is. Nothing is sent to the students yet (M3-09).
  */
 export async function publishProject(db: Db, projectId: string, now: Date, actor: AuditActor): Promise<ProjectRow> {
   return db.transaction(async (tx) => {
@@ -364,6 +406,7 @@ export async function publishProject(db: Db, projectId: string, now: Date, actor
       throw new ProjectError("distribution_missing", "The project's distribution repository is not built");
     }
     if (project.groupMode) {
+      if (project.groupSetId === null) throw new ProjectError("no_group_set", "The group project names no group set");
       const left = await unassignedStudents(tx, project);
       const [group] = await tx
         .select({ id: projectGroups.id })
@@ -402,7 +445,10 @@ export async function publishProject(db: Db, projectId: string, now: Date, actor
 
 // ---------------------------------------------------------------- archive, delete
 
-/** Archives or brings back a project (F-PROJ-16): out of the lists, reversibly. Audited when it changes. */
+/**
+ * Archives or brings back a project (F-PROJ-16): out of the lists, reversibly. Audited when it changes.
+ * The archive stops its groups for good (ADR-070 §4): an unarchive never makes its copy follow again.
+ */
 export async function setProjectArchived(
   db: Db,
   project: ProjectRow,
@@ -414,7 +460,11 @@ export async function setProjectArchived(
   return db.transaction(async (tx) => {
     const [row] = await tx
       .update(projects)
-      .set({ archivedAt: archived ? now : null })
+      .set(
+        archived
+          ? { archivedAt: now, groupsStoppedAt: sql`coalesce(${projects.groupsStoppedAt}, ${ts(now)})` }
+          : { archivedAt: null },
+      )
       .where(eq(projects.id, project.id))
       .returning();
     await audit(tx, {

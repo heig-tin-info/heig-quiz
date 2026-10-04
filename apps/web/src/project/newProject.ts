@@ -38,7 +38,6 @@ export interface ProjectDraft {
   /** null: the source's suggestions (`suggestedProtected`), the default even while Advanced stays folded. */
   protectedFiles: string[] | null;
   groupMode: boolean;
-  groupMaxSize: string;
 }
 
 export const emptyDraft = (): ProjectDraft => ({
@@ -57,7 +56,6 @@ export const emptyDraft = (): ProjectDraft => ({
   scaleKind: "linear",
   protectedFiles: null,
   groupMode: false,
-  groupMaxSize: "",
 });
 
 /** The fields a message can stand under, and the DOM id of each control (focus, `fieldErrorProps`). */
@@ -68,7 +66,6 @@ export const FIELD_ID = {
   deadline: "project-deadline",
   duration: "project-duration",
   grace: "project-grace",
-  groupMaxSize: "project-group-max",
 } as const;
 export type ProjectField = keyof typeof FIELD_ID;
 
@@ -92,7 +89,6 @@ function count(value: string): number | undefined {
 /** The body before the schema, every empty or unreadable value left out (the schema then names it). */
 function rawBody(draft: ProjectDraft, detail: ProjectSourceDetail | undefined): Record<string, unknown> {
   const days = count(draft.durationDays);
-  const maxSize = count(draft.groupMaxSize);
   return {
     name: draft.name,
     sourceRepo: draft.sourceRepo,
@@ -108,7 +104,6 @@ function rawBody(draft: ProjectDraft, detail: ProjectSourceDetail | undefined): 
     gradingMode: draft.gradingMode,
     gradingScale: { kind: draft.scaleKind },
     groupMode: draft.groupMode,
-    ...(draft.groupMode && draft.groupMaxSize.trim() !== "" ? { groupMaxSize: maxSize ?? Number.NaN } : {}),
   };
 }
 
@@ -126,7 +121,6 @@ const FIELD_OF: Record<string, ProjectField> = {
   deadlineAt: "deadline",
   durationMinutes: "duration",
   graceMinutes: "grace",
-  groupMaxSize: "groupMaxSize",
 };
 
 /** What a field says when the schema refuses it, in the teacher's words. */

@@ -38,6 +38,7 @@ import {
   evaluationItems,
   evaluations,
   gradings,
+  groupSets,
   poolMembers,
   pools,
   questionVersions,
@@ -525,7 +526,10 @@ export async function accessibleProjectRepo(
   return (await findAccessibleProjectRepo(app.db, callerOf(req), params.id, params.rid)) ?? notFound(reply);
 }
 
-/** {@link accessibleClassroom} for the projects' classroom routes: the caller's own portal session only. */
+/**
+ * {@link accessibleClassroom} for the projects' and the group sets' (ADR-070)
+ * classroom routes: the caller's own portal session only.
+ */
 export async function projectsClassroom(
   app: FastifyInstance,
   req: FastifyRequest,
@@ -534,6 +538,37 @@ export async function projectsClassroom(
 ) {
   if (!ownPortalSession(req.auth)) return notFound(reply);
   return accessibleClassroom(app, req, reply, params);
+}
+
+// ---------------------------------------------------------------------------
+// Group sets (ADR-070, merge task M3-15a): the staff's routes, portal
+// sessions only, like the projects'. A set is reached through its
+// classroom's course, `staffAccess` in the WHERE; anyone else gets the 404
+// of a missing set. A group or a student of it is loaded by the service
+// within the set (a group of another set, a line of another classroom: 404).
+// ---------------------------------------------------------------------------
+
+/** The set, its classroom and course, if the caller is on the course's staff; null otherwise. */
+export async function findAccessibleGroupSet(db: Db, user: Caller, setId: string) {
+  const [row] = await db
+    .select({ set: groupSets, room: classrooms, course: courses })
+    .from(groupSets)
+    .innerJoin(classrooms, eq(groupSets.classroomId, classrooms.id))
+    .innerJoin(courses, eq(classrooms.courseId, courses.id))
+    .where(and(eq(groupSets.id, setId), accessWhere(user, staffAccess(user.id))))
+    .limit(1);
+  return row ?? null;
+}
+
+/** {@link findAccessibleGroupSet} for the caller's own portal session, answering the 404 (invariant 6). */
+export async function accessibleGroupSet(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  params: { id: string },
+) {
+  if (!ownPortalSession(req.auth)) return notFound(reply);
+  return (await findAccessibleGroupSet(app.db, callerOf(req), params.id)) ?? notFound(reply);
 }
 
 /**

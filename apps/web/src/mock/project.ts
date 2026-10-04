@@ -406,7 +406,7 @@ function seeded(): MockProject[] {
       branches: ["main"],
       protectedFiles: PROTECTED,
       groupMode: false,
-      groupMaxSize: null,
+      groupSetId: null,
       source: { fullName: `${ORG}/${name.replace(/^labo-(\d)-.*$/, "prg1-labo-0$1")}-${name.split("-").slice(2).join("-")}` },
       distribution: { fullName: `${ORG}/${name}-squashed` },
       deadlineAppliedAt: seed.state === "locked" ? iso(seed.deadline) : null,

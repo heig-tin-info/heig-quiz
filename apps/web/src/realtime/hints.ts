@@ -66,6 +66,10 @@ export const HINT_ROOTS: Record<HintKind, readonly string[] | "all"> = {
   // (`classroomProjectsKey`) and the project page with its runs and
   // checkpoints (`projectKey`, M3-12).
   projects: ["classroom", "project"],
+  // A classroom's group sets changed (ADR-070, M3-15a): no screen reads
+  // them before M3-16, which names its roots here. A copy that changed is
+  // hinted `projects` besides.
+  groups: [],
   mutation: "all",
 };
 

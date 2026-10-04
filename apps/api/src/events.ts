@@ -40,6 +40,7 @@ export type EventType =
   | "notifications"
   | "journal"
   | "projects"
+  | "groups"
   | "mutation";
 
 /**

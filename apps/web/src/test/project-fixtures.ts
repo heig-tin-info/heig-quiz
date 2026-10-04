@@ -103,7 +103,7 @@ export function makeProject(over: Partial<ProjectDetail> = {}): ProjectDetail {
     branches: ["main"],
     protectedFiles: ["criteria.yml", ".github/workflows/grading.yml"],
     groupMode: false,
-    groupMaxSize: null,
+    groupSetId: null,
     source: { fullName: "heig-tin-info/prg1-labo-02-pointeurs" },
     distribution: { fullName: "heig-tin-info/labo-2-pointeurs-squashed" },
     deadlineAppliedAt: null,
@@ -140,7 +140,7 @@ export const makeDraft = (over: Partial<ProjectDetail> = {}): ProjectDetail =>
       "gradingScale",
       "protectedFiles",
       "groupMode",
-      "groupMaxSize",
+      "groupSetId",
     ],
     ...over,
   });

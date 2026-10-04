@@ -109,6 +109,27 @@ export type AuditAction =
   | "grading.regrade"
   | "grading.run"
   | "grading.validate"
+  /**
+   * A classroom's group sets (ADR-070, merge task M3-15a), subject the set,
+   * by its staff. `group_set.create`: `payload.name`, `maxSize`; `update`:
+   * the fields sent; `duplicate`: subject the NEW set, `payload.from`,
+   * `name`; `delete`: `payload.name`. `group.create`: `payload.groupId`,
+   * `name`; `rename`: `groupId`, `from`, `to`; `delete`: `groupId`, `name`;
+   * `member_move`: `enrollmentId`, `from`, `to` (group ids, null: none);
+   * `random_form`: `size`, `remainder`, `groups` (the new ones), `placed`.
+   * Every write but the sets' creation and duplication also names
+   * `payload.copies`: the projects whose copy it changed (ADR-070 §4;
+   * always empty for a deletion, which no following copy allows).
+   */
+  | "group_set.create"
+  | "group_set.update"
+  | "group_set.duplicate"
+  | "group_set.delete"
+  | "group.create"
+  | "group.rename"
+  | "group.delete"
+  | "group.member_move"
+  | "group.random_form"
   /** An admin opened a session as a student (ADR-034): actor the admin, subject the student. */
   | "impersonation.started"
   /** That session ended: signed out, or expired (`payload.reason`). */

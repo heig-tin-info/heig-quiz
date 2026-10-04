@@ -45,7 +45,7 @@ import {
 import { ProjectAdvanced } from "./ProjectAdvanced";
 
 /** The fields under "Advanced options": a message there unfolds it. */
-const ADVANCED_FIELDS: readonly ProjectField[] = ["grace", "groupMaxSize"];
+const ADVANCED_FIELDS: readonly ProjectField[] = ["grace"];
 
 /**
  * The new project (F-PROJ-01, M3-11), one page at `/classrooms/:id/projects/
