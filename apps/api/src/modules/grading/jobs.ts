@@ -60,12 +60,11 @@ import {
   itemPoints,
   maskNames,
   round2,
-  type MaskedPerson,
 } from "@quiz/domain";
 
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { answers, attempts, enrollments, evaluations, gradings, users } from "../../db/schema.js";
+import { answers, attempts, evaluations, gradings } from "../../db/schema.js";
 import {
   GRADING_EVALUATION_QUEUE,
   GRADING_LLM_QUEUE,
@@ -78,6 +77,7 @@ import {
   gradeDefaults,
   joinedItem,
   joinedItems,
+  peopleOf,
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
@@ -854,25 +854,6 @@ function keepsLlmProposal(
     standing.answerId === answer?.id &&
     justificationOf(standing.details) !== null
   );
-}
-
-/**
- * Whom an answer of this evaluation may name: the classroom's roster, and
- * whoever sat it with an account (a poll has no roster). Their names are
- * masked before an answer leaves (N-DATA-05).
- */
-async function peopleOf(db: Db, evaluation: EvaluationRecord): Promise<MaskedPerson[]> {
-  const sat = await db
-    .select({ givenName: users.givenName, familyName: users.familyName, email: users.email })
-    .from(attempts)
-    .innerJoin(users, eq(attempts.userId, users.id))
-    .where(eq(attempts.evaluationId, evaluation.id));
-  if (evaluation.classroomId === null) return sat;
-  const roster = await db
-    .select({ givenName: enrollments.prenom, familyName: enrollments.nom, email: enrollments.email })
-    .from(enrollments)
-    .where(eq(enrollments.classroomId, evaluation.classroomId));
-  return [...sat, ...roster];
 }
 
 /** The reason a failed call leaves on its cell (ADR-063 §2). */

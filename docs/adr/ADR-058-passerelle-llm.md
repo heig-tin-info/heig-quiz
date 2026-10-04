@@ -65,7 +65,7 @@ The `llm` module owns an `LlmGateway` with one method:
 complete({ purpose, userId, system, prompt, schema, maxTokens }) → Promise<T>
 ```
 
-`purpose` is a closed union (`test`, `grade`, `generate`, `review`), `userId`
+`purpose` is a closed union (`test`, `grade`, `generate`, `review`, and `poll` since [ADR-072](ADR-072-ia-du-brainstorm.md)), `userId`
 the teacher the call is made for (null for a call no person made), `schema`
 a zod schema the reply must satisfy. The gateway asks the provider for a
 STRUCTURED output (JSON matching the schema), parses it, retries once on an

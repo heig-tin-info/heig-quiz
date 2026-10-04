@@ -80,6 +80,7 @@ export {
   evaluationDetail,
   listEvaluations,
   byId,
+  peopleOf,
 } from "./reads.js";
 export {
   createEvaluation,

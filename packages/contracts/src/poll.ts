@@ -15,6 +15,7 @@
 import { z } from "zod";
 
 import { pageOf } from "./common.js";
+import { LLM_ERROR_CODES } from "./llm.js";
 import { QuestionSearch, QuestionTypeId } from "./pool.js";
 
 /** The question types a poll may run: `brainstorm` runs nowhere else (ADR-071). */
@@ -71,6 +72,13 @@ export const PollSettings = z.object({
    * Inert on the other types.
    */
   moderation: z.boolean().default(false),
+  /**
+   * A brainstorm's AI assistance (ADR-072): a model judges each new idea —
+   * approves it or hides it, corrects and rephrases it, attaches it to an
+   * idea that says the same — and the teacher can undo any of it. Off by
+   * default; the phones say so while it is on.
+   */
+  ai: z.boolean().default(false),
 });
 export type PollSettings = z.infer<typeof PollSettings>;
 
@@ -336,9 +344,15 @@ export const PollRevealBody = z
     votes: z.boolean().optional(),
     /** A brainstorm's moderation (ADR-071); refused on another type (`422 poll_type`). */
     moderation: z.boolean().optional(),
+    /**
+     * A brainstorm's AI assistance (ADR-072); refused on another type
+     * (`422 poll_type`), and turned on only when a model can be called
+     * (`422 llm_unavailable`).
+     */
+    ai: z.boolean().optional(),
   })
-  .refine((body) => body.revealed !== undefined || body.votes !== undefined || body.moderation !== undefined, {
-    message: "name at least one of `revealed`, `votes` and `moderation`",
+  .refine((body) => Object.values(body).some((v) => v !== undefined), {
+    message: "name at least one of `revealed`, `votes`, `moderation` and `ai`",
   });
 export type PollRevealBody = z.infer<typeof PollRevealBody>;
 
@@ -386,12 +400,25 @@ export const PollIdeaAction = z.discriminatedUnion("action", [
 export type PollIdeaAction = z.infer<typeof PollIdeaAction>;
 
 /**
+ * Why the AI assistance stopped judging (ADR-072): a gateway failure, or
+ * `run_cap`, the most calls one poll may make.
+ */
+export const PollAiError = z.enum([...LLM_ERROR_CODES, "run_cap"]);
+export type PollAiError = z.infer<typeof PollAiError>;
+
+/**
  * `GET /app/api/evaluations/:id/poll/ideas`: the teacher's board of a
  * brainstorm — every idea, hidden and unmoderated ones included, grouped by
  * the teacher's merges. Staff only: it never reaches a phone or the wall.
  */
 export const PollIdeaBoard = z.object({
   moderation: z.boolean(),
+  /** The AI assistance (ADR-072): whether a model can be called, whether it is on, its last failure. */
+  ai: z.object({
+    available: z.boolean(),
+    on: z.boolean(),
+    error: PollAiError.nullable(),
+  }),
   answered: z.number().int(),
   pending: z.number().int(),
   clusters: z.array(
@@ -406,7 +433,12 @@ export const PollIdeaBoard = z.object({
       variants: z.array(
         z.object({
           key: z.string(),
+          /** As the participant typed it. */
           text: z.string(),
+          /** The model's corrected form, which the room reads instead; null without one. */
+          correction: z.string().nullable(),
+          /** The decision on it is the model's (ADR-072). */
+          ai: z.boolean(),
           count: z.number().int(),
           status: z.enum(["pending", "approved", "hidden"]),
         }),

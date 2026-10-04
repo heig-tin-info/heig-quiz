@@ -5,7 +5,7 @@
  */
 
 /** Why a call is made: the `purpose` column of `llm_calls` (ADR-058 §1). */
-export const LLM_PURPOSES = ["test", "grade", "generate", "review"] as const;
+export const LLM_PURPOSES = ["test", "grade", "generate", "review", "poll"] as const;
 export type LlmPurpose = (typeof LLM_PURPOSES)[number];
 
 export interface LlmModel {
@@ -67,9 +67,16 @@ export function llmWorstCaseUsd(modelId: string, promptChars: number, maxTokens:
   return llmCostUsd(modelId, Math.ceil(promptChars / 3), maxTokens);
 }
 
-/** The model a purpose uses: its own, else the default of the settings, else the platform's. */
+/**
+ * The model a purpose uses when the settings name none of its own, before
+ * their default: a live poll waits on its answer in front of a room, so it
+ * takes the fast model (ADR-072).
+ */
+const PURPOSE_MODELS: Partial<Record<LlmPurpose, LlmModelId>> = { poll: "claude-haiku-4-5" };
+
+/** The model a purpose uses: its own, else its fixed one, else the default of the settings, else the platform's. */
 export function modelFor(models: Partial<Record<LlmPurpose | "default", string>>, purpose: LlmPurpose): string {
-  return models[purpose] ?? models.default ?? DEFAULT_LLM_MODEL;
+  return models[purpose] ?? PURPOSE_MODELS[purpose] ?? models.default ?? DEFAULT_LLM_MODEL;
 }
 
 /** Whether the connection test's answer names Paris, whatever its case, accents or punctuation. */

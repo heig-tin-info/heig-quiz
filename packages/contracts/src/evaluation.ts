@@ -232,6 +232,8 @@ export const EvaluationSettings = z.object({
       votes: z.boolean().default(false),
       /** ADR-071: absent means the audience's default, read through `pollSettingsOf`. */
       moderation: z.boolean().optional(),
+      /** ADR-072: a model judges a brainstorm's ideas. Absent means off. */
+      ai: z.boolean().optional(),
     })
     .optional(),
 });

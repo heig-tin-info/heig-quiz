@@ -463,6 +463,13 @@
       "when": 1791152102141,
       "tag": "0065_poll_idea_marks",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1791152391406,
+      "tag": "0066_poll_ai",
+      "breakpoints": true
     }
   ]
 }

@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, EyeOff, Lightbulb, Merge, Pencil, Split } from "lucide-react";
+import { Check, EyeOff, Lightbulb, Merge, Pencil, Sparkles, Split } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
   POLL_IDEA_LABEL_MAX,
   type PollIdeaAction,
   type PollIdeaBoard,
+  type PollRevealBody,
   type PollTeacherView,
   type WatchSubject,
 } from "@quiz/contracts";
@@ -17,6 +18,7 @@ import { pollIdeasKey, pollKey } from "../queryKeys";
 import { useEventStream } from "../realtime/useEventStream";
 import {
   Actions,
+  Alert,
   Badge,
   Button,
   Card,
@@ -83,11 +85,12 @@ export function PollModeration({ id }: { id: string }) {
     onSuccess: (data) => qc.setQueryData(boardKey, data),
     onError: toastError("poll.ideas.failed"),
   });
-  const moderation = useMutation({
-    mutationFn: (on: boolean) =>
+  // The board's own two switches: moderation, and the AI assistance (ADR-072).
+  const display = useMutation({
+    mutationFn: (body: Pick<PollRevealBody, "moderation" | "ai">) =>
       api<PollTeacherView>(`/app/api/evaluations/${id}/poll/reveal`, {
         method: "POST",
-        body: JSON.stringify({ moderation: on }),
+        body: JSON.stringify(body),
       }),
     onSuccess: (data) => {
       qc.setQueryData(pollKey(id), data);
@@ -155,15 +158,21 @@ export function PollModeration({ id }: { id: string }) {
         })} · ${t(data.pending === 1 ? "poll.ideas.pending.one" : "poll.ideas.pending", { n: data.pending })}`}
         actions={
           <>
-            <span className="inline-flex items-center gap-2 text-[13px] font-medium text-fg-muted">
-              <Switch
-                label={t("poll.moderation")}
-                checked={data.moderation}
-                disabled={moderation.isPending}
-                onChange={(on) => moderation.mutate(on)}
+            {/* Offered only when a model can be called — or to turn off one that no longer can. */}
+            {data.ai.available || data.ai.on ? (
+              <BoardSwitch
+                label={t("poll.ai")}
+                checked={data.ai.on}
+                disabled={display.isPending}
+                onChange={(ai) => display.mutate({ ai })}
               />
-              <span aria-hidden>{t("poll.moderation")}</span>
-            </span>
+            ) : null}
+            <BoardSwitch
+              label={t("poll.moderation")}
+              checked={data.moderation}
+              disabled={display.isPending}
+              onChange={(moderation) => display.mutate({ moderation })}
+            />
             <Button
               disabled={pendingKeys.length === 0}
               loading={act.isPending && act.variables?.action === "approve"}
@@ -174,6 +183,13 @@ export function PollModeration({ id }: { id: string }) {
           </>
         }
       />
+
+      {data.ai.on && data.ai.error !== null ? (
+        // Fail closed (ADR-072): nothing the model did not judge reaches the wall by itself.
+        <Alert tone="warning" title={t("poll.ai.failed")}>
+          {t(data.ai.error === "run_cap" ? "poll.ai.failed.cap" : "poll.ai.failed.body")}
+        </Alert>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-3">
         <Segmented
@@ -267,6 +283,15 @@ export function PollModeration({ id }: { id: string }) {
                         )}
                       >
                         <span className="break-all">{v.text}</span>
+                        {/* What the room reads in its place: the model's corrected form. */}
+                        {v.correction !== null && v.correction !== v.text ? (
+                          <span className="break-all text-fg-muted">→ {v.correction}</span>
+                        ) : null}
+                        {v.ai ? (
+                          <span className="text-fg-faint" title={t("poll.ai.decided")}>
+                            <Sparkles className="size-3.5" aria-label={t("poll.ai.decided")} />
+                          </span>
+                        ) : null}
                         {v.count > 1 ? (
                           <span className="font-mono text-[12px] tabular-nums text-fg-muted">×{v.count}</span>
                         ) : null}
@@ -340,5 +365,15 @@ export function PollModeration({ id }: { id: string }) {
         </Modal>
       ) : null}
     </div>
+  );
+}
+
+/** A switch of the board, its words beside it: a state, not an action. */
+function BoardSwitch(props: { label: string; checked: boolean; disabled: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <span className="inline-flex items-center gap-2 text-[13px] font-medium text-fg-muted">
+      <Switch {...props} />
+      <span aria-hidden>{props.label}</span>
+    </span>
   );
 }

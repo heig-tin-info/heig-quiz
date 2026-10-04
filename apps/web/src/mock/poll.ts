@@ -112,6 +112,8 @@ interface MockPoll {
   votes?: boolean;
   /** A brainstorm's moderation (ADR-071); absent means the audience's default. */
   moderation?: boolean;
+  /** A brainstorm's AI assistance (ADR-072); absent means off. */
+  ai?: boolean;
   type: PollQuestionType;
   student: unknown;
   solution: unknown;
@@ -346,7 +348,7 @@ function pollPublicView(poll: MockPoll): PollPublicView {
   return {
     code: poll.code,
     state: poll.state,
-    settings: { anonymous: poll.anonymous, revealed, votes: votesOn(poll), moderation: moderationOn(poll) },
+    settings: { anonymous: poll.anonymous, revealed, votes: votesOn(poll), moderation: moderationOn(poll), ai: poll.ai === true },
     question: { type: poll.type, student: poll.student },
     // Never before the teacher says so: the key is the one thing on this
     // payload a participant must not be able to read early (invariant 4).
@@ -620,6 +622,8 @@ if (!flags.empty && polls.length >= 5) {
       status: "approved",
       mergedInto,
       label,
+      correction: null,
+      source: "teacher",
     });
     teacherPolls.push({
       id: POLL_BRAINSTORM,
@@ -648,7 +652,7 @@ if (!flags.empty && polls.length >= 5) {
           approved("il meurt"),
           approved("adn"),
           approved("il bouge"),
-          { key: "c est nul ce cours", status: "hidden", mergedInto: null, label: null },
+          { key: "c est nul ce cours", status: "hidden", mergedInto: null, label: null, correction: null, source: "teacher" },
         ],
       },
     });
@@ -687,6 +691,8 @@ function boardOf(tp: MockTeacherPoll) {
   const moderation = moderationOn(poll);
   return {
     moderation,
+    // The mock has no model: the assistance is never offered, as without a key.
+    ai: { available: false, on: poll.ai === true, error: null },
     ...brainstormBoard({ payloads: tp.ideas?.payloads ?? [], marks: tp.ideas?.marks ?? [], moderation }),
   };
 }
@@ -737,7 +743,7 @@ function pollTeacherView(tp: MockTeacherPoll) {
       createdAt: tp.createdAt,
     },
     joinUrl: `${window.location.origin}/p/${poll.code}`,
-    settings: { anonymous: poll.anonymous, revealed, votes: votesOn(poll), moderation: moderationOn(poll) },
+    settings: { anonymous: poll.anonymous, revealed, votes: votesOn(poll), moderation: moderationOn(poll), ai: poll.ai === true },
     question: {
       id: tp.questionId ?? tp.id,
       type: poll.type,
@@ -1269,6 +1275,8 @@ on("POST", "/app/api/evaluations/:id/poll/reveal", (m, body) => {
   if (typeof body.revealed === "boolean") poll.revealed = body.revealed;
   if (typeof body.votes === "boolean") poll.votes = body.votes;
   if (typeof body.moderation === "boolean") poll.moderation = body.moderation;
+  if (body.ai === true) throw new MockPayload(422, { error: "llm_unavailable", message: "no language model is configured" });
+  if (body.ai === false) poll.ai = false;
   return pollTeacherView(tp);
 });
 

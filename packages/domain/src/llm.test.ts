@@ -34,6 +34,9 @@ describe("modelFor", () => {
     expect(modelFor({ test: "claude-haiku-4-5", default: "claude-opus-5-5" }, "test")).toBe("claude-haiku-4-5");
     expect(modelFor({ default: "claude-opus-5-5" }, "generate")).toBe("claude-opus-5-5");
     expect(modelFor({}, "review")).toBe(DEFAULT_LLM_MODEL);
+    // A live poll takes the fast model unless the settings name one for it.
+    expect(modelFor({ default: "claude-opus-5-5" }, "poll")).toBe("claude-haiku-4-5");
+    expect(modelFor({ poll: "claude-sonnet-5-5" }, "poll")).toBe("claude-sonnet-5-5");
   });
 });
 

@@ -33,7 +33,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Send, SearchX, UserX } from "lucide-react";
+import { Check, Send, SearchX, Sparkles, UserX } from "lucide-react";
 
 import type { Me, PollPublicView } from "@quiz/contracts";
 
@@ -288,6 +288,14 @@ export function PollJoin({
             />
           )}
         </Card>
+
+        {view.settings.ai ? (
+          // ADR-072: the room is told, before typing, that a model reads its ideas.
+          <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-fg-muted">
+            <Sparkles className="size-3.5" aria-hidden />
+            {t("join.aiNotice")}
+          </p>
+        ) : null}
 
         {!ended && revealBlock ? (
           <Card className="mt-4 px-4 py-5 sm:px-6">{revealBlock}</Card>
