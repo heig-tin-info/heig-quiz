@@ -1,8 +1,16 @@
+---
+search:
+  exclude: true
+---
+
 [Audit overview](README.md) · [Ordered work catalogue](plan.md)
 
 # API quality audit — 59c8925a
 
-Read-only audit in `/tmp/heig-quiz-code-quality-audit`. No repository edits, dependency installation, tests or server runs. This is a refactoring plan, not a finding that current behavior is incorrect. AGENTS/CLAUDE and architecture conventions informed the review. The desired architecture remains a modular Fastify monolith, typed contracts, pure rules in domain, owning-module writes and real DB integration tests.
+> Snapshot of baseline `59c8925a` (2026-10-03). Paths and line numbers drift as
+> `main` moves: re-measure before acting on a row.
+
+Read-only audit of baseline `59c8925a`. No repository edits, dependency installation, tests or server runs. This is a refactoring plan, not a finding that current behavior is incorrect. AGENTS/CLAUDE and architecture conventions informed the review. The desired architecture remains a modular Fastify monolith, typed contracts, pure rules in domain, owning-module writes and real DB integration tests.
 
 ## Coverage and limitations
 
@@ -20,10 +28,10 @@ Concrete edges:
 - `modules/notifications/service.ts:54` imports `holdsCourseSeat` from org's facade; `modules/org/service.ts:32` re-exports roster; `modules/org/roster.ts:21` imports notifications. A recipient-policy read loads a mutation-capable facade that imports its own consumer.
 - `modules/guards.ts:45` imports `trustedClients` from evaluation's facade. That facade exports writes/templates/items, which pull guards and pool dependencies into authorization initialization.
 - `modules/grading/service.ts:70` imports results' `watchReleasedGrades`; `modules/results/updated.ts:25` imports grading's `pointsAcrossRegrade`, and `:27` imports its own results facade's `shownGrades`. This coupling is especially expensive because a grading write must retain before/after released-grade observation and commit ordering.
-- `modules/llm/service.ts:28` exports `LlmGateway`, while `modules/llm/gateway.ts:24` imports reservation/settings/settlement from service. This is the simplest cycle to remove.
+- `modules/llm/service.ts:27` re-exports `LlmGateway`, while `modules/llm/gateway.ts:21` imports reservation/settings/settlement from service. This is the simplest cycle to remove.
 - `modules/system/health.ts:66` imports ticker's `lastTickOf`; ticker also composes system tasks through the service/catalog/jobs graph.
 
-Bounded work: first move LLM settings/ledger implementation into a private leaf, retain `service.ts` as facade, and have gateway import that leaf. Then separate tick-observation state from task composition. Separately place the org seat predicate and evaluation trusted-client predicate in narrow read/policy leaves, re-export from their existing facades, and ensure internal imports never point back up to a facade. For grading/results, first diagram actual execution edges and extract shared read calculations, not an event bus; retain the one grading write and explicit postcommit observation. The cross-module service-only convention means any new public read entry should be documented as such; don't simply replace all external imports with arbitrary private paths.
+Bounded work: first move LLM settings/ledger implementation into a private leaf, retain `service.ts` as facade, and have gateway import that leaf. Then separate tick-observation state from task composition. Separately cut the two predicate edges without a new cross-module entry point, since `CLAUDE.md` makes `service.ts` the only file another module imports: notifications reads the course seat itself by a join on org's table (a read by join is allowed; it never writes it), and `guards.ts` computes trusted clients with `trustedClientsOf` from `@quiz/domain` and the contract's `EvaluationSettings` (`evaluation/reads.ts:211` is only a wrapper around them). For grading/results, first diagram actual execution edges and extract shared read calculations, not an event bus; retain the one grading write and explicit postcommit observation. Do not replace external imports with private paths into another module: if a cut needs one, it needs an explicit exception recorded first.
 
 Acceptance: targeted SCCs shrink/disappear, no change in externally exposed exports, unchanged grading notification timing and guard semantics. No wholesale dependency injection framework. This is mostly movement: expect roughly -20 to +80 runtime lines, not a large deletion. Test LLM gateway/budget suites, ticker/system jobs, org/guards/Super Powers, grading/ready/results updated/regrade integration suites depending on subpackage. Stage independently in that order.
 

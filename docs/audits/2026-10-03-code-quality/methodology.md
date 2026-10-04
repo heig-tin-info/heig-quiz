@@ -1,4 +1,12 @@
+---
+search:
+  exclude: true
+---
+
 # Measurement method and reproduction
+
+> Snapshot of baseline `59c8925a` (2026-10-03). Paths and line numbers drift as
+> `main` moves: re-measure before acting on a row.
 
 [Overview](README.md). The scan is local and read-only. It does not install a linting
 framework, execute application code, change source files or apply refactorings.
@@ -44,7 +52,7 @@ without the same maintenance risk as stateful policy. Function span includes com
 and nested bodies while CC does not; never multiply span by CC to estimate removable
 code. Nesting depth is a secondary syntactic indicator, not cognitive complexity.
 
-`complexity-over-10.csv` retains all 343 function nodes above 10, across all three
+The analyzer's `functions.json`, filtered on `cc > 10`, holds all 343 function nodes above 10, across all three
 classifications. `hotspots.md` enumerates all 52 runtime nodes above 20. Other
 functions remain accounted for in per-file counts/maxima; reproduction emits their
 full JSON inventory. The mean/percentiles do not substitute for domain review.

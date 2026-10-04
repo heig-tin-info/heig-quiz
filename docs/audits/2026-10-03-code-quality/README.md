@@ -1,4 +1,12 @@
+---
+search:
+  exclude: true
+---
+
 # Source quality audit and refactoring plan
+
+> Snapshot of baseline `59c8925a` (2026-10-03). Paths and line numbers drift as
+> `main` moves: re-measure before acting on a row.
 
 **Baseline:** `59c8925a7fee4bee9bcb2664bf2cdde781468cd0`, 2026-10-03.
 **Scope:** analysis only; no application, test, dependency, configuration or ADR changes.
@@ -75,12 +83,11 @@ net source delta; never count file moves as deletion.
 - [Packages, runner, extension and operational findings](packages.md).
 - [All 52 runtime functions above CC 20](hotspots.md), including explicit retain/triage decisions.
 - [Method and executable measurement appendix](methodology.md).
-- Machine-readable [file inventory](metrics/files.csv),
-  [functions above CC 10](metrics/complexity-over-10.csv),
-  [exact clone pairs](metrics/exact-clones.csv),
-  [value-import SCC membership](metrics/value-import-cycles.csv),
-  [area dependencies](metrics/area-dependencies.csv) and
-  [other tracked code/configuration](metrics/other-files.csv).
+- Machine-readable [exact clone pairs](metrics/exact-clones.csv) and
+  [value-import SCC membership](metrics/value-import-cycles.csv). The file
+  inventory, the functions above CC 10, the area dependencies and the other
+  tracked files are not committed: they go stale with the next merge, and the
+  [analyzer](methodology.md#reproduce) regenerates them for any base.
 
 Source paths and line numbers refer to the baseline above. The work catalogue is
 exhaustive for findings established by this audit, not a claim that static analysis

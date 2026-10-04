@@ -1,4 +1,12 @@
+---
+search:
+  exclude: true
+---
+
 # High-complexity disposition
+
+> Snapshot of baseline `59c8925a` (2026-10-03). Paths and line numbers drift as
+> `main` moves: re-measure before acting on a row.
 
 [Overview](README.md) · [Work catalogue](plan.md) · [Metric definition](methodology.md).
 All **52 runtime function nodes with CC > 20** are listed below, including nested

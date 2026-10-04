@@ -1,4 +1,12 @@
+---
+search:
+  exclude: true
+---
+
 # Refactoring work catalogue
+
+> Snapshot of baseline `59c8925a` (2026-10-03). Paths and line numbers drift as
+> `main` moves: re-measure before acting on a row.
 
 [Audit overview](README.md). Baseline `59c8925a`. **Nothing below is implemented by this PR.**
 The catalogue covers every established finding and measured high-complexity group;
@@ -14,9 +22,9 @@ Detailed paths, behavior constraints and suites are in the linked domain reports
 
 | ID | Priority / size | Concrete change / evidence | Depends on | Acceptance and outcome |
 |---|---|---|---|---|
-| W1 | P1 / S | Guard menu scroll target before `Node.contains`; [web W1](web.md#w1-p1-correctness-menu-scroll-event-assumes-a-node). | None | Window and panel-scroll regression cases; preserve opening grace. Correctness, 0–2 added lines. |
-| W3 | P1 / S | Make student-view session storage tolerate denied access; [web W3](web.md#w3-p2-correctnessresilience-student-view-storage-differs-from-other-remembered-ui-choices). | None | Preserve tab-local state, enter/leave and ordinary reload behavior; denied get/set/remove do not crash. +10–25 lines. |
-| W4 | P1 / S | Make screenshot failures affect exit status and guarantee cleanup; [web W4](web.md#w4-p2-test-tool-correctness-screenshot-errors-do-not-fail-process-cleanup-is-asymmetric). | None | Failing scene/screenshot produces nonzero status; browser/context close in all paths. +5–20 tooling lines. |
+| W1 | P2 / S | Guard menu scroll target before `Node.contains`; [web W1](web.md#w1-p2-correctness-menu-scroll-event-assumes-a-node). | None | Window and panel-scroll regression cases; preserve opening grace. Correctness, 0–2 added lines. |
+| W3 | P2 / S | Make student-view session storage tolerate denied access; [web W3](web.md#w3-p2-correctnessresilience-student-view-storage-differs-from-other-remembered-ui-choices). | None | Preserve tab-local state, enter/leave and ordinary reload behavior; denied get/set/remove do not crash. +10–25 lines. |
+| W4 | P2 / S | Make screenshot failures affect exit status and guarantee cleanup; [web W4](web.md#w4-p2-test-tool-correctness-screenshot-errors-do-not-fail-process-cleanup-is-asymmetric). | None | Failing scene/screenshot produces nonzero status; browser/context close in all paths. +5–20 tooling lines. |
 | A5a | P2 / S | Share pool name collision selection, keeping copy/keep formatting; [API A5](api.md#a5-minor-two-confirmed-local-single-source-of-truth-cleanups). | None | Case-insensitive, deleted-name, collision and unique-constraint race behavior retained. 12–22 runtime lines removed. |
 | A5b | P2 / S | Reuse contract difficulty/tags schemas in MCP tools; API A5. | None | Required/optional semantics, tool descriptions and scope restrictions unchanged. 2–8 lines removed. |
 | A5c | P2 / S | Use the existing poll eligibility schema/list consistently in `questionPicks`; API A5. | None | Only mcq/short, parameterized exclusions unchanged; no dynamic capability registry. 1–3 lines removed. |
@@ -27,9 +35,9 @@ Detailed paths, behavior constraints and suites are in the linked domain reports
 | W10 | P3 / S | Share palette Ctrl/Meta+K protocol; web W10. | None | Modifiers, input focus, disabled gate and cleanup preserved. 8–15 lines removed. |
 | PKG-02 | P2 / S | One numeric min-heap for diagram and circuit routers; packages. | None | Same tie/empty behavior and router goldens; existing neutral dependency only. 35–45 lines removed. |
 | A1a | P1 / M | Cut LLM gateway↔service facade cycle using a private settings/ledger leaf; [API A1](api.md#a1-major-service-facades-participate-in-real-runtime-dependency-cycles). | Capture import graph baseline | Gateway budgets/reservations/settlement unchanged; two-file SCC gone, facade API stable. |
-| A1b | P2 / M | Separate ticker observation from task composition; API A1. | Capture graph baseline | System/ticker SCC removed or reduced for the targeted edges; health state/timer behavior unchanged. |
-| A1c | P2 / M | Isolate course-seat read policy used by notification recipients; API A1. | Capture graph baseline | No notification→org mutation-facade cycle for this predicate; same role/recipient resolution. |
-| A1d | P2 / M | Isolate evaluation trusted-client policy from write/template facade; API A1. | Capture graph baseline | Guards stop loading writes through the predicate; confinement and Super Powers suites pass. |
+| A1b | P2 / M | Separate ticker observation from task composition; API A1. | Capture graph baseline; open question 37 (`expireSuperPowers` in `TICK_TASKS`) stays as it is | System/ticker SCC removed or reduced for the targeted edges; health state/timer behavior unchanged. |
+| A1c | P2 / M | Notification recipients read the course seat by a join on org's table instead of importing org's facade; API A1. | Capture graph baseline; after the course owner/assistant roles change, which reworks seats | No notification→org cycle for this predicate; same role/recipient resolution; no import of a non-`service.ts` file of another module. |
+| A1d | P2 / S | Guards compute trusted clients with `trustedClientsOf` (`@quiz/domain`) instead of importing evaluation's facade; API A1. | Capture graph baseline | Guards stop loading writes through the predicate; confinement and Super Powers suites pass. |
 | A1e | P2 / L | Untangle grading/results observation/read calculations; API A1. | Draw execution/transaction sequence first; coordinate A2b | Keep single grading write and before/after released-grade observation; no new event bus or hidden async ordering. |
 | A3 | P1 / M | Isolate evaluation patch preparation from persistence; [API A3](api.md#a3-major-patch-policy-and-projection-are-mixed-in-one-db-write-function). | Characterize patch combinations | Preserve absent/null, legacy-invalid rename, retakes, feedback, kiosk and scheduling rules. No Drizzle types in domain; likely +10–50 lines. |
 | A2a | P1 / M | Move student-home reads and item projection out of live/attempt; [API A2](api.md#a2-major-live-attempt-and-results-services-still-combine-distinct-responsibilities). | Map A1e boundaries | Keep transactional create/retake/close together and service API stable; filtering, frozen instances and attempt IDs unchanged. |
@@ -38,7 +46,7 @@ Detailed paths, behavior constraints and suites are in the linked domain reports
 | A4b | P2 / M | Give SSE stream resources one lifecycle owner; API A4. | Characterize watch authorization and close order | Preserve join-before-snapshot, revocation, clocks, delegated absence, backpressure and idempotent cleanup. |
 | A6a | P2 / M | Separate poll launcher read bundle from pure aggregation/projection; [API A6](api.md#a6-moderate-poll-read-aggregation-and-github-administration-have-overly-broad-files). | A5c | Same historical population/sorting/privacy; grouped queries remain grouped, no N+1 reads. |
 | W5 | P2 / M | Separate question host dictionaries, rehearsal adapters and host rendering; web W5. | Capture existing lazy chunk boundaries | App-owned wiring remains in app; client entries retain lazy loading and typed injected surfaces. −10 to +25 lines. |
-| W6 | P1 / M | Separate journal staff action/dialog orchestration from reading; web W6. | Existing journal/api hooks retained | Staff/student cache isolation, GitHub read-only mode, conflicts and home redirect unchanged. −10 to +30 lines. |
+| W6 | P2 / M | Separate journal staff action/dialog orchestration from reading; web W6. | Existing journal/api hooks retained | Staff/student cache isolation, GitHub read-only mode, conflicts and home redirect unchanged. −10 to +30 lines. |
 | PKG-01 | P1 / M | Extract diagram-local gesture transitions/adapters; packages. | Characterize gestures/history | Pointer cancellation, read-only pan, drag/double-click, one undo per gesture unchanged; do not share circuit engine. Often adds 30–100 lines. |
 | PKG-06 | P2 / M | Separate pure locked-layout rules from Monaco/React lifecycle; packages. | None | Same edits/IME/paste/undo/fallback/line mapping; server reconstruction remains authoritative. Typically +5–20 lines. |
 
@@ -70,7 +78,7 @@ per row. Acceptance is architectural/behavioral, not a reduction quota.
   safety requirements before that operational use; do not count it as a LOC saving.
 - **M3-07:** `github/sync.ts` is an imported adapter with a planned consumer. No current
   value import is not a reason to delete it without resolving that delivery task.
-- Open questions Q22, Q29 and Q40–42 constrain timing, diagram/circuit convergence and
+- Open questions Q22, Q29, Q37 and Q40–42 constrain timing, diagram/circuit convergence and
   parameter rules. This audit does not choose answers. A later proposal changing them
   requires a separate product decision; this PR changes no ADR.
 

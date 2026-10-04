@@ -1,4 +1,12 @@
+---
+search:
+  exclude: true
+---
+
 # Measured inventory and coverage
+
+> Snapshot of baseline `59c8925a` (2026-10-03). Paths and line numbers drift as
+> `main` moves: re-measure before acting on a row.
 
 Baseline `59c8925a7fee4bee9bcb2664bf2cdde781468cd0`. [Method](methodology.md).
 
@@ -36,13 +44,13 @@ seed files and scripts/configuration belong to tooling.
 
 Every source area has a disposition in [API](api.md#area-by-area-disposition),
 [web](web.md#inventory-every-source-area), or [packages and operations](packages.md#every-package-disposition).
-The full [file inventory](metrics/files.csv) also covers config/scripts and test support.
+The full file inventory, which the [analyzer](methodology.md#reproduce) regenerates, also covers config/scripts and test support.
 Manual behavioral review was selected by risk and metrics; an inventoried file is not
 a claim that every statement received a security review or a runtime test.
 
 ## Other tracked code and configuration
 
-[Other files](metrics/other-files.csv) records source/configuration outside JS/TS.
+The analyzer's other-files inventory records source/configuration outside JS/TS.
 SQL migrations and generated snapshots are retained historical state, not deletion targets.
 CSS/help/translation content, deployment configuration, build images and screenshot
 scenes are not interchangeable algorithms. Shell/Python/CSS/YAML/HTML receive inventory

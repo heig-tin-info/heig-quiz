@@ -1,12 +1,20 @@
+---
+search:
+  exclude: true
+---
+
 [Audit overview](README.md) · [Ordered work catalogue](plan.md)
 
 # Web code-quality audit — 2026-10-03
 
-Scope: `/tmp/heig-quiz-code-quality-audit`, baseline `59c8925a`; read-only. No tests, browser sessions or repository edits performed. This is a complete area inventory and targeted static review, NOT a claim that every line in every component received behavioral verification. The [repository measurements](README.md#evidence) complement this evidence. Follow AGENTS isolation, explicit staging and memory rules for implementation. CLAUDE invariants particularly bind translations, single primary action, student content boundaries, server clock/access/contracts and domain rule ownership. UI primitives retain semantic tokens/accessibility and lazy question surfaces.
+> Snapshot of baseline `59c8925a` (2026-10-03). Paths and line numbers drift as
+> `main` moves: re-measure before acting on a row.
+
+Scope: baseline `59c8925a`, read-only. No tests, browser sessions or repository edits performed. This is a complete area inventory and targeted static review, NOT a claim that every line in every component received behavioral verification. The [repository measurements](README.md#evidence) complement this evidence. Follow AGENTS isolation, explicit staging and memory rules for implementation. CLAUDE invariants particularly bind translations, single primary action, student content boundaries, server clock/access/contracts and domain rule ownership. UI primitives retain semantic tokens/accessibility and lazy question surfaces.
 
 ## Findings with verified evidence
 
-### W1 — P1 correctness, menu scroll event assumes a Node
+### W1 — P2 correctness, menu scroll event assumes a Node
 
 `apps/web/src/ui/menu.tsx:230` (onScroll block) casts `e.target as Node` and calls `panel.current?.contains(...)`. `apps/web/src/ui/popover.tsx:132` handles the same event defensively with `e.target instanceof Node`; window is not a Node. A window-targeted scroll event while the menu is open can throw. Fix the local guard, preserving the menu's opening-scroll grace period. Add one focused test dispatching scroll on window with menu open and a panel-scroll test proving the menu stays open. Net source growth 0–2 lines. This is a static-reachable failure, not an observed production incident.
 
@@ -16,11 +24,11 @@ Scope: `/tmp/heig-quiz-code-quality-audit`, baseline `59c8925a`; read-only. No t
 
 ### W3 — P2 correctness/resilience, student-view storage differs from other remembered UI choices
 
-`studentView.ts:48,57,67,75` directly gets/sets/removes sessionStorage; `ui/state.ts:9–33` deliberately catches localStorage failures and documents blocked storage. `App.tsx:490` calls useStudentView for all ordinary session pages, so reading denied sessionStorage can crash render rather than only lose a preference. Extend the existing storage mechanism with an explicitly session-scoped variant plus in-memory fallback; DO NOT change sessionStorage to localStorage (ADR-018 tab isolation). Test denied reads/writes, enter/leave behavior, reload persistence when available, two-tab separation. Expect **+10–25 production lines**, not a savings exercise. Browser policies must be reproduced before classifying user incidence.
+`studentView.ts:48,57,67,75` directly gets/sets/removes sessionStorage; `ui/state.ts:9–33` deliberately catches localStorage failures and documents blocked storage. `App.tsx:492` calls useStudentView for all ordinary session pages, so reading denied sessionStorage can crash render rather than only lose a preference. Extend the existing storage mechanism with an explicitly session-scoped variant plus in-memory fallback; DO NOT change sessionStorage to localStorage (ADR-018 tab isolation). Test denied reads/writes, enter/leave behavior, reload persistence when available, two-tab separation. Expect **+10–25 production lines**, not a savings exercise. Browser policies must be reproduced before classifying user incidence.
 
 ### W4 — P2 test-tool correctness, screenshot errors do not fail process; cleanup is asymmetric
 
-`scripts/screenshots.mjs:1323–1380` counts failed scenes but finishes with console.error only; a failed visual verification can exit zero. Screenshot itself is outside the scene try and browser/context cleanup is not in finally. `scripts/docs-screenshots.mjs:1286–1354` already closes each scene context in finally. Decide explicit CLI semantics: ordinary visual verification should set process.exitCode=1 on scene failures and close resources in finally; use an explicit exploratory flag only if wanted. Preserve evidence images for failed scenes. Focused CLI harness with failing page/screenshot and cleanup spies, not full browser matrix. Source **+5–20**, no claimed reduction.
+`scripts/screenshots.mjs:1323–1376` counts failed scenes but finishes with console.error only; a failed visual verification can exit zero. Screenshot itself is outside the scene try and browser/context cleanup is not in finally. `scripts/docs-screenshots.mjs:1286–1354` already closes each scene context in finally. Decide explicit CLI semantics: ordinary visual verification should set process.exitCode=1 on scene failures and close resources in finally; use an explicit exploratory flag only if wanted. Preserve evidence images for failed scenes. Focused CLI harness with failing page/screenshot and cleanup spies, not full browser matrix. Source **+5–20**, no claimed reduction.
 
 ### W5 — P2 responsibility boundary, questionTypes is several different modules
 

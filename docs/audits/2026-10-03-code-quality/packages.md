@@ -1,8 +1,16 @@
+---
+search:
+  exclude: true
+---
+
 [Audit overview](README.md) · [Ordered work catalogue](plan.md)
 
 # Packages, runner, extensions and scripts audit
 
-Scope reviewed read-only at `/tmp/heig-quiz-code-quality-audit`. No repository file edited, no tests run. All 15 workspace packages and runner/extensions/scripts inventoried. Metrics use the [shared measurement convention](methodology.md), including nullish operators.
+> Snapshot of baseline `59c8925a` (2026-10-03). Paths and line numbers drift as
+> `main` moves: re-measure before acting on a row.
+
+Scope reviewed read-only at baseline `59c8925a`. No repository file edited, no tests run. All 15 workspace packages and runner/extensions/scripts inventoried. Metrics use the [shared measurement convention](methodology.md), including nullish operators.
 
 ## Scope challenge
 
@@ -20,9 +28,9 @@ Done when: gesture cases can be tested without mounting the entire editor; no si
 
 ### PKG-02 — Identical priority queue, distinct routers (confirmed duplication)
 
-Evidence: numeric binary `Heap` at `packages/diagram/src/layout.ts:176` and `packages/qt-circuit/src/canvas/router.ts:35`, same arrays, push and pop, exact clone. Shared dependency `@quiz/core` already exists in both packages. Neighboring A* implementations differ: diagram `layout.ts:227` searches growing margins [6,20,60], circuit router declares fixed GW/GH and bound clipping at `router.ts:22`. Do not deduplicate the entire A* search.
+Evidence: numeric binary `Heap` at `packages/diagram/src/layout.ts:177` and `packages/qt-circuit/src/canvas/router.ts:35`, same arrays, push and pop, exact clone. Shared dependency `@quiz/core` already exists in both packages. Neighboring A* implementations differ: diagram `layout.ts:227` searches growing margins [6,20,60], circuit router declares fixed GW/GH and bound clipping at `router.ts:22`. Do not deduplicate the entire A* search.
 
-Action: one small deterministic numeric min-heap in an existing dependency's neutral utility module, with explicit export; replace both private copies. No new workspace/package/framework. Keep deterministic equal-priority behavior and empty-pop behavior.
+Action: one small deterministic numeric min-heap in an existing dependency's neutral utility module, with explicit export (`@quiz/core` is the question-type contract, RNG and runner interface: agree on the heap's home, such as a dedicated entry point, before widening it); replace both private copies. No new workspace/package/framework. Keep deterministic equal-priority behavior and empty-pop behavior.
 
 Tests: existing diagram layout cases and circuit `router.test.ts` / `router.golden.test.ts`; focused queue property cases (sorted extraction, interleaved push/pop, ties). Estimate **35–45 net production lines removed**, after imports/export and retaining one implementation. Test code may grow. Reject if the proposed helper forces diagram↔qt-circuit or domain/UI dependencies.
 
