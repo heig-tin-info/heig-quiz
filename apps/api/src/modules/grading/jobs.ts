@@ -4,8 +4,13 @@
  * ```
  * POST /close  or  ticker auto-close
  *       └─▶ grading.evaluation { evaluationId }   (one job per request, #273)
+ * an exercise's attempt handed in, expired or closed while it runs (ADR-067)
+ *       └─▶ grading.evaluation { evaluationId, attemptIds: [that attempt] }
+ *           (an exam waits for its close; a reopen stands the attempt's
+ *            automatic gradings down, and its next hand-in grades it again)
  *
  * grading.evaluation, for each (attempt × item):
+ *    an attempt not finished while the eval runs  → skip: its next hand-in grades it
  *    a validated grading already stands           → skip          (idempotent)
  *    no answer row at all                         → 0, validated, auto  (F-GRADE-01)
  *    type.grade() returns 'graded'                → validated (or proposed if it says so)
@@ -16,7 +21,8 @@
  *                                                   the type then proposes by hand)
  *    then, the grid complete                      → grading_ready, once (`ready.ts`)
  *
- * grading.runner, for one answer:
+ * grading.runner, for one answer (GRADING_RUNNER_CONCURRENCY at a time, default 1):
+ *    attempt reopened, or answer rewritten, since → nothing: a later pass sends its own
  *    runner.run() → type.finalizeRunner()         → validated
  *    RunnerUnavailable (the stub, decision D14)   → proposed, reason 'runner_unavailable'
  *    RunnerBusy                                   → rethrown, pg-boss retries
@@ -48,10 +54,18 @@ import {
   type PassReason,
 } from "@quiz/contracts";
 import { RunnerBusy, RunnerUnavailable, isGraded, isPendingRunner } from "@quiz/core/server";
-import { isLiveState, itemPoints, maskNames, round2, type MaskedPerson } from "@quiz/domain";
+import {
+  gradableNow,
+  isLiveState,
+  itemPoints,
+  maskNames,
+  round2,
+  type MaskedPerson,
+} from "@quiz/domain";
 
+import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { answers, attempts, enrollments, gradings, users } from "../../db/schema.js";
+import { answers, attempts, enrollments, evaluations, gradings, users } from "../../db/schema.js";
 import {
   GRADING_EVALUATION_QUEUE,
   GRADING_LLM_QUEUE,
@@ -80,6 +94,7 @@ import {
   type GradingRecord,
   type PairKey,
   type WriteGradingInput,
+  type WriteGuard,
 } from "./service.js";
 
 /** How often the progress event goes out while a pass is running (§5.4). */
@@ -126,6 +141,12 @@ interface RunnerGradingJob {
   attemptId: string;
   itemId: string;
   answerId: string | null;
+  /**
+   * The answer's revision the request was built from (ADR-067). Absent on a
+   * job queued before ADR-067 was deployed: such a job is taken as current,
+   * since nothing would send it again once its evaluation is closed.
+   */
+  revision?: number;
   request: RunnerRequest;
   regradeNote?: string;
 }
@@ -192,8 +213,19 @@ export async function enqueueEvaluationGrading(
   return true;
 }
 
-/** Registers the three handlers. Called once, from `buildApp`. */
-export async function registerGradingJobs(app: FastifyInstance, queue: JobQueue): Promise<void> {
+/**
+ * Registers the three handlers. Called once, from `buildApp`.
+ *
+ * `grading.runner` takes `GRADING_RUNNER_CONCURRENCY` jobs at a time (one by
+ * default, ADR-067): the runner has one FIFO for the grading and the
+ * students' Run clicks alike (`RUNNER_CONCURRENCY`), and an exercise graded
+ * at every hand-in must never fill it while the class is still running code.
+ */
+export async function registerGradingJobs(
+  app: FastifyInstance,
+  queue: JobQueue,
+  config: Pick<AppConfig, "GRADING_RUNNER_CONCURRENCY">,
+): Promise<void> {
   await queue.createQueue(GRADING_EVALUATION_QUEUE, { retryLimit: 1 });
   await queue.createQueue(GRADING_RUNNER_QUEUE, {
     retryLimit: 2,
@@ -203,7 +235,9 @@ export async function registerGradingJobs(app: FastifyInstance, queue: JobQueue)
   await queue.work<EvaluationGradingJob>(GRADING_EVALUATION_QUEUE, (data) =>
     runEvaluationGrading(app, data),
   );
-  await queue.work<RunnerGradingJob>(GRADING_RUNNER_QUEUE, (data) => runRunnerGrading(app, data));
+  await queue.work<RunnerGradingJob>(GRADING_RUNNER_QUEUE, (data) => runRunnerGrading(app, data), {
+    localConcurrency: config.GRADING_RUNNER_CONCURRENCY,
+  });
   // No retry: the provider's SDK already retries a rate limit, and a cap
   // reached now is still reached in a minute (ADR-063 §2).
   await queue.createQueue(GRADING_LLM_QUEUE, { retryLimit: 0 });
@@ -241,7 +275,11 @@ async function loadPass(
         ? and(eq(attempts.evaluationId, evaluation.id), inArray(attempts.id, job.attemptIds))
         : eq(attempts.evaluationId, evaluation.id),
     );
-  if (items.length === 0 || attemptRows.length === 0) return null;
+  // While the evaluation runs, only a finished attempt is graded (ADR-067):
+  // one reopened since the hand-in that sent this pass is graded at its next.
+  // The write checks it again, under the attempt's lock (`passGuard`).
+  const gradable = attemptRows.filter((a) => gradableNow(evaluation.state, a.state));
+  if (items.length === 0 || gradable.length === 0) return null;
 
   const answerRows = await db
     .select()
@@ -249,12 +287,12 @@ async function loadPass(
     .where(
       inArray(
         answers.attemptId,
-        attemptRows.map((a) => a.id),
+        gradable.map((a) => a.id),
       ),
     );
   return {
     items,
-    attempts: attemptRows,
+    attempts: gradable,
     answers: new Map(answerRows.map((a) => [pairKey(a.attemptId, a.itemId), a])),
     standing: await standingGradings(db, evaluation.id),
     teacherIds: await events.staffOf(db, evaluation),
@@ -413,7 +451,7 @@ async function gradeCell(
     const details = withWarning(outcome.details, warning);
     return { llm: { ...cellOf, request: outcome.request, details, bonus: item.item.bonus } };
   }
-  return { runner: { ...cellOf, request: outcome.request } };
+  return { runner: { ...cellOf, revision: answer.revision, request: outcome.request } };
 }
 
 /**
@@ -479,7 +517,11 @@ export async function runEvaluationGrading(
       progress.tick();
     }
   }
-  await writeGradings(app.db, writes);
+  await writeGradings(
+    app.db,
+    writes,
+    passGuard(new Map(pass.attempts.map((a) => [a.id, endOf(a.closedAt)]))),
+  );
   progress.finish(runnerJobs.length + llmJobs.length > 0 ? "pending" : "done");
   for (const runnerJob of runnerJobs) {
     await enqueueOrRun(app, GRADING_RUNNER_QUEUE, runnerJob, runRunnerGrading, { priority: RUNNER_PRIORITY });
@@ -597,7 +639,10 @@ async function runRunnerGrading(
   await announceGradingReady(app, evaluation);
 }
 
-/** The runner half proper: whatever happens, the cell ends with a grading (or the job is retried). */
+/**
+ * The runner half proper: whatever happens, the cell ends with a grading —
+ * unless the job is retried, or stale (ADR-067).
+ */
 async function gradeWithRunner(
   app: FastifyInstance,
   evaluation: EvaluationRecord,
@@ -609,6 +654,12 @@ async function gradeWithRunner(
   if (!item) return;
   const [attempt] = await db.select().from(attempts).where(eq(attempts.id, job.attemptId)).limit(1);
   if (!attempt) return;
+  const answerRow = job.answerId
+    ? (await db.select().from(answers).where(eq(answers.id, job.answerId)).limit(1))[0]
+    : undefined;
+  // A cheap early exit, so a stale job never takes a runner slot. What
+  // decides is the guard of the write, under the attempt's lock.
+  if (isStale(evaluation.state, attempt.state, answerRow, job)) return;
 
   const now = app.clock.now();
   const base = {
@@ -619,37 +670,38 @@ async function gradeWithRunner(
     now,
     ...(job.regradeNote === undefined ? {} : { regradeNote: job.regradeNote }),
   };
+  const write = (grading: Omit<WriteGradingInput, keyof typeof base>) =>
+    writeGradings(db, [{ ...base, ...grading }], runnerGuard(job));
 
   const type = typeOf(item.question.type);
   if (!type.finalizeRunner) {
-    await writeGrading(db, { ...base, ...failedProposal("not_finalizable") });
+    await write(failedProposal("not_finalizable"));
     return;
   }
 
-  let outcome;
-  try {
-    outcome = await app.runner.run(job.request);
-  } catch (err) {
-    if (err instanceof RunnerBusy) throw err; // the queue retries with backoff
-    const reason = err instanceof RunnerUnavailable ? "runner_unavailable" : "runner_error";
+  const run = await app.runner.run(job.request).then(
+    (outcome) => ({ outcome }),
+    (err: unknown) => ({ err }),
+  );
+  if ("err" in run) {
+    if (run.err instanceof RunnerBusy) throw run.err; // the queue retries with backoff
+    const reason = run.err instanceof RunnerUnavailable ? "runner_unavailable" : "runner_error";
     if (reason === "runner_error") {
-      app.log.error({ err, itemId: job.itemId }, "grading: runner failed");
+      app.log.error({ err: run.err, itemId: job.itemId }, "grading: runner failed");
     }
-    await writeGrading(db, { ...base, ...failedProposal(reason) });
+    await write(failedProposal(reason));
     return;
   }
 
   const config = loadConfig(item.question.type, itemInstance(item, attempt).version);
-  const answerRow = job.answerId
-    ? (await db.select().from(answers).where(eq(answers.id, job.answerId)).limit(1))[0]
-    : undefined;
   const parsed =
     answerRow && answerRow.payload !== null
       ? type.answerSchema.safeParse(answerRow.payload)
       : null;
 
+  let graded;
   try {
-    const graded = type.finalizeRunner(
+    graded = type.finalizeRunner(
       config,
       parsed?.success ? parsed.data : null,
       {
@@ -660,20 +712,100 @@ async function gradeWithRunner(
         now,
         defaults: gradeDefaults(evaluation),
       },
-      outcome,
+      run.outcome,
     );
-    await writeGrading(db, {
-      ...base,
-      points: itemPoints(graded.points, item.item.bonus),
-      source: "auto",
-      state: graded.state ?? "validated",
-      details: graded.details,
-      ...(graded.comment === undefined ? {} : { comment: graded.comment }),
-    });
   } catch (err) {
     app.log.error({ err, itemId: job.itemId }, "grading: finalizeRunner threw");
-    await writeGrading(db, { ...base, ...failedProposal("finalize_error") });
+    await write(failedProposal("finalize_error"));
+    return;
   }
+  await write({
+    points: itemPoints(graded.points, item.item.bonus),
+    source: "auto",
+    state: graded.state ?? "validated",
+    details: graded.details,
+    ...(graded.comment === undefined ? {} : { comment: graded.comment }),
+  });
+}
+
+/**
+ * Whether a runner job no longer describes its cell (ADR-067): its attempt
+ * was reopened since the hand-in that sent it, while the evaluation runs, or
+ * its answer was rewritten since (a reopened attempt handed in again, whose
+ * own pass sent a job of its own). Writing would grade an answer the student
+ * no longer holds, and the pass never re-grades a validated cell.
+ */
+function isStale(
+  evaluationState: EvaluationRecord["state"],
+  attemptState: AttemptRecord["state"],
+  answer: { revision: number } | undefined,
+  job: RunnerGradingJob,
+): boolean {
+  if (!gradableNow(evaluationState, attemptState)) return true;
+  return answer !== undefined && rewritten(answer.revision, job);
+}
+
+/** Whether the answer moved past the revision the job was built from (none: current). */
+function rewritten(revision: number, job: RunnerGradingJob): boolean {
+  return job.revision !== undefined && revision !== job.revision;
+}
+
+/**
+ * The guard of every grading write of the jobs (ADR-067): locks the attempts
+ * of the cells, in id order, re-reads their state and their evaluation's
+ * under the lock, and keeps the cells still {@link gradableNow}. A reopen
+ * takes the same row lock before it stands the attempt's automatic gradings
+ * down (`reopenAttempt`), so a pass that loaded an attempt finished either
+ * commits first — and the stand-down supersedes what it wrote — or sees the
+ * attempt reopened here and writes nothing on it.
+ *
+ * `loadedEnd` is each attempt's `closedAt` as the pass loaded it. A reopen
+ * clears it and the next hand-in writes a new one, so an attempt reopened
+ * AND handed in again between the pass's load and its write — finished
+ * again, but on other answers — is dropped too: its own hand-in grades it.
+ */
+function passGuard(loadedEnd?: ReadonlyMap<string, number | null>): WriteGuard {
+  return async (tx, inputs) => {
+    const ids = [...new Set(inputs.map((i) => i.attemptId))];
+    if (ids.length === 0) return inputs;
+    const rows = await tx
+      .select({
+        id: attempts.id,
+        state: attempts.state,
+        closedAt: attempts.closedAt,
+        evaluationState: evaluations.state,
+      })
+      .from(attempts)
+      .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
+      .where(inArray(attempts.id, ids))
+      .orderBy(attempts.id)
+      .for("update", { of: attempts });
+    const gradable = new Set(
+      rows
+        .filter((r) => gradableNow(r.evaluationState, r.state))
+        .filter((r) => loadedEnd === undefined || loadedEnd.get(r.id) === endOf(r.closedAt))
+        .map((r) => r.id),
+    );
+    return inputs.filter((i) => gradable.has(i.attemptId));
+  };
+}
+
+const endOf = (closedAt: Date | null): number | null => closedAt?.getTime() ?? null;
+
+/** {@link passGuard}, and the answer still at the revision the job was built from. */
+function runnerGuard(job: RunnerGradingJob): WriteGuard {
+  return async (tx, inputs) => {
+    const kept = await passGuard()(tx, inputs);
+    if (kept.length === 0 || job.answerId === null) return kept;
+    // Under the attempt's lock: an answer is written only while its attempt
+    // is open, and opening it again takes that lock.
+    const [answer] = await tx
+      .select({ revision: answers.revision })
+      .from(answers)
+      .where(eq(answers.id, job.answerId))
+      .limit(1);
+    return answer !== undefined && rewritten(answer.revision, job) ? [] : kept;
+  };
 }
 
 /** Whether one cell holds a validated grading. */
@@ -696,7 +828,7 @@ async function isValidated(db: Db, attemptId: string, itemId: string): Promise<b
 
 /**
  * Whether this pass may ask a model: a service, a key behind it, and an
- * evaluation that no longer runs (F-LLM-03: a retake's own pass leaves the
+ * evaluation that no longer runs (F-LLM-03: a hand-in's own pass leaves the
  * essay to the close's). Asked once per pass.
  */
 async function offersLlm(app: FastifyInstance, evaluation: EvaluationRecord): Promise<boolean> {

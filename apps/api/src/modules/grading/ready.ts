@@ -33,8 +33,9 @@ import { progressOf } from "./service.js";
  * Tells the course's staff seats (`staffOf`: the rows `staffAccess` reads,
  * no seatless admin) that the grid is complete and how many proposals wait,
  * if it is and nobody has told them yet. Nothing while the evaluation still
- * runs — a retake graded alone mid-run (ADR-025) is not the end of anything
- * (`claimGradingReady` refuses it) — nothing for a grid with no proposal,
+ * runs — an exercise attempt graded alone mid-run (ADR-067) is not the end
+ * of anything (`claimGradingReady` refuses it) — nothing for a grid with no
+ * proposal,
  * and nothing for a poll, which has no key to grade against.
  *
  * Best-effort: a notification that fails is logged and never fails the job,

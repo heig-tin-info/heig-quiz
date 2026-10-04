@@ -11,7 +11,9 @@ Accepted (2026-09-30, settled with the product owner; with the column
 ADR-033 §1 and ADR-025 §4, and overrides the spirit of
 `docs/spec/06-questions-ouvertes.md` row 5 for exercises, by an explicit
 act of the teacher. Amends ADR-041 §13.2 (the drill follows). Settles
-open question 34 (the drill).
+open question 34 (the drill). Amended 2026-10-02 by ADR-067 (§3): every
+exercise is graded at hand-in, published or not; a reopened attempt's
+automatic gradings are stood down.
 
 ## Context
 
@@ -76,6 +78,13 @@ decides, on purpose, that the key of this exercise may now be read.
    the student rewrote — with the correction in hand — would never be
    graded. A student who needs another go on an exercise with retakes starts
    one; without retakes, the teacher chose to publish before the end.
+
+   *Amended by ADR-067 (2026-10-02): every exercise grades its attempts at
+   hand-in, so "from then on" no longer depends on the publication. A reopen
+   of an exercise that is not published now stands the attempt's automatic
+   gradings down, so what a reopened student rewrites is graded; the refusal
+   once the correction is published stays, for its other reason: the student
+   would rewrite with the correction in hand.*
 
 4. **The projection.** `not_over` is lifted once the correction is
    published (`isDebriefOpen`). While the exercise is still open the debrief

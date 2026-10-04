@@ -181,10 +181,17 @@ describe("POST /evaluations/:id/publish-correction (ADR-050)", () => {
   it("publishes once, audits once, grades the papers handed in, and opens the debrief", async () => {
     const built = await running();
     const [first, second] = built.students;
-    const handedIn = await sit(built, first.id, "answer-q0");
+    // A paper handed in before ADR-067, which nothing graded at hand-in: the
+    // submit without `app` sends no pass.
+    const handedIn = await live.submitAttempt(
+      server.app.db,
+      await reload(server.app.db, built.evaluation.id),
+      await sit(built, first.id, "answer-q0", false),
+      server.clock.now(),
+    );
     const writing = await sit(built, second.id, "nope", false);
 
-    // Before: no debrief, nothing graded (no retakes: the close would grade).
+    // Before: no debrief, nothing graded.
     expect((await get(`/app/api/evaluations/${built.evaluation.id}/results/by-question`, teacher.headers)).json())
       .toMatchObject({ error: "not_over" });
     expect(await gradingsOf(handedIn.id)).toHaveLength(0);

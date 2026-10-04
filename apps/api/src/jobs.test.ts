@@ -47,7 +47,7 @@ describe("the grading.evaluation queue, as pg-boss sees it", () => {
 
   it("is a standard queue: no policy, whose semantics would differ from the in-process one", async () => {
     const { calls, queue } = recorder();
-    await registerGradingJobs({} as FastifyInstance, queue);
+    await registerGradingJobs({} as FastifyInstance, queue, { GRADING_RUNNER_CONCURRENCY: 1 });
     const created = calls.find((c) => c.op === "create" && c.name === GRADING_EVALUATION_QUEUE);
     expect(created?.options).not.toHaveProperty("policy");
   });
