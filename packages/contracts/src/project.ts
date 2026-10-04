@@ -753,6 +753,14 @@ export const ProjectRepoView = ProjectRepoDeadlineState.extend({
       })
       .nullable(),
     final: ProjectFinalScore.nullable(),
+    /**
+     * The maximum a teacher's score is held to (M3-12b): the scored run's —
+     * the one the final score would come from without the teacher —, or
+     * null when there is none (pass / fail only, malformed, several
+     * annotations, or a run to verify): the teacher then gives their own
+     * with the points (`ScoreOverride.max`, else `422 score_max_required`).
+     */
+    scoreMax: z.number().nullable(),
   }),
   review: ProjectRepoReview,
   released: z.object({ points: z.number().nullable(), max: z.number().nullable() }).nullable(),
@@ -969,6 +977,19 @@ export const ProjectUnassigned = z.object({
   students: z.array(z.object({ enrollmentId: z.uuid(), nom: z.string(), prenom: z.string() })),
 });
 export type ProjectUnassigned = z.infer<typeof ProjectUnassigned>;
+
+/**
+ * The `409` bodies of `POST /app/api/projects/:id/release` that carry
+ * data (M3-08b `grades.ts`; worded by the project page, M3-12c):
+ * `not_frozen` with the page's counts — the live repositories and how many
+ * of them are frozen for good —, `to_verify` with the ids of the live
+ * repositories whose final score rests on a run to verify.
+ */
+export const ProjectReleaseRefusal = z.discriminatedUnion("error", [
+  z.object({ error: z.literal("not_frozen"), message: z.string(), live: z.number().int(), frozen: z.number().int() }),
+  z.object({ error: z.literal("to_verify"), message: z.string(), repos: z.array(z.uuid()) }),
+]);
+export type ProjectReleaseRefusal = z.infer<typeof ProjectReleaseRefusal>;
 
 // ---------------------------------------------------------- the student's project (M3-09a)
 

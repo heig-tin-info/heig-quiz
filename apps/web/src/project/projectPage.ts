@@ -1,18 +1,21 @@
 /*
  * The project page's rules (F-PROJ-13, M3-12), pure: what the header says of
- * the project's situation, a repository's flags, whether a moved deadline
- * reopens the project and how many repositories it reaches, a checkpoint's
- * status, the refetch cadence, and the words of each refusal the page meets.
- * `ProjectPage.tsx` and its sections draw them.
+ * the project's situation, a repository's flags and the state of its final
+ * review, whether a moved deadline reopens the project and how many
+ * repositories it reaches, a checkpoint's status, the refetch cadence, the
+ * teacher's score rules the sheet draws, and the words of each refusal the
+ * page meets. `ProjectPage.tsx` and its sections draw them.
  */
-import { z } from "zod";
-
-import type {
-  ProjectCheckpointErrorCode,
-  ProjectDetail,
-  ProjectErrorCode,
-  ProjectRepoView,
-  ReviewCheckpoint,
+import {
+  ProjectReleaseRefusal,
+  ProjectUnassigned,
+  type ProjectAcceptErrorCode,
+  type ProjectCheckpointErrorCode,
+  type ProjectDetail,
+  type ProjectErrorCode,
+  type ProjectRepoReview,
+  type ProjectRepoView,
+  type ReviewCheckpoint,
 } from "@quiz/contracts";
 import { isVoidCheckpoint, reopens } from "@quiz/domain";
 
@@ -20,22 +23,12 @@ import { ApiError, apiErrorMessage, refusalCodeOf } from "../api";
 import type { Dict, TFunction } from "../i18n";
 import type { Tone } from "../ui";
 
-/**
- * The body of Publish's `409 unassigned_students` (F-PROJ-06): the claimed
- * students in no group, empty when the group project has no group at all.
- * Parsed here until merge task M3-08b adds `ProjectUnassigned` beside
- * `ProjectRefusal` in `contracts/src/project.ts`; this schema then goes.
- */
-export const UnassignedBody = z.object({
-  error: z.literal("unassigned_students"),
-  students: z.array(z.object({ enrollmentId: z.string(), nom: z.string(), prenom: z.string() })),
-});
-export type UnassignedStudent = z.infer<typeof UnassignedBody>["students"][number];
+export type UnassignedStudent = ProjectUnassigned["students"][number];
 
-/** The students Publish refused over, or null when `error` is something else. */
+/** The students Publish refused over (`409 unassigned_students`, F-PROJ-06), or null when `error` is something else. */
 export function unassignedStudents(error: unknown): UnassignedStudent[] | null {
   if (!(error instanceof ApiError)) return null;
-  const parsed = UnassignedBody.safeParse(error.body);
+  const parsed = ProjectUnassigned.safeParse(error.body);
   return parsed.success ? parsed.data.students : null;
 }
 
@@ -49,16 +42,18 @@ export const projectRefetchInterval = (detail: ProjectDetail | undefined): numbe
 
 /**
  * The sentence under the title: the project's situation, and the one action
- * the server names when there is one. Release and Sync are said, not drawn,
- * until their routes exist (M3-08b, M3-07): the header then turns them into
- * the primary button. `date` is the instant the sentence names: the start
- * of a scheduled draft, the release, else the deadline.
+ * the server names when there is one. It describes the primary button when
+ * there is one (Publish, Release, a release again once a score moved after
+ * the release); Sync is said, not drawn, until its route exists (M3-07).
+ * `date` is the instant the sentence names: the start of a scheduled draft,
+ * the release, else the deadline.
  */
 export type StatusKey =
   | "project.status.archived"
   | "project.status.draft"
   | "project.status.scheduled"
   | "project.status.release"
+  | "project.status.rerelease"
   | "project.status.sync"
   | "project.status.open"
   | "project.status.released"
@@ -69,14 +64,18 @@ export function projectStatus(p: ProjectDetail): { key: StatusKey; date: string 
   const key = ((): StatusKey => {
     if (p.archivedAt) return "project.status.archived";
     if (p.state === "draft") return p.publishMode === "scheduled" ? "project.status.scheduled" : "project.status.draft";
-    if (p.primaryAction === "release") return "project.status.release";
+    if (p.primaryAction === "release") return p.releasedAt ? "project.status.rerelease" : "project.status.release";
     if (p.primaryAction === "sync") return "project.status.sync";
     if (p.state === "published") return "project.status.open";
     if (p.releasedAt) return "project.status.released";
     return p.counts.frozen < p.counts.live ? "project.status.lockedFreezing" : "project.status.locked";
   })();
   const date =
-    key === "project.status.scheduled" ? p.startAt : key === "project.status.released" ? p.releasedAt! : p.deadlineAt;
+    key === "project.status.scheduled"
+      ? p.startAt
+      : key === "project.status.released" || key === "project.status.rerelease"
+        ? p.releasedAt!
+        : p.deadlineAt;
   return { key, date };
 }
 
@@ -129,6 +128,102 @@ export const actionable = (repo: ProjectRepoView, project: Pick<ProjectDetail, "
   repo.provisionStatus === "ok" && !repo.flags.deleted && project.archivedAt === null;
 
 /**
+ * The state of a repository's final review (F-PROJ-11, M3-08b's `review`):
+ * its word (a tag), its tone, and the line that says why or what next when
+ * the word is not enough (`detail`, taking `{date, sha}` for an asked
+ * review) — null when the word is enough.
+ */
+export interface ReviewView {
+  key: keyof Dict;
+  tone: Tone;
+  detail: keyof Dict | null;
+}
+
+/**
+ * ONE table, read by the row's tag and the sheet's detail: a fact in zinc
+ * (pending, asked, no review), done in green, a degraded "no review" in
+ * amber (archived as its lock, or the protection suspended: re-enabling it
+ * makes the review due again), and "not confirmed" in red — claimed,
+ * GitHub's acceptance never recorded, never sent again: the teacher's score
+ * settles the repository. A pending review says it waits for the freeze
+ * only while the repository is not frozen (`frozenAt` null): frozen and
+ * pending, it is due and the job will ask for it.
+ */
+export function reviewView(review: ProjectRepoReview, frozenAt: string | null): ReviewView {
+  switch (review.status) {
+    case "pending":
+      return {
+        key: "project.reviewState.pending",
+        tone: "zinc",
+        detail: frozenAt === null ? "project.reviewState.pending.detail" : null,
+      };
+    case "none":
+      return {
+        key: "project.reviewState.none",
+        tone: "zinc",
+        detail: review.reason === "no_frozen_run" ? "project.reviewState.noFrozenRun.detail" : null,
+      };
+    case "skipped":
+      return {
+        key: "project.reviewState.none",
+        tone: "amber",
+        detail:
+          review.reason === "archived"
+            ? "project.reviewState.archived.detail"
+            : "project.reviewState.protectionSuspended.detail",
+      };
+    case "unconfirmed":
+      return { key: "project.reviewState.unconfirmed", tone: "red", detail: "project.reviewState.unconfirmed.detail" };
+    case "asked":
+      return { key: "project.reviewState.asked", tone: "zinc", detail: "project.reviewState.asked.detail" };
+    case "done":
+      return { key: "project.reviewState.done", tone: "green", detail: null };
+  }
+}
+
+/**
+ * The review tag of a table row, or null when it would say nothing: a
+ * repository not frozen yet is trivially pending, and a project graded
+ * `none` has no review on any row. The sheet shows the state whatever it is.
+ */
+export function reviewTag(repo: ProjectRepoView): ReviewView | null {
+  if (repo.review.status === "pending" && repo.frozenAt === null) return null;
+  if (repo.review.status === "none" && repo.review.reason === null) return null;
+  return reviewView(repo.review, repo.frozenAt);
+}
+
+/** Why the sheet offers no teacher's score form: the project is not graded, or the repository is not frozen for good. */
+export type TeacherScoreBlock = "grading_none" | "not_frozen" | null;
+
+export function teacherScoreBlock(repo: ProjectRepoView, project: Pick<ProjectDetail, "gradingMode">): TeacherScoreBlock {
+  if (project.gradingMode !== "auto") return "grading_none";
+  if (repo.frozenAt === null) return "not_frozen";
+  return null;
+}
+
+/**
+ * What a refused release says (F-PROJ-14), from the body the contracts
+ * describe (`ProjectReleaseRefusal`): `not_frozen` with how many live
+ * repositories are frozen, `to_verify` with the students whose score waits
+ * for the teacher's (named from the page's rows; "some repositories" when
+ * none is listed), else the refusal as the page words every other one.
+ */
+export function releaseRefusal(error: unknown, project: ProjectDetail, t: TFunction): string {
+  const body = error instanceof ApiError ? ProjectReleaseRefusal.safeParse(error.body) : null;
+  if (body?.success) {
+    if (body.data.error === "not_frozen") {
+      return t("project.release.refusal.notFrozen", { frozen: body.data.frozen, live: body.data.live });
+    }
+    const { repos } = body.data;
+    const names = project.rows
+      .filter((r) => r.repo !== null && repos.includes(r.repo.id))
+      .map((r) => `${r.student.nom} ${r.student.prenom}`);
+    return t("project.release.refusal.toVerify", { names: names.join(", ") || t("project.release.refusal.someRepos") });
+  }
+  return refusalMessage(error, t);
+}
+
+/**
  * The repositories a project deadline moved to `deadlineAt` reopens
  * (F-PROJ-09): applied already, following the project's deadline (one with
  * an own deadline keeps it), live. Zero when the move is no reopen.
@@ -167,8 +262,13 @@ export const repoHref = (fullName: string): string => `https://github.com/${full
 /** The name of a repository without its organization: what the table has room for. */
 export const repoShortName = (fullName: string): string => fullName.slice(fullName.indexOf("/") + 1);
 
-/** The words of the refusals the page meets, lifecycle's and checkpoints' alike; the rest read the server's message. */
-const REFUSAL_KEY: Partial<Record<ProjectErrorCode | ProjectCheckpointErrorCode, keyof Dict>> = {
+/**
+ * The words of the refusals the page meets — the lifecycle's, the
+ * checkpoints', the staff's writes, and the resend's `github_account_stale`
+ * (a code of Accept's list the resend shares); the rest read the server's message.
+ */
+type KnownCode = ProjectErrorCode | ProjectCheckpointErrorCode | Extract<ProjectAcceptErrorCode, "github_account_stale">;
+const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   not_draft: "project.refusal.notDraft",
   distribution_missing: "project.refusal.distributionMissing",
   deadline_past: "project.refusal.deadlinePast",
@@ -179,12 +279,22 @@ const REFUSAL_KEY: Partial<Record<ProjectErrorCode | ProjectCheckpointErrorCode,
   due_after_deadline: "project.refusal.dueAfterDeadline",
   duplicate_checkpoint: "project.refusal.duplicateCheckpoint",
   checkpoint_dispatched: "project.refusal.checkpointDispatched",
+  // The staff's writes (M3-08b): the teacher's score, the release, the resend, the re-enable.
+  not_frozen: "project.refusal.notFrozen",
+  grading_none: "project.refusal.gradingNone",
+  score_max_required: "project.refusal.scoreMaxRequired",
+  score_max_mismatch: "project.refusal.scoreMaxMismatch",
+  score_above_max: "project.refusal.scoreAboveMax",
+  invitation_not_pending: "project.refusal.invitationNotPending",
+  resend_too_soon: "project.refusal.resendTooSoon",
+  invite_failed: "project.refusal.inviteFailed",
+  github_account_stale: "project.refusal.githubAccountStale",
 };
 
 /** The dictionary key wording a refusal the page knows, or null (the server's message then). */
 export function refusalKey(error: unknown): keyof Dict | null {
   const code = refusalCodeOf(error);
-  return code ? (REFUSAL_KEY[code as ProjectErrorCode | ProjectCheckpointErrorCode] ?? null) : null;
+  return code ? (REFUSAL_KEY[code as KnownCode] ?? null) : null;
 }
 
 /** What a failed write says: the refusal worded when the page knows it, else the server's message, else `error.save`. */

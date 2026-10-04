@@ -5,7 +5,9 @@
  * repository's runs (`GradeRunList`), the review checkpoints, and every
  * write the page makes — rename, deadline, strategy and protected files
  * (`PATCH`), publish, archive, restore, delete, a repository's own deadline,
- * its lock and unlock —, all checked by `contract.test.ts`.
+ * its lock and unlock, the teacher's score, the release, a pending
+ * invitation resent, the protection re-enabled (M3-12b, M3-12c) —, all
+ * checked by `contract.test.ts`.
  * `GET /classrooms/:id/projects` is served here; the Activities section's
  * rows are added by `poll.ts`, which serves `GET /activities`, through
  * {@link projectActivities}.
@@ -18,7 +20,8 @@
  * changed since (the server then names Release as the primary action) and
  * the "score is the grade" scale falling back on scores out of 100.
  * `?unassigned=1`: publishing the draft is refused `409 unassigned_students`
- * with three names. Without `?projects=1` no classroom has a project, so the
+ * with three names. `?unreleased=1`: the locked project is not released yet,
+ * so Release is its one action. Without `?projects=1` no classroom has a project, so the
  * default scenes are what they were. The other classrooms are not connected:
  * "New ▾ › Project" there leads to the Settings' connect sheet.
  *
@@ -29,13 +32,20 @@
 import {
   PROJECT_DEFAULTS,
   ProjectPatch,
+  ProjectReleaseRefusal,
   ReviewCheckpointCreate,
+  ScoreOverride,
   type GradeRunList,
   type GradeRunView,
   type ProjectActivitySummary,
   type ProjectDetail,
   type ProjectDetailRow,
+  type ProjectInvitationResent,
+  type ProjectReleaseResult,
   type ProjectRepoDeadlineState,
+  type ProjectRepoProtection,
+  type ProjectRepoReview,
+  type ProjectRepoScores,
   type ProjectRepoView,
   type ProjectSummary,
   type ReviewCheckpoint,
@@ -50,6 +60,7 @@ import {
   resolveFinalScore,
   reviewState,
   scoreGrade,
+  teacherScoreMax,
 } from "@quiz/domain";
 
 import { classroomRoster, courses, rooms } from "./org";
@@ -88,6 +99,10 @@ interface MockRepo {
   currentRunId: string | null;
   frozenRunId: string | null;
   reviewRunId: string | null;
+  /** The final review's ledger row (`trigger = deadline`): claimed, and confirmed by GitHub or not. */
+  dispatch: { sha: string; dispatchedAt: string | null } | null;
+  /** When the staff last resent the invitation (F-PROJ-07): once a minute. */
+  resentAt: number | null;
 }
 
 interface MockProject {
@@ -107,6 +122,14 @@ const SEEDS: { id: string; title: string; state: ProjectSummary["state"]; start:
 ];
 
 const slug = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+/**
+ * A repository's id, a uuid: the contracts name repositories that way
+ * (`ProjectReleaseRefusal.repos`, parsed strictly by the page), so a seeded
+ * id is built from the seed's rank and the student's (999: the student who
+ * left the roster).
+ */
+const repoId = (seed: (typeof SEEDS)[number], n: number) =>
+  `0190d3c4-0000-7000-8000-${String(SEEDS.indexOf(seed) + 1).padStart(4, "0")}${String(n).padStart(8, "0")}`;
 const sha = (n: number) => (0x9a3f1c00 + n * 0x1f3d7).toString(16).padStart(8, "0").repeat(5).slice(0, 40);
 
 /** One run of `grading.yml`, as the ingestion stored it. */
@@ -150,7 +173,7 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
   const claimed = roster.filter((s) => s.status === "claimed");
   claimed.forEach((student, i) => {
     if (i % 10 === 0) return;
-    const id = `${seed.id}-r${i + 1}`;
+    const id = repoId(seed, i + 1);
     const name = `${ORG}/${project.slug}-${(student.githubLogin ?? `${student.prenom}-${student.nom}`).toLowerCase()}`;
     const variant = i % 12;
     const runs: GradeRunView[] = [];
@@ -181,6 +204,8 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
       currentRunId: null,
       frozenRunId: null,
       reviewRunId: null,
+      dispatch: null,
+      resentAt: null,
     };
     const scored = (n: number, at: number, over: Partial<GradeRunView> = {}) => {
       const r = run(id, n, at, over);
@@ -236,19 +261,31 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
     }
     if (locked && !base.deleted) {
       base.frozenRunId = base.currentRunId;
-      // The final review, dispatched at the definitive freeze (F-PROJ-11); none on a degraded lock.
+      // The final review, claimed at the definitive freeze (F-PROJ-11); none on a degraded lock.
+      // On `i === 2` GitHub's acceptance was never recorded: "not confirmed", never sent again.
+      // On `i === 4` (variant 4: a restored head, the frozen run to verify) the review was asked
+      // but its run is to verify too and never fills the slot (F-PROJ-11 as amended): the final
+      // score rests on the frozen run, and only the teacher's score settles it.
       if (!base.archived && base.currentRunId) {
-        const review = scored(9, seed.deadline + 40 * 60_000, { kind: "review", points: 60 + (i % 7) * 5, max: 100, testsPassed: null, testsTotal: null, headSha: latest.headSha });
-        base.reviewRunId = review.id;
+        base.dispatch = { sha: latest.headSha, dispatchedAt: i === 2 ? null : iso(seed.deadline + 31 * 60_000) };
+        if (i !== 2 && i !== 4) {
+          const review = scored(9, seed.deadline + 40 * 60_000, { kind: "review", points: 60 + (i % 7) * 5, max: 100, testsPassed: null, testsTotal: null, headSha: latest.headSha });
+          base.reviewRunId = review.id;
+        }
       }
       // A late push: in the history, never the frozen score.
       if (i % 4 === 1) scored(8, seed.deadline + 2 * H, { points: 10, max: 10, testsPassed: 10, afterDeadline: true, headSha: sha(i * 7 + 2) });
-      if (i === 3) base.teacher = { points: 9, max: 10, comment: "Excellent travail sur la gestion mémoire.", gradedAt: iso(-6 * D) };
+      // The teacher's score settles the repository whose frozen run is to verify (variant 4, F-PROJ-14 amended):
+      // written with the review's maximum, the scored run the final score would otherwise come from.
+      if (i === 4) base.teacher = { points: 72, max: 100, comment: "Excellent travail sur la gestion mémoire.", gradedAt: iso(-6 * D) };
       // Released five days ago at the final score of the day; on `i === 5` the review came in after it.
-      const frozenRun = runs.find((r) => r.id === base.frozenRunId)!;
-      const final = finalOf(base);
-      base.released =
-        i === 5 ? { points: frozenRun.points, max: frozenRun.max } : { points: final?.points ?? null, max: final?.max ?? null };
+      // `?unreleased=1`: not released yet — Release is the page's one action.
+      if (!flags.unreleased) {
+        const frozenRun = runs.find((r) => r.id === base.frozenRunId)!;
+        const final = finalOf(base);
+        base.released =
+          i === 5 ? { points: frozenRun.points, max: frozenRun.max } : { points: final?.points ?? null, max: final?.max ?? null };
+      }
     }
     repos.push(base);
   });
@@ -261,8 +298,9 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
     email: "eleve.ancien@heig-vd.ch",
     githubLogin: "eleve-ancien",
   };
+  const goneId = repoId(seed, 999);
   repos.push({
-    id: `${seed.id}-gone`,
+    id: goneId,
     enrollmentId: null,
     student: gone,
     fullName: `${ORG}/${project.slug}-eleve-ancien`,
@@ -284,10 +322,12 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
     released: null,
     protectionSuspended: false,
     deleted: false,
-    runs: [run(`${seed.id}-gone`, 1, seed.start + 3 * D, { points: 5, testsPassed: 5 })],
-    currentRunId: `${seed.id}-gone-run-1`,
-    frozenRunId: locked ? `${seed.id}-gone-run-1` : null,
+    runs: [run(goneId, 1, seed.start + 3 * D, { points: 5, testsPassed: 5 })],
+    currentRunId: `${goneId}-run-1`,
+    frozenRunId: locked ? `${goneId}-run-1` : null,
     reviewRunId: null,
+    dispatch: locked ? { sha: sha(99), dispatchedAt: iso(seed.deadline + 31 * 60_000) } : null,
+    resentAt: null,
   });
   return repos;
 }
@@ -298,15 +338,44 @@ function slot(repo: MockRepo, id: string | null) {
   return r ? { runId: r.id, points: r.points, max: r.max } : null;
 }
 
-/** The final score as the server resolves it: the teacher's, else the review's, else the frozen (or current) one. */
+const runOf = (repo: MockRepo, id: string | null) => (id ? (repo.runs.find((x) => x.id === id) ?? null) : null);
+
+/** The slots a final score is resolved from: the review's, the frozen, the current run. */
+const slotRuns = (repo: MockRepo) => ({
+  reviewScore: runOf(repo, repo.reviewRunId),
+  frozenScore: runOf(repo, repo.frozenRunId),
+  score: runOf(repo, repo.currentRunId),
+});
+
+/** The final score as the server resolves it: the teacher's (with its own maximum), else the review's, else the frozen (or current) one. */
 function finalOf(repo: MockRepo) {
-  const runOf = (id: string | null) => (id ? (repo.runs.find((x) => x.id === id) ?? null) : null);
   return resolveFinalScore({
     teacherPoints: repo.teacher?.points ?? null,
-    reviewScore: runOf(repo.reviewRunId),
-    frozenScore: runOf(repo.frozenRunId),
-    score: runOf(repo.currentRunId),
+    teacherMax: repo.teacher?.max ?? null,
+    ...slotRuns(repo),
   });
+}
+
+/** The maximum a teacher's score is held to (`teacherRunMax` of the API): the scored run's, none when it is to verify. */
+function runMaxOf(repo: MockRepo): number | null {
+  const scored = resolveFinalScore(slotRuns(repo));
+  return scored && !scored.toVerify ? scored.max : null;
+}
+
+/** The final review's state (`reviewState` of `@quiz/domain`), from the repository and its ledger row. */
+function reviewOf(p: MockProject, r: MockRepo): ProjectRepoReview {
+  const state = reviewState({
+    gradingMode: p.summary.gradingMode,
+    frozenAt: r.frozenAt ? new Date(r.frozenAt) : null,
+    frozenGradeRunId: r.frozenRunId,
+    reviewGradeRunId: r.reviewRunId,
+    archivedAt: r.archived ? new Date(r.frozenAt ?? now) : null,
+    protectionSuspendedAt: r.protectionSuspended ? new Date(now - H) : null,
+    dispatch: r.dispatch
+      ? { sha: r.dispatch.sha, dispatchedAt: r.dispatch.dispatchedAt ? new Date(r.dispatch.dispatchedAt) : null }
+      : null,
+  });
+  return { ...state, askedAt: state.askedAt?.toISOString() ?? null };
 }
 
 const PROJECTS = new Map<string, MockProject>();
@@ -350,7 +419,7 @@ function seeded(): MockProject[] {
     const project: MockProject = {
       summary,
       classroom: { id: room.id, name: room.name, courseCode: course?.code ?? "" },
-      releasedAt: seed.state === "locked" ? iso(-5 * D) : null,
+      releasedAt: seed.state === "locked" && !flags.unreleased ? iso(-5 * D) : null,
       repos: seedRepos(seed, summary, classroomRoster(room.id)),
       checkpoints: [],
       read: false,
@@ -458,21 +527,9 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
       review: graded(slot(r, r.reviewRunId)),
       teacher: r.teacher,
       final: final ? { ...final, grade: scoreGrade(final.points, final.max, scale) } : null,
+      scoreMax: runMaxOf(r),
     },
-    // The final review's state, by the server's own rule (F-PROJ-11); the
-    // mock keeps no dispatch ledger, so a review is done or not yet asked.
-    review: (() => {
-      const state = reviewState({
-        gradingMode: p.summary.gradingMode,
-        frozenAt: r.frozenAt ? new Date(r.frozenAt) : null,
-        frozenGradeRunId: r.frozenRunId,
-        reviewGradeRunId: r.reviewRunId,
-        archivedAt: r.archived ? new Date(0) : null,
-        protectionSuspendedAt: r.protectionSuspended ? new Date(0) : null,
-        dispatch: null,
-      });
-      return { ...state, askedAt: state.askedAt?.toISOString() ?? null };
-    })(),
+    review: reviewOf(p, r),
     released: r.released,
     flags: {
       protectionSuspended: r.protectionSuspended,
@@ -610,10 +667,11 @@ on("POST", "/app/api/projects/:id/publish", (m) => {
   if (s.state !== "draft") throw refuse(409, "not_draft", "Only a draft is published");
   if (s.distribution === null) throw refuse(409, "distribution_missing", "The distribution repository is not built");
   if (flags.unassigned) {
+    // `ProjectUnassigned` wants uuids; the mock's roster ids are not, so each student gets one of its rank.
     const students = classroomRoster(s.classroomId)
       .filter((x) => x.status === "claimed")
       .slice(0, 3)
-      .map((x) => ({ enrollmentId: x.id, nom: x.nom, prenom: x.prenom }));
+      .map((x, i) => ({ enrollmentId: `0190d3c4-0000-7000-8000-${String(i + 1).padStart(12, "0")}`, nom: x.nom, prenom: x.prenom }));
     throw refuse(409, "unassigned_students", `${students.length} student(s) in no group`, { students });
   }
   s.state = "published";
@@ -675,6 +733,83 @@ const setLock = (m: RegExpMatchArray, on: boolean) => {
 };
 on("POST", "/app/api/projects/:id/repos/:rid/lock", (m) => setLock(m, true));
 on("POST", "/app/api/projects/:id/repos/:rid/unlock", (m) => setLock(m, false));
+
+/**
+ * The teacher's score (F-PROJ-14, M3-08b): after the definitive freeze on a
+ * graded project; its maximum the scored run's, else the teacher's own
+ * (`teacherScoreMax`); null clears it. Answers the row's scores, laid over it.
+ */
+on("PATCH", "/app/api/projects/:id/repos/:rid/score", (m, raw) => {
+  const p = projectOr404(m.groups!.id!);
+  const r = p.repos.find((x) => x.id === m.groups!.rid);
+  if (!r) throw new MockError(404, "Not found");
+  const parsed = ScoreOverride.safeParse(raw);
+  if (!parsed.success) throw new MockPayload(400, { error: "validation", message: parsed.error.message });
+  if (p.summary.gradingMode !== "auto") throw refuse(409, "grading_none", "The project is not graded");
+  if (r.frozenAt === null) throw refuse(409, "not_frozen", "The repository is not frozen yet");
+  const body = parsed.data;
+  if (body.points === null) {
+    r.teacher = null;
+  } else {
+    const max = teacherScoreMax(body.points, body.max, runMaxOf(r));
+    if ("refusal" in max) throw refuse(422, max.refusal, "The score is refused");
+    r.teacher = { points: body.points, max: max.max, comment: body.comment?.trim() || null, gradedAt: iso(0) };
+  }
+  const view = repoView(p, r);
+  const scores: ProjectRepoScores = { scores: view.scores, released: view.released, changedAfterRelease: view.flags.changedAfterRelease };
+  return scores;
+});
+
+/**
+ * The release (F-PROJ-14, D05): every live repository frozen for good, no
+ * final score left to verify; a snapshot per repository, rewritten by a
+ * release again. A non-live repository's score to verify is released as none.
+ */
+on("POST", "/app/api/projects/:id/release", (m) => {
+  const p = projectOr404(m.groups!.id!);
+  if (p.summary.gradingMode !== "auto") throw refuse(409, "grading_none", "The project is not graded");
+  const live = p.repos.filter((r) => isLive(p, r));
+  const frozen = live.filter((r) => r.frozenAt !== null);
+  // The two refusals that carry data, in the shape the page parses (`ProjectReleaseRefusal`).
+  if (live.length === 0 || frozen.length < live.length) {
+    const body = ProjectReleaseRefusal.parse({ error: "not_frozen", message: "Some live repositories are not frozen", live: live.length, frozen: frozen.length });
+    throw new MockPayload(409, body);
+  }
+  const toVerify = live.filter((r) => finalOf(r)?.toVerify).map((r) => r.id);
+  if (toVerify.length > 0) {
+    const body = ProjectReleaseRefusal.parse({ error: "to_verify", message: "Some final scores are to verify", repos: toVerify });
+    throw new MockPayload(409, body);
+  }
+  const first = p.releasedAt === null;
+  let scored = 0;
+  for (const r of p.repos) {
+    const resolved = finalOf(r);
+    const final = resolved && (isLive(p, r) || !resolved.toVerify) ? resolved : null;
+    r.released = { points: final?.points ?? null, max: final?.max ?? null };
+    if (final) scored += 1;
+  }
+  p.releasedAt = iso(0);
+  const result: ProjectReleaseResult = { releasedAt: p.releasedAt, first, repos: p.repos.length, scored };
+  return result;
+});
+
+/** The protected files restored again (F-PROJ-08): a no-op on a repository not suspended. */
+on("POST", "/app/api/projects/:id/repos/:rid/protection", (m) => {
+  const [, r] = liveRepoOr409(m);
+  const answer: ProjectRepoProtection = { reenabledAt: r.protectionSuspended ? iso(0) : null };
+  r.protectionSuspended = false;
+  return answer;
+});
+
+/** A pending invitation resent by the staff (F-PROJ-07), at most once a minute. */
+on("POST", "/app/api/projects/:id/repos/:rid/invite", (m) => {
+  const [, r] = liveRepoOr409(m);
+  if (r.invitationStatus !== "pending") throw refuse(409, "invitation_not_pending", "The invitation is not pending");
+  if (r.resentAt !== null && Date.now() - r.resentAt < 60_000) throw refuse(429, "resend_too_soon", "Resent less than a minute ago");
+  r.resentAt = Date.now();
+  const answer: ProjectInvitationResent = { invitationStatus: "pending", resentAt: iso(0) };
+  return answer;
+});
 
 on("GET", "/app/api/projects/:id/repos/:rid/runs", (m): GradeRunList => {
   const p = projectOr404(m.groups!.id!);

@@ -2020,6 +2020,108 @@ release. The original card's notes stay here; each part has its card below.
   each repository answer over it (`settle` in `RepoSheet.tsx`); the
   refusals go through `refusalMessage`; the mock's `MockRepo` carries
   `teacher` and `protectionSuspended` already.
+- **As delivered** (branch `merge/M3-12bc-project-writes`, ONE PR with
+  M3-12c). What M3-13, M3-16, M5-03 and M3-07 inherit:
+  - **The sheet** (`project/RepoSheet.tsx`): `settle` now takes a patch of
+    the row (`(repo) => repo`), so every answer — a deadline state, the
+    scores, an invitation status, a cleared flag — is laid over the row the
+    same way, then the page invalidated.
+    - **The teacher's score** (`project/TeacherScoreForm.tsx`: `ScoreSection`
+      — the five slots, the review's state and the form —, `PATCH
+      …/repos/:rid/score`, `ScoreOverride`): points, a maximum field shown
+      only when the server says the score is held to none —
+      **`scores.scoreMax`** on every row (review round 1: the API's
+      `teacherRunMax`, `detail.ts`, ONE rule for the write of `grades.ts`
+      and the page; the scored run's maximum, null for pass / fail only,
+      malformed, several annotations, or a run to verify; tested in
+      `grades.db.test.ts` and `detail.db.test.ts`) —, otherwise "out of N"
+      as text and no `max` sent; a comment (sent trimmed, always, so it can
+      be emptied); Save (`common.save`), the sheet's ONE primary; Clear
+      (`{ points: null }`) once a score exists. `scoreOverrideBody` builds
+      the raw object and keeps what `ScoreOverride.safeParse` accepts
+      (invariant 7); locally it only knows "no points" and "own maximum
+      required". The answer (`ProjectRepoScores`) patches `scores`,
+      `released` and `flags.changedAfterRelease`. The form exists only when
+      `teacherScoreBlock` is null: on a `none` project the line says it is
+      not graded, before the definitive freeze that the score waits for
+      it — so `409 not_frozen` / `grading_none` are met only by a stale
+      page, and worded under the form with the three 422s (`FormError`
+      with `refusalMessage`). The Teacher fact of the five slots shows the
+      points with their maximum (`scores.teacher.max`).
+    - **Resend** (`POST …/repos/:rid/invite`): a `secondary` `sm` button
+      beside the Invitation fact, only while `invitationStatus` is
+      `pending` and the repository is `actionable`; `invitationStatus` of
+      the answer laid over the row (an `accepted` answer removes the
+      button and says the student already has access); `429
+      resend_too_soon`, `409 invitation_not_pending`, `502 invite_failed`
+      and `409 github_account_stale` worded (toast).
+    - **Re-enable** (`POST …/repos/:rid/protection`): a `secondary` `sm`
+      button under the flags, only while `flags.protectionSuspended`, with
+      a 13 px line beside it saying the restores resume at the next push
+      and the runs marked to verify stay so; no confirmation (nothing is
+      lost, nothing restored at once). The answer clears
+      `flags.protectionSuspended` on the row (the table's "protected files
+      in conflict" tag goes, "to verify" stays), the run list is
+      invalidated, the toast repeats that past runs stay to verify.
+    - **The final review** (`row.review`, `ProjectRepoReview`): ONE table,
+      `reviewView` (`projectPage.ts`) → `{ key, tone, detail }` per status,
+      read by the row's tag and the sheet's detail line alike — "review
+      pending" / "review asked" / "no review" zinc, "review done" green,
+      the degraded "no review" (archived as its lock, protection
+      suspended) amber, **"review not confirmed" red**; `detail` is the
+      line that says why or what next (asked on {date} of commit {sha};
+      not confirmed: never sent again, set the score by hand; no frozen
+      run; archived; protection suspended: re-enable it; not frozen yet),
+      null for done and a plain none. The sheet draws it as a "Final
+      review" fact inside the scores grid. The table's State column draws
+      `reviewTag`: the same tag, except that a repository not frozen
+      (trivially pending) and a `none` without reason (a project graded
+      `none`: no row has a review) get no tag — decided here, to keep a
+      row of an open project free of a tag that says nothing.
+  - `UnassignedBody` is gone: `unassignedStudents` parses the contracts'
+    `ProjectUnassigned` (`message` required, `enrollmentId` a uuid — the
+    mock's `?unassigned=1` refusal mints uuids by rank, since its roster
+    ids are not).
+  - **Refusals** (`REFUSAL_KEY`, widened to the resend's
+    `github_account_stale` of `PROJECT_ACCEPT_REFUSALS`): `not_frozen`,
+    `grading_none`, `score_max_required`, `score_max_mismatch`,
+    `score_above_max`, `invitation_not_pending`, `resend_too_soon`,
+    `invite_failed`, `github_account_stale`; the release's `to_verify` is
+    worded by `releaseRefusal` alone (M3-12c), with the names.
+  - **Contracts** (own block, review round 1): `ProjectRepoView.scores.scoreMax`
+    (above) and `ProjectReleaseRefusal` (M3-12c); `contract.test.ts` has a
+    describe calling the four write routes of the mock and checking
+    `ProjectRepoScores`, `ProjectReleaseResult`, `ProjectReleaseRefusal`,
+    `ProjectInvitationResent` (and the 429) and `ProjectRepoProtection`.
+  - **Mock** (`mock/project.ts`), over #498's repair (which gave the mock
+    `review`, `teacher.max` and `unverified`, and the fixtures
+    `final.toVerify`): `MockRepo.dispatch` (the ledger row, so a review can
+    be asked or not confirmed) and `resentAt`; one `review` derivation,
+    `reviewOf`, feeding `reviewState` of `@quiz/domain` with that ledger.
+    The locked project's rows now walk the review states (done; `i === 2`
+    not confirmed; archived degraded; the gone student's done) and the
+    to-verify repository (`i === 4`, rather than `i === 3`: a restored
+    head, its review asked but never filling the slot) carries the
+    teacher's score that settles it (72 out of the teacher's own 100,
+    `scoreMax` null), so the server's `scoresFinal` holds and Release is
+    offered; without it the release is refused `to_verify` naming that
+    repository. Repository ids are uuids (`repoId`), as
+    `ProjectReleaseRefusal.repos` wants them (review round 2). The four
+    routes: `PATCH …/score` (`teacherScoreMax` applied, the 409s and
+    422s), `POST …/release` (counts in `not_frozen`, ids in `to_verify`,
+    the snapshots), `POST …/protection`, `POST …/invite` (once a minute,
+    `429` on a second click). Scene `project-grades` (the sheet of the
+    teacher-scored repository); `contract.test.ts` checks `ProjectDetail`
+    with `review`.
+  - **Tests**: `projectPage.test.ts` (review words and tones, the table's
+    tag rule, `scoredRunMax`, `teacherScoreBlock`, `scoreOverrideBody`,
+    the refusal keys, `releaseRefusal`, `ProjectUnassigned` strictness),
+    `ProjectPage.test.tsx` (the score with and without a scored run, the
+    422s and 409s worded, the answer laid over the row, Clear, no form on
+    `none`; resend, 429, accepted; re-enable clearing the tag; the review
+    per status in table and sheet; French).
+  - Not done here: a manual re-dispatch of an unconfirmed review (M3-08b
+    left it open); the student's own resend (M3-09).
 
 ### M3-12c — Web: the release
 - **Depends on**: M3-12a, M3-08b.
@@ -2032,6 +2134,45 @@ release. The original card's notes stay here; each part has its card below.
 - **From M3-12a**: `ProjectPage.tsx` draws the button for `publish` only
   (`actions` of its `PageHeader`); add the `release` branch there, and the
   status sentence stays (`projectStatus`).
+- **As delivered** (branch `merge/M3-12bc-project-writes`, ONE PR with
+  M3-12b):
+  - **The button** (`ProjectPage.tsx`): `primaryAction: "release"` draws
+    the header's one primary, "Release scores" (`Send`), or "Release
+    again" once `releasedAt` is set (the server names `release` again only
+    when a final score moved after the release, `changedAfterRelease`).
+    `useConfirm` first: the first release says the final score of each of
+    the {n} live repositories becomes the student's and the gradebook's,
+    and that a student's score is indicative until then; the release again
+    says the snapshot is rewritten with today's final scores, the
+    "modified after publication" marks go, nobody is notified again. Then
+    `POST …/release`; on `ProjectReleaseResult` the page, the classroom's
+    lists and the Activities are invalidated and a toast says "{scored} of
+    {repos} repositories have one". Sync stays a sentence (M3-07).
+  - **The sentence** (`projectStatus`): `project.status.release` kept for
+    the first release; a new `project.status.rerelease`, dated at the
+    release, once released and offered again — the previous sentence said
+    "ready to be released" of a project already released.
+  - **Refusals** (`releaseRefusal`, `projectPage.ts`), as a danger `Alert`
+    under the header titled "The scores were not released", kept until a
+    release succeeds, parsed with the contracts' **`ProjectReleaseRefusal`**
+    (review round 1: a discriminated union beside `ProjectUnassigned` —
+    `not_frozen` with `live` / `frozen`, `to_verify` with `repos: uuid[]`,
+    the two bodies `grades.ts` throws; the mock's release route builds its
+    refusals through it): "{frozen} of {live} live repositories are frozen
+    for good"; the students named from the page's rows by the `repos` ids
+    (a generic "some repositories" when none is on the page); `409
+    grading_none` and anything else through `refusalMessage`. An alert
+    rather than a toast because the to-verify names must stay readable
+    while the teacher opens each sheet.
+  - **Mock**: `POST …/release` above; `?unreleased=1` makes the locked
+    project not released yet (Release its one action). Scenes
+    `project-release` (the confirmation open) and `project-released` (the
+    header after it); `project-locked` unchanged shows the release again.
+  - **Tests** (`ProjectPage.test.tsx`): the button, the confirmation
+    declined then accepted, the POST, the toast and the refetch; the
+    release again and its wording; nothing offered once released with no
+    change; the three refusals worded; French. `projectPage.test.ts`:
+    `releaseRefusal`, the `rerelease` sentence.
 
 ### M3-13 — Web: student `ProjectRow`
 - **Depends on**: M3-09a contracts, M2-07.

@@ -317,6 +317,8 @@ describe("the project page (F-PROJ-13)", () => {
     expect(scores(s3!.id).frozen).toMatchObject({ points: 7, max: 10, grade: { grade: 4.5, fellBack: true } });
     expect(scores(s4!.id).final).toEqual({ points: 4.5, max: 6, source: "ci", toVerify: false, grade: { grade: 4.5, fellBack: false } });
     expect(scores(s4!.id).frozen).toBeNull();
+    // The maximum a teacher's score is held to, per row: the review's, the frozen run's, the current one's (`teacherRunMax`).
+    expect([s1, s2, s3, s4].map((s) => scores(s!.id).scoreMax)).toEqual([6, 6, 10, 6]);
   });
 
   it("shows a score changed after the release, and offers the release again for it", async () => {

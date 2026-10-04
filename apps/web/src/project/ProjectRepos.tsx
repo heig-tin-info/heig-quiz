@@ -21,7 +21,7 @@ import {
   type Column,
 } from "../ui";
 import { CiBadge, RepoLink, Score } from "./parts";
-import { repoFlags, shortSha } from "./projectPage";
+import { repoFlags, reviewTag, shortSha } from "./projectPage";
 
 type SortKey = "student" | "score" | "deadline";
 
@@ -45,10 +45,15 @@ function RepoCell({ repo }: { repo: ProjectRepoView | null }) {
   );
 }
 
-/** The lock, the freeze and the flags of a repository, as tags; on a narrow table the flags fold into one count. */
+/**
+ * The lock, the freeze, the final review's state and the flags of a
+ * repository, as tags; on a narrow table the flags fold into one count. The
+ * review tag (M3-12b) says nothing while it is trivially pending.
+ */
 function StateCell({ repo }: { repo: ProjectRepoView }) {
   const t = useT();
   const flags = repoFlags(repo);
+  const review = reviewTag(repo);
   return (
     <span className="flex flex-wrap items-center gap-1">
       {repo.locked ? (
@@ -70,6 +75,7 @@ function StateCell({ repo }: { repo: ProjectRepoView }) {
           {t("project.frozen.provisional")}
         </Badge>
       ) : null}
+      {review ? <Badge tone={review.tone}>{t(review.key)}</Badge> : null}
       {/* Wrappers, not classes on the badges: a badge's own `inline-flex` would win over `hidden`. */}
       <span className="hidden @2xl:contents">
         {flags.map((f) => (

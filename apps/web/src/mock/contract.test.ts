@@ -80,7 +80,12 @@ import {
   ProjectActivitySummary,
   ProjectCreate,
   ProjectDetail,
+  ProjectInvitationResent,
   ProjectRefusal,
+  ProjectReleaseRefusal,
+  ProjectReleaseResult,
+  ProjectRepoProtection,
+  ProjectRepoScores,
   ProjectSourceDetail,
   ProjectSourceRepo,
   ProjectSummary,
@@ -605,5 +610,78 @@ describe("the mock's new project (M3-11)", () => {
     const unknown = await post(classroomId, body("no-such-repo"));
     expect(unknown.status).toBe(422);
     expect(ProjectRefusal.parse(unknown.body).error).toBe("source_not_found");
+  });
+});
+
+describe("the mock's project writes (M3-12b, M3-12c)", () => {
+  const send = async (path: string, method: string, body?: unknown) => {
+    const res = await fetch(path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+    return { status: res.status, body: (await res.json()) as unknown };
+  };
+  /** The locked project, every repository frozen: the one the teacher's score and the release apply to. */
+  const locked = async () => {
+    const own = (await get(`/app/api/classrooms/${classroomId}/projects`)) as { id: string; state: string }[];
+    const id = own.find((p) => p.state === "locked")!.id;
+    const detail = (await get(`/app/api/projects/${id}`)) as ProjectDetail;
+    return { id, detail };
+  };
+  const published = async () => {
+    const own = (await get(`/app/api/classrooms/${classroomId}/projects`)) as { id: string; state: string }[];
+    const id = own.find((p) => p.state === "published")!.id;
+    const detail = (await get(`/app/api/projects/${id}`)) as ProjectDetail;
+    return { id, detail };
+  };
+
+  it("answers the teacher's score with the row's scores (ProjectRepoScores), and the release with its result", async () => {
+    const { id, detail } = await locked();
+    const row = detail.rows.find((r) => r.repo !== null && r.repo.scores.scoreMax !== null && !r.repo.flags.deleted)!;
+    const scored = await send(`/app/api/projects/${id}/repos/${row.repo!.id}/score`, "PATCH", { points: 1, comment: "seen" });
+    expect(scored.status).toBe(200);
+    expect(issuesOf(ProjectRepoScores, scored.body)).toEqual([]);
+    expect((scored.body as ProjectRepoScores).scores.teacher).toMatchObject({ points: 1, max: row.repo!.scores.scoreMax });
+    const released = await send(`/app/api/projects/${id}/release`, "POST");
+    expect(released.status).toBe(200);
+    expect(issuesOf(ProjectReleaseResult, released.body)).toEqual([]);
+  });
+
+  it("refuses the release of an open project with the body the page parses (ProjectReleaseRefusal)", async () => {
+    const { id } = await published();
+    const refused = await send(`/app/api/projects/${id}/release`, "POST");
+    expect(refused.status).toBe(409);
+    expect(issuesOf(ProjectReleaseRefusal, refused.body)).toEqual([]);
+    expect(refused.body).toMatchObject({ error: "not_frozen" });
+  });
+
+  it("refuses a release over a score to verify, naming the repository by a uuid the contract accepts", async () => {
+    const { id, detail } = await locked();
+    // The repository whose frozen run is to verify, settled by the teacher's score: clear it, the release is refused.
+    const settled = detail.rows.find((r) => r.repo?.flags.toVerify && r.repo.scores.final?.source === "teacher")!;
+    expect((await send(`/app/api/projects/${id}/repos/${settled.repo!.id}/score`, "PATCH", { points: null })).status).toBe(200);
+    const refused = await send(`/app/api/projects/${id}/release`, "POST");
+    expect(refused.status).toBe(409);
+    // Strict: the ids must be uuids, as the page's `releaseRefusal` parses them.
+    expect(ProjectReleaseRefusal.parse(refused.body)).toEqual({
+      error: "to_verify",
+      message: expect.any(String),
+      repos: [settled.repo!.id],
+    });
+    // Settled again — with the teacher's own maximum, since no scored run holds it: the release goes through.
+    const back = await send(`/app/api/projects/${id}/repos/${settled.repo!.id}/score`, "PATCH", { points: 72, max: 100 });
+    expect(back.status).toBe(200);
+    expect((await send(`/app/api/projects/${id}/release`, "POST")).status).toBe(200);
+  });
+
+  it("resends a pending invitation (ProjectInvitationResent) and re-enables a protection (ProjectRepoProtection)", async () => {
+    const { id, detail } = await published();
+    const pending = detail.rows.find((r) => r.repo?.invitationStatus === "pending")!;
+    const resent = await send(`/app/api/projects/${id}/repos/${pending.repo!.id}/invite`, "POST");
+    expect(resent.status).toBe(200);
+    expect(issuesOf(ProjectInvitationResent, resent.body)).toEqual([]);
+    expect((await send(`/app/api/projects/${id}/repos/${pending.repo!.id}/invite`, "POST")).status).toBe(429);
+    const suspended = detail.rows.find((r) => r.repo?.flags.protectionSuspended)!;
+    const reenabled = await send(`/app/api/projects/${id}/repos/${suspended.repo!.id}/protection`, "POST");
+    expect(reenabled.status).toBe(200);
+    expect(issuesOf(ProjectRepoProtection, reenabled.body)).toEqual([]);
+    expect((reenabled.body as ProjectRepoProtection).reenabledAt).not.toBeNull();
   });
 });

@@ -74,6 +74,7 @@ export const FLAG_NAMES = [
   "srcmissing",
   "distfail",
   "unassigned",
+  "unreleased",
   "superpowers",
   "lastminutes",
   "degraded",

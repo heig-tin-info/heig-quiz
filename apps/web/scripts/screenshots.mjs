@@ -277,6 +277,39 @@ const scenes = [
     },
   },
   { name: "project-locked", role: "teacher", path: "/projects/pj-locked?projects=1", settle: 2500 },
+  // M3-12b: the sheet of the repository whose score is the teacher's (its
+  // form filled, the final review received); M3-12c: the locked project not
+  // yet released (`?unreleased=1`), Release its one action and its
+  // confirmation, then the header once released.
+  {
+    name: "project-grades",
+    role: "teacher",
+    path: "/projects/pj-locked?projects=1",
+    fold: true,
+    settle: 2500,
+    act: (p) => p.locator("tbody tr").filter({ hasText: /(teacher|enseignant)/ }).first().click(),
+  },
+  {
+    name: "project-release",
+    role: "teacher",
+    path: "/projects/pj-locked?projects=1&unreleased=1",
+    settle: 2500,
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(release scores|publier les scores)$/i }).click();
+      await p.getByRole("dialog").waitFor();
+    },
+  },
+  {
+    name: "project-released",
+    role: "teacher",
+    path: "/projects/pj-locked?projects=1&unreleased=1",
+    settle: 2500,
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(release scores|publier les scores)$/i }).click();
+      await p.getByRole("dialog").getByRole("button", { name: /^(release|publier)$/i }).click();
+      await p.getByText(/^(Scores released on|Scores publiés le)/).waitFor();
+    },
+  },
   // F-ORG-13 (D24, M2-07): the Settings tab. A classroom that is not
   // connected (r2, its course's organization suggested): "Connect to GitHub"
   // is the one accent, and the connect sheet it opens; PRG1-2026 connected,

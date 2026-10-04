@@ -1,18 +1,28 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Lock, LockOpen } from "lucide-react";
+import { Lock, LockOpen, Mail, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { ProjectDetail, ProjectRepoDeadline, ProjectRepoDeadlineState } from "@quiz/contracts";
+import type {
+  ProjectDetail,
+  ProjectInvitationResent,
+  ProjectRepoDeadline,
+  ProjectRepoDeadlineState,
+  ProjectRepoProtection,
+  ProjectRepoScores,
+  ProjectRepoView,
+  ScoreOverride,
+} from "@quiz/contracts";
 
 import { api, refusedWith } from "../api";
 import { DateField } from "../evaluation/TimingStep";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { projectKey } from "../queryKeys";
+import { projectKey, projectRunsKey } from "../queryKeys";
 import { Badge, Button, Fact, FieldError, fieldErrorProps, isoDateTime, RelativeTime, Sheet } from "../ui";
-import { CiBadge, Points, RepoLink, Score } from "./parts";
+import { CiBadge, RepoLink } from "./parts";
 import { actionable, refusalMessage, repoFlags, shortSha } from "./projectPage";
 import { RunHistory } from "./RunHistory";
+import { ScoreSection } from "./TeacherScoreForm";
 
 const OWN_DEADLINE_ID = "project-repo-deadline";
 
@@ -27,14 +37,14 @@ function Section({ title, children }: { title: ReactNode; children: ReactNode })
 
 /**
  * One repository of the project page (F-PROJ-13), opened from its row: the
- * student and the repository, its scores slot by slot, its deadline and lock
+ * student and the repository, its scores slot by slot with the teacher's own
+ * (F-PROJ-14, M3-12b), the state of its final review, its deadline and lock
  * — an own deadline set or taken back, a lock or an unlock by hand (F-PROJ-09,
- * M3-05a), each written at once — and the history of its runs. The row is
- * read from the page's own data, so a write here is seen on the table behind
- * the sheet.
- *
- * The resend of an invitation, the re-enable of the protection and the
- * teacher's score come with M3-08b's routes (merge tasks M3-12b, M3-12c).
+ * M3-05a) —, the resend of a pending invitation (F-PROJ-07) and the
+ * re-enable of its protected files (F-PROJ-08), each written at once, and
+ * the history of its runs. The row is read from the page's own data, so a
+ * write here is seen on the table behind the sheet. The sheet's one primary
+ * action is the score's Save.
  */
 export function RepoSheet({
   project,
@@ -51,12 +61,10 @@ export function RepoSheet({
   const row = project.rows.find((r) => r.repo?.id === repoId);
   const repo = row?.repo ?? null;
 
-  /** The repository's deadline state answered by its routes, laid over its row. */
-  const settle = (state: ProjectRepoDeadlineState) => {
+  /** What a route answered of the repository, laid over its row; then the page is read again. */
+  const settle = (patch: (repo: ProjectRepoView) => ProjectRepoView) => {
     qc.setQueryData<ProjectDetail>(projectKey(project.id), (p) =>
-      p
-        ? { ...p, rows: p.rows.map((r) => (r.repo?.id === state.id ? { ...r, repo: { ...r.repo, ...state } } : r)) }
-        : p,
+      p ? { ...p, rows: p.rows.map((r) => (r.repo?.id === repoId ? { ...r, repo: patch(r.repo) } : r)) } : p,
     );
     void qc.invalidateQueries({ queryKey: projectKey(project.id) });
   };
@@ -66,7 +74,7 @@ export function RepoSheet({
     mutationFn: (body: ProjectRepoDeadline) =>
       api<ProjectRepoDeadlineState>(`${base}/deadline`, { method: "PUT", body: JSON.stringify(body) }),
     onSuccess: (state) => {
-      settle(state);
+      settle((r) => ({ ...r, ...state }));
       toast(t("project.repo.deadlineSaved"), "success");
     },
     onError: (error) => {
@@ -77,8 +85,35 @@ export function RepoSheet({
   const lock = useMutation({
     mutationFn: (on: boolean) => api<ProjectRepoDeadlineState>(`${base}/${on ? "lock" : "unlock"}`, { method: "POST" }),
     onSuccess: (state, on) => {
-      settle(state);
+      settle((r) => ({ ...r, ...state }));
       toast(t(on ? "project.repo.locked" : "project.repo.unlocked"), "success");
+    },
+    onError: failed,
+  });
+  const score = useMutation({
+    mutationFn: (body: ScoreOverride) =>
+      api<ProjectRepoScores>(`${base}/score`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: ({ scores, released, changedAfterRelease }, body) => {
+      settle((r) => ({ ...r, scores, released, flags: { ...r.flags, changedAfterRelease } }));
+      toast(t(body.points === null ? "project.teacherScore.cleared" : "project.teacherScore.saved"), "success");
+    },
+    // The refusal is worded under the form (`FormError`), not toasted.
+  });
+  const resend = useMutation({
+    mutationFn: () => api<ProjectInvitationResent>(`${base}/invite`, { method: "POST" }),
+    onSuccess: ({ invitationStatus }) => {
+      settle((r) => ({ ...r, invitationStatus }));
+      toast(t(invitationStatus === "accepted" ? "project.invitation.alreadyAccepted" : "project.invitation.resent"), "success");
+    },
+    onError: failed,
+  });
+  const reenable = useMutation({
+    mutationFn: () => api<ProjectRepoProtection>(`${base}/protection`, { method: "POST" }),
+    onSuccess: () => {
+      settle((r) => ({ ...r, flags: { ...r.flags, protectionSuspended: false } }));
+      // The runs flagged meanwhile keep their mark: the history is read again with the page.
+      void qc.invalidateQueries({ queryKey: projectRunsKey(project.id, repoId) });
+      toast(t("project.protection.reenabled"), "success");
     },
     onError: failed,
   });
@@ -111,8 +146,25 @@ export function RepoSheet({
           {repo.flags.malformed ? (
             <p className="font-mono text-xs text-fg-muted">{repo.flags.malformed}</p>
           ) : null}
+          {repo.flags.protectionSuspended ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <Button variant="secondary" size="sm" disabled={!can} loading={reenable.isPending} onClick={() => reenable.mutate()}>
+                <ShieldCheck /> {t("project.protection.reenable")}
+              </Button>
+              <p className="text-[13px] text-fg-muted">{t("project.protection.reenable.desc")}</p>
+            </div>
+          ) : null}
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-            <Fact label={t("project.sheet.invitation")}>{t(`project.invitation.${repo.invitationStatus}`)}</Fact>
+            <Fact label={t("project.sheet.invitation")}>
+              <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                {t(`project.invitation.${repo.invitationStatus}`)}
+                {repo.invitationStatus === "pending" ? (
+                  <Button variant="secondary" size="sm" disabled={!can} loading={resend.isPending} onClick={() => resend.mutate()}>
+                    <Mail /> {t("project.invitation.resend")}
+                  </Button>
+                ) : null}
+              </span>
+            </Fact>
             <Fact label={t("project.col.commit")}>
               {repo.lastCommit ? (
                 <span className="inline-flex flex-wrap items-baseline gap-x-2">
@@ -135,25 +187,7 @@ export function RepoSheet({
         </Section>
 
         <Section title={t("project.sheet.scores")}>
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-5">
-            <Fact label={t("project.score.current")}>
-              <Points points={repo.scores.current?.points ?? null} max={repo.scores.current?.max ?? null} />
-            </Fact>
-            <Fact label={t("project.score.frozen")}>
-              <Points points={repo.scores.frozen?.points ?? null} max={repo.scores.frozen?.max ?? null} />
-            </Fact>
-            <Fact label={t("project.reviewLabel")}>
-              <Points points={repo.scores.review?.points ?? null} max={repo.scores.review?.max ?? null} />
-            </Fact>
-            <Fact label={t("project.score.teacher")}>
-              <span title={repo.scores.teacher?.comment ?? undefined}>
-                <Points points={repo.scores.teacher?.points ?? null} max={null} />
-              </span>
-            </Fact>
-            <Fact label={t("project.score.final")}>
-              <Score score={repo.scores.final} />
-            </Fact>
-          </dl>
+          <ScoreSection project={project} repo={repo} score={score} />
         </Section>
 
         <Section title={t("project.sheet.deadline")}>

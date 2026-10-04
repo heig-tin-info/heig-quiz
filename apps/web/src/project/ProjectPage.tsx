@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Archive, ArchiveRestore, Rocket, Trash2 } from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, Rocket, Send, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import type { ClassroomDetail, ProjectDetail, ProjectPatch, ProjectSummary } from "@quiz/contracts";
+import type { ClassroomDetail, ProjectDetail, ProjectPatch, ProjectReleaseResult, ProjectSummary } from "@quiz/contracts";
 
 import { api, ApiError } from "../api";
 import { useConfirm } from "../confirm";
@@ -34,6 +34,7 @@ import {
   projectRefetchInterval,
   projectStatus,
   refusalMessage,
+  releaseRefusal,
   unassignedStudents,
   type UnassignedStudent,
 } from "./projectPage";
@@ -45,14 +46,17 @@ import { RepoSheet } from "./RepoSheet";
  * primary action the server names —, the settings still open to change
  * (F-PROJ-03), one row per student of the roster with their repository, and
  * the review checkpoints. A row opens its repository's sheet: the history
- * of its runs, its own deadline and its lock.
+ * of its runs, its scores and the teacher's, its own deadline and its lock.
  *
  * The primary action is `primaryAction`, decided by the server and never
- * derived here: Publish is a button; Release and Sync are said in the
- * header until their routes exist (merge tasks M3-08b and M3-07 turn them
- * into the button); `none` leaves the header to its sentence. Archive,
- * Restore and Delete live in the overflow menu — a deletion names the
- * project, and says that nothing is deleted on GitHub (F-PROJ-16).
+ * derived here: Publish and Release are buttons — Release confirmed first,
+ * since it makes the final scores the students' and the gradebook's
+ * (F-PROJ-14), and worded as a release again once a score moved after the
+ * release (the snapshot is rewritten, nobody is notified again); Sync is
+ * said in the header until its route exists (merge task M3-07); `none`
+ * leaves the header to its sentence. Archive, Restore and Delete live in
+ * the overflow menu — a deletion names the project, and says that nothing
+ * is deleted on GitHub (F-PROJ-16).
  *
  * The page refetches every 30 s while its tab is visible, and once a few
  * seconds after a response whose live state was not all read in time
@@ -65,6 +69,8 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   const confirm = useConfirm();
   const [openRepo, setOpenRepo] = useState<string | null>(null);
   const [unassigned, setUnassigned] = useState<UnassignedStudent[] | null>(null);
+  /** Why the last release was refused, said above the page until the next attempt succeeds. */
+  const [releaseRefused, setReleaseRefused] = useState<string | null>(null);
 
   const detail = useQuery<ProjectDetail>({
     queryKey: projectKey(id),
@@ -105,6 +111,16 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
       if (students) setUnassigned(students);
       else failed(error);
     },
+  });
+  const release = useMutation({
+    mutationFn: () => api<ProjectReleaseResult>(`/app/api/projects/${id}/release`, { method: "POST" }),
+    onSuccess: async (result) => {
+      setReleaseRefused(null);
+      await refresh();
+      toast(t("project.released", { scored: result.scored, repos: result.repos }), "success");
+    },
+    // Worded with what the body carries (the counts, the students to verify), where the names can be read.
+    onError: (error) => setReleaseRefused(releaseRefusal(error, detail.data!, t)),
   });
   const archive = useMutation({
     mutationFn: (on: boolean) =>
@@ -183,6 +199,21 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
       remove.mutate();
     }
   };
+  /** The release, and the release again once a score moved: the same route, the confirmation says which. */
+  const again = project.releasedAt !== null;
+  const onRelease = async () => {
+    if (
+      await confirm({
+        title: t(again ? "project.release.again.confirm.title" : "project.release.confirm.title"),
+        message: t(again ? "project.release.again.confirm.body" : "project.release.confirm.body", {
+          n: project.counts.live,
+        }),
+        confirmLabel: t(again ? "project.release.again" : "project.release.confirmLabel"),
+      })
+    ) {
+      release.mutate();
+    }
+  };
   const menuItems: MenuItem[] = [
     {
       label: t(archived ? "classrooms.unarchive" : "classrooms.archive"),
@@ -241,11 +272,20 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
             <Button onClick={() => publish.mutate()} loading={publish.isPending}>
               <Rocket /> {t("question.publish")}
             </Button>
+          ) : project.primaryAction === "release" ? (
+            <Button onClick={() => void onRelease()} loading={release.isPending}>
+              <Send /> {t(again ? "project.release.again" : "project.release")}
+            </Button>
           ) : null
         }
         menu={<Menu items={menuItems} />}
       />
 
+      {releaseRefused ? (
+        <Alert tone="danger" icon={AlertTriangle} title={t("project.release.refused")}>
+          {releaseRefused}
+        </Alert>
+      ) : null}
       {unassigned ? (
         <Alert
           tone="danger"
