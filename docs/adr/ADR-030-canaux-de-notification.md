@@ -278,13 +278,13 @@ Where an old number cited in code or another record now lives:
 
 | Old reference | Current section |
 | --- | --- |
-| §1 `notify` the one entry; §h best-effort after commit | [One entry, after commit](#one-entry-after-commit) |
+| §1 `notify` the one entry; §f fan-out after commit; §h best-effort after commit | [One entry, after commit](#one-entry-after-commit) |
 | §2 rendering and locale; §5 preferences; §b defaults | [Preferences, audiences and payloads](#preferences-audiences-and-payloads) |
-| §a bell and toast; §e aggregation; §h quiet pages and throttle; Step 4 | [App aggregation and live toasts](#app-aggregation-and-live-toasts) |
-| §c the kinds; §6 `results_released`; Step 6 | [Events and trigger boundaries](#events-and-trigger-boundaries) |
+| §a bell and toast; §e aggregation; §h.2 quiet pages and throttle; Step 4 | [App aggregation and live toasts](#app-aggregation-and-live-toasts) |
+| §c the kinds; §6 `results_released`; §h.1 `activity_scheduled`; §h.3 take-home only; Step 6 | [Events and trigger boundaries](#events-and-trigger-boundaries) |
 | §d `deadline_approaching`; Step 7 | [Deadline reminders](#deadline-reminders) |
-| Step 5 (`grading_ready`); Step 8 (`results_updated`) | [Grading-ready and changed results](#grading-ready-and-changed-results) |
-| §3 e-mail; §4 Teams; §f fan-out and manifest | [External transports and identity](#external-transports-and-identity) |
+| Step 5 (`grading_ready`); §h.4–5 and Step 8 (`results_updated`) | [Grading-ready and changed results](#grading-ready-and-changed-results) |
+| §3 e-mail; §4 Teams; §f manifest | [External transports and identity](#external-transports-and-identity) |
 | §g out of scope; Rollback; Alternatives considered | [Consequences and alternatives](#consequences-and-alternatives) |
 
 <a id="adr-030-notification-channels-the-bell-e-mail-and-microsoft-teams"></a>

@@ -40,8 +40,9 @@ already reveals the poll's existence. A browser without a session must sign in
 An anonymous poll admits anyone with its code: a signed-in browser votes as its
 account, otherwise as a guest. There is no second identity for the same browser.
 The database requires exactly one of `attempts.user_id` and `guest_id`, and a
-unique index `(evaluation_id, guest_id)` beside `(evaluation_id, user_id)`: one
-attempt per poll and browser, as per poll and account. Grading names a guest
+unique index `attempts_evaluation_guest_uq (evaluation_id, guest_id)`: one attempt
+per poll and browser (an account's side is the partial `attempts_evaluation_user_open_uq`,
+one unfinished attempt per evaluation and account). Grading names a guest
 "Guest n"; the dashboard grid iterates the roster, so it shows no guest and emits
 no `dashboard.attempt` for one; no guest reaches the grade table or the CSV.
 
@@ -138,8 +139,9 @@ rejected. Nothing about a poll justifies releasing grades to absent roster membe
 - `apps/api/src/modules/poll/service.ts`: audience, codes, display normalization,
   tally, idle closure, recent outcomes and pool search.
 - `apps/api/src/modules/poll/routes.ts`: managed/public loaders and CSRF. Teacher
-  routes `/app/api/polls` (list, `questions`, `pool-questions`, `inline`) and
-  `/app/api/evaluations/:id/poll` (`reveal`, `end`, `again`, `keep`); public routes
+  routes `/app/api/polls` (`GET` list, `POST` create-and-start, `questions`,
+  `pool-questions`, `inline`) and `/app/api/evaluations/:id/poll` (`GET`, `reveal`,
+  `end`, `again`, `keep`); public routes
   `GET /app/api/p/:code`, `POST …/join`, `POST …/answer`.
 - `packages/contracts/src/poll.ts`, `packages/domain/src/pollTally.ts` and
   `packages/domain/src/pollOutcome.ts`: contracts and pure rules.
@@ -155,10 +157,10 @@ Where an old number cited in code or another record now lives:
 
 | Old reference | Current section |
 | --- | --- |
-| §1 a poll is an evaluation; §2 session code; §4 participants; §5 guest cookie; §6 public routes; §10 login return; §11 `WEB_URL` | [Evaluation and audience](#evaluation-and-audience) |
-| §3 personal pool; inline, Recent polls and From pools addenda | [Questions and retrieval](#questions-and-retrieval) |
-| §7 reveal; §8 End does not release; 12-hour expiry and independent switches addenda | [Display, answers and ending](#display-answers-and-ending) |
-| §9 tally; votes-hidden addendum | [Tally, history and visibility](#tally-history-and-visibility) |
+| §1 a poll is an evaluation; §2 session code; §4 participants; §5 guest cookie; §6 public routes; §10 login return; §11 `WEB_URL`; audience addendum (2026-09-27) | [Evaluation and audience](#evaluation-and-audience) |
+| §3 personal pool; inline, Recent polls (§1–2) and From pools addenda | [Questions and retrieval](#questions-and-retrieval) |
+| §7 reveal; §8 End does not release; votes-hidden, 12-hour expiry and independent switches addenda | [Display, answers and ending](#display-answers-and-ending) |
+| §9 tally; Recent polls §3 (outcomes) | [Tally, history and visibility](#tally-history-and-visibility) |
 
 <a id="adr-014-live-polls-an-evaluation-of-one-question-a-code-and-participants-without-a-roster"></a>
 - [ADR-014 — Live polls: an evaluation of one question, a code, and participants without a roster](history/ADR-014-sondages-en-direct.md#adr-014-live-polls-an-evaluation-of-one-question-a-code-and-participants-without-a-roster)

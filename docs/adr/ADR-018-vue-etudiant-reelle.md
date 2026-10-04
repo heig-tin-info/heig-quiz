@@ -140,8 +140,8 @@ Where an old number cited in code or another record now lives:
 | --- | --- |
 | §1 the walk; §2 where it was entered from; §7 the student path; first to third addenda | [Real student view and return](#real-student-view-and-return) |
 | §3 shown and badged; §4 counts in nothing; §5 CSV drops the row; §6 own reset | [Staff attempts](#staff-attempts) |
-| Fourth addendum (stateless preview); seventh (preview is a mode) | [Stateless evaluation preview](#stateless-evaluation-preview) |
-| Fifth addendum (waiting room); sixth (fixing a question) | [Editing during preview and previewing the lobby](#editing-during-preview-and-previewing-the-lobby) |
+| Fourth addendum (stateless preview) | [Stateless evaluation preview](#stateless-evaluation-preview) |
+| Fifth addendum (waiting room); sixth (fixing a question); seventh (preview is a mode) | [Editing during preview and previewing the lobby](#editing-during-preview-and-previewing-the-lobby) |
 
 <a id="adr-018-the-real-student-view-and-the-teachers-own-test-attempt"></a>
 - [ADR-018 — The real student view, and the teacher's own test attempt](history/ADR-018-vue-etudiant-reelle.md#adr-018-the-real-student-view-and-the-teachers-own-test-attempt)

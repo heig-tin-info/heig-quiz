@@ -31,8 +31,8 @@ For orientation: `apps/api` is Fastify; `apps/web` is the React SPA;
 `packages/domain` pure rules, `packages/core` the question-type contracts,
 `packages/registry` their static wiring, `packages/qt-*` the types,
 `packages/diagram` the diagram engine and `packages/docrender` journal rendering.
-`mockups/` holds the HTML origins of the circuit, categorize, diagram and
-grading editors; `extensions/kiosk-attestation/` the kiosk stations' Chrome
+`mockups/` holds the HTML origins of the circuit and diagram editors, the
+categorize board and the grading table (ADR-044); `extensions/kiosk-attestation/` the kiosk stations' Chrome
 extension (ADR-051); `infra/` the Keycloak development realm.
 
 `core` never imports a `qt-*` package: register types through both registry
