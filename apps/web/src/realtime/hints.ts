@@ -65,10 +65,13 @@ export const HINT_ROOTS: Record<HintKind, readonly string[] | "all"> = {
   // The journal's copy was synchronised, or a page became visible (M4-02).
   journal: ["journal"],
   // A project's repository changed (M3-04): a classroom's projects
-  // (`classroomProjectsKey`) and the project page with its runs and
-  // checkpoints (`projectKey`, M3-12). A project archived, or naming another
-  // set, changes the sets' "used by" (`groupSetsKey`, M3-16a).
-  projects: ["classroom", "project", "group-sets"],
+  // (`classroomProjectsKey`), the project page with its runs and
+  // checkpoints (`projectKey`, M3-12), the student's home, classroom
+  // page and project (`student`, M3-13): an invitation accepted on GitHub
+  // turns "Open the invitation" into "Open repository" without a reload.
+  // A project archived, or naming another set, changes the sets' "used by"
+  // (`groupSetsKey`, M3-16a).
+  projects: ["classroom", "project", "group-sets", "student"],
   // A classroom's group sets changed (ADR-070, M3-15a): the Groups tab and
   // every set's page (`groupSetsKey`, M3-16a). A copy that changed is
   // hinted `projects` besides.

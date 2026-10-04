@@ -1,13 +1,14 @@
 /**
  * The cards the student's pages share: the activity rows (an evaluation, a
- * running poll), their one-line captions, and the list of classrooms. The
- * home (`StudentHome`) lists them across every classroom, the
+ * running poll, a project), their one-line captions, and the list of
+ * classrooms. The home (`StudentHome`) lists them across every classroom, the
  * classroom page (`StudentClassroom`) for one, the Courses page
  * (`StudentCourses`) the classrooms (F-ORG-14, F-ORG-15).
  *
  * A row decides nothing about emphasis: the page says which button is the
  * primary, since the home lights every open card and the classroom page only
- * its most urgent one.
+ * its most urgent one. The row itself is `ActivityRow.tsx`; a project's row
+ * and its four-state button are `ProjectRow.tsx` (M3-13).
  */
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState, type ReactNode } from "react";
@@ -19,7 +20,6 @@ import type {
   StudentActivityCard,
   StudentClassroom,
   StudentPollCard,
-  StudentProjectCard,
 } from "@quiz/contracts";
 
 import { api } from "../api";
@@ -29,7 +29,6 @@ import { studentClassroomsKey } from "../queryKeys";
 import type { Route } from "../router";
 import {
   Badge,
-  Button,
   Card,
   cx,
   EmptyState,
@@ -40,8 +39,12 @@ import {
   QueryError,
   Skeleton,
 } from "../ui";
+import { ActivityRow, type RowAction } from "./ActivityRow";
+import { ProjectRow } from "./ProjectRow";
 import { useRetake } from "./retake";
 import { SebLaunchModal } from "./SebLaunchModal";
+
+export { ActivityRow, type RowAction } from "./ActivityRow";
 
 export const MODE_KEY = {
   exam: "shome.mode.exam",
@@ -171,39 +174,14 @@ export function upcomingLine(card: EvaluationCardData, now: number, t: TFunction
     : t("shome.opensAt", { when: isoDateTime(card.opensAt) });
 }
 
-/** The status word of a student's project card (F-PROJ-04). */
-const PROJECT_STATUS_KEY = {
-  to_accept: "sproj.status.to_accept",
-  in_progress: "sproj.status.in_progress",
-  locked: "sproj.status.locked",
-  released: "sproj.status.released",
-} as const satisfies Record<StudentProjectCard["status"], string>;
-
-/**
- * The line of a project card: its status, and the deadline it counts down
- * to while it runs, the start while it waits (F-PROJ-04). The four-state
- * onboarding button and the indicative score are M3-13's (`ProjectRow` of
- * `docs/merge/05-web.md` §5.3).
- */
-export function projectLine(card: StudentProjectCard, group: StudentActivityGroup, now: number, t: TFunction): string {
-  const status = t(PROJECT_STATUS_KEY[card.status]);
-  if (group === "upcoming") {
-    const wait = Date.parse(card.startAt) - now;
-    return wait > 0 ? t("shome.opensIn", { time: formatDuration(wait, t) }) : t("shome.opensAt", { when: isoDateTime(card.startAt) });
-  }
-  if (group === "past") return status;
-  const left = Date.parse(card.deadlineAt) - now;
-  return `${status} · ${left > 0 ? t("shome.left", { time: formatDuration(left, t) }) : t("shome.dueAt", { when: isoDateTime(card.deadlineAt) })}`;
-}
-
 /** The instant a card's "coming up" line counts down to: an evaluation opens, a project starts. */
 export const opensAt = (card: StudentActivityCard): string | null => (card.kind === "project" ? card.startAt : card.opensAt);
 
 /**
  * One card of the student's Activities, whatever its kind (M3-09a): an
  * evaluation's row with the line and the button of its group, or a project's
- * row — title, status, deadline, no button until M3-13. `actions` are the
- * page's `useCardActions`; absent in Upcoming, which never has a button.
+ * row with its one action (`ProjectRow`, M3-13). `actions` are the page's
+ * `useCardActions`; absent in Upcoming, which never has a button.
  */
 export function ActivityCard({
   card,
@@ -222,14 +200,7 @@ export function ActivityCard({
 }) {
   const t = useT();
   if (card.kind === "project") {
-    return (
-      <ActivityRow
-        title={card.title}
-        where={showWhere ? `${card.courseCode} · ${card.classroomName}` : undefined}
-        line={projectLine(card, group, now, t)}
-        badge={{ label: t("activities.kind.project"), accent: false }}
-      />
-    );
+    return <ProjectRow card={card} group={group} now={now} primary={primary} showWhere={showWhere} />;
   }
   if (group === "open") {
     return <EvaluationRow card={card} showWhere={showWhere} line={openLine(card, now, t)} action={actions?.open(card, primary)} />;
@@ -302,49 +273,6 @@ function DayGroup({
         ))}
       </ul>
     </div>
-  );
-}
-
-export type RowAction = {
-  label: string;
-  onClick: () => void | Promise<void>;
-  primary?: boolean;
-  loading?: boolean;
-};
-
-/** One card of a list: what it is, where it comes from, one line, one button. */
-export function ActivityRow({
-  title,
-  where,
-  line,
-  badge,
-  action,
-}: {
-  title: string;
-  /** Absent on a page that is already the classroom's. */
-  where?: string | undefined;
-  line: string | null;
-  badge: { label: string; accent: boolean };
-  action?: RowAction | undefined;
-}) {
-  return (
-    <Card className="flex flex-wrap items-center gap-x-5 gap-y-3 p-5">
-      <div className="min-w-0 flex-1 basis-60">
-        <p className="text-[17px] font-bold leading-snug tracking-tight">{title}</p>
-        {where ? <p className="mt-0.5 text-sm text-fg-muted">{where}</p> : null}
-        {line ? <p className="mt-1 text-[13px] text-fg-faint">{line}</p> : null}
-      </div>
-      <Badge tone={badge.accent ? "accent" : "zinc"}>{badge.label}</Badge>
-      {action ? (
-        <Button
-          variant={action.primary ? "primary" : "secondary"}
-          onClick={() => void action.onClick()}
-          loading={action.loading ?? false}
-        >
-          {action.label}
-        </Button>
-      ) : null}
-    </Card>
   );
 }
 

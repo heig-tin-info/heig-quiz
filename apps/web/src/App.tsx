@@ -63,6 +63,9 @@ const NewProjectPage = lazy(() =>
 );
 const ProjectPage = lazy(() => import("./project/ProjectPage").then((m) => ({ default: m.ProjectPage })));
 const GroupSetPage = lazy(() => import("./group/GroupSetPage").then((m) => ({ default: m.GroupSetPage })));
+const StudentProjectPage = lazy(() =>
+  import("./student/StudentProjectPage").then((m) => ({ default: m.StudentProjectPage })),
+);
 // The pool screens (WP7): the teacher's authoring surface, one chunk each,
 // so a student — or a teacher who only runs quizzes — never downloads them.
 const PoolsPage = lazy(() => import("./pool/PoolsPage").then((m) => ({ default: m.PoolsPage })));
@@ -281,8 +284,15 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   classroomGroups: (r, c) => <ClassroomView id={r.id} navigate={c.navigate} routeTab="groups" />,
   // Keyed: one set to the next (a duplicate) starts a fresh page, its write queue included.
   groupSet: (r, c) => <GroupSetPage key={r.id} classroomId={r.classroomId} id={r.id} navigate={c.navigate} />,
-  // F-PROJ-13: the staff's project page (M3-12).
-  project: (r, c) => <ProjectPage id={r.id} navigate={c.navigate} />,
+  // F-PROJ-13: the staff's project page (M3-12); F-PROJ-15: one address, the
+  // student's project for a student, a teacher in the student view, an
+  // impersonation (M3-13).
+  project: (r, c) =>
+    c.teacherUi ? (
+      <ProjectPage id={r.id} navigate={c.navigate} />
+    ) : (
+      <StudentProjectPage id={r.id} navigate={c.navigate} />
+    ),
   // F-PROJ-01: "New ▾ › Project" (M3-10) leads here, M3-11's form.
   projectNew: (r, c) => <NewProjectPage classroomId={r.classroomId} navigate={c.navigate} />,
   activities: (_, c) => <ActivitiesPage navigate={c.navigate} />,

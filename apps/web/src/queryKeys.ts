@@ -283,7 +283,11 @@ export const resultsByQuestionKey = (evaluationId: string) =>
 
 // --- Students ------------------------------------------------------------------
 
-export const studentHomeKey = ["student", "home"] as const;
+/** Every read of the student's own pages: what a project's write (Accept, Resend) invalidates (M3-13). */
+export const studentRootKey = ["student"] as const;
+export const studentHomeKey = [...studentRootKey, "home"] as const;
+/** The student's project (F-PROJ-15), under the root the `projects` hint refreshes. */
+export const studentProjectKey = (id: string) => [...studentRootKey, "project", id] as const;
 export const studentClassroomsKey = ["student", "classrooms"] as const;
 /** The student's Grades (`GET /student/results`), under the `student` root the `results` hint refreshes. */
 export const studentGradesKey = ["student", "grades"] as const;

@@ -125,6 +125,7 @@ export function PageHeader({
   help,
   actions,
   menu,
+  actionsFullWidth = false,
   className = "",
 }: {
   eyebrow?: ReactNode;
@@ -135,6 +136,12 @@ export function PageHeader({
   actions?: ReactNode;
   /** The page's overflow `Menu`, placed after the help. */
   menu?: ReactNode;
+  /**
+   * On a phone, the actions take the whole width under the title, so a
+   * single `w-full` action reads as the row's button does (the student's
+   * project page). The desktop layout is unchanged.
+   */
+  actionsFullWidth?: boolean;
   className?: string;
 }) {
   const right = actions || help || menu;
@@ -146,7 +153,7 @@ export function PageHeader({
         {description ? <div className="mt-1.5 text-sm text-fg-muted">{description}</div> : null}
       </div>
       {right ? (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className={cx("flex flex-wrap items-center gap-2", actionsFullWidth && "max-sm:w-full")}>
           {actions}
           {/* "?" and "…" wrap as one: on a phone the row breaks before them,
               never between them, so "…" is not left alone on a line. */}

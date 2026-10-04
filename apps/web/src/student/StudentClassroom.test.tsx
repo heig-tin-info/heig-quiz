@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { EvaluationCard, StudentClassroomPage, StudentPollCard } from "@quiz/contracts";
+import type { EvaluationCard, StudentClassroomPage, StudentPollCard, StudentProjectCard } from "@quiz/contracts";
 
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { mostUrgent, StudentClassroom } from "./StudentClassroom";
@@ -227,6 +227,70 @@ describe("mostUrgent", () => {
 
   it("keeps the server's order on a tie", () => {
     expect(mostUrgent({ polls: [], open: [card({ id: "x" }), card({ id: "y" })] })).toBe("x");
+  });
+
+  // M3-13: a project counts by its deadline while it asks something of the
+  // student — to accept, to link GitHub, to accept the invitation; a ready
+  // repository asks nothing and never takes the accent (F-ORG-15).
+  it("ranks a project to accept by its deadline, and never a ready one", () => {
+    const toAccept = project({ id: "pj-accept", deadlineAt: inMinutes(30) });
+    const ready = project({
+      id: "pj-ready",
+      status: "in_progress",
+      invitation: "accepted",
+      repoFullName: "heig/labo-1-lea",
+      repoUrl: "https://github.com/heig/labo-1-lea",
+      deadlineAt: inMinutes(5),
+    });
+    const quiz = card({ id: "e", closesAt: inMinutes(60) });
+    expect(mostUrgent({ polls: [], open: [quiz, toAccept] })).toBe("pj-accept");
+    expect(mostUrgent({ polls: [], open: [quiz, ready] })).toBe("e");
+    expect(mostUrgent({ polls: [], open: [ready] })).toBeNull();
+    expect(mostUrgent({ polls: [], open: [ready, project({ id: "pj-link", githubLinked: false, deadlineAt: inMinutes(90) })] })).toBe("pj-link");
+  });
+});
+
+const project = (over: Partial<StudentProjectCard>): StudentProjectCard => ({
+  kind: "project",
+  id: "pj",
+  title: "Labo 1 — Pointeurs",
+  classroomId: "r1",
+  classroomName: "PRG1-2026",
+  courseCode: "PRG1",
+  startAt: inMinutes(-60),
+  deadlineAt: inMinutes(600),
+  status: "to_accept",
+  invitation: null,
+  githubLinked: true,
+  repoFullName: null,
+  repoUrl: null,
+  ...over,
+});
+
+describe("the project rows of the classroom page (M3-13)", () => {
+  it("lights the project to accept when its deadline comes first, and draws a ready one as a link", async () => {
+    const page = classroomPage();
+    page.activities.open = [
+      card({ id: "e-late", title: "Série 3 — Pointeurs", mode: "exercise", closesAt: inMinutes(3 * 24 * 60) }),
+      project({ id: "pj-accept", title: "Labo 2 — Listes", deadlineAt: inMinutes(120) }),
+      project({
+        id: "pj-ready",
+        title: "Labo 1 — Pointeurs",
+        status: "in_progress",
+        invitation: "accepted",
+        repoFullName: "heig/labo-1-lea",
+        repoUrl: "https://github.com/heig/labo-1-lea",
+        deadlineAt: inMinutes(30),
+      }),
+    ];
+    mockFetch({ [URL_R1]: ok(page) });
+    render();
+    const accept = (await cardOf("Labo 2 — Listes")).getByRole("button", { name: "Accept" });
+    expect(accept).toHaveClass("bg-accent");
+    expect(document.querySelectorAll(".bg-accent")).toHaveLength(1);
+    const open = (await cardOf("Labo 1 — Pointeurs")).getByRole("link", { name: "Open repository" });
+    expect(open).toHaveAttribute("href", "https://github.com/heig/labo-1-lea");
+    expect((await cardOf("Série 3 — Pointeurs")).getByRole("button", { name: "Start" })).not.toHaveClass("bg-accent");
   });
 });
 

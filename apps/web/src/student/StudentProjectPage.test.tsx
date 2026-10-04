@@ -1,0 +1,296 @@
+import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import type { Me, StudentProject } from "@quiz/contracts";
+
+import type { Locale } from "../i18n";
+import { makeMe } from "../test/fixtures";
+import { fail, makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
+import { meKey } from "../queryKeys";
+import { StudentProjectPage } from "./StudentProjectPage";
+
+/*
+ * The student's project page (F-PROJ-15, M3-13): its states, the facts it
+ * shows — the repository and its invitation with the student's Resend, the
+ * evaluated commit and its run, the indicative score, the frozen score, the
+ * release — and the one action it shares with the row.
+ */
+
+const NOW = Date.now();
+const DAY = 86_400_000;
+const at = (days: number) => new Date(NOW + days * DAY).toISOString();
+const SHA = "9a3f1c7e2b4d6f8a0c1e3b5d7f9a1c3e5b7d9f1a";
+const URL = "GET /app/api/student/projects/p1";
+const INVITE = "POST /app/api/student/projects/p1/invite";
+
+const project = (over: Partial<StudentProject> = {}): StudentProject => ({
+  kind: "project",
+  id: "p1",
+  title: "Labo 1 — Pointeurs",
+  classroomId: "r1",
+  classroomName: "PRG1-2026",
+  courseCode: "PRG1",
+  startAt: at(-3),
+  deadlineAt: at(6),
+  status: "in_progress",
+  githubLinked: true,
+  gradingMode: "auto",
+  repo: {
+    fullName: "heig/labo-1-lea",
+    url: "https://github.com/heig/labo-1-lea",
+    invitation: "accepted",
+    deleted: false,
+    locked: false,
+    lastCommit: { sha: SHA, at: at(-0.1) },
+    ciStatus: "pass",
+    run: { sha: SHA, url: "https://github.com/heig/labo-1-lea/actions/runs/42", conclusion: "success", completedAt: at(-0.1) },
+    score: { points: 34, max: 40, grade: { grade: 5.3, fellBack: false }, frozen: false },
+  },
+  release: null,
+  serverNow: at(0),
+  ...over,
+});
+
+const student: Me = makeMe({ id: "u1", role: "student" });
+
+/** How many times the page read the project. */
+const reads = (calls: { method: string; url: string }[]) =>
+  calls.filter((c) => c.method === "GET" && c.url === "/app/api/student/projects/p1").length;
+
+function render({ me = student, locale = "en" }: { me?: Me; locale?: Locale } = {}) {
+  const navigate = vi.fn();
+  const queryClient = makeQueryClient();
+  queryClient.setQueryData(meKey, me);
+  const r = renderWithProviders(<StudentProjectPage id="p1" navigate={navigate} />, { locale, route: "/projects/p1", queryClient });
+  return { ...r, navigate };
+}
+
+afterEach(() => sessionStorage.clear());
+
+describe("the page's states", () => {
+  it("shows a skeleton while it loads", () => {
+    mockFetch({});
+    render();
+    expect(document.querySelector(".animate-pulse")).not.toBeNull();
+  });
+
+  it("reads a 404 as a project that does not exist, with the way back", async () => {
+    mockFetch({ [URL]: fail(404, { message: "Not found" }) });
+    const { navigate } = render();
+    expect(await screen.findByRole("heading", { level: 1, name: /does not exist/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Back to my activities" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "home" });
+  });
+
+  it("shows the error with a retry", async () => {
+    mockFetch({ [URL]: fail(500, { message: "boom" }) });
+    render();
+    expect(await screen.findByText("boom")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+  });
+});
+
+describe("a project in progress", () => {
+  it("names the project, its classroom, its deadline, the repository and the evaluated commit", async () => {
+    mockFetch({ [URL]: ok(project()) });
+    const { navigate } = render();
+    expect(await screen.findByRole("heading", { level: 1, name: /Labo 1 — Pointeurs/ })).toBeInTheDocument();
+    expect(screen.getByText("in progress")).toBeInTheDocument();
+    expect(screen.getByText(/^Due .* · .* left$/)).toBeInTheDocument();
+
+    const repo = screen.getByRole("link", { name: /heig\/labo-1-lea/ });
+    expect(repo).toHaveAttribute("href", "https://github.com/heig/labo-1-lea");
+    expect(repo).toHaveAttribute("target", "_blank");
+    expect(screen.getByText("Last commit")).toBeInTheDocument();
+    expect(screen.getByText("9a3f1c7")).toBeInTheDocument();
+    expect(screen.getByText("CI passed")).toBeInTheDocument();
+    expect(screen.getByText("accepted")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Resend the invitation" })).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "PRG1-2026" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r1" });
+  });
+
+  it("marks the current score indicative, with the run it comes from, and offers the repository as the only action", async () => {
+    mockFetch({ [URL]: ok(project()) });
+    render();
+    expect(await screen.findByText("Indicative score")).toBeInTheDocument();
+    expect(screen.getByText("34 / 40")).toBeInTheDocument();
+    expect(screen.getByText(/From the latest graded commit\. Indicative until your teacher publishes the scores\./)).toBeInTheDocument();
+    expect(screen.getByText("Grade")).toBeInTheDocument();
+    expect(screen.getByText("5.3")).toBeInTheDocument();
+    expect(screen.getByText("indicative")).toBeInTheDocument();
+    expect(screen.getByText("Evaluated commit 9a3f1c7")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /See the run on GitHub/ })).toHaveAttribute(
+      "href",
+      "https://github.com/heig/labo-1-lea/actions/runs/42",
+    );
+    const open = screen.getByRole("link", { name: "Open repository" });
+    expect(open).not.toHaveClass("bg-accent");
+    expect(document.querySelectorAll(".bg-accent")).toHaveLength(0);
+  });
+
+  it("says the frozen score is frozen at the deadline, still indicative, on the evaluated commit", async () => {
+    const p = project({
+      status: "locked",
+      deadlineAt: at(-1),
+      repo: { ...project().repo!, locked: true, score: { points: 30, max: 40, grade: null, frozen: true } },
+    });
+    mockFetch({ [URL]: ok(p) });
+    render();
+    expect(await screen.findByText("Score at the deadline")).toBeInTheDocument();
+    expect(screen.getByText("30 / 40")).toBeInTheDocument();
+    expect(screen.getByText(/Frozen at the deadline\. Indicative until/)).toBeInTheDocument();
+    expect(screen.getByText("Evaluated commit")).toBeInTheDocument();
+    expect(screen.getByText("read-only since the deadline")).toBeInTheDocument();
+    expect(screen.queryByText("Grade")).toBeNull();
+  });
+
+  it("shows no score section at all under grading none, and 'no score yet' without a graded run", async () => {
+    mockFetch({ [URL]: ok(project({ gradingMode: "none", repo: { ...project().repo!, score: null, run: null } })) });
+    const { unmount } = render();
+    await screen.findByRole("heading", { level: 1 });
+    expect(screen.queryByText("Score")).toBeNull();
+    unmount();
+
+    mockFetch({ [URL]: ok(project({ repo: { ...project().repo!, score: null, run: null, ciStatus: "pending" } })) });
+    render();
+    expect(await screen.findByText("No score yet: the CI has not graded a commit of yours.")).toBeInTheDocument();
+    expect(screen.getByText("CI running")).toBeInTheDocument();
+  });
+});
+
+describe("the invitation", () => {
+  const pending = () =>
+    project({
+      repo: { ...project().repo!, invitation: "pending", lastCommit: null, ciStatus: "none", run: null, score: null },
+    });
+
+  it("leads to the invitation, says it is pending, and offers the Resend", async () => {
+    const { calls } = mockFetch({ [URL]: ok(pending()), [INVITE]: ok({ invitationStatus: "pending", resentAt: at(0) }) });
+    render();
+    const open = await screen.findByRole("link", { name: "Open the invitation" });
+    expect(open).toHaveAttribute("href", "https://github.com/heig/labo-1-lea/invitations");
+    expect(open).toHaveClass("bg-accent");
+    expect(screen.getByText("pending on GitHub")).toBeInTheDocument();
+    expect(screen.getByText("no commit yet")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Resend the invitation" }));
+    expect(await screen.findByText(/Invitation sent again/)).toBeInTheDocument();
+    // The page is re-read: the invitation's state is the server's, never assumed.
+    await waitFor(() => expect(reads(calls)).toBe(2));
+  });
+
+  it("words a resend asked too soon, and re-reads when the invitation is no longer pending", async () => {
+    mockFetch({ [URL]: ok(pending()), [INVITE]: fail(429, { error: "resend_too_soon", message: "x" }) });
+    const { unmount } = render();
+    await userEvent.click(await screen.findByRole("button", { name: "Resend the invitation" }));
+    expect(await screen.findByText(/sent less than a minute ago/)).toBeInTheDocument();
+    unmount();
+
+    const { calls } = mockFetch({ [URL]: ok(pending()), [INVITE]: fail(409, { error: "invitation_not_pending", message: "x" }) });
+    render();
+    await userEvent.click(await screen.findByRole("button", { name: "Resend the invitation" }));
+    expect(await screen.findByText("This invitation is no longer pending.")).toBeInTheDocument();
+    await waitFor(() => expect(reads(calls)).toBe(2));
+  });
+});
+
+describe("without a repository", () => {
+  it("offers Accept as the page's one accent, and says what Accept gives", async () => {
+    mockFetch({ [URL]: ok(project({ status: "to_accept", repo: null })) });
+    render();
+    expect(await screen.findByRole("button", { name: "Accept" })).toHaveClass("bg-accent");
+    expect(screen.getByText(/Accept the project to get your repository/)).toBeInTheDocument();
+    expect(screen.queryByText("Score")).toBeNull();
+  });
+
+  it("leads an unlinked student to GitHub, even before the start", async () => {
+    mockFetch({ [URL]: ok(project({ status: "to_accept", repo: null, githubLinked: false, startAt: at(2) })) });
+    render();
+    expect(await screen.findByRole("link", { name: "Link GitHub" })).toHaveAttribute(
+      "href",
+      "/app/auth/github/link?return=%2Fprojects%2Fp1",
+    );
+    expect(screen.getByText(/^Starts in /)).toBeInTheDocument();
+    expect(screen.getByText(/Link your GitHub account to accept this project/)).toBeInTheDocument();
+  });
+
+  it("says when a project not yet started may be accepted, that one was never accepted, that a repository was deleted", async () => {
+    mockFetch({ [URL]: ok(project({ status: "to_accept", repo: null, startAt: at(2) })) });
+    const r1 = render();
+    expect(await screen.findByText(/^You can accept this project from /)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Accept" })).toBeNull();
+    r1.unmount();
+
+    mockFetch({ [URL]: ok(project({ status: "locked", deadlineAt: at(-1), repo: null })) });
+    const r2 = render();
+    expect(await screen.findByText("You did not accept this project before its deadline.")).toBeInTheDocument();
+    // A passed deadline is said once, with no countdown.
+    expect(screen.getByText(/^Due [^·]+$/)).toBeInTheDocument();
+    r2.unmount();
+
+    mockFetch({ [URL]: ok(project({ repo: { ...project().repo!, deleted: true } })) });
+    render();
+    expect(await screen.findByText(/Your repository was deleted on GitHub/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /heig\/labo-1-lea/ })).toBeNull();
+    expect(screen.queryByText("Score")).toBeNull();
+  });
+});
+
+describe("the release", () => {
+  it("shows the final score, the grade and the teacher's comment, and no indicative score any more", async () => {
+    const p = project({
+      status: "released",
+      deadlineAt: at(-7),
+      repo: { ...project().repo!, locked: true, score: { points: 30, max: 40, grade: null, frozen: true } },
+      release: { at: at(-5), points: 36, max: 40, grade: { grade: 5.5, fellBack: false }, comment: "Bon travail,\nattention aux fuites." },
+    });
+    mockFetch({ [URL]: ok(p) });
+    render();
+    expect(await screen.findByText("Result")).toBeInTheDocument();
+    expect(screen.getByText(/^Published on /)).toBeInTheDocument();
+    expect(screen.getByText("Final score")).toBeInTheDocument();
+    expect(screen.getByText("36 / 40")).toBeInTheDocument();
+    expect(screen.getByText("5.5")).toBeInTheDocument();
+    const note = screen.getByText("Teacher's comment").parentElement!;
+    expect(within(note).getByText(/Bon travail,\s*attention aux fuites\./)).toBeInTheDocument();
+    expect(screen.queryByText("Score at the deadline")).toBeNull();
+    expect(screen.queryByText("indicative")).toBeNull();
+    expect(screen.getByText("scores published")).toBeInTheDocument();
+  });
+
+  it("writes a dash for a release that found no score", async () => {
+    mockFetch({
+      [URL]: ok(project({ status: "released", repo: null, release: { at: at(-5), points: null, max: null, grade: null, comment: null } })),
+    });
+    render();
+    expect(await screen.findByText("Final score")).toBeInTheDocument();
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.queryByText("Teacher's comment")).toBeNull();
+  });
+});
+
+describe("a reader who is not the student", () => {
+  it("gives a teacher in the student view no action and no Resend, one muted line", async () => {
+    sessionStorage.setItem("quiz-view-as", "student");
+    const pending = project({ repo: { ...project().repo!, invitation: "pending" } });
+    mockFetch({ [URL]: ok(pending) });
+    render({ me: makeMe({ role: "teacher" }) });
+    expect(await screen.findByText("Read-only view: the student's actions are not available")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open the invitation" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Resend the invitation" })).toBeNull();
+  });
+});
+
+describe("in French", () => {
+  it("translates the page", async () => {
+    mockFetch({ [URL]: ok(project()) });
+    render({ locale: "fr" });
+    expect(await screen.findByText("Score indicatif")).toBeInTheDocument();
+    expect(screen.getByText("Mon dépôt")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ouvrir le dépôt" })).toBeInTheDocument();
+    expect(screen.getByText("CI réussie")).toBeInTheDocument();
+  });
+});

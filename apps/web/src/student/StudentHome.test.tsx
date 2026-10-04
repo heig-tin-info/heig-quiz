@@ -224,8 +224,9 @@ describe("the student home", () => {
     expect(screen.queryByText("Rien à faire pour l'instant")).toBeNull();
   });
 
-  // M3-09a (F-PROJ-04): a project card, drawn minimally until M3-13 — title, status, deadline, no button.
-  it("lists a project among what is open, with its status and no button yet", async () => {
+  // M3-09a, M3-13 (F-PROJ-04): a project card among the evaluations — title,
+  // status, deadline, and its one action; a ready repository is a link.
+  it("lists a project among what is open, with its status and its repository", async () => {
     const project: StudentProjectCard = {
       kind: "project",
       id: "p1",
@@ -250,8 +251,11 @@ describe("the student home", () => {
     expect(within(row).getByText("Projet")).toBeInTheDocument();
     expect(within(row).getByText(/en cours · /)).toBeInTheDocument();
     expect(within(row).queryByRole("button")).toBeNull();
-    // The evaluation beside it keeps its one action.
-    expect(screen.getByRole("button", { name: "Commencer" })).toBeInTheDocument();
+    const open = within(row).getByRole("link", { name: "Ouvrir le dépôt" });
+    expect(open).toHaveAttribute("href", "https://github.com/heig/labo-1-lea");
+    // A ready repository never takes the accent: the evaluation beside it keeps the one red fill.
+    expect(open).not.toHaveClass("bg-accent");
+    expect(screen.getByRole("button", { name: "Commencer" })).toHaveClass("bg-accent");
   });
 
   it("shows the empty state when nothing is open", async () => {

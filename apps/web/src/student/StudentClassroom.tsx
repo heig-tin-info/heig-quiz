@@ -54,6 +54,7 @@ import {
   UpcomingByDay,
   useCardActions,
 } from "./cards";
+import { needsStudentAction } from "./projectRow";
 
 export type ClassroomTab = "activities" | "journal";
 
@@ -73,15 +74,19 @@ function dueAt(card: StudentActivityCard): string | null {
  *   1. a running poll — it happens in the room, now, and lasts minutes;
  *   2. a card still to do with no deadline;
  *   3. a card already done and open to a retake.
+ * A project whose repository is ready asks nothing of the student and is
+ * not ranked at all (M3-13): its "Open repository" never takes the accent.
  * Ties keep the server's order. `null` when nothing is open.
  */
-export function mostUrgent({ polls, open }: Pick<StudentActivities, "polls" | "open">): string | null {
+export function mostUrgent({ polls, open }: Pick<StudentActivities, "polls" | "open">, now = Date.now()): string | null {
   const ranked = [
-    ...open.map((card) => {
-      const due = dueAt(card);
-      const rank = card.kind === "evaluation" && finished(card) ? 3 : due === null ? 2 : 0;
-      return { id: card.id, rank, due: due === null ? 0 : Date.parse(due) };
-    }),
+    ...open
+      .filter((card) => card.kind !== "project" || needsStudentAction(card, now))
+      .map((card) => {
+        const due = dueAt(card);
+        const rank = card.kind === "evaluation" && finished(card) ? 3 : due === null ? 2 : 0;
+        return { id: card.id, rank, due: due === null ? 0 : Date.parse(due) };
+      }),
     ...polls.map((poll) => ({ id: poll.id, rank: 1, due: 0 })),
   ];
   // `Array.prototype.sort` is stable: ties keep the server's order.
@@ -252,7 +257,7 @@ function Activities({ activities, navigate }: { activities: StudentActivities; n
   const now = useNow(30_000);
   const actions = useCardActions(navigate);
   const { polls, open, upcoming, past } = activities;
-  const urgent = mostUrgent(activities);
+  const urgent = mostUrgent(activities, now);
 
   return (
     <div className="space-y-8">

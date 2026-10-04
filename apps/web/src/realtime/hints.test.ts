@@ -42,6 +42,12 @@ describe("hint kinds -> query-key roots", () => {
     );
   });
 
+  it("refreshes the student's pages on a project hint: an invitation accepted on GitHub reaches the row (M3-13)", () => {
+    const roots = hintRoots(["projects"]);
+    expect(roots).not.toBe("all");
+    for (const root of ["classroom", "project", "student"]) expect(roots).toContain(root);
+  });
+
   it("falls back to everything for mutation, an unknown kind or no kind", () => {
     expect(hintRoots(["mutation"])).toBe("all");
     expect(hintRoots(["pool", "from-a-newer-server"])).toBe("all");
