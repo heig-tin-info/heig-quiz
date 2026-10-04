@@ -122,8 +122,9 @@ describe("the new project form", () => {
     expect(screen.queryByText(/workflow can be changed by the student/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("checkbox", { name: ".github/workflows/grading.yml" }));
     expect(screen.getByText(/workflow can be changed by the student/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("switch", { name: "Groups" }));
-    await userEvent.type(screen.getByLabelText("Maximum group size"), "3");
+    // Group mode is not offered until the groups' pages exist (M3-16): a
+    // group project could not be published without groups.
+    expect(screen.queryByRole("switch", { name: "Groups" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(posted(calls)).toHaveLength(1));
     expect(posted(calls)[0]).toMatchObject({
@@ -133,9 +134,9 @@ describe("the new project form", () => {
       graceMinutes: 60,
       gradingScale: { kind: "score_is_grade" },
       protectedFiles: ["criteria.yml", "README.md"],
-      groupMode: true,
-      groupMaxSize: 3,
+      groupMode: false,
     });
+    expect(posted(calls)[0]).not.toHaveProperty("groupMaxSize");
   });
 
   it("holds a date or a duration, and a start only when scheduled — never a start with a duration", async () => {

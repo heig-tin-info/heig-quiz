@@ -242,6 +242,33 @@ const scenes = [
     },
   },
   { name: "project-new-unconnected", role: "teacher", path: "/classrooms/r2/projects/new" },
+  // F-PROJ-13 (M3-12): the project page. The published project, its rows in
+  // every state; a row's sheet (runs, deadline and lock); the draft, Publish
+  // its one action; Publish refused over students in no group
+  // (`?unassigned=1`); the locked project, every repository frozen, released
+  // with one score changed since (Release said in the header), the scale's
+  // warning. `--width=390` gives the phone layout of each.
+  { name: "project", role: "teacher", path: "/projects/pj-published?projects=1", settle: 2500 },
+  {
+    name: "project-sheet",
+    role: "teacher",
+    path: "/projects/pj-published?projects=1",
+    fold: true,
+    settle: 2500,
+    // The first row with a score: a repository, not a student who has not accepted.
+    act: (p) => p.locator("tbody tr").filter({ hasText: /\d+\/\d+/ }).first().click(),
+  },
+  { name: "project-draft", role: "teacher", path: "/projects/pj-draft?projects=1" },
+  {
+    name: "project-unassigned",
+    role: "teacher",
+    path: "/projects/pj-draft?projects=1&unassigned=1",
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(publish|publier)$/i }).click();
+      await p.getByText(/(Cannot publish|Publication impossible)/).waitFor();
+    },
+  },
+  { name: "project-locked", role: "teacher", path: "/projects/pj-locked?projects=1", settle: 2500 },
   // F-ORG-13 (D24, M2-07): the Settings tab. A classroom that is not
   // connected (r2, its course's organization suggested): "Connect to GitHub"
   // is the one accent, and the connect sheet it opens; PRG1-2026 connected,

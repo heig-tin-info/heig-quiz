@@ -70,7 +70,7 @@ describe("the classroom's Projects group", () => {
     expect(calls.every((c) => c.method === "GET")).toBe(true);
   });
 
-  it("does not open a project where its page does not parse (production until M3-12)", async () => {
+  it("does not open a project in a build where its page's route does not parse", async () => {
     gate.enabled = false;
     mockFetch({ [`GET ${PROJECTS}`]: ok([project(1)]) });
     const navigate = renderGroup();

@@ -1,7 +1,5 @@
 import { AlertTriangle } from "lucide-react";
 
-import type { ProjectSourceDetail } from "@quiz/contracts";
-
 import { useT } from "../i18n";
 import { Alert, Checkbox } from "../ui";
 
@@ -12,14 +10,15 @@ const GRADING_WORKFLOW = ".github/workflows/grading.yml";
  * A project's protected files (F-PROJ-01): the suggestions the source holds
  * (`suggestedProtected`), each a checkbox. Unchecking `grading.yml` warns
  * that the student could then alter the grading. The new project's form
- * draws it, and the project page (M3-12) will, for its edit.
+ * draws it, and the project page's settings (M3-12), where `suggested` also
+ * carries the files protected today that the source no longer suggests.
  */
 export function ProtectedFiles({
   suggested,
   value,
   onChange,
 }: {
-  suggested: ProjectSourceDetail["suggestedProtected"];
+  suggested: readonly string[];
   value: readonly string[];
   onChange: (files: string[]) => void;
 }) {

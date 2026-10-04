@@ -51,6 +51,7 @@ import {
   GithubAccountState,
   GithubClassroom,
   GithubOrg,
+  GradeRunList,
   GradingProgress,
   GradingQueue,
   GradingSteps,
@@ -78,6 +79,7 @@ import {
   PollTeacherView,
   ProjectActivitySummary,
   ProjectCreate,
+  ProjectDetail,
   ProjectRefusal,
   ProjectSourceDetail,
   ProjectSourceRepo,
@@ -92,6 +94,7 @@ import {
   QuestionDetail,
   QuestionPage,
   ResultsView,
+  ReviewCheckpoint,
   StudentFeedback,
   StudentClassroom,
   StudentClassroomPage,
@@ -205,6 +208,13 @@ const firstSeat = ((await get(`/app/api/classrooms/${classroomId}`)) as { roster
 const sourceNames = ((await get(`/app/api/classrooms/${classroomId}/projects/sources`)) as { name: string }[]).map(
   (s) => s.name,
 );
+/** PRG1-2026's projects (M3-12, `?projects=1`), and every repository of their pages. */
+const projectIds = ((await get(`/app/api/classrooms/${classroomId}/projects`)) as Ref[]).map((p) => p.id);
+const projectRepos: [string, string][] = [];
+for (const id of projectIds) {
+  const detail = (await get(`/app/api/projects/${id}`)) as { rows: { repo: Ref | null }[] };
+  for (const row of detail.rows) if (row.repo) projectRepos.push([id, row.repo.id]);
+}
 /** Every page of the classroom's journal (its home and its staff navigation), and whether a student reads it. */
 interface Nav {
   pagePath: string | null;
@@ -462,6 +472,15 @@ const CHECKED: Case[] = [
       `/app/api/classrooms/${classroomId}/projects/sources/${name}`,
       ProjectSourceDetail,
     ),
+  ),
+  // The project page (M3-12): each project's detail, the runs of each of its
+  // repositories, and its review checkpoints.
+  ...projectIds.map((id) => one("/app/api/projects/:id", `/app/api/projects/${id}`, ProjectDetail)),
+  ...projectRepos.map(([id, rid]) =>
+    one("/app/api/projects/:id/repos/:rid/runs", `/app/api/projects/${id}/repos/${rid}/runs`, GradeRunList),
+  ),
+  ...projectIds.map((id) =>
+    each("/app/api/projects/:id/checkpoints", `/app/api/projects/${id}/checkpoints`, ReviewCheckpoint),
   ),
   // The drill (ADR-041, #317): the student's tab and the teacher's switch.
   one("/app/api/drill/session", "/app/api/drill/session", DrillSession),

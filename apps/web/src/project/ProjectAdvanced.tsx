@@ -18,6 +18,9 @@ import {
 import { chosenBranches, chosenProtected, FIELD_ID, type ProjectDraft, type ProjectField } from "./newProject";
 import { ProtectedFiles } from "./ProtectedFiles";
 
+/** Whether the form offers group mode: not before the groups' pages exist (M3-16). */
+const GROUPS_OFFERED = false;
+
 /** A setting whose control is a list, laid under its title rather than beside it. */
 function StackedRow({ title, desc, children }: { title: ReactNode; desc?: ReactNode; children: ReactNode }) {
   return (
@@ -234,21 +237,28 @@ export function ProjectAdvanced({
         </StackedRow>
       ) : null}
 
-      <SettingRow title={t("project.groups")}>
-        <Switch checked={draft.groupMode} label={t("project.groups")} onChange={(groupMode) => update({ groupMode })} />
-      </SettingRow>
-      {draft.groupMode ? (
-        <NumberRow
-          field="groupMaxSize"
-          title={t("project.groupMaxSize")}
-          desc={t("project.groupMaxSize.desc")}
-          unit={t("project.groupMaxSize.unit")}
-          min={1}
-          max={50}
-          value={draft.groupMaxSize}
-          message={message("groupMaxSize")}
-          onChange={(groupMaxSize) => update({ groupMaxSize })}
-        />
+      {/* Group mode waits for its pages (merge tasks M3-15, M3-16): a group
+          project cannot be published without groups, and nothing forms them
+          yet. The rows come back with M3-16. */}
+      {GROUPS_OFFERED ? (
+        <>
+          <SettingRow title={t("project.groups")}>
+            <Switch checked={draft.groupMode} label={t("project.groups")} onChange={(groupMode) => update({ groupMode })} />
+          </SettingRow>
+          {draft.groupMode ? (
+            <NumberRow
+              field="groupMaxSize"
+              title={t("project.groupMaxSize")}
+              desc={t("project.groupMaxSize.desc")}
+              unit={t("project.groupMaxSize.unit")}
+              min={1}
+              max={50}
+              value={draft.groupMaxSize}
+              message={message("groupMaxSize")}
+              onChange={(groupMaxSize) => update({ groupMaxSize })}
+            />
+          ) : null}
+        </>
       ) : null}
     </Card>
   );

@@ -76,17 +76,14 @@ export type Route =
   /** The classroom's Grades tab: the teacher's export, the student's table (§5.2). */
   | { view: "classroomGrades"; id: string }
   /**
-   * One project (M3-12), and its groups. Behind `CLASSROOM_PAGES` until their
-   * screens ship: a project's row opens `project` only where it parses
-   * (`routeEnabled`).
+   * One project, the staff's page (F-PROJ-13, M3-12; `project/ProjectPage`),
+   * and its groups, behind `CLASSROOM_PAGES` until M3-16 ships their screen.
    */
   | { view: "project"; id: string }
   | { view: "projectGroups"; id: string }
   /**
    * A new project in one classroom (F-PROJ-01): where "New ▾ › Project" leads
    * on a connected classroom (M3-10), M3-11's form (`project/NewProjectPage`).
-   * Still `preview` until M3-12 ships the project page it lands on: while it
-   * does not parse, the classroom offers no "New ▾" at all (`routeEnabled`).
    */
   | { view: "projectNew"; classroomId: string }
   /**
@@ -242,10 +239,11 @@ export interface RouteSpec<V extends Route["view"]> {
 /**
  * The gate of the classroom merge's routes (ADR-035, `docs/merge/05-web.md`
  * §5.1–§5.2) whose routes exist before their screens do: the classroom's
- * Grades tab, the new project, a project and its groups. Each renders a
- * placeholder (`ComingSoon`) until its task ships the real screen (M5-04,
- * M3-11, M3-12, M3-16). A screen that links to one asks `routeEnabled`
- * first, so production never shows a door to a page that does not parse.
+ * Grades tab and a project's groups. Each renders a placeholder
+ * (`ComingSoon`) until its task ships the real screen (M5-04, M3-16). A
+ * screen that links to one asks `routeEnabled` first, so production never
+ * shows a door to a page that does not parse. The new project and the
+ * project page left it with M3-12.
  *
  * Off in a production build: the `preview` routes do not parse. On in the
  * browser mock (`VITE_MOCK=1`), and wherever `VITE_CLASSROOM_PAGES=1` is set
@@ -370,8 +368,8 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
       head === "classrooms" && id && tail === "settings" ? { view: "classroomSettings", id } : null,
     studentSafe: false,
   },
-  // M3-10: "New ▾ › Project" on a connected classroom, M3-11's form. M3-12
-  // drops `preview` here and on `project` together.
+  // M3-10: "New ▾ › Project" on a connected classroom, M3-11's form. In
+  // every build since M3-12 shipped the page it lands on.
   projectNew: {
     path: (r) => `/classrooms/${r.classroomId}/projects/new`,
     match: ([head, id, tail, leaf]) =>
@@ -379,7 +377,6 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
         ? { view: "projectNew", classroomId: id }
         : null,
     studentSafe: false,
-    preview: true,
   },
   classroomJournal: {
     path: (r) => `/classrooms/${r.id}/journal${r.path ? `/${encodeJournalPath(r.path)}` : ""}`,
@@ -407,9 +404,9 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     studentSafe: true,
     bottomSlot: "courses",
   },
-  // M3-12, M3-16: behind `CLASSROOM_PAGES` until their screens ship. `project`
-  // takes no tail, so `/projects/:id/groups` reads as home in a production
-  // build rather than as the project.
+  // M3-16: the groups stay behind `CLASSROOM_PAGES` until their screen
+  // ships. `project` takes no tail, so `/projects/:id/groups` reads as home
+  // in a production build rather than as the project.
   projectGroups: {
     path: (r) => `/projects/${r.id}/groups`,
     match: ([head, id, tail]) =>
@@ -418,13 +415,13 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     section: "activities",
     preview: true,
   },
+  // F-PROJ-13 (M3-12): the staff's project page, in every build.
   project: {
     path: (r) => `/projects/${r.id}`,
     match: ([head, id, tail]) =>
       head === "projects" && id && tail === undefined ? { view: "project", id } : null,
     studentSafe: false,
     section: "activities",
-    preview: true,
   },
   activities: { ...fixed("activities", { view: "activities" }), section: "activities" },
   pools: {

@@ -153,7 +153,7 @@ export const KIND: { [K in ActivitySummary["kind"]]: ActivityKindSpec<Extract<Ac
       const s = new Date(a.startAt).getTime();
       return { s, d: Math.max(s, new Date(a.deadlineAt).getTime()) };
     },
-    // M3-12 drops `preview` from `project`, and the rows open.
+    // The project page (M3-12); `routeEnabled` kept as the one rule every kind's home follows.
     home: (a) => (routeEnabled("project") ? { view: "project", id: a.id } : null),
     stateLabel: (a, t) => projectStateLabel(a.state, t),
     stateTone: (a) => projectStateTone(a.state),

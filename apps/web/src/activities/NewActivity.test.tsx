@@ -110,7 +110,7 @@ describe("New ▾ on the classroom's activities", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "projectNew", classroomId: "r1" });
   });
 
-  it("is the plain New evaluation where the new project does not parse (production until M3-11)", async () => {
+  it("is the plain New evaluation in a build where the new project's route does not parse", async () => {
     gate.enabled = false;
     renderClassroom(ok(connected));
     await screen.findByText("No evaluation yet");
