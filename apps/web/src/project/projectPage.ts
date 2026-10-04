@@ -275,6 +275,9 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   strategy_frozen: "project.refusal.strategyFrozen",
   publish_mode_frozen: "project.refusal.publishModeFrozen",
   repo_unavailable: "project.refusal.repoUnavailable",
+  // ADR-070 (M3-15a): a group project's set.
+  no_group_set: "project.noGroupSet.title",
+  unknown_group_set: "project.refusal.unknownGroupSet",
   due_past: "project.refusal.duePast",
   due_after_deadline: "project.refusal.dueAfterDeadline",
   duplicate_checkpoint: "project.refusal.duplicateCheckpoint",

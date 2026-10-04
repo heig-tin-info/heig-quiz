@@ -12,8 +12,12 @@ import { Z } from "./ui";
  *   §a): the App channel is the bell AND this toast. Which notifications
  *   toast, and when, is decided by `notifications/toasts.ts`; the sentence
  *   is the bell's, in the reader's language;
- * - `useToast()(message, tone?)` — one-shot flow feedback, never gated: the
- *   user just did the action.
+ * - `useToast()(message, tone?, options?)` — one-shot flow feedback, never
+ *   gated: the user just did the action. `options.action` adds ONE button
+ *   to the toast — Undo after a move of a group set (ADR-070 §6) — which
+ *   runs it and dismisses the toast; `options.key` makes a toast replace
+ *   the one standing with the same key, so only the latest move can be
+ *   undone.
  */
 
 /**
@@ -37,18 +41,32 @@ const TONE_COLORS: Record<ToastTone, string> = {
   progress: "animate-spin text-fg-faint",
 };
 
+/** The one button a toast may carry: what it says, and what it does. */
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
+
+export interface ToastOptions {
+  action?: ToastAction;
+  /** A toast with this key replaces the one standing with the same key. */
+  key?: string;
+}
+
 interface Toast {
   id: number;
   icon: typeof CheckCircle2;
   iconColor: string;
   message: string;
+  action?: ToastAction;
+  key?: string;
   /** Plays the exit animation; the entry is removed when it ends. */
   leaving?: boolean;
 }
 
 const ToastContext = createContext<{
   notify: (sentence: string) => void;
-  toast: (message: string, tone?: ToastTone) => void;
+  toast: (message: string, tone?: ToastTone, options?: ToastOptions) => void;
 }>({
   notify: () => {},
   toast: () => {},
@@ -90,9 +108,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const push = useCallback(
-    (icon: typeof CheckCircle2, iconColor: string, message: string) => {
+    (icon: typeof CheckCircle2, iconColor: string, message: string, options: ToastOptions = {}) => {
       const id = ++seq.current;
-      setToasts((prev) => [...prev.slice(-4), { id, icon, iconColor, message }]);
+      const { action, key } = options;
+      setToasts((prev) => [
+        // The toast it replaces goes at once: two Undo buttons for one move would be one too many.
+        ...prev.filter((t) => key === undefined || t.key !== key).slice(-4),
+        { id, icon, iconColor, message, action, key },
+      ]);
       setTimeout(() => dismiss(id), AUTO_DISMISS_MS);
     },
     [dismiss],
@@ -101,8 +124,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const notify = useCallback((sentence: string) => push(Bell, "text-accent", sentence), [push]);
 
   const toast = useCallback(
-    (message: string, tone: ToastTone = "success") => {
-      push(TONE_ICONS[tone], TONE_COLORS[tone], message);
+    (message: string, tone: ToastTone = "success", options?: ToastOptions) => {
+      push(TONE_ICONS[tone], TONE_COLORS[tone], message, options);
     },
     [push],
   );
@@ -131,6 +154,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             >
               <Icon className={`mt-0.5 size-4 shrink-0 ${t.iconColor}`} />
               <span className="text-fg">{t.message}</span>
+              {t.action ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    t.action!.run();
+                    dismiss(t.id);
+                  }}
+                  className="-my-0.5 shrink-0 rounded-full px-2 py-0.5 font-semibold text-fg underline-offset-2 transition-colors hover:bg-surface-2 hover:underline"
+                >
+                  {t.action.label}
+                </button>
+              ) : null}
               <button
                 type="button"
                 aria-label={translate("toast.dismiss")}

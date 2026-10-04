@@ -29,6 +29,8 @@ import { ProjectPage } from "./ProjectPage";
  */
 
 const ROOM = `/app/api/classrooms/${CLASSROOM_ID}`;
+/** A group set of the classroom (ADR-070), a uuid as `ProjectPatch` takes one. */
+const SET = "0190d3c4-0000-7000-8000-00000000f001";
 
 /** The page's routes: `project` is the detail served, or a reply / handler of its own. */
 function routes(project: ProjectDetail | RouteHandler, extra: Record<string, RouteHandler> = {}) {
@@ -148,8 +150,76 @@ describe("the one primary action", () => {
     )!;
     expect(within(alert).getByText("Dupont Alice")).toBeInTheDocument();
     expect(within(alert).getByText("Martin Benoît")).toBeInTheDocument();
-    // The names, no link (the groups' page comes with M3-16).
+    // No set to place them in: no link.
     expect(within(alert).queryByRole("link")).toBeNull();
+  });
+});
+
+describe("a group project's set (ADR-070, M3-16a)", () => {
+  const SETS = `GET ${ROOM}/group-sets`;
+  const setSummary = {
+    id: SET,
+    name: "Binômes",
+    maxSize: 2,
+    groups: 12,
+    placed: 22,
+    unplaced: 2,
+    createdAt: PAST,
+    usedBy: [],
+  };
+
+  it("chooses the draft's set with one PATCH", async () => {
+    const { calls } = routes(makeDraft({ groupMode: true }), {
+      [SETS]: ok([setSummary]),
+      [`PATCH ${BASE}`]: ok(makeDraft({ groupMode: true, groupSetId: SET })),
+    });
+    renderPage();
+    await screen.findByRole("option", { name: /^Binômes/ });
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Group set" }), SET);
+    await waitFor(() => expect(writes(calls)).toEqual([expect.objectContaining({ method: "PATCH", body: { groupSetId: SET } })]));
+  });
+
+  it("says Choose a group set first when Publish is refused 409 no_group_set, and points at the picker", async () => {
+    routes(makeDraft({ groupMode: true }), {
+      [SETS]: ok([setSummary]),
+      [`POST ${BASE}/publish`]: fail(409, { error: "no_group_set", message: "no set" }),
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: /Publish/ }));
+    expect(await screen.findByText("Choose a group set first")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Choose a group set" }));
+    expect(screen.getByRole("combobox", { name: "Group set" })).toHaveFocus();
+  });
+
+  it("links the students in no group to the set's page, which comes back here", async () => {
+    routes(makeDraft({ groupMode: true, groupSetId: SET }), {
+      [SETS]: ok([setSummary]),
+      [`POST ${BASE}/publish`]: fail(409, {
+        error: "unassigned_students",
+        message: "1 student(s) in no group",
+        students: [{ enrollmentId: "0190d3c4-0000-7000-8000-00000000e001", nom: "Dupont", prenom: "Alice" }],
+      }),
+    });
+    const { navigate } = renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: /Publish/ }));
+    const link = await screen.findByRole("link", { name: "Place them in the group set" });
+    await userEvent.click(link);
+    expect(navigate).toHaveBeenCalledWith({
+      view: "groupSet",
+      classroomId: CLASSROOM_ID,
+      id: SET,
+      from: `project:${makeProject().id}`,
+    });
+  });
+
+  it("says whether a published project's groups still follow the set", async () => {
+    routes(makeProject({ groupMode: true, groupSetId: SET, editable: [] }), {
+      [SETS]: ok([{ ...setSummary, usedBy: [{ id: makeProject().id, name: "Labo 2", archived: false, follows: false }] }]),
+    });
+    renderPage();
+    expect(await screen.findByText("Its groups stopped following the set at the deadline.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Binômes — 12 groups · 2 not placed" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Group set" })).toBeNull();
   });
 });
 

@@ -90,6 +90,12 @@ async function fillProject(p) {
   await p.getByText(/^(Default branch|Branche par défaut)/).waitFor();
 }
 
+/** The group sets of `mock/groups.ts` (`?groups=1`, M3-16a). */
+const SET_PAIRS = "/classrooms/r1/groups/5e7a0000-0000-4000-8000-000000000001";
+const SET_FINAL = "/classrooms/r1/groups/5e7a0000-0000-4000-8000-000000000002";
+const SET_EMPTY = "/classrooms/r1/groups/5e7a0000-0000-4000-8000-000000000003";
+const SET_ARCHIVED = "/classrooms/r6/groups/5e7a0000-0000-4000-8000-000000000004";
+
 const scenes = [
   // The Activities section (#190): the three views, the states.
   { name: "activities", role: "teacher", path: "/activities" },
@@ -310,6 +316,68 @@ const scenes = [
       await p.getByText(/^(Scores released on|Scores publiés le)/).waitFor();
     },
   },
+  // ADR-070 (M3-16a): the classroom's Groups tab — empty, then three sets,
+  // one named by a project —, a set's page in each state (some students in
+  // no group and a group above its maximum, everyone placed, empty, an
+  // archived classroom's, a class of 120), a student selected for click
+  // then click, the Undo toast after a move, the random formation; the new
+  // project's group work, and a draft group project with and without its set.
+  { name: "classroom-groups-empty", role: "teacher", path: "/classrooms/r1/groups" },
+  { name: "classroom-groups", role: "teacher", path: "/classrooms/r1/groups?groups=1&projects=1" },
+  { name: "group-set", role: "teacher", path: `${SET_FINAL}?groups=1&projects=1` },
+  { name: "group-set-placed", role: "teacher", path: `${SET_PAIRS}?groups=1&projects=1` },
+  { name: "group-set-empty", role: "teacher", path: `${SET_EMPTY}?groups=1` },
+  { name: "group-set-archived", role: "teacher", path: `${SET_ARCHIVED}?groups=1` },
+  { name: "group-set-many", role: "teacher", path: `${SET_PAIRS}?groups=1&many=1` },
+  {
+    name: "group-set-selected",
+    role: "teacher",
+    path: `${SET_FINAL}?groups=1`,
+    fold: true,
+    act: (p) => p.getByRole("region", { name: /^(no group|sans groupe)$/i }).getByRole("button", { pressed: false }).first().click(),
+  },
+  {
+    name: "group-set-undo",
+    role: "teacher",
+    path: `${SET_FINAL}?groups=1`,
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(move|déplacer) .+(to|vers)…$/i }).first().click();
+      await p.getByRole("menuitem", { name: /^(Group|Groupe) 5$/ }).click();
+      await p.getByRole("button", { name: /^(undo|annuler)$/i }).waitFor();
+    },
+  },
+  {
+    name: "group-set-random",
+    role: "teacher",
+    path: `${SET_FINAL}?groups=1`,
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(form at random|répartir au hasard)$/i }).click();
+      await p.getByRole("dialog").waitFor();
+    },
+  },
+  {
+    name: "project-new-groups",
+    role: "teacher",
+    path: "/classrooms/r1/projects/new?projects=1&groups=1",
+    act: async (p) => {
+      await fillProject(p);
+      await p.getByRole("button", { name: /^(advanced options|options avancées)$/i }).click();
+      await p.getByRole("switch", { name: /^(groups|groupes)$/i }).click();
+      await p.getByLabel(/^(group set|répartition)$/i).selectOption({ index: 1 });
+    },
+  },
+  {
+    name: "project-group-noset",
+    role: "teacher",
+    path: "/projects/pj-draft?projects=1&groups=1",
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(publish|publier)$/i }).click();
+      await p.getByText(/(Choose a group set first|Choisissez d'abord une répartition)/).first().waitFor();
+    },
+  },
+  { name: "project-group", role: "teacher", path: "/projects/pj-group?projects=1&groups=1" },
   // F-ORG-13 (D24, M2-07): the Settings tab. A classroom that is not
   // connected (r2, its course's organization suggested): "Connect to GitHub"
   // is the one accent, and the connect sheet it opens; PRG1-2026 connected,

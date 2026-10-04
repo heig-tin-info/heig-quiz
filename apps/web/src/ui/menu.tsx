@@ -366,7 +366,9 @@ export function Menu({
               tabIndex={-1}
               onKeyDown={onPanelKeyDown}
               className={cx(
-                "menu-panel fixed min-w-44 rounded-menu border border-line bg-surface p-1 shadow-popover focus:outline-none",
+                // A list longer than the room left scrolls inside the panel
+                // (every group of a set to move a student into, M3-16a).
+                "menu-panel fixed min-w-44 overflow-y-auto rounded-menu border border-line bg-surface p-1 shadow-popover focus:outline-none",
                 Z.popover,
                 // A fixed width, not a max: the panel is `position: fixed` with
                 // only `left` set, so shrink-to-fit gives it whatever is left
@@ -379,6 +381,7 @@ export function Menu({
                   top: pos.top,
                   bottom: pos.bottom,
                   left: pos.left,
+                  maxHeight: `calc(100dvh - ${(pos.top ?? pos.bottom ?? 0) + 8}px)`,
                   // Not `transform`: `.menu-panel` animates that property on
                   // open, and an animation owns it entirely while it plays.
                   // The alignment offset travels as a custom property the

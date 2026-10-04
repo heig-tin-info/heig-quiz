@@ -2396,20 +2396,86 @@ stops a group) are ADR-070's amendment and F-PROJ-06/F-PROJ-17's wording.
   refused revocation retried, two projects on one set, a stale digest.
 
 ### M3-16 — Groups (web)
-- **Depends on**: M3-15a (M3-15b for the confirmations and flags), M3-12.
-- **Goal**: the classroom's *Groups* tab (fr *Groupes*) listing its sets; a
-  set's page: the students in no group and the groups, drag and drop with a
-  keyboard equivalent, *Undo* for a move with no GitHub consequence, the
-  confirmation naming them otherwise, the random formation (size, smaller /
-  larger); the project form's group work (`GROUPS_OFFERED`) with the
-  classroom's sets and *Create new groups*; the project page's set, its
-  drift and *Resync*, one row per group. Read `apps/web/DESIGN.md` and the
+Split in two PRs (orchestrator, 2026-10-05): what the API of M3-15a
+serves now (16a), and what waits for the group repositories (16b).
+
+#### M3-16a — The Groups tab, a set's page, the project's set
+- **Depends on**: M3-15a, M3-12.
+- **Goal**: the classroom's *Groups* tab (fr *Groupes*) listing its sets;
+  a set's page: the students in no group and the groups, drag and drop
+  with a keyboard equivalent, *Undo* for a move (none reaches GitHub
+  before M3-15b), the random formation (size, smaller / larger); the
+  project form's group work (`GROUPS_OFFERED`) with the classroom's sets
+  and *Create new groups*; a draft's set chosen on its page, the set a
+  group project follows shown there. Read `apps/web/DESIGN.md` and the
   `quiz-ui` skill first.
-- **From M3-15a**: when `GROUPS_OFFERED` turns on, the form and the project
-  page word the refusals `no_group_set` (publish) and `unknown_group_set`
-  (create, PATCH) through `t()`, in `en.ts` and `fr.ts`, like the others
-  of `PROJECT_REFUSALS`; the hint kind `groups` names its query roots in
-  `realtime/hints.ts` (none before this task).
+- **From M3-15a**: the form and the project page word the refusals
+  `no_group_set` (publish) and `unknown_group_set` (create, PATCH) through
+  `t()`, in `en.ts` and `fr.ts`, like the others of `PROJECT_REFUSALS`;
+  the hint kind `groups` names its query roots in `realtime/hints.ts`.
+- **Decided for it** (orchestrator, 2026-10-05): (1) the Groups tab and
+  the set's page ship to production; the form's group mode is offered only
+  where `CLASSROOM_PAGES` is on until M3-15b-1 merges (Accept answers
+  `409 no_group` today); (2) the routes are `/classrooms/:id/groups` (a
+  route tab) and `/classrooms/:id/groups/:setId`, staff only, and
+  `/projects/:id/groups` goes; (3) one primary on the set's page, *Form at
+  random*, none once everyone is placed; (4) `@dnd-kit` after the
+  categorize board's pattern, copied, never imported; a "Move to…" menu per
+  student; (5) Undo for moves only, the latest only, through the toast;
+  (6) one write at a time per set, the cache from the latest answer.
+- **As delivered** (branch `merge/M3-16a-groups-web`). What M3-16b and
+  M3-17 inherit:
+  - **Routes** (`router.ts`): `classroomGroups` and `groupSet` (its
+    `from`, `project:<id>`, in the query only), neither `preview` nor
+    `studentSafe`; `projectGroups` and `soon.projectGroups` are gone.
+    `ClassroomView`'s `ROUTE_TABS` has `groups` (after the Roster), whose
+    header primary is *New group set* (straight to the new set's page).
+  - **`apps/web/src/group/`**: `api.ts` (`useClassroomGroupSets`,
+    `useGroupSet`, `useCreateGroupSet`, `useGroupSetWrites` — the queue:
+    one request at a time per set, an optimistic step drawn at once, the
+    cache set from the latest answer once the queue is empty, rolled back
+    to the last answer when it ends on an error); `groupRules.ts` (pure:
+    `placeOf`, `withMove`, `sizesSummary` on `groupSizes`, the refusals'
+    words, `has_repo` included ahead of M3-15b-1, `set_in_use`'s
+    projects read with a local schema — the contracts name the code, not
+    the body); `GroupSetList`,
+    `GroupSetPage` (name renamed in place, *New group*, menu: maximum
+    size, duplicate, delete), `GroupBoard` (pointer and keyboard drag,
+    the keyboard walking the zones in reading order, `stepZone`; click
+    then click with "Move here" buttons; a "Move to…" menu; a group renamed
+    in place, `duplicate_name` under its field), `RandomFormDialog`,
+    `GroupSetPicker`, `parts.tsx`. An archived classroom's set is drawn
+    read-only.
+  - **Primitives**: the toast takes one action and a `key` (Undo, the
+    latest move only); `Menu`'s panel scrolls inside the viewport;
+    `EditableTitle`'s button no longer wraps its pencil in a box sized to
+    its content.
+  - **Keys and hints**: `groupSetsKey` (`classroomGroupSetsKey`,
+    `groupSetKey`), named by the hints `groups`, `roster` and `projects`.
+  - **Projects**: `GROUPS_OFFERED = CLASSROOM_PAGES` in
+    `ProjectAdvanced.tsx`, THE switch to flip once M3-15b-1 is merged; the
+    draft's `groupSetId`, sent in group mode only; `unknown_group_set`
+    under the picker, the choice cleared. `ProjectGroupSet` on the page:
+    a draft's picker (`PATCH groupSetId`), the set's link with
+    `?from=project:<id>`, *follows* / *stopped following* once published;
+    `no_group_set` an alert pointing at the picker; `unassigned_students`
+    links to the set.
+  - **Mock** (`mock/groups.ts`, `?groups=1`): three sets on PRG1-2026
+    (pairs, named by a draft group project; "Projet final" with a group
+    above its maximum and eight students in no group; an empty one), one
+    on the archived PRG1-2024; the draft project in group mode without a
+    set. Checked by `contract.test.ts`; scenes `classroom-groups*`,
+    `group-set*`, `project-new-groups`, `project-group*`.
+
+#### M3-16b — Rows per group, drift, Resync, confirmations
+- **Depends on**: M3-15b-2, M3-16a.
+- **Goal**: the project page's one row per group (its repository, its
+  members); the drift of a stopped copy and *Resync with the set*; the
+  `409 needs_confirmation` dialog of a membership write that reaches
+  GitHub (ADR-070 §6), naming the consequences and sending the digest
+  back, through the set's write queue; the *access to revoke* flag on a
+  repository's row; `GROUPS_OFFERED` turned on everywhere (if M3-15b-1
+  has not done it).
 
 ### M3-17 — Groups formed by the students (ADR-070 lot 2)
 - **Depends on**: M3-15a, M3-16, M3-09.

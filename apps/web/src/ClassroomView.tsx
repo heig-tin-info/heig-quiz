@@ -4,6 +4,8 @@ import {
   ClipboardList,
   Dumbbell,
   GraduationCap,
+  Plus,
+  UsersRound,
   Settings as SettingsIcon,
   UserPlus,
   Users,
@@ -18,6 +20,8 @@ import { PeriodFields, periodBody, periodInvalid, type PeriodDraft } from "./Cla
 import { ClassroomSettings } from "./ClassroomSettings";
 import { ClassroomDrill } from "./drill/ClassroomDrill";
 import { githubAbsent, useClassroomGithub } from "./github/api";
+import { useCreateGroupSet } from "./group/api";
+import { GroupSetList } from "./group/GroupSetList";
 import { useT } from "./i18n";
 import { useStaffJournal } from "./journal/api";
 import { JournalReader } from "./journal/JournalReader";
@@ -66,18 +70,22 @@ import { invalidateHint } from "./realtime/hints";
  * (F-JRN-07, M4-05) is a route too (`/classrooms/:id/journal/<path>`), and a
  * tab only while the classroom has a journal (F-JRN-01): the reader, whose
  * staff bar holds Refresh; Edit, its primary inside a page, is M4-06's.
+ * The Groups (ADR-070, M3-16a) are a route too (`/classrooms/:id/groups`):
+ * the classroom's group sets, whose primary, "New group set", takes the
+ * header's slot and leads straight to the new set's page.
  */
 
-type RouteTab = "journal" | "settings";
+type RouteTab = "journal" | "groups" | "settings";
 export type ClassroomTab = ClassroomQueryTab | RouteTab;
 type Tab = ClassroomTab;
 
 /**
  * The tabs that are routes of their own (`/classrooms/:id/<tab>`), not a
- * `?tab=` on the classroom's address: the Journal and the Settings.
+ * `?tab=` on the classroom's address: the Journal, the Groups and the Settings.
  */
 const ROUTE_TABS: Record<RouteTab, (id: string) => Route> = {
   journal: (id) => ({ view: "classroomJournal", id }),
+  groups: (id) => ({ view: "classroomGroups", id }),
   settings: (id) => ({ view: "classroomSettings", id }),
 };
 const isRouteTab = (t: Tab): t is RouteTab => t in ROUTE_TABS;
@@ -213,6 +221,9 @@ export function ClassroomView({
     },
     onError: toastError("roster.joinFailed"),
   });
+  // ADR-070 §2: a new set, named by the server, opened at once.
+  const newSet = useCreateGroupSet(id, (created) => navigate({ view: "groupSet", classroomId: id, id: created.set.id }));
+  const createSet = () => newSet.mutate({}, { onError: toastError("error.save") });
 
   /** A tab: a route of its own (`ROUTE_TABS`), or a `?tab=` on the classroom's address. */
   const openTab = (next: Tab) => {
@@ -327,6 +338,10 @@ export function ClassroomView({
                 onEvaluation={() => setCreating(true)}
                 onConnect={openConnect}
               />
+            ) : tab === "groups" && !data.archivedAt ? (
+              <Button loading={newSet.isPending} onClick={createSet}>
+                <Plus /> {t("groups.new")}
+              </Button>
             ) : null}
           </>
         }
@@ -354,6 +369,8 @@ export function ClassroomView({
             // promises the number of rows behind it. Last before Settings:
             // the content tabs come first, the people and the setup after.
             { value: "roster", label: t("roster.title"), count: data.roster.length, icon: Users },
+            // ADR-070: who works with whom, beside who is in the classroom.
+            { value: "groups", label: t("groups.tab"), icon: UsersRound },
             { value: "settings", label: t("classroomSettings.tab"), icon: SettingsIcon },
           ]}
         />
@@ -393,6 +410,14 @@ export function ClassroomView({
           </div>
         ) : tab === "journal" ? (
           <JournalReader classroomId={id} path={journalPath} navigate={navigate} studentView={false} />
+        ) : tab === "groups" ? (
+          <GroupSetList
+            classroomId={id}
+            navigate={navigate}
+            onNew={createSet}
+            creating={newSet.isPending}
+            readOnly={Boolean(data.archivedAt)}
+          />
         ) : tab === "drill" ? (
           <ClassroomDrill room={data} onSettings={() => openTab("settings")} />
         ) : (

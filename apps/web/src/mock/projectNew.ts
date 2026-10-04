@@ -27,6 +27,7 @@ import {
 import { PROJECT_PATCH_FIELDS, slugify } from "@quiz/domain";
 
 import { mockClassroomOrg } from "./github";
+import { isSetOf } from "./groups";
 import { courses, rooms } from "./org";
 import { addMockProject } from "./project";
 import { D, flags, H, iso, MockError, MockPayload, nextId, on, role } from "./runtime";
@@ -127,6 +128,9 @@ on("POST", "/app/api/classrooms/:id/projects", async (m, raw): Promise<ProjectSu
   if (deadline <= at) throw new MockPayload(422, { error: "deadline_past", message: "The deadline has passed" });
   const source = flags.srcmissing ? undefined : sourcesOf(id).find((s) => s.repo.name === body.sourceRepo);
   if (!source) throw new MockPayload(422, { error: "source_not_found", message: "The source repository was not found" });
+  if (body.groupSetId && !isSetOf(id, body.groupSetId)) {
+    throw new MockPayload(422, { error: "unknown_group_set", message: "The group set is not one of the project's classroom" });
+  }
   const branches = body.branches ?? [source.repo.defaultBranch];
   const lacking = branches.filter((b) => !source.branches.includes(b));
   if (lacking.length > 0) {

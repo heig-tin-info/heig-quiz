@@ -28,7 +28,8 @@ describe("the classroom merge's routes, CLASSROOM_PAGES on", () => {
       ],
       [{ view: "classroomGrades", id: "c-1" }, "/classrooms/c-1/grades"],
       [{ view: "project", id: "p-1" }, "/projects/p-1"],
-      [{ view: "projectGroups", id: "p-1" }, "/projects/p-1/groups"],
+      [{ view: "classroomGroups", id: "c-1" }, "/classrooms/c-1/groups"],
+      [{ view: "groupSet", classroomId: "c-1", id: "s-1" }, "/classrooms/c-1/groups/s-1"],
       [{ view: "projectNew", classroomId: "c-1" }, "/classrooms/c-1/projects/new"],
     ];
     for (const [route, path] of cases) {
@@ -78,8 +79,9 @@ describe("the classroom merge's routes, CLASSROOM_PAGES on", () => {
     expect(parsePath("/classrooms/c-1/settings/")).toEqual({ view: "classroomSettings", id: "c-1" });
     expect(parsePath("/classrooms/c-1/grades/")).toEqual({ view: "classroomGrades", id: "c-1" });
     expect(parsePath("/classrooms/c-1/whatever")).toEqual({ view: "classroom", id: "c-1" });
-    expect(parsePath("/projects/p-1/groups/")).toEqual({ view: "projectGroups", id: "p-1" });
-    // A project takes no tail (M3-10): anything else is home.
+    expect(parsePath("/classrooms/c-1/groups/")).toEqual({ view: "classroomGroups", id: "c-1" });
+    // A project takes no tail (M3-10): anything else, its old groups page included, is home.
+    expect(parsePath("/projects/p-1/groups")).toEqual({ view: "home" });
     expect(parsePath("/projects/p-1/other")).toEqual({ view: "home" });
     expect(parsePath("/projects")).toEqual({ view: "home" });
   });

@@ -107,6 +107,9 @@ import {
   StudentHome,
   StudentProject,
   GradeGroup,
+  GroupErrorCode,
+  GroupSetDetail,
+  GroupSetSummary,
   TemplateDetail,
   TemplatePullPreview,
 } from "@quiz/contracts";
@@ -124,6 +127,9 @@ localStorage.setItem("quiz-mock-journal", "1");
 // `?projects=1` (M3-10): PRG1-2026 has a project in each state, so the
 // classroom's list and the Activities' project rows are served and checked.
 localStorage.setItem("quiz-mock-projects", "1");
+// `?groups=1` (M3-16a): PRG1-2026 and PRG1-2024 have group sets, and two of
+// PRG1-2026's drafts are group projects.
+localStorage.setItem("quiz-mock-groups", "1");
 await import("./index");
 const { routes } = await import("./runtime");
 const { STUDENT_ATTEMPT, STUDENT_RETAKE_ATTEMPT, STUDENT_PROJECT_OPEN, STUDENT_PROJECT_PAST, STUDENT_PROJECT_SOON } = await import("./student");
@@ -221,6 +227,13 @@ const projectRepos: [string, string][] = [];
 for (const id of projectIds) {
   const detail = (await get(`/app/api/projects/${id}`)) as { rows: { repo: Ref | null }[] };
   for (const row of detail.rows) if (row.repo) projectRepos.push([id, row.repo.id]);
+}
+/** Every classroom's group sets (M3-16a, `?groups=1`): each one is read in detail. */
+const groupSetIds: string[] = [];
+/** PRG1-2024, archived: out of the courses' lists, its set read-only. */
+const ARCHIVED_ROOM = "r6";
+for (const room of [...courses.flatMap((c) => c.classrooms).map((r) => r.id), ARCHIVED_ROOM]) {
+  groupSetIds.push(...((await get(`/app/api/classrooms/${room}/group-sets`)) as Ref[]).map((s) => s.id));
 }
 /** Every page of the classroom's journal (its home and its staff navigation), and whether a student reads it. */
 interface Nav {
@@ -496,6 +509,11 @@ const CHECKED: Case[] = [
   ...projectIds.map((id) =>
     each("/app/api/projects/:id/checkpoints", `/app/api/projects/${id}/checkpoints`, ReviewCheckpoint),
   ),
+  // The group sets (M3-16a): every classroom's list, and every set.
+  ...courses
+    .flatMap((c) => c.classrooms)
+    .map((r) => each("/app/api/classrooms/:id/group-sets", `/app/api/classrooms/${r.id}/group-sets`, GroupSetSummary)),
+  ...groupSetIds.map((id) => one("/app/api/group-sets/:id", `/app/api/group-sets/${id}`, GroupSetDetail)),
   // The drill (ADR-041, #317): the student's tab and the teacher's switch.
   one("/app/api/drill/session", "/app/api/drill/session", DrillSession),
   each("/app/api/drill/classrooms", "/app/api/drill/classrooms", DrillClassroom),
@@ -571,9 +589,10 @@ describe("the mock answers what the contracts describe", () => {
 describe("the mock's projects (?projects=1)", () => {
   it("serves one project per state, on PRG1-2026 and in the Activities", async () => {
     const own = (await get(`/app/api/classrooms/${classroomId}/projects`)) as { state: string }[];
-    expect(own.map((p) => p.state).sort()).toEqual(["draft", "locked", "published"]);
+    // `?groups=1` adds a draft group project (M3-16a).
+    expect(own.map((p) => p.state).sort()).toEqual(["draft", "draft", "locked", "published"]);
     const all = (await get("/app/api/activities")) as { kind: string }[];
-    expect(all.filter((a) => a.kind === "project")).toHaveLength(3);
+    expect(all.filter((a) => a.kind === "project")).toHaveLength(4);
   });
 });
 
@@ -687,5 +706,55 @@ describe("the mock's project writes (M3-12b, M3-12c)", () => {
     expect(reenabled.status).toBe(200);
     expect(issuesOf(ProjectRepoProtection, reenabled.body)).toEqual([]);
     expect((reenabled.body as ProjectRepoProtection).reenabledAt).not.toBeNull();
+  });
+});
+
+describe("the mock's group sets (M3-16a, ?groups=1)", () => {
+  const send = async (path: string, method: string, body?: unknown) => {
+    const res = await fetch(path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+    return { status: res.status, body: res.status === 204 ? null : ((await res.json()) as unknown) };
+  };
+  const sets = async (room: string) => (await get(`/app/api/classrooms/${room}/group-sets`)) as GroupSetSummary[];
+  /** The refusal's code, parsed by the contract's closed list. */
+  const refusal = (body: unknown) => GroupErrorCode.parse((body as { error?: unknown }).error);
+
+  it("answers every write of a set with the set (GroupSetDetail), and its refusals with the bodies the pages read", async () => {
+    const created = await send(`/app/api/classrooms/${classroomId}/group-sets`, "POST", {});
+    expect(issuesOf(GroupSetDetail, created.body)).toEqual([]);
+    const set = created.body as GroupSetDetail;
+    const base = `/app/api/group-sets/${set.set.id}`;
+    const withGroup = (await send(`${base}/groups`, "POST", {})).body as GroupSetDetail;
+    expect(issuesOf(GroupSetDetail, withGroup)).toEqual([]);
+    const group = withGroup.groups[0]!;
+    const student = withGroup.unplaced[0]!;
+    const moved = (await send(`${base}/members/${student.enrollmentId}`, "PUT", { groupId: group.id })).body as GroupSetDetail;
+    expect(moved.groups[0]!.members.map((s) => s.enrollmentId)).toEqual([student.enrollmentId]);
+    // A second group of the same name, a size above the students left: refused, worded by the page.
+    const taken = await send(`${base}/groups`, "POST", { name: group.name });
+    expect(taken.status).toBe(409);
+    expect(refusal(taken.body)).toBe("duplicate_name");
+    const tooBig = await send(`${base}/random`, "POST", { size: 500, remainder: "smaller" });
+    expect(tooBig.status).toBe(422);
+    expect(refusal(tooBig.body)).toBe("size_out_of_range");
+    const formed = (await send(`${base}/random`, "POST", { size: 3, remainder: "smaller" })).body as GroupSetDetail;
+    expect(formed.unplaced).toEqual([]);
+    const nobody = await send(`${base}/random`, "POST", { size: 3, remainder: "smaller" });
+    expect(refusal(nobody.body)).toBe("nobody_to_place");
+    expect((await send(base, "DELETE")).status).toBe(204);
+  });
+
+  it("refuses to delete a set a project follows, naming it (set_in_use)", async () => {
+    const pairs = (await sets(classroomId)).find((s) => s.usedBy.length > 0)!;
+    const refused = await send(`/app/api/group-sets/${pairs.id}`, "DELETE");
+    expect(refused.status).toBe(409);
+    expect(refused.body).toMatchObject({ error: "set_in_use", projects: [{ id: pairs.usedBy[0]!.id, name: pairs.usedBy[0]!.name }] });
+  });
+
+  it("keeps an archived classroom's sets read-only (classroom_archived)", async () => {
+    const [set] = await sets(ARCHIVED_ROOM);
+    const detail = (await get(`/app/api/group-sets/${set!.id}`)) as GroupSetDetail;
+    expect(detail.set.readOnly).toBe(true);
+    const refused = await send(`/app/api/group-sets/${set!.id}/groups`, "POST", {});
+    expect(refusal(refused.body)).toBe("classroom_archived");
   });
 });

@@ -62,6 +62,7 @@ const NewProjectPage = lazy(() =>
   import("./project/NewProjectPage").then((m) => ({ default: m.NewProjectPage })),
 );
 const ProjectPage = lazy(() => import("./project/ProjectPage").then((m) => ({ default: m.ProjectPage })));
+const GroupSetPage = lazy(() => import("./group/GroupSetPage").then((m) => ({ default: m.GroupSetPage })));
 // The pool screens (WP7): the teacher's authoring surface, one chunk each,
 // so a student — or a teacher who only runs quizzes — never downloads them.
 const PoolsPage = lazy(() => import("./pool/PoolsPage").then((m) => ({ default: m.PoolsPage })));
@@ -276,9 +277,11 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   // The pages of the classroom merge, placeholders until their screens ship
   // (`CLASSROOM_PAGES`, `router.ts`).
   classroomGrades: (_, c) => <ComingSoon title="bnav.grades" navigate={c.navigate} teacherUi={c.teacherUi} />,
+  // ADR-070 (M3-16a): the classroom's Groups tab, a route of its own, and one group set's page.
+  classroomGroups: (r, c) => <ClassroomView id={r.id} navigate={c.navigate} routeTab="groups" />,
+  groupSet: (r, c) => <GroupSetPage classroomId={r.classroomId} id={r.id} navigate={c.navigate} />,
   // F-PROJ-13: the staff's project page (M3-12).
   project: (r, c) => <ProjectPage id={r.id} navigate={c.navigate} />,
-  projectGroups: (_, c) => <ComingSoon title="soon.projectGroups" navigate={c.navigate} teacherUi={c.teacherUi} />,
   // F-PROJ-01: "New ▾ › Project" (M3-10) leads here, M3-11's form.
   projectNew: (r, c) => <NewProjectPage classroomId={r.classroomId} navigate={c.navigate} />,
   activities: (_, c) => <ActivitiesPage navigate={c.navigate} />,
