@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="apps/web/public/icon-192.png" alt="" width="96" height="96">
-
-# Quiz
+<h1><img src="apps/web/src/assets/quiz.svg" alt="Quiz" width="360"></h1>
 
 **The teaching platform for Swiss higher education: write your questions once,
 run exams live, grade in one pass, and keep students practising.**
