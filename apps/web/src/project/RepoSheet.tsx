@@ -1,36 +1,18 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { History, Lock, LockOpen } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Lock, LockOpen } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type {
-  GradeRunList,
-  GradeRunView,
-  ProjectDetail,
-  ProjectRepoDeadline,
-  ProjectRepoDeadlineState,
-} from "@quiz/contracts";
+import type { ProjectDetail, ProjectRepoDeadline, ProjectRepoDeadlineState } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api, refusedWith } from "../api";
 import { DateField } from "../evaluation/TimingStep";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { projectKey, projectRunsKey } from "../queryKeys";
-import {
-  Badge,
-  Button,
-  EmptyState,
-  FieldError,
-  fieldErrorProps,
-  GithubIcon,
-  isoDateTime,
-  QueryError,
-  RelativeTime,
-  Sheet,
-  Skeleton,
-  T,
-} from "../ui";
-import { CiBadge, Score } from "./ProjectRepos";
-import { actionable, refusalCode, refusalKey, repoFlags, repoHref, shortSha } from "./projectPage";
+import { projectKey } from "../queryKeys";
+import { Badge, Button, Fact, FieldError, fieldErrorProps, isoDateTime, RelativeTime, Sheet } from "../ui";
+import { CiBadge, Points, RepoLink, Score } from "./parts";
+import { actionable, refusalMessage, repoFlags, shortSha } from "./projectPage";
+import { RunHistory } from "./RunHistory";
 
 const OWN_DEADLINE_ID = "project-repo-deadline";
 
@@ -43,145 +25,13 @@ function Section({ title, children }: { title: ReactNode; children: ReactNode })
   );
 }
 
-function Fact({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs font-medium text-fg-muted">{label}</dt>
-      <dd className="mt-0.5 text-sm">{children}</dd>
-    </div>
-  );
-}
-
-/** One slot's score: points out of their maximum, or a dash. */
-function SlotScore({ score }: { score: { points: number | null; max: number | null } | null }) {
-  if (!score || score.points === null) return <span className="text-fg-faint">—</span>;
-  return (
-    <span className="tabular-nums">
-      {score.points}
-      {score.max !== null ? `/${score.max}` : ""}
-    </span>
-  );
-}
-
-/** Which of the three slots a run fills, by its id (null: none). */
-function slotOf(run: GradeRunView, list: GradeRunList): "current" | "frozen" | "review" | null {
-  if (run.id === list.reviewGradeRunId) return "review";
-  if (run.id === list.frozenGradeRunId) return "frozen";
-  if (run.id === list.currentGradeRunId) return "current";
-  return null;
-}
-
-/** The history of a repository's runs (`GET …/repos/:rid/runs`), the newest first, the slots marked. */
-function RunHistory({ projectId, repoId }: { projectId: string; repoId: string }) {
-  const t = useT();
-  const runs = useQuery<GradeRunList>({
-    queryKey: projectRunsKey(projectId, repoId),
-    queryFn: () => api(`/app/api/projects/${projectId}/repos/${repoId}/runs`),
-  });
-  if (runs.isLoading) {
-    return (
-      <div className="space-y-2">
-        <Skeleton className="h-8" />
-        <Skeleton className="h-8" />
-        <Skeleton className="h-8" />
-      </div>
-    );
-  }
-  if (runs.isError) {
-    return (
-      <QueryError
-        title={t("project.runs.failed")}
-        error={runs.error}
-        onRetry={() => void runs.refetch()}
-        retrying={runs.isFetching}
-      />
-    );
-  }
-  const list = runs.data!;
-  if (list.runs.length === 0) {
-    return (
-      <EmptyState icon={History} title={t("project.runs.empty")} className="py-8">
-        {t("project.runs.emptyBody")}
-      </EmptyState>
-    );
-  }
-  return (
-    <div className={`${T.container} -mx-6 overflow-x-auto`}>
-      <table className={T.table}>
-        <thead className={T.head}>
-          <tr>
-            <th scope="col" className={`${T.th} pl-6`}>
-              {t("project.col.when")}
-            </th>
-            <th scope="col" className={T.th}>
-              {t("project.col.run")}
-            </th>
-            <th scope="col" className={`${T.th} text-right`}>
-              {t("project.col.result")}
-            </th>
-            <th scope="col" className={`${T.th} pr-6`}>
-              {t("project.col.state")}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {list.runs.map((run) => {
-            const slot = slotOf(run, list);
-            return (
-              <tr key={run.id} className={T.row}>
-                <td className={`${T.td} pl-6 text-fg-muted`}>
-                  <RelativeTime iso={run.completedAt} />
-                </td>
-                <td className={T.td}>
-                  <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <Badge tone="zinc">{t(`project.run.kind.${run.kind}`)}</Badge>
-                    <span className="font-mono text-xs text-fg-muted">
-                      {run.headBranch}@{shortSha(run.headSha)}
-                    </span>
-                    <span className="text-xs text-fg-faint">{run.conclusion}</span>
-                  </span>
-                </td>
-                <td className={`${T.td} text-right`}>
-                  <span className="flex flex-col items-end">
-                    <SlotScore score={run} />
-                    {run.testsTotal !== null ? (
-                      <span className="text-xs text-fg-faint">
-                        {t("project.run.tests", { passed: run.testsPassed ?? 0, total: run.testsTotal })}
-                      </span>
-                    ) : null}
-                    {run.parseStatus !== "ok" ? (
-                      <span className="text-xs text-fg-muted">{t(`project.run.parse.${run.parseStatus}`)}</span>
-                    ) : null}
-                    {run.parseDetail ? (
-                      <span className="max-w-60 truncate font-mono text-xs text-fg-faint" title={run.parseDetail}>
-                        {run.parseDetail}
-                      </span>
-                    ) : null}
-                  </span>
-                </td>
-                <td className={`${T.td} pr-6`}>
-                  <span className="flex flex-wrap gap-1">
-                    {slot ? <Badge tone="accent">{t(`project.run.slot.${slot}`)}</Badge> : null}
-                    {run.afterDeadline ? <Badge tone="zinc">{t("project.run.afterDeadline")}</Badge> : null}
-                    {run.toVerify ? <Badge tone="amber">{t("project.run.toVerify")}</Badge> : null}
-                  </span>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 /**
  * One repository of the project page (F-PROJ-13), opened from its row: the
  * student and the repository, its scores slot by slot, its deadline and lock
  * — an own deadline set or taken back, a lock or an unlock by hand (F-PROJ-09,
- * M3-05a), each written at once — and the history of its runs, the three
- * slots marked. The row is read from the page's own data, so a write here
- * is seen on the table behind the sheet.
+ * M3-05a), each written at once — and the history of its runs. The row is
+ * read from the page's own data, so a write here is seen on the table behind
+ * the sheet.
  *
  * The resend of an invitation, the re-enable of the protection and the
  * teacher's score come with M3-08b's routes (merge tasks M3-12b, M3-12c).
@@ -210,10 +60,7 @@ export function RepoSheet({
     );
     void qc.invalidateQueries({ queryKey: projectKey(project.id) });
   };
-  const failed = (error: unknown) => {
-    const key = refusalKey(error);
-    toast(key ? t(key) : apiErrorMessage(error, t("error.save")), "error");
-  };
+  const failed = (error: unknown) => toast(refusalMessage(error, t), "error");
   const base = `/app/api/projects/${project.id}/repos/${repoId}`;
   const deadline = useMutation({
     mutationFn: (body: ProjectRepoDeadline) =>
@@ -223,7 +70,8 @@ export function RepoSheet({
       toast(t("project.repo.deadlineSaved"), "success");
     },
     onError: (error) => {
-      if (refusalCode(error) !== "deadline_past") failed(error);
+      // A past date is said under the field, not toasted.
+      if (!refusedWith(error, "deadline_past")) failed(error);
     },
   });
   const lock = useMutation({
@@ -238,32 +86,19 @@ export function RepoSheet({
   if (!row || !repo) return null;
   const can = actionable(repo, project);
   const busy = deadline.isPending || lock.isPending;
-  const deadlineRefused =
-    deadline.isError && refusalCode(deadline.error) === "deadline_past" ? t("project.refusal.deadlinePast") : undefined;
+  const deadlineRefused = refusedWith(deadline.error, "deadline_past") ? t("project.refusal.deadlinePast") : undefined;
   const flags = repoFlags(repo);
 
   return (
     <Sheet
       title={`${row.student.nom} ${row.student.prenom}`}
-      subtitle={
-        repo.fullName ? (
-          <a
-            href={repoHref(repo.fullName)}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 font-mono text-[13px] hover:underline"
-          >
-            <GithubIcon className="size-3.5" />
-            {repo.fullName}
-          </a>
-        ) : undefined
-      }
+      subtitle={repo.fullName ? <RepoLink fullName={repo.fullName} full icon /> : undefined}
       onClose={onClose}
       width="lg"
       flush
     >
       <div className="divide-y divide-line">
-        <Section title={t("project.sheet.repo")}>
+        <Section title={t("project.col.repo")}>
           {flags.length > 0 ? (
             <div className="flex flex-wrap gap-1">
               {flags.map((f) => (
@@ -302,22 +137,19 @@ export function RepoSheet({
         <Section title={t("project.sheet.scores")}>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-5">
             <Fact label={t("project.score.current")}>
-              <SlotScore score={repo.scores.current} />
+              <Points points={repo.scores.current?.points ?? null} max={repo.scores.current?.max ?? null} />
             </Fact>
             <Fact label={t("project.score.frozen")}>
-              <SlotScore score={repo.scores.frozen} />
+              <Points points={repo.scores.frozen?.points ?? null} max={repo.scores.frozen?.max ?? null} />
             </Fact>
-            <Fact label={t("project.score.review")}>
-              <SlotScore score={repo.scores.review} />
+            {/* The one word of a review, a tag elsewhere, capitalised among its fellow labels. */}
+            <Fact label={<span className="capitalize">{t("project.review")}</span>}>
+              <Points points={repo.scores.review?.points ?? null} max={repo.scores.review?.max ?? null} />
             </Fact>
             <Fact label={t("project.score.teacher")}>
-              {repo.scores.teacher ? (
-                <span className="tabular-nums" title={repo.scores.teacher.comment ?? undefined}>
-                  {repo.scores.teacher.points}
-                </span>
-              ) : (
-                <span className="text-fg-faint">—</span>
-              )}
+              <span title={repo.scores.teacher?.comment ?? undefined}>
+                <Points points={repo.scores.teacher?.points ?? null} max={null} />
+              </span>
             </Fact>
             <Fact label={t("project.score.final")}>
               <Score score={repo.scores.final} />

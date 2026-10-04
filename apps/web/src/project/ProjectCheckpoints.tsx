@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import type { ProjectDetail, ReviewCheckpoint, ReviewCheckpointCreate } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { fromLocalInput } from "../evaluation/timing";
 import { useT } from "../i18n";
@@ -26,7 +26,7 @@ import {
   Skeleton,
   type Tone,
 } from "../ui";
-import { checkpointStatus, refusalKey, type CheckpointStatus } from "./projectPage";
+import { checkpointStatus, refusalMessage, type CheckpointStatus } from "./projectPage";
 
 const STATUS_TONE: Record<CheckpointStatus, Tone> = { dispatched: "green", void: "zinc", scheduled: "amber" };
 
@@ -68,15 +68,7 @@ function AddCheckpoint({
       submitLabel={t("common.create")}
       submitting={submitting}
       canSubmit={body !== null}
-      error={
-        <FormError
-          error={error}
-          describe={(e) => {
-            const key = refusalKey(e);
-            return key ? t(key) : apiErrorMessage(e, t("error.save"));
-          }}
-        />
-      }
+      error={<FormError error={error} describe={(e) => refusalMessage(e, t)} />}
     >
       <Field
         label={t("project.checkpoint.name")}
@@ -99,7 +91,7 @@ function AddCheckpoint({
       />
       {kind === "offset" ? (
         <Field
-          label={t("project.checkpoint.offset")}
+          label={t("project.checkpoint.kind.offset")}
           type="number"
           min={1}
           max={365}
@@ -157,10 +149,7 @@ export function ProjectCheckpoints({ project }: { project: ProjectDetail }) {
       await refresh();
       toast(t("project.checkpoint.deleted"), "success");
     },
-    onError: (error) => {
-      const key = refusalKey(error);
-      toast(key ? t(key) : apiErrorMessage(error, t("error.save")), "error");
-    },
+    onError: (error) => toast(refusalMessage(error, t), "error"),
   });
 
   const onDelete = async (c: ReviewCheckpoint) => {
@@ -200,12 +189,12 @@ export function ProjectCheckpoints({ project }: { project: ProjectDetail }) {
       ) : list.data!.length === 0 ? (
         <p className="text-sm text-fg-muted">{t("project.checkpoints.empty")}</p>
       ) : (
-        <Card className="divide-y divide-line">
-          <ul>
+        <Card>
+          <ul className="divide-y divide-line">
             {list.data!.map((c) => {
               const status = checkpointStatus(c, project.deadlineAt);
               return (
-                <li key={c.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line px-4 py-2.5 first:border-t-0">
+                <li key={c.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5">
                   <span className="font-mono text-[13px] font-semibold">{c.name}</span>
                   <span className="tabular-nums text-[13px] text-fg-muted">
                     {isoDateTime(c.dueAt)}

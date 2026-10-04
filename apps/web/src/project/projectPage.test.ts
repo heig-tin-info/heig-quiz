@@ -4,17 +4,25 @@ import { ApiError } from "../api";
 import { AHEAD, makeCheckpoint, makeProject, makeRepo, PAST, row } from "../test/project-fixtures";
 import {
   checkpointStatus,
+  deadlineDesc,
+  hasFellBack,
   isReopen,
   LIVE_STALE_REFETCH_MS,
   projectRefetchInterval,
+  projectStatus,
   REFETCH_MS,
   refusalKey,
+  refusalMessage,
   reopenedRepos,
   repoFlags,
   repoShortName,
-  statusKey,
   unassignedStudents,
 } from "./projectPage";
+
+/** A translator that echoes the key and its variables, for the helpers that word something. */
+const t = ((key: string, vars?: Record<string, string | number>) =>
+  vars ? `${key} ${JSON.stringify(vars)}` : key) as Parameters<typeof deadlineDesc>[2];
+const statusKey = (p: Parameters<typeof projectStatus>[0]) => projectStatus(p).key;
 
 /*
  * The project page's rules (F-PROJ-13, M3-12): what the header says per
@@ -44,6 +52,33 @@ describe("the header's sentence", () => {
     expect(statusKey(makeProject({ state: "locked", counts: { ...counts, frozen: 2 }, releasedAt: PAST }))).toBe(
       "project.status.released",
     );
+  });
+
+  it("names the date the sentence is about: the start, the release, else the deadline", () => {
+    const start = new Date(Date.now() + 86_400_000).toISOString();
+    expect(projectStatus(makeProject({ state: "draft", publishMode: "scheduled", startAt: start })).date).toBe(start);
+    expect(projectStatus(makeProject({ state: "locked", releasedAt: PAST, gradingMode: "none" })).date).toBe(PAST);
+    expect(projectStatus(makeProject()).date).toBe(AHEAD);
+  });
+});
+
+describe("the scale's warning", () => {
+  it("fires once any grade of any slot fell back", () => {
+    expect(hasFellBack(makeProject())).toBe(false);
+    const fell = { grade: 4, fellBack: true };
+    const repo = makeRepo(1, { scores: { ...makeRepo(1).scores, review: { runId: "r", points: 60, max: 100, grade: fell } } });
+    expect(hasFellBack(makeProject({ rows: [row(1, null), row(2, repo)] }))).toBe(true);
+  });
+});
+
+describe("the line under the deadline", () => {
+  it("says a duration on a manual draft, the reopen on a locked project, else the foreign zone", () => {
+    expect(deadlineDesc(makeProject({ state: "draft", durationMinutes: 3 * 1440 }), "Asia/Tokyo", t)).toBe(
+      'project.deadline.byDuration {"days":3}',
+    );
+    expect(deadlineDesc(makeProject({ state: "locked" }), "Asia/Tokyo", t)).toBe("project.deadline.reopenDesc");
+    expect(deadlineDesc(makeProject(), "Asia/Tokyo", t)).toBe('project.zone {"zone":"Asia/Tokyo"}');
+    expect(deadlineDesc(makeProject(), null, t)).toBeUndefined();
   });
 });
 
@@ -147,6 +182,12 @@ describe("the refusals", () => {
     );
     expect(refusalKey(new ApiError(409, { error: "source_not_found", message: "" }))).toBeNull();
     expect(refusalKey(new Error("boom"))).toBeNull();
+  });
+
+  it("says the worded refusal, else the server's message, else the save failure", () => {
+    expect(refusalMessage(new ApiError(422, { error: "due_past", message: "nope" }), t)).toBe("project.refusal.duePast");
+    expect(refusalMessage(new ApiError(409, { error: "weird", message: "The server says" }), t)).toBe("The server says");
+    expect(refusalMessage(new Error("boom"), t)).toBe("error.save");
   });
 });
 

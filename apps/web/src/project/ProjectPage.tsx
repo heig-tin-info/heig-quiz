@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Archive, ArchiveRestore, FolderGit2, Rocket, Trash2 } from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, Rocket, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import type { ClassroomDetail, ProjectDetail, ProjectPatch, ProjectSummary } from "@quiz/contracts";
 
-import { api, ApiError, apiErrorMessage } from "../api";
+import { api, ApiError } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
@@ -14,15 +14,14 @@ import {
   Alert,
   Badge,
   Button,
-  Card,
   EditableTitle,
-  EmptyState,
   isoDateTime,
   Menu,
   PageError,
   PageHeader,
   PageSkeleton,
   ParentLink,
+  QueryError,
   Skeleton,
   type MenuItem,
 } from "../ui";
@@ -30,7 +29,14 @@ import { projectStateLabel, projectStateTone } from "./common";
 import { ProjectCheckpoints } from "./ProjectCheckpoints";
 import { ProjectRepos } from "./ProjectRepos";
 import { ProjectSettings } from "./ProjectSettings";
-import { projectRefetchInterval, refusalKey, statusKey, unassignedStudents, type UnassignedStudent } from "./projectPage";
+import {
+  hasFellBack,
+  projectRefetchInterval,
+  projectStatus,
+  refusalMessage,
+  unassignedStudents,
+  type UnassignedStudent,
+} from "./projectPage";
 import { RepoSheet } from "./RepoSheet";
 
 /**
@@ -80,10 +86,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
       qc.invalidateQueries({ queryKey: activitiesKey }),
     ]);
   };
-  const failed = (error: unknown) => {
-    const key = refusalKey(error);
-    toast(key ? t(key) : apiErrorMessage(error, t("error.save")), "error");
-  };
+  const failed = (error: unknown) => toast(refusalMessage(error, t), "error");
 
   const patch = useMutation({
     mutationFn: (body: ProjectPatch) =>
@@ -127,27 +130,17 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
 
   if (detail.isLoading) return <PageSkeleton header="title-and-bar" body="summary-and-block" />;
   if (detail.isError) {
+    // A project that does not exist, or is not the caller's (invariant 6:
+    // the same 404), said as the classroom says it.
     if (detail.error instanceof ApiError && detail.error.status === 404) {
       return (
-        <div className="space-y-6">
-          <PageHeader
-            eyebrow={<ParentLink onClick={() => navigate({ view: "activities" })}>{t("nav.activities")}</ParentLink>}
-            title={t("project.notFound")}
-          />
-          <Card className="px-6 py-4">
-            <EmptyState
-              icon={FolderGit2}
-              title={t("project.notFound")}
-              action={
-                <Button variant="secondary" onClick={() => navigate({ view: "activities" })}>
-                  {t("project.backToActivities")}
-                </Button>
-              }
-            >
-              {t("project.notFound.body")}
-            </EmptyState>
-          </Card>
-        </div>
+        <QueryError
+          title={t("project.notFound")}
+          error={detail.error}
+          onRetry={() => void detail.refetch()}
+          retrying={detail.isFetching}
+          fallback={t("error.server")}
+        />
       );
     }
     return (
@@ -161,11 +154,6 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   }
   const project = detail.data!;
   const archived = project.archivedAt !== null;
-  const fellBack = project.rows.some(({ repo }) =>
-    [repo?.scores.final?.grade, repo?.scores.current?.grade, repo?.scores.frozen?.grade, repo?.scores.review?.grade].some(
-      (g) => g?.fellBack,
-    ),
-  );
 
   const onArchive = async () => {
     if (archived) {
@@ -204,14 +192,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
     { label: t("project.delete"), icon: Trash2, danger: true, separator: true, onSelect: () => void onDelete() },
   ];
 
-  const status = statusKey(project);
-  const statusDate = isoDateTime(
-    status === "project.status.scheduled"
-      ? project.startAt
-      : status === "project.status.released"
-        ? project.releasedAt!
-        : project.deadlineAt,
-  );
+  const status = projectStatus(project);
   const counts = [
     t("project.counts.students", { n: project.counts.students }),
     t("project.counts.accepted", { n: project.counts.accepted }),
@@ -251,14 +232,14 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
         }
         description={
           <>
-            <p data-testid="project-status">{t(status, { date: statusDate })}</p>
+            <p data-testid="project-status">{t(status.key, { date: isoDateTime(status.date) })}</p>
             <p className="mt-0.5 tabular-nums text-fg-faint">{counts.join(" · ")}</p>
           </>
         }
         actions={
           project.primaryAction === "publish" ? (
             <Button onClick={() => publish.mutate()} loading={publish.isPending}>
-              <Rocket /> {t("project.publish")}
+              <Rocket /> {t("question.publish")}
             </Button>
           ) : null
         }
@@ -287,7 +268,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
           <p className="mt-1">{t("project.unassigned.body")}</p>
         </Alert>
       ) : null}
-      {fellBack ? (
+      {hasFellBack(project) ? (
         <Alert tone="warning" icon={AlertTriangle} title={t("project.fellBack.title")}>
           {t("project.fellBack.body")}
         </Alert>

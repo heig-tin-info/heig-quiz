@@ -2,8 +2,7 @@ import { FolderGit2, Loader2, Lock, LockOpen, Snowflake, Users } from "lucide-re
 
 import type { ProjectDetail, ProjectDetailRow, ProjectRepoView } from "@quiz/contracts";
 
-import { Grade } from "../Grade";
-import { useT, type Dict } from "../i18n";
+import { useT } from "../i18n";
 import type { Navigate } from "../router";
 import {
   Badge,
@@ -11,7 +10,6 @@ import {
   Card,
   cx,
   EmptyState,
-  GithubIcon,
   isoDateTime,
   pressable,
   RelativeTime,
@@ -21,44 +19,11 @@ import {
   Tip,
   useSortableTable,
   type Column,
-  type Tone,
 } from "../ui";
-import { repoFlags, repoHref, repoShortName, shortSha } from "./projectPage";
+import { CiBadge, RepoLink, Score } from "./parts";
+import { repoFlags, shortSha } from "./projectPage";
 
 type SortKey = "student" | "score" | "deadline";
-
-/** A CI status as a tag: running, pass or fail; a dash while the repository has no run at all. */
-const CI: Record<Exclude<ProjectRepoView["ciStatus"], "none">, { tone: Tone; key: keyof Dict }> = {
-  pending: { tone: "zinc", key: "project.ci.pending" },
-  pass: { tone: "green", key: "project.ci.pass" },
-  fail: { tone: "red", key: "project.ci.fail" },
-};
-
-export function CiBadge({ status }: { status: ProjectRepoView["ciStatus"] }) {
-  const t = useT();
-  if (status === "none") return <span className="text-fg-faint">—</span>;
-  return <Badge tone={CI[status].tone}>{t(CI[status].key)}</Badge>;
-}
-
-/** A final score as the table writes it: points out of their maximum, and the grade. */
-export function Score({ score }: { score: ProjectRepoView["scores"]["final"] }) {
-  const t = useT();
-  if (!score) return <span className="text-fg-faint">—</span>;
-  return (
-    <span className="inline-flex flex-wrap items-baseline justify-end gap-x-2">
-      <span className="tabular-nums">
-        {score.points}
-        {score.max !== null ? `/${score.max}` : ""}
-      </span>
-      {score.grade ? (
-        <span className="font-semibold tabular-nums">
-          <Grade value={score.grade.grade} />
-        </span>
-      ) : null}
-      <span className="text-xs text-fg-faint">{t(`project.score.source.${score.source}`)}</span>
-    </span>
-  );
-}
 
 /** The repository's cell: its link, or why there is none yet. */
 function RepoCell({ repo }: { repo: ProjectRepoView | null }) {
@@ -74,18 +39,7 @@ function RepoCell({ repo }: { repo: ProjectRepoView | null }) {
   }
   return (
     <span className="flex flex-wrap items-center gap-2">
-      {repo.fullName ? (
-        <a
-          href={repoHref(repo.fullName)}
-          target="_blank"
-          rel="noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="inline-flex items-center gap-1.5 whitespace-nowrap font-mono text-[13px] hover:underline"
-        >
-          <GithubIcon className="size-3.5 text-fg-faint" />
-          {repoShortName(repo.fullName)}
-        </a>
-      ) : null}
+      {repo.fullName ? <RepoLink fullName={repo.fullName} icon /> : null}
       {repo.invitationStatus === "pending" ? <Badge tone="amber">{t("project.repo.invitationPending")}</Badge> : null}
     </span>
   );
@@ -163,8 +117,8 @@ export function ProjectRepos({
       key === "student"
         ? `${row.student.nom} ${row.student.prenom}`
         : key === "score"
-          ? row.repo?.scores.final?.points ?? -1
-          : row.repo?.effectiveDeadlineAt ?? "",
+          ? (row.repo?.scores.final?.points ?? -1)
+          : (row.repo?.effectiveDeadlineAt ?? ""),
     null,
   );
 
@@ -208,12 +162,12 @@ export function ProjectRepos({
   }
 
   const columns: Column<SortKey>[] = [
-    { key: "student", label: t("project.col.student") },
+    { key: "student", label: t("results.col.student") },
     { key: "repo", label: t("project.col.repo"), sortable: false, className: T.colMid },
     { key: "commit", label: t("project.col.commit"), sortable: false, className: T.colLow },
     { key: "ci", label: t("project.col.ci"), sortable: false, className: T.colMid },
     { key: "score", label: t("project.col.score"), right: true },
-    { key: "deadline", label: t("project.col.deadline"), className: T.colHigh },
+    { key: "deadline", label: t("project.deadline"), className: T.colHigh },
     { key: "state", label: t("project.col.state"), sortable: false },
   ];
   const noneAccepted = project.state === "published" && project.rows.every((r) => r.repo === null);

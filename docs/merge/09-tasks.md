@@ -1197,7 +1197,7 @@ under the half that serves them.
   source or distribution by id; a deleted one is this task's to surface.
 - **From M3-12a** (orchestrator, 2026-10-04): the project page says
   `primaryAction: "sync"` as a sentence in its header
-  (`project.status.sync`, `statusKey` in `project/projectPage.ts`) and
+  (`project.status.sync`, `projectStatus` in `project/projectPage.ts`) and
   draws no button for it. This task adds the **Sync** primary button in
   `project/ProjectPage.tsx` (the `actions` of its `PageHeader`, beside the
   `publish` branch) on its route, and the `-sync-banner` scene.
@@ -1624,13 +1624,14 @@ release. The original card's notes stay here; each part has its card below.
     `project` that `HINT_ROOTS.projects` now names): `GET /app/api/projects/
     :id` (`ProjectDetail`), refetched every 30 s while visible and once 3 s
     after `liveStale: true` (`projectRefetchInterval`, `projectPage.ts`).
-    States: skeleton, a 404 page ("Project not found", back to the
-    activities), `PageError` with retry, the empty roster (`EmptyState` →
+    States: skeleton, a 404 as the classroom's (`QueryError` titled
+    `project.notFound`), `PageError` with retry, the empty roster (`EmptyState` →
     the classroom's Roster tab). Header: name renamed in place
     (`EditableTitle`, `PATCH {name}`) when `editable` names it, the state
     badge (`project/common.ts`), the archived badge, ONE sentence
-    (`statusKey`: draft / scheduled / open until / locked since / locked
-    not yet frozen / released on / **release** and **sync** as text) and
+    (`projectStatus`, the key and the date it names: draft / scheduled /
+    open until / locked since / locked not yet frozen / released on /
+    **release** and **sync** as text) and
     the counts line; the primary button only for `primaryAction:
     "publish"` (`POST …/publish`, success → `projectKey`,
     `classroomProjectsKey`, `activitiesKey` invalidated); overflow menu
@@ -1689,10 +1690,20 @@ release. The original card's notes stay here; each part has its card below.
     after a confirmation (none offered once dispatched; `409
     checkpoint_dispatched` toasted); `422 due_past` / `due_after_deadline`
     and `409 duplicate_checkpoint` worded in the dialog.
-  - **Refusals** worded by `refusalKey` (`projectPage.ts`): `not_draft`,
-    `distribution_missing`, `deadline_past`, `strategy_frozen`,
-    `publish_mode_frozen`, `repo_unavailable`, the four checkpoint codes;
-    the rest show the server's message.
+  - **Refusals** worded by `refusalMessage(error, t)` (`projectPage.ts`,
+    on `refusalKey` and `api.ts`'s new `refusalCodeOf`, which
+    `refusedWith` now reads too): `not_draft`, `distribution_missing`,
+    `deadline_past`, `strategy_frozen`, `publish_mode_frozen`,
+    `repo_unavailable`, the four checkpoint codes; the rest show the
+    server's message, else `error.save`.
+  - **Shared pieces**: `project/parts.tsx` (`RepoLink`, `Points`, `Score`,
+    `CiBadge`, `SCORE_SOURCE_KEY`), `project/RunHistory.tsx` (the sheet's
+    run table, GitHub's `conclusion` worded through
+    `project.run.conclusion.*`, an unknown one shown raw), `Fact` in
+    `ui/page.tsx` (a `<dt>`/`<dd>` pair). One key per word: `project.review`
+    (a run's kind, its slot, a score's source), `project.col.ci`,
+    `project.frozen`, `project.flag.toVerify`, `project.flag.multiple`,
+    `project.deadline`, `results.col.student`, `question.publish`.
   - **Form** (`ProjectAdvanced.tsx`): group mode hidden (`GROUPS_OFFERED
     = false`) until M3-16.
   - **Mock** (`mock/project.ts`, `?projects=1`): the three seeded projects
@@ -1734,7 +1745,7 @@ release. The original card's notes stay here; each part has its card below.
   score).
 - **From M3-12a**: the sheet reads its row from `projectKey(id)` and lays
   each repository answer over it (`settle` in `RepoSheet.tsx`); the
-  refusals go through `refusalKey`; the mock's `MockRepo` carries
+  refusals go through `refusalMessage`; the mock's `MockRepo` carries
   `teacher` and `protectionSuspended` already.
 
 ### M3-12c — Web: the release
@@ -1747,7 +1758,7 @@ release. The original card's notes stay here; each part has its card below.
   and `-released`.
 - **From M3-12a**: `ProjectPage.tsx` draws the button for `publish` only
   (`actions` of its `PageHeader`); add the `release` branch there, and the
-  status sentence stays (`statusKey`).
+  status sentence stays (`projectStatus`).
 
 ### M3-13 — Web: student `ProjectRow`
 - **Depends on**: M3-09 contracts, M2-07.

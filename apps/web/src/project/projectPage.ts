@@ -16,8 +16,8 @@ import type {
 } from "@quiz/contracts";
 import { isVoidCheckpoint, reopens } from "@quiz/domain";
 
-import { ApiError } from "../api";
-import type { Dict } from "../i18n";
+import { ApiError, apiErrorMessage, refusalCodeOf } from "../api";
+import type { Dict, TFunction } from "../i18n";
 import type { Tone } from "../ui";
 
 /**
@@ -51,7 +51,8 @@ export const projectRefetchInterval = (detail: ProjectDetail | undefined): numbe
  * The sentence under the title: the project's situation, and the one action
  * the server names when there is one. Release and Sync are said, not drawn,
  * until their routes exist (M3-08b, M3-07): the header then turns them into
- * the primary button.
+ * the primary button. `date` is the instant the sentence names: the start
+ * of a scheduled draft, the release, else the deadline.
  */
 export type StatusKey =
   | "project.status.archived"
@@ -64,14 +65,41 @@ export type StatusKey =
   | "project.status.lockedFreezing"
   | "project.status.locked";
 
-export function statusKey(p: ProjectDetail): StatusKey {
-  if (p.archivedAt) return "project.status.archived";
-  if (p.state === "draft") return p.publishMode === "scheduled" ? "project.status.scheduled" : "project.status.draft";
-  if (p.primaryAction === "release") return "project.status.release";
-  if (p.primaryAction === "sync") return "project.status.sync";
-  if (p.state === "published") return "project.status.open";
-  if (p.releasedAt) return "project.status.released";
-  return p.counts.frozen < p.counts.live ? "project.status.lockedFreezing" : "project.status.locked";
+export function projectStatus(p: ProjectDetail): { key: StatusKey; date: string } {
+  const key = ((): StatusKey => {
+    if (p.archivedAt) return "project.status.archived";
+    if (p.state === "draft") return p.publishMode === "scheduled" ? "project.status.scheduled" : "project.status.draft";
+    if (p.primaryAction === "release") return "project.status.release";
+    if (p.primaryAction === "sync") return "project.status.sync";
+    if (p.state === "published") return "project.status.open";
+    if (p.releasedAt) return "project.status.released";
+    return p.counts.frozen < p.counts.live ? "project.status.lockedFreezing" : "project.status.locked";
+  })();
+  const date =
+    key === "project.status.scheduled" ? p.startAt : key === "project.status.released" ? p.releasedAt! : p.deadlineAt;
+  return { key, date };
+}
+
+/** Whether any grade of the page was converted by the linear scale instead of "score is the grade" (one warning). */
+export function hasFellBack(p: ProjectDetail): boolean {
+  return p.rows.some(({ repo }) => {
+    if (!repo) return false;
+    const { current, frozen, review, final } = repo.scores;
+    return [current, frozen, review, final].some((s) => s?.grade?.fellBack);
+  });
+}
+
+/**
+ * The line under the deadline field: a manual draft counted as a duration
+ * says so; a locked project warns that a later date reopens it; otherwise
+ * the browser's zone, when it is not the school's.
+ */
+export function deadlineDesc(p: ProjectDetail, zone: string | null, t: TFunction): string | undefined {
+  if (p.state === "draft" && p.durationMinutes !== null) {
+    return t("project.deadline.byDuration", { days: Math.round(p.durationMinutes / 1440) });
+  }
+  if (p.state === "locked") return t("project.deadline.reopenDesc");
+  return zone ? t("project.zone", { zone }) : undefined;
 }
 
 /** A repository's flag, as a tag of the table: its word and its tone (danger red, to look at amber, a fact zinc). */
@@ -153,15 +181,14 @@ const REFUSAL_KEY: Partial<Record<ProjectErrorCode | ProjectCheckpointErrorCode,
   checkpoint_dispatched: "project.refusal.checkpointDispatched",
 };
 
-/** The code of a refusal of the API (`{ error }` in its body), or null. */
-export function refusalCode(error: unknown): string | null {
-  if (!(error instanceof ApiError)) return null;
-  const code = (error.body as { error?: unknown } | null)?.error;
-  return typeof code === "string" ? code : null;
-}
-
 /** The dictionary key wording a refusal the page knows, or null (the server's message then). */
 export function refusalKey(error: unknown): keyof Dict | null {
-  const code = refusalCode(error);
+  const code = refusalCodeOf(error);
   return code ? (REFUSAL_KEY[code as ProjectErrorCode | ProjectCheckpointErrorCode] ?? null) : null;
+}
+
+/** What a failed write says: the refusal worded when the page knows it, else the server's message, else `error.save`. */
+export function refusalMessage(error: unknown, t: TFunction): string {
+  const key = refusalKey(error);
+  return key ? t(key) : apiErrorMessage(error, t("error.save"));
 }

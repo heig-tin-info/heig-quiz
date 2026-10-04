@@ -1,6 +1,5 @@
 import { useQuery, type UseMutationResult } from "@tanstack/react-query";
 import { Settings2 } from "lucide-react";
-import type { ReactNode } from "react";
 
 import type {
   ProjectDetail,
@@ -10,36 +9,18 @@ import type {
   ProjectSummary,
 } from "@quiz/contracts";
 
-import { api } from "../api";
+import { api, refusedWith } from "../api";
 import { useConfirm } from "../confirm";
 import { DateField } from "../evaluation/TimingStep";
 import { useT } from "../i18n";
 import { projectSourceKey } from "../queryKeys";
-import { Card, FieldError, fieldErrorProps, SectionHeading, Segmented, SettingRow } from "../ui";
+import { Card, Fact, FieldError, fieldErrorProps, SectionHeading, Segmented, SettingRow } from "../ui";
 import { foreignZone } from "./newProject";
-import { isReopen, refusalCode, reopenedRepos, repoHref, repoShortName } from "./projectPage";
+import { RepoLink } from "./parts";
+import { deadlineDesc, isReopen, reopenedRepos, repoShortName } from "./projectPage";
 import { ProtectedFiles } from "./ProtectedFiles";
 
 const DEADLINE_ID = "project-deadline";
-
-/** A fact of the project, set at creation or at publication, read-only here. */
-function Fact({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs font-medium text-fg-muted">{label}</dt>
-      <dd className="mt-0.5 truncate text-sm text-fg">{children}</dd>
-    </div>
-  );
-}
-
-/** A repository named on GitHub, as a mono link. */
-function RepoLink({ fullName }: { fullName: string }) {
-  return (
-    <a href={repoHref(fullName)} target="_blank" rel="noreferrer" className="font-mono text-[13px] hover:underline">
-      {repoShortName(fullName)}
-    </a>
-  );
-}
 
 /**
  * The settings of a project (F-PROJ-03): what may still change once it is
@@ -78,7 +59,7 @@ export function ProjectSettings({
   const suggested = [...new Set([...(source.data?.suggestedProtected ?? []), ...project.protectedFiles])];
 
   const deadlineRefused =
-    patch.isError && patch.variables?.deadlineAt !== undefined && refusalCode(patch.error) === "deadline_past"
+    patch.variables?.deadlineAt !== undefined && refusedWith(patch.error, "deadline_past")
       ? t("project.refusal.deadlinePast")
       : undefined;
 
@@ -106,9 +87,6 @@ export function ProjectSettings({
     );
   };
 
-  const zone = foreignZone();
-  const byDuration = project.state === "draft" && project.durationMinutes !== null;
-
   return (
     <section aria-labelledby="project-settings" className="space-y-3">
       <SectionHeading icon={Settings2} title={<span id="project-settings">{t("project.settings")}</span>} />
@@ -119,15 +97,7 @@ export function ProjectSettings({
             key={project.deadlineAt}
             id={DEADLINE_ID}
             label={t("project.deadline")}
-            description={
-              byDuration
-                ? t("project.deadline.byDuration", { days: Math.round(project.durationMinutes! / 1440) })
-                : project.state === "locked"
-                  ? t("project.deadline.reopenDesc")
-                  : zone
-                    ? t("project.zone", { zone })
-                    : undefined
-            }
+            description={deadlineDesc(project, foreignZone(), t)}
             disabled={busy || !can("deadlineAt")}
             value={project.deadlineAt}
             onCommit={(value, reset) => void commitDeadline(value, reset)}

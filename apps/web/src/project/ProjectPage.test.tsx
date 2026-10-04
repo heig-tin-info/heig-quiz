@@ -70,12 +70,11 @@ describe("the page's states", () => {
     expect(await screen.findByText("PRG1-2026")).toBeInTheDocument();
   });
 
-  it("says a 404 is a project that does not exist, with the way back", async () => {
+  it("says a 404 is a project that does not exist, or is not the caller's, as the classroom does", async () => {
     routes(fail(404, { message: "Not found" }));
-    const { navigate } = renderPage();
-    expect(await screen.findByRole("heading", { level: 1, name: "Project not found" })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Back to the activities" }));
-    expect(navigate).toHaveBeenCalledWith({ view: "activities" });
+    renderPage();
+    expect(await screen.findByText("This project does not exist, or it is not open to you.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Retry/ })).toBeInTheDocument();
   });
 
   it("keeps a heading and offers a retry when the read fails", async () => {
@@ -368,6 +367,8 @@ describe("the repositories", () => {
     expect(runRows[1]!.textContent).toMatch(/current/);
     expect(runRows[2]!.textContent).not.toMatch(/current/);
     expect(runRows[2]!.textContent).toMatch(/4\/10/);
+    // GitHub's conclusion worded, never raw.
+    expect(runRows[1]!.textContent).toMatch(/success/);
     // Nothing of M3-08b yet: no score form, no resend, no re-enable.
     expect(within(sheet).queryByRole("button", { name: /Resend|Re-enable|Set the score/ })).toBeNull();
 

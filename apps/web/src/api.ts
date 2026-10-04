@@ -35,9 +35,15 @@ export class ApiError extends Error {
  */
 export const KIOSK_SUSPENDED_EVENT = "quiz:kiosk-suspended";
 
-/** Whether `error` is the API's refusal `code` (the `error` field of its body). */
-export const refusedWith = (error: unknown, code: string): boolean =>
-  error instanceof ApiError && (error.body as { error?: string } | null)?.error === code;
+/** The code of an API refusal (the `error` field of its body), or null for anything else. */
+export function refusalCodeOf(error: unknown): string | null {
+  if (!(error instanceof ApiError)) return null;
+  const code = (error.body as { error?: unknown } | null)?.error;
+  return typeof code === "string" ? code : null;
+}
+
+/** Whether `error` is the API's refusal `code`. */
+export const refusedWith = (error: unknown, code: string): boolean => refusalCodeOf(error) === code;
 
 export async function api<T>(
   path: string,
