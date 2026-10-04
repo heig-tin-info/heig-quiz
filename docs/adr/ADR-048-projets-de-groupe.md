@@ -2,7 +2,7 @@
 
 ## Status
 
-**Amended by [ADR-070](ADR-070-repartitions-de-groupes.md)** (proposed
+**Amended by [ADR-070](ADR-070-repartitions-de-groupes.md)** (accepted
 2026-10-04) for Quiz: groups live in a classroom's group sets, which a project
 follows until its deadline; students may form their own (lot 2); a rename
 no longer renames a repository; the advisory size moves to the set.

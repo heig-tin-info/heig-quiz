@@ -2,10 +2,10 @@
 
 ## Status
 
-Proposed (2026-10-04). The four forks of the design (how a project is tied to
-its set, the UI words, the place of student self-formation, the guard of a
-drag and drop) were settled by the product owner on 2026-10-04; the rest is
-proposed here and becomes accepted with this record.
+Accepted (2026-10-04, product owner). The four forks of the design (how a
+project is tied to its set, the UI words, the place of student
+self-formation, the guard of a drag and drop) were settled by the product
+owner on 2026-10-04, and the record as a whole accepted the same day.
 
 Scope: where a classroom's groups of students live, who forms them and how,
 and how a group project uses them. The GitHub side of a group repository
@@ -19,12 +19,13 @@ of a membership change). Amends in `docs/spec/02-exigences-fonctionnelles.md`
 F-PROJ-01 (the form names a set), F-PROJ-03 (a draft's set, not its groups,
 freezes at publication), F-PROJ-06 (rewritten on sets), F-PROJ-13 (the
 "access to revoke" flag, the drift of a stopped copy) and F-PROJ-17 (decision
-5 below); N-SEC-20 in `docs/spec/03-exigences-non-fonctionnelles.md` (the
+5 below), and adds F-PROJ-22 (decision 8); N-SEC-20 in `docs/spec/03-exigences-non-fonctionnelles.md` (the
 set's student view, lot 2); the glossary's *Project group*
 (`docs/spec/01-glossaire-et-domaine.md`); the cards M3-15 and M3-16
 (`docs/merge/09-tasks.md`). The import of F-PROJ-20 (M8-01) maps onto it.
-Not yet delivered in Quiz: no group route exists, and Accept answers
-`409 no_group` for any group project (M3-03).
+Delivery: cards M3-15, M3-16 (lot 1) and M3-17 (lot 2) of the
+[merge progress](../merge/PROGRESS.md); until M3-15, no group route exists
+and Accept answers `409 no_group` for any group project (M3-03).
 
 ## Context
 
@@ -229,13 +230,13 @@ meaning, which ADR-048 deliberately does not use.
     a stopped copy (decision 4).
 
 11. **Delivery.**
-    - **Lot 1** — M3-15 (API: sets, by hand, at random, a project's set and
-      its copy, the follow and its job, ADR-048 lot 2's group repositories,
-      the revocation on leaving the roster) and M3-16 (web: the classroom's
+    - **Lot 1** — M3-15a (API: sets, by hand, at random, a project's set and
+      its copy), M3-15b (the follow's job, ADR-048 lot 2's group
+      repositories, the revocation on leaving the roster) and M3-16 (web: the classroom's
       *Groups* tab, a set's page with drag and drop and a keyboard
       equivalent, the project form's choice).
-    - **Lot 2** — a new card: self-formation (decision 8), the student's
-      screen of it.
+    - **Lot 2** — M3-17: self-formation (decision 8, F-PROJ-22), the
+      student's screen of it.
     - ADR-048 lot 3 (per-member invitation follow-up, a per-member
       adjustment of the group's score) is unchanged and still later.
 

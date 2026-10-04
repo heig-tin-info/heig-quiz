@@ -88,8 +88,10 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | M3-12c | Web: the release | todo | M3-12a, M3-08b | | | Release as the primary button on its route |
 | M3-13 | Web: student `ProjectRow` | todo | M3-09, M2-07 | | | |
 | M3-14 | Pilot and load test on staging | todo | M3-01…13, M2-06 | | | |
-| M3-15 | Groups (API) | todo | M3-03 | | | |
-| M3-16 | Groups (web) | todo | M3-15, M3-12 | | | |
+| M3-15a | Groups: sets and a project's copy (API, database only) | todo | M3-02 | | | ADR-070 (2026-10-04) replaces ADR-048's groups per project by classroom group sets |
+| M3-15b | Groups: group repositories, membership on GitHub | todo | M3-15a, M3-03 | | | |
+| M3-16 | Groups (web) | todo | M3-15a, M3-12 | | | |
+| M3-17 | Groups formed by the students (ADR-070 lot 2) | todo | M3-15a, M3-16, M3-09 | | | |
 
 ## M4 — Journal
 
