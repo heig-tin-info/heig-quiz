@@ -60,20 +60,18 @@ export function RandomFormDialog({
     >
       <p className="text-sm text-fg-muted">{t(n === 1 ? "groups.random.desc.one" : "groups.random.desc", { n })}</p>
       <div className="flex flex-wrap items-end gap-4">
-        <div className="flex flex-col gap-1">
-          <Field
-            id={SIZE_ID}
-            label={t("groups.random.size")}
-            type="number"
-            min={1}
-            max={n}
-            width="w-24"
-            className="text-right tabular-nums"
-            value={size}
-            onChange={(e) => setSize(e.target.value)}
-            {...fieldErrorProps(SIZE_ID, valid ? undefined : t("groups.refusal.sizeOutOfRange", { max: n }))}
-          />
-        </div>
+        <Field
+          id={SIZE_ID}
+          label={t("groups.random.size")}
+          type="number"
+          min={1}
+          max={n}
+          width="w-24"
+          className="text-right tabular-nums"
+          value={size}
+          onChange={(e) => setSize(e.target.value)}
+          {...fieldErrorProps(SIZE_ID, valid ? undefined : t("groups.refusal.sizeOutOfRange", { max: n }))}
+        />
         <Segmented
           name="remainder"
           label={t("groups.random.remainder")}

@@ -82,11 +82,12 @@ export type Route =
   | { view: "classroomGroups"; id: string }
   /**
    * One group set of a classroom (ADR-070 §3): its students in no group and
-   * its groups. `from` — `project:<id>`, the project page it was opened
-   * from — is carried in `?from=` so the way back survives a reload; the
-   * page reads it off the query string, `parsePath` never sees it.
+   * its groups. `fromProject`, the project page it was opened from, is
+   * carried in `?fromProject=` (as the question editor's `from`) so the way
+   * back survives a reload; the page reads it off the query string,
+   * `parsePath` never sees it.
    */
-  | { view: "groupSet"; classroomId: string; id: string; from?: string }
+  | { view: "groupSet"; classroomId: string; id: string; fromProject?: string }
   /** One project, the staff's page (F-PROJ-13, M3-12; `project/ProjectPage`). */
   | { view: "project"; id: string }
   /**
@@ -402,7 +403,8 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   // ADR-070 (M3-16a): a group set, then the Groups tab that lists them, in
   // every build. Staff pages: a student's UI gets the home.
   groupSet: {
-    path: (r) => `/classrooms/${r.classroomId}/groups/${r.id}${r.from ? `?from=${encodeURIComponent(r.from)}` : ""}`,
+    path: (r) =>
+      `/classrooms/${r.classroomId}/groups/${r.id}${r.fromProject ? `?fromProject=${encodeURIComponent(r.fromProject)}` : ""}`,
     match: ([head, classroomId, tail, id]) =>
       head === "classrooms" && classroomId && tail === "groups" && id ? { view: "groupSet", classroomId, id } : null,
     studentSafe: false,

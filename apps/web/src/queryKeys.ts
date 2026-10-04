@@ -121,7 +121,9 @@ export const projectCheckpointsKey = (id: string) => [...projectKey(id), "checkp
  * (`realtime/hints.ts`): one root reaches the list and every set.
  */
 export const groupSetsKey = ["group-sets"] as const;
-export const classroomGroupSetsKey = (classroomId: string) => [...groupSetsKey, "classroom", classroomId] as const;
+/** Every classroom's list: what a write of a set marks stale (its counts). */
+export const groupSetListsKey = [...groupSetsKey, "classroom"] as const;
+export const classroomGroupSetsKey = (classroomId: string) => [...groupSetListsKey, classroomId] as const;
 export const groupSetKey = (id: string) => [...groupSetsKey, "set", id] as const;
 /**
  * The organizations Quiz's App is installed on (the connect sheet's picker).

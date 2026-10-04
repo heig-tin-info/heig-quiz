@@ -4101,6 +4101,7 @@ export const fr: Record<keyof Dict, string> = {
   "groups.refusal.duplicateName": "Un autre groupe de cette répartition porte déjà ce nom.",
   "groups.refusal.nobodyToPlace": "Tout le monde est déjà dans un groupe.",
   "groups.refusal.sizeOutOfRange": "Choisissez une taille de 1 à {max}.",
+  "groups.gone": "Ce groupe ou cet étudiant n'est plus dans la répartition. Elle est affichée telle qu'elle est maintenant.",
   "groups.refusal.hasRepo": "Ce groupe a déjà un dépôt : ses membres ne peuvent pas encore changer.",
   "project.groups.desc": "Les étudiants travaillent dans les groupes d'une répartition, un dépôt par groupe.",
   "project.groupSet": "Répartition",

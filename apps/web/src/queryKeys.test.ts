@@ -43,6 +43,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["projectSourceKey", keys.projectSourceKey("r1", "labo"), ["classroom", "r1", "project-sources", "labo"]],
     ["projectKey", keys.projectKey("p1"), ["project", "p1"]],
     ["groupSetsKey", keys.groupSetsKey, ["group-sets"]],
+    ["groupSetListsKey", keys.groupSetListsKey, ["group-sets", "classroom"]],
     ["classroomGroupSetsKey", keys.classroomGroupSetsKey("r1"), ["group-sets", "classroom", "r1"]],
     ["groupSetKey", keys.groupSetKey("s1"), ["group-sets", "set", "s1"]],
     ["projectRunsKey", keys.projectRunsKey("p1", "x1"), ["project", "p1", "repos", "x1", "runs"]],

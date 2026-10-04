@@ -378,6 +378,15 @@ const scenes = [
     },
   },
   { name: "project-group", role: "teacher", path: "/projects/pj-group?projects=1&groups=1" },
+  {
+    name: "project-group-unassigned",
+    role: "teacher",
+    path: "/projects/pj-group?projects=1&groups=1&unassigned=1",
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(publish|publier)$/i }).click();
+      await p.getByRole("link", { name: /^(place them in the group set|les placer dans la répartition)$/i }).waitFor();
+    },
+  },
   // F-ORG-13 (D24, M2-07): the Settings tab. A classroom that is not
   // connected (r2, its course's organization suggested): "Connect to GitHub"
   // is the one accent, and the connect sheet it opens; PRG1-2026 connected,

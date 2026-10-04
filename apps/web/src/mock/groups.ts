@@ -37,13 +37,13 @@ import {
 import { defaultGroupName, defaultSetName, duplicateSetName, formRandomGroups, type NameLocale } from "@quiz/domain";
 
 import { classroomRoster, rooms } from "./org";
-import { D, flags, H, iso, MockError, MockPayload, on, rand, role } from "./runtime";
+import { D, flags, H, iso, MockError, MockPayload, on, rand, refuse, role } from "./runtime";
 
 /** The seeded sets' ids: uuids, as a project's `groupSetId` must be (`ProjectPatch`). */
 export const SET_PAIRS = "5e7a0000-0000-4000-8000-000000000001";
-export const SET_FINAL = "5e7a0000-0000-4000-8000-000000000002";
-export const SET_EMPTY = "5e7a0000-0000-4000-8000-000000000003";
-export const SET_ARCHIVED = "5e7a0000-0000-4000-8000-000000000004";
+const SET_FINAL = "5e7a0000-0000-4000-8000-000000000002";
+const SET_EMPTY = "5e7a0000-0000-4000-8000-000000000003";
+const SET_ARCHIVED = "5e7a0000-0000-4000-8000-000000000004";
 
 interface MockGroup {
   id: string;
@@ -187,8 +187,6 @@ function summaryOf(set: MockSet): GroupSetSummary {
 
 // ---------------------------------------------------------------- loaders and refusals
 
-const refuse = (status: number, error: string, message: string, extra: Record<string, unknown> = {}) =>
-  new MockPayload(status, { error, message, ...extra });
 
 /** A classroom of the staff persona, or the 404 of a missing one (a student reads the same 404). */
 function staffRoom(id: string) {

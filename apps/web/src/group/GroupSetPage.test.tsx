@@ -80,9 +80,9 @@ describe("the page's states", () => {
     expect(screen.getByText("Martin Chloé")).toBeInTheDocument();
   });
 
-  it("leads back to the project it was opened from (?from=project:<id>)", async () => {
+  it("leads back to the project it was opened from (?fromProject=<id>)", async () => {
     routes(makeSet({ usedBy: [{ id: "p-1", name: "Labo 4", archived: false, follows: true }] }));
-    const { navigate } = renderPage("en", "/classrooms/x/groups/y?from=project:p-1");
+    const { navigate } = renderPage("en", "/classrooms/x/groups/y?fromProject=p-1");
     await userEvent.click(await screen.findByRole("button", { name: "Labo 4" }));
     expect(navigate).toHaveBeenCalledWith({ view: "project", id: "p-1" });
   });
@@ -145,6 +145,22 @@ describe("a move", () => {
     await waitFor(() =>
       expect(within(screen.getByRole("region", { name: "No group" })).getByText("Martin Chloé")).toBeInTheDocument(),
     );
+  });
+});
+
+describe("a write that meets a set changed meanwhile", () => {
+  it("says a 404 in the reader's words, never the server's, and reads the set again", async () => {
+    const { calls } = routes(makeSet(), {
+      [`PUT ${SET_BASE}/members/${student(2).enrollmentId}`]: fail(404, { message: "Not found" }),
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Move Martin Chloé to…" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Groupe 2" }));
+    expect(
+      await screen.findByText("This group or student is no longer in the set. The set is shown as it now stands."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Not found")).toBeNull();
+    await waitFor(() => expect(calls.filter((c) => c.method === "GET" && c.url === SET_BASE)).toHaveLength(2));
   });
 });
 

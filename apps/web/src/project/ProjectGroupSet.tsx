@@ -4,18 +4,16 @@ import { UsersRound } from "lucide-react";
 import type { ProjectDetail, ProjectPatch, ProjectSummary } from "@quiz/contracts";
 
 import { refusedWith } from "../api";
+import { AppLink } from "../AppLink";
 import { useClassroomGroupSets } from "../group/api";
 import { GroupSetPicker, setLabel } from "../group/GroupSetPicker";
-import { AppLink } from "../group/parts";
+import { textLink } from "../group/parts";
 import { useT } from "../i18n";
-import { useToast } from "../notify";
 import { classroomGroupSetsKey } from "../queryKeys";
 import type { Navigate } from "../router";
 import { Card, SectionHeading } from "../ui";
-import { refusalMessage } from "./projectPage";
-
-/** The DOM id of the draft's picker: where "Choose a group set first" sends the focus. */
-export const GROUP_SET_FIELD = "project-group-set";
+import { FIELD_ID } from "./newProject";
+import { groupSetPageOf, refusalMessage } from "./projectPage";
 
 /**
  * The group set a group project follows (ADR-070 §4, §7; M3-16a): a
@@ -36,15 +34,13 @@ export function ProjectGroupSet({
 }) {
   const t = useT();
   const qc = useQueryClient();
-  const toast = useToast();
   const sets = useClassroomGroupSets(project.classroomId);
   const set = sets.data?.find((s) => s.id === project.groupSetId);
   const use = set?.usedBy.find((u) => u.id === project.id);
   const editable = project.editable.includes("groupSetId") && project.archivedAt === null;
-  const refused =
-    patch.variables?.groupSetId !== undefined && refusedWith(patch.error, "unknown_group_set")
-      ? t("project.refusal.unknownGroupSet")
-      : undefined;
+  // A refused choice is said under the picker, in the page's words for it.
+  const refused = patch.variables?.groupSetId !== undefined && patch.isError ? refusalMessage(patch.error, t) : undefined;
+  const setPage = groupSetPageOf(project);
 
   return (
     <section aria-labelledby="project-group-set-heading" className="space-y-3">
@@ -54,7 +50,7 @@ export function ProjectGroupSet({
           <>
             <p className="text-[13px] text-fg-muted">{t("project.groupSet.desc")}</p>
             <GroupSetPicker
-              id={GROUP_SET_FIELD}
+              id={FIELD_ID.groupSet}
               classroomId={project.classroomId}
               value={project.groupSetId}
               disabled={patch.isPending}
@@ -63,10 +59,10 @@ export function ProjectGroupSet({
                   { groupSetId },
                   {
                     onError: (error) => {
-                      // A set deleted meanwhile is said under the field; the list is read again.
+                      // A set deleted meanwhile: the list is read again.
                       if (refusedWith(error, "unknown_group_set")) {
                         void qc.invalidateQueries({ queryKey: classroomGroupSetsKey(project.classroomId) });
-                      } else toast(refusalMessage(error, t), "error");
+                      }
                     },
                   },
                 )
@@ -75,12 +71,12 @@ export function ProjectGroupSet({
             />
           </>
         ) : null}
-        {set ? (
+        {set && setPage ? (
           <div className="text-sm">
             <AppLink
-              route={{ view: "groupSet", classroomId: project.classroomId, id: set.id, from: `project:${project.id}` }}
+              route={setPage}
               navigate={navigate}
-              className="font-medium text-fg underline decoration-line-strong"
+              className={`${textLink} font-medium text-fg underline decoration-line-strong`}
             >
               {editable ? t("project.groupSet.open") : setLabel(set, t)}
             </AppLink>

@@ -9,7 +9,7 @@ import { z } from "zod";
 import { GroupErrorCode, type GroupRemainder, type GroupSetDetail, type GroupStudent } from "@quiz/contracts";
 import { groupSizes } from "@quiz/domain";
 
-import { ApiError, apiErrorMessage, refusalCodeOf } from "../api";
+import { ApiError, refusalCodeOf, refusedWith } from "../api";
 import type { Dict, TFunction } from "../i18n";
 
 /** A student as the board writes them: family name first, like the roster and the project page. */
@@ -62,52 +62,61 @@ export function sizesSummary(n: number, size: number, remainder: GroupRemainder)
 export const defaultRandomSize = (unplaced: number, maxSize: number | null): number =>
   Math.max(1, Math.min(maxSize ?? 2, unplaced));
 
-// ---------------------------------------------------------------- refusals
+// ---------------------------------------------------------------- the board's keyboard
 
 /**
- * The words of each refusal of the group routes, by code. `has_repo` comes
- * with M3-15b-1 (a write that would change the members of, or delete, a
- * copy's group that has a repository): worded here already, so the code
- * joining `GROUP_REFUSALS` needs no change on this side.
+ * The zone the keyboard lands on from `from` (an index into the zones in
+ * their reading order — No group, then each group): the next one for →
+ * and ↓, the previous one for ← and ↑, held at the ends. `null` for any
+ * other key. The board's keyboard drag is this walk.
  */
-type RefusalCode = GroupErrorCode | "has_repo";
-const REFUSAL_KEY: Record<RefusalCode, keyof Dict> = {
+export function stepZone(count: number, from: number, code: string): number | null {
+  const step = code === "ArrowRight" || code === "ArrowDown" ? 1 : code === "ArrowLeft" || code === "ArrowUp" ? -1 : 0;
+  if (step === 0 || count === 0) return null;
+  return Math.min(count - 1, Math.max(0, from + step));
+}
+
+// ---------------------------------------------------------------- refusals
+
+/** The words of each refusal of the group routes, by code. */
+const REFUSAL_KEY: Record<GroupErrorCode, keyof Dict> = {
   classroom_archived: "groups.refusal.classroomArchived",
   set_in_use: "groups.refusal.setInUse",
   duplicate_name: "groups.refusal.duplicateName",
   nobody_to_place: "groups.refusal.nobodyToPlace",
   size_out_of_range: "groups.refusal.sizeOutOfRange",
-  has_repo: "groups.refusal.hasRepo",
+  // TODO(M3-15b-1): `has_repo` joins `GROUP_REFUSALS` there; once rebased:
+  // has_repo: "groups.refusal.hasRepo",
 };
 
-const isRefusalCode = (code: string | null): code is RefusalCode => code !== null && Object.hasOwn(REFUSAL_KEY, code);
+/** A group, a student or a set out of reach: the 404 of a missing one (another teacher deleted it, say). */
+export const gone = (error: unknown): boolean => error instanceof ApiError && error.status === 404;
 
-/** The refusal of a group route this error is, or null. */
-export function groupRefusal(error: unknown): GroupErrorCode | null {
-  const parsed = GroupErrorCode.safeParse(refusalCodeOf(error));
-  return parsed.success ? parsed.data : null;
-}
-
-/** What a failed write of a set says: the refusal worded, else the server's message, else `error.save`. */
+/**
+ * What a failed write of a set says, always in the reader's language: the
+ * refusal worded; a 404 as what it is from here, something no longer in
+ * the set; anything else the generic failure (the server's own message is
+ * English).
+ */
 export function groupRefusalMessage(error: unknown, t: TFunction): string {
-  const code = refusalCodeOf(error);
-  if (!isRefusalCode(code)) return apiErrorMessage(error, t("error.save"));
-  const max = error instanceof ApiError ? (error.body as { max?: unknown } | null)?.max : undefined;
-  return t(REFUSAL_KEY[code], { max: typeof max === "number" ? max : "" });
+  const code = GroupErrorCode.safeParse(refusalCodeOf(error));
+  if (code.success) {
+    const max = error instanceof ApiError ? (error.body as { max?: unknown } | null)?.max : undefined;
+    return t(REFUSAL_KEY[code.data], { max: typeof max === "number" ? max : "" });
+  }
+  return t(gone(error) ? "groups.gone" : "error.save");
 }
 
 /**
  * The `409 set_in_use` body (`modules/group/errors.ts`): the projects that
- * are not archived and name the set. Read here, where it is worded; the
- * contracts name the code only.
+ * are not archived and name the set. Read here, where it is worded.
+ * TODO(M3-15b-1): parse it with the contract's `GroupRefusalProjects` once
+ * rebased on it.
  */
 const SetInUseBody = z.object({ projects: z.array(z.object({ id: z.string(), name: z.string() })) });
 
 export function setInUseProjects(error: unknown): { id: string; name: string }[] | null {
-  if (groupRefusal(error) !== "set_in_use" || !(error instanceof ApiError)) return null;
+  if (!refusedWith(error, "set_in_use") || !(error instanceof ApiError)) return null;
   const parsed = SetInUseBody.safeParse(error.body);
   return parsed.success ? parsed.data.projects : [];
 }
-
-/** An Undo answered 404: the group the student came from is gone (ADR-070 §6). */
-export const undoGone = (error: unknown): boolean => error instanceof ApiError && error.status === 404;

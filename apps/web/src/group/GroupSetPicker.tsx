@@ -6,7 +6,6 @@ import { useT, type TFunction } from "../i18n";
 import { useToast } from "../notify";
 import { Button, FieldError, fieldErrorProps, Select, Skeleton } from "../ui";
 import { useClassroomGroupSets, useCreateGroupSet } from "./api";
-import { groupRefusalMessage } from "./groupRules";
 
 /** A set as the picker lists it: its name, its groups, the students not placed yet (ADR-070 §7). */
 export function setLabel(set: GroupSetSummary, t: TFunction): string {
@@ -76,7 +75,7 @@ export function GroupSetPicker({
           variant="secondary"
           disabled={disabled}
           loading={create.isPending}
-          onClick={() => create.mutate({}, { onError: (error) => toast(groupRefusalMessage(error, t), "error") })}
+          onClick={() => create.mutate()}
         >
           <Plus /> {t("project.groupSet.create")}
         </Button>

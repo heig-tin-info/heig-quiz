@@ -24,8 +24,9 @@ import { ProtectedFiles } from "./ProtectedFiles";
  * Whether the form offers group mode (ADR-070 §7). The groups' pages ship
  * with M3-16a, but Accept answers `409 no_group` for any group project until
  * the group repositories do (M3-15b-1): until then the mode is offered where
- * `CLASSROOM_PAGES` is on (the mock, staging) and nowhere else. THE switch
- * to flip to `true` once M3-15b-1 is merged.
+ * `CLASSROOM_PAGES` is on — the browser mock, or a build made with
+ * `VITE_CLASSROOM_PAGES=1`; staging runs the production image, so not
+ * there. THE switch to flip to `true` once M3-15b-1 is merged.
  */
 export const GROUPS_OFFERED: boolean = CLASSROOM_PAGES;
 

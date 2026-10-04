@@ -30,7 +30,7 @@ import { mockClassroomOrg } from "./github";
 import { isSetOf } from "./groups";
 import { courses, rooms } from "./org";
 import { addMockProject } from "./project";
-import { D, flags, H, iso, MockError, MockPayload, nextId, on, role } from "./runtime";
+import { D, flags, H, iso, MockError, MockPayload, nextId, on, refuse, role } from "./runtime";
 
 /** How long the mock's GitHub takes to build a distribution repository. */
 const BUILD_MS = 2500;
@@ -129,7 +129,7 @@ on("POST", "/app/api/classrooms/:id/projects", async (m, raw): Promise<ProjectSu
   const source = flags.srcmissing ? undefined : sourcesOf(id).find((s) => s.repo.name === body.sourceRepo);
   if (!source) throw new MockPayload(422, { error: "source_not_found", message: "The source repository was not found" });
   if (body.groupSetId && !isSetOf(id, body.groupSetId)) {
-    throw new MockPayload(422, { error: "unknown_group_set", message: "The group set is not one of the project's classroom" });
+    throw refuse(422, "unknown_group_set", "The group set is not one of the project's classroom");
   }
   const branches = body.branches ?? [source.repo.defaultBranch];
   const lacking = branches.filter((b) => !source.branches.includes(b));

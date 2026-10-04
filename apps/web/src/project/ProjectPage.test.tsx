@@ -208,7 +208,7 @@ describe("a group project's set (ADR-070, M3-16a)", () => {
       view: "groupSet",
       classroomId: CLASSROOM_ID,
       id: SET,
-      from: `project:${makeProject().id}`,
+      fromProject: makeProject().id,
     });
   });
 

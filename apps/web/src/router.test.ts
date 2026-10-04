@@ -86,8 +86,8 @@ describe("routeToPath / parsePath", () => {
     expect(routeToPath({ view: "groupSet", classroomId: "c-1", id: "s-1" })).toBe("/classrooms/c-1/groups/s-1");
     expect(parsePath("/classrooms/c-1/groups/s-1")).toEqual({ view: "groupSet", classroomId: "c-1", id: "s-1" });
     // The way back to a project travels in the query, which `parsePath` never reads.
-    expect(routeToPath({ view: "groupSet", classroomId: "c-1", id: "s-1", from: "project:p-1" })).toBe(
-      "/classrooms/c-1/groups/s-1?from=project%3Ap-1",
+    expect(routeToPath({ view: "groupSet", classroomId: "c-1", id: "s-1", fromProject: "p-1" })).toBe(
+      "/classrooms/c-1/groups/s-1?fromProject=p-1",
     );
     // Staff pages: a student, or a teacher in the student view, gets the home.
     expect(ROUTES.classroomGroups.studentSafe).toBe(false);

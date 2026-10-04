@@ -9,15 +9,15 @@ import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { activitiesKey, classroomGroupSetsKey, classroomKey, classroomProjectsKey, projectKey } from "../queryKeys";
-import { routeToPath, type Navigate, type Route } from "../router";
+import { AppLink } from "../AppLink";
+import type { Navigate } from "../router";
 import {
   Alert,
   Badge,
   Button,
   EditableTitle,
-  isPlainClick,
   isoDateTime,
-  LinkButton,
+  buttonClass,
   Menu,
   PageError,
   PageHeader,
@@ -29,7 +29,8 @@ import {
 } from "../ui";
 import { projectStateLabel, projectStateTone } from "./common";
 import { ProjectCheckpoints } from "./ProjectCheckpoints";
-import { GROUP_SET_FIELD, ProjectGroupSet } from "./ProjectGroupSet";
+import { FIELD_ID } from "./newProject";
+import { ProjectGroupSet } from "./ProjectGroupSet";
 import { ProjectRepos } from "./ProjectRepos";
 import { ProjectSettings } from "./ProjectSettings";
 import {
@@ -38,6 +39,7 @@ import {
   projectStatus,
   refusalMessage,
   releaseRefusal,
+  groupSetPageOf,
   unassignedStudents,
   type UnassignedStudent,
 } from "./projectPage";
@@ -237,9 +239,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
 
   const status = projectStatus(project);
   /** The set's page, coming back here (`?from=`): where the students in no group are placed. */
-  const setPage: Route | null = project.groupSetId
-    ? { view: "groupSet", classroomId: project.classroomId, id: project.groupSetId, from: `project:${project.id}` }
-    : null;
+  const setPage = groupSetPageOf(project);
   const counts = [
     t("project.counts.students", { n: project.counts.students }),
     t("project.counts.accepted", { n: project.counts.accepted }),
@@ -308,7 +308,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
           icon={AlertTriangle}
           title={t("project.noGroupSet.title")}
           action={
-            <Button variant="secondary" size="sm" onClick={() => document.getElementById(GROUP_SET_FIELD)?.focus()}>
+            <Button variant="secondary" size="sm" onClick={() => document.getElementById(FIELD_ID.groupSet)?.focus()}>
               {t("project.groupSet.pick")}
             </Button>
           }
@@ -322,17 +322,9 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
           icon={AlertTriangle}
           action={
             setPage ? (
-              <LinkButton
-                size="sm"
-                href={routeToPath(setPage)}
-                onClick={(e) => {
-                  if (!isPlainClick(e)) return;
-                  e.preventDefault();
-                  navigate(setPage);
-                }}
-              >
+              <AppLink route={setPage} navigate={navigate} className={buttonClass("secondary", "sm")}>
                 {t("project.unassigned.open")}
-              </LinkButton>
+              </AppLink>
             ) : undefined
           }
           title={

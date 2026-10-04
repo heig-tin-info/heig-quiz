@@ -1,37 +1,12 @@
 import type { GroupSetUse } from "@quiz/contracts";
 
+import { AppLink } from "../AppLink";
 import { useT } from "../i18n";
-import { routeToPath, type Navigate, type Route } from "../router";
-import { Badge, isPlainClick } from "../ui";
+import type { Navigate } from "../router";
+import { Badge } from "../ui";
 
-/** A page of the app as a real link: a plain click routes in place, a middle click opens a tab. */
-export function AppLink({
-  route,
-  navigate,
-  children,
-  className = "",
-}: {
-  route: Route;
-  navigate: Navigate;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <a
-      href={routeToPath(route)}
-      onClick={(e) => {
-        // A link in a clickable row opens its own page, not the row's.
-        e.stopPropagation();
-        if (!isPlainClick(e)) return;
-        e.preventDefault();
-        navigate(route);
-      }}
-      className={`underline-offset-2 transition-colors hover:text-fg hover:underline ${className}`}
-    >
-      {children}
-    </a>
-  );
-}
+/** A link in running text: the parent's ink until hovered, then `fg` and an underline. */
+export const textLink = "underline-offset-2 transition-colors hover:text-fg hover:underline";
 
 /**
  * The projects that name a set (ADR-070 §4), each a link to its page: an
@@ -45,7 +20,7 @@ export function SetUses({ uses, navigate }: { uses: Pick<GroupSetUse, "id" | "na
     <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
       {uses.map((use) => (
         <span key={use.id} className="inline-flex items-center gap-1.5">
-          <AppLink route={{ view: "project", id: use.id }} navigate={navigate}>
+          <AppLink route={{ view: "project", id: use.id }} navigate={navigate} className={textLink}>
             {use.name}
           </AppLink>
           {use.archived ? (

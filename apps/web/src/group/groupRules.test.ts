@@ -6,16 +6,15 @@ import { ApiError } from "../api";
 import { en } from "../i18n/en";
 import { fr } from "../i18n/fr";
 import { GROUP_1, GROUP_2, makeSet, student } from "../test/group-fixtures";
-import { stepZone } from "./GroupBoard";
 import {
   defaultRandomSize,
-  groupRefusal,
+  gone,
   groupRefusalMessage,
   overMax,
   placeOf,
   setInUseProjects,
   sizesSummary,
-  undoGone,
+  stepZone,
   withMove,
 } from "./groupRules";
 
@@ -66,10 +65,8 @@ describe("the random formation's preview", () => {
 });
 
 describe("the refusals, worded in both languages", () => {
-  it.each([...GROUP_REFUSALS, "has_repo"])("words %s through the dictionary", (code) => {
+  it.each(GROUP_REFUSALS)("words %s through the dictionary", (code) => {
     const error = new ApiError(409, { error: code, message: "server words", max: 3 });
-    // `has_repo` joins the contract's list with M3-15b-1; its words are ready.
-    if (code !== "has_repo") expect(groupRefusal(error)).toBe(code);
     for (const dict of [en, fr] as Record<string, string>[]) {
       const said = groupRefusalMessage(error, tr(dict) as never);
       expect(said).not.toBe("server words");
@@ -77,16 +74,18 @@ describe("the refusals, worded in both languages", () => {
     }
   });
 
-  it("says the server's message for anything else", () => {
-    expect(groupRefusalMessage(new ApiError(500, { message: "boom" }), tr(en) as never)).toBe("boom");
+  it("never says the server's English: a 404 is something no longer in the set, anything else the generic failure", () => {
+    expect(groupRefusalMessage(new ApiError(404, { message: "Not found" }), tr(en) as never)).toBe(en["groups.gone"]);
+    expect(groupRefusalMessage(new ApiError(404, { message: "Not found" }), tr(fr) as never)).toBe(fr["groups.gone"]);
+    expect(groupRefusalMessage(new ApiError(500, { message: "boom" }), tr(en) as never)).toBe(en["error.save"]);
   });
 
   it("reads the projects of a set_in_use, and a 404 as an Undo whose group is gone", () => {
     const inUse = new ApiError(409, { error: "set_in_use", message: "x", projects: [{ id: "p1", name: "Labo 4" }] });
     expect(setInUseProjects(inUse)).toEqual([{ id: "p1", name: "Labo 4" }]);
     expect(setInUseProjects(new ApiError(409, { error: "duplicate_name" }))).toBeNull();
-    expect(undoGone(new ApiError(404, { message: "Not found" }))).toBe(true);
-    expect(undoGone(new ApiError(409, { error: "classroom_archived" }))).toBe(false);
+    expect(gone(new ApiError(404, { message: "Not found" }))).toBe(true);
+    expect(gone(new ApiError(409, { error: "classroom_archived" }))).toBe(false);
   });
 });
 

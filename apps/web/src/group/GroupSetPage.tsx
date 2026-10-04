@@ -4,19 +4,18 @@ import { useState } from "react";
 
 import {
   GroupMaxSize,
-  GroupMemberPut,
   GroupRename,
-  GroupSetPatch,
   type ClassroomDetail,
   type GroupRandomForm,
   type GroupSetDetail,
 } from "@quiz/contracts";
 
 import { api, ApiError } from "../api";
+import { AppLink } from "../AppLink";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { classroomKey, groupSetKey, groupSetsKey } from "../queryKeys";
+import { classroomGroupSetsKey, classroomKey, groupSetKey } from "../queryKeys";
 import { useSearchParam, type Navigate } from "../router";
 import {
   Alert,
@@ -37,14 +36,11 @@ import {
   Skeleton,
   type MenuItem,
 } from "../ui";
-import { useGroupSet, useGroupSetWrites } from "./api";
+import { setWrite, useGroupSet, useGroupSetWrites } from "./api";
 import { GroupBoard } from "./GroupBoard";
-import { groupRefusalMessage, placeOf, setInUseProjects, studentName, studentOf, undoGone, withMove } from "./groupRules";
-import { AppLink, SetUses } from "./parts";
+import { gone, groupRefusalMessage, placeOf, setInUseProjects, studentName, studentOf, withMove } from "./groupRules";
+import { SetUses, textLink } from "./parts";
 import { RandomFormDialog } from "./RandomFormDialog";
-
-/** The project a set's page was opened from (`?from=project:<id>`, W9), or null. */
-const fromProject = (from: string): string | null => (from.startsWith("project:") ? from.slice("project:".length) : null);
 
 /**
  * One group set of a classroom (ADR-070 §3, M3-16a),
@@ -68,7 +64,8 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
-  const [from] = useSearchParam("from", "");
+  // The project this page was opened from (W9), `?fromProject=<id>`.
+  const [project] = useSearchParam("fromProject", "");
   const [randomOpen, setRandomOpen] = useState(false);
   const [maxOpen, setMaxOpen] = useState(false);
   /** The projects that refused the deletion (`409 set_in_use`), said above the board. */
@@ -82,38 +79,35 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
   const write = useGroupSetWrites(id);
   const failed = (error: unknown) => toast(groupRefusalMessage(error, t), "error");
 
-  /** A student into `groupId` (`null`: no group); `undo` marks the reverse move, which offers no Undo of its own. */
-  const move = (enrollmentId: string, groupId: string | null, undo = false) => {
+  /** A student into `groupId` (`null`: no group), drawn at once. */
+  const place = (enrollmentId: string, groupId: string | null) =>
+    write(setWrite.place(enrollmentId, groupId), (d) => withMove(d, enrollmentId, groupId));
+
+  /** The reverse of a move (ADR-070 §6): offers no Undo of its own; a 404 is a group gone since. */
+  const undoMove = (enrollmentId: string, groupId: string | null) =>
+    place(enrollmentId, groupId).catch((error: unknown) =>
+      toast(gone(error) ? t("groups.undoFailed") : groupRefusalMessage(error, t), "error"),
+    );
+
+  /** A move, said in a toast that offers to undo it — the latest move only. */
+  const move = (enrollmentId: string, groupId: string | null) => {
     const before = qc.getQueryData<GroupSetDetail>(groupSetKey(id));
     const student = before ? studentOf(before, enrollmentId) : undefined;
     const previous = before ? placeOf(before, enrollmentId) : undefined;
     if (!student || previous === undefined) return;
-    write(
-      { method: "PUT", path: `/members/${enrollmentId}`, body: GroupMemberPut.parse({ groupId }) },
-      (d) => withMove(d, enrollmentId, groupId),
-    ).then(
-      (answer) => {
-        if (undo) return;
-        const name = studentName(student);
-        const group = answer.groups.find((g) => g.id === groupId)?.name;
-        toast(group ? t("groups.moved", { name, group }) : t("groups.movedOut", { name }), "success", {
-          key: `group-undo:${id}`,
-          action: { label: t("groups.undo"), run: () => move(enrollmentId, previous, true) },
-        });
-      },
-      (error: unknown) => toast(undo && undoGone(error) ? t("groups.undoFailed") : groupRefusalMessage(error, t), "error"),
-    );
+    place(enrollmentId, groupId).then((answer) => {
+      const name = studentName(student);
+      const group = answer.groups.find((g) => g.id === groupId)?.name;
+      toast(group ? t("groups.moved", { name, group }) : t("groups.movedOut", { name }), "success", {
+        key: `group-undo:${id}`,
+        action: { label: t("groups.undo"), run: () => void undoMove(enrollmentId, previous) },
+      });
+    }, failed);
   };
 
-  const addGroup = useMutation({
-    mutationFn: () => write({ method: "POST", path: "/groups", body: {} }),
-    onError: failed,
-  });
-  const rename = useMutation({
-    mutationFn: (name: string) => write({ method: "PATCH", path: "", body: GroupSetPatch.parse({ name }) }),
-    onError: failed,
-  });
-  const lists = () => qc.invalidateQueries({ queryKey: [...groupSetsKey, "classroom", classroomId] });
+  const addGroup = useMutation({ mutationFn: () => write(setWrite.addGroup()), onError: failed });
+  const rename = useMutation({ mutationFn: (name: string) => write(setWrite.patch({ name })), onError: failed });
+  const lists = () => qc.invalidateQueries({ queryKey: classroomGroupSetsKey(classroomId) });
   const duplicate = useMutation({
     mutationFn: () => api<GroupSetDetail>(`/app/api/group-sets/${id}/duplicate`, { method: "POST" }),
     onSuccess: async (copy) => {
@@ -161,7 +155,6 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
   const readOnly = detail.set.readOnly;
   const unplaced = detail.unplaced.length;
   const placed = detail.groups.reduce((sum, g) => sum + g.members.length, 0);
-  const project = fromProject(from);
   const projectName = project ? detail.usedBy.find((u) => u.id === project)?.name : undefined;
 
   const onDeleteGroup = async (group: GroupSetDetail["groups"][number]) => {
@@ -173,14 +166,14 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
         danger: true,
       })
     ) {
-      write({ method: "DELETE", path: `/groups/${group.id}` }).catch(failed);
+      write(setWrite.deleteGroup(group.id)).catch(failed);
     }
   };
   const onRenameGroup = async (groupId: string, name: string): Promise<string | null> => {
     const body = GroupRename.safeParse({ name });
     if (!body.success) return t("groups.name.invalid");
     try {
-      await write({ method: "PATCH", path: `/groups/${groupId}`, body: body.data });
+      await write(setWrite.renameGroup(groupId, body.data));
       return null;
     } catch (error) {
       return groupRefusalMessage(error, t);
@@ -275,7 +268,7 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
           <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
             {inUse.map((p) => (
               <li key={p.id}>
-                <AppLink route={{ view: "project", id: p.id }} navigate={navigate} className="font-medium text-fg">
+                <AppLink route={{ view: "project", id: p.id }} navigate={navigate} className={`${textLink} font-medium text-fg`}>
                   {p.name}
                 </AppLink>
               </li>
@@ -311,14 +304,14 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
       {randomOpen ? (
         <RandomFormDialog
           detail={detail}
-          form={(body: GroupRandomForm) => write({ method: "POST", path: "/random", body })}
+          form={(body: GroupRandomForm) => write(setWrite.random(body))}
           onClose={() => setRandomOpen(false)}
         />
       ) : null}
       {maxOpen ? (
         <MaxSizeDialog
           value={detail.set.maxSize}
-          save={(maxSize) => write({ method: "PATCH", path: "", body: GroupSetPatch.parse({ maxSize }) })}
+          save={(maxSize) => write(setWrite.patch({ maxSize }))}
           onClose={() => setMaxOpen(false)}
         />
       ) : null}

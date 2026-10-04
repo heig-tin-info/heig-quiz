@@ -2415,7 +2415,8 @@ serves now (16a), and what waits for the group repositories (16b).
   the hint kind `groups` names its query roots in `realtime/hints.ts`.
 - **Decided for it** (orchestrator, 2026-10-05): (1) the Groups tab and
   the set's page ship to production; the form's group mode is offered only
-  where `CLASSROOM_PAGES` is on until M3-15b-1 merges (Accept answers
+  where `CLASSROOM_PAGES` is on (the browser mock; staging runs the
+  production image, so not there) until M3-15b-1 merges (Accept answers
   `409 no_group` today); (2) the routes are `/classrooms/:id/groups` (a
   route tab) and `/classrooms/:id/groups/:setId`, staff only, and
   `/projects/:id/groups` goes; (3) one primary on the set's page, *Form at
@@ -2426,38 +2427,43 @@ serves now (16a), and what waits for the group repositories (16b).
 - **As delivered** (branch `merge/M3-16a-groups-web`). What M3-16b and
   M3-17 inherit:
   - **Routes** (`router.ts`): `classroomGroups` and `groupSet` (its
-    `from`, `project:<id>`, in the query only), neither `preview` nor
+    `fromProject`, in the query only; `groupSetPageOf` in
+    `project/projectPage.ts` builds it), neither `preview` nor
     `studentSafe`; `projectGroups` and `soon.projectGroups` are gone.
     `ClassroomView`'s `ROUTE_TABS` has `groups` (after the Roster), whose
     header primary is *New group set* (straight to the new set's page).
   - **`apps/web/src/group/`**: `api.ts` (`useClassroomGroupSets`,
-    `useGroupSet`, `useCreateGroupSet`, `useGroupSetWrites` — the queue:
-    one request at a time per set, an optimistic step drawn at once, the
-    cache set from the latest answer once the queue is empty, rolled back
-    to the last answer when it ends on an error); `groupRules.ts` (pure:
+    `useGroupSet`, `useCreateGroupSet`, `setWrite` — each write's body
+    built by its route's schema —, `useGroupSetWrites` — the queue: one
+    request at a time per set, an optimistic step drawn at once, the cache
+    set from the latest answer once the queue is empty, rolled back to the
+    last answer and read again when it ends on an error); `groupRules.ts` (pure:
     `placeOf`, `withMove`, `sizesSummary` on `groupSizes`, the refusals'
-    words, `has_repo` included ahead of M3-15b-1, `set_in_use`'s
-    projects read with a local schema — the contracts name the code, not
-    the body); `GroupSetList`,
+    words — a 404 "no longer in the set", never the server's English;
+    `groups.refusal.hasRepo` worded ahead of M3-15b-1, wired after the
+    rebase (TODO) —, `set_in_use`'s projects read with a local schema
+    until the contract's `GroupRefusalProjects` (TODO), `stepZone`); `GroupSetList`,
     `GroupSetPage` (name renamed in place, *New group*, menu: maximum
     size, duplicate, delete), `GroupBoard` (pointer and keyboard drag,
-    the keyboard walking the zones in reading order, `stepZone`; click
+    the keyboard walking the zones in reading order; click
     then click with "Move here" buttons; a "Move to…" menu; a group renamed
     in place, `duplicate_name` under its field), `RandomFormDialog`,
-    `GroupSetPicker`, `parts.tsx`. An archived classroom's set is drawn
-    read-only.
+    `GroupSetPicker`, `parts.tsx`; `AppLink.tsx` (a route as a real link)
+    beside the router. An archived classroom's set is drawn read-only.
   - **Primitives**: the toast takes one action and a `key` (Undo, the
     latest move only); `Menu`'s panel scrolls inside the viewport;
     `EditableTitle`'s button no longer wraps its pencil in a box sized to
     its content.
-  - **Keys and hints**: `groupSetsKey` (`classroomGroupSetsKey`,
-    `groupSetKey`), named by the hints `groups`, `roster` and `projects`.
+  - **Keys and hints**: `groupSetsKey` (`groupSetListsKey`,
+    `classroomGroupSetsKey`, `groupSetKey`), named by the hints `groups`,
+    `roster`, `projects` and `classrooms` (an archive turns an open set
+    read-only).
   - **Projects**: `GROUPS_OFFERED = CLASSROOM_PAGES` in
     `ProjectAdvanced.tsx`, THE switch to flip once M3-15b-1 is merged; the
     draft's `groupSetId`, sent in group mode only; `unknown_group_set`
     under the picker, the choice cleared. `ProjectGroupSet` on the page:
-    a draft's picker (`PATCH groupSetId`), the set's link with
-    `?from=project:<id>`, *follows* / *stopped following* once published;
+    a draft's picker (`PATCH groupSetId`, its refusal under it), the set's
+    link with `?fromProject=<id>`, *follows* / *stopped following* once published;
     `no_group_set` an alert pointing at the picker; `unassigned_students`
     links to the set.
   - **Mock** (`mock/groups.ts`, `?groups=1`): three sets on PRG1-2026

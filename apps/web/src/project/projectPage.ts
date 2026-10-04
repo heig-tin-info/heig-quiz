@@ -15,12 +15,14 @@ import {
   type ProjectErrorCode,
   type ProjectRepoReview,
   type ProjectRepoView,
+  type ProjectSummary,
   type ReviewCheckpoint,
 } from "@quiz/contracts";
 import { isVoidCheckpoint, reopens } from "@quiz/domain";
 
 import { ApiError, apiErrorMessage, refusalCodeOf } from "../api";
 import type { Dict, TFunction } from "../i18n";
+import type { RouteOf } from "../router";
 import type { Tone } from "../ui";
 
 export type UnassignedStudent = ProjectUnassigned["students"][number];
@@ -305,3 +307,10 @@ export function refusalMessage(error: unknown, t: TFunction): string {
   const key = refusalKey(error);
   return key ? t(key) : apiErrorMessage(error, t("error.save"));
 }
+
+/**
+ * The page of the group set a group project follows, coming back to the
+ * project (`fromProject`, W9); null while it names none.
+ */
+export const groupSetPageOf = (p: Pick<ProjectSummary, "id" | "classroomId" | "groupSetId">): RouteOf<"groupSet"> | null =>
+  p.groupSetId === null ? null : { view: "groupSet", classroomId: p.classroomId, id: p.groupSetId, fromProject: p.id };

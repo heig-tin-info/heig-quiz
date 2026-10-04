@@ -143,6 +143,8 @@ export interface MenuPlacement {
   left: number;
   /** The panel opens above the trigger. */
   up: boolean;
+  /** The room left between the panel's edge and the viewport's (8 px kept): a longer list scrolls inside. */
+  maxHeight: number;
 }
 
 /**
@@ -159,10 +161,12 @@ export function menuPosition(
   panelHeight = MENU_FLIP_MARGIN,
 ): MenuPlacement {
   const up = rect.bottom + panelHeight > viewport.height && rect.top > viewport.height / 2;
+  const edge = up ? viewport.height - rect.top + 6 : rect.bottom + 6;
   return {
-    ...(up ? { bottom: viewport.height - rect.top + 6 } : { top: rect.bottom + 6 }),
+    ...(up ? { bottom: edge } : { top: edge }),
     left: align === "end" ? rect.right : rect.left,
     up,
+    maxHeight: viewport.height - edge - 8,
   };
 }
 
@@ -381,7 +385,7 @@ export function Menu({
                   top: pos.top,
                   bottom: pos.bottom,
                   left: pos.left,
-                  maxHeight: `calc(100dvh - ${(pos.top ?? pos.bottom ?? 0) + 8}px)`,
+                  maxHeight: pos.maxHeight,
                   // Not `transform`: `.menu-panel` animates that property on
                   // open, and an animation owns it entirely while it plays.
                   // The alignment offset travels as a custom property the

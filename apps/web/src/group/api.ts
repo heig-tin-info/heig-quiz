@@ -9,16 +9,27 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useRef } from "react";
 
-import type { GroupSetCreate, GroupSetDetail, GroupSetSummary } from "@quiz/contracts";
+import {
+  GroupCreate,
+  GroupMemberPut,
+  GroupRandomForm,
+  GroupRename,
+  GroupSetCreate,
+  GroupSetPatch,
+  type GroupSetDetail,
+  type GroupSetSummary,
+} from "@quiz/contracts";
 
 import { api } from "../api";
-import { classroomGroupSetsKey, groupSetKey, groupSetsKey } from "../queryKeys";
+import { useT } from "../i18n";
+import { useToast } from "../notify";
+import { classroomGroupSetsKey, groupSetKey, groupSetListsKey } from "../queryKeys";
+import { groupRefusalMessage } from "./groupRules";
 
 /** `GET /classrooms/:id/group-sets`: the classroom's sets, the oldest first. */
-export function useClassroomGroupSets(classroomId: string, enabled = true) {
+export function useClassroomGroupSets(classroomId: string) {
   return useQuery<GroupSetSummary[]>({
     queryKey: classroomGroupSetsKey(classroomId),
-    enabled,
     queryFn: () => api(`/app/api/classrooms/${classroomId}/group-sets`),
   });
 }
@@ -31,37 +42,65 @@ export function useGroupSet(id: string) {
 /**
  * `POST /classrooms/:id/group-sets`: an empty set, named by the server after
  * now ("Groups of <date> <time>", ADR-070 §2). Its answer seeds the set's
- * page, and the classroom's list is read again.
+ * page, and the classroom's list is read again; a failure is a toast.
  */
 export function useCreateGroupSet(classroomId: string, onCreated: (created: GroupSetDetail) => void) {
   const qc = useQueryClient();
+  const toast = useToast();
+  const t = useT();
   return useMutation({
-    mutationFn: (body: GroupSetCreate) =>
-      api<GroupSetDetail>(`/app/api/classrooms/${classroomId}/group-sets`, { method: "POST", body: JSON.stringify(body) }),
+    mutationFn: () =>
+      api<GroupSetDetail>(`/app/api/classrooms/${classroomId}/group-sets`, {
+        method: "POST",
+        body: JSON.stringify(GroupSetCreate.parse({})),
+      }),
     onSuccess: async (created) => {
       qc.setQueryData(groupSetKey(created.set.id), created);
       await qc.invalidateQueries({ queryKey: classroomGroupSetsKey(classroomId) });
       onCreated(created);
     },
+    onError: (error) => toast(groupRefusalMessage(error, t), "error"),
   });
 }
 
-/** One write of a set: its method, its path under `/group-sets/:id`, its body. */
-export interface SetWrite {
-  method: "POST" | "PATCH" | "PUT" | "DELETE";
-  path: string;
-  body?: unknown;
-}
+/**
+ * One write of a set: its method, its path under `/group-sets/:id`, and its
+ * body built by the route's own schema (invariant 7). `setWrite` makes each.
+ */
+type SetWrite =
+  | { method: "PATCH"; path: ""; body: GroupSetPatch }
+  | { method: "POST"; path: "/groups"; body: GroupCreate }
+  | { method: "PATCH"; path: `/groups/${string}`; body: GroupRename }
+  | { method: "DELETE"; path: `/groups/${string}`; body?: undefined }
+  | { method: "PUT"; path: `/members/${string}`; body: GroupMemberPut }
+  | { method: "POST"; path: "/random"; body: GroupRandomForm };
 
-/** The classrooms' lists count what a write of a set changes: marked stale, refetched where shown. */
-const listsKey = [...groupSetsKey, "classroom"] as const;
+export const setWrite = {
+  patch: (body: GroupSetPatch): SetWrite => ({ method: "PATCH", path: "", body: GroupSetPatch.parse(body) }),
+  addGroup: (): SetWrite => ({ method: "POST", path: "/groups", body: GroupCreate.parse({}) }),
+  renameGroup: (groupId: string, body: GroupRename): SetWrite => ({
+    method: "PATCH",
+    path: `/groups/${groupId}`,
+    body: GroupRename.parse(body),
+  }),
+  deleteGroup: (groupId: string): SetWrite => ({ method: "DELETE", path: `/groups/${groupId}` }),
+  place: (enrollmentId: string, groupId: string | null): SetWrite => ({
+    method: "PUT",
+    path: `/members/${enrollmentId}`,
+    body: GroupMemberPut.parse({ groupId }),
+  }),
+  random: (body: GroupRandomForm): SetWrite => ({ method: "POST", path: "/random", body: GroupRandomForm.parse(body) }),
+};
 
 /**
  * The write queue of one set. `write(request, optimistic?)` sends the
  * request after every write before it has settled, and resolves with its
  * answer (or rejects with its error). `optimistic` is drawn at once; the
  * cache then takes the latest answer only once the queue is empty, so an
- * answer to an earlier write never undoes a later move on screen.
+ * answer to an earlier write never undoes a later move on screen. A queue
+ * that ends on an error puts back the last answer, and reads the set again:
+ * whatever refused the write may have changed it (another teacher's
+ * deletion).
  */
 export function useGroupSetWrites(setId: string) {
   const qc = useQueryClient();
@@ -92,12 +131,15 @@ export function useGroupSetWrites(setId: string) {
           inFlight.current -= 1;
           server.current = answer;
           if (inFlight.current === 0) qc.setQueryData(key, answer);
-          void qc.invalidateQueries({ queryKey: listsKey });
+          void qc.invalidateQueries({ queryKey: groupSetListsKey });
           return answer;
         },
         (error: unknown) => {
           inFlight.current -= 1;
-          if (inFlight.current === 0 && server.current) qc.setQueryData(key, server.current);
+          if (inFlight.current === 0) {
+            if (server.current) qc.setQueryData(key, server.current);
+            void qc.invalidateQueries({ queryKey: key });
+          }
           throw error;
         },
       );

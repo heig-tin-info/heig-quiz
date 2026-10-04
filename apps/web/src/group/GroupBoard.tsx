@@ -31,17 +31,18 @@ import {
   useSensors,
   type DragEndEvent,
   type DragOverEvent,
+  type Announcements,
   type DragStartEvent,
   type KeyboardCoordinateGetter,
 } from "@dnd-kit/core";
 import { CircleDashed, GripVertical, MoveRight, PenLine, Trash2, TriangleAlert } from "lucide-react";
-import { useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
 
 import type { GroupSetDetail, GroupStudent } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { cx, IconButton, inputClass, inputSize, Menu, Tip, type MenuItem } from "../ui";
-import { overMax, placeOf, studentName } from "./groupRules";
+import { overMax, placeOf, stepZone, studentName, studentOf } from "./groupRules";
 
 /** The dnd id of the "No group" zone; a group's zone is `g:<id>`, a student `s:<enrollment id>`. */
 const NONE = "none";
@@ -50,22 +51,10 @@ const groupOfZone = (key: string): string | null => (key === NONE ? null : key.s
 const dragKey = (enrollmentId: string) => `s:${enrollmentId}`;
 const studentOfDrag = (id: string): string | null => (id.startsWith("s:") ? id.slice(2) : null);
 
-/**
- * The zone the keyboard lands on from `from` (an index into the zones in
- * their reading order — No group, then each group): the next one for →
- * and ↓, the previous one for ← and ↑, held at the ends. `null` for any
- * other key. Pure: the board's keyboard drag is this walk.
- */
-export function stepZone(count: number, from: number, code: string): number | null {
-  const step = code === "ArrowRight" || code === "ArrowDown" ? 1 : code === "ArrowLeft" || code === "ArrowUp" ? -1 : 0;
-  if (step === 0 || count === 0) return null;
-  return Math.min(count - 1, Math.max(0, from + step));
-}
-
 /** The frame of a zone: the hairline card the categorize columns wear. */
 const zoneFrame = "flex min-w-0 flex-col rounded-card border border-line bg-surface";
 
-export interface GroupBoardProps {
+interface GroupBoardProps {
   detail: GroupSetDetail;
   readOnly: boolean;
   /** A student into a group, or out of every group (`null`). Called only for a real move. */
@@ -192,29 +181,28 @@ export function GroupBoard({ detail, readOnly, onMove, onRename, onDelete }: Gro
     </Zone>
   );
 
-  const dragged = active === null ? null : zones.flatMap((z) => z.members).find((s) => s.enrollmentId === active);
+  const dragged = active === null ? undefined : studentOf(detail, active);
 
   /** What a screen reader hears of a drag, in the reader's language (dnd-kit's own words are English). */
   const nameOf = (id: string | number) => {
-    const student = zones.flatMap((z) => z.members).find((s) => dragKey(s.enrollmentId) === String(id));
+    const student = studentOf(detail, studentOfDrag(String(id)) ?? "");
     return student ? studentName(student) : "";
   };
-  const zoneLabel = (id: string | number | undefined) => zones.find((z) => z.key === String(id))?.label ?? "";
-  const accessibility = {
-    screenReaderInstructions: { draggable: t("groups.drag.help") },
-    announcements: {
-      onDragStart: ({ active: a }: { active: { id: string | number } }) => t("groups.drag.start", { name: nameOf(a.id) }),
-      onDragOver: ({ active: a, over }: { active: { id: string | number }; over: { id: string | number } | null }) =>
-        over ? t("groups.drag.over", { name: nameOf(a.id), group: zoneLabel(over.id) }) : undefined,
-      onDragEnd: ({ active: a, over }: { active: { id: string | number }; over: { id: string | number } | null }) =>
-        over ? t("groups.drag.end", { name: nameOf(a.id), group: zoneLabel(over.id) }) : t("groups.drag.cancel", { name: nameOf(a.id) }),
-      onDragCancel: ({ active: a }: { active: { id: string | number } }) => t("groups.drag.cancel", { name: nameOf(a.id) }),
-    },
+  const zoneLabel = (id: string | number) => zones.find((z) => z.key === String(id))?.label ?? "";
+  const announcements: Announcements = {
+    onDragStart: ({ active: a }) => t("groups.drag.start", { name: nameOf(a.id) }),
+    onDragOver: ({ active: a, over }) => (over ? t("groups.drag.over", { name: nameOf(a.id), group: zoneLabel(over.id) }) : undefined),
+    onDragEnd: ({ active: a, over }) =>
+      over
+        ? t("groups.drag.end", { name: nameOf(a.id), group: zoneLabel(over.id) })
+        : t("groups.drag.cancel", { name: nameOf(a.id) }),
+    onDragCancel: ({ active: a }) => t("groups.drag.cancel", { name: nameOf(a.id) }),
   };
+  const overLabel = t("groups.over", { max: detail.set.maxSize ?? "" });
 
   return (
     <DndContext
-      accessibility={accessibility}
+      accessibility={{ announcements, screenReaderInstructions: { draggable: t("groups.drag.help") } }}
       sensors={sensors}
       collisionDetection={closestCorners}
       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
@@ -273,10 +261,10 @@ export function GroupBoard({ detail, readOnly, onMove, onRename, onDelete }: Gro
                           {detail.set.maxSize !== null ? `/${detail.set.maxSize}` : null}
                         </span>
                         {over ? (
-                          <Tip label={t("groups.over", { max: detail.set.maxSize ?? "" })}>
+                          <Tip label={overLabel}>
                             <TriangleAlert
                               className="size-4 text-warning"
-                              aria-label={t("groups.over", { max: detail.set.maxSize ?? "" })}
+                              aria-label={overLabel}
                               role="img"
                             />
                           </Tip>
@@ -420,9 +408,12 @@ function StudentChip({
   });
   const name = studentName(student);
   const unclaimed = student.claimed ? null : (
-    <Tip label={t("groups.unclaimed")}>
-      <CircleDashed className="size-3.5 shrink-0 text-fg-faint" aria-hidden />
-    </Tip>
+    <>
+      <Tip label={t("groups.unclaimed")}>
+        <CircleDashed className="size-3.5 shrink-0 text-fg-faint" aria-hidden />
+      </Tip>
+      <span className="sr-only">{t("groups.unclaimed")}</span>
+    </>
   );
   return (
     <li ref={setNodeRef} data-student={student.enrollmentId} className={cx("flex items-center gap-0.5", isDragging && "opacity-40")}>
@@ -430,7 +421,6 @@ function StudentChip({
         <span className={cx(chipClass, "flex-1 border-line")}>
           <span className="min-w-0 flex-1 truncate">{name}</span>
           {unclaimed}
-          {student.claimed ? null : <span className="sr-only">{t("groups.unclaimed")}</span>}
         </span>
       ) : (
         <>
@@ -454,7 +444,6 @@ function StudentChip({
             <GripVertical className="size-3.5 shrink-0 text-fg-faint" aria-hidden />
             <span className="min-w-0 flex-1 truncate">{name}</span>
             {unclaimed}
-            {student.claimed ? null : <span className="sr-only">{t("groups.unclaimed")}</span>}
           </button>
           <Menu
             label={t("groups.moveTo", { name })}
@@ -485,7 +474,7 @@ function GroupNameField({
   const [draft, setDraft] = useState(name);
   const [refused, setRefused] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const id = `group-name-${name}`;
+  const id = useId();
   const save = async () => {
     const next = draft.trim();
     if (saving) return;

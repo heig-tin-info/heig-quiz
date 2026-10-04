@@ -191,6 +191,10 @@ export class MockPayload extends MockError {
   }
 }
 
+/** A refusal of the API: `{ error, message, ...extra }` under `status`, as the routes' error handlers answer. */
+export const refuse = (status: number, error: string, message: string, extra: Record<string, unknown> = {}) =>
+  new MockPayload(status, { error, message, ...extra });
+
 export type Handler = (m: RegExpMatchArray, body: Record<string, unknown>, url: URL) => unknown;
 export const routes: { method: string; re: RegExp; h: Handler }[] = [];
 export const on = (method: string, path: string, h: Handler) =>

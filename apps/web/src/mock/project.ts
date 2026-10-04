@@ -68,7 +68,7 @@ import {
 
 import { isSetOf, provideSetUses, SET_PAIRS, unplacedClaimed } from "./groups";
 import { classroomRoster, courses, rooms } from "./org";
-import { D, flags, H, iso, MockError, MockPayload, nextId, now, on, role } from "./runtime";
+import { D, flags, H, iso, MockError, MockPayload, nextId, now, on, refuse, role } from "./runtime";
 
 /** PRG1-2026's organization, as `github.ts` names it (which this section, above it, cannot read). */
 const ORG = "heig-tin-info";
@@ -508,8 +508,6 @@ function projectOr404(id: string): MockProject {
   return p;
 }
 
-const refuse = (status: number, error: string, message: string, extra: Record<string, unknown> = {}) =>
-  new MockPayload(status, { error, message, ...extra });
 
 /** A live repository: provisioned, not deleted, its project not archived (`LIVE` of `deadline.ts`). */
 const isLive = (p: MockProject, r: MockRepo) => r.provisionStatus === "ok" && !r.deleted && p.summary.archivedAt === null;

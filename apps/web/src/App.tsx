@@ -279,7 +279,8 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   classroomGrades: (_, c) => <ComingSoon title="bnav.grades" navigate={c.navigate} teacherUi={c.teacherUi} />,
   // ADR-070 (M3-16a): the classroom's Groups tab, a route of its own, and one group set's page.
   classroomGroups: (r, c) => <ClassroomView id={r.id} navigate={c.navigate} routeTab="groups" />,
-  groupSet: (r, c) => <GroupSetPage classroomId={r.classroomId} id={r.id} navigate={c.navigate} />,
+  // Keyed: one set to the next (a duplicate) starts a fresh page, its write queue included.
+  groupSet: (r, c) => <GroupSetPage key={r.id} classroomId={r.classroomId} id={r.id} navigate={c.navigate} />,
   // F-PROJ-13: the staff's project page (M3-12).
   project: (r, c) => <ProjectPage id={r.id} navigate={c.navigate} />,
   // F-PROJ-01: "New ▾ › Project" (M3-10) leads here, M3-11's form.

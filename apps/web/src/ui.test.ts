@@ -123,6 +123,11 @@ describe("menuPosition", () => {
     expect(menuPosition(rect(100, 32, 600, 40), viewport, "start").left).toBe(600);
   });
 
+  it("caps the panel at the room left to the viewport's edge, 8 px kept", () => {
+    expect(menuPosition(rect(100), viewport, "end").maxHeight).toBe(900 - 138 - 8);
+    expect(menuPosition(rect(820), viewport, "start").maxHeight).toBe(900 - 86 - 8);
+  });
+
   it("takes the assumed panel height into account", () => {
     const low = rect(600);
     expect(menuPosition(low, viewport, "end", 100).up).toBe(false);

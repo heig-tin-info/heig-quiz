@@ -223,7 +223,7 @@ export function ClassroomView({
   });
   // ADR-070 §2: a new set, named by the server, opened at once.
   const newSet = useCreateGroupSet(id, (created) => navigate({ view: "groupSet", classroomId: id, id: created.set.id }));
-  const createSet = () => newSet.mutate({}, { onError: toastError("error.save") });
+  const createSet = () => newSet.mutate();
 
   /** A tab: a route of its own (`ROUTE_TABS`), or a `?tab=` on the classroom's address. */
   const openTab = (next: Tab) => {
