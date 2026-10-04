@@ -325,6 +325,34 @@ describe("the release (F-PROJ-14, D05)", () => {
     expect(await repoRow(tampered)).toMatchObject({ releasedPoints: 5, releasedMax: 10 });
   });
 
+  it("never waits for a deleted, unfrozen repository's score to verify: released as no score", async () => {
+    const w = await world({ students: 2 });
+    const [gone, plain] = w.students;
+    // Deleted on GitHub before its deadline: it never freezes, the teacher can never score it.
+    const deleted = await repoOf(w, gone!.id, { deletedAt: at(NOW), deadlineAppliedAt: null, frozenAt: null });
+    await setRepo(deleted, { currentGradeRunId: await run(deleted, { toVerify: true }) });
+    const clean = await repoOf(w, plain!.id);
+    await setRepo(clean, { frozenGradeRunId: await run(clean) });
+
+    const before = await detail(w);
+    expect(before.primaryAction).toBe("release");
+    expect(rowOf(before, gone!.id).scores.final).toMatchObject({ source: "ci", toVerify: true });
+    const res = await release(w);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(ProjectReleaseResult.parse(res.json())).toMatchObject({ repos: 2, scored: 1 });
+    expect(await repoRow(deleted)).toMatchObject({ releasedPoints: null, releasedMax: null });
+    expect(await repoRow(clean)).toMatchObject({ releasedPoints: 7, releasedMax: 10 });
+
+    // The live score is still shown to verify, but is not "changed after release": no Release offered again.
+    const after = await detail(w);
+    expect(rowOf(after, gone!.id)).toMatchObject({
+      scores: { final: { toVerify: true } },
+      released: { points: null, max: null },
+      flags: { changedAfterRelease: false, deleted: true },
+    });
+    expect(after.primaryAction).toBe("none");
+  });
+
   it("is refused on an ungraded project, and without a single live repository", async () => {
     const none = await world({ gradingMode: "none" });
     await repoOf(none, none.students[0]!.id);

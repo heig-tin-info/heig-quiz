@@ -39,8 +39,8 @@ import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { projectRepos, projects } from "../../db/schema.js";
 import { DomainError } from "../http.js";
-import { releaseCounts, repoForUpdate } from "./deadline.js";
-import { repoScores, slotRuns } from "./detail.js";
+import { isLive, releaseCounts, repoForUpdate } from "./deadline.js";
+import { releasableScore, repoScores, slotRuns } from "./detail.js";
 import { ProjectError } from "./errors.js";
 import { studentRepos, type RepoRow } from "./repos.js";
 
@@ -106,10 +106,12 @@ export async function overrideScore(
  * `POST /app/api/projects/:id/release` (F-PROJ-14, D05): the final scores
  * made the students' and the gradebook's. Refused on an ungraded project
  * (`grading_none`), while a live repository is not frozen for good, or
- * none is (`not_frozen`), and while a final score rests on a run to verify
- * (`to_verify`, F-PROJ-08: a score captured under a suspended protection or
- * on a restored head is released only once the teacher's score settles it;
- * the body names the repositories). The student repositories
+ * none is (`not_frozen`), and while a LIVE repository's final score rests on
+ * a run to verify (`to_verify`, F-PROJ-08: a score captured under a
+ * suspended protection or on a restored head is released only once the
+ * teacher's score settles it; the body names the repositories). A non-live
+ * repository never freezes, so its score to verify is released as no score
+ * (`releasableScore`) rather than deadlocking the release. The student repositories
  * (`studentRepos`) and the counts (`releaseCounts`) are the page's. Writes
  * every repository's snapshot and the project's `released_at`; idempotent
  * in effect, audited each time.
@@ -126,13 +128,17 @@ export async function releaseProject(db: Db, projectId: string, actor: AuditActo
     }
     const runs = await slotRuns(tx, repos);
     const finals = repos.map((repo) => ({ repo, final: repoScores(project, repo, runs).scores.final }));
-    const unverified = finals.filter(({ final }) => final?.toVerify === true).map(({ repo }) => repo.id);
+    // Over the live repositories only: a non-live one (deleted, or of an
+    // archived project) never freezes, so the teacher could never settle its
+    // score to verify — it is released as no score (`releasableScore`).
+    const unverified = finals.filter(({ repo, final }) => final?.toVerify === true && isLive(repo, project)).map(({ repo }) => repo.id);
     if (unverified.length > 0) {
       throw new ProjectError("to_verify", "A score to verify is released once the teacher's score settles it", { repos: unverified });
     }
     const first = project.releasedAt === null;
     let scored = 0;
-    for (const { repo, final } of finals) {
+    for (const { repo, final: live } of finals) {
+      const final = releasableScore(project, repo, live);
       if (final) scored += 1;
       await tx
         .update(projectRepos)

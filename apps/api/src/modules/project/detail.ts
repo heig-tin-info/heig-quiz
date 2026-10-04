@@ -212,8 +212,24 @@ export function repoScores(project: ProjectRow, repo: RepoRow, runs: Map<string,
       final: final && { ...final, grade: scoreGrade(final.points, final.max, scale) },
     },
     released: released ? { points: repo.releasedPoints, max: repo.releasedMax } : null,
-    changedAfterRelease: changedAfterRelease(released, final, { points: repo.releasedPoints, max: repo.releasedMax }),
+    changedAfterRelease: changedAfterRelease(released, releasableScore(project, repo, final), {
+      points: repo.releasedPoints,
+      max: repo.releasedMax,
+    }),
   };
+}
+
+/**
+ * What the release writes of a final score (M3-08b, review round 2): the
+ * score itself — except a score to verify on a repository that is no longer
+ * live (deleted on GitHub, or of an archived project), which never freezes
+ * and so can never be settled by the teacher: released as NO score, so that
+ * it neither blocks the release nor shows "changed after release" forever.
+ * A live repository's score to verify is the release's `to_verify` refusal
+ * instead (`grades.ts`).
+ */
+export function releasableScore<T extends { toVerify: boolean }>(project: ProjectRow, repo: RepoRow, final: T | null): T | null {
+  return final !== null && final.toVerify && !isLive(repo, project) ? null : final;
 }
 
 /** The repository's three slot runs — current, frozen, review — from {@link slotRuns}'s map. */
@@ -354,7 +370,8 @@ export async function projectDetail(
       gradingMode: project.gradingMode,
       sourceAhead: project.sourceAheadSha !== null,
       ...counts,
-      unverified: accepted.filter((v) => v.scores.final?.toVerify === true).length,
+      // Over the live repositories only: a non-live one never freezes, so its score to verify is released as none.
+      unverified: liveRepos.filter((repo) => views.get(repo.userId)!.scores.final?.toVerify === true).length,
       released: project.releasedAt !== null,
       changedAfterRelease: accepted.filter((v) => v.flags.changedAfterRelease).length,
     }),

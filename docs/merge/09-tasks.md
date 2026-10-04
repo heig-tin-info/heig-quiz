@@ -1417,7 +1417,12 @@ that serves them.
       (ids) while a repository's final score rests on a run to verify
       (F-PROJ-14 amended 2026-10-04: the teacher's score settles it;
       `ProjectFinalScore.toVerify` says which, `scoresFinal` takes an
-      `unverified` count so the page offers no Release meanwhile). Audited
+      `unverified` count so the page offers no Release meanwhile) — over
+      the LIVE repositories only: a non-live one (deleted, archived
+      project) never freezes, so its score to verify is released as NO
+      score (`releasableScore`, `detail.ts`: the snapshot null, and the
+      `changedAfterRelease` comparison reads the same, so it never
+      re-offers Release). Audited
       `project.release` (`first`, `repos`, `scored`).
     - `POST /app/api/projects/:id/repos/:rid/protection` →
       `ProjectRepoProtection` `{ reenabledAt: iso | null }`; a no-op on a
