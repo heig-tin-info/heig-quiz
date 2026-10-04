@@ -136,7 +136,7 @@ describe("the new project form", () => {
       protectedFiles: ["criteria.yml", "README.md"],
       groupMode: false,
     });
-    expect(posted(calls)[0]).not.toHaveProperty("groupMaxSize");
+    expect(posted(calls)[0]).not.toHaveProperty("groupSetId");
   });
 
   it("holds a date or a duration, and a start only when scheduled — never a start with a duration", async () => {

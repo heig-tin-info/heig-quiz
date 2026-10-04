@@ -156,7 +156,7 @@ on("POST", "/app/api/classrooms/:id/projects", async (m, raw): Promise<ProjectSu
     branches,
     protectedFiles: body.protectedFiles,
     groupMode: body.groupMode,
-    groupMaxSize: body.groupMaxSize ?? null,
+    groupSetId: body.groupSetId ?? null,
     source: { fullName: `${org.login}/${source.repo.name}` },
     distribution: { fullName: `${org.login}/${slug}-squashed` },
     deadlineAppliedAt: null,

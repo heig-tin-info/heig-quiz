@@ -37,7 +37,6 @@ import {
   githubClassroomLinks,
   githubOrganizations,
   projectGroupMembers,
-  projectGroups,
   projectRepos,
   projects,
   pushReceipts,
@@ -69,7 +68,7 @@ let outsider: { id: string; headers: Headers };
 let student: { id: string; headers: Headers };
 let nextOrg = 8000;
 
-const call = (method: "GET" | "POST" | "PATCH" | "DELETE", url: string, headers: Headers, payload?: object) =>
+const call = (method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE", url: string, headers: Headers, payload?: object) =>
   server.app.inject({ method, url, headers, ...(payload === undefined ? {} : { payload }) });
 
 /** A classroom of `teacher`'s course (and `colleague`'s), connected to an organization holding a source `lab`. */
@@ -293,6 +292,28 @@ describe("create a project (F-PROJ-01, F-PROJ-02)", () => {
     for (const name of names) expect(world.git(name, "rev-list", "--count", "main").trim()).toBe("1");
   });
 
+  it("copies the group set it names (ADR-070), only in group mode and only of its classroom", async () => {
+    const room = await connectedClassroom();
+    const db = server.app.db;
+    const set = (await call("POST", `/app/api/classrooms/${room.id}/group-sets`, teacher.headers, {})).json();
+    const withGroup = (await call("POST", `/app/api/group-sets/${set.set.id}/groups`, teacher.headers, { name: "Pandas" })).json();
+    const [seat] = await db.select().from(enrollments).where(eq(enrollments.classroomId, room.id));
+    await call("PUT", `/app/api/group-sets/${set.set.id}/members/${seat!.id}`, teacher.headers, { groupId: withGroup.groups[0].id });
+    const project = await create(room.id, { ...LAB, groupMode: true, groupSetId: set.set.id });
+    expect(project.groupSetId).toBe(set.set.id);
+    const members = await db.select().from(projectGroupMembers).where(eq(projectGroupMembers.projectId, project.id));
+    expect(members.map((m) => m.enrollmentId)).toEqual([seat!.id]);
+    expect((await call("POST", `/app/api/projects/${project.id}/publish`, teacher.headers)).statusCode).toBe(200);
+
+    const other = await connectedClassroom();
+    expect(refusal(await call("POST", base(other.id), teacher.headers, { ...LAB, groupMode: true, groupSetId: set.set.id }))).toEqual([
+      422,
+      "unknown_group_set",
+    ]);
+    const res = await call("POST", base(room.id), teacher.headers, { ...LAB, groupSetId: set.set.id });
+    expect([res.statusCode, res.json().error]).toEqual([400, "validation"]);
+  });
+
   it("refuses a deadline already past, a classroom not connected, and a malformed body", async () => {
     const room = await connectedClassroom();
     const past = await call("POST", base(room.id), teacher.headers, { ...LAB, deadlineAt: "2026-10-01T00:00:00Z" });
@@ -330,7 +351,6 @@ describe("patch (F-PROJ-03)", () => {
       graceMinutes: 10,
       gradingMode: "none",
       groupMode: true,
-      groupMaxSize: 3,
       gradingScale: { kind: "score_is_grade" },
     });
     expect(res.statusCode, res.body).toBe(200);
@@ -342,7 +362,7 @@ describe("patch (F-PROJ-03)", () => {
       graceMinutes: 10,
       gradingMode: "none",
       groupMode: true,
-      groupMaxSize: 3,
+      groupSetId: null,
     });
     expect(await auditOf(project.id, "project.update")).toHaveLength(1);
     // The source, its branches and strategy are fixed at creation.
@@ -447,9 +467,20 @@ describe("publish (F-PROJ-03, ADR-048)", () => {
     expect(ProjectSummary.parse((await publish(project.id)).json())).toMatchObject({ startAt: "2026-10-05T08:00:00.000Z", deadlineAt: IN_A_WEEK });
   });
 
-  it("refuses a group project while a claimed student is in no group, a staff seat never counting", async () => {
+  /** A group set of the classroom, named by the project (ADR-070): its id. */
+  async function groupSet(roomId: string, projectId: string) {
+    const res = await call("POST", `/app/api/classrooms/${roomId}/group-sets`, teacher.headers, {});
+    expect(res.statusCode, res.body).toBe(201);
+    const setId: string = res.json().set.id;
+    expect((await call("PATCH", `/app/api/projects/${projectId}`, teacher.headers, { groupSetId: setId })).statusCode).toBe(200);
+    return setId;
+  }
+
+  it("refuses a group project without a group set, then while a claimed student is in no group, a staff seat never counting", async () => {
     const room = await connectedClassroom();
     const project = await create(room.id, { ...LAB, groupMode: true });
+    expect(refusal(await publish(project.id))).toEqual([409, "no_group_set"]);
+    const setId = await groupSet(room.id, project.id);
     const db = server.app.db;
     // The teacher's own staff seat (ADR-018) and an unclaimed roster line.
     await db.insert(enrollments).values([
@@ -461,9 +492,11 @@ describe("publish (F-PROJ-03, ADR-048)", () => {
     const [seat] = await db.select().from(enrollments).where(and(eq(enrollments.classroomId, room.id), eq(enrollments.userId, student.id)));
     expect(none.json().students).toEqual([{ enrollmentId: seat!.id, nom: seat!.nom, prenom: seat!.prenom }]);
 
-    const groupId = randomUUID();
-    await db.insert(projectGroups).values({ id: groupId, projectId: project.id, name: "G1", slug: "g1", position: 0 });
-    await db.insert(projectGroupMembers).values({ id: randomUUID(), projectId: project.id, groupId, enrollmentId: seat!.id });
+    // Placed in the set, the student is in the project's copy of it.
+    const group = await call("POST", `/app/api/group-sets/${setId}/groups`, teacher.headers, {});
+    const groupId: string = group.json().groups[0].id;
+    expect((await call("PUT", `/app/api/group-sets/${setId}/members/${seat!.id}`, teacher.headers, { groupId })).statusCode).toBe(200);
+    expect(await db.select().from(projectGroupMembers).where(eq(projectGroupMembers.projectId, project.id))).toHaveLength(1);
     expect((await publish(project.id)).statusCode).toBe(200);
   });
 
@@ -471,6 +504,7 @@ describe("publish (F-PROJ-03, ADR-048)", () => {
     const room = await connectedClassroom();
     await server.app.db.delete(enrollments).where(eq(enrollments.classroomId, room.id));
     const project = await create(room.id, { ...LAB, groupMode: true });
+    await groupSet(room.id, project.id);
     const res = await publish(project.id);
     expect([res.statusCode, res.json().error, res.json().students]).toEqual([409, "unassigned_students", []]);
   });

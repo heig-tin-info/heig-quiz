@@ -24,6 +24,9 @@ const STATUS: Record<Code, number> = {
   strategy_frozen: 409,
   unassigned_students: 409,
   repo_unavailable: 409,
+  // The group set (ADR-070, M3-15a).
+  no_group_set: 409,
+  unknown_group_set: 422,
   // Accept (M3-03).
   not_started: 409,
   deadline_passed: 409,

@@ -43,12 +43,11 @@ describe("the new project's body", () => {
     });
   });
 
-  it("refuses a name without a letter, a bad grace, a group size out of range", () => {
-    const { missing } = projectBody(draft({ name: "--", graceMinutes: "x", groupMode: true, groupMaxSize: "99" }), DETAIL);
+  it("refuses a name without a letter and a bad grace", () => {
+    const { missing } = projectBody(draft({ name: "--", graceMinutes: "x" }), DETAIL);
     expect(missing).toEqual({
       name: "project.missing.name",
       grace: "project.missing.grace",
-      groupMaxSize: "project.missing.groupMaxSize",
     });
   });
 

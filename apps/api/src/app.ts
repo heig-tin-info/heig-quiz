@@ -35,6 +35,7 @@ import { registerGithubJobs } from "./modules/github/jobs.js";
 import { githubPlugin } from "./modules/github/routes.js";
 import { gradingPlugin } from "./modules/grading/routes.js";
 import { registerGradingJobs } from "./modules/grading/jobs.js";
+import { groupPlugin } from "./modules/group/routes.js";
 import { registerJournalJobs } from "./modules/journal/jobs.js";
 import { journalPlugin } from "./modules/journal/routes.js";
 import { createKioskAttestor } from "./modules/kiosk/attestation.js";
@@ -204,6 +205,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   if (githubApp(config)) await app.register(githubPlugin, { config });
   // Projects drive GitHub through the App: no App, no project route (M3-02).
   if (githubApp(config)) await app.register(projectPlugin, { config });
+  // A classroom's group sets touch no repository (ADR-070, M3-15a): always.
+  await app.register(groupPlugin);
   await app.register(poolPlugin, { config });
   await app.register(pollPlugin, { config });
   if (app.kioskAttestor) await app.register(kioskPlugin, { config });

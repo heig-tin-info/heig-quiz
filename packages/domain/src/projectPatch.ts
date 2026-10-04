@@ -8,7 +8,9 @@
  * - the publication mode and its duration freeze at publication
  *   (`publish_mode_frozen`); the deadline strategy at the deadline
  *   (`strategy_frozen`); everything else at publication (`not_draft`): the
- *   start, the grace, the grading mode and scale, the group mode and size;
+ *   start, the grace, the grading mode and scale, the group mode and the
+ *   group set it follows (ADR-070 §7: the set freezes, its groups keep
+ *   following);
  * - a deadline already applied still moves, to a later date (the service
  *   refuses one already past, `deadline_past`): that **reopens** the
  *   project (F-PROJ-09, merge task M3-05a).
@@ -33,7 +35,7 @@ export const PROJECT_PATCH_FIELDS = [
   "gradingScale",
   "protectedFiles",
   "groupMode",
-  "groupMaxSize",
+  "groupSetId",
 ] as const;
 export type ProjectPatchField = (typeof PROJECT_PATCH_FIELDS)[number];
 

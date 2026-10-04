@@ -27,12 +27,17 @@
  * From M3-09a: the project's student view (`studentView.ts`), the ONE exit
  * of a project towards a student (N-SEC-20): their cards, their project's
  * page, their own resend of an invitation.
+ * From M3-15a: a group project's copy of its group set (`groupCopy.ts`),
+ * which the `group` module steps in its own transaction, never writing
+ * these tables itself (ADR-070 §4).
  */
 export { acceptProject } from "./accept.js";
 export { createCheckpoint, deleteCheckpoint, listCheckpoints } from "./checkpoints.js";
 export { projectDetail, repoRuns } from "./detail.js";
 export { repoDeadline, setRepoDeadline, setStaffLock } from "./deadline.js";
 export { overrideScore, releaseProject } from "./grades.js";
+export { projectsChanged } from "./events.js";
+export { followingCopies, stepCopies } from "./groupCopy.js";
 export { resendInvitation } from "./invitation.js";
 export { reenableProtection } from "./protection.js";
 export { requestDeadlineWork } from "./jobs.js";

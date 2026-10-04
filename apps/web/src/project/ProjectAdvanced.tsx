@@ -49,7 +49,7 @@ function NumberRow({
   message,
   onChange,
 }: {
-  field: "grace" | "groupMaxSize";
+  field: "grace";
   title: string;
   desc: string;
   unit: string;
@@ -237,28 +237,15 @@ export function ProjectAdvanced({
         </StackedRow>
       ) : null}
 
-      {/* Group mode waits for its pages (merge tasks M3-15, M3-16): a group
-          project cannot be published without groups, and nothing forms them
-          yet. The rows come back with M3-16. */}
+      {/* Group mode waits for its pages (merge task M3-16): a group project
+          cannot be published without a group set, and nothing forms one in
+          the web app yet. The row comes back with the choice of the
+          classroom's sets (ADR-070 §7); the set's maximum size replaced the
+          project's (ADR-070 §2). */}
       {GROUPS_OFFERED ? (
-        <>
-          <SettingRow title={t("project.groups")}>
-            <Switch checked={draft.groupMode} label={t("project.groups")} onChange={(groupMode) => update({ groupMode })} />
-          </SettingRow>
-          {draft.groupMode ? (
-            <NumberRow
-              field="groupMaxSize"
-              title={t("project.groupMaxSize")}
-              desc={t("project.groupMaxSize.desc")}
-              unit={t("project.groupMaxSize.unit")}
-              min={1}
-              max={50}
-              value={draft.groupMaxSize}
-              message={message("groupMaxSize")}
-              onChange={(groupMaxSize) => update({ groupMaxSize })}
-            />
-          ) : null}
-        </>
+        <SettingRow title={t("project.groups")}>
+          <Switch checked={draft.groupMode} label={t("project.groups")} onChange={(groupMode) => update({ groupMode })} />
+        </SettingRow>
       ) : null}
     </Card>
   );

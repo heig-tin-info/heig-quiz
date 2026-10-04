@@ -115,7 +115,9 @@ async function applyDeadlines(db: Db, now: Date): Promise<string[]> {
   return db.transaction(async (tx) => {
     const locked = await tx
       .update(projects)
-      .set({ state: "locked", deadlineAppliedAt: now })
+      // The groups stop with the deadline, for good (ADR-070 §4): a reopen
+      // never clears it, so a copy stopped once keeps its first stop.
+      .set({ state: "locked", deadlineAppliedAt: now, groupsStoppedAt: sql`coalesce(${projects.groupsStoppedAt}, ${ts(now)})` })
       .where(
         and(
           eq(projects.state, "published"),

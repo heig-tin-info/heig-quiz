@@ -240,8 +240,6 @@ const ProjectName = z
 const DurationMinutes = z.number().int().min(15).max(400 * 1440);
 /** Minutes after the deadline before the freeze is definitive (F-PROJ-11). */
 const GraceMinutes = z.number().int().min(0).max(1440);
-/** Advisory group size (ADR-048): exceeding it warns, never blocks. */
-const GroupMaxSize = z.number().int().min(1).max(50);
 const Instant = z.iso.datetime({ offset: true });
 
 /**
@@ -252,7 +250,9 @@ const Instant = z.iso.datetime({ offset: true });
  * branches (by default its default branch; the first becomes the students'
  * default branch) and the source strategy are fixed here, for good
  * (F-PROJ-03 as amended 2026-10-02). `gradingScale` defaults to the linear
- * scale (D05).
+ * scale (D05). A group project may name its classroom's group set now or
+ * later while a draft (`groupSetId`, ADR-070 §7; `422 unknown_group_set`
+ * for a set of another classroom); only in group mode.
  */
 export const ProjectCreate = z
   .strictObject({
@@ -270,9 +270,12 @@ export const ProjectCreate = z
     gradingScale: ProjectGradingScale.optional(),
     protectedFiles: z.array(ProtectedPath).max(50).default([]),
     groupMode: z.boolean().default(false),
-    groupMaxSize: GroupMaxSize.nullable().optional(),
+    groupSetId: z.uuid().nullable().optional(),
   })
   .superRefine((b, ctx) => {
+    if (b.groupSetId && !b.groupMode) {
+      ctx.addIssue({ code: "custom", path: ["groupSetId"], message: "A group set only applies to a group project" });
+    }
     if (b.branches && new Set(b.branches).size !== b.branches.length) {
       ctx.addIssue({ code: "custom", path: ["branches"], message: "A branch is listed twice" });
     }
@@ -301,7 +304,10 @@ export type ProjectCreate = z.infer<typeof ProjectCreate>;
  * `PROJECT_PATCH_FIELDS` (`@quiz/domain`), at least one. What may change in
  * which state is `projectFieldRefusal`; sending a field's current value is
  * never refused (the form posts the whole of it). `durationMinutes: null`
- * turns a manual deadline into an absolute one.
+ * turns a manual deadline into an absolute one. `groupSetId` names the
+ * classroom's group set the project follows, which makes or replaces its
+ * copy (ADR-070 §4); only in group mode (400 otherwise), and `groupMode:
+ * false` clears it and deletes the copy.
  */
 export const ProjectPatch = z
   .strictObject({
@@ -316,7 +322,7 @@ export const ProjectPatch = z
     gradingScale: ProjectGradingScale.optional(),
     protectedFiles: z.array(ProtectedPath).max(50).optional(),
     groupMode: z.boolean().optional(),
-    groupMaxSize: GroupMaxSize.nullable().optional(),
+    groupSetId: z.uuid().nullable().optional(),
   })
   .refine((b) => Object.values(b).some((v) => v !== undefined), { message: "Nothing to update" });
 export type ProjectPatch = z.infer<typeof ProjectPatch>;
@@ -357,7 +363,8 @@ export const ProjectSummary = z.object({
   branches: z.array(z.string()),
   protectedFiles: z.array(z.string()),
   groupMode: z.boolean(),
-  groupMaxSize: z.number().int().nullable(),
+  /** The group set a group project follows (ADR-070 §4); null when none is chosen yet. */
+  groupSetId: z.uuid().nullable(),
   source: z.object({ fullName: z.string() }),
   distribution: z.object({ fullName: z.string() }).nullable(),
   deadlineAppliedAt: z.iso.datetime().nullable(),
@@ -388,7 +395,10 @@ export type ProjectSummary = z.infer<typeof ProjectSummary>;
  *     GitHub (M3-05a);
  *   - `unassigned_students` — the body names the claimed students in no
  *     group (`students`: enrollment id, nom, prenom, {@link ProjectUnassigned}),
- *     empty when the group project has no group at all.
+ *     empty when the group project has no group at all;
+ *   - `no_group_set` — publishing a group project that names no group set
+ *     (ADR-070 §7); `unknown_group_set` (422) — a set that is not one of
+ *     the project's classroom.
  * The staff's writes of M3-08b (F-PROJ-07, F-PROJ-08, F-PROJ-14):
  *   - `not_frozen` — a teacher's score before the repository's definitive
  *     freeze, or a release while a live repository is not frozen;
@@ -420,6 +430,9 @@ export const PROJECT_REFUSALS = [
   "strategy_frozen",
   "unassigned_students",
   "repo_unavailable",
+  // ADR-070, M3-15a.
+  "no_group_set",
+  "unknown_group_set",
   // M3-08b.
   "not_frozen",
   "to_verify",

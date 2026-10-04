@@ -172,6 +172,15 @@ describe("ProjectCreate and ProjectPatch (F-PROJ-01, F-PROJ-03, M3-02)", () => {
     expect(ProjectPatch.safeParse({ durationMinutes: null }).success).toBe(true);
   });
 
+  it("names a group set only in group mode, and has no group size of its own (ADR-070)", () => {
+    expect(ProjectCreate.safeParse({ ...LAB, groupMode: true, groupSetId: ID }).success).toBe(true);
+    expect(ProjectCreate.safeParse({ ...LAB, groupSetId: ID }).success).toBe(false);
+    expect(ProjectCreate.safeParse({ ...LAB, groupMode: true, groupSetId: "x" }).success).toBe(false);
+    expect(ProjectCreate.safeParse({ ...LAB, groupMode: true, groupMaxSize: 3 }).success).toBe(false);
+    expect(ProjectPatch.safeParse({ groupSetId: null }).success).toBe(true);
+    expect(ProjectPatch.safeParse({ groupMaxSize: 3 }).success).toBe(false);
+  });
+
   it("takes a repository name, branches and protected files that cannot leave their place", () => {
     for (const sourceRepo of ["../x", "org/x", ".", "..", "a b", ""]) {
       expect(ProjectCreate.safeParse({ ...LAB, sourceRepo }).success, sourceRepo).toBe(false);

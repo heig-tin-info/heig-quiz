@@ -25,4 +25,5 @@ export * from "./journal.js";
 export * from "./kiosk.js";
 export * from "./github.js";
 export * from "./project.js";
+export * from "./group.js";
 export * from "./llm.js";
