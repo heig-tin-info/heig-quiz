@@ -7,6 +7,9 @@ Accepted (2026-09-21), consolidated from the amendments through 2026-10-01.
 [ADR-056](ADR-056-questions-parametrees.md) excludes parameterized questions.
 This consolidation changes no decision. The [historical record](history/ADR-014-sondages-en-direct.md)
 preserves incidents, alternatives, migration details and original section numbering.
+Amended 2026-10-04: the launcher's defaults are safe for a projected screen
+([Launcher](#launcher)); they supersede "opens on Recent polls when it has rows"
+and "remembers the last choice" of the 2026-09-27 addenda.
 
 ## Context
 
@@ -77,6 +80,15 @@ A guarded update makes concurrent keeps idempotent. Pool visibility controls
 whether a colleague learns the destination, even when they can manage the poll.
 A kept keyless question remains poll-only (`question_keyless` on evaluation entry);
 its next ordinary publication requires a key. Reads never create the personal pool.
+
+### Launcher
+
+The launcher is often opened on a projected screen, so it opens on what reveals
+nothing: the "Ask a new question" tab, blank, first of the three tabs (then
+"Recent polls", then "From pools"), and the audience "anyone with the code".
+A classroom audience is an explicit choice for each poll; the launcher does not
+remember one, so a poll is never filed under, nor restricted to, a class by a
+leftover from the previous one. Decided by the product owner (2026-10-04).
 
 ### Display, answers and ending
 

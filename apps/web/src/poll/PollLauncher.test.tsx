@@ -85,18 +85,31 @@ describe("PollLauncher", () => {
     mockFetch({ [`GET ${QUESTIONS}`]: ok(picks), [`GET ${COURSES}`]: ok(courses) });
     renderWithProviders(<PollLauncher navigate={vi.fn()} />);
 
+    await userEvent.click(screen.getByRole("tab", { name: /Recent polls/ }));
     expect(await screen.findByText("sizeof-ptr-64")).toBeVisible();
     expect(screen.getByText(/Polled 4 times/)).toBeVisible();
     // A question never asked says so rather than showing "0".
     expect(screen.getByText("Never polled")).toBeVisible();
   });
 
-  it("opens on the recent polls, each with its outcome in words", async () => {
+  it("opens on a new question, even with past polls: nothing of them on the wall", async () => {
     mockFetch({ [`GET ${QUESTIONS}`]: ok(picks), [`GET ${COURSES}`]: ok(courses) });
     renderWithProviders(<PollLauncher navigate={vi.fn()} />);
 
+    expect(await screen.findByLabelText("Statement")).toBeVisible();
+    expect(screen.getByRole("tab", { name: /Ask a new question/, selected: true })).toBeVisible();
+    expect(
+      screen.getAllByRole("tab").map((tab) => tab.textContent?.replace(/\d+$/, "")),
+    ).toEqual(["Ask a new question", "Recent polls", "From pools"]);
+    expect(screen.queryByText("sizeof-ptr-64")).toBeNull();
+  }, 20_000);
+
+  it("shows the recent polls on demand, each with its outcome in words", async () => {
+    mockFetch({ [`GET ${QUESTIONS}`]: ok(picks), [`GET ${COURSES}`]: ok(courses) });
+    renderWithProviders(<PollLauncher navigate={vi.fn()} />);
+
+    await userEvent.click(screen.getByRole("tab", { name: /Recent polls/ }));
     await screen.findByText("sizeof-ptr-64");
-    expect(screen.getByRole("tab", { name: /Recent polls/, selected: true })).toBeVisible();
     // A donut is an image whose name spells every share out.
     expect(
       screen.getByRole("img", { name: "Correct 45 % · Incorrect 30 % · No answer 25 % (last 4 runs)" }),
@@ -109,7 +122,7 @@ describe("PollLauncher", () => {
     expect(screen.getByText("no answer")).toBeVisible();
   });
 
-  it("opens on a new question while there is no poll to run again", async () => {
+  it("says so when there is no poll to run again", async () => {
     // A teacher who never polled: the API answers an empty list, never a 404.
     mockFetch({ [`GET ${QUESTIONS}`]: ok([]), [`GET ${COURSES}`]: ok(courses) });
     renderWithProviders(<PollLauncher navigate={vi.fn()} />);
@@ -123,11 +136,13 @@ describe("PollLauncher", () => {
   }, 20_000);
 
   it("asks who answers with ONE control: anyone with the code, or a classroom", async () => {
+    // An earlier launcher remembered the last classroom; this one never does.
+    localStorage.setItem("quiz-poll-classroom", ROOM);
     mockFetch({ [`GET ${QUESTIONS}`]: ok(picks), [`GET ${COURSES}`]: ok(courses) });
     renderWithProviders(<PollLauncher navigate={vi.fn()} />);
 
     const audience = await screen.findByRole("combobox", { name: "Who answers" });
-    // Nothing remembered: anyone with the code, which needs no classroom.
+    // Anyone with the code, always: a classroom is chosen for each poll.
     expect(audience).toHaveValue("anonymous");
     expect(
       Array.from((audience as HTMLSelectElement).options).map((o) => o.textContent),
@@ -152,6 +167,7 @@ describe("PollLauncher", () => {
     renderWithProviders(<PollLauncher navigate={navigate} />);
 
     // Nothing picked yet: the one primary action is not available.
+    await userEvent.click(screen.getByRole("tab", { name: /Recent polls/ }));
     await screen.findByText("sizeof-ptr-64");
     expect(screen.getByRole("button", { name: "Start the poll" })).toBeDisabled();
     await userEvent.click(screen.getByText("sizeof-ptr-64"));
@@ -168,6 +184,7 @@ describe("PollLauncher", () => {
   it("filters the list rather than re-fetching it", async () => {
     mockFetch({ [`GET ${QUESTIONS}`]: ok(picks), [`GET ${COURSES}`]: ok(courses) });
     renderWithProviders(<PollLauncher navigate={vi.fn()} />);
+    await userEvent.click(screen.getByRole("tab", { name: /Recent polls/ }));
     await screen.findByText("sizeof-ptr-64");
 
     await userEvent.type(screen.getByLabelText("Search the questions"), "binary");

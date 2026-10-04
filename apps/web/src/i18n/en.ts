@@ -3665,7 +3665,8 @@ export const en = {
   "poll.outcome.opinion": "No correct answer: an opinion poll",
   "poll.outcome.perRun": "on average per run",
   "poll.audience": "Who answers",
-  "poll.audienceHint": "Anyone with the code answers anonymously, without an account. A classroom's students sign in and answer by name.",
+  "poll.audienceHint": 
+    "Anyone with the code can answer, anonymously and without signing in. Choose a classroom to have its students sign in and answer by name.",
   "poll.audience.anonymous": "Anyone with the code (anonymous)",
   "poll.audience.context": "Anyone with the code",
   "poll.startFailed": "Could not start the poll.",

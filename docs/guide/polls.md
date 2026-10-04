@@ -9,26 +9,32 @@ A poll runs a multiple-choice question or a short-answer question, and nothing e
 Click **Poll** in the sidebar, or open the command palette with `Ctrl+K` and choose **Start a poll**. The launcher opens on a page of its own, so you can reach it from wherever you happen to be.
 
 <figure markdown="span">
-  ![The poll launcher, on its Recent polls tab, each question with the outcome of its last runs](../assets/screenshots/poll-launcher-light.png#only-light)
-  ![The poll launcher, on its Recent polls tab, each question with the outcome of its last runs](../assets/screenshots/poll-launcher-dark.png#only-dark)
-  <figcaption>The launcher: run again a question you already polled, or ask a new one, choose the classroom, and start.</figcaption>
+  ![The poll launcher, with its audience, its three tabs and the Start the poll button](../assets/screenshots/poll-launcher-light.png#only-light)
+  ![The poll launcher, with its audience, its three tabs and the Start the poll button](../assets/screenshots/poll-launcher-dark.png#only-dark)
+  <figcaption>The launcher: choose who answers, write a question or pick one, and start.</figcaption>
 </figure>
 
-The launcher has two tabs, because there are exactly two ways to have a question.
+The launcher is often open on the beamer, so it opens on what shows nothing of yours: a blank new question, answered by anyone with the code. Your past polls, your pools and your classrooms appear only when you ask for them.
+
+**Who answers** sits above the tabs and applies to all of them:
+
+- **Anyone with the code (anonymous)**, the default: no sign-in is needed, and no name is ever shown. The poll belongs to no classroom; you find it again in your own poll history.
+- **A classroom**: its students sign in and answer by name, and anyone else is turned away. Choose it each time: the launcher never remembers a classroom from one poll to the next.
+
+Three tabs follow, because there are three ways to have a question.
+
+**Ask a new question** holds the question type's own editor, without anything that only decides a mark. Write the statement and the choices (or the accepted answers), and **Start the poll** runs it at once. Marking a correct answer is optional: without one, the poll simply collects opinions. Nothing is saved at this point: the question lives with its poll, and in your **Recent polls** to run again, until you keep it. See `question-types.md` for what a multiple-choice or a short-answer question can hold.
 
 **Recent polls** lists the questions of the polls you launched, one row per question, the most recently polled first, including the questions you wrote in the launcher and never kept. Each row shows the internal name, the first line of the statement, how many times it was polled, and, on the right, how its last five runs went:
 
 - a small ring for a question with a correct answer: green for the share who answered right, amber for those who answered wrong, and grey for those on the roster who did not answer at all, with the right share printed in the middle. The grey part only appears when the runs asked who answers: an anonymous poll has no roster, so it shows right and wrong only. Hover or focus the ring for the exact percentages;
 - "*n* answers" instead of a ring for an opinion poll, which has no correct answer.
 
-The questions of your **Polls** pool that you have never polled come after them. The search box filters by name or statement. Select a row, and the primary action becomes **Start the poll**. The launcher opens on this tab when it has something to show, and on **Ask a new question** otherwise.
+The questions of your **Polls** pool that you have never polled come after them. The search box filters by name or statement.
 
-**Ask a new question** holds the question type's own editor, without anything that only decides a mark. Write the statement and the choices (or the accepted answers), and **Start the poll** runs it at once. Marking a correct answer is optional: without one, the poll simply collects opinions. Nothing is saved at this point: the question lives with its poll, and in your **Recent polls** to run again, until you keep it. See `question-types.md` for what a multiple-choice or a short-answer question can hold.
+**From pools** searches the published multiple-choice and short-answer questions of every pool you can reach, with the pool screen's own search. When a classroom answers, it starts on that course's pools, and **All pools** widens the search.
 
-Two settings sit above the list on the first tab:
-
-- **Classroom**: where the poll and its answers are kept. A poll appears afterwards in that classroom's evaluation list like any other evaluation, which is how you find the poll you ran last Tuesday. The launcher remembers your last choice.
-- **Anyone with the code answers**: on, the poll is anonymous. No account is needed to answer, and no name is ever shown. Off, participants must sign in, and each answer is counted under the student's name.
+Select a row, and the primary action becomes **Start the poll**.
 
 Press **Start the poll**. The poll is running from that instant and the projection opens.
 
