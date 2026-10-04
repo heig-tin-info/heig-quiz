@@ -41,7 +41,6 @@ import {
   QueryError,
   Skeleton,
   Tabs,
-  Tip,
 } from "./ui";
 import { classroomKey, evaluationsKey } from "./queryKeys";
 import { invalidateHint } from "./realtime/hints";
@@ -301,21 +300,19 @@ export function ClassroomView({
         actions={
           <>
             {/* Secondary, and to the left of the primary: it is a detour into
-                the student view, not what the page is for. A seat already
-                taken is not an action but an answer — the button stays and
-                says so on hover, rather than vanishing and shifting the row
-                under the pointer. */}
-            <Tip label={seat ? t("roster.joined") : null}>
+                the student view, not what the page is for. Once the seat is
+                taken there is nothing left to do, so the button goes; the
+                roster's staff badge shows the seat. */}
+            {seat ? null : (
               <Button
                 variant="secondary"
                 data-coach="classroom.join"
-                disabled={seat != null}
                 loading={join.isPending}
                 onClick={() => join.mutate()}
               >
                 <GraduationCap /> {t("roster.join")}
               </Button>
-            </Tip>
+            )}
             {/* The open tab's one primary action, always in this slot: the
                 page never shows both, so the squint test has one answer. */}
             {tab === "roster" ? (

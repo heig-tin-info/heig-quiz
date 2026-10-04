@@ -260,7 +260,6 @@ export const en = {
   "roster.revokeFailed": "Could not revoke this claim.",
   "roster.updateFailed": "Update failed",
   "roster.join": "Join as student",
-  "roster.joined": "You have a seat in this classroom",
 
   "import.title": "Add students",
   "import.subtitle": "Last name, first name and e-mail — the student claims the seat on first sign-in",
