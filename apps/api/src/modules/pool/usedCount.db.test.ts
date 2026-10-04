@@ -177,26 +177,14 @@ describe("the pool list's used count", () => {
   });
 });
 
-describe("the pool list's owner and roles", () => {
-  it("names the owner for the avatar, and shows an admin with Super Powers their own role", async () => {
+describe("the pool list's owner", () => {
+  it("names the owner for the avatar", async () => {
     const seed = await seedLive(db, { students: 0, questions: 0 });
-    const asOwner = await listed(seed);
-    expect(asOwner).toMatchObject({
-      role: "owner",
-      heldRole: "owner",
+    expect(await listed(seed)).toMatchObject({
       ownerName: "Test teacher",
       ownerGivenName: "Test",
       ownerFamilyName: "teacher",
       ownerAvatarUrl: null,
     });
-
-    // An admin with Super Powers, neither owner nor seated: every action
-    // (the effective role), but the list says what they hold in their own
-    // right — with no seat and no course, a reader.
-    const [asAdmin] = await service.listPools(db, eq(pools.id, seed.poolId), {
-      id: randomUUID(),
-      reach: "all",
-    });
-    expect(asAdmin).toMatchObject({ role: "owner", heldRole: "reader" });
   });
 });

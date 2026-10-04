@@ -605,14 +605,14 @@ export function makeEvaluation(
 
 export const evaluations: MockEvaluation[] = [];
 
-// The pool list's "Used" (ADR-013): a question frozen in an exam or an
-// exercise where a student seat, not a staff walk, holds an attempt.
+// The pool list's "Used" (ADR-013 §7): a question frozen in an exam or an
+// exercise where a student seat, not a staff walk, STARTED an attempt.
 registerUsedProbe((questionId) =>
   evaluations.some(
     (e) =>
       e.mode !== "poll" &&
       e.items.some((i) => i.questionId === questionId) &&
-      e.rows.some((r) => !r.staff && r.attemptId !== null),
+      e.rows.some((r) => !r.staff && r.attemptId !== null && r.state !== "not_started"),
   ),
 );
 /** The draft exercise with retakes (F-EVAL-15), addressable by id. */

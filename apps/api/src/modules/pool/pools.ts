@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 
 import type { Pool, PoolColor, PoolInUse, PoolRole, PoolSummary } from "@quiz/contracts";
-import { displayName, effectivePoolRole, heldPoolRole } from "@quiz/domain";
+import { displayName, effectivePoolRole, heldPoolRole, type PoolRoleFacts } from "@quiz/domain";
 
 import { isForeignKeyViolation, type Db } from "../../db/client.js";
 import type { Caller } from "../guards.js";
@@ -82,6 +82,48 @@ function courseStaffOf(userId: string): SQL<boolean> {
   return sql<boolean>`EXISTS (SELECT 1 FROM ${coursePools} JOIN ${courseStaff} ON ${qualified(courseStaff.courseId)} = ${qualified(coursePools.courseId)} WHERE ${qualified(coursePools.poolId)} = ${qualified(pools.id)} AND ${qualified(courseStaff.userId)} = ${userId})`;
 }
 
+/** The facts of `effectivePoolRole` for one row, Super Powers aside. */
+function roleFacts(
+  row: { ownerId: string; visibility: string; memberRole: PoolRole | null; isCourseStaff: boolean },
+  viewerId: string,
+): PoolRoleFacts {
+  return {
+    reachesAll: false,
+    isOwner: row.ownerId === viewerId,
+    memberRole: row.memberRole,
+    isCourseStaff: row.isCourseStaff,
+    isPublic: row.visibility === "public",
+  };
+}
+
+/**
+ * The caller's EFFECTIVE role on every pool the predicate selects, by pool
+ * id, and nothing else: what a write check needs, without the counts and the
+ * owner of {@link listPools}.
+ */
+export async function poolRolesOf(
+  db: Db,
+  where: SQL | undefined,
+  viewer: Pick<Caller, "id" | "reach">,
+): Promise<Map<string, PoolRole>> {
+  const rows = await db
+    .select({
+      id: pools.id,
+      ownerId: pools.ownerId,
+      visibility: pools.visibility,
+      memberRole: memberRoleOf(viewer.id),
+      isCourseStaff: courseStaffOf(viewer.id),
+    })
+    .from(pools)
+    .where(where);
+  return new Map(
+    rows.map((r) => [
+      r.id,
+      effectivePoolRole({ ...roleFacts(r, viewer.id), reachesAll: viewer.reach === "all" }),
+    ]),
+  );
+}
+
 /**
  * Every pool the predicate lets the caller see (their own, the ones they were
  * named in, the public ones and the ones their courses draw from), with the
@@ -116,12 +158,7 @@ export async function listPools(
     .where(where)
     .orderBy(asc(pools.name));
   return rows.map((r) => {
-    const facts = {
-      isOwner: r.pool.ownerId === viewer.id,
-      memberRole: r.memberRole,
-      isCourseStaff: r.isCourseStaff,
-      isPublic: r.pool.visibility === "public",
-    };
+    const facts = roleFacts({ ...r.pool, memberRole: r.memberRole, isCourseStaff: r.isCourseStaff }, viewer.id);
     return {
       ...poolJson(r.pool),
       questionCount: r.questionCount,

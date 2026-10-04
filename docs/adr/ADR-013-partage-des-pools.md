@@ -10,7 +10,8 @@ everywhere" in §4) now reads "an admin with Super Powers on". Without them an a
 like any teacher; the pure rule's fact is `reachesAll`, formerly `isAdmin`.
 
 **Amended 2026-10-04 (product owner), scope: what the pool list SHOWS** — decision 7 below.
-Access and the resolution order of §3 are unchanged.
+Access to pools and the resolution order of §3 are unchanged; §7 also records the widening
+of who may fetch an owner's uploaded avatar, which follows from it.
 
 ## Context
 
@@ -97,14 +98,20 @@ every teacher. Two facts shape the design:
      Any role that can list the pool sees it: an aggregate, never who sat what.
    - **Owner.** Every row shows its owner as an avatar alone (`PersonAvatar`, the name as
      its label), the reader's own pool included, in the accent tone. The list carries the
-     owner's names and picture URL (`ownerGivenName`, `ownerFamilyName`, `ownerAvatarUrl`),
-     and `seesUser` lets a teacher fetch the uploaded picture of the owner of a pool they
-     reach through `poolAccess`. The cards keep their attribution line.
+     owner's names and picture URL (`ownerGivenName`, `ownerFamilyName`, `ownerAvatarUrl`).
+     The cards keep their attribution line.
    - **My role, always.** The column is never empty. "Owner" there means only
      `pools.owner_id` or an `owner` seat: the list shows `heldRole`, resolved by
      `heldPoolRole` — §3 with Super Powers set aside. An admin with Super Powers who is
      neither sees the role they would hold without them, while `role`, the effective one,
      still gates what the screen offers.
+
+   *Consequence introduced by the implementation, not a product-owner decision:* for the
+   owner's uploaded picture to load rather than fall back to initials, `seesUser`
+   (`guards.ts`) now lets a teacher fetch the uploaded picture of the owner of any pool they
+   reach through `poolAccess` — public pools included, so every teacher sees the uploaded
+   avatar of a public pool's owner. Students still never do. Reverting that widening would
+   leave the avatar as initials for those viewers, nothing more.
 
 ## Consequences
 

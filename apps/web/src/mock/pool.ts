@@ -1466,13 +1466,16 @@ const poolOwner = (pool: MockPool): { givenName: string; familyName: string } | 
   (pool.ownerId === (me?.id ?? "u-me") && me ? me : null);
 
 /**
- * The questions students have met, by id: the evaluation mock knows its
- * items and attempts and registers its answer here — it imports this file,
- * so this one cannot import it back.
+ * The pool list's "Used" (ADR-013 §7), answered by the evaluation mock, which
+ * holds the items and the attempts. It registers the answer rather than this
+ * file importing it: `evaluation.ts` imports this file and seeds its
+ * evaluations from `questions` while it loads, so importing it back makes it
+ * run first whenever this file is the entry (`contract.test.ts`) and read
+ * `questions` before it exists.
  */
-let usedProbe: (questionId: string) => boolean = () => false;
+let usedByStudents: (questionId: string) => boolean = () => false;
 export function registerUsedProbe(probe: (questionId: string) => boolean): void {
-  usedProbe = probe;
+  usedByStudents = probe;
 }
 
 export const poolSummary = (pool: MockPool) => {
@@ -1486,7 +1489,7 @@ export const poolSummary = (pool: MockPool) => {
   return {
     ...pool,
     questionCount: live.length,
-    usedCount: live.filter((q) => usedProbe(q.id)).length,
+    usedCount: live.filter((q) => usedByStudents(q.id)).length,
     role,
     heldRole: role,
     ownerName: owner ? `${owner.givenName} ${owner.familyName}` : "—",
