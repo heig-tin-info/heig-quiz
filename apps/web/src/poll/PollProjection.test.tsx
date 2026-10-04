@@ -169,8 +169,9 @@ describe("PollProjection", () => {
     // used to land on the QR the room was scanning.
     const toaster = document.querySelector('[aria-live="polite"][aria-relevant="additions"]');
     expect(toaster).not.toBeNull();
-    // 1rem from the bottom, plus the student's bottom bar when it is up (#191).
-    expect(toaster!.className).toContain("bottom-[calc(1rem+var(--bottom-nav-h))]");
+    // 1rem from the bottom, plus the student's bottom bar when it is up (#191)
+    // and the calculator's button (ADR-069).
+    expect(toaster!.className).toContain("bottom-[calc(1rem+var(--bottom-nav-h)+var(--tool-dock-h))]");
     expect(toaster!.contains(join!)).toBe(false);
   });
 

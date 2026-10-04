@@ -39,7 +39,7 @@
  * leads back to the evaluation.
  */
 import { Home, Moon, Sun } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 import { CommandPalette } from "../CommandPalette";
 import type { Command } from "../commands";
@@ -157,20 +157,13 @@ export function PlayerShell({
   const theme = useResolvedTheme();
   // The bar's own height, for the side column that sticks under it: it grows
   // with a subtitle or a larger text size, and the column must not slide
-  // under it.
+  // under it. The footer's, for what floats above it (the calculator,
+  // ADR-069): on a phone the move buttons must stay in reach.
   const docked = aside !== undefined;
-  const bar = useRef<HTMLElement>(null);
-  const [barHeight, setBarHeight] = useState(0);
-  useLayoutEffect(() => {
-    const el = bar.current;
-    if (!docked || !el) return;
-    const measure = () => setBarHeight(el.offsetHeight);
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [docked]);
+  const [bar, setBar] = useState<HTMLElement | null>(null);
+  const [foot, setFoot] = useState<HTMLElement | null>(null);
+  const barHeight = useHeight(docked ? bar : null);
+  const footerHeight = useHeight(foot);
   const strip = docked ? [] : segments;
   const [palette, setPalette] = useState(false);
   const hasPalette = (commands?.length ?? 0) > 0;
@@ -190,9 +183,9 @@ export function PlayerShell({
   return (
     <div
       className="flex min-h-[calc(100dvh-var(--banner-h))] flex-col bg-canvas"
-      style={{ "--bar-h": `${barHeight}px` } as CSSProperties}
+      style={{ "--bar-h": `${barHeight}px`, "--player-footer-h": `${footerHeight}px` } as CSSProperties}
     >
-      <header ref={bar} className="sticky top-(--banner-h) z-20 border-b border-line bg-surface">
+      <header ref={setBar} className="sticky top-(--banner-h) z-20 border-b border-line bg-surface">
         <div
           className={cx(
             "mx-auto w-full px-4 pt-2.5 sm:px-6",
@@ -287,7 +280,7 @@ export function PlayerShell({
       </div>
 
       {footer ? (
-        <footer className="sticky bottom-0 z-20 border-t border-line bg-surface">
+        <footer ref={setFoot} className="sticky bottom-0 z-20 border-t border-line bg-surface">
           <div className="mx-auto flex w-full max-w-190 flex-wrap items-center gap-2 px-4 py-3 sm:px-6">
             {footer}
           </div>
@@ -301,4 +294,22 @@ export function PlayerShell({
       ) : null}
     </div>
   );
+}
+
+/** The height of an element, followed as it changes; 0 without one. */
+function useHeight(el: HTMLElement | null): number {
+  const [height, setHeight] = useState(0);
+  useLayoutEffect(() => {
+    if (!el) {
+      setHeight(0);
+      return;
+    }
+    const measure = () => setHeight(el.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [el]);
+  return height;
 }

@@ -12,6 +12,7 @@
 import { z } from "zod";
 
 import {
+  CalculatorMode,
   EvaluationMode,
   EvaluationSettings,
   EvaluationState,
@@ -138,6 +139,11 @@ export const LobbyView = z.object({
    * sends it; absent reads as off.
    */
   negativeMarking: z.boolean().optional(),
+  /**
+   * The calculator the screen will provide (ADR-069), said in the waiting
+   * room like negative marking. Absent reads as none.
+   */
+  calculator: CalculatorMode.optional(),
   present: z.number().int(),
   enrolled: z.number().int(),
   timeBonusPercent: z.number().int(),

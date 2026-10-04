@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { CategorizePolicy, categorizePolicyOf, kioskOf, McqPolicy, negativeMarkingOf, safeExamBrowserOf, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
-import { allowedFeedbackWhen, feedbackWhenFor, isInClass } from "@quiz/domain";
+import { allowedFeedbackWhen, CALCULATOR_MODES, calculatorAllowedFor, calculatorOn, feedbackWhenFor, isInClass } from "@quiz/domain";
 
 import { usePublicConfig } from "../api";
 import type { Dict } from "../i18n";
@@ -54,6 +54,7 @@ export function AdvancedDisclosure({
   const set = (next: Partial<EvaluationSettings>) => patch.mutate({ settings: next });
   const feedback = (next: Partial<FeedbackPolicy>) => patch.mutate({ feedbackPolicy: next });
   const inClass = isInClass({ mode, lobby: settings.lobby });
+  const calculator = calculatorOn(mode, settings.calculator);
   // ADR-026: negative marking replaces both policies below; each row says so
   // while it is on, so a teacher never tunes a policy nothing reads.
   const policyDesc = (desc: string) =>
@@ -178,6 +179,23 @@ export function AdvancedDisclosure({
             onChange={(requireFullscreen) => set({ requireFullscreen })}
           />
         </SettingRow>
+        {/* ADR-069: the calculator the student's screen provides. A poll has
+            nothing to compute. */}
+        {calculatorAllowedFor(mode) ? (
+          <SettingRow title={t("eval.calculator")} desc={t(`eval.calculator.desc.${calculator}`)}>
+            <Segmented
+              name="calculator"
+              label={t("eval.calculator")}
+              value={calculator}
+              disabled={disabled}
+              onChange={(calculator) => set({ calculator })}
+              options={CALCULATOR_MODES.map((value) => ({
+                value,
+                label: t(`eval.calculator.${value}`),
+              }))}
+            />
+          </SettingRow>
+        ) : null}
 
         {/* F-EVAL-11 and #78: `immediate` is hidden, not disabled, for an
             evaluation sat in class (an exam, or an exercise with a waiting

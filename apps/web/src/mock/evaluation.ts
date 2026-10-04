@@ -27,6 +27,7 @@ import {
   MockPayload,
   flags,
   iso,
+  mockCalculator,
   now,
   on,
   rand,
@@ -416,6 +417,7 @@ const defaultEvaluationSettings = () => ({
   // ADR-051, behind `?kiosk=1`: the exams accept the stations, and the live
   // grid offers "Assign a station".
   ...(flags.kiosk ? { kiosk: true } : {}),
+  ...mockCalculator(),
 });
 
 /**

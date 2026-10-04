@@ -44,6 +44,11 @@ export type IconType = ComponentType<{ className?: string }>;
 export const Z = {
   /** A mode banner (`ModeBanner`): over the sticky bars (z-20), under the coach. */
   banner: "z-30",
+  /**
+   * A tool docked on the player (the calculator, ADR-069): over the page and
+   * its sticky bars, under the pause overlay, the coach marks and every dialog.
+   */
+  tool: "z-35",
   /** Coach marks: over the page and its sticky bars, under every dialog. */
   coach: "z-45",
   popover: "z-55",

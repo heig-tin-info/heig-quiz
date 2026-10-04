@@ -6,6 +6,7 @@
  */
 export * from "./activity.js";
 export * from "./batchable.js";
+export * from "./calculator.js";
 export * from "./categorizeScore.js";
 export { extractScore, SCORE_ANNOTATION_TITLE, type AnnotationLike, type ScoreParse } from "./ciScore.js";
 export * from "./cloze.js";

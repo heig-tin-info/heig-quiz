@@ -19,6 +19,7 @@ import {
   MockError,
   flags,
   iso,
+  mockCalculator,
   now,
   on,
   scene,
@@ -362,6 +363,7 @@ export const studentAttemptView = (): AttemptView => ({
       logVisibility: true,
       requireFullscreen: false,
       ...(flags.negative ? { negativeMarking: true } : {}),
+      ...mockCalculator(),
     },
     feedbackPolicy: {
       when: "on_release",
@@ -426,6 +428,7 @@ export const studentLobbyView = (): LobbyView => ({
   },
   navigation: "free",
   negativeMarking: flags.negative,
+  calculator: mockCalculator().calculator ?? "none",
   present: 18,
   enrolled: 24,
   timeBonusPercent: 33,

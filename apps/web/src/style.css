@@ -95,6 +95,13 @@
      DESIGN.md, "The student's bottom bar". */
   --topbar-h: 3.5rem;
   --bottom-nav-h: 0px;
+  /* The round button of a tool docked on the player (the calculator,
+     ADR-069), 3 rem, with its 1 rem of air: its panel and the toasts rise
+     above it. */
+  --tool-dock-h: 0px;
+}
+:root:has([data-tool-dock]) {
+  --tool-dock-h: 4rem;
 }
 @variant max-lg {
   :root {

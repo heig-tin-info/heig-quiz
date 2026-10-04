@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  calculatorOn,
   allowedFeedbackWhen,
   feedbackWhenFor,
   isFeedbackAllowed,
@@ -124,5 +125,13 @@ describe("isLiveState", () => {
   it("holds while students sit the evaluation, and only then", () => {
     expect(["running", "paused"].every(isLiveState)).toBe(true);
     expect(["draft", "lobby", "closed", "grading", "released"].some(isLiveState)).toBe(false);
+  });
+});
+
+describe("calculatorOn (ADR-069)", () => {
+  it("is none when absent, and always none on a poll", () => {
+    expect(calculatorOn("exam", undefined)).toBe("none");
+    expect(calculatorOn("exercise", "scientific")).toBe("scientific");
+    expect(calculatorOn("poll", "standard")).toBe("none");
   });
 });

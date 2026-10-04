@@ -96,6 +96,13 @@ export class NegativeMarkingNotAllowed extends EvaluationError {
   }
 }
 
+/** ADR-069: a poll has nothing to compute. */
+export class CalculatorNotAllowed extends EvaluationError {
+  constructor(mode: string) {
+    super("calculator_not_allowed", 422, `an evaluation of mode "${mode}" provides no calculator (ADR-069)`);
+  }
+}
+
 /**
  * ADR-051 §2: the platform has no kiosk path (`KIOSK_ATTESTATION=off`), so an
  * exam that only a kiosk station may sit could never be sat.
