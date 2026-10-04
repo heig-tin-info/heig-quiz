@@ -131,7 +131,7 @@ async function applyDeadlines(db: Db, now: Date): Promise<string[]> {
             // The groups stop with the deadline, for good (ADR-070 §4): a reopen
             // never clears it, so a copy stopped once keeps its first stop.
             .set({ state: "locked", deadlineAppliedAt: now, groupsStoppedAt: sql`coalesce(${projects.groupsStoppedAt}, ${ts(now)})` })
-            .where(and(inArray(projects.id, ids), due))
+            .where(inArray(projects.id, ids))
             .returning({ id: projects.id, deadlineAt: projects.deadlineAt });
     for (const row of locked) {
       await audit(tx, {

@@ -29,12 +29,15 @@ import { randomUUID } from "node:crypto";
 
 import { and, asc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 
-import { groupSyncPlan, isEmptyPlan, type CopyState, type GroupSyncPlan, type SetState } from "@quiz/domain";
+import { groupSyncPlan, isEmptyPlan, type copyFollows, type CopyState, type GroupSyncPlan, type SetState } from "@quiz/domain";
 
 import type { Tx } from "../../db/client.js";
 import { enrollments, projectGroupMembers, projectGroups, projectRepos, projects, studentGroupMembers, studentGroups } from "../../db/schema.js";
 
-/** The projects whose copy follows set `setId`, locked FOR UPDATE in id order (see the lock order above). */
+/**
+ * The projects whose copy follows set `setId` — {@link copyFollows}, the rule
+ * this SQL mirrors —, locked FOR UPDATE in id order (see the lock order above).
+ */
 export async function followingCopies(tx: Tx, setId: string): Promise<{ id: string }[]> {
   return tx
     .select({ id: projects.id })

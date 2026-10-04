@@ -1,5 +1,5 @@
 /**
- * The `group` module's tables (`db/group.ts`, migration `0063_group_sets`)
+ * The `group` module's tables (`db/group.ts`, migration `0064_group_sets`)
  * against the real migrations (ADR-070): a student in at most one group of
  * a set, a member's group always of its set, the names unique in a set,
  * and the cascades — a classroom takes its sets, a roster line leaves every

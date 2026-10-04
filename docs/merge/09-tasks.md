@@ -2091,7 +2091,7 @@ follows its set until the deadline. Split in two PRs.
   the routes, the copy's step with the set, a stopped copy, staff seats
   never placed, the 404 of a classroom not reached.
 - **As delivered** (branch `merge/M3-15a-group-sets`): migration
-  `0063_group_sets` (`Q:db/group.ts`; `projects.group_set_id` set null,
+  `0064_group_sets` (`Q:db/group.ts`; `projects.group_set_id` set null,
   `projects.groups_stopped_at`, `project_groups.source_group_id` set null,
   `projects.group_max_size` dropped); `@quiz/domain` `groupSets.ts`
   (`groupSizes`, `formRandomGroups` on an injected `randomInt`,
