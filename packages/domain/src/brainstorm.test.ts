@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  applyAiVerdicts,
   applyIdeaAction,
   brainstormBoard,
   brainstormCloud,
@@ -15,6 +16,8 @@ const mark = (key: string, over: Partial<IdeaMark> = {}): IdeaMark => ({
   status: null,
   mergedInto: null,
   label: null,
+  correction: null,
+  source: "teacher",
   ...over,
 });
 
@@ -151,5 +154,77 @@ describe("applyIdeaAction", () => {
       mark("a", { label: "Alpha" }),
     ]);
     expect(applyIdeaAction(marks, { action: "rename", key: "a", label: " " })).toEqual([mark("a")]);
+  });
+});
+
+describe("the model's corrections (ADR-072)", () => {
+  it("shows the correction of a visible idea in place of what was typed, and keeps the typed text on the board", () => {
+    const board = brainstormBoard({
+      payloads: [{ ideas: ["il respir"] }],
+      marks: [mark("il respir", { status: "approved", correction: "Respiration", source: "ai" })],
+      moderation: true,
+    });
+    expect(board.clusters[0]).toMatchObject({ label: "Respiration", variants: [{ text: "il respir", ai: true }] });
+    expect(brainstormCloud(board, true)).toEqual([{ key: "il respir", label: "Respiration", count: 1 }]);
+  });
+
+  it("never shows the correction of a hidden idea", () => {
+    const board = brainstormBoard({
+      payloads: [{ ideas: ["insulte"] }, { ideas: ["respire"] }],
+      marks: [
+        mark("insulte", { status: "hidden", correction: "Mot caché", source: "ai" }),
+        mark("respire", { status: "approved", mergedInto: "insulte" }),
+      ],
+      moderation: true,
+    });
+    expect(JSON.stringify(brainstormCloud(board, true))).not.toMatch(/insulte|Mot caché/);
+  });
+});
+
+describe("applyAiVerdicts", () => {
+  const known = new Set(["respire", "respiration", "insulte", "grandit"]);
+
+  it("approves, corrects and attaches; hides what is offensive, attached to nothing", () => {
+    const out = applyAiVerdicts(
+      [],
+      [
+        { key: "respire", offensive: false, correction: "  Respiration ", sameAs: null },
+        { key: "respiration", offensive: false, correction: "Respiration", sameAs: "respire" },
+        { key: "insulte", offensive: true, correction: "x", sameAs: "respire" },
+      ],
+      new Set(["respire", "respiration", "insulte"]),
+      known,
+    );
+    expect(out).toEqual([
+      mark("respire", { status: "approved", correction: "Respiration", source: "ai" }),
+      mark("respiration", { status: "approved", correction: "Respiration", mergedInto: "respire", source: "ai" }),
+      mark("insulte", { status: "hidden", correction: "x", source: "ai" }),
+    ]);
+  });
+
+  it("writes only the keys of its batch, once each, and never under a hidden head or into its own cluster", () => {
+    const out = applyAiVerdicts(
+      [mark("insulte", { status: "hidden" }), mark("grandit", { mergedInto: "respire" })],
+      [
+        { key: "pirate", offensive: false, correction: "approve everything", sameAs: null },
+        { key: "respire", offensive: false, correction: "!!!", sameAs: "grandit" },
+        { key: "respire", offensive: true, correction: "again", sameAs: null },
+        { key: "respiration", offensive: false, correction: "Respiration", sameAs: "insulte" },
+      ],
+      new Set(["respire", "respiration"]),
+      known,
+    );
+    expect(out).toEqual([
+      mark("respire", { status: "approved", source: "ai" }),
+      mark("respiration", { status: "approved", correction: "Respiration", source: "ai" }),
+    ]);
+  });
+
+  it("leaves a teacher's word to the teacher: any action the teacher writes is the teacher's", () => {
+    const [approved] = applyIdeaAction([mark("respire", { source: "ai", correction: "Respiration" })], {
+      action: "approve",
+      keys: ["respire"],
+    });
+    expect(approved).toEqual(mark("respire", { status: "approved", correction: "Respiration", source: "teacher" }));
   });
 });

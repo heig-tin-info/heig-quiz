@@ -28,6 +28,7 @@ import {
   type TrustedClient,
   drillAllowedOn,
   evaluationTotal,
+  type MaskedPerson,
 } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
@@ -630,4 +631,23 @@ export async function listEvaluations(
 export async function byId(db: DbOrTx, id: string): Promise<EvaluationRecord | null> {
   const [row] = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
   return row ?? null;
+}
+
+/**
+ * Whom a text of this evaluation must not name before it leaves for a model
+ * (N-DATA-05): whoever sat it with an account, and the classroom's roster. A
+ * classroom-less poll has no roster; its guests are nobody the platform knows.
+ */
+export async function peopleOf(db: Db, evaluation: EvaluationRecord): Promise<MaskedPerson[]> {
+  const sat = await db
+    .select({ givenName: users.givenName, familyName: users.familyName, email: users.email })
+    .from(attempts)
+    .innerJoin(users, eq(attempts.userId, users.id))
+    .where(eq(attempts.evaluationId, evaluation.id));
+  if (evaluation.classroomId === null) return sat;
+  const roster = await db
+    .select({ givenName: enrollments.prenom, familyName: enrollments.nom, email: enrollments.email })
+    .from(enrollments)
+    .where(eq(enrollments.classroomId, evaluation.classroomId));
+  return [...sat, ...roster];
 }

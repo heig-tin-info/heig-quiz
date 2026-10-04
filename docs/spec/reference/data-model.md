@@ -62,7 +62,9 @@ Common columns omitted: `id uuid pk`, `created_at`, `updated_at`.
 |---|---|---|
 | `gradings` | `answer_id`, `points` numeric, `max_points` numeric, `source` auto / llm / manual, `state` proposed / validated / superseded, `details` jsonb, `confidence` low / medium / high nullable, `comment` text, `graded_by` nullable, `graded_at`, `supersedes_id` nullable, `regrade_note` text | Partial unique index `(answer_id) WHERE state = 'validated'`. `details`: verdict per test case, points per criterion, matcher match |
 | `answer_flags` | `answer_id`, `user_id`, `reason`, `resolved_at` | Student flag, phase 2 |
-| `llm_calls` | `user_id` nullable, `purpose` test / grade / generate / review, `provider`, `model`, `input_tokens`, `output_tokens`, `cost_usd`, `duration_ms`, `status` pending / ok / error, `error` | Never the prompt or reply. Cost is an estimate stored at write time; pending calls reserve budget (ADR-058). |
+| `poll_idea_marks` | PK (`evaluation_id` FK cascade, `idea_key`), `status` approved / hidden / null, `merged_into`, `label`, `correction`, `source` teacher / ai, `updated_at` | A brainstorm's decisions, keyed by the normalised idea (ADR-071). The teacher writes `label`; a model writes `correction` and a mark only where none exists (ADR-072). |
+| `poll_ai_runs` | `evaluation_id` PK (FK cascade), `lease_at`, `calls`, `error`, `updated_at` | The lease of a brainstorm's AI pass, its call count against the per-run limit, its last failure (ADR-072). `updated_at` is the pass's heartbeat. |
+| `llm_calls` | `user_id` nullable, `purpose` test / grade / generate / review / poll, `provider`, `model`, `input_tokens`, `output_tokens`, `cost_usd`, `duration_ms`, `status` pending / ok / error, `error` | Never the prompt or reply. Cost is an estimate stored at write time; pending calls reserve budget (ADR-058). |
 
 **Drill**
 

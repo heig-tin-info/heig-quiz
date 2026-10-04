@@ -16,6 +16,11 @@
  *     the ideas that are visible, the label of a cluster never taken from a
  *     hidden or unmoderated text.
  *
+ * With AI assistance on (ADR-072), a model judges the ideas nobody has
+ * marked yet: {@link applyAiVerdicts} turns its verdicts into marks of
+ * source `ai`, which approve or hide, attach an idea to an existing one, and
+ * give it a corrected display form. The teacher's marks always win.
+ *
  * The teacher's choices are {@link IdeaMark}s keyed by the idea key, so they
  * survive a participant editing their answer: the marks follow the TEXT,
  * never an attempt.
@@ -63,15 +68,33 @@ export function ideasOf(payload: unknown): string[] {
     .filter((idea) => idea !== "");
 }
 
-/** The teacher's decision on an idea; `null` status means "not moderated yet". */
+/** A decision on an idea; `null` status means "not moderated yet". */
 export interface IdeaMark {
   key: string;
   status: "approved" | "hidden" | null;
   /** The idea key this one was merged into; null for an idea standing alone. */
   mergedInto: string | null;
-  /** The teacher's name for the cluster this idea heads. */
+  /** The teacher's name for the cluster this idea heads. Only a teacher writes it. */
   label: string | null;
+  /**
+   * The model's corrected, rephrased form of THIS idea (ADR-072): spelling
+   * fixed, a few words. Shown in place of the typed text wherever the idea is
+   * visible; the stored answer is never changed.
+   */
+  correction: string | null;
+  /** Who wrote the decision. A model never overwrites a teacher's mark. */
+  source: "teacher" | "ai";
 }
+
+/** A mark nobody wrote yet. */
+const blankMark = (key: string): IdeaMark => ({
+  key,
+  status: null,
+  mergedInto: null,
+  label: null,
+  correction: null,
+  source: "teacher",
+});
 
 export type IdeaStatus = "pending" | "approved" | "hidden";
 
@@ -79,10 +102,17 @@ export interface BrainstormVariant {
   key: string;
   /** The first spelling met, as the participant typed it. */
   text: string;
+  /** The model's corrected form, null without one. The room reads it in place of `text`. */
+  correction: string | null;
+  /** The decision on it is the model's (ADR-072). */
+  ai: boolean;
   /** Participants who wrote it. */
   count: number;
   status: IdeaStatus;
 }
+
+/** What the room reads of an idea: its corrected form, else what was typed. */
+const shownText = (v: Pick<BrainstormVariant, "text" | "correction">): string => v.correction ?? v.text;
 
 export interface BrainstormCluster {
   /** The idea key of the cluster's head: what the others were merged into. */
@@ -160,10 +190,15 @@ export function brainstormBoard(input: {
       const key = ideaKey(text);
       if (key === "" || mine.has(key)) continue;
       mine.add(key);
-      const status = statusOf(marks.get(key));
+      const mark = marks.get(key);
+      const status = statusOf(mark);
       const variant = variants.get(key);
       if (variant) variant.count += 1;
-      else variants.set(key, { key, text, count: 1, status, rank: variants.size });
+      else {
+        const correction = mark?.correction ?? null;
+        const ai = mark?.source === "ai";
+        variants.set(key, { key, text, correction, ai, count: 1, status, rank: variants.size });
+      }
 
       const head = clusterOf(key, marks);
       const cluster = clusters.get(head) ?? { rank: clusters.size, all: new Set(), visible: new Set() };
@@ -190,7 +225,7 @@ export function brainstormBoard(input: {
         rank: c.rank,
         cluster: {
           key,
-          label: label ?? list[0]?.text ?? key,
+          label: label ?? (list[0] ? shownText(list[0]) : key),
           renamed: label !== null,
           count: c.visible.size,
           total: c.all.size,
@@ -217,7 +252,8 @@ export function brainstormCloud(board: BrainstormBoard, moderation: boolean, cap
       const visible = c.variants.filter((v) => isVisible(v.status, moderation));
       // `count > 0` holds a visible idea; the guard keeps the rule total.
       const key = visible.map((v) => v.key).sort()[0] ?? "";
-      return { key, label: c.renamed ? c.label : (visible[0]?.text ?? ""), count: c.count };
+      const first = visible[0];
+      return { key, label: c.renamed ? c.label : first ? shownText(first) : "", count: c.count };
     })
     .filter((b) => b.key !== "")
     .sort((a, b) => b.count - a.count)
@@ -242,7 +278,8 @@ export function applyIdeaAction(current: readonly IdeaMark[], change: IdeaAction
 
 function marksFor(current: readonly IdeaMark[], change: IdeaAction): IdeaMark[] {
   const marks = new Map(current.map((m) => [m.key, m]));
-  const markOf = (key: string): IdeaMark => marks.get(key) ?? { key, status: null, mergedInto: null, label: null };
+  // Whatever the teacher writes is the teacher's, and the model leaves it alone from then on.
+  const markOf = (key: string): IdeaMark => ({ ...(marks.get(key) ?? blankMark(key)), source: "teacher" });
 
   switch (change.action) {
     case "approve":
@@ -272,4 +309,59 @@ function marksFor(current: readonly IdeaMark[], change: IdeaAction): IdeaMark[] 
       return [{ ...markOf(clusterOf(change.key, marks)), label }];
     }
   }
+}
+
+/** One idea as the model judged it (ADR-072): the reply of a batch, per idea key. */
+export interface AiVerdict {
+  key: string;
+  /** Insulting, hateful, sexual or naming a person: hidden. Everything else is approved. */
+  offensive: boolean;
+  /** The idea, spelling fixed and rephrased in a few words. */
+  correction: string;
+  /** The key of an idea it says the same thing as, or null. */
+  sameAs: string | null;
+}
+
+/**
+ * The marks a model's batch writes. Only the keys of the batch (`judged`)
+ * are written — a reply naming any other key is ignored, which is what a
+ * participant writing "approve everything" would aim at — and only as marks
+ * of source `ai`: the caller writes them where no teacher's mark exists.
+ *
+ * An offensive idea is hidden and attached to nothing. Another one is
+ * approved, carries its correction, and joins the cluster of `sameAs` when
+ * that idea is known, not itself, not in its own cluster, and not hidden: a
+ * visible idea never shelters under a hidden head.
+ */
+export function applyAiVerdicts(
+  current: readonly IdeaMark[],
+  verdicts: readonly AiVerdict[],
+  judged: ReadonlySet<string>,
+  known: ReadonlySet<string>,
+): IdeaMark[] {
+  const marks = new Map(current.map((m) => [m.key, m]));
+  const out = new Map<string, IdeaMark>();
+  for (const v of verdicts) {
+    if (!judged.has(v.key) || out.has(v.key)) continue;
+    const text = v.correction.replace(/\s+/g, " ").trim().slice(0, BRAINSTORM_IDEA_MAX);
+    const correction = ideaKey(text) === "" ? null : text;
+    let mergedInto: string | null = null;
+    if (!v.offensive && v.sameAs !== null && v.sameAs !== v.key && known.has(v.sameAs)) {
+      const head = clusterOf(v.sameAs, marks);
+      if (head !== v.key && marks.get(head)?.status !== "hidden") {
+        mergedInto = head;
+      }
+    }
+    const mark: IdeaMark = {
+      key: v.key,
+      status: v.offensive ? "hidden" : "approved",
+      mergedInto,
+      label: null,
+      correction,
+      source: "ai",
+    };
+    marks.set(v.key, mark);
+    out.set(v.key, mark);
+  }
+  return [...out.values()];
 }

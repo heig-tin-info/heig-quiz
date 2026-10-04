@@ -81,6 +81,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-012 — Grade freezing: receipt time written synchronously, two-step freeze](ADR-012-gel-note-deux-temps.md)
 - [ADR-014 — Live polls: an evaluation of one question, a code, and participants without a roster](ADR-014-sondages-en-direct.md)
 - [ADR-071 — The brainstorm poll: short ideas, a bubble cloud, moderated by the teacher](ADR-071-sondage-brainstorm.md)
+- [ADR-072 — AI assistance for a brainstorm: a model moderates, corrects and groups ideas live](ADR-072-ia-du-brainstorm.md)
 - [ADR-020 — Presence is a body in the room, and the Results switch colours it now](ADR-020-presence-et-verdicts-en-direct.md)
 - [ADR-025 — Several attempts on an exercise](ADR-025-plusieurs-tentatives-exercice.md)
 - [ADR-026 — Negative marking, per evaluation, with the total floored at 0](ADR-026-points-negatifs-par-evaluation.md)

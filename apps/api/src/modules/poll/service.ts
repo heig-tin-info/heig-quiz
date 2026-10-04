@@ -69,6 +69,7 @@ import {
   evaluations,
   gradings,
   isOwnedPoll,
+  pollAiRuns,
   pollIdeaMarks,
   pools,
   questionVersions,
@@ -218,6 +219,8 @@ export function pollSettingsOf(scope: PollScope): PollSettings {
     votes: votes || (!keyed && revealed),
     // ADR-071: guests and a projector are moderated unless the teacher says otherwise.
     moderation: isBrainstorm(item) && (stored?.moderation ?? anonymous),
+    // ADR-072: off unless the teacher turned it on.
+    ai: isBrainstorm(item) && stored?.ai === true,
   };
 }
 
@@ -230,7 +233,7 @@ function keyedOf(type: string, version: StoredVersion): boolean {
   return hasKey(type, loadConfig(type, version));
 }
 
-const isBrainstorm = (item: JoinedItem): boolean => item.question.type === "brainstorm";
+export const isBrainstorm = (item: JoinedItem): boolean => item.question.type === "brainstorm";
 
 /** Whether the poll's frozen question names a right answer. */
 function isKeyed(item: JoinedItem): boolean {
@@ -411,11 +414,12 @@ export async function setDisplay(
 ): Promise<EvaluationRecord> {
   const { evaluation, item } = scope;
   if (change.revealed === true && !isKeyed(item)) throw new PollKeyless();
-  if (change.moderation !== undefined && !isBrainstorm(item)) throw new PollNotBrainstorm();
+  if ((change.moderation !== undefined || change.ai !== undefined) && !isBrainstorm(item)) throw new PollNotBrainstorm();
   const current = pollSettingsOf(scope);
   const revealed = change.revealed ?? current.revealed;
   const votes = change.votes ?? current.votes;
   const moderation = change.moderation ?? current.moderation;
+  const ai = change.ai ?? current.ai;
   const feedbackPolicy = {
     ...(evaluation.feedbackPolicy as Record<string, unknown>),
     showKey: revealed,
@@ -426,7 +430,10 @@ export async function setDisplay(
     evaluation.id,
     {
       // Moderation is a brainstorm's alone: the other polls keep the pair they always stored.
-      settings: { ...settingsOf(evaluation), poll: { revealed, votes, ...(isBrainstorm(item) ? { moderation } : {}) } },
+      settings: {
+        ...settingsOf(evaluation),
+        poll: { revealed, votes, ...(isBrainstorm(item) ? { moderation, ai } : {}) },
+      },
       feedbackPolicy,
     },
     now,
@@ -621,7 +628,7 @@ export async function tallyOf(db: Db, evaluation: EvaluationRecord): Promise<Pol
 }
 
 /** Every stored answer to the poll's one item. */
-async function payloadsOf(db: Db, scope: PollScope): Promise<unknown[]> {
+export async function payloadsOf(db: Db, scope: PollScope): Promise<unknown[]> {
   const rows = await db
     .select({ payload: answers.payload })
     .from(answers)
@@ -632,16 +639,60 @@ async function payloadsOf(db: Db, scope: PollScope): Promise<unknown[]> {
 
 // --- The brainstorm board (ADR-071) ---------------------------------------
 
-async function marksOf(db: Db, evaluationId: string): Promise<IdeaMark[]> {
+export async function marksOf(db: Db, evaluationId: string): Promise<IdeaMark[]> {
   return db
     .select({
       key: pollIdeaMarks.ideaKey,
       status: pollIdeaMarks.status,
       mergedInto: pollIdeaMarks.mergedInto,
       label: pollIdeaMarks.label,
+      correction: pollIdeaMarks.correction,
+      source: pollIdeaMarks.source,
     })
     .from(pollIdeaMarks)
     .where(eq(pollIdeaMarks.evaluationId, evaluationId));
+}
+
+/**
+ * Marks written in one statement. The teacher's replace whatever stands; the
+ * model's are written only where no mark exists yet, so a teacher who acted
+ * while the model was thinking keeps the last word (ADR-072).
+ */
+export async function writeMarks(db: Db, evaluationId: string, marks: readonly IdeaMark[], now: Date): Promise<void> {
+  if (marks.length === 0) return;
+  const rows = marks.map((m) => ({
+    evaluationId,
+    ideaKey: m.key,
+    status: m.status,
+    mergedInto: m.mergedInto,
+    label: m.label,
+    correction: m.correction,
+    source: m.source,
+    updatedAt: now,
+  }));
+  await db
+    .insert(pollIdeaMarks)
+    .values(rows)
+    .onConflictDoUpdate({
+      target: [pollIdeaMarks.evaluationId, pollIdeaMarks.ideaKey],
+      set: {
+        status: sql`excluded.status`,
+        mergedInto: sql`excluded.merged_into`,
+        label: sql`excluded.label`,
+        correction: sql`excluded.correction`,
+        source: sql`excluded.source`,
+        updatedAt: sql`excluded.updated_at`,
+      },
+      // A teacher's mark replaces what stands; a model's only fills an empty place.
+      setWhere: sql`excluded.source = 'teacher'`,
+    });
+}
+
+/** AI assistance asked for while no model can be called (no key, no master key). */
+export class PollAiUnavailable extends PollError {
+  constructor() {
+    super("llm_unavailable", 422, "no language model is configured");
+  }
 }
 
 /** A board on a poll of another type: there are no ideas to moderate. */
@@ -656,11 +707,22 @@ export class PollNotBrainstorm extends PollError {
  * STAFF ONLY — the route loads the poll through the staff predicate; the
  * room only ever reads `tally.ideas`, the filtered cloud.
  */
-export async function ideaBoard(db: Db, scope: PollScope): Promise<PollIdeaBoard> {
+export async function ideaBoard(db: Db, scope: PollScope, aiAvailable: boolean): Promise<PollIdeaBoard> {
   if (!isBrainstorm(scope.item)) throw new PollNotBrainstorm();
-  const [payloads, marks] = await Promise.all([payloadsOf(db, scope), marksOf(db, scope.evaluation.id)]);
-  const { moderation } = pollSettingsOf(scope);
-  return { moderation, ...brainstormBoard({ payloads, marks, moderation }) };
+  const [payloads, marks, [run]] = await Promise.all([
+    payloadsOf(db, scope),
+    marksOf(db, scope.evaluation.id),
+    db
+      .select({ error: pollAiRuns.error })
+      .from(pollAiRuns)
+      .where(eq(pollAiRuns.evaluationId, scope.evaluation.id)),
+  ]);
+  const { moderation, ai } = pollSettingsOf(scope);
+  return {
+    moderation,
+    ai: { available: aiAvailable, on: ai, error: run?.error ?? null },
+    ...brainstormBoard({ payloads, marks, moderation }),
+  };
 }
 
 /**
@@ -673,38 +735,19 @@ export async function actOnIdeas(
   scope: PollScope,
   action: PollIdeaAction,
   now: Date,
+  aiAvailable: boolean,
 ): Promise<PollIdeaBoard> {
   if (!isBrainstorm(scope.item)) throw new PollNotBrainstorm();
   const changed = applyIdeaAction(await marksOf(db, scope.evaluation.id), action);
   if (changed.length > 0) {
-    await db
-      .insert(pollIdeaMarks)
-      .values(
-        changed.map((m) => ({
-          evaluationId: scope.evaluation.id,
-          ideaKey: m.key,
-          status: m.status,
-          mergedInto: m.mergedInto,
-          label: m.label,
-          updatedAt: now,
-        })),
-      )
-      .onConflictDoUpdate({
-        target: [pollIdeaMarks.evaluationId, pollIdeaMarks.ideaKey],
-        set: {
-          status: sql`excluded.status`,
-          mergedInto: sql`excluded.merged_into`,
-          label: sql`excluded.label`,
-          updatedAt: sql`excluded.updated_at`,
-        },
-      });
+    await writeMarks(db, scope.evaluation.id, changed, now);
     await emitTally(db, scope.evaluation, now);
   }
-  return ideaBoard(db, scope);
+  return ideaBoard(db, scope, aiAvailable);
 }
 
 /** The tally, out on `evaluation:<id>`, staff only, coalesced 500 ms. */
-async function emitTally(
+export async function emitTally(
   db: Db,
   evaluation: EvaluationRecord,
   now: Date,
@@ -733,6 +776,12 @@ function studentPayload(type: string, version: StoredVersion, itemId: string): u
 
 function studentOf(item: JoinedItem): unknown {
   return studentPayload(item.question.type, item.version, item.item.id);
+}
+
+/** The statement of the poll's question, as a participant reads it. */
+export function promptOfScope(scope: PollScope): string {
+  const prompt = (studentOf(scope.item) as { prompt?: unknown } | null)?.prompt;
+  return typeof prompt === "string" ? prompt : "";
 }
 
 /**

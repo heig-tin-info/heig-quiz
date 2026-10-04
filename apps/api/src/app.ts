@@ -51,6 +51,7 @@ import { notificationsPlugin } from "./modules/notifications/routes.js";
 import { orgPlugin } from "./modules/org/routes.js";
 import { pollPlugin } from "./modules/poll/routes.js";
 import { registerProjectJobs } from "./modules/project/jobs.js";
+import { registerPollJobs } from "./modules/poll/ai.js";
 import { projectPlugin } from "./modules/project/routes.js";
 import { poolPlugin } from "./modules/pool/routes.js";
 import { flushCoalescers, openStreamCount } from "./modules/realtime/bus.js";
@@ -263,6 +264,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     // The scheduled tasks' worker (D10). Without a queue the ticker runs a
     // claimed task inline instead.
     await step("system jobs registration", () => registerSystemJobs(app, started, config));
+    // A brainstorm's AI passes (ADR-072). Without a queue a pass runs inline.
+    await step("poll jobs registration", () => registerPollJobs(app, started));
     // The webhook worker (M2-04), only with Quiz's App: without it there is no intake.
     if (githubApp(config)) {
       await step("github jobs registration", () => registerGithubJobs(app, started, config));

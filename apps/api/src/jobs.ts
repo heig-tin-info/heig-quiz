@@ -89,6 +89,15 @@ export const PROJECT_DEADLINE_QUEUE = "project.deadline";
 export const PROJECT_DISPATCH_QUEUE = "project.dispatch";
 
 /**
+ * One AI pass over a brainstorm (ADR-072): `{ evaluationId, lease }`, sent a
+ * few seconds after the answer that claimed the poll's lease
+ * (`poll_ai_runs.lease_at`). A `standard` queue, no dedupe, no retry: the
+ * lease keeps two passes of one poll apart, and a failure is recorded and
+ * left for the next answer to try again (`modules/poll/ai.ts`).
+ */
+export const POLL_AI_QUEUE = "poll.ai";
+
+/**
  * No `singletonKey`, on purpose (#273). Our queues are pg-boss `standard`
  * queues (`createQueue` passes no policy, and pg-boss 12 refuses to change a
  * policy after creation), on which a key without `singletonSeconds` dedupes

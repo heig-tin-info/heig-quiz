@@ -190,8 +190,8 @@ What a user is told, and where (ADR-030 and its addendum of #198). A notificatio
 |---|---|---|---|
 | F-LLM-01 | One provider (Anthropic) and one institutional key, entered by an administrator and encrypted at rest, with a model per purpose (one chosen in the screen) and a daily spending cap. No per-teacher key (ADR-058). | P2 | M |
 | F-LLM-02 | In the editor: generate a variant of the question, propose the answer key, write the explanation, propose distractors. The result lands in the draft, never published automatically. | P2 | M |
-| F-LLM-03 | LLM grading is described in F-GRADE-02. No LLM call is made while an evaluation is running. | P2 | M |
-| F-LLM-04 | Every piece of data sent is anonymised: no name, email nor student identifier. The calls are logged with the model, the number of tokens and the estimated cost, per teacher. | P2 | M |
+| F-LLM-03 | LLM grading is described in F-GRADE-02. No LLM call is made while an evaluation is running, *except a brainstorm poll's AI assistance, which grades and releases nothing (ADR-072)*. | P2 | M |
+| F-LLM-04 | Every piece of data sent is anonymised: no name, email nor student identifier. *Exception (ADR-072): a brainstorm's ideas leave without any identifier but, for an anonymous guest, as typed — the names the platform knows are masked, and the poll page says so before anyone types.* The calls are logged with the model, the number of tokens and the estimated cost, per teacher. | P2 | M |
 | F-LLM-05 | Without a configured key, the "Copy the prompt" action provides the full prompt to paste into an external client, and "Paste the answer" imports it. | P2 | S |
 | F-LLM-06 | MCP server exposing the reading and writing of question drafts, to author from an LLM client. | P3 | C |
 

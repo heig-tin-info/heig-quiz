@@ -9,7 +9,7 @@ separate teacher view) on 2026-10-04.
 Scope: a third question type for live polls, and what of its answers reaches
 the room.
 
-Relations: amends [ADR-014](ADR-014-sondages-en-direct.md) (the poll types,
+Relations: [ADR-072](ADR-072-ia-du-brainstorm.md) adds the AI assistance (§§2, 3, 5 below gain a model's marks); amends [ADR-014](ADR-014-sondages-en-direct.md) (the poll types,
 the display switches and the tally); depends on F-LIVE-13, F-LIVE-14 and
 F-AUTH-05. The LLM clustering of the issue is out of scope: it contradicts
 F-LLM-03 (no model call while an evaluation runs) and needs its own record.

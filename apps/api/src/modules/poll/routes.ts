@@ -62,6 +62,7 @@ import {
 import { csrfRefused, emptyBody, invalid, notFound, sendFailure, teacherRoute } from "../http.js";
 import * as live from "../live/service.js";
 import * as poolService from "../pool/service.js";
+import * as ai from "./ai.js";
 import * as service from "./service.js";
 
 export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
@@ -333,9 +334,15 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     teacher(
       { params: IdParam, body: PollRevealBody, load: staffPoll },
       async ({ req, now, body, scope }) => {
+        // A model that cannot be called is not turned on: the teacher would believe it judges.
+        if (body.ai === true && !(await app.llmGateway.ready())) throw new service.PollAiUnavailable();
+        const wasOn = service.pollSettingsOf(scope).ai;
         const updated = await service.setDisplay(app.db, scope, body, now);
         await trace(req, "poll.reveal", "evaluation", updated.id, body);
-        return view(req, { ...scope, evaluation: updated });
+        const next = { ...scope, evaluation: updated };
+        // Only a real move: "on" sent again must not reset the run's call count.
+        if (body.ai !== undefined && body.ai !== wasOn) await ai.switchAi(app, next, body.ai, now);
+        return view(req, next);
       },
     ),
   );
@@ -347,7 +354,9 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
   app.get(
     "/app/api/evaluations/:id/poll/ideas",
     { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: staffPoll }, ({ scope }) => service.ideaBoard(app.db, scope)),
+    teacher({ params: IdParam, load: staffPoll }, async ({ scope }) =>
+      service.ideaBoard(app.db, scope, await app.llmGateway.ready()),
+    ),
   );
 
   /** The teacher's word on ideas: approve, hide, merge, detach, rename. */
@@ -357,7 +366,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     teacher(
       { params: IdParam, body: PollIdeaAction, load: staffPoll },
       async ({ req, now, body, scope }) => {
-        const board = await service.actOnIdeas(app.db, scope, body, now);
+        const board = await service.actOnIdeas(app.db, scope, body, now, await app.llmGateway.ready());
         await trace(req, "poll.ideas", "evaluation", scope.evaluation.id, body);
         return board;
       },
@@ -573,6 +582,12 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     if (!attempt) return reply.code(403).send({ error: "not_joined" });
     try {
       await service.answerPoll(app.db, scope, attempt, body.data.payload, now);
+      try {
+        await ai.requestAiPass(app, scope, now);
+      } catch (err) {
+        // The answer is stored: the model's pass is extra, and a failure of it is not the participant's.
+        app.log.error({ err }, "poll AI pass request failed");
+      }
       return await service.publicView(app.db, scope, found.state, viewer);
     } catch (error) {
       return failure(reply, error, now);

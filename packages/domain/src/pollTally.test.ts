@@ -116,8 +116,8 @@ describe("pollTally — brainstorm", () => {
       payloads,
       moderation: true,
       marks: [
-        { key: "respire", status: "approved", mergedInto: null, label: "Respiration" },
-        { key: "respiration", status: "approved", mergedInto: "respire", label: null },
+        { key: "respire", status: "approved", mergedInto: null, label: "Respiration", correction: null, source: "teacher" },
+        { key: "respiration", status: "approved", mergedInto: "respire", label: null, correction: null, source: "teacher" },
       ],
     });
     expect(tally).toEqual({
