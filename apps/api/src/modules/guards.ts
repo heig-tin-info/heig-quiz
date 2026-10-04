@@ -15,8 +15,14 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { and, eq, getTableName, isNull, ne, sql, type AnyColumn, type SQL } from "drizzle-orm";
 
-import type { PoolRole } from "@quiz/contracts";
-import { effectivePoolRole, ipAllowed, poolRoleAllows } from "@quiz/domain";
+import type { CourseRole, PoolRole } from "@quiz/contracts";
+import {
+  courseRoleAllows,
+  effectiveCourseRole,
+  effectivePoolRole,
+  ipAllowed,
+  poolRoleAllows,
+} from "@quiz/domain";
 
 import { confined, delegated, type SessionAuth, type SessionState } from "../auth/session.js";
 import type { Db } from "../db/client.js";
@@ -46,8 +52,10 @@ import { trustedClients } from "./evaluation/service.js";
 
 /**
  * THE access predicate, on a query that has `courses` in scope: a seat on
- * the course staff. Every member of a staff holds the same rights
- * (docs/spec/07, 7.3) — there is no permission matrix, and no owner.
+ * the course staff, whatever its role. It defines REACH — who sees the
+ * course at all, and failing it is a 404 (invariant 6). What a member may DO
+ * there is the second step, the seat's role (ADR-068): `requireCourseRole`
+ * below, whose refusal is a 403, as for pools.
  *
  * Every loader below, the course listing and the SSE topics go through it:
  * one predicate, one definition of "who may work on this course". `courseId`
@@ -167,6 +175,65 @@ export async function requirePoolRole(
     role,
   });
   return null;
+}
+
+/**
+ * What the caller may DO on a course they already reach (ADR-068). THE
+ * resolution is the pure rule `effectiveCourseRole` of `@quiz/domain`: an
+ * owner under Super Powers, otherwise the seat's role; null without a seat.
+ */
+async function courseRoleOf(
+  db: Db,
+  courseId: string,
+  user: Pick<Caller, "id" | "reach">,
+): Promise<CourseRole | null> {
+  if (user.reach === "all") return effectiveCourseRole({ reachesAll: true, seatRole: null });
+  const [seat] = await db
+    .select({ role: courseStaff.role })
+    .from(courseStaff)
+    .where(and(eq(courseStaff.courseId, courseId), eq(courseStaff.userId, user.id)))
+    .limit(1);
+  return effectiveCourseRole({ reachesAll: false, seatRole: seat?.role ?? null });
+}
+
+/**
+ * The role half of the course motif, the twin of {@link requirePoolRole}.
+ * The caller has already been let in by `staffAccess`, so a role they do
+ * not hold is `403 owner_required`, NOT 404: they know the course exists.
+ */
+export async function requireCourseRole(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  courseId: string,
+  needed: CourseRole,
+): Promise<CourseRole | null> {
+  const role = await courseRoleOf(app.db, courseId, callerOf(req));
+  if (courseRoleAllows(role, needed)) return role;
+  await reply
+    .code(403)
+    .send({ error: "owner_required", message: "Only an owner of this course may do that" });
+  return null;
+}
+
+/**
+ * A route loader of invariant 6 with the role step after it: the entity
+ * under `staffAccess` (the loader's own 404), then — when `needed` is given
+ * — {@link requireCourseRole}'s 403. It runs INSIDE `load`, so the route
+ * wrapper refuses before it parses the body: an assistant's malformed body
+ * is a 403 like a well-formed one. The pools' `withRole` is the same motif.
+ */
+export function withCourseRole<P, S>(
+  app: FastifyInstance,
+  load: (req: FastifyRequest, reply: FastifyReply, params: P) => Promise<S | null>,
+  courseIdOf: (scope: S) => string,
+  needed: CourseRole | undefined,
+) {
+  return async (req: FastifyRequest, reply: FastifyReply, params: P): Promise<S | null> => {
+    const scope = await load(req, reply, params);
+    if (scope === null || needed === undefined) return scope;
+    return (await requireCourseRole(app, req, reply, courseIdOf(scope), needed)) ? scope : null;
+  };
 }
 
 /**

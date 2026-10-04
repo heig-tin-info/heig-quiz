@@ -137,6 +137,10 @@ const WORDED: Partial<Record<string, keyof Dict>> = {
   fix_stale: "error.fixStale",
   // A course's code is unique across the instance: at creation and on edit.
   duplicate_code: "courses.codeTaken",
+  // ADR-068: what only a course owner may do, the last owner, a second seat.
+  owner_required: "error.ownerRequired",
+  last_owner: "error.lastOwner",
+  already_staff: "error.alreadyStaff",
 };
 
 /** Server-provided error message of a failed call (or its worded code), or the fallback. */

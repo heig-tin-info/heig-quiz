@@ -565,6 +565,7 @@ export async function evaluationDetail(
   row: EvaluationRecord,
   viewer: Caller,
   enrolled: number,
+  courseId: string,
 ): Promise<EvaluationDetail> {
   const items = await itemRows(db, row.id);
   const attemptsSoFar = await attemptCount(db, row.id);
@@ -579,6 +580,7 @@ export async function evaluationDetail(
     editableQuestionIds: await editableQuestionIdsOf(db, items, viewer),
     roster: await rosterOf(db, row, enrolled),
     templateRevision: (await templateRevisionsOf(db, [row])).get(row.id) ?? null,
+    courseId,
   };
 }
 

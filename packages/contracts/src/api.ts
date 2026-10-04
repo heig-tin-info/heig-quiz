@@ -9,6 +9,7 @@ import { z } from "zod";
 import { TRUSTED_CLIENTS } from "@quiz/domain";
 
 import { McqPolicy } from "./evaluation.js";
+import type { CourseRole } from "./org.js";
 
 /** Display format for date-times; null falls back to ISO (`2026-09-01 08:00`). */
 export const DATE_FORMATS = ["iso", "eu", "uk", "us"] as const;
@@ -151,6 +152,7 @@ interface CourseStaffMember {
   familyName: string;
   email: string;
   avatarUrl: string | null;
+  role: CourseRole;
 }
 
 export interface ClassroomSummary {
@@ -185,6 +187,12 @@ export interface CourseSummary {
   /** Non-archived classrooms of this course, oldest first. */
   classrooms: ClassroomSummary[];
   staff: CourseStaffMember[];
+  /**
+   * What the caller may do on this course (ADR-068): `owner` under Super
+   * Powers, otherwise their seat's role. The screens hide what only an
+   * owner may do; the routes refuse it anyway (`owner_required`).
+   */
+  myRole: CourseRole;
 }
 
 export interface RosterEntry {

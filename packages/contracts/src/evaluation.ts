@@ -403,6 +403,12 @@ export const EvaluationDetail = z.object({
     .nullable(),
   /** The template's current revision, for the launch checklist's pull (F-EVAL-26). */
   templateRevision: TemplateRevision,
+  /**
+   * The evaluation's course: what the screens read the reader's role from,
+   * in the course list (`CourseSummary.myRole`, ADR-068) — a classroom's
+   * course cannot be found there once the classroom is archived.
+   */
+  courseId: z.uuid(),
 });
 export type EvaluationDetail = z.infer<typeof EvaluationDetail>;
 

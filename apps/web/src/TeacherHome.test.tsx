@@ -238,6 +238,7 @@ describe("TeacherHome", () => {
               familyName: "Dupont",
               email: "marie.dupont@heig-vd.ch",
               avatarUrl: null,
+              role: "owner",
             },
             {
               userId: "u-2",
@@ -245,6 +246,7 @@ describe("TeacherHome", () => {
               familyName: "Roulet",
               email: "pierre.roulet@heig-vd.ch",
               avatarUrl: null,
+              role: "owner",
             },
           ],
         }),
@@ -286,6 +288,7 @@ describe("TeacherHome", () => {
               familyName: "Dupont",
               email: "marie.dupont@heig-vd.ch",
               avatarUrl: null,
+              role: "owner",
             },
           ],
         }),

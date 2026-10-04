@@ -1,5 +1,5 @@
 import { FileStack, FolderTree, Library, Plus, School, Settings as SettingsIcon, UserPlus, Users } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import type { CourseSummary } from "@quiz/contracts";
 
@@ -7,6 +7,7 @@ import { CourseTemplates, useCourseTemplates } from "../evaluation/templates";
 import { useT } from "../i18n";
 import type { CourseTab, Route } from "../router";
 import {
+  Badge,
   Button,
   Card,
   EmptyState,
@@ -31,7 +32,9 @@ import { useCourseActions } from "./useCourseActions";
  * settings. Each tab is a path of its own (`/courses/:id/<tab>`).
  *
  * The header's one primary action is the open tab's: New classroom, New
- * template, Link a pool, Add a staff member; Settings has none. The course's
+ * template, Link a pool, Add a staff member; Settings has none. An assistant
+ * (ADR-068) is offered only New template there: the classrooms, the linked
+ * pools and the staff are the owners' to change. The course's
  * actions are `useCourseActions`, the card's copy, so the two cannot drift —
  * the card keeps them in its menu, the page spreads them over its tabs.
  *
@@ -102,11 +105,34 @@ function Course({
   navigate: (r: Route) => void;
 }) {
   const t = useT();
-  const actions = useCourseActions(course, { onDeleted: () => navigate({ view: "home" }) });
+  const actions = useCourseActions(course, { onGone: () => navigate({ view: "home" }) });
+  const { isOwner } = actions;
   const [creatingTemplate, setCreatingTemplate] = useState(false);
   const templates = useCourseTemplates(course.id);
   const pools = useCourseDetail(course.id).data?.pools;
   const open = (next: CourseTab) => navigate({ view: "course", id: course.id, tab: next });
+
+  // The open tab's one primary action. New template is every member's; the
+  // other three are the owners' (ADR-068), and an assistant gets none there.
+  const newTemplate = (
+    <Button onClick={() => setCreatingTemplate(true)}>
+      <Plus /> {t("templates.new")}
+    </Button>
+  );
+  const ownerPrimary: Partial<Record<CourseTab, ReactNode>> = {
+    classrooms: (
+      <Button onClick={actions.newClassroom}>
+        <Plus /> {t("classrooms.new")}
+      </Button>
+    ),
+    pools: <LinkPoolMenu course={course} />,
+    members: (
+      <Button onClick={actions.addStaff}>
+        <UserPlus /> {t("courses.staffAdd")}
+      </Button>
+    ),
+  };
+  const primary = tab === "templates" ? newTemplate : isOwner ? ownerPrimary[tab] : null;
 
   return (
     <div className="space-y-6">
@@ -122,24 +148,7 @@ function Course({
             <HiddenBadge course={course} />
           </span>
         }
-        actions={
-          // The open tab's one primary action, always in this slot.
-          tab === "classrooms" ? (
-            <Button onClick={actions.newClassroom}>
-              <Plus /> {t("classrooms.new")}
-            </Button>
-          ) : tab === "templates" ? (
-            <Button onClick={() => setCreatingTemplate(true)}>
-              <Plus /> {t("templates.new")}
-            </Button>
-          ) : tab === "pools" ? (
-            <LinkPoolMenu course={course} />
-          ) : tab === "members" ? (
-            <Button onClick={actions.addStaff}>
-              <UserPlus /> {t("courses.staffAdd")}
-            </Button>
-          ) : null
-        }
+        actions={primary}
       />
 
       <div className="space-y-4">
@@ -194,16 +203,17 @@ function Course({
 }
 
 /**
- * The staff of the course, one row each, with its removal (the server keeps
- * the last one, `useCourseActions`). No roles: every member reaches the whole
- * course (D04), which the line under the list says, with how one is added.
+ * The staff of the course, one row each, with its role (ADR-068) and what may
+ * be done to the seat (`useCourseActions`: the owners change roles and
+ * remove, an assistant leaves). Every member reaches the whole course (D04);
+ * the line under the list says what an owner does more, and how one is added.
  */
 function CourseMembers({
   course,
   staffActions,
 }: {
   course: CourseSummary;
-  staffActions: (person: Person) => MenuItem[];
+  staffActions: ReturnType<typeof useCourseActions>["staffActions"];
 }) {
   const t = useT();
   return (
@@ -211,7 +221,15 @@ function CourseMembers({
       <Card className="divide-y divide-line px-4">
         {course.staff.map((person) => (
           <div key={person.userId} className="py-3">
-            <PersonCard person={person} actions={staffActions(person)} />
+            <PersonCard
+              person={person}
+              actions={staffActions(person)}
+              badge={
+                <Badge tone="zinc">
+                  {t(person.role === "owner" ? "courses.role.owner" : "courses.role.assistant")}
+                </Badge>
+              }
+            />
           </div>
         ))}
       </Card>

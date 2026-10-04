@@ -435,6 +435,13 @@
       "when": 1791130727216,
       "tag": "0061_project_staff_writes",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1791136706674,
+      "tag": "0062_course_staff_role",
+      "breakpoints": true
     }
   ]
 }

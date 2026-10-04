@@ -73,9 +73,16 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
   const detail = async (
     req: FastifyRequest,
     row: service.EvaluationRecord,
+    courseId: string,
   ): Promise<EvaluationDetail> =>
-    // The lobby ring's denominator, a rule of the `live` module (#152).
-    service.evaluationDetail(app.db, row, callerOf(req), await live.enrolledCount(app.db, row));
+    service.evaluationDetail(
+      app.db,
+      row,
+      callerOf(req),
+      // The lobby ring's denominator, a rule of the `live` module (#152).
+      await live.enrolledCount(app.db, row),
+      courseId,
+    );
 
   // F-EVAL-02: the type decides an item's default weight, from the config it
   // owns — this module never looks inside a config. And a question kept after
@@ -157,7 +164,7 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
     "/app/api/evaluations/:id",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: staffEvaluation }, ({ req, scope }) =>
-      detail(req, scope.evaluation),
+      detail(req, scope.evaluation, scope.classroom.courseId),
     ),
   );
 
@@ -183,7 +190,7 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
           { fields: Object.keys(body) },
           (ctx) => service.patchEvaluation(app.db, scope.evaluation, body, { ...ctx, now, kioskAvailable }),
         );
-        return detail(req, row);
+        return detail(req, row, scope.classroom.courseId);
       },
     ),
   );
@@ -598,7 +605,7 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
         // editors and dashboards refetch.
         evaluationChanged(scope.classroom.id, scope.evaluation.id);
         const answer: TemplatePullResult = {
-          detail: await detail(req, pulled.row),
+          detail: await detail(req, pulled.row, scope.classroom.courseId),
           deprecatedItems: pulled.deprecatedItems,
         };
         return answer;

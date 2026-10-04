@@ -2932,6 +2932,7 @@ on("GET", "/app/api/courses/:id", (m) => {
       givenName: s.givenName,
       familyName: s.familyName,
       email: s.email,
+      role: s.role,
     })),
     pools: (coursePools[course.id] ?? [])
       .map((poolId) => pools.find((p) => p.id === poolId))

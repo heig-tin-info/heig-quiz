@@ -117,11 +117,35 @@ const CourseRef = z.object({
 });
 type CourseRef = z.infer<typeof CourseRef>;
 
+/**
+ * What a seat on a course's staff may do (ADR-068): an `owner` runs the
+ * course — its staff, its pools, its classrooms, the release of results —
+ * and an `assistant` does the day-to-day work in it.
+ */
+export const CourseRole = z.enum(["owner", "assistant"]);
+export type CourseRole = z.infer<typeof CourseRole>;
+
+/** `POST /courses/:id/staff`: an account named by an address, an assistant unless said otherwise. */
+export const StaffAdd = z.object({
+  email: z.email(),
+  role: CourseRole.default("assistant"),
+});
+export type StaffAdd = z.infer<typeof StaffAdd>;
+
+/** `PATCH /courses/:id/staff/:uid`. */
+export const StaffPatch = z.object({ role: CourseRole });
+export type StaffPatch = z.infer<typeof StaffPatch>;
+
+/** One seat of one course's staff: `/courses/:id/staff/:uid`. */
+export const StaffParam = z.object({ id: z.uuid(), uid: z.uuid() });
+export type StaffParam = z.infer<typeof StaffParam>;
+
 const StaffMember = z.object({
   userId: z.uuid(),
   givenName: z.string(),
   familyName: z.string(),
   email: z.string(),
+  role: CourseRole,
 });
 type StaffMember = z.infer<typeof StaffMember>;
 

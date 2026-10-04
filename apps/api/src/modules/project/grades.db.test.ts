@@ -24,7 +24,7 @@ import { ProjectDetail, ProjectReleaseResult, ProjectRepoScores } from "@quiz/co
 
 import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
-import { auditLog, enrollments, githubOrganizations, projectGradeRuns, projectRepos, projects } from "../../db/schema.js";
+import { auditLog, courseStaff, enrollments, githubOrganizations, projectGradeRuns, projectRepos, projects } from "../../db/schema.js";
 import { resetLiveStateCache } from "../../github/metrics.js";
 import { appKey, fakeGithub, json, orgsRoute, type Route } from "../../github/testing.js";
 import { testServer, type TestServer } from "../../test/http.js";
@@ -65,6 +65,7 @@ const call = (method: "GET" | "POST" | "PATCH", url: string, headers: Headers, p
 interface World {
   projectId: string;
   classroomId: string;
+  courseId: string;
   students: { id: string; headers: Headers }[];
 }
 
@@ -98,7 +99,7 @@ async function world(opts: { students?: number; gradingMode?: "auto" | "none" } 
     gradingScale: { kind: "linear", rounding: "nearest" },
     createdBy: teacher.id,
   });
-  return { projectId, classroomId: seeded.classroomId, students };
+  return { projectId, classroomId: seeded.classroomId, courseId: seeded.courseId, students };
 }
 
 type RepoPatch = Partial<typeof projectRepos.$inferInsert>;
@@ -286,6 +287,18 @@ describe("the teacher's score (F-PROJ-14)", () => {
 });
 
 describe("the release (F-PROJ-14, D05)", () => {
+  it("is the course owner's: an assistant gets 403 owner_required, and nothing is released (ADR-068)", async () => {
+    const w = await world();
+    await repoOf(w, w.students[0]!.id);
+    const assistant = await server.signIn("teacher");
+    await server.app.db.insert(courseStaff).values({ courseId: w.courseId, userId: assistant.id, role: "assistant" });
+    const res = await release(w, assistant.headers);
+    expect(res.statusCode, res.body).toBe(403);
+    expect(res.json()).toMatchObject({ error: "owner_required" });
+    expect((await projectRow(w.projectId)).releasedAt).toBeNull();
+    expect((await release(w)).statusCode).toBe(200);
+  });
+
   it("waits until every live repository is frozen: one with a later own deadline holds it back", async () => {
     const w = await world({ students: 2 });
     const [a, b] = w.students;

@@ -33,9 +33,11 @@ export const courses = pgTable("courses", {
 });
 
 /**
- * Teaching staff of a course. Every member holds the same rights
- * (docs/spec/07-reutilisation-heig-classroom.md, 7.3): no permission matrix
- * until a real need shows up. THE access predicate of `guards.ts` reads it.
+ * Teaching staff of a course. A seat is what REACHES the course: THE access
+ * predicate of `guards.ts` (`staffAccess`) reads it. Its `role` is what the
+ * member may DO there (ADR-068): an `owner` runs the course (staff, pools,
+ * classrooms, release of results), an `assistant` does the rest of the work;
+ * `requireCourseRole` reads it, and a course keeps at least one owner.
  */
 export const courseStaff = pgTable(
   "course_staff",
@@ -46,6 +48,14 @@ export const courseStaff = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    /**
+     * The database default is `owner` so the migration made every seat that
+     * existed before ADR-068 an owner; a NEW seat's role is always written
+     * by `addStaff` (the contract defaults it to `assistant`).
+     */
+    role: text("role", { enum: ["owner", "assistant"] })
+      .notNull()
+      .default("owner"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

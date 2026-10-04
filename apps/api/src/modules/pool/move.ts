@@ -100,18 +100,18 @@ export async function coursesLinkedToPool(
   return new Set(rows.map((r) => r.courseId));
 }
 
-/** The course ids, among these, the user holds a staff seat on. */
+/** The course ids, among these, the user holds a staff seat on, with the seat's role (ADR-068). */
 export async function staffSeatsOf(
   db: Db,
   userId: string,
   courseIds: readonly string[],
-): Promise<Set<string>> {
-  if (courseIds.length === 0) return new Set();
+): Promise<Map<string, (typeof courseStaff.$inferSelect)["role"]>> {
+  if (courseIds.length === 0) return new Map();
   const rows = await db
-    .select({ courseId: courseStaff.courseId })
+    .select({ courseId: courseStaff.courseId, role: courseStaff.role })
     .from(courseStaff)
     .where(and(eq(courseStaff.userId, userId), inArray(courseStaff.courseId, [...courseIds])));
-  return new Set(rows.map((r) => r.courseId));
+  return new Map(rows.map((r) => [r.courseId, r.role]));
 }
 
 /**

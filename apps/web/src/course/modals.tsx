@@ -1,14 +1,21 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { ClassroomCreate, CourseCreate, type CoursePatch, type CourseSummary } from "@quiz/contracts";
+import {
+  ClassroomCreate,
+  CourseCreate,
+  type CoursePatch,
+  type CourseRole,
+  type CourseSummary,
+  type StaffAdd,
+} from "@quiz/contracts";
 
 import { api } from "../api";
 import { newPeriodDraft, PeriodFields, periodBody, periodInvalid } from "../ClassroomPeriod";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { invalidateHint } from "../realtime/hints";
-import { Field, FormDialog, FormError } from "../ui";
+import { Field, FieldLabel, FormDialog, FormError, Segmented } from "../ui";
 import { coursesKey } from "../queryKeys";
 
 /**
@@ -175,16 +182,24 @@ export function NewClassroomModal({ course, onClose }: { course: CourseSummary; 
   );
 }
 
+/**
+ * A colleague named by the address they sign in with, and their role
+ * (ADR-068): an assistant unless the owner says otherwise — the weaker role
+ * is the one a slip of the hand can give.
+ */
 export function AddStaffModal({ course, onClose }: { course: CourseSummary; onClose: () => void }) {
   const t = useT();
   const qc = useQueryClient();
   const [email, setEmail] = useState("");
+  const [role, setRole] = useState<CourseRole>("assistant");
   const add = useMutation({
-    mutationFn: () =>
-      api(`/app/api/courses/${course.id}/staff`, {
+    mutationFn: () => {
+      const body: StaffAdd = { email: email.trim(), role };
+      return api(`/app/api/courses/${course.id}/staff`, {
         method: "POST",
-        body: JSON.stringify({ email }),
-      }),
+        body: JSON.stringify(body),
+      });
+    },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: coursesKey });
       onClose();
@@ -211,6 +226,22 @@ export function AddStaffModal({ course, onClose }: { course: CourseSummary; onCl
         value={email}
         onChange={(e) => setEmail(e.target.value)}
       />
+      <fieldset className="space-y-1.5">
+        <legend className="mb-1.5">
+          <FieldLabel>{t("courses.staffRole")}</FieldLabel>
+        </legend>
+        <Segmented
+          name="staff-role"
+          label={t("courses.staffRole")}
+          value={role}
+          onChange={setRole}
+          options={[
+            { value: "assistant", label: t("courses.role.assistant") },
+            { value: "owner", label: t("courses.role.owner") },
+          ]}
+        />
+        <p className="text-xs text-fg-muted">{t(`courses.role.desc.${role}`)}</p>
+      </fieldset>
     </FormDialog>
   );
 }

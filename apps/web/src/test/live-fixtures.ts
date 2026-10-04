@@ -195,6 +195,7 @@ export function makeEvaluationDetail(overrides: Partial<EvaluationDetail> = {}):
     editableQuestionIds: items.map((i) => i.questionId),
     roster: { enrolled: 24, unlinked: 2, conflicts: 0 },
     templateRevision: null,
+    courseId: "c1",
     ...overrides,
   };
 }

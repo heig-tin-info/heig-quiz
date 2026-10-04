@@ -12,7 +12,13 @@ import { randomUUID } from "node:crypto";
 
 import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 
-import type { EnrollmentPatch, StudentClassroom, StudentClassroomPage } from "@quiz/contracts";
+import type {
+  CourseRole,
+  EnrollmentPatch,
+  StudentClassroom,
+  StudentClassroomPage,
+} from "@quiz/contracts";
+import { effectiveCourseRole, staffChangeRefusal, type StaffChange } from "@quiz/domain";
 
 import { isUniqueViolation, type Db } from "../../db/client.js";
 import {
@@ -44,6 +50,7 @@ async function staffOf(db: Db, courseIds: string[]) {
     .select({
       courseId: courseStaff.courseId,
       userId: users.id,
+      role: courseStaff.role,
       givenName: users.givenName,
       familyName: users.familyName,
       email: users.email,
@@ -60,13 +67,19 @@ async function staffOf(db: Db, courseIds: string[]) {
 /**
  * The course cards of `GET /courses`: every course `access` lets through
  * (`accessWhere(user, staffAccess(user.id))`), with its live classrooms and
- * their headcounts, its staff, and whether `viewerId` hid it (#155).
+ * their headcounts, its staff, whether the viewer hid it (#155) and the
+ * viewer's role on it (ADR-068: `owner` under Super Powers, else their seat's).
  *
  * A hidden course is still IN the list, flagged: hiding takes a course out
  * of the viewer's navigation only (ADR-032), and the pickers and the MCP
  * `list_courses` read this same list and must keep seeing it.
  */
-export async function listCourses(db: Db, access: SQL | undefined, viewerId: string) {
+export async function listCourses(
+  db: Db,
+  access: SQL | undefined,
+  viewer: { id: string; reachesAll: boolean },
+) {
+  const viewerId = viewer.id;
   const rows = await db
     .select({
       id: courses.id,
@@ -111,6 +124,13 @@ export async function listCourses(db: Db, access: SQL | undefined, viewerId: str
     code: c.code,
     createdAt: c.createdAt.toISOString(),
     hidden: c.hiddenAt !== null,
+    // Every listed course is reached by a seat or by Super Powers, so the
+    // role is never null here; `assistant` is only the type's floor.
+    myRole:
+      effectiveCourseRole({
+        reachesAll: viewer.reachesAll,
+        seatRole: staff.find((s) => s.courseId === c.id && s.userId === viewerId)?.role ?? null,
+      }) ?? ("assistant" as const),
     templates: templates.get(c.id) ?? 0,
     classrooms: rooms
       .filter((r) => r.courseId === c.id)
@@ -136,13 +156,14 @@ export async function listCourses(db: Db, access: SQL | undefined, viewerId: str
         familyName: s.familyName,
         email: s.email,
         avatarUrl: shownAvatar(s.userId, s.avatarAt, s.pictureUrl),
+        role: s.role,
       })),
   }));
 }
 
 /**
- * Creates a course with its creator as the first member of the staff: a
- * course without a staff would be reachable by nobody but an admin. `null`
+ * Creates a course with its creator as the first member of the staff, its
+ * owner: a course without one would be run by nobody but an admin. `null`
  * when the code is taken (nothing is written then).
  */
 export async function createCourse(
@@ -157,7 +178,7 @@ export async function createCourse(
     .onConflictDoNothing({ target: courses.code })
     .returning();
   if (!created) return null;
-  await db.insert(courseStaff).values({ courseId: id, userId: creatorId });
+  await db.insert(courseStaff).values({ courseId: id, userId: creatorId, role: "owner" });
   return created;
 }
 
@@ -223,6 +244,7 @@ export async function staffOfCourse(db: Db, courseId: string) {
       givenName: users.givenName,
       familyName: users.familyName,
       email: users.email,
+      role: courseStaff.role,
     })
     .from(courseStaff)
     .innerJoin(users, eq(courseStaff.userId, users.id))
@@ -251,30 +273,63 @@ export async function setCourseHidden(
 
 // --- Course staff -----------------------------------------------------------
 
-/** Gives an account a seat on the staff; a second call is a no-op. True when the seat is new. */
-export async function addStaff(db: Db, courseId: string, userId: string): Promise<boolean> {
+/**
+ * Gives an account a seat on the staff, with its role. True when the seat
+ * is new; false when the account already held one, which is left as it was
+ * (the route answers 409 `already_staff`; a role changes by `changeStaffSeat`).
+ */
+export async function addStaff(
+  db: Db,
+  courseId: string,
+  userId: string,
+  role: CourseRole,
+): Promise<boolean> {
   const added = await db
     .insert(courseStaff)
-    .values({ courseId, userId })
+    .values({ courseId, userId, role })
     .onConflictDoNothing()
     .returning({ userId: courseStaff.userId });
   return added.length > 0;
 }
 
-export async function staffSeatCount(db: Db, courseId: string): Promise<number> {
-  const [seats] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(courseStaff)
-    .where(eq(courseStaff.courseId, courseId));
-  return seats?.count ?? 0;
-}
+/** What a change to one seat came to: refused, or the role before it. */
+export type StaffChangeOutcome =
+  | { refused: "not_found" }
+  | { refused: "last_owner" }
+  | { refused: null; from: CourseRole };
 
-/** Takes a seat away; the user's open streams are closed with it (#248). */
-export async function removeStaff(db: Db, courseId: string, userId: string): Promise<void> {
-  await db
-    .delete(courseStaff)
-    .where(and(eq(courseStaff.courseId, courseId), eq(courseStaff.userId, userId)));
-  accessRevoked([userId]);
+/**
+ * Sets the role of `userId`'s seat, or removes it (`next`), under the
+ * last-owner rule (`staffChangeRefusal`): a course never loses its last
+ * owner. The course's seats are read `FOR UPDATE` in the same transaction as
+ * the write, so two owners demoting or removing each other at the same
+ * instant cannot both pass the count: the second waits for the first, then
+ * counts again. A removed member's open streams are closed with the seat (#248).
+ */
+export async function changeStaffSeat(
+  db: Db,
+  courseId: string,
+  userId: string,
+  next: StaffChange,
+): Promise<StaffChangeOutcome> {
+  const outcome = await db.transaction(async (tx): Promise<StaffChangeOutcome> => {
+    const seats = await tx
+      .select({ userId: courseStaff.userId, role: courseStaff.role })
+      .from(courseStaff)
+      .where(eq(courseStaff.courseId, courseId))
+      .for("update");
+    const target = seats.find((s) => s.userId === userId);
+    if (!target) return { refused: "not_found" };
+    const owners = seats.filter((s) => s.role === "owner").length;
+    const refused = staffChangeRefusal({ owners, targetRole: target.role, next });
+    if (refused) return { refused };
+    const seat = and(eq(courseStaff.courseId, courseId), eq(courseStaff.userId, userId));
+    if (next === "remove") await tx.delete(courseStaff).where(seat);
+    else if (next !== target.role) await tx.update(courseStaff).set({ role: next }).where(seat);
+    return { refused: null, from: target.role };
+  });
+  if (next === "remove" && outcome.refused === null) accessRevoked([userId]);
+  return outcome;
 }
 
 // --- Classrooms -------------------------------------------------------------

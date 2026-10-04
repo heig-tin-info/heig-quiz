@@ -13,7 +13,7 @@ A course card is a summary of four things:
 - the **Pools of this course**, the pools its evaluations may draw from;
 - how many **evaluation templates** it keeps; the count opens the course page.
 
-The course's name opens its page. Under the title, five tabs, and the primary action at the right of the title changes with the tab: **Classrooms** (the default, with **New classroom**), **Templates** (**New template**), **Linked pools** (**Link a pool**), **Members** (**Add a staff member**) and **Settings**, which has none.
+The course's name opens its page. Under the title, five tabs, and the primary action at the right of the title changes with the tab: **Classrooms** (the default, with **New classroom**), **Templates** (**New template**), **Linked pools** (**Link a pool**), **Members** (**Add a staff member**) and **Settings**, which has none. An assistant of the course sees only **New template** there: the other three are an owner's (see below), and their **Settings** tab holds only whether the course shows in their own navigation.
 
 A course outlives a class. The same "Programmation C" carries the classroom of 2026, then the one of 2027, and its staff and pools stay in place from one year to the next.
 
@@ -21,7 +21,7 @@ To rename a course or change its code, open its **Settings** tab and click **Edi
 
 ### Adding a colleague to the staff
 
-On the course page's **Members** tab, click **Add a staff member** (the card's menu, the three dots, offers it too). The field asks for the **E-mail of an existing account**: the colleague must have signed in once, otherwise the form answers "No account has signed in with this address yet." Every member of the staff has the same rights on the course and its classrooms; there is no owner. Each member's row on the **Members** tab carries **Remove from the staff**; the last member cannot be removed.
+On the course page's **Members** tab, click **Add a staff member** (the card's menu, the three dots, offers it too). The field asks for the **E-mail of an existing account**: the colleague must have signed in once, otherwise the form answers "No account has signed in with this address yet." The form also asks for the **Role**: **Assistant** (the default) or **Owner**. Every member of the staff reaches the course and all its classrooms; an **owner** also runs it — adds and removes members and changes their roles, renames or deletes the course, links and unlinks its pools, creates and deletes its classrooms, and publishes or withdraws results and publishes the correction of an exercise. An **assistant** does everything else: evaluations, grading, rosters, a classroom's settings. Each member's row on the **Members** tab shows their role; an owner finds **Make owner** or **Make assistant** and **Remove from the staff** there, and every member finds **Leave the course** on their own row. A course keeps at least one owner: its last owner can be neither removed nor made an assistant. Adding someone already on the staff is refused; change their role instead.
 
 Being on the staff of a course is enough to be a teacher: a colleague you add does not need a grant from the administrator.
 
@@ -137,3 +137,5 @@ Your own GitHub account is linked from your **Settings** page, in its **GitHub**
 **I changed an address and the student lost the classroom.** Changing the address revokes the claim on purpose, so that a seat never stays attached to the wrong account. The student claims it again at their next sign-in with the new address.
 
 **A colleague cannot open my classroom.** Access follows the staff of the course, not the classroom. Add them with **Add a staff member** on the course page's **Members** tab.
+
+**A colleague cannot publish the results, or create a classroom.** They are an assistant of the course: those are an owner's. An owner makes them one with **Make owner** on the **Members** tab.

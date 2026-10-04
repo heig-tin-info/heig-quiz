@@ -195,6 +195,7 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
     editableQuestionIds: ["q1", "q2"],
     roster: { enrolled: 24, unlinked: 0, conflicts: 0 },
     templateRevision: null,
+    courseId: "c1",
     ...over,
   };
 }

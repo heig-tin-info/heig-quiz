@@ -24,7 +24,9 @@ import {
 } from "../../src/db/schema.js";
 import { emailIn, normalizeEmail } from "../../src/identity.js";
 import { createTeacherGrant } from "../../src/modules/admin/service.js";
-import { addStaff, claimLines, type ClaimMatch } from "../../src/modules/org/service.js";
+import type { CourseRole } from "@quiz/contracts";
+
+import { addStaff, changeStaffSeat, claimLines, type ClaimMatch } from "../../src/modules/org/service.js";
 import { syncRoleOfUser } from "../../src/roles.js";
 import { targetOf, type Identity } from "./identity.js";
 import type { Destination } from "./mapping.js";
@@ -222,16 +224,27 @@ export async function importGrants(ctx: Ctx) {
   }
 }
 
-/** Course staff: the owner and the claimed seats of each mapped classroom. */
+/**
+ * Course staff: the owner and the claimed seats of each mapped classroom,
+ * with their roles (ADR-068, D04 (c)): the classroom's owner and a `teacher`
+ * seat become owners of the course, an `assistant` seat an assistant. A seat
+ * is never demoted: an account that owns one classroom of the course owns
+ * the course, whatever another classroom made it, and a seat that existed in
+ * Quiz before the import keeps its role unless the import makes it an owner.
+ */
 export async function importStaff(ctx: Ctx) {
-  const seat = async (courseId: string, userId: string) => {
-    if (await addStaff(ctx.db, courseId, userId)) written(ctx, "course_staff");
+  const seat = async (courseId: string, userId: string, role: CourseRole) => {
+    if (await addStaff(ctx.db, courseId, userId, role)) written(ctx, "course_staff");
+    else if (role === "owner") {
+      const promoted = await changeStaffSeat(ctx.db, courseId, userId, "owner");
+      if (promoted.refused === null && promoted.from !== "owner") written(ctx, "course_staff");
+    }
   };
   for (const c of ctx.snapshot.classrooms) {
     const dest = ctx.mapped.get(c.id);
     if (!dest) continue;
     const owner = target(ctx, c.teacherId);
-    if (owner) await seat(dest.courseId, owner);
+    if (owner) await seat(dest.courseId, owner, "owner");
     else note(ctx, "staff", `"${c.name}": its owner ${nameOf(ctx.usersById.get(c.teacherId))} is unresolved, no seat`);
     for (const s of ctx.snapshot.staff.filter((s) => s.classroomId === c.id)) {
       const who = target(ctx, s.userId);
@@ -241,9 +254,9 @@ export async function importStaff(ctx: Ctx) {
       else if (s.role === "assistant" && ctx.decisions.assistants === "skip") {
         note(ctx, "staff", `"${c.name}": assistant ${whom} left out (--assistants=skip)`);
       } else {
-        await seat(dest.courseId, who);
+        await seat(dest.courseId, who, s.role === "teacher" ? "owner" : "assistant");
         if (s.role === "assistant") {
-          note(ctx, "staff", `"${c.name}": assistant ${whom} becomes staff of ${dest.courseCode}, every classroom of it (D04 (a))`);
+          note(ctx, "staff", `"${c.name}": assistant ${whom} becomes an assistant of ${dest.courseCode}, every classroom of it (D04 (a), (c))`);
         }
       }
     }

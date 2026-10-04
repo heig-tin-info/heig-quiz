@@ -472,14 +472,14 @@ export type StarsCleared = z.infer<typeof StarsCleared>;
 export const MoveBlockingCourse = z.object({
   /**
    * Null, like `courseName`, and `classrooms` empty, for a course the caller
-   * is not on the staff of: the 409 names it by its code and says no more
+   * is not on the staff of (an assistant's course is shown in full): the 409 names it by its code and says no more
    * about a course they cannot open (invariant 6).
    */
   courseId: z.uuid().nullable(),
   courseName: z.string().nullable(),
   courseCode: z.string(),
   classrooms: z.array(z.object({ id: z.uuid(), name: z.string() })),
-  /** The caller holds a staff seat, so `linkCourses: true` can cover it. */
+  /** The caller owns the course (ADR-068), so `linkCourses: true` can cover it. */
   mayLink: z.boolean(),
 });
 export type MoveBlockingCourse = z.infer<typeof MoveBlockingCourse>;
@@ -488,7 +488,8 @@ export type MoveBlockingCourse = z.infer<typeof MoveBlockingCourse>;
  * The 409 of a refused move, in three flavours, all shaped the same so the
  * client parses one schema:
  *   - `pool_not_linked`: ask the teacher, retry with `linkCourses: true`;
- *   - `course_forbidden`: a named course is not theirs to link — no retry;
+ *   - `course_forbidden`: a named course is not theirs to link (they are not
+ *     an owner of it, ADR-068) — no retry;
  *   - `name_taken`: the target pool already has a question by that internal
  *     name, and a move keeps the name it moves (ADR-017).
  */

@@ -30,9 +30,13 @@ you archive it.
 ## Staff
 
 **Add a staff member** takes the e-mail of an account that has already
-signed in once. Every member of the staff has the same rights on the
-course's classrooms — there is no owner. The overflow menu also removes
-someone from the staff.
+signed in once, and a role. Every member of the staff reaches every
+classroom of the course. An **owner** also runs it: the staff and their
+roles, the course's name and deletion, its linked pools, creating and
+deleting classrooms, and publishing results. An **assistant** does the rest.
+On **Members**, an owner changes a role or removes someone from a person's
+row, and anyone leaves the course from their own. A course keeps at least
+one owner.
 
 ## Pools of this course
 

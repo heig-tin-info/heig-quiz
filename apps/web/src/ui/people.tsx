@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { useT } from "../i18n";
 import { Actions } from "./actions";
 import { cx } from "./layers";
@@ -33,9 +35,18 @@ const DISC = "size-6 text-[10px]";
 
 /**
  * The card behind a disc: the face, the name, the address, the actions. Also
- * a row of its own where a list of people is the page (a course's members).
+ * a row of its own where a list of people is the page (a course's members),
+ * where `badge` says what the person is there (their role), after the name.
  */
-export function PersonCard({ person, actions }: { person: Person; actions?: MenuItem[] }) {
+export function PersonCard({
+  person,
+  actions,
+  badge,
+}: {
+  person: Person;
+  actions?: MenuItem[];
+  badge?: ReactNode;
+}) {
   const t = useT();
   return (
     <div className="flex items-center gap-2.5">
@@ -45,7 +56,10 @@ export function PersonCard({ person, actions }: { person: Person; actions?: Menu
         className="size-9 text-sm"
       />
       <div className="min-w-0">
-        <p className="truncate text-[13px] font-semibold">{fullName(person)}</p>
+        <p className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-[13px] font-semibold">{fullName(person)}</span>
+          {badge}
+        </p>
         <a
           href={`mailto:${person.email}`}
           className="block truncate text-xs text-fg-muted hover:text-fg hover:underline"
@@ -98,15 +112,15 @@ export function PersonPill({
 }
 
 /** A row of `PersonPill`s, capped at `max` with a "+N" disc for the rest. */
-export function PeopleStack({
+export function PeopleStack<P extends Person>({
   people,
   actions,
   max = 10,
   className = "",
 }: {
-  people: Person[];
+  people: P[];
   /** The actions of ONE person; an empty list leaves the card read-only. */
-  actions?: (p: Person) => MenuItem[];
+  actions?: (p: P) => MenuItem[];
   max?: number;
   className?: string;
 }) {

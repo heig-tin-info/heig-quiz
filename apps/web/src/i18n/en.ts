@@ -105,6 +105,9 @@ export const en = {
   "error.githubAppNotInstalled": "Quiz's GitHub App is not installed on this organization. Install it, then try again.",
   "error.superPowersActive": "Super Powers are already on. Switch them off first to start a new hour.",
   "error.superPowersRequired": "This takes Super Powers. Switch them on in Settings first.",
+  "error.ownerRequired": "Only an owner of the course may do that.",
+  "error.lastOwner": "A course keeps at least one owner: make someone else an owner first.",
+  "error.alreadyStaff": "This person is already on the staff of the course.",
   "error.impersonationReadOnly": "You are acting as a student, read only: nothing can be changed from this window.",
   "error.correctionNotOpen": "The correction can only be published while the exercise is running. It may have just been closed.",
   "error.correctionNotAllowed": "The correction is published early for an exercise only, never for an exam or a poll.",
@@ -151,6 +154,17 @@ export const en = {
   "courses.staffRemove": "Remove from the staff",
   "courses.staffRemoveConfirm": "Remove {name} from the staff of “{course}”?",
   "courses.staffUnknown": "No account has signed in with this address yet.",
+  "courses.staffRole": "Role",
+  "courses.role.owner": "Owner",
+  "courses.role.assistant": "Assistant",
+  "courses.role.desc.owner":
+    "Runs the course: its classrooms, linked pools and staff, and the release of results.",
+  "courses.role.desc.assistant":
+    "Works in every classroom: evaluations, grading, rosters. Leaves the course itself to its owners.",
+  "courses.makeOwner": "Make owner",
+  "courses.makeAssistant": "Make assistant",
+  "courses.leave": "Leave the course",
+  "courses.leaveConfirm": "Leave the staff of “{course}”? You will no longer reach it.",
 
   "courses.hide": "Hide for me",
   "courses.hideHint": "Out of your list, sidebar and palette. Your colleagues still see it.",
@@ -168,7 +182,7 @@ export const en = {
   "courses.tab.members": "Members",
   "courses.tab.settings": "Settings",
   "courses.members.hint":
-    "Every member of the staff reaches the whole course: its classrooms, templates, pools and members. A colleague is added by the address they sign in with, once they have signed in.",
+    "Every member of the staff reaches the whole course. Owners also run it: they add and remove members, link pools, create and delete classrooms, and release results. A colleague is added by the address they sign in with, once they have signed in.",
   "courses.settings.general": "Course",
   "courses.settings.identity": "Name and code",
   "courses.settings.edit": "Edit",
@@ -181,6 +195,7 @@ export const en = {
   "courses.settings.lifecycle": "Delete",
   "courses.settings.deleteDesc":
     "Deletes the course, its classrooms with their rosters and results, and its templates. This cannot be undone.",
+  "courses.settings.ownerOnly": "The name, the code and the deletion of the course are its owners' to change.",
   "classrooms.title": "Classrooms",
   "classrooms.new": "New classroom",
   "classrooms.name": "Name",
@@ -1047,7 +1062,7 @@ export const en = {
   "pool.move.failed": "These questions could not be moved.",
   "pool.move.nameTaken": "The target pool already has a question named {name}.",
   "pool.move.forbidden":
-    "You are not on the teaching staff of {course}, so this pool cannot be added to it.",
+    "Only an owner of {course} may add this pool to it.",
   "pool.move.usedTitle": "Already used in a classroom",
   "pool.move.usedBody.one":
     "This question is already used in {classrooms}. Add the pool “{pool}” to {courses} so the class keeps reaching it?",

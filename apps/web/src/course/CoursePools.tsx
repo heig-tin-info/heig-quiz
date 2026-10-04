@@ -12,7 +12,7 @@ import { useErrorToast } from "../notify";
 import type { Route } from "../router";
 import { Actions, Button, Card, Menu, QueryError, Skeleton } from "../ui";
 import { courseKey, poolsKey } from "../queryKeys";
-import { useCourseDetail } from "./parts";
+import { useCourseDetail, useIsCourseOwner } from "./parts";
 
 type LinkedPool = { id: string; name: string; questionCount: number };
 
@@ -101,11 +101,12 @@ export function LinkPoolMenu({ course }: { course: CourseSummary }) {
   );
 }
 
-/** The Linked pools tab of the course page: the pools, each with its unlink. */
+/** The Linked pools tab of the course page: the pools, each with its unlink for an owner. */
 export function LinkedPools({ course, navigate }: { course: CourseSummary; navigate: (r: Route) => void }) {
   const t = useT();
   const confirm = useConfirm();
   const { unlink } = usePoolLinks(course);
+  const isOwner = useIsCourseOwner(course.id);
 
   const confirmUnlink = async (pool: LinkedPool) => {
     const ok = await confirm({
@@ -122,7 +123,8 @@ export function LinkedPools({ course, navigate }: { course: CourseSummary; navig
       <PoolList
         course={course}
         navigate={navigate}
-        rowAction={(pool) => (
+        // Linking and unlinking are an owner's (ADR-068): an assistant reads the list.
+        rowAction={!isOwner ? undefined : (pool) => (
           <Actions
             label={t("common.actions")}
             size="sm"

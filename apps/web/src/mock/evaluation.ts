@@ -955,6 +955,7 @@ const evaluationDetail = (e: MockEvaluation) => ({
   self: selfOf(e),
   roster: rosterOf(e),
   templateRevision: templateRevisionOf(e),
+  courseId: rooms.find((r) => r.id === e.classroomId)?.courseId ?? "",
 });
 
 export const dashboardView = (e: MockEvaluation, includeAnswers: boolean) => {
@@ -1702,7 +1703,9 @@ on("POST", "/app/api/questions/move", (_m, body) => {
       courseName: course.name,
       courseCode: course.code,
       classrooms: [] as { id: string; name: string }[],
-      mayLink: course.staff.some((s) => s.userId === (me?.id ?? "u-me")),
+      // As the server does (ADR-068): a seat reaches the course, an owner's links to it.
+      reached: course.staff.some((s) => s.userId === (me?.id ?? "u-me")),
+      mayLink: course.staff.some((s) => s.userId === (me?.id ?? "u-me") && s.role === "owner"),
     };
     const listed = entry.classrooms as { id: string; name: string }[];
     if (!listed.some((x) => x.id === room.id)) listed.push({ id: room.id, name: room.name });
@@ -1710,8 +1713,8 @@ on("POST", "/app/api/questions/move", (_m, body) => {
   }
   const blocked = [...blocking.values()];
   // As the server does: a course the caller cannot open is named by its code only.
-  const asSeen = (c: Record<string, unknown>) =>
-    c.mayLink === true
+  const asSeen = ({ reached, ...c }: Record<string, unknown>) =>
+    reached === true
       ? c
       : { courseId: null, courseName: null, courseCode: c.courseCode, classrooms: [], mayLink: false };
   let linkedCourseIds: string[] = [];
@@ -1728,7 +1731,7 @@ on("POST", "/app/api/questions/move", (_m, body) => {
     if (forbidden.length > 0) {
       throw new MockPayload(409, {
         error: "course_forbidden",
-        message: "You are not on the teaching staff of that course",
+        message: "Only an owner of that course may add this pool to it",
         courses: forbidden.map(asSeen),
         names: [],
       });

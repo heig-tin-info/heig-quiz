@@ -87,7 +87,7 @@ A student sees their classrooms, the evaluations opened there, their own answers
 
 A teacher reaches the data of a course only if they are on that course's staff. The check is made when the data is loaded; without a staff seat, the answer is the same as if the course did not exist (`apps/api/src/modules/guards.ts`, the `staffAccess` predicate).
 
-Within a staff, every member has the same rights, over every classroom of the course, past years included. Any staff member may add a colleague to it. A teacher who is not on a course's staff sees nothing of its students.
+Within a staff, every member reaches every classroom of the course, past years included. Each holds a role (ADR-068): only an **owner** adds a colleague to the staff, removes one or changes their role, and only an owner publishes or withdraws results; an **assistant** works in the classrooms. Any member may leave the staff. A teacher who is not on a course's staff sees nothing of its students.
 
 When a classroom has the drill, its staff see each student's drill activity: the questions practised, the sessions, the recall rate and its progress week by week (`apps/api/src/modules/drill/teacher.ts`). Students are told so in their drill tab. A student may leave the drill of a classroom: from then on nothing more is counted, what was recorded before stays visible, and the teacher sees that and when the student left (ADR-041 §8).
 

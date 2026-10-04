@@ -51,6 +51,7 @@ export type AuditAction =
   | "course.staff_add"
   | "course.pools_update"
   | "course.staff_remove"
+  | "course.staff_role_change"
   | "course.update"
   /** The teacher enabled the drill for a classroom (ADR-041 §6). */
   | "drill.enable"

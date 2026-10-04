@@ -15,7 +15,7 @@ import { IdParam, PublishCorrectionBody, ReleaseBody } from "@quiz/contracts";
 
 import { tracer } from "../../audit.js";
 import { iso } from "../../clock.js";
-import { loadEvaluation, ownAttempt, teacherGuard } from "../guards.js";
+import { loadEvaluation, ownAttempt, teacherGuard, withCourseRole } from "../guards.js";
 import { studentRoute, teacherRoute } from "../http.js";
 import { byId } from "../evaluation/service.js";
 import * as gradingEvents from "../grading/events.js";
@@ -38,6 +38,17 @@ export async function resultsPlugin(app: FastifyInstance) {
   // The loaders of invariant 6, each answering its own 404.
   const staffEvaluation = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
     loadEvaluation(app, req, reply, p.id);
+  /**
+   * What reaches the students — a release, its withdrawal, a published
+   * correction — is the course owner's call (ADR-068): an assistant gets
+   * `403 owner_required`, before the body is parsed.
+   */
+  const ownerEvaluation = withCourseRole(
+    app,
+    staffEvaluation,
+    (scope) => scope.classroom.courseId,
+    "owner",
+  );
   const own = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
     ownAttempt(app, req, reply, p.id);
 
@@ -85,7 +96,7 @@ export async function resultsPlugin(app: FastifyInstance) {
     "/app/api/evaluations/:id/release",
     { preHandler: requireTeacher },
     teacher(
-      { params: IdParam, body: ReleaseBody, optionalBody: true, load: staffEvaluation },
+      { params: IdParam, body: ReleaseBody, optionalBody: true, load: ownerEvaluation },
       async ({ req, now, scope }) => {
         const again = scope.evaluation.releasedAt !== null;
         const released = await service.releaseResults(app.db, scope.evaluation, now);
@@ -108,7 +119,7 @@ export async function resultsPlugin(app: FastifyInstance) {
     "/app/api/evaluations/:id/publish-correction",
     { preHandler: requireTeacher },
     teacher(
-      { params: IdParam, body: PublishCorrectionBody, load: staffEvaluation },
+      { params: IdParam, body: PublishCorrectionBody, load: ownerEvaluation },
       async ({ req, now, scope }) => {
         const published = await service.publishCorrection(app.db, scope.evaluation, now);
         if (published.first) {
@@ -136,7 +147,7 @@ export async function resultsPlugin(app: FastifyInstance) {
   app.post(
     "/app/api/evaluations/:id/unrelease",
     { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: staffEvaluation }, async ({ req, now, scope }) => {
+    teacher({ params: IdParam, load: ownerEvaluation }, async ({ req, now, scope }) => {
       await service.unreleaseResults(app.db, scope.evaluation, now);
       await trace(req, "results.unrelease", "evaluation", scope.evaluation.id);
       await announce(scope.evaluation.id);

@@ -47,6 +47,7 @@ import { ExportButton } from "./ExportButton";
 import { GradeTable } from "./GradeTable";
 import { Histogram } from "./Histogram";
 import { StatsRow } from "./StatsRow";
+import { useIsCourseOwner } from "../course/parts";
 import { evaluationKey, resultsByQuestionKey, resultsKey, resultsViewKey } from "../queryKeys";
 
 type Tab = "students" | "questions";
@@ -136,6 +137,10 @@ export function ResultsView({
   const presentable =
     evaluation.data !== undefined && hasCorrection(evaluation.data.evaluation) && (view?.items.length ?? 0) > 0;
 
+  // Releasing and withdrawing are a course owner's (ADR-068): an assistant
+  // reads and grades, and is offered neither. Not known yet is not an owner.
+  const isOwner = useIsCourseOwner(evaluation.data?.courseId);
+
   const links = gradingLinks(evaluationId);
   useScreenCommands([
     {
@@ -145,13 +150,17 @@ export function ResultsView({
       group: "navigate",
       run: () => navigate(links.grading),
     },
-    {
-      id: "results:release",
-      label: t(view?.released ? "results.release.again" : "results.release"),
-      icon: Send,
-      group: "action",
-      run: () => void ask(true),
-    },
+    ...(isOwner
+      ? [
+          {
+            id: "results:release",
+            label: t(view?.released ? "results.release.again" : "results.release"),
+            icon: Send,
+            group: "action" as const,
+            run: () => void ask(true),
+          },
+        ]
+      : []),
   ]);
 
   if (results.isLoading) {
@@ -207,13 +216,15 @@ export function ResultsView({
                 <Presentation /> {t("results.present")}
               </Button>
             ) : null}
-            <Button onClick={() => void ask(true)} loading={releasing}>
-              <Send /> {t(view.released ? "results.release.again" : "results.release")}
-            </Button>
+            {isOwner ? (
+              <Button onClick={() => void ask(true)} loading={releasing}>
+                <Send /> {t(view.released ? "results.release.again" : "results.release")}
+              </Button>
+            ) : null}
           </>
         }
         menu={
-          view.released ? (
+          view.released && isOwner ? (
             // One action, so one icon button: `Actions` is what turns a
             // single-item overflow menu into the thing it always was.
             <Actions

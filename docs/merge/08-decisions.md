@@ -40,7 +40,10 @@ Status values: `open`, `settled`, `superseded`.
   sees every classroom (risk of acting in the wrong one). A per-classroom
   restriction of staff is a possible later refinement, not part of the
   merge. (b) moot: M0-02 found 0 pending seats; (c) dropped as
-  suggested.
+  suggested — *reversed 2026-10-04 by ADR-068*: no longer dropped but
+  mapped, a heig-classroom `teacher` seat (and a classroom's owner) becomes
+  an `owner` of the Quiz course and an `assistant` seat an `assistant`,
+  never demoting a seat Quiz already holds.
 
 ### D08 — Identity key for the migration
 - **Suggested**: the cascade `swiss_edu_id` → `sub` (only if shared) →

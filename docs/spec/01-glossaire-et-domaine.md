@@ -87,7 +87,7 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 
 Roles on a shared pool: `reader` may read and copy into their own pool, `contributor` may create and publish versions, `owner` manages members and deletes.
 
-A course may have several teachers. They all have the same rights on its classrooms.
+A course may have several teachers. They all reach its classrooms; each seat is `owner` or `assistant` (ADR-068): an owner also manages the staff, the course, its linked pools, its classrooms' creation and deletion, and the release of results.
 
 **Super Powers** (ADR-054): an admin reaches everyone's content only after switching them on
 from the settings, for one fixed hour of the server's clock, in that browser session only

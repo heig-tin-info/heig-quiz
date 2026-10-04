@@ -257,17 +257,34 @@ describe("import-classroom", () => {
       { email: "s7.student@heig-vd.ch", userId: SRC.s7 },
     ]);
 
-    const seats = await w.db.select({ courseId: courseStaff.courseId, userId: courseStaff.userId }).from(courseStaff);
+    const seats = await w.db
+      .select({ courseId: courseStaff.courseId, userId: courseStaff.userId, role: courseStaff.role })
+      .from(courseStaff);
     expect(seats).toHaveLength(3);
+    // The classroom's owner owns the course, an assistant seat stays one (D04 (c), ADR-068).
     expect(seats).toEqual(expect.arrayContaining([
-      { courseId: w.prog, userId: w.t1 },
-      { courseId: w.prog, userId: SRC.a1 },
-      { courseId: w.info, userId: w.t1 },
+      { courseId: w.prog, userId: w.t1, role: "owner" },
+      { courseId: w.prog, userId: SRC.a1, role: "assistant" },
+      { courseId: w.info, userId: w.t1, role: "owner" },
     ]));
     // The assistant's widening is listed, and the seat makes a teacher.
     expect(report.findings.staff?.some((l) => l.includes("assistant") && l.includes("PROG"))).toBe(true);
     expect((await userOf(w.db, eq(users.id, SRC.a1)))?.role).toBe("teacher");
     expect(report.findings.roles?.length).toBeGreaterThan(0);
+  });
+
+  it("makes the owner of a classroom an owner of its course, even from an assistant seat", async () => {
+    const w = await world();
+    await w.db
+      .update(courseStaff)
+      .set({ role: "assistant" })
+      .where(and(eq(courseStaff.courseId, w.prog), eq(courseStaff.userId, w.t1)));
+    await runImport(w.db, config, snapshot, MAPPING, DECIDED);
+    const [seat] = await w.db
+      .select({ role: courseStaff.role })
+      .from(courseStaff)
+      .where(and(eq(courseStaff.courseId, w.prog), eq(courseStaff.userId, w.t1)));
+    expect(seat?.role).toBe("owner");
   });
 
   it("carries the GitHub links Quiz does not contradict", async () => {

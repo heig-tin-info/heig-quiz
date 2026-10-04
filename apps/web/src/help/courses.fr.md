@@ -30,9 +30,13 @@ dates** la garde dans la liste jusqu'à ce que vous l'archiviez.
 ## Équipe
 
 **Ajouter une personne** prend l'adresse d'un compte qui s'est déjà connecté
-au moins une fois. Tous les membres de l'équipe ont les mêmes droits sur les
-classes du cours — il n'y a pas de propriétaire. Le menu permet aussi de
-retirer quelqu'un de l'équipe.
+au moins une fois, et un rôle. Tous les membres de l'équipe accèdent à toutes
+les classes du cours. Un **propriétaire** le dirige en plus : l'équipe et ses
+rôles, le nom et la suppression du cours, ses banques liées, la création et
+la suppression des classes, et la publication des résultats. Un **assistant**
+fait le reste. Sous **Membres**, un propriétaire change un rôle ou retire
+quelqu'un depuis sa ligne, et chacun quitte le cours depuis la sienne. Un
+cours garde au moins un propriétaire.
 
 ## Banques de ce cours
 
