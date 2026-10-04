@@ -24,7 +24,7 @@
  * repositories therefore costs at most eight requests to GitHub in flight
  * and 1.5 s, and fills over a few refetches.
  */
-import { desc, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
 
 import {
@@ -34,22 +34,24 @@ import {
   type ProjectDetail,
   type ProjectDetailRow,
   type ProjectRepoLive,
+  type ProjectRepoReview,
+  type ProjectRepoScores,
   type ProjectRepoView,
   type ProjectSlotScore,
   type ProjectStudent,
 } from "@quiz/contracts";
-import { changedAfterRelease, projectPrimaryAction, resolveFinalScore, scoreGrade, type ProjectScale } from "@quiz/domain";
+import { changedAfterRelease, projectPrimaryAction, resolveFinalScore, reviewState, scoreGrade, type ProjectScale } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
-import type { Db } from "../../db/client.js";
-import { enrollments, githubAccounts, projectGradeRuns, projectRepos, users } from "../../db/schema.js";
+import type { Db, Tx } from "../../db/client.js";
+import { enrollments, githubAccounts, gradeDispatches, projectGradeRuns, projectRepos, users } from "../../db/schema.js";
 import { installationClient } from "../../github/app.js";
 import { isRateLimited, readRepoLiveState, type LiveRead } from "../../github/metrics.js";
 import { projectInstallation } from "../github/service.js";
-import { isLive, repoDeadlineState } from "./deadline.js";
+import { isLive, releaseCounts, repoDeadlineState } from "./deadline.js";
 import { forEachLimit } from "./lease.js";
-import type { RepoRow } from "./repos.js";
+import { studentRepos, type RepoRow } from "./repos.js";
 import { projectSummary, type ProjectRow } from "./views.js";
 
 /** Live-state reads in flight for one page view. */
@@ -58,6 +60,8 @@ export const LIVE_CONCURRENCY = 8;
 export const LIVE_BUDGET_MS = 1_500;
 
 type RunRow = typeof projectGradeRuns.$inferSelect;
+/** The repository's `deadline` row of the dispatch ledger (F-PROJ-11, M3-05b). */
+type DispatchRow = { sha: string; dispatchedAt: Date | null };
 
 /**
  * The live state of `repos` read within `budgetMs`, by repository id: a
@@ -158,24 +162,97 @@ function liveView(read: LiveRead | undefined): ProjectRepoLive | null {
   return { commitCount, checksPassed, checksTotal, stale: read.stale };
 }
 
-/** One repository's row, from its stored state, its slot runs, its runs' facts and its live read. */
-function repoView(
-  project: ProjectRow,
-  repo: RepoRow,
-  runs: Map<string, RunRow>,
-  facts: RunFacts | undefined,
-  read: LiveRead | undefined,
-): ProjectRepoView {
+/** The runs filling the three slots of `repos`, by id (M3-08b: shared with the score's write). */
+export async function slotRuns(db: Db | Tx, repos: readonly RepoRow[]): Promise<Map<string, RunRow>> {
+  const ids = repos.flatMap((repo) =>
+    [repo.currentGradeRunId, repo.frozenGradeRunId, repo.reviewGradeRunId].filter((id): id is string => id !== null),
+  );
+  if (ids.length === 0) return new Map();
+  return new Map((await db.select().from(projectGradeRuns).where(inArray(projectGradeRuns.id, ids))).map((r) => [r.id, r]));
+}
+
+/** The `deadline` ledger rows of `repoIds`, by repository: the final review's state (M3-05b). */
+async function finalDispatches(db: Db, repoIds: string[]): Promise<Map<string, DispatchRow>> {
+  if (repoIds.length === 0) return new Map();
+  const rows = await db
+    .select({ repoId: gradeDispatches.repoId, sha: gradeDispatches.sha, dispatchedAt: gradeDispatches.dispatchedAt })
+    .from(gradeDispatches)
+    .where(and(inArray(gradeDispatches.repoId, repoIds), eq(gradeDispatches.trigger, "deadline")));
+  return new Map(rows.map((r) => [r.repoId, { sha: r.sha, dispatchedAt: r.dispatchedAt }]));
+}
+
+/**
+ * A repository's scores (F-PROJ-14) and whether they moved since the
+ * release: the three slots, the teacher's score with the maximum it was
+ * written with, the final score resolved and graded by the project's scale,
+ * the release's snapshot. The one computation behind the page's rows and
+ * the score's write (M3-08b); `runs` holds the repository's slot runs
+ * ({@link slotRuns}).
+ */
+export function repoScores(project: ProjectRow, repo: RepoRow, runs: Map<string, RunRow>): ProjectRepoScores {
   const scale = project.gradingScale;
-  const run = (id: string | null) => (id === null ? undefined : runs.get(id));
-  const [current, frozen, review] = [run(repo.currentGradeRunId), run(repo.frozenGradeRunId), run(repo.reviewGradeRunId)];
+  const [current, frozen, review] = slots(repo, runs);
   const final = resolveFinalScore({
     teacherPoints: repo.teacherPoints,
+    teacherMax: repo.teacherMax,
     reviewScore: review ?? null,
     frozenScore: frozen ?? null,
     score: current ?? null,
   });
   const released = project.releasedAt !== null;
+  return {
+    scores: {
+      current: slotScore(current, scale),
+      frozen: slotScore(frozen, scale),
+      review: slotScore(review, scale),
+      teacher:
+        repo.teacherPoints === null
+          ? null
+          : { points: repo.teacherPoints, max: repo.teacherMax, comment: repo.teacherComment, gradedAt: isoOrNull(repo.teacherGradedAt) },
+      final: final && { ...final, grade: scoreGrade(final.points, final.max, scale) },
+    },
+    released: released ? { points: repo.releasedPoints, max: repo.releasedMax } : null,
+    changedAfterRelease: changedAfterRelease(released, releasableScore(project, repo, final), {
+      points: repo.releasedPoints,
+      max: repo.releasedMax,
+    }),
+  };
+}
+
+/**
+ * What the release writes of a final score (M3-08b, review round 2): the
+ * score itself — except a score to verify on a repository that is no longer
+ * live (deleted on GitHub, or of an archived project), which never freezes
+ * and so can never be settled by the teacher: released as NO score, so that
+ * it neither blocks the release nor shows "changed after release" forever.
+ * A live repository's score to verify is the release's `to_verify` refusal
+ * instead (`grades.ts`).
+ */
+export function releasableScore<T extends { toVerify: boolean }>(project: ProjectRow, repo: RepoRow, final: T | null): T | null {
+  return final !== null && final.toVerify && !isLive(repo, project) ? null : final;
+}
+
+/** The repository's three slot runs — current, frozen, review — from {@link slotRuns}'s map. */
+function slots(repo: RepoRow, runs: Map<string, RunRow>): (RunRow | undefined)[] {
+  return [repo.currentGradeRunId, repo.frozenGradeRunId, repo.reviewGradeRunId].map((id) => (id === null ? undefined : runs.get(id)));
+}
+
+/** The final review's state of a repository, from its row and its ledger row (`reviewState`, `@quiz/domain`). */
+function reviewView(project: ProjectRow, repo: RepoRow, dispatch: DispatchRow | undefined): ProjectRepoReview {
+  const state = reviewState({ ...repo, gradingMode: project.gradingMode, dispatch: dispatch ?? null });
+  return { ...state, askedAt: isoOrNull(state.askedAt) };
+}
+
+/** One repository's row, from its stored state, its slot runs, its runs' facts, its ledger row and its live read. */
+function repoView(
+  project: ProjectRow,
+  repo: RepoRow,
+  runs: Map<string, RunRow>,
+  facts: RunFacts | undefined,
+  dispatch: DispatchRow | undefined,
+  read: LiveRead | undefined,
+): ProjectRepoView {
+  const { scores, released, changedAfterRelease: changed } = repoScores(project, repo, runs);
   return {
     ...repoDeadlineState(repo, project),
     provisionStatus: repo.provisionStatus,
@@ -185,24 +262,16 @@ function repoView(
     lastCommit: repo.lastCommitSha === null ? null : { sha: repo.lastCommitSha, at: isoOrNull(repo.lastCommitAt) },
     ciStatus: repo.ciStatus,
     live: liveView(read),
-    scores: {
-      current: slotScore(current, scale),
-      frozen: slotScore(frozen, scale),
-      review: slotScore(review, scale),
-      teacher:
-        repo.teacherPoints === null
-          ? null
-          : { points: repo.teacherPoints, comment: repo.teacherComment, gradedAt: isoOrNull(repo.teacherGradedAt) },
-      final: final && { ...final, grade: scoreGrade(final.points, final.max, scale) },
-    },
-    released: released ? { points: repo.releasedPoints, max: repo.releasedMax } : null,
+    scores,
+    review: reviewView(project, repo, dispatch),
+    released,
     flags: {
       protectionSuspended: repo.protectionSuspendedAt !== null,
-      toVerify: [current, frozen, review].some((r) => r?.toVerify === true),
+      toVerify: slots(repo, runs).some((r) => r?.toVerify === true),
       multiple: facts?.multiple ?? false,
       malformed: facts?.malformed ?? null,
       deleted: repo.deletedAt !== null || read?.state?.missing === true,
-      changedAfterRelease: changedAfterRelease(released, final, { points: repo.releasedPoints, max: repo.releasedMax }),
+      changedAfterRelease: changed,
     },
   };
 }
@@ -219,8 +288,9 @@ export interface DetailOptions {
  * (staff seats excepted) with their repository — null when they have not
  * accepted —, then the repositories whose student has left the roster. A
  * repository of a user who now holds a STAFF seat of the classroom is left
- * out altogether — rows, counts and the release's readiness: a staff seat
- * is never a student's (ADR-018).
+ * out altogether — rows, counts and the release's readiness
+ * (`studentRepos`, `releaseCounts`: the release reads the same): a staff
+ * seat is never a student's (ADR-018).
  * The project was loaded under `staffAccess` by the route (invariant 6).
  */
 export async function projectDetail(
@@ -230,9 +300,8 @@ export async function projectDetail(
   now: Date,
   opts: DetailOptions,
 ): Promise<ProjectDetail> {
-  const seats = await db
+  const roster = await db
     .select({
-      staff: enrollments.staff,
       enrollmentId: enrollments.id,
       userId: enrollments.userId,
       nom: enrollments.nom,
@@ -243,36 +312,18 @@ export async function projectDetail(
     })
     .from(enrollments)
     .leftJoin(githubAccounts, eq(githubAccounts.userId, enrollments.userId))
-    .where(eq(enrollments.classroomId, project.classroomId))
+    .where(and(eq(enrollments.classroomId, project.classroomId), eq(enrollments.staff, false)))
     .orderBy(enrollments.nom, enrollments.prenom, enrollments.id);
-  const roster = seats.filter((s) => !s.staff);
-  const staffUsers = new Set(seats.filter((s) => s.staff).map((s) => s.userId));
   // Individual repositories (M3-03); a group's rows join their members with M3-15.
-  const repos = (
-    await db
-      .select({ repo: projectRepos, user: users, githubLogin: githubAccounts.login })
-      .from(projectRepos)
-      .innerJoin(users, eq(users.id, projectRepos.userId))
-      .leftJoin(githubAccounts, eq(githubAccounts.userId, projectRepos.userId))
-      .where(eq(projectRepos.projectId, project.id))
-  ).filter(({ repo }) => !staffUsers.has(repo.userId));
-
-  const slotIds = repos.flatMap(({ repo }) =>
-    [repo.currentGradeRunId, repo.frozenGradeRunId, repo.reviewGradeRunId].filter((id): id is string => id !== null),
-  );
-  const runs = new Map(
-    (slotIds.length === 0 ? [] : await db.select().from(projectGradeRuns).where(inArray(projectGradeRuns.id, slotIds))).map(
-      (r) => [r.id, r],
-    ),
-  );
-  const facts = await runFacts(
-    db,
-    repos.map(({ repo }) => repo.id),
-  );
-  const liveRepos = repos.map(({ repo }) => repo).filter((repo) => isLive(repo, project));
+  const repos = await studentRepos(db, project);
+  const repoIds = repos.map((repo) => repo.id);
+  const [runs, facts, dispatches] = await Promise.all([slotRuns(db, repos), runFacts(db, repoIds), finalDispatches(db, repoIds)]);
+  const liveRepos = repos.filter((repo) => isLive(repo, project));
   const { live, complete } = await liveStates(db, config, project, liveRepos, opts.log, opts.budgetMs ?? LIVE_BUDGET_MS);
 
-  const views = new Map(repos.map(({ repo }) => [repo.userId, repoView(project, repo, runs, facts.get(repo.id), live.get(repo.id))]));
+  const views = new Map(
+    repos.map((repo) => [repo.userId, repoView(project, repo, runs, facts.get(repo.id), dispatches.get(repo.id), live.get(repo.id))]),
+  );
   const rows: ProjectDetailRow[] = roster.map((s) => ({
     student: {
       enrollmentId: s.enrollmentId,
@@ -285,24 +336,31 @@ export async function projectDetail(
     },
     repo: (s.userId !== null && views.get(s.userId)) || null,
   }));
+  // The repositories whose student has left the roster since, by their account.
   const onRoster = new Set(roster.map((s) => s.userId));
-  for (const { repo, user, githubLogin } of repos) {
-    if (onRoster.has(repo.userId)) continue;
-    const student: ProjectStudent = {
-      enrollmentId: null,
-      userId: user.id,
-      nom: user.familyName,
-      prenom: user.givenName,
-      email: user.email,
-      claimed: false,
-      githubLogin,
-    };
-    rows.push({ student, repo: views.get(repo.userId)! });
+  const leavers = repos.filter((repo) => !onRoster.has(repo.userId)).map((repo) => repo.userId);
+  if (leavers.length > 0) {
+    const accounts = await db
+      .select({ user: users, githubLogin: githubAccounts.login })
+      .from(users)
+      .leftJoin(githubAccounts, eq(githubAccounts.userId, users.id))
+      .where(inArray(users.id, leavers));
+    for (const { user, githubLogin } of accounts) {
+      const student: ProjectStudent = {
+        enrollmentId: null,
+        userId: user.id,
+        nom: user.familyName,
+        prenom: user.givenName,
+        email: user.email,
+        claimed: false,
+        githubLogin,
+      };
+      rows.push({ student, repo: views.get(user.id)! });
+    }
   }
 
   const accepted = [...views.values()];
-  const frozen = liveRepos.filter((r) => r.frozenAt !== null).length;
-  const changed = accepted.filter((v) => v.flags.changedAfterRelease).length;
+  const counts = releaseCounts(project, repos);
   return {
     ...(await projectSummary(db, project, now)),
     releasedAt: isoOrNull(project.releasedAt),
@@ -311,16 +369,16 @@ export async function projectDetail(
       archived: project.archivedAt !== null,
       gradingMode: project.gradingMode,
       sourceAhead: project.sourceAheadSha !== null,
-      live: liveRepos.length,
-      frozen,
+      ...counts,
+      // Over the live repositories only: a non-live one never freezes, so its score to verify is released as none.
+      unverified: liveRepos.filter((repo) => views.get(repo.userId)!.scores.final?.toVerify === true).length,
       released: project.releasedAt !== null,
-      changedAfterRelease: changed,
+      changedAfterRelease: accepted.filter((v) => v.flags.changedAfterRelease).length,
     }),
     counts: {
       students: roster.length,
       accepted: accepted.length,
-      live: liveRepos.length,
-      frozen,
+      ...counts,
       toVerify: accepted.filter((v) => v.flags.toVerify).length,
       alerts: accepted.filter((v) => v.flags.multiple || v.flags.protectionSuspended).length,
     },

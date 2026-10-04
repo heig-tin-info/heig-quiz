@@ -21,11 +21,17 @@
  * repository, the checkpoints', the `project.dispatch` job, its own lease
  * — `lease.ts`, shared with the deadline's) and the checkpoints' authoring
  * (`checkpoints.ts`).
+ * From M3-08b: the staff's writes — the teacher's score and the release
+ * (`grades.ts`), the protection re-enabled (`protection.ts`), an
+ * invitation resent (`invitation.ts`).
  */
 export { acceptProject } from "./accept.js";
 export { createCheckpoint, deleteCheckpoint, listCheckpoints } from "./checkpoints.js";
 export { projectDetail, repoRuns } from "./detail.js";
 export { repoDeadline, setRepoDeadline, setStaffLock } from "./deadline.js";
+export { overrideScore, releaseProject } from "./grades.js";
+export { resendInvitation } from "./invitation.js";
+export { reenableProtection } from "./protection.js";
 export { requestDeadlineWork } from "./jobs.js";
 export {
   createProject,

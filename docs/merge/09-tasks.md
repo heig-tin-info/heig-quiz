@@ -1182,6 +1182,15 @@ under the half that serves them.
   webhook's (App-triggered, not `to_verify`, started after the freeze and
   after the `deadline` ledger row). The reconciliation never re-sends a
   review dispatch: an unconfirmed ledger row stays as it is.
+- **From M3-08b** (2026-10-04): the staff's resend of a pending invitation
+  (`resendInvitation`, `modules/project/invitation.ts`) is INDEPENDENT of
+  this task's daily re-invite: it claims `project_repos.invitation_resent_at`
+  (once a minute) and the re-invite neither reads nor writes that column
+  — the two never wait for each other. Both go through
+  `inviteCollaborator(…, "push")` and both make `invitation_status` follow
+  GitHub's answer (`accepted` on a 204). A repository re-enabled by its
+  staff (`protection_reenabled_at`) is an ordinary repository again for
+  `reconcile.repos`.
 
 ### M3-07 — Sync of the source repository
 - **Depends on**: M2-04, M3-02, D12. ‖ M3-05, M3-06.
@@ -1381,6 +1390,128 @@ that serves them.
   dispatched whose `dueAt` is at or after the project's deadline as
   **void** (it never fires; deletable), and a deletion refused with `409
   checkpoint_dispatched` once any ledger row names it.
+- **As delivered** (branch `merge/M3-08b-project-release`). What M3-12,
+  M3-09, M3-06 and M5-03 inherit:
+  - **Routes**, all staff only through `accessibleProject` /
+    `accessibleProjectRepo` (invariant 6: a student, another teacher, a
+    token get the 404 of a missing entity; an impersonation the read-only
+    403 of ADR-034 first, the loader's 404 where it may write; tested on
+    every route). Refusal bodies are `ProjectRefusal` (`{ error, message,
+    … }`); the codes joined `PROJECT_REFUSALS` (`ProjectErrorCode`), the
+    statuses `modules/project/errors.ts`.
+    - `PATCH /app/api/projects/:id/repos/:rid/score`, body
+      `ScoreOverride` (strict) `{ points: number 0…1000 | null, max?:
+      number > 0, comment?: string ≤ 2000 }` → `ProjectRepoScores` `{
+      scores, released, changedAfterRelease }` — the row's `scores` and
+      `released` as `ProjectRepoView` carries them, so the row is patched in
+      place. `409 not_frozen` before the repository's `frozen_at`, `409
+      grading_none`, `422 score_max_required` (no scored run and no `max`),
+      `422 score_max_mismatch` (a `max` beside a scored run's that
+      differs), `422 score_above_max`. `points: null` clears the score, its
+      maximum and its comment. Audited `project_repo.grade_override`
+      (`payload.before`, `after`: `{ points, max, comment } | null`).
+    - `POST /app/api/projects/:id/release` → `ProjectReleaseResult` `{
+      releasedAt, first, repos, scored }`. `409 grading_none`; `409
+      not_frozen` with `live` and `frozen` counts in the body while a live
+      repository is not frozen, or none is; `409 to_verify` with `repos`
+      (ids) while a repository's final score rests on a run to verify
+      (F-PROJ-14 amended 2026-10-04: the teacher's score settles it;
+      `ProjectFinalScore.toVerify` says which, `scoresFinal` takes an
+      `unverified` count so the page offers no Release meanwhile) — over
+      the LIVE repositories only: a non-live one (deleted, archived
+      project) never freezes, so its score to verify is released as NO
+      score (`releasableScore`, `detail.ts`: the snapshot null, and the
+      `changedAfterRelease` comparison reads the same, so it never
+      re-offers Release). Audited
+      `project.release` (`first`, `repos`, `scored`).
+    - `POST /app/api/projects/:id/repos/:rid/protection` →
+      `ProjectRepoProtection` `{ reenabledAt: iso | null }`; a no-op on a
+      repository not suspended (its last re-enable, or null); `409
+      repo_unavailable` (not provisioned, deleted, archived project).
+      Audited `project_repo.protection_reenabled` (`payload.suspendedAt`).
+    - `POST /app/api/projects/:id/repos/:rid/invite` →
+      `ProjectInvitationResent` `{ invitationStatus, resentAt }`. `409
+      invitation_not_pending`, `409 repo_unavailable` (not provisioned,
+      deleted, archived project: `liveRepoForUpdate`), `429
+      resend_too_soon` (less than a minute after the last resend), `409
+      github_account_stale` (the student's account is gone or renamed:
+      they relink), `502 invite_failed`. Audited `project_repo.invite_resent`
+      (`payload.login`, `invitationStatus`).
+    - `ProjectUnassigned` (`{ error: "unassigned_students", message,
+      students: [{ enrollmentId, nom, prenom }] }`) is the `409` body of
+      Publish, for M3-12.
+  - **The teacher's score has its own maximum** (decision 1):
+    `project_repos.teacher_max`, written WITH the points — the scored run's
+    maximum when the repository has one (the run the final score would
+    otherwise come from: the review slot, else the frozen, else the
+    current; `resolveFinalScore` without the teacher), the teacher's own
+    otherwise. The score is then self-contained: a later run with another
+    maximum never re-reads it. `resolveFinalScore` takes `teacherMax`
+    (`teacherMax ?? review.max ?? ci.max ?? null`); a null `teacher_max`
+    (heig-classroom's imported rows) keeps reading the CI's, as before.
+    `teacherScoreMax(points, given, runMax)` in `@quiz/domain/finalScore.ts`
+    is the rule; a run to verify is no scored run (`runMax` null): the
+    teacher gives their own maximum. `ProjectRepoView.scores.teacher`
+    gained `max`; `resolveFinalScore` and `ProjectFinalScore` carry
+    `toVerify` (the run behind the score is to verify; never for a
+    teacher's).
+  - **The release** (decisions 2 and 3): `releaseProject`
+    (`modules/project/grades.ts`) reads the page's own set and counts —
+    `studentRepos(db, project)` (`repos.ts`: every repository but those of
+    a user who now holds a staff seat) and `releaseCounts(project, repos)`
+    (`deadline.ts`: live, frozen) — and refuses `to_verify` while a final
+    score rests on a run to verify (above). It writes `released_points /
+    released_max` for EVERY repository of that set — a deleted repository with a score gets its
+    snapshot too, so its grade is released and `changedAfterRelease` stays
+    false. The grade is not stored: `scoreGrade(points, max, scale)` on
+    read, everywhere (M5-03 reads the snapshot that way). The readers keep
+    the live final score; `changedAfterRelease` is the flag, which a
+    release again clears. **M3-09's hook**: `ProjectReleaseResult.first`
+    (and the audit's `payload.first`) is true on the first release only;
+    `project_grade_final` goes out then and never on a release again — the
+    place is marked in `routes.ts`.
+  - **The protection re-enabled** (decision 4): `reenableProtection`
+    (`protection.ts`) clears `protection_suspended_at` and writes a new
+    column `project_repos.protection_reenabled_at`; `recordRestore`'s cap
+    counts `reverts.created_at > protection_reenabled_at` only, within the
+    hour. Nothing restored at the re-enable, the runs flagged meanwhile
+    kept `to_verify`. `FINAL_REVIEW_DUE` already required
+    `protection_suspended_at IS NULL` and `review_skipped` writes no ledger
+    row, so the final review is due again on its own (tested through
+    `claimReviewWork` and the page).
+  - **The resend** (decision 5): `resendInvitation` (`invitation.ts`),
+    the minute claimed on a new column `project_repos.invitation_resent_at`
+    before GitHub is called and given back when GitHub's part fails (not
+    once GitHub accepted: the status and the audit then land in one
+    transaction);
+    `linkedLogin` names the student (today's login by the immutable id);
+    `inviteCollaborator(…, "push")`. The row's `invitation_status` follows
+    GitHub's answer (`accepted` on a 204). Apart from M3-06's daily
+    re-invite, which neither reads nor writes `invitation_resent_at`.
+  - **The final review on the row** (M3-12's challenge, 2026-10-04):
+    `ProjectRepoView.review` = `ProjectRepoReview` `{ status: "pending" |
+    "none" | "skipped" | "unconfirmed" | "asked" | "done", reason:
+    "no_frozen_run" | "archived" | "protection_suspended" | null, askedAt:
+    iso | null, sha: string | null, runId: uuid | null }`, derived by
+    `reviewState` (`@quiz/domain/projectView.ts`) from the row and its
+    `grade_dispatches` row (`trigger = deadline`), read in one query by
+    `detail.ts`: the review slot filled ⇒ `done`; a ledger row ⇒ `asked`
+    (`dispatched_at`) or `unconfirmed`; else `grading_mode: none` ⇒ `none`;
+    not frozen ⇒ `pending`; no frozen run ⇒ `none/no_frozen_run`; archived
+    ⇒ `skipped/archived`; suspended ⇒ `skipped/protection_suspended`; else
+    `pending` (due, not yet asked). The ledger wins over the row's state.
+    A test per status in `detail.db.test.ts`.
+  - Migration `0061_project_staff_writes`: the three additive columns.
+    `detail.ts` exports `repoScores(project, repo, runs)` (exactly
+    `ProjectRepoScores`, the score route's answer) and `slotRuns(db,
+    repos)`, the one computation behind the rows and the score's write;
+    `deadline.ts` exports `repoForUpdate` (the project then the repository
+    locked) and `liveRepoForUpdate` (the same, refused unless `isLive`),
+    the one lock every repository write takes.
+  - Not done here: the web page (M3-12); the notification (M3-09); the
+    student's own resend (M3-09); storing a repository's name without its
+    owner (the M3-04 follow-up, still open); a manual re-dispatch of an
+    unconfirmed review.
 
 ### M3-09 — Student side, SSE, notifications
 - **Depends on**: M3-04, D18. ‖ M3-08.
@@ -1441,6 +1572,17 @@ that serves them.
   happens only for a run Quiz's App triggered. A student's own dispatch is
   never worth a notice. A `project_repo.review_skipped` (archived as its
   lock) is the staff's, never the student's.
+- **From M3-08b** (2026-10-04): the release notification
+  (`project_grade_final`, F-PROJ-14, F-GRADE-09) is sent on the FIRST
+  release only: `releaseProject` (`modules/project/grades.ts`) answers
+  `ProjectReleaseResult.first` and audits `project.release` with
+  `payload.first`; the place to send it is marked in the release route
+  (`routes.ts`). A release again (a score changed after the release)
+  rewrites the snapshots and notifies nobody (product owner, decision 3).
+  The student's own resend of an invitation (F-PROJ-07) reuses the staff's
+  rule and column (`resendInvitation`, `invitation.ts`;
+  `project_repos.invitation_resent_at`: one minute per repository, shared
+  by whoever asks) through the student view, never the staff's route.
 
 ### M3-10 — Web: projects in Activities, "New ▾"
 - **Depends on**: M3-01 contracts, M1-05. ‖ M3-11.
@@ -2134,6 +2276,19 @@ that serves them.
   student who never accepted a project (F-GBOOK-01, 06 no. 48) and the
   absence mark are this task's: where that score is stored is decided
   here (M3-01's `project_repos` has no row to hold it).
+- **From M3-08b** (2026-10-04): a released project's grade is read, not
+  stored: the gradebook reads the LIVE final score (`repoScores` of
+  `modules/project/detail.ts`, or `resolveFinalScore` with `teacherMax`)
+  passed through `releasableScore(project, repo, final)` (`detail.ts`: a
+  non-live repository's to-verify final is no score), graded by
+  `scoreGrade(points, max, projects.grading_scale)`, and marks
+  the cell "changed after release" when `changedAfterRelease(true, final,
+  { released_points, released_max })` says so — the same reading as the
+  staff's page (decision 3). A repository with a null snapshot
+  (`released_points IS NULL` after the release) had no score: an empty
+  cell. The source of a cell (I42) is `final.source`: `teacher`, `review`
+  or `ci`. A teacher's score carries its own maximum (`teacher_max`):
+  never rescale it to the CI's.
 
 ### M5-04 — Web: Grades tabs
 - **Depends on**: M5-03.

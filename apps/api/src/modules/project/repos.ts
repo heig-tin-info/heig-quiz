@@ -3,7 +3,7 @@
  * found by GitHub's immutable repository id, never by name; who hears of a
  * change to it; and its one terminal state, deleted on GitHub.
  */
-import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, notInArray } from "drizzle-orm";
 
 import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
@@ -12,6 +12,23 @@ import { projectsChanged, repoChanged } from "./events.js";
 
 export type RepoRow = typeof projectRepos.$inferSelect;
 type ProjectRow = typeof projects.$inferSelect;
+
+/**
+ * The STUDENT repositories of `project`: every one but those of a user who
+ * now holds a staff seat of the classroom — a staff seat is never a
+ * student's (ADR-018). The one set the page's rows and counts, and the
+ * release, read (M3-08a, M3-08b).
+ */
+export async function studentRepos(db: Db | Tx, project: Pick<ProjectRow, "id" | "classroomId">): Promise<RepoRow[]> {
+  const staff = db
+    .select({ userId: enrollments.userId })
+    .from(enrollments)
+    .where(and(eq(enrollments.classroomId, project.classroomId), eq(enrollments.staff, true), isNotNull(enrollments.userId)));
+  return db
+    .select()
+    .from(projectRepos)
+    .where(and(eq(projectRepos.projectId, project.id), notInArray(projectRepos.userId, staff)));
+}
 
 /** A project repository with what its events need: its project and the course of its staff. */
 export interface RepoContext {
