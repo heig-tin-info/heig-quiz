@@ -1268,6 +1268,27 @@ describe("Tip", () => {
     expect(screen.queryByText("Lock repository (block pushes)")).toBeNull();
   });
 
+  it("gives way to the click on a trigger that keeps its click to itself", () => {
+    vi.useFakeTimers();
+    renderWithProviders(
+      <Tip label="Ada Lovelace" side="right">
+        <span onClick={(e) => e.stopPropagation()}>
+          <button type="button">Account</button>
+        </span>
+      </Tip>,
+    );
+    const button = screen.getByRole("button", { name: "Account" });
+    fireEvent.mouseEnter(button.parentElement!.parentElement!);
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(screen.getByText("Ada Lovelace")).toBeInTheDocument();
+    // A `Menu` trigger stops its click from bubbling: the Tip still hears it.
+    fireEvent.click(button);
+    expect(screen.queryByText("Ada Lovelace")).toBeNull();
+    vi.useRealTimers();
+  });
+
   it("renders the child untouched when there is no label", () => {
     const { container } = renderWithProviders(
       <Tip label={null}>

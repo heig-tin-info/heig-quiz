@@ -305,6 +305,9 @@ export function useScrollLock() {
   }, []);
 }
 
+/** Where a `Tip` opens: above its anchor (flipped below near the top), or at its right. */
+export type TipSide = "top" | "right";
+
 /**
  * Instant tooltip (replaces the laggy native `title`): inverted bubble with an
  * arrow, rendered in a portal on hover/focus after 120 ms, flipped below the
@@ -321,19 +324,24 @@ export function useScrollLock() {
  * trigger whose panel is open (an ancestor with `aria-haspopup` and
  * `aria-expanded="true"`, a `Popover` or `Menu` trigger) stays shut: the
  * panel says more, and the two would overlap. A plain disclosure row does not
- * silence it, and neither does a Tip wrapped AROUND its trigger (`IconButton`):
- * that gap is accepted, the click that opens the panel already dismisses it.
+ * silence it. A Tip wrapped AROUND its trigger (`IconButton`, the folded
+ * sidebar's avatar) is dismissed by the click that opens the panel, caught
+ * on the way down since the trigger keeps its click to itself.
+ * `side="right"` opens the bubble beside the anchor, vertically centred: the
+ * folded sidebar's icons, where a bubble above would cover the row above.
  */
 export function Tip({
   label,
   media,
   children,
   className = "inline-flex",
+  side = "top",
 }: {
   label: string | null | undefined;
   media?: ReactNode;
   children: ReactNode;
   className?: string;
+  side?: TipSide;
 }) {
   const [tip, setTip] = useState<{
     x: number;
@@ -341,6 +349,7 @@ export function Tip({
     bottom: number;
     below: boolean;
   } | null>(null);
+  const right = side === "right";
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bubble = useRef<HTMLSpanElement>(null);
   // Escape hides the bubble without moving the hover or the focus. Deliberately
@@ -364,11 +373,11 @@ export function Tip({
   // the paint, so it never shows in the wrong place first.
   useLayoutEffect(() => {
     const el = bubble.current;
-    if (!tip || tip.below || !el) return;
+    if (!tip || tip.below || right || !el) return;
     if (tip.top - 7 - el.offsetHeight < 8 && window.innerHeight - tip.bottom > tip.top) {
       setTip({ ...tip, below: true });
     }
-  }, [tip]);
+  }, [tip, right]);
   if (!label && media === undefined) return <>{children}</>;
   const arm = (el: HTMLElement) => {
     if (timer.current) clearTimeout(timer.current);
@@ -376,10 +385,10 @@ export function Tip({
       if ((!label && !media) || el.closest('[aria-haspopup][aria-expanded="true"]')) return;
       const r = el.getBoundingClientRect();
       setTip({
-        x: Math.min(Math.max(r.left + r.width / 2, 16), window.innerWidth - 16),
+        x: right ? r.right : Math.min(Math.max(r.left + r.width / 2, 16), window.innerWidth - 16),
         top: r.top,
         bottom: r.bottom,
-        below: r.top < 44,
+        below: !right && r.top < 44,
       });
     }, 120);
   };
@@ -395,7 +404,9 @@ export function Tip({
       onMouseLeave={disarm}
       onFocus={(e) => arm(e.currentTarget)}
       onBlur={disarm}
-      onClick={disarm}
+      // Capture: a `Menu` trigger inside stops its click from bubbling, and
+      // the bubble must still give way to the panel that click opens.
+      onClickCapture={disarm}
     >
       {children}
       {tip
@@ -403,18 +414,22 @@ export function Tip({
             <span
               aria-hidden
               className={`pointer-events-none fixed ${Z.tooltip}`}
-              style={{
-                left: tip.x,
-                top: tip.below ? tip.bottom + 7 : tip.top - 7,
-                transform: `translate(-50%, ${tip.below ? "0" : "-100%"})`,
-              }}
+              style={
+                right
+                  ? { left: tip.x + 7, top: (tip.top + tip.bottom) / 2, transform: "translateY(-50%)" }
+                  : {
+                      left: tip.x,
+                      top: tip.below ? tip.bottom + 7 : tip.top - 7,
+                      transform: `translate(-50%, ${tip.below ? "0" : "-100%"})`,
+                    }
+              }
             >
               <span
                 ref={bubble}
                 className={cx(
                   "tip-bubble relative block rounded-lg bg-fg text-xs font-medium leading-snug text-canvas",
                   media ? "p-1.5 text-center" : "px-2.5 py-1.5",
-                  tip.below ? "origin-top" : "origin-bottom",
+                  right ? "origin-left" : tip.below ? "origin-top" : "origin-bottom",
                   label && label.length > 60 ? "max-w-xs whitespace-normal" : "whitespace-nowrap",
                 )}
               >
@@ -422,8 +437,10 @@ export function Tip({
                 {label && media ? <span className="block px-1 pb-0.5 pt-1.5">{label}</span> : label}
                 <span
                   className={cx(
-                    "absolute left-1/2 size-2 -translate-x-1/2 rotate-45 bg-fg",
-                    tip.below ? "-top-1" : "-bottom-1",
+                    "absolute size-2 rotate-45 bg-fg",
+                    right
+                      ? "-left-1 top-1/2 -translate-y-1/2"
+                      : cx("left-1/2 -translate-x-1/2", tip.below ? "-top-1" : "-bottom-1"),
                   )}
                 />
               </span>
@@ -566,6 +583,7 @@ export function IconButton({
   active,
   shortcut,
   size = "md",
+  tipSide,
   className = "",
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -581,11 +599,13 @@ export function IconButton({
    */
   shortcut?: string;
   size?: "sm" | "md";
+  /** Where the tooltip opens (`Tip`'s `side`). */
+  tipSide?: TipSide;
 }) {
   const t = useT();
   const key = shortcut === "Space" ? t("key.space") : shortcut;
   return (
-    <Tip label={key ? `${label} (${key})` : label}>
+    <Tip label={key ? `${label} (${key})` : label} side={tipSide}>
       <button
         type="button"
         {...props}

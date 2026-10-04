@@ -10,6 +10,7 @@ import { resetShortcuts, useShortcuts } from "./shortcuts";
 import { modKey, PAGE_COLUMN } from "./ui";
 import { makeClassroomSummary, makeCourseSummary, makeMe } from "./test/fixtures";
 import { makeQueryClient, renderWithProviders } from "./test/render";
+import { viewport } from "./test/viewport";
 import { drillClassroomsKey, drillSessionKey } from "./queryKeys";
 import type { Route } from "./router";
 
@@ -392,6 +393,43 @@ describe("Shell sidebar", () => {
     renderShell({ teacherUi: false, me: makeMe({ role: "student" }), drill: { rooms: 1, cards: 0 } });
     const row = within(sidebar()).getByRole("button", { name: "Drill" });
     expect(within(row).queryByText("Today's drill is available")).toBeNull();
+  });
+});
+
+describe("Shell folded sidebar (1024–1279 px)", () => {
+  // The setup's narrow stub, back for the tests after these.
+  const narrow = window.matchMedia;
+  afterEach(() => vi.stubGlobal("matchMedia", narrow));
+
+  it("keeps the top-level rows as icons and leaves the names out", () => {
+    viewport(1100);
+    renderShell({ route: { view: "classroom", id: "c2" }, me: makeMe({ role: "admin" }) });
+    const nav = within(sidebar());
+    // Each row is still named, for a screen reader and in its tip.
+    for (const name of ["Activities", "Courses", "Question pools", "Administration"]) {
+      expect(nav.getByRole("button", { name })).toBeInTheDocument();
+    }
+    // Names do not fold into icons: no classroom list, no course tree.
+    expect(nav.queryByText("Classrooms")).toBeNull();
+    expect(nav.queryByRole("button", { name: /^Classroom 2(?!\d)/ })).toBeNull();
+    // Nor the shortcut strip; the account menu stays, as its avatar.
+    expect(screen.queryByText("Shortcuts")).toBeNull();
+    expect(within(sidebar().closest("aside")!).getByRole("button", { name: "User menu" })).toBeInTheDocument();
+  });
+
+  it("navigates from the Courses row on its own page instead of toggling a tree", async () => {
+    viewport(1100);
+    const { navigate } = renderShell({ route: { view: "home" } });
+    const courses = within(sidebar()).getByRole("button", { name: "Courses" });
+    expect(courses).toHaveAttribute("aria-current", "page");
+    await userEvent.click(courses);
+    expect(navigate).toHaveBeenCalledWith({ view: "home" });
+  });
+
+  it("unfolds again from 1280 px", () => {
+    viewport(1280);
+    renderShell();
+    expect(within(sidebar()).getByText("Classrooms")).toBeInTheDocument();
   });
 });
 

@@ -16,7 +16,7 @@ import {
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import type { CourseSummary, Me, PoolSummary } from "@quiz/contracts";
-import { isCurrent } from "@quiz/domain";
+import { displayName, isCurrent } from "@quiz/domain";
 
 import { api } from "./api";
 import { CommandPalette } from "./CommandPalette";
@@ -43,9 +43,11 @@ import {
   pageColumnVars,
   Tip,
   useLayer,
+  useMinWidth,
   useTruncated,
   Z,
   type IconType,
+  type TipSide,
 } from "./ui";
 import { coursesKey, poolsKey } from "./queryKeys";
 import { BottomNav, SLOT_LOOK } from "./student/BottomNav";
@@ -53,10 +55,15 @@ import { bottomNavShown, sidebarSlots } from "./student/bottomNavSlots";
 import { useDrillAvailability, type DrillAvailability } from "./drill/api";
 import { AvailableDot } from "./drill/AvailableDot";
 
+/** The viewport widths (Tailwind's `lg`, `xl`) where the sidebar shows, folded, and unfolds. */
+const SIDEBAR_FOLDED = 1024;
+const SIDEBAR_FULL = 1280;
+
 /**
  * Application frame: a 240 px sidebar on desktop (navigation, the teacher's
- * classrooms, the account menu at the bottom) and a slim top bar with a
- * drawer on phones. The page content sits in a 1120 px column.
+ * classrooms, the account menu at the bottom), folded to a 56 px column of
+ * icons from 1024 to 1279 px, and a slim top bar with a drawer below that.
+ * The page content sits in a 1120 px column.
  */
 
 function NavItem({
@@ -68,8 +75,9 @@ function NavItem({
   expanded,
   coach,
   description,
+  folded,
 }: {
-  icon?: IconType;
+  icon: IconType;
   label: ReactNode;
   /** What the row's `Tip` shows, for a reader that cannot see the bubble. */
   description?: string;
@@ -80,24 +88,39 @@ function NavItem({
   expanded?: boolean;
   /** A coach mark's anchor (`coach/catalog.ts`). */
   coach?: string;
+  /**
+   * The folded sidebar's row: the icon alone in a square, the label for a
+   * screen reader and in a `Tip` at its right, the trailing mark on the icon.
+   */
+  folded?: boolean;
 }) {
-  return (
+  const button = (
     <button
       type="button"
       data-coach={coach}
       onClick={onClick}
       aria-current={active ? "page" : undefined}
-      aria-expanded={expanded}
+      aria-expanded={folded ? undefined : expanded}
       aria-description={description}
       className={cx(
-        "flex w-full items-center gap-2.5 rounded-field px-2.5 py-1.5 text-left text-sm transition-colors",
-        active ? "bg-accent-soft font-semibold text-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg",
+        "flex items-center rounded-field text-sm transition-colors",
+        folded ? "relative size-9 justify-center" : "w-full gap-2.5 px-2.5 py-1.5 text-left",
+        active
+          ? cx("bg-accent-soft text-accent", !folded && "font-semibold")
+          : "text-fg-muted hover:bg-surface-2 hover:text-fg",
       )}
     >
-      {Icon ? <Icon className={cx("size-4 shrink-0", active ? "" : "text-fg-faint")} /> : null}
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {trailing}
+      <Icon aria-hidden className={cx("size-4 shrink-0", active ? "" : "text-fg-faint")} />
+      <span className={folded ? "sr-only" : "min-w-0 flex-1 truncate"}>{label}</span>
+      {folded && trailing ? <span className="absolute right-1.5 top-1.5">{trailing}</span> : trailing}
     </button>
+  );
+  return folded ? (
+    <Tip label={typeof label === "string" ? label : null} side="right" className="flex justify-center">
+      {button}
+    </Tip>
+  ) : (
+    button
   );
 }
 
@@ -174,6 +197,7 @@ function Nav({
   courseNav,
   drill,
   onNavigate,
+  folded = false,
 }: {
   me: Me;
   route: Route;
@@ -192,6 +216,8 @@ function Nav({
   courseNav: NavCycle;
   /** Called after any navigation (closes the mobile drawer). */
   onNavigate?: () => void;
+  /** The sidebar folded to its icons: top-level rows only (DESIGN.md, Spacing). */
+  folded?: boolean;
 }) {
   const t = useT();
   const courses = useQuery<CourseSummary[]>({
@@ -203,6 +229,10 @@ function Nav({
     navigate(r);
     onNavigate?.();
   };
+  // The click of a row that heads a tree (useNavCycle): folded, the tree is
+  // not drawn, so the row only navigates and never flips a state it hides.
+  const treeRow = (cycle: NavCycle, list: Extract<Route, { view: "home" | "pools" }>) => () =>
+    folded ? go(list) : cycle.press(route.view === list.view, () => go(list));
   const currentRoom = route.view === "classroom" ? route.id : null;
   // The row lit for the page on screen, read from the route table: a
   // teacher's by section, a student's by the bottom bar's slot.
@@ -234,8 +264,8 @@ function Nav({
   return (
     // min-h-0 + overflow-y-auto: with thirty classrooms the list scrolls on its
     // own inside the sticky sidebar instead of pushing the account row out.
-    <nav className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-3 py-2">
-      <div className="space-y-0.5">
+    <nav className={cx("flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto py-2", folded ? "px-2" : "px-3")}>
+      <div className={folded ? "space-y-1" : "space-y-0.5"}>
         {/* Every activity across the classrooms (#190): a flat page, no tree.
             First, above the courses: it is where a teacher's day starts. */}
         {teacherUi ? (
@@ -245,6 +275,7 @@ function Nav({
               label={t("nav.activities")}
               active={section === "activities"}
               onClick={() => go({ view: "activities" })}
+              folded={folded}
             />
             <NavItem
               icon={Library}
@@ -254,9 +285,12 @@ function Nav({
               expanded={courseNav.state === "all"}
               // The pools' rule (below): the click goes to the course list; on
               // the list itself it toggles the active course / all courses.
-              onClick={() => courseNav.press(route.view === "home", () => go({ view: "home" }))}
+              onClick={treeRow(courseNav, { view: "home" })}
+              folded={folded}
             />
-            <CourseNavTree state={courseNav.state} courses={courses} route={route} navigate={go} />
+            {folded ? null : (
+              <CourseNavTree state={courseNav.state} courses={courses} route={route} navigate={go} />
+            )}
             <NavItem
               icon={FolderTree}
               label={t("pools.title")}
@@ -269,12 +303,13 @@ function Nav({
               // pool list the click NAVIGATES there, as every sidebar row
               // does; on the list, where there is nowhere left to go, it
               // toggles the active pool / all pools (useNavCycle).
-              onClick={() => poolNav.press(route.view === "pools", () => go({ view: "pools" }))}
+              onClick={treeRow(poolNav, { view: "pools" })}
+              folded={folded}
             />
             {/* The tree of the pool being read, or every pool the teacher can
                 reach — the state the row above cycles through (PoolNav.tsx).
                 Each row of it is a drop target for a dragged question. */}
-            <PoolNavTree state={poolNav.state} route={route} navigate={go} />
+            {folded ? null : <PoolNavTree state={poolNav.state} route={route} navigate={go} />}
             {/* The launcher is a page of its own (`/polls`); the row stays
                 `active` while a projection is up, because that IS the poll. */}
             <NavItem
@@ -283,6 +318,7 @@ function Nav({
               active={section === "polls"}
               coach="nav.polls"
               onClick={() => go({ view: "polls" })}
+              folded={folded}
             />
           </>
         ) : (
@@ -300,6 +336,7 @@ function Nav({
                 active={slot.id === studentSlot}
                 onClick={() => go(slot.route)}
                 trailing={slot.id === "drill" && drill.available ? <AvailableDot /> : null}
+                folded={folded}
               />
             );
           })
@@ -312,10 +349,11 @@ function Nav({
             label={t("nav.admin")}
             active={section === "admin"}
             onClick={() => go({ view: "admin" })}
+            folded={folded}
           />
         ) : null}
       </div>
-      {teacherUi && allRooms.length ? (
+      {teacherUi && !folded && allRooms.length ? (
         // A hairline above, like the one over the shortcut strip: this is the
         // "right now" list, apart from the navigation, and it looks apart.
         <div className="border-t border-line pt-4">
@@ -416,6 +454,9 @@ export function Shell({
   children: ReactNode;
 }) {
   const { t, locale, setLocale } = useI18n();
+  const sidebarShown = useMinWidth(SIDEBAR_FOLDED);
+  const sidebarFull = useMinWidth(SIDEBAR_FULL);
+  const folded = sidebarShown && !sidebarFull;
   const [drawer, setDrawer] = useState(false);
   const drawerPanel = useRef<HTMLDivElement>(null);
   const drawerTitleId = useId();
@@ -468,21 +509,19 @@ export function Shell({
   const topics = useMemo(() => helpTopics(locale, teacherUi), [locale, teacherUi]);
 
   /**
-   * The home link, drawn as the wordmark. `titleId` lands on the image, whose
-   * `alt` is then what names the drawer through `aria-labelledby`.
-   *
-   * `width` is the one thing that changes between the three places it
-   * appears: the sidebar gives it the whole column, the phone top bar and the
-   * drawer a third of it.
+   * The home link, drawn as the mark it is given: the wordmark at the width
+   * of its place (the whole sidebar column, a third of the phone top bar and
+   * of the drawer, whose `Logo` carries the id that names the dialog), or the
+   * Q bubble alone in the folded sidebar.
    */
-  const brand = (titleId?: string, width = "w-28") => (
+  const brand = (mark: ReactNode, className?: string) => (
     <button
       type="button"
       onClick={() => navigate({ view: "home" })}
       aria-label={t("app.title")}
-      className="flex shrink-0 items-center rounded-field text-left"
+      className={cx("flex shrink-0 items-center rounded-field text-left", className)}
     >
-      <Logo id={titleId} className={width} />
+      {mark}
     </button>
   );
   // Where the student's bottom bar shows, the top bar does not repeat it:
@@ -491,11 +530,15 @@ export function Shell({
   // The student's drill (#317): the sidebar row and the bottom slot, both
   // drawn only once a classroom has it on, with today's badge.
   const drill = useDrillAvailability(!teacherUi);
-  const userMenu = (compact: boolean) => (
+  // Where the account menu is drawn: the full sidebar row (also the
+  // drawer's), the folded sidebar's avatar, or the phone top bar's avatar —
+  // the one place the student's bottom bar already holds Settings.
+  const userMenu = (place: "sidebar" | "folded" | "topbar") => (
     <UserMenu
       me={me}
-      compact={compact}
-      {...(compact && bottomNav ? {} : { onOpenSettings: () => navigate({ view: "settings" }) })}
+      compact={place !== "sidebar"}
+      align={place === "topbar" ? "end" : "start"}
+      {...(place === "topbar" && bottomNav ? {} : { onOpenSettings: () => navigate({ view: "settings" }) })}
       studentView={studentView}
       onToggleStudentView={onToggleStudentView}
       notifications={{ navigate }}
@@ -510,12 +553,13 @@ export function Shell({
    * do nothing. It is drawn in BOTH views — the way out of the student view
    * is exactly as reachable as the way in.
    */
-  const viewToggle = (compact: boolean) =>
+  const viewToggle = (compact: boolean, tipSide?: TipSide) =>
     onToggleStudentView ? (
       <ViewModeToggle
         studentView={studentView}
         onToggle={onToggleStudentView}
         compact={compact}
+        tipSide={tipSide}
       />
     ) : null;
 
@@ -524,11 +568,21 @@ export function Shell({
       {/* Desktop sidebar */}
       <aside
         aria-label={t("aside.sidebar")}
-        className="sticky top-(--banner-h) hidden h-[calc(100dvh-var(--banner-h))] w-60 shrink-0 flex-col border-r border-line bg-canvas lg:flex"
+        className={cx(
+          "sticky top-(--banner-h) hidden h-[calc(100dvh-var(--banner-h))] shrink-0 flex-col border-r border-line bg-canvas lg:flex",
+          folded ? "w-14" : "w-60",
+        )}
       >
         {/* The mark takes the sidebar's full width, with the air a wordmark
-            needs: it is the only thing above the navigation. */}
-        <div className="px-5 pb-3 pt-5">{brand(undefined, "w-full")}</div>
+            needs: it is the only thing above the navigation. Folded, the
+            wordmark would be four dots: the Q bubble alone, the favicon's. */}
+        {folded ? (
+          <div className="flex justify-center pb-3 pt-4">
+            {brand(<img src="/favicon.svg" alt="" className="size-7" />, "size-9 justify-center")}
+          </div>
+        ) : (
+          <div className="px-5 pb-3 pt-5">{brand(<Logo className="w-full" />)}</div>
+        )}
         {/* No search row here: Ctrl/⌘+K opens the palette from anywhere, and a
             permanent button for it took the top of the sidebar away from the
             navigation. The phone keeps its own trigger in the top bar, where
@@ -541,20 +595,30 @@ export function Shell({
           poolNav={poolNav}
           courseNav={courseNav}
           drill={drill}
+          folded={folded}
         />
-        <ShortcutStrip />
+        {/* Folded, there is no width for a line of text: Ctrl+K still opens
+            the palette, it is only not taught here. */}
+        {folded ? null : <ShortcutStrip />}
         {/* The account row: what is about the PERSON rather than about the
             page (the inbox included, inside its menu), at the bottom of the
-            column where the eye leaves the navigation. */}
-        <div className="border-t border-line p-2">
+            column where the eye leaves the navigation. Folded, the switch
+            and the avatar stack, each named in a tip at its right. */}
+        <div className={cx("border-t border-line", folded ? "flex flex-col items-center gap-2 px-2 py-3" : "p-2")}>
           {onToggleStudentView ? (
-            <div className="mb-2 flex justify-center">
+            <div className={folded ? "flex" : "mb-2 flex justify-center"}>
               <span className="inline-flex rounded-full" data-coach="shell.view-toggle">
-                {viewToggle(false)}
+                {viewToggle(folded, folded ? "right" : undefined)}
               </span>
             </div>
           ) : null}
-          {userMenu(false)}
+          {folded ? (
+            <Tip label={displayName(me)} side="right">
+              {userMenu("folded")}
+            </Tip>
+          ) : (
+            userMenu("sidebar")
+          )}
         </div>
       </aside>
 
@@ -571,7 +635,7 @@ export function Shell({
             className="absolute inset-y-0 left-0 flex w-72 flex-col border-r border-line bg-canvas shadow-overlay focus:outline-none"
           >
             <div className="flex items-center justify-between px-3 pb-2 pt-4">
-              {brand(drawerTitleId)}
+              {brand(<Logo id={drawerTitleId} className="w-28" />)}
               <IconButton label={t("menu.closeMenu")} onClick={() => setDrawer(false)}>
                 <X />
               </IconButton>
@@ -590,7 +654,7 @@ export function Shell({
               {onToggleStudentView ? (
                 <div className="mb-2 flex justify-center">{viewToggle(false)}</div>
               ) : null}
-              {userMenu(false)}
+              {userMenu("sidebar")}
             </div>
           </div>
         </div>
@@ -609,13 +673,13 @@ export function Shell({
               <MenuIcon />
             </IconButton>
           )}
-          {brand()}
+          {brand(<Logo className="w-28" />)}
           <span className="flex-1" />
           {viewToggle(true)}
           <IconButton label={t("palette.open")} onClick={() => setPalette(true)}>
             <Search />
           </IconButton>
-          {userMenu(true)}
+          {userMenu("topbar")}
         </div>
 
         <main
