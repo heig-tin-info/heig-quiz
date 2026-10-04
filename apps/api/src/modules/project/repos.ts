@@ -9,7 +9,7 @@ import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
 import { classrooms, enrollments, projectRepos, projects } from "../../db/schema.js";
 import { projectsChanged, repoChanged } from "./events.js";
-import { groupMembers, individualHolders } from "./groupRepos.js";
+import { repoMembers } from "./groupRepos.js";
 
 export type RepoRow = typeof projectRepos.$inferSelect;
 type ProjectRow = typeof projects.$inferSelect;
@@ -67,19 +67,17 @@ export async function tracksRepo(tx: Tx, githubRepoId: number): Promise<boolean>
 
 /**
  * The accounts that read a repository: the student who accepted it or, for
- * a group's, its members of the copy with an account (ADR-048) — never its
- * creator for having created it (N-SEC-20), nor a holder of a live
- * individual repository (`groupRepos.ts`).
+ * a group's, its members of the copy (`repoMembers`) — never its creator
+ * for having created it (N-SEC-20).
  */
-async function repoUserIds(db: Db, repo: RepoRow): Promise<string[]> {
-  if (repo.groupId === null) return [repo.userId];
-  const holders = await individualHolders(db, repo.projectId);
-  return (await groupMembers(db, repo.groupId)).flatMap((m) => (m.userId === null || holders.has(m.userId) ? [] : [m.userId]));
+async function repoUserIds(db: Db, ctx: RepoContext): Promise<string[]> {
+  if (ctx.repo.groupId === null) return [ctx.repo.userId];
+  return (await repoMembers(db, ctx.repo, ctx.project.classroomId)).map((m) => m.userId);
 }
 
 /** The hint of a change to `ctx`'s repository: its students and the course's staff, never the classroom. */
 export async function hintRepo(db: Db, ctx: RepoContext): Promise<void> {
-  repoChanged(ctx.courseId, await repoUserIds(db, ctx.repo));
+  repoChanged(ctx.courseId, await repoUserIds(db, ctx));
 }
 
 /** The staff of the projects `projectIds` hear of them (course topics only): the ticker's and the jobs' changes. */

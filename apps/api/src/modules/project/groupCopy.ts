@@ -34,15 +34,15 @@ import { randomUUID } from "node:crypto";
 
 import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
-import { groupSyncPlan, isEmptyPlan, type copyFollows, type CopyState, type GroupSyncPlan, type SetState } from "@quiz/domain";
+import { groupSyncPlan, isEmptyPlan, planReachesRepoGroup, type copyFollows, type CopyState, type GroupSyncPlan, type SetState } from "@quiz/domain";
 
 import type { Tx } from "../../db/client.js";
 import { enrollments, projectGroupMembers, projectGroups, projectRepos, projects, studentGroupMembers, studentGroups } from "../../db/schema.js";
 
-/** A set's step would reach a copy group of `projectId` that has a repository: the group module's `409 has_repo`. */
+/** A set's step would reach, on GitHub, a copy group with a repository of each of `projectIds`: the group module's `409 has_repo`. */
 export class RepoGroupTouched extends Error {
-  constructor(readonly projectId: string) {
-    super(`project ${projectId}: the step reaches a group with a repository`);
+  constructor(readonly projectIds: readonly string[]) {
+    super(`projects ${projectIds.join(", ")}: the step reaches a group with a repository`);
     this.name = "RepoGroupTouched";
   }
 }
@@ -74,7 +74,11 @@ async function setState(tx: Tx, setId: string): Promise<SetState> {
   return { groups, members };
 }
 
-/** The copy, each group's slug fixed when it has a repository (whatever its state), and the staff seats in it. */
+/**
+ * The copy, each group's slug fixed when GitHub holds its repository (a
+ * repository id recorded: a first Accept that failed before creating it
+ * freezes nothing), and the staff seats in it.
+ */
 async function copyState(tx: Tx, projectId: string): Promise<CopyState & { staffSeats: Set<string> }> {
   const groups = await tx
     .select({
@@ -83,7 +87,7 @@ async function copyState(tx: Tx, projectId: string): Promise<CopyState & { staff
       slug: projectGroups.slug,
       position: projectGroups.position,
       sourceGroupId: projectGroups.sourceGroupId,
-      slugFixed: sql<boolean>`${projectRepos.id} IS NOT NULL`,
+      slugFixed: sql<boolean>`${projectRepos.githubRepoId} IS NOT NULL`,
     })
     .from(projectGroups)
     .leftJoin(projectRepos, eq(projectRepos.groupId, projectGroups.id))
@@ -94,23 +98,6 @@ async function copyState(tx: Tx, projectId: string): Promise<CopyState & { staff
     .innerJoin(enrollments, eq(enrollments.id, projectGroupMembers.enrollmentId))
     .where(eq(projectGroupMembers.projectId, projectId));
   return { groups, members, staffSeats: new Set(members.filter((m) => m.staff).map((m) => m.enrollmentId)) };
-}
-
-/**
- * Whether `plan` reaches a copy group with a repository on GitHub's side:
- * deletes it, takes a student out of it (a staff seat aside), or brings
- * one in. Its rename and its position are not a GitHub change.
- */
-function touchesRepoGroup(copy: CopyState & { staffSeats: Set<string> }, plan: GroupSyncPlan): boolean {
-  const withRepo = new Set(copy.groups.filter((g) => g.slugFixed).map((g) => g.id));
-  if (withRepo.size === 0) return false;
-  const bySource = new Map(copy.groups.flatMap((g) => (g.sourceGroupId === null ? [] : [[g.sourceGroupId, g.id] as const])));
-  const groupOf = new Map(copy.members.map((m) => [m.enrollmentId, m.groupId]));
-  return (
-    plan.delete.some((id) => withRepo.has(id)) ||
-    plan.place.some((p) => (p.from !== null && withRepo.has(p.from)) || withRepo.has(bySource.get(p.sourceGroupId) ?? "")) ||
-    plan.unplace.some((e) => !copy.staffSeats.has(e) && withRepo.has(groupOf.get(e)!))
-  );
 }
 
 /** A draft's copy is made and replaced freely: no group of it may hold a repository (Accept takes published projects only). */
@@ -168,27 +155,30 @@ async function applyPlan(tx: Tx, projectId: string, copy: CopyState, plan: Group
   }
 }
 
-/** Brings one copy in step with `set`; true when it changed. */
-async function stepCopy(tx: Tx, projectId: string, set: SetState, now: Date): Promise<boolean> {
+/** The plan bringing one copy in step with `set`, and whether it reaches a group with a repository (`planReachesRepoGroup`). */
+async function planCopy(tx: Tx, projectId: string, set: SetState) {
   const copy = await copyState(tx, projectId);
   const plan = groupSyncPlan(set, copy);
-  if (isEmptyPlan(plan)) return false;
-  if (touchesRepoGroup(copy, plan)) throw new RepoGroupTouched(projectId);
-  await applyPlan(tx, projectId, copy, plan, now);
-  return true;
+  return { projectId, copy, plan, reachesRepo: planReachesRepoGroup(copy, plan, copy.staffSeats) };
 }
 
 /**
  * Each copy of `copies` ({@link followingCopies}, locked by the caller)
  * brought in step with set `setId` as the caller's transaction now holds
- * it. Returns the projects whose copy changed (their staff's hint).
+ * it — or none, {@link RepoGroupTouched} naming EVERY project whose step
+ * would reach a group with a repository. Returns the projects whose copy
+ * changed (their staff's hint).
  */
 export async function stepCopies(tx: Tx, setId: string, copies: readonly { id: string }[], now: Date): Promise<string[]> {
   if (copies.length === 0) return [];
   const set = await setState(tx, setId);
-  const changed: string[] = [];
-  for (const { id } of copies) if (await stepCopy(tx, id, set, now)) changed.push(id);
-  return changed;
+  const plans = [];
+  for (const { id } of copies) plans.push(await planCopy(tx, id, set));
+  const held = plans.filter((p) => p.reachesRepo).map((p) => p.projectId);
+  if (held.length > 0) throw new RepoGroupTouched(held);
+  const changed = plans.filter((p) => !isEmptyPlan(p.plan));
+  for (const p of changed) await applyPlan(tx, p.projectId, p.copy, p.plan, now);
+  return changed.map((p) => p.projectId);
 }
 
 /**
@@ -199,5 +189,7 @@ export async function stepCopies(tx: Tx, setId: string, copies: readonly { id: s
 export async function replaceGroupCopy(tx: Tx, projectId: string, setId: string | null, now: Date): Promise<void> {
   await assertNoGroupRepo(tx, projectId);
   await tx.delete(projectGroups).where(eq(projectGroups.projectId, projectId));
-  if (setId !== null) await stepCopy(tx, projectId, await setState(tx, setId), now);
+  if (setId === null) return;
+  const { copy, plan } = await planCopy(tx, projectId, await setState(tx, setId));
+  await applyPlan(tx, projectId, copy, plan, now);
 }

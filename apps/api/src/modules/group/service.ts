@@ -27,7 +27,7 @@ import { randomInt, randomUUID } from "node:crypto";
 
 import { and, asc, count, eq, inArray, isNull, max, ne } from "drizzle-orm";
 
-import type { GroupMemberPut, GroupRandomForm, GroupSetCreate, GroupSetDetail, GroupSetPatch, GroupSetSummary, GroupSetUse } from "@quiz/contracts";
+import type { GroupMemberPut, GroupRandomForm, GroupRefusalProjects, GroupSetCreate, GroupSetDetail, GroupSetPatch, GroupSetSummary, GroupSetUse } from "@quiz/contracts";
 import { copyFollows, defaultGroupName, defaultSetName, duplicateSetName, formRandomGroups, type NameLocale } from "@quiz/domain";
 
 import { audit, type AuditAction, type AuditActor } from "../../audit.js";
@@ -184,8 +184,9 @@ async function writeSet(db: Db, scope: SetScope, ctx: WriteContext, write: (tx: 
     if (!written) return null;
     const changed = await stepCopies(tx, set.id, copies, ctx.now).catch(async (err: unknown) => {
       if (!(err instanceof RepoGroupTouched)) throw err;
-      const [held] = await tx.select({ id: projects.id, name: projects.name }).from(projects).where(eq(projects.id, err.projectId));
-      throw new GroupError("has_repo", "This change reaches a group that has a repository on GitHub", { projects: [held] });
+      const held = await tx.select({ id: projects.id, name: projects.name }).from(projects).where(inArray(projects.id, [...err.projectIds])).orderBy(asc(projects.id));
+      const details: GroupRefusalProjects = { projects: held };
+      throw new GroupError("has_repo", "This change reaches a group that has a repository on GitHub", details);
     });
     await audit(tx, {
       ...ctx.actor,
@@ -272,7 +273,8 @@ export async function deleteGroupSet(db: Db, scope: SetScope, ctx: WriteContext)
   await writeSet(db, scope, ctx, async (tx, set) => {
     const holding = ((await usesOf(tx, [set.id])).get(set.id) ?? []).filter((use) => !use.archived).map(({ id, name }) => ({ id, name }));
     if (holding.length > 0) {
-      throw new GroupError("set_in_use", `${holding.length} project(s) follow this group set`, { projects: holding });
+      const details: GroupRefusalProjects = { projects: holding };
+      throw new GroupError("set_in_use", `${holding.length} project(s) follow this group set`, details);
     }
     await tx.delete(groupSets).where(eq(groupSets.id, set.id));
     return { action: "group_set.delete", payload: { name: set.name } };

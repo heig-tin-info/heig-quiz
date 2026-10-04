@@ -34,7 +34,6 @@
  * creator moved out of (N-SEC-20, M3-15b).
  */
 import { and, eq, isNull, ne, type SQL } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
 import type { FastifyBaseLogger } from "fastify";
 
 import type {
@@ -46,7 +45,6 @@ import type {
 } from "@quiz/contracts";
 import {
   effectiveDeadline,
-  pickStudentRepo,
   scoreGrade,
   studentCiReading,
   studentProjectGroup,
@@ -59,13 +57,13 @@ import type { AuditActor } from "../../audit.js";
 import { iso, isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { classrooms, courses, enrollments, githubAccounts, projectGradeRuns, projectGroupMembers, projectRepos, projects } from "../../db/schema.js";
+import { classrooms, courses, enrollments, githubAccounts, projectGradeRuns, projects } from "../../db/schema.js";
 import { htmlUrl } from "../../github/git.js";
 import type { StudentProjectScope } from "../guards.js";
-import { EFFECTIVE_DEADLINE, isLive } from "./deadline.js";
+import { isLive } from "./deadline.js";
 import { slotRuns } from "./detail.js";
 import { ProjectError } from "./errors.js";
-import { seatRepo } from "./groupRepos.js";
+import { seatRepo, seatRepos } from "./groupRepos.js";
 import { resendInvitation } from "./invitation.js";
 import type { RepoRow } from "./repos.js";
 import type { ProjectRow } from "./views.js";
@@ -156,41 +154,26 @@ export async function studentProjectCards(db: Db, userId: string, now: Date, cla
     eq(enrollments.userId, userId),
     classroomId === undefined ? undefined : eq(enrollments.classroomId, classroomId),
   ];
-  const groupRepos = alias(projectRepos, "group_repo");
   const rows = await db
-    .select({ project: projects, classroomName: classrooms.name, courseCode: courses.code, own: projectRepos, group: groupRepos })
+    .select({ project: projects, classroomName: classrooms.name, courseCode: courses.code, seat: { id: enrollments.id, staff: enrollments.staff } })
     .from(enrollments)
     .innerJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
     .innerJoin(projects, and(eq(projects.classroomId, classrooms.id), ne(projects.state, "draft"), isNull(projects.archivedAt)))
-    .leftJoin(
-      projectRepos,
-      and(
-        eq(projectRepos.projectId, projects.id),
-        eq(projectRepos.userId, userId),
-        isNull(projectRepos.groupId),
-        // A staff seat never holds a student's repository (ADR-018).
-        eq(enrollments.staff, false),
-      ),
-    )
-    // A group project's repository: the seat's copy group's (N-SEC-20).
-    .leftJoin(
-      projectGroupMembers,
-      and(
-        eq(projectGroupMembers.projectId, projects.id),
-        eq(projectGroupMembers.enrollmentId, enrollments.id),
-        eq(projects.groupMode, true),
-        eq(enrollments.staff, false),
-      ),
-    )
-    .leftJoin(groupRepos, and(eq(groupRepos.projectId, projects.id), eq(groupRepos.groupId, projectGroupMembers.groupId)))
-    .where(and(...scope))
-    .orderBy(EFFECTIVE_DEADLINE, projects.name);
+    .where(and(...scope));
+  // The repository each seat reads (`seatRepos`): its own, or its copy group's; a staff seat none (ADR-018).
+  const seats = await seatRepos(
+    db,
+    rows.map((r) => r.project),
+    rows.map((r) => r.seat.id),
+  );
+  const cards = rows.map(({ seat, ...row }) => ({ ...row, repo: seats.of(row.project.id, seat.id) }));
+  const deadline = (row: CardRow) => effectiveDeadline(row.repo ?? { deadlineAt: null }, row.project).getTime();
+  cards.sort((a, b) => deadline(a) - deadline(b) || (a.project.name < b.project.name ? -1 : a.project.name > b.project.name ? 1 : 0));
   const linked = rows.length > 0 && (await githubLinked(db, userId));
   const groups: StudentProjectCards = { open: [], upcoming: [], past: [] };
-  for (const { own, group, ...row } of rows) {
-    const repo = row.project.groupMode ? pickStudentRepo(own ?? undefined, group ?? undefined) : own;
-    const placed = card({ ...row, repo: repo ?? null }, linked, now);
+  for (const row of cards) {
+    const placed = card(row, linked, now);
     groups[placed.group].push(placed.card);
   }
   return groups;
@@ -240,7 +223,7 @@ function reading(project: ProjectRow, repo: ProvisionedRepo, runs: Map<string, R
  */
 export async function studentProject(db: Db, scope: StudentProjectScope, userId: string, now: Date): Promise<StudentProject> {
   const { project } = scope;
-  const row = scope.seat !== null && !scope.seat.staff ? await seatRepo(db, project, { enrollmentId: scope.seat.id, userId }) : null;
+  const row = scope.seat !== null && !scope.seat.staff ? await seatRepo(db, project, scope.seat.id) : null;
   const repo = provisioned(row);
   const live = repo !== null && isLive(repo, project) ? repo : null;
   const [linked, runs] = await Promise.all([
@@ -289,12 +272,12 @@ export async function studentResendInvitation(
   db: Db,
   config: AppConfig,
   project: ProjectRow,
-  seat: { enrollmentId: string; userId: string },
+  enrollmentId: string,
   actor: AuditActor,
   now: Date,
   log: FastifyBaseLogger,
 ): Promise<ProjectInvitationResent> {
-  const repo = await seatRepo(db, project, seat);
+  const repo = await seatRepo(db, project, enrollmentId);
   if (repo === null) throw new ProjectError("repo_unavailable", "You have no repository on this project yet");
-  return resendInvitation(db, config, project.id, repo.id, actor, now, log, seat);
+  return resendInvitation(db, config, project.id, repo.id, actor, now, log, enrollmentId);
 }

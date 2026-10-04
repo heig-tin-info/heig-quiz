@@ -291,7 +291,7 @@ describe("the invitation resent (F-PROJ-07)", () => {
     expect(world.collaborators.get(repo!.fullName!)!.get(student.login)).toBe("push");
     expect(await repoRow(repo!.id)).toMatchObject({ invitationStatus: "pending", invitationResentAt: at(NOW) });
     const [entry] = await auditOf(repo!.id, "project_repo.invite_resent");
-    expect(entry).toMatchObject({ actorUserId: teacher.id, payload: { login: student.login, invitationStatus: "pending" } });
+    expect(entry).toMatchObject({ actorUserId: teacher.id, payload: { logins: [student.login], invitationStatus: "pending" } });
 
     // Too soon: nothing asked of GitHub.
     const calls = inviteCalls(student.login);

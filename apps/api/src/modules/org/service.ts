@@ -10,7 +10,8 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, or, sql, type SQL } from "drizzle-orm";
+import type { FastifyBaseLogger } from "fastify";
 
 import type {
   CourseRole,
@@ -20,7 +21,9 @@ import type {
 } from "@quiz/contracts";
 import { effectiveCourseRole, staffChangeRefusal, type StaffChange } from "@quiz/domain";
 
-import { isUniqueViolation, type Db } from "../../db/client.js";
+import type { AuditActor } from "../../audit.js";
+import type { AppConfig } from "../../config.js";
+import { isForeignKeyViolation, isUniqueViolation, type Db } from "../../db/client.js";
 import {
   avatars,
   classrooms,
@@ -33,7 +36,9 @@ import {
 import { shownAvatar } from "../avatar.js";
 import { countTemplates } from "../evaluation/service.js";
 import { purgeProjectReceipts } from "../github/service.js";
+import { forgetGrants, revokeEnrollmentAccess, type RevokeVia } from "../project/service.js";
 import { accessRevoked } from "../realtime/bus.js";
+import { rosterRefusal } from "./errors.js";
 
 export { claimEnrollments, claimLines, type ClaimMatch } from "./roster.js";
 
@@ -212,12 +217,14 @@ export async function updateCourse(
 /**
  * Deletes the course and, by cascade, its classrooms and everything they
  * hold (F-ORG-09). Its projects' push receipts go first, in the same
- * transaction: no foreign key reaches them (N-DATA-03). Nothing is deleted
- * on GitHub (D19).
+ * transaction: no foreign key reaches them (N-DATA-03); so do the GitHub
+ * accounts recorded for its lines, whose key does not cascade (M3-15b).
+ * Nothing is deleted on GitHub (D19).
  */
 export async function deleteCourse(db: Db, courseId: string): Promise<void> {
   await db.transaction(async (tx) => {
     await purgeProjectReceipts(tx, { courseId });
+    await forgetGrants(tx, { courseId });
     await tx.delete(courses).where(eq(courses.id, courseId));
   });
 }
@@ -402,11 +409,13 @@ export async function setArchived(db: Db, classroomId: string, archived: boolean
 /**
  * Deletes the classroom and, by cascade, its evaluations, journal and
  * projects (F-ORG-09); its projects' push receipts first, in the same
- * transaction (N-DATA-03). Nothing is deleted on GitHub (D19, F-PROJ-16).
+ * transaction (N-DATA-03), and the GitHub accounts recorded for its lines
+ * (M3-15b). Nothing is deleted on GitHub (D19, F-PROJ-16).
  */
 export async function deleteClassroom(db: Db, classroomId: string): Promise<void> {
   await db.transaction(async (tx) => {
     await purgeProjectReceipts(tx, { classroomId });
+    await forgetGrants(tx, { classroomId });
     await tx.delete(classrooms).where(eq(classrooms.id, classroomId));
   });
 }
@@ -473,102 +482,121 @@ export async function setDrillOptOut(
 // --- Roster entries -----------------------------------------------------------
 
 /**
+ * What the roster's writes need to revoke a line's GitHub accesses first
+ * (F-PROJ-17, ADR-070 §5): the `project` module's `revokeEnrollmentAccess`,
+ * `502 revoke_failed` when GitHub does not take them, nothing written.
+ */
+export interface Revocation {
+  config: AppConfig;
+  actor: AuditActor;
+  now: Date;
+  log: FastifyBaseLogger;
+}
+
+const revoke = (db: Db, enrollmentId: string, ctx: Revocation, via: RevokeVia) =>
+  revokeEnrollmentAccess(db, ctx.config, enrollmentId, { ...ctx, via });
+
+/**
  * A teacher takes a (staff) seat in their own classroom, claimed at once and
- * flagged `staff` so it stays out of the headcount. Throws on
- * UNIQUE(classroom_id, user_id): already enrolled under another address.
+ * flagged `staff` so it stays out of the headcount. A student line holding
+ * their e-mail becomes that seat: its GitHub accesses are revoked first.
+ * `409 already_enrolled` when they hold another line (UNIQUE(classroom_id,
+ * user_id)), checked before anything is revoked.
  */
 export async function selfEnroll(
   db: Db,
   classroomId: string,
   me: { id: string; email: string; givenName: string; familyName: string },
+  ctx: Revocation,
 ): Promise<void> {
-  await db
-    .insert(enrollments)
-    .values({
-      id: randomUUID(),
-      classroomId,
-      nom: me.familyName,
-      prenom: me.givenName,
-      email: me.email.trim().toLowerCase(),
-      userId: me.id,
-      claimedAt: new Date(),
-      staff: true,
-    })
-    .onConflictDoUpdate({
-      target: [enrollments.classroomId, enrollments.email],
-      set: { userId: me.id, claimedAt: new Date(), staff: true },
-    });
-}
-
-/**
- * What a self-enroll would do to the classroom's roster: the line it would
- * turn into the caller's staff seat (the one holding their e-mail), and
- * whether it would be refused instead (`conflict`: the caller holds another
- * line, UNIQUE(classroom_id, user_id)). The route revokes a student line's
- * GitHub accesses before it becomes a staff seat (ADR-070 §5, M3-15b).
- */
-export async function selfEnrollTarget(
-  db: Db,
-  classroomId: string,
-  me: { id: string; email: string },
-): Promise<{ conflict: boolean; line: EnrollmentRecord | null }> {
   const email = me.email.trim().toLowerCase();
   const lines = await db
     .select()
     .from(enrollments)
-    .where(and(eq(enrollments.classroomId, classroomId), sql`(${enrollments.email} = ${email} OR ${enrollments.userId} = ${me.id})`));
-  const line = lines.find((l) => l.email === email) ?? null;
-  return { conflict: lines.some((l) => l.email !== email), line };
-}
-
-/** Whether another line of the classroom than `entryId` holds `email`: the `duplicate_email` of an edit. */
-export async function emailTaken(db: Db, classroomId: string, email: string, entryId: string): Promise<boolean> {
-  const [row] = await db
-    .select({ id: enrollments.id })
-    .from(enrollments)
-    .where(and(eq(enrollments.classroomId, classroomId), eq(enrollments.email, email), sql`${enrollments.id} <> ${entryId}`))
-    .limit(1);
-  return row !== undefined;
+    .where(and(eq(enrollments.classroomId, classroomId), or(eq(enrollments.email, email), eq(enrollments.userId, me.id))));
+  if (lines.some((l) => l.email !== email)) throw rosterRefusal("already_enrolled");
+  const taken = lines.find((l) => !l.staff);
+  if (taken) await revoke(db, taken.id, ctx, "roster.self_enroll");
+  try {
+    await db
+      .insert(enrollments)
+      .values({
+        id: randomUUID(),
+        classroomId,
+        nom: me.familyName,
+        prenom: me.givenName,
+        email,
+        userId: me.id,
+        claimedAt: new Date(),
+        staff: true,
+      })
+      .onConflictDoUpdate({
+        target: [enrollments.classroomId, enrollments.email],
+        set: { userId: me.id, claimedAt: new Date(), staff: true },
+      });
+  } catch (err) {
+    if (isUniqueViolation(err, "enrollments_classroom_user_uq")) throw rosterRefusal("already_enrolled");
+    throw err;
+  }
 }
 
 /**
  * Edits one roster entry. Changing the e-mail (`emailChanged`) invalidates
  * the attachment: the entry is again claimable by the holder of the new
- * address. Throws on UNIQUE(classroom_id, email).
+ * address — its account's GitHub accesses revoked first, once the address
+ * is known to be free (`409 duplicate_email`).
  */
 export async function updateEnrollment(
   db: Db,
-  entry: Pick<EnrollmentRecord, "id" | "userId">,
+  entry: Pick<EnrollmentRecord, "id" | "userId" | "classroomId">,
   patch: EnrollmentPatch,
   email: string | undefined,
   emailChanged: boolean,
+  ctx: Revocation,
 ) {
-  const [updated] = await db
-    .update(enrollments)
-    .set({
-      ...(patch.nom ? { nom: patch.nom } : {}),
-      ...(patch.prenom ? { prenom: patch.prenom } : {}),
-      ...(email ? { email } : {}),
-      ...(patch.timeBonusPercent !== undefined
-        ? { timeBonusPercent: patch.timeBonusPercent }
-        : {}),
-      ...(patch.note !== undefined ? { note: patch.note } : {}),
-      ...(emailChanged ? { userId: null, claimedAt: null, conflictFlag: false } : {}),
-    })
-    .where(eq(enrollments.id, entry.id))
-    .returning();
-  if (emailChanged) accessRevoked([entry.userId]);
-  return updated;
+  if (emailChanged && email !== undefined) {
+    const [taken] = await db
+      .select({ id: enrollments.id })
+      .from(enrollments)
+      .where(and(eq(enrollments.classroomId, entry.classroomId), eq(enrollments.email, email), ne(enrollments.id, entry.id)))
+      .limit(1);
+    if (taken) throw rosterRefusal("duplicate_email");
+    if (entry.userId !== null) await revoke(db, entry.id, ctx, "roster.update");
+  }
+  try {
+    const [updated] = await db
+      .update(enrollments)
+      .set({
+        ...(patch.nom ? { nom: patch.nom } : {}),
+        ...(patch.prenom ? { prenom: patch.prenom } : {}),
+        ...(email ? { email } : {}),
+        ...(patch.timeBonusPercent !== undefined
+          ? { timeBonusPercent: patch.timeBonusPercent }
+          : {}),
+        ...(patch.note !== undefined ? { note: patch.note } : {}),
+        ...(emailChanged ? { userId: null, claimedAt: null, conflictFlag: false } : {}),
+      })
+      .where(eq(enrollments.id, entry.id))
+      .returning();
+    if (emailChanged) accessRevoked([entry.userId]);
+    return updated;
+  } catch (err) {
+    if (isUniqueViolation(err, "enrollments_classroom_email_uq")) throw rosterRefusal("duplicate_email");
+    throw err;
+  }
 }
 
 /**
  * Detaches a roster line from its account, or removes it: either way its
  * student loses the classroom, and their open streams are closed (#248).
+ * Its GitHub accesses go first.
  */
 export async function unclaimEnrollment(
   db: Db,
   entry: Pick<EnrollmentRecord, "id" | "userId">,
+  ctx: Revocation,
 ): Promise<EnrollmentRecord | undefined> {
+  if (entry.userId !== null) await revoke(db, entry.id, ctx, "roster.unclaim");
   const [updated] = await db
     .update(enrollments)
     .set({ userId: null, claimedAt: null, conflictFlag: false })
@@ -578,11 +606,23 @@ export async function unclaimEnrollment(
   return updated;
 }
 
+/**
+ * Removes a line, its GitHub accesses revoked first. An account invited on
+ * it in between keeps a grant row, whose foreign key refuses the delete:
+ * `502 revoke_failed`, to retry (the next revocation takes it).
+ */
 export async function removeEnrollment(
   db: Db,
   entry: Pick<EnrollmentRecord, "id" | "userId">,
+  ctx: Revocation,
 ): Promise<void> {
-  await db.delete(enrollments).where(eq(enrollments.id, entry.id));
+  await revoke(db, entry.id, ctx, "roster.remove");
+  try {
+    await db.delete(enrollments).where(eq(enrollments.id, entry.id));
+  } catch (err) {
+    if (isForeignKeyViolation(err, "project_repo_access_enrollment_id_enrollments_id_fk")) throw rosterRefusal("revoke_failed");
+    throw err;
+  }
   accessRevoked([entry.userId]);
 }
 

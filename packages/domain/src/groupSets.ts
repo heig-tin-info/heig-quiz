@@ -7,7 +7,8 @@
  *   remainder going to smaller or to larger ones, at the staff's choice;
  * - `copyFollows`: whether a project's copy still follows its set (§4);
  * - `groupSyncPlan`: the difference between a set and a following copy, as
- *   the operations that bring the copy in step (§4);
+ *   the operations that bring the copy in step (§4); `planReachesRepoGroup`:
+ *   whether they reach a group with a repository on GitHub (M3-15b);
  * - `freeName`, `freeSlug`, `defaultGroupName`, `defaultSetName`: the names.
  *
  * The randomness and the clock are injected by the caller (`crypto`, the
@@ -172,6 +173,26 @@ export function groupSyncPlan(set: SetState, copy: CopyState): GroupSyncPlan {
     if (!inSet.has(m.enrollmentId) && !deleted.has(m.groupId)) plan.unplace.push(m.enrollmentId);
   }
   return plan;
+}
+
+/**
+ * Whether `plan` reaches, on GitHub's side, a copy group whose slug is fixed
+ * (it has a repository, ADR-070 §4): deletes it, takes a student out of it,
+ * or brings one in. Its rename and its position are no GitHub change, nor
+ * is the departure of a student of `exempt` (a staff seat, whose accounts
+ * were revoked when it became one). Until the `group.sync` job (M3-15b-2)
+ * such a step is refused whole, `409 has_repo`.
+ */
+export function planReachesRepoGroup(copy: CopyState, plan: GroupSyncPlan, exempt: ReadonlySet<string> = new Set()): boolean {
+  const fixed = new Set(copy.groups.filter((g) => g.slugFixed).map((g) => g.id));
+  if (fixed.size === 0) return false;
+  const bySource = new Map(copy.groups.flatMap((g) => (g.sourceGroupId === null ? [] : [[g.sourceGroupId, g.id] as const])));
+  const groupOf = new Map(copy.members.map((m) => [m.enrollmentId, m.groupId]));
+  return (
+    plan.delete.some((id) => fixed.has(id)) ||
+    plan.place.some((p) => (p.from !== null && fixed.has(p.from)) || fixed.has(bySource.get(p.sourceGroupId) ?? "")) ||
+    plan.unplace.some((e) => !exempt.has(e) && fixed.has(groupOf.get(e)!))
+  );
 }
 
 /** True when `plan` changes nothing. */

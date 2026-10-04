@@ -40,16 +40,17 @@ import {
   type ProjectSlotScore,
   type ProjectStudent,
 } from "@quiz/contracts";
-import { changedAfterRelease, pickStudentRepo, projectPrimaryAction, resolveFinalScore, reviewState, scoreGrade, type ProjectScale } from "@quiz/domain";
+import { changedAfterRelease, projectPrimaryAction, resolveFinalScore, reviewState, scoreGrade, type ProjectScale } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
-import { enrollments, githubAccounts, gradeDispatches, projectGradeRuns, projectGroupMembers, projectRepos, users } from "../../db/schema.js";
+import { enrollments, githubAccounts, gradeDispatches, projectGradeRuns, projectRepos, users } from "../../db/schema.js";
 import { installationClient } from "../../github/app.js";
 import { isRateLimited, readRepoLiveState, type LiveRead } from "../../github/metrics.js";
 import { projectInstallation } from "../github/service.js";
 import { isLive, releaseCounts, repoDeadlineState } from "./deadline.js";
+import { seatRepos } from "./groupRepos.js";
 import { forEachLimit } from "./lease.js";
 import { studentRepos, type RepoRow } from "./repos.js";
 import { projectSummary, type ProjectRow } from "./views.js";
@@ -340,26 +341,15 @@ export async function projectDetail(
   const views = new Map(
     repos.map((repo) => [repo.id, repoView(project, repo, runs, facts.get(repo.id), dispatches.get(repo.id), live.get(repo.id))]),
   );
-  // Whose repository: a student's own, or their copy group's (ADR-048 lot 2,
+  // Whose repository: a student's own, or their copy group's (`seatRepos`,
   // N-SEC-20: never the group repository's creator for having created it);
   // one row per student, each member reading the group's.
-  const own = new Map(repos.filter((repo) => repo.groupId === null).map((repo) => [repo.userId, repo]));
-  const ofGroup = new Map(repos.filter((repo) => repo.groupId !== null).map((repo) => [repo.groupId!, repo]));
-  const placed = project.groupMode
-    ? new Map(
-        (
-          await db
-            .select({ enrollmentId: projectGroupMembers.enrollmentId, groupId: projectGroupMembers.groupId })
-            .from(projectGroupMembers)
-            .where(eq(projectGroupMembers.projectId, project.id))
-        ).map((m) => [m.enrollmentId, m.groupId]),
-      )
-    : new Map<string, string>();
+  const seats = await seatRepos(db, [project]);
   const shown = new Set<string>();
   const rows: ProjectDetailRow[] = roster.map((s) => {
-    const group = placed.get(s.enrollmentId);
-    const repo = pickStudentRepo(s.userId === null ? undefined : own.get(s.userId), group === undefined ? undefined : ofGroup.get(group));
-    if (repo) shown.add(repo.id);
+    const repo = seats.of(project.id, s.enrollmentId);
+    const view = repo === null ? undefined : views.get(repo.id);
+    if (view) shown.add(repo!.id);
     return {
       student: {
         enrollmentId: s.enrollmentId,
@@ -370,7 +360,7 @@ export async function projectDetail(
         claimed: s.claimedAt !== null && s.userId !== null,
         githubLogin: s.githubLogin,
       },
-      repo: repo ? views.get(repo.id)! : null,
+      repo: view ?? null,
     };
   });
   // The repositories no student of the roster reads any more — their

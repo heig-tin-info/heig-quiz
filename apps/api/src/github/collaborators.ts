@@ -60,9 +60,10 @@ export async function inviteCollaborator(
 }
 
 /**
- * Takes every access of `login` away from `owner/repo`: the collaborator seat
- * if the invitation was accepted, the invitation itself if it is still
- * pending (removing a collaborator does not cancel an invitation). A user who
+ * Takes every access of `login` away from `owner/repo`: a pending
+ * invitation first — cancelled before the seat, so that it cannot be
+ * accepted in between and outlive the revocation (removing a collaborator
+ * does not cancel an invitation) —, then the collaborator seat. A user who
  * had neither is a no-op, not an error — the revocation may be a replay.
  */
 export async function revokeCollaborator(
@@ -71,17 +72,6 @@ export async function revokeCollaborator(
   repo: string,
   login: string,
 ): Promise<{ invitationsCancelled: number }> {
-  try {
-    await octokit.request("DELETE /repos/{owner}/{repo}/collaborators/{username}", {
-      owner,
-      repo,
-      username: login,
-      request: { retries: 0 },
-    });
-  } catch (err) {
-    // 404: no such collaborator (or a renamed account) — nothing to remove.
-    if ((err as { status?: number }).status !== 404) throw err;
-  }
   const { data: invitations } = await octokit.request(
     "GET /repos/{owner}/{repo}/invitations",
     { owner, repo, per_page: 100 },
@@ -96,6 +86,17 @@ export async function revokeCollaborator(
       repo,
       invitation_id: Number(invitation.id),
     });
+  }
+  try {
+    await octokit.request("DELETE /repos/{owner}/{repo}/collaborators/{username}", {
+      owner,
+      repo,
+      username: login,
+      request: { retries: 0 },
+    });
+  } catch (err) {
+    // 404: no such collaborator (or a renamed account) — nothing to remove.
+    if ((err as { status?: number }).status !== 404) throw err;
   }
   return { invitationsCancelled: mine.length };
 }

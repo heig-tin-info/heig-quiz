@@ -158,6 +158,14 @@ export type GroupSetDetail = z.infer<typeof GroupSetDetail>;
  *     repository's name, is fixed).
  * A group, a student or a set out of reach is the 404 of a missing one.
  */
+/**
+ * The details of `set_in_use` and `has_repo`: EVERY project concerned, by
+ * id and name (the projects naming the set; the following projects whose
+ * copy the write would reach on GitHub).
+ */
+export const GroupRefusalProjects = z.object({ projects: z.array(z.object({ id: z.uuid(), name: z.string() })) });
+export type GroupRefusalProjects = z.infer<typeof GroupRefusalProjects>;
+
 export const GROUP_REFUSALS = ["classroom_archived", "set_in_use", "duplicate_name", "nobody_to_place", "size_out_of_range", "has_repo"] as const;
 export const GroupErrorCode = z.enum(GROUP_REFUSALS);
 export type GroupErrorCode = z.infer<typeof GroupErrorCode>;

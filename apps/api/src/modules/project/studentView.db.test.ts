@@ -552,7 +552,7 @@ describe("the student's resend (F-PROJ-07)", () => {
       .select()
       .from(auditLog)
       .where(and(eq(auditLog.subjectId, repo.id), eq(auditLog.action, "project_repo.invite_resent")));
-    expect(entry).toMatchObject({ actorUserId: student.id, payload: { login: student.login, invitationStatus: "pending" } });
+    expect(entry).toMatchObject({ actorUserId: student.id, payload: { logins: [student.login], invitationStatus: "pending" } });
 
     // The same minute for whoever asks: the staff's resend is too soon, and so is the student's after the staff's.
     server.clock.advance(MINUTE - 1000);

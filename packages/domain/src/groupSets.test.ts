@@ -11,6 +11,7 @@ import {
   groupSizes,
   groupSyncPlan,
   isEmptyPlan,
+  planReachesRepoGroup,
   type CopyState,
   type SetState,
 } from "./groupSets.js";
@@ -168,6 +169,45 @@ describe("groupSyncPlan (ADR-070 §4)", () => {
       { id: "c1", name: "B", slug: "b", position: 0 },
       { id: "c2", name: "A", slug: "a", position: 1 },
     ]);
+  });
+});
+
+describe("planReachesRepoGroup (M3-15b)", () => {
+  const set = (groups: [string, string][], members: [string, string][] = []): SetState => ({
+    groups: groups.map(([id, name], position) => ({ id, name, position })),
+    members: members.map(([enrollmentId, groupId]) => ({ enrollmentId, groupId })),
+  });
+  // c1 (source g1) has a repository, c2 (source g2) has none.
+  const copy = (members: [string, string][]): CopyState => ({
+    groups: [
+      { id: "c1", name: "A", slug: "a", position: 0, sourceGroupId: "g1", slugFixed: true },
+      { id: "c2", name: "B", slug: "b", position: 1, sourceGroupId: "g2" },
+    ],
+    members: members.map(([enrollmentId, groupId]) => ({ enrollmentId, groupId })),
+  });
+  const reaches = (s: SetState, c: CopyState, exempt?: Set<string>) => planReachesRepoGroup(c, groupSyncPlan(s, c), exempt);
+
+  it("is reached by a member out, a member in, a move either way, and its deletion", () => {
+    const base = copy([["e1", "c1"], ["e2", "c2"]]);
+    expect(reaches(set([["g1", "A"], ["g2", "B"]], [["e2", "g2"]]), base)).toBe(true);
+    expect(reaches(set([["g1", "A"], ["g2", "B"]], [["e1", "g1"], ["e2", "g1"]]), base)).toBe(true);
+    expect(reaches(set([["g1", "A"], ["g2", "B"]], [["e1", "g2"], ["e2", "g2"]]), base)).toBe(true);
+    expect(reaches(set([["g2", "B"]], [["e2", "g2"]]), copy([["e2", "c2"]]))).toBe(true);
+  });
+
+  it("is not reached by its rename, its position, a group without repository, nor an exempt departure", () => {
+    const base = copy([["e1", "c1"], ["e2", "c2"]]);
+    expect(reaches(set([["g2", "B"], ["g1", "Renamed"]], [["e1", "g1"], ["e2", "g2"]]), base)).toBe(false);
+    expect(reaches(set([["g1", "A"], ["g2", "B"]], [["e1", "g1"]]), base)).toBe(false);
+    expect(reaches(set([["g1", "A"], ["g2", "B"]], [["e2", "g2"]]), base, new Set(["e1"]))).toBe(false);
+    expect(reaches(set([["g1", "A"]], [["e1", "g1"]]), copy([["e1", "c1"]]))).toBe(false);
+  });
+
+  it("is never reached in a copy without repository, and a sourceless group is deleted as any", () => {
+    const plain: CopyState = { groups: [{ id: "c2", name: "B", slug: "b", position: 0, sourceGroupId: "g2" }], members: [{ enrollmentId: "e2", groupId: "c2" }] };
+    expect(reaches(set([], []), plain)).toBe(false);
+    const orphan: CopyState = { groups: [{ id: "c9", name: "Old", slug: "old", position: 0, sourceGroupId: null, slugFixed: true }], members: [] };
+    expect(reaches(set([["g1", "A"]]), orphan)).toBe(true);
   });
 });
 

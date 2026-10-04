@@ -15,13 +15,22 @@
  *   nothing written; a rename follows, the slug fixed;
  * - leaving: a removal, an unclaim, an e-mail change, a self-enroll revoke
  *   the RECORDED accounts first (an unlinked and relinked student's too, an
- *   individual repository's too); GitHub refusing is `502 revoke_failed`,
- *   the roster, the set and the copy unchanged; the App gone, a repository
- *   deleted, a student never invited proceed, audited `skipped`.
+ *   individual repository's too, its invitation state cleared); GitHub
+ *   refusing is `502 revoke_failed`, the roster, the set and the copy
+ *   unchanged; the App gone (or its installation gone on GitHub), a
+ *   repository deleted, a student never invited proceed, audited `skipped`;
+ * - the races, interleaved through the fake GitHub: a line removed before
+ *   its invitation is recorded (never invited), or while GitHub is asked
+ *   (the invitation taken back), an account recorded during a removal (the
+ *   line's delete refused, `502`, retried), a student moved out of their
+ *   group during their Accept (`no_group`); a classroom deleted with its
+ *   grants; the backfill of 0067.
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { readFileSync } from "node:fs";
+
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GroupErrorCode, GroupSetDetail, ProjectAcceptErrorCode, ProjectDetail, ProjectSummary, RosterErrorCode, StudentProject } from "@quiz/contracts";
@@ -37,6 +46,7 @@ import {
   projectGroups,
   projectRepoAccess,
   projectRepos,
+  projects,
   studentGroupMembers,
   users,
 } from "../../db/schema.js";
@@ -190,16 +200,38 @@ const acceptInvitation = (fullName: string, login: string) => {
 };
 const removeLine = (room: Room, line: string) => staff("DELETE", `/app/api/classrooms/${room.id}/roster/${line}`);
 
+/**
+ * A hook the next matching GitHub call runs first (once), before the call
+ * goes on to the world: how a test interleaves a request with another's.
+ */
+let hook: { match: (url: URL, method: string) => boolean; run: () => Promise<void> } | null = null;
+const hookRoute: Route = (url, req) => {
+  const h = hook;
+  if (!h || !h.match(url, req.method)) return undefined;
+  hook = null;
+  return (async () => {
+    await h.run();
+    return (world.route(url, req) ?? usersRoute(url, req) ?? json({ message: "Not Found" }, 404))!;
+  })() as unknown as Response;
+};
+/** Installations whose token GitHub refuses (gone without a webhook). */
+const goneInstallations = new Set<number>();
+const tokensRoute: Route = (url, req) => {
+  const m = /^\/app\/installations\/(\d+)\/access_tokens$/.exec(url.pathname);
+  return req.method === "POST" && m && goneInstallations.has(Number(m[1])) ? json({ message: "Not Found" }, 404) : undefined;
+};
+
 beforeAll(async () => {
   vi.stubGlobal("fetch", gh.fetch);
   setRemoteBaseForTests(`file://${world.dir}`);
   server = await testServer(ENV);
-  gh.routes = [orgsRoute(() => []), usersRoute, world.route];
+  gh.routes = [hookRoute, tokensRoute, orgsRoute(() => []), usersRoute, world.route];
   teacher = await server.signIn("teacher");
 });
 
 beforeEach(() => {
   server.clock.set(NOW);
+  hook = null;
 });
 
 afterAll(async () => {
@@ -290,11 +322,7 @@ describe("a group's repository at Accept (ADR-048 lot 2)", () => {
     expect((await accept(project.id, ana!)).statusCode).toBe(200);
     const fullName = `${room.login}/lab-1-group-1`;
     await link(cid!.id, cid!.githubUserId, cid!.login);
-    const invited = await inviteOnGithubLink(server.app.db, config, cid!.id, { githubUserId: cid!.githubUserId, login: cid!.login }, {
-      now: new Date(NOW),
-      log: server.app.log,
-    });
-    expect(invited).toEqual([fullName]);
+    await inviteOnGithubLink(server.app.db, config, cid!.id, { now: new Date(NOW), log: server.app.log });
     expect(seats(fullName)[cid!.login]).toBe("push");
     const [row] = await repoRows(project.id);
     expect((await grantsOf(row!.id)).some((g) => g.githubLogin === cid!.login && g.revokedAt === null)).toBe(true);
@@ -347,12 +375,26 @@ describe("a group's repository is a student's through the copy only (N-SEC-20)",
     // Their own resend: no repository of theirs. The staff's: the members only.
     const own = await call("POST", `/app/api/student/projects/${project.id}/invite`, ana!.headers);
     expect([own.statusCode, own.json().error]).toEqual([409, "repo_unavailable"]);
-    world.collaborators.get(fullName)!.delete(ana!.login);
-    world.collaborators.get(fullName)!.delete(ben!.login);
-    world.invitations.get(fullName)!.clear();
+    // Both invitations still pending: only the member's is sent again.
+    const before = gh.calls.length;
     const resent = await staff("POST", `/app/api/projects/${project.id}/repos/${row!.id}/invite`);
     expect(resent.statusCode, resent.body).toBe(200);
-    expect(seats(fullName)).toEqual({ [ben!.login]: "push" });
+    expect(gh.calls.slice(before).filter((c) => c.startsWith("PUT"))).toEqual([`PUT api.github.com/repos/${fullName}/collaborators/${ben!.login}`]);
+  });
+
+  it("the staff's resend of a group's re-invites the members still out only", async () => {
+    const [ana, ben] = [await newStudent(), await newStudent()];
+    const { project, room } = await groupProject([ana!, ben!], [[0, 1]]);
+    expect((await accept(project.id, ana!)).statusCode).toBe(200);
+    const fullName = `${room.login}/lab-1-group-1`;
+    acceptInvitation(fullName, ana!.login);
+    const [row] = await repoRows(project.id);
+    const before = gh.calls.length;
+    const res = await staff("POST", `/app/api/projects/${project.id}/repos/${row!.id}/invite`);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(gh.calls.slice(before).filter((c) => c.startsWith("PUT"))).toEqual([`PUT api.github.com/repos/${fullName}/collaborators/${ben!.login}`]);
+    const [entry] = await auditsOf(row!.id, "project_repo.invite_resent");
+    expect(entry!.payload).toEqual({ logins: [ben!.login], invitationStatus: "accepted" });
   });
 
   it("a member's own resend invites them alone", async () => {
@@ -422,8 +464,12 @@ describe("leaving the roster, or an account, revokes the recorded accounts first
     const res = await removeLine(room, room.lines.get(ana!.id)!);
     expect(res.statusCode, res.body).toBe(204);
     expect(seats(fullName)).toEqual({ [ben!.login]: "push" });
+    const before = gh.calls.length;
     const res2 = await removeLine(room, room.lines.get(ben!.id)!);
     expect(res2.statusCode, res2.body).toBe(204);
+    // The pending invitation cancelled BEFORE the seat is removed: it cannot be accepted in between.
+    const deletes = gh.calls.slice(before).filter((c) => c.startsWith("DELETE"));
+    expect(deletes.map((c) => c.split("/")[4])).toEqual(["invitations", "collaborators"]);
     expect(seats(fullName)).toEqual({});
     expect(pendingInvitations(fullName)).toEqual([]);
     // The lines gone, their grants with them; the audit keeps the trace.
@@ -548,5 +594,149 @@ describe("leaving the roster, or an account, revokes the recorded accounts first
     expect((await removeLine(room, room.lines.get(ana.id)!)).statusCode).toBe(204);
     expect(seats(fullName)).toEqual({});
     expect(pendingInvitations(fullName)).toEqual([]);
+    // Nobody is let in any more: its invitation state says so.
+    expect((await repoRows(project.id))[0]!.invitationStatus).toBe("none");
+  });
+
+  it("refuses the staff's resend of an individual repository with no student on the roster (repo_unavailable)", async () => {
+    const ana = await newStudent();
+    const room = await connectedClassroom([ana]);
+    const created = await staff("POST", `/app/api/classrooms/${room.id}/projects`, { name: "Alone", sourceRepo: "starter", deadlineAt: IN_A_WEEK });
+    const project = ProjectSummary.parse(created.json());
+    expect((await staff("POST", `/app/api/projects/${project.id}/publish`)).statusCode).toBe(200);
+    expect((await accept(project.id, ana)).statusCode).toBe(200);
+    const [row] = await repoRows(project.id);
+    // A student whose account was never recorded (unlinked before 0067's backfill) leaves: nothing to take.
+    await server.app.db.delete(projectRepoAccess).where(eq(projectRepoAccess.repoId, row!.id));
+    expect((await removeLine(room, room.lines.get(ana.id)!)).statusCode).toBe(204);
+    const res = await staff("POST", `/app/api/projects/${project.id}/repos/${row!.id}/invite`);
+    expect([res.statusCode, res.json().error]).toEqual([409, "repo_unavailable"]);
+  });
+
+  it("skips an installation GitHub no longer knows (its token refused) as app_not_installed", async () => {
+    const [ana] = [await newStudent()];
+    const { project, room } = await groupProject([ana!], [[0]]);
+    expect((await accept(project.id, ana!)).statusCode).toBe(200);
+    const [row] = await repoRows(project.id);
+    const gone = nextOrg++;
+    goneInstallations.add(gone);
+    await server.app.db.update(githubOrganizations).set({ installationId: gone }).where(eq(githubOrganizations.id, room.orgId));
+    expect((await removeLine(room, room.lines.get(ana!.id)!)).statusCode).toBe(204);
+    const [revoke] = await auditsOf(row!.id, "project_group.repo_revoke");
+    expect(revoke!.payload).toMatchObject({ outcome: "skipped", reason: "app_not_installed" });
+  });
+});
+
+// ---------------------------------------------------------------- the races
+
+describe("the races of an invitation and a departure (R1–R3)", () => {
+  it("never invites a line removed before its account is recorded", async () => {
+    const [ana, ben] = [await newStudent(), await newStudent()];
+    const { project, room } = await groupProject([ana!, ben!], [[0, 1]]);
+    const line = room.lines.get(ben!.id)!;
+    // Ben's line goes while Ana's Accept asks GitHub for Ben's login.
+    hook = {
+      match: (url, method) => method === "GET" && url.pathname === `/user/${ben!.githubUserId}`,
+      run: async () => void (await removeLine(room, line)),
+    };
+    expect((await accept(project.id, ana!)).statusCode).toBe(200);
+    const fullName = `${room.login}/lab-1-group-1`;
+    expect(seats(fullName)).toEqual({ [ana!.login]: "push" });
+    expect(await server.app.db.select().from(projectRepoAccess).where(eq(projectRepoAccess.enrollmentId, line))).toEqual([]);
+  });
+
+  it("takes an invitation back when the line was removed while GitHub was asked", async () => {
+    const [ana, ben] = [await newStudent(), await newStudent()];
+    const { project, room } = await groupProject([ana!, ben!], [[0, 1]]);
+    const line = room.lines.get(ben!.id)!;
+    const fullName = `${room.login}/lab-1-group-1`;
+    // Ben's grant is recorded; his removal runs before GitHub's answer to his invitation.
+    hook = {
+      match: (url, method) => method === "PUT" && url.pathname.endsWith(`/collaborators/${ben!.login}`),
+      run: async () => {
+        const res = await removeLine(room, line);
+        expect(res.statusCode, res.body).toBe(204);
+      },
+    };
+    expect((await accept(project.id, ana!)).statusCode).toBe(200);
+    expect(await server.app.db.select().from(enrollments).where(eq(enrollments.id, line))).toEqual([]);
+    expect(seats(fullName)).toEqual({ [ana!.login]: "push" });
+    expect(pendingInvitations(fullName)).toEqual([ana!.login]);
+  });
+
+  it("refuses a removal whose line got an account recorded meanwhile (502), then takes it on retry", async () => {
+    const [ana, ben] = [await newStudent(), await newStudent()];
+    const { project, room } = await groupProject([ana!, ben!], [[0, 1]]);
+    expect((await accept(project.id, ana!)).statusCode).toBe(200);
+    const [row] = await repoRows(project.id);
+    const line = room.lines.get(ben!.id)!;
+    const other = nextAccount++;
+    accounts.set(other, "ben-other");
+    // While the removal revokes Ben's recorded account, an invitation records another one.
+    hook = {
+      match: (url, method) => method === "GET" && url.pathname === `/user/${ben!.githubUserId}`,
+      run: async () =>
+        void (await server.app.db
+          .insert(projectRepoAccess)
+          .values({ id: randomUUID(), repoId: row!.id, enrollmentId: line, githubUserId: other, githubLogin: "ben-other", invitedAt: new Date(NOW) })),
+    };
+    expect(rosterRefusal(await removeLine(room, line))).toEqual([502, "revoke_failed"]);
+    expect(await server.app.db.select().from(enrollments).where(eq(enrollments.id, line))).toHaveLength(1);
+    expect((await removeLine(room, line)).statusCode).toBe(204);
+    const logins = (await auditsOf(row!.id, "project_group.repo_revoke")).map((a) => (a.payload as { login: string }).login);
+    expect(logins).toEqual([ben!.login, "ben-other"]);
+  });
+
+  it("answers no_group to a student moved out of their group during their Accept, nothing made", async () => {
+    const [ana, ben] = [await newStudent(), await newStudent()];
+    const { project, room, set } = await groupProject([ana!, ben!], [[0, 1]]);
+    hook = {
+      match: (url, method) => method === "GET" && url.pathname === `/user/${ana!.githubUserId}`,
+      run: async () => void (await setOk(await moveTo(set, room.lines.get(ana!.id)!, null))),
+    };
+    expect(acceptRefusal(await accept(project.id, ana!))).toEqual([409, "no_group"]);
+    expect(await repoRows(project.id)).toEqual([]);
+  });
+
+  it("deletes a classroom whose lines hold accounts recorded (no cascade from the line)", async () => {
+    const [ana] = [await newStudent()];
+    const { project, room } = await groupProject([ana!], [[0]]);
+    expect((await accept(project.id, ana!)).statusCode).toBe(200);
+    const [row] = await repoRows(project.id);
+    expect(await grantsOf(row!.id)).toHaveLength(1);
+    const [roomRow] = await server.app.db.select().from(enrollments).where(eq(enrollments.classroomId, room.id));
+    expect(roomRow).toBeDefined();
+    const { classrooms } = await import("../../db/schema.js");
+    const [named] = await server.app.db.select({ name: classrooms.name }).from(classrooms).where(eq(classrooms.id, room.id));
+    const res = await staff("DELETE", `/app/api/classrooms/${room.id}?confirm=${encodeURIComponent(named!.name)}`);
+    expect(res.statusCode, res.body).toBe(204);
+    expect(await server.app.db.select().from(projects).where(eq(projects.id, project.id))).toEqual([]);
+    expect(await grantsOf(row!.id)).toEqual([]);
+  });
+
+  it("backfills an individual repository provisioned before 0067 (its student linked today)", async () => {
+    const ana = await newStudent();
+    const room = await connectedClassroom([ana]);
+    const created = await staff("POST", `/app/api/classrooms/${room.id}/projects`, { name: "Before", sourceRepo: "starter", deadlineAt: IN_A_WEEK });
+    const project = ProjectSummary.parse(created.json());
+    // A row as M3-03 left it: provisioned, invited, no account recorded.
+    const repoId = randomUUID();
+    await server.app.db.insert(projectRepos).values({
+      id: repoId,
+      projectId: project.id,
+      userId: ana.id,
+      fullName: `${room.login}/before-${ana.login}`,
+      githubRepoId: nextOrg++,
+      provisionStatus: "ok",
+      invitationStatus: "accepted",
+      acceptedAt: new Date(NOW),
+    });
+    const migration = readFileSync(new URL("../../../drizzle/0067_project_repo_access.sql", import.meta.url), "utf8");
+    const backfill = migration.slice(migration.indexOf("INSERT INTO"));
+    await server.app.db.execute(sql.raw(backfill));
+    const grants = await grantsOf(repoId);
+    expect(grants.map((g) => [g.enrollmentId, g.githubUserId, g.githubLogin, g.invitedAt, g.revokedAt])).toEqual([
+      [room.lines.get(ana.id), ana.githubUserId, ana.login, new Date(NOW), null],
+    ]);
   });
 });

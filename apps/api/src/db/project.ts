@@ -437,8 +437,15 @@ export const projectRepos = pgTable(
  * One row per (repository, line, account); `revoked_at` set once GitHub
  * took the access away, or there was nothing left to take (the App gone,
  * the repository deleted); an invitation of the same account again clears
- * it. The line's removal revokes first, then cascades these rows away (its
- * trace is the audit's, `project_group.repo_revoke`).
+ * it. **Written BEFORE GitHub is asked** (the line locked FOR SHARE: a line
+ * removed meanwhile is never invited), taken back if GitHub refuses.
+ *
+ * The line's foreign key does NOT cascade: the roster's removal revokes,
+ * deletes the revoked rows (the trace is the audit's,
+ * `project_group.repo_revoke`), then the line — and an account invited in
+ * between makes that delete fail, a `502 revoke_failed` to retry, instead
+ * of a seat nobody would ever revoke. A classroom's or a course's deletion
+ * removes these rows with their repositories in the same statement.
  */
 export const projectRepoAccess = pgTable(
   "project_repo_access",
@@ -449,7 +456,7 @@ export const projectRepoAccess = pgTable(
       .references(() => projectRepos.id, { onDelete: "cascade" }),
     enrollmentId: uuid("enrollment_id")
       .notNull()
-      .references(() => enrollments.id, { onDelete: "cascade" }),
+      .references(() => enrollments.id),
     githubUserId: bigint("github_user_id", { mode: "number" }).notNull(),
     githubLogin: text("github_login").notNull(),
     /** The last invitation's time (`app.clock`): no default. */

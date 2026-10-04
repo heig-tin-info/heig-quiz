@@ -335,7 +335,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     "/app/api/student/projects/:id/invite",
     session,
     student({ params: IdParam, load: studentProject.bind(null, app) }, async ({ req, now, scope }) =>
-      service.studentResendInvitation(app.db, config, scope.project, { enrollmentId: scope.seat.id, userId: req.user!.id }, actorOf(req), now, req.log),
+      service.studentResendInvitation(app.db, config, scope.project, scope.seat.id, actorOf(req), now, req.log),
     ),
   );
 }

@@ -378,9 +378,8 @@ export async function githubLinkPlugin(app: FastifyInstance, opts: { config: App
     const code = (req.query as { code?: unknown }).code;
     if (typeof code !== "string" || code === "") return back("error");
     let outcome: GithubLinkOutcome;
-    let account: GithubUser;
     try {
-      account = await readAccount(github, code, req.log);
+      const account = await readAccount(github, code, req.log);
       outcome = await saveAccount(app.db, state.userId, account, app.clock.now());
     } catch (err) {
       req.log.warn({ err: failure(err) }, "GitHub account linking failed");
@@ -389,8 +388,7 @@ export async function githubLinkPlugin(app: FastifyInstance, opts: { config: App
     if (outcome === "linked") {
       // Their groups' repositories they could not be invited on yet (ADR-048
       // lot 2, M3-15b): best effort, the link never fails on it.
-      const linked = { githubUserId: account.id, login: account.login };
-      await inviteOnGithubLink(app.db, config, state.userId, linked, { now: app.clock.now(), log: req.log }).catch((err: unknown) => {
+      await inviteOnGithubLink(app.db, config, state.userId, { now: app.clock.now(), log: req.log }).catch((err: unknown) => {
         req.log.warn({ err: failure(err) }, "group repository invitations on link failed");
       });
       // The user's other tabs refresh their card; a GET publishes no hint of its own (`app.ts`).

@@ -43,7 +43,7 @@ export { repoDeadline, setRepoDeadline, setStaffLock } from "./deadline.js";
 export { overrideScore, releaseProject } from "./grades.js";
 export { projectsChanged } from "./events.js";
 export { followingCopies, RepoGroupTouched, stepCopies } from "./groupCopy.js";
-export { inviteOnGithubLink, revokeEnrollmentAccess, type RevokeVia } from "./access.js";
+export { forgetGrants, inviteOnGithubLink, revokeEnrollmentAccess, type RevokeVia } from "./access.js";
 export { resendInvitation } from "./invitation.js";
 export { reenableProtection } from "./protection.js";
 export { requestDeadlineWork } from "./jobs.js";

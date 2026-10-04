@@ -45,15 +45,16 @@ import { audit, type AuditActor } from "../../audit.js";
 import { linkedLogin } from "../../auth/githubLink.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { githubAccounts, projectRepos } from "../../db/schema.js";
+import { githubAccounts, projectRepos, projects } from "../../db/schema.js";
 import { installationClient, ownerRepo, type InstallationClient } from "../../github/app.js";
 import { isInvitationRefused } from "../../github/collaborators.js";
 import { provisionStudentRepo, RepoNameTaken } from "../../github/provision.js";
 import { redactTokens } from "../../redact.js";
 import { projectInstallation, type InstalledOrg } from "../github/service.js";
-import { inviteMember, markGroupInvitationPending, recordGrant } from "./access.js";
+import { DomainError } from "../http.js";
+import { followInvitation, inviteAccount, recordGrant } from "./access.js";
 import { ProjectError } from "./errors.js";
-import { copyGroupOf, groupMembers, groupRepoWhere, individualHolders, type GroupRow } from "./groupRepos.js";
+import { copyGroupOf, groupRepoWhere, repoMembers, seatRepo, type AccountRow, type GroupRow } from "./groupRepos.js";
 import type { ProjectRow } from "./views.js";
 
 type RepoRow = typeof projectRepos.$inferSelect;
@@ -132,58 +133,67 @@ export interface AcceptInput {
   log: FastifyBaseLogger;
 }
 
-/** What Accept needs of GitHub before it writes anything: the organization, a client, the student's login of today. */
+/** What Accept needs of GitHub before it writes anything: the student's link, the organization, a client. */
 interface GithubSide {
+  account: AccountRow;
   org: InstalledOrg;
   client: InstallationClient;
-  githubUserId: number;
-  login: string;
 }
 
-/**
- * The student's side on GitHub, or the refusal: `github_not_linked`,
- * `app_not_installed`, `github_account_stale`, `provision_failed` when
- * GitHub cannot tell the login. The login is followed to today's through
- * the immutable id, or nothing is named: a stored login renamed away may
- * belong to somebody else now, who would be invited with push.
- */
+/** The student's side on GitHub, or the refusal: `github_not_linked`, `app_not_installed`. */
 async function githubSide(db: Db, config: AppConfig, input: AcceptInput): Promise<GithubSide> {
   const [account] = await db.select().from(githubAccounts).where(eq(githubAccounts.userId, input.userId));
   if (!account) throw new ProjectError("github_not_linked", "Link your GitHub account first");
   const org = await projectInstallation(db, input.project.orgId);
   if (!org) throw new ProjectError("app_not_installed", "Quiz's GitHub App no longer acts on the project's organization");
-  const client = await installationClient(config, org.installationId);
-  const login = await linkedLogin(db, client.octokit, input.userId, account).catch((err: unknown) => {
+  return { account, org, client: await installationClient(config, org.installationId) };
+}
+
+/**
+ * The login GitHub knows today for the student's immutable id, or the
+ * refusal (`github_account_stale`; `provision_failed` when GitHub cannot
+ * tell): a stored login renamed away may belong to somebody else now, who
+ * would be invited with push.
+ */
+async function loginOf(db: Db, input: AcceptInput, github: GithubSide): Promise<string> {
+  const login = await linkedLogin(db, github.client.octokit, input.userId, github.account).catch((err: unknown) => {
     input.log.warn({ err }, "GitHub login lookup failed");
     throw new ProjectError("provision_failed", "GitHub cannot be reached: try again");
   });
   if (typeof login !== "string") throw new ProjectError("github_account_stale", "Relink your GitHub account");
-  return { org, client, githubUserId: account.githubUserId, login };
+  return login;
 }
+
+/** A provisioned repository GitHub still holds: a student joins it, never provisions it again. */
+const joinable = (row: RepoRow | null | undefined): boolean => row?.provisionStatus === "ok" && row.deletedAt === null;
 
 /**
  * `POST /app/api/student/projects/:id/accept` on a project the caller may
  * accept (`studentProject`, `guards.ts`). The row first: provisioned or
- * dead, it is the answer. Then the refusals, all `409`: the project's
- * (`acceptRefusal` of `@quiz/domain`: `not_started`, `deadline_passed`,
- * `distribution_missing`), `no_group` (a group project's copy places the
- * student nowhere), `github_not_linked`, `app_not_installed`,
- * `github_account_stale`, `provision_in_progress`, `repo_name_taken`;
- * GitHub failing (its login lookup included) is `502 provision_failed`,
- * retried by the student.
+ * dead, it is the answer — a student's own repository whose access was
+ * revoked (an unclaim, an e-mail change) is joined again. Then the
+ * refusals, all `409`: the project's (`acceptRefusal` of `@quiz/domain`:
+ * `not_started`, `deadline_passed`, `distribution_missing`), `no_group` (a
+ * group project's copy places the student nowhere), `github_not_linked`,
+ * `app_not_installed`, `github_account_stale`, `provision_in_progress`,
+ * `repo_name_taken`; GitHub failing (its login lookup included) is `502
+ * provision_failed`, retried by the student.
  */
 export async function acceptProject(db: Db, config: AppConfig, input: AcceptInput): Promise<ProjectAcceptance> {
   const { project, userId, now } = input;
-  const mine = and(eq(projectRepos.projectId, project.id), eq(projectRepos.userId, userId), isNull(projectRepos.groupId));
-  const [existing] = await db.select().from(projectRepos).where(mine).limit(1);
-  // In a group project, only a live individual repository (heig-classroom's lot 1) is the student's own.
-  if (project.groupMode ? existing !== undefined && isLiveIndividualRepo(existing) : settled(existing)) return acceptance(existing!);
-  if (project.groupMode) return acceptGroup(db, config, input);
+  // The repository the seat reads: its own, or (a group project) its copy group's (`seatRepo`).
+  const seat = await seatRepo(db, project, input.enrollmentId);
+  if (project.groupMode && seat?.groupId === null && isLiveIndividualRepo(seat)) return acceptance(seat);
+  if (project.groupMode) return acceptGroup(db, config, input, seat);
+  if (joinable(seat) && seat!.invitationStatus === "none") return joinRepo(db, config, input, seat!);
+  if (settled(seat ?? undefined)) return acceptance(seat!);
 
   const refusal = acceptRefusal(project, now);
   if (refusal) throw new ProjectError(refusal);
   const github = await githubSide(db, config, input);
+  const login = await loginOf(db, input, github);
 
+  const mine = and(eq(projectRepos.projectId, project.id), eq(projectRepos.userId, userId), isNull(projectRepos.groupId));
   await db.insert(projectRepos).values({ id: randomUUID(), projectId: project.id, userId, acceptedAt: now }).onConflictDoNothing();
   const row = await claimProvisioning(db, mine, now);
   if (!row) {
@@ -191,7 +201,7 @@ export async function acceptProject(db: Db, config: AppConfig, input: AcceptInpu
     if (settled(current)) return acceptance(current);
     throw new ProjectError("provision_in_progress", "Your repository is being created: try again in a moment");
   }
-  return acceptance(await provision(db, input, row, github, repoName(project.slug, github.login)));
+  return acceptance(await provision(db, input, row, github, login, repoName(project.slug, login)));
 }
 
 /**
@@ -199,31 +209,41 @@ export async function acceptProject(db: Db, config: AppConfig, input: AcceptInpu
  * repository — made by the first member, every other member invited;
  * joined by a later one, who is invited on it.
  */
-async function acceptGroup(db: Db, config: AppConfig, input: AcceptInput): Promise<ProjectAcceptance> {
+async function acceptGroup(db: Db, config: AppConfig, input: AcceptInput, seat: RepoRow | null): Promise<ProjectAcceptance> {
   const { project, userId, now } = input;
-  const group = await copyGroupOf(db, project.id, input.enrollmentId);
-  if (!group) throw new ProjectError("no_group", "You are in no group of this project: ask your teacher to place you");
-  const where = groupRepoWhere(project.id, group.id);
-  const [found] = await db.select().from(projectRepos).where(where).limit(1);
-  if (found?.provisionStatus === "ok" && found.deletedAt === null) return joinGroupRepo(db, config, input, found);
-  if (settled(found)) return acceptance(found);
+  if (joinable(seat)) return joinRepo(db, config, input, seat!);
+  if (seat?.groupId != null && settled(seat)) return acceptance(seat);
+  if (seat === null && (await copyGroupOf(db, project.id, input.enrollmentId)) === null) throw noGroup();
 
   const refusal = acceptRefusal(project, now);
   if (refusal) throw new ProjectError(refusal);
   const github = await githubSide(db, config, input);
+  const login = await loginOf(db, input, github);
 
-  // The first member's row: `user_id` records who created it, nothing more (N-SEC-20).
-  await db.insert(projectRepos).values({ id: randomUUID(), projectId: project.id, userId, groupId: group.id, acceptedAt: now }).onConflictDoNothing();
+  // The row of the student's group as the copy holds it NOW: the project
+  // locked FOR SHARE, which a set's write stepping the copy (FOR UPDATE,
+  // `followingCopies`) waits for — the membership re-read under it (R3).
+  const group = await db.transaction(async (tx) => {
+    await tx.select({ id: projects.id }).from(projects).where(eq(projects.id, project.id)).for("share");
+    const placed = await copyGroupOf(tx, project.id, input.enrollmentId);
+    // The first member's row: `user_id` records who created it, nothing more (N-SEC-20).
+    if (placed) await tx.insert(projectRepos).values({ id: randomUUID(), projectId: project.id, userId, groupId: placed.id, acceptedAt: now }).onConflictDoNothing();
+    return placed;
+  });
+  if (!group) throw noGroup();
+  const where = groupRepoWhere(project.id, group.id);
   const row = await claimProvisioning(db, where, now);
   if (!row) {
     const [current] = await db.select().from(projectRepos).where(where).limit(1);
-    if (current?.provisionStatus === "ok" && current.deletedAt === null) return joinGroupRepo(db, config, input, current);
+    if (joinable(current)) return joinRepo(db, config, input, current!);
     if (settled(current)) return acceptance(current);
     throw new ProjectError("provision_in_progress", "Your group's repository is being created: try again in a moment");
   }
-  const made = await provision(db, input, row, github, await groupRepoNameFor(db, project, group, github.org.login, row));
+  const made = await provision(db, input, row, github, login, await groupRepoNameFor(db, project, group, github.org.login, row));
   return acceptance(await inviteGroup(db, input, made, github));
 }
+
+const noGroup = () => new ProjectError("no_group", "You are in no group of this project: ask your teacher to place you");
 
 /**
  * The name of a group's repository: `<project slug>-<group slug>`, the
@@ -246,11 +266,14 @@ async function groupRepoNameFor(db: Db, project: ProjectRow, group: GroupRow, or
 
 /**
  * Provisions `row` as `targetRepo` for the Accept that claimed it, the
- * accepting student invited (and their account recorded); audited
+ * accepting student invited under `login` — their account recorded FIRST
+ * (R1: a line removed meanwhile is not provisioned for); audited
  * `project.accept`, or `project.accept_failed` and the refusal.
  */
-async function provision(db: Db, input: AcceptInput, row: RepoRow, github: GithubSide, targetRepo: string): Promise<RepoRow> {
+async function provision(db: Db, input: AcceptInput, row: RepoRow, github: GithubSide, login: string, targetRepo: string): Promise<RepoRow> {
   const { project, now, log } = input;
+  const account = { enrollmentId: input.enrollmentId, githubUserId: github.account.githubUserId, login };
+  if ((await recordGrant(db, row.id, account, now)) === null) throw new DomainError("not_found", 404, "No such project");
   try {
     const result = await provisionStudentRepo({
       octokit: github.client.octokit,
@@ -260,7 +283,7 @@ async function provision(db: Db, input: AcceptInput, row: RepoRow, github: Githu
       targetRepo,
       branches: project.branches,
       defaultBranch: project.branches[0]!,
-      studentLogin: github.login,
+      studentLogin: login,
       claim: async (repoId, created) => {
         if (!created) return repoId === row.githubRepoId;
         await db.update(projectRepos).set({ githubRepoId: repoId }).where(eq(projectRepos.id, row.id));
@@ -280,7 +303,6 @@ async function provision(db: Db, input: AcceptInput, row: RepoRow, github: Githu
       })
       .where(eq(projectRepos.id, row.id))
       .returning();
-    await recordGrant(db, row.id, { enrollmentId: input.enrollmentId, githubUserId: github.githubUserId, login: github.login }, now);
     await audit(db, {
       ...input.actor,
       action: "project.accept",
@@ -311,52 +333,41 @@ async function provision(db: Db, input: AcceptInput, row: RepoRow, github: Githu
 }
 
 /**
- * Every other member of the group's new repository with a linked account,
- * invited — best effort: a member GitHub refuses (an account renamed away)
- * never deprives the others of their access, and is invited when they
- * accept or relink. The members are read AFTER the provisioning, so one
- * who left meanwhile is not invited from a stale list; a holder of a live
- * individual repository keeps theirs. The row's invitation is then pending
- * while any member's is.
+ * Every other member of the group's new repository with a link, invited
+ * (`inviteAccount`) — best effort: a member GitHub refuses (an account
+ * renamed away) never deprives the others of their access, and is invited
+ * when they accept or relink. The members are read AFTER the provisioning,
+ * so one who left meanwhile is not invited from a stale list.
  */
 async function inviteGroup(db: Db, input: AcceptInput, repo: RepoRow, github: GithubSide): Promise<RepoRow> {
-  const holders = await individualHolders(db, repo.projectId);
   let pending = false;
-  for (const member of await groupMembers(db, repo.groupId!)) {
-    if (member.enrollmentId === input.enrollmentId || member.account === null || holders.has(member.userId!)) continue;
-    try {
-      const login = await linkedLogin(db, github.client.octokit, member.userId!, member.account);
-      if (typeof login !== "string") continue;
-      const account = { enrollmentId: member.enrollmentId, githubUserId: member.account.githubUserId, login };
-      const invitation = await inviteMember(db, github.client.octokit, repo, account, { actor: input.actor, now: input.now, via: "accept" });
-      pending ||= invitation === "pending";
-    } catch (err) {
+  for (const member of await repoMembers(db, repo, input.project.classroomId)) {
+    if (member.enrollmentId === input.enrollmentId || member.account === null) continue;
+    const ctx = { actor: input.actor, now: input.now, log: input.log, via: "accept", failure: "provision_failed" } as const;
+    const invited = await inviteAccount(db, github.client.octokit, repo, { ...member, account: member.account }, ctx).catch((err: unknown) => {
       input.log.warn({ err, repo: repo.id, enrollmentId: member.enrollmentId }, "inviting a group member failed");
-    }
+      return null;
+    });
+    pending ||= invited?.invitation === "pending";
   }
   if (!pending || repo.invitationStatus === "pending") return repo;
-  await markGroupInvitationPending(db, repo.id);
+  await followInvitation(db, repo, "pending");
   return { ...repo, invitationStatus: "pending" };
 }
 
 /**
- * A later member's Accept on their group's provisioned repository: they are
- * invited (idempotent on GitHub's side), and the answer is THEIR invitation.
- * Refused as a first Accept would be on their account (`github_not_linked`,
- * `github_account_stale`) or the App (`app_not_installed`); GitHub failing
- * is `provision_failed`, retried.
+ * The student's Accept on a provisioned repository they are not (or no
+ * longer) let into — their group's, made by a fellow member, or their own
+ * whose access a roster change revoked: they are invited (idempotent on
+ * GitHub's side), and the answer is THEIR invitation. Refused as a first
+ * Accept would be on their account or the App.
  */
-async function joinGroupRepo(db: Db, config: AppConfig, input: AcceptInput, repo: RepoRow): Promise<ProjectAcceptance> {
+async function joinRepo(db: Db, config: AppConfig, input: AcceptInput, repo: RepoRow): Promise<ProjectAcceptance> {
   const github = await githubSide(db, config, input);
-  const account = { enrollmentId: input.enrollmentId, githubUserId: github.githubUserId, login: github.login };
-  let invitation: "pending" | "accepted";
-  try {
-    invitation = await inviteMember(db, github.client.octokit, repo, account, { actor: input.actor, now: input.now, via: "accept" });
-  } catch (err) {
-    if (isInvitationRefused(err)) throw new ProjectError("github_account_stale", "GitHub refused to invite your account: relink it");
-    input.log.error({ err, repo: repo.id }, "inviting a group member failed");
-    throw new ProjectError("provision_failed", "GitHub failed: try again");
-  }
-  if (invitation === "pending") await markGroupInvitationPending(db, repo.id);
-  return { status: repo.provisionStatus, fullName: repo.fullName, invitationStatus: invitation };
+  const member = { enrollmentId: input.enrollmentId, userId: input.userId, account: github.account };
+  const ctx = { actor: input.actor, now: input.now, log: input.log, via: "accept", failure: "provision_failed" } as const;
+  const invited = await inviteAccount(db, github.client.octokit, repo, member, ctx);
+  if (invited === null) throw new DomainError("not_found", 404, "No such project");
+  await followInvitation(db, repo, invited.invitation);
+  return { status: repo.provisionStatus, fullName: repo.fullName, invitationStatus: invited.invitation };
 }
