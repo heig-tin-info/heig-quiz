@@ -43,6 +43,7 @@ import {
   debrief,
   describe,
   feedbackGate,
+  feedbackGradeShown,
   GROUPED_BY_CHOICE,
   gradeFromPoints,
   histogram,
@@ -696,6 +697,8 @@ function feedbackAvailable(
 ): FeedbackGate {
   return feedbackGate({
     when: policy.when,
+    exam: evaluation.mode === "exam",
+    evaluationOver: isEvaluationOver(evaluation.state),
     attemptOpen: attemptState === "in_progress" || attemptState === "not_started",
     retakesOpen: retakesOpen(evaluation),
     released: evaluation.releasedAt !== null,
@@ -826,12 +829,17 @@ export async function studentFeedback(
   });
 
   // The same total as the grade table (`attemptTotal`, floored at 0 under
-  // negative marking, ADR-026), over the same validated gradings.
+  // negative marking, ADR-026), over the same validated gradings. A cell
+  // still pending counts nowhere — never as a 0.
   const points = attemptTotal(result.flatMap((r) => (r.points === null ? [] : [r.points])));
+  // Must equal `pendingCells` (grading/kept.ts), the count of the Grades page and the card.
+  const pendingCount = result.filter((r) => r.points === null).length;
   // The total is the frozen one while it still holds (D-06); the per-item
   // points above always come from the gradings, which the snapshot mirrors.
   const hit =
     attempt.userId === null ? null : cachedGrade(evaluation, attempt.userId, attempt.id);
+  // No grade before the release, nor while a cell is pending.
+  const gradeShown = feedbackGradeShown({ released: evaluation.releasedAt !== null, pendingCount });
   return {
     available: true,
     evaluation: {
@@ -842,7 +850,12 @@ export async function studentFeedback(
     attemptId: attempt.id,
     points: hit ? hit.points : points,
     totalPoints: hit ? hit.totalPoints : totalPoints,
-    grade: hit ? hit.grade : gradeFromPoints(points, totalPoints, scaleOf(evaluation)),
+    grade: !gradeShown
+      ? null
+      : hit
+        ? hit.grade
+        : gradeFromPoints(points, totalPoints, scaleOf(evaluation)),
+    pendingCount,
     items: result,
     ...retake,
   };

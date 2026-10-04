@@ -282,7 +282,7 @@ describe("the student home", () => {
           maxAttempts: 3,
           attemptCount: 2,
           canRetake: true,
-          kept: { attemptId: "a8", attemptNumber: 1, score: { points: 7.5, totalPoints: 10, pending: false } },
+          kept: { attemptId: "a8", attemptNumber: 1, score: { points: 7.5, totalPoints: 10, pendingCount: 0 } },
           ...over,
         },
       });

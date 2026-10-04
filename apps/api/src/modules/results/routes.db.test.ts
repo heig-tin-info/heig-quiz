@@ -176,7 +176,7 @@ describe("results and the export (§4.6)", () => {
     expect(gradeRows(cardsAfter.json())).toEqual([
       expect.objectContaining({
         status: "released",
-        score: { points: 1, totalPoints: 1, grade: 6 },
+        score: { points: 1, totalPoints: 1, grade: 6, pendingCount: 0 },
         feedbackAttemptId: built.attemptId,
       }),
     ]);

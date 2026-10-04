@@ -23,6 +23,7 @@ import {
 } from "../ui";
 import { attemptFeedbackKey } from "../queryKeys";
 import { BonusLabel } from "../BonusLabel";
+import { PendingLine } from "./cards";
 import { useRetake } from "./retake";
 
 /**
@@ -51,6 +52,7 @@ const PENDING_TITLE: Record<FeedbackPending["reason"], keyof Dict> = {
   no_feedback: "feedback.pending.no_feedback.title",
   attempt_open: "feedback.pending.attempt_open.title",
   retakes_open: "feedback.pending.retakes_open.title",
+  exam_open: "feedback.pending.exam_open.title",
 };
 
 const PENDING_BODY: Record<FeedbackPending["reason"], keyof Dict> = {
@@ -58,6 +60,7 @@ const PENDING_BODY: Record<FeedbackPending["reason"], keyof Dict> = {
   no_feedback: "feedback.pending.no_feedback.body",
   attempt_open: "feedback.pending.attempt_open.body",
   retakes_open: "feedback.pending.retakes_open.body",
+  exam_open: "feedback.pending.exam_open.body",
 };
 
 /** Why no other attempt may start, for the refusals a student can meet here. */
@@ -145,8 +148,8 @@ export function Feedback({
       // runs (ADR-050), where nothing is released yet and points come in.
       const grading = data
         ? data.available
-          ? data.evaluation.releasedAt === null && data.items.some((item) => item.points === null)
-          : data.score?.pending === true
+          ? data.evaluation.releasedAt === null && data.pendingCount > 0
+          : (data.score?.pendingCount ?? 0) > 0
         : false;
       return grading && query.state.dataUpdateCount < SCORE_POLLS ? SCORE_POLL_MS : false;
     },
@@ -201,9 +204,7 @@ export function Feedback({
               label={t("feedback.score")}
               value={`${formatPoints(data.score.points)} / ${formatPoints(data.score.totalPoints)}`}
             />
-            {data.score.pending ? (
-              <p className="text-[13px] text-fg-muted">{t("feedback.scorePending")}</p>
-            ) : null}
+            <PendingLine count={data.score.pendingCount} />
             {data.retake ? <AttemptCount retake={data.retake} /> : null}
           </div>
         ) : null}
@@ -226,12 +227,19 @@ export function Feedback({
     <div className="mx-auto max-w-180 space-y-8">
       {header(data.evaluation.releasedAt)}
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Stat label={t("feedback.grade")} value={<Grade value={data.grade} />} />
-        <Stat
-          label={t("feedback.points")}
-          value={`${formatPoints(data.points)} / ${data.totalPoints}`}
-        />
+      {/* No grade while a question waits for its grading, nor on an
+          exercise before its release: the points alone (the server's call). */}
+      <div className="space-y-1.5">
+        <div className="grid gap-3 sm:grid-cols-2">
+          {data.grade !== null ? (
+            <Stat label={t("feedback.grade")} value={<Grade value={data.grade} />} />
+          ) : null}
+          <Stat
+            label={t("feedback.points")}
+            value={`${formatPoints(data.points)} / ${data.totalPoints}`}
+          />
+        </div>
+        <PendingLine count={data.pendingCount} />
       </div>
 
       {/* The correction of an exercise published while it runs (ADR-050):

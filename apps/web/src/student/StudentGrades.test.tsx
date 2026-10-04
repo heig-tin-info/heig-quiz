@@ -41,7 +41,7 @@ const groups: GradeGroup[] = [
         evaluationId: "e2",
         title: "Quiz 2",
         feedbackAttemptId: "a2",
-        score: { points: 8.5, totalPoints: 12, grade: 4.5 },
+        score: { points: 8.5, totalPoints: 12, grade: 4.5, pendingCount: 0 },
       }),
       // Released under the policy `none`: the server sends no score.
       row({ evaluationId: "e3", title: "Série 8", mode: "exercise", status: "withheld" }),
@@ -52,7 +52,7 @@ const groups: GradeGroup[] = [
         mode: "exercise",
         status: "available",
         feedbackAttemptId: "a5",
-        score: { points: 7, totalPoints: 10, grade: null },
+        score: { points: 7, totalPoints: 10, grade: null, pendingCount: 0 },
       }),
     ],
   },
@@ -65,7 +65,7 @@ const groups: GradeGroup[] = [
       period: "2024-A",
       archived: true,
     },
-    rows: [row({ evaluationId: "e4", title: "Examen final", status: "missed", score: { points: 0, totalPoints: 40, grade: 1 } })],
+    rows: [row({ evaluationId: "e4", title: "Examen final", status: "missed", score: { points: 0, totalPoints: 40, grade: 1, pendingCount: 0 } })],
   },
 ];
 

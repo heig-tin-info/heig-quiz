@@ -87,6 +87,11 @@ export const STUDENT_RETAKE_ATTEMPT = "22222222-2222-4222-8222-222222222224";
 /** Issue #203: a quiz handed in while it still runs, results not out yet. */
 const STUDENT_EVAL_HANDED_IN = "11111111-1111-4111-8111-111111111115";
 const STUDENT_HANDED_IN_ATTEMPT = "22222222-2222-4222-8222-222222222225";
+/**
+ * An exercise under the immediate policy, handed in, not released, two of its
+ * questions still waiting for a grading: points only, no grade (F-RES-04).
+ */
+export const STUDENT_EARLY_ATTEMPT = "22222222-2222-4222-8222-222222222226";
 const studentItem = (n: number) => `aaaaaaaa-0000-4000-8000-00000000000${n}`;
 
 /** The evaluation's state follows the scene; everything else is fixed. */
@@ -531,7 +536,7 @@ const studentHome = (): StudentHomeData => {
           kept: {
             attemptId: STUDENT_RETAKE_ATTEMPT,
             attemptNumber: 2,
-            score: { points: 7.5, totalPoints: 10, pending: false },
+            score: { points: 7.5, totalPoints: 10, pendingCount: 0 },
           },
         },
         // Between two attempts the page is score only (ADR-025).
@@ -625,6 +630,7 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
     points,
     totalPoints,
     grade: Math.round((1 + (5 * points) / totalPoints) * 10) / 10,
+    pendingCount: 0,
   });
   const series = flags.many
     ? Array.from({ length: 12 }, (_, i) =>
@@ -646,14 +652,14 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
         // Handed in, the quiz still running, `on_release` (issue #203).
         row({ evaluationId: STUDENT_EVAL_HANDED_IN, title: "Quiz 3bis — Allocation dynamique", status: "pending", date: iso(-35 * 60_000) }),
         // An exercise under the immediate policy: readable, not released —
-        // its points, indicative, and no grade.
+        // its points, indicative, no grade, and two questions still pending.
         row({
           title: "Série 2 — Tableaux",
           mode: "exercise",
           status: "available",
           date: iso(-3 * D),
-          feedbackAttemptId: STUDENT_PAST_ATTEMPT,
-          score: { points: 7, totalPoints: 10, grade: null },
+          feedbackAttemptId: STUDENT_EARLY_ATTEMPT,
+          score: { points: 7, totalPoints: 10, grade: null, pendingCount: 2 },
         }),
         row({
           evaluationId: STUDENT_EVAL_PAST,
@@ -724,7 +730,7 @@ on("GET", `/app/api/attempts/${STUDENT_RETAKE_ATTEMPT}/feedback`, () => ({
   available: false,
   reason: "retakes_open",
   evaluation: { id: STUDENT_EVAL_RETAKE, title: "Série 3 — Pointeurs, entraînement" },
-  score: { points: 7.5, totalPoints: 10, pending: false },
+  score: { points: 7.5, totalPoints: 10, pendingCount: 0 },
   // Two of three attempts taken: the page offers the third (issues #120, #121).
   retake: {
     evaluationId: STUDENT_EVAL_RETAKE,

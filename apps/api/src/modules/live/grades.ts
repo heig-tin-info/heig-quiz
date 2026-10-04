@@ -64,13 +64,22 @@ export function gradeStatus(fact: {
 
 /**
  * The released points and grade where the student may read them; before the
- * release, the feedback page's points, indicative, and no grade.
+ * release, the feedback page's points, indicative, no grade, and its count
+ * of questions still pending.
  */
 function scoreOf({ row, counted, released, early }: PastEntry): EvaluationGradeRow["score"] {
   if (released && gradeReadable(row.evaluation, counted?.state ?? null)) {
-    return { points: released.points, totalPoints: released.totalPoints, grade: released.grade };
+    return {
+      points: released.points,
+      totalPoints: released.totalPoints,
+      grade: released.grade,
+      pendingCount: 0,
+    };
   }
-  if (early) return { ...early, grade: null };
+  if (early) {
+    const { points, totalPoints, pendingCount } = early;
+    return { points, totalPoints, grade: null, pendingCount };
+  }
   return null;
 }
 

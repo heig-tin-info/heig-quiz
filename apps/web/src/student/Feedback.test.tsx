@@ -52,13 +52,13 @@ describe("student feedback", () => {
         available: false,
         reason: "retakes_open",
         evaluation: { id: "e1", title: "Série 3" },
-        score: { points: 3, totalPoints: 5, pending: true },
+        score: { points: 3, totalPoints: 5, pendingCount: 2 },
       }),
     });
     renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
     expect(await screen.findByText("Attempt handed in")).toBeVisible();
     expect(screen.getByText("Score of this attempt").nextSibling).toHaveTextContent("3 / 5");
-    expect(screen.getByText(/still to be graded/)).toBeVisible();
+    expect(screen.getByText("2 questions awaiting grading")).toBeVisible();
     expect(screen.queryByText("Grade")).toBeNull();
     expect(screen.queryByText(/Question 1/)).toBeNull();
   });
@@ -73,6 +73,42 @@ describe("student feedback", () => {
     expect(screen.getByRole("heading", { name: "Question 1" })).toBeVisible();
     expect(await screen.findByText("An address is 64 bits wide.")).toBeVisible();
     expect(screen.getByText("Clean answer.")).toBeVisible();
+  });
+
+  // A pending cell is not a zero: the validated points, the count, no grade.
+  it("shows no grade while questions wait for their grading, and says how many", async () => {
+    const payload = makeFeedback();
+    mockFetch({
+      [`GET ${URL}`]: ok({
+        ...payload,
+        evaluation: { ...payload.evaluation, releasedAt: null },
+        points: 2,
+        grade: null,
+        pendingCount: 1,
+        items: [
+          payload.items[0]!,
+          { ...payload.items[0]!, itemId: "i2", position: 1, points: null, verdict: null, details: null },
+        ],
+      }),
+    });
+    renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
+    expect(await screen.findByRole("heading", { name: "Your results" })).toBeVisible();
+    expect(screen.queryByText("Grade")).toBeNull();
+    expect(screen.getByText("Points").nextSibling).toHaveTextContent("2 / 5");
+    expect(screen.getByText("1 question awaiting grading")).toBeVisible();
+  });
+
+  it("says an exam's results come after the deadline", async () => {
+    mockFetch({
+      [`GET ${URL}`]: ok({
+        available: false,
+        reason: "exam_open",
+        evaluation: { id: "e1", title: "Test 1" },
+      }),
+    });
+    renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
+    expect(await screen.findByText("Results will be available after the deadline")).toBeVisible();
+    expect(screen.queryByText("Points")).toBeNull();
   });
 
   // `position` is 0-based on the wire (the API stores it that way); every

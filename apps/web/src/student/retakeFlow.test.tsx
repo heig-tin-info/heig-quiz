@@ -145,7 +145,7 @@ function card(canRetake: boolean, keep: Keep = "best"): EvaluationCard {
       maxAttempts: 3,
       attemptCount: 1,
       canRetake,
-      kept: { attemptId: FIRST, attemptNumber: 1, score: { points: 1, totalPoints: 1, pending: false } },
+      kept: { attemptId: FIRST, attemptNumber: 1, score: { points: 1, totalPoints: 1, pendingCount: 0 } },
     },
     results: "pending",
     trustedClients: [],
@@ -168,7 +168,7 @@ function feedback(
     available: false,
     reason: "retakes_open",
     evaluation: { id: EVAL, title: "Série 3 — Entraînement" },
-    score: { points: 1, totalPoints: 1, pending: false },
+    score: { points: 1, totalPoints: 1, pendingCount: 0 },
     retake: {
       evaluationId: EVAL,
       keep: over.keep ?? "best",
@@ -389,6 +389,7 @@ describe("retakes on an exercise (issues #120, #121)", () => {
       points: 1,
       totalPoints: 1,
       grade: 6,
+      pendingCount: 0,
       items: [],
     });
     await userEvent.click(await screen.findByRole("button", { name: "Voir mes résultats" }));

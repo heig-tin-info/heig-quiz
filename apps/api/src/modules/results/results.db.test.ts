@@ -471,7 +471,7 @@ describe("the student's pages read in a fixed number of statements (audit D-05)"
   it("draws the home and the Grades page of three released evaluations in one statement each", async () => {
     const app = await appFor();
     let studentId: string | undefined;
-    const expected = new Map<string, { points: number; totalPoints: number; grade: number }>();
+    const expected = new Map<string, { points: number; totalPoints: number; grade: number; pendingCount: number }>();
     // Three evaluations of three classrooms, each worth 2 × 5 points; the
     // student scores 10, 5 and 0 of them.
     for (const [i, score] of [10, 5, 0].entries()) {
@@ -503,7 +503,7 @@ describe("the student's pages read in a fixed number of statements (audit D-05)"
         });
       }
       await service.releaseResults(db, await reload(db, evaluation.id), app.clock.now());
-      expected.set(evaluation.id, { points: score, totalPoints: 10, grade: [6, 3.5, 1][i]! });
+      expected.set(evaluation.id, { points: score, totalPoints: 10, grade: [6, 3.5, 1][i]!, pendingCount: 0 });
       app.clock.advance(60_000);
     }
 
