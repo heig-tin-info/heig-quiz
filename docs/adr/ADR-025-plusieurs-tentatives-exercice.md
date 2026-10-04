@@ -10,6 +10,10 @@ open question 12 of `docs/spec/06-questions-ouvertes.md`. Amended
 Amended 2026-09-30 by ADR-050: §4's score-only masking is lifted once the
 teacher publishes the correction of the exercise.
 
+Amended by [ADR-053](ADR-053-retrait-des-codes-d-entree.md): the evaluation access code is
+removed, making §2's retake exemption moot. The network allowlist still
+applies on every entry.
+
 ## Context
 
 F-EVAL-15 asks that an `exercise` may allow several attempts, keeping the

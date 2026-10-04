@@ -7,8 +7,9 @@ plan). Amends ADR-027 (§2 the Config Key, §3 the cookie and the lifetime of a
 confined session) and the scope of `docs/spec/00-cadre-et-perimetre.md`
 §0.6. Settles, for **evaluations only**, the part of merge decision D21
 (`docs/merge/08-decisions.md`) that concerns how a SEB session is checked;
-the confinement of a session to an **activity** (a project) stays open
-there. Delivered in steps, each its own pull request (§10).
+the confinement of a session to an **activity** (a project) was outside
+this decision. D21 was subsequently settled on 2026-10-01 for M6; see
+[ADR-027](ADR-027-tickets-de-lancement-et-sessions-typees.md)'s Status for that scope and its implementation boundary. Delivered in steps, each its own pull request (§10).
 
 ## Context
 

@@ -3,7 +3,11 @@
 ## Status
 
 Accepted (2026-10-01, decided by the product owner after a challenge of the
-proposal). Not implemented yet. It replaces the design of the "Random values"
+proposal). Implemented with migration `0051_parameterized_questions`, the
+shared instantiation path in `apps/api/src/modules/pool/instance.ts`, and
+the editor. The attempt, regrade and student-view behavior is covered by
+`live/parameters.db.test.ts`; drill persistence by `drill/drill.db.test.ts`.
+The extensions listed in §10 remain deferred. It replaces the design of the "Random values"
 section (§4.3 of docs/spec/04) and rewrites F-QST-10 (docs/spec/02). It
 amends decision D19 of `docs/PLAN-MVP.md`: drawn values are stored, while
 permutations are still recomputed. It also amends
@@ -333,8 +337,9 @@ values, because they read the stored instance.
   replaces a family of near-copies, and the statistics pool them.
 - A parameterized question can be reread exactly as the student had it,
   forever: a mathjs upgrade, an edit or a regrade does not change it.
-- The `(attempt, item)` row gains a column, and so do the drill's review in
-  progress and its reviews: one additive migration.
+- The version gains `variables`; `attempts.instances` stores the item-to-instance
+  map. The drill stores `drill_cards.serve_values` while a review is in
+  progress and `drill_reviews.values` with its answer (migration `0051`).
 - A choke point stands between every reader and the question type. A new
   reader that bypasses it fails the extended 5.7 test instead of leaking a
   formula.

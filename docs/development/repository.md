@@ -18,6 +18,7 @@ packages/
   registry/   the two static question-type registries (./server, ./client)
   contracts/  zod schemas and payload types shared api <-> web
   domain/     pure business rules: grade scale, deadlines, policies, cloze, roster
+  docrender/  the server-side journal renderer
   ui/         the shared primitives of the question-type surfaces (@quiz/ui)
   qt-mcq/     question type: multiple choice
   qt-short/   question type: short answer
@@ -25,10 +26,10 @@ packages/
   qt-code/    question types: code graded by the runner, and its variant
               codeimage graded pixel by pixel
   qt-circuit/ question type: two-port schematic, graded by ngspice simulation
-  qt-rich/    question type: essay, graded by hand against a rubric
+  qt-rich/    question type: essay, manual or LLM-proposed grading
   qt-categorize/ question type: cards sorted into columns (ADR-036)
   diagram/    the diagram engine: scenes, kinds, router, editor (ADR-046)
-  qt-diagram/ question type: a diagram of one notation, graded by hand (ADR-046)
+  qt-diagram/ question type: a diagram, manual or LLM-proposed grading (ADR-046/063)
 docs/
   guide/      the user guide
   spec/       the product specification
@@ -41,8 +42,10 @@ scripts/      smoke.sh, the end-to-end HTTP walk; staging-export.sh and
               staging-refresh.sh
 ```
 
-`CLAUDE.md` keeps the authoritative version of this map, with a paragraph on
-each package that needs one.
+This page owns the repository map; `CLAUDE.md` keeps the mandatory working
+rules and invariants. Workspace manifests are the source for exact packages
+and dependencies. Planned `ui-kit`, `canonical`, `cli` and `apps/codespace`
+are described by their spec/merge tasks, not entries in the current tree.
 
 At the root: `Dockerfile` (the application image), `apps/runner/Dockerfile`
 (the runner image), `compose.prod.yml`, `compose.staging.yml`, `Caddyfile`,
@@ -184,7 +187,9 @@ back by image tag, not by reverse migration (see
 | `*.leak.test.ts`, `toStudent.test.ts` | `apps/api/src/modules/live`, every `qt-*` | the content-safety tests of invariant 4 |
 | `*.int.test.ts` | `apps/runner` | real containers, `pnpm --filter @quiz/runner test:integration`, skipped without Podman |
 
-`pnpm test` runs all of them except the runner's integration suite.
+On the shared workstation run `VITEST_MAX_WORKERS=4 pnpm -r
+--workspace-concurrency=1 test` (one command), following `AGENTS.md`'s memory
+guard. The runner integration suite is separate.
 
 The cross-type contract of the question types is one test,
 `packages/registry/src/server.test.ts`: for every registered type it runs
