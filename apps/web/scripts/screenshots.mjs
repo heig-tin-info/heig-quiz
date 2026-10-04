@@ -642,24 +642,29 @@ const scenes = [
   // WP: live polls. The launcher is the `/polls` page (the navigation's
   // "Poll" entry, hidden in the drawer on a phone); the projection is a page,
   // and the mock addresses its three polls by name.
+  // It opens on "Ask a new question" (ADR-014, launcher): the type's own
+  // editor, without marks, and saved nowhere. The second scene presses
+  // "Start the poll" on the blank question, which the schema refuses.
   { name: "poll-launcher", role: "teacher", path: "/polls" },
-  // "Ask a new question": the type's own editor, without marks, and saved
-  // nowhere (ADR-014, addendum 2026-09-23). The second scene presses "Start
-  // the poll" on the blank question, which the schema refuses.
-  { name: "poll-launcher-new", role: "teacher", path: "/polls", act: (p) => p.getByRole("tab", { name: /ask a new question|poser une nouvelle question/i }).click() },
+  { name: "poll-launcher-recent", role: "teacher", path: "/polls", act: (p) => p.getByRole("tab", { name: /recent polls|derniers polls/i }).click() },
   {
     name: "poll-launcher-new-refused",
     role: "teacher",
     path: "/polls",
-    act: async (p) => {
-      await p.getByRole("tab", { name: /ask a new question|poser une nouvelle question/i }).click();
-      await p.getByRole("button", { name: /start the poll|lancer le sondage/i }).click();
-    },
+    act: (p) => p.getByRole("button", { name: /start the poll|lancer le sondage/i }).click(),
   },
   // "From pools" (#162): the pool screen's search over every pool; with a
   // classroom as the audience, the "Classroom pools | All pools" control.
   { name: "poll-launcher-pools", role: "teacher", path: "/polls", act: (p) => p.getByRole("tab", { name: /from pools|depuis les pools/i }).click() },
-  { name: "poll-launcher-pools-room", role: "teacher", path: "/polls", ls: { "quiz-poll-classroom": "r1" }, act: (p) => p.getByRole("tab", { name: /from pools|depuis les pools/i }).click() },
+  {
+    name: "poll-launcher-pools-room",
+    role: "teacher",
+    path: "/polls",
+    act: async (p) => {
+      await p.getByRole("combobox", { name: /who answers|qui répond/i }).selectOption("r1");
+      await p.getByRole("tab", { name: /from pools|depuis les pools/i }).click();
+    },
+  },
   {
     name: "poll-launcher-pools-filters",
     role: "teacher",

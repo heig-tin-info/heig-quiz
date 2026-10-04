@@ -3663,7 +3663,8 @@ export const fr: Record<keyof Dict, string> = {
   "poll.outcome.opinion": "Pas de bonne réponse : un sondage d'opinion",
   "poll.outcome.perRun": "en moyenne par lancement",
   "poll.audience": "Qui répond",
-  "poll.audienceHint": "Toute personne ayant le code répond anonymement, sans compte. Les étudiants d'une classe se connectent et répondent à leur nom.",
+  "poll.audienceHint": 
+    "Toute personne ayant le code peut répondre, anonymement et sans se connecter. Choisissez une classe pour que ses étudiants se connectent et répondent à leur nom.",
   "poll.audience.anonymous": "Toute personne ayant le code (anonyme)",
   "poll.audience.context": "Toute personne ayant le code",
   "poll.startFailed": "Impossible de lancer le sondage.",

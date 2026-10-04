@@ -600,7 +600,7 @@ const scenes = [
   // Live polls
   {
     name: "poll-launcher",
-    caption: "The poll launcher: pick a question, or write one, and start.",
+    caption: "The poll launcher: choose who answers, write a question or pick one, and start.",
     persona: "teacher",
     path: "/polls",
     phase: "running",

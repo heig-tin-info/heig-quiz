@@ -36,7 +36,6 @@ import {
   SettingRow,
   Skeleton,
   Tabs,
-  usePersistentChoice,
 } from "../ui";
 import { coursesKey, pollQuestionsKey } from "../queryKeys";
 
@@ -52,13 +51,20 @@ import { coursesKey, pollQuestionsKey } from "../queryKeys";
  * backdrop.
  *
  * Three tabs, because there are three ways to have a question: one you
- * already ran ("Recent polls", issue #161: the questions of your polls, kept
- * or not, each with a donut of how its last runs went), one that waits in a
- * pool ("From pools", issue #162: the pool screen's own search, over every
- * pool you reach, narrowed to the classroom's pools when the audience is
- * one), or one you write now. The first is the default when it has rows. All
- * end in the same primary action, "Start the poll", and the audience above
- * the tabs applies to each.
+ * write now, one you already ran ("Recent polls", issue #161: the questions
+ * of your polls, kept or not, each with a donut of how its last runs went),
+ * or one that waits in a pool ("From pools", issue #162: the pool screen's
+ * own search, over every pool you reach, narrowed to the classroom's pools
+ * when the audience is one). All end in the same primary action, "Start the
+ * poll", and the audience above the tabs applies to each.
+ *
+ * ### Safe for the wall
+ *
+ * The launcher is often opened on a projected screen, so it opens on what
+ * shows nothing: "Ask a new question", blank, and "anyone with the code"
+ * (ADR-014, launcher). The teacher's past questions, their pools and their
+ * classrooms appear only when they ask for them, and a classroom audience is
+ * chosen again for every poll — never remembered from the last one.
  *
  * ### Why a new question is not saved
  *
@@ -113,18 +119,8 @@ function refusedIssues(error: unknown): readonly ZodIssueLite[] | null {
  * filed under a class that anybody could answer.
  */
 
-/**
- * The audience of the last poll — a classroom id, or {@link ANYONE}; a
- * convenience, never state. The key predates the audience and still holds
- * the classroom a teacher last polled, which stays a valid choice.
- */
-const ROOM_KEY = "quiz-poll-classroom";
-
 /** The audience value of "anyone with the code". A classroom id never reads so. */
 const ANYONE = "anonymous";
-
-/** Any stored value is taken; a classroom that no longer exists falls back below. */
-const anyRoom = (raw: string): raw is string => true;
 
 /** What the Select holds, as the contract's audience. */
 function audienceOf(choice: string): PollAudience {
@@ -176,15 +172,13 @@ function RecentRow({
 
 export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
   const t = useT();
-  // No tab chosen yet: "Recent polls" when it has rows (or is still loading
-  // them), "Ask a new question" when there is nothing to run again.
-  const [chosenTab, setTab] = useState<"pick" | "pools" | "new" | null>(null);
+  const [tab, setTab] = useState<"new" | "pick" | "pools">("new");
   const [query, setQuery] = useState("");
   const [questionId, setQuestionId] = useState<string | null>(null);
   // One selection per list: a question picked in one tab is never started
   // from the other, where it is not on screen.
   const [poolQuestionId, setPoolQuestionId] = useState<string | null>(null);
-  const [room, setRoom] = usePersistentChoice<string>(ROOM_KEY, anyRoom, ANYONE);
+  const [choice, setChoice] = useState<string>(ANYONE);
   const [type, setType] = useState<PollType>("mcq");
   // One working copy per type, so a switch back and forth loses nothing.
   const [drafts, setDrafts] = useState<Partial<Record<PollType, unknown>>>({});
@@ -194,7 +188,6 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
     queryKey: pollQuestionsKey,
     queryFn: () => api("/app/api/polls/questions"),
   });
-  const tab = chosenTab ?? (picks.data?.length === 0 ? "new" : "pick");
   const donutLegend = useMemo(() => {
     const keyed = (picks.data ?? []).map((p) => p.outcome).filter((o) => o.kind === "keyed");
     return keyed.length === 0 ? null : { abstention: keyed.some((o) => o.abstention !== null) };
@@ -212,13 +205,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
       ),
     [courses.data],
   );
-  // The remembered audience, when its classroom still exists; otherwise
-  // anyone with the code, which needs no classroom at all.
-  const choice = room !== ANYONE && rooms.some((r) => r.id === room) ? room : ANYONE;
   const audience = audienceOf(choice);
-  // Until the classrooms are known, the remembered one cannot be shown, and
-  // a start would silently go to "anyone".
-  const audienceReady = !courses.isLoading;
 
   const filtered = useMemo(
     () =>
@@ -233,10 +220,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
         method: "POST",
         body: JSON.stringify({ questionId: picked, audience }),
       }),
-    onSuccess: (view) => {
-      setRoom(view.evaluation.classroomId ?? ANYONE);
-      navigate({ view: "poll", id: view.evaluation.id });
-    },
+    onSuccess: (view) => navigate({ view: "poll", id: view.evaluation.id }),
   });
 
   const inline = useMutation({
@@ -245,10 +229,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
         method: "POST",
         body: JSON.stringify({ type, config, audience }),
       }),
-    onSuccess: (view) => {
-      setRoom(view.evaluation.classroomId ?? ANYONE);
-      navigate({ view: "poll", id: view.evaluation.id });
-    },
+    onSuccess: (view) => navigate({ view: "poll", id: view.evaluation.id }),
   });
   const refused = refusedIssues(inline.error);
   const issues = useMemo(() => (refused ? toConfigIssues(t, refused) : undefined), [refused, t]);
@@ -261,7 +242,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
         data-coach="polls.launch"
         onClick={() => start.mutate()}
         loading={start.isPending}
-        disabled={picked === null || !audienceReady}
+        disabled={picked === null}
       >
         {t("poll.startAction")}
       </Button>
@@ -270,7 +251,6 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
         data-coach="polls.launch"
         onClick={() => inline.mutate()}
         loading={inline.isPending}
-        disabled={!audienceReady}
       >
         {t("poll.startAction")}
       </Button>
@@ -288,7 +268,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
               aria-label={t("poll.audience")}
               width="w-full sm:w-80"
               value={choice}
-              onChange={(e) => setRoom(e.currentTarget.value)}
+              onChange={(e) => setChoice(e.currentTarget.value)}
             >
               <option value={ANYONE}>{t("poll.audience.anonymous")}</option>
               {rooms.map((r) => (
@@ -305,9 +285,9 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
         onChange={setTab}
         label={t("poll.launcher")}
         items={[
+          { value: "new", label: t("poll.tab.new") },
           { value: "pick", label: t("poll.tab.pick"), count: picks.data?.length },
           { value: "pools", label: t("poll.tab.pools") },
-          { value: "new", label: t("poll.tab.new") },
         ]}
       />
 
