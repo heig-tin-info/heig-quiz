@@ -157,8 +157,22 @@ function shortRows(question: QuestionLike, tally: PollTally): PollRow[] {
   }));
 }
 
+/** A brainstorm's ideas, as the server let the room see them (ADR-071). */
+function ideaRows(tally: PollTally): PollRow[] {
+  return tally.ideas.map((idea) => ({
+    key: `i${idea.key}`,
+    letter: null,
+    label: idea.label,
+    markdown: false,
+    count: idea.count,
+    percent: percentOf(idea.count, tally.answered),
+    correct: false,
+  }));
+}
+
 /** The rows of one poll, in the order the room saw them. */
 export function pollRows(question: QuestionLike, tally: PollTally): PollRow[] {
+  if (question.type === "brainstorm") return ideaRows(tally);
   return question.type === "mcq" ? mcqRows(question, tally) : shortRows(question, tally);
 }
 

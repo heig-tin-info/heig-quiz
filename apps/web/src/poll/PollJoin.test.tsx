@@ -27,7 +27,7 @@ function view(patch: Partial<PollPublicView> = {}): PollPublicView {
   return {
     code: CODE,
     state: "running",
-    settings: { anonymous: true, revealed: false, votes: false },
+    settings: { anonymous: true, revealed: false, votes: false, moderation: false },
     question: { type: "mcq", student: mcqStudent },
     solution: null,
     tally: null,
@@ -78,7 +78,7 @@ describe("the poll participant page", () => {
     render({
       [`GET ${URL}`]: ok(
         view({
-          settings: { anonymous: false, revealed: false, votes: false },
+          settings: { anonymous: false, revealed: false, votes: false, moderation: false },
           me: { identified: false, loginRequired: true, joined: false, answer: null },
         }),
       ),
@@ -142,7 +142,7 @@ describe("the poll participant page", () => {
     render({
       [`GET ${URL}`]: ok(
         view({
-          settings: { anonymous: true, revealed: true, votes: false },
+          settings: { anonymous: true, revealed: true, votes: false, moderation: false },
           solution: { correct: [0] },
           me: { identified: true, loginRequired: false, joined: true, answer: { selected: [1] } },
         }),
@@ -163,7 +163,7 @@ describe("the poll participant page", () => {
       [`GET ${URL}`]: ok(
         view({
           question: { type: "short", student: { prompt: "Complexité de la recherche binaire ?" } },
-          settings: { anonymous: true, revealed: true, votes: false },
+          settings: { anonymous: true, revealed: true, votes: false, moderation: false },
           solution: { expected: ["O(log n)"] },
         }),
       ),
@@ -180,7 +180,7 @@ describe("the poll participant page", () => {
       [`GET ${URL}`]: ok(
         view({
           state: "ended",
-          settings: { anonymous: true, revealed: true, votes: false },
+          settings: { anonymous: true, revealed: true, votes: false, moderation: false },
           solution: { correct: [0] },
           me: { identified: true, loginRequired: false, joined: true, answer: { selected: [1] } },
         }),
@@ -198,7 +198,7 @@ describe("the poll participant page", () => {
         view({
           state: "ended",
           question: { type: "short", student: { prompt: "Complexité de la recherche binaire ?" } },
-          settings: { anonymous: true, revealed: true, votes: false },
+          settings: { anonymous: true, revealed: true, votes: false, moderation: false },
           solution: { expected: ["O(log n)"] },
         }),
       ),
@@ -210,8 +210,8 @@ describe("the poll participant page", () => {
     render({
       [`GET ${URL}`]: ok(
         view({
-          settings: { anonymous: true, revealed: false, votes: true },
-          tally: { joined: 5, answered: 4, choices: [{ index: 0, count: 1 }, { index: 1, count: 3 }], answers: [] },
+          settings: { anonymous: true, revealed: false, votes: true, moderation: false },
+          tally: { joined: 5, answered: 4, choices: [{ index: 0, count: 1 }, { index: 1, count: 3 }], answers: [], ideas: [], pending: 0 },
           me: { identified: true, loginRequired: false, joined: true, answer: { selected: [1] } },
         }),
       ),
@@ -232,9 +232,9 @@ describe("the poll participant page", () => {
           state: "ended",
           // A keyless poll never carries a key: the server reads a legacy
           // reveal as the votes (`pollSettingsOf`).
-          settings: { anonymous: true, revealed: false, votes: true },
+          settings: { anonymous: true, revealed: false, votes: true, moderation: false },
           solution: null,
-          tally: { joined: 5, answered: 4, choices: [{ index: 0, count: 1 }, { index: 1, count: 3 }], answers: [] },
+          tally: { joined: 5, answered: 4, choices: [{ index: 0, count: 1 }, { index: 1, count: 3 }], answers: [], ideas: [], pending: 0 },
           me: { identified: true, loginRequired: false, joined: true, answer: { selected: [1] } },
         }),
       ),
@@ -283,5 +283,27 @@ describe("the short reveal's fold", () => {
     expect(matchesExpected("  O(LOG   n) ", ["O(log n)"])).toBe(true);
     expect(matchesExpected("O(n)", ["O(log n)"])).toBe(false);
     expect(matchesExpected("   ", ["O(log n)"])).toBe(false);
+  });
+});
+
+describe("a brainstorm on the participant page (ADR-071)", () => {
+  const brainstorm = (answer: unknown) =>
+    view({ question: { type: "brainstorm", student: { prompt: "Un être vivant ?", maxIdeas: 3 } }, me: { identified: true, loginRequired: false, joined: true, answer } });
+
+  it("sends each idea as it is added, with no Send button, one request at a time", async () => {
+    const { calls } = render({
+      [`GET ${URL}`]: ok(brainstorm(null)),
+      // The server stores what it was sent, and answers with it.
+      [`POST ${URL}/answer`]: (call) => ok(brainstorm((call.body as { payload: unknown }).payload)),
+    });
+    const field = await screen.findByLabelText("Your idea");
+    expect(screen.queryByRole("button", { name: /^(Send|Update)$/ })).toBeNull();
+    await userEvent.type(field, "respire{Enter}");
+    await userEvent.type(field, "grandit{Enter}");
+    await waitFor(() => expect(screen.getByText("Sent")).toBeVisible());
+    await waitFor(() => expect(calls.filter((c) => c.url === `${URL}/answer`)).toHaveLength(2));
+    const sent = calls.filter((c) => c.method === "POST" && c.url === `${URL}/answer`).map((c) => c.body);
+    // Never two in flight: the last one sent holds every idea.
+    expect(sent.at(-1)).toEqual({ payload: { ideas: ["respire", "grandit"] } });
   });
 });

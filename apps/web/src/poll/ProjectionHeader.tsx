@@ -4,6 +4,7 @@ import {
   BookmarkPlus,
   ChartPie,
   Maximize2,
+  MessageSquareText,
   Minimize2,
   Moon,
   RotateCcw,
@@ -14,7 +15,7 @@ import {
 import type { PollRevealBody, PollSettings, PollTeacherView } from "@quiz/contracts";
 
 import { useT } from "../i18n";
-import { Button, IconButton, Switch } from "../ui";
+import { Badge, Button, IconButton, Switch } from "../ui";
 import { PollQr } from "./PollQr";
 import { hasKey, joinHost, waitingOf } from "./pollTally";
 
@@ -122,6 +123,7 @@ export function ProjectionHeader({
   onOpenQuestion,
   donut,
   onToggleDonut,
+  onModerate,
 }: {
   view: PollTeacherView;
   phase: ProjectionPhase;
@@ -143,6 +145,8 @@ export function ProjectionHeader({
   /** The donut's state, or null when it is not offered (not an ended mcq with its votes shown). */
   donut: boolean | null;
   onToggleDonut: () => void;
+  /** A brainstorm: opens the moderation board in another tab, off the wall (ADR-071). */
+  onModerate: () => void;
 }) {
   const t = useT();
   const ended = phase === "ended";
@@ -161,6 +165,7 @@ export function ProjectionHeader({
   // An opinion poll has no answer to reveal, so it has no reveal switch
   // (ADR-014, addendum 2026-09-29).
   const keyed = hasKey(view.question);
+  const brainstorm = view.question.type === "brainstorm";
   const waiting = waitingOf(view.tally);
   /*
    * "Keep this question" (ADR-014, addenda item 6). A question written in
@@ -194,10 +199,25 @@ export function ProjectionHeader({
           {/* Two independent switches (ADR-014, addendum 2026-09-29): the
               votes, and the key. Neither closes the vote — End does. */}
           <DisplaySwitch
-            label={t("poll.showVotes")}
+            label={t(brainstorm ? "poll.showIdeas" : "poll.showVotes")}
             checked={view.settings.votes}
             onChange={(votes) => onDisplay({ votes })}
           />
+          {brainstorm ? (
+            <>
+              <DisplaySwitch
+                label={t("poll.moderation")}
+                checked={view.settings.moderation}
+                onChange={(moderation) => onDisplay({ moderation })}
+              />
+              {/* The board lives in another tab: the wall never shows an
+                  idea the teacher has not let through. */}
+              <Button size="sm" variant="secondary" onClick={onModerate}>
+                <MessageSquareText /> {t("poll.moderate")}
+                {view.tally.pending > 0 ? <Badge tone="amber">{view.tally.pending}</Badge> : null}
+              </Button>
+            </>
+          ) : null}
           {keyed ? (
             <DisplaySwitch
               label={t("poll.reveal")}

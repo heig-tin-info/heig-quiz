@@ -12,6 +12,7 @@ import {
 } from "@quiz/contracts";
 import { emptyMcqDraft } from "@quiz/qt-mcq/client";
 import { emptyShortDraft } from "@quiz/qt-short/client";
+import { emptyBrainstormDraft } from "@quiz/qt-brainstorm/client";
 
 import { api, ApiError } from "../api";
 import { fuzzyFilter } from "../fuzzy";
@@ -101,6 +102,7 @@ const EMPTY: Record<PollType, () => unknown> = {
     return { ...draft, choices: draft.choices.map((c) => ({ ...c, correct: false })) };
   },
   short: () => ({ ...emptyShortDraft(), matchers: [] }),
+  brainstorm: emptyBrainstormDraft,
 };
 
 /** The schema's issues of a refused content, when that is why it was refused. */

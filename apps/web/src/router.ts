@@ -129,6 +129,8 @@ export type Route =
   | { view: "polls" }
   /** The projection of a poll: the question, the tally, the QR (F-LIVE-14). */
   | { view: "poll"; id: string }
+  /** A brainstorm's moderation board, in a tab beside the wall (ADR-071). */
+  | { view: "pollModerate"; id: string }
   /** A participant joining a poll by its session code — with or without an account. */
   | { view: "join"; code: string }
   /**
@@ -278,6 +280,7 @@ function fixed<V extends Route["view"]>(
 type EvaluationTailView =
   | "live"
   | "poll"
+  | "pollModerate"
   | "grading"
   | "results"
   | "correction"
@@ -534,6 +537,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   evaluationPreview: evaluationTail("preview", (id) => ({ view: "evaluationPreview", id })),
   // The projection IS the poll: the launcher's row stays lit while it is up.
   poll: evaluationTail("poll", (id) => ({ view: "poll", id }), { section: "polls" }),
+  pollModerate: evaluationTail("moderate", (id) => ({ view: "pollModerate", id }), { section: "polls" }),
   grading: {
     ...evaluationTail("grading", (evaluationId) => ({ view: "grading", evaluationId }), {
       evaluationId: evaluationIdOf,

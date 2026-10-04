@@ -39,6 +39,11 @@
     "branches": 97,
     "functions": 100
   },
+  "packages/qt-brainstorm": {
+    "lines": 91,
+    "branches": 88,
+    "functions": 87
+  },
   "packages/qt-categorize": {
     "lines": 85,
     "branches": 73,

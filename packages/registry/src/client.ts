@@ -15,6 +15,7 @@ import {
   type AnyQuestionTypeClient,
   type QuestionTypeId,
 } from "@quiz/core/client";
+import { brainstormClient } from "@quiz/qt-brainstorm/client";
 import { categorizeClient } from "@quiz/qt-categorize/client";
 import { clozeClient } from "@quiz/qt-cloze/client";
 import { diagramClient } from "@quiz/qt-diagram/client";
@@ -36,6 +37,7 @@ export const clientRegistry: Partial<Record<QuestionTypeId, AnyQuestionTypeClien
     rich: richClient,
     categorize: categorizeClient,
     diagram: diagramClient,
+    brainstorm: brainstormClient,
   });
 
 /** Total lookup; an unregistered id throws `UnknownQuestionType`. */

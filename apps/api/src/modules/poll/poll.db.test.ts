@@ -164,7 +164,7 @@ describe("creating and starting a poll", () => {
     });
     expect(code).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/);
     expect(body.joinUrl).toMatch(new RegExp(`/p/${code}$`));
-    expect(body.settings).toEqual({ anonymous: true, revealed: false, votes: false });
+    expect(body.settings).toEqual({ anonymous: true, revealed: false, votes: false, moderation: false });
     expect(body.tally).toMatchObject({ joined: 0, answered: 0 });
     expect(body.tally.choices).toHaveLength(3);
 
@@ -201,7 +201,7 @@ describe("creating and starting a poll", () => {
       classroomName: "A",
       courseName: "Programmation C",
     });
-    expect(created.json().settings).toEqual({ anonymous: false, revealed: false, votes: false });
+    expect(created.json().settings).toEqual({ anonymous: false, revealed: false, votes: false, moderation: false });
     const list = await get(`/app/api/classrooms/${seed.classroomId}/evaluations`, teacher.headers);
     expect((list.json() as { id: string }[]).map((e) => e.id)).toContain(created.json().evaluation.id);
     await post(`/app/api/evaluations/${created.json().evaluation.id}/poll/end`, teacher.headers);

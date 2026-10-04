@@ -1355,6 +1355,20 @@ hole in the mono figure style.
 - **Revealed**, the slices outside the key fade to a quarter and the key's
   legend line turns `success` with a tick, as on the bars.
 
+**The bubble cloud (a brainstorm, ADR-071).** A brainstorm's votes are a cloud
+of bubbles (`poll/BubbleCloud.tsx`), packed by `d3-force` in a band of
+`min(58vh, 760px)`. A bubble's AREA is its share of the participants, and
+together the bubbles cover about 40 % of the band. Each bubble is categorical
+by idea — `--chart-1…8`, picked from the idea's key so it keeps its colour —
+drawn as a 2 px ring of that colour over a 22 % tint of it, with the label in
+`fg` and the count under it in mono. The label is always inside, so the colour
+never carries meaning alone. Its size is the largest that fits the inscribed
+square and keeps the longest word on one line. The ideas awaiting moderation
+are counted on the "Moderate" button in `warning`, not in the accent, which
+stays the Live pulse's and End's. The moderation board is NOT on the wall: it
+opens in another tab, because a queue of raw text is what the wall must never
+show.
+
 ## Tables
 
 At most seven visible columns, one dominant identity column, numbers right

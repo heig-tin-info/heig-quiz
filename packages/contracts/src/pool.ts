@@ -17,7 +17,7 @@ import { QuestionReview, ReviewPill } from "./review.js";
  * source of truth; `apps/api/src/modules/pool/routes.ts` asserts at compile
  * time that the two lists agree, so a fifth type cannot land on one side only.
  */
-export const QuestionTypeId = z.enum(["mcq", "short", "cloze", "code", "circuit", "codeimage", "rich", "categorize", "diagram"]);
+export const QuestionTypeId = z.enum(["mcq", "short", "cloze", "code", "circuit", "codeimage", "rich", "categorize", "diagram", "brainstorm"]);
 export type QuestionTypeId = z.infer<typeof QuestionTypeId>;
 
 export const PoolVisibility = z.enum(["private", "shared", "public"]);

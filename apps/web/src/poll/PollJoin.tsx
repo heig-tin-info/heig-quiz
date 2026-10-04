@@ -138,6 +138,37 @@ export function PollJoin({
   const joinFired = useRef(false);
 
   /*
+   * A brainstorm sends the WHOLE answer on every tap, so two requests in
+   * flight could land out of order and drop an idea. One at a time: a tap
+   * made while one is sending waits, and only the latest waiting answer goes.
+   */
+  const queued = useRef<unknown>(undefined);
+  const sending = useRef(false);
+  const sendNow = send.mutateAsync;
+  const sendInOrder = (next: unknown) => {
+    setDraft(next);
+    queued.current = next;
+    if (sending.current) return;
+    sending.current = true;
+    void (async () => {
+      try {
+        while (queued.current !== undefined) {
+          const payload = queued.current;
+          queued.current = undefined;
+          await sendNow(payload);
+        }
+        // Everything typed is stored: the server's copy shows through again.
+        setDraft(undefined);
+      } catch {
+        // `send.error` says so under the question, and the draft stays.
+        queued.current = undefined;
+      } finally {
+        sending.current = false;
+      }
+    })();
+  };
+
+  /*
    * The page stays MOUNTED when the code changes (the not-found screen sends
    * the reader to another poll), so the two things that belong to one poll —
    * what was typed, and the fact that this browser has already joined — are
@@ -220,6 +251,13 @@ export function PollJoin({
     ) : null;
   const dirty = !same(answer, stored);
   const sent = stored !== null && !dirty;
+  /*
+   * A brainstorm sends on every Add and every Remove (ADR-071): each is
+   * already one deliberate tap on one idea, and a second "Send" under it
+   * would be a tap that only confirms the first.
+   */
+  const instant = view.question.type === "brainstorm";
+  const onChange = instant ? sendInOrder : setDraft;
   const closedByServer = errorCode(send.error) === "attempt_closed";
 
   return (
@@ -245,7 +283,7 @@ export function PollJoin({
               type={view.question.type}
               student={view.question.student}
               answer={answer}
-              onChange={setDraft}
+              onChange={onChange}
               readOnly={ended}
             />
           )}
@@ -307,16 +345,18 @@ export function PollJoin({
                 </span>
               ) : null}
             </p>
-            <Button
-              variant="primary"
-              size="lg"
-              loading={send.isPending}
-              disabled={!isAnswered(view.question.type, answer) || sent}
-              onClick={() => send.mutate(answer)}
-            >
-              <Send aria-hidden />
-              {stored === null ? t("join.send") : t("join.update")}
-            </Button>
+            {instant ? null : (
+              <Button
+                variant="primary"
+                size="lg"
+                loading={send.isPending}
+                disabled={!isAnswered(view.question.type, answer) || sent}
+                onClick={() => send.mutate(answer)}
+              >
+                <Send aria-hidden />
+                {stored === null ? t("join.send") : t("join.update")}
+              </Button>
+            )}
           </div>
         </footer>
       )}

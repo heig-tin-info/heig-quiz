@@ -17,8 +17,8 @@ import { z } from "zod";
 import { pageOf } from "./common.js";
 import { QuestionSearch, QuestionTypeId } from "./pool.js";
 
-/** The two question types a poll may run for now. */
-export const PollQuestionType = z.enum(["mcq", "short"]);
+/** The question types a poll may run: `brainstorm` runs nowhere else (ADR-071). */
+export const PollQuestionType = z.enum(["mcq", "short", "brainstorm"]);
 export type PollQuestionType = z.infer<typeof PollQuestionType>;
 
 /**
@@ -64,6 +64,13 @@ export const PollSettings = z.object({
    * that reads the bars while it votes votes like the longest one.
    */
   votes: z.boolean().default(false),
+  /**
+   * A brainstorm's moderation (ADR-071): an idea reaches the wall and the
+   * phones only once the teacher approved it. Defaults to ON for an
+   * anonymous poll — guests and a projector — and OFF for a classroom's.
+   * Inert on the other types.
+   */
+  moderation: z.boolean().default(false),
 });
 export type PollSettings = z.infer<typeof PollSettings>;
 
@@ -217,6 +224,14 @@ export const PollTally = z.object({
    * server (`PollTally.SHORT_CAP`).
    */
   answers: z.array(z.object({ text: z.string(), count: z.number().int() })),
+  /**
+   * `brainstorm`: one bubble per cluster of ideas, most proposed first —
+   * only the ideas the room may see (`brainstormCloud` of `@quiz/domain`):
+   * under moderation, approved ones; never a hidden one, not even as a label.
+   */
+  ideas: z.array(z.object({ key: z.string(), label: z.string(), count: z.number().int() })),
+  /** `brainstorm`, the teacher's exits only: ideas waiting for moderation. 0 elsewhere. */
+  pending: z.number().int(),
 });
 export type PollTally = z.infer<typeof PollTally>;
 
@@ -319,9 +334,11 @@ export const PollRevealBody = z
   .object({
     revealed: z.boolean().optional(),
     votes: z.boolean().optional(),
+    /** A brainstorm's moderation (ADR-071); refused on another type (`422 poll_type`). */
+    moderation: z.boolean().optional(),
   })
-  .refine((body) => body.revealed !== undefined || body.votes !== undefined, {
-    message: "name at least one of `revealed` and `votes`",
+  .refine((body) => body.revealed !== undefined || body.votes !== undefined || body.moderation !== undefined, {
+    message: "name at least one of `revealed`, `votes` and `moderation`",
   });
 export type PollRevealBody = z.infer<typeof PollRevealBody>;
 
@@ -343,3 +360,58 @@ export const PollSummary = z.object({
   createdAt: z.iso.datetime(),
 });
 export type PollSummary = z.infer<typeof PollSummary>;
+
+/** The longest label a teacher may give a cluster of ideas. */
+export const POLL_IDEA_LABEL_MAX = 60;
+
+const IdeaKey = z.string().min(1).max(200);
+
+/**
+ * `POST /app/api/evaluations/:id/poll/ideas` (ADR-071): the teacher's word on
+ * a brainstorm's ideas, by idea key (`ideaKey` of `@quiz/domain`). `approve`,
+ * `hide` and `reset` (back to unmoderated) set a status; `merge` puts the
+ * clusters of `keys` under the cluster of `into`; `detach` takes ideas out of
+ * their cluster; `rename` names the cluster of `key` (`null` drops the name).
+ */
+export const PollIdeaAction = z.discriminatedUnion("action", [
+  z.object({ action: z.enum(["approve", "hide", "reset"]), keys: z.array(IdeaKey).min(1).max(500) }),
+  z.object({ action: z.literal("merge"), keys: z.array(IdeaKey).min(1).max(500), into: IdeaKey }),
+  z.object({ action: z.literal("detach"), keys: z.array(IdeaKey).min(1).max(500) }),
+  z.object({
+    action: z.literal("rename"),
+    key: IdeaKey,
+    label: z.string().trim().max(POLL_IDEA_LABEL_MAX).nullable(),
+  }),
+]);
+export type PollIdeaAction = z.infer<typeof PollIdeaAction>;
+
+/**
+ * `GET /app/api/evaluations/:id/poll/ideas`: the teacher's board of a
+ * brainstorm — every idea, hidden and unmoderated ones included, grouped by
+ * the teacher's merges. Staff only: it never reaches a phone or the wall.
+ */
+export const PollIdeaBoard = z.object({
+  moderation: z.boolean(),
+  answered: z.number().int(),
+  pending: z.number().int(),
+  clusters: z.array(
+    z.object({
+      key: z.string(),
+      label: z.string(),
+      renamed: z.boolean(),
+      /** Participants with a visible idea in the cluster: the bubble's size. */
+      count: z.number().int(),
+      /** Participants with any idea in the cluster. */
+      total: z.number().int(),
+      variants: z.array(
+        z.object({
+          key: z.string(),
+          text: z.string(),
+          count: z.number().int(),
+          status: z.enum(["pending", "approved", "hidden"]),
+        }),
+      ),
+    }),
+  ),
+});
+export type PollIdeaBoard = z.infer<typeof PollIdeaBoard>;

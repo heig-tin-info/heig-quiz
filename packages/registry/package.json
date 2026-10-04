@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@quiz/core": "workspace:*",
+    "@quiz/qt-brainstorm": "workspace:*",
     "@quiz/qt-categorize": "workspace:*",
     "@quiz/qt-circuit": "workspace:*",
     "@quiz/qt-cloze": "workspace:*",

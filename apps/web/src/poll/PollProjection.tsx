@@ -10,9 +10,10 @@ import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { useEventStream } from "../realtime/useEventStream";
-import type { Route } from "../router";
+import { routeToPath, type Route } from "../router";
 import { useProjectionTheme } from "../theme";
 import { cx, isTyping, PageError, Skeleton, useFullscreen } from "../ui";
+import { BubbleCloud } from "./BubbleCloud";
 import { PollBars } from "./PollBars";
 import { PollDonut } from "./PollDonut";
 import { ProjectionFooter } from "./ProjectionFooter";
@@ -79,23 +80,37 @@ import { anyPoolKey, pollKey, pollQuestionsKey, poolsKey } from "../queryKeys";
  * mcq in one large ring instead of the bars (`PollDonut`).
  */
 function ProjectionQuestion({ view, donut }: { view: PollTeacherView; donut: boolean }) {
+  const prompt = promptOf(view.question);
+  return (
+    <>
+      <h1 className={cx("max-w-[24ch] font-bold leading-[1.08] tracking-[-0.03em]", questionScale(prompt))}>
+        <MarkdownView source={prompt} inline />
+      </h1>
+      <ProjectionVotes view={view} donut={donut} />
+    </>
+  );
+}
+
+/** What sits under the question: the key, the bars, the ring or the cloud. */
+function ProjectionVotes({ view, donut }: { view: PollTeacherView; donut: boolean }) {
   const t = useT();
   const allRows = useMemo(() => pollRows(view.question, view.tally), [view]);
   // The switches as the server normalised them (`pollSettingsOf`).
   const marked = view.settings.revealed;
   const hidden = !view.settings.votes;
+  const muted = "text-[clamp(16px,1.6vw,22px)] text-fg-muted";
+  if (view.question.type === "brainstorm") {
+    // The cloud IS the votes: hidden, the wall keeps the question alone.
+    if (hidden) return <p className={muted}>{t("poll.ideasHidden")}</p>;
+    if (view.tally.ideas.length === 0) {
+      return <p className={muted}>{t(view.settings.moderation ? "poll.noIdeasApproved" : "poll.noAnswersYet")}</p>;
+    }
+    return <BubbleCloud bubbles={view.tally.ideas} className="h-[min(58vh,760px)]" />;
+  }
   if (hidden && view.question.type === "short") {
     const expected = (view.question.solution as { expected?: unknown } | null)?.expected;
     return (
       <>
-        <h1
-          className={cx(
-            "max-w-[24ch] font-bold leading-[1.08] tracking-[-0.03em]",
-            questionScale(promptOf(view.question)),
-          )}
-        >
-          <MarkdownView source={promptOf(view.question)} inline />
-        </h1>
         {marked && Array.isArray(expected) ? (
           <ul className="flex list-none flex-wrap gap-3 p-0" aria-label={t("poll.correctAnswer")}>
             {expected.map((e, i) => (
@@ -109,36 +124,22 @@ function ProjectionQuestion({ view, donut }: { view: PollTeacherView; donut: boo
             ))}
           </ul>
         ) : null}
-        <p className="text-[clamp(16px,1.6vw,22px)] text-fg-muted">{t("poll.votesHidden")}</p>
+        <p className={muted}>{t("poll.votesHidden")}</p>
       </>
     );
   }
   const rows = allRows.slice(0, PROJECTION_ROW_CAP);
   const overflow = allRows.length - rows.length;
+  if (rows.length === 0) return <p className={muted}>{t("poll.noAnswersYet")}</p>;
+  if (donut) return <PollDonut rows={allRows} revealed={marked} />;
   return (
     <>
-      <h1
-        className={cx(
-          "max-w-[24ch] font-bold leading-[1.08] tracking-[-0.03em]",
-          questionScale(promptOf(view.question)),
-        )}
-      >
-        <MarkdownView source={promptOf(view.question)} inline />
-      </h1>
-      {rows.length === 0 ? (
-        <p className="text-[clamp(16px,1.6vw,22px)] text-fg-muted">{t("poll.noAnswersYet")}</p>
-      ) : donut ? (
-        <PollDonut rows={allRows} revealed={marked} />
-      ) : (
-        <>
-          <PollBars rows={rows} revealed={marked} hideVotes={hidden} />
-          {overflow > 0 ? (
-            <p className="text-[clamp(13px,1.2vw,17px)] text-fg-faint">
-              {t(overflow === 1 ? "poll.moreAnswers.one" : "poll.moreAnswers", { n: overflow })}
-            </p>
-          ) : null}
-        </>
-      )}
+      <PollBars rows={rows} revealed={marked} hideVotes={hidden} />
+      {overflow > 0 ? (
+        <p className="text-[clamp(13px,1.2vw,17px)] text-fg-faint">
+          {t(overflow === 1 ? "poll.moreAnswers.one" : "poll.moreAnswers", { n: overflow })}
+        </p>
+      ) : null}
     </>
   );
 }
@@ -362,6 +363,9 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
         onKeep={() => keep.mutate()}
         keepPending={keep.isPending}
         onOpenQuestion={() => navigate({ view: "question", id: view.question.id })}
+        onModerate={() =>
+          window.open(routeToPath({ view: "pollModerate", id: view.evaluation.id }), "_blank", "noopener")
+        }
         donut={donutOffered ? donut : null}
         onToggleDonut={toggleDonut}
       />

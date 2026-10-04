@@ -42,8 +42,19 @@ import {
   type PollTally,
   type PollRevealBody,
   type PollTeacherView,
+  PollQuestionType,
+  type PollIdeaAction,
+  type PollIdeaBoard,
 } from "@quiz/contracts";
-import { pollOutcome, pollTally, type PollRunCounts, type PollType } from "@quiz/domain";
+import {
+  applyIdeaAction,
+  brainstormBoard,
+  pollOutcome,
+  pollTally,
+  type IdeaMark,
+  type PollRunCounts,
+  type PollType,
+} from "@quiz/domain";
 
 import { audit } from "../../audit.js";
 import { iso } from "../../clock.js";
@@ -58,6 +69,7 @@ import {
   evaluations,
   gradings,
   isOwnedPoll,
+  pollIdeaMarks,
   pools,
   questionVersions,
   questions,
@@ -84,7 +96,12 @@ export class PollError extends DomainError {
   override name = "PollError";
 }
 
-/** A poll runs `mcq` or `short` and nothing else (contract `PollQuestionType`). */
+/** The question types a poll runs: the contract's `PollQuestionType`. */
+const POLLABLE_TYPES: readonly PollType[] = PollQuestionType.options;
+
+const isPollable = (type: string): type is PollType => PollQuestionType.safeParse(type).success;
+
+/** A poll runs the types of {@link POLLABLE_TYPES} and nothing else. */
 export class PollTypeRefused extends PollError {
   constructor(type: string) {
     super("poll_type", 422, `a poll cannot run a "${type}" question`);
@@ -194,10 +211,13 @@ export function pollSettingsOf(scope: PollScope): PollSettings {
   const revealed = stored?.revealed ?? false;
   const votes = stored?.votes ?? false;
   const keyed = isKeyed(item);
+  const anonymous = isOwnedPoll(evaluation);
   return {
-    anonymous: isOwnedPoll(evaluation),
+    anonymous,
     revealed: revealed && keyed,
     votes: votes || (!keyed && revealed),
+    // ADR-071: guests and a projector are moderated unless the teacher says otherwise.
+    moderation: isBrainstorm(item) && (stored?.moderation ?? anonymous),
   };
 }
 
@@ -209,6 +229,8 @@ export function pollSettingsOf(scope: PollScope): PollSettings {
 function keyedOf(type: string, version: StoredVersion): boolean {
   return hasKey(type, loadConfig(type, version));
 }
+
+const isBrainstorm = (item: JoinedItem): boolean => item.question.type === "brainstorm";
 
 /** Whether the poll's frozen question names a right answer. */
 function isKeyed(item: JoinedItem): boolean {
@@ -259,9 +281,7 @@ async function assertPollable(db: Db, questionId: string): Promise<void> {
     .where(eq(questions.id, questionId))
     .limit(1);
   if (!question || question.deletedAt !== null) throw new PollError("not_found", 404);
-  if (question.type !== "mcq" && question.type !== "short") {
-    throw new PollTypeRefused(question.type);
-  }
+  if (!isPollable(question.type)) throw new PollTypeRefused(question.type);
   // Derived from the latest published version, the one the poll freezes.
   if (question.randomizable) throw new PollParameterizedRefused();
   const [version] = await db
@@ -344,7 +364,7 @@ export async function createInlinePoll(
     drawCode?: () => string;
   },
 ): Promise<PollScope> {
-  if (input.type !== "mcq" && input.type !== "short") throw new PollTypeRefused(input.type);
+  if (!isPollable(input.type)) throw new PollTypeRefused(input.type);
   const { questionId } = await createUnsavedQuestion(db, {
     type: input.type,
     config: input.config,
@@ -391,9 +411,11 @@ export async function setDisplay(
 ): Promise<EvaluationRecord> {
   const { evaluation, item } = scope;
   if (change.revealed === true && !isKeyed(item)) throw new PollKeyless();
+  if (change.moderation !== undefined && !isBrainstorm(item)) throw new PollNotBrainstorm();
   const current = pollSettingsOf(scope);
   const revealed = change.revealed ?? current.revealed;
   const votes = change.votes ?? current.votes;
+  const moderation = change.moderation ?? current.moderation;
   const feedbackPolicy = {
     ...(evaluation.feedbackPolicy as Record<string, unknown>),
     showKey: revealed,
@@ -402,11 +424,17 @@ export async function setDisplay(
   await setPollSettings(
     db,
     evaluation.id,
-    { settings: { ...settingsOf(evaluation), poll: { revealed, votes } }, feedbackPolicy },
+    {
+      // Moderation is a brainstorm's alone: the other polls keep the pair they always stored.
+      settings: { ...settingsOf(evaluation), poll: { revealed, votes, ...(isBrainstorm(item) ? { moderation } : {}) } },
+      feedbackPolicy,
+    },
     now,
   );
   const row = (await byId(db, evaluation.id))!;
   events.pollChanged(row);
+  // Moderation decides what the wall draws: the projection redraws now.
+  if (change.moderation !== undefined) await emitTally(db, row, now);
   return row;
 }
 
@@ -566,19 +594,14 @@ export async function answerPoll(
 /** The counts the projection draws, computed the same way for both exits. */
 export async function tallyOf(db: Db, evaluation: EvaluationRecord): Promise<PollTally> {
   const scope = await scopeOf(db, evaluation);
-  if (!scope) return { joined: 0, answered: 0, choices: [], answers: [] };
-  const [[joined], payloads] = await Promise.all([
+  if (!scope) return { joined: 0, answered: 0, choices: [], answers: [], ideas: [], pending: 0 };
+  const [[joined], payloads, marks] = await Promise.all([
     db
       .select({ n: count() })
       .from(attempts)
       .where(eq(attempts.evaluationId, evaluation.id)),
-    db
-      .select({ payload: answers.payload })
-      .from(answers)
-      .innerJoin(attempts, eq(answers.attemptId, attempts.id))
-      .where(
-        and(eq(attempts.evaluationId, evaluation.id), eq(answers.itemId, scope.item.item.id)),
-      ),
+    payloadsOf(db, scope),
+    isBrainstorm(scope.item) ? marksOf(db, evaluation.id) : [],
   ]);
   const type = scope.item.question.type as PollType;
   let choiceCount = 0;
@@ -590,9 +613,94 @@ export async function tallyOf(db: Db, evaluation: EvaluationRecord): Promise<Pol
     type,
     choiceCount,
     joined: joined?.n ?? 0,
-    payloads: payloads.map((r) => r.payload),
+    payloads,
     shortCap: POLL_SHORT_CAP,
+    marks,
+    moderation: pollSettingsOf(scope).moderation,
   });
+}
+
+/** Every stored answer to the poll's one item. */
+async function payloadsOf(db: Db, scope: PollScope): Promise<unknown[]> {
+  const rows = await db
+    .select({ payload: answers.payload })
+    .from(answers)
+    .innerJoin(attempts, eq(answers.attemptId, attempts.id))
+    .where(and(eq(attempts.evaluationId, scope.evaluation.id), eq(answers.itemId, scope.item.item.id)));
+  return rows.map((r) => r.payload);
+}
+
+// --- The brainstorm board (ADR-071) ---------------------------------------
+
+async function marksOf(db: Db, evaluationId: string): Promise<IdeaMark[]> {
+  return db
+    .select({
+      key: pollIdeaMarks.ideaKey,
+      status: pollIdeaMarks.status,
+      mergedInto: pollIdeaMarks.mergedInto,
+      label: pollIdeaMarks.label,
+    })
+    .from(pollIdeaMarks)
+    .where(eq(pollIdeaMarks.evaluationId, evaluationId));
+}
+
+/** A board on a poll of another type: there are no ideas to moderate. */
+export class PollNotBrainstorm extends PollError {
+  constructor() {
+    super("poll_type", 422, "only a brainstorm poll has ideas");
+  }
+}
+
+/**
+ * The teacher's board: every idea, hidden and unmoderated ones included.
+ * STAFF ONLY — the route loads the poll through the staff predicate; the
+ * room only ever reads `tally.ideas`, the filtered cloud.
+ */
+export async function ideaBoard(db: Db, scope: PollScope): Promise<PollIdeaBoard> {
+  if (!isBrainstorm(scope.item)) throw new PollNotBrainstorm();
+  const [payloads, marks] = await Promise.all([payloadsOf(db, scope), marksOf(db, scope.evaluation.id)]);
+  const { moderation } = pollSettingsOf(scope);
+  return { moderation, ...brainstormBoard({ payloads, marks, moderation }) };
+}
+
+/**
+ * The teacher's word on ideas: the marks `applyIdeaAction` computes, upserted
+ * in one statement, then the wall redrawn. Allowed after the end too: a
+ * teacher may still tidy the cloud the room is looking at.
+ */
+export async function actOnIdeas(
+  db: Db,
+  scope: PollScope,
+  action: PollIdeaAction,
+  now: Date,
+): Promise<PollIdeaBoard> {
+  if (!isBrainstorm(scope.item)) throw new PollNotBrainstorm();
+  const changed = applyIdeaAction(await marksOf(db, scope.evaluation.id), action);
+  if (changed.length > 0) {
+    await db
+      .insert(pollIdeaMarks)
+      .values(
+        changed.map((m) => ({
+          evaluationId: scope.evaluation.id,
+          ideaKey: m.key,
+          status: m.status,
+          mergedInto: m.mergedInto,
+          label: m.label,
+          updatedAt: now,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [pollIdeaMarks.evaluationId, pollIdeaMarks.ideaKey],
+        set: {
+          status: sql`excluded.status`,
+          mergedInto: sql`excluded.merged_into`,
+          label: sql`excluded.label`,
+          updatedAt: sql`excluded.updated_at`,
+        },
+      });
+    await emitTally(db, scope.evaluation, now);
+  }
+  return ideaBoard(db, scope);
 }
 
 /** The tally, out on `evaluation:<id>`, staff only, coalesced 500 ms. */
@@ -740,7 +848,7 @@ export async function publicView(
     settings,
     question: { type: item.question.type as PollType, student: studentOf(item) },
     solution: settings.revealed ? solutionOf(item) : null,
-    tally: settings.votes ? await tallyOf(db, evaluation) : null,
+    tally: settings.votes ? { ...(await tallyOf(db, evaluation)), pending: 0 } : null,
     me: {
       identified: viewer.userId !== null || viewer.guestId !== null,
       loginRequired: !viewer.loggedIn && !settings.anonymous,
@@ -943,9 +1051,6 @@ export async function questionPicks(
     return ka < kb ? 1 : -1;
   });
 }
-
-/** The types a poll runs, as the search across pools restricts them. */
-const POLLABLE_TYPES: readonly PollType[] = ["mcq", "short"];
 
 /**
  * The launcher's "From pools" (issue #162): the pool screen's search over

@@ -218,6 +218,8 @@ export type AuditAction =
   | "oauth.revoke"
   | "poll.create"
   | "poll.end"
+  /** A teacher's word on a brainstorm's ideas (ADR-071): `payload` is the action. */
+  | "poll.ideas"
   | "poll.keep"
   | "poll.reveal"
   | "pool.asset_upload"

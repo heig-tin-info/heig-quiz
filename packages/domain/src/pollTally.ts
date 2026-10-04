@@ -17,10 +17,11 @@
  *     but DISPLAYS the first one seen: "Paris", "paris " and "PARIS" are one
  *     line of three, written the way the first participant wrote it.
  */
+import { brainstormBoard, brainstormCloud, type BrainstormBubble, type IdeaMark } from "./brainstorm.js";
 import { applyTextOptions, foldCase, normalizeInput } from "./short.js";
 
-/** The two question types a poll may run (mirrors `PollQuestionType`). */
-export type PollType = "mcq" | "short";
+/** The question types a poll may run (mirrors `PollQuestionType`). */
+export type PollType = "mcq" | "short" | "brainstorm";
 
 export interface PollChoiceCount {
   /** Canonical index into `config.choices`. */
@@ -39,6 +40,10 @@ export interface PollTallyResult {
   answered: number;
   choices: PollChoiceCount[];
   answers: PollAnswerCount[];
+  /** `brainstorm`: what the room may see of the ideas (`brainstormCloud`). */
+  ideas: BrainstormBubble[];
+  /** `brainstorm`: ideas awaiting the teacher's moderation. */
+  pending: number;
 }
 
 export interface PollTallyInput {
@@ -55,6 +60,9 @@ export interface PollTallyInput {
    * default is here so the rule is testable on its own.
    */
   shortCap?: number | undefined;
+  /** `brainstorm`: the teacher's marks on the ideas, and whether they moderate. */
+  marks?: readonly IdeaMark[] | undefined;
+  moderation?: boolean | undefined;
 }
 
 export const POLL_SHORT_CAP_DEFAULT = 60;
@@ -109,6 +117,21 @@ export function pollTally(input: PollTallyInput): PollTallyResult {
       answered,
       choices: counts.map((count, index) => ({ index, count })),
       answers: [],
+      ideas: [],
+      pending: 0,
+    };
+  }
+
+  if (input.type === "brainstorm") {
+    const moderation = input.moderation ?? false;
+    const board = brainstormBoard({ payloads: input.payloads, marks: input.marks ?? [], moderation });
+    return {
+      joined: input.joined,
+      answered: board.answered,
+      choices: [],
+      answers: [],
+      ideas: brainstormCloud(board, moderation),
+      pending: board.pending,
     };
   }
 
@@ -131,5 +154,5 @@ export function pollTally(input: PollTallyInput): PollTallyResult {
     .slice(0, cap)
     .map(({ text, count }) => ({ text, count }));
 
-  return { joined: input.joined, answered, choices: [], answers };
+  return { joined: input.joined, answered, choices: [], answers, ideas: [], pending: 0 };
 }
