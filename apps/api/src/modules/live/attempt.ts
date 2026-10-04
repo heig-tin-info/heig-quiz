@@ -1329,7 +1329,6 @@ export interface EvaluationHome {
   open: EvaluationCard[];
   upcoming: EvaluationCard[];
   past: EvaluationCard[];
-  serverNow: string;
 }
 
 /**
@@ -1344,7 +1343,7 @@ export async function studentHome(
   classroomId?: string,
 ): Promise<EvaluationHome> {
   const { polls, open, upcoming, past } = await studentBoard(db, userId, now, classroomId);
-  return { polls, open, upcoming, past: past.map((entry) => entry.card), serverNow: iso(now) };
+  return { polls, open, upcoming, past: past.map((entry) => entry.card) };
 }
 
 type StudentRow = Awaited<ReturnType<typeof studentEvaluationRows>>[number];

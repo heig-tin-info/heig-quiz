@@ -2,6 +2,8 @@
 import {
   clozeStudentTemplate,
   parseCloze,
+  studentProjectGroup,
+  type StudentActivityGroup,
 } from "@quiz/domain";
 import type {
   AttemptView,
@@ -486,12 +488,11 @@ interface EvaluationHome {
   open: EvaluationCard[];
   upcoming: EvaluationCard[];
   past: EvaluationCard[];
-  serverNow: string;
 }
 
 const evaluationHome = (): EvaluationHome => {
   if (flags.empty) {
-    return { polls: [], open: [], upcoming: [], past: [], serverNow: new Date().toISOString() };
+    return { polls: [], open: [], upcoming: [], past: [] };
   }
   const room = { classroomId: "r1", classroomName: "PRG1-2026", courseCode: "PRG1" };
   return {
@@ -609,149 +610,103 @@ const evaluationHome = (): EvaluationHome => {
         trustedClients: [],
       },
     ],
-    serverNow: new Date().toISOString(),
   };
 };
 
 // M3-09a (F-PROJ-04, F-PROJ-15): the student's projects of PRG1-2026 under
 // `?projects=1` — one in progress with an indicative score, one starting in
 // three days, one locked at last week's deadline and released — as cards of
-// the home and the classroom page, and each as the student's project view.
-// Hand-written, like the home: the teacher's projects of `project.ts` are
-// another persona's world.
+// the home and the classroom page, each served as a view derived from its
+// card (M3-13 fleshes them out). Hand-written, like the home: the teacher's
+// projects of `project.ts` are another persona's world.
 export const STUDENT_PROJECT_OPEN = "77777777-7777-4777-8777-777777777701";
 export const STUDENT_PROJECT_SOON = "77777777-7777-4777-8777-777777777702";
 export const STUDENT_PROJECT_PAST = "77777777-7777-4777-8777-777777777703";
-const STUDENT_LOGIN = "lea-perret";
 const PROJECT_ORG = "heig-tin-info";
+const STUDENT_LOGIN = "lea-perret";
 
-interface MockStudentProject {
-  card: StudentProjectCard;
-  view: Omit<StudentProject, "serverNow">;
-}
-
-const studentProjects = (): MockStudentProject[] => {
+const studentProjectCards = (): StudentProjectCard[] => {
   if (!flags.projects || flags.empty) return [];
-  const room = { kind: "project" as const, classroomId: "r1", classroomName: "PRG1-2026", courseCode: "PRG1" };
-  const repo = (slug: string): string => `${PROJECT_ORG}/${slug}-${STUDENT_LOGIN}`;
-  const url = (fullName: string): string => `https://github.com/${fullName}`;
-  const open: StudentProjectCard = {
-    ...room,
-    id: STUDENT_PROJECT_OPEN,
-    title: "Labo 1 — Pointeurs et tableaux",
-    startAt: iso(-3 * D),
-    deadlineAt: iso(6 * D + 4 * H),
-    status: "in_progress",
-    invitation: "accepted",
-    githubLinked: true,
-    released: false,
-    repoFullName: repo("labo-1"),
-    repoUrl: url(repo("labo-1")),
+  const base = { kind: "project" as const, classroomId: "r1", classroomName: "PRG1-2026", courseCode: "PRG1", githubLinked: true };
+  const repo = (slug: string) => {
+    const fullName = `${PROJECT_ORG}/${slug}-${STUDENT_LOGIN}`;
+    return { repoFullName: fullName, repoUrl: `https://github.com/${fullName}`, invitation: "accepted" as const };
   };
-  const soon: StudentProjectCard = {
-    ...room,
-    id: STUDENT_PROJECT_SOON,
-    title: "Labo 2 — Listes chaînées",
-    startAt: iso(3 * D),
-    deadlineAt: iso(17 * D),
-    status: "to_accept",
-    invitation: null,
-    githubLinked: true,
-    released: false,
-    repoFullName: null,
-    repoUrl: null,
-  };
-  const past: StudentProjectCard = {
-    ...room,
-    id: STUDENT_PROJECT_PAST,
-    title: "Labo 0 — Prise en main",
-    startAt: iso(-21 * D),
-    deadlineAt: iso(-7 * D),
-    status: "released",
-    invitation: "accepted",
-    githubLinked: true,
-    released: true,
-    repoFullName: repo("labo-0"),
-    repoUrl: url(repo("labo-0")),
-  };
-  const facts = ({ invitation, repoFullName, repoUrl, ...rest }: StudentProjectCard) => {
-    void invitation;
-    void repoFullName;
-    void repoUrl;
-    return rest;
-  };
-  const sha = (seed: string) => seed.repeat(40).slice(0, 40);
   return [
-    {
-      card: open,
-      view: {
-        ...facts(open),
-        gradingMode: "auto",
-        repo: {
-          fullName: open.repoFullName!,
-          url: open.repoUrl!,
-          invitation: "accepted",
-          deleted: false,
-          locked: false,
-          lastCommit: { sha: sha("a1"), at: iso(-2 * H) },
-          ciStatus: "pass",
-          run: { sha: sha("a1"), url: `${open.repoUrl}/actions/runs/4821`, conclusion: "success", completedAt: iso(-2 * H + 3 * 60_000) },
-          score: { points: 34, max: 40, grade: { grade: 5.3, fellBack: false }, frozen: false },
-        },
-        release: null,
-      },
-    },
-    { card: soon, view: { ...facts(soon), gradingMode: "auto", repo: null, release: null } },
-    {
-      card: past,
-      view: {
-        ...facts(past),
-        gradingMode: "auto",
-        repo: {
-          fullName: past.repoFullName!,
-          url: past.repoUrl!,
-          invitation: "accepted",
-          deleted: false,
-          locked: true,
-          lastCommit: { sha: sha("b2"), at: iso(-7 * D - 3 * H) },
-          ciStatus: "pass",
-          run: { sha: sha("b2"), url: `${past.repoUrl}/actions/runs/3310`, conclusion: "success", completedAt: iso(-7 * D - 3 * H + 2 * 60_000) },
-          score: { points: 18, max: 20, grade: { grade: 5.5, fellBack: false }, frozen: true },
-        },
-        release: { at: iso(-5 * D), points: 18, max: 20, grade: { grade: 5.5, fellBack: false }, comment: "Très bon travail, attention aux fuites mémoire dans la libération de la liste." },
-      },
-    },
+    { ...base, id: STUDENT_PROJECT_OPEN, title: "Labo 1 — Pointeurs et tableaux", startAt: iso(-3 * D), deadlineAt: iso(6 * D + 4 * H), status: "in_progress", ...repo("labo-1") },
+    { ...base, id: STUDENT_PROJECT_SOON, title: "Labo 2 — Listes chaînées", startAt: iso(3 * D), deadlineAt: iso(17 * D), status: "to_accept", invitation: null, repoFullName: null, repoUrl: null },
+    { ...base, id: STUDENT_PROJECT_PAST, title: "Labo 0 — Prise en main", startAt: iso(-21 * D), deadlineAt: iso(-7 * D), status: "released", ...repo("labo-0") },
   ];
 };
 
-/** The home as the `activity` module serves it: every kind, tagged (M3-09a). */
+/** The view of one of the cards above: its repository as the card names it, a score on the open one, the release on the past one. */
+const studentProjectView = (card: StudentProjectCard): StudentProject => {
+  const { invitation, repoFullName, repoUrl, ...facts } = card;
+  const sha = (seed: string) => seed.repeat(40).slice(0, 40);
+  const released = card.status === "released";
+  const at = released ? iso(-7 * D - 3 * H) : iso(-2 * H);
+  return {
+    ...facts,
+    gradingMode: "auto",
+    repo:
+      repoFullName === null || repoUrl === null || invitation === null
+        ? null
+        : {
+            fullName: repoFullName,
+            url: repoUrl,
+            invitation,
+            deleted: false,
+            locked: released,
+            lastCommit: { sha: sha(card.id.slice(-2)), at },
+            ciStatus: "pass",
+            run: { sha: sha(card.id.slice(-2)), url: `${repoUrl}/actions/runs/${card.id.slice(-4)}`, conclusion: "success", completedAt: at },
+            score: released
+              ? { points: 18, max: 20, grade: { grade: 5.5, fellBack: false }, frozen: true }
+              : { points: 34, max: 40, grade: { grade: 5.3, fellBack: false }, frozen: false },
+          },
+    release: released
+      ? { at: iso(-5 * D), points: 18, max: 20, grade: { grade: 5.5, fellBack: false }, comment: "Très bon travail, attention aux fuites mémoire dans la libération de la liste." }
+      : null,
+    serverNow: new Date().toISOString(),
+  };
+};
+
+/** The home as the `activity` module serves it: every kind, tagged, the projects grouped by the domain's rule (M3-09a). */
 const studentHome = (): StudentHomeData => {
   const home = evaluationHome();
   const tag = (cards: EvaluationCard[]) => cards.map((c) => ({ kind: "evaluation" as const, ...c }));
-  const projects = studentProjects().map((p) => p.card);
-  const inGroup = (group: StudentProjectCard["status"][]) => projects.filter((p) => group.includes(p.status));
-  const started = (p: StudentProjectCard) => Date.parse(p.startAt) <= now;
+  const groups: Record<StudentActivityGroup, StudentProjectCard[]> = { open: [], upcoming: [], past: [] };
+  for (const card of studentProjectCards()) {
+    const facts = {
+      startAt: new Date(card.startAt),
+      deadlineAt: new Date(card.deadlineAt),
+      released: card.status === "released",
+      accepted: card.repoFullName !== null,
+      locked: card.status === "locked",
+    };
+    groups[studentProjectGroup(facts, new Date(now))].push(card);
+  }
   return {
     polls: home.polls,
-    open: [...tag(home.open), ...inGroup(["to_accept", "in_progress"]).filter(started)],
-    upcoming: [...tag(home.upcoming), ...inGroup(["to_accept"]).filter((p) => !started(p))],
-    past: [...tag(home.past), ...inGroup(["locked", "released"])],
-    serverNow: home.serverNow,
+    open: [...tag(home.open), ...groups.open],
+    upcoming: [...tag(home.upcoming), ...groups.upcoming],
+    past: [...tag(home.past), ...groups.past],
+    serverNow: new Date().toISOString(),
   };
 };
 
 on("GET", "/app/api/student/home", studentHome);
 
-on("GET", "/app/api/student/projects/:id", (m): StudentProject => {
-  const found = studentProjects().find((p) => p.card.id === m.groups!.id);
+const studentProjectOr404 = (id: string | undefined): StudentProjectCard => {
+  const found = studentProjectCards().find((p) => p.id === id);
   if (!found) throw new MockError(404, "Not found");
-  return { ...found.view, serverNow: new Date().toISOString() };
-});
+  return found;
+};
+
+on("GET", "/app/api/student/projects/:id", (m): StudentProject => studentProjectView(studentProjectOr404(m.groups!.id)));
 
 on("POST", "/app/api/student/projects/:id/invite", (m): ProjectInvitationResent => {
-  const found = studentProjects().find((p) => p.card.id === m.groups!.id);
-  if (!found) throw new MockError(404, "Not found");
-  if (found.view.repo?.invitation !== "pending") throw new MockError(409, "invitation_not_pending");
+  if (studentProjectOr404(m.groups!.id).invitation !== "pending") throw new MockError(409, "invitation_not_pending");
   return { invitationStatus: "pending", resentAt: new Date().toISOString() };
 });
 

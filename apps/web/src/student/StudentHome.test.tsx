@@ -238,7 +238,6 @@ describe("the student home", () => {
       status: "in_progress",
       invitation: "accepted",
       githubLinked: true,
-      released: false,
       repoFullName: "heig/labo-1-lea",
       repoUrl: "https://github.com/heig/labo-1-lea",
     };

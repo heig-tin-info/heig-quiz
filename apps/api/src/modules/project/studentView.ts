@@ -9,18 +9,22 @@
  *
  * What it carries: the project's facts (name, start, the student's
  * EFFECTIVE deadline, state), the caller's OWN repository — its name and
- * URL, their invitation, the last commit of theirs and its CI status, the
- * run their score comes from and that score, indicative until the release
- * (`studentScoreRun` of `@quiz/domain`: the current CI score, the frozen
- * one once their deadline is applied) — and, once released, the final
- * score's snapshot, its grade and the teacher's comment.
+ * URL, their invitation, the commit the view stands on and its CI status,
+ * the run their score comes from and that score, indicative until the
+ * release (`studentScoreRun` of `@quiz/domain`: the current CI score, the
+ * frozen one once their deadline is applied) — and, once released, the
+ * final score's snapshot, its grade and the teacher's comment as the
+ * release wrote it.
  *
  * What it never carries: the source or distribution repository (not even
- * their existence), another student's repository or score, a run after the
- * deadline, the review's or the teacher's score before the release, the
- * staff's flags (`to_verify`, `multiple`, `malformed`, the suspended
- * protection), a draft or an archived project. The leak test of
- * `studentView.db.test.ts` searches every student response for them.
+ * their existence), another student's repository or score, a push or a run
+ * after the deadline (once the deadline is applied or passed, the commit
+ * and the CI state shown are the SELECTED run's, not the row's, which the
+ * webhooks keep moving on an open repository), the review's or the
+ * teacher's score before the release, the staff's flags (`to_verify`,
+ * `multiple`, `malformed`, the suspended protection), a draft or an
+ * archived project. The leak test of `studentView.db.test.ts` searches
+ * every student response for them.
  *
  * The repository is the seat's: read through a STUDENT seat only — a staff
  * seat (a teacher in the student view, ADR-018) holds none, so the view
@@ -51,7 +55,9 @@ import { iso, isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { classrooms, courses, enrollments, githubAccounts, projectGradeRuns, projectRepos, projects } from "../../db/schema.js";
+import { htmlUrl } from "../../github/git.js";
 import type { StudentProjectScope } from "../guards.js";
+import { EFFECTIVE_DEADLINE, isLive } from "./deadline.js";
 import { slotRuns } from "./detail.js";
 import { ProjectError } from "./errors.js";
 import { resendInvitation } from "./invitation.js";
@@ -62,16 +68,11 @@ type RunRow = typeof projectGradeRuns.$inferSelect;
 /** A row whose repository exists on GitHub's side: provisioned, named. */
 type ProvisionedRepo = RepoRow & { fullName: string };
 
-const GITHUB = "https://github.com";
-const repoUrl = (fullName: string): string => `${GITHUB}/${fullName}`;
-const runUrl = (fullName: string, workflowRunId: number): string => `${repoUrl(fullName)}/actions/runs/${workflowRunId}`;
+const runUrl = (fullName: string, workflowRunId: number): string => `${htmlUrl(fullName)}/actions/runs/${workflowRunId}`;
 
 /** The student's repository, once Accept provisioned it; a pending or failed row is not one yet. */
 const provisioned = (repo: RepoRow | null): ProvisionedRepo | null =>
   repo !== null && repo.provisionStatus === "ok" && repo.fullName !== null ? (repo as ProvisionedRepo) : null;
-
-/** A repository the student can still use: provisioned and not deleted on GitHub (F-PROJ-18). */
-const usable = (repo: ProvisionedRepo | null): ProvisionedRepo | null => (repo !== null && repo.deletedAt === null ? repo : null);
 
 /** The student's own individual repository row of `projectId`, provisioned or not; null before Accept. */
 async function ownRepo(db: Db, projectId: string, userId: string): Promise<RepoRow | null> {
@@ -122,7 +123,6 @@ function cardFacts(row: CardRow, linked: boolean, now: Date): { facts: CardFacts
       deadlineAt: iso(judged.deadlineAt),
       status: studentProjectStatus(judged, now),
       githubLinked: linked,
-      released: judged.released,
     },
   };
 }
@@ -130,14 +130,15 @@ function cardFacts(row: CardRow, linked: boolean, now: Date): { facts: CardFacts
 /** One card (F-PROJ-04): the facts, and the repository's name and URL once it exists and is not deleted. */
 function card(row: CardRow, linked: boolean, now: Date): { card: StudentProjectCard; group: StudentActivityGroup } {
   const { facts, group } = cardFacts(row, linked, now);
-  const repo = usable(provisioned(row.repo));
+  const repo = provisioned(row.repo);
+  const live = repo !== null && isLive(repo, row.project) ? repo : null;
   return {
     group,
     card: {
       ...facts,
-      invitation: repo === null || repo.invitationStatus === "none" ? null : repo.invitationStatus,
-      repoFullName: repo?.fullName ?? null,
-      repoUrl: repo === null ? null : repoUrl(repo.fullName),
+      invitation: live === null || live.invitationStatus === "none" ? null : live.invitationStatus,
+      repoFullName: live?.fullName ?? null,
+      repoUrl: live === null ? null : htmlUrl(live.fullName),
     },
   };
 }
@@ -151,7 +152,8 @@ export type StudentProjectCards = Record<StudentActivityGroup, StudentProjectCar
  * (the classroom page, loaded through `readableClassroom` by the route),
  * all of them otherwise (the home) — with the caller's own repository where
  * their seat is a student's. Never a draft, never an archived project
- * (F-PROJ-04, F-PROJ-16); the soonest project deadline first, then by name.
+ * (F-PROJ-04, F-PROJ-16); the soonest EFFECTIVE deadline first, then by
+ * name.
  */
 export async function studentProjectCards(db: Db, userId: string, now: Date, classroomId?: string): Promise<StudentProjectCards> {
   const scope: (SQL | undefined)[] = [
@@ -175,7 +177,7 @@ export async function studentProjectCards(db: Db, userId: string, now: Date, cla
       ),
     )
     .where(and(...scope))
-    .orderBy(projects.deadlineAt, projects.name);
+    .orderBy(EFFECTIVE_DEADLINE, projects.name);
   const linked = rows.length > 0 && (await githubLinked(db, userId));
   const groups: StudentProjectCards = { open: [], upcoming: [], past: [] };
   for (const row of rows) {
@@ -185,21 +187,43 @@ export async function studentProjectCards(db: Db, userId: string, now: Date, cla
   return groups;
 }
 
-/** The student's score (indicative) and the run it comes from (`studentScoreRun`); no score under grading `none`. */
-function scoreOf(project: ProjectRow, repo: ProvisionedRepo, runs: Map<string, RunRow>): Pick<StudentProjectRepo, "run" | "score"> {
+/** What the view shows of a repository's commits and runs: the commit it stands on, its CI state, the selected run and its score. */
+type RepoReading = Pick<StudentProjectRepo, "lastCommit" | "ciStatus" | "run" | "score">;
+
+/**
+ * The repository as the student reads it (F-PROJ-15, N-SEC-20). Before the
+ * deadline: the last push of theirs and its CI status as the webhooks
+ * stored them, the current run and its indicative score. Once their
+ * deadline is applied or passed: the SELECTED run alone — its commit, its
+ * conclusion as the CI state, its score frozen — never the row's head,
+ * which an open repository (strategy `commit`) keeps moving after the
+ * deadline. No score under grading `none`.
+ */
+function reading(project: ProjectRow, repo: ProvisionedRepo, runs: Map<string, RunRow>, now: Date): RepoReading {
   const slot = (id: string | null) => (id === null ? null : (runs.get(id) ?? null));
   const chosen = studentScoreRun({
     deadlineAppliedAt: repo.deadlineAppliedAt,
     current: slot(repo.currentGradeRunId),
     frozen: slot(repo.frozenGradeRunId),
   });
-  if (chosen === null) return { run: null, score: null };
+  const over = repo.deadlineAppliedAt !== null || now.getTime() >= effectiveDeadline(repo, project).getTime();
+  const stored: Pick<RepoReading, "lastCommit" | "ciStatus"> = over
+    ? {
+        lastCommit: chosen === null ? null : { sha: chosen.run.headSha, at: null },
+        ciStatus: chosen === null ? "none" : chosen.run.conclusion === "success" ? "pass" : "fail",
+      }
+    : {
+        lastCommit: repo.lastCommitSha === null ? null : { sha: repo.lastCommitSha, at: isoOrNull(repo.lastCommitAt) },
+        ciStatus: repo.ciStatus,
+      };
+  if (chosen === null) return { ...stored, run: null, score: null };
   const { run, frozen } = chosen;
   const score: StudentProjectScore | null =
     project.gradingMode === "auto" && run.parseStatus === "ok" && run.points !== null
       ? { points: run.points, max: run.max, grade: scoreGrade(run.points, run.max, project.gradingScale), frozen }
       : null;
   return {
+    ...stored,
     run: { sha: run.headSha, url: runUrl(repo.fullName, run.workflowRunId), conclusion: run.conclusion, completedAt: iso(run.completedAt) },
     score,
   };
@@ -209,13 +233,14 @@ function scoreOf(project: ProjectRow, repo: ProvisionedRepo, runs: Map<string, R
  * `GET /app/api/student/projects/:id` (F-PROJ-15): the student payload of
  * the project `scope` loaded through `studentProjectView` (invariant 6),
  * for `userId` — the caller, or the impersonated student (ADR-034). A
- * repository deleted on GitHub is still theirs to read, said `deleted`.
+ * repository deleted on GitHub is still theirs to read, said `deleted`,
+ * with nothing of its runs.
  */
 export async function studentProject(db: Db, scope: StudentProjectScope, userId: string, now: Date): Promise<StudentProject> {
   const { project } = scope;
   const row = scope.seat !== null && !scope.seat.staff ? await ownRepo(db, project.id, userId) : null;
   const repo = provisioned(row);
-  const live = usable(repo);
+  const live = repo !== null && isLive(repo, project) ? repo : null;
   const [linked, runs] = await Promise.all([
     githubLinked(db, userId),
     live === null ? new Map<string, RunRow>() : slotRuns(db, [live]),
@@ -229,13 +254,11 @@ export async function studentProject(db: Db, scope: StudentProjectScope, userId:
         ? null
         : {
             fullName: repo.fullName,
-            url: repoUrl(repo.fullName),
+            url: htmlUrl(repo.fullName),
             invitation: repo.invitationStatus === "accepted" ? "accepted" : "pending",
             deleted: repo.deletedAt !== null,
             locked: repo.lockedAt !== null,
-            lastCommit: repo.lastCommitSha === null ? null : { sha: repo.lastCommitSha, at: isoOrNull(repo.lastCommitAt) },
-            ciStatus: repo.ciStatus,
-            ...(live === null ? { run: null, score: null } : scoreOf(project, live, runs)),
+            ...(live === null ? { lastCommit: null, ciStatus: "none" as const, run: null, score: null } : reading(project, live, runs, now)),
           },
     release:
       project.releasedAt === null
@@ -245,7 +268,7 @@ export async function studentProject(db: Db, scope: StudentProjectScope, userId:
             points: repo?.releasedPoints ?? null,
             max: repo?.releasedMax ?? null,
             grade: scoreGrade(repo?.releasedPoints ?? null, repo?.releasedMax ?? null, project.gradingScale),
-            comment: repo?.teacherComment ?? null,
+            comment: repo?.releasedComment ?? null,
           },
     serverNow: iso(now),
   };

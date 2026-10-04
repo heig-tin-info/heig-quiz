@@ -17,6 +17,7 @@ import type {
 } from "@quiz/contracts";
 import { activityBucket } from "@quiz/domain";
 
+import { confined, type SessionAuth } from "../../auth/session.js";
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { enrollments } from "../../db/schema.js";
@@ -24,6 +25,7 @@ import type { Caller, ReadableClassroom } from "../guards.js";
 import { hasJournal } from "../journal/service.js";
 import { studentClassroomHeader } from "../org/service.js";
 import { evaluationActivity } from "./evaluation.js";
+import type { StudentScope } from "./kind.js";
 import { projectActivity } from "./project.js";
 
 const KINDS = [evaluationActivity, projectActivity] as const;
@@ -56,15 +58,8 @@ export async function statsForTeacher(db: Db, caller: Caller, now: Date): Promis
 }
 
 /** The student's Activities, every classroom or one: every kind's groups, concatenated. */
-async function studentCards(
-  db: Db,
-  caller: Caller,
-  now: Date,
-  classroomId?: string,
-): Promise<StudentActivities> {
-  const kinds: StudentActivities[] = await Promise.all(
-    KINDS.map((k) => k.studentCards(db, caller, now, classroomId)),
-  );
+async function studentCards(db: Db, caller: Caller, now: Date, scope: StudentScope): Promise<StudentActivities> {
+  const kinds: StudentActivities[] = await Promise.all(KINDS.map((k) => k.studentCards(db, caller, now, scope)));
   return {
     polls: kinds.flatMap((k) => k.polls),
     open: kinds.flatMap((k) => k.open),
@@ -77,10 +72,11 @@ async function studentCards(
  * `GET /student/home` (F-ORG-14): the Activities of every classroom the
  * caller holds a claimed seat in, every kind — the summary of what is open
  * now and what is coming. The student payload whoever asks: a student, a
- * teacher through their staff seat (ADR-018), an impersonation session.
+ * teacher through their staff seat (ADR-018), an impersonation session. A
+ * confined session (`seb`, `kiosk`) gets its evaluations and no project.
  */
-export async function studentHome(db: Db, caller: Caller, now: Date): Promise<StudentHome> {
-  return { ...(await studentCards(db, caller, now)), serverNow: iso(now) };
+export async function studentHome(db: Db, caller: Caller, auth: SessionAuth | null, now: Date): Promise<StudentHome> {
+  return { ...(await studentCards(db, caller, now, { confined: confined(auth) })), serverNow: iso(now) };
 }
 
 /**
@@ -99,7 +95,7 @@ export async function studentClassroomPage(
 ): Promise<StudentClassroomPage> {
   const [classroom, activities, journal] = await Promise.all([
     studentClassroomHeader(db, scope),
-    studentCards(db, caller, now, scope.room.id),
+    studentCards(db, caller, now, { classroomId: scope.room.id, confined: false }),
     hasJournal(db, scope.room.id),
   ]);
   return {

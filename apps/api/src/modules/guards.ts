@@ -573,22 +573,19 @@ export async function studentProject(
 }
 
 /** A project loaded through {@link findStudentProjectView}: the student payload's scope. */
-export interface StudentProjectScope {
+export interface StudentProjectScope extends ReadableClassroom {
   project: typeof projects.$inferSelect;
-  room: typeof classrooms.$inferSelect;
-  course: typeof courses.$inferSelect;
-  /** The caller's own claimed seat in the classroom; null for a staff member without one. */
-  seat: { id: string; staff: boolean } | null;
 }
 
 /**
- * The project's student view (F-PROJ-15, N-SEC-20; merge task M3-09a):
- * {@link classroomPayload}'s student branch, the student payload FORCED —
- * the course's staff (a teacher in the student view, ADR-018), a claimed
- * seat, an impersonation session through the seat alone (ADR-034) — on a
- * project neither draft nor archived. Null otherwise: the 404 of a missing
- * project. The repository the view shows is the seat's, read by the
- * `project` module through a STUDENT seat only: a staff seat holds none.
+ * The project's student view (F-PROJ-15, N-SEC-20; merge task M3-09a): a
+ * project neither draft nor archived, through its classroom's student
+ * branch ({@link findReadableClassroom}, the student payload FORCED) — the
+ * course's staff (a teacher in the student view, ADR-018), a claimed seat,
+ * an impersonation session through the seat alone (ADR-034); a confined
+ * session, a stranger get null, the 404 of a missing project. The
+ * repository the view shows is the seat's, read by the `project` module
+ * through a STUDENT seat only (`seat.staff`): a staff seat holds none.
  */
 export async function findStudentProjectView(
   db: Db,
@@ -596,29 +593,14 @@ export async function findStudentProjectView(
   auth: Pick<SessionAuth, "kind" | "actorUserId"> | null,
   projectId: string,
 ): Promise<StudentProjectScope | null> {
-  const [row] = await db
-    .select({
-      project: projects,
-      room: classrooms,
-      course: courses,
-      seat: { id: enrollments.id, staff: enrollments.staff },
-      staff: sql<boolean>`${accessWhere(user, staffAccess(user.id)) ?? sql`true`}`,
-    })
+  const [project] = await db
+    .select()
     .from(projects)
-    .innerJoin(classrooms, eq(projects.classroomId, classrooms.id))
-    .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .leftJoin(enrollments, and(eq(enrollments.classroomId, classrooms.id), eq(enrollments.userId, user.id)))
     .where(and(eq(projects.id, projectId), ne(projects.state, "draft"), isNull(projects.archivedAt)))
     .limit(1);
-  if (!row) return null;
-  const payload = classroomPayload({
-    confined: auth !== null && auth.kind !== "portal" && !delegated(auth),
-    delegated: delegated(auth),
-    staff: row.staff,
-    seat: row.seat !== null,
-    studentView: true,
-  });
-  return payload === null ? null : { project: row.project, room: row.room, course: row.course, seat: row.seat };
+  if (!project) return null;
+  const room = await findReadableClassroom(db, user, auth, project.classroomId, { studentView: true });
+  return room === null ? null : { ...room, project };
 }
 
 /** {@link findStudentProjectView} for the request's own session, answering the 404 (invariant 6). */
@@ -685,8 +667,8 @@ export function classroomPayload(facts: ClassroomReadFacts): ClassroomPayload | 
 export interface ReadableClassroom {
   room: typeof classrooms.$inferSelect;
   course: typeof courses.$inferSelect;
-  /** The caller's own claimed seat in it; null for a staff member without one. */
-  seat: { id: string; timeBonusPercent: number } | null;
+  /** The caller's own claimed seat in it; null for a staff member without one. `staff`: a staff seat (ADR-018), never a student's. */
+  seat: { id: string; timeBonusPercent: number; staff: boolean } | null;
   payload: ClassroomPayload;
 }
 
@@ -706,7 +688,7 @@ export async function findReadableClassroom(
     .select({
       room: classrooms,
       course: courses,
-      seat: { id: enrollments.id, timeBonusPercent: enrollments.timeBonusPercent },
+      seat: { id: enrollments.id, timeBonusPercent: enrollments.timeBonusPercent, staff: enrollments.staff },
       staff: sql<boolean>`${accessWhere(user, staffAccessOfClassroom(user.id)) ?? sql`true`}`,
     })
     .from(classrooms)

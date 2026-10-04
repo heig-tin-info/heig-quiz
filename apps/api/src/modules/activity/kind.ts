@@ -20,6 +20,7 @@ import type {
   StudentActivities,
   StudentActivityCard,
 } from "@quiz/contracts";
+import type { StudentActivityGroup } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import type { Caller } from "../guards.js";
@@ -32,8 +33,21 @@ export type CardOf<K extends ActivityKindName> = Extract<StudentActivityCard, { 
 
 /** The groups of the student's Activities, holding the cards of one kind. */
 export type StudentCardsOf<K extends ActivityKindName> = Pick<StudentActivities, "polls"> & {
-  [G in "open" | "upcoming" | "past"]: CardOf<K>[];
+  [G in StudentActivityGroup]: CardOf<K>[];
 };
+
+/** Whose Activities, and how far they reach. */
+export interface StudentScope {
+  /** One classroom (the classroom page, loaded through `readableClassroom`); every classroom of the caller's seats otherwise (the home). */
+  classroomId?: string | undefined;
+  /**
+   * A confined session (`seb`, `kiosk`; ADR-027, ADR-051): opened to sit one
+   * exam, it reads its evaluations and nothing that leads outside — no
+   * project, whose card links to GitHub (N-SEC-20). The classroom page
+   * never reaches here confined (`readableClassroom` refuses it).
+   */
+  confined: boolean;
+}
 
 export interface ActivityKind<K extends ActivityKindName> {
   readonly kind: K;
@@ -49,10 +63,9 @@ export interface ActivityKind<K extends ActivityKindName> {
   /**
    * The student's Activities (F-ORG-14, F-ORG-15): the caller's own cards,
    * drawn through their claimed seats — in every classroom for the home, in
-   * `classroomId` alone for the classroom page, which the route loaded
-   * through `readableClassroom` first (so a staff member without a seat
-   * there gets none). The student payload whoever asks: no draft, nothing
-   * of another student.
+   * `scope.classroomId` alone for the classroom page (so a staff member
+   * without a seat there gets none). The student payload whoever asks: no
+   * draft, nothing of another student.
    */
-  studentCards(db: Db, caller: Caller, now: Date, classroomId?: string): Promise<StudentCardsOf<K>>;
+  studentCards(db: Db, caller: Caller, now: Date, scope: StudentScope): Promise<StudentCardsOf<K>>;
 }

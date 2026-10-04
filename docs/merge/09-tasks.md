@@ -1543,8 +1543,11 @@ former M3-09 card are kept below, under the task that inherits each.
      **no Projects tab** (F-ORG-15): `hasProjects` dropped.
   2. **Card status words** stay the spec's (`to_accept | in_progress |
      locked`, plus `released`); the card gains `invitation`,
-     `githubLinked`, `released`, `repoUrl` (own repository only), and
-     `deadlineAt` is the student's **effective** deadline.
+     `githubLinked`, `repoUrl` (own repository only) — the three facts of
+     the row's four-state button, `docs/merge/05-web.md` §5.3: not linked,
+     linked without a repository, invitation pending, ready — and
+     `deadlineAt` is the student's **effective** deadline. (Review round 1:
+     a `released: boolean` beside `status: "released"` was dropped.)
   3. **The view** `GET /app/api/student/projects/:id` is loaded through the
      classroom's student branch (the rule of `readableClassroom`, the
      student payload forced): a teacher in the student view sees no
@@ -1570,19 +1573,28 @@ former M3-09 card are kept below, under the task that inherits each.
     `StudentProjectCard` `{ kind: "project", id, title, classroomId,
     classroomName, courseCode, startAt, deadlineAt (EFFECTIVE), status:
     StudentProjectStatus (to_accept | in_progress | locked | released),
-    invitation: "pending" | "accepted" | null, githubLinked, released,
-    repoFullName, repoUrl }` — the repository named only when provisioned
-    and not deleted. `StudentProject` = the card's facts without the three
+    invitation: "pending" | "accepted" | null, githubLinked, repoFullName,
+    repoUrl }` — the repository named only when live (provisioned, not
+    deleted). `StudentProject` = the card's facts without the three
     repository fields + `{ gradingMode, repo: StudentProjectRepo | null,
     release: StudentProjectRelease | null, serverNow }`;
     `StudentProjectRepo` `{ fullName, url, invitation: "pending" |
     "accepted", deleted, locked, lastCommit: { sha, at } | null, ciStatus,
     run: { sha, url, conclusion, completedAt } | null, score: { points,
-    max, grade, frozen } | null }` (the score INDICATIVE until the release,
-    null under grading `none`); `StudentProjectRelease` `{ at, points, max,
-    grade, comment }`. `StudentHome` moved from `live.ts` to `student.ts`
-    as `StudentActivities.extend({ serverNow })`; `StudentClassroomPage`
-    lost `hasProjects`.
+    max, grade, frozen } | null }` — the score INDICATIVE until the release,
+    null under grading `none`; **once the student's deadline is applied or
+    passed, `lastCommit` and `ciStatus` are the SELECTED run's commit and
+    conclusion (or null / `none`), never the row's head, which the webhooks
+    keep moving on a repository left open (strategy `commit`)** (N-SEC-20,
+    review round 1). `StudentProjectRelease` `{ at, points, max, grade,
+    comment }`, the comment AS THE RELEASE WROTE IT: new column
+    `project_repos.released_comment` (migration
+    `0063_project_released_comment`, additive), written by
+    `releaseProject` beside the points and the maximum — a comment written
+    after the release waits for the next one, like the score it may
+    describe. `StudentHome` moved from `live.ts` to `student.ts` as
+    `StudentActivities.extend({ serverNow })`; `StudentClassroomPage` lost
+    `hasProjects`.
   - **Pure rules** (`@quiz/domain/projectStudent.ts`, unit-tested):
     `studentProjectStatus` (released → locked at the effective deadline or
     while GitHub holds the repository locked → in progress once provisioned
@@ -1597,41 +1609,51 @@ former M3-09 card are kept below, under the task that inherits each.
     project; the soonest project deadline first), `studentProject(db,
     scope, userId, now)`, `studentResendInvitation` (`409 repo_unavailable`
     before Accept, then `resendInvitation`'s refusals). Loader
-    `studentProjectView` / `findStudentProjectView` (`guards.ts`):
-    `classroomPayload` with `studentView` forced on a project neither draft
-    nor archived — the course's staff, a claimed seat, an impersonation
-    through the seat; a `seb`/`kiosk` session, a stranger get the 404; an
-    API token reads (as it reads the classroom page) and never writes. The
-    resend route takes `studentProject` (a claimed student seat, own portal
-    session).
+    `studentProjectView` / `findStudentProjectView` (`guards.ts`): the
+    project (neither draft nor archived) then `findReadableClassroom` with
+    `studentView` forced — ONE rule with the classroom page — the course's
+    staff, a claimed seat, an impersonation through the seat; a
+    `seb`/`kiosk` session, a stranger get the 404; an API token reads (as
+    it reads the classroom page) and never writes. `ReadableClassroom.seat`
+    gained `staff`. The resend route takes `studentProject` (a claimed
+    student seat, own portal session). A confined session's home
+    (`/student/home`) carries no project card (`StudentScope.confined`,
+    `activity/kind.ts`): its exam leads nowhere else.
   - **Routes** (`project/routes.ts`, with the App only): `GET
     /app/api/student/projects/:id` → `StudentProject`; `POST
     /app/api/student/projects/:id/invite` → `ProjectInvitationResent`,
     audited `project_repo.invite_resent` with the student as actor.
   - **The home** `GET /app/api/student/home` is the `activity` module's
     (`activity/routes.ts`, `studentHome` in `activity/service.ts`):
-    `ActivityKind.studentCards(db, caller, now, classroomId?)` — one
-    signature for the home and the classroom page. `live.studentHome` now
-    answers an `EvaluationHome` (evaluation cards only), read by the
-    evaluation adapter and the kiosk's `pairableEvaluations`.
+    `ActivityKind.studentCards(db, caller, now, { classroomId?, confined })`
+    — one signature for the home and the classroom page; the groups are
+    the domain's `StudentActivityGroup`. `live.studentHome` now answers an
+    `EvaluationHome` (evaluation cards only), read by the evaluation
+    adapter and the kiosk's `pairableEvaluations`. `htmlUrl(fullName)`
+    (`github/git.ts`) is the one GitHub page URL.
   - **Web** (minimal, the full row is M3-13's): `student/cards.tsx` gains
     `ActivityCard` (one switch over the union for Open now, Upcoming and
     Past; a project draws `ActivityRow` with its title, the status word
     `sproj.status.*`, the deadline or the start, no button) and
     `UpcomingByDay` groups by `opensAt(card)` (a project's `startAt`);
     `mostUrgent` ranks a project by its deadline. Mock: `?projects=1`
-    gives the student persona three projects (`STUDENT_PROJECT_OPEN`,
-    `_SOON`, `_PAST` in `mock/student.ts`), each served as a view and
-    checked by `contract.test.ts`.
+    gives the student persona three cards (`STUDENT_PROJECT_OPEN`,
+    `_SOON`, `_PAST` in `mock/student.ts`, grouped through
+    `studentProjectGroup`), each served as a view derived from its card
+    (one scored, one released) and checked by `contract.test.ts`; M3-13
+    fleshes them out.
   - **Leak test** (`studentView.db.test.ts`, N-SEC-20): a second student's
-    repository, login, id, score, review score, teacher score and comment,
-    the source and distribution names, a draft's title, the staff's flags
-    (`toVerify`, `multiple`, `malformed`, `protectionSuspended`), the first
-    student's own teacher score and comment before the release — searched
-    for in every response of the first student (home, classroom page, view,
-    Accept, resend), for each caller (student, teacher in the student view,
-    impersonation), before and after the release; the second student's hint
-    never on a topic the first listens to.
+    repository, login, id, head sha, score, review score, teacher score and
+    comment, the source and distribution names, a draft's title, the
+    staff's flags (`toVerify`, `multiple`, `malformed`,
+    `protectionSuspended`), the first student's own push and run after the
+    deadline (sha and points), their own unreleased review score, their own
+    teacher score and comment before the release, a comment written after
+    the release — searched for in every response of the first student
+    (home, classroom page, view, Accept, resend), for each caller (student,
+    teacher in the student view, impersonation, API token), before and
+    after the release; the second student's hint never on a topic the first
+    listens to; a confined session's home without a project card.
   - Not done here: the notifications (M3-09b), the F-PROJ-21 notices
     (M3-09c), the `ProjectRow` button and its indicative score (M3-13), a
     group's repository (M3-15).

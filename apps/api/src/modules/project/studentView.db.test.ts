@@ -54,6 +54,8 @@ import { setRemoteBaseForTests } from "../../github/git.js";
 import { appKey, fakeGithub, json, orgsRoute, type Route } from "../../github/testing.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive, type Seeded } from "../../test/live.js";
+import { studentHome as activityHome } from "../activity/service.js";
+import { findStudentProjectView } from "../guards.js";
 import { hintRepo, repoContext } from "./repos.js";
 import { repoWorld } from "./testing.js";
 
@@ -269,7 +271,6 @@ describe("the student's cards (F-PROJ-04, F-ORG-14, F-ORG-15)", () => {
       status: "to_accept",
       invitation: null,
       githubLinked: true,
-      released: false,
       repoFullName: null,
       repoUrl: null,
     });
@@ -345,7 +346,6 @@ describe("the student's project (F-PROJ-15)", () => {
       deadlineAt: DEADLINE,
       status: "to_accept",
       githubLinked: true,
-      released: false,
       gradingMode: "auto",
       repo: null,
       release: null,
@@ -382,8 +382,16 @@ describe("the student's project (F-PROJ-15)", () => {
       score: { points: 7.5, max: 10, grade: { grade: 4.8, fellBack: false }, frozen: false },
     });
 
+    // The deadline passed, not yet applied by the ticker: the row's head moved to a late push, the view stands on the selected run.
+    const lateSha = "f".repeat(40);
+    await setRepo(repo.id, { lastCommitSha: lateSha, lastCommitAt: at(DEADLINE, 30_000), ciStatus: "fail" });
+    server.clock.set(at(DEADLINE, MINUTE));
+    const passed = await view(lab.id, student.headers);
+    expect(passed.repo).toMatchObject({ lastCommit: { sha, at: null }, ciStatus: "pass", score: { points: 7.5, frozen: false } });
+    expect(JSON.stringify(passed)).not.toContain(lateSha);
+
     // The deadline applied: the frozen run, never the one after the deadline; the review and the teacher's score not yet.
-    const late = await run(repo.id, { points: 99.5, max: 100, afterDeadline: true, completedAt: at(DEADLINE, MINUTE) });
+    const late = await run(repo.id, { headSha: lateSha, points: 99.5, max: 100, afterDeadline: true, completedAt: at(DEADLINE, MINUTE) });
     const review = await run(repo.id, { kind: "review", points: 33.5, max: 100, completedAt: at(DEADLINE, 2 * MINUTE) });
     await setRepo(repo.id, {
       deadlineAppliedAt: at(DEADLINE),
@@ -399,9 +407,9 @@ describe("the student's project (F-PROJ-15)", () => {
     server.clock.set(at(DEADLINE, 5 * MINUTE));
     const frozen = await view(lab.id, student.headers);
     expect(frozen.status).toBe("locked");
-    expect(frozen.repo).toMatchObject({ locked: true, score: { points: 7.5, max: 10, frozen: true } });
+    expect(frozen.repo).toMatchObject({ locked: true, lastCommit: { sha, at: null }, ciStatus: "pass", score: { points: 7.5, max: 10, frozen: true } });
     expect(frozen.release).toBeNull();
-    expect(JSON.stringify(frozen)).not.toMatch(/99\.5|33\.5|8\.25|Own-note|review|teacher/);
+    expect(JSON.stringify(frozen)).not.toMatch(new RegExp(`99\\.5|33\\.5|8\\.25|Own-note|review|teacher|${lateSha}`));
 
     // The release: the final score (the teacher's), its grade, the comment.
     await setRepo(repo.id, { frozenAt: at(DEADLINE, 30 * MINUTE) });
@@ -410,7 +418,6 @@ describe("the student's project (F-PROJ-15)", () => {
     expect(released.statusCode, released.body).toBe(200);
     const after = await view(lab.id, student.headers);
     expect(after.status).toBe("released");
-    expect(after.released).toBe(true);
     expect(after.release).toEqual({
       at: at(DEADLINE, DAY).toISOString(),
       points: 8.25,
@@ -420,7 +427,13 @@ describe("the student's project (F-PROJ-15)", () => {
     });
     // The indicative score stays what it was: the release is the one that counts.
     expect(after.repo!.score).toMatchObject({ points: 7.5, frozen: true });
-    expect(projectCards((await home(student.headers)).past)[0]).toMatchObject({ status: "released", released: true });
+    expect(projectCards((await home(student.headers)).past)[0]).toMatchObject({ status: "released" });
+
+    // A comment rewritten after the release waits for the next one, like the score it may describe.
+    await setRepo(repo.id, { teacherPoints: 9, teacherComment: "Rewritten-after" });
+    const stale = await view(lab.id, student.headers);
+    expect(stale.release).toMatchObject({ points: 8.25, comment: "Own-note" });
+    expect(JSON.stringify(stale)).not.toContain("Rewritten-after");
   });
 
   it("shows no score under grading none, and says a deleted repository is gone", async () => {
@@ -492,6 +505,26 @@ describe("who reads the view (invariant 6, ADR-018, ADR-034)", () => {
     const bearer = { authorization: `Bearer ${token}` };
     expect((await viewRaw(lab.id, bearer)).statusCode).toBe(200);
     expect((await resend(lab.id, bearer)).statusCode).toBe(404);
+
+    // The loader's confined branch, directly: a `seb` or `kiosk` session reaches no project (the route's 401 comes first over HTTP).
+    const caller = { id: student.id, role: "student" as const, reach: "seats" as const };
+    for (const kind of ["seb", "kiosk"] as const) {
+      expect(await findStudentProjectView(server.app.db, caller, { kind, actorUserId: null }, lab.id)).toBeNull();
+    }
+    expect(await findStudentProjectView(server.app.db, caller, { kind: "portal", actorUserId: null }, lab.id)).toMatchObject({
+      project: { id: lab.id },
+      seat: { staff: false },
+    });
+
+    // A confined session's home: the session guard refuses it over HTTP (401); should one ever reach the
+    // service, it gets its evaluations and no project card leading to GitHub (`StudentScope.confined`).
+    expect((await call("GET", "/app/api/student/home", seb)).statusCode).toBe(401);
+    const confinedHome = await activityHome(server.app.db, caller, { kind: "seb", actorUserId: null, evaluationId: room.evaluationId }, server.clock.now());
+    studentBodies.push(JSON.stringify(confinedHome));
+    expect([...confinedHome.open, ...confinedHome.upcoming, ...confinedHome.past].filter((c) => c.kind === "project")).toEqual([]);
+    expect(JSON.stringify(confinedHome)).not.toContain(lab.id);
+    const portalHome = await activityHome(server.app.db, caller, { kind: "portal", actorUserId: null, evaluationId: null }, server.clock.now());
+    expect(portalHome.open.filter((c) => c.kind === "project").map((c) => c.id)).toEqual([lab.id]);
   });
 });
 
@@ -560,8 +593,10 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
         teacherComment: "Hidden-note-two",
         lastCommitSha: "d".repeat(40),
       });
+      // The first student's own: a flagged run, an unreleased review score, the teacher's score and comment.
       await setRepo(mine.id, {
         currentGradeRunId: await run(mine.id, { points: 7, max: 10, toVerify: true, headSha: "e".repeat(40) }),
+        reviewGradeRunId: await run(mine.id, { kind: "review", points: 21.5, max: 100 }),
         teacherPoints: 8.5,
         teacherMax: 10,
         teacherComment: "Own-note-one",
@@ -571,7 +606,8 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
 
       const admin = await server.signIn("admin");
       const impersonation = await sessionOf(first.id, { kind: "impersonation", actorUserId: admin.id });
-      const callers: Headers[] = [first.headers, teacher.headers, impersonation];
+      const { token } = await createApiToken(server.app.db, first.id, { name: "leak", expiresInDays: null });
+      const callers: Headers[] = [first.headers, teacher.headers, impersonation, { authorization: `Bearer ${token}` }];
       const read = async () => {
         for (const headers of callers) {
           await home(headers);
@@ -584,8 +620,19 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
       const from = studentBodies.length;
       await read();
       // Locked, frozen, then released: the own comment and score come out, nothing else.
+      // Past the deadline: the first student pushed again (the row's head moved) and a late run scored it.
       const frozenMine = (await repoOf(lab.id, first.id)).currentGradeRunId;
-      await setRepo(mine.id, { deadlineAppliedAt: at(DEADLINE), frozenGradeRunId: frozenMine, frozenAt: at(DEADLINE, 30 * MINUTE) });
+      const lateSha = "a1b2c3d4".repeat(5);
+      const lateRun = await run(mine.id, { headSha: lateSha, points: 77.75, max: 100, afterDeadline: true, completedAt: at(DEADLINE, MINUTE) });
+      await setRepo(mine.id, {
+        deadlineAppliedAt: at(DEADLINE),
+        frozenGradeRunId: frozenMine,
+        currentGradeRunId: lateRun,
+        frozenAt: at(DEADLINE, 30 * MINUTE),
+        lastCommitSha: lateSha,
+        lastCommitAt: at(DEADLINE, 30_000),
+        ciStatus: "fail",
+      });
       await setRepo(theirs.id, { deadlineAppliedAt: at(DEADLINE), frozenAt: at(DEADLINE, 30 * MINUTE) });
       server.clock.set(at(DEADLINE, DAY));
       await read();
@@ -596,6 +643,8 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
       // The teacher's score settles the flagged run (M3-08b): the release goes through.
       const released = await call("POST", `/app/api/projects/${lab.id}/release`, teacher.headers);
       expect(released.statusCode, released.body).toBe(200);
+      // A comment rewritten after the release stays the staff's until the next one.
+      await setRepo(mine.id, { teacherComment: "Rewritten-after-release" });
       await read();
       const after = await view(lab.id, first.headers);
       expect(after.release).toMatchObject({ points: 8.5, comment: "Own-note-one" });
@@ -604,10 +653,15 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
         theirs.fullName!,
         second.login,
         second.id,
+        "d".repeat(40), // the second student's head
         "42.25",
         "33.5",
         "11.75",
         "Hidden-note-two",
+        lateSha, // the first student's own push after the deadline
+        "77.75", // and its run's score
+        "21.5", // the first student's own review score, never released as such
+        "Rewritten-after-release",
         "starter",
         "squashed",
         "Secret draft",

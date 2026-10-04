@@ -13,7 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useId, useState, type ReactNode } from "react";
 import { CalendarClock, GraduationCap, School } from "lucide-react";
 
-import { formatPoints, groupByDay, type DayBucket } from "@quiz/domain";
+import { formatPoints, groupByDay, type DayBucket, type StudentActivityGroup } from "@quiz/domain";
 import type {
   EvaluationCard as EvaluationCardData,
   StudentActivityCard,
@@ -185,7 +185,7 @@ const PROJECT_STATUS_KEY = {
  * onboarding button and the indicative score are M3-13's (`ProjectRow` of
  * `docs/merge/05-web.md` §5.3).
  */
-export function projectLine(card: StudentProjectCard, group: ActivityGroup, now: number, t: TFunction): string {
+export function projectLine(card: StudentProjectCard, group: StudentActivityGroup, now: number, t: TFunction): string {
   const status = t(PROJECT_STATUS_KEY[card.status]);
   if (group === "upcoming") {
     const wait = Date.parse(card.startAt) - now;
@@ -198,9 +198,6 @@ export function projectLine(card: StudentProjectCard, group: ActivityGroup, now:
 
 /** The instant a card's "coming up" line counts down to: an evaluation opens, a project starts. */
 export const opensAt = (card: StudentActivityCard): string | null => (card.kind === "project" ? card.startAt : card.opensAt);
-
-/** The three groups a student's card is listed under. */
-export type ActivityGroup = "open" | "upcoming" | "past";
 
 /**
  * One card of the student's Activities, whatever its kind (M3-09a): an
@@ -217,7 +214,7 @@ export function ActivityCard({
   actions,
 }: {
   card: StudentActivityCard;
-  group: ActivityGroup;
+  group: StudentActivityGroup;
   now: number;
   primary?: boolean;
   showWhere?: boolean;

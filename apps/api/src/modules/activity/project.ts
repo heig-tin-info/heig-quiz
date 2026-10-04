@@ -8,7 +8,8 @@
  * - `studentCards` (M3-09a): the published projects of the classrooms where
  *   the caller holds a claimed seat, through the project's student view
  *   (`studentProjectCards`), its one exit (N-SEC-20) — never a draft, never
- *   an archived project, nothing of another student.
+ *   an archived project, nothing of another student; none at all to a
+ *   confined session, whose exam leads nowhere else.
  */
 import { studentProjectCards, teacherProjects } from "../project/service.js";
 import type { ActivityKind } from "./kind.js";
@@ -16,8 +17,8 @@ import type { ActivityKind } from "./kind.js";
 export const projectActivity: ActivityKind<"project"> = {
   kind: "project",
   listForTeacher: (db, caller) => teacherProjects(db, caller),
-  studentCards: async (db, caller, now, classroomId) => ({
+  studentCards: async (db, caller, now, scope) => ({
     polls: [],
-    ...(await studentProjectCards(db, caller.id, now, classroomId)),
+    ...(scope.confined ? { open: [], upcoming: [], past: [] } : await studentProjectCards(db, caller.id, now, scope.classroomId)),
   }),
 };

@@ -42,7 +42,6 @@ describe("the student's project card (F-PROJ-04)", () => {
     status: "in_progress",
     invitation: "pending",
     githubLinked: true,
-    released: false,
     repoFullName: "heig-prg1/lab2-alice",
     repoUrl: "https://github.com/heig-prg1/lab2-alice",
   } as const;
