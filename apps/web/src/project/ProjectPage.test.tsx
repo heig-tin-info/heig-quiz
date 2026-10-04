@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ProjectDetail } from "@quiz/contracts";
+import type { ProjectDetail, ProjectRepoScores, ProjectRepoView } from "@quiz/contracts";
 
 import {
   AHEAD,
@@ -101,12 +101,12 @@ describe("the one primary action", () => {
     expect(status()).toMatch(/^Draft: the students see nothing yet/);
   });
 
-  it("is a sentence, not a button, for release and for sync (their routes come with M3-08b and M3-07)", async () => {
-    routes(makeProject({ state: "locked", primaryAction: "release" }));
+  it("is a sentence, not a button, for sync (its route comes with M3-07)", async () => {
+    routes(makeProject({ primaryAction: "sync" }));
     renderPage();
     await screen.findByRole("heading", { level: 1 });
     expect(screen.queryByRole("button", { name: /Publish|Release|Sync/ })).toBeNull();
-    expect(status()).toBe("Every repository is frozen: the scores are final and ready to be released.");
+    expect(status()).toBe("The source repository is ahead of the students' copies: a sync is due.");
   });
 
   it("is nothing for an open project: the header states the situation", async () => {
@@ -136,8 +136,8 @@ describe("the one primary action", () => {
         error: "unassigned_students",
         message: "2 student(s) in no group",
         students: [
-          { enrollmentId: "e1", nom: "Dupont", prenom: "Alice" },
-          { enrollmentId: "e2", nom: "Martin", prenom: "Benoît" },
+          { enrollmentId: "0190d3c4-0000-7000-8000-00000000e001", nom: "Dupont", prenom: "Alice" },
+          { enrollmentId: "0190d3c4-0000-7000-8000-00000000e002", nom: "Martin", prenom: "Benoît" },
         ],
       }),
     });
@@ -369,8 +369,9 @@ describe("the repositories", () => {
     expect(runRows[2]!.textContent).toMatch(/4\/10/);
     // GitHub's conclusion worded, never raw.
     expect(runRows[1]!.textContent).toMatch(/success/);
-    // Nothing of M3-08b yet: no score form, no resend, no re-enable.
-    expect(within(sheet).queryByRole("button", { name: /Resend|Re-enable|Set the score/ })).toBeNull();
+    // Accepted, not suspended, not frozen: no resend, no re-enable, and the score waits for the freeze.
+    expect(within(sheet).queryByRole("button", { name: /Resend|Re-enable|Save score/ })).toBeNull();
+    expect(within(sheet).getByText("Set once the repository is frozen for good.")).toBeInTheDocument();
 
     const own = within(sheet).getByLabelText("Own deadline");
     fireEvent.change(own, { target: { value: "2099-06-01T23:59" } });
@@ -398,6 +399,281 @@ describe("the repositories", () => {
     expect(within(sheet).getByRole("button", { name: /Lock now/ })).toBeDisabled();
     expect(within(sheet).getByLabelText("Own deadline")).toBeDisabled();
     expect(await within(sheet).findByText("No run yet")).toBeInTheDocument();
+  });
+});
+
+/** A repository frozen for good a week ago, its frozen run the final score (the state the teacher's score and the release need). */
+const frozenRepo = (n: number, over: Partial<ProjectRepoView> = {}) =>
+  makeRepo(n, {
+    deadlineAppliedAt: PAST,
+    frozenAt: PAST,
+    effectiveDeadlineAt: PAST,
+    locked: true,
+    scores: {
+      ...makeRepo(n).scores,
+      frozen: { runId: "run-2", points: 8, max: 10, grade: { grade: 5, fellBack: false } },
+    },
+    review: { status: "done", reason: null, askedAt: PAST, sha: "9a3f1c7e2b4d6f8a0c1e3b5d7f9a1c3e5b7d9f1a", runId: "run-9" },
+    ...over,
+  });
+const frozenProject = (over: Partial<ProjectDetail> = {}) =>
+  makeProject({
+    state: "locked",
+    deadlineAt: PAST,
+    deadlineAppliedAt: PAST,
+    rows: [row(1, frozenRepo(1)), row(2, null)],
+    counts: { students: 2, accepted: 1, live: 1, frozen: 1, toVerify: 0, alerts: 0 },
+    editable: ["name", "deadlineAt", "protectedFiles"],
+    ...over,
+  });
+
+describe("the release (F-PROJ-14, M3-12c)", () => {
+  it("is the header's one button once the server names it; the confirmation says what a release does; the counts are toasted", async () => {
+    const { calls } = routes(frozenProject({ primaryAction: "release" }), {
+      [`POST ${BASE}/release`]: ok({ releasedAt: PAST, first: true, repos: 1, scored: 1 }),
+    });
+    renderPage();
+    const button = await screen.findByRole("button", { name: "Release scores" });
+    expect(status()).toBe("Every repository is frozen: the scores are final and ready to be released.");
+    await userEvent.click(button);
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Release the scores?")).toBeInTheDocument();
+    expect(within(dialog).getByText(/becomes the student's and the gradebook's/)).toBeInTheDocument();
+    // Declined: nothing posted.
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(writes(calls)).toHaveLength(0);
+    await userEvent.click(button);
+    await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Release" }));
+    await waitFor(() => expect(writes(calls)).toEqual([expect.objectContaining({ method: "POST", url: `${BASE}/release` })]));
+    expect(await screen.findByText("Scores released: 1 of 1 repositories have one")).toBeInTheDocument();
+    await waitFor(() => expect(calls.filter((c) => c.url === BASE && c.method === "GET").length).toBeGreaterThan(1));
+  });
+
+  it("is worded as a release again once released and a score moved, and says the snapshot is rewritten", async () => {
+    routes(
+      frozenProject({
+        primaryAction: "release",
+        releasedAt: PAST,
+        rows: [row(1, frozenRepo(1, { released: { points: 7, max: 10 }, flags: { ...makeRepo(1).flags, changedAfterRelease: true } }))],
+      }),
+    );
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Release again" }));
+    expect(status()).toMatch(/^Scores released on .*; some changed since\. Release again/);
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Release the scores again?")).toBeInTheDocument();
+    expect(within(dialog).getByText(/snapshot is rewritten/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Release again" })).toBeInTheDocument();
+  });
+
+  it("offers nothing once released with no change, nor on a graded-none project", async () => {
+    routes(frozenProject({ releasedAt: PAST }));
+    renderPage();
+    await screen.findByRole("heading", { level: 1 });
+    expect(screen.queryByRole("button", { name: /Release/ })).toBeNull();
+    expect(status()).toMatch(/^Scores released on /);
+  });
+
+  it("says why a release was refused: the counts of not_frozen, the names of to_verify, grading_none", async () => {
+    let reply = fail(409, { error: "not_frozen", message: "", live: 2, frozen: 1 });
+    routes(
+      frozenProject({ primaryAction: "release", rows: [row(1, frozenRepo(1)), row(2, frozenRepo(2))] }),
+      { [`POST ${BASE}/release`]: () => reply },
+    );
+    renderPage();
+    const attempt = async () => {
+      await userEvent.click(await screen.findByRole("button", { name: "Release scores" }));
+      await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Release" }));
+    };
+    await attempt();
+    const alert = (await screen.findByText("The scores were not released")).closest<HTMLElement>("[role=status]")!;
+    expect(within(alert).getByText("Not yet: 1 of 2 live repositories are frozen for good.")).toBeInTheDocument();
+    reply = fail(409, { error: "to_verify", message: "", repos: [frozenRepo(2).id] });
+    await attempt();
+    expect(await screen.findByText(/The score of Rochat Chloé rests on a run to verify/)).toBeInTheDocument();
+    reply = fail(409, { error: "grading_none", message: "" });
+    await attempt();
+    expect(await screen.findByText("This project is not graded: no score, no release.")).toBeInTheDocument();
+  });
+});
+
+describe("the sheet's writes (M3-12b)", () => {
+  const openSheet = async () => {
+    await userEvent.click(await screen.findByRole("row", { name: /Martin Benoît/ }));
+    return screen.findByRole("dialog");
+  };
+  const runsRoute = (repo: { id: string }) => ({ [`GET ${BASE}/repos/${repo.id}/runs`]: ok(makeRunList({ runs: [] })) });
+
+  it("sets the teacher's score against the scored run's maximum, with a comment, and lays the answer over the row", async () => {
+    const repo = frozenRepo(1);
+    const answer: ProjectRepoScores = {
+      scores: {
+        ...repo.scores,
+        teacher: { points: 9, max: 10, comment: "Bien.", gradedAt: PAST },
+        final: { points: 9, max: 10, source: "teacher", toVerify: false, grade: { grade: 5.5, fellBack: false } },
+      },
+      released: null,
+      changedAfterRelease: false,
+    };
+    // The server's page follows the write: the refetch after it reads the scored row.
+    let saved = false;
+    const { calls } = routes(
+      () => ok(frozenProject({ rows: [row(1, saved ? { ...repo, scores: answer.scores } : repo), row(2, null)] })),
+      {
+        ...runsRoute(repo),
+        [`PATCH ${BASE}/repos/${repo.id}/score`]: () => {
+          saved = true;
+          return ok(answer);
+        },
+      },
+    );
+    renderPage();
+    const sheet = await openSheet();
+    // A scored run: the maximum is its, no field for it.
+    expect(within(sheet).queryByRole("spinbutton", { name: "Out of" })).toBeNull();
+    expect(within(sheet).getByText("out of 10")).toBeInTheDocument();
+    const save = within(sheet).getByRole("button", { name: "Save score" });
+    expect(save).toBeDisabled();
+    await userEvent.type(within(sheet).getByRole("spinbutton", { name: "Points" }), "9");
+    await userEvent.type(within(sheet).getByRole("textbox", { name: "Comment" }), "Bien.");
+    await userEvent.click(save);
+    await waitFor(() => expect(writes(calls)).toHaveLength(1));
+    expect(writes(calls)[0]).toMatchObject({
+      method: "PATCH",
+      url: `${BASE}/repos/${repo.id}/score`,
+      body: { points: 9, comment: "Bien." },
+    });
+    expect(writes(calls)[0]!.body).not.toHaveProperty("max");
+    expect(await screen.findByText("Score saved")).toBeInTheDocument();
+    // The row behind the sheet now reads the teacher's score as the final one.
+    const table = screen.getByRole("region", { name: "Repositories" }).querySelector("table")!;
+    expect(within(table).getAllByRole("row")[1]!.textContent).toMatch(/9\/10.*teacher/);
+    // And the sheet offers Clear.
+    await userEvent.click(within(sheet).getByRole("button", { name: "Clear" }));
+    await waitFor(() => expect(writes(calls)).toHaveLength(2));
+    expect(writes(calls)[1]!.body).toEqual({ points: null });
+  });
+
+  it("asks for the maximum when the repository has no scored run, sends it, and words the 422s and the 409s", async () => {
+    const repo = frozenRepo(1, { scores: { ...makeRepo(1).scores, current: null, frozen: null, final: null } });
+    let reply = fail(422, { error: "score_max_required", message: "" });
+    const { calls } = routes(frozenProject({ rows: [row(1, repo), row(2, null)] }), {
+      ...runsRoute(repo),
+      [`PATCH ${BASE}/repos/${repo.id}/score`]: () => reply,
+    });
+    renderPage();
+    const sheet = await openSheet();
+    expect(within(sheet).getByText(/No scored run to take the maximum from/)).toBeInTheDocument();
+    const save = within(sheet).getByRole("button", { name: "Save score" });
+    await userEvent.type(within(sheet).getByRole("spinbutton", { name: "Points" }), "15");
+    // Points alone do not do: the maximum is required with them.
+    expect(save).toBeDisabled();
+    await userEvent.type(within(sheet).getByRole("spinbutton", { name: "Out of" }), "20");
+    await userEvent.click(save);
+    await waitFor(() => expect(writes(calls)).toHaveLength(1));
+    expect(writes(calls)[0]!.body).toEqual({ points: 15, max: 20, comment: "" });
+    expect(await within(sheet).findByText(/Give the maximum: this repository has no scored run/)).toBeInTheDocument();
+    reply = fail(409, { error: "not_frozen", message: "" });
+    await userEvent.click(save);
+    expect(await within(sheet).findByText("This repository is not frozen for good yet.")).toBeInTheDocument();
+    reply = fail(409, { error: "grading_none", message: "" });
+    await userEvent.click(save);
+    expect(await within(sheet).findByText("This project is not graded: no score, no release.")).toBeInTheDocument();
+  });
+
+  it("offers no score form on a project graded none", async () => {
+    const repo = frozenRepo(1);
+    routes(frozenProject({ gradingMode: "none" }), runsRoute(repo));
+    renderPage();
+    const sheet = await openSheet();
+    expect(within(sheet).queryByRole("button", { name: "Save score" })).toBeNull();
+    expect(within(sheet).getByText("This project is not graded: no score, no release.")).toBeInTheDocument();
+  });
+
+  it("resends a pending invitation, once a minute (429 worded), and never an accepted one", async () => {
+    const repo = makeRepo(1, { invitationStatus: "pending", lastCommit: null, ciStatus: "none" });
+    let invitation: ProjectRepoView["invitationStatus"] = "pending";
+    let reply = fail(429, { error: "resend_too_soon", message: "" });
+    const { calls } = routes(() => ok(makeProject({ rows: [row(1, { ...repo, invitationStatus: invitation }), row(2, null)] })), {
+      ...runsRoute(repo),
+      [`POST ${BASE}/repos/${repo.id}/invite`]: () => {
+        if (reply.status === 200) invitation = (reply.body as { invitationStatus: typeof invitation }).invitationStatus;
+        return reply;
+      },
+    });
+    reply = ok({ invitationStatus: "pending", resentAt: PAST });
+    renderPage();
+    const sheet = await openSheet();
+    const resend = within(sheet).getByRole("button", { name: "Resend" });
+    await userEvent.click(resend);
+    await waitFor(() => expect(writes(calls)).toEqual([expect.objectContaining({ method: "POST", url: `${BASE}/repos/${repo.id}/invite` })]));
+    expect(await screen.findByText("Invitation resent")).toBeInTheDocument();
+    reply = fail(429, { error: "resend_too_soon", message: "" });
+    await userEvent.click(resend);
+    expect(await screen.findByText(/resent less than a minute ago/)).toBeInTheDocument();
+    // Accepted meanwhile: the answer is laid over the row and the button goes.
+    reply = ok({ invitationStatus: "accepted", resentAt: PAST });
+    await userEvent.click(resend);
+    expect(await screen.findByText(/already has access/)).toBeInTheDocument();
+    await waitFor(() => expect(within(sheet).queryByRole("button", { name: "Resend" })).toBeNull());
+  });
+
+  it("re-enables the protection, which clears the conflict tag, and says past runs stay to verify", async () => {
+    const repo = makeRepo(1, { flags: { ...makeRepo(1).flags, protectionSuspended: true, toVerify: true } });
+    let suspended = true;
+    const { calls } = routes(
+      () => ok(makeProject({ rows: [row(1, { ...repo, flags: { ...repo.flags, protectionSuspended: suspended } }), row(2, null)] })),
+      {
+        ...runsRoute(repo),
+        [`POST ${BASE}/repos/${repo.id}/protection`]: () => {
+          suspended = false;
+          return ok({ reenabledAt: PAST });
+        },
+      },
+    );
+    renderPage();
+    const sheet = await openSheet();
+    expect(within(sheet).getByText("protected files in conflict")).toBeInTheDocument();
+    expect(within(sheet).getByText(/The runs marked “to verify” meanwhile stay so/)).toBeInTheDocument();
+    await userEvent.click(within(sheet).getByRole("button", { name: "Re-enable the protection" }));
+    await waitFor(() => expect(writes(calls)).toEqual([expect.objectContaining({ method: "POST", url: `${BASE}/repos/${repo.id}/protection` })]));
+    expect(await screen.findByText("Protection re-enabled; past runs stay to verify")).toBeInTheDocument();
+    await waitFor(() => expect(within(sheet).queryByText("protected files in conflict")).toBeNull());
+    expect(within(sheet).queryByRole("button", { name: "Re-enable the protection" })).toBeNull();
+    // The "to verify" mark stays: only the conflict went.
+    expect(within(sheet).getByText("to verify")).toBeInTheDocument();
+  });
+
+  it("shows the final review's state per status in the table, and its detail in the sheet", async () => {
+    const sha = "9a3f1c7e2b4d6f8a0c1e3b5d7f9a1c3e5b7d9f1a";
+    const rows = [
+      // Not frozen: trivially pending, no tag.
+      row(1, makeRepo(1)),
+      row(2, frozenRepo(2, { review: { status: "pending", reason: null, askedAt: null, sha: null, runId: null } })),
+      row(3, frozenRepo(3, { review: { status: "none", reason: "no_frozen_run", askedAt: null, sha: null, runId: null } })),
+      row(4, frozenRepo(4, { archived: true, degraded: true, review: { status: "skipped", reason: "archived", askedAt: null, sha: null, runId: null } })),
+      row(5, frozenRepo(5, { review: { status: "skipped", reason: "protection_suspended", askedAt: null, sha: null, runId: null } })),
+      row(6, frozenRepo(6, { review: { status: "unconfirmed", reason: null, askedAt: null, sha, runId: null } })),
+      row(7, frozenRepo(7, { review: { status: "asked", reason: null, askedAt: PAST, sha, runId: null } }), { nom: "Ziegler", prenom: "Nora" }),
+      row(8, frozenRepo(8)),
+    ];
+    routes(frozenProject({ rows }), runsRoute(frozenRepo(7)));
+    renderPage();
+    const table = (await screen.findByRole("region", { name: "Repositories" })).querySelector("table")!;
+    const text = within(table).getAllByRole("row").slice(1).map((r) => r.textContent!);
+    expect(text[0]).not.toMatch(/review/);
+    expect(text[1]).toMatch(/review pending/);
+    expect(text[2]).toMatch(/no review: no frozen run/);
+    expect(text[3]).toMatch(/no review: locked by archiving/);
+    expect(text[4]).toMatch(/no review: protection suspended/);
+    expect(text[5]).toMatch(/review not confirmed/);
+    expect(text[6]).toMatch(/review asked/);
+    expect(text[7]).toMatch(/review done/);
+    // The sheet of the asked one: when, and of which commit.
+    await userEvent.click(screen.getByRole("row", { name: /Ziegler Nora/ }));
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByText("Final review")).toBeInTheDocument();
+    expect(within(sheet).getByText(/^Asked on .*, of commit 9a3f1c7\./)).toBeInTheDocument();
   });
 });
 
@@ -508,5 +784,23 @@ describe("in French", () => {
     expect(screen.getByText("à vérifier")).toBeInTheDocument();
     expect(screen.getByText("non accepté")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Jalons de revue" })).toBeInTheDocument();
+  });
+
+  it("offers the release, the review's state and the teacher's score in French", async () => {
+    const repo = frozenRepo(1, { review: { status: "unconfirmed", reason: null, askedAt: null, sha: "abc", runId: null } });
+    routes(frozenProject({ primaryAction: "release", rows: [row(1, repo), row(2, null)] }), {
+      [`GET ${BASE}/repos/${repo.id}/runs`]: ok(makeRunList({ runs: [] })),
+    });
+    renderPage("fr");
+    await userEvent.click(await screen.findByRole("button", { name: "Publier les scores" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Publier les scores ?")).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Annuler" }));
+    expect(screen.getByText("revue non confirmée")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("row", { name: /Martin Benoît/ }));
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByText("Score de l'enseignant")).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Enregistrer le score" })).toBeInTheDocument();
+    expect(within(sheet).getByText("Revue finale")).toBeInTheDocument();
   });
 });

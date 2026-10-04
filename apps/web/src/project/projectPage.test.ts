@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import type { ProjectRepoView } from "@quiz/contracts";
+
 import { ApiError } from "../api";
 import { AHEAD, makeCheckpoint, makeProject, makeRepo, PAST, row } from "../test/project-fixtures";
 import {
@@ -13,11 +15,17 @@ import {
   REFETCH_MS,
   refusalKey,
   refusalMessage,
+  releaseRefusal,
   reopenedRepos,
   repoFlags,
   repoShortName,
+  reviewTag,
+  reviewView,
+  scoredRunMax,
+  teacherScoreBlock,
   unassignedStudents,
 } from "./projectPage";
+import { scoreOverrideBody } from "./TeacherScoreForm";
 
 /** A translator that echoes the key and its variables, for the helpers that word something. */
 const t = ((key: string, vars?: Record<string, string | number>) =>
@@ -161,16 +169,23 @@ describe("the refetch cadence", () => {
 });
 
 describe("the refusals", () => {
-  it("reads Publish's 409 unassigned_students, its students included", () => {
+  it("reads Publish's 409 unassigned_students through the contracts' ProjectUnassigned, its students included", () => {
     const body = {
       error: "unassigned_students",
       message: "2 student(s) in no group",
       students: [
-        { enrollmentId: "e1", nom: "Dupont", prenom: "Alice" },
-        { enrollmentId: "e2", nom: "Martin", prenom: "Benoît" },
+        { enrollmentId: "0190d3c4-0000-7000-8000-00000000e001", nom: "Dupont", prenom: "Alice" },
+        { enrollmentId: "0190d3c4-0000-7000-8000-00000000e002", nom: "Martin", prenom: "Benoît" },
       ],
     };
     expect(unassignedStudents(new ApiError(409, body))).toEqual(body.students);
+    // The contract is strict about the shape: no message, or an id that is no uuid, is not that refusal.
+    expect(unassignedStudents(new ApiError(409, { error: "unassigned_students", students: body.students }))).toBeNull();
+    expect(
+      unassignedStudents(
+        new ApiError(409, { ...body, students: [{ enrollmentId: "e1", nom: "Dupont", prenom: "Alice" }] }),
+      ),
+    ).toBeNull();
     expect(unassignedStudents(new ApiError(409, { error: "not_draft", message: "" }))).toBeNull();
     expect(unassignedStudents(new Error("boom"))).toBeNull();
   });
@@ -182,6 +197,154 @@ describe("the refusals", () => {
     );
     expect(refusalKey(new ApiError(409, { error: "source_not_found", message: "" }))).toBeNull();
     expect(refusalKey(new Error("boom"))).toBeNull();
+  });
+
+  it("words the staff's writes' refusals (M3-08b): the score's, the resend's, the release's", () => {
+    const key = (error: string) => refusalKey(new ApiError(409, { error, message: "" }));
+    expect(key("not_frozen")).toBe("project.refusal.notFrozen");
+    expect(key("grading_none")).toBe("project.refusal.gradingNone");
+    expect(key("to_verify")).toBe("project.refusal.toVerify");
+    expect(key("score_max_required")).toBe("project.refusal.scoreMaxRequired");
+    expect(key("score_max_mismatch")).toBe("project.refusal.scoreMaxMismatch");
+    expect(key("score_above_max")).toBe("project.refusal.scoreAboveMax");
+    expect(key("invitation_not_pending")).toBe("project.refusal.invitationNotPending");
+    expect(key("resend_too_soon")).toBe("project.refusal.resendTooSoon");
+    expect(key("invite_failed")).toBe("project.refusal.inviteFailed");
+    expect(key("github_account_stale")).toBe("project.refusal.githubAccountStale");
+  });
+
+  it("says a refused release with what its body carries: the counts, the students to verify", () => {
+    const project = makeProject({ rows: [row(1, makeRepo(1)), row(2, makeRepo(2))] });
+    expect(releaseRefusal(new ApiError(409, { error: "not_frozen", message: "", live: 3, frozen: 1 }), project, t)).toBe(
+      'project.release.refusal.notFrozen {"frozen":1,"live":3}',
+    );
+    expect(
+      releaseRefusal(new ApiError(409, { error: "to_verify", message: "", repos: [makeRepo(2).id] }), project, t),
+    ).toBe('project.release.refusal.toVerify {"names":"Rochat Chloé"}');
+    // A repository the page does not list (a row refetched away): the names fall back to a generic word.
+    expect(releaseRefusal(new ApiError(409, { error: "to_verify", message: "", repos: ["unknown"] }), project, t)).toBe(
+      'project.release.refusal.toVerify {"names":"project.release.refusal.someRepos"}',
+    );
+    // A not_frozen without its counts, and grading_none: the plain words.
+    expect(releaseRefusal(new ApiError(409, { error: "not_frozen", message: "" }), project, t)).toBe("project.refusal.notFrozen");
+    expect(releaseRefusal(new ApiError(409, { error: "grading_none", message: "" }), project, t)).toBe(
+      "project.refusal.gradingNone",
+    );
+    expect(releaseRefusal(new Error("boom"), project, t)).toBe("error.save");
+  });
+});
+
+describe("the header once released", () => {
+  it("offers the release again as its own sentence, dated at the release", () => {
+    const p = makeProject({ state: "locked", primaryAction: "release", releasedAt: PAST });
+    expect(projectStatus(p)).toEqual({ key: "project.status.rerelease", date: PAST });
+  });
+});
+
+describe("the final review's state (F-PROJ-11, M3-08b)", () => {
+  const review = (over: Partial<ProjectRepoView["review"]>): ProjectRepoView["review"] => ({
+    status: "pending",
+    reason: null,
+    askedAt: null,
+    sha: null,
+    runId: null,
+    ...over,
+  });
+
+  it("has a word and a tone per status: facts in zinc, degraded in amber, not confirmed in red, done in green", () => {
+    expect(reviewView(review({}))).toEqual({ key: "project.reviewState.pending", tone: "zinc" });
+    expect(reviewView(review({ status: "none" }))).toEqual({ key: "project.reviewState.none", tone: "zinc" });
+    expect(reviewView(review({ status: "none", reason: "no_frozen_run" }))).toEqual({
+      key: "project.reviewState.noFrozenRun",
+      tone: "zinc",
+    });
+    expect(reviewView(review({ status: "skipped", reason: "archived" }))).toEqual({
+      key: "project.reviewState.archived",
+      tone: "amber",
+    });
+    expect(reviewView(review({ status: "skipped", reason: "protection_suspended" }))).toEqual({
+      key: "project.reviewState.protectionSuspended",
+      tone: "amber",
+    });
+    expect(reviewView(review({ status: "unconfirmed", sha: "abc" }))).toEqual({
+      key: "project.reviewState.unconfirmed",
+      tone: "red",
+    });
+    expect(reviewView(review({ status: "asked", sha: "abc", askedAt: PAST }))).toEqual({
+      key: "project.reviewState.asked",
+      tone: "zinc",
+    });
+    expect(reviewView(review({ status: "done", runId: "run-9" }))).toEqual({ key: "project.reviewState.done", tone: "green" });
+  });
+
+  it("tags no table row while the review is trivially pending, nor on a project that has no review", () => {
+    expect(reviewTag(makeRepo(1))).toBeNull();
+    expect(reviewTag(makeRepo(1, { frozenAt: PAST }))).toEqual({ key: "project.reviewState.pending", tone: "zinc" });
+    expect(reviewTag(makeRepo(1, { review: review({ status: "none" }) }))).toBeNull();
+    expect(reviewTag(makeRepo(1, { review: review({ status: "none", reason: "no_frozen_run" }) }))).toEqual({
+      key: "project.reviewState.noFrozenRun",
+      tone: "zinc",
+    });
+    expect(reviewTag(makeRepo(1, { review: review({ status: "unconfirmed" }) }))?.key).toBe("project.reviewState.unconfirmed");
+  });
+});
+
+describe("the teacher's score (F-PROJ-14)", () => {
+  const scores = makeRepo(1).scores;
+  const slot = (points: number | null, max: number | null) => ({ runId: "r", points, max, grade: null });
+
+  it("takes its maximum from the run the final score would come from: the review's, else the frozen, else the current", () => {
+    expect(scoredRunMax(makeRepo(1))).toBe(10);
+    expect(
+      scoredRunMax(
+        makeRepo(1, {
+          scores: {
+            ...scores,
+            review: slot(70, 100),
+            frozen: slot(8, 10),
+            final: { points: 70, max: 100, source: "review", toVerify: false, grade: null },
+          },
+        }),
+      ),
+    ).toBe(100);
+    expect(
+      scoredRunMax(
+        makeRepo(1, {
+          scores: { ...scores, frozen: slot(8, 10), current: slot(9, 10), final: { points: 8, max: 10, source: "ci", toVerify: false, grade: null } },
+        }),
+      ),
+    ).toBe(10);
+  });
+
+  it("has none when no run scored, or when the scoring run is to verify: the teacher gives the maximum", () => {
+    expect(scoredRunMax(makeRepo(1, { scores: { ...scores, current: null, final: null } }))).toBeNull();
+    // A run without a parsed score (pass / fail only) is no scored run.
+    expect(scoredRunMax(makeRepo(1, { scores: { ...scores, current: slot(null, null), final: null } }))).toBeNull();
+    expect(
+      scoredRunMax(makeRepo(1, { scores: { ...scores, final: { points: 8, max: 10, source: "ci", toVerify: true, grade: null } } })),
+    ).toBeNull();
+    // Once the teacher's score covers the final score, the flag says whether the run behind is to verify.
+    const teacher = { points: 9, max: 10, comment: null, gradedAt: PAST };
+    const covered = { ...scores, teacher, final: { points: 9, max: 10, source: "teacher" as const, toVerify: false, grade: null } };
+    expect(scoredRunMax(makeRepo(1, { scores: covered }))).toBe(10);
+    expect(scoredRunMax(makeRepo(1, { scores: covered, flags: { ...makeRepo(1).flags, toVerify: true } }))).toBeNull();
+  });
+
+  it("is offered only on a graded project, once the repository is frozen for good", () => {
+    expect(teacherScoreBlock(makeRepo(1), makeProject())).toBe("not_frozen");
+    expect(teacherScoreBlock(makeRepo(1, { frozenAt: PAST }), makeProject())).toBeNull();
+    expect(teacherScoreBlock(makeRepo(1, { frozenAt: PAST }), makeProject({ gradingMode: "none" }))).toBe("grading_none");
+  });
+
+  it("sends the points as typed, the maximum only when the teacher gives it, the comment trimmed", () => {
+    expect(scoreOverrideBody("8.5", "", " Bien. ", false)).toEqual({ points: 8.5, comment: "Bien." });
+    expect(scoreOverrideBody("8", "20", "", true)).toEqual({ points: 8, max: 20, comment: "" });
+    // Nothing to send: no points, points out of range, or an own maximum missing or null.
+    expect(scoreOverrideBody("", "", "", false)).toBeNull();
+    expect(scoreOverrideBody("-1", "", "", false)).toBeNull();
+    expect(scoreOverrideBody("1001", "", "", false)).toBeNull();
+    expect(scoreOverrideBody("8", "", "", true)).toBeNull();
+    expect(scoreOverrideBody("8", "0", "", true)).toBeNull();
   });
 
   it("says the worded refusal, else the server's message, else the save failure", () => {
