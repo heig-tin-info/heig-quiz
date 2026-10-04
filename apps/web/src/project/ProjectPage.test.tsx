@@ -327,8 +327,8 @@ describe("the repositories", () => {
       makeProject({
         liveStale: true,
         rows: [
-          row(1, makeRepo(1, { scores: { ...makeRepo(1).scores, final: { points: 80, max: 100, source: "ci", grade: { grade: 5, fellBack: true } } } })),
-          row(2, makeRepo(2, { scores: { ...makeRepo(2).scores, final: { points: 60, max: 100, source: "ci", grade: { grade: 4, fellBack: true } } } })),
+          row(1, makeRepo(1, { scores: { ...makeRepo(1).scores, final: { points: 80, max: 100, source: "ci", toVerify: false, grade: { grade: 5, fellBack: true } } } })),
+          row(2, makeRepo(2, { scores: { ...makeRepo(2).scores, final: { points: 60, max: 100, source: "ci", toVerify: false, grade: { grade: 4, fellBack: true } } } })),
         ],
       }),
     );
