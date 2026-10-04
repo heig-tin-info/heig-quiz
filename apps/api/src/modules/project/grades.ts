@@ -142,7 +142,8 @@ export async function releaseProject(db: Db, projectId: string, actor: AuditActo
       if (final) scored += 1;
       await tx
         .update(projectRepos)
-        .set({ releasedPoints: final?.points ?? null, releasedMax: final?.max ?? null })
+        // The comment travels with the score (M3-09a): the student reads the pair the release wrote.
+        .set({ releasedPoints: final?.points ?? null, releasedMax: final?.max ?? null, releasedComment: final ? repo.teacherComment : null })
         .where(eq(projectRepos.id, repo.id));
     }
     await tx.update(projects).set({ releasedAt: now, releasedBy: userId }).where(eq(projects.id, project.id));

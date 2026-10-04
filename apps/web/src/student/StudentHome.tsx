@@ -34,10 +34,9 @@ import type { Route } from "../router";
 import { Card, EmptyState, PageHeader, QueryError, SectionHeading, Skeleton, useNow } from "../ui";
 import { studentHomeKey } from "../queryKeys";
 import {
+  ActivityCard,
   ActivityRow,
   ClassroomList,
-  EvaluationRow,
-  openLine,
   PollRow,
   UpcomingByDay,
   useCardActions,
@@ -113,12 +112,7 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
               </Card>
             ) : (
               open.map((card) => (
-                <EvaluationRow
-                  key={card.id}
-                  card={card}
-                  line={openLine(card, now, t)}
-                  action={actions.open(card, true)}
-                />
+                <ActivityCard key={card.id} card={card} group="open" now={now} primary actions={actions} />
               ))
             )}
             {/* After what closes: an evaluation open now is the more urgent. */}

@@ -30,6 +30,18 @@ export async function activityPlugin(app: FastifyInstance) {
   );
 
   /**
+   * The student's home (F-ORG-14, F-LIVE-01): the Activities of every
+   * classroom the caller holds a seat in, every kind. Drawn through the
+   * caller's own seats, so it needs no loader; the session's kind decides
+   * whether the projects are among them (a confined session gets none).
+   * Served by the `live` module until M3-09a brought the projects to it. No
+   * input, so no schema.
+   */
+  app.get("/app/api/student/home", { preHandler: (req, reply) => app.requireSession(req, reply) }, async (req) =>
+    service.studentHome(app.db, callerOf(req), req.auth, app.clock.now()),
+  );
+
+  /**
    * The student's classroom page (F-ORG-15). It serves the STUDENT payload
    * and nothing else, so it asks `readableClassroom` for it: a student with a
    * claimed seat, a teacher in the student view or not (the staff read their

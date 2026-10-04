@@ -19,7 +19,6 @@ import {
   type AttemptView,
   type EvaluationCard,
   type LobbyView,
-  type StudentHome,
   type StudentPollCard,
 } from "@quiz/contracts";
 import { shuffle, streamSeed } from "@quiz/core/rng";
@@ -1319,6 +1318,20 @@ export async function reopenAttempt(
 // --- Student home (F-LIVE-01) --------------------------------------------
 
 /**
+ * The evaluations' half of the student's home and classroom page: the
+ * running polls and the evaluation cards in their three groups. The
+ * `activity` module tags them and lists them with the other kinds
+ * (`ActivityKind.studentCards`, M3-09a); the kiosk reads them for the exams
+ * a station may start (ADR-051 §7).
+ */
+export interface EvaluationHome {
+  polls: StudentPollCard[];
+  open: EvaluationCard[];
+  upcoming: EvaluationCard[];
+  past: EvaluationCard[];
+}
+
+/**
  * `classroomId` narrows the home to one of the student's classrooms: the
  * Activities tab of their classroom page (M5-01, `ActivityKind.studentCards`),
  * which the caller has loaded through `readableClassroom` first.
@@ -1328,9 +1341,9 @@ export async function studentHome(
   userId: string,
   now: Date,
   classroomId?: string,
-): Promise<StudentHome> {
+): Promise<EvaluationHome> {
   const { polls, open, upcoming, past } = await studentBoard(db, userId, now, classroomId);
-  return { polls, open, upcoming, past: past.map((entry) => entry.card), serverNow: iso(now) };
+  return { polls, open, upcoming, past: past.map((entry) => entry.card) };
 }
 
 type StudentRow = Awaited<ReturnType<typeof studentEvaluationRows>>[number];

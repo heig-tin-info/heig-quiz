@@ -12,8 +12,7 @@
  *
  * Registered only when Quiz's App is configured (`app.ts`), like the
  * `github` module: without it none of these routes exists. Open to every
- * member of a course's staff (D26 addendum, 2026-10-02); the students see
- * nothing of projects until M3-09 but Accept (below).
+ * member of a course's staff (D26 addendum, 2026-10-02).
  *
  * Access is loaded, never checked afterwards (invariant 6): a classroom or
  * a project is reached through its course's `staffAccess`, by the caller's
@@ -21,10 +20,14 @@
  * student, a teacher off the staff, an impersonation, a `seb` or `kiosk`
  * session get the 404 of a missing entity.
  *
- * The student's side (M3-03): Accept, on a project of a classroom where the
- * caller holds a claimed student seat (`studentProject`), by their own
- * portal session only. Nothing else of a project reaches a student until
- * the project's student view (M3-09).
+ * The student's side: Accept (M3-03) and their own resend of an invitation
+ * (M3-09a), on a project of a classroom where the caller holds a claimed
+ * student seat (`studentProject`), by their own portal session only; the
+ * project's student view (M3-09a, `GET /app/api/student/projects/:id`),
+ * through the classroom's student branch (`studentProjectView`): the ONE
+ * exit of a project towards a student (N-SEC-20). The student's cards on
+ * the home and the classroom page are the `activity` module's, drawn from
+ * the same `studentView.ts`.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
@@ -44,7 +47,15 @@ import {
 
 import { actorOf } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
-import { accessibleProject, accessibleProjectRepo, projectsClassroom, studentProject, withCourseRole } from "../guards.js";
+import {
+  accessibleProject,
+  accessibleProjectRepo,
+  callerOf,
+  projectsClassroom,
+  studentProject,
+  studentProjectView,
+  withCourseRole,
+} from "../guards.js";
 import { notFound, studentRoute, teacherRoute } from "../http.js";
 import * as service from "./service.js";
 import { registerProjectHandlers } from "./webhooks.js";
@@ -277,7 +288,22 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     }),
   );
 
-  // ------------------------------------------------------------ the student's side (M3-03)
+  // ------------------------------------------------------------ the student's side (M3-03, M3-09a)
+
+  /**
+   * F-PROJ-15: the project as its student reads it — the one exit
+   * (N-SEC-20). Through the classroom's student branch: a claimed seat, a
+   * teacher in the student view (no repository, their staff seat holds
+   * none), an impersonation session through the seat (ADR-034); anyone
+   * else, a `seb` or `kiosk` session, gets the 404 of a missing project.
+   */
+  app.get(
+    "/app/api/student/projects/:id",
+    session,
+    student({ params: IdParam, load: studentProjectView.bind(null, app) }, async ({ req, now, scope }) =>
+      service.studentProject(app.db, scope, callerOf(req).id, now),
+    ),
+  );
 
   /**
    * F-PROJ-05: the caller's own repository, provisioned in the request.
@@ -296,6 +322,19 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
           log: req.log,
         }),
       ),
+    ),
+  );
+
+  /**
+   * F-PROJ-07: the student's own resend of their pending invitation — the
+   * staff's rule and minute (`resendInvitation`), through the student's
+   * loader, never the staff's route.
+   */
+  app.post(
+    "/app/api/student/projects/:id/invite",
+    session,
+    student({ params: IdParam, load: studentProject.bind(null, app) }, async ({ req, now, scope }) =>
+      service.studentResendInvitation(app.db, config, scope.project, req.user!.id, actorOf(req), now, req.log),
     ),
   );
 }

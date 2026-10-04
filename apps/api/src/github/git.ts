@@ -82,6 +82,9 @@ export function gitRunner(opts: { identity?: boolean; token?: string } = {}): Gi
 const GITHUB = "https://github.com";
 let remoteBase = GITHUB;
 
+/** The page of a repository on GitHub, for a link a person follows (never a remote: no credential, no `.git`). */
+export const htmlUrl = (fullName: string): string => `${GITHUB}/${fullName}`;
+
 /**
  * The one seam of the remotes, for the tests: every repository URL is
  * `<base>/<org>/<repo>.git`, GitHub's unless a test points it at a directory

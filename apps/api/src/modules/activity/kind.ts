@@ -9,9 +9,10 @@
  *
  * A member lands with the first task that calls it through `KINDS`
  * (`docs/merge/09-tasks.md`, M1-03 "As delivered"): the student's cards with
- * M5-01, the gradebook entries with M5-03, the deadlines with M3-05. A method
- * that takes a classroom id is reached only after the route has loaded the
- * classroom (`staffAccess` or `readableClassroom`, invariant 6).
+ * M5-01 (the home too since M3-09a), the gradebook entries with M5-03, the
+ * deadlines with M3-05. A method that takes a classroom id is reached only
+ * after the route has loaded the classroom (`staffAccess` or
+ * `readableClassroom`, invariant 6).
  */
 import type {
   ActivityKindName,
@@ -19,6 +20,7 @@ import type {
   StudentActivities,
   StudentActivityCard,
 } from "@quiz/contracts";
+import type { StudentActivityGroup } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import type { Caller } from "../guards.js";
@@ -29,10 +31,23 @@ export type SummaryOf<K extends ActivityKindName> = Extract<ActivitySummary, { k
 /** The student's card of a kind. */
 export type CardOf<K extends ActivityKindName> = Extract<StudentActivityCard, { kind: K }>;
 
-/** The groups of the student's classroom page, holding the cards of one kind. */
+/** The groups of the student's Activities, holding the cards of one kind. */
 export type StudentCardsOf<K extends ActivityKindName> = Pick<StudentActivities, "polls"> & {
-  [G in "open" | "upcoming" | "past"]: CardOf<K>[];
+  [G in StudentActivityGroup]: CardOf<K>[];
 };
+
+/** Whose Activities, and how far they reach. */
+export interface StudentScope {
+  /** One classroom (the classroom page, loaded through `readableClassroom`); every classroom of the caller's seats otherwise (the home). */
+  classroomId?: string | undefined;
+  /**
+   * A confined session (`seb`, `kiosk`; ADR-027, ADR-051): opened to sit one
+   * exam, it reads its evaluations and nothing that leads outside — no
+   * project, whose card links to GitHub (N-SEC-20). The classroom page
+   * never reaches here confined (`readableClassroom` refuses it).
+   */
+  confined: boolean;
+}
 
 export interface ActivityKind<K extends ActivityKindName> {
   readonly kind: K;
@@ -46,11 +61,11 @@ export interface ActivityKind<K extends ActivityKindName> {
   listForTeacher(db: Db, caller: Caller, now: Date): Promise<SummaryOf<K>[]>;
 
   /**
-   * The Activities tab of the student's classroom page (F-ORG-15): the
-   * caller's own cards in `classroomId`, drawn through the caller's claimed
-   * seat there, so a staff member without one gets none. The student payload
-   * whoever asks: no draft, nothing of another student. Reached only after
-   * the route loaded the classroom through `readableClassroom`.
+   * The student's Activities (F-ORG-14, F-ORG-15): the caller's own cards,
+   * drawn through their claimed seats — in every classroom for the home, in
+   * `scope.classroomId` alone for the classroom page (so a staff member
+   * without a seat there gets none). The student payload whoever asks: no
+   * draft, nothing of another student.
    */
-  studentCards(db: Db, caller: Caller, classroomId: string, now: Date): Promise<StudentCardsOf<K>>;
+  studentCards(db: Db, caller: Caller, now: Date, scope: StudentScope): Promise<StudentCardsOf<K>>;
 }

@@ -19,9 +19,9 @@ const tagged = (cards: EvaluationCard[]): CardOf<"evaluation">[] =>
 export const evaluationActivity: ActivityKind<"evaluation"> = {
   kind: "evaluation",
   listForTeacher: (db, caller, now) => listActivities(db, ownEvaluationAccess(caller), now),
-  /** The student home narrowed to the classroom: the same rows, sorted the same way. */
-  async studentCards(db, caller, classroomId, now) {
-    const home = await studentHome(db, caller.id, now, classroomId);
+  /** The evaluations' board, every classroom or one: the same rows, sorted the same way. */
+  async studentCards(db, caller, now, scope) {
+    const home = await studentHome(db, caller.id, now, scope.classroomId);
     return {
       polls: home.polls,
       open: tagged(home.open),

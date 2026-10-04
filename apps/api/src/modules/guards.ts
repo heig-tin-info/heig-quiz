@@ -572,6 +572,47 @@ export async function studentProject(
   return (await findStudentProject(app.db, callerOf(req).id, params.id)) ?? notFound(reply);
 }
 
+/** A project loaded through {@link findStudentProjectView}: the student payload's scope. */
+export interface StudentProjectScope extends ReadableClassroom {
+  project: typeof projects.$inferSelect;
+}
+
+/**
+ * The project's student view (F-PROJ-15, N-SEC-20; merge task M3-09a): a
+ * project neither draft nor archived, through its classroom's student
+ * branch ({@link findReadableClassroom}, the student payload FORCED) — the
+ * course's staff (a teacher in the student view, ADR-018), a claimed seat,
+ * an impersonation session through the seat alone (ADR-034); a confined
+ * session, a stranger get null, the 404 of a missing project. The
+ * repository the view shows is the seat's, read by the `project` module
+ * through a STUDENT seat only (`seat.staff`): a staff seat holds none.
+ */
+export async function findStudentProjectView(
+  db: Db,
+  user: Caller,
+  auth: Pick<SessionAuth, "kind" | "actorUserId"> | null,
+  projectId: string,
+): Promise<StudentProjectScope | null> {
+  const [project] = await db
+    .select()
+    .from(projects)
+    .where(and(eq(projects.id, projectId), ne(projects.state, "draft"), isNull(projects.archivedAt)))
+    .limit(1);
+  if (!project) return null;
+  const room = await findReadableClassroom(db, user, auth, project.classroomId, { studentView: true });
+  return room === null ? null : { ...room, project };
+}
+
+/** {@link findStudentProjectView} for the request's own session, answering the 404 (invariant 6). */
+export async function studentProjectView(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  params: { id: string },
+): Promise<StudentProjectScope | null> {
+  return (await findStudentProjectView(app.db, callerOf(req), req.auth, params.id)) ?? notFound(reply);
+}
+
 // ---------------------------------------------------------------------------
 // The student branch (invariant 6, spec 05 §5.7): the classroom routes a
 // student reads — the student's classroom page, the journal.
@@ -626,8 +667,8 @@ export function classroomPayload(facts: ClassroomReadFacts): ClassroomPayload | 
 export interface ReadableClassroom {
   room: typeof classrooms.$inferSelect;
   course: typeof courses.$inferSelect;
-  /** The caller's own claimed seat in it; null for a staff member without one. */
-  seat: { id: string; timeBonusPercent: number } | null;
+  /** The caller's own claimed seat in it; null for a staff member without one. `staff`: a staff seat (ADR-018), never a student's. */
+  seat: { id: string; timeBonusPercent: number; staff: boolean } | null;
   payload: ClassroomPayload;
 }
 
@@ -647,7 +688,7 @@ export async function findReadableClassroom(
     .select({
       room: classrooms,
       course: courses,
-      seat: { id: enrollments.id, timeBonusPercent: enrollments.timeBonusPercent },
+      seat: { id: enrollments.id, timeBonusPercent: enrollments.timeBonusPercent, staff: enrollments.staff },
       staff: sql<boolean>`${accessWhere(user, staffAccessOfClassroom(user.id)) ?? sql`true`}`,
     })
     .from(classrooms)

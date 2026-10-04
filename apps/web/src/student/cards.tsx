@@ -13,11 +13,13 @@ import { useQuery } from "@tanstack/react-query";
 import { useId, useState, type ReactNode } from "react";
 import { CalendarClock, GraduationCap, School } from "lucide-react";
 
-import { formatPoints, groupByDay, type DayBucket } from "@quiz/domain";
+import { formatPoints, groupByDay, type DayBucket, type StudentActivityGroup } from "@quiz/domain";
 import type {
   EvaluationCard as EvaluationCardData,
+  StudentActivityCard,
   StudentClassroom,
   StudentPollCard,
+  StudentProjectCard,
 } from "@quiz/contracts";
 
 import { api } from "../api";
@@ -169,6 +171,75 @@ export function upcomingLine(card: EvaluationCardData, now: number, t: TFunction
     : t("shome.opensAt", { when: isoDateTime(card.opensAt) });
 }
 
+/** The status word of a student's project card (F-PROJ-04). */
+const PROJECT_STATUS_KEY = {
+  to_accept: "sproj.status.to_accept",
+  in_progress: "sproj.status.in_progress",
+  locked: "sproj.status.locked",
+  released: "sproj.status.released",
+} as const satisfies Record<StudentProjectCard["status"], string>;
+
+/**
+ * The line of a project card: its status, and the deadline it counts down
+ * to while it runs, the start while it waits (F-PROJ-04). The four-state
+ * onboarding button and the indicative score are M3-13's (`ProjectRow` of
+ * `docs/merge/05-web.md` §5.3).
+ */
+export function projectLine(card: StudentProjectCard, group: StudentActivityGroup, now: number, t: TFunction): string {
+  const status = t(PROJECT_STATUS_KEY[card.status]);
+  if (group === "upcoming") {
+    const wait = Date.parse(card.startAt) - now;
+    return wait > 0 ? t("shome.opensIn", { time: formatDuration(wait, t) }) : t("shome.opensAt", { when: isoDateTime(card.startAt) });
+  }
+  if (group === "past") return status;
+  const left = Date.parse(card.deadlineAt) - now;
+  return `${status} · ${left > 0 ? t("shome.left", { time: formatDuration(left, t) }) : t("shome.dueAt", { when: isoDateTime(card.deadlineAt) })}`;
+}
+
+/** The instant a card's "coming up" line counts down to: an evaluation opens, a project starts. */
+export const opensAt = (card: StudentActivityCard): string | null => (card.kind === "project" ? card.startAt : card.opensAt);
+
+/**
+ * One card of the student's Activities, whatever its kind (M3-09a): an
+ * evaluation's row with the line and the button of its group, or a project's
+ * row — title, status, deadline, no button until M3-13. `actions` are the
+ * page's `useCardActions`; absent in Upcoming, which never has a button.
+ */
+export function ActivityCard({
+  card,
+  group,
+  now,
+  primary = false,
+  showWhere = true,
+  actions,
+}: {
+  card: StudentActivityCard;
+  group: StudentActivityGroup;
+  now: number;
+  primary?: boolean;
+  showWhere?: boolean;
+  actions?: Pick<ReturnType<typeof useCardActions>, "open" | "review"> | undefined;
+}) {
+  const t = useT();
+  if (card.kind === "project") {
+    return (
+      <ActivityRow
+        title={card.title}
+        where={showWhere ? `${card.courseCode} · ${card.classroomName}` : undefined}
+        line={projectLine(card, group, now, t)}
+        badge={{ label: t("activities.kind.project"), accent: false }}
+      />
+    );
+  }
+  if (group === "open") {
+    return <EvaluationRow card={card} showWhere={showWhere} line={openLine(card, now, t)} action={actions?.open(card, primary)} />;
+  }
+  if (group === "past") {
+    return <EvaluationRow card={card} showWhere={showWhere} line={pastLine(card, t)} action={actions?.review(card)} />;
+  }
+  return <EvaluationRow card={card} showWhere={showWhere} line={upcomingLine(card, now, t)} />;
+}
+
 const DAY_KEY = {
   today: "shome.day.today",
   tomorrow: "shome.day.tomorrow",
@@ -179,24 +250,25 @@ const DAY_KEY = {
 /**
  * "Coming up" as an agenda (product owner, 2026-10-01): the cards under
  * Today, Tomorrow, This week and Later, by the day they OPEN (`opensAt`, the
- * instant their line counts down to; every card of the list is a scheduled
- * evaluation), in the browser's time zone (`groupByDay` of `@quiz/domain`).
- * The soonest first inside a day; an empty day is not drawn. `now` is the
- * page's `useNow`, so the cards move from Tomorrow to Today at midnight.
- * The sub-heading is the teacher's schedule's week heading, one step down.
+ * instant their line counts down to: a scheduled evaluation's opening, a
+ * project's start), in the browser's time zone (`groupByDay` of
+ * `@quiz/domain`). The soonest first inside a day; an empty day is not
+ * drawn. `now` is the page's `useNow`, so the cards move from Tomorrow to
+ * Today at midnight. The sub-heading is the teacher's schedule's week
+ * heading, one step down.
  */
 export function UpcomingByDay({
   cards,
   now,
   showWhere = true,
 }: {
-  cards: readonly EvaluationCardData[];
+  cards: readonly StudentActivityCard[];
   now: number;
   showWhere?: boolean;
 }) {
   return (
     <div className="space-y-5">
-      {groupByDay(cards, (card) => card.opensAt, now, localTimeZone()).map(({ bucket, rows }) => (
+      {groupByDay(cards, opensAt, now, localTimeZone()).map(({ bucket, rows }) => (
         <DayGroup key={bucket} bucket={bucket} cards={rows} now={now} showWhere={showWhere} />
       ))}
     </div>
@@ -211,7 +283,7 @@ function DayGroup({
   showWhere,
 }: {
   bucket: DayBucket;
-  cards: readonly EvaluationCardData[];
+  cards: readonly StudentActivityCard[];
   now: number;
   showWhere: boolean;
 }) {
@@ -225,7 +297,7 @@ function DayGroup({
       <ul className="space-y-3" aria-labelledby={id}>
         {cards.map((card) => (
           <li key={card.id}>
-            <EvaluationRow card={card} showWhere={showWhere} line={upcomingLine(card, now, t)} />
+            <ActivityCard card={card} group="upcoming" now={now} showWhere={showWhere} />
           </li>
         ))}
       </ul>

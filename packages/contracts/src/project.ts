@@ -27,6 +27,7 @@ import {
   PROJECT_REVIEW_REASONS,
   PROJECT_REVIEW_STATUSES,
   PROJECT_SCALE_KINDS,
+  STUDENT_PROJECT_STATUSES,
   slugify,
 } from "@quiz/domain";
 
@@ -144,15 +145,26 @@ export const ProjectActivitySummary = z.object({
 });
 export type ProjectActivitySummary = z.infer<typeof ProjectActivitySummary>;
 
+/** The status word of a student's project (`studentProjectStatus` of `@quiz/domain`). */
+export const StudentProjectStatus = z.enum(STUDENT_PROJECT_STATUSES);
+export type StudentProjectStatus = z.infer<typeof StudentProjectStatus>;
+
 /**
- * A published project on the student's Activities (F-PROJ-04, the
- * `project` member of `StudentActivityCard`). The student payload: never a
- * draft, never the source or distribution repository, nothing of another
- * student (N-SEC-20). `status`: to accept (or not yet open, which `startAt`
- * tells), in progress once accepted, locked after the deadline.
- * `repoFullName` is the student's own repository (or their group's) once
- * it exists. Its score is the project's student view's (M3-09), not the
- * card's.
+ * A published project on the student's Activities — the home and the
+ * classroom page (F-PROJ-04, F-ORG-14; the `project` member of
+ * `StudentActivityCard`; merge task M3-09a). The student payload: never a
+ * draft nor an archived project, never the source or distribution
+ * repository, nothing of another student (N-SEC-20). `status`: to accept
+ * (or not yet open, which `startAt` tells), in progress once the repository
+ * exists, locked after the student's deadline, released once the scores
+ * are out. `deadlineAt` is the student's EFFECTIVE deadline: their own
+ * extension, else the project's. `githubLinked`, `repoUrl` and
+ * `invitation` are the four states of the row's button
+ * (`docs/merge/05-web.md` §5.3, drawn by M3-13): not linked, linked
+ * without a repository, invitation pending, ready — `repoFullName` and
+ * `repoUrl` name the student's own repository once it exists and is not
+ * deleted, `invitation` their invitation on it (F-PROJ-07). The scores are
+ * the project's student view's ({@link StudentProject}), not the card's.
  */
 export const StudentProjectCard = z.object({
   kind: z.literal("project"),
@@ -163,8 +175,11 @@ export const StudentProjectCard = z.object({
   courseCode: z.string(),
   startAt: z.iso.datetime(),
   deadlineAt: z.iso.datetime(),
-  status: z.enum(["to_accept", "in_progress", "locked"]),
+  status: StudentProjectStatus,
+  invitation: z.enum(["pending", "accepted"]).nullable(),
+  githubLinked: z.boolean(),
   repoFullName: z.string().nullable(),
+  repoUrl: z.url().nullable(),
 });
 export type StudentProjectCard = z.infer<typeof StudentProjectCard>;
 
@@ -954,3 +969,91 @@ export const ProjectUnassigned = z.object({
   students: z.array(z.object({ enrollmentId: z.uuid(), nom: z.string(), prenom: z.string() })),
 });
 export type ProjectUnassigned = z.infer<typeof ProjectUnassigned>;
+
+// ---------------------------------------------------------- the student's project (M3-09a)
+
+/** The run a student's score comes from: the evaluated commit, its run on GitHub, when it finished. */
+export const StudentProjectRun = z.object({
+  sha: z.string(),
+  url: z.url(),
+  conclusion: z.string(),
+  completedAt: z.iso.datetime(),
+});
+export type StudentProjectRun = z.infer<typeof StudentProjectRun>;
+
+/**
+ * The score a student reads before the release, INDICATIVE until then
+ * (N-SEC-21): the current CI score, or the frozen one (`frozen`) once their
+ * deadline is applied — provisional or definitive alike. Graded by the
+ * project's scale. Never the review's nor the teacher's (F-PROJ-15).
+ */
+export const StudentProjectScore = z.object({
+  points: z.number(),
+  max: z.number().nullable(),
+  grade: ProjectGradeView.nullable(),
+  frozen: z.boolean(),
+});
+export type StudentProjectScore = z.infer<typeof StudentProjectScore>;
+
+/**
+ * The student's own repository (F-PROJ-15): its name and URL, their
+ * invitation (F-PROJ-07), whether GitHub lost it (`deleted`) or holds it
+ * locked, the commit the view stands on and its CI status, the run their
+ * score comes from and that score. Before the deadline, `lastCommit` and
+ * `ciStatus` are the last push of theirs and its checks as the webhooks
+ * stored them; once their deadline is applied (or passed), they are the
+ * SELECTED run's commit and its conclusion read as pass or fail — `success`
+ * is `pass`, every other conclusion (a failure, a cancellation, a skip) is
+ * `fail` — never a push or a run after the deadline (N-SEC-20), or null and
+ * `none` without a selected run (`studentCiReading` of `@quiz/domain`).
+ * `score` is null
+ * under grading `none`, without a parsed run, and after the deadline when
+ * no run in time scored; `run` is null when no run is selected.
+ */
+export const StudentProjectRepo = z.object({
+  fullName: z.string(),
+  url: z.url(),
+  invitation: z.enum(["pending", "accepted"]),
+  deleted: z.boolean(),
+  locked: z.boolean(),
+  lastCommit: z.object({ sha: z.string(), at: z.iso.datetime().nullable() }).nullable(),
+  ciStatus: CiStatus,
+  run: StudentProjectRun.nullable(),
+  score: StudentProjectScore.nullable(),
+});
+export type StudentProjectRepo = z.infer<typeof StudentProjectRepo>;
+
+/**
+ * What the release gave the student (F-PROJ-14): the final score's
+ * snapshot, its grade, and the teacher's comment AS THE RELEASE WROTE IT
+ * (`released_comment`: a comment written since waits for the next
+ * release, like the score it may describe). `points` null when the
+ * release found no score for them.
+ */
+export const StudentProjectRelease = z.object({
+  at: z.iso.datetime(),
+  points: z.number().nullable(),
+  max: z.number().nullable(),
+  grade: ProjectGradeView.nullable(),
+  comment: z.string().nullable(),
+});
+export type StudentProjectRelease = z.infer<typeof StudentProjectRelease>;
+
+/**
+ * `GET /app/api/student/projects/:id` (F-PROJ-15, N-SEC-20): the ONE exit of
+ * a project towards a student, loaded through the classroom's student
+ * branch (`studentProjectView`, `guards.ts`): the card's facts, the
+ * project's grading mode, the caller's own repository (null until they
+ * accept — and always null for a teacher in the student view, whose staff
+ * seat holds none), and the release once it happened. Never the source nor
+ * the distribution repository, another student's anything, a run after the
+ * deadline, the review or the teacher's score before the release, nor the
+ * staff's flags.
+ */
+export const StudentProject = StudentProjectCard.omit({ invitation: true, repoFullName: true, repoUrl: true }).extend({
+  gradingMode: ProjectGradingMode,
+  repo: StudentProjectRepo.nullable(),
+  release: StudentProjectRelease.nullable(),
+  serverNow: z.iso.datetime(),
+});
+export type StudentProject = z.infer<typeof StudentProject>;

@@ -16,7 +16,7 @@ import * as bus from "../realtime/bus.js";
 /**
  * Something of a project changed for its staff alone — published by the
  * ticker, locked, frozen (M3-05a): the courses' `course:` topics. The
- * students hear of nothing of a project until its student view (M3-09).
+ * students' notices of a project are M3-09b's and M3-09c's.
  */
 export function projectsChanged(courseIds: readonly string[]): void {
   if (courseIds.length === 0) return;

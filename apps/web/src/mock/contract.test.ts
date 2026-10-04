@@ -99,6 +99,7 @@ import {
   StudentClassroom,
   StudentClassroomPage,
   StudentHome,
+  StudentProject,
   GradeGroup,
   TemplateDetail,
   TemplatePullPreview,
@@ -119,7 +120,7 @@ localStorage.setItem("quiz-mock-journal", "1");
 localStorage.setItem("quiz-mock-projects", "1");
 await import("./index");
 const { routes } = await import("./runtime");
-const { STUDENT_ATTEMPT, STUDENT_RETAKE_ATTEMPT } = await import("./student");
+const { STUDENT_ATTEMPT, STUDENT_RETAKE_ATTEMPT, STUDENT_PROJECT_OPEN, STUDENT_PROJECT_PAST, STUDENT_PROJECT_SOON } = await import("./student");
 
 interface Issue {
   code: string;
@@ -418,6 +419,10 @@ const CHECKED: Case[] = [
     .map((p) => one("/app/api/p/:code", `/app/api/p/${p.code}`, PollPublicView)),
   one("/app/api/attempts/:id", `/app/api/attempts/${attemptId}`, AttemptOrLobby),
   one("/app/api/student/home", "/app/api/student/home", StudentHome),
+  // M3-09a (`?projects=1`): the student's project view, in each of its three states.
+  ...[STUDENT_PROJECT_OPEN, STUDENT_PROJECT_SOON, STUDENT_PROJECT_PAST].map((id) =>
+    one("/app/api/student/projects/:id", `/app/api/student/projects/${id}`, StudentProject),
+  ),
   // F-ORG-14, F-RES-04: the student's Grades, by classroom.
   each("/app/api/student/results", "/app/api/student/results", GradeGroup),
   // M5-01: the Courses list, and the page of each classroom it lists.

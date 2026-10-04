@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { EvaluationCard, Me, StudentHome as StudentHomeData } from "@quiz/contracts";
+import type { EvaluationCard, Me, StudentHome as StudentHomeData, StudentProjectCard } from "@quiz/contracts";
 
 import { makeMe } from "../test/fixtures";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
@@ -20,7 +20,8 @@ const me: Me = makeMe({
   dateFormat: null,
 });
 
-const card = (over: Partial<EvaluationCard>): EvaluationCard => ({
+const card = (over: Partial<EvaluationCard>): EvaluationCard & { kind: "evaluation" } => ({
+  kind: "evaluation",
   id: "e1",
   title: "Quiz 3 — Pointeurs",
   mode: "exam",
@@ -221,6 +222,36 @@ describe("the student home", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "join", code: "NM2X9A" });
     // A running poll is something to do: no "nothing to do" beside it.
     expect(screen.queryByText("Rien à faire pour l'instant")).toBeNull();
+  });
+
+  // M3-09a (F-PROJ-04): a project card, drawn minimally until M3-13 — title, status, deadline, no button.
+  it("lists a project among what is open, with its status and no button yet", async () => {
+    const project: StudentProjectCard = {
+      kind: "project",
+      id: "p1",
+      title: "Labo 1 — Pointeurs",
+      classroomId: "r1",
+      classroomName: "PRG1-2026",
+      courseCode: "PRG1",
+      startAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+      deadlineAt: new Date(Date.now() + 2 * 3_600_000).toISOString(),
+      status: "in_progress",
+      invitation: "accepted",
+      githubLinked: true,
+      repoFullName: "heig/labo-1-lea",
+      repoUrl: "https://github.com/heig/labo-1-lea",
+    };
+    mockFetch({
+      "GET /app/api/student/home": ok({ ...home, open: [card({}), project] }),
+      "GET /app/api/student/classrooms": ok([]),
+    });
+    render();
+    const row = (await screen.findByText("Labo 1 — Pointeurs")).closest("div.rounded-card") as HTMLElement;
+    expect(within(row).getByText("Projet")).toBeInTheDocument();
+    expect(within(row).getByText(/en cours · /)).toBeInTheDocument();
+    expect(within(row).queryByRole("button")).toBeNull();
+    // The evaluation beside it keeps its one action.
+    expect(screen.getByRole("button", { name: "Commencer" })).toBeInTheDocument();
   });
 
   it("shows the empty state when nothing is open", async () => {

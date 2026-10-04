@@ -366,6 +366,13 @@ export const projectRepos = pgTable(
     releasedPoints: doublePrecision("released_points"),
     releasedMax: doublePrecision("released_max"),
     /**
+     * The teacher's comment as the release wrote it (M3-09a): what the
+     * student reads with their released score (F-PROJ-15). A comment written
+     * since names a score not yet released again, so it stays the staff's
+     * until the next release.
+     */
+    releasedComment: text("released_comment"),
+    /**
      * Restoring protected files stopped: five restores in an hour
      * (F-PROJ-08). The staff re-enable it by hand, which clears it.
      */

@@ -70,7 +70,6 @@ const classroomPage = (over: Partial<StudentClassroomPage> = {}): StudentClassro
     ],
   },
   hasJournal: false,
-  hasProjects: false,
   serverNow: new Date().toISOString(),
   ...over,
 });

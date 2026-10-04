@@ -7,6 +7,7 @@ import {
   ProjectGradingScale,
   ProjectPatch,
   ProtectedPath,
+  StudentProject,
   StudentProjectCard,
   defaultProjectGradingScale,
 } from "./project.js";
@@ -39,7 +40,10 @@ describe("the student's project card (F-PROJ-04)", () => {
     startAt: START,
     deadlineAt: DEADLINE,
     status: "in_progress",
+    invitation: "pending",
+    githubLinked: true,
     repoFullName: "heig-prg1/lab2-alice",
+    repoUrl: "https://github.com/heig-prg1/lab2-alice",
   } as const;
 
   it("is a member of StudentActivityCard", () => {
@@ -50,6 +54,32 @@ describe("the student's project card (F-PROJ-04)", () => {
     const parsed = StudentProjectCard.parse({ ...card, sourceFullName: "heig-prg1/lab2-source", teacherPoints: 5 });
     expect(Object.keys(parsed)).not.toContain("sourceFullName");
     expect(Object.keys(parsed)).not.toContain("teacherPoints");
+  });
+
+  it("is the base of the student's project view, which carries the repository and the release instead (M3-09a)", () => {
+    const { invitation, repoFullName, repoUrl, ...facts } = card;
+    void invitation;
+    const view = {
+      ...facts,
+      gradingMode: "auto",
+      repo: {
+        fullName: repoFullName,
+        url: repoUrl,
+        invitation: "accepted",
+        deleted: false,
+        locked: false,
+        lastCommit: { sha: "a".repeat(40), at: START },
+        ciStatus: "pass",
+        run: { sha: "a".repeat(40), url: `${repoUrl}/actions/runs/7`, conclusion: "success", completedAt: START },
+        score: { points: 7, max: 10, grade: { grade: 4.5, fellBack: false }, frozen: false },
+      },
+      release: null,
+      serverNow: START,
+    };
+    expect(StudentProject.parse(view)).toEqual(view);
+    // The staff's flags and the other slots have no field to land in.
+    expect(StudentProject.safeParse({ ...view, repo: { ...view.repo, toVerify: true } }).success).toBe(true);
+    expect(Object.keys(StudentProject.parse({ ...view, repo: { ...view.repo, toVerify: true } }).repo!)).not.toContain("toVerify");
   });
 });
 
