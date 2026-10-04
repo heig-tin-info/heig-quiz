@@ -208,8 +208,9 @@ describe("the teacher's score (F-PROJ-14)", () => {
     const res = await score(w, repo, { points: 8, comment: "Late fixes counted" });
     expect(res.statusCode, res.body).toBe(200);
     const scores = ProjectRepoScores.parse(res.json());
-    // The FROZEN run's maximum (10), never the current one's (20).
+    // The FROZEN run's maximum (10), never the current one's (20) — and the page is told which (`scoreMax`).
     expect(scores.scores.teacher).toEqual({ points: 8, max: 10, comment: "Late fixes counted", gradedAt: NOW });
+    expect(scores.scores.scoreMax).toBe(10);
     expect(scores.scores.final).toEqual({ points: 8, max: 10, source: "teacher", toVerify: false, grade: { grade: 5, fellBack: false } });
     expect(scores).toMatchObject({ released: null, changedAfterRelease: false });
     expect(await repoRow(repo)).toMatchObject({ teacherPoints: 8, teacherMax: 10, teacherGradedBy: teacher.id, teacherGradedAt: at(NOW) });
@@ -226,7 +227,9 @@ describe("the teacher's score (F-PROJ-14)", () => {
     expect([mismatch.statusCode, mismatch.json().error]).toEqual([422, "score_max_mismatch"]);
     const res = await score(w, repo, { points: 5, max: 6 });
     expect(res.statusCode, res.body).toBe(200);
-    expect(ProjectRepoScores.parse(res.json()).scores.final).toMatchObject({ points: 5, max: 6, source: "teacher" });
+    const scores = ProjectRepoScores.parse(res.json()).scores;
+    expect(scores.final).toMatchObject({ points: 5, max: 6, source: "teacher" });
+    expect(scores.scoreMax).toBe(6);
   });
 
   it("requires the teacher's own maximum without a scored run, and grades with it", async () => {
@@ -243,13 +246,16 @@ describe("the teacher's score (F-PROJ-14)", () => {
       expect([above.statusCode, above.json().error]).toEqual([422, "score_above_max"]);
       const res = await score(w, repo, { points: 8, max: 20 });
       expect(res.statusCode, res.body).toBe(200);
-      expect(ProjectRepoScores.parse(res.json()).scores.final).toEqual({
+      const scores = ProjectRepoScores.parse(res.json()).scores;
+      expect(scores.final).toEqual({
         points: 8,
         max: 20,
         source: "teacher",
         toVerify: false,
         grade: { grade: 3, fellBack: false },
       });
+      // No scored run to hold the score to: the page shows the maximum field.
+      expect(scores.scoreMax).toBeNull();
     }
     expect(await repoRow(noRun)).toMatchObject({ teacherPoints: 8, teacherMax: 20 });
   });
@@ -258,11 +264,14 @@ describe("the teacher's score (F-PROJ-14)", () => {
     const w = await world();
     const repo = await repoOf(w, w.students[0]!.id);
     await setRepo(repo, { frozenGradeRunId: await run(repo, { toVerify: true }) });
+    expect(rowOf(await detail(w), w.students[0]!.id).scores.scoreMax).toBeNull();
     const missing = await score(w, repo, { points: 8 });
     expect([missing.statusCode, missing.json().error]).toEqual([422, "score_max_required"]);
     const res = await score(w, repo, { points: 8, max: 20 });
     expect(res.statusCode, res.body).toBe(200);
-    expect(ProjectRepoScores.parse(res.json()).scores.final).toMatchObject({ points: 8, max: 20, source: "teacher", toVerify: false });
+    const scores = ProjectRepoScores.parse(res.json()).scores;
+    expect(scores.final).toMatchObject({ points: 8, max: 20, source: "teacher", toVerify: false });
+    expect(scores.scoreMax).toBeNull();
   });
 
   it("clears the score with null, and audits before and after", async () => {

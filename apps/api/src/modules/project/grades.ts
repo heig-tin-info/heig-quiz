@@ -32,7 +32,7 @@
 import { eq } from "drizzle-orm";
 
 import type { ProjectReleaseResult, ProjectRepoScores, ScoreOverride } from "@quiz/contracts";
-import { resolveFinalScore, scoresFinal, teacherScoreMax } from "@quiz/domain";
+import { scoresFinal, teacherScoreMax } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
 import { iso } from "../../clock.js";
@@ -40,7 +40,7 @@ import type { Db } from "../../db/client.js";
 import { projectRepos, projects } from "../../db/schema.js";
 import { DomainError } from "../http.js";
 import { isLive, releaseCounts, repoForUpdate } from "./deadline.js";
-import { releasableScore, repoScores, slotRuns } from "./detail.js";
+import { releasableScore, repoScores, slotRuns, teacherRunMax } from "./detail.js";
 import { ProjectError } from "./errors.js";
 import { studentRepos, type RepoRow } from "./repos.js";
 
@@ -67,20 +67,14 @@ export async function overrideScore(
     if (project.gradingMode !== "auto") throw new ProjectError("grading_none", "The project is not graded");
     if (repo.frozenAt === null) throw new ProjectError("not_frozen", "A score can be set once the repository's deadline and grace have passed");
     const runs = await slotRuns(tx, [repo]);
-    const run = (id: string | null) => (id === null ? null : (runs.get(id) ?? null));
     let values: Partial<RepoRow>;
     if (body.points === null) {
       values = { teacherPoints: null, teacherMax: null, teacherComment: null, teacherGradedBy: null, teacherGradedAt: null };
     } else {
-      // The run the final score would come from without the teacher's: its
-      // maximum is the score's — unless that run is to verify (F-PROJ-08),
-      // which is no scored run at all: the teacher gives their own.
-      const scored = resolveFinalScore({
-        reviewScore: run(repo.reviewGradeRunId),
-        frozenScore: run(repo.frozenGradeRunId),
-        score: run(repo.currentGradeRunId),
-      });
-      const max = teacherScoreMax(body.points, body.max, scored && !scored.toVerify ? scored.max : null);
+      // The scored run's maximum is the score's; none (a run to verify
+      // included, F-PROJ-08): the teacher gives their own (`teacherRunMax`,
+      // the rule the page's `scores.scoreMax` reads too).
+      const max = teacherScoreMax(body.points, body.max, teacherRunMax(repo, runs));
       if ("refusal" in max) throw new ProjectError(max.refusal);
       values = {
         teacherPoints: body.points,

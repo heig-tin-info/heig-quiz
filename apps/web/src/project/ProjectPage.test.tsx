@@ -370,7 +370,7 @@ describe("the repositories", () => {
     // GitHub's conclusion worded, never raw.
     expect(runRows[1]!.textContent).toMatch(/success/);
     // Accepted, not suspended, not frozen: no resend, no re-enable, and the score waits for the freeze.
-    expect(within(sheet).queryByRole("button", { name: /Resend|Re-enable|Save score/ })).toBeNull();
+    expect(within(sheet).queryByRole("button", { name: /Resend|Re-enable|^Save$/ })).toBeNull();
     expect(within(sheet).getByText("Set once the repository is frozen for good.")).toBeInTheDocument();
 
     const own = within(sheet).getByLabelText("Own deadline");
@@ -532,7 +532,7 @@ describe("the sheet's writes (M3-12b)", () => {
     // A scored run: the maximum is its, no field for it.
     expect(within(sheet).queryByRole("spinbutton", { name: "Out of" })).toBeNull();
     expect(within(sheet).getByText("out of 10")).toBeInTheDocument();
-    const save = within(sheet).getByRole("button", { name: "Save score" });
+    const save = within(sheet).getByRole("button", { name: "Save" });
     expect(save).toBeDisabled();
     await userEvent.type(within(sheet).getByRole("spinbutton", { name: "Points" }), "9");
     await userEvent.type(within(sheet).getByRole("textbox", { name: "Comment" }), "Bien.");
@@ -555,7 +555,8 @@ describe("the sheet's writes (M3-12b)", () => {
   });
 
   it("asks for the maximum when the repository has no scored run, sends it, and words the 422s and the 409s", async () => {
-    const repo = frozenRepo(1, { scores: { ...makeRepo(1).scores, current: null, frozen: null, final: null } });
+    // The server says the score is held to no maximum (`scoreMax` null): no scored run.
+    const repo = frozenRepo(1, { scores: { ...makeRepo(1).scores, current: null, frozen: null, final: null, scoreMax: null } });
     let reply = fail(422, { error: "score_max_required", message: "" });
     const { calls } = routes(frozenProject({ rows: [row(1, repo), row(2, null)] }), {
       ...runsRoute(repo),
@@ -564,7 +565,7 @@ describe("the sheet's writes (M3-12b)", () => {
     renderPage();
     const sheet = await openSheet();
     expect(within(sheet).getByText(/No scored run to take the maximum from/)).toBeInTheDocument();
-    const save = within(sheet).getByRole("button", { name: "Save score" });
+    const save = within(sheet).getByRole("button", { name: "Save" });
     await userEvent.type(within(sheet).getByRole("spinbutton", { name: "Points" }), "15");
     // Points alone do not do: the maximum is required with them.
     expect(save).toBeDisabled();
@@ -586,7 +587,7 @@ describe("the sheet's writes (M3-12b)", () => {
     routes(frozenProject({ gradingMode: "none" }), runsRoute(repo));
     renderPage();
     const sheet = await openSheet();
-    expect(within(sheet).queryByRole("button", { name: "Save score" })).toBeNull();
+    expect(within(sheet).queryByRole("button", { name: "Save" })).toBeNull();
     expect(within(sheet).getByText("This project is not graded: no score, no release.")).toBeInTheDocument();
   });
 
@@ -652,7 +653,7 @@ describe("the sheet's writes (M3-12b)", () => {
       row(2, frozenRepo(2, { review: { status: "pending", reason: null, askedAt: null, sha: null, runId: null } })),
       row(3, frozenRepo(3, { review: { status: "none", reason: "no_frozen_run", askedAt: null, sha: null, runId: null } })),
       row(4, frozenRepo(4, { archived: true, degraded: true, review: { status: "skipped", reason: "archived", askedAt: null, sha: null, runId: null } })),
-      row(5, frozenRepo(5, { review: { status: "skipped", reason: "protection_suspended", askedAt: null, sha: null, runId: null } })),
+      row(5, frozenRepo(5, { review: { status: "skipped", reason: "protection_suspended", askedAt: null, sha: null, runId: null } }), { nom: "Keller", prenom: "Ana" }),
       row(6, frozenRepo(6, { review: { status: "unconfirmed", reason: null, askedAt: null, sha, runId: null } })),
       row(7, frozenRepo(7, { review: { status: "asked", reason: null, askedAt: PAST, sha, runId: null } }), { nom: "Ziegler", prenom: "Nora" }),
       row(8, frozenRepo(8)),
@@ -663,9 +664,10 @@ describe("the sheet's writes (M3-12b)", () => {
     const text = within(table).getAllByRole("row").slice(1).map((r) => r.textContent!);
     expect(text[0]).not.toMatch(/review/);
     expect(text[1]).toMatch(/review pending/);
-    expect(text[2]).toMatch(/no review: no frozen run/);
-    expect(text[3]).toMatch(/no review: locked by archiving/);
-    expect(text[4]).toMatch(/no review: protection suspended/);
+    // The tag says "no review"; the reason is the sheet's detail line.
+    expect(text[2]).toMatch(/no review/);
+    expect(text[3]).toMatch(/no review/);
+    expect(text[4]).toMatch(/no review/);
     expect(text[5]).toMatch(/review not confirmed/);
     expect(text[6]).toMatch(/review asked/);
     expect(text[7]).toMatch(/review done/);
@@ -674,6 +676,11 @@ describe("the sheet's writes (M3-12b)", () => {
     const sheet = await screen.findByRole("dialog");
     expect(within(sheet).getByText("Final review")).toBeInTheDocument();
     expect(within(sheet).getByText(/^Asked on .*, of commit 9a3f1c7\./)).toBeInTheDocument();
+    // The sheet of a degraded one: the word, and why.
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(screen.getByRole("row", { name: /Keller Ana/ }));
+    const degraded = await screen.findByRole("dialog");
+    expect(within(degraded).getByText(/^Re-enable the protected files: the review is then asked\./)).toBeInTheDocument();
   });
 });
 
@@ -799,8 +806,8 @@ describe("in French", () => {
     expect(screen.getByText("revue non confirmée")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("row", { name: /Martin Benoît/ }));
     const sheet = await screen.findByRole("dialog");
-    expect(within(sheet).getByText("Score de l'enseignant")).toBeInTheDocument();
-    expect(within(sheet).getByRole("button", { name: "Enregistrer le score" })).toBeInTheDocument();
+    expect(within(sheet).getAllByText("Score de l'enseignant").length).toBeGreaterThan(0);
+    expect(within(sheet).getByRole("button", { name: "Enregistrer" })).toBeInTheDocument();
     expect(within(sheet).getByText("Revue finale")).toBeInTheDocument();
   });
 });

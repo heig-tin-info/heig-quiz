@@ -2026,17 +2026,21 @@ release. The original card's notes stay here; each part has its card below.
     the row (`(repo) => repo`), so every answer — a deadline state, the
     scores, an invitation status, a cleared flag — is laid over the row the
     same way, then the page invalidated.
-    - **The teacher's score** (`project/TeacherScoreForm.tsx`, `PATCH
+    - **The teacher's score** (`project/TeacherScoreForm.tsx`: `ScoreSection`
+      — the five slots, the review's state and the form —, `PATCH
       …/repos/:rid/score`, `ScoreOverride`): points, a maximum field shown
-      only when the repository has no scored run (`scoredRunMax`,
-      `projectPage.ts`: the review's, else the frozen, else the current run
-      with a parsed score — the one `teacherScoreMax` reads —, null when
-      that run is to verify, read from `final.toVerify`, or from
-      `flags.toVerify` once a teacher's score covers the final one),
-      otherwise "out of N" as text and no `max` sent; a comment (sent
-      trimmed, always, so it can be emptied); Save, the sheet's ONE primary;
-      Clear (`{ points: null }`) once a score exists. `scoreOverrideBody` is
-      the pure rule. The answer (`ProjectRepoScores`) patches `scores`,
+      only when the server says the score is held to none —
+      **`scores.scoreMax`** on every row (review round 1: the API's
+      `teacherRunMax`, `detail.ts`, ONE rule for the write of `grades.ts`
+      and the page; the scored run's maximum, null for pass / fail only,
+      malformed, several annotations, or a run to verify; tested in
+      `grades.db.test.ts` and `detail.db.test.ts`) —, otherwise "out of N"
+      as text and no `max` sent; a comment (sent trimmed, always, so it can
+      be emptied); Save (`common.save`), the sheet's ONE primary; Clear
+      (`{ points: null }`) once a score exists. `scoreOverrideBody` builds
+      the raw object and keeps what `ScoreOverride.safeParse` accepts
+      (invariant 7); locally it only knows "no points" and "own maximum
+      required". The answer (`ProjectRepoScores`) patches `scores`,
       `released` and `flags.changedAfterRelease`. The form exists only when
       `teacherScoreBlock` is null: on a `none` project the line says it is
       not graded, before the definitive freeze that the score waits for
@@ -2059,29 +2063,36 @@ release. The original card's notes stay here; each part has its card below.
       `flags.protectionSuspended` on the row (the table's "protected files
       in conflict" tag goes, "to verify" stays), the run list is
       invalidated, the toast repeats that past runs stay to verify.
-    - **The final review** (`row.review`, `ProjectRepoReview`):
-      `reviewView` (`projectPage.ts`) gives one word and one tone per
-      status — pending, asked, done, "no review" and "no review: no frozen
-      run" zinc (done green); the degraded "no review: locked by
-      archiving" / "no review: protection suspended" amber; **"review not
-      confirmed" red**. The sheet shows it as a "Final review" fact in the
-      Scores section with a detail line where a word is not enough: asked
-      on {date} of commit {sha}; not confirmed (never sent again, set the
-      score by hand); archived; protection suspended (re-enable it); not
-      frozen yet. The table's State column draws `reviewTag`: the same tag,
-      except that a repository not frozen (trivially pending) and a `none`
-      without reason (a project graded `none`: no row has a review) get no
-      tag — decided here, to keep a row of an open project free of a tag
-      that says nothing.
+    - **The final review** (`row.review`, `ProjectRepoReview`): ONE table,
+      `reviewView` (`projectPage.ts`) → `{ key, tone, detail }` per status,
+      read by the row's tag and the sheet's detail line alike — "review
+      pending" / "review asked" / "no review" zinc, "review done" green,
+      the degraded "no review" (archived as its lock, protection
+      suspended) amber, **"review not confirmed" red**; `detail` is the
+      line that says why or what next (asked on {date} of commit {sha};
+      not confirmed: never sent again, set the score by hand; no frozen
+      run; archived; protection suspended: re-enable it; not frozen yet),
+      null for done and a plain none. The sheet draws it as a "Final
+      review" fact inside the scores grid. The table's State column draws
+      `reviewTag`: the same tag, except that a repository not frozen
+      (trivially pending) and a `none` without reason (a project graded
+      `none`: no row has a review) get no tag — decided here, to keep a
+      row of an open project free of a tag that says nothing.
   - `UnassignedBody` is gone: `unassignedStudents` parses the contracts'
     `ProjectUnassigned` (`message` required, `enrollmentId` a uuid — the
     mock's `?unassigned=1` refusal mints uuids by rank, since its roster
     ids are not).
   - **Refusals** (`REFUSAL_KEY`, widened to the resend's
     `github_account_stale` of `PROJECT_ACCEPT_REFUSALS`): `not_frozen`,
-    `to_verify`, `grading_none`, `score_max_required`,
-    `score_max_mismatch`, `score_above_max`, `invitation_not_pending`,
-    `resend_too_soon`, `invite_failed`, `github_account_stale`.
+    `grading_none`, `score_max_required`, `score_max_mismatch`,
+    `score_above_max`, `invitation_not_pending`, `resend_too_soon`,
+    `invite_failed`, `github_account_stale`; the release's `to_verify` is
+    worded by `releaseRefusal` alone (M3-12c), with the names.
+  - **Contracts** (own block, review round 1): `ProjectRepoView.scores.scoreMax`
+    (above) and `ProjectReleaseRefusal` (M3-12c); `contract.test.ts` has a
+    describe calling the four write routes of the mock and checking
+    `ProjectRepoScores`, `ProjectReleaseResult`, `ProjectReleaseRefusal`,
+    `ProjectInvitationResent` (and the 429) and `ProjectRepoProtection`.
   - **Mock** (`mock/project.ts`), over #498's repair (which gave the mock
     `review`, `teacher.max` and `unverified`, and the fixtures
     `final.toVerify`): `MockRepo.dispatch` (the ledger row, so a review can
@@ -2139,13 +2150,16 @@ release. The original card's notes stay here; each part has its card below.
     "ready to be released" of a project already released.
   - **Refusals** (`releaseRefusal`, `projectPage.ts`), as a danger `Alert`
     under the header titled "The scores were not released", kept until a
-    release succeeds: `409 not_frozen` with the body's `live` / `frozen`
-    counts ("{frozen} of {live} live repositories are frozen for good"),
-    `409 to_verify` with the students named from the page's rows by the
-    body's `repos` ids (a generic "some repositories" when none is on the
-    page), `409 grading_none` and anything else through `refusalMessage`.
-    An alert rather than a toast because the to-verify names must stay
-    readable while the teacher opens each sheet.
+    release succeeds, parsed with the contracts' **`ProjectReleaseRefusal`**
+    (review round 1: a discriminated union beside `ProjectUnassigned` —
+    `not_frozen` with `live` / `frozen`, `to_verify` with `repos: uuid[]`,
+    the two bodies `grades.ts` throws; the mock's release route builds its
+    refusals through it): "{frozen} of {live} live repositories are frozen
+    for good"; the students named from the page's rows by the `repos` ids
+    (a generic "some repositories" when none is on the page); `409
+    grading_none` and anything else through `refusalMessage`. An alert
+    rather than a toast because the to-verify names must stay readable
+    while the teacher opens each sheet.
   - **Mock**: `POST …/release` above; `?unreleased=1` makes the locked
     project not released yet (Release its one action). Scenes
     `project-release` (the confirmation open) and `project-released` (the

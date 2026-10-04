@@ -210,6 +210,7 @@ export function repoScores(project: ProjectRow, repo: RepoRow, runs: Map<string,
           ? null
           : { points: repo.teacherPoints, max: repo.teacherMax, comment: repo.teacherComment, gradedAt: isoOrNull(repo.teacherGradedAt) },
       final: final && { ...final, grade: scoreGrade(final.points, final.max, scale) },
+      scoreMax: teacherRunMax(repo, runs),
     },
     released: released ? { points: repo.releasedPoints, max: repo.releasedMax } : null,
     changedAfterRelease: changedAfterRelease(released, releasableScore(project, repo, final), {
@@ -217,6 +218,21 @@ export function repoScores(project: ProjectRow, repo: RepoRow, runs: Map<string,
       max: repo.releasedMax,
     }),
   };
+}
+
+/**
+ * The maximum a teacher's score is held to (`teacherScoreMax`, F-PROJ-14,
+ * product owner 2026-10-02): that of the run the final score would come
+ * from without the teacher — the review's, else the frozen, else the
+ * current — unless that run is to verify (F-PROJ-08), which is no scored
+ * run at all: null, and the teacher gives their own maximum. ONE rule for
+ * the write (`grades.ts`) and for the page (`scores.scoreMax`, which the
+ * sheet's form reads to show the maximum field, M3-12b).
+ */
+export function teacherRunMax(repo: RepoRow, runs: Map<string, RunRow>): number | null {
+  const [current, frozen, review] = slots(repo, runs);
+  const scored = resolveFinalScore({ reviewScore: review ?? null, frozenScore: frozen ?? null, score: current ?? null });
+  return scored && !scored.toVerify ? scored.max : null;
 }
 
 /**

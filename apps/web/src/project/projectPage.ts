@@ -6,9 +6,8 @@
  * teacher's score rules the sheet draws, and the words of each refusal the
  * page meets. `ProjectPage.tsx` and its sections draw them.
  */
-import { z } from "zod";
-
 import {
+  ProjectReleaseRefusal,
   ProjectUnassigned,
   type ProjectAcceptErrorCode,
   type ProjectCheckpointErrorCode,
@@ -128,37 +127,51 @@ export function repoFlags(repo: ProjectRepoView): RepoFlag[] {
 export const actionable = (repo: ProjectRepoView, project: Pick<ProjectDetail, "archivedAt">): boolean =>
   repo.provisionStatus === "ok" && !repo.flags.deleted && project.archivedAt === null;
 
-/** The state of a repository's final review (F-PROJ-11, M3-08b's `review`), as a tag: its word and its tone. */
+/**
+ * The state of a repository's final review (F-PROJ-11, M3-08b's `review`):
+ * its word (a tag), its tone, and the line that says why or what next when
+ * the word is not enough (`detail`, taking `{date, sha}` for an asked
+ * review) — null when the word is enough.
+ */
 export interface ReviewView {
   key: keyof Dict;
   tone: Tone;
+  detail: keyof Dict | null;
 }
 
 /**
- * One tag per review status: a fact in zinc (pending, done, no frozen run to
- * review), a degraded "no review" in amber (archived as its lock, or the
- * protection suspended: re-enabling it makes the review due again), and
- * "not confirmed" in red — claimed, GitHub's acceptance never recorded, never
- * sent again: the teacher's score settles the repository.
+ * ONE table, read by the row's tag and the sheet's detail: a fact in zinc
+ * (pending, asked, no review), done in green, a degraded "no review" in
+ * amber (archived as its lock, or the protection suspended: re-enabling it
+ * makes the review due again), and "not confirmed" in red — claimed,
+ * GitHub's acceptance never recorded, never sent again: the teacher's score
+ * settles the repository.
  */
 export function reviewView(review: ProjectRepoReview): ReviewView {
   switch (review.status) {
     case "pending":
-      return { key: "project.reviewState.pending", tone: "zinc" };
+      return { key: "project.reviewState.pending", tone: "zinc", detail: "project.reviewState.pending.detail" };
     case "none":
-      return review.reason === "no_frozen_run"
-        ? { key: "project.reviewState.noFrozenRun", tone: "zinc" }
-        : { key: "project.reviewState.none", tone: "zinc" };
+      return {
+        key: "project.reviewState.none",
+        tone: "zinc",
+        detail: review.reason === "no_frozen_run" ? "project.reviewState.noFrozenRun.detail" : null,
+      };
     case "skipped":
-      return review.reason === "archived"
-        ? { key: "project.reviewState.archived", tone: "amber" }
-        : { key: "project.reviewState.protectionSuspended", tone: "amber" };
+      return {
+        key: "project.reviewState.none",
+        tone: "amber",
+        detail:
+          review.reason === "archived"
+            ? "project.reviewState.archived.detail"
+            : "project.reviewState.protectionSuspended.detail",
+      };
     case "unconfirmed":
-      return { key: "project.reviewState.unconfirmed", tone: "red" };
+      return { key: "project.reviewState.unconfirmed", tone: "red", detail: "project.reviewState.unconfirmed.detail" };
     case "asked":
-      return { key: "project.reviewState.asked", tone: "zinc" };
+      return { key: "project.reviewState.asked", tone: "zinc", detail: "project.reviewState.asked.detail" };
     case "done":
-      return { key: "project.reviewState.done", tone: "green" };
+      return { key: "project.reviewState.done", tone: "green", detail: null };
   }
 }
 
@@ -173,22 +186,6 @@ export function reviewTag(repo: ProjectRepoView): ReviewView | null {
   return reviewView(repo.review);
 }
 
-/**
- * The maximum of the scored run a teacher's score is written against
- * (`teacherScoreMax`, `@quiz/domain`): the run the final score would come
- * from without the teacher — the review's, else the frozen, else the
- * current — unless that run is to verify, which counts as no scored run.
- * Null: the teacher gives their own maximum (the max field is shown).
- */
-export function scoredRunMax(repo: ProjectRepoView): number | null {
-  const { review, frozen, current, final } = repo.scores;
-  const run = [review, frozen, current].find((s) => s !== null && s.points !== null && s.max !== null) ?? null;
-  if (!run) return null;
-  // The final score IS that resolution when no teacher's score covers it, and says whether its run is to verify.
-  if (final && final.source !== "teacher") return final.toVerify ? null : final.max;
-  return repo.flags.toVerify ? null : run.max;
-}
-
 /** Why the sheet offers no teacher's score form: the project is not graded, or the repository is not frozen for good. */
 export type TeacherScoreBlock = "grading_none" | "not_frozen" | null;
 
@@ -198,32 +195,24 @@ export function teacherScoreBlock(repo: ProjectRepoView, project: Pick<ProjectDe
   return null;
 }
 
-/** The counts a release's `409 not_frozen` carries, and the repositories a `409 to_verify` names. */
-const ReleaseRefusalBody = z.object({
-  error: z.string(),
-  live: z.number().int().optional(),
-  frozen: z.number().int().optional(),
-  repos: z.array(z.string()).optional(),
-});
-
 /**
- * What a refused release says (F-PROJ-14): `not_frozen` with how many live
+ * What a refused release says (F-PROJ-14), from the body the contracts
+ * describe (`ProjectReleaseRefusal`): `not_frozen` with how many live
  * repositories are frozen, `to_verify` with the students whose score waits
- * for the teacher's, else the refusal as the page words every other one.
+ * for the teacher's (named from the page's rows; "some repositories" when
+ * none is listed), else the refusal as the page words every other one.
  */
 export function releaseRefusal(error: unknown, project: ProjectDetail, t: TFunction): string {
-  const body = error instanceof ApiError ? ReleaseRefusalBody.safeParse(error.body) : null;
+  const body = error instanceof ApiError ? ProjectReleaseRefusal.safeParse(error.body) : null;
   if (body?.success) {
-    const { error: code, live, frozen, repos } = body.data;
-    if (code === "not_frozen" && live !== undefined && frozen !== undefined) {
-      return t("project.release.refusal.notFrozen", { frozen, live });
+    if (body.data.error === "not_frozen") {
+      return t("project.release.refusal.notFrozen", { frozen: body.data.frozen, live: body.data.live });
     }
-    if (code === "to_verify" && repos) {
-      const names = project.rows
-        .filter((r) => r.repo !== null && repos.includes(r.repo.id))
-        .map((r) => `${r.student.nom} ${r.student.prenom}`);
-      return t("project.release.refusal.toVerify", { names: names.join(", ") || t("project.release.refusal.someRepos") });
-    }
+    const { repos } = body.data;
+    const names = project.rows
+      .filter((r) => r.repo !== null && repos.includes(r.repo.id))
+      .map((r) => `${r.student.nom} ${r.student.prenom}`);
+    return t("project.release.refusal.toVerify", { names: names.join(", ") || t("project.release.refusal.someRepos") });
   }
   return refusalMessage(error, t);
 }
@@ -286,7 +275,6 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   checkpoint_dispatched: "project.refusal.checkpointDispatched",
   // The staff's writes (M3-08b): the teacher's score, the release, the resend, the re-enable.
   not_frozen: "project.refusal.notFrozen",
-  to_verify: "project.refusal.toVerify",
   grading_none: "project.refusal.gradingNone",
   score_max_required: "project.refusal.scoreMaxRequired",
   score_max_mismatch: "project.refusal.scoreMaxMismatch",

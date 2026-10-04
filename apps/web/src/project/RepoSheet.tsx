@@ -19,10 +19,10 @@ import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { projectKey, projectRunsKey } from "../queryKeys";
 import { Badge, Button, Fact, FieldError, fieldErrorProps, isoDateTime, RelativeTime, Sheet } from "../ui";
-import { CiBadge, Points, RepoLink, Score } from "./parts";
-import { actionable, refusalMessage, repoFlags, reviewView, shortSha, teacherScoreBlock } from "./projectPage";
+import { CiBadge, RepoLink } from "./parts";
+import { actionable, refusalMessage, repoFlags, shortSha } from "./projectPage";
 import { RunHistory } from "./RunHistory";
-import { TeacherScoreForm } from "./TeacherScoreForm";
+import { ScoreSection } from "./TeacherScoreForm";
 
 const OWN_DEADLINE_ID = "project-repo-deadline";
 
@@ -32,42 +32,6 @@ function Section({ title, children }: { title: ReactNode; children: ReactNode })
       <h3 className="text-sm font-semibold">{title}</h3>
       {children}
     </section>
-  );
-}
-
-/** The final review's state (F-PROJ-11, M3-12b): its tag, and the line that says what it means when a word is not enough. */
-function ReviewState({ repo }: { repo: ProjectRepoView }) {
-  const t = useT();
-  const { review } = repo;
-  const view = reviewView(review);
-  const detail = (() => {
-    switch (review.status) {
-      case "asked":
-        return t("project.reviewState.asked.detail", {
-          date: review.askedAt ? isoDateTime(review.askedAt) : "—",
-          sha: review.sha ? shortSha(review.sha) : "—",
-        });
-      case "unconfirmed":
-        return t("project.reviewState.unconfirmed.detail");
-      case "skipped":
-        return t(
-          review.reason === "archived"
-            ? "project.reviewState.archived.detail"
-            : "project.reviewState.protectionSuspended.detail",
-        );
-      case "pending":
-        return repo.frozenAt === null ? t("project.reviewState.pending.detail") : null;
-      default:
-        return null;
-    }
-  })();
-  return (
-    <Fact label={t("project.sheet.review")}>
-      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <Badge tone={view.tone}>{t(view.key)}</Badge>
-        {detail ? <span className="text-[13px] text-fg-muted">{detail}</span> : null}
-      </span>
-    </Fact>
   );
 }
 
@@ -159,7 +123,6 @@ export function RepoSheet({
   const busy = deadline.isPending || lock.isPending;
   const deadlineRefused = refusedWith(deadline.error, "deadline_past") ? t("project.refusal.deadlinePast") : undefined;
   const flags = repoFlags(repo);
-  const block = teacherScoreBlock(repo, project);
 
   return (
     <Sheet
@@ -224,36 +187,7 @@ export function RepoSheet({
         </Section>
 
         <Section title={t("project.sheet.scores")}>
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-5">
-            <Fact label={t("project.score.current")}>
-              <Points points={repo.scores.current?.points ?? null} max={repo.scores.current?.max ?? null} />
-            </Fact>
-            <Fact label={t("project.score.frozen")}>
-              <Points points={repo.scores.frozen?.points ?? null} max={repo.scores.frozen?.max ?? null} />
-            </Fact>
-            <Fact label={t("project.reviewLabel")}>
-              <Points points={repo.scores.review?.points ?? null} max={repo.scores.review?.max ?? null} />
-            </Fact>
-            <Fact label={t("project.score.teacher")}>
-              <Points points={repo.scores.teacher?.points ?? null} max={repo.scores.teacher?.max ?? null} />
-            </Fact>
-            <Fact label={t("project.score.final")}>
-              <Score score={repo.scores.final} />
-            </Fact>
-          </dl>
-          <dl>
-            <ReviewState repo={repo} />
-          </dl>
-          <div className="space-y-3 border-t border-line pt-3">
-            <h4 className="text-[13px] font-medium">{t("project.teacherScore")}</h4>
-            {block === null ? (
-              <TeacherScoreForm key={repo.scores.teacher?.gradedAt ?? "none"} repo={repo} score={score} />
-            ) : (
-              <p className="text-[13px] text-fg-muted">
-                {t(block === "grading_none" ? "project.refusal.gradingNone" : "project.teacherScore.waitsFreeze")}
-              </p>
-            )}
-          </div>
+          <ScoreSection project={project} repo={repo} score={score} />
         </Section>
 
         <Section title={t("project.sheet.deadline")}>

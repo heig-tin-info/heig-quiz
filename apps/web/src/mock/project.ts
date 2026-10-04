@@ -32,6 +32,7 @@
 import {
   PROJECT_DEFAULTS,
   ProjectPatch,
+  ProjectReleaseRefusal,
   ReviewCheckpointCreate,
   ScoreOverride,
   type GradeRunList,
@@ -343,6 +344,12 @@ function finalOf(repo: MockRepo) {
   });
 }
 
+/** The maximum a teacher's score is held to (`teacherRunMax` of the API): the scored run's, none when it is to verify. */
+function runMaxOf(repo: MockRepo): number | null {
+  const scored = resolveFinalScore(slotRuns(repo));
+  return scored && !scored.toVerify ? scored.max : null;
+}
+
 /** The final review's state (`reviewState` of `@quiz/domain`), from the repository and its ledger row. */
 function reviewOf(p: MockProject, r: MockRepo): ProjectRepoReview {
   const state = reviewState({
@@ -508,6 +515,7 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
       review: graded(slot(r, r.reviewRunId)),
       teacher: r.teacher,
       final: final ? { ...final, grade: scoreGrade(final.points, final.max, scale) } : null,
+      scoreMax: runMaxOf(r),
     },
     review: reviewOf(p, r),
     released: r.released,
@@ -731,9 +739,7 @@ on("PATCH", "/app/api/projects/:id/repos/:rid/score", (m, raw) => {
   if (body.points === null) {
     r.teacher = null;
   } else {
-    // A run to verify is no scored run: the teacher gives their own maximum.
-    const run = resolveFinalScore(slotRuns(r));
-    const max = teacherScoreMax(body.points, body.max, run && !run.toVerify ? run.max : null);
+    const max = teacherScoreMax(body.points, body.max, runMaxOf(r));
     if ("refusal" in max) throw refuse(422, max.refusal, "The score is refused");
     r.teacher = { points: body.points, max: max.max, comment: body.comment?.trim() || null, gradedAt: iso(0) };
   }
@@ -752,11 +758,16 @@ on("POST", "/app/api/projects/:id/release", (m) => {
   if (p.summary.gradingMode !== "auto") throw refuse(409, "grading_none", "The project is not graded");
   const live = p.repos.filter((r) => isLive(p, r));
   const frozen = live.filter((r) => r.frozenAt !== null);
+  // The two refusals that carry data, in the shape the page parses (`ProjectReleaseRefusal`).
   if (live.length === 0 || frozen.length < live.length) {
-    throw refuse(409, "not_frozen", "Some live repositories are not frozen", { live: live.length, frozen: frozen.length });
+    const body = ProjectReleaseRefusal.parse({ error: "not_frozen", message: "Some live repositories are not frozen", live: live.length, frozen: frozen.length });
+    throw new MockPayload(409, body);
   }
   const toVerify = live.filter((r) => finalOf(r)?.toVerify).map((r) => r.id);
-  if (toVerify.length > 0) throw refuse(409, "to_verify", "Some final scores are to verify", { repos: toVerify });
+  if (toVerify.length > 0) {
+    const body = ProjectReleaseRefusal.parse({ error: "to_verify", message: "Some final scores are to verify", repos: toVerify });
+    throw new MockPayload(409, body);
+  }
   const first = p.releasedAt === null;
   let scored = 0;
   for (const r of p.repos) {

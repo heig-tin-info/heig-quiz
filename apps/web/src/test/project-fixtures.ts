@@ -37,7 +37,8 @@ export function makeStudent(n: number, over: Partial<ProjectStudent> = {}): Proj
 
 export function makeRepo(n: number, over: Partial<ProjectRepoView> = {}): ProjectRepoView {
   return {
-    id: `0190d3c4-0000-7000-8000-00000000r${String(n).padStart(3, "0")}`,
+    // A real uuid: the release's `to_verify` body names repositories by `z.uuid()` ids.
+    id: `0190d3c4-0000-7000-8000-00000000a${String(n).padStart(3, "0")}`,
     fullName: `heig-tin-info/labo-2-student-${n}`,
     deadlineAt: null,
     effectiveDeadlineAt: AHEAD,
@@ -60,6 +61,7 @@ export function makeRepo(n: number, over: Partial<ProjectRepoView> = {}): Projec
       review: null,
       teacher: null,
       final: { points: 8, max: 10, source: "ci", toVerify: false, grade: { grade: 5, fellBack: false } },
+      scoreMax: 10,
     },
     review: { status: "pending", reason: null, askedAt: null, sha: null, runId: null },
     released: null,
