@@ -2090,6 +2090,34 @@ follows its set until the deadline. Split in two PRs.
 - **Tests**: the follow predicate and the random formation in the domain;
   the routes, the copy's step with the set, a stopped copy, staff seats
   never placed, the 404 of a classroom not reached.
+- **As delivered** (branch `merge/M3-15a-group-sets`): migration
+  `0063_group_sets` (`Q:db/group.ts`; `projects.group_set_id` set null,
+  `projects.groups_stopped_at`, `project_groups.source_group_id` set null,
+  `projects.group_max_size` dropped); `@quiz/domain` `groupSets.ts`
+  (`groupSizes`, `formRandomGroups` on an injected `randomInt`,
+  `copyFollows`, `groupSyncPlan`, the default names in the creator's
+  language); contracts `group.ts` (`GROUP_REFUSALS`: `classroom_archived`,
+  `set_in_use`, `duplicate_name`, `nobody_to_place`, `size_out_of_range`)
+  and, in `project.ts`, `groupSetId` on create, patch and summary,
+  `no_group_set`, `unknown_group_set`; hint kind `groups` (course topics
+  only). `Q:modules/group/{routes,service,errors,events}.ts`, registered
+  without the App; loaders `accessibleGroupSet` and `projectsClassroom`
+  (`guards.ts`); every write of a set goes through `writeSet` (classroom
+  FOR SHARE, set FOR UPDATE, the following projects FOR UPDATE in id
+  order, the write, the copies stepped, the audit). The copy is the
+  project module's (`Q:modules/project/groupCopy.ts`: `followingCopies`,
+  `stepCopies`, `replaceGroupCopy`); a project's patch locks the set it
+  names FOR SHARE before its own row. **The stop is stored**
+  (orchestrator D1): `groups_stopped_at` written with the deadline applied
+  (ticker) or the archive, never cleared, so neither a reopen nor an
+  unarchive makes a copy follow again; the per-repository stop is M3-15b's.
+  Every route answers the set (`GroupSetDetail`) but the set's deletion
+  (204). The plan applies the deletions first, then the renames through a
+  temporary name (a swap of two names), the new groups, the moves.
+  `POST /classrooms/:id/group-sets` is `readOnly` for the catch-all
+  mutation hint, which would reach the classroom's students; the module
+  hints `course:` itself. The web form lost `groupMaxSize` (and its i18n
+  keys); `GROUPS_OFFERED` stays false until M3-16.
 
 #### M3-15b — Group repositories and their membership on GitHub
 - **Depends on**: M3-15a, M3-03.

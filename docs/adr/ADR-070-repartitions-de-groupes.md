@@ -97,6 +97,9 @@ meaning, which ADR-048 deliberately does not use.
      size s − 1), **larger** makes ⌊n/s⌋ groups (some of size s + 1). 23 by 3:
      smaller gives seven of 3 and one of 2, larger gives five of 3 and two of
      4; 10 by 4: smaller gives 4, 3, 3 (never 4, 4, 2), larger gives 5, 5.
+     At the edges a size lies further than one from `s`, the sizes still
+     balanced: 5 by 3, larger, gives one group of 5; 7 by 5, smaller, gives
+     4 and 3 (M3-15a).
      Groups already formed are never touched. The rule is pure, in
      `@quiz/domain`, with its tests; the whole formation is one transaction.
    - **By the students** (lot 2): see decision 8.
