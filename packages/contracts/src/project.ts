@@ -1002,8 +1002,11 @@ export type StudentProjectScore = z.infer<typeof StudentProjectScore>;
  * score comes from and that score. Before the deadline, `lastCommit` and
  * `ciStatus` are the last push of theirs and its checks as the webhooks
  * stored them; once their deadline is applied (or passed), they are the
- * SELECTED run's commit and conclusion — never a push or a run after the
- * deadline (N-SEC-20) — or null and `none` without one. `score` is null
+ * SELECTED run's commit and its conclusion read as pass or fail — `success`
+ * is `pass`, every other conclusion (a failure, a cancellation, a skip) is
+ * `fail` — never a push or a run after the deadline (N-SEC-20), or null and
+ * `none` without a selected run (`studentCiReading` of `@quiz/domain`).
+ * `score` is null
  * under grading `none`, without a parsed run, and after the deadline when
  * no run in time scored; `run` is null when no run is selected.
  */

@@ -44,6 +44,7 @@ import type {
 import {
   effectiveDeadline,
   scoreGrade,
+  studentCiReading,
   studentProjectGroup,
   studentProjectStatus,
   studentScoreRun,
@@ -191,13 +192,11 @@ export async function studentProjectCards(db: Db, userId: string, now: Date, cla
 type RepoReading = Pick<StudentProjectRepo, "lastCommit" | "ciStatus" | "run" | "score">;
 
 /**
- * The repository as the student reads it (F-PROJ-15, N-SEC-20). Before the
- * deadline: the last push of theirs and its CI status as the webhooks
- * stored them, the current run and its indicative score. Once their
- * deadline is applied or passed: the SELECTED run alone — its commit, its
- * conclusion as the CI state, its score frozen — never the row's head,
- * which an open repository (strategy `commit`) keeps moving after the
- * deadline. No score under grading `none`.
+ * The repository as the student reads it (F-PROJ-15, N-SEC-20): the run
+ * and the commit by `studentScoreRun` and `studentCiReading` of
+ * `@quiz/domain` — the stored head before the deadline, the SELECTED run
+ * alone once it is over — and the run's score, indicative; no score under
+ * grading `none`.
  */
 function reading(project: ProjectRow, repo: ProvisionedRepo, runs: Map<string, RunRow>, now: Date): RepoReading {
   const slot = (id: string | null) => (id === null ? null : (runs.get(id) ?? null));
@@ -206,16 +205,11 @@ function reading(project: ProjectRow, repo: ProvisionedRepo, runs: Map<string, R
     current: slot(repo.currentGradeRunId),
     frozen: slot(repo.frozenGradeRunId),
   });
-  const over = repo.deadlineAppliedAt !== null || now.getTime() >= effectiveDeadline(repo, project).getTime();
-  const stored: Pick<RepoReading, "lastCommit" | "ciStatus"> = over
-    ? {
-        lastCommit: chosen === null ? null : { sha: chosen.run.headSha, at: null },
-        ciStatus: chosen === null ? "none" : chosen.run.conclusion === "success" ? "pass" : "fail",
-      }
-    : {
-        lastCommit: repo.lastCommitSha === null ? null : { sha: repo.lastCommitSha, at: isoOrNull(repo.lastCommitAt) },
-        ciStatus: repo.ciStatus,
-      };
+  const ci = studentCiReading(repo, chosen?.run ?? null, effectiveDeadline(repo, project), now);
+  const stored: Pick<RepoReading, "lastCommit" | "ciStatus"> = {
+    lastCommit: ci.lastCommit === null ? null : { sha: ci.lastCommit.sha, at: isoOrNull(ci.lastCommit.at) },
+    ciStatus: ci.ciStatus,
+  };
   if (chosen === null) return { ...stored, run: null, score: null };
   const { run, frozen } = chosen;
   const score: StudentProjectScore | null =

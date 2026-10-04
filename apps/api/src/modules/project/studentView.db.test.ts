@@ -518,7 +518,10 @@ describe("who reads the view (invariant 6, ADR-018, ADR-034)", () => {
 
     // A confined session's home: the session guard refuses it over HTTP (401); should one ever reach the
     // service, it gets its evaluations and no project card leading to GitHub (`StudentScope.confined`).
-    expect((await call("GET", "/app/api/student/home", seb)).statusCode).toBe(401);
+    const kiosk = await sessionOf(student.id, { kind: "kiosk", evaluationId: room.evaluationId });
+    for (const [kind, headers] of [["seb", seb], ["kiosk", kiosk]] as const) {
+      expect((await call("GET", "/app/api/student/home", headers)).statusCode, kind).toBe(401);
+    }
     const confinedHome = await activityHome(server.app.db, caller, { kind: "seb", actorUserId: null, evaluationId: room.evaluationId }, server.clock.now());
     studentBodies.push(JSON.stringify(confinedHome));
     expect([...confinedHome.open, ...confinedHome.upcoming, ...confinedHome.past].filter((c) => c.kind === "project")).toEqual([]);

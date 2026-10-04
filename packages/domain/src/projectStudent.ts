@@ -62,3 +62,40 @@ export function studentScoreRun<T>(repo: {
   if (repo.deadlineAppliedAt !== null) return repo.frozen === null ? null : { run: repo.frozen, frozen: true };
   return repo.current === null ? null : { run: repo.current, frozen: false };
 }
+
+/** The CI state of a repository as the webhooks store it, and as a student reads it. */
+export type StudentCiStatus = "none" | "pending" | "pass" | "fail";
+
+export interface StudentCiReading {
+  /** The commit the view stands on; `at` null when it is a run's head, whose push time is not the run's. */
+  lastCommit: { sha: string; at: Date | null } | null;
+  ciStatus: StudentCiStatus;
+}
+
+/**
+ * The commit and CI state a student reads (F-PROJ-15, N-SEC-20). Before
+ * their deadline: the last push of theirs and its checks as the webhooks
+ * stored them. Once the deadline is OVER — applied by the ticker, or passed
+ * on the server's clock while the ticker has not yet applied it — the
+ * selected run alone (`studentScoreRun`): its head, and its conclusion read
+ * as pass or fail (`success` passes; anything else — a failure, a
+ * cancellation, a skip — fails), or nothing without a selected run. Never
+ * the row's head, which a repository left open keeps moving after the
+ * deadline.
+ */
+export function studentCiReading(
+  repo: { deadlineAppliedAt: Date | null; lastCommitSha: string | null; lastCommitAt: Date | null; ciStatus: StudentCiStatus },
+  run: { headSha: string; conclusion: string } | null,
+  deadlineAt: Date,
+  now: Date,
+): StudentCiReading {
+  const over = repo.deadlineAppliedAt !== null || now.getTime() >= deadlineAt.getTime();
+  if (!over) {
+    return {
+      lastCommit: repo.lastCommitSha === null ? null : { sha: repo.lastCommitSha, at: repo.lastCommitAt },
+      ciStatus: repo.ciStatus,
+    };
+  }
+  if (run === null) return { lastCommit: null, ciStatus: "none" };
+  return { lastCommit: { sha: run.headSha, at: null }, ciStatus: run.conclusion === "success" ? "pass" : "fail" };
+}
