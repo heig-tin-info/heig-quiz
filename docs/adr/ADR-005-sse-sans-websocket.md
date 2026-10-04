@@ -8,7 +8,9 @@ Accepted (2026-07-03, phase 3). Amended 2026-09-22: decision 1's path is
 mounted by WP5 and removed once no client opened it. Nothing else of the
 decision changes. The inherited `/api/v1` separation in decision 1 was later
 rejected by [ADR-022](ADR-022-jetons-api-et-serveur-mcp.md): tokens share
-`/app/api`, but this stream remains session-only.
+`/app/api`, this stream included: it is guarded by `requireSession`, which a
+personal API token satisfies (its connection has no session id); an OAuth
+token is confined to the MCP route and cannot open it.
 [ADR-065](ADR-065-reconnection-overlay.md) adds connection recovery and graceful
 restart signaling without reloading student work.
 
@@ -21,7 +23,7 @@ No functional requirement depends on real time — it is a display comfort.
 ## Decision
 
 1. **Server-Sent Events** on `GET /app/api/events` (formerly `/app/events`; see Status).
-   A session cookie is required; API tokens cannot open this stream (ADR-022).
+   It needs an authenticated caller: a session cookie, or a personal API token (ADR-022).
 2. Authorization filtering on the server side: a student only receives the events of their
    own repositories (AU-26).
 3. **No `Last-Event-ID` replay** and no ring buffer: on (re)connection the front end replays

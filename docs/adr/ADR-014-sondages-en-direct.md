@@ -20,7 +20,8 @@ an evaluation preserves one answer, versioning, deadline and student-content pat
 
 A poll is an evaluation of mode `poll`, with exactly one frozen question version,
 created and started together through the poll routes. Generic evaluation creation
-and entry still refuse polls. The session code is six characters from
+still refuses `mode: "poll"` (`501`) and student entry refuses a poll: participants
+come in through the public `/app/api/p/:code` routes (read, join, answer) only. The session code is six characters from
 `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`, unique among running polls and those ended
 less than two hours ago. The grace window permits continued reading after End.
 The QR targets `${WEB_URL}/p/<code>`; `WEB_URL` defaults to `PUBLIC_URL`.
@@ -34,10 +35,15 @@ Generic classroom evaluation routes cannot reach a classroom-less poll.
 
 A classroom poll admits signed-in claimed roster seats, staff and authorized admins.
 A signed-in outsider receives `403 not_on_roster` without content: the public code
-already reveals the poll's existence. A browser without a session must sign in.
+already reveals the poll's existence. A browser without a session must sign in
+(`401 login_required`).
 An anonymous poll admits anyone with its code: a signed-in browser votes as its
 account, otherwise as a guest. There is no second identity for the same browser.
-The database requires exactly one of `attempts.user_id` and `guest_id`.
+The database requires exactly one of `attempts.user_id` and `guest_id`, and a
+unique index `(evaluation_id, guest_id)` beside `(evaluation_id, user_id)`: one
+attempt per poll and browser, as per poll and account. Grading names a guest
+"Guest n"; the dashboard grid iterates the roster, so it shows no guest and emits
+no `dashboard.attempt` for one; no guest reaches the grade table or the CSV.
 
 Guest identity is a random 32-byte `quiz_guest` cookie, HttpOnly, SameSite=Lax,
 Secure outside development, path `/app/api/p`, 12 hours. Only
@@ -47,7 +53,9 @@ validated by `safeReturnTo`, carried in the signed OIDC stash, never trusted URL
 
 ### Questions and retrieval
 
-Polls use published, live `mcq` or `short` questions. Parameterized questions are
+Polls use published, live `mcq` or `short` questions; any other type is
+`422 poll_type`, and an inline config the type's schema refuses is
+`422 config_invalid`. Parameterized questions are
 refused so the projection and phones see the same values. Choices never shuffle.
 A pool question may come from any pool the teacher can access, independently of
 links to the answering classroom's course. The pool search can narrow to the
@@ -80,8 +88,8 @@ Late answers after reveal count normally, including in outcome statistics; the
 resulting optimistic success rate is an accepted distortion.
 
 A keyless poll has no reveal control; `revealed: true` is `422 poll_keyless`.
-Legacy keyless rows are normalized centrally: old revealed becomes votes, reveal
-becomes false. `feedbackPolicy.showKey` and `showExplanation` move with reveal so
+Legacy keyless rows are normalized centrally: `votes` becomes `votes || revealed`
+(an old reveal shows the votes, never hides them), and reveal becomes false. `feedbackPolicy.showKey` and `showExplanation` move with reveal so
 an authenticated feedback endpoint cannot leak the key early. Every question
 payload still passes through `toStudent`; revealing uses the solution path.
 
@@ -129,7 +137,10 @@ rejected. Nothing about a poll justifies releasing grades to absent roster membe
 
 - `apps/api/src/modules/poll/service.ts`: audience, codes, display normalization,
   tally, idle closure, recent outcomes and pool search.
-- `apps/api/src/modules/poll/routes.ts`: managed/public loaders and CSRF.
+- `apps/api/src/modules/poll/routes.ts`: managed/public loaders and CSRF. Teacher
+  routes `/app/api/polls` (list, `questions`, `pool-questions`, `inline`) and
+  `/app/api/evaluations/:id/poll` (`reveal`, `end`, `again`, `keep`); public routes
+  `GET /app/api/p/:code`, `POST …/join`, `POST …/answer`.
 - `packages/contracts/src/poll.ts`, `packages/domain/src/pollTally.ts` and
   `packages/domain/src/pollOutcome.ts`: contracts and pure rules.
 - `apps/api/src/modules/guards.ts`, pool/evaluation services and the poll database
@@ -139,6 +150,15 @@ rejected. Nothing about a poll justifies releasing grades to absent roster membe
 
 Original numbered decisions and addenda are historical. These compatibility
 anchors lead to their full text; apply the consolidated decision above.
+
+Where an old number cited in code or another record now lives:
+
+| Old reference | Current section |
+| --- | --- |
+| §1 a poll is an evaluation; §2 session code; §4 participants; §5 guest cookie; §6 public routes; §10 login return; §11 `WEB_URL` | [Evaluation and audience](#evaluation-and-audience) |
+| §3 personal pool; inline, Recent polls and From pools addenda | [Questions and retrieval](#questions-and-retrieval) |
+| §7 reveal; §8 End does not release; 12-hour expiry and independent switches addenda | [Display, answers and ending](#display-answers-and-ending) |
+| §9 tally; votes-hidden addendum | [Tally, history and visibility](#tally-history-and-visibility) |
 
 <a id="adr-014-live-polls-an-evaluation-of-one-question-a-code-and-participants-without-a-roster"></a>
 - [ADR-014 — Live polls: an evaluation of one question, a code, and participants without a roster](history/ADR-014-sondages-en-direct.md#adr-014-live-polls-an-evaluation-of-one-question-a-code-and-participants-without-a-roster)

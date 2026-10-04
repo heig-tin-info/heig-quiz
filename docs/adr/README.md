@@ -39,7 +39,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-004 — pg-boss job queue on Postgres](ADR-004-jobs-pg-boss.md)
 - [ADR-005 — SSE rather than WebSocket, without `Last-Event-ID` replay](ADR-005-sse-sans-websocket.md)
 - [ADR-006 — Deadlines through a single ticker-sweeper, no scheduled one-shot job](ADR-006-deadline-ticker.md)
-- [ADR-008 — React + Vite SPA front end, accessible headless components, no SSR](ADR-008-frontend-spa-react.md)
+- [ADR-008 — React + Vite SPA front end, own accessible primitives, no SSR](ADR-008-frontend-spa-react.md)
 - [ADR-009 — Deployment on a single VM, Docker Compose, Caddy, SWITCH backups](ADR-009-deploiement-vm-compose.md)
 - [ADR-010 — Secrets outside the repository and outside the database, in an encrypted institutional vault](ADR-010-stockage-secrets.md)
 - [ADR-011 — Reconciliation reuses the idempotent webhook handlers](ADR-011-reconciliation-par-les-handlers.md)

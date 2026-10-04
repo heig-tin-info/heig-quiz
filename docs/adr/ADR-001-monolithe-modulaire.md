@@ -2,8 +2,10 @@
 
 ## Status
 
-Accepted (2026-07-03, inherited from heig-classroom). Consolidated for Quiz
-on 2026-10-03 against `apps/api/src/{app,server,config,events}.ts`.
+Accepted (2026-07-03, inherited from heig-classroom). Amended for Quiz on
+2026-10-03 against `apps/api/src/{app,server,config,events}.ts`: inherited
+details the code never adopted are withdrawn, and the decision below is the one
+in force.
 The [inherited record](history/ADR-001-monolithe-modulaire.md) keeps the original module names and alternatives.
 
 ## Context

@@ -22,21 +22,26 @@ These are separate modes, not separate implementations of the student player.
 
 The Teacher/Student switch belongs to the application frame, with account-menu
 and command-palette access. It is available to teachers/admins, not students.
+It is secondary chrome (no accent, one tier under the page's primary action), so
+invariant 2 is untouched.
 The mode and return path live in `sessionStorage`: reload preserves one tab's walk
 without changing another tab's dashboard. Entering from an evaluation or its live
 dashboard goes to that evaluation's `/take/:id`; an existing student route stays,
 other pages go to the student home. Return restores the entry route.
 
 The switch does not enroll anyone. A teacher obtains a staff seat explicitly with
-Join as student on the classroom page. Without a seat, the real student route
-refuses access and explains that path. The former evaluation-page button and its
+Join as student on the classroom page. Without a seat, `/take/:id` answers 404
+as it does to a stranger (invariant 6), and its screen explains that path to a
+teacher. A teacher who is not staff of the classroom holds no seat and gets the
+same 404; this record does not change that. The former evaluation-page button and its
 automatic enrollment confirmation are gone.
 
 The real attempt uses the student's lobby, player, content, grading and server
 clock, including the normal deadline/410 rules and confined-exam requirements
 ([ADR-027](ADR-027-tickets-de-lancement-et-sessions-typees.md)). The attempt page
 has no ordinary application frame, but a teacher in student view gets the return
-banner; returning leaves the attempt open. Students never see that banner.
+banner and, inside the player, a "Back to teacher view" entry in the `Ctrl+K`
+palette; returning leaves the attempt open. Students never see that banner.
 
 ### Staff attempts
 
@@ -128,6 +133,15 @@ allowed on a structurally frozen evaluation.
 
 Original numbered decisions and addenda are historical. These compatibility
 anchors lead to their full text; apply the consolidated decision above.
+
+Where an old number cited in code or another record now lives:
+
+| Old reference | Current section |
+| --- | --- |
+| §1 the walk; §2 where it was entered from; §7 the student path; first to third addenda | [Real student view and return](#real-student-view-and-return) |
+| §3 shown and badged; §4 counts in nothing; §5 CSV drops the row; §6 own reset | [Staff attempts](#staff-attempts) |
+| Fourth addendum (stateless preview); seventh (preview is a mode) | [Stateless evaluation preview](#stateless-evaluation-preview) |
+| Fifth addendum (waiting room); sixth (fixing a question) | [Editing during preview and previewing the lobby](#editing-during-preview-and-previewing-the-lobby) |
 
 <a id="adr-018-the-real-student-view-and-the-teachers-own-test-attempt"></a>
 - [ADR-018 — The real student view, and the teacher's own test attempt](history/ADR-018-vue-etudiant-reelle.md#adr-018-the-real-student-view-and-the-teachers-own-test-attempt)

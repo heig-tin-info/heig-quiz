@@ -8,7 +8,8 @@ one PostgreSQL and a separate hardened question runner.
 
 Read `AGENTS.md` first: each agent uses its own worktree, stages by path and
 opens a PR. `main` receives merges only; a push deploys staging, production
-requires approval. Limit test workers and stop servers you start.
+requires approval (staging is `quiz.dev.chevallier.io`, ADR-028). Limit test
+workers and stop servers you start.
 
 Read [the specification index](docs/spec/README.md), then only the chapters
 or sections relevant to the task. Check [unresolved questions](docs/spec/06-questions-ouvertes.md)
@@ -30,14 +31,18 @@ For orientation: `apps/api` is Fastify; `apps/web` is the React SPA;
 `packages/domain` pure rules, `packages/core` the question-type contracts,
 `packages/registry` their static wiring, `packages/qt-*` the types,
 `packages/diagram` the diagram engine and `packages/docrender` journal rendering.
+`mockups/` holds the HTML origins of the circuit, categorize, diagram and
+grading editors; `extensions/kiosk-attestation/` the kiosk stations' Chrome
+extension (ADR-051); `infra/` the Keycloak development realm.
 
 `core` never imports a `qt-*` package: register types through both registry
 entry points (`./server`, `./client`). Generic web primitives go in
 `apps/web/src/ui/`; `packages/ui` holds primitives shared by question types
 and must not import a `qt-*` package or `apps/web`. The accepted `ui-kit`
 extraction remains in ADR-035; do not create the superseded external npm
-library of ADR-029. `canonical`, `cli`, `ui-kit` and `apps/codespace` are
-planned, not present; consult the relevant spec/task before implementing them.
+library of ADR-029. `ui-kit`, then `canonical`, then `cli` (in this order) and
+`apps/codespace` are planned, not present; consult the relevant spec/task
+before implementing them.
 
 For UI work, read `apps/web/DESIGN.md` and `.claude/skills/quiz-ui/SKILL.md`.
 Screenshots are in `docs/assets/screenshots/`. Runner work also requires
@@ -177,12 +182,14 @@ the smoke test and optional PostgreSQL/OIDC/Podman paths. Use Node as required
 by `package.json` and the pinned pnpm version. Build packages before running
 the apps: they import workspace `dist/` outputs.
 
+No Docker, Podman or PostgreSQL is needed for this path.
+
 ```bash
-pnpm install --frozen-lockfile
+corepack enable pnpm && pnpm install --frozen-lockfile
 pnpm build
 cp .env.example .env
 pnpm seed
-pnpm dev
+pnpm dev            # API :3000, Vite :5173 (open it, click Dev login)
 ```
 
 Local PGlite is single-process: stop the API before seeding. The seed is

@@ -4,6 +4,7 @@ search:
 ---
 
 > Historical snapshot: superseded wording and delivery history are preserved here.
+> The record's text as of 2026-10-03, unchanged except for a reading map added for navigation.
 > For current decisions, read [the active ADR](../ADR-018-vue-etudiant-reelle.md). Load this archive only for rationale or a historical section reference.
 
 # ADR-018 — The real student view, and the teacher's own test attempt

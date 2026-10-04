@@ -4,6 +4,7 @@ search:
 ---
 
 > Historical snapshot: superseded wording and delivery history are preserved here.
+> The record's text as of 2026-10-03, unchanged except for a reading map and two relative-link fixes added for navigation.
 > For current decisions, read [the active ADR](../ADR-014-sondages-en-direct.md). Load this archive only for rationale or a historical section reference.
 
 # ADR-014 — Live polls: an evaluation of one question, a code, and participants without a roster

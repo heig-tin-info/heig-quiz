@@ -12,7 +12,9 @@ not evidence they are delivered: the current contracts contain twelve kinds.
 
 The [historical record](history/ADR-030-canaux-de-notification.md) preserves the
 rejected Teams transports, migration sequence, implementation steps and original
-section numbers. Read it only for that history, not to recover current behavior.
+section numbers. Load it for rationale or an old section reference; where this
+record is silent on a detail (an exact log line, a migration step), the archive
+still describes the implementation, and this record wins wherever both speak.
 
 ## Context
 
@@ -42,7 +44,8 @@ in-process queue logs failures rather than promising production retries.
 ### Preferences, audiences and payloads
 
 `notification_preferences` stores only changed toggles, keyed by user/kind/channel.
-Missing values come from `DEFAULT_CHANNEL_ENABLED` in `@quiz/contracts`. The
+Missing values come from `DEFAULT_CHANNEL_ENABLED` in `@quiz/contracts`, a
+`Record<NotificationKind, …>`: a kind without its defaults is a compile error. The
 recipient's preferences are intersected with a delivery's allowed channels and
 `KIND_CHANNELS`; preferences cannot widen either restriction. App is on by default.
 Linking Teams is the account's opt-in before its enabled kinds can use that channel.
@@ -55,6 +58,10 @@ members, and admin kinds target the admin role. The settings list follows those
 capabilities: students see seat kinds before enrollment; teachers/admins need a
 student seat for those kinds, and an admin needs a course seat for course kinds.
 Teachers can configure course kinds before receiving a seat.
+
+Every kind has its sentence in `en` and `fr` twice: in the API's `templates.ts`
+(e-mail, Teams), whose `fr` is typed `Record<keyof typeof en, string>`, and in the
+web dictionary (bell, toast). A missing French sentence is a compile error.
 
 Payloads carry identifiers, titles and counts, never grades, points, answers,
 question content, student names or student e-mail. Teacher names in sharing and
@@ -186,13 +193,23 @@ Installation and Entra configuration belong in the
 The personal Teams tab cannot use Quiz SameSite cookies; it gets Teams SSO instead.
 Its sessionless endpoint verifies RS256 signature, exact tenant-derived Entra v2
 issuer, our audience, delegated `access_as_user`, a Teams client id, tenant allowlist,
-expiry/not-before and object id. Production refuses enabled Teams with an empty
-tenant allowlist. It returns only that identity's link state or a 15-minute,
+expiry/not-before with five minutes of skew, object id, and `idtyp` not `app`.
+Entra's keys come from the common key set, cached a day and re-read at most every
+five minutes for an unknown key. Production refuses enabled Teams with an empty
+tenant allowlist. The endpoint, `POST /app/api/notifications/teams/tab`, reads no
+cookie (so no CSRF), answers `Cache-Control: no-store` and 404 while Teams is off;
+a tenant outside the allowlist gets 403 `tenant_not_allowed`, any other refusal a
+401 and a `teams tab refused` log line naming the reason, never the token. It returns only that identity's link state or a 15-minute,
 random 32-byte, SHA-256-stored link token. Issuance is serialized per identity and
-replaces outstanding tokens. A Quiz browser session and CSRF-protected confirmation
-consume it atomically, checking the tenant again. The confirmation names Microsoft
+replaces outstanding tokens; there is no issuance cooldown. The `/teams/link` page
+previews without consuming; a Quiz browser session and CSRF-protected confirmation
+consume it, the token in a body and one conditional UPDATE deciding, checking the
+tenant again. The confirmation names Microsoft
 account and organization; its address need not equal edu-ID's. One Teams identity
-links to one Quiz account and vice versa; moving a link is explicit and audited.
+links to one Quiz account and vice versa (UNIQUE `(tenant_id, aad_object_id)`).
+Confirming a token of an identity already linked to another account MOVES the link
+(audited `teams.unlink`, `{ via: "moved", to }`), and a new link replaces the
+account's previous one.
 
 A malicious same-tenant user could forward their genuine linking URL: confirmation
 and the named identity mitigate that residual consent-phishing risk, they do not
@@ -201,7 +218,9 @@ bounds the exposure. Link URLs/return paths and authorization headers are redact
 
 Graph credentials are obtained for the recipient's tenant and cached to just before
 expiry. The manifest declares each Teams-supported activity type, excluding
-`system_alert`; catalogue tests enforce completeness. Bundle newly added kinds into
+`system_alert`; catalogue tests enforce completeness. That list alone may run
+ahead of the catalogue, so one manifest bump can declare the types of kinds still
+to be emitted. Bundle newly added kinds into
 one manifest update, since users may need to reinstall. Teams renders its template
 in Teams' language and the server preview in Quiz locale, capped at 150 characters.
 Deep links are parsed into a known router route and rebuilt under the app's origin,
@@ -254,6 +273,19 @@ Teams designs and why their tenant/operational requirements failed.
 
 Original numbered decisions and addenda are historical. These compatibility
 anchors lead to their full text; apply the consolidated decision above.
+
+Where an old number cited in code or another record now lives:
+
+| Old reference | Current section |
+| --- | --- |
+| §1 `notify` the one entry; §h best-effort after commit | [One entry, after commit](#one-entry-after-commit) |
+| §2 rendering and locale; §5 preferences; §b defaults | [Preferences, audiences and payloads](#preferences-audiences-and-payloads) |
+| §a bell and toast; §e aggregation; §h quiet pages and throttle; Step 4 | [App aggregation and live toasts](#app-aggregation-and-live-toasts) |
+| §c the kinds; §6 `results_released`; Step 6 | [Events and trigger boundaries](#events-and-trigger-boundaries) |
+| §d `deadline_approaching`; Step 7 | [Deadline reminders](#deadline-reminders) |
+| Step 5 (`grading_ready`); Step 8 (`results_updated`) | [Grading-ready and changed results](#grading-ready-and-changed-results) |
+| §3 e-mail; §4 Teams; §f fan-out and manifest | [External transports and identity](#external-transports-and-identity) |
+| §g out of scope; Rollback; Alternatives considered | [Consequences and alternatives](#consequences-and-alternatives) |
 
 <a id="adr-030-notification-channels-the-bell-e-mail-and-microsoft-teams"></a>
 - [ADR-030 — Notification channels: the bell, e-mail and Microsoft Teams](history/ADR-030-canaux-de-notification.md#adr-030-notification-channels-the-bell-e-mail-and-microsoft-teams)

@@ -50,8 +50,8 @@ M = must, S = should, C = could.
 | Decisions not yet settled | [Open questions](06-questions-ouvertes.md) |
 
 The journal supports Quiz and GitHub modes (ADR-057). Teachers may create
-projects before the cutover through Quiz's own App (D26 addendum, ADR-062).
-The online workspace stays after the cutover (D09). Requirements describe
+projects before the cutover through Quiz's own App (D26 addendum of
+2026-10-02). The online workspace is rebuilt in Quiz after the cutover (D09, M6). Requirements describe
 intended behaviour; their presence alone does not certify implementation.
 
 ### Phase 1, MVP: run a graded quiz in class
@@ -94,7 +94,7 @@ intended behaviour; their presence alone does not certify implementation.
 | Wrong LLM grading on an official grade | Medium | Always validated by the teacher, justification per criterion, confidence score, traced re-grading |
 | Cost or unavailability of the LLM provider | Medium | Deferred grading, never in the critical path of the quiz, a daily spending cap on the institutional key (ADR-058, which replaced the key per teacher) |
 | Leak of the pool's questions | Medium | The pool is never served to students, only the questions of a running evaluation are, without the key |
-| Scope creep | High | Keep the documented scope; record new decisions and their delivery priority explicitly |
+| Scope creep | High | Keep the documented scope; a new idea is recorded (a requirement with its priority, an ADR) before it is built, otherwise it stays out of scope |
 | GitHub unavailable, or its rate limit reached | Medium | The journal is a read model in Postgres: a page view never calls GitHub, an outage only delays the next synchronisation (N-RES-07) |
 | A forged CI score: the student's code runs in the run that reports it | Medium | A score is indicative until the teacher releases it; two `GRADE` annotations void a run; the teacher may override (N-SEC-21) |
 | A deadline applied late or twice on 100 repositories | High | The receipt time of every push written as the webhook arrives; the deadline claimed in the database, applied idempotently, with a time budget (N-PERF-07, N-RES-08) |

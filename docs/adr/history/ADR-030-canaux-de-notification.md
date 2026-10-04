@@ -4,6 +4,7 @@ search:
 ---
 
 > Historical snapshot: superseded wording and delivery history are preserved here.
+> The record's text as of 2026-10-03, unchanged except for a reading map, editorial notes and the `Step 4`–`Step 8` headings added for navigation.
 > For current decisions, read [the active ADR](../ADR-030-canaux-de-notification.md). Load this archive only for rationale or a historical section reference.
 
 # ADR-030 — Notification channels: the bell, e-mail and Microsoft Teams

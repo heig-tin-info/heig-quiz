@@ -2,8 +2,9 @@
 
 ## Status
 
-Accepted (2026-07-03, inherited from heig-classroom). The durable Postgres
-queue remains. Quiz's queue policies are in `apps/api/src/jobs.ts` and each
+Accepted (2026-07-03, inherited from heig-classroom). Amended 2026-10-03: the
+durable Postgres queue remains; the inherited singleton keys, dead-letter replay
+screen and queue metrics, never built in Quiz, are withdrawn. Quiz's queue policies are in `apps/api/src/jobs.ts` and each
 module's job registration; the [inherited record](history/ADR-004-jobs-pg-boss.md) is not their configuration.
 
 ## Context

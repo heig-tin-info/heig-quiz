@@ -1,9 +1,10 @@
-# ADR-008 — React + Vite SPA front end, accessible headless components, no SSR
+# ADR-008 — React + Vite SPA front end, own accessible primitives, no SSR
 
 ## Status
 
-Accepted (2026-07-03, inherited from heig-classroom). React/Vite SPA remains
-the choice; the [inherited record](history/ADR-008-frontend-spa-react.md)'s frontend library list was not carried into Quiz
+Accepted (2026-07-03, inherited from heig-classroom). Amended 2026-10-03:
+React/Vite SPA remains the choice; Radix, TanStack Router/Table, i18next and
+Luxon are withdrawn; the [inherited record](history/ADR-008-frontend-spa-react.md)'s frontend library list was not carried into Quiz
 as a package requirement. Current implementation is evidenced below.
 
 ## Context

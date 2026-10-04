@@ -2,8 +2,10 @@
 
 ## Status
 
-Accepted (2026-07-03, inherited from heig-classroom). The language/framework
-choice remains; version pins and integration mechanisms below describe Quiz.
+Accepted (2026-07-03, inherited from heig-classroom). Amended 2026-10-03: the
+language/framework choice remains; the version pins, the library shortlist and
+"explicit authorization middleware on every route" are withdrawn — access is
+loaded through `modules/guards.ts` (invariant 6).
 The [inherited record](history/ADR-002-stack-backend-fastify.md) preserves the original library shortlist.
 
 ## Context
@@ -21,8 +23,9 @@ SPA and tools, including GitHub and OIDC integrations.
    entities. Access rules are the invariants in `CLAUDE.md`.
 3. Quiz uses Octokit, `openid-client` and Fastify's structured logging.
    The installed dependencies are in `apps/api/package.json`; webhook HMAC,
-   request validation and rate limits are implemented in the corresponding
-   auth/GitHub modules, not guaranteed by the libraries once proposed here.
+   request validation and rate limits are implemented where they are needed
+   (webhook HMAC in `modules/github`, rate limits in the kiosk, live and runner
+   paths), not guaranteed by the libraries once proposed here.
 
 ## Consequences
 

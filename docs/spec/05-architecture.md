@@ -120,7 +120,9 @@ qt-mcq/
 ### Tables
 
 The [data model reference](reference/data-model.md) holds detailed fields and
-schema intent, including planned tables. Read only the relevant domain block.
+schema intent, including planned tables. Read only the relevant domain block,
+but read it before touching its tables: its constraints, single-writer notes
+("written only by") and staff-only columns are binding, not illustrative.
 Exact implemented declarations are the exports of `apps/api/src/db/schema.ts`;
 `apps/api/drizzle/` owns migration history. This chapter keeps cross-module
 principles, critical queries and transaction boundaries below.
