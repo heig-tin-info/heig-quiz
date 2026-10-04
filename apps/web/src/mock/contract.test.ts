@@ -652,6 +652,25 @@ describe("the mock's project writes (M3-12b, M3-12c)", () => {
     expect(refused.body).toMatchObject({ error: "not_frozen" });
   });
 
+  it("refuses a release over a score to verify, naming the repository by a uuid the contract accepts", async () => {
+    const { id, detail } = await locked();
+    // The repository whose frozen run is to verify, settled by the teacher's score: clear it, the release is refused.
+    const settled = detail.rows.find((r) => r.repo?.flags.toVerify && r.repo.scores.final?.source === "teacher")!;
+    expect((await send(`/app/api/projects/${id}/repos/${settled.repo!.id}/score`, "PATCH", { points: null })).status).toBe(200);
+    const refused = await send(`/app/api/projects/${id}/release`, "POST");
+    expect(refused.status).toBe(409);
+    // Strict: the ids must be uuids, as the page's `releaseRefusal` parses them.
+    expect(ProjectReleaseRefusal.parse(refused.body)).toEqual({
+      error: "to_verify",
+      message: expect.any(String),
+      repos: [settled.repo!.id],
+    });
+    // Settled again — with the teacher's own maximum, since no scored run holds it: the release goes through.
+    const back = await send(`/app/api/projects/${id}/repos/${settled.repo!.id}/score`, "PATCH", { points: 72, max: 100 });
+    expect(back.status).toBe(200);
+    expect((await send(`/app/api/projects/${id}/release`, "POST")).status).toBe(200);
+  });
+
   it("resends a pending invitation (ProjectInvitationResent) and re-enables a protection (ProjectRepoProtection)", async () => {
     const { id, detail } = await published();
     const pending = detail.rows.find((r) => r.repo?.invitationStatus === "pending")!;

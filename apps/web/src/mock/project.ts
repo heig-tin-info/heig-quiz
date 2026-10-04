@@ -122,6 +122,14 @@ const SEEDS: { id: string; title: string; state: ProjectSummary["state"]; start:
 ];
 
 const slug = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+/**
+ * A repository's id, a uuid: the contracts name repositories that way
+ * (`ProjectReleaseRefusal.repos`, parsed strictly by the page), so a seeded
+ * id is built from the seed's rank and the student's (999: the student who
+ * left the roster).
+ */
+const repoId = (seed: (typeof SEEDS)[number], n: number) =>
+  `0190d3c4-0000-7000-8000-${String(SEEDS.indexOf(seed) + 1).padStart(4, "0")}${String(n).padStart(8, "0")}`;
 const sha = (n: number) => (0x9a3f1c00 + n * 0x1f3d7).toString(16).padStart(8, "0").repeat(5).slice(0, 40);
 
 /** One run of `grading.yml`, as the ingestion stored it. */
@@ -165,7 +173,7 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
   const claimed = roster.filter((s) => s.status === "claimed");
   claimed.forEach((student, i) => {
     if (i % 10 === 0) return;
-    const id = `${seed.id}-r${i + 1}`;
+    const id = repoId(seed, i + 1);
     const name = `${ORG}/${project.slug}-${(student.githubLogin ?? `${student.prenom}-${student.nom}`).toLowerCase()}`;
     const variant = i % 12;
     const runs: GradeRunView[] = [];
@@ -255,9 +263,12 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
       base.frozenRunId = base.currentRunId;
       // The final review, claimed at the definitive freeze (F-PROJ-11); none on a degraded lock.
       // On `i === 2` GitHub's acceptance was never recorded: "not confirmed", never sent again.
+      // On `i === 4` (variant 4: a restored head, the frozen run to verify) the review was asked
+      // but its run is to verify too and never fills the slot (F-PROJ-11 as amended): the final
+      // score rests on the frozen run, and only the teacher's score settles it.
       if (!base.archived && base.currentRunId) {
         base.dispatch = { sha: latest.headSha, dispatchedAt: i === 2 ? null : iso(seed.deadline + 31 * 60_000) };
-        if (i !== 2) {
+        if (i !== 2 && i !== 4) {
           const review = scored(9, seed.deadline + 40 * 60_000, { kind: "review", points: 60 + (i % 7) * 5, max: 100, testsPassed: null, testsTotal: null, headSha: latest.headSha });
           base.reviewRunId = review.id;
         }
@@ -287,8 +298,9 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
     email: "eleve.ancien@heig-vd.ch",
     githubLogin: "eleve-ancien",
   };
+  const goneId = repoId(seed, 999);
   repos.push({
-    id: `${seed.id}-gone`,
+    id: goneId,
     enrollmentId: null,
     student: gone,
     fullName: `${ORG}/${project.slug}-eleve-ancien`,
@@ -310,9 +322,9 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
     released: null,
     protectionSuspended: false,
     deleted: false,
-    runs: [run(`${seed.id}-gone`, 1, seed.start + 3 * D, { points: 5, testsPassed: 5 })],
-    currentRunId: `${seed.id}-gone-run-1`,
-    frozenRunId: locked ? `${seed.id}-gone-run-1` : null,
+    runs: [run(goneId, 1, seed.start + 3 * D, { points: 5, testsPassed: 5 })],
+    currentRunId: `${goneId}-run-1`,
+    frozenRunId: locked ? `${goneId}-run-1` : null,
     reviewRunId: null,
     dispatch: locked ? { sha: sha(99), dispatchedAt: iso(seed.deadline + 31 * 60_000) } : null,
     resentAt: null,

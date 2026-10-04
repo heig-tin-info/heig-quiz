@@ -2100,9 +2100,13 @@ release. The original card's notes stay here; each part has its card below.
     `reviewOf`, feeding `reviewState` of `@quiz/domain` with that ledger.
     The locked project's rows now walk the review states (done; `i === 2`
     not confirmed; archived degraded; the gone student's done) and the
-    to-verify repository (`i === 4`, rather than `i === 3`) carries the
-    teacher's score that settles it (72/100, the review's maximum), so the
-    server's `scoresFinal` holds and Release is offered. The four
+    to-verify repository (`i === 4`, rather than `i === 3`: a restored
+    head, its review asked but never filling the slot) carries the
+    teacher's score that settles it (72 out of the teacher's own 100,
+    `scoreMax` null), so the server's `scoresFinal` holds and Release is
+    offered; without it the release is refused `to_verify` naming that
+    repository. Repository ids are uuids (`repoId`), as
+    `ProjectReleaseRefusal.repos` wants them (review round 2). The four
     routes: `PATCH …/score` (`teacherScoreMax` applied, the 409s and
     422s), `POST …/release` (counts in `not_frozen`, ids in `to_verify`,
     the snapshots), `POST …/protection`, `POST …/invite` (once a minute,

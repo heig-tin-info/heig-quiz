@@ -127,9 +127,10 @@ function TeacherScoreForm({
 }
 
 /** The final review's state (F-PROJ-11): its tag and, where a word is not enough, the line that says why or what next. */
-function ReviewState({ review }: { review: ProjectRepoView["review"] }) {
+function ReviewState({ repo }: { repo: Pick<ProjectRepoView, "review" | "frozenAt"> }) {
   const t = useT();
-  const view = reviewView(review);
+  const { review } = repo;
+  const view = reviewView(review, repo.frozenAt);
   return (
     <Fact label={t("project.sheet.review")}>
       <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -182,7 +183,7 @@ export function ScoreSection({
         <Fact label={t("project.score.final")}>
           <Score score={repo.scores.final} />
         </Fact>
-        <ReviewState review={repo.review} />
+        <ReviewState repo={repo} />
       </dl>
       <div className="space-y-3 border-t border-line pt-3">
         <h4 className="text-[13px] font-medium">{t("project.teacherScore")}</h4>

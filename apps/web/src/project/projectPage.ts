@@ -145,12 +145,18 @@ export interface ReviewView {
  * amber (archived as its lock, or the protection suspended: re-enabling it
  * makes the review due again), and "not confirmed" in red — claimed,
  * GitHub's acceptance never recorded, never sent again: the teacher's score
- * settles the repository.
+ * settles the repository. A pending review says it waits for the freeze
+ * only while the repository is not frozen (`frozenAt` null): frozen and
+ * pending, it is due and the job will ask for it.
  */
-export function reviewView(review: ProjectRepoReview): ReviewView {
+export function reviewView(review: ProjectRepoReview, frozenAt: string | null): ReviewView {
   switch (review.status) {
     case "pending":
-      return { key: "project.reviewState.pending", tone: "zinc", detail: "project.reviewState.pending.detail" };
+      return {
+        key: "project.reviewState.pending",
+        tone: "zinc",
+        detail: frozenAt === null ? "project.reviewState.pending.detail" : null,
+      };
     case "none":
       return {
         key: "project.reviewState.none",
@@ -183,7 +189,7 @@ export function reviewView(review: ProjectRepoReview): ReviewView {
 export function reviewTag(repo: ProjectRepoView): ReviewView | null {
   if (repo.review.status === "pending" && repo.frozenAt === null) return null;
   if (repo.review.status === "none" && repo.review.reason === null) return null;
-  return reviewView(repo.review);
+  return reviewView(repo.review, repo.frozenAt);
 }
 
 /** Why the sheet offers no teacher's score form: the project is not graded, or the repository is not frozen for good. */

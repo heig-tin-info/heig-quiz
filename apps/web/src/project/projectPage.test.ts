@@ -20,7 +20,7 @@ import {
   repoFlags,
   repoShortName,
   reviewTag,
-  reviewView,
+  reviewView as reviewViewOf,
   teacherScoreBlock,
   unassignedStudents,
 } from "./projectPage";
@@ -253,7 +253,10 @@ describe("the final review's state (F-PROJ-11, M3-08b)", () => {
   });
 
   it("has a word, a tone and a detail per status: facts in zinc, degraded in amber, not confirmed in red, done in green", () => {
-    expect(reviewView(review({}))).toEqual({ key: "project.reviewState.pending", tone: "zinc", detail: "project.reviewState.pending.detail" });
+    // Pending says it waits for the freeze only while there is none; frozen and pending, it is simply due.
+    expect(reviewViewOf(review({}), null)).toEqual({ key: "project.reviewState.pending", tone: "zinc", detail: "project.reviewState.pending.detail" });
+    expect(reviewViewOf(review({}), PAST)).toEqual({ key: "project.reviewState.pending", tone: "zinc", detail: null });
+    const reviewView = (r: ProjectRepoView["review"]) => reviewViewOf(r, PAST);
     expect(reviewView(review({ status: "none" }))).toEqual({ key: "project.reviewState.none", tone: "zinc", detail: null });
     expect(reviewView(review({ status: "none", reason: "no_frozen_run" }))).toEqual({
       key: "project.reviewState.none",
