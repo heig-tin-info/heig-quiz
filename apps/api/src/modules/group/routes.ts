@@ -54,9 +54,7 @@ export async function groupPlugin(app: FastifyInstance) {
 
   app.post(
     "/app/api/classrooms/:id/group-sets",
-    // The module hints the course's staff itself: the catch-all hint of a
-    // classroom's writes (`app.ts`) would reach its students (N-SEC-20).
-    { ...session, config: { readOnly: true } },
+    session,
     teacher(
       { params: IdParam, load: projectsClassroom.bind(null, app), body: GroupSetCreate, optionalBody: true },
       async ({ req, reply, now, body, scope }) => {

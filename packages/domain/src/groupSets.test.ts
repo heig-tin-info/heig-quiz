@@ -112,7 +112,7 @@ describe("groupSyncPlan (ADR-070 §4)", () => {
 
   it("deletes a copy group whose set group is gone, or that has none", () => {
     const plan = groupSyncPlan(set([["g1", "Group 1"]]), copyOf([["c1", "Group 1", "g1"], ["c2", "Group 2", "gone"], ["c3", "Old", null]], [["e2", "c2"]]));
-    expect(plan.delete).toEqual([{ id: "c2" }, { id: "c3" }]);
+    expect(plan.delete).toEqual(["c2", "c3"]);
     // Its members leave with it: no separate unplace.
     expect(plan.unplace).toEqual([]);
   });
@@ -126,12 +126,12 @@ describe("groupSyncPlan (ADR-070 §4)", () => {
       { enrollmentId: "joins", sourceGroupId: "g1", from: null },
       { enrollmentId: "moves", sourceGroupId: "g2", from: "c1" },
     ]);
-    expect(plan.unplace).toEqual([{ enrollmentId: "leaves", groupId: "c2" }]);
+    expect(plan.unplace).toEqual(["leaves"]);
   });
 
   it("places the members of a deleted copy group as arrivals", () => {
     const plan = groupSyncPlan(set([["g2", "B"]], [["e1", "g2"]]), copyOf([["c1", "A", "gone"]], [["e1", "c1"]]));
-    expect(plan.delete).toEqual([{ id: "c1" }]);
+    expect(plan.delete).toEqual(["c1"]);
     expect(plan.create).toEqual([{ sourceGroupId: "g2", name: "B", slug: "b", position: 0 }]);
     expect(plan.place).toEqual([{ enrollmentId: "e1", sourceGroupId: "g2", from: null }]);
   });
@@ -147,7 +147,7 @@ describe("groupSyncPlan (ADR-070 §4)", () => {
       { groups: [{ id: "g1", name: "A", position: 1 }, { id: "g2", name: "!!!", position: 0 }], members: [] },
       copyOf([["c1", "A", "g1"], ["c2", "A twice", "g1"]]),
     );
-    expect(plan.delete).toEqual([{ id: "c2" }]);
+    expect(plan.delete).toEqual(["c2"]);
     expect(plan.update).toEqual([{ id: "c1", name: "A", slug: "a", position: 1 }]);
     expect(plan.create).toEqual([{ sourceGroupId: "g2", name: "!!!", slug: "group", position: 0 }]);
   });

@@ -90,21 +90,22 @@ export interface CopyState {
  * applied in this order (they never break the copy's UNIQUE (project, name),
  * (project, slug) and (project, enrollment) when renames go through a
  * temporary name first):
- *   - `delete` — a copy group whose set group is gone (its members leave
- *     with it, by cascade);
+ *   - `delete` — the copy groups whose set group is gone (their members
+ *     leave with them, by cascade);
  *   - `update` — a copy group whose name or position differs from its set
  *     group's (the slug follows the name);
  *   - `create` — a set group the copy lacks;
  *   - `place` — a student into the copy group of `sourceGroupId`; `from`
  *     the copy group they leave (a move), null when in none;
- *   - `unplace` — a student in the copy who is in no group of the set.
+ *   - `unplace` — the students (roster lines) in the copy who are in no
+ *     group of the set.
  */
 export interface GroupSyncPlan {
-  delete: { id: string }[];
+  delete: string[];
   update: { id: string; name: string; slug: string; position: number }[];
   create: { sourceGroupId: string; name: string; slug: string; position: number }[];
   place: { enrollmentId: string; sourceGroupId: string; from: string | null }[];
-  unplace: { enrollmentId: string; groupId: string }[];
+  unplace: string[];
 }
 
 /**
@@ -121,7 +122,7 @@ export function groupSyncPlan(set: SetState, copy: CopyState): GroupSyncPlan {
   const bySource = new Map<string, CopyState["groups"][number]>();
   for (const g of copy.groups) {
     if (g.sourceGroupId !== null && setIds.has(g.sourceGroupId) && !bySource.has(g.sourceGroupId)) bySource.set(g.sourceGroupId, g);
-    else plan.delete.push({ id: g.id });
+    else plan.delete.push(g.id);
   }
 
   // The names and slugs of the copy once in step: the groups whose name
@@ -151,7 +152,7 @@ export function groupSyncPlan(set: SetState, copy: CopyState): GroupSyncPlan {
   }
 
   const sourceOf = new Map(copy.groups.map((g) => [g.id, g.sourceGroupId]));
-  const deleted = new Set(plan.delete.map((d) => d.id));
+  const deleted = new Set(plan.delete);
   const inCopy = new Map(copy.members.map((m) => [m.enrollmentId, m.groupId]));
   const inSet = new Set<string>();
   for (const m of set.members) {
@@ -161,7 +162,7 @@ export function groupSyncPlan(set: SetState, copy: CopyState): GroupSyncPlan {
     plan.place.push({ enrollmentId: m.enrollmentId, sourceGroupId: m.groupId, from: current === undefined || deleted.has(current) ? null : current });
   }
   for (const m of copy.members) {
-    if (!inSet.has(m.enrollmentId) && !deleted.has(m.groupId)) plan.unplace.push({ enrollmentId: m.enrollmentId, groupId: m.groupId });
+    if (!inSet.has(m.enrollmentId) && !deleted.has(m.groupId)) plan.unplace.push(m.enrollmentId);
   }
   return plan;
 }
@@ -173,17 +174,16 @@ export function isEmptyPlan(plan: GroupSyncPlan): boolean {
 
 // ---------------------------------------------------------------- names
 
-/** `base`, else `base 2`, `base 3`… — the first not in `taken`. */
-export function freeName(base: string, taken: ReadonlySet<string>): string {
-  if (!taken.has(base)) return base;
-  for (let n = 2; ; n++) if (!taken.has(`${base} ${n}`)) return `${base} ${n}`;
+/** The first of `nth(1)`, `nth(2)`… not in `taken`. */
+function firstFree(taken: ReadonlySet<string>, nth: (k: number) => string): string {
+  for (let k = 1; ; k++) if (!taken.has(nth(k))) return nth(k);
 }
 
+/** `base`, else `base 2`, `base 3`… — the first not in `taken`. */
+export const freeName = (base: string, taken: ReadonlySet<string>): string => firstFree(taken, (k) => (k === 1 ? base : `${base} ${k}`));
+
 /** `base`, else `base-2`, `base-3`… — the first not in `taken`. */
-export function freeSlug(base: string, taken: ReadonlySet<string>): string {
-  if (!taken.has(base)) return base;
-  for (let n = 2; ; n++) if (!taken.has(`${base}-${n}`)) return `${base}-${n}`;
-}
+export const freeSlug = (base: string, taken: ReadonlySet<string>): string => firstFree(taken, (k) => (k === 1 ? base : `${base}-${k}`));
 
 /** The languages a default name is written in: the creator's (ADR-070 §1, §2). */
 export type NameLocale = "en" | "fr";
@@ -191,7 +191,7 @@ export type NameLocale = "en" | "fr";
 /** "Group k" (fr "Groupe k") with the first k whose name is not `taken` (ADR-070 §1). */
 export function defaultGroupName(taken: ReadonlySet<string>, locale: NameLocale): string {
   const word = locale === "fr" ? "Groupe" : "Group";
-  for (let k = 1; ; k++) if (!taken.has(`${word} ${k}`)) return `${word} ${k}`;
+  return firstFree(taken, (k) => `${word} ${k}`);
 }
 
 /**

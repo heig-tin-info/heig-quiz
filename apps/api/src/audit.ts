@@ -117,8 +117,9 @@ export type AuditAction =
    * `name`; `rename`: `groupId`, `from`, `to`; `delete`: `groupId`, `name`;
    * `member_move`: `enrollmentId`, `from`, `to` (group ids, null: none);
    * `random_form`: `size`, `remainder`, `groups` (the new ones), `placed`.
-   * Every write but the sets' creation, duplication and deletion also
-   * names `payload.copies`: the projects whose copy it changed (ADR-070 §4).
+   * Every write but the sets' creation and duplication also names
+   * `payload.copies`: the projects whose copy it changed (ADR-070 §4;
+   * always empty for a deletion, which no following copy allows).
    */
   | "group_set.create"
   | "group_set.update"

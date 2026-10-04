@@ -47,7 +47,7 @@
  * it — the receipt time does (ADR-012).
  */
 import type { FastifyInstance } from "fastify";
-import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
 import { deadlineWantsLock, effectiveDeadline, zonedIso } from "@quiz/domain";
@@ -113,20 +113,26 @@ async function publishScheduled(db: Db, now: Date): Promise<string[]> {
 /** Steps 2 and 3: the projects locked, and the repositories whose effective deadline came given their provisional freeze. */
 async function applyDeadlines(db: Db, now: Date): Promise<string[]> {
   return db.transaction(async (tx) => {
-    const locked = await tx
-      .update(projects)
-      // The groups stop with the deadline, for good (ADR-070 §4): a reopen
-      // never clears it, so a copy stopped once keeps its first stop.
-      .set({ state: "locked", deadlineAppliedAt: now, groupsStoppedAt: sql`coalesce(${projects.groupsStoppedAt}, ${ts(now)})` })
-      .where(
-        and(
-          eq(projects.state, "published"),
-          isNull(projects.deadlineAppliedAt),
-          isNull(projects.archivedAt),
-          sql`${projects.deadlineAt} <= ${ts(now)}`,
-        ),
-      )
-      .returning({ id: projects.id, deadlineAt: projects.deadlineAt });
+    const due = and(
+      eq(projects.state, "published"),
+      isNull(projects.deadlineAppliedAt),
+      isNull(projects.archivedAt),
+      sql`${projects.deadlineAt} <= ${ts(now)}`,
+    );
+    // The rows first, in id order: the order of a group set's write
+    // (`followingCopies`), which locks the same rows, so the two never
+    // deadlock (ADR-070 §4).
+    const ids = (await tx.select({ id: projects.id }).from(projects).where(due).orderBy(asc(projects.id)).for("update")).map((r) => r.id);
+    const locked =
+      ids.length === 0
+        ? []
+        : await tx
+            .update(projects)
+            // The groups stop with the deadline, for good (ADR-070 §4): a reopen
+            // never clears it, so a copy stopped once keeps its first stop.
+            .set({ state: "locked", deadlineAppliedAt: now, groupsStoppedAt: sql`coalesce(${projects.groupsStoppedAt}, ${ts(now)})` })
+            .where(and(inArray(projects.id, ids), due))
+            .returning({ id: projects.id, deadlineAt: projects.deadlineAt });
     for (const row of locked) {
       await audit(tx, {
         ...SYSTEM_ACTOR,

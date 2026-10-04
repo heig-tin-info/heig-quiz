@@ -2114,9 +2114,7 @@ follows its set until the deadline. Split in two PRs.
   Every route answers the set (`GroupSetDetail`) but the set's deletion
   (204). The plan applies the deletions first, then the renames through a
   temporary name (a swap of two names), the new groups, the moves.
-  `POST /classrooms/:id/group-sets` is `readOnly` for the catch-all
-  mutation hint, which would reach the classroom's students; the module
-  hints `course:` itself. The web form lost `groupMaxSize` (and its i18n
+  The web form lost `groupMaxSize` (and its i18n
   keys); `GROUPS_OFFERED` stays false until M3-16.
 
 #### M3-15b — Group repositories and their membership on GitHub
@@ -2149,6 +2147,11 @@ follows its set until the deadline. Split in two PRs.
   classroom's sets and *Create new groups*; the project page's set, its
   drift and *Resync*, one row per group. Read `apps/web/DESIGN.md` and the
   `quiz-ui` skill first.
+- **From M3-15a**: when `GROUPS_OFFERED` turns on, the form and the project
+  page word the refusals `no_group_set` (publish) and `unknown_group_set`
+  (create, PATCH) through `t()`, in `en.ts` and `fr.ts`, like the others
+  of `PROJECT_REFUSALS`; the hint kind `groups` names its query roots in
+  `realtime/hints.ts` (none before this task).
 
 ### M3-17 — Groups formed by the students (ADR-070 lot 2)
 - **Depends on**: M3-15a, M3-16, M3-09.

@@ -99,7 +99,7 @@ function draftDates(body: ProjectCreate, now: Date): { startAt: Date; deadlineAt
  * (classroom, slug) decides, so two creations racing never take the same
  * one. The row reserves the slug while the distribution is built.
  */
-async function reserveDraft(db: Db, values: Omit<typeof projects.$inferInsert, "id" | "slug">, name: string): Promise<ProjectRow> {
+async function reserveDraft(db: Db | Tx, values: Omit<typeof projects.$inferInsert, "id" | "slug">, name: string): Promise<ProjectRow> {
   const base = slugify(name);
   for (let n = 1; n <= MAX_SUFFIX; n++) {
     const slug = n === 1 ? base : `${base.slice(0, SLUG_MAX - 3).replace(/-+$/, "")}-${n}`;
@@ -181,42 +181,41 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
   const dates = draftDates(body, now);
   if (dates.deadlineAt.getTime() <= now.getTime()) throw new ProjectError("deadline_past", "The deadline has passed");
   const groupSetId = body.groupSetId ?? null;
-  if (groupSetId !== null && !(await setOfClassroom(db, groupSetId, input.classroomId))) throw unknownGroupSet();
   const { org, client } = await classroomClient(db, config, input.classroomId);
   const { source, branches } = await readSource(db, client, org, body.sourceRepo, body.branches);
 
-  const draft = await reserveDraft(
-    db,
-    {
-      classroomId: input.classroomId,
-      orgId: org.id,
-      name: body.name,
-      ...dates,
-      graceMinutes: body.graceMinutes,
-      sourceRepoId: source.id,
-      sourceFullName: source.fullName,
-      sourceStrategy: body.sourceStrategy,
-      deadlineStrategy: body.deadlineStrategy,
-      gradingMode: body.gradingMode,
-      publishMode: body.publishMode,
-      durationMinutes: body.durationMinutes ?? null,
-      groupMode: body.groupMode,
-      groupSetId,
-      branches,
-      protectedFiles: body.protectedFiles,
-      gradingScale: body.gradingScale ?? defaultProjectGradingScale(),
-      createdBy: input.userId,
-      createdAt: now,
-    },
-    body.name,
-  );
-  if (groupSetId !== null) {
-    await db.transaction(async (tx) => {
-      await lockSet(tx, groupSetId);
-      await tx.select({ id: projects.id }).from(projects).where(eq(projects.id, draft.id)).for("update");
-      await replaceGroupCopy(tx, draft.id, groupSetId, now);
-    });
-  }
+  const values: Omit<typeof projects.$inferInsert, "id" | "slug"> = {
+    classroomId: input.classroomId,
+    orgId: org.id,
+    name: body.name,
+    ...dates,
+    graceMinutes: body.graceMinutes,
+    sourceRepoId: source.id,
+    sourceFullName: source.fullName,
+    sourceStrategy: body.sourceStrategy,
+    deadlineStrategy: body.deadlineStrategy,
+    gradingMode: body.gradingMode,
+    publishMode: body.publishMode,
+    durationMinutes: body.durationMinutes ?? null,
+    groupMode: body.groupMode,
+    groupSetId,
+    branches,
+    protectedFiles: body.protectedFiles,
+    gradingScale: body.gradingScale ?? defaultProjectGradingScale(),
+    createdBy: input.userId,
+    createdAt: now,
+  };
+  // The set checked under its lock in the draft's own transaction: a set
+  // deleted meanwhile is a 422, and its writes step the copy from now on.
+  const draft =
+    groupSetId === null
+      ? await reserveDraft(db, values, body.name)
+      : await db.transaction(async (tx) => {
+          if ((await groupSetOf(tx, groupSetId))?.classroomId !== input.classroomId) throw unknownGroupSet();
+          const row = await reserveDraft(tx, values, body.name);
+          await replaceGroupCopy(tx, row.id, groupSetId, now);
+          return row;
+        });
 
   let built: { repoId: number; fullName: string };
   try {
@@ -253,21 +252,13 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
 
 const unknownGroupSet = () => new ProjectError("unknown_group_set", "No such group set in the project's classroom");
 
-/** True when `setId` is a group set of classroom `classroomId`. */
-async function setOfClassroom(db: Db | Tx, setId: string, classroomId: string): Promise<boolean> {
-  const [set] = await db
-    .select({ id: groupSets.id })
-    .from(groupSets)
-    .where(and(eq(groupSets.id, setId), eq(groupSets.classroomId, classroomId)));
-  return set !== undefined;
-}
-
 /**
- * The set a project is about to name, locked FOR SHARE BEFORE the project's
- * row: the order of the set's own writes (`groupCopy.ts`), so that a write
- * of the set waits for the copy it must step, or the copy for the write.
+ * The set a project is about to name, and its classroom, locked FOR SHARE
+ * BEFORE the project's row: the order of the set's own writes
+ * (`groupCopy.ts`), so that a write of the set waits for the copy it must
+ * step, or the copy for the write. Every caller names it to write it.
  */
-async function lockSet(tx: Tx, setId: string): Promise<{ classroomId: string } | undefined> {
+async function groupSetOf(tx: Tx, setId: string): Promise<{ classroomId: string } | undefined> {
   const [set] = await tx.select({ classroomId: groupSets.classroomId }).from(groupSets).where(eq(groupSets.id, setId)).for("share");
   return set;
 }
@@ -309,7 +300,7 @@ export async function patchProject(
   now: Date,
 ): Promise<ProjectRow> {
   return db.transaction(async (tx) => {
-    const askedSet = body.groupSetId ? await lockSet(tx, body.groupSetId) : undefined;
+    const askedSet = body.groupSetId ? await groupSetOf(tx, body.groupSetId) : undefined;
     const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
     if (!project) throw notFound();
     const changed: Partial<Record<ProjectPatchField, unknown>> = {};
@@ -322,6 +313,7 @@ export async function patchProject(
     // Leaving group mode leaves the set too, and its copy.
     if (changed.groupMode === false && body.groupSetId === undefined && project.groupSetId !== null) changed.groupSetId = null;
     const next = { ...project, ...changed } as ProjectRow;
+    // `ProjectCreate` refuses the same in its schema; a patch needs the row.
     if (next.groupSetId !== null && !next.groupMode) {
       throw new DomainError("validation", 400, "A group set only applies to a group project");
     }

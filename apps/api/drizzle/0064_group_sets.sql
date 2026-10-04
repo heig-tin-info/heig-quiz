@@ -43,4 +43,6 @@ ALTER TABLE "project_groups" ADD CONSTRAINT "project_groups_source_group_id_stud
 ALTER TABLE "projects" ADD CONSTRAINT "projects_group_set_id_group_sets_id_fk" FOREIGN KEY ("group_set_id") REFERENCES "public"."group_sets"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "project_groups_source_idx" ON "project_groups" USING btree ("source_group_id");--> statement-breakpoint
 CREATE INDEX "projects_group_set_idx" ON "projects" USING btree ("group_set_id");--> statement-breakpoint
-ALTER TABLE "projects" DROP COLUMN "group_max_size";
+ALTER TABLE "projects" DROP COLUMN "group_max_size";--> statement-breakpoint
+-- An archived project's copy never follows its set (ADR-070 §4).
+UPDATE "projects" SET "groups_stopped_at" = "archived_at" WHERE "archived_at" IS NOT NULL;

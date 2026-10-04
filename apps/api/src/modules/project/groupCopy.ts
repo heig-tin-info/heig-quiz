@@ -94,12 +94,12 @@ async function assertNoGroupRepo(tx: Tx, projectId: string): Promise<void> {
  */
 async function applyPlan(tx: Tx, projectId: string, copy: CopyState, plan: GroupSyncPlan, now: Date): Promise<void> {
   if (plan.delete.length > 0) {
-    await tx.delete(projectGroups).where(inArray(projectGroups.id, plan.delete.map((d) => d.id)));
+    await tx.delete(projectGroups).where(inArray(projectGroups.id, plan.delete));
   }
   if (plan.unplace.length > 0) {
     await tx
       .delete(projectGroupMembers)
-      .where(and(eq(projectGroupMembers.projectId, projectId), inArray(projectGroupMembers.enrollmentId, plan.unplace.map((u) => u.enrollmentId))));
+      .where(and(eq(projectGroupMembers.projectId, projectId), inArray(projectGroupMembers.enrollmentId, plan.unplace)));
   }
   const before = new Map(copy.groups.map((g) => [g.id, g]));
   const renamed = plan.update.filter((u) => before.get(u.id)!.name !== u.name || before.get(u.id)!.slug !== u.slug);
@@ -110,7 +110,7 @@ async function applyPlan(tx: Tx, projectId: string, copy: CopyState, plan: Group
     await tx.update(projectGroups).set({ name: u.name, slug: u.slug, position: u.position }).where(eq(projectGroups.id, u.id));
   }
   const bySource = new Map<string, string>();
-  const deleted = new Set(plan.delete.map((d) => d.id));
+  const deleted = new Set(plan.delete);
   for (const g of copy.groups) if (g.sourceGroupId !== null && !deleted.has(g.id)) bySource.set(g.sourceGroupId, g.id);
   if (plan.create.length > 0) {
     const rows = plan.create.map((c) => ({ id: randomUUID(), projectId, name: c.name, slug: c.slug, position: c.position, sourceGroupId: c.sourceGroupId, createdAt: now }));

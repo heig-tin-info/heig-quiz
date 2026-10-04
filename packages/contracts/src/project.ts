@@ -273,6 +273,7 @@ export const ProjectCreate = z
     groupSetId: z.uuid().nullable().optional(),
   })
   .superRefine((b, ctx) => {
+    // `patchProject` refuses the same on the row (a patch may send either alone).
     if (b.groupSetId && !b.groupMode) {
       ctx.addIssue({ code: "custom", path: ["groupSetId"], message: "A group set only applies to a group project" });
     }

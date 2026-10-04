@@ -25,7 +25,7 @@ import { randomInt, randomUUID } from "node:crypto";
 import { and, asc, count, eq, inArray, isNull, max, ne } from "drizzle-orm";
 
 import type { GroupMemberPut, GroupRandomForm, GroupSetCreate, GroupSetDetail, GroupSetPatch, GroupSetSummary, GroupSetUse } from "@quiz/contracts";
-import { defaultGroupName, defaultSetName, duplicateSetName, formRandomGroups, type NameLocale } from "@quiz/domain";
+import { copyFollows, defaultGroupName, defaultSetName, duplicateSetName, formRandomGroups, type NameLocale } from "@quiz/domain";
 
 import { audit, type AuditAction, type AuditActor } from "../../audit.js";
 import { iso } from "../../clock.js";
@@ -65,13 +65,19 @@ async function usesOf(db: Db | Tx, setIds: readonly string[]): Promise<Map<strin
   const out = new Map<string, GroupSetUse[]>();
   if (setIds.length === 0) return out;
   const rows = await db
-    .select({ setId: projects.groupSetId, id: projects.id, name: projects.name, archivedAt: projects.archivedAt, stoppedAt: projects.groupsStoppedAt })
+    .select({
+      setId: projects.groupSetId,
+      id: projects.id,
+      name: projects.name,
+      archivedAt: projects.archivedAt,
+      groupsStoppedAt: projects.groupsStoppedAt,
+    })
     .from(projects)
     .where(inArray(projects.groupSetId, [...setIds]))
     .orderBy(asc(projects.createdAt));
   for (const r of rows) {
     const list = out.get(r.setId!) ?? [];
-    list.push({ id: r.id, name: r.name, archived: r.archivedAt !== null, follows: r.stoppedAt === null });
+    list.push({ id: r.id, name: r.name, archived: r.archivedAt !== null, follows: copyFollows(r) });
     out.set(r.setId!, list);
   }
   return out;
@@ -91,7 +97,7 @@ export async function classroomGroupSets(db: Db, classroomId: string): Promise<G
     .select({ setId: studentGroupMembers.setId, n: count() })
     .from(studentGroupMembers)
     .innerJoin(enrollments, eq(enrollments.id, studentGroupMembers.enrollmentId))
-    .where(and(inArray(studentGroupMembers.setId, ids), eq(enrollments.staff, false)))
+    .where(and(inArray(studentGroupMembers.setId, ids), isStudentOf(classroomId)))
     .groupBy(studentGroupMembers.setId);
   const [students] = await db.select({ n: count() }).from(enrollments).where(isStudentOf(classroomId));
   const uses = await usesOf(db, ids);
@@ -238,7 +244,7 @@ export async function duplicateGroupSet(db: Db, scope: SetScope, ctx: WriteConte
       .select({ groupId: studentGroupMembers.groupId, enrollmentId: studentGroupMembers.enrollmentId })
       .from(studentGroupMembers)
       .innerJoin(enrollments, eq(enrollments.id, studentGroupMembers.enrollmentId))
-      .where(and(eq(studentGroupMembers.setId, source.id), eq(enrollments.staff, false)));
+      .where(and(eq(studentGroupMembers.setId, source.id), isStudentOf(source.classroomId)));
     if (members.length > 0) {
       await tx.insert(studentGroupMembers).values(
         members.map((m) => ({ id: randomUUID(), setId: id, groupId: newId.get(m.groupId)!, enrollmentId: m.enrollmentId, addedAt: ctx.now })),
@@ -256,22 +262,14 @@ export async function duplicateGroupSet(db: Db, scope: SetScope, ctx: WriteConte
  * project's name of it is cleared, its stopped copy kept.
  */
 export async function deleteGroupSet(db: Db, scope: SetScope, ctx: WriteContext): Promise<void> {
-  await db.transaction(async (tx) => {
-    await lockClassroom(tx, scope.room.id);
-    const [set] = await tx.select().from(groupSets).where(eq(groupSets.id, scope.set.id)).for("update");
-    if (!set) throw notFound("group set");
-    const holding = await tx
-      .select({ id: projects.id, name: projects.name })
-      .from(projects)
-      .where(and(eq(projects.groupSetId, set.id), isNull(projects.archivedAt)))
-      .orderBy(asc(projects.createdAt));
+  await writeSet(db, scope, ctx, async (tx, set) => {
+    const holding = ((await usesOf(tx, [set.id])).get(set.id) ?? []).filter((use) => !use.archived).map(({ id, name }) => ({ id, name }));
     if (holding.length > 0) {
       throw new GroupError("set_in_use", `${holding.length} project(s) follow this group set`, { projects: holding });
     }
     await tx.delete(groupSets).where(eq(groupSets.id, set.id));
-    await audit(tx, { ...ctx.actor, action: "group_set.delete", subjectType: "group_set", subjectId: set.id, payload: { name: set.name } });
+    return { action: "group_set.delete", payload: { name: set.name } };
   });
-  groupsChanged(scope.course.id);
 }
 
 // ---------------------------------------------------------------- groups
@@ -283,13 +281,15 @@ async function groupOf(tx: Tx, setId: string, groupId: string) {
   return group;
 }
 
-/** `409 duplicate_name` when another group of the set holds `name` (the set's row lock makes it final). */
-async function refuseTakenName(tx: Tx, setId: string, name: string, except?: string): Promise<void> {
+const duplicateName = (name: string) => new GroupError("duplicate_name", `A group "${name}" already exists in this set`);
+
+/** `409 duplicate_name` when another group of the set than `groupId` holds `name` (the set's row lock makes it final). */
+async function refuseTakenName(tx: Tx, setId: string, name: string, groupId: string): Promise<void> {
   const [taken] = await tx
     .select({ id: studentGroups.id })
     .from(studentGroups)
-    .where(and(eq(studentGroups.setId, setId), eq(studentGroups.name, name), ...(except ? [ne(studentGroups.id, except)] : [])));
-  if (taken) throw new GroupError("duplicate_name", `A group "${name}" already exists in this set`);
+    .where(and(eq(studentGroups.setId, setId), eq(studentGroups.name, name), ne(studentGroups.id, groupId)));
+  if (taken) throw duplicateName(name);
 }
 
 /** The names taken in the set, and the next position. */
@@ -304,7 +304,7 @@ export async function createGroup(db: Db, scope: SetScope, name: string | undefi
   await writeSet(db, scope, ctx, async (tx, set) => {
     const { names, next } = await groupsSoFar(tx, set.id);
     const chosen = name ?? defaultGroupName(names, ctx.locale);
-    await refuseTakenName(tx, set.id, chosen);
+    if (names.has(chosen)) throw duplicateName(chosen);
     const id = randomUUID();
     await tx.insert(studentGroups).values({ id, setId: set.id, name: chosen, position: next, createdAt: ctx.now });
     return { action: "group.create", payload: { groupId: id, name: chosen } };
