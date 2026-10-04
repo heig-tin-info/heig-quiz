@@ -18,6 +18,7 @@ import { z } from "zod";
 import { EvaluationState } from "./evaluation.js";
 import { Verdict } from "./grading.js";
 import { AttemptState, CellStatus, ClosedBy } from "./live.js";
+import { PollTally } from "./poll.js";
 
 /** The audiences an event can be addressed to. */
 export const Topic = z.union([
@@ -273,12 +274,7 @@ export type HintEvent = z.infer<typeof HintEvent>;
 export const PollTallyEvent = z.object({
   type: z.literal("poll.tally"),
   evaluationId: z.uuid(),
-  tally: z.object({
-    joined: z.number().int(),
-    answered: z.number().int(),
-    choices: z.array(z.object({ index: z.number().int(), count: z.number().int() })),
-    answers: z.array(z.object({ text: z.string(), count: z.number().int() })),
-  }),
+  tally: PollTally,
   serverNow: z.iso.datetime(),
 });
 export type PollTallyEvent = z.infer<typeof PollTallyEvent>;

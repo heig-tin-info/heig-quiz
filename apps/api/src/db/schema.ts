@@ -12,6 +12,7 @@ export * from "./org.js";
 export * from "./pool.js";
 export * from "./evaluation.js";
 export * from "./live.js";
+export * from "./poll.js";
 export * from "./grading.js";
 export * from "./notifications.js";
 export * from "./drill.js";

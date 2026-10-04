@@ -35,7 +35,7 @@ function view(patch: Partial<PollTeacherView> = {}): PollTeacherView {
       ...(patch.evaluation ?? {}),
     },
     joinUrl: "https://quiz.heig-vd.ch/p/QZ4F7K",
-    settings: { anonymous: true, revealed: false, votes: true, ...(patch.settings ?? {}) },
+    settings: { anonymous: true, revealed: false, votes: true, moderation: false, ...(patch.settings ?? {}) },
     question: {
       id: "q1",
       type: "mcq",
@@ -60,6 +60,8 @@ function view(patch: Partial<PollTeacherView> = {}): PollTeacherView {
         { index: 1, count: 6 },
       ],
       answers: [],
+      ideas: [],
+      pending: 0,
       ...(patch.tally ?? {}),
     },
   };
@@ -193,6 +195,8 @@ describe("PollProjection", () => {
             answered: 16,
             choices: choices.map((c) => ({ index: c.id, count: 2 })),
             answers: [],
+            ideas: [],
+            pending: 0,
           },
         }),
       ),
@@ -237,8 +241,8 @@ describe("PollProjection", () => {
 
   it("keeps the choices on the wall and the votes off it until shown (#157)", async () => {
     const { calls } = mockFetch({
-      [`GET ${POLL}`]: ok(view({ settings: { anonymous: true, revealed: false, votes: false } })),
-      [`POST ${POLL}/reveal`]: ok(view({ settings: { anonymous: true, revealed: false, votes: true } })),
+      [`GET ${POLL}`]: ok(view({ settings: { anonymous: true, revealed: false, votes: false, moderation: false } })),
+      [`POST ${POLL}/reveal`]: ok(view({ settings: { anonymous: true, revealed: false, votes: true, moderation: false } })),
     });
     renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
     await screen.findByRole("heading", { name: /How many bytes/ });
@@ -293,10 +297,10 @@ describe("PollProjection", () => {
   });
 
   it("shows the key without the votes, and the remote adds the votes from there", async () => {
-    const keyOnly = view({ settings: { anonymous: true, revealed: true, votes: false } });
+    const keyOnly = view({ settings: { anonymous: true, revealed: true, votes: false, moderation: false } });
     const { calls } = mockFetch({
       [`GET ${POLL}`]: ok(keyOnly),
-      [`POST ${POLL}/reveal`]: ok(view({ settings: { anonymous: true, revealed: true, votes: true } })),
+      [`POST ${POLL}/reveal`]: ok(view({ settings: { anonymous: true, revealed: true, votes: true, moderation: false } })),
     });
     renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
     await screen.findByRole("heading", { name: /How many bytes/ });
@@ -315,7 +319,7 @@ describe("PollProjection", () => {
     mockFetch({
       [`GET ${POLL}`]: ok(
         view({
-          settings: { anonymous: true, revealed: false, votes: false },
+          settings: { anonymous: true, revealed: false, votes: false, moderation: false },
           question: {
             id: "q1",
             type: "short",
@@ -324,7 +328,7 @@ describe("PollProjection", () => {
             saved: false,
             pool: null,
           },
-          tally: { joined: 3, answered: 2, choices: [], answers: [{ text: "eight", count: 2 }] },
+          tally: { joined: 3, answered: 2, choices: [], answers: [{ text: "eight", count: 2 }], ideas: [], pending: 0 },
         }),
       ),
     });
@@ -347,7 +351,7 @@ describe("PollProjection", () => {
   });
 
   it("names the correct choice once the answer is revealed", async () => {
-    mockFetch({ [`GET ${POLL}`]: ok(view({ settings: { anonymous: true, revealed: true, votes: true } })) });
+    mockFetch({ [`GET ${POLL}`]: ok(view({ settings: { anonymous: true, revealed: true, votes: true, moderation: false } })) });
     renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
 
     // Icon AND word, never the tint alone: a projector eats half the
@@ -358,8 +362,8 @@ describe("PollProjection", () => {
   it("offers no reveal when the poll has no key, only the votes", async () => {
     const keyless = { id: "q1", type: "mcq" as const, student: view().question.student, solution: { correct: [] }, saved: false, pool: null };
     const { calls } = mockFetch({
-      [`GET ${POLL}`]: ok(view({ settings: { anonymous: true, revealed: false, votes: false }, question: keyless })),
-      [`POST ${POLL}/reveal`]: ok(view({ settings: { anonymous: true, revealed: false, votes: true }, question: keyless })),
+      [`GET ${POLL}`]: ok(view({ settings: { anonymous: true, revealed: false, votes: false, moderation: false }, question: keyless })),
+      [`POST ${POLL}/reveal`]: ok(view({ settings: { anonymous: true, revealed: false, votes: true, moderation: false }, question: keyless })),
     });
     renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
     await screen.findByRole("heading", { name: /How many bytes/ });
@@ -378,7 +382,7 @@ describe("PollProjection", () => {
   it("reveals through the server, never locally", async () => {
     const { calls } = mockFetch({
       [`GET ${POLL}`]: ok(view()),
-      [`POST ${POLL}/reveal`]: ok(view({ settings: { anonymous: true, revealed: true, votes: true } })),
+      [`POST ${POLL}/reveal`]: ok(view({ settings: { anonymous: true, revealed: true, votes: true, moderation: false } })),
     });
     renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
     await screen.findByRole("heading", { name: /How many bytes/ });

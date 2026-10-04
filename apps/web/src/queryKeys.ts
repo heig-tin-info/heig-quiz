@@ -303,4 +303,5 @@ export const pollQuestionsKey = ["poll-questions"] as const;
 /** The launcher's "From pools", keyed by its first page's query string. */
 export const pollPoolQuestionsKey = (search: string) => ["poll-pool-questions", search] as const;
 export const pollKey = (id: string) => ["poll", id] as const;
+export const pollIdeasKey = (id: string) => ["poll", id, "ideas"] as const;
 export const publicPollKey = (code: string) => ["poll", "public", code] as const;

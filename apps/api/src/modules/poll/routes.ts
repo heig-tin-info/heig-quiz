@@ -37,6 +37,7 @@ import {
   PollCodeParam,
   PollCreate,
   type PollAudience,
+  PollIdeaAction,
   PollInlineCreate,
   PollPoolSearch,
   PollQuestionCreate,
@@ -335,6 +336,30 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
         const updated = await service.setDisplay(app.db, scope, body, now);
         await trace(req, "poll.reveal", "evaluation", updated.id, body);
         return view(req, { ...scope, evaluation: updated });
+      },
+    ),
+  );
+
+  /**
+   * A brainstorm's board (ADR-071): every idea, hidden and unmoderated ones
+   * included — the moderation screen's. Staff only, like the projection.
+   */
+  app.get(
+    "/app/api/evaluations/:id/poll/ideas",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: staffPoll }, ({ scope }) => service.ideaBoard(app.db, scope)),
+  );
+
+  /** The teacher's word on ideas: approve, hide, merge, detach, rename. */
+  app.post(
+    "/app/api/evaluations/:id/poll/ideas",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: PollIdeaAction, load: staffPoll },
+      async ({ req, now, body, scope }) => {
+        const board = await service.actOnIdeas(app.db, scope, body, now);
+        await trace(req, "poll.ideas", "evaluation", scope.evaluation.id, body);
+        return board;
       },
     ),
   );

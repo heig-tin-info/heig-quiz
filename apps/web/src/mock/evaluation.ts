@@ -280,6 +280,9 @@ export function summaryOf(q: MockQuestion, seedValue: number): string {
       const { scene } = answer as { scene: { nodes: unknown[]; links: unknown[] } };
       return `${scene.nodes.length} · ${scene.links.length}`;
     }
+    // A poll's alone: no evaluation of the mock holds one.
+    case "brainstorm":
+      return "";
   }
 }
 

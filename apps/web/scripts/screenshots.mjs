@@ -709,6 +709,11 @@ const scenes = [
     },
   },
   { name: "poll-projection", role: "teacher", path: "/evaluations/poll/poll", fold: true },
+  // A brainstorm (issue #458, ADR-071): the bubble cloud, its moderation tab, the phone.
+  { name: "poll-brainstorm", role: "teacher", path: "/evaluations/poll-brainstorm/poll", fold: true },
+  { name: "poll-brainstorm-light", role: "teacher", path: "/evaluations/poll-brainstorm/poll", ls: { "quiz-theme": "light" }, fold: true },
+  { name: "poll-brainstorm-moderate", role: "teacher", path: "/evaluations/poll-brainstorm/moderate" },
+  { name: "poll-brainstorm-join", role: "student", path: "/p/BR4N5T?as=guest" },
   { name: "poll-projection-revealed", role: "teacher", path: "/evaluations/poll/poll?revealed=1", fold: true },
   { name: "poll-ended", role: "teacher", path: "/evaluations/poll-ended/poll", fold: true },
   // An ended mcq as one large donut (Space): the room's split, by choice.

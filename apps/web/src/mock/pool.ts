@@ -85,6 +85,8 @@ import { richServer } from "@quiz/qt-rich/server";
 import type { RichConfig } from "@quiz/qt-rich/client";
 /* `categorize` likewise: its `toStudent` drops the key, its grade is the real one. */
 import { categorizeServer } from "@quiz/qt-categorize/server";
+import { brainstormServer } from "@quiz/qt-brainstorm/server";
+import type { BrainstormConfig } from "@quiz/qt-brainstorm/client";
 import type { CategorizeAnswer, CategorizeConfig } from "@quiz/qt-categorize/client";
 /* `diagram` likewise: graded by hand, and its `toStudent` drops the reference. */
 import { diagramServer } from "@quiz/qt-diagram/server";
@@ -124,7 +126,7 @@ interface MockVersion {
 export interface MockQuestion {
   id: string;
   poolId: string;
-  type: "mcq" | "short" | "cloze" | "code" | "circuit" | "codeimage" | "rich" | "categorize" | "diagram";
+  type: "mcq" | "short" | "cloze" | "code" | "circuit" | "codeimage" | "rich" | "categorize" | "diagram" | "brainstorm";
   internalName: string;
   categoryId: string | null;
   difficulty: number;
@@ -1798,6 +1800,8 @@ function mockDraws(q: MockQuestion): DraftInstances {
 /** `toStudent`, as the server's registry would do it (seed 0, no shuffle). */
 export function studentView(q: MockQuestion, config: Record<string, unknown>): unknown {
   switch (q.type) {
+    case "brainstorm":
+      return brainstormServer.toStudent(config as BrainstormConfig, { seed: 0, itemId: q.id, shuffle: false });
     case "mcq": {
       const choices = (config.choices ?? []) as { text: string }[];
       return {
@@ -1941,6 +1945,8 @@ export const frozenConfig = (q: MockQuestion): Record<string, unknown> =>
 export function solutionOf(q: MockQuestion): unknown {
   const config = frozenConfig(q);
   switch (q.type) {
+    case "brainstorm":
+      return null;
     case "mcq": {
       const choices = (config.choices ?? []) as { correct: boolean }[];
       return { correct: choices.flatMap((c, i) => (c.correct ? [i] : [])) };
@@ -2632,6 +2638,8 @@ export function emptyConfig(type: MockQuestion["type"]): Record<string, unknown>
       return { ...categorizeServer.emptyDraft() };
     case "diagram":
       return { ...diagramServer.emptyDraft() };
+    case "brainstorm":
+      return { ...brainstormServer.emptyDraft() };
     case "circuit":
       return {
         configVersion: 1,

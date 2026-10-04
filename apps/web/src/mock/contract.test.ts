@@ -77,6 +77,7 @@ import {
   PollQuestionPick,
   PollSummary,
   PollTeacherView,
+  PollIdeaBoard,
   ProjectActivitySummary,
   ProjectCreate,
   ProjectDetail,
@@ -207,7 +208,7 @@ const templateIds = (
 const templateItems = (
   (await get(`/app/api/templates/${templateIds[0]}`)) as { items: Ref[] }
 ).items.map((i) => i.id);
-const polls = (await get("/app/api/polls")) as { id: string; code: string | null }[];
+const polls = (await get("/app/api/polls")) as { id: string; code: string | null; questionType: string }[];
 /** A student seat of the classroom, for one student's drill progression. */
 const firstSeat = ((await get(`/app/api/classrooms/${classroomId}`)) as { roster: Ref[] }).roster[0]!.id;
 /** The repositories PRG1-2026's organization may hand out (M3-11, `?projects=1`). */
@@ -419,6 +420,9 @@ const CHECKED: Case[] = [
   ...polls.map((p) =>
     one("/app/api/evaluations/:id/poll", `/app/api/evaluations/${p.id}/poll`, PollTeacherView),
   ),
+  ...polls
+    .filter((p) => p.questionType === "brainstorm")
+    .map((p) => one("/app/api/evaluations/:id/poll/ideas", `/app/api/evaluations/${p.id}/poll/ideas`, PollIdeaBoard)),
   ...polls
     .filter((p) => p.code !== null)
     .map((p) => one("/app/api/p/:code", `/app/api/p/${p.code}`, PollPublicView)),

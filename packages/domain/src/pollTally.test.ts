@@ -104,3 +104,35 @@ describe("foldPollAnswer", () => {
     expect(foldPollAnswer("ÉLÈVE A")).toBe(foldPollAnswer("élève a"));
   });
 });
+
+describe("pollTally — brainstorm", () => {
+  const payloads = [{ ideas: ["Respire", "insulte"] }, { ideas: ["la respiration"] }, { ideas: [] }];
+
+  it("draws the visible bubbles and counts the ideas awaiting moderation", () => {
+    const tally = pollTally({
+      type: "brainstorm",
+      choiceCount: 0,
+      joined: 4,
+      payloads,
+      moderation: true,
+      marks: [
+        { key: "respire", status: "approved", mergedInto: null, label: "Respiration" },
+        { key: "respiration", status: "approved", mergedInto: "respire", label: null },
+      ],
+    });
+    expect(tally).toEqual({
+      joined: 4,
+      answered: 2,
+      choices: [],
+      answers: [],
+      ideas: [{ key: "respiration", label: "Respiration", count: 2 }],
+      pending: 1,
+    });
+  });
+
+  it("shows every idea when nobody moderates", () => {
+    const tally = pollTally({ type: "brainstorm", choiceCount: 0, joined: 3, payloads });
+    expect(tally.ideas.map((b) => b.label)).toEqual(["Respire", "insulte", "la respiration"]);
+    expect(tally.pending).toBe(0);
+  });
+});

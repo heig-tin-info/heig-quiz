@@ -178,6 +178,9 @@ function Landing() {
 
 // The poll screens. The participant page is the ONE route that renders with
 // no session at all: a guest who scanned a QR has nothing to log into.
+const PollModeration = lazy(() =>
+  import("./poll/PollModeration").then((m) => ({ default: m.PollModeration })),
+);
 const PollProjection = lazy(() =>
   import("./poll/PollProjection").then((m) => ({ default: m.PollProjection })),
 );
@@ -282,6 +285,7 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   polls: (_, c) => <PollLauncher navigate={c.navigate} />,
   // The projection is for a beamer: no sidebar, no chrome.
   poll: (r, c) => <PollProjection id={r.id} navigate={c.navigate} />,
+  pollModerate: (r) => <PollModeration id={r.id} />,
   pools: (_, c) => <PoolsPage navigate={c.navigate} />,
   pool: (r, c) => <PoolView id={r.id} navigate={c.navigate} />,
   poolCategories: (r, c) => <CategoriesPage id={r.id} navigate={c.navigate} />,

@@ -139,6 +139,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["pollQuestionsKey", keys.pollQuestionsKey, ["poll-questions"]],
     ["pollPoolQuestionsKey", keys.pollPoolQuestionsKey("?limit=25"), ["poll-pool-questions", "?limit=25"]],
     ["pollKey", keys.pollKey("e1"), ["poll", "e1"]],
+    ["pollIdeasKey", keys.pollIdeasKey("e1"), ["poll", "e1", "ideas"]],
     ["publicPollKey", keys.publicPollKey("ABC123"), ["poll", "public", "ABC123"]],
   ];
 

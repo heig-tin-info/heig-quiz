@@ -27,6 +27,8 @@ const tally = (patch: Partial<PollTally> = {}): PollTally => ({
   answered: 0,
   choices: [],
   answers: [],
+  ideas: [],
+  pending: 0,
   ...patch,
 });
 

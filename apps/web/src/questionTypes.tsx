@@ -64,6 +64,12 @@ import {
   diagramReviewStrings,
 } from "@quiz/qt-diagram/client";
 import {
+  brainstormEditorStrings,
+  brainstormGradingStrings,
+  brainstormPlayerStrings,
+  brainstormReviewStrings,
+} from "@quiz/qt-brainstorm/client";
+import {
   clozeEditorStrings,
   clozeGradingStrings,
   clozePlayerStrings,
@@ -231,6 +237,7 @@ export const editorStrings = {
   rich: (t: TFunction) => translated(t, richEditorStrings, "qt.rich.e"),
   categorize: (t: TFunction) => translated(t, categorizeEditorStrings, "qt.categorize.e"),
   diagram: (t: TFunction) => translated(t, diagramEditorStrings, "qt.diagram.e"),
+  brainstorm: (t: TFunction) => translated(t, brainstormEditorStrings, "qt.brainstorm.e"),
 };
 
 /**
@@ -293,6 +300,7 @@ export const playerStrings = {
   rich: (t: TFunction) => translated(t, richPlayerStrings, "qt.rich.p"),
   categorize: (t: TFunction) => translated(t, categorizePlayerStrings, "qt.categorize.p"),
   diagram: (t: TFunction) => translated(t, diagramPlayerStrings, "qt.diagram.p"),
+  brainstorm: (t: TFunction) => translated(t, brainstormPlayerStrings, "qt.brainstorm.p"),
 };
 
 export const reviewStrings = {
@@ -310,6 +318,7 @@ export const reviewStrings = {
   rich: (t: TFunction) => translated(t, richReviewStrings, "qt.rich.r"),
   categorize: (t: TFunction) => translated(t, categorizeReviewStrings, "qt.categorize.r"),
   diagram: (t: TFunction) => translated(t, diagramReviewStrings, "qt.diagram.r"),
+  brainstorm: (t: TFunction) => translated(t, brainstormReviewStrings, "qt.brainstorm.r"),
 };
 
 /**
@@ -331,6 +340,7 @@ export const gradingStrings: Record<QuestionTypeId, (t: TFunction) => Record<str
   circuit: (t) => translated(t, CIRCUIT_GRADING_STRINGS, "qt.circuit.g"),
   rich: (t) => translated(t, richGradingStrings, "qt.rich.g"),
   diagram: (t) => translated(t, diagramGradingStrings, "qt.diagram.g"),
+  brainstorm: (t) => translated(t, brainstormGradingStrings, "qt.brainstorm.g"),
 };
 
 // --- Hosts -----------------------------------------------------------------

@@ -7,7 +7,16 @@ import {
   type PollPublicView,
   type PollQuestionPick,
 } from "@quiz/contracts";
-import { activityBucket, pollOutcome, type PollRunCounts } from "@quiz/domain";
+import {
+  activityBucket,
+  applyIdeaAction,
+  brainstormBoard,
+  pollOutcome,
+  pollTally,
+  type IdeaAction,
+  type IdeaMark,
+  type PollRunCounts,
+} from "@quiz/domain";
 import { hasKey } from "../poll/pollTally";
 import {
   D,
@@ -101,6 +110,8 @@ interface MockPoll {
   revealed: boolean;
   /** The distribution is on the wall (#157); absent means hidden. */
   votes?: boolean;
+  /** A brainstorm's moderation (ADR-071); absent means the audience's default. */
+  moderation?: boolean;
   type: PollQuestionType;
   student: unknown;
   solution: unknown;
@@ -271,7 +282,28 @@ export const polls: MockPoll[] = [
     joined: false,
     answer: null,
   },
+  {
+    // A brainstorm (issue #458, ADR-071): ideas as bubbles, moderated
+    // because the room is anonymous. Its ideas are shown from the start so
+    // the wall has a cloud to draw.
+    code: "BR4N5T",
+    title: "Brainstorm — le vivant",
+    state: "running",
+    anonymous: true,
+    revealed: false,
+    votes: true,
+    type: "brainstorm",
+    student: { prompt: "Qu'est-ce qui caractérise un être vivant ?", maxIdeas: 5 },
+    solution: null,
+    joined: true,
+    answer: { ideas: ["il respire", "il grandit"] },
+  },
 ];
+
+/** The moderation switch: a brainstorm only, on by default for an anonymous one. */
+function moderationOn(poll: MockPoll): boolean {
+  return poll.type === "brainstorm" && (poll.moderation ?? poll.anonymous);
+}
 
 /**
  * A classroom's poll lets in its roster and its staff, signed in; anybody
@@ -314,7 +346,7 @@ function pollPublicView(poll: MockPoll): PollPublicView {
   return {
     code: poll.code,
     state: poll.state,
-    settings: { anonymous: poll.anonymous, revealed, votes: votesOn(poll) },
+    settings: { anonymous: poll.anonymous, revealed, votes: votesOn(poll), moderation: moderationOn(poll) },
     question: { type: poll.type, student: poll.student },
     // Never before the teacher says so: the key is the one thing on this
     // payload a participant must not be able to read early (invariant 4).
@@ -333,8 +365,8 @@ function pollPublicView(poll: MockPoll): PollPublicView {
 function publicTally(poll: MockPoll): PollPublicView["tally"] {
   const tp = teacherPolls.find((t) => t.code === poll.code);
   return tp
-    ? tallyOf(tp, poll)
-    : { joined: 0, answered: 0, choices: [], answers: [] };
+    ? { ...tallyOf(tp, poll), pending: 0 }
+    : { joined: 0, answered: 0, choices: [], answers: [], ideas: [], pending: 0 };
 }
 
 on("GET", "/app/api/p/:code", (m) => {
@@ -392,6 +424,7 @@ const POLL_SHORT = "00000000-0000-4000-9000-000000000002";
 const POLL_ENDED = "00000000-0000-4000-9000-000000000003";
 const POLL_LONG = "00000000-0000-4000-9000-000000000004";
 const POLL_OPINION = "00000000-0000-4000-9000-000000000005";
+const POLL_BRAINSTORM = "00000000-0000-4000-9000-000000000006";
 
 /** How often the fake room answers, in ms. */
 const POLL_TICK = 1200;
@@ -416,6 +449,8 @@ export interface MockTeacherPoll {
   counts: number[];
   /** `short`: the spellings seen, first one kept, most frequent first. */
   texts: { text: string; count: number }[];
+  /** `brainstorm`: one payload per participant, and the teacher's marks. */
+  ideas?: { payloads: { ideas: string[] }[]; marks: IdeaMark[] };
   /**
    * The pool question the poll runs; null for one written in the launcher
    * and not kept yet — "Keep this question" is what sets it.
@@ -564,15 +599,109 @@ if (!flags.empty && polls.length >= 5) {
   seedPollEvaluation(teacherPolls[2]!, "poll-ended");
   seedPollEvaluation(teacherPolls[3]!, "poll-long");
   seedPollEvaluation(teacherPolls[4]!, "poll-opinion");
+  const brainstorm = polls.find((p) => p.code === "BR4N5T");
+  if (brainstorm) {
+    const payloads = [
+      ["il respire", "il grandit", "il se reproduit"],
+      ["respiration", "croissance"],
+      ["Il respire !", "il mange"],
+      ["reproduction", "il a des cellules"],
+      ["il se nourrit", "il respire"],
+      ["il grandit", "il meurt"],
+      ["cellules", "ADN"],
+      ["il bouge"],
+      ["mange", "respire"],
+      ["c'est nul ce cours"],
+      ["il se reproduit", "il évolue"],
+      ["il réagit à son environnement"],
+    ].map((ideas) => ({ ideas }));
+    const approved = (key: string, mergedInto: string | null = null, label: string | null = null): IdeaMark => ({
+      key,
+      status: "approved",
+      mergedInto,
+      label,
+    });
+    teacherPolls.push({
+      id: POLL_BRAINSTORM,
+      code: brainstorm.code,
+      classroomId: null,
+      createdAt: iso(-90_000),
+      joined: 15,
+      answered: payloads.length,
+      counts: [],
+      texts: [],
+      ideas: {
+        payloads,
+        marks: [
+          approved("il respire", null, "Respiration"),
+          approved("respiration", "il respire"),
+          approved("respire", "il respire"),
+          approved("il grandit", null, "Croissance"),
+          approved("croissance", "il grandit"),
+          approved("il se reproduit", null, "Reproduction"),
+          approved("reproduction", "il se reproduit"),
+          approved("il mange", null, "Nutrition"),
+          approved("il se nourrit", "il mange"),
+          approved("mange", "il mange"),
+          approved("il a des cellules", null, "Cellules"),
+          approved("cellules", "il a des cellules"),
+          approved("il meurt"),
+          approved("adn"),
+          approved("il bouge"),
+          { key: "c est nul ce cours", status: "hidden", mergedInto: null, label: null },
+        ],
+      },
+    });
+    seedPollEvaluation(teacherPolls[teacherPolls.length - 1]!, "poll-brainstorm");
+  }
 }
 
 const answeredOf = (tp: MockTeacherPoll): number => tp.answered;
 
-export const tallyOf = (tp: MockTeacherPoll, _poll: MockPoll) => ({
-  joined: tp.joined,
-  answered: tp.answered,
-  choices: tp.counts.map((count, index) => ({ index, count })),
-  answers: tp.texts.map((a) => ({ ...a })),
+export const tallyOf = (tp: MockTeacherPoll, poll: MockPoll) => {
+  if (poll.type === "brainstorm") {
+    // The real rule of `@quiz/domain`, so the mock wall is the API's.
+    return pollTally({
+      type: "brainstorm",
+      choiceCount: 0,
+      joined: tp.joined,
+      payloads: tp.ideas?.payloads ?? [],
+      marks: tp.ideas?.marks ?? [],
+      moderation: moderationOn(poll),
+    });
+  }
+  return {
+    joined: tp.joined,
+    answered: tp.answered,
+    choices: tp.counts.map((count, index) => ({ index, count })),
+    answers: tp.texts.map((a) => ({ ...a })),
+    ideas: [],
+    pending: 0,
+  };
+};
+
+/** The teacher's board of a brainstorm (`GET …/poll/ideas`). */
+function boardOf(tp: MockTeacherPoll) {
+  const poll = pollOfTeacher(tp)!;
+  if (poll.type !== "brainstorm") throw new MockPayload(422, { error: "poll_type", message: "Not a brainstorm" });
+  const moderation = moderationOn(poll);
+  return {
+    moderation,
+    ...brainstormBoard({ payloads: tp.ideas?.payloads ?? [], marks: tp.ideas?.marks ?? [], moderation }),
+  };
+}
+
+on("GET", "/app/api/evaluations/:id/poll/ideas", (m) => boardOf(teacherPollOr404(m.groups!.id!)));
+
+on("POST", "/app/api/evaluations/:id/poll/ideas", (m, body) => {
+  const tp = teacherPollOr404(m.groups!.id!);
+  boardOf(tp);
+  const state = (tp.ideas ??= { payloads: [], marks: [] });
+  const changed = applyIdeaAction(state.marks, body as unknown as IdeaAction);
+  const byKey = new Map(state.marks.map((mk) => [mk.key, mk]));
+  for (const mk of changed) byKey.set(mk.key, mk);
+  state.marks = [...byKey.values()];
+  return boardOf(tp);
 });
 
 /**
@@ -608,7 +737,7 @@ function pollTeacherView(tp: MockTeacherPoll) {
       createdAt: tp.createdAt,
     },
     joinUrl: `${window.location.origin}/p/${poll.code}`,
-    settings: { anonymous: poll.anonymous, revealed, votes: votesOn(poll) },
+    settings: { anonymous: poll.anonymous, revealed, votes: votesOn(poll), moderation: moderationOn(poll) },
     question: {
       id: tp.questionId ?? tp.id,
       type: poll.type,
@@ -734,7 +863,10 @@ function advancePoll(tp: MockTeacherPoll): void {
     return;
   }
   tp.answered += 1;
-  if (poll.type === "mcq") {
+  if (poll.type === "brainstorm") {
+    const pool = ["il respire", "photosynthèse", "il grandit", "il a un métabolisme", "il se reproduit", "homéostasie"];
+    tp.ideas?.payloads.push({ ideas: [pool[Math.floor(rand() * pool.length)]!] });
+  } else if (poll.type === "mcq") {
     const key = (poll.solution as { correct: number[] }).correct;
     const pickKey = rand() < 0.55 && key.length > 0;
     const index = pickKey
@@ -1099,7 +1231,7 @@ function startPoll(
     state: "running",
     anonymous: classroomId === null,
     revealed: false,
-    type: q.type === "short" ? "short" : "mcq",
+    type: q.type === "short" || q.type === "brainstorm" ? q.type : "mcq",
     student: studentView(q, config),
     // The room's key, as the API serves it to the phones and the beamer (ADR-037).
     solution: studentSolutionOf(q, solutionOf(q)),
@@ -1113,8 +1245,9 @@ function startPoll(
     createdAt: iso(0),
     joined: 0,
     answered: 0,
-    counts: q.type === "short" ? [] : new Array<number>(choiceCount).fill(0),
+    counts: q.type === "mcq" ? new Array<number>(choiceCount).fill(0) : [],
     texts: [],
+    ...(q.type === "brainstorm" ? { ideas: { payloads: [], marks: [] } } : {}),
     ...(options.unsaved
       ? { questionId: null, unsaved: q }
       : { questionId: q.id }),
@@ -1135,6 +1268,7 @@ on("POST", "/app/api/evaluations/:id/poll/reveal", (m, body) => {
   // (ADR-014, addendum 2026-09-29).
   if (typeof body.revealed === "boolean") poll.revealed = body.revealed;
   if (typeof body.votes === "boolean") poll.votes = body.votes;
+  if (typeof body.moderation === "boolean") poll.moderation = body.moderation;
   return pollTeacherView(tp);
 });
 
@@ -1169,6 +1303,7 @@ on("POST", "/app/api/evaluations/:id/poll/again", (m) => {
     answered: 0,
     counts: previous.type === "mcq" ? tp.counts.map(() => 0) : [],
     texts: [],
+    ...(previous.type === "brainstorm" ? { ideas: { payloads: [], marks: [] } } : {}),
     questionId: tp.questionId ?? null,
     ...(tp.unsaved ? { unsaved: tp.unsaved } : {}),
   };

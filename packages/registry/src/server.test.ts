@@ -1,5 +1,6 @@
 import { ConfigMigrationError, UnknownQuestionType, type StudentView } from "@quiz/core/server";
 import { findStudentLeaks, type StudentLeakFixture } from "@quiz/core/testing";
+import { brainstormLeakFixture } from "@quiz/qt-brainstorm/testing";
 import { categorizeLeakFixture } from "@quiz/qt-categorize/testing";
 import { circuitLeakFixture } from "@quiz/qt-circuit/testing";
 import { clozeLeakFixture } from "@quiz/qt-cloze/testing";
@@ -16,7 +17,7 @@ import { QUESTION_TYPE_IDS, questionType, registeredServerIds, serverRegistry } 
  * The four MVP types, `circuit` (docs/spec/04 §4.11), `codeimage` (§4.9),
  * `rich` (§4.8), `categorize` (§4.13) and `diagram` (§4.14), brought forward.
  */
-const REGISTERED = ["mcq", "short", "cloze", "code", "circuit", "codeimage", "rich", "categorize", "diagram"] as const;
+const REGISTERED = ["mcq", "short", "cloze", "code", "circuit", "codeimage", "rich", "categorize", "diagram", "brainstorm"] as const;
 type RegisteredId = (typeof REGISTERED)[number];
 
 /**
@@ -35,6 +36,7 @@ const CONFIG_VERSIONS: Record<RegisteredId, number> = {
   rich: 1,
   categorize: 1,
   diagram: 1,
+  brainstorm: 1,
 };
 
 /**
@@ -55,6 +57,7 @@ const LEAK_FIXTURES: Record<RegisteredId, StudentLeakFixture> = {
   rich: richLeakFixture,
   categorize: categorizeLeakFixture,
   diagram: diagramLeakFixture,
+  brainstorm: brainstormLeakFixture,
 };
 
 /**
@@ -112,6 +115,14 @@ describe.each(REGISTERED)("the contract of %s", (id) => {
     // identity `toStudent` must be reported by value (by key too, except for
     // `cloze`, whose whole key lives inside the authoring text).
     const leaks = findStudentLeaks(fixture.config, fixture);
+    if (type.hasKey?.(fixture.config) === false && fixture.secrets.length === 0) {
+      // A type with NO key at all (`brainstorm`, ADR-071) has no secret value
+      // to plant. Its proof is narrower and still strict: nothing to reveal,
+      // and the identity `toStudent` is caught by key.
+      expect(type.toSolution(fixture.config, VIEWS[0]!)).toBeNull();
+      expect(leaks.some((leak) => leak.startsWith("forbidden key"))).toBe(true);
+      return;
+    }
     expect(leaks.some((leak) => leak.startsWith("secret value"))).toBe(true);
   });
 

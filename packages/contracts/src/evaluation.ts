@@ -227,7 +227,12 @@ export const EvaluationSettings = z.object({
    * before that carries an `anonymous` key, which parsing drops.
    */
   poll: z
-    .object({ revealed: z.boolean().default(false), votes: z.boolean().default(false) })
+    .object({
+      revealed: z.boolean().default(false),
+      votes: z.boolean().default(false),
+      /** ADR-071: absent means the audience's default, read through `pollSettingsOf`. */
+      moderation: z.boolean().optional(),
+    })
     .optional(),
 });
 export type EvaluationSettings = z.infer<typeof EvaluationSettings>;
