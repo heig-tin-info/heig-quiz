@@ -243,6 +243,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   const correction = useCorrectionControls({
     id,
     evaluation: detail.data?.evaluation,
+    courseId: detail.data?.courseId,
     navigate,
     onChanged: refresh,
   });

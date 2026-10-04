@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { registerForTests } from "@quiz/registry/server";
 
-import { auditLog, coursePools, courses, poolMembers, questions } from "../../db/schema.js";
+import { auditLog, coursePools, courseStaff, courses, poolMembers, questions } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { seedLive } from "../../test/live.js";
@@ -329,6 +329,37 @@ describe("POST /questions/move", () => {
     expect(forced.json().error).toBe("course_forbidden");
     expect(forced.json().courses).toEqual([unseen]);
     expect(JSON.stringify(forced.json())).not.toContain(seeded.classroomId);
+    const links = await server.app.db
+      .select()
+      .from(coursePools)
+      .where(and(eq(coursePools.courseId, seeded.courseId), eq(coursePools.poolId, target)));
+    expect(links).toHaveLength(0);
+  });
+
+  it("never links a course the caller is only an assistant of (ADR-068), naming it in full", async () => {
+    const colleague = await server.signIn("teacher");
+    const seeded = await seedLive(server.app.db, {
+      teacherId: colleague.id,
+      questions: 1,
+      students: 0,
+    });
+    await server.app.db
+      .insert(courseStaff)
+      .values({ courseId: seeded.courseId, userId: mover.id, role: "assistant" });
+    const target = await newPool(mover, "Mine, an assistant's");
+
+    const asked = await move(mover, { questionIds: [seeded.questionIds[0]!], targetPoolId: target });
+    expect(asked.statusCode).toBe(409);
+    expect(asked.json().error).toBe("pool_not_linked");
+    expect(asked.json().courses[0]).toMatchObject({ courseId: seeded.courseId, mayLink: false });
+
+    const forced = await move(mover, {
+      questionIds: [seeded.questionIds[0]!],
+      targetPoolId: target,
+      linkCourses: true,
+    });
+    expect(forced.statusCode).toBe(409);
+    expect(forced.json().error).toBe("course_forbidden");
     const links = await server.app.db
       .select()
       .from(coursePools)

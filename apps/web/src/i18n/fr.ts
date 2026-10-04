@@ -102,6 +102,9 @@ export const fr: Record<keyof Dict, string> = {
   "error.githubAppNotInstalled": "L'app GitHub de Quiz n'est pas installée sur cette organisation. Installez-la, puis réessayez.",
   "error.superPowersActive": "Les Super Powers sont déjà actifs. Désactivez-les d'abord pour recommencer une heure.",
   "error.superPowersRequired": "Cette action demande les Super Powers. Activez-les d'abord dans les réglages.",
+  "error.ownerRequired": "Seul un propriétaire du cours peut faire cela.",
+  "error.lastOwner": "Un cours garde au moins un propriétaire : nommez d'abord quelqu'un d'autre propriétaire.",
+  "error.alreadyStaff": "Cette personne fait déjà partie de l'équipe du cours.",
   "error.impersonationReadOnly": "Vous agissez en tant qu'étudiant, en lecture seule : rien ne peut être modifié depuis cette fenêtre.",
   "error.correctionNotOpen": "Le corrigé ne peut être publié que pendant que l'exercice est en cours. Il vient peut-être d'être clôturé.",
   "error.correctionNotAllowed": "Le corrigé n'est publié en avance que pour un exercice, jamais pour un examen ni un sondage.",
@@ -148,6 +151,17 @@ export const fr: Record<keyof Dict, string> = {
   "courses.staffRemove": "Retirer de l'équipe",
   "courses.staffRemoveConfirm": "Retirer {name} de l'équipe de « {course} » ?",
   "courses.staffUnknown": "Aucun compte ne s'est encore connecté avec cette adresse.",
+  "courses.staffRole": "Rôle",
+  "courses.role.owner": "Propriétaire",
+  "courses.role.assistant": "Assistant",
+  "courses.role.desc.owner":
+    "Dirige le cours : ses classes, ses banques liées et son équipe, et la publication des résultats.",
+  "courses.role.desc.assistant":
+    "Travaille dans toutes les classes : évaluations, correction, listes d'étudiants. Laisse le cours lui-même à ses propriétaires.",
+  "courses.makeOwner": "Nommer propriétaire",
+  "courses.makeAssistant": "Passer en assistant",
+  "courses.leave": "Quitter le cours",
+  "courses.leaveConfirm": "Quitter l'équipe de « {course} » ? Vous n'y aurez plus accès.",
 
   "courses.hide": "Masquer pour moi",
   "courses.hideHint": "Retiré de votre liste, de la barre latérale et de la palette. Vos collègues le voient toujours.",
@@ -165,7 +179,7 @@ export const fr: Record<keyof Dict, string> = {
   "courses.tab.members": "Membres",
   "courses.tab.settings": "Réglages",
   "courses.members.hint":
-    "Chaque membre de l'équipe accède à tout le cours : ses classes, ses modèles, ses banques et ses membres. On ajoute un collègue par l'adresse avec laquelle il se connecte, une fois qu'il s'est connecté.",
+    "Chaque membre de l'équipe accède à tout le cours. Les propriétaires le dirigent en plus : ils ajoutent et retirent des membres, lient les banques, créent et suppriment les classes, et publient les résultats. On ajoute un collègue par l'adresse avec laquelle il se connecte, une fois qu'il s'est connecté.",
   "courses.settings.general": "Cours",
   "courses.settings.identity": "Nom et code",
   "courses.settings.edit": "Modifier",
@@ -178,6 +192,7 @@ export const fr: Record<keyof Dict, string> = {
   "courses.settings.lifecycle": "Supprimer",
   "courses.settings.deleteDesc":
     "Supprime le cours, ses classes avec leurs listes d'étudiants et leurs résultats, et ses modèles. C'est irréversible.",
+  "courses.settings.ownerOnly": "Le nom, le code et la suppression du cours relèvent de ses propriétaires.",
   "classrooms.title": "Classes",
   "classrooms.new": "Nouvelle classe",
   "classrooms.name": "Nom",
@@ -1042,7 +1057,7 @@ export const fr: Record<keyof Dict, string> = {
   "pool.move.failed": "Ces questions n'ont pas pu être déplacées.",
   "pool.move.nameTaken": "La banque de destination contient déjà une question nommée {name}.",
   "pool.move.forbidden":
-    "Vous ne faites pas partie de l'équipe enseignante de {course} : la banque ne peut pas y être ajoutée.",
+    "Seul un propriétaire de {course} peut y ajouter cette banque.",
   "pool.move.usedTitle": "Déjà utilisée dans une classe",
   "pool.move.usedBody.one":
     "Cette question est déjà utilisée dans {classrooms}. Ajouter la banque « {pool} » à {courses} pour que la classe continue d'y accéder ?",

@@ -1,0 +1,1 @@
+ALTER TABLE "course_staff" ADD COLUMN "role" text DEFAULT 'owner' NOT NULL;

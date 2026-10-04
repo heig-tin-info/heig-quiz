@@ -122,10 +122,12 @@ describe("LiveDashboard — the grid", () => {
     // column while no row has points (#227).
     expect(screen.getAllByRole("columnheader")).toHaveLength(15);
     // Only the evaluation's own detail (and the public configuration, which
-    // says whether stations exist, ADR-051); the grid came from the cache and
-    // no cell asked for anything of its own.
+    // says whether stations exist, ADR-051, and the course list the owner's
+    // actions are decided from, ADR-068 — the sidebar's, cached in the app);
+    // the grid came from the cache and no cell asked for anything of its own.
     expect(calls.filter((c) => c.url.includes("/dashboard"))).toHaveLength(0);
-    expect(calls.filter((c) => c.method === "GET" && c.url !== "/app/api/config")).toHaveLength(1);
+    const shared = ["/app/api/config", "/app/api/courses"];
+    expect(calls.filter((c) => c.method === "GET" && !shared.includes(c.url))).toHaveLength(1);
     expect(calls.every((c) => !c.url.includes("/attempts/"))).toBe(true);
   }, 30_000);
 

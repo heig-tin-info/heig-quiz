@@ -2,12 +2,13 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { EvaluationDetail } from "@quiz/contracts";
+import type { CourseRole, EvaluationDetail } from "@quiz/contracts";
 
 import { dashboardKey } from "../queryKeys";
 import { initialGrid } from "../realtime/grid";
 import { resetEventStream } from "../realtime/useEventStream";
 import { EVALUATION_ID, makeDashboard, makeEvaluationDetail } from "../test/live-fixtures";
+import { makeCourseSummary } from "../test/fixtures";
 import { fail, makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { LiveDashboard } from "./LiveDashboard";
 import { LIVE_TOGGLES_KEY } from "./toggles";
@@ -42,6 +43,7 @@ function exercise(over: (detail: EvaluationDetail) => void = () => {}): Evaluati
 function setup(
   detail: EvaluationDetail,
   publishReply = ok({ correctionPublishedAt: "2026-09-30T10:00:00.000Z", queued: 1 }),
+  myRole: CourseRole = "owner",
 ) {
   localStorage.setItem(LIVE_TOGGLES_KEY, JSON.stringify({ names: true, answers: true, results: true }));
   const view = makeDashboard(2, 2);
@@ -51,6 +53,8 @@ function setup(
     [`GET /app/api/evaluations/${EVALUATION_ID}`]: ok(detail),
     [`GET /app/api/evaluations/${EVALUATION_ID}/dashboard?includeAnswers=1&results=1`]: ok(view),
     [PUBLISH]: publishReply,
+    // The course list the owner's actions are decided from (ADR-068).
+    "GET /app/api/courses": ok([makeCourseSummary({ id: detail.courseId, myRole })]),
   });
   const rendered = renderWithProviders(<LiveDashboard id={EVALUATION_ID} navigate={navigate} />, {
     queryClient,
@@ -82,6 +86,22 @@ describe("LiveDashboard — publishing the correction (ADR-050)", () => {
       expect(screen.queryByText(/correction published/i)).not.toBeInTheDocument();
       unmount();
     }
+  });
+
+  it("is never offered to an assistant of the course, who still presents it once published (ADR-068)", async () => {
+    const user = userEvent.setup();
+    const { unmount } = setup(exercise(), undefined, "assistant");
+    await screen.findByRole("heading", { name: /quiz 3 — pointers/i });
+    expect(screen.queryByRole("button", { name: /^actions$/i })).not.toBeInTheDocument();
+    unmount();
+
+    setup(
+      exercise((d) => (d.evaluation.correctionPublishedAt = "2026-09-30T09:00:00.000Z")),
+      undefined,
+      "assistant",
+    );
+    await pick(user, /present the correction/i);
+    expect(navigate).toHaveBeenCalledWith({ view: "correction", evaluationId: EVALUATION_ID });
   });
 
   it("says in the reader's words why the server refused, and reads the evaluation again", async () => {

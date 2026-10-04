@@ -8,6 +8,7 @@ import type {
   AdminTeacher,
   AdminUser,
   ClassroomDetail,
+  CourseRole,
   CourseSummary,
   ImpersonationLink,
   RosterEntry,
@@ -26,6 +27,7 @@ import {
   D,
   H,
   MockError,
+  MockPayload,
   flags,
   iso,
   nextId,
@@ -111,13 +113,34 @@ export interface Course {
   hidden?: boolean;
 }
 
-export const ME_TEACHER = {
+/**
+ * The mock teacher's seat. `?assistant=1` makes them an assistant of every
+ * course (ADR-068), with Pierre Roulet as the owner beside them: the screens
+ * an assistant sees, without a second persona.
+ */
+const MY_ROLE: CourseRole = flags.assistant ? "assistant" : "owner";
+
+export const ME_TEACHER: CourseSummary["staff"][number] = {
   userId: "u-me",
   givenName: "Prof",
   familyName: "Démo",
   email: "teacher@heig-vd.ch",
   avatarUrl: null,
+  role: MY_ROLE,
 };
+
+const ROULET: CourseSummary["staff"][number] = {
+  userId: "u2",
+  givenName: "Pierre",
+  familyName: "Roulet",
+  email: "pierre.roulet@heig-vd.ch",
+  avatarUrl: null,
+  role: flags.assistant ? "owner" : "assistant",
+};
+
+/** A course's staff: the mock teacher, and an owner beside them when they are not one. */
+const staffOf = (...others: CourseSummary["staff"]): CourseSummary["staff"] =>
+  others.length === 0 && flags.assistant ? [ME_TEACHER, ROULET] : [ME_TEACHER, ...others];
 
 export const courses: Course[] = [
   {
@@ -125,23 +148,14 @@ export const courses: Course[] = [
     name: "Programmation C",
     code: "PRG1",
     createdAt: iso(-400 * D),
-    staff: [
-      ME_TEACHER,
-      {
-        userId: "u2",
-        givenName: "Pierre",
-        familyName: "Roulet",
-        email: "pierre.roulet@heig-vd.ch",
-        avatarUrl: null,
-      },
-    ],
+    staff: staffOf(ROULET),
   },
   {
     id: "c2",
     name: "Systèmes embarqués",
     code: "EMB",
     createdAt: iso(-200 * D),
-    staff: [ME_TEACHER],
+    staff: staffOf(),
   },
   // A course the teacher no longer teaches, hidden (#155): out of the list
   // until "Show hidden", out of both sidebar sections and of the palette.
@@ -150,7 +164,7 @@ export const courses: Course[] = [
     name: "Algorithmique",
     code: "ALG",
     createdAt: iso(-800 * D),
-    staff: [ME_TEACHER],
+    staff: staffOf(),
     hidden: true,
   },
 ];
@@ -322,6 +336,7 @@ function inflate() {
       familyName,
       email: `${slug(givenName)}.${slug(familyName)}@heig-vd.ch`,
       avatarUrl: null,
+      role: "assistant",
     });
   }
   const topics = ["Strings", "Structs", "Recursion", "Sorting", "Files", "Makefiles", "Tests", "Pointers"];
@@ -331,7 +346,7 @@ function inflate() {
       name: `Course ${i + 1} — ${topics[i % topics.length]}`,
       code: `C${i + 1}`,
       createdAt: iso(-(20 + i) * D),
-      staff: [ME_TEACHER],
+      staff: staffOf(),
     });
   }
   for (let i = rooms.length; i < 30; i += 1) {
@@ -448,12 +463,21 @@ const adminUsers = buildAdminUsers();
  */
 export const templateCount = { of: (_courseId: string): number => 0 };
 
+/**
+ * The reader's role on a course: their seat's, or an owner's for anyone
+ * without one (the admin persona, as under Super Powers).
+ */
+const myRoleOn = (courseId: string | null | undefined): CourseRole =>
+  courses.find((c) => c.id === courseId)?.staff.find((s) => s.userId === ME_TEACHER.userId)?.role ??
+  "owner";
+
 const courseSummary = (c: Course): CourseSummary => ({
   id: c.id,
   name: c.name,
   code: c.code,
   createdAt: c.createdAt,
   hidden: c.hidden ?? false,
+  myRole: myRoleOn(c.id),
   templates: templateCount.of(c.id),
   staff: c.staff,
   classrooms: rooms
@@ -527,7 +551,7 @@ on("POST", "/app/api/courses", (_m, body) => {
     name: String(body.name),
     code: String(body.code).toUpperCase(),
     createdAt: iso(0),
-    staff: [ME_TEACHER],
+    staff: [{ ...ME_TEACHER, role: "owner" }],
   };
   courses.push(c);
   return courseSummary(c);
@@ -559,19 +583,35 @@ on("POST", "/app/api/courses/:id/unhide", (m) => {
 on("POST", "/app/api/courses/:id/staff", (m, body) => {
   const c = courseOr404(m.groups!.id!);
   const email = String(body.email);
-  if (c.staff.some((s) => s.email === email)) throw new MockError(409, "Already on the staff");
+  const role: CourseRole = body.role === "owner" ? "owner" : "assistant";
+  if (c.staff.some((s) => s.email === email)) {
+    throw new MockPayload(409, { error: "already_staff", message: "This account is already on the staff" });
+  }
   const [prenom = "New", nom = "Member"] = email.split("@")[0]!.split(".");
-  c.staff.push({
-    userId: nextId("u"),
-    givenName: prenom,
-    familyName: nom,
-    email,
-    avatarUrl: null,
-  });
-  return undefined;
+  const userId = nextId("u");
+  c.staff.push({ userId, givenName: prenom, familyName: nom, email, avatarUrl: null, role });
+  return { userId, role };
+});
+
+/** The server's last-owner rule (ADR-068): the seat, or the 409 that keeps the last owner. */
+const seatChange = (c: Course, uid: string, next: CourseRole | "remove") => {
+  const seat = c.staff.find((s) => s.userId === uid);
+  if (!seat) throw new MockError(404, "Not found");
+  const owners = c.staff.filter((s) => s.role === "owner").length;
+  if (seat.role === "owner" && next !== "owner" && owners <= 1) {
+    throw new MockPayload(409, { error: "last_owner", message: "A course keeps at least one owner" });
+  }
+  return seat;
+};
+on("PATCH", "/app/api/courses/:id/staff/:uid", (m, body) => {
+  const c = courseOr404(m.groups!.id!);
+  const role: CourseRole = body.role === "owner" ? "owner" : "assistant";
+  seatChange(c, m.groups!.uid!, role).role = role;
+  return { userId: m.groups!.uid, role };
 });
 on("DELETE", "/app/api/courses/:id/staff/:uid", (m) => {
   const c = courseOr404(m.groups!.id!);
+  seatChange(c, m.groups!.uid!, "remove");
   c.staff = c.staff.filter((s) => s.userId !== m.groups!.uid);
   return undefined;
 });

@@ -793,9 +793,9 @@ describe("the order of the refusals, over HTTP", () => {
     expect(
       (await del(`/app/api/courses/${courseId}/staff/${teacher.id}`, outsider.headers)).statusCode,
     ).toBe(404);
-    // …and the last seat of the staff is never removed.
+    // …and the last owner of the course is never removed.
     const last = await del(`/app/api/courses/${courseId}/staff/${teacher.id}`, teacher.headers);
     expect(last.statusCode).toBe(409);
-    expect(last.json().error).toBe("last_staff");
+    expect(last.json().error).toBe("last_owner");
   });
 });

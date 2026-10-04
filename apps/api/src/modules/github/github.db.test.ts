@@ -127,7 +127,7 @@ beforeAll(async () => {
     server.signIn("student"),
   ]);
   courseId = (await createCourse(server.app.db, { name: "Prog 1", code: "PRG1" }, teacher.id))!.id;
-  await addStaff(server.app.db, courseId, colleague.id);
+  await addStaff(server.app.db, courseId, colleague.id, "owner");
   await createCourse(server.app.db, { name: "Other", code: "OTH1" }, outsider.id);
 });
 

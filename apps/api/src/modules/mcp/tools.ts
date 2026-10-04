@@ -171,7 +171,8 @@ export const TOOLS: Tool[] = [
     title: "List courses",
     description:
       "The courses the teacher is on the staff of. A course holds classrooms (a class of students for a " +
-      "period) and draws its questions from the pools linked to it.",
+      "period) and draws its questions from the pools linked to it. `myRole` is the teacher's role on " +
+      "each: an `owner` runs the course (classrooms, linked pools, staff), an `assistant` does the rest.",
     input: z.object({}),
     annotations: READ,
     run: (api) => api.get("/courses"),
@@ -337,7 +338,9 @@ export const TOOLS: Tool[] = [
       "Creates a classroom (one class of students for one period, e.g. `Français 2026`) in a course. " +
       "Evaluations live in a classroom. `period` is a free label; `periodStart` and `periodEnd` date " +
       "it by month (both or neither), which keeps it in the teacher's sidebar only while it runs. " +
-      "HEIG-VD semesters: autumn N = `N-09` to `(N+1)-01`, spring N = `N-02` to `N-07`.",
+      "HEIG-VD semesters: autumn N = `N-09` to `(N+1)-01`, spring N = `N-02` to `N-07`. " +
+      "Only an owner of the course may create one (`myRole` of list_courses); an assistant is refused " +
+      "with 403 `owner_required`.",
     input: z.object({
       courseId: Id,
       ...ClassroomCreate.shape,
@@ -376,7 +379,8 @@ export const TOOLS: Tool[] = [
       "Makes a pool's questions available to a course's evaluations. Keeps the pools already linked. Idempotent. " +
       "Linking needs the contributor or owner role on the pool, because it makes the whole course staff " +
       "contributors of it: a pool the teacher only reads (a colleague's public pool, a reader seat) is " +
-      "refused with 403 `pool_link_forbidden`.",
+      "refused with 403 `pool_link_forbidden`. Only an owner of the course may link (`myRole` of " +
+      "list_courses); an assistant is refused with 403 `owner_required`.",
     input: z.object({ courseId: Id, poolId: Id }),
     annotations: { ...WRITE, idempotentHint: true },
     run: async (api, a) => {

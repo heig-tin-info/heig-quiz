@@ -25,6 +25,7 @@ import { useT } from "./i18n";
 import { pagesText, removalNeedsName, useStaffJournal, withConfirm } from "./journal/api";
 import { JournalSettings } from "./journal/JournalSettings";
 import { useErrorToast, useToast } from "./notify";
+import { useIsCourseOwner } from "./course/parts";
 import { invalidateHint } from "./realtime/hints";
 import type { Navigate } from "./router";
 import { Button, Card, Field, FormDialog, SectionHeading, SettingRow } from "./ui";
@@ -110,7 +111,10 @@ function RenameDialog({ room, onClose }: { room: ClassroomDetail; onClose: () =>
   );
 }
 
-/** Archive (reversible, no confirmation) and delete (confirmed, `danger`). */
+/**
+ * Archive (reversible, no confirmation) and delete (confirmed, `danger`).
+ * Deleting is an owner's of the course (ADR-068): an assistant has Archive only.
+ */
 function LifecycleSection({ room, navigate }: { room: ClassroomDetail; navigate: Navigate }) {
   const t = useT();
   const qc = useQueryClient();
@@ -118,6 +122,7 @@ function LifecycleSection({ room, navigate }: { room: ClassroomDetail; navigate:
   const toast = useToast();
   const toastError = useErrorToast();
   const archived = room.archivedAt !== null;
+  const isOwner = useIsCourseOwner(room.course.id);
   // A Quiz-mode journal holding pages goes with the classroom, and it is the
   // only copy of them: the name is typed, and sent (F-ORG-09, F-JRN-04).
   const journal = useStaffJournal(room.id);
@@ -141,7 +146,7 @@ function LifecycleSection({ room, navigate }: { room: ClassroomDetail; navigate:
   });
   return (
     <section className="space-y-3">
-      <SectionHeading title={t("classroomSettings.lifecycle")} />
+      <SectionHeading title={t(isOwner ? "classroomSettings.lifecycle" : "classroomSettings.archive")} />
       <Card className="divide-y divide-line px-5">
         <SettingRow
           title={t("classroomSettings.archive")}
@@ -163,34 +168,36 @@ function LifecycleSection({ room, navigate }: { room: ClassroomDetail; navigate:
             )}
           </Button>
         </SettingRow>
-        <SettingRow title={t("classroomSettings.delete")} desc={t("classroomSettings.deleteDesc")}>
-          <Button
-            variant="danger-quiet"
-            loading={remove.isPending}
-            onClick={async () => {
-              if (
-                await confirm({
-                  title: t("classrooms.deleteConfirm", { name: room.name }),
-                  ...(typed
-                    ? {
-                        message: t("classroomSettings.deleteJournal", {
-                          pages: pagesText(t, journal.data!.pageCount),
-                        }),
-                        typeToConfirm: room.name,
-                      }
-                    : {}),
-                  confirmLabel: t("common.delete"),
-                  cancelLabel: t("common.cancel"),
-                  danger: true,
-                })
-              ) {
-                remove.mutate(typed ? room.name : undefined);
-              }
-            }}
-          >
-            <Trash2 /> {t("classrooms.delete")}
-          </Button>
-        </SettingRow>
+        {isOwner ? (
+          <SettingRow title={t("classroomSettings.delete")} desc={t("classroomSettings.deleteDesc")}>
+            <Button
+              variant="danger-quiet"
+              loading={remove.isPending}
+              onClick={async () => {
+                if (
+                  await confirm({
+                    title: t("classrooms.deleteConfirm", { name: room.name }),
+                    ...(typed
+                      ? {
+                          message: t("classroomSettings.deleteJournal", {
+                            pages: pagesText(t, journal.data!.pageCount),
+                          }),
+                          typeToConfirm: room.name,
+                        }
+                      : {}),
+                    confirmLabel: t("common.delete"),
+                    cancelLabel: t("common.cancel"),
+                    danger: true,
+                  })
+                ) {
+                  remove.mutate(typed ? room.name : undefined);
+                }
+              }}
+            >
+              <Trash2 /> {t("classrooms.delete")}
+            </Button>
+          </SettingRow>
+        ) : null}
       </Card>
     </section>
   );

@@ -204,6 +204,38 @@ describe("dragging a question onto another pool", () => {
     );
   });
 
+  it("offers no linking to a course the caller does not own, and says why (ADR-068)", async () => {
+    const { calls } = mockFetch(
+      navRoutes({
+        "POST /app/api/questions/move": fail(409, {
+          error: "pool_not_linked",
+          message: "used",
+          names: [],
+          courses: [
+            {
+              courseId: "c1",
+              courseName: "Programmation C",
+              courseCode: "PRG1",
+              classrooms: [{ id: "r1", name: "PRG1-2026" }],
+              mayLink: false,
+            },
+          ],
+        }),
+      }),
+    );
+    renderWithProviders(
+      <PoolNavTree state="all" route={{ view: "pool", id: "p1" }} navigate={vi.fn()} />,
+    );
+    const row = await screen.findByRole("button", { name: /Systèmes embarqués/ });
+    const dataTransfer = transfer({ questionIds: ["q1"], label: "ptr-arith-01" });
+    fireEvent.dragEnter(row, { dataTransfer });
+    fireEvent.drop(row, { dataTransfer });
+
+    expect(await screen.findByText("Only an owner of PRG1 may add this pool to it.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add the pool and move" })).toBeNull();
+    expect(calls.filter((c) => c.url === "/app/api/questions/move")).toHaveLength(1);
+  });
+
   it("says why when the internal name is already taken there, and retries nothing", async () => {
     const { calls } = mockFetch(
       navRoutes({

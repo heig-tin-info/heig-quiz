@@ -93,7 +93,9 @@ Never work around these, not even "temporarily".
    classroom if and only if they hold a seat on its course's staff, or an admin
    session has active Super Powers (`accessWhere`, ADR-054). An entity is loaded
    only if that holds; otherwise the answer is a 404 indistinguishable from a
-   missing entity.
+   missing entity. What a member may DO on a course is a second step,
+   `requireCourseRole` (owner or assistant, ADR-068), inside the loader: a
+   403 `owner_required`, as for pools.
    **The student branch** is `readableClassroom`, in the same file (its
    rule is the pure `classroomPayload`), for the classroom routes a student
    reads: the course's staff (through `staffAccess`) get the staff payload,

@@ -2,7 +2,9 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { makeClassroomSummary, makeCourseSummary } from "../test/fixtures";
+import type { CourseSummary } from "@quiz/contracts";
+
+import { makeClassroomSummary, makeCourseSummary, makeMe } from "../test/fixtures";
 import { fail, mockFetch, noContent, ok, renderWithProviders } from "../test/render";
 import { CoursePage } from "./CoursePage";
 
@@ -263,23 +265,33 @@ describe("CoursePage", () => {
     ]);
   });
 
-  it("lists the members, each with their removal, and adds one by address", async () => {
-    const staff = [
-      { userId: "u-1", givenName: "Marie", familyName: "Dupont", email: "marie.dupont@heig-vd.ch", avatarUrl: null },
-      { userId: "u-2", givenName: "Paul", familyName: "Martin", email: "paul.martin@heig-vd.ch", avatarUrl: null },
+  it("lists the members with their roles, changes one, removes one and adds one by address", async () => {
+    const staff: CourseSummary["staff"] = [
+      { userId: "u-1", givenName: "Marie", familyName: "Dupont", email: "marie.dupont@heig-vd.ch", avatarUrl: null, role: "owner" },
+      { userId: "u-2", givenName: "Paul", familyName: "Martin", email: "paul.martin@heig-vd.ch", avatarUrl: null, role: "assistant" },
     ];
     const { calls } = mockFetch({
       ...world(),
       [`GET ${COURSES}`]: ok([makeCourseSummary({ staff })]),
-      "POST /app/api/courses/c1/staff": ok({ userId: "u-3" }),
+      "POST /app/api/courses/c1/staff": ok({ userId: "u-3", role: "assistant" }),
+      "PATCH /app/api/courses/c1/staff/u-2": ok({ userId: "u-2", role: "owner" }),
       "DELETE /app/api/courses/c1/staff/u-2": noContent(),
     });
     renderWithProviders(<CoursePage id="c1" tab="members" navigate={vi.fn()} />);
 
     expect(await screen.findByText("Marie Dupont")).toBeVisible();
     expect(screen.getByText("paul.martin@heig-vd.ch")).toBeVisible();
+    expect(screen.getByText("Owner")).toBeVisible();
+    expect(screen.getByText("Assistant")).toBeVisible();
 
-    await userEvent.click(screen.getAllByRole("button", { name: "Remove from the staff" })[1]!);
+    await userEvent.click(screen.getByRole("button", { name: "Make owner" }));
+    await waitFor(() =>
+      expect(calls.filter((c) => c.method === "PATCH")).toEqual([
+        { url: "/app/api/courses/c1/staff/u-2", method: "PATCH", body: { role: "owner" } },
+      ]),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove from the staff" }));
     const confirm = await screen.findByRole("dialog", { name: /Remove Paul Martin/ });
     await userEvent.click(within(confirm).getByRole("button", { name: "Remove from the staff" }));
     await waitFor(() =>
@@ -294,17 +306,108 @@ describe("CoursePage", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
     await waitFor(() =>
       expect(calls.filter((c) => c.method === "POST")).toEqual([
-        { url: "/app/api/courses/c1/staff", method: "POST", body: { email: "anne.roux@heig-vd.ch" } },
+        {
+          url: "/app/api/courses/c1/staff",
+          method: "POST",
+          body: { email: "anne.roux@heig-vd.ch", role: "assistant" },
+        },
       ]),
     );
   });
 
-  it("offers no removal of the last member", async () => {
+  it("adds an owner when the form says so, and words a second seat", async () => {
+    const { calls } = mockFetch({
+      ...world(),
+      "POST /app/api/courses/c1/staff": fail(409, { error: "already_staff", message: "x" }),
+    });
+    renderWithProviders(<CoursePage id="c1" tab="members" navigate={vi.fn()} />);
+
+    await userEvent.click(await screen.findByRole("button", { name: /Add a staff member/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Add a staff member" });
+    await userEvent.type(within(dialog).getByRole("textbox"), "marie.dupont@heig-vd.ch");
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Owner" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+    expect(await within(dialog).findByText("This person is already on the staff of the course.")).toBeVisible();
+    expect(calls.filter((c) => c.method === "POST").map((c) => c.body)).toEqual([
+      { email: "marie.dupont@heig-vd.ch", role: "owner" },
+    ]);
+  });
+
+  it("offers nothing that would leave the course without an owner", async () => {
     mockFetch(world());
     renderWithProviders(<CoursePage id="c1" tab="members" navigate={vi.fn()} />);
 
     expect(await screen.findByText("Marie Dupont")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Remove from the staff" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Make assistant" })).toBeNull();
+  });
+
+  describe("for an assistant (ADR-068)", () => {
+    const staff: CourseSummary["staff"] = [
+      { userId: "u-1", givenName: "Marie", familyName: "Dupont", email: "marie.dupont@heig-vd.ch", avatarUrl: null, role: "assistant" },
+      { userId: "u-2", givenName: "Paul", familyName: "Martin", email: "paul.martin@heig-vd.ch", avatarUrl: null, role: "owner" },
+    ];
+    const assistantWorld = () => ({
+      ...world(),
+      "GET /app/api/me": ok(makeMe()),
+      [`GET ${COURSES}`]: ok([
+        makeCourseSummary({
+          staff,
+          myRole: "assistant",
+          classrooms: [makeClassroomSummary({ id: "r1", name: "PRG1-2026", students: 24 })],
+        }),
+      ]),
+    });
+
+    it("offers no header action but New template", async () => {
+      mockFetch(assistantWorld());
+      for (const tab of ["classrooms", "pools", "members"] as const) {
+        const { unmount } = renderWithProviders(<CoursePage id="c1" tab={tab} navigate={vi.fn()} />);
+        await screen.findByRole("heading", { level: 1, name: /Programmation C/ });
+        expect(screen.queryByRole("button", { name: /New classroom/ })).toBeNull();
+        expect(screen.queryByRole("button", { name: /Link a pool/ })).toBeNull();
+        expect(screen.queryByRole("button", { name: /Add a staff member/ })).toBeNull();
+        unmount();
+      }
+      renderWithProviders(<CoursePage id="c1" tab="templates" navigate={vi.fn()} />);
+      expect(await screen.findByRole("button", { name: /New template/ })).toBeVisible();
+    });
+
+    it("lists the pools without their unlink", async () => {
+      mockFetch(assistantWorld());
+      renderWithProviders(<CoursePage id="c1" tab="pools" navigate={vi.fn()} />);
+      expect(await screen.findByText("Pointers")).toBeVisible();
+      expect(screen.queryByRole("button", { name: "Unlink from this course" })).toBeNull();
+    });
+
+    it("offers only their own leaving among the members, then goes home", async () => {
+      const { calls } = mockFetch({
+        ...assistantWorld(),
+        "DELETE /app/api/courses/c1/staff/u-1": noContent(),
+      });
+      const navigate = vi.fn();
+      renderWithProviders(<CoursePage id="c1" tab="members" navigate={navigate} />);
+
+      await userEvent.click(await screen.findByRole("button", { name: "Leave the course" }));
+      expect(screen.queryByRole("button", { name: "Remove from the staff" })).toBeNull();
+      expect(screen.queryByRole("button", { name: /Make (owner|assistant)/ })).toBeNull();
+      const confirm = await screen.findByRole("dialog", { name: /Leave the staff of/ });
+      await userEvent.click(within(confirm).getByRole("button", { name: "Leave the course" }));
+      await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "home" }));
+      expect(calls.filter((c) => c.method === "DELETE")).toEqual([
+        { url: "/app/api/courses/c1/staff/u-1", method: "DELETE", body: null },
+      ]);
+    });
+
+    it("shows only the visibility in the settings, and says why", async () => {
+      mockFetch(assistantWorld());
+      renderWithProviders(<CoursePage id="c1" tab="settings" navigate={vi.fn()} />);
+
+      expect(await screen.findByRole("button", { name: /Hide for me/ })).toBeVisible();
+      expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+      expect(screen.queryByRole("button", { name: /Delete course/ })).toBeNull();
+      expect(screen.getByText(/are its owners' to change/)).toBeVisible();
+    });
   });
 
   it("edits the name and the code in its settings, sending only what changed", async () => {

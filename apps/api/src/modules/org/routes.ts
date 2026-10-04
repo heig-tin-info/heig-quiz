@@ -6,9 +6,11 @@
  * helpers it re-exports (`./roster.ts`, the shared role and pool helpers) —
  * never in a handler (audit B-12). The teacher routes
  * that act on one entity run on `teacherRoute`: params (404), then the entity
- * under `staffAccess` (404, invariant 6), then the body — so a caller off the
- * staff learns nothing, not even that their body was malformed. Their 400
- * is the wrapper's `invalid()`, `{ error: "validation", details }`.
+ * under `staffAccess` (404, invariant 6), then — for what only an owner of
+ * the course may do (ADR-068) — the caller's role (403 `owner_required`),
+ * then the body — so a caller off the staff learns nothing, not even that
+ * their body was malformed, and an assistant learns only that they may not.
+ * Their 400 is the wrapper's `invalid()`, `{ error: "validation", details }`.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -23,7 +25,11 @@ import {
   EnrollmentPatch,
   IdParam,
   RosterEntryParams,
+  StaffAdd,
+  StaffParam,
+  StaffPatch,
   type CourseDetail,
+  type CourseRole,
   type StudentClassroom,
 } from "@quiz/contracts";
 import type { Cell } from "@quiz/domain";
@@ -45,6 +51,7 @@ import {
   staffAccess,
   superPowersGuard,
   teacherGuard,
+  withCourseRole,
 } from "../guards.js";
 import { invalid, notFound, teacherRoute } from "../http.js";
 import { journalRemovalRefused } from "../journal/service.js";
@@ -59,8 +66,9 @@ const RowsBody = z.object({
     .max(5000),
 });
 
-const StaffBody = z.object({ email: z.email() });
-const StaffParam = z.object({ id: z.uuid(), uid: z.uuid() });
+/** A course keeps at least one owner (ADR-068): the refusal of removing or demoting the last. */
+const lastOwner = (reply: FastifyReply) =>
+  reply.code(409).send({ error: "last_owner", message: "A course keeps at least one owner" });
 
 /** A course code is unique across the instance: the one refusal of a create and of an edit. */
 const duplicateCode = (reply: FastifyReply) =>
@@ -76,11 +84,29 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   /** The loaders of invariant 6: each answers its own 404 and returns null. */
   const loadCourse = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
     accessibleCourse(app, req, reply, p);
-  const onCourse = { params: IdParam, load: loadCourse };
-  const onClassroom = {
+  const loadClassroom = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
+    accessibleClassroom(app, req, reply, p);
+  /** The course, and the caller's role on it when `role` is given (ADR-068). */
+  const onCourse = (role?: CourseRole) => ({
     params: IdParam,
-    load: (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
-      accessibleClassroom(app, req, reply, p),
+    load: withCourseRole(app, loadCourse, (course) => course.id, role),
+  });
+  const onClassroom = (role?: CourseRole) => ({
+    params: IdParam,
+    load: withCourseRole(app, loadClassroom, (scope) => scope.course.id, role),
+  });
+  /**
+   * One seat of the course's staff. Its role is the owner's to change, and
+   * so is the seat, except that a member may always leave: for the caller's
+   * own seat the role step is skipped. Still inside `load`, so the refusal
+   * comes before the body, like every other owner-only route.
+   */
+  const ownedCourse = withCourseRole(app, loadCourse, (course) => course.id, "owner");
+  const onSeat = { params: StaffParam, load: ownedCourse };
+  const onOwnSeatOrOwned = {
+    params: StaffParam,
+    load: (req: FastifyRequest, reply: FastifyReply, p: { id: string; uid: string }) =>
+      p.uid === req.user!.id ? loadCourse(req, reply, p) : ownedCourse(req, reply, p),
   };
   const onEntry = {
     params: RosterEntryParams,
@@ -91,7 +117,10 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   // --- Courses ---
 
   app.get("/app/api/courses", { preHandler: requireTeacher }, async (req) =>
-    service.listCourses(app.db, accessWhere(callerOf(req), staffAccess(req.user!.id)), req.user!.id),
+    service.listCourses(app.db, accessWhere(callerOf(req), staffAccess(req.user!.id)), {
+      id: req.user!.id,
+      reachesAll: callerOf(req).reach === "all",
+    }),
   );
 
   app.post("/app/api/courses", { preHandler: requireTeacher }, async (req, reply) => {
@@ -108,7 +137,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.get(
     "/app/api/courses/:id",
     { preHandler: requireTeacher },
-    teacher(onCourse, async ({ scope: course }) => {
+    teacher(onCourse(), async ({ scope: course }) => {
       const [staff, rooms, pools] = await Promise.all([
         service.staffOfCourse(app.db, course.id),
         service.classroomsOfCourse(app.db, course.id),
@@ -139,7 +168,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.patch(
     "/app/api/courses/:id",
     { preHandler: requireTeacher },
-    teacher({ ...onCourse, body: CoursePatch }, async ({ req, reply, body, scope: course }) => {
+    teacher({ ...onCourse("owner"), body: CoursePatch }, async ({ req, reply, body, scope: course }) => {
       const updated = await service.updateCourse(app.db, course.id, body);
       if (updated === null) return duplicateCode(reply);
       await trace(req, "course.update", "course", course.id, body);
@@ -150,7 +179,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.delete(
     "/app/api/courses/:id",
     { preHandler: requireTeacher },
-    teacher(onCourse, async ({ req, reply, scope: course }) => {
+    teacher(onCourse("owner"), async ({ req, reply, scope: course }) => {
       await service.deleteCourse(app.db, course.id);
       await trace(req, "course.delete", "course", course.id, {
         name: course.name,
@@ -174,7 +203,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
     app.post(
       `/app/api/courses/:id/${path}`,
       { preHandler: requireTeacher },
-      teacher(onCourse, async ({ req, reply, scope: course }) => {
+      teacher(onCourse(), async ({ req, reply, scope: course }) => {
         await service.setCourseHidden(app.db, req.user!.id, course.id, hidden);
         return reply.code(204).send();
       }),
@@ -190,7 +219,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.put(
     "/app/api/courses/:id/pools",
     { preHandler: requireTeacher },
-    teacher({ ...onCourse, body: CoursePoolsPut }, async ({ req, body, scope: course }) => {
+    teacher({ ...onCourse("owner"), body: CoursePoolsPut }, async ({ req, body, scope: course }) => {
       // A pool the caller only reads is `PoolLinkForbidden`'s 403 (ADR-013).
       const linked = await setCoursePools(
         app.db,
@@ -210,17 +239,18 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
 
   // --- Course staff ---
 
+  /**
+   * A new seat, an assistant unless the body says `owner` (ADR-068). An
+   * account that already holds one is `409 already_staff`: its role is
+   * changed by the PATCH below, never by adding it again.
+   */
   app.post(
     "/app/api/courses/:id/staff",
     { preHandler: requireTeacher },
-    teacher(onCourse, async ({ req, reply, scope: course }) => {
-      const body = StaffBody.safeParse(req.body);
-      if (!body.success) {
-        return reply.code(400).send({ error: "validation", message: "A valid e-mail is required" });
-      }
+    teacher({ ...onCourse("owner"), body: StaffAdd }, async ({ req, reply, body, scope: course }) => {
       // A seat is held by an ACCOUNT, not by an address: the identity of a
       // person is a set of addresses, so the invitee must have signed in once.
-      const owners = await ownersOf(app.db, body.data.email);
+      const owners = await ownersOf(app.db, body.email);
       if (owners.length !== 1) {
         return reply.code(409).send({
           error: owners.length === 0 ? "unknown_account" : "ambiguous_account",
@@ -231,30 +261,55 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
         });
       }
       const userId = owners[0]!;
-      await service.addStaff(app.db, course.id, userId);
+      if (!(await service.addStaff(app.db, course.id, userId, body.role))) {
+        return reply
+          .code(409)
+          .send({ error: "already_staff", message: "This account is already on the staff" });
+      }
       // Immediate effect: a colleague added mid-session sees the course
       // without signing out and in again.
       await syncRoleOfUser(app.db, config, userId);
-      await trace(req, "course.staff_add", "course", course.id, { userId, email: body.data.email });
+      await trace(req, "course.staff_add", "course", course.id, {
+        userId,
+        email: body.email,
+        role: body.role,
+      });
       publish("courses", [`teacher:${userId}`, `course:${course.id}`]);
-      return reply.code(201).send({ userId });
+      return reply.code(201).send({ userId, role: body.role });
     }),
   );
 
+  /** An owner makes a seat an owner or an assistant; the last owner stays one. */
+  app.patch(
+    "/app/api/courses/:id/staff/:uid",
+    { preHandler: requireTeacher },
+    teacher({ ...onSeat, body: StaffPatch }, async ({ req, reply, params, body, scope: course }) => {
+      const outcome = await service.changeStaffSeat(app.db, course.id, params.uid, body.role);
+      if (outcome.refused === "not_found") return notFound(reply);
+      if (outcome.refused === "last_owner") return lastOwner(reply);
+      if (outcome.from !== body.role) {
+        await trace(req, "course.staff_role_change", "course", course.id, {
+          userId: params.uid,
+          from: outcome.from,
+          to: body.role,
+        });
+        publish("courses", [`teacher:${params.uid}`, `course:${course.id}`]);
+      }
+      return { userId: params.uid, role: body.role };
+    }),
+  );
+
+  /** An owner removes a seat; any member removes their own (leaves the course). */
   app.delete(
     "/app/api/courses/:id/staff/:uid",
     { preHandler: requireTeacher },
-    teacher({ params: StaffParam, load: loadCourse }, async ({ req, reply, params, scope: course }) => {
+    teacher(onOwnSeatOrOwned, async ({ req, reply, params, scope: course }) => {
       const { uid } = params;
-      // Emptying the staff would orphan the course: refuse the last seat.
-      if ((await service.staffSeatCount(app.db, course.id)) <= 1) {
-        return reply
-          .code(409)
-          .send({ error: "last_staff", message: "A course keeps at least one staff member" });
-      }
-      await service.removeStaff(app.db, course.id, uid);
+      const outcome = await service.changeStaffSeat(app.db, course.id, uid, "remove");
+      if (outcome.refused === "not_found") return notFound(reply);
+      if (outcome.refused === "last_owner") return lastOwner(reply);
       await syncRoleOfUser(app.db, config, uid);
-      await trace(req, "course.staff_remove", "course", course.id, { userId: uid });
+      await trace(req, "course.staff_remove", "course", course.id, { userId: uid, role: outcome.from });
       publish("courses", [`teacher:${uid}`, `course:${course.id}`]);
       return reply.code(204).send();
     }),
@@ -265,7 +320,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.post(
     "/app/api/courses/:id/classrooms",
     { preHandler: requireTeacher },
-    teacher({ ...onCourse, body: ClassroomCreate }, async ({ req, reply, body, scope: course }) => {
+    teacher({ ...onCourse("owner"), body: ClassroomCreate }, async ({ req, reply, body, scope: course }) => {
       const room = await service.createClassroom(app.db, course.id, body);
       await trace(req, "classroom.create", "classroom", room.id, {
         name: room.name,
@@ -279,7 +334,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.get(
     "/app/api/classrooms/:id",
     { preHandler: requireTeacher },
-    teacher(onClassroom, async ({ scope }) => ({
+    teacher(onClassroom(), async ({ scope }) => ({
       id: scope.room.id,
       name: scope.room.name,
       period: scope.room.period,
@@ -295,7 +350,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.patch(
     "/app/api/classrooms/:id",
     { preHandler: requireTeacher },
-    teacher({ ...onClassroom, body: ClassroomPatch }, async ({ req, body, scope }) => {
+    teacher({ ...onClassroom(), body: ClassroomPatch }, async ({ req, body, scope }) => {
       const updated = await service.updateClassroom(app.db, scope.room.id, body);
       const { name, period, periodStart } = body;
       if (name !== undefined || period !== undefined || periodStart !== undefined) {
@@ -324,7 +379,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
     app.post(
       `/app/api/classrooms/:id/${path}`,
       { preHandler: requireTeacher },
-      teacher(onClassroom, async ({ req, reply, scope }) => {
+      teacher(onClassroom(), async ({ req, reply, scope }) => {
         await service.setArchived(app.db, scope.room.id, value);
         await trace(req, action, "classroom", scope.room.id, { name: scope.room.name });
         return reply.code(204).send();
@@ -340,7 +395,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.delete(
     "/app/api/classrooms/:id",
     { preHandler: requireTeacher },
-    teacher({ ...onClassroom, query: ClassroomDeleteQuery }, async ({ req, reply, query, scope }) => {
+    teacher({ ...onClassroom("owner"), query: ClassroomDeleteQuery }, async ({ req, reply, query, scope }) => {
       await journalRemovalRefused(app.db, scope.room, query.confirm);
       await service.deleteClassroom(app.db, scope.room.id);
       await trace(req, "classroom.delete", "classroom", scope.room.id, { name: scope.room.name });
@@ -354,7 +409,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.post(
     "/app/api/classrooms/:id/self-enroll",
     { preHandler: requireTeacher },
-    teacher(onClassroom, async ({ req, reply, scope }) => {
+    teacher(onClassroom(), async ({ req, reply, scope }) => {
       const me = req.user!;
       try {
         await service.selfEnroll(app.db, scope.room.id, me);
@@ -373,7 +428,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.post(
     "/app/api/classrooms/:id/roster",
     { preHandler: requireTeacher },
-    teacher(onClassroom, async ({ req, reply, scope }) => {
+    teacher(onClassroom(), async ({ req, reply, scope }) => {
       // Two forms: raw CSV (text/csv) or tabular {rows} lines (JSON),
       // typically extracted from an Excel file client-side.
       let source: { csv: string } | { rows: Cell[][] };

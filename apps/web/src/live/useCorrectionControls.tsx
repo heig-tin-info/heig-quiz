@@ -12,6 +12,7 @@ import { ApiError, api } from "../api";
 import { useConfirm } from "../confirm";
 import { useT, type Dict } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
+import { useIsCourseOwner } from "../course/parts";
 import { resultsKey } from "../queryKeys";
 import type { Route } from "../router";
 import type { CorrectionControls } from "./LiveHeader";
@@ -33,17 +34,22 @@ function studentsLine(policy: Evaluation["feedbackPolicy"]): keyof Dict {
  * that says what happens under THIS evaluation's feedback policy, the call,
  * and "Present" once it is done. `null` wherever the server refuses it
  * (`correctionPublishRefusal`, the server's own rule: an exam, a poll, an
- * exercise that is not running) and until the evaluation has loaded.
+ * exercise that is not running) and until the evaluation has loaded — and,
+ * for anyone but an owner of the course (ADR-068), until it is published:
+ * an assistant is never offered the publication, only "Present" after it.
  */
 export function useCorrectionControls({
   id,
   evaluation,
+  courseId,
   navigate,
   onChanged,
 }: {
   /** The route's id: the one the dashboard's queries are keyed on. */
   id: string;
   evaluation: Evaluation | undefined;
+  /** The evaluation's course, whose owners alone publish; undefined until it has loaded. */
+  courseId: string | undefined;
   navigate: (r: Route) => void;
   /** Re-reads the evaluation and the grid: the badge, the menu and Reopen follow. */
   onChanged: () => void;
@@ -53,6 +59,7 @@ export function useCorrectionControls({
   const confirm = useConfirm();
   const toast = useToast();
   const toastError = useErrorToast();
+  const isOwner = useIsCourseOwner(courseId);
 
   const publish = useMutation<PublishCorrectionResponse>({
     mutationFn: () =>
@@ -73,6 +80,8 @@ export function useCorrectionControls({
   });
 
   if (!evaluation || correctionPublishRefusal(evaluation) !== null) return null;
+  const published = evaluation.correctionPublishedAt !== null;
+  if (!published && !isOwner) return null;
 
   const ask = async () => {
     const ok = await confirm({
@@ -98,7 +107,7 @@ export function useCorrectionControls({
   };
 
   return {
-    published: evaluation.correctionPublishedAt !== null,
+    published,
     publish: () => void ask(),
     present: () => navigate({ view: "correction", evaluationId: id }),
   };

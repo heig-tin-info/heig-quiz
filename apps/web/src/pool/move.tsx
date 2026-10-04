@@ -164,6 +164,13 @@ export function useMoveQuestions(): (request: MoveRequest) => Promise<boolean> {
           report(error);
           return false;
         }
+        // A course the caller does not own (ADR-068) would refuse the link:
+        // no question to ask, the refusal is said at once.
+        const notMine = conflict.courses.find((c) => !c.mayLink);
+        if (notMine) {
+          toast(t("pool.move.forbidden", { course: notMine.courseCode }), "error");
+          return false;
+        }
         const rooms = conflict.courses.flatMap((c) => c.classrooms.map((r) => r.name));
         const ok = await confirm({
           title: t("pool.move.usedTitle"),

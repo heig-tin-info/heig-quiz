@@ -7,6 +7,7 @@ import {
   type MoveConflict,
   type MoveResult,
 } from "@quiz/contracts";
+import { courseRoleAllows, effectiveCourseRole } from "@quiz/domain";
 
 import type { pools } from "../../db/schema.js";
 import { callerOf, findAccessiblePool, requirePoolRole } from "../guards.js";
@@ -16,8 +17,12 @@ import { poolChanged } from "./events.js";
 import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";
 
-/** A course that plays a moved question, with whether the caller may link it. */
-type BlockingCourse = service.UsingCourse & { mayLink: boolean };
+/**
+ * A course that plays a moved question: whether the caller reaches it (a
+ * seat, or Super Powers), and whether they may link a pool to it — only an
+ * owner of the course may (ADR-068).
+ */
+type BlockingCourse = service.UsingCourse & { reached: boolean; mayLink: boolean };
 
 export function moveRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { requireTeacher, trace, questionsInReach } = ctx;
@@ -103,7 +108,8 @@ export function moveRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   /**
    * The courses that already PLAY one of these questions and do not draw
    * from the target pool, each with whether the caller may link the pool to
-   * it (a staff seat there, or Super Powers, ADR-054).
+   * it: an owner's seat there, or Super Powers (ADR-054, ADR-068). An
+   * assistant's course blocks like a course out of reach, but is shown in full.
    */
   async function blockingCourses(
     req: FastifyRequest,
@@ -117,14 +123,14 @@ export function moveRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
       using.map((c) => c.courseId),
     );
     const blocking = using.filter((c) => !linked.has(c.courseId));
-    const seats =
-      callerOf(req).reach === "all"
-        ? null
-        : await service.staffSeatsOf(app.db, req.user!.id, blocking.map((c) => c.courseId));
-    return blocking.map((c) => ({
-      ...c,
-      mayLink: seats === null || seats.has(c.courseId),
-    }));
+    const reachesAll = callerOf(req).reach === "all";
+    const seats = reachesAll
+      ? new Map()
+      : await service.staffSeatsOf(app.db, req.user!.id, blocking.map((c) => c.courseId));
+    return blocking.map((c) => {
+      const role = effectiveCourseRole({ reachesAll, seatRole: seats.get(c.courseId) ?? null });
+      return { ...c, reached: role !== null, mayLink: courseRoleAllows(role, "owner") };
+    });
   }
 
   /**
@@ -150,7 +156,7 @@ export function moveRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     if (forbidden.length > 0) {
       return {
         error: "course_forbidden",
-        message: `You are not on the teaching staff of ${forbidden[0]!.courseCode}, so this pool cannot be added to it`,
+        message: `Only an owner of ${forbidden[0]!.courseCode} may add this pool to it`,
         courses: forbidden.map(asSeen),
         names: [],
       };
@@ -159,12 +165,12 @@ export function moveRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   }
 
   /**
-   * A blocking course as the caller may see it: in full when they hold a
-   * seat on it, by its code alone otherwise — no id, no name, no classroom
-   * of a course they cannot open (invariant 6).
+   * A blocking course as the caller may see it: in full when they reach it,
+   * by its code alone otherwise — no id, no name, no classroom of a course
+   * they cannot open (invariant 6).
    */
-  function asSeen(course: BlockingCourse): MoveBlockingCourse {
-    return course.mayLink
+  function asSeen({ reached, ...course }: BlockingCourse): MoveBlockingCourse {
+    return reached
       ? course
       : { courseId: null, courseName: null, courseCode: course.courseCode, classrooms: [], mayLink: false };
   }

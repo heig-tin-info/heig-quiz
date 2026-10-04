@@ -3,6 +3,7 @@ import { Archive, EyeOff, School } from "lucide-react";
 import { useState } from "react";
 
 import type { CourseDetail, CourseSummary } from "@quiz/contracts";
+import { courseRoleAllows } from "@quiz/domain";
 
 import { api } from "../api";
 import { useT } from "../i18n";
@@ -28,6 +29,19 @@ export function useCourses() {
     queryKey: coursesKey,
     queryFn: () => api("/app/api/courses"),
   });
+}
+
+/**
+ * THE client decision of "may the caller do what only an owner of this
+ * course may" (ADR-068): their `myRole` in the course list, which holds
+ * every course they reach — hidden ones, and every course under Super
+ * Powers. False while the list loads, and for a course it does not hold:
+ * an owner's action is never offered on a guess. The server refuses anyway
+ * (`owner_required`).
+ */
+export function useIsCourseOwner(courseId: string | null | undefined): boolean {
+  const role = useCourses().data?.find((c) => c.id === courseId)?.myRole ?? null;
+  return courseRoleAllows(role, "owner");
 }
 
 /**

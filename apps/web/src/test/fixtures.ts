@@ -95,8 +95,10 @@ export function makeCourseSummary(overrides: Partial<CourseSummary> = {}): Cours
         familyName: "Dupont",
         email: "marie.dupont@heig-vd.ch",
         avatarUrl: null,
+        role: "owner",
       },
     ],
+    myRole: "owner",
     ...overrides,
   };
 }

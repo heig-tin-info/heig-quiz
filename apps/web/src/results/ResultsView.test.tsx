@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { makeCourseSummary } from "../test/fixtures";
 import { makeEvaluationDetail, makeResultsView } from "../test/grading-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 import { ResultsView } from "./ResultsView";
@@ -59,6 +60,8 @@ describe("ResultsView", () => {
   it("publishes only through a confirmation that names the evaluation", async () => {
     const { calls } = mockFetch({
       [`GET ${VIEW}`]: ok(makeResultsView()),
+      "GET /app/api/evaluations/e1": ok(makeEvaluationDetail()),
+      "GET /app/api/courses": ok([makeCourseSummary()]),
       "POST /app/api/evaluations/e1/release": ok({
         releasedAt: "2026-09-10T08:00:00.000Z",
         rows: 4,
@@ -74,6 +77,18 @@ describe("ResultsView", () => {
     await waitFor(() =>
       expect(calls.find((c) => c.method === "POST")?.body).toEqual({ confirm: true }),
     );
+  });
+
+  it("offers an assistant of the course neither the publication nor its withdrawal (ADR-068)", async () => {
+    mockFetch({
+      [`GET ${VIEW}`]: ok(makeResultsView({ released: true, releasedAt: "2026-09-10T08:00:00.000Z" })),
+      "GET /app/api/evaluations/e1": ok(makeEvaluationDetail()),
+      "GET /app/api/courses": ok([makeCourseSummary({ myRole: "assistant" })]),
+    });
+    renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
+    expect(await screen.findByRole("button", { name: /Present/ })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Publish results|Publish again/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Withdraw|Unpublish/ })).toBeNull();
   });
 
   it("flags a grading that moved after the publication", async () => {

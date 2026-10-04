@@ -60,6 +60,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-051 — Attested kiosk stations, paired from the student's phone, beside Safe Exam Browser](ADR-051-postes-kiosque-attestes.md)
 - [ADR-053 — Removing the entry codes: the classroom join code and the evaluation access code](ADR-053-retrait-des-codes-d-entree.md)
 - [ADR-054 — Super Powers: an admin reaches everyone's content for one hour, on request](ADR-054-super-powers-admin.md)
+- [ADR-068 — Course staff roles: owner and assistant](ADR-068-roles-de-l-equipe-du-cours.md)
 - [ADR-061 — Login adoption of the accounts imported from heig-classroom](ADR-061-adoption-des-comptes-importes.md)
 
 ### Question authoring and types

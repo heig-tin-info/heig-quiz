@@ -96,7 +96,7 @@ describe("avatar", () => {
         server.signIn("teacher"),
       ]);
       const course = (await createCourse(db, { name: "Prog 1", code: "PRG1" }, teacher.id))!;
-      await addStaff(db, course.id, colleague.id);
+      await addStaff(db, course.id, colleague.id, "assistant");
       await createCourse(db, { name: "Other", code: "OTH1" }, outsider.id);
       const room = await createClassroom(db, course.id, { name: "PRG1-A", period: "2026" });
       await db.insert(enrollments).values(

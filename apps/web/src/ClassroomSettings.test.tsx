@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ClassroomView } from "./ClassroomView";
 import { screenCommands } from "./screenCommands";
-import { makeClassroomDetail } from "./test/fixtures";
+import { makeClassroomDetail, makeCourseSummary } from "./test/fixtures";
 import { fail, mockFetch, noContent, ok, renderWithProviders } from "./test/render";
 
 /*
@@ -22,6 +22,8 @@ afterEach(() => {
 
 const ROOM = "/app/api/classrooms/r1";
 const SETTINGS = "/classrooms/r1/settings";
+/** The course list the owner's actions are decided from (ADR-068). */
+const OWNER = { "GET /app/api/courses": ok([makeCourseSummary()]) };
 
 function renderSettings(navigate = vi.fn()) {
   renderWithProviders(<ClassroomView id="r1" navigate={navigate} routeTab="settings" />, { route: SETTINGS });
@@ -30,15 +32,25 @@ function renderSettings(navigate = vi.fn()) {
 
 describe("the classroom's Settings tab", () => {
   it("is the selected tab, with its rows and no primary in the header", async () => {
-    mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()) });
+    mockFetch({ ...OWNER, [`GET ${ROOM}`]: ok(makeClassroomDetail()) });
     renderSettings();
     expect(await screen.findByRole("tab", { name: /Settings/ })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Name")).toBeVisible();
     expect(screen.getByRole("switch", { name: "Drill" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Archive" })).toBeVisible();
-    expect(screen.getByRole("button", { name: /Delete classroom/ })).toBeVisible();
+    expect(await screen.findByRole("button", { name: /Delete classroom/ })).toBeVisible();
     // The header's slot is empty on this tab: its one accent is its own.
     expect(screen.queryByRole("button", { name: /Add students|New evaluation/ })).toBeNull();
+  });
+
+  it("keeps Archive and offers no deletion to an assistant of the course (ADR-068)", async () => {
+    mockFetch({
+      "GET /app/api/courses": ok([makeCourseSummary({ myRole: "assistant" })]),
+      [`GET ${ROOM}`]: ok(makeClassroomDetail()),
+    });
+    renderSettings();
+    expect(await screen.findByRole("button", { name: "Archive" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Delete classroom/ })).toBeNull();
   });
 
   it("is a route the tab opens", async () => {
@@ -109,6 +121,7 @@ describe("the classroom's Settings tab", () => {
 
   it("deletes the classroom after a confirmation, then goes home", async () => {
     const { calls } = mockFetch({
+      ...OWNER,
       [`GET ${ROOM}`]: ok(makeClassroomDetail()),
       [`DELETE ${ROOM}`]: noContent(),
     });
@@ -123,6 +136,7 @@ describe("the classroom's Settings tab", () => {
 
   it("asks for the classroom's name when a Quiz-mode journal with pages goes with it, and sends it", async () => {
     const { calls } = mockFetch({
+      ...OWNER,
       [`GET ${ROOM}`]: ok(makeClassroomDetail()),
       [`GET ${ROOM}/journal`]: ok({
         view: "staff",

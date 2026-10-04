@@ -44,7 +44,7 @@ import {
 
 import { actorOf } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
-import { accessibleProject, accessibleProjectRepo, projectsClassroom, studentProject } from "../guards.js";
+import { accessibleProject, accessibleProjectRepo, projectsClassroom, studentProject, withCourseRole } from "../guards.js";
 import { notFound, studentRoute, teacherRoute } from "../http.js";
 import * as service from "./service.js";
 import { registerProjectHandlers } from "./webhooks.js";
@@ -58,6 +58,12 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   const session = { preHandler: (req: FastifyRequest, reply: FastifyReply) => app.requireSession(req, reply) };
   const onClassroom = { params: IdParam, load: projectsClassroom.bind(null, app) };
   const onProject = { params: IdParam, load: accessibleProject.bind(null, app) };
+  // What reaches the students — the release — is the course owner's call
+  // (ADR-068): an assistant gets `403 owner_required`.
+  const onOwnedProject = {
+    params: IdParam,
+    load: withCourseRole(app, accessibleProject.bind(null, app), (scope) => scope.course.id, "owner"),
+  };
 
   // ------------------------------------------------------------ a classroom's projects
 
@@ -165,7 +171,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   );
 
   /**
-   * F-PROJ-14: the release — every live repository frozen for good (`409
+   * F-PROJ-14: the release, the course owner's (ADR-068) — every live repository frozen for good (`409
    * not_frozen`), the project graded (`409 grading_none`); a release again
    * rewrites the snapshots. M3-09 sends `project_grade_final` to the
    * students when `first` is true, here, and never on a release again.
@@ -173,7 +179,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   app.post(
     "/app/api/projects/:id/release",
     session,
-    teacher(onProject, async ({ req, now, scope }) =>
+    teacher(onOwnedProject, async ({ req, now, scope }) =>
       service.releaseProject(app.db, scope.project.id, actorOf(req), req.user!.id, now),
     ),
   );
