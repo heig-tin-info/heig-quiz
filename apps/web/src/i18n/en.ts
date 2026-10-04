@@ -3963,6 +3963,7 @@ export const en = {
   "project.page": "Project",
   "project.notFound": "This project does not exist, or it is not open to you.",
   "project.review": "review",
+  "project.reviewLabel": "Review",
   "project.published": "Project published",
   "project.archived": "Project archived",
   "project.unarchived": "Project restored",

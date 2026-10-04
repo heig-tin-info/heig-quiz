@@ -33,10 +33,11 @@ export function RepoLink({
       target="_blank"
       rel="noreferrer"
       onClick={(e) => e.stopPropagation()}
-      className={cx("inline-flex items-center gap-1.5 whitespace-nowrap font-mono text-[13px] hover:underline", className)}
+      className={cx("inline-flex max-w-full items-center gap-1.5 font-mono text-[13px] hover:underline", className)}
     >
-      {icon ? <GithubIcon className="size-3.5 text-fg-faint" /> : null}
-      {full ? fullName : repoShortName(fullName)}
+      {icon ? <GithubIcon className="size-3.5 shrink-0 text-fg-faint" /> : null}
+      {/* One line, cut with an ellipsis where the cell is narrower than the name. */}
+      <span className="truncate">{full ? fullName : repoShortName(fullName)}</span>
     </a>
   );
 }

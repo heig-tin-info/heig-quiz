@@ -366,13 +366,14 @@ export function SectionHeading({
 /**
  * One fact of a record inside a `<dl>`: a small muted label over its value
  * (a repository's last commit, a project's source). The grid is the
- * caller's; a fact never sets its own width.
+ * caller's; a fact never sets its own width, and never clips its value — a
+ * value that must not wrap truncates itself.
  */
 export function Fact({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
     <div className="min-w-0">
       <dt className="text-xs font-medium text-fg-muted">{label}</dt>
-      <dd className="mt-0.5 truncate text-sm text-fg">{children}</dd>
+      <dd className="mt-0.5 text-sm text-fg">{children}</dd>
     </div>
   );
 }

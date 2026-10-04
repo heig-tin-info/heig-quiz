@@ -3954,6 +3954,7 @@ export const fr: Record<keyof Dict, string> = {
   "project.page": "Projet",
   "project.notFound": "Ce projet n'existe pas, ou il ne vous est pas ouvert.",
   "project.review": "revue",
+  "project.reviewLabel": "Revue",
   "project.published": "Projet publié",
   "project.archived": "Projet archivé",
   "project.unarchived": "Projet restauré",

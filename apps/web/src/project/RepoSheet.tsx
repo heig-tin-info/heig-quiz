@@ -142,8 +142,7 @@ export function RepoSheet({
             <Fact label={t("project.score.frozen")}>
               <Points points={repo.scores.frozen?.points ?? null} max={repo.scores.frozen?.max ?? null} />
             </Fact>
-            {/* The one word of a review, a tag elsewhere, capitalised among its fellow labels. */}
-            <Fact label={<span className="capitalize">{t("project.review")}</span>}>
+            <Fact label={t("project.reviewLabel")}>
               <Points points={repo.scores.review?.points ?? null} max={repo.scores.review?.max ?? null} />
             </Fact>
             <Fact label={t("project.score.teacher")}>
