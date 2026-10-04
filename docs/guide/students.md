@@ -152,6 +152,10 @@ Depending on the question, the run happens in your browser: the page says **Runs
 
 Whatever Run says, the grade is computed later by the server, from the source it rebuilds out of the template and what you wrote. Run is a trial, not the grading. If running is unavailable, your answer is still saved and graded normally.
 
+### The calculator
+
+When the evaluation provides one, a round calculator button sits at the bottom right of the player, and the waiting room says so. It opens a **standard** or a **scientific** calculator, as your teacher chose, beside the question: you can keep reading and typing your answer while it is open. It respects the order of operations (`2 + 3 × 4` gives 14), and the scientific one reads angles in degrees until you switch **DEG** to **RAD**. While it has the focus, the keyboard types into it (`Enter` for `=`, `Backspace` to erase); `Escape` or the button closes it, and it keeps its number until you open it again. Nothing you compute is sent to anyone. Copy a result by selecting it; the answer is still yours to type.
+
 ### When the teacher pauses
 
 If your teacher pauses the evaluation, an overlay says **The quiz is paused**. The clock is stopped and what you write is kept until it resumes; the page comes back by itself when it does.

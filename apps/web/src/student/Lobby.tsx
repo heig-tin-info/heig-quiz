@@ -19,7 +19,7 @@
  * state turns `running`, so nobody has to reload to begin.
  */
 import { useState, type ReactNode } from "react";
-import { CheckCheck, CircleMinus, Save, ShieldCheck } from "lucide-react";
+import { Calculator as CalculatorIcon, CheckCheck, CircleMinus, Save, ShieldCheck } from "lucide-react";
 
 import { LobbyView } from "@quiz/contracts";
 
@@ -65,7 +65,7 @@ const SIZES = {
 /** What the waiting room says, stripped of what only the live room knows. */
 export type LobbyScreenView = Pick<
   LobbyView,
-  "evaluation" | "navigation" | "negativeMarking" | "timeBonusPercent"
+  "evaluation" | "navigation" | "negativeMarking" | "calculator" | "timeBonusPercent"
 >;
 
 /**
@@ -111,6 +111,16 @@ export function LobbyScreen({
     { icon: CheckCheck, ...NAV_COPY[view.navigation] } as const,
     ...(view.negativeMarking === true
       ? [{ icon: CircleMinus, title: "lobby.negative.title", body: "lobby.negative.body" } as const]
+      : []),
+    // ADR-069: where the calculator is, before the clock runs.
+    ...(view.calculator !== undefined && view.calculator !== "none"
+      ? [
+          {
+            icon: CalculatorIcon,
+            title: "lobby.calculator.title",
+            body: `lobby.calculator.body.${view.calculator}`,
+          } as const,
+        ]
       : []),
     { icon: Save, title: "lobby.saving.title", body: "lobby.saving.body" } as const,
     { icon: ShieldCheck, title: "lobby.attempt.title", body: "lobby.attempt.body" } as const,

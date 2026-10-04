@@ -116,7 +116,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div
         aria-live="polite"
         aria-relevant="additions"
-        className={`pointer-events-none fixed bottom-[calc(1rem+var(--bottom-nav-h))] right-4 ${Z.toast} flex flex-col items-end gap-2`}
+        className={`pointer-events-none fixed bottom-[calc(1rem+var(--bottom-nav-h)+var(--tool-dock-h))] right-4 ${Z.toast} flex flex-col items-end gap-2`}
       >
         {toasts.map((t) => {
           const Icon = t.icon;

@@ -263,6 +263,22 @@ export function allowDrillWritable(mode: EvaluationModeName, state: EvaluationSt
   return drillModeOf(mode) && state !== "released";
 }
 
+// --- The calculator provided (ADR-069) ---------------------------------------
+
+/** What an evaluation provides (`settings.calculator`); absent is `none`. */
+export const CALCULATOR_MODES = ["none", "standard", "scientific"] as const;
+export type CalculatorMode = (typeof CALCULATOR_MODES)[number];
+
+/** A poll has nothing to compute: the server refuses the setting there. */
+export function calculatorAllowedFor(mode: EvaluationModeName): boolean {
+  return mode !== "poll";
+}
+
+/** The calculator a student gets on this evaluation; a poll's is `none` whatever its row says. */
+export function calculatorOn(mode: EvaluationModeName, calculator: CalculatorMode | undefined): CalculatorMode {
+  return calculatorAllowedFor(mode) ? (calculator ?? "none") : "none";
+}
+
 /** Whether this evaluation scores its choice questions negatively. */
 export function negativeMarkingOn(
   mode: EvaluationModeName,

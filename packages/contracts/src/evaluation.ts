@@ -9,7 +9,7 @@
  */
 import { z } from "zod";
 
-import { ROUNDINGS, TRUSTED_CLIENTS } from "@quiz/domain";
+import { CALCULATOR_MODES, ROUNDINGS, TRUSTED_CLIENTS } from "@quiz/domain";
 
 /** F-EVAL-01. `poll` is accepted by the column and refused by every route (decision D7). */
 export const EvaluationMode = z.enum(["exam", "exercise", "poll"]);
@@ -130,6 +130,14 @@ export const TrustedClient = z.enum(TRUSTED_CLIENTS);
 export type TrustedClient = z.infer<typeof TrustedClient>;
 export { TRUSTED_CLIENTS };
 
+/**
+ * The calculator an evaluation provides on the student's screen (ADR-069).
+ * The list is `@quiz/domain`'s `CALCULATOR_MODES`; `calculatorOn` computes an
+ * evaluation's, a poll's being `none`.
+ */
+export const CalculatorMode = z.enum(CALCULATOR_MODES);
+export type CalculatorMode = z.infer<typeof CalculatorMode>;
+
 /** The kiosk-station switch of an evaluation's settings (ADR-051); absent is off. */
 export const kioskOf = (settings: { kiosk?: boolean | undefined }): boolean => settings.kiosk === true;
 
@@ -194,6 +202,13 @@ export const EvaluationSettings = z.object({
    * {@link kioskOf}, never raw.
    */
   kiosk: z.boolean().optional(),
+  /**
+   * ADR-069: the calculator the student's screen provides — none, standard
+   * or scientific. It provides one; it forbids none other, which only a
+   * trusted client can. Refused on a poll. Absent means `none`: read it
+   * through `calculatorOn` (`@quiz/domain`), never raw.
+   */
+  calculator: CalculatorMode.optional(),
   /**
    * ADR-041 §2 (#317): the questions of this evaluation become drill cards —
    * at the release of an exam, at the hand-in of an exercise — when its
@@ -452,6 +467,7 @@ export const EvaluationSettingsPatch = z.object({
   categorizePolicy: CategorizePolicy.optional(),
   safeExamBrowser: z.boolean().optional(),
   kiosk: z.boolean().optional(),
+  calculator: CalculatorMode.optional(),
   poll: EvaluationSettings.shape.poll,
 });
 export type EvaluationSettingsPatch = z.infer<typeof EvaluationSettingsPatch>;

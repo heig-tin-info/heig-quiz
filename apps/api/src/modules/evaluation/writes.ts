@@ -20,6 +20,7 @@ import {
 } from "@quiz/contracts";
 import {
   allowDrillWritable,
+  calculatorAllowedFor,
   CONFIG_LIVE_STATES,
   configLock,
   isConfigFieldWritable,
@@ -45,6 +46,7 @@ import {
   RunningLocked,
   RetakesNotAllowed,
   NegativeMarkingNotAllowed,
+  CalculatorNotAllowed,
   KioskUnavailable,
   FeedbackNotAllowed,
   PollFeedbackLocked,
@@ -249,6 +251,10 @@ export async function patchEvaluation(
     // there is refused, switching it off always passes.
     if (negativeMarkingOf(settings) && !negativeMarkingAllowedFor(row.mode)) {
       throw new NegativeMarkingNotAllowed(row.mode);
+    }
+    // Nor does a poll provide a calculator (ADR-069); switching it off passes.
+    if ((settings.calculator ?? "none") !== "none" && !calculatorAllowedFor(row.mode)) {
+      throw new CalculatorNotAllowed(row.mode);
     }
     // No kiosk path, no kiosk exam (ADR-051 §2): switching it on is refused,
     // switching it off — or patching anything else — always passes, so an

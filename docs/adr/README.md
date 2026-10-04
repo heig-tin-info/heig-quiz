@@ -93,6 +93,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-052 — Bonus questions replace the threshold grade scale](ADR-052-questions-bonus.md)
 - [ADR-066 — A wide question beside a pinned rail](ADR-066-question-large-et-rail-fixe.md)
 - [ADR-067 — Grading an exercise at hand-in](ADR-067-correction-a-la-remise-des-exercices.md)
+- [ADR-069 — A calculator provided on the student's screen](ADR-069-calculatrice-fournie.md)
 
 ### Question analytics
 

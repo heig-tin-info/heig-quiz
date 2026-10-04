@@ -144,7 +144,8 @@ Two pairs stay below their target, on purpose:
 
 - Radii: controls (buttons, chips, segmented, avatars) are **pills**;
   fields 10 px; cards 12 px; sheets and dialogs 16 px; menus 12 px.
-  Pills on everything you press, soft squares on everything that holds.
+  Pills on everything you press, soft squares on everything that holds —
+  save the keys of the calculator's keypad, soft squares in a grid (below).
   Each of those was one step larger (12 / 16 / 20 / 14) and the previous
   radii read as soft and toy-like next to dense tables: the pool table, the
   live grid and the grading list are the screens this product is for, and a
@@ -1819,3 +1820,35 @@ button: recovery is automatic. The existing spinner is still under reduced
 motion. An ordinary failure has a 1.2 s grace to avoid flashes; an explicit
 server shutdown appears immediately. Escape cannot dismiss the interruption;
 focus returns to the previous control when it clears.
+
+## The calculator (ADR-069)
+
+A tool docked on the player when the evaluation provides one
+(`apps/web/src/calculator/`).
+
+- **The button**: a 48 px round button at the bottom right, 16 px from the
+  edges (24 from `sm`), above the phone footer through `--player-footer-h`.
+  `surface`, hairline and popover shadow: it floats over the page. Open, it
+  takes the neutral ink fill of a pressed `ToggleChip` (`bg-fg`), never the
+  accent, which stays the player's primary action.
+- **The panel**: a non-modal floating layer 12 px above the button,
+  `rounded-sheet`, hairline, overlay shadow; 288 px wide in standard,
+  352 px in scientific, never wider than the screen less 32 px. It sits on
+  `Z.tool`, over the sticky bars and under the pause overlay, the coach marks
+  and every dialog. It traps nothing: the question stays readable and
+  typable while it is open. Escape and its X close it, and focus returns to
+  the button. The toasts rise above the button (`--tool-dock-h`).
+- **The display**: the number at 28 px semibold, tabular, shrinking to 22
+  then 18 px for a long one rather than wrapping; the expression above it is
+  the 13 px muted line, cut on its LEFT when too long, because its end is
+  what was just typed. Both sit in a `surface-2` well.
+- **The keys are soft squares** (`rounded-field`), the one place where
+  something pressed is not a pill: forty pills in a grid read as beads. Three
+  tones, no accent: digits (and `.`, `+/−`) semibold on `surface-2`;
+  functions and operators on `canvas` with a hairline, the four operators
+  at 20 px (at the label's size `÷` and `−` are specks); `=` in the ink fill.
+  4 px between keys; 40 px tall in scientific, 48 px in standard, the six
+  trigonometry keys 32 px. DEG/RAD, `2nd` and `hyp` are neutral
+  `ToggleChip`s above them; `2nd` swaps six keys in place (x² → x³, √x → ∛x,
+  xʸ → ʸ√x, 10ˣ → 2ˣ, log → logᵧx, ln → eˣ) and the trigonometry to its
+  inverses, as on Windows.

@@ -7,6 +7,7 @@
  * layout).
  */
 import type {
+  CalculatorMode,
   Me,
 } from "@quiz/contracts";
 
@@ -48,6 +49,8 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  *   a failed job (`mock/org.ts`, ADR-055).
  * `assistant`: the teacher persona is an assistant of every course, not an
  *   owner (`mock/org.ts`, ADR-068).
+ * `calculator`: the student's evaluation provides the scientific calculator
+ *   (ADR-069); `stdcalc`: the standard one.
  */
 export const FLAG_NAMES = [
   "empty",
@@ -75,6 +78,8 @@ export const FLAG_NAMES = [
   "lastminutes",
   "degraded",
   "assistant",
+  "calculator",
+  "stdcalc",
 ] as const;
 type FlagName = (typeof FLAG_NAMES)[number];
 export const flags = {} as Record<FlagName, boolean>;
@@ -89,6 +94,10 @@ for (const name of FLAG_NAMES) {
   }
   flags[name] = localStorage.getItem(key) === "1";
 }
+
+/** ADR-069: the calculator the mock's evaluations provide, from `?calculator=1` or `?stdcalc=1`. */
+export const mockCalculator = (): { calculator?: CalculatorMode } =>
+  flags.calculator ? { calculator: "scientific" } : flags.stdcalc ? { calculator: "standard" } : {};
 
 /**
  * The student player's scene, remembered the same way. It picks what the

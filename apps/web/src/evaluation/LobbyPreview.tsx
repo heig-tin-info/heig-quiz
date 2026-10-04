@@ -2,7 +2,7 @@ import { ChevronRight, Eye } from "lucide-react";
 import { useState } from "react";
 
 import { negativeMarkingOf, type EvaluationDetail } from "@quiz/contracts";
-import { negativeMarkingOn } from "@quiz/domain";
+import { calculatorOn, negativeMarkingOn } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import { LobbyScreen, type LobbyScreenView } from "../student/Lobby";
@@ -30,6 +30,7 @@ export function lobbyPreviewView(detail: EvaluationDetail): LobbyScreenView {
     },
     navigation: evaluation.settings.navigation,
     negativeMarking: negativeMarkingOn(evaluation.mode, negativeMarkingOf(evaluation.settings)),
+    calculator: calculatorOn(evaluation.mode, evaluation.settings.calculator),
     timeBonusPercent: 0,
   };
 }

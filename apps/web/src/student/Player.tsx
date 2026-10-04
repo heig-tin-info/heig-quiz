@@ -50,10 +50,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { ShieldAlert } from "lucide-react";
 
 import type { AttemptView } from "@quiz/contracts";
-import { answerMark, mayValidate } from "@quiz/domain";
+import { answerMark, calculatorOn, mayValidate } from "@quiz/domain";
 
 import { postSimulate } from "../attempt/run";
 import { useAttempt, type UseAttempt } from "../attempt/useAttempt";
+import { CalculatorDock } from "../calculator/CalculatorDock";
 import { currentItem, isLocked, neighbour, segmentsOf } from "../attempt/playerReducer";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
@@ -356,6 +357,9 @@ export function PlayerView({
   const rail = railScreen && manyItems && item !== undefined;
   const selectSegment = (itemId: string) => dispatch({ type: "goto", itemId });
   const progressLabel = t("player.progress", { n: state.index + 1, total });
+  // ADR-069: the calculator the evaluation provides, for the whole attempt —
+  // outside the keyed question, so its number survives a move.
+  const calculator = calculatorOn(initial.evaluation.mode, initial.evaluation.settings.calculator);
   const actions =
     manyItems || canValidate ? (
       <PlayerActions
@@ -477,6 +481,7 @@ export function PlayerView({
             ) : null}
           </>
         ) : null}
+        {calculator === "none" ? null : <CalculatorDock kind={calculator} />}
       </PlayerShell>
       <PausedOverlay show={paused} />
       <SubmitDialog
