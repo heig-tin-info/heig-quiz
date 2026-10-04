@@ -25,7 +25,7 @@ import {
 } from "./notifications/NotificationPanel";
 import type { Route } from "./router";
 import { setThemeChoice, useResolvedTheme } from "./theme";
-import { Avatar, cx, IconButton, isoDateTime, Menu, Segmented, type MenuItem } from "./ui";
+import { Avatar, cx, IconButton, isoDateTime, Menu, Segmented, type MenuItem, type TipSide } from "./ui";
 import { meKey } from "./queryKeys";
 
 /**
@@ -110,11 +110,14 @@ export function ViewModeToggle({
   studentView,
   onToggle,
   compact,
+  tipSide,
 }: {
   studentView: boolean;
   onToggle: () => void;
-  /** Icon-only trigger (mobile top bar). */
+  /** Icon-only trigger (mobile top bar, folded sidebar). */
   compact?: boolean;
+  /** Where the icon's tooltip opens: right of it in the folded sidebar. */
+  tipSide?: TipSide;
 }) {
   const t = useT();
   if (compact) {
@@ -123,6 +126,7 @@ export function ViewModeToggle({
         label={studentView ? t("menu.teacherView") : t("menu.studentView")}
         active={studentView}
         onClick={onToggle}
+        tipSide={tipSide}
       >
         {studentView ? <School /> : <GraduationCap />}
       </IconButton>
@@ -170,14 +174,20 @@ export function ViewModeToggle({
 export function UserMenu({
   me,
   compact,
+  align = compact ? "end" : "start",
   onOpenSettings,
   studentView,
   onToggleStudentView,
   notifications,
 }: {
   me: Me;
-  /** Avatar-only trigger (mobile top bar). */
+  /** Avatar-only trigger (mobile top bar, folded sidebar). */
   compact?: boolean;
+  /**
+   * The menu's edge on the trigger's: the end in the top bar (right corner),
+   * the start in the sidebar, folded or not (left edge).
+   */
+  align?: "start" | "end";
   /** Absent where Settings is reached otherwise (the student's bottom bar, #191). */
   onOpenSettings?: () => void;
   studentView?: boolean;
@@ -193,7 +203,6 @@ export function UserMenu({
   const unread = useUnreadNotifications(notifications !== undefined);
   const [inboxOpen, setInboxOpen] = useState(false);
   const anchor = useRef<HTMLSpanElement>(null);
-  const align = compact ? "end" : "start";
   const triggerLabel = unread > 0 ? t("menu.userUnread", { n: unread }) : t("menu.user");
   const avatar = (
     <span className="relative inline-flex shrink-0">

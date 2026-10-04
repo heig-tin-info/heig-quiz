@@ -139,6 +139,18 @@ Two pairs stay below their target, on purpose:
 - A navigation list is capped, not scrolled: the sidebar shows twelve
   classrooms and a "Show all (N)" row, always including the one being read.
   Thirty names in a column is a wall, and it pushes the account row off.
+- The frame has three widths (`Shell.tsx`): the 240 px sidebar from `xl`
+  (1280); the same sidebar FOLDED to a 56 px column of icons from `lg`
+  (1024) to `xl`, where 240 px of names took a fifth of a 13" laptop;
+  the top bar and its drawer under `lg`. Folded, the column keeps the
+  top-level rows only (36 px squares, 4 px apart, the lit one the same
+  `accent-soft` chip), the Q bubble for the wordmark, and at the bottom the
+  view switch and the avatar, stacked. Each icon names itself in a `Tip` at
+  its RIGHT (`side="right"`) and to a screen reader; the avatar's tip is the
+  person's name. The course and pool trees, the classroom list and the
+  shortcut strip are names, not icons, and wait for the full sidebar: the
+  course list and Ctrl+K reach the same places. A folded row never toggles
+  a tree it does not show; it only navigates.
 
 ## Shape and elevation
 
@@ -599,8 +611,10 @@ live in `ui/state.ts`, each written once.
   token scale — nothing else on a screen may use them. `className` carries
   the WIDTH and the height follows, because it is a drawn word and is sized
   like a word: 100 % of the sidebar (about 200 px), 112 px in the phone top
-  bar and in the drawer, 220 px on the signed-out page, where it IS the `h1`
-  and the 28 px title under it is gone — it said "Quiz" a second time.
+  bar and in the drawer (the folded sidebar shows the Q bubble alone, the
+  favicon's file, 28 px: the wordmark at 40 px is four dots), 220 px on
+  the signed-out page, where it IS the `h1` and the 28 px title under it
+  is gone — it said "Quiz" a second time.
 - Alert: hairline + soft tone fill, an icon, a title and one paragraph. Its
   `action` slot holds one button, beside the text from `sm` up and on a line
   of its own below it: a long label inline squeezes the body to one word per
@@ -1595,7 +1609,8 @@ student alike, goes through `t()` with an `en` and an `fr` entry (N-I18N-01).
 A student opens the app on a phone far more often than a teacher does, and
 reaches for it with a thumb (#191, the product owner's decision of
 2026-09-29). So under `lg` — the frame's own breakpoint, where the sidebar
-gives way to the top bar; there is no second one — the STUDENT UI gets a bar
+gives way to the top bar; between `lg` and `xl` the sidebar only folds to
+its icons — the STUDENT UI gets a bar
 at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
 
 - **Student UI only.** A student, or a teacher in student view, who is looking
