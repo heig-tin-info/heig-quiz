@@ -23,7 +23,7 @@
  *    to a stack of read-only blocks and one textarea per region, built from
  *    this component.
  */
-import { Component, lazy, Suspense, useEffect, useRef } from "react";
+import { Component, lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { OnMount } from "@monaco-editor/react";
 
@@ -119,8 +119,26 @@ export interface CodeLineDecoration {
 type MonacoEditor = Parameters<OnMount>[0];
 type MonacoApi = Parameters<OnMount>[1];
 
-const LINE_PX = 20;
-const MAX_LINES = 30;
+/** Monaco's line height at our font size, for estimates before it measures. */
+export const LINE_PX = 19;
+/**
+ * An editor grows with its content up to this many lines, so the page — not
+ * the editor — scrolls through a question; only a longer file scrolls inside.
+ */
+const MAX_LINES = 100;
+const MAX_PX = MAX_LINES * LINE_PX;
+
+/** An editor's height for a content height, both in px. */
+export function fitPx(contentPx: number, minPx: number): number {
+  return Math.min(MAX_PX, Math.max(minPx, contentPx));
+}
+
+/**
+ * Monaco swallows every wheel event over it by default, even with nothing to
+ * scroll, which stops the page under a student's cursor. It keeps the wheel
+ * only while it can still scroll itself.
+ */
+export const PAGE_WHEEL = { alwaysConsumeMouseWheel: false } as const;
 
 function heightLines(value: string, minLines: number): number {
   return Math.min(MAX_LINES, Math.max(minLines, value.split("\n").length));
@@ -141,6 +159,8 @@ export function CodeArea({
   onTextareaSelect,
 }: CodeAreaProps) {
   const lines = heightLines(value, minLines);
+  // Monaco's own content height once mounted; the line count estimates it until then.
+  const [contentPx, setContentPx] = useState<number | null>(null);
   const mounted = useRef<{
     editor: MonacoEditor;
     monaco: MonacoApi;
@@ -168,6 +188,9 @@ export function CodeArea({
     mounted.current = { editor, monaco: monacoApi, collection: editor.createDecorationsCollection() };
     // The first decorations were passed before the editor existed.
     draw(mounted.current);
+    const fit = () => setContentPx(editor.getContentHeight());
+    editor.onDidContentSizeChange(fit);
+    fit();
     onMount?.(editor, monacoApi);
   };
   const select = (target: HTMLTextAreaElement) =>
@@ -202,7 +225,7 @@ export function CodeArea({
       <MonacoBoundary fallback={fallback}>
         <Suspense fallback={fallback}>
           <LazyMonaco
-            height={`${lines * LINE_PX + 16}px`}
+            height={`${fitPx(contentPx ?? lines * LINE_PX + 16, minLines * LINE_PX)}px`}
             language={MONACO_LANGUAGE[language]}
             theme={dark ? "vs-dark" : "light"}
             value={value}
@@ -220,6 +243,7 @@ export function CodeArea({
               lineNumbersMinChars: 3,
               renderLineHighlight: "none",
               overviewRulerLanes: 0,
+              scrollbar: PAGE_WHEEL,
             }}
           />
         </Suspense>
