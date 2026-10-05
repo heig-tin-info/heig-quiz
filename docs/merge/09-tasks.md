@@ -2956,8 +2956,8 @@ are ADR-070's second amendment of 2026-10-05.
 - **Tests**: a resync after the deadline, refused after the release, its
   confirmation naming the frozen repositories.
 - **As delivered** (branch `merge/M3-15b2b-group-resync`): the product
-  owner's R1–R3 are ADR-070's third amendment of 2026-10-05 and
-  F-PROJ-13/14's wording. Migration `0071_group_resync`
+  owner's R1–R3 are ADR-070's fourth amendment of 2026-10-05 and
+  F-PROJ-13/14's wording. Migration `0074_group_resync`
   (`projects.group_resync` jsonb of consequence keys, `group_resync_at`,
   `group_resync_by`). `@quiz/domain`: `groupSyncPlan`'s `keepRepoOrphans`
   (R1: a group with a repository whose set group is gone kept, its name and
@@ -2972,7 +2972,8 @@ are ADR-070's second amendment of 2026-10-05.
   `deadline_passed` and R3's closed Accept); `consequenceKey`'s format is
   persisted. `Q:modules/project/groupResync.ts`: `resyncGroups` (the
   classroom FOR SHARE, then `lockSync`: the set FOR SHARE, the project FOR
-  UPDATE; `no_group_set`, `archived`, `released`, `classroom_archived`;
+  UPDATE; `no_group_set`, `project_archived`, `released`,
+  `classroom_archived`;
   a draft, or nothing to resync — the lifted plan applies nothing and adds
   no consequence beyond the job's work —, is a 204 with no audit; the
   consequences ADDED to the job's work confirmed by digest through
@@ -2999,12 +3000,12 @@ are ADR-070's second amendment of 2026-10-05.
   `via: "group.resync"`. Release: `409 group_sync_pending` while
   `group_resync` is not empty (R2). Route `POST /app/api/projects/:id/
   groups/resync` (`ProjectGroupResync`, `staffAccess`), 204; contracts:
-  `GroupConsequence.frozen`, `.acceptClosed`; `released`, `archived`,
+  `GroupConsequence.frozen`, `.acceptClosed`; `released`,
   `classroom_archived`, `needs_confirmation`, `group_sync_pending` in
   `PROJECT_REFUSALS`. Web: `group_sync_pending` worded at the release (en,
   fr); `groupsDrifted` false in the mock.
   Conservative choices (noted for review): an archived project is refused
-  with a new `archived`; the resync stores the following copy's pending
+  with M3-07's `project_archived` (worded for both); the resync stores the following copy's pending
   moves too (they then count for R2 and are audited `group.resync`); a
   project archived with a resync owed keeps being revoked by the job (its
   invitations skipped: not live); a deadline passing between the
@@ -3030,7 +3031,8 @@ are ADR-070's second amendment of 2026-10-05.
   (`groupsDrifted`, the action hidden once `releasedAt` or `archivedAt`),
   the confirmation dialog listing the distinct frozen repositories
   (`frozen`) and the R3 arrivals (`acceptClosed`), the 204, and the
-  refusals `released`, `archived`, `classroom_archived`, `no_group_set`.
+  refusals `released`, `project_archived`, `classroom_archived`,
+  `no_group_set`.
 
 ### M3-16 — Groups (web)
 Split in two PRs (orchestrator, 2026-10-05): what the API of M3-15a

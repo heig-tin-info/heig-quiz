@@ -408,7 +408,7 @@ How it is built (orchestrator, M3-17):
   its departure marks survive a stop and a set's write. Its GitHub writes
   are audited `via: "group.resync"`, the request `project.group_resync`.
   A draft has nothing to resync (its copy follows). Refused: an archived
-  project (`archived`), a released one (`released`), an archived classroom
+  project (`project_archived`, the sync's own refusal), a released one (`released`), an archived classroom
   (`classroom_archived`).
 
 ## Consequences

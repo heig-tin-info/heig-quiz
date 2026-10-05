@@ -1,5 +1,5 @@
 /**
- * *Resync with the set* and the drift (ADR-070 §4, §6 and its third
+ * *Resync with the set* and the drift (ADR-070 §4, §6 and its fourth
  * amendment of 2026-10-05, F-PROJ-13; merge task M3-15b-2b), on the group
  * repositories' world (`groupTesting.ts`): the `group.sync` job is run by
  * hand, each interleaving through the fake GitHub's one-shot hooks.

@@ -4542,7 +4542,7 @@ export const fr: Record<keyof Dict, string> = {
   "project.refusal.resendTooSoon": "L'invitation a été renvoyée il y a moins d'une minute. Patientez un instant.",
   "project.refusal.inviteFailed": "GitHub n'a pas pu renvoyer l'invitation. Réessayez plus tard.",
   "project.refusal.githubAccountStale": "Le compte GitHub de l'étudiant a disparu ou a été renommé : il doit le relier à nouveau.",
-  "project.refusal.projectArchived": "Un projet archivé ne se synchronise pas.",
+  "project.refusal.projectArchived": "Ce projet est archivé : ni sa source ni ses groupes ne se synchronisent.",
   "project.refusal.syncInProgress": "Une synchronisation est déjà en cours. Si elle a échoué, elle se libère en moins d'une minute.",
   "project.refusal.sourceRewritten": "L'historique du dépôt source a été réécrit : le dépôt des étudiants ne peut pas le suivre. Recréez le projet depuis la source actuelle.",
   "project.refusal.syncFailed": "GitHub a échoué pendant la mise à jour du dépôt des étudiants. Réessayez.",

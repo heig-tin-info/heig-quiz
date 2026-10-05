@@ -4555,7 +4555,7 @@ export const en = {
   "project.refusal.resendTooSoon": "The invitation was resent less than a minute ago. Wait a moment.",
   "project.refusal.inviteFailed": "GitHub could not resend the invitation. Try again later.",
   "project.refusal.githubAccountStale": "The student's GitHub account is gone or renamed: they must link it again.",
-  "project.refusal.projectArchived": "An archived project cannot be synced.",
+  "project.refusal.projectArchived": "This project is archived: neither its source nor its groups can be synced.",
   "project.refusal.syncInProgress": "A sync is already under way. If it failed, it frees within a minute.",
   "project.refusal.sourceRewritten": "The source's history was rewritten: the students' repository cannot follow it. Create the project again from the current source.",
   "project.refusal.syncFailed": "GitHub failed while the students' repository was updated. Try again.",

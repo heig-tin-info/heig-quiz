@@ -1,5 +1,5 @@
 /**
- * *Resync with the set* and the drift (ADR-070 §4, §6 and its third
+ * *Resync with the set* and the drift (ADR-070 §4, §6 and its fourth
  * amendment of 2026-10-05, F-PROJ-13; merge task M3-15b-2b): a group
  * project's copy that stopped following its set — its deadline, a group's
  * repository deadline, the archive — brought back in step with it once, at
