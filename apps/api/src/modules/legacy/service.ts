@@ -22,8 +22,8 @@ import type { LegacyRule } from "@quiz/domain";
 
 import type { SessionAuth } from "../../auth/session.js";
 import type { Db } from "../../db/client.js";
-import { importIdMap, projects } from "../../db/schema.js";
-import { findVisibleAvatar } from "../avatar.js";
+import { importIdMap } from "../../db/schema.js";
+import { seesAvatar } from "../avatar.js";
 import { findAccessibleProject, findReadableClassroom, findStudentProjectView, type Caller } from "../guards.js";
 
 /** The rules that need an entity: everything the pure rule cannot answer alone. */
@@ -66,13 +66,11 @@ export async function resolve(
     case "start": {
       const id = await mapped(db, "assignments", rule.assignmentId);
       if (!id) return null;
-      // The old classroom of the path must be the assignment's own.
-      if ("classroomId" in rule) {
-        const room = await mapped(db, "classrooms", rule.classroomId);
-        const [owner] = await db.select({ classroomId: projects.classroomId }).from(projects).where(eq(projects.id, id)).limit(1);
-        if (!room || owner?.classroomId !== room) return null;
-      }
       const staff = await findAccessibleProject(db, caller, id);
+      // The path's classroom is only vetted as one the import carried: a remap moves the
+      // classroom, not its projects, so no match against the project's own is possible.
+      // The access just loaded is what protects the project.
+      if ((rule.kind === "project" || rule.kind === "groups") && !(await mapped(db, "classrooms", rule.classroomId))) return null;
       // The students' side, by the rule of the page the link lands on (an archived classroom still reads).
       if (!staff && !(await findStudentProjectView(db, caller, auth, id))) return null;
       // The staff's groups page: the project's set when it names one, else
@@ -87,7 +85,7 @@ export async function resolve(
     case "avatar": {
       const id = await mapped(db, "users", rule.userId);
       if (!id) return null;
-      return (await findVisibleAvatar(db, caller, id)) ? `/app/api/users/${id}/avatar` : null;
+      return (await seesAvatar(db, caller, id)) ? `/app/api/users/${id}/avatar` : null;
     }
   }
 }

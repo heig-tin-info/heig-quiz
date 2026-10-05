@@ -274,6 +274,18 @@ describe("import-classroom", () => {
     await runImport(w.db, config, snapshot, MAPPING, DECIDED);
     const back = await w.db.select().from(importIdMap).where(and(eq(importIdMap.sourceTable, "classrooms"), eq(importIdMap.sourceId, SRC.progA)));
     expect(back[0]!.targetId).toBe(w.progA);
+    // A classroom the mapping now drops leaves no row: its legacy links lead nowhere.
+    const dropped: ClassroomMapping = {
+      classrooms: [
+        { source: { name: "Prog-A" }, drop: true, note: "retired" },
+        { source: { id: MI }, target: { course: "INFO1", classroom: "MI-2026" } },
+        { source: { name: "Sandbox" }, drop: true, note: "test classroom" },
+      ],
+    };
+    const last = await runImport(w.db, config, snapshot, dropped, DECIDED);
+    const left = await w.db.select().from(importIdMap).where(eq(importIdMap.sourceTable, "classrooms"));
+    expect(left.map((r) => r.sourceId)).toEqual([MI]);
+    expect(last.findings.reimport?.join("\n")).toContain("no longer mapped");
   });
 
   it("does not import the people of a dropped classroom", async () => {

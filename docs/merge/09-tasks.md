@@ -4361,8 +4361,9 @@ serves now (16a), and what waits for the group repositories (16b).
     classroom as `classrooms` (old id, Quiz classroom, `merged`). Before it
     the id map held no classroom row but the journals' one.
   - **Targets**: `/classrooms/:id`, `/classrooms/:id/journal[/<path>]`
-    (the page path is passed through, never checked: a page's existence is
-    not revealed), `/projects/:id`, for the groups the project's set
+    (the page path is vetted by the contract's `safeJournalPath`, an unsafe one
+    lands on the journal home, and never checked against the pages: a page's
+    existence is not revealed), `/projects/:id`, for the groups the project's set
     (`/classrooms/:id/groups/:setId`) or the classroom's sets, staff only (a
     student gets the project page). `/app/codespace/start/:aid` leads to the
     project page: Quiz has no codespace start route before M6-06/M6-07.
@@ -4375,7 +4376,12 @@ serves now (16a), and what waits for the group repositories (16b).
     `.../assignments/:aid/groups` and `.../journal/<path>` only; any other
     suffix under `/classrooms/:id/` is no row and falls to `/` (the
     fragment's last line), not silently to the classroom. For an assignment
-    the path's classroom must be the assignment's own (id map), else the 404.
+    the path's classroom must be one the import carried (any mapping), else
+    the 404; it is not matched against the project's classroom, because a
+    remap moves the classroom and leaves the projects where they are. The
+    access loaded on the project is what protects it. A classroom the
+    mapping later drops loses its id-map row (and its links 404).
+    Identity-dependent answers carry `Cache-Control: no-store`.
     A login `next` over 1500 encoded characters is dropped (the stash cookie
     is signed and limited to 4 KB).
   - **Deviation, codespace start**: `/app/codespace/start/:aid` goes to

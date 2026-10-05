@@ -47,6 +47,16 @@ export async function findVisibleAvatar(db: Db, caller: Caller, userId: string) 
   return row ?? null;
 }
 
+/** {@link findVisibleAvatar} without the image: whether the caller sees a picture of that user. */
+export async function seesAvatar(db: Db, caller: Caller, userId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ userId: avatars.userId })
+    .from(avatars)
+    .where(and(eq(avatars.userId, userId), seesUser(caller, userId)))
+    .limit(1);
+  return row !== undefined;
+}
+
 /**
  * Uploaded avatar (cropped client-side, circular preview). Takes precedence
  * over the OIDC `picture` claim; deletable to fall back to it.

@@ -211,19 +211,22 @@ export async function importGrants(ctx: Ctx) {
  * `merged`, never `created`: the import owns no classroom row.
  */
 export async function importClassroomMap(ctx: Ctx) {
+  const rows = ctx.known.get("classrooms") ?? new Map<string, string>();
   for (const [sourceId, dest] of ctx.mapped) {
-    const held = ctx.known.get("classrooms")?.get(sourceId);
-    if (held === undefined) await remember(ctx, "classrooms", sourceId, dest.classroomId, "merged");
-    else if (held !== dest.classroomId) {
-      // A remap: the mapping file now sends the classroom elsewhere. No baseline to protect (`merged`, never owned).
-      await ctx.db
-        .update(importIdMap)
-        .set({ targetId: dest.classroomId })
-        .where(and(eq(importIdMap.sourceTable, "classrooms"), eq(importIdMap.sourceId, sourceId)));
-      ctx.known.get("classrooms")!.set(sourceId, dest.classroomId);
-      written(ctx, "import_classroom.id_map");
+    const held = rows.get(sourceId);
+    // A remap follows (`follow`): the mapping file sends the classroom elsewhere, no baseline to protect.
+    await remember(ctx, "classrooms", sourceId, dest.classroomId, "merged", undefined, true);
+    if (held !== undefined && held !== dest.classroomId) {
       note(ctx, "reimport", `"${dest.classroomName}": the mapping now sends classroom ${sourceId} to ${dest.courseCode}/${dest.classroomName}, the legacy links follow`);
     }
+  }
+  // A classroom the mapping file now drops or no longer names leads nowhere: its row goes.
+  const stale = [...rows.keys()].filter((id) => !ctx.mapped.has(id));
+  if (stale.length > 0) {
+    await ctx.db.delete(importIdMap).where(and(eq(importIdMap.sourceTable, "classrooms"), inArray(importIdMap.sourceId, stale)));
+    for (const id of stale) rows.delete(id);
+    written(ctx, "import_classroom.id_map", stale.length);
+    note(ctx, "reimport", `${stale.length} classroom(s) no longer mapped: the legacy links to ${stale.join(", ")} now lead nowhere`);
   }
 }
 

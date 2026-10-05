@@ -219,16 +219,31 @@ describe("who reaches a target (invariant 6)", () => {
     expect([res.statusCode, location(res)]).toEqual([302, `/projects/${p}`]);
   });
 
-  it("the classroom of the path must be the assignment's own, else the 404 of a missing one", async () => {
-    const other = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [student.id], questions: 0 });
-    const otherOld = randomUUID();
-    await server.app.db.insert(importIdMap).values({ sourceTable: "classrooms", sourceId: otherOld, targetId: other.classroomId, how: "merged" });
+  it("the path's classroom must be one the import carried; the access to the project is what protects it", async () => {
     for (const tail of ["", "/groups"]) {
-      const wrong = await get(`${L}/classrooms/${otherOld}/assignments/${old.assignment}${tail}`, teacher.headers);
       const unmapped = await get(`${L}/classrooms/${old.unmapped}/assignments/${old.assignment}${tail}`, teacher.headers);
-      const absent = await get(`${L}/classrooms/${otherOld}/assignments/${randomUUID()}${tail}`, teacher.headers);
-      expect([wrong.statusCode, unmapped.statusCode, absent.statusCode]).toEqual([404, 404, 404]);
-      
+      const absent = await get(`${L}/classrooms/${old.classroom}/assignments/${randomUUID()}${tail}`, teacher.headers);
+      expect([unmapped.statusCode, absent.statusCode]).toEqual([404, 404]);
+      // A stranger gets the 404 whatever the classroom of the path.
+      const off = await get(`${L}/classrooms/${old.classroom}/assignments/${old.assignment}${tail}`, stranger.headers);
+      expect(off.statusCode).toBe(404);
+    }
+  });
+
+  it("after a remap of the classroom (its projects stay where they are), the assignment links still resolve", async () => {
+    const [moved, kept] = [randomUUID(), randomUUID()];
+    const seeded = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [student.id], questions: 0 });
+    const target = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [student.id], questions: 0 });
+    const p = await project({ state: "published" }, seeded.classroomId);
+    await server.app.db.insert(importIdMap).values([
+      { sourceTable: "classrooms", sourceId: moved, targetId: seeded.classroomId, how: "merged" },
+      { sourceTable: "assignments", sourceId: kept, targetId: p, how: "created" },
+    ]);
+    // The mapping file now sends the old classroom to another Quiz classroom.
+    await server.app.db.update(importIdMap).set({ targetId: target.classroomId }).where(eq(importIdMap.sourceId, moved));
+    for (const headers of [teacher.headers, student.headers]) {
+      const res = await get(`${L}/classrooms/${moved}/assignments/${kept}`, headers);
+      expect([res.statusCode, location(res)]).toEqual([302, `/projects/${p}`]);
     }
   });
 
@@ -245,6 +260,18 @@ describe("who reaches a target (invariant 6)", () => {
     const { token } = await createApiToken(server.app.db, teacher.id, { name: "t", expiresInDays: null });
     const res = await get(`${L}/classrooms/${old.classroom}`, { authorization: `Bearer ${token}` });
     expect(location(res)).toContain("/app/auth/login?next=");
+  });
+
+  it("identity-dependent answers are never cached", async () => {
+    for (const [url, headers] of [
+      [`${L}/classrooms/${old.classroom}`, teacher.headers],
+      [`${L}/classrooms/${old.classroom}`, stranger.headers],
+      [`${L}/classrooms/${old.classroom}`, {}],
+      [`${L}/app/api/users/${old.user}/avatar`, stranger.headers],
+      [`${L}/app/api/users/${old.user}/avatar`, teacher.headers],
+    ] as const) {
+      expect([url, (await get(url, headers)).headers["cache-control"]]).toEqual([url, "no-store"]);
+    }
   });
 
   it("a seb and a kiosk session are nobody here: the login, like no session", async () => {

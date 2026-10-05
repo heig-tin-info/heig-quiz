@@ -47,6 +47,8 @@ export async function legacyPlugin(app: FastifyInstance) {
       case "not_found":
         return notFound();
       default: {
+        // What these answers say depends on who asks: never stored by a cache.
+        reply.header("cache-control", "no-store");
         if (!req.user) {
           if (rule.kind === "avatar") return gone();
           // A URL too long for the stash is sent without its way back.
