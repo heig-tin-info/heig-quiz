@@ -52,6 +52,11 @@ const STATUS: Record<Code, number> = {
   invitation_not_pending: 409,
   resend_too_soon: 429,
   invite_failed: 502,
+  // The source's sync (M3-07).
+  project_archived: 409,
+  sync_in_progress: 409,
+  source_rewritten: 409,
+  sync_failed: 502,
 };
 
 /** A refusal: `{ error: code, message, ...details }`. */

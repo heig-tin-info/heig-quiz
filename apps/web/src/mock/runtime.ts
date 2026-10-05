@@ -80,6 +80,7 @@ export const FLAG_NAMES = [
   "distfail",
   "unassigned",
   "unreleased",
+  "ahead",
   "groups",
   "superpowers",
   "lastminutes",

@@ -101,6 +101,18 @@ export const PROJECT_DISPATCH_QUEUE = "project.dispatch";
 export const PROJECT_GROUP_SYNC_QUEUE = "group.sync";
 
 /**
+ * The pass of a source's sync over one project's repositories (F-PROJ-12,
+ * merge task M3-07): `{ projectId, lease }`, sent by the staff's request once
+ * it holds the project's `sync_job_at` lease and has updated the
+ * distribution repository — the `sync/<branch>` refs pushed, the pull
+ * requests opened or updated. As {@link PROJECT_DEADLINE_QUEUE}: `standard`,
+ * no dedupe, no retry by the queue (a failed pass gives the lease back; the
+ * staff ask again, and only the repositories whose update moved get a push
+ * or a comment).
+ */
+export const PROJECT_SYNC_QUEUE = "project.sync";
+
+/**
  * One AI pass over a brainstorm (ADR-072): `{ evaluationId, lease }`, sent a
  * few seconds after the answer that claimed the poll's lease
  * (`poll_ai_runs.lease_at`). A `standard` queue, no dedupe, no retry: the

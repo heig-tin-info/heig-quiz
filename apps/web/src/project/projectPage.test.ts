@@ -9,6 +9,7 @@ import {
   deadlineDesc,
   hasFellBack,
   isReopen,
+  offersSync,
   LIVE_STALE_REFETCH_MS,
   projectRefetchInterval,
   projectStatus,
@@ -21,6 +22,7 @@ import {
   repoShortName,
   reviewTag,
   reviewView as reviewViewOf,
+  syncTag,
   teacherScoreBlock,
   unassignedStudents,
 } from "./projectPage";
@@ -159,11 +161,52 @@ describe("a checkpoint's status", () => {
 });
 
 describe("the refetch cadence", () => {
-  it("is 30 s, and 3 s once after a response whose live state was not all read", () => {
+  it("is 30 s, and 3 s once after a response whose live state was not all read, or while a sync runs", () => {
     expect(projectRefetchInterval(undefined)).toBe(REFETCH_MS);
     expect(projectRefetchInterval(makeProject())).toBe(REFETCH_MS);
     expect(projectRefetchInterval(makeProject({ liveStale: true }))).toBe(LIVE_STALE_REFETCH_MS);
+    expect(projectRefetchInterval(makeProject({ sync: { ...makeProject().sync, inProgress: true } }))).toBe(LIVE_STALE_REFETCH_MS);
     expect(LIVE_STALE_REFETCH_MS).toBeLessThan(REFETCH_MS);
+  });
+});
+
+describe("the sync (F-PROJ-12, M3-07)", () => {
+  const ahead = { pushedAt: PAST, commits: 2 };
+  const sync = (over: Partial<ProjectRepoView["sync"]>): ProjectRepoView => makeRepo(1, { sync: { pr: null, outcome: null, at: null, ...over } });
+
+  it("offers Sync beside another primary action while the server says the source is ahead or a sync runs", () => {
+    expect(offersSync(makeProject())).toBe(false);
+    expect(offersSync(makeProject({ sync: { ahead, inProgress: false, syncedAt: null, last: null } }))).toBe(true);
+    expect(offersSync(makeProject({ sync: { ahead: null, inProgress: true, syncedAt: null, last: null } }))).toBe(true);
+    // The server's own primary action: the button is the primary one, not a second.
+    expect(offersSync(makeProject({ primaryAction: "sync", sync: { ahead, inProgress: false, syncedAt: null, last: null } }))).toBe(false);
+  });
+
+  it("tags a row: a failed sync first, else the pull request by its state (open linked), else up to date or skipped, else nothing", () => {
+    expect(syncTag(sync({}))).toBeNull();
+    expect(syncTag(sync({ outcome: "opened" }))).toBeNull(); // opened without its row: nothing to link
+    expect(syncTag(sync({ pr: { number: 4, state: "open" }, outcome: "failed" }))).toEqual({ key: "project.syncTag.failed", tone: "red", href: null });
+    expect(syncTag(sync({ pr: { number: 4, state: "open" }, outcome: "opened" }))).toEqual({
+      key: "project.syncTag.open",
+      tone: "amber",
+      n: 4,
+      href: "https://github.com/heig-tin-info/labo-2-student-1/pull/4",
+    });
+    expect(syncTag(sync({ pr: { number: 4, state: "merged" }, outcome: "up_to_date" }))).toMatchObject({ key: "project.syncTag.merged", tone: "green", n: 4 });
+    expect(syncTag(sync({ pr: { number: 4, state: "closed" }, outcome: "updated" }))).toMatchObject({ key: "project.syncTag.closed", tone: "zinc" });
+    expect(syncTag(sync({ outcome: "up_to_date" }))).toEqual({ key: "project.syncTag.upToDate", tone: "zinc", href: null });
+    expect(syncTag(sync({ outcome: "skipped" }))).toEqual({ key: "project.syncTag.skipped", tone: "zinc", href: null });
+  });
+
+  it("words the sync's refusals", () => {
+    for (const [code, key] of [
+      ["project_archived", "project.refusal.projectArchived"],
+      ["sync_in_progress", "project.refusal.syncInProgress"],
+      ["source_rewritten", "project.refusal.sourceRewritten"],
+      ["sync_failed", "project.refusal.syncFailed"],
+    ] as const) {
+      expect(refusalKey(new ApiError(409, { error: code, message: "" }))).toBe(key);
+    }
   });
 });
 

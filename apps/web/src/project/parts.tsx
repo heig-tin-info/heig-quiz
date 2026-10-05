@@ -5,10 +5,12 @@
  */
 import type { ProjectRepoView } from "@quiz/contracts";
 
+import { GitPullRequest } from "lucide-react";
+
 import { Grade } from "../Grade";
 import { useT, type Dict } from "../i18n";
 import { Badge, cx, GithubIcon, type Tone } from "../ui";
-import { repoHref, repoShortName } from "./projectPage";
+import { repoHref, repoShortName, syncTag } from "./projectPage";
 
 /**
  * A repository on GitHub, as a mono link in a new tab: its short name in a
@@ -74,6 +76,29 @@ export function Score({ score }: { score: ProjectRepoView["scores"]["final"] }) 
       ) : null}
       <span className="text-xs text-fg-faint">{t(SCORE_SOURCE_KEY[score.source])}</span>
     </span>
+  );
+}
+
+/**
+ * The sync of a repository as a tag (F-PROJ-12, M3-07; `syncTag`): its
+ * pull request, linked to GitHub in a new tab when it has one — the click
+ * never reaches the row —, else its outcome; nothing when the sync never
+ * reached it.
+ */
+export function SyncBadge({ repo }: { repo: ProjectRepoView }) {
+  const t = useT();
+  const tag = syncTag(repo);
+  if (!tag) return null;
+  const badge = (
+    <Badge tone={tag.tone} icon={tag.n === undefined ? undefined : GitPullRequest}>
+      {tag.n === undefined ? t(tag.key) : t(tag.key, { n: tag.n })}
+    </Badge>
+  );
+  if (!tag.href) return badge;
+  return (
+    <a href={tag.href} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="hover:underline">
+      {badge}
+    </a>
   );
 }
 

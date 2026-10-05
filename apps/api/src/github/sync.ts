@@ -1,28 +1,47 @@
 /**
- * Source → squashed → student repositories synchronization (GH-50..53).
- * The squashed repo is brought up to date first (fast-forward for the
- * `whole` strategy, one primary commit for `squash`, GH-13), then each
- * student repository receives the squashed branch on its `sync/<branch>`
- * ref. That bot-only ref is the single place where a forced update is
- * allowed; the selected branches are never touched directly.
+ * Source → distribution → student repositories synchronization (F-PROJ-12;
+ * heig-classroom's GH-50..53, merge task M3-07). The distribution repository
+ * is brought up to date first (fast-forward for the `whole` strategy, one
+ * commit on top per branch for `squash`), then each student repository
+ * receives the distribution's branch on its `sync/<branch>` ref. That
+ * bot-only ref is the single place where a forced update is allowed; the
+ * handed-out branches are never touched directly.
+ *
+ * Nothing the students receive names the SOURCE (N-SEC-20): the
+ * distribution's commit message carries no sha, and the sync's pull
+ * request names the distribution's commit (`modules/project/sync.ts`).
  */
 import { cpSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { type GitRunner, gitRunner, repoUrl } from "./git.js";
+import { pushWithRetry } from "./retry.js";
 import { applyStudentHandout } from "./studentize.js";
 
 export interface SquashedUpdate {
-  /** New squashed head per branch (the content students will receive). */
+  /** New distribution head per branch (the content students will receive). */
   heads: Record<string, string>;
-  /** Source head per branch at the time of the update. */
+  /** Source head per branch at the time of the update: the shas handed out. */
   sourceHeads: Record<string, string>;
-  /** Branches whose squashed content actually changed. */
+  /** Branches whose distribution content actually changed. */
   changed: string[];
 }
 
-/** GH-51 step 1: bring the squashed repo up to date with the source. */
+/** The `whole` strategy's push refused: the source's history was rewritten and the distribution cannot fast-forward. */
+export class SourceRewritten extends Error {
+  constructor(branches: string[]) {
+    super(`the source was rewritten: ${branches.join(", ")} cannot fast-forward`);
+    this.name = "SourceRewritten";
+  }
+}
+
+/** The distribution's commit message (D12: English; never the source's sha, N-SEC-20). */
+export const SYNC_COMMIT_MESSAGE = "Project update";
+
+const NON_FAST_FORWARD = /non-fast-forward|fetch first|\[rejected\]/i;
+
+/** Step 1: bring the distribution repository up to date with the source. */
 export async function updateSquashedRepo(opts: {
   token: string;
   org: string;
@@ -32,7 +51,7 @@ export async function updateSquashedRepo(opts: {
   branches: string[];
 }): Promise<SquashedUpdate> {
   const { token, org, sourceRepo, squashedRepo, strategy, branches } = opts;
-  // Sync creates the per-branch primary commits: bot identity required.
+  // Sync creates the per-branch commits: bot identity required.
   const runner = gitRunner({ identity: true, token });
   const { git, gitBare } = runner;
   const work = mkdtempSync(join(tmpdir(), "quiz-sync-"));
@@ -47,10 +66,15 @@ export async function updateSquashedRepo(opts: {
       for (const b of branches) {
         sourceHeads[b] = (await gitBare(src, "rev-parse", `refs/heads/${b}`)).trim();
       }
-      // Fast-forward only: the squashed repo is never rewritten (GH-13).
-      const refspecs = branches.map((b) => `refs/heads/${b}:refs/heads/${b}`);
+      // Fast-forward only: the distribution repository is never rewritten.
       const before = await squashedBranchHeads(runner, repoUrl(org, squashedRepo), branches, work);
-      await gitBare(src, "push", "--quiet", repoUrl(org, squashedRepo), ...refspecs);
+      const refspecs = branches.map((b) => `refs/heads/${b}:refs/heads/${b}`);
+      try {
+        await pushWithRetry(() => gitBare(src, "push", "--quiet", repoUrl(org, squashedRepo), ...refspecs));
+      } catch (err) {
+        if (NON_FAST_FORWARD.test(String(err))) throw new SourceRewritten(branches.filter((b) => before[b] !== sourceHeads[b]));
+        throw err;
+      }
       for (const b of branches) {
         heads[b] = sourceHeads[b]!;
         if (before[b] !== heads[b]) changed.push(b);
@@ -58,8 +82,8 @@ export async function updateSquashedRepo(opts: {
       return { heads, sourceHeads, changed };
     }
 
-    // `squash` strategy: one primary commit per branch replaying the source
-    // tree on top of the squashed history (students merge a single commit).
+    // `squash` strategy: one commit per branch replaying the source tree on
+    // top of the distribution's history (students merge a single commit).
     for (const branch of branches) {
       const safe = branch.replace(/[^a-zA-Z0-9]/g, "_");
       const sqDir = join(work, `sq-${safe}`);
@@ -83,14 +107,8 @@ export async function updateSquashedRepo(opts: {
         heads[branch] = (await git(sqDir, "rev-parse", "HEAD")).trim();
         continue; // already up to date
       }
-      await git(
-        sqDir,
-        "commit",
-        "-q",
-        "-m",
-        `Assignment update (${sourceHeads[branch]!.slice(0, 7)})`,
-      );
-      await git(sqDir, "push", "-q", repoUrl(org, squashedRepo), `${branch}:${branch}`);
+      await git(sqDir, "commit", "-q", "-m", SYNC_COMMIT_MESSAGE);
+      await pushWithRetry(() => git(sqDir, "push", "-q", repoUrl(org, squashedRepo), `${branch}:${branch}`));
       heads[branch] = (await git(sqDir, "rev-parse", "HEAD")).trim();
       changed.push(branch);
     }
@@ -116,36 +134,32 @@ async function squashedBranchHeads(
 }
 
 /**
- * GH-51 step 2: a workspace holding one bare clone of the squashed repo,
+ * Step 2: a workspace holding one bare clone of the distribution repository,
  * reused to push `sync/<branch>` to every student repository (forced update
- * allowed on this bot-only ref).
+ * allowed on this bot-only ref). `headOf` is the distribution's head of a
+ * branch — the commit a push moves the ref onto — known BEFORE the push, so
+ * the caller records it as a bot commit first (N-RES-08, N-SEC-21).
  */
 export interface SyncWorkspace {
-  pushSyncRef: (studentRepo: string, branch: string) => Promise<string>;
+  headOf: (branch: string) => Promise<string>;
+  pushSyncRef: (studentRepo: string, branch: string) => Promise<void>;
   dispose: () => void;
 }
 
-export async function openSyncWorkspace(opts: {
-  token: string;
-  org: string;
-  squashedRepo: string;
-}): Promise<SyncWorkspace> {
+export async function openSyncWorkspace(opts: { token: string; org: string; squashedRepo: string }): Promise<SyncWorkspace> {
   const { token, org, squashedRepo } = opts;
-  const { git, gitBare } = gitRunner({ identity: true, token });
+  const { git, gitBare } = gitRunner({ token });
   const work = mkdtempSync(join(tmpdir(), "quiz-syncpush-"));
   await git(work, "clone", "--quiet", "--bare", repoUrl(org, squashedRepo), "sq.git");
   const sq = join(work, "sq.git");
   return {
-    async pushSyncRef(studentRepo: string, branch: string): Promise<string> {
-      await gitBare(
-        sq,
-        "push",
-        "--quiet",
-        "--force",
-        repoUrl(org, studentRepo),
-        `refs/heads/${branch}:refs/heads/sync/${branch}`,
-      );
+    async headOf(branch) {
       return (await gitBare(sq, "rev-parse", `refs/heads/${branch}`)).trim();
+    },
+    async pushSyncRef(studentRepo, branch) {
+      await pushWithRetry(() =>
+        gitBare(sq, "push", "--quiet", "--force", repoUrl(org, studentRepo), `refs/heads/${branch}:refs/heads/sync/${branch}`),
+      );
     },
     dispose() {
       rmSync(work, { recursive: true, force: true });

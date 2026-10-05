@@ -42,6 +42,20 @@ export function deadlineWantsLock(
 }
 
 /**
+ * Whether a sync leaves a repository alone (F-PROJ-12 as amended
+ * 2026-10-05, merge task M3-07): one whose EFFECTIVE deadline has passed
+ * takes no update, locked or not — the students' work is over —; one GitHub
+ * holds locked (the deadline's ruleset, the archive that stands for it, or
+ * the staff's hand) cannot merge one. A repository's own deadline, like the
+ * project's, is read through {@link effectiveDeadline}; the rest of the
+ * frame — provisioned, not deleted, the project not archived — is the
+ * caller's (`isLive`).
+ */
+export function syncSkips(repo: { deadlineAt: Date | null; lockedAt: Date | null }, project: { deadlineAt: Date }, now: Date): boolean {
+  return effectiveDeadline(repo, project).getTime() <= now.getTime() || repo.lockedAt !== null;
+}
+
+/**
  * Whether moving a repository's (or a project's) deadline reopens it
  * (F-PROJ-09): it was applied, and the new deadline lies ahead.
  */

@@ -64,6 +64,7 @@ export function makeRepo(n: number, over: Partial<ProjectRepoView> = {}): Projec
       scoreMax: 10,
     },
     review: { status: "pending", reason: null, askedAt: null, sha: null, runId: null },
+    sync: { pr: null, outcome: null, at: null },
     released: null,
     flags: {
       protectionSuspended: false,
@@ -114,6 +115,7 @@ export function makeProject(over: Partial<ProjectDetail> = {}): ProjectDetail {
     editable: ["name", "deadlineAt", "deadlineStrategy", "protectedFiles"],
     releasedAt: null,
     primaryAction: "none",
+    sync: { ahead: null, inProgress: false, syncedAt: null, last: null },
     counts: { students: rows.length, accepted, live: accepted, frozen: 0, toVerify: 0, alerts: 0 },
     liveStale: false,
     rows,

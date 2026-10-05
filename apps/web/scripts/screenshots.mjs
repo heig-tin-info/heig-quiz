@@ -290,6 +290,9 @@ const scenes = [
       await p.getByText(/(Cannot publish|Publication impossible)/).waitFor();
     },
   },
+  // F-PROJ-12 (M3-07): the source ahead — Sync the header's one button, the last sync's counts,
+  // the rows' pull requests.
+  { name: "project-sync-banner", role: "teacher", path: "/projects/pj-published?projects=1&ahead=1", settle: 2500 },
   { name: "project-locked", role: "teacher", path: "/projects/pj-locked?projects=1", settle: 2500 },
   // M3-12b: the sheet of the repository whose score is the teacher's (its
   // form filled, the final review received); M3-12c: the locked project not

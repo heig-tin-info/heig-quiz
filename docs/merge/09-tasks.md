@@ -1283,6 +1283,72 @@ under the half that serves them.
   draws no button for it. This task adds the **Sync** primary button in
   `project/ProjectPage.tsx` (the `actions` of its `PageHeader`, beside the
   `publish` branch) on its route, and the `-sync-banner` scene.
+- **As delivered** (2026-10-05, `merge/M3-07-source-sync`; ADR-073, F-PROJ-12
+  amended):
+  - `Q:modules/project/sync.ts`: `requestSync` (`POST /app/api/projects/:id/sync`,
+    202 `ProjectSyncAccepted`): the `sync_job_at` lease taken (`409
+    sync_in_progress`), the distribution repository updated IN THE REQUEST
+    (`github/sync.ts`'s `updateSquashedRepo`: the squash commit says
+    `Project update`, never the source's sha; a `whole` push refused as
+    non-fast-forward is `409 source_rewritten`, audited `project.sync_failed`,
+    the lease given back; `502 sync_failed` otherwise), `projects.source_heads`
+    written, audited `project.sync_requested`, one `project.sync` job sent
+    (run in the request without a queue). `409 project_archived`,
+    `distribution_missing`, `app_not_installed`; a draft syncs its
+    distribution only; never refused for a source that is not ahead.
+  - `runSyncJob` in `runLeased` (which now hands the body the installation
+    `token`): every student repository, re-read before its push, skipped
+    when not live, past its effective deadline or locked (`syncSkips`,
+    `@quiz/domain`); the distribution's head recorded in `bot_commits(sync)`
+    before `sync/<branch>` is forced (left alone when already there);
+    GitHub's compare `branch...sync/branch` with no file → `up_to_date`;
+    else ONE pull request per branch (`project_sync_prs`, PK (repo, branch);
+    the stored one reused while open, else found by head, else opened;
+    a comment only when the head moved), English texts naming the
+    distribution's sha. Outcome per repository
+    (`project_repos.sync_outcome`, `_at`: opened / updated / up_to_date /
+    failed / skipped); a failed repository recorded, the pass goes on, the
+    frame gives the lease back (`runLeased`'s `onFailure: "release"`:
+    nothing re-claims a sync but the staff, at once); a push the
+    repository refuses is probed:
+    a 404 marks it deleted (`via: sync`). Then `synced_at`,
+    `source_ahead_sha`/`source_pushed_at`/`source_ahead` cleared only when
+    nothing failed and the sha is one of `source_heads`; audited
+    `project.synced {opened, updated, upToDate, failed, skipped, failedRepos}`.
+  - Handlers registered beside M3-04's (`webhooks.ts`, additive):
+    `sourcePush` — a push on a SOURCE repository marks every non-archived
+    project handing out that branch (drafts included) with
+    `source_ahead_sha`, `source_pushed_at` (the delivery's receipt) and
+    `source_ahead[branch]` (GitHub's compare from the handed-out sha, null
+    when unknown); a push whose head is the handed-out sha marks nothing;
+    `pullRequest` — the App's pull requests from `sync/*` only, state kept
+    (`open`, `merged`, `closed`), a replay about an older number ignored
+    (`setWhere`). The source repository gets no push receipt.
+  - Contracts: `ProjectDetail.sync` (`ProjectSyncState`: `ahead {pushedAt,
+    commits|null}`, `inProgress`, `syncedAt`, `last` counts),
+    `ProjectRepoView.sync` (`ProjectRepoSync`: the default branch's `pr`
+    and the last `outcome`/`at`), `SYNC_OUTCOMES`, `ProjectSyncAccepted`,
+    refusals `project_archived`, `sync_in_progress`, `source_rewritten`,
+    `sync_failed`. `createSquashedRepo` returns `sourceHeads`, written at
+    the build. Migration `0072_project_sync` (regenerated after `0071_rpn_calculator`) (`sync_job_at`, `source_heads`,
+    `source_ahead`, `sync_outcome(_at)`, `project_sync_prs`; the old
+    `sync_pr_number/state` copied into the default branch's row, then
+    dropped).
+  - Web: the Sync button (primary when `primaryAction === "sync"`, a
+    secondary beside Publish or Release while the source is ahead,
+    `offersSync`), "Syncing…" while in progress (refetch every 3 s), the
+    commits ahead in the counts, the last sync's counts under the header,
+    the row's pull request / outcome tag (`syncTag`, `SyncBadge`) and a
+    sheet fact; mock `?ahead=1`, scene `project-sync-banner`; en + fr.
+  - Tests: `sync.db.test.ts` (nine cases over local bare repositories,
+    the fake GitHub now answering pull requests and a compare by refs),
+    the leak test extended with the source's sha and the sync's words,
+    `syncSkips` unit test, the page's and the rules' web tests.
+  - Not done here: the import's mapping of `sync_pr_number` (M8-01, the
+    migration's copy stands for Quiz's own rows); a notification kind for a
+    merged pull request (none, D18); the student's notice (M3-09c).
+  - **Deployment:** the production App must subscribe to `pull_request`
+    (M2-06 lists `workflow_run`, `member`, `repository`).
 
 ### M3-08 — split (orchestrator, 2026-10-02)
 M3-08 (teacher views, grades, release) is split in two: **M3-08a** the

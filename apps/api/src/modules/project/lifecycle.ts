@@ -149,7 +149,7 @@ async function buildDistribution(
   org: InstalledOrg,
   draft: ProjectRow,
   source: Source,
-): Promise<{ repoId: number; fullName: string }> {
+): Promise<{ repoId: number; fullName: string; sourceHeads: Record<string, string> }> {
   for (let n = 1; ; n++) {
     try {
       return await createSquashedRepo({
@@ -218,7 +218,7 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
           return row;
         });
 
-  let built: { repoId: number; fullName: string };
+  let built: { repoId: number; fullName: string; sourceHeads: Record<string, string> };
   try {
     built = await buildDistribution(db, client, org, draft, source);
   } catch (err) {
@@ -234,7 +234,8 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
   }
   const [row] = await db
     .update(projects)
-    .set({ distributionFullName: built.fullName })
+    // The source's shas handed out (F-PROJ-12): what a later push is counted from.
+    .set({ distributionFullName: built.fullName, sourceHeads: built.sourceHeads })
     .where(eq(projects.id, draft.id))
     .returning();
   // Deleted by its staff while it was being built: the repository stays.

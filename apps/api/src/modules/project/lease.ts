@@ -1,13 +1,14 @@
 /**
  * The leases of a project's GitHub work (ADR-064 §3 and its addendum,
- * merge tasks M3-05a, M3-05b and M3-15b-2): one column of `projects` per
- * kind of work — `deadline_job_at` for the deadline's locks and commits
+ * merge tasks M3-05a, M3-05b, M3-15b-2 and M3-07): one column of `projects`
+ * per kind of work — `deadline_job_at` for the deadline's locks and commits
  * (`jobs.ts`), `dispatch_job_at` for the review dispatches (`review.ts`),
  * `group_sync_job_at` for the moves of a group set on GitHub
- * (`groupSync.ts`) — so that none waits for another, and ONE frame for the
- * jobs that hold the first two ({@link runLeased}): take, renew, backdate
- * and give back; `group.sync`, which must run without the App (a
- * revocation with nothing to take proceeds), holds its lease through
+ * (`groupSync.ts`), `sync_job_at` for the source's sync (`sync.ts`) — so
+ * that none waits for another, and ONE frame for the jobs that hold the
+ * deadline's, the dispatches' and the sync's ({@link runLeased}): take,
+ * renew, backdate and give back; `group.sync`, which must run without the
+ * App (a revocation with nothing to take proceeds), holds its lease through
  * {@link heldLease} itself. A queue's dedupe is never relied upon (#273).
  */
 import type { FastifyInstance } from "fastify";
@@ -28,8 +29,8 @@ export const FAILED_RETRY_MS = 30_000;
 /** Repositories a job settles at once: GitHub's secondary limits frown on more parallel writes. */
 const REPO_CONCURRENCY = 4;
 
-/** The column of `projects` that holds a kind of work's lease. */
-export type LeaseKey = "deadlineJobAt" | "dispatchJobAt" | "groupSyncJobAt";
+/** The column of `projects` that holds a kind of work's lease (`sync_job_at`: the source's sync, M3-07). */
+export type LeaseKey = "deadlineJobAt" | "dispatchJobAt" | "groupSyncJobAt" | "syncJobAt";
 
 /** One project's work, as the queue carries it: the lease it was claimed under. */
 export interface ProjectJob {
@@ -57,6 +58,19 @@ export async function claimLeases(db: Db, key: LeaseKey, now: Date, work: SQL, p
     )
     .returning({ projectId: projects.id, lease: column });
   return rows.map((r) => ({ projectId: r.projectId, lease: r.lease!.toISOString() }));
+}
+
+/**
+ * A lease given back by the request that claimed it, when it fails before
+ * sending its job (the sync's distribution update, M3-07): conditional on
+ * the lease still being the row's.
+ */
+export async function releaseLease(db: Db, key: LeaseKey, job: ProjectJob): Promise<void> {
+  const column = projects[key];
+  await db
+    .update(projects)
+    .set({ [key]: null })
+    .where(and(eq(projects.id, job.projectId), eq(column, new Date(job.lease))));
 }
 
 /**
@@ -112,6 +126,8 @@ export async function forEachLimit<T>(
 export interface LeasedRun {
   project: ProjectRow;
   octokit: Octokit;
+  /** The installation's token, for git (handed to it through the environment only, invariant 15). */
+  token: string;
   lost: () => boolean;
   /**
    * `repos` through `settle`, four at a time, the lease renewed after each,
@@ -128,8 +144,10 @@ export interface LeasedRun {
  * after it expired); without the App on the organization it waits, the
  * lease kept, for the sweep ten minutes on — no retry loop. Then `body`;
  * afterwards nothing more when the lease was lost (the job that took over
- * finishes the work), a backdated lease and a throw when a repository
- * failed (the next tick resumes), else the lease given back.
+ * finishes the work); when a repository failed, a throw with the lease
+ * backdated (`onFailure: "expire"`, the default: the next tick resumes the
+ * work) or given back (`"release"`: work nobody re-claims but a person —
+ * the sync, M3-07 — may be asked again at once); else the lease given back.
  */
 export async function runLeased(
   app: FastifyInstance,
@@ -138,12 +156,13 @@ export async function runLeased(
   job: ProjectJob,
   label: string,
   body: (run: LeasedRun) => Promise<void>,
+  opts: { onFailure?: "expire" | "release" } = {},
 ): Promise<void> {
   const [project] = await app.db.select().from(projects).where(eq(projects.id, job.projectId));
   if (!project || project[key]?.toISOString() !== job.lease) return;
   const org = await projectInstallation(app.db, project.orgId);
   if (!org) return;
-  const { octokit } = await installationClient(config, org.installationId);
+  const { octokit, token } = await installationClient(config, org.installationId);
   const lease = heldLease(app, key, project.id, project[key]);
   const failed: string[] = [];
   const each: LeasedRun["each"] = async (repos, settle) => {
@@ -165,10 +184,10 @@ export async function runLeased(
     failed.push(...mine);
     return mine;
   };
-  await body({ project, octokit, lost: lease.lost, each });
+  await body({ project, octokit, token, lost: lease.lost, each });
   if (lease.lost()) return;
   if (failed.length > 0) {
-    await lease.expireSoon();
+    await (opts.onFailure === "release" ? lease.release() : lease.expireSoon());
     throw new Error(`${label} incomplete: ${failed.join(", ")}`);
   }
   await lease.release();

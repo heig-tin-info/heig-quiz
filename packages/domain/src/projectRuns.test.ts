@@ -8,6 +8,7 @@ import {
   reopens,
   runKind,
   selectScoreRun,
+  syncSkips,
   type ScoredRun,
 } from "./projectRuns.js";
 
@@ -55,6 +56,18 @@ describe("reopens (F-PROJ-09)", () => {
     expect(reopens(at(10), at(14), at(12))).toBe(true);
     expect(reopens(at(10), at(11), at(12))).toBe(false);
     expect(reopens(null, at(14), at(12))).toBe(false);
+  });
+});
+
+describe("syncSkips (F-PROJ-12 as amended 2026-10-05)", () => {
+  it("skips a repository past its effective deadline, locked or not, and a locked one; pushes to the rest", () => {
+    const project = { deadlineAt: at(12) };
+    expect(syncSkips({ deadlineAt: null, lockedAt: null }, project, at(12))).toBe(true);
+    expect(syncSkips({ deadlineAt: null, lockedAt: at(11) }, project, at(13))).toBe(true);
+    // An own deadline ahead keeps the repository open to the update, even past the project's.
+    expect(syncSkips({ deadlineAt: at(14), lockedAt: null }, project, at(13))).toBe(false);
+    expect(syncSkips({ deadlineAt: null, lockedAt: at(9) }, project, at(10))).toBe(true);
+    expect(syncSkips({ deadlineAt: null, lockedAt: null }, project, at(10))).toBe(false);
   });
 });
 

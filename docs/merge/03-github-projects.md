@@ -172,6 +172,14 @@ layers:
 - Sync (`C:sync.ts`, `github/sync.ts`): update the squashed repo, force-push
   the bot-only `sync/<branch>` to every live unlocked repo
   (`bot_commits(sync)`), open or comment the single sync PR, never merge.
+  *As built (M3-07, ADR-073):* the staff's request updates the
+  distribution repository under the project's `sync_job_at` lease and
+  sends one `project.sync` job; one pull request per handed-out branch
+  (`project_sync_prs`); a repository past its effective deadline is
+  skipped like a locked one; "up to date" is a compare listing no file.
+  **Deployment:** the production App must subscribe to `pull_request`
+  besides the events M2-06 lists (`workflow_run`, `member`, `repository`),
+  or the pull requests' state is only refreshed by the next sync.
 - `reconcile.grades` (15 min): repos quiet > 30 min, last 20 runs through
   `ingestCompletedRun`. `reconcile.repos` (24 h): pending invitations,
   head, CI. In Quiz (M3-06a, `Q:modules/project/reconcile.ts`) both are

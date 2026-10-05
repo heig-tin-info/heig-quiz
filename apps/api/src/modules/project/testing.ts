@@ -15,7 +15,8 @@
  * M3-05a, a ruleset deleted and a repository archived (read-only until
  * un-archived). From M3-15b, a collaborator removed and the pending
  * invitations listed and cancelled (a revocation), or refused (`unrevokable`),
- * and a repository by its id.
+ * and a repository by its id. From M3-07, a compare by refs with its
+ * counts, and the pull requests (opened, listed by head, read, commented).
  * Test support only; nothing in the application imports it.
  */
 import { execFileSync } from "node:child_process";
@@ -35,6 +36,18 @@ const AUTHOR = {
   GIT_COMMITTER_NAME: "t",
   GIT_COMMITTER_EMAIL: "t@x",
 };
+
+/** A pull request of the fake GitHub, as its REST answers describe one. */
+export interface FakePull {
+  number: number;
+  title: string;
+  body: string;
+  state: "open" | "closed";
+  merged: boolean;
+  head: { ref: string };
+  base: { ref: string };
+  user: { login: string };
+}
 
 export interface RepoWorld {
   /** The directory `setRemoteBaseForTests` is given (as `file://<dir>`). */
@@ -67,6 +80,12 @@ export interface RepoWorld {
   invitations: Map<string, Map<number, string>>;
   /** Repositories, by `org/name`, that refuse every collaborator removal (a 403). */
   unrevokable: Set<string>;
+  /** The pull requests of each repository, by `org/name` (M3-07); a test merges or closes one by mutating it. */
+  pulls: Map<string, FakePull[]>;
+  /** The comments on each repository's pull requests, by `org/name` then number. */
+  comments: Map<string, Map<number, string[]>>;
+  /** The App's login, author of the pull requests it opens. */
+  botLogin: string;
   /** A repository with commits on `branches` (`file` → content), as a teacher pushed it. */
   source: (org: string, name: string, branches: Record<string, Record<string, string>>, commits?: number) => void;
   /** The empty repository `org/name`, as a failed build leaves it. */
@@ -151,6 +170,7 @@ export function repoWorld(): RepoWorld {
 
   let nextRuleset = 1;
   let nextInvitation = 1;
+  let nextPull = 1;
   /** A write on an existing repository: its default branch, a ruleset, an invitation. */
   const repoWrite = (org: string, name: string, rest: string, req: RequestInit & { method: string }): Response | undefined => {
     const fullName = `${org}/${name}`;
@@ -192,6 +212,31 @@ export function repoWorld(): RepoWorld {
       }
       world.git(fullName, "update-ref", `refs/heads/${m[1]}`, sha);
       return json({ ref: `refs/heads/${m[1]}`, object: { sha } });
+    }
+    if (req.method === "POST" && rest === "/pulls") {
+      const { title, body: text, head, base } = body() as { title: string; body: string; head: string; base: string };
+      const pulls = world.pulls.get(fullName) ?? [];
+      world.pulls.set(fullName, pulls);
+      const pull: FakePull = {
+        number: nextPull++,
+        title,
+        body: text,
+        state: "open",
+        merged: false,
+        head: { ref: head },
+        base: { ref: base },
+        user: { login: world.botLogin },
+      };
+      pulls.push(pull);
+      return json(pull, 201);
+    }
+    if (req.method === "POST" && (m = /^\/issues\/(\d+)\/comments$/.exec(rest))) {
+      const number = Number(m[1]);
+      if (!(world.pulls.get(fullName) ?? []).some((p) => p.number === number)) return json({ message: "Not Found" }, 404);
+      const threads = world.comments.get(fullName) ?? new Map<number, string[]>();
+      world.comments.set(fullName, threads);
+      threads.set(number, [...(threads.get(number) ?? []), (body() as { body: string }).body]);
+      return json({ id: threads.size }, 201);
     }
     if (req.method === "POST" && rest === "/rulesets") {
       if (world.freePlan) return planRefusal();
@@ -251,6 +296,9 @@ export function repoWorld(): RepoWorld {
     uninvitable: new Set(),
     invitations: new Map(),
     unrevokable: new Set(),
+    pulls: new Map(),
+    comments: new Map(),
+    botLogin: "quiz-test[bot]",
     release(ok) {
       writeFileSync(join(dir, "release"), ok ? "0" : "1");
     },
@@ -374,14 +422,37 @@ export function repoWorld(): RepoWorld {
       if ((m = /^\/git\/commits\/([0-9a-f]+)$/.exec(rest))) {
         return json({ sha: m[1], tree: { sha: world.git(fullName, "rev-parse", `${m[1]}^{tree}`).trim() } });
       }
-      if ((m = /^\/compare\/([0-9a-f]+)\.\.\.([0-9a-f]+)$/.exec(rest))) {
-        const base = world.git(fullName, "merge-base", m[1]!, m[2]!).trim();
-        const files = world
-          .git(fullName, "diff", "--name-only", "--no-renames", base, m[2]!)
-          .split("\n")
-          .filter(Boolean)
-          .map((filename) => ({ filename, status: "modified" }));
-        return json({ files });
+      if ((m = /^\/compare\/(.+)\.\.\.(.+)$/.exec(rest))) {
+        // Shas or refs (`main...sync/main`); one git does not know is GitHub's 404.
+        try {
+          const base = world.git(fullName, "merge-base", m[1]!, m[2]!).trim();
+          const files = world
+            .git(fullName, "diff", "--name-only", "--no-renames", base, m[2]!)
+            .split("\n")
+            .filter(Boolean)
+            .map((filename) => ({ filename, status: "modified" }));
+          const ahead_by = Number(world.git(fullName, "rev-list", "--count", `${m[1]}..${m[2]}`).trim());
+          const behind_by = Number(world.git(fullName, "rev-list", "--count", `${m[2]}..${m[1]}`).trim());
+          const status = ahead_by === 0 && behind_by === 0 ? "identical" : ahead_by === 0 ? "behind" : behind_by === 0 ? "ahead" : "diverged";
+          return json({ status, ahead_by, behind_by, files });
+        } catch {
+          return undefined;
+        }
+      }
+      if (rest === "/pulls") {
+        const q = url.searchParams;
+        const head = q.get("head")?.replace(/^[^:]+:/, "");
+        const pulls = (world.pulls.get(fullName) ?? []).filter(
+          (p) =>
+            (q.get("state") ?? "open") === (q.get("state") === "all" ? q.get("state") : p.state) &&
+            (!head || p.head.ref === head) &&
+            (!q.get("base") || p.base.ref === q.get("base")),
+        );
+        return json(pulls);
+      }
+      if ((m = /^\/pulls\/(\d+)$/.exec(rest))) {
+        const pull = (world.pulls.get(fullName) ?? []).find((p) => p.number === Number(m![1]));
+        return pull ? json(pull) : undefined;
       }
       if ((m = /^\/git\/trees\/(.+)$/.exec(rest))) {
         if (branches.length === 0) return json({ message: "Git Repository is empty." }, 409);

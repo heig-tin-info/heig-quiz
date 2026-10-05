@@ -21,6 +21,8 @@ export interface SquashedResult {
   fullName: string;
   /** Head SHA per branch of the squashed repo (base of future primary_commits). */
   heads: Record<string, string>;
+  /** The source's head per branch as it was built from: the shas handed out (F-PROJ-12, M3-07). */
+  sourceHeads: Record<string, string>;
 }
 
 export async function createSquashedRepo(opts: {
@@ -86,18 +88,20 @@ export async function createSquashedRepo(opts: {
   const work = mkdtempSync(join(tmpdir(), "quiz-squash-"));
   try {
     const heads: Record<string, string> = {};
+    const sourceHeads: Record<string, string> = {};
     if (strategy === "whole") {
       await git(work, "clone", "--quiet", "--bare", url(sourceRepo), "src.git");
       const src = join(work, "src.git");
       const refspecs = branches.map((b) => `refs/heads/${b}:refs/heads/${b}`);
       await pushWithRetry(() => gitBare(src, "push", "--quiet", url(targetRepo), ...refspecs));
       for (const b of branches) {
-        heads[b] = (await gitBare(src, "rev-parse", `refs/heads/${b}`)).trim();
+        heads[b] = sourceHeads[b] = (await gitBare(src, "rev-parse", `refs/heads/${b}`)).trim();
       }
     } else {
       for (const branch of branches) {
         const dir = join(work, `b-${branch.replace(/[^a-zA-Z0-9]/g, "_")}`);
         await git(work, "clone", "--quiet", "--depth", "1", "--branch", branch, url(sourceRepo), dir);
+        sourceHeads[branch] = (await git(dir, "rev-parse", "HEAD")).trim();
         // A single initial commit: replay the head tree without history.
         rmSync(join(dir, ".git"), { recursive: true, force: true });
         // `student/` overlay and `.studentignore`: the solution stays private.
@@ -109,7 +113,7 @@ export async function createSquashedRepo(opts: {
         heads[branch] = (await git(dir, "rev-parse", "HEAD")).trim();
       }
     }
-    return { repoId: created.id, fullName: created.full_name, heads };
+    return { repoId: created.id, fullName: created.full_name, heads, sourceHeads };
   } finally {
     rmSync(work, { recursive: true, force: true });
   }

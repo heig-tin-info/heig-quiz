@@ -48,6 +48,7 @@ import {
   projectGradeRuns,
   projectRepos,
   projects,
+  projectSyncPrs,
 } from "../../db/schema.js";
 import { subscribe, type BusMessage } from "../../events.js";
 import { setRemoteBaseForTests } from "../../github/git.js";
@@ -587,6 +588,11 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
       await accept(lab.id, second);
       const mine = await repoOf(lab.id, first.id);
       const theirs = await repoOf(lab.id, second.id);
+      // The source ahead and the sync's facts (M3-07): the staff's only.
+      const sourceSha = "5ad0c0de".repeat(5);
+      await setProject(lab.id, { sourceAheadSha: sourceSha, sourcePushedAt: at(NOW), sourceAhead: { main: 3 }, sourceHeads: { main: "c0ffee42".repeat(5) }, syncedAt: at(NOW) });
+      await setRepo(mine.id, { syncOutcome: "opened", syncOutcomeAt: at(NOW) });
+      await server.app.db.insert(projectSyncPrs).values({ repoId: mine.id, branch: "main", prNumber: 7331, state: "open", updatedAt: at(NOW) });
       // The second student's run, review, teacher's score; a flagged run of the first's.
       await setRepo(theirs.id, {
         currentGradeRunId: await run(theirs.id, { points: 42.25, max: 100, headSha: "d".repeat(40) }),
@@ -675,6 +681,11 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
         "protectionSuspended",
         "sourceFullName",
         "distribution",
+        sourceSha, // the source ahead (M3-07)
+        "c0ffee42",
+        "7331", // the sync pull request's number
+        "syncOutcome",
+        "sourceAhead",
       ];
       expect(studentBodies.length).toBeGreaterThan(from + 30);
       for (const body of studentBodies.slice(from)) {

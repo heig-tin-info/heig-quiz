@@ -20,7 +20,7 @@ import {
   useSortableTable,
   type Column,
 } from "../ui";
-import { CiBadge, RepoLink, Score } from "./parts";
+import { CiBadge, RepoLink, Score, SyncBadge } from "./parts";
 import { repoFlags, reviewTag, shortSha } from "./projectPage";
 
 type SortKey = "student" | "score" | "deadline";
@@ -46,9 +46,10 @@ function RepoCell({ repo }: { repo: ProjectRepoView | null }) {
 }
 
 /**
- * The lock, the freeze, the final review's state and the flags of a
- * repository, as tags; on a narrow table the flags fold into one count. The
- * review tag (M3-12b) says nothing while it is trivially pending.
+ * The lock, the freeze, the final review's state, the sync's pull request
+ * (M3-07) and the flags of a repository, as tags; on a narrow table the
+ * flags fold into one count. The review tag (M3-12b) says nothing while it
+ * is trivially pending.
  */
 function StateCell({ repo }: { repo: ProjectRepoView }) {
   const t = useT();
@@ -76,6 +77,7 @@ function StateCell({ repo }: { repo: ProjectRepoView }) {
         </Badge>
       ) : null}
       {review ? <Badge tone={review.tone}>{t(review.key)}</Badge> : null}
+      <SyncBadge repo={repo} />
       {/* Wrappers, not classes on the badges: a badge's own `inline-flex` would win over `hidden`. */}
       <span className="hidden @2xl:contents">
         {flags.map((f) => (

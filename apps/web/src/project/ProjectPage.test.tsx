@@ -103,12 +103,45 @@ describe("the one primary action", () => {
     expect(status()).toMatch(/^Draft: the students see nothing yet/);
   });
 
-  it("is a sentence, not a button, for sync (its route comes with M3-07)", async () => {
-    routes(makeProject({ primaryAction: "sync" }));
+  it("is Sync, as a button, when the source is ahead (F-PROJ-12, M3-07): one POST, a toast, the page refreshed", async () => {
+    const ahead = { pushedAt: PAST, commits: 3 };
+    const { calls } = routes(makeProject({ primaryAction: "sync", sync: { ahead, inProgress: false, syncedAt: null, last: null } }), {
+      [`POST ${BASE}/sync`]: ok({ requestedAt: PAST }),
+    });
     renderPage();
-    await screen.findByRole("heading", { level: 1 });
-    expect(screen.queryByRole("button", { name: /Publish|Release|Sync/ })).toBeNull();
+    const button = await screen.findByRole("button", { name: "Sync" });
+    expect(screen.queryByRole("button", { name: /Publish|Release/ })).toBeNull();
     expect(status()).toBe("The source repository is ahead of the students' copies: a sync is due.");
+    expect(screen.getByText(/source 3 commits ahead/)).toBeInTheDocument();
+    await userEvent.click(button);
+    await waitFor(() => expect(writes(calls)).toEqual([expect.objectContaining({ method: "POST", url: `${BASE}/sync` })]));
+    expect(await screen.findByText(/^Sync started/)).toBeInTheDocument();
+    await waitFor(() => expect(calls.filter((c) => c.url === BASE && c.method === "GET").length).toBeGreaterThan(1));
+  });
+
+  it("offers Sync beside Publish on a draft whose source is ahead, says what the last sync did, and shows the pass under way", async () => {
+    routes(
+      makeDraft({
+        sync: { ahead: { pushedAt: PAST, commits: null }, inProgress: false, syncedAt: null, last: null },
+      }),
+    );
+    renderPage();
+    expect(await screen.findByRole("button", { name: "Sync" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Publish/ })).toBeInTheDocument();
+    expect(screen.getByText(/source ahead/)).toBeInTheDocument();
+  });
+
+  it("says the last sync's counts, and 'Syncing…' while the pass runs", async () => {
+    routes(
+      makeProject({
+        primaryAction: "none",
+        sync: { ahead: { pushedAt: PAST, commits: 1 }, inProgress: true, syncedAt: PAST, last: { opened: 2, updated: 1, upToDate: 3, failed: 0, skipped: 1 } },
+      }),
+    );
+    renderPage();
+    const button = await screen.findByRole("button", { name: /Syncing…/ });
+    expect(button).toBeDisabled();
+    expect(screen.getByTestId("project-sync-last").textContent).toMatch(/^Last sync .*: 2 pull requests opened, 1 updated, 3 up to date, 0 failed, 1 skipped\.$/);
   });
 
   it("is nothing for an open project: the header states the situation", async () => {
@@ -353,9 +386,9 @@ describe("the settings", () => {
 describe("the repositories", () => {
   const flagged = makeProject({
     rows: [
-      row(1, makeRepo(1)),
+      row(1, makeRepo(1, { sync: { pr: { number: 12, state: "open" }, outcome: "opened", at: PAST } })),
       row(2, makeRepo(2, { flags: { ...makeRepo(2).flags, protectionSuspended: true, toVerify: true } })),
-      row(3, makeRepo(3, { flags: { ...makeRepo(3).flags, multiple: true } })),
+      row(3, makeRepo(3, { sync: { pr: null, outcome: "failed", at: PAST }, flags: { ...makeRepo(3).flags, multiple: true } })),
       row(4, makeRepo(4, { flags: { ...makeRepo(4).flags, malformed: "::notice title=GRADE::huit/10" } })),
       row(5, makeRepo(5, { degraded: true, archived: true, locked: true })),
       row(6, makeRepo(6, { flags: { ...makeRepo(6).flags, changedAfterRelease: true } })),
@@ -390,6 +423,10 @@ describe("the repositories", () => {
     // The healthy row carries its score, grade and source.
     expect(text(0)).toMatch(/8\/10/);
     expect(text(0)).toMatch(/5\.0/);
+    // The sync (M3-07): the pull request of the row, linked to GitHub; a failed sync in red.
+    const pr = within(rows[0]!).getByRole("link", { name: /PR #12 open/ });
+    expect(pr).toHaveAttribute("href", "https://github.com/heig-tin-info/labo-2-student-1/pull/12");
+    expect(text(2)).toMatch(/sync failed/);
   });
 
   it("warns once on the scale when a grade fell back, and says when GitHub's state is refreshing", async () => {
