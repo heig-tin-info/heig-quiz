@@ -57,6 +57,11 @@ const STATUS: Record<Code, number> = {
   sync_in_progress: 409,
   source_rewritten: 409,
   sync_failed: 502,
+  // *Resync with the set* (M3-15b-2b), and the release waiting for it.
+  released: 409,
+  classroom_archived: 409,
+  needs_confirmation: 409,
+  group_sync_pending: 409,
 };
 
 /** A refusal: `{ error: code, message, ...details }`. */

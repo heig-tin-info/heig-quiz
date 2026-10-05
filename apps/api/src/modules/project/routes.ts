@@ -36,6 +36,7 @@ import {
   ProjectAcceptance,
   ProjectCheckpointParams,
   ProjectCreate,
+  ProjectGroupResync,
   ProjectListQuery,
   ProjectPatch,
   ProjectRepoDeadline,
@@ -207,6 +208,25 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     teacher(onProject, async ({ req, reply, now, scope }) =>
       reply.code(202).send(await service.requestSync(app, config, scope.project, actorOf(req), now, req.log)),
     ),
+  );
+
+  /**
+   * ADR-070 §4, §6 (M3-15b-2b): *Resync with the set* — the copy brought
+   * back in step with its set, stops lifted, its consequences confirmed by
+   * digest (`409 needs_confirmation`); the GitHub part sent to the
+   * `group.sync` job. 204, also when there is nothing to resync.
+   */
+  app.post(
+    "/app/api/projects/:id/groups/resync",
+    session,
+    teacher({ ...onProject, body: ProjectGroupResync }, async ({ req, reply, now, body, scope }) => {
+      const done = await service.resyncGroups(app.db, scope.project.id, { confirm: body.confirm, actor: actorOf(req), userId: req.user!.id, now });
+      if (done) {
+        service.projectsChanged([scope.course.id]);
+        if (done.due) await service.requestGroupSync(app, config, [scope.project.id]);
+      }
+      return reply.code(204).send();
+    }),
   );
 
   // ------------------------------------------------------------ one repository (M3-05a)

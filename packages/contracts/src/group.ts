@@ -170,6 +170,14 @@ export type GroupSetDetail = z.infer<typeof GroupSetDetail>;
  * runs. Named even when GitHub will have nothing to do — no account
  * invited, the App gone — since it changes whose repository and grade it
  * is (product owner, 2026-10-05).
+ *
+ * *Resync with the set* (`POST /app/api/projects/:id/groups/resync`,
+ * M3-15b-2b) answers the same: `frozen` — the group stopped following (its
+ * deadline, or its repository's, applied): its repository and its frozen
+ * score are touched after the deadline; `acceptClosed` (product owner R3) —
+ * a `join` into a group WITHOUT a repository while the project's Accept is
+ * closed: the student will have no repository (`repo` null; `groupId` the
+ * set's group when the resync creates it). Both false for a set's write.
  */
 export const GroupConsequence = z.object({
   projectId: z.uuid(),
@@ -181,6 +189,8 @@ export const GroupConsequence = z.object({
   nom: z.string(),
   prenom: z.string(),
   kind: z.enum(["lose", "join"]),
+  frozen: z.boolean(),
+  acceptClosed: z.boolean(),
 });
 export type GroupConsequence = z.infer<typeof GroupConsequence>;
 

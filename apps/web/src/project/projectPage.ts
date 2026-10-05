@@ -341,6 +341,8 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   sync_in_progress: "project.refusal.syncInProgress",
   source_rewritten: "project.refusal.sourceRewritten",
   sync_failed: "project.refusal.syncFailed",
+  // ADR-070's R2 (M3-15b-2b): a release while a confirmed resync of the groups is applied.
+  group_sync_pending: "project.refusal.groupSyncPending",
 };
 
 /** The dictionary key wording a refusal the page knows, or null (the server's message then). */

@@ -274,6 +274,10 @@ describe("the refusals", () => {
     expect(releaseRefusal(new ApiError(409, { error: "grading_none", message: "" }), project, t)).toBe(
       "project.refusal.gradingNone",
     );
+    // ADR-070's R2: a resync of the groups still applied.
+    expect(releaseRefusal(new ApiError(409, { error: "group_sync_pending", message: "" }), project, t)).toBe(
+      "project.refusal.groupSyncPending",
+    );
     expect(releaseRefusal(new Error("boom"), project, t)).toBe("error.save");
   });
 });

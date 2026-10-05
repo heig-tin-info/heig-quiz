@@ -18,10 +18,13 @@ export interface ProjectAcceptLike {
   distributionFullName: string | null;
 }
 
+/** Whether the project's deadline has passed at `now` (no grace): Accept is closed — also a resync's R3 (ADR-070, M3-15b-2b). */
+export const deadlinePassed = (project: { deadlineAt: Date }, now: Date): boolean => now.getTime() >= project.deadlineAt.getTime();
+
 /** Why `project` cannot be accepted at `now`, or null when it may. */
 export function acceptRefusal(project: ProjectAcceptLike, now: Date): ProjectAcceptRefusal | null {
   if (now.getTime() < project.startAt.getTime()) return "not_started";
-  if (now.getTime() >= project.deadlineAt.getTime()) return "deadline_passed";
+  if (deadlinePassed(project, now)) return "deadline_passed";
   if (project.distributionFullName === null) return "distribution_missing";
   return null;
 }

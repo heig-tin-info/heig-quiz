@@ -287,6 +287,15 @@ export type AuditAction =
    */
   | "project.release"
   /**
+   * *Resync with the set* (ADR-070 §4, §6; merge task M3-15b-2b), subject
+   * the project: `payload.digest` of the consequences confirmed (null when
+   * none needed it), `consequences` (their count), `frozenRepos` (the
+   * frozen repositories they touch, full names), `applied` (a part touching
+   * no repository applied at once), `deferred` (the steps stored for the
+   * `group.sync` job, audited `via: "group.resync"`).
+   */
+  | "project.group_resync"
+  /**
    * A student's Accept (F-PROJ-05, merge task M3-03), subject the
    * `project_repos` row. `accept`: `payload.repo` (the student's own full
    * name), `invitation`, `protected` (false: a plan without rulesets);
@@ -385,14 +394,15 @@ export type AuditAction =
    * `project_repos` row — a group's, or (a revocation) a student's own.
    * `repo_invite`: `payload.repo`, `enrollmentId`, `login`, `invitation`
    * (`pending` | `accepted`), `via` (`accept`, `link`, `group.sync` — a
-   * set's move, M3-15b-2 —, `reconcile` — the daily re-invite, M3-06; a
-   * resend audits `project_repo.invite_resent`);
+   * set's move, M3-15b-2 —, `group.resync` — a resync's, M3-15b-2b —,
+   * `reconcile` — the daily re-invite, M3-06; a resend audits
+   * `project_repo.invite_resent`);
    * `repo_revoke`: `payload.repo`, `enrollmentId`, `login` (null: none was
    * ever invited), `outcome` (`ok` | `skipped`), `reason` of a skip
    * (`app_not_installed`, `repo_deleted`, `not_provisioned`,
    * `account_gone`, `not_invited`), `invitationsCancelled` of a
    * revocation, `via` (`roster.remove`, `roster.unclaim`, `roster.update`,
-   * `roster.self_enroll`, `group.sync`).
+   * `roster.self_enroll`, `group.sync`, `group.resync`).
    */
   | "project_group.repo_invite"
   | "project_group.repo_revoke"

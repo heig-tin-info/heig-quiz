@@ -52,6 +52,7 @@ import { isRateLimited, readRepoLiveState, type LiveRead } from "../../github/me
 import { projectInstallation } from "../github/service.js";
 import { isLive, releaseCounts, repoDeadlineState } from "./deadline.js";
 import { reposWithAccessToRevoke } from "./groupCopy.js";
+import { groupsDrifted } from "./groupResync.js";
 import { seatRepos } from "./groupRepos.js";
 import { forEachLimit } from "./lease.js";
 import { studentRepos, type RepoRow } from "./repos.js";
@@ -412,6 +413,7 @@ export async function projectDetail(
   return {
     ...(await projectSummary(db, project, now)),
     releasedAt: isoOrNull(project.releasedAt),
+    groupsDrifted: await groupsDrifted(db, project, now),
     primaryAction: projectPrimaryAction({
       state: project.state,
       archived: project.archivedAt !== null,

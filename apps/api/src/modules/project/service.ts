@@ -44,6 +44,7 @@
  * that reach a group with a repository left to the `group.sync` job
  * (`groupSync.ts`, its own lease) after their consequences are confirmed
  * (`ConfirmationNeeded`), and *access to revoke* on the project page.
+ * From M3-15b-2b: *Resync with the set* and the drift (`groupResync.ts`).
  */
 export { acceptProject } from "./accept.js";
 export { createCheckpoint, deleteCheckpoint, listCheckpoints } from "./checkpoints.js";
@@ -53,6 +54,7 @@ export { overrideScore, releaseProject } from "./grades.js";
 export { projectsChanged } from "./events.js";
 export { ConfirmationNeeded, copiesBefore, followingCopies, RepoGroupTouched, setFrozen, stepCopies } from "./groupCopy.js";
 export { requestGroupSync } from "./groupSync.js";
+export { resyncGroups } from "./groupResync.js";
 export { inviteOnGithubLink, releaseLine, revokeEnrollmentAccess, RevokeFailed, type RevokeVia } from "./access.js";
 export { resendInvitation } from "./invitation.js";
 export { reenableProtection } from "./protection.js";

@@ -764,6 +764,8 @@ function detailOf(p: MockProject): ProjectDetail {
     },
     // Stale only when there was live state to read.
     liveStale: !p.read && live.length > 0,
+    // The mock's copies never stop following their set (M3-16b draws the drift).
+    groupsDrifted: false,
     rows,
   };
   p.read = true;
