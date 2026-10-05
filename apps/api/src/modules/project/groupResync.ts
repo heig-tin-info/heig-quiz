@@ -79,11 +79,12 @@ export async function resyncGroups(db: Db, projectId: string, input: ResyncInput
     const [room] = await tx.select({ archivedAt: classrooms.archivedAt }).from(classrooms).where(eq(classrooms.id, named.classroomId)).for("share");
     const { project, frame } = await lockSync(tx, projectId, now);
     if (!project) throw new DomainError("not_found", 404, "No such project");
-    if (project.state === "draft") return null;
     if (!project.groupMode || project.groupSetId === null) throw new ProjectError("no_group_set", "The project follows no group set");
+    if (room && room.archivedAt !== null) throw new ProjectError("classroom_archived", "The classroom is archived: its group sets are read-only");
+    // A draft's copy follows its set: nothing to resync.
+    if (project.state === "draft") return null;
     if (project.archivedAt !== null) throw new ProjectError("project_archived", "An archived project's groups are not resynced");
     if (project.releasedAt !== null) throw new ProjectError("released", "A released project's groups are not resynced");
-    if (room && room.archivedAt !== null) throw new ProjectError("classroom_archived", "The classroom is archived: its group sets are read-only");
 
     const found = await copyWork(tx, project.id, frame);
     const { now: applied, added } = resyncDelta(found);

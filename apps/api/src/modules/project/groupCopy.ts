@@ -89,6 +89,7 @@ import {
 } from "../../db/schema.js";
 import { assertNoLiveGrant, type GrantRow } from "./access.js";
 import type { RepoRow } from "./repos.js";
+import type { ProjectRow } from "./views.js";
 
 /** A set's write would delete a copy group with a repository of each of `projectIds`: the group module's `409 has_repo`. */
 export class RepoGroupTouched extends Error {
@@ -319,32 +320,33 @@ export async function copiesBefore(tx: Tx, setId: string, following: readonly { 
 export async function describeConsequences(tx: Tx, added: (PlanConsequence & { projectId: string })[]): Promise<GroupConsequences> {
   const ids = [...new Set(added.map((c) => c.groupId))];
   const copied = await tx
-    .select({ id: projectGroups.id, name: projectGroups.name, projectName: projects.name, repo: projectRepos.fullName, stoppedAt: projectGroups.stoppedAt })
+    .select({ id: projectGroups.id, name: projectGroups.name, repo: projectRepos.fullName, stoppedAt: projectGroups.stoppedAt })
     .from(projectGroups)
-    .innerJoin(projects, eq(projects.id, projectGroups.projectId))
     .leftJoin(projectRepos, eq(projectRepos.groupId, projectGroups.id))
     .where(inArray(projectGroups.id, ids));
-  const groupOf = new Map<string, { name: string; projectName?: string; repo: string | null; stoppedAt: Date | null }>(copied.map((g) => [g.id, g]));
+  const groupOf = new Map<string, { name: string; repo: string | null; stoppedAt: Date | null }>(copied.map((g) => [g.id, g]));
   const fresh = ids.filter((id) => !groupOf.has(id));
   if (fresh.length > 0) {
     const ofSet = await tx.select({ id: studentGroups.id, name: studentGroups.name }).from(studentGroups).where(inArray(studentGroups.id, fresh));
     for (const g of ofSet) groupOf.set(g.id, { name: g.name, repo: null, stoppedAt: null });
   }
-  const projectNameOf = async (projectId: string) =>
-    (await tx.select({ name: projects.name }).from(projects).where(eq(projects.id, projectId)))[0]!.name;
+  const named = await tx
+    .select({ id: projects.id, name: projects.name })
+    .from(projects)
+    .where(inArray(projects.id, [...new Set(added.map((c) => c.projectId))]));
+  const projectOf = new Map(named.map((p) => [p.id, p.name]));
   const lines = await tx
     .select({ id: enrollments.id, nom: enrollments.nom, prenom: enrollments.prenom })
     .from(enrollments)
     .where(inArray(enrollments.id, [...new Set(added.map((c) => c.enrollmentId))]));
   const lineOf = new Map(lines.map((l) => [l.id, l]));
   const keyed = added.map((c) => ({ c, key: `${c.projectId}:${consequenceKey(c)}` })).sort((a, b) => (a.key < b.key ? -1 : 1));
-  const consequences: GroupConsequence[] = [];
-  for (const { c } of keyed) {
+  const consequences = keyed.map(({ c }): GroupConsequence => {
     const group = groupOf.get(c.groupId)!;
     const line = lineOf.get(c.enrollmentId)!;
-    consequences.push({
+    return {
       projectId: c.projectId,
-      projectName: group.projectName ?? (await projectNameOf(c.projectId)),
+      projectName: projectOf.get(c.projectId)!,
       groupId: c.groupId,
       groupName: group.name,
       repo: c.acceptClosed ? null : group.repo,
@@ -354,8 +356,8 @@ export async function describeConsequences(tx: Tx, added: (PlanConsequence & { p
       kind: c.kind,
       frozen: group.stoppedAt !== null,
       acceptClosed: c.acceptClosed === true,
-    });
-  }
+    };
+  });
   const digest = createHash("sha256")
     .update(JSON.stringify(keyed.map((k) => k.key)))
     .digest("hex");
@@ -509,8 +511,6 @@ export interface WorkFrame {
   stored: readonly string[];
   acceptClosed: boolean;
 }
-
-type ProjectRow = typeof projects.$inferSelect;
 
 /** The frame a project's row gives the copy's work: Accept closed is its deadline passed (R3). */
 export const frameOf = (project: ProjectRow, now: Date): WorkFrame => ({
