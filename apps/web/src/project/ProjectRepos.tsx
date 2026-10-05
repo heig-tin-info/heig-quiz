@@ -216,16 +216,18 @@ export function ProjectRepos({
     { key: "state", label: t("project.col.state"), sortable: false },
   ];
   const noneAccepted = project.state === "published" && entries.every((e) => e.repo === null);
+  /** The row the tour points at to say a row opens its sheet: the first one that has a repository. */
+  const firstOpenable = sorted.findIndex((e) => e.repo !== null);
 
   return (
-    <section aria-labelledby="project-repos" className="space-y-3">
+    <section aria-labelledby="project-repos" className="space-y-3" data-coach="project.repos">
       {heading}
       {noneAccepted ? <p className="text-sm text-fg-muted">{t("project.repos.none")}</p> : null}
       <Card className={`${T.container} overflow-x-auto`}>
         <table className={T.table}>
           <TableHead columns={columns} sort={sort} onToggle={toggle} />
           <tbody>
-            {sorted.map((entry) => {
+            {sorted.map((entry, index) => {
               const { repo } = entry;
               const opens = repo ? () => onOpen(repo.id) : undefined;
               const own = repo !== null && repo.deadlineAt !== null;
@@ -239,6 +241,7 @@ export function ProjectRepos({
                   )}
                   onClick={opens}
                   {...(opens ? pressable(opens, "row") : {})}
+                  {...(index === firstOpenable ? { "data-coach": "project.repo" } : {})}
                 >
                   <td className={T.td}>
                     <IdentityCell entry={entry} groupMode={project.groupMode} />

@@ -165,7 +165,7 @@ export function ProjectCheckpoints({ project }: { project: ProjectDetail }) {
   };
 
   return (
-    <section aria-labelledby="project-checkpoints" className="space-y-3">
+    <section aria-labelledby="project-checkpoints" className="space-y-3" data-coach="project.checkpoints">
       <SectionHeading
         icon={Flag}
         title={<span id="project-checkpoints">{t("project.checkpoints")}</span>}

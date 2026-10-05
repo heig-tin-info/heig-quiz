@@ -109,6 +109,53 @@ describe("buildCommands: who sees what", () => {
     expect(ids(student).some((id) => id.startsWith(CLASSROOM_COMMAND_PREFIX))).toBe(false);
   });
 
+  it("lists the projects it is given, by name, and opens one", () => {
+    const navigate = vi.fn();
+    const commands = buildCommands(
+      makeContext({ navigate, projects: [{ id: "p1", title: "Labo 2", hint: "PRG1 — PRG1-2026" }] }),
+    );
+    const project = need(commands, "project:p1");
+    expect(project.label).toBe("Open the project Labo 2");
+    expect(project.hint).toBe("PRG1 — PRG1-2026");
+    expect(filterCommands("labo 2", commands).map((c) => c.id)).toContain("project:p1");
+    project.run();
+    expect(navigate).toHaveBeenCalledWith({ view: "project", id: "p1" });
+    expect(ids(buildCommands(makeContext()))).not.toContain("project:p1");
+  });
+
+  it("offers the Journal and Groups tabs of the classroom on screen, and only there", () => {
+    const navigate = vi.fn();
+    const onRoom = buildCommands(makeContext({ navigate, route: { view: "classroom", id: "r1" } }));
+    need(onRoom, "nav:journal").run();
+    need(onRoom, "nav:groups").run();
+    expect(navigate).toHaveBeenCalledWith({ view: "classroomJournal", id: "r1" });
+    expect(navigate).toHaveBeenCalledWith({ view: "classroomGroups", id: "r1" });
+    const onHome = ids(buildCommands(makeContext()));
+    expect(onHome).not.toContain("nav:journal");
+    expect(onHome).not.toContain("nav:groups");
+    // A student reaches the journal, not a Groups tab that may not exist for them.
+    const student = ids(
+      buildCommands(
+        makeContext({ me: makeMe({ role: "student" }), teacherUi: false, route: { view: "classroom", id: "r1" } }),
+      ),
+    );
+    expect(student).toContain("nav:journal");
+    expect(student).not.toContain("nav:groups");
+  });
+
+  it("names the new entries in French", () => {
+    const commands = buildCommands(
+      makeContext({
+        locale: "fr",
+        route: { view: "classroomGroups", id: "r1" },
+        projects: [{ id: "p1", title: "Labo 2", hint: "" }],
+      }),
+    );
+    expect(need(commands, "project:p1").label).toBe("Ouvrir le projet Labo 2");
+    expect(need(commands, "nav:journal").label).toBe("Ouvrir le journal de cette classe");
+    expect(need(commands, "nav:groups").label).toBe("Ouvrir les groupes de cette classe");
+  });
+
   it("leaves out the classrooms of a course the teacher hid (#155)", () => {
     const hidden = makeCourseSummary({
       id: "k9",

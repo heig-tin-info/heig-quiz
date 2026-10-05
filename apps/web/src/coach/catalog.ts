@@ -261,6 +261,78 @@ export const TOURS: readonly CoachTour[] = [
       },
     ],
   },
+  // M7-01. The project page is one address and two pages (a student gets
+  // theirs): each audience has its own walk.
+  {
+    id: "project",
+    views: ["project"],
+    audience: "teacher",
+    steps: [
+      {
+        id: "project.primary",
+        target: at("project.primary"),
+        title: "coach.project.primary.title",
+        body: "coach.project.primary.body",
+        placement: "bottom",
+      },
+      {
+        id: "project.repos",
+        target: at("project.repos"),
+        title: "coach.project.repos.title",
+        body: "coach.project.repos.body",
+        placement: "top",
+      },
+      {
+        id: "project.repo",
+        target: at("project.repo"),
+        title: "coach.project.repo.title",
+        body: "coach.project.repo.body",
+        placement: "bottom",
+      },
+      {
+        id: "project.checkpoints",
+        target: at("project.checkpoints"),
+        title: "coach.project.checkpoints.title",
+        body: "coach.project.checkpoints.body",
+        placement: "top",
+      },
+      {
+        id: "project.sync",
+        target: at("project.sync"),
+        title: "coach.project.sync.title",
+        body: "coach.project.sync.body",
+        placement: "bottom",
+      },
+    ],
+  },
+  {
+    id: "sproj",
+    views: ["project"],
+    audience: "student",
+    steps: [
+      {
+        id: "sproj.action",
+        target: at("sproj.action"),
+        title: "coach.sproj.action.title",
+        body: "coach.sproj.action.body",
+        placement: "bottom",
+      },
+      {
+        id: "sproj.score",
+        target: at("sproj.score"),
+        title: "coach.sproj.score.title",
+        body: "coach.sproj.score.body",
+        placement: "top",
+      },
+      {
+        id: "sproj.deadline",
+        target: at("sproj.deadline"),
+        title: "coach.sproj.deadline.title",
+        body: "coach.sproj.deadline.body",
+        placement: "bottom",
+      },
+    ],
+  },
 ];
 
 /**

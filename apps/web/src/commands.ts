@@ -2,6 +2,8 @@ import {
   BarChart3,
   BookOpen,
   CalendarRange,
+  GitBranch,
+  Users,
   ClipboardCheck,
   CircleHelp,
   Code2,
@@ -26,6 +28,7 @@ import { fuzzyFilter } from "./fuzzy";
 import { gradingLinks } from "./grading";
 import { DOCS_URL, SOURCES_URL } from "./Header";
 import { LOCALES, type Locale, type TFunction } from "./i18n";
+import type { PaletteProject } from "./paletteProjects";
 import { evaluationInView, type Route } from "./router";
 import { screenCommands } from "./screenCommands";
 import { homeLook } from "./student/BottomNav";
@@ -71,6 +74,11 @@ export interface CommandContext {
   courses: CourseSummary[];
   /** The teacher's question pools; absent for a student (WP7). */
   pools?: PoolSummary[];
+  /**
+   * The projects the viewer may open: the staff's from their Activities, a
+   * student's from their own home (`paletteProjects.ts`), never the other's.
+   */
+  projects?: PaletteProject[];
   themeChoice: ThemeChoice;
   resolvedTheme: Theme;
   setThemeChoice: (c: ThemeChoice) => void;
@@ -102,6 +110,26 @@ const POOL_COMMAND_PREFIX = "pool:";
  * come for. Typing searches every classroom, so none is out of reach.
  */
 export const EMPTY_QUERY_CLASSROOM_CAP = 6;
+
+/** Id prefix of the per-project commands (M7-01). */
+const PROJECT_COMMAND_PREFIX = "project:";
+
+/** The classroom a classroom screen shows, or null: the Journal and Groups jumps are about it. */
+function classroomInView(route: Route): string | null {
+  switch (route.view) {
+    case "classroom":
+    case "classroomSettings":
+    case "classroomJournal":
+    case "classroomGroups":
+    case "classroomGrades":
+      return route.id;
+    case "groupSet":
+    case "projectNew":
+      return route.classroomId;
+    default:
+      return null;
+  }
+}
 
 /** Opens an external page without handing it a reference to this one. */
 function openExternal(url: string) {
@@ -211,6 +239,45 @@ export function buildCommands(ctx: CommandContext): Command[] {
           run: () => navigate({ view: "classroom", id: room.id }),
         });
       }
+    }
+  }
+
+  // M7-01: the projects the viewer may open, by name, and the Journal and
+  // Groups tabs of the classroom on screen. Not one jump per classroom: that
+  // would be a wall of rows for tabs that exist only when a journal or a group
+  // set does, and the tab's own page falls back to the classroom when it is
+  // absent. A student has no Groups jump: their page of it exists only while
+  // a set is open to them.
+  for (const project of ctx.projects ?? []) {
+    commands.push({
+      id: `${PROJECT_COMMAND_PREFIX}${project.id}`,
+      label: t("palette.openProject", { name: project.title }),
+      hint: project.hint,
+      keywords: "project projet github",
+      icon: GitBranch,
+      group: "navigate",
+      run: () => navigate({ view: "project", id: project.id }),
+    });
+  }
+  const roomInView = classroomInView(ctx.route);
+  if (roomInView !== null) {
+    commands.push({
+      id: "nav:journal",
+      label: t("palette.openJournal"),
+      icon: BookOpen,
+      group: "navigate",
+      keywords: "journal notes pages",
+      run: () => navigate({ view: "classroomJournal", id: roomInView }),
+    });
+    if (ctx.teacherUi) {
+      commands.push({
+        id: "nav:groups",
+        label: t("palette.openGroups"),
+        icon: Users,
+        group: "navigate",
+        keywords: "groups groupes teams équipes",
+        run: () => navigate({ view: "classroomGroups", id: roomInView }),
+      });
     }
   }
 

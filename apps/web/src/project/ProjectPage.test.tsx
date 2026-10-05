@@ -18,6 +18,7 @@ import {
   row,
 } from "../test/project-fixtures";
 import { fail, makeQueryClient, mockFetch, noContent, ok, renderWithProviders, type RouteHandler } from "../test/render";
+import { TOURS } from "../coach/catalog";
 import { ProjectPage } from "./ProjectPage";
 
 /*
@@ -187,6 +188,31 @@ describe("the one primary action", () => {
     expect(within(alert).getByText("Martin Benoît")).toBeInTheDocument();
     // No set to place them in: no link.
     expect(within(alert).queryByRole("link")).toBeNull();
+  });
+});
+
+describe("the teacher's tour (M7-01)", () => {
+  it("finds every step's anchor on a draft whose source is ahead, with a repository to open", async () => {
+    routes(
+      makeDraft({
+        rows: [row(1, makeRepo(1)), row(2, null)],
+        sync: { ahead: { pushedAt: PAST, commits: 2 }, inProgress: false, syncedAt: null, last: null },
+      }),
+    );
+    renderPage();
+    await screen.findByRole("button", { name: "Sync" });
+    const tour = TOURS.find((t) => t.id === "project")!;
+    expect(tour.audience).toBe("teacher");
+    for (const step of tour.steps) expect(document.querySelector(step.target), step.id).not.toBeNull();
+  });
+
+  it("points the primary step at Sync when Sync is the primary action, and keeps one anchor each", async () => {
+    routes(makeProject({ primaryAction: "sync", sync: { ahead: { pushedAt: PAST, commits: 1 }, inProgress: false, syncedAt: null, last: null } }));
+    renderPage();
+    const button = await screen.findByRole("button", { name: "Sync" });
+    expect(document.querySelectorAll('[data-coach="project.primary"]')).toHaveLength(1);
+    expect(button).toHaveAttribute("data-coach", "project.primary");
+    expect(document.querySelector('[data-coach="project.sync"]')).toBeNull();
   });
 });
 
