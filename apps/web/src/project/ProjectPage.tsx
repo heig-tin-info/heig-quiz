@@ -284,7 +284,9 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
     <Button
       variant={variant}
       data-coach={variant === "primary" ? "project.primary" : "project.sync"}
-      onClick={() => syncNow.mutate()} loading={syncNow.isPending || sync.inProgress}>
+      onClick={() => syncNow.mutate()}
+      loading={syncNow.isPending || sync.inProgress}
+    >
       <RefreshCw /> {t(sync.inProgress ? "project.sync.inProgress" : "project.sync")}
     </Button>
   );
@@ -340,11 +342,20 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
           <span className="flex flex-wrap items-center gap-2">
             {offersSync(project) ? syncButton("secondary") : null}
             {project.primaryAction === "publish" ? (
-              <Button data-coach="project.primary" onClick={() => publish.mutate()} loading={publish.isPending}>
+              <Button
+                data-coach="project.primary"
+                onClick={() => publish.mutate()}
+                loading={publish.isPending}
+              >
                 <Rocket /> {t("question.publish")}
               </Button>
             ) : project.primaryAction === "release" ? (
-              <Button data-coach="project.primary" onClick={() => void onRelease()} loading={release.isPending} disabled={releaseWaits}>
+              <Button
+                data-coach="project.primary"
+                onClick={() => void onRelease()}
+                loading={release.isPending}
+                disabled={releaseWaits}
+              >
                 <Send /> {t(again ? "project.release.again" : "project.release")}
               </Button>
             ) : project.primaryAction === "sync" ? (

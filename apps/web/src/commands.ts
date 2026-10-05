@@ -2,12 +2,11 @@ import {
   BarChart3,
   BookOpen,
   CalendarRange,
-  GitBranch,
-  Users,
-  ClipboardCheck,
   CircleHelp,
+  ClipboardCheck,
   Code2,
   FolderTree,
+  GitBranch,
   GraduationCap,
   Languages,
   Library,
@@ -18,6 +17,7 @@ import {
   Settings as SettingsIcon,
   ShieldCheck,
   Sun,
+  Users,
   Vote,
 } from "lucide-react";
 
