@@ -518,7 +518,8 @@ export type ProjectAcceptance = z.infer<typeof ProjectAcceptance>;
  *   - `app_not_installed` — Quiz's App no longer acts on the project's
  *     organization; `distribution_missing` — nothing to hand out;
  *   - `provision_in_progress` — another Accept of the same repository is
- *     under way: try again in a moment;
+ *     under way, or (M3-15b-2) the student's move out of their group waits
+ *     for GitHub: try again in a moment;
  *   - `repo_name_taken` — `<slug>-<login>` names a repository of the
  *     organization this Accept did not make: nothing was done to it;
  *   - `provision_failed` — GitHub failed, or could not tell the account's
@@ -788,6 +789,13 @@ export const ProjectRepoView = ProjectRepoDeadlineState.extend({
     deleted: z.boolean(),
     changedAfterRelease: z.boolean(),
   }),
+  /**
+   * *Access to revoke* (F-PROJ-13, ADR-070 §4; M3-15b-2): a member the set
+   * moved out of this group still holds their access, GitHub having
+   * refused its revocation; the `group.sync` job retries it. Always sent
+   * by the API; optional until the web's mock carries it (M3-16b).
+   */
+  accessToRevoke: z.boolean().optional(),
 });
 export type ProjectRepoView = z.infer<typeof ProjectRepoView>;
 

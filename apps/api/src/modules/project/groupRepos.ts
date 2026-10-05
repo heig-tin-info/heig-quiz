@@ -14,7 +14,7 @@
  * (`pickStudentRepo`, `isLiveIndividualRepo` of `@quiz/domain`). Quiz's own
  * Accept never makes one in a group project.
  */
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 
 import { isLiveIndividualRepo, pickStudentRepo } from "@quiz/domain";
 
@@ -36,6 +36,15 @@ export async function copyGroupOf(db: Db | Tx, projectId: string, enrollmentId: 
     .where(and(eq(projectGroupMembers.projectId, projectId), eq(projectGroupMembers.enrollmentId, enrollmentId)))
     .limit(1);
   return row?.group ?? null;
+}
+
+/** Whether roster line `enrollmentId`'s move out of its copy group of `projectId` waits for GitHub (`departing_at`, M3-15b-2). */
+export async function isDeparting(db: Db | Tx, projectId: string, enrollmentId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: projectGroupMembers.id })
+    .from(projectGroupMembers)
+    .where(and(eq(projectGroupMembers.projectId, projectId), eq(projectGroupMembers.enrollmentId, enrollmentId), isNotNull(projectGroupMembers.departingAt)));
+  return row !== undefined;
 }
 
 /** Where a copy group's repository row is: by the partial UNIQUE (project, group). */
@@ -106,8 +115,9 @@ export interface RepoMember {
  * Who reads `repo` — and whom an invitation of it may reach (those with a
  * link): its student's claimed student seat, or the members of a group's
  * copy group with an account, minus a holder of a live individual
- * repository of the project, who keeps theirs. Never the group
- * repository's creator for having created it (N-SEC-20).
+ * repository of the project, who keeps theirs, and minus a member whose
+ * departure waits for GitHub (M3-15b-2: never invited again). Never the
+ * group repository's creator for having created it (N-SEC-20).
  */
 export async function repoMembers(db: Db | Tx, repo: RepoRow, classroomId: string): Promise<RepoMember[]> {
   const columns = { enrollmentId: enrollments.id, userId: enrollments.userId, account: githubAccounts };
@@ -124,7 +134,7 @@ export async function repoMembers(db: Db | Tx, repo: RepoRow, classroomId: strin
     .from(projectGroupMembers)
     .innerJoin(enrollments, and(eq(enrollments.id, projectGroupMembers.enrollmentId), eq(enrollments.staff, false)))
     .leftJoin(githubAccounts, eq(githubAccounts.userId, enrollments.userId))
-    .where(eq(projectGroupMembers.groupId, repo.groupId))
+    .where(and(eq(projectGroupMembers.groupId, repo.groupId), isNull(projectGroupMembers.departingAt)))
     .orderBy(enrollments.id);
   const holders = new Set(
     (await db.select().from(projectRepos).where(eq(projectRepos.projectId, repo.projectId))).filter(isLiveIndividualRepo).map((r) => r.userId),

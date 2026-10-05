@@ -29,7 +29,10 @@ and Accept answers `409 no_group` for any group project (M3-03).
 
 Amended 2026-10-05 (product owner, merge task M3-15b-1): decisions 4 and
 5 — the first deadline stops a group, and what "nothing to revoke" means;
-see *Amendment of 2026-10-05* at the end of the Decision.
+see *Amendment of 2026-10-05* at the end of the Decision. Amended again the
+same day (product owner, merge task M3-15b-2): decisions 4 and 6 — *Resync*
+after the deadline, and a confirmation for every move touching a group with
+a repository; see *Second amendment of 2026-10-05*.
 
 ## Context
 
@@ -271,6 +274,26 @@ meaning, which ADR-048 deliberately does not use.
   job, the per-group stop, `needs_confirmation`, *access to revoke*,
   *Resync*), a set's write whose step would reach a copy group with a
   repository is refused whole, `409 has_repo`, and a rename still follows.
+
+### Second amendment of 2026-10-05 (product owner, M3-15b-2)
+
+- **§4, *Resync with the set*** is allowed after the deadline — its
+  confirmation names every frozen repository it touches — and refused once
+  the project is released (`409 released`). (Delivered by M3-15b-2b.)
+- **§6, what needs a confirmation.** Every place or unplace touching a
+  following group that has a repository needs the confirmation, even when
+  GitHub will have nothing to do (no account invited, the App gone): it
+  changes whose repository and grade it is. The `group.sync` job then audits
+  the revocation skipped (§5's P1).
+- **How it is built** (orchestrator, M3-15b-2a): a move touching a group
+  with a repository is always the job's; the set's transaction applies the
+  rest, marks the departures on the copy (`departing_at`, which no
+  invitation passes) and the project due (`group_sync_due_at`, a third
+  lease `group_sync_job_at`). The consequences confirmed are those the
+  write ADDS to the ones already waiting, by a SHA-256 digest of their
+  sorted (project, group, roster line, kind). A failed pass retries after a
+  backoff doubling from 30 s up to an hour. Each copy group's stop is
+  stored (`project_groups.stopped_at`).
 
 ## Consequences
 

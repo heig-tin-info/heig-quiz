@@ -2617,16 +2617,91 @@ stops a group) are ADR-070's amendment and F-PROJ-06/F-PROJ-17's wording.
   `planReachesRepoGroup`.
 
 #### M3-15b-2 — The follow on GitHub: `group.sync`, the per-group stop, confirmations
+Split in two PRs (orchestrator, 2026-10-05); the product owner's PO1–PO2
+are ADR-070's second amendment of 2026-10-05.
+
+#### M3-15b-2a — Per-group stop, the `group.sync` job, `needs_confirmation`, *access to revoke*
 - **Depends on**: M3-15b-1.
-- **Create**: the per-group stop (P2: the first of the project's deadline
-  and the repository's own); the `group.sync` job (one lease per project,
-  the deadlines re-read in its transaction; a departure waits for GitHub,
-  an arrival is invited) replacing M3-15b-1's `409 has_repo` for a member's
-  move; the *access to revoke* flag on a repository's row; *Resync with the
-  set*; `409 needs_confirmation` with the consequences and their digest on
-  every membership write that reaches GitHub.
-- **Tests**: a move between two following groups, into a stopped one, a
-  refused revocation retried, two projects on one set, a stale digest.
+- **Goal**: the per-group stop (the first of the project's deadline and the
+  repository's own); the `group.sync` job (one lease per project, the
+  stops re-read in its transaction; a departure waits for GitHub, an
+  arrival is invited) replacing M3-15b-1's `409 has_repo` for a member's
+  move; `409 needs_confirmation` with the consequences and their digest;
+  the *access to revoke* flag.
+- **As delivered** (branch `merge/M3-15b2a-group-sync`): migration
+  `0068_group_sync` (`projects.group_sync_due_at`, `group_sync_job_at`,
+  `group_sync_failures`, a partial index on the due mark;
+  `project_groups.stopped_at`, backfilled from the first of
+  `groups_stopped_at` and the repository's `deadline_applied_at`;
+  `project_group_members.departing_at`, `revoke_failed_at`,
+  `revoke_failed_reason`). `@quiz/domain`: `groupSyncPlan` per group (a
+  stopped group is never deleted, renamed nor moved, its name and slug
+  reserved; a move with one stopped end is held), `splitPlan` (what the
+  set's transaction applies, what waits for the job, the consequences
+  `lose`/`join`, the groups with a repository a plan would delete) and
+  `consequenceDelta`; `planReachesRepoGroup` removed. `Q:modules/project/
+  groupCopy.ts`: `copiesBefore` (read under the set's lock before the
+  write) and `stepCopies` (the delta of consequences, its SHA-256 digest
+  over the sorted (project, group, line, kind), `ConfirmationNeeded`
+  unless `confirm` is it; the rest applied, the departures marked
+  `departing_at`, the project due), `stopGroups` (tick step 3 for a group
+  whose repository's deadline is applied — the projects concerned locked
+  FOR UPDATE first, in id order, with those whose own deadline is due —,
+  step 2 and the archive for every group; a stop drops the group's pending
+  departures and flags), and the job's steps under its locks (set FOR
+  SHARE, project FOR UPDATE, the member row FOR UPDATE):
+  `syncSteps`, `completeDeparture` (refused while an account of the line
+  was recorded since the revocation; the set having put the student back:
+  kept and invited again; the project stopped meanwhile: the departure
+  completes, the arrival skipped), `completeArrival`, `settleSync` (the due
+  mark cleared, kept, or moved later: 30 s doubling up to an hour).
+  `Q:modules/project/groupSync.ts`: `runGroupSyncJob` (its own frame on
+  `heldLease`, since it must run without the App: P1), `requestGroupSync`
+  (sent after a member's place commits), ticker step 7, queue `group.sync`
+  (`jobs.ts`); without a queue nothing sends it and the moves wait.
+  `access.ts`: `recordGrant` also locks the line's member row FOR SHARE
+  and records nothing for a non-member or a departing one (Accept answers
+  `409 provision_in_progress`, the link and the resends skip them);
+  `revokeDeparture` (one repository, marked before GitHub, `via:
+  "group.sync"`, `not_invited` when none was recorded); `revocationClient`
+  and `ProvisioningUnderWay` (a revocation during a first provisioning is
+  retried, unflagged). `repoMembers` leaves out departing members.
+  Contracts: `confirm?` on `GroupMemberPut`, `GroupConsequence(s)`,
+  `needs_confirmation` in `GROUP_REFUSALS`, `accessToRevoke` on
+  `ProjectRepoView` (optional until the web's mock carries it, M3-16b).
+  Audit: the set's writes name `payload.deferred`; `repo_revoke` and
+  `repo_invite` take `via: "group.sync"`. `has_repo` stays for deleting a
+  set group a following copy holds with a repository. Hints after a pass:
+  the course's staff and the moved students' `user:` topics. Known gap: a
+  roster removal racing a job between its revocation's mark and GitHub's
+  refusal finds the grant marked revoked and proceeds; the line's grant
+  rows go with it, so the access GitHub kept is only in the job's error
+  log.
+- **Tests**: `groupSync.db.test.ts` (16): the consequences and their
+  digest, a wrong and a stale digest, writes that add none (unrelated, a
+  move back); a move between two following groups (revocation before
+  invitation, audits), an arrival, the P1 skips, a refused revocation
+  (flag, backoff, retry), two projects on one set, a crashed lease taken
+  over, a roster removal while a move waits; Accept, link and resends of a
+  departing student refused; the stop between the revocation and the copy
+  write, the student put back meanwhile, an account recorded since the
+  revocation; a repository's earlier deadline stopping its group for good,
+  the backfill. `groupRepos.db.test.ts`: `needs_confirmation` replaces
+  `has_repo` for moves; a confirmed move during the first provisioning is
+  never invited. Domain: the stopped group, `splitPlan`,
+  `consequenceDelta`. The shared world is `Q:modules/project/
+  groupTesting.ts`.
+- **For M3-16b**: word `needs_confirmation` (its `GroupConsequences`) in
+  the set's page and `accessToRevoke` on the project page's row.
+
+#### M3-15b-2b — *Resync with the set* and the drift
+- **Depends on**: M3-15b-2a.
+- **Goal**: the drift of a stopped copy (the project page), *Resync with
+  the set* through the same confirmation (PO1: allowed after the deadline,
+  naming every frozen repository it touches; `409 released` once the
+  project is released), as a durable intent the job applies.
+- **Tests**: a resync after the deadline, refused after the release, its
+  confirmation naming the frozen repositories.
 
 ### M3-16 — Groups (web)
 Split in two PRs (orchestrator, 2026-10-05): what the API of M3-15a

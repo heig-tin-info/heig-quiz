@@ -206,8 +206,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   if (githubApp(config)) await app.register(githubPlugin, { config });
   // Projects drive GitHub through the App: no App, no project route (M3-02).
   if (githubApp(config)) await app.register(projectPlugin, { config });
-  // A classroom's group sets touch no repository (ADR-070, M3-15a): always.
-  await app.register(groupPlugin);
+  // A classroom's group sets (ADR-070): always; their moves on GitHub need the App (M3-15b-2).
+  await app.register(groupPlugin, { config });
   await app.register(poolPlugin, { config });
   await app.register(pollPlugin, { config });
   if (app.kioskAttestor) await app.register(kioskPlugin, { config });

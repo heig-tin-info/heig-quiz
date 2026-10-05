@@ -37,7 +37,7 @@ import { purgeProjectReceipts, type InstalledOrg } from "../github/service.js";
 import { DomainError } from "../http.js";
 import { projectDeadlineMoved, rescheduleCheckpoints, ts } from "./deadline.js";
 import { ProjectError } from "./errors.js";
-import { replaceGroupCopy } from "./groupCopy.js";
+import { replaceGroupCopy, stopGroups } from "./groupCopy.js";
 import { announcePublished } from "./notify.js";
 import { classroomClient, fetchSource, type Source } from "./sources.js";
 import type { ProjectRow } from "./views.js";
@@ -472,6 +472,7 @@ export async function setProjectArchived(
       )
       .where(eq(projects.id, project.id))
       .returning();
+    if (archived) await stopGroups(tx, eq(projectGroups.projectId, project.id), now);
     await audit(tx, {
       ...actor,
       action: archived ? "project.archive" : "project.unarchive",

@@ -158,6 +158,18 @@ export const projects = pgTable(
      */
     dispatchJobAt: timestamp("dispatch_job_at", { withTimezone: true }),
     /**
+     * The copy has moves waiting for GitHub (ADR-070 §4, M3-15b-2): the
+     * `group.sync` job may run from then on. Set to now by a set's write
+     * that leaves it a departure or an arrival of a group with a
+     * repository; cleared by the job once nothing waits; moved later by a
+     * failed pass (a capped backoff, `group_sync_failures`).
+     */
+    groupSyncDueAt: timestamp("group_sync_due_at", { withTimezone: true }),
+    /** The lease of the project's `group.sync` job: the claim, renewal and expiry of `deadline_job_at`. */
+    groupSyncJobAt: timestamp("group_sync_job_at", { withTimezone: true }),
+    /** Failed `group.sync` passes in a row, the backoff's exponent; zero once a pass leaves nothing waiting. */
+    groupSyncFailures: integer("group_sync_failures").notNull().default(0),
+    /**
      * The day-before reminder of the project's deadline sent (F-NOTIF-13,
      * M3-09b): claimed by the ticker's scan before it tells the students
      * under the project's deadline (`project_deadline_reminder`). Null:
@@ -186,6 +198,10 @@ export const projects = pgTable(
     index("projects_org_idx").on(t.orgId),
     // The projects that follow a set, read by each of its writes (ADR-070).
     index("projects_group_set_idx").on(t.groupSetId),
+    // The ticker's scan: the copies with moves waiting for GitHub (M3-15b-2).
+    index("projects_group_sync_due_idx")
+      .on(t.groupSyncDueAt)
+      .where(sql`${t.groupSyncDueAt} IS NOT NULL`),
     // The ticker's scans: deadlines due and not applied,
     index("projects_deadline_due_idx")
       .on(t.deadlineAt)
@@ -232,6 +248,10 @@ export const projectCheckpoints = pgTable(
  * (`<project-slug>-<group-slug>`), frozen once that repository exists;
  * `position` keeps the set's order. `source_group_id` is the set's group it
  * follows; null once that group is deleted (a stopped copy keeps its own).
+ * `stopped_at`: the group no longer follows (M3-15b-2) — the FIRST of its
+ * repository's deadline applied and its project's groups stopped
+ * (`projects.groups_stopped_at`), written in the transaction of either,
+ * never cleared.
  */
 export const projectGroups = pgTable(
   "project_groups",
@@ -244,6 +264,7 @@ export const projectGroups = pgTable(
     slug: text("slug").notNull(),
     position: integer("position").notNull(),
     sourceGroupId: uuid("source_group_id").references(() => studentGroups.id, { onDelete: "set null" }),
+    stoppedAt: timestamp("stopped_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -257,6 +278,14 @@ export const projectGroups = pgTable(
  * A member of a group, by roster line: a student may be in a group before
  * they ever sign in. `project_id` is denormalized so that the UNIQUE states
  * the rule itself — at most one group per student per project.
+ *
+ * **A departure waits for GitHub** (ADR-070 §4, M3-15b-2): a member the set
+ * moves out of a group with a repository stays in it, `departing_at` set
+ * (by the set's write, or the `group.sync` job), until the job has revoked
+ * their access; no invitation of them on it is recorded meanwhile
+ * (`recordGrant`). `revoke_failed_at` and its reason: GitHub refused that
+ * revocation — the project page's *access to revoke*, retried by the job;
+ * cleared when the row moves, or when the set puts the student back.
  */
 export const projectGroupMembers = pgTable(
   "project_group_members",
@@ -272,6 +301,9 @@ export const projectGroupMembers = pgTable(
       .notNull()
       .references(() => enrollments.id, { onDelete: "cascade" }),
     addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+    departingAt: timestamp("departing_at", { withTimezone: true }),
+    revokeFailedAt: timestamp("revoke_failed_at", { withTimezone: true }),
+    revokeFailedReason: text("revoke_failed_reason"),
   },
   (t) => [
     uniqueIndex("project_group_members_project_enrollment_uq").on(t.projectId, t.enrollmentId),

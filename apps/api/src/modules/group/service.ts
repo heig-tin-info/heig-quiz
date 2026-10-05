@@ -11,9 +11,13 @@
  * for the write), the set locked FOR UPDATE, then the projects whose copy
  * follows it; the write; their copies stepped; the audit. The hints go
  * after the commit, to the course's staff only (ADR-070 §9). A step that
- * would reach a copy group with a repository refuses the whole write, `409
- * has_repo` (M3-15b-1: the `group.sync` job that follows it on GitHub is
- * M3-15b-2's); a rename still follows, the repository's name fixed.
+ * would delete a copy group with a repository refuses the whole write,
+ * `409 has_repo`; a rename still follows, the repository's name fixed. A
+ * move out of such a group, or into it, is applied on GitHub by the
+ * `group.sync` job (M3-15b-2) once its consequences are confirmed: the
+ * write ADDING any answers `409 needs_confirmation` (the consequences and
+ * their digest) until it is sent again with `confirm: <digest>`; the
+ * route then sends the job (`requestGroupSync`).
  *
  * **The students of a set** are the classroom's roster lines, claimed or
  * not, except staff seats (ADR-018): never placed, never counted, never
@@ -35,18 +39,19 @@ import { iso } from "../../clock.js";
 import type { Db, Tx } from "../../db/client.js";
 import { classrooms, enrollments, groupSets, projects, studentGroupMembers, studentGroups } from "../../db/schema.js";
 import { DomainError } from "../http.js";
-import { followingCopies, projectsChanged, RepoGroupTouched, stepCopies } from "../project/service.js";
+import { ConfirmationNeeded, copiesBefore, followingCopies, projectsChanged, RepoGroupTouched, stepCopies } from "../project/service.js";
 import { GroupError } from "./errors.js";
 import { groupsChanged } from "./events.js";
 
 type SetRow = typeof groupSets.$inferSelect;
 
-/** Who writes, when, in which language a default name is written. */
+/** Who writes, when, in which language a default name is written; the digest of the consequences the writer confirmed. */
 export interface WriteContext {
   actor: AuditActor;
   userId: string;
   locale: NameLocale;
   now: Date;
+  confirm?: string | undefined;
 }
 
 /** The set as its loader found it (`accessibleGroupSet`): the set, its classroom and course. */
@@ -170,36 +175,44 @@ async function lockClassroom(tx: Tx, classroomId: string): Promise<void> {
 /** The write's audit entry; null when it changed nothing (no audit, no hint). */
 type Written = { action: AuditAction; payload: Record<string, unknown> } | null;
 
+/** The project module's refusals of a step, worded as the group's. */
+async function stepRefusal(tx: Tx, err: unknown): Promise<never> {
+  if (err instanceof ConfirmationNeeded) {
+    throw new GroupError("needs_confirmation", "This change has consequences on GitHub: confirm them", err.details);
+  }
+  if (!(err instanceof RepoGroupTouched)) throw err;
+  const held = await tx.select({ id: projects.id, name: projects.name }).from(projects).where(inArray(projects.id, [...err.projectIds])).orderBy(asc(projects.id));
+  const details: GroupRefusalProjects = { projects: held };
+  throw new GroupError("has_repo", "This change deletes a group that has a repository on GitHub", details);
+}
+
 /**
  * One write of a set (see the module's header): the copies that follow it
- * are locked before the write and stepped after it, in its transaction.
+ * are locked and read before the write and stepped after it, in its
+ * transaction. The projects whose moves now wait for the `group.sync` job.
  */
-async function writeSet(db: Db, scope: SetScope, ctx: WriteContext, write: (tx: Tx, set: SetRow) => Promise<Written>): Promise<void> {
-  const changed = await db.transaction(async (tx) => {
+async function writeSet(db: Db, scope: SetScope, ctx: WriteContext, write: (tx: Tx, set: SetRow) => Promise<Written>): Promise<string[]> {
+  const stepped = await db.transaction(async (tx) => {
     await lockClassroom(tx, scope.room.id);
     const [set] = await tx.select().from(groupSets).where(eq(groupSets.id, scope.set.id)).for("update");
     if (!set) throw notFound("group set");
-    const copies = await followingCopies(tx, set.id);
+    const before = await copiesBefore(tx, set.id, await followingCopies(tx, set.id));
     const written = await write(tx, set);
     if (!written) return null;
-    const changed = await stepCopies(tx, set.id, copies, ctx.now).catch(async (err: unknown) => {
-      if (!(err instanceof RepoGroupTouched)) throw err;
-      const held = await tx.select({ id: projects.id, name: projects.name }).from(projects).where(inArray(projects.id, [...err.projectIds])).orderBy(asc(projects.id));
-      const details: GroupRefusalProjects = { projects: held };
-      throw new GroupError("has_repo", "This change reaches a group that has a repository on GitHub", details);
-    });
+    const stepped = await stepCopies(tx, set.id, before, { now: ctx.now, confirm: ctx.confirm }).catch((err: unknown) => stepRefusal(tx, err));
     await audit(tx, {
       ...ctx.actor,
       action: written.action,
       subjectType: "group_set",
       subjectId: set.id,
-      payload: { ...written.payload, copies: changed },
+      payload: { ...written.payload, copies: stepped.changed, deferred: stepped.due },
     });
-    return changed;
+    return stepped;
   });
-  if (!changed) return;
+  if (!stepped) return [];
   groupsChanged(scope.course.id);
-  if (changed.length > 0) projectsChanged([scope.course.id]);
+  if (stepped.changed.length > 0) projectsChanged([scope.course.id]);
+  return stepped.due;
 }
 
 // ---------------------------------------------------------------- sets
@@ -344,9 +357,10 @@ export async function deleteGroup(db: Db, scope: SetScope, groupId: string, ctx:
  * `PUT /app/api/group-sets/:id/members/:eid`: the student into a group of
  * the set, or out of every group (`groupId: null`). A roster line of
  * another classroom, or a staff seat, is the 404 of a missing student.
+ * The projects whose part of it waits for the `group.sync` job.
  */
-export async function placeStudent(db: Db, scope: SetScope, enrollmentId: string, body: GroupMemberPut, ctx: WriteContext): Promise<void> {
-  await writeSet(db, scope, ctx, async (tx, set) => {
+export async function placeStudent(db: Db, scope: SetScope, enrollmentId: string, body: GroupMemberPut, ctx: WriteContext): Promise<string[]> {
+  return writeSet(db, scope, ctx, async (tx, set) => {
     const [student] = await tx
       .select({ id: enrollments.id })
       .from(enrollments)

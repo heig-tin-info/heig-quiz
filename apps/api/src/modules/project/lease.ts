@@ -1,11 +1,14 @@
 /**
  * The leases of a project's GitHub work (ADR-064 §3 and its addendum,
- * merge tasks M3-05a and M3-05b): one column of `projects` per kind of work
- * — `deadline_job_at` for the deadline's locks and commits (`jobs.ts`),
- * `dispatch_job_at` for the review dispatches (`review.ts`) — so that the
- * two never wait for each other, and ONE frame for the jobs that hold them
- * ({@link runLeased}): take, renew, backdate and give back. A queue's
- * dedupe is never relied upon (#273).
+ * merge tasks M3-05a, M3-05b and M3-15b-2): one column of `projects` per
+ * kind of work — `deadline_job_at` for the deadline's locks and commits
+ * (`jobs.ts`), `dispatch_job_at` for the review dispatches (`review.ts`),
+ * `group_sync_job_at` for the moves of a group set on GitHub
+ * (`groupSync.ts`) — so that none waits for another, and ONE frame for the
+ * jobs that hold the first two ({@link runLeased}): take, renew, backdate
+ * and give back; `group.sync`, which must run without the App (a
+ * revocation with nothing to take proceeds), holds its lease through
+ * {@link heldLease} itself. A queue's dedupe is never relied upon (#273).
  */
 import type { FastifyInstance } from "fastify";
 import { and, eq, isNull, lt, or, type SQL } from "drizzle-orm";
@@ -26,7 +29,7 @@ export const FAILED_RETRY_MS = 30_000;
 const REPO_CONCURRENCY = 4;
 
 /** The column of `projects` that holds a kind of work's lease. */
-export type LeaseKey = "deadlineJobAt" | "dispatchJobAt";
+export type LeaseKey = "deadlineJobAt" | "dispatchJobAt" | "groupSyncJobAt";
 
 /** One project's work, as the queue carries it: the lease it was claimed under. */
 export interface ProjectJob {
@@ -62,7 +65,7 @@ export async function claimLeases(db: Db, key: LeaseKey, now: Date, work: SQL, p
  * Lost when a write finds the row holding another lease: another job took
  * the work over (this one outlived its lease), and this one stops.
  */
-function heldLease(app: FastifyInstance, key: LeaseKey, projectId: string, lease: Date) {
+export function heldLease(app: FastifyInstance, key: LeaseKey, projectId: string, lease: Date) {
   const column = projects[key];
   let held = lease;
   let lost = false;
