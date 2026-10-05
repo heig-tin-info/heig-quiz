@@ -43,6 +43,7 @@ import {
   githubAccounts,
   githubClassroomLinks,
   githubOrganizations,
+  notifications,
   projectGroupMembers,
   projectGroups,
   projectRepoAccess,
@@ -292,6 +293,26 @@ describe("a group's repository at Accept (ADR-048 lot 2)", () => {
     expect(await repoRows(project.id)).toHaveLength(1);
   });
 
+  it("tells a member of their invitation once: at the first Accept that invited them, never at their own clicks (F-NOTIF-13)", async () => {
+    const [ana, ben] = [await newStudent(), await newStudent()];
+    const { project } = await groupProject([ana!, ben!], [[0, 1]]);
+    const invitedBells = async (userId: string) =>
+      (await server.app.db.select({ payload: notifications.payload }).from(notifications).where(eq(notifications.userId, userId))).filter(
+        (r) => (r.payload as { kind: string; projectId?: string }).kind === "project_repo_invited" && (r.payload as { projectId?: string }).projectId === project.id,
+      );
+    expect((await accept(project.id, ana!)).statusCode).toBe(200);
+    // Ana made the repository and is invited; Ben was invited by her Accept.
+    expect(await invitedBells(ana!.id)).toHaveLength(1);
+    expect(await invitedBells(ben!.id)).toHaveLength(1);
+    // Ben's own Accept re-invites him (GitHub answers pending again): told no second time, nor on a repeat.
+    for (let i = 0; i < 2; i++) {
+      const res = await accept(project.id, ben!);
+      expect([res.statusCode, res.json().invitationStatus]).toEqual([200, "pending"]);
+    }
+    expect(await invitedBells(ben!.id)).toHaveLength(1);
+    expect(await invitedBells(ana!.id)).toHaveLength(1);
+  });
+
   it("makes ONE repository for two members accepting at the same second", async () => {
     const [ana, ben] = [await newStudent(), await newStudent()];
     const { project, room } = await groupProject([ana!, ben!], [[0, 1]]);
@@ -404,7 +425,8 @@ describe("a group's repository is a student's through the copy only (N-SEC-20)",
     expect(res.statusCode, res.body).toBe(200);
     expect(gh.calls.slice(before).filter((c) => c.startsWith("PUT"))).toEqual([`PUT api.github.com/repos/${fullName}/collaborators/${ben!.login}`]);
     const [entry] = await auditsOf(row!.id, "project_repo.invite_resent");
-    expect(entry!.payload).toEqual({ logins: [ben!.login], invitationStatus: "accepted" });
+    // Ben is still out: GitHub answers his invitation again, pending (the fake follows GitHub here).
+    expect(entry!.payload).toEqual({ logins: [ben!.login], invitationStatus: "pending" });
   });
 
   it("a member's own resend invites them alone", async () => {

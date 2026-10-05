@@ -207,10 +207,13 @@ export function repoWorld(): RepoWorld {
       world.collaborators.set(fullName, seats);
       const invited = seats.has(login);
       seats.set(login, (JSON.parse(String(req.body)) as { permission: string }).permission);
-      if (invited) return new Response(null, { status: 204 });
-      const id = nextInvitation++;
       const pending = world.invitations.get(fullName) ?? new Map<number, string>();
       world.invitations.set(fullName, pending);
+      // As GitHub: an invitee still pending is answered their invitation again (201), a collaborator 204.
+      const outstanding = [...pending].find(([, who]) => who === login);
+      if (outstanding) return json({ id: outstanding[0], invitee: { login } }, 201);
+      if (invited) return new Response(null, { status: 204 });
+      const id = nextInvitation++;
       pending.set(id, login);
       return json({ id, invitee: { login } }, 201);
     }

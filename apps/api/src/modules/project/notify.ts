@@ -40,6 +40,7 @@
  * skipped.
  */
 import { and, eq, exists, inArray, isNotNull, isNull, ne, notExists, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import type { NotificationPayload } from "@quiz/contracts";
 import { DEADLINE_REMINDER_MS } from "@quiz/domain";
@@ -115,14 +116,34 @@ export async function remindDeadlines(db: Db, now: Date, log?: NotifyLog): Promi
   for (const project of claimedProjects) {
     // Left out: a member of a repository with its own deadline (reminded of
     // THAT one, below), of a deleted one, or of one the staff locked by hand
-    // — their own repository, or their group's (ADR-048).
+    // — their own repository, or their group's (ADR-048). A holder of a LIVE
+    // individual repository reads that one, never their group's
+    // (`repoMembers`' rule): it alone decides their reminder.
+    const own = alias(projectRepos, "own");
+    const holdsOwn = db
+      .select({ one: sql`1` })
+      .from(own)
+      .where(
+        and(
+          eq(own.projectId, project.id),
+          eq(own.userId, enrollments.userId),
+          isNull(own.groupId),
+          eq(own.provisionStatus, "ok"),
+          isNotNull(own.fullName),
+          isNull(own.deletedAt),
+        ),
+      );
     const theirs = or(
-      eq(projectRepos.userId, enrollments.userId),
-      exists(
-        db
-          .select({ one: sql`1` })
-          .from(projectGroupMembers)
-          .where(and(eq(projectGroupMembers.groupId, projectRepos.groupId), eq(projectGroupMembers.enrollmentId, enrollments.id))),
+      and(isNull(projectRepos.groupId), eq(projectRepos.userId, enrollments.userId)),
+      and(
+        isNotNull(projectRepos.groupId),
+        notExists(holdsOwn),
+        exists(
+          db
+            .select({ one: sql`1` })
+            .from(projectGroupMembers)
+            .where(and(eq(projectGroupMembers.groupId, projectRepos.groupId), eq(projectGroupMembers.enrollmentId, enrollments.id))),
+        ),
       ),
     );
     const seats = await db

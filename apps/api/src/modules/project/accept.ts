@@ -249,7 +249,13 @@ async function acceptGroup(db: Db, config: AppConfig, input: AcceptInput, seat: 
 
 const noGroup = () => new ProjectError("no_group", "You are in no group of this project: ask your teacher to place you");
 
-/** `project_repo_invited` to the accounts THIS request invited and GitHub left pending (F-NOTIF-13). */
+/**
+ * `project_repo_invited` to the accounts THIS request let into a repository
+ * (a grant made or brought back, `fresh`) with GitHub's invitation left
+ * pending (F-NOTIF-13): never on a repeat — the kind is not folded, so a
+ * member clicking Accept again, re-invited and answered `pending` again,
+ * must not be told again.
+ */
 const tellInvited = (db: Db, project: ProjectRow, userIds: readonly string[]) =>
   notifyUsers(db, userIds, { kind: "project_repo_invited", projectId: project.id, projectTitle: project.name });
 /** The seat left (removed, unclaimed, turned staff seat) during the Accept: the 404 of a project no longer reached. */
@@ -362,7 +368,8 @@ async function provision(db: Db, input: AcceptInput, row: RepoRow, github: Githu
  * so one who left meanwhile is not invited from a stale list.
  */
 async function inviteGroup(db: Db, input: AcceptInput, repo: RepoRow, github: GithubSide): Promise<RepoRow> {
-  const pending: string[] = [];
+  let pending = false;
+  const letIn: string[] = [];
   for (const member of await repoMembers(db, repo, input.project.classroomId)) {
     if (member.enrollmentId === input.enrollmentId || member.account === null) continue;
     const ctx = { actor: input.actor, now: input.now, log: input.log, via: "accept", failure: "provision_failed" } as const;
@@ -370,10 +377,12 @@ async function inviteGroup(db: Db, input: AcceptInput, repo: RepoRow, github: Gi
       input.log.warn({ err, repo: repo.id, enrollmentId: member.enrollmentId }, "inviting a group member failed");
       return null;
     });
-    if (invited?.invitation === "pending") pending.push(member.userId);
+    pending ||= invited?.invitation === "pending";
+    // Told once: when THIS call let them in (`fresh`), never on a repeat GitHub answers `pending` to again.
+    if (invited?.invitation === "pending" && invited.fresh) letIn.push(member.userId);
   }
-  await tellInvited(db, input.project, pending);
-  if (pending.length === 0 || repo.invitationStatus === "pending") return repo;
+  await tellInvited(db, input.project, letIn);
+  if (!pending || repo.invitationStatus === "pending") return repo;
   await followInvitation(db, repo, "pending");
   return { ...repo, invitationStatus: "pending" };
 }
@@ -403,6 +412,7 @@ async function joinRepo(db: Db, config: AppConfig, input: AcceptInput, repo: Rep
   const invited = await inviteAccount(db, github.client.octokit, repo, member, ctx);
   if (invited === null) throw gone();
   await followInvitation(db, repo, invited.invitation);
-  if (invited.invitation === "pending") await tellInvited(db, input.project, [input.userId]);
+  // Told once: a member invited by a fellow's Accept, clicking Accept themselves, is re-invited but not re-told.
+  if (invited.invitation === "pending" && invited.fresh) await tellInvited(db, input.project, [input.userId]);
   return { status: repo.provisionStatus, fullName: repo.fullName, invitationStatus: invited.invitation };
 }

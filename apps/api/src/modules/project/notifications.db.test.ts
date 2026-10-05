@@ -399,14 +399,19 @@ describe("project_deadline_reminder", () => {
     expect(await bells(locked!.id, "project_deadline_reminder")).toEqual([]);
   });
 
-  it("leaves a member of a GROUP repository with its own deadline out of the project's claim (ADR-048)", async () => {
-    const w = await project({ students: 2, accept: false });
-    const [member, other] = w.students;
+  it("leaves a member of a GROUP repository with its own deadline out of the project's claim, but not a holder of a live individual repository (ADR-048)", async () => {
+    const w = await project({ students: 3, accept: false });
+    const [member, other, holder] = w.students;
+    // The holder: in the group too, but reads their own live repository — their deadline is the project's.
+    expect((await accept(w.id, holder!)).statusCode).toBe(200);
     const db = server.app.db;
-    const [seat] = await db.select({ id: enrollments.id }).from(enrollments).where(and(eq(enrollments.classroomId, w.classroomId), eq(enrollments.userId, member!.id)));
+    const seatOf = async (userId: string) =>
+      (await db.select({ id: enrollments.id }).from(enrollments).where(and(eq(enrollments.classroomId, w.classroomId), eq(enrollments.userId, userId))))[0]!;
     const groupId = randomUUID();
     await db.insert(projectGroups).values({ id: groupId, projectId: w.id, name: "G1", slug: "g1", position: 1 });
-    await db.insert(projectGroupMembers).values({ id: randomUUID(), projectId: w.id, groupId, enrollmentId: seat!.id });
+    for (const who of [member!, holder!]) {
+      await db.insert(projectGroupMembers).values({ id: randomUUID(), projectId: w.id, groupId, enrollmentId: (await seatOf(who.id)).id });
+    }
     // The group's repository, accepted by somebody else, with its own later deadline.
     await db.insert(projectRepos).values({
       id: randomUUID(),
@@ -422,6 +427,7 @@ describe("project_deadline_reminder", () => {
     server.clock.set(at(DEADLINE, -23 * HOUR));
     await tick();
     expect(await bells(other!.id, "project_deadline_reminder")).toEqual([reminder(w.id)]);
+    expect(await bells(holder!.id, "project_deadline_reminder")).toEqual([reminder(w.id)]);
     expect(await bells(member!.id, "project_deadline_reminder")).toEqual([]);
   });
 
