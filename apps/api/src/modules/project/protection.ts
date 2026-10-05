@@ -32,9 +32,11 @@
  * student leaves it — the push is answered, the heads up to the covered one
  * stay `to_verify`, and no restore is counted. A push that touched a
  * protected file but whose head a clean head had already overtaken when its
- * delivery was handled gets the same row, its head alone (`covered_sha`
- * null): its runs ran its own copy. A push whose own head leaves the files
- * the distribution's is no tampering and writes no row.
+ * delivery was handled is read at its own head (`alteredFiles`, the hit
+ * files only): altered, it gets the same row, its head alone (`covered_sha`
+ * null) — its runs ran its own copy; the files the distribution's, it is a
+ * fix delivered late and writes no row. A push whose own head leaves the
+ * files the distribution's is no tampering and writes no row.
  */
 import { randomUUID } from "node:crypto";
 
@@ -50,7 +52,7 @@ import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { botCommits, projectRepos, reverts } from "../../db/schema.js";
 import { githubStatus, installationClient, isZeroSha, ownerRepo } from "../../github/app.js";
-import { changedFiles, revertProtectedFiles, type RevertOutcome, type RevertResult } from "../../github/revert.js";
+import { alteredFiles, changedFiles, revertProtectedFiles, type RevertOutcome, type RevertResult } from "../../github/revert.js";
 import { projectInstallation } from "../github/service.js";
 import { liveRepoForUpdate } from "./deadline.js";
 import { refreshScoreSelection } from "./grading.js";
@@ -170,14 +172,18 @@ export async function protectFiles(
   } else if (recorded.refused) {
     return; // the cap suspended the protection (its runs are flagged by the suspension), or the push was answered meanwhile
   } else if (!pending) {
-    // Nothing to restore. The push's own head leaving the files the
-    // distribution's is no tampering; a head a clean head had already
-    // overtaken when this delivery was handled ran its own copy: answered
-    // without a restore, its head alone (`covered_sha` null).
+    // Nothing to restore at the branch head. The push's own head is read
+    // when a later head overtook it (the hit files only): the files the
+    // distribution's — a fix delivered late — is no tampering, no row; any
+    // altered ran its own copy: answered without a restore, its head alone
+    // (`covered_sha` null). A false `to_verify` would hold the release.
     if (outcome.head === push.after) return;
+    const squashedRepo = ownerRepo(project.distributionFullName).repo;
+    const { altered } = await alteredFiles(octokit, { org: owner, studentRepo, squashedRepo, branch: push.branch, sha: push.after, paths: hit });
+    if (altered.length === 0) return;
     await db
       .insert(reverts)
-      .values({ id: randomUUID(), repoId: repo.id, headSha: push.after, files: hit, branch: push.branch, createdAt: now })
+      .values({ id: randomUUID(), repoId: repo.id, headSha: push.after, files: altered.map((a) => a.path), branch: push.branch, createdAt: now })
       .onConflictDoNothing();
   }
   // Every head the restore covered (`restoredHeads`: the pushed one and the

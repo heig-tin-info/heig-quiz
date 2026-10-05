@@ -828,6 +828,34 @@ describe("protected files (F-PROJ-08)", () => {
     expect(await restores(f)).toHaveLength(1);
     expect(head(f)).toBe(fix);
   });
+
+  it("never flags a clean fix delivered late: F1 restores grading.yml, F2 adds work, F1 handled with head F2 (M3-06b)", async () => {
+    const f = await acceptedRepo();
+    server.clock.advance(MINUTE);
+    const base = head(f);
+    const s = world.commit(f.fullName, "main", { [GRADING]: "grade: always 6" });
+    const f1 = world.commit(f.fullName, "main", { [GRADING]: "grade: v1" });
+    const f2 = world.commit(f.fullName, "main", { "src/main.c": "work on top of the fix" });
+    // Every delivery handled with F2 on the branch: S read at its head is altered, F1 is not.
+    await handled("push", pushPayload(f, { branch: "main", before: base, after: s, files: { [GRADING]: "x" } }));
+    server.clock.advance(MINUTE);
+    await handled("push", pushPayload(f, { branch: "main", before: s, after: f1, files: { [GRADING]: "grade: v1" } }));
+    server.clock.advance(MINUTE);
+    await handled("push", pushPayload(f, { branch: "main", before: f1, after: f2, files: { "src/main.c": "y" } }));
+    expect(head(f)).toBe(f2);
+    expect(await restores(f)).toEqual([expect.objectContaining({ headSha: s, revertSha: null, coveredSha: null })]);
+
+    for (const [sha, grade] of [[s, "6/6"], [f1, "4/6"], [f2, "5/6"]] as const) {
+      scored(sha, { title: "GRADE", message: grade });
+      server.clock.advance(MINUTE);
+      await handled("workflow_run", runPayload(f, sha));
+    }
+    const all = await runs(f);
+    expect(all.find((r) => r.headSha === s)).toMatchObject({ toVerify: true });
+    expect(all.find((r) => r.headSha === f1)).toMatchObject({ points: 4, toVerify: false });
+    expect(all.find((r) => r.headSha === f2)).toMatchObject({ points: 5, toVerify: false });
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBe(all.find((r) => r.headSha === f2)!.id);
+  });
 });
 
 // ---------------------------------------------------------------- runs

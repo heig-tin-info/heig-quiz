@@ -93,11 +93,16 @@ amended to match:
    flagged and the score reselected on the 422 itself, not at the retry.
    (d) A push that touched a protected file but whose head a clean head had
    already overtaken when its delivery was handled (S then the fix, before
-   S's delivery) gets the same row, its head alone (`covered_sha` null,
-   nothing restored): its runs ran its own copy. Conservative limit: the
-   tampered heads between it and the clean one, never delivered as
-   tampering themselves, count. A push whose own head leaves the protected
-   files the distribution's writes no row: it is no tampering. The stored `to_verify`
+   S's delivery) is read at its own head — the hit files, compared with the
+   distribution's exactly as the branch head is (`alteredFiles`, the one
+   comparison): altered, it gets the same row, its head alone
+   (`covered_sha` null, nothing restored), its runs ran its own copy; the
+   distribution's, it is a fix delivered late and writes no row — a false
+   `to_verify` is not free, the release refuses with `409 to_verify` until
+   the teacher settles it. Known limit: the tampered heads between S and
+   the clean one, never delivered as tampering themselves, count. A push
+   whose own head leaves the protected files the distribution's writes no
+   row: it is no tampering. The stored `to_verify`
    of a run follows the set at every reselection (`refreshScoreSelection`):
    a run ingested before a late receipt widened its window is flagged at
    the repository's next reselection — a restore, or a run ingested by the

@@ -1296,12 +1296,17 @@ under the half that serves them.
     `covered_sha` is set (the fix pushed after the read is outside), its
     head alone otherwise (a `CASE` upper bound in the window join).
   - **Nothing to restore** (review round 1, a gap of M3-04): the adapter
-    answers `RevertOutcome {head, restored}`; a push that touched a
-    protected file whose head a clean head had overtaken when its delivery
-    was handled (`head !== push.after`) gets a null row, head alone
-    (`covered_sha` null, `files` the files touched): its runs `to_verify`.
-    A push whose own head is clean (`head === push.after`) writes no row;
-    a refused `beforeMove` (the cap) writes none either.
+    answers `RevertOutcome {head, restored}` and exposes its one comparison
+    `alteredFiles(octokit, {…, sha, paths})` (commit, tree, the reference
+    blobs: the paths whose blob differs from the distribution's); a push
+    that touched a protected file whose head a clean head had overtaken
+    when its delivery was handled (`head !== push.after`) is read at
+    `push.after` (the hit files only, on that path only): altered ⇒ a null
+    row, head alone (`covered_sha` null, `files` the altered ones), its
+    runs `to_verify`; identical ⇒ a fix delivered late, no row. A push
+    whose own head is clean (`head === push.after`) writes no row; a
+    refused `beforeMove` (the cap) writes none either. Limit: never-
+    delivered tampered heads between S and the clean one count.
   - Tests (`ingest.db.test.ts`, "protected files"): a head on `dev` inside
     `main`'s window not flagged (S first received on `dev`); X received
     between `created_at` and S2's receipt flagged, a push on the restore
@@ -1311,7 +1316,9 @@ under the half that serves them.
     filled, `created_at` the retry's, a redelivery answered, S1 flagged);
     S, S1, 422, the fix (S and S1 `to_verify`, the fix the score); S then
     the fix before S's delivery (null row, S `to_verify`, the fix's own
-    delivery writes no row and counts, a redelivery answered).
+    delivery writes no row and counts, a redelivery answered); S, F1 (the
+    fix), F2, every delivery handled with head F2 (S's null row only, F1
+    and F2 count).
     `failedDelivery(payload)` beside `handled`. The student leak test
     (`studentView.db.test.ts`, `toVerify`/`to_verify`) stays green.
 
