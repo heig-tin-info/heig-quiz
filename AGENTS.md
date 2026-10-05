@@ -24,7 +24,8 @@ deploying, not for editing.
 - Push your branch and open a pull request; the `checks` status runs there
   (build, typecheck, tests, frozen lockfile, in parallel jobs) before
   anything reaches `main`.
-- Merge when green. The deploy jobs run on `main` only, so neither staging
+- Merge when green. A PR merges on `checks`; Coverage is informative — do
+  not wait for it. The deploy jobs run on `main` only, so neither staging
   nor production ever sees a commit the checks did not pass.
 - Rebase often (`git pull --rebase origin main` on your branch): small diffs,
   rare conflicts.
