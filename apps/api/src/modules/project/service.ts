@@ -51,6 +51,7 @@ export { createCheckpoint, deleteCheckpoint, listCheckpoints } from "./checkpoin
 export { projectDetail, repoRuns } from "./detail.js";
 export { repoDeadline, setRepoDeadline, setStaffLock } from "./deadline.js";
 export { overrideScore, releaseProject } from "./grades.js";
+export { gradebookProjects, projectLiveScores, projectReleasedScore, type ProjectGradeCell } from "./gradebook.js";
 export { projectsChanged } from "./events.js";
 export { ConfirmationNeeded, copiesBefore, followingCopies, RepoGroupTouched, setFrozen, stepCopies } from "./groupCopy.js";
 export { requestGroupSync } from "./groupSync.js";

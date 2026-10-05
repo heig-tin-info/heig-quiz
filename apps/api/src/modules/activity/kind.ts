@@ -17,10 +17,13 @@
 import type {
   ActivityKindName,
   ActivitySummary,
+  GradebookColumnKind,
+  GradebookSource,
+  GradebookStudentCell,
   StudentActivities,
   StudentActivityCard,
 } from "@quiz/contracts";
-import type { StudentActivityGroup } from "@quiz/domain";
+import type { CellOutcome, StudentActivityGroup } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import type { Caller } from "../guards.js";
@@ -49,6 +52,60 @@ export interface StudentScope {
   confined: boolean;
 }
 
+/** A claimed student seat of the classroom: the roster line and its account. */
+export interface GradebookSeat {
+  enrollmentId: string;
+  userId: string;
+}
+
+/**
+ * What a column of the gradebook says of its activity (F-GBOOK-01), before
+ * the gradebook's own settings and marks: the facts, and `markGrade`, how
+ * the activity's OWN scale turns a teacher's score out of a maximum into a
+ * grade (an evaluation's, a project's: never one scale for both).
+ */
+export interface GradebookEntryFacts {
+  kind: ActivityKindName;
+  activityId: string;
+  mode: GradebookColumnKind;
+  title: string;
+  /** Opening (evaluation) or start (project): the default order of the columns. */
+  date: Date;
+  /** The results are released (an evaluation's release, a project's). */
+  released: boolean;
+  markGrade(points: number, max: number): number;
+}
+
+/** What the activity itself gives a seat, under any staff mark: read, never recomputed. */
+export interface GradebookBeneath {
+  outcome: CellOutcome;
+  points: number | null;
+  /** What the points are out of. */
+  max: number | null;
+  source: GradebookSource | null;
+  /** The grade moved since the release (F-GBOOK-03). */
+  changedAfterRelease: boolean;
+  /** A real grade lies here: a mark over it needs an explicit override. */
+  hasGrade: boolean;
+}
+
+/** One column as the staff read it: the facts, and the cells of the seats. */
+export interface GradebookEntry extends GradebookEntryFacts {
+  /** The seats' LIVE cells: a column follows its activity (F-GBOOK-03). */
+  staffCells(db: Db, seats: readonly GradebookSeat[]): Promise<Map<string, GradebookBeneath>>;
+}
+
+/**
+ * One column as a student reads it: the facts and the caller's own cell,
+ * already through the student view of the kind (F-RES-04, N-SEC-20).
+ * `markShown`: a staff mark may show here, the column being released and
+ * the feedback policy not `none`.
+ */
+export interface StudentGradebookEntry extends GradebookEntryFacts {
+  cell: GradebookStudentCell;
+  markShown: boolean;
+}
+
 export interface ActivityKind<K extends ActivityKindName> {
   readonly kind: K;
 
@@ -68,4 +125,25 @@ export interface ActivityKind<K extends ActivityKindName> {
    * draft, nothing of another student.
    */
   studentCards(db: Db, caller: Caller, now: Date, scope: StudentScope): Promise<StudentCardsOf<K>>;
+
+  /**
+   * The gradebook's columns of this kind in a classroom (M5-03a, F-GBOOK):
+   * what the activity says of itself and, per column, the staff's cells. The
+   * staff payload, so the classroom is loaded through `staffAccess` first.
+   */
+  gradebookEntries(db: Db, classroomId: string): Promise<GradebookEntry[]>;
+
+  /**
+   * The caller's own columns and cells of this kind in a classroom (M5-03a,
+   * F-GBOOK-05): only what the kind's student view lets a student read. The
+   * classroom is loaded through `readableClassroom` first, and `seat` is the
+   * caller's claimed student seat.
+   */
+  studentGradebookEntries(
+    db: Db,
+    userId: string,
+    seat: GradebookSeat,
+    classroomId: string,
+    now: Date,
+  ): Promise<StudentGradebookEntry[]>;
 }
