@@ -8,7 +8,7 @@ import {
   reopens,
   runKind,
   selectScoreRun,
-  syncSkipReason,
+  syncSkips,
   type ScoredRun,
 } from "./projectRuns.js";
 
@@ -59,15 +59,15 @@ describe("reopens (F-PROJ-09)", () => {
   });
 });
 
-describe("syncSkipReason (F-PROJ-12 as amended 2026-10-05)", () => {
-  it("skips a repository past its effective deadline, locked or not, then a locked one; pushes to the rest", () => {
+describe("syncSkips (F-PROJ-12 as amended 2026-10-05)", () => {
+  it("skips a repository past its effective deadline, locked or not, and a locked one; pushes to the rest", () => {
     const project = { deadlineAt: at(12) };
-    expect(syncSkipReason({ deadlineAt: null, lockedAt: null }, project, at(12))).toBe("deadline_passed");
-    expect(syncSkipReason({ deadlineAt: null, lockedAt: at(11) }, project, at(13))).toBe("deadline_passed");
+    expect(syncSkips({ deadlineAt: null, lockedAt: null }, project, at(12))).toBe(true);
+    expect(syncSkips({ deadlineAt: null, lockedAt: at(11) }, project, at(13))).toBe(true);
     // An own deadline ahead keeps the repository open to the update, even past the project's.
-    expect(syncSkipReason({ deadlineAt: at(14), lockedAt: null }, project, at(13))).toBeNull();
-    expect(syncSkipReason({ deadlineAt: null, lockedAt: at(9) }, project, at(10))).toBe("locked");
-    expect(syncSkipReason({ deadlineAt: null, lockedAt: null }, project, at(10))).toBeNull();
+    expect(syncSkips({ deadlineAt: at(14), lockedAt: null }, project, at(13))).toBe(false);
+    expect(syncSkips({ deadlineAt: null, lockedAt: at(9) }, project, at(10))).toBe(true);
+    expect(syncSkips({ deadlineAt: null, lockedAt: null }, project, at(10))).toBe(false);
   });
 });
 

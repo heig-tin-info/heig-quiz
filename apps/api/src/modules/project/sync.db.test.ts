@@ -56,7 +56,7 @@ import { appKey, fakeGithub, json, orgsRoute, signedDelivery, type Route } from 
 import { PROJECT_SYNC_QUEUE, type JobQueue } from "../../jobs.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
-import { FAILED_RETRY_MS, type ProjectJob } from "./lease.js";
+import type { ProjectJob } from "./lease.js";
 import { runSyncJob } from "./sync.js";
 import { repoWorld } from "./testing.js";
 
@@ -424,7 +424,7 @@ describe("the request and the pass (F-PROJ-12)", () => {
     expect((await projectRow(p.id)).sourceAheadSha).toBeNull();
   });
 
-  it("records a failed repository, goes on with the others, keeps the source ahead, frees the lease within a minute; the retry reaches the failed one alone", async () => {
+  it("records a failed repository, goes on with the others, keeps the source ahead, gives the lease back; the next sync opens the failed one's pull request and spares the rest a comment", async () => {
     const p = await project({ students: 2 });
     const [failing, fine] = p.repos as [Repo, Repo];
     const hook = join(world.dir, `${failing.fullName}.git`, "hooks", "pre-receive");
@@ -442,15 +442,31 @@ describe("the request and the pass (F-PROJ-12)", () => {
     expect(await projectRow(p.id)).toMatchObject({ sourceAheadSha: after, syncedAt: at(NOW) });
     expect((await detail(p.id)).sync).toMatchObject({ ahead: { commits: 1 }, last: { opened: 1, failed: 1 } });
 
-    // The lease is backdated: in progress for a few seconds, then free.
-    expect(refusal(await sync(p.id))).toEqual([409, "sync_in_progress"]);
-    server.clock.set(at(NOW, FAILED_RETRY_MS + 1000));
+    // The lease was given back: nothing re-claims a sync, the staff ask again at once.
+    expect((await projectRow(p.id)).syncJobAt).toBeNull();
     rmSync(hook);
     await synced(p.id);
     expect(await repoRow(failing.id)).toMatchObject({ syncOutcome: "opened" });
     expect(pulls(failing.fullName!)).toHaveLength(1);
     // The other repository's pull request was current: no second comment.
     expect(comments(fine.fullName!, pulls(fine.fullName!)[0]!.number)).toHaveLength(0);
+    expect((await projectRow(p.id)).sourceAheadSha).toBeNull();
+  });
+
+  it("keeps the source ahead when a push lands during the pass: the sha is no longer one the pass synced", async () => {
+    const p = await project();
+    await sourcePush(p, { "src/util.c": "v1" });
+    const res = await queued(() => sync(p.id));
+    expect(res.statusCode, res.body).toBe(202);
+    // The job is queued, not run yet: the teacher pushes again meanwhile.
+    const later = await sourcePush(p, { "src/util.c": "v2" });
+    for (const job of jobsOf(p.id)) await runSyncJob(server.app, config, job);
+    expect(await repoRow(p.repos[0]!.id)).toMatchObject({ syncOutcome: "opened" });
+    expect(await projectRow(p.id)).toMatchObject({ sourceAheadSha: later, syncJobAt: null, syncedAt: at(NOW) });
+    expect((await detail(p.id)).primaryAction).toBe("sync");
+    // The next sync brings v2 and clears it.
+    await synced(p.id);
+    expect(world.read(p.distribution, "main", "src/util.c")).toBe("v2");
     expect((await projectRow(p.id)).sourceAheadSha).toBeNull();
   });
 

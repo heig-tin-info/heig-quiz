@@ -44,13 +44,13 @@ export const projectRefetchInterval = (detail: ProjectDetail | undefined): numbe
 
 /**
  * Whether the header offers Sync beside another primary action (F-PROJ-12,
- * M3-07): the source is ahead, or a sync runs, on a project that is not
- * archived and has its distribution repository — a draft syncs its
- * distribution, a project awaiting its release its open repositories. As
- * the primary action, Sync is the server's word (`primaryAction`).
+ * M3-07): the server says the source is ahead (never on a project that
+ * cannot sync: archived, its distribution not built), or a sync runs — a
+ * draft syncs its distribution, a project awaiting its release its open
+ * repositories. As the primary action, Sync is the server's word
+ * (`primaryAction`).
  */
-export const offersSync = (p: ProjectDetail): boolean =>
-  p.archivedAt === null && p.distribution !== null && p.primaryAction !== "sync" && (p.sync.ahead !== null || p.sync.inProgress);
+export const offersSync = (p: ProjectDetail): boolean => p.primaryAction !== "sync" && (p.sync.ahead !== null || p.sync.inProgress);
 
 /**
  * The sentence under the title: the project's situation, and the one action

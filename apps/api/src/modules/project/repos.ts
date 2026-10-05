@@ -1,10 +1,13 @@
 /**
  * A student's repository as GitHub's events reach it (merge task M3-04):
  * found by GitHub's immutable repository id, never by name; who hears of a
- * change to it; and its one terminal state, deleted on GitHub.
+ * change to it; and its one terminal state, deleted on GitHub. The shape of
+ * a push as the module's handlers read it, shared by a student
+ * repository's (`webhooks.ts`) and a source's (`sync.ts`).
  */
 import { and, eq, inArray, isNotNull, isNull, notInArray, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
+import { z } from "zod";
 
 import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
@@ -13,6 +16,29 @@ import { projectsChanged, repoChanged } from "./events.js";
 import { repoMembers } from "./groupRepos.js";
 
 export type RepoRow = typeof projectRepos.$inferSelect;
+
+/** A push's `ref` on a branch: its name. */
+export const BRANCH_REF = /^refs\/heads\/(.+)$/;
+
+/** The fields of GitHub's `push` payload the project's handlers read. */
+export const PushEvent = z.object({
+  ref: z.string(),
+  before: z.string().optional(),
+  after: z.string(),
+  forced: z.boolean().optional(),
+  repository: z.object({ id: z.number().int() }),
+  sender: z.object({ login: z.string() }).optional(),
+  head_commit: z.object({ timestamp: z.string().optional() }).nullish(),
+  commits: z
+    .array(
+      z.object({
+        added: z.array(z.string()).optional(),
+        modified: z.array(z.string()).optional(),
+        removed: z.array(z.string()).optional(),
+      }),
+    )
+    .optional(),
+});
 
 /** A provisioning claim older than this is taken over: the request that held it died (Accept, and a revocation's wait). */
 export const PROVISION_CLAIM_STALE_MS = 5 * 60_000;

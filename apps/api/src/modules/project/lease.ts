@@ -144,8 +144,10 @@ export interface LeasedRun {
  * after it expired); without the App on the organization it waits, the
  * lease kept, for the sweep ten minutes on — no retry loop. Then `body`;
  * afterwards nothing more when the lease was lost (the job that took over
- * finishes the work), a backdated lease and a throw when a repository
- * failed (the next tick resumes), else the lease given back.
+ * finishes the work); when a repository failed, a throw with the lease
+ * backdated (`onFailure: "expire"`, the default: the next tick resumes the
+ * work) or given back (`"release"`: work nobody re-claims but a person —
+ * the sync, M3-07 — may be asked again at once); else the lease given back.
  */
 export async function runLeased(
   app: FastifyInstance,
@@ -154,6 +156,7 @@ export async function runLeased(
   job: ProjectJob,
   label: string,
   body: (run: LeasedRun) => Promise<void>,
+  opts: { onFailure?: "expire" | "release" } = {},
 ): Promise<void> {
   const [project] = await app.db.select().from(projects).where(eq(projects.id, job.projectId));
   if (!project || project[key]?.toISOString() !== job.lease) return;
@@ -184,7 +187,7 @@ export async function runLeased(
   await body({ project, octokit, token, lost: lease.lost, each });
   if (lease.lost()) return;
   if (failed.length > 0) {
-    await lease.expireSoon();
+    await (opts.onFailure === "release" ? lease.release() : lease.expireSoon());
     throw new Error(`${label} incomplete: ${failed.join(", ")}`);
   }
   await lease.release();

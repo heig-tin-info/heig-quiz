@@ -24,7 +24,7 @@
  * - **The pass** ({@link runSyncJob}), in the leased frame: every student
  *   repository, four at a time, each re-read just before its push —
  *   skipped when it is not live, past its EFFECTIVE deadline (locked or
- *   not) or locked (`syncSkipReason`, `@quiz/domain`) —, the distribution's
+ *   not) or locked (`syncSkips`, `@quiz/domain`) —, the distribution's
  *   branch force-pushed to its `sync/<branch>` (the one ref the App ever
  *   forces), its head recorded in `bot_commits(sync)` BEFORE the ref moves
  *   (N-SEC-21; the ref is left where it is when it already is at that
@@ -33,9 +33,10 @@
  *   — the stored one reused while it is open, else the open one found by
  *   its head, else opened — commented on when the update moved its head.
  *   The outcome per repository is stored;
- *   a failure is recorded, the pass goes on, and the frame backdates the
- *   lease (a retry a few seconds on). `source_ahead_sha` is cleared only
- *   when no repository failed and it still is a sha the pass synced.
+ *   a failure is recorded, the pass goes on, and the frame gives the lease
+ *   back (nothing re-claims a sync but the staff, who may ask again at
+ *   once). `source_ahead_sha` is cleared only when no repository failed and
+ *   it still is a sha the pass synced.
  * - **The pull requests** ({@link pullRequest}): GitHub's `pull_request`
  *   events keep each row's state, for the App's own pull requests from
  *   `sync/<branch>` only; a replay about an older pull request than the
@@ -51,7 +52,7 @@ import type { Octokit } from "octokit";
 import { z } from "zod";
 
 import type { ProjectRepoSync, ProjectSyncAccepted, ProjectSyncState, SyncOutcome, SyncPrState } from "@quiz/contracts";
-import { syncSkipReason } from "@quiz/domain";
+import { syncSkips } from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import { iso, isoOrNull } from "../../clock.js";
@@ -64,11 +65,19 @@ import { PROJECT_SYNC_QUEUE } from "../../jobs.js";
 import { projectInstallation, pushedBy, type WebhookHandler } from "../github/service.js";
 import { isLive } from "./deadline.js";
 import { ProjectError } from "./errors.js";
-import { claimLeases, LEASE_MS, releaseLease, runLeased, type ProjectJob } from "./lease.js";
-import { hintProjectStaff, hintRepo, markRepoDeleted, repoContext, studentRepos, type RepoRow } from "./repos.js";
+import { claimLeases, LEASE_MS, releaseLease, runLeased, type LeasedRun, type ProjectJob } from "./lease.js";
+import {
+  BRANCH_REF,
+  hintProjectStaff,
+  hintRepo,
+  markRepoDeleted,
+  PushEvent,
+  repoContext,
+  studentRepos,
+  type RepoRow,
+} from "./repos.js";
 import type { ProjectRow } from "./views.js";
 
-const BRANCH_REF = /^refs\/heads\/(.+)$/;
 /** The App's refs on a student repository: `sync/<branch>`. */
 const SYNC_REF = /^sync\/(.+)$/;
 /** The pull request lists this many changed files at most. */
@@ -76,11 +85,8 @@ const FILES_SHOWN = 50;
 
 // ---------------------------------------------------------------- the source ahead
 
-const SourcePushEvent = z.object({
-  ref: z.string(),
-  after: z.string(),
-  repository: z.object({ id: z.number().int() }),
-});
+/** What a push on a SOURCE repository is read for: the branch, its new head, the repository. */
+const SourcePushEvent = PushEvent.pick({ ref: true, after: true, repository: true });
 
 /**
  * The commits `branch` of the source holds past the sha handed out, by
@@ -178,10 +184,9 @@ export async function requestSync(
   if (!job) throw new ProjectError("sync_in_progress", "A sync of the project is under way");
 
   const subject = { subjectType: "project" as const, subjectId: project.id };
-  let update;
   try {
     const { token } = await installationClient(config, org.installationId);
-    update = await updateSquashedRepo({
+    const update = await updateSquashedRepo({
       token,
       org: org.login,
       sourceRepo: ownerRepo(project.sourceFullName).repo,
@@ -189,7 +194,17 @@ export async function requestSync(
       strategy: project.sourceStrategy,
       branches: project.branches,
     });
+    await app.db.update(projects).set({ sourceHeads: update.sourceHeads }).where(eq(projects.id, project.id));
+    await audit(app.db, {
+      ...actor,
+      action: "project.sync_requested",
+      ...subject,
+      payload: { changed: update.changed, sourceHeads: update.sourceHeads },
+    });
+    if (app.boss) await app.boss.send(PROJECT_SYNC_QUEUE, job);
+    else await runSyncJob(app, config, job).catch((err: unknown) => log.error({ err, project: project.id }, "project sync job failed"));
   } catch (err) {
+    // Whatever failed before the job took the lease over: given back, never held for its ten minutes.
     await releaseLease(app.db, "syncJobAt", job);
     const rewritten = err instanceof SourceRewritten;
     log.error({ err, project: project.id }, "source sync: the distribution repository could not be updated");
@@ -197,15 +212,6 @@ export async function requestSync(
     if (rewritten) throw new ProjectError("source_rewritten", "The source's history was rewritten: the distribution cannot fast-forward");
     throw new ProjectError("sync_failed", "Updating the distribution repository failed: try again");
   }
-  await app.db.update(projects).set({ sourceHeads: update.sourceHeads }).where(eq(projects.id, project.id));
-  await audit(app.db, {
-    ...actor,
-    action: "project.sync_requested",
-    ...subject,
-    payload: { changed: update.changed, sourceHeads: update.sourceHeads },
-  });
-  if (app.boss) await app.boss.send(PROJECT_SYNC_QUEUE, job);
-  else await runSyncJob(app, config, job).catch((err: unknown) => log.error({ err, project: project.id }, "project sync job failed"));
   return { requestedAt: iso(now) };
 }
 
@@ -236,12 +242,28 @@ async function prState(octokit: Octokit, owner: string, repo: string, number: nu
   }
 }
 
-/** The one row of (repository, branch): its pull request and state as last known. */
-async function storePr(db: Db, repoId: string, branch: string, prNumber: number, state: SyncPrState, now: Date): Promise<void> {
+/**
+ * The one row of (repository, branch): its pull request and state as last
+ * known. `onlyIfNewer`: a row naming a later pull request is left alone (a
+ * stale event replayed).
+ */
+async function storePr(
+  db: Db,
+  repoId: string,
+  branch: string,
+  prNumber: number,
+  state: SyncPrState,
+  now: Date,
+  opts: { onlyIfNewer?: boolean } = {},
+): Promise<void> {
   await db
     .insert(projectSyncPrs)
     .values({ repoId, branch, prNumber, state, updatedAt: now })
-    .onConflictDoUpdate({ target: [projectSyncPrs.repoId, projectSyncPrs.branch], set: { prNumber, state, updatedAt: now } });
+    .onConflictDoUpdate({
+      target: [projectSyncPrs.repoId, projectSyncPrs.branch],
+      set: { prNumber, state, updatedAt: now },
+      ...(opts.onlyIfNewer ? { setWhere: sql`${projectSyncPrs.prNumber} <= ${prNumber}` } : {}),
+    });
 }
 
 /**
@@ -271,11 +293,8 @@ async function upsertSyncPr(
     .from(projectSyncPrs)
     .where(and(eq(projectSyncPrs.repoId, repo.id), eq(projectSyncPrs.branch, branch)));
   let open: number | null = null;
-  if (known) {
-    const state = await prState(octokit, owner, name, known.prNumber);
-    if (state === "open") open = known.prNumber;
-    else if (state !== null && state !== known.state) await storePr(db, repo.id, branch, known.prNumber, state, now);
-  }
+  // A stored pull request no longer open is replaced by the row written below.
+  if (known && (await prState(octokit, owner, name, known.prNumber)) === "open") open = known.prNumber;
   if (open === null) {
     const { data: found } = await octokit.request("GET /repos/{owner}/{repo}/pulls", {
       owner,
@@ -366,7 +385,7 @@ async function syncRepo(app: FastifyInstance, octokit: Octokit, ws: SyncWorkspac
   if (!row) return "skipped";
   const { repo, project } = row;
   const now = app.clock.now();
-  if (!isLive(repo, project) || syncSkipReason(repo, project, now) !== null) {
+  if (!isLive(repo, project) || syncSkips(repo, project, now)) {
     await recordOutcome(db, repo.id, "skipped", now);
     return "skipped";
   }
@@ -411,7 +430,7 @@ async function syncRepo(app: FastifyInstance, octokit: Octokit, ws: SyncWorkspac
  */
 export async function runSyncJob(app: FastifyInstance, config: AppConfig, job: ProjectJob): Promise<void> {
   const db = app.db;
-  await runLeased(app, config, "syncJobAt", job, "project sync", async ({ project, octokit, token, lost, each }) => {
+  const body = async ({ project, octokit, token, lost, each }: LeasedRun) => {
     if (project.archivedAt !== null || project.distributionFullName === null) return;
     const { owner, repo: squashedRepo } = ownerRepo(project.distributionFullName);
     const tally: Record<SyncOutcome, number> = { opened: 0, updated: 0, up_to_date: 0, failed: 0, skipped: 0 };
@@ -445,7 +464,9 @@ export async function runSyncJob(app: FastifyInstance, config: AppConfig, job: P
       payload: { opened: tally.opened, updated: tally.updated, upToDate: tally.up_to_date, failed: tally.failed, skipped: tally.skipped, failedRepos },
     });
     await hintProjectStaff(db, [project.id]);
-  });
+  };
+  // A failed repository gives the lease back: nothing re-claims a sync but the staff, at once.
+  await runLeased(app, config, "syncJobAt", job, "project sync", body, { onFailure: "release" });
 }
 
 // ---------------------------------------------------------------- the pull requests
@@ -478,14 +499,7 @@ export const pullRequest: WebhookHandler = async (app, config, delivery) => {
   const ctx = await repoContext(app.db, repository.id);
   if (!ctx) return;
   const state: SyncPrState = action === "closed" || pr.state === "closed" ? (pr.merged ? "merged" : "closed") : "open";
-  await app.db
-    .insert(projectSyncPrs)
-    .values({ repoId: ctx.repo.id, branch, prNumber: pr.number, state, updatedAt: delivery.receivedAt })
-    .onConflictDoUpdate({
-      target: [projectSyncPrs.repoId, projectSyncPrs.branch],
-      set: { prNumber: pr.number, state, updatedAt: delivery.receivedAt },
-      setWhere: sql`${projectSyncPrs.prNumber} <= ${pr.number}`,
-    });
+  await storePr(app.db, ctx.repo.id, branch, pr.number, state, delivery.receivedAt, { onlyIfNewer: true });
   await hintRepo(app.db, ctx);
 };
 
@@ -496,9 +510,11 @@ export function projectSyncState(project: ProjectRow, repos: readonly RepoRow[],
   const counts = Object.values(project.sourceAhead ?? {});
   const outcomes = repos.map((r) => r.syncOutcome).filter((o): o is SyncOutcome => o !== null);
   const count = (outcome: SyncOutcome) => outcomes.filter((o) => o === outcome).length;
+  // Never "ahead" on a project that cannot sync (archived, its distribution not built): the page offers nothing.
+  const canSync = project.archivedAt === null && project.distributionFullName !== null;
   return {
     ahead:
-      project.sourceAheadSha === null || project.sourcePushedAt === null
+      !canSync || project.sourceAheadSha === null || project.sourcePushedAt === null
         ? null
         : {
             pushedAt: iso(project.sourcePushedAt),

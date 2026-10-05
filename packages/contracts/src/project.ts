@@ -871,7 +871,9 @@ export type ProjectPrimaryAction = z.infer<typeof ProjectPrimaryAction>;
  * lacks — since `pushedAt` (the server's receipt of the push), `commits` of
  * them when the handed-out sha is known (null for a project built before
  * it was recorded, or when GitHub could not count them) — null when the
- * source and the distribution agree. `inProgress`: a sync holds the
+ * source and the distribution agree, and on a project that cannot sync
+ * (archived, its distribution not built): the page offers Sync on `ahead`
+ * alone. `inProgress`: a sync holds the
  * project's lease (the page refetches shortly). `syncedAt`: the last pass
  * that finished. `last`: what that pass, and the retries since, did to each
  * repository — the counts of the repositories' last outcomes

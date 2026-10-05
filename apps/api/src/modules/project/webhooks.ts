@@ -39,29 +39,8 @@ import { forgetRepoLiveState } from "../../github/metrics.js";
 import { onEvent, onReceipt, projectInstallation, pushedBy, type WebhookHandler } from "../github/service.js";
 import { completedRun, ingestCompletedRun, isEligible, isLastStudentCommit, RawWorkflowRun } from "./grading.js";
 import { protectFiles } from "./protection.js";
-import { followRepoRename, hintRepo, markRepoDeleted, moveLastCommit, repoContext, tracksRepo } from "./repos.js";
+import { BRANCH_REF, followRepoRename, hintRepo, markRepoDeleted, moveLastCommit, PushEvent, repoContext, tracksRepo } from "./repos.js";
 import { pullRequest, sourcePush } from "./sync.js";
-
-const BRANCH_REF = /^refs\/heads\/(.+)$/;
-
-const PushEvent = z.object({
-  ref: z.string(),
-  before: z.string().optional(),
-  after: z.string(),
-  forced: z.boolean().optional(),
-  repository: z.object({ id: z.number().int() }),
-  sender: z.object({ login: z.string() }).optional(),
-  head_commit: z.object({ timestamp: z.string().optional() }).nullish(),
-  commits: z
-    .array(
-      z.object({
-        added: z.array(z.string()).optional(),
-        modified: z.array(z.string()).optional(),
-        removed: z.array(z.string()).optional(),
-      }),
-    )
-    .optional(),
-});
 
 /**
  * A push on a student's repository. A deleted branch changes nothing. Only
