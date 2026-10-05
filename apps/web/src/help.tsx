@@ -52,7 +52,8 @@ function firstHeading(source: string): string | null {
 /**
  * The topics a reader without the teacher UI can reach. The rule: a topic
  * belongs to a role's palette when that role can reach the `HelpIcon` that
- * opens it. `student-home` is the only one hosted by a student surface;
+ * opens it. The student surfaces host `student-home`, `student-project` (the
+ * project page's repository section) and `student-groups` (the Groups tab);
  * every other source lives on `ClassroomView` or `RosterImport`, which a
  * student never opens.
  *
@@ -60,7 +61,7 @@ function firstHeading(source: string): string | null {
  * palette will keep the page's own help out of the one search field that was
  * supposed to reach everything.
  */
-const STUDENT_TOPICS = ["student-home"];
+const STUDENT_TOPICS = ["student-home", "student-project", "student-groups"];
 
 /**
  * Every help topic with its title, for the command palette. The title is read
