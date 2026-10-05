@@ -751,7 +751,10 @@ live in `ui/state.ts`, each written once.
   the sign the form belongs in a `Sheet`, never a reason to widen the
   dialog. `dense` (12 px between rows instead of 16) is for a body that is a
   single row.
-- Menu: overflow for tertiary actions; destructive items last, separated. It
+- Menu: overflow for tertiary actions; destructive items last, separated. A
+  list longer than the room left under (or above) its trigger scrolls inside
+  the panel, capped at the viewport (a set's thirty groups to move a
+  student into, M3-16a). It
   closes on a page scroll, but not on the scroll its own opening click causes
   (200 ms of grace) nor on one inside the panel. Its panel stacks ABOVE the
   dialog layer (`Z.popover` > `Z.modal`), because menus open from inside
@@ -814,7 +817,25 @@ live in `ui/state.ts`, each written once.
   can get. A failed mutation reports through `useErrorToast()` (`notify.tsx`):
   `onError: toastError("error.save")` — the server's message or the
   translated fallback key, always in the `error` tone, so no call site can
-  pick another one.
+  pick another one. A toast may carry ONE action (`toast(message, tone, {
+  action, key })`): a 13 px semibold `fg` text button before the dismiss
+  cross — never the accent, the screen's red is elsewhere —, which runs and
+  dismisses the toast. Today it is Undo after a group set's move (ADR-070
+  §6), for the toast's 6 s; `key` makes a toast replace the one standing
+  with the same key, so only the latest move offers Undo.
+- Group board (`group/GroupBoard.tsx`, M3-16a): a group set's students in
+  no group and its groups, as the categorize board draws its tray and
+  columns (`ColumnFrame`'s hairline card, the chip of a categorize card,
+  `info` for the selected student and the "Move here" buttons, `info-soft`
+  under a drag). "No group" is a 16 rem column that stays in sight from
+  `lg` (sticky under the banner, its own list scrolling past the screen);
+  the groups wrap in a 13 rem grid (`items-start`: a pair is not stretched
+  to the tallest group of its row), so a class of a hundred is some thirty
+  cards and no horizontal scroll. Each student has a "Move to…" menu, the
+  keyboard's and the phone's way, beside the drag. A group above the set's
+  maximum shows its count in `warning` and a `TriangleAlert`: a warning,
+  never a refusal. A student who has not signed in carries a faint
+  `CircleDashed`. Read-only (an archived classroom): plain chips, no menu.
 - Empty state: icon in a `surface-2` circle, title, one line, one action.
 - PageSkeleton: the loading state of a whole page, in ONE shape — a 32 px
   title bar, optionally the 36 px tabs/toolbar row under it, then a 256 px

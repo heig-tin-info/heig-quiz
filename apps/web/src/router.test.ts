@@ -72,8 +72,26 @@ describe("routeToPath / parsePath", () => {
   it("parses none of the classroom merge's other routes while CLASSROOM_PAGES is off", () => {
     // A production build: every such address reads as it did before them.
     expect(parsePath("/classrooms/c-1/grades")).toEqual({ view: "classroom", id: "c-1" });
+    // M3-16a: a project's groups page is gone; its address reads as home.
     expect(parsePath("/projects/p-1/groups")).toEqual({ view: "home" });
     expect(parsePath("/projects/x/groups")).toEqual({ view: "home" });
+  });
+
+  it("parses the classroom's Groups and a group set in every build, since M3-16a (ADR-070)", () => {
+    expect(ROUTES.classroomGroups.preview).toBeUndefined();
+    expect(ROUTES.groupSet.preview).toBeUndefined();
+    expect(routeToPath({ view: "classroomGroups", id: "c-1" })).toBe("/classrooms/c-1/groups");
+    expect(parsePath("/classrooms/c-1/groups")).toEqual({ view: "classroomGroups", id: "c-1" });
+    expect(parsePath("/classrooms/c-1/groups/")).toEqual({ view: "classroomGroups", id: "c-1" });
+    expect(routeToPath({ view: "groupSet", classroomId: "c-1", id: "s-1" })).toBe("/classrooms/c-1/groups/s-1");
+    expect(parsePath("/classrooms/c-1/groups/s-1")).toEqual({ view: "groupSet", classroomId: "c-1", id: "s-1" });
+    // The way back to a project travels in the query, which `parsePath` never reads.
+    expect(routeToPath({ view: "groupSet", classroomId: "c-1", id: "s-1", fromProject: "p-1" })).toBe(
+      "/classrooms/c-1/groups/s-1?fromProject=p-1",
+    );
+    // Staff pages: a student, or a teacher in the student view, gets the home.
+    expect(ROUTES.classroomGroups.studentSafe).toBe(false);
+    expect(ROUTES.groupSet.studentSafe).toBe(false);
   });
 
   it("parses the project page and the new project in every build, since M3-12 (F-PROJ-13)", () => {
@@ -86,7 +104,8 @@ describe("routeToPath / parsePath", () => {
   it("enables exactly the routes that parse in this build (M3-10)", () => {
     expect(routeEnabled("project")).toBe(true);
     expect(routeEnabled("projectNew")).toBe(true);
-    expect(routeEnabled("projectGroups")).toBe(false);
+    expect(routeEnabled("classroomGroups")).toBe(true);
+    expect(routeEnabled("groupSet")).toBe(true);
     expect(routeEnabled("classroomSettings")).toBe(true);
   });
 
@@ -204,7 +223,8 @@ describe("ROUTES", () => {
     classroomJournal: { view: "classroomJournal", id: "c-1", path: "10-semaine-1/10-pointeurs.md" },
     classroomGrades: { view: "classroomGrades", id: "c-1" },
     project: { view: "project", id: "p-1" },
-    projectGroups: { view: "projectGroups", id: "p-1" },
+    classroomGroups: { view: "classroomGroups", id: "c-1" },
+    groupSet: { view: "groupSet", classroomId: "c-1", id: "s-1" },
     projectNew: { view: "projectNew", classroomId: "c-1" },
     activities: { view: "activities" },
     pools: { view: "pools" },
@@ -287,7 +307,6 @@ describe("ROUTES", () => {
       pollModerate: "polls",
       admin: "admin",
       project: "activities",
-      projectGroups: "activities",
     });
     const unlit = ROUTE_VIEWS.filter((v) => lit[v] === null).sort();
     expect(unlit).toEqual(
@@ -295,6 +314,7 @@ describe("ROUTES", () => {
         "attempt",
         "classroom",
         "classroomGrades",
+        "classroomGroups",
         "classroomJournal",
         "classroomSettings",
         "correction",
@@ -306,6 +326,7 @@ describe("ROUTES", () => {
         "evaluationPreview",
         "feedback",
         "grading",
+        "groupSet",
         "join",
         "kiosk",
         "live",

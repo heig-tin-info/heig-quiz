@@ -76,11 +76,20 @@ export type Route =
   /** The classroom's Grades tab: the teacher's export, the student's table (§5.2). */
   | { view: "classroomGrades"; id: string }
   /**
-   * One project, the staff's page (F-PROJ-13, M3-12; `project/ProjectPage`),
-   * and its groups, behind `CLASSROOM_PAGES` until M3-16 ships their screen.
+   * The classroom's Groups tab (ADR-070, M3-16a): its group sets, the staff's
+   * only — a student, or a teacher in the student view, gets the home.
    */
+  | { view: "classroomGroups"; id: string }
+  /**
+   * One group set of a classroom (ADR-070 §3): its students in no group and
+   * its groups. `fromProject`, the project page it was opened from, is
+   * carried in `?fromProject=` (as the question editor's `from`) so the way
+   * back survives a reload; the page reads it off the query string,
+   * `parsePath` never sees it.
+   */
+  | { view: "groupSet"; classroomId: string; id: string; fromProject?: string }
+  /** One project, the staff's page (F-PROJ-13, M3-12; `project/ProjectPage`). */
   | { view: "project"; id: string }
-  | { view: "projectGroups"; id: string }
   /**
    * A new project in one classroom (F-PROJ-01): where "New ▾ › Project" leads
    * on a connected classroom (M3-10), M3-11's form (`project/NewProjectPage`).
@@ -241,11 +250,11 @@ export interface RouteSpec<V extends Route["view"]> {
 /**
  * The gate of the classroom merge's routes (ADR-035, `docs/merge/05-web.md`
  * §5.1–§5.2) whose routes exist before their screens do: the classroom's
- * Grades tab and a project's groups. Each renders a placeholder
- * (`ComingSoon`) until its task ships the real screen (M5-04, M3-16). A
- * screen that links to one asks `routeEnabled` first, so production never
- * shows a door to a page that does not parse. The new project and the
- * project page left it with M3-12.
+ * Grades tab, which renders a placeholder (`ComingSoon`) until its task
+ * ships the real screen (M5-04). A screen that links to one asks
+ * `routeEnabled` first, so production never shows a door to a page that
+ * does not parse. The new project and the project page left it with M3-12,
+ * the classroom's Groups and a group set's page were never in it (M3-16a).
  *
  * Off in a production build: the `preview` routes do not parse. On in the
  * browser mock (`VITE_MOCK=1`), and wherever `VITE_CLASSROOM_PAGES=1` is set
@@ -315,8 +324,8 @@ function evaluationIdOf(route: RouteOf<EvaluationTailView | "evaluation">): stri
  * matters in a family with a catch-all, the evaluation's first: `evaluation`
  * accepts ANY tail after the id — an unknown tail lands on the configuration screen
  * rather than on the home — so it comes after `live`, `poll`, `grading`,
- * `results` and `evaluationPreview`. The classroom's tabs and the project's
- * groups precede `classroom` and `project` for the same reason. `home`
+ * `results` and `evaluationPreview`. The classroom's tabs and a group set
+ * precede `classroom` for the same reason. `home`
  * matches nothing: it is the fallback.
  */
 export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
@@ -391,6 +400,21 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     studentSafe: true,
     bottomSlot: "courses",
   },
+  // ADR-070 (M3-16a): a group set, then the Groups tab that lists them, in
+  // every build. Staff pages: a student's UI gets the home.
+  groupSet: {
+    path: (r) =>
+      `/classrooms/${r.classroomId}/groups/${r.id}${r.fromProject ? `?fromProject=${encodeURIComponent(r.fromProject)}` : ""}`,
+    match: ([head, classroomId, tail, id]) =>
+      head === "classrooms" && classroomId && tail === "groups" && id ? { view: "groupSet", classroomId, id } : null,
+    studentSafe: false,
+  },
+  classroomGroups: {
+    path: (r) => `/classrooms/${r.id}/groups`,
+    match: ([head, id, tail, leaf]) =>
+      head === "classrooms" && id && tail === "groups" && leaf === undefined ? { view: "classroomGroups", id } : null,
+    studentSafe: false,
+  },
   classroomGrades: {
     path: (r) => `/classrooms/${r.id}/grades`,
     match: ([head, id, tail]) =>
@@ -407,18 +431,8 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     studentSafe: true,
     bottomSlot: "courses",
   },
-  // M3-16: the groups stay behind `CLASSROOM_PAGES` until their screen
-  // ships. `project` takes no tail, so `/projects/:id/groups` reads as home
-  // in a production build rather than as the project.
-  projectGroups: {
-    path: (r) => `/projects/${r.id}/groups`,
-    match: ([head, id, tail]) =>
-      head === "projects" && id && tail === "groups" ? { view: "projectGroups", id } : null,
-    studentSafe: false,
-    section: "activities",
-    preview: true,
-  },
-  // F-PROJ-13 (M3-12): the staff's project page, in every build.
+  // F-PROJ-13 (M3-12): the staff's project page, in every build. It takes
+  // no tail: `/projects/:id/<anything>` reads as home.
   project: {
     path: (r) => `/projects/${r.id}`,
     match: ([head, id, tail]) =>

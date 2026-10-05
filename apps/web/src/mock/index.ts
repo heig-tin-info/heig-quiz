@@ -36,6 +36,8 @@
  *    new project's create is refused, the source not found or the build
  *    failed; `unassigned` — publishing the draft is refused, three
  *    students in no group;
+ *  - `groups` — PRG1-2026 has group sets (section 5b'), and with `projects`
+ *    two of its drafts are group projects;
  *  - `scene` — the student player's state, and only that one screen's:
  *    `?scene=lobby|running|paused|closed|extend|single|marks|forward|exercise` (`running` by default).
  *
@@ -55,6 +57,8 @@
  *   student.ts     4.  the student's home, lobby and player;
  *   grading.ts     5.  grading, results and the student's feedback;
  *   preview.ts     5b. the teacher's stateless preview of an evaluation;
+ *   groups.ts      5b'. a classroom's group sets, their groups, the moves
+ *                      and the random formation (`?groups=1`, M3-16a);
  *   project.ts     5c. a classroom's projects, one project's page, its
  *                      repositories' runs and its checkpoints (`?projects=1`,
  *                      M3-10, M3-12);
@@ -130,6 +134,7 @@ import {
 } from "./student";
 import "./grading";
 import "./preview";
+import "./groups";
 import "./project";
 import "./drill";
 import "./github";

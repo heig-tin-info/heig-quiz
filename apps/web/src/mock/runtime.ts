@@ -43,6 +43,8 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  *   (`mock/projectNew.ts`); `distfail`: ...`502 distribution_failed`.
  * `unassigned`: publishing the draft project is refused `409
  *   unassigned_students`, three students in no group (`mock/project.ts`).
+ * `groups`: PRG1-2026 has three group sets and PRG1-2024 one, and with
+ *   `projects` two of PRG1-2026's drafts are group projects (`mock/groups.ts`).
  * `superpowers`: the admin persona's Super Powers are on, 54 minutes left (ADR-054).
  * `lastminutes`: ...with 4 min 30 s left instead, the banner's countdown.
  * `degraded`: the admin's system status has a dead clock, a stale backup and
@@ -75,6 +77,7 @@ export const FLAG_NAMES = [
   "distfail",
   "unassigned",
   "unreleased",
+  "groups",
   "superpowers",
   "lastminutes",
   "degraded",
@@ -187,6 +190,10 @@ export class MockPayload extends MockError {
     super(status, String(body.message ?? ""));
   }
 }
+
+/** A refusal of the API: `{ error, message, ...extra }` under `status`, as the routes' error handlers answer. */
+export const refuse = (status: number, error: string, message: string, extra: Record<string, unknown> = {}) =>
+  new MockPayload(status, { error, message, ...extra });
 
 export type Handler = (m: RegExpMatchArray, body: Record<string, unknown>, url: URL) => unknown;
 export const routes: { method: string; re: RegExp; h: Handler }[] = [];

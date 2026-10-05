@@ -122,9 +122,9 @@ describe("the new project form", () => {
     expect(screen.queryByText(/workflow can be changed by the student/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("checkbox", { name: ".github/workflows/grading.yml" }));
     expect(screen.getByText(/workflow can be changed by the student/)).toBeInTheDocument();
-    // Group mode is not offered until the groups' pages exist (M3-16): a
-    // group project could not be published without groups.
-    expect(screen.queryByRole("switch", { name: "Groups" })).not.toBeInTheDocument();
+    // Group mode is offered (M3-16a), off by default: no set is asked for.
+    expect(screen.getByRole("switch", { name: "Groups" })).not.toBeChecked();
+    expect(screen.queryByRole("combobox", { name: "Group set" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(posted(calls)).toHaveLength(1));
     expect(posted(calls)[0]).toMatchObject({

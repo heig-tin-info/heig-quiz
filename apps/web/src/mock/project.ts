@@ -20,7 +20,10 @@
  * changed since (the server then names Release as the primary action) and
  * the "score is the grade" scale falling back on scores out of 100.
  * `?unassigned=1`: publishing the draft is refused `409 unassigned_students`
- * with three names. `?unreleased=1`: the locked project is not released yet,
+ * with three names. `?groups=1` (ADR-070, M3-16a): the draft is a group
+ * project that names no set yet (Publish answers `409 no_group_set`), and a
+ * second draft, "Labo 4 — en binômes", follows PRG1-2026's pairs
+ * (`groups.ts`, which asks this section what its sets are used by). `?unreleased=1`: the locked project is not released yet,
  * so Release is its one action. Without `?projects=1` no classroom has a project, so the
  * default scenes are what they were. The other classrooms are not connected:
  * "New ▾ › Project" there leads to the Settings' connect sheet.
@@ -63,8 +66,9 @@ import {
   teacherScoreMax,
 } from "@quiz/domain";
 
+import { isSetOf, provideSetUses, SET_PAIRS, unplacedClaimed } from "./groups";
 import { classroomRoster, courses, rooms } from "./org";
-import { D, flags, H, iso, MockError, MockPayload, nextId, now, on, role } from "./runtime";
+import { D, flags, H, iso, MockError, MockPayload, nextId, now, on, refuse, role } from "./runtime";
 
 /** PRG1-2026's organization, as `github.ts` names it (which this section, above it, cannot read). */
 const ORG = "heig-tin-info";
@@ -115,10 +119,20 @@ interface MockProject {
   read: boolean;
 }
 
+/**
+ * The group project's id: a uuid, as the refusals naming the projects of a
+ * set parse them (`GroupRefusalProjects`).
+ */
+const PJ_GROUP = "0190d3c4-0000-7000-8000-0000000000b4";
+
 const SEEDS: { id: string; title: string; state: ProjectSummary["state"]; start: number; deadline: number }[] = [
   { id: "pj-draft", title: "Labo 3 — listes chaînées", state: "draft", start: 7 * D, deadline: 21 * D },
   { id: "pj-published", title: "Labo 2 — pointeurs", state: "published", start: -7 * D, deadline: 7 * D },
   { id: "pj-locked", title: "Labo 1 — premiers pas en C", state: "locked", start: -35 * D, deadline: -7 * D },
+  // `?groups=1`: a group project following PRG1-2026's pairs.
+  ...(flags.groups
+    ? [{ id: PJ_GROUP, title: "Labo 4 — en binômes", state: "draft" as const, start: 14 * D, deadline: 28 * D }]
+    : []),
 ];
 
 const slug = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -416,6 +430,9 @@ function seeded(): MockProject[] {
       editable: [],
     };
     summary.editable = editableProjectFields({ state: summary.state, deadlineAt: new Date(summary.deadlineAt) }, new Date(now));
+    // `?groups=1`: the draft is a group project with no set yet; the second one follows the pairs.
+    if (flags.groups && seed.id === "pj-draft") summary.groupMode = true;
+    if (seed.id === PJ_GROUP) Object.assign(summary, { groupMode: true, groupSetId: SET_PAIRS });
     const project: MockProject = {
       summary,
       classroom: { id: room.id, name: room.name, courseCode: course?.code ?? "" },
@@ -453,6 +470,18 @@ export function addMockProject(summary: ProjectSummary, classroom: MockProject["
   PROJECTS.set(summary.id, project);
 }
 
+/** What a set is used by (ADR-070 §4): the projects naming it, archived or not, following or stopped. */
+provideSetUses((setId) =>
+  [...seeded(), ...CREATED]
+    .filter((p) => p.summary.groupSetId === setId)
+    .map((p) => ({
+      id: p.summary.id,
+      name: p.summary.name,
+      archived: p.summary.archivedAt !== null,
+      follows: p.summary.archivedAt === null && p.summary.deadlineAppliedAt === null,
+    })),
+);
+
 const activityOf = (p: MockProject): ProjectActivitySummary => ({
   kind: "project",
   id: p.summary.id,
@@ -484,9 +513,6 @@ function projectOr404(id: string): MockProject {
   if (role === "student" || !p) throw new MockError(404, "Not found");
   return p;
 }
-
-const refuse = (status: number, error: string, message: string, extra: Record<string, unknown> = {}) =>
-  new MockPayload(status, { error, message, ...extra });
 
 /** A live repository: provisioned, not deleted, its project not archived (`LIVE` of `deadline.ts`). */
 const isLive = (p: MockProject, r: MockRepo) => r.provisionStatus === "ok" && !r.deleted && p.summary.archivedAt === null;
@@ -651,6 +677,18 @@ on("PATCH", "/app/api/projects/:id", (m, raw) => {
       if (c.offsetDays !== null && c.dispatchedAt === null) c.dueAt = checkpointDueAt(new Date(s.deadlineAt), c.offsetDays).toISOString();
     }
   }
+  // ADR-070 §7: a group project names a set of its own classroom; leaving group mode clears it.
+  if (body.groupSetId && !isSetOf(s.classroomId, body.groupSetId)) {
+    throw refuse(422, "unknown_group_set", "The group set is not one of the project's classroom");
+  }
+  if (body.groupMode !== undefined) {
+    s.groupMode = body.groupMode;
+    if (!body.groupMode) s.groupSetId = null;
+  }
+  if (body.groupSetId !== undefined) {
+    if (body.groupSetId !== null && !s.groupMode) throw refuse(400, "validation", "A group set only applies to a group project");
+    s.groupSetId = body.groupSetId;
+  }
   if (body.name !== undefined) s.name = body.name;
   if (body.deadlineStrategy !== undefined) s.deadlineStrategy = body.deadlineStrategy;
   if (body.protectedFiles !== undefined) s.protectedFiles = body.protectedFiles;
@@ -666,10 +704,11 @@ on("POST", "/app/api/projects/:id/publish", (m) => {
   const s = p.summary;
   if (s.state !== "draft") throw refuse(409, "not_draft", "Only a draft is published");
   if (s.distribution === null) throw refuse(409, "distribution_missing", "The distribution repository is not built");
-  if (flags.unassigned) {
+  if (s.groupMode && s.groupSetId === null) throw refuse(409, "no_group_set", "A group project needs a group set");
+  const left = s.groupMode && s.groupSetId !== null ? unplacedClaimed(s.groupSetId) : [];
+  if (flags.unassigned || left.length > 0) {
     // `ProjectUnassigned` wants uuids; the mock's roster ids are not, so each student gets one of its rank.
-    const students = classroomRoster(s.classroomId)
-      .filter((x) => x.status === "claimed")
+    const students = (left.length > 0 ? left : classroomRoster(s.classroomId).filter((x) => x.status === "claimed"))
       .slice(0, 3)
       .map((x, i) => ({ enrollmentId: `0190d3c4-0000-7000-8000-${String(i + 1).padStart(12, "0")}`, nom: x.nom, prenom: x.prenom }));
     throw refuse(409, "unassigned_students", `${students.length} student(s) in no group`, { students });

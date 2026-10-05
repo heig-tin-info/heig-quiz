@@ -40,8 +40,10 @@ export const HINT_ROOTS: Record<HintKind, readonly string[] | "all"> = {
   // An archived classroom takes its evaluations out of the Activities. The
   // GitHub setup return (M2-02) raises it too: the organizations the connect
   // sheet offers, and the classroom's link (under `classroom`).
-  classrooms: ["courses", "course", "classroom", "student", "activities", "github"],
-  roster: ["courses", "course", "classroom", "evaluations", "evaluation", "dashboard", "student"],
+  // An archived classroom's sets turn read-only (`group-sets`, M3-16a).
+  classrooms: ["courses", "course", "classroom", "student", "activities", "github", "group-sets"],
+  // A roster line added or removed is a student of every group set (ADR-070 §2).
+  roster: ["courses", "course", "classroom", "evaluations", "evaluation", "dashboard", "student", "group-sets"],
   pool: [
     "pools",
     "pool",
@@ -64,12 +66,13 @@ export const HINT_ROOTS: Record<HintKind, readonly string[] | "all"> = {
   journal: ["journal"],
   // A project's repository changed (M3-04): a classroom's projects
   // (`classroomProjectsKey`) and the project page with its runs and
-  // checkpoints (`projectKey`, M3-12).
-  projects: ["classroom", "project"],
-  // A classroom's group sets changed (ADR-070, M3-15a): no screen reads
-  // them before M3-16, which names its roots here. A copy that changed is
+  // checkpoints (`projectKey`, M3-12). A project archived, or naming another
+  // set, changes the sets' "used by" (`groupSetsKey`, M3-16a).
+  projects: ["classroom", "project", "group-sets"],
+  // A classroom's group sets changed (ADR-070, M3-15a): the Groups tab and
+  // every set's page (`groupSetsKey`, M3-16a). A copy that changed is
   // hinted `projects` besides.
-  groups: [],
+  groups: ["group-sets"],
   mutation: "all",
 };
 

@@ -115,6 +115,17 @@ export const projectKey = (id: string) => ["project", id] as const;
 export const projectRunsKey = (id: string, rid: string) => [...projectKey(id), "repos", rid, "runs"] as const;
 export const projectCheckpointsKey = (id: string) => [...projectKey(id), "checkpoints"] as const;
 /**
+ * A classroom's group sets (`GET /classrooms/:id/group-sets`, ADR-070) and
+ * one set (`GET /group-sets/:id`, the answer of every write on it), under
+ * a root of their own, `group-sets`, which the `groups` hint names
+ * (`realtime/hints.ts`): one root reaches the list and every set.
+ */
+export const groupSetsKey = ["group-sets"] as const;
+/** Every classroom's list: what a write of a set marks stale (its counts). */
+export const groupSetListsKey = [...groupSetsKey, "classroom"] as const;
+export const classroomGroupSetsKey = (classroomId: string) => [...groupSetListsKey, classroomId] as const;
+export const groupSetKey = (id: string) => [...groupSetsKey, "set", id] as const;
+/**
  * The organizations Quiz's App is installed on (the connect sheet's picker).
  * Its own root, which the `classrooms` hint names: an installation that
  * completes adds a row while the sheet is open.

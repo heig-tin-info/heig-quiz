@@ -317,7 +317,7 @@ export function EditableTitle({
         // Not a flex row: a long title WRAPS on a phone rather than being cut
         // short, and an inline pencil then trails its last line instead of
         // floating beside the block.
-        "group -mx-1.5 max-w-full rounded-field border border-transparent px-1.5 text-left break-words transition-colors hover:border-line hover:bg-surface-2 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-accent/20",
+        "group -mx-1.5 max-w-[calc(100%+0.75rem)] rounded-field border border-transparent px-1.5 text-left break-words transition-colors hover:border-line hover:bg-surface-2 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-accent/20",
         type,
         className,
       )}

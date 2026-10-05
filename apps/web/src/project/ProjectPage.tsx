@@ -4,16 +4,18 @@ import { useState } from "react";
 
 import type { ClassroomDetail, ProjectDetail, ProjectPatch, ProjectReleaseResult, ProjectSummary } from "@quiz/contracts";
 
-import { api, ApiError } from "../api";
+import { api, ApiError, refusedWith } from "../api";
+import { AppLink } from "../AppLink";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { activitiesKey, classroomKey, classroomProjectsKey, projectKey } from "../queryKeys";
+import { activitiesKey, classroomGroupSetsKey, classroomKey, classroomProjectsKey, projectKey } from "../queryKeys";
 import type { Navigate } from "../router";
 import {
   Alert,
   Badge,
   Button,
+  buttonClass,
   EditableTitle,
   isoDateTime,
   Menu,
@@ -27,6 +29,8 @@ import {
 } from "../ui";
 import { projectStateLabel, projectStateTone } from "./common";
 import { ProjectCheckpoints } from "./ProjectCheckpoints";
+import { FIELD_ID } from "./newProject";
+import { ProjectGroupSet } from "./ProjectGroupSet";
 import { ProjectRepos } from "./ProjectRepos";
 import { ProjectSettings } from "./ProjectSettings";
 import {
@@ -35,6 +39,7 @@ import {
   projectStatus,
   refusalMessage,
   releaseRefusal,
+  groupSetPageOf,
   unassignedStudents,
   type UnassignedStudent,
 } from "./projectPage";
@@ -69,6 +74,8 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   const confirm = useConfirm();
   const [openRepo, setOpenRepo] = useState<string | null>(null);
   const [unassigned, setUnassigned] = useState<UnassignedStudent[] | null>(null);
+  /** Publish refused `409 no_group_set`: said above the page, pointing at the picker, until a set is chosen. */
+  const [noSet, setNoSet] = useState(false);
   /** Why the last release was refused, said above the page until the next attempt succeeds. */
   const [releaseRefused, setReleaseRefused] = useState<string | null>(null);
 
@@ -89,6 +96,8 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
     await Promise.all([
       qc.invalidateQueries({ queryKey: projectKey(id) }),
       classroomId ? qc.invalidateQueries({ queryKey: classroomProjectsKey(classroomId) }) : null,
+      // A set named, or another one, changes what the sets say they are used by.
+      classroomId ? qc.invalidateQueries({ queryKey: classroomGroupSetsKey(classroomId) }) : null,
       qc.invalidateQueries({ queryKey: activitiesKey }),
     ]);
   };
@@ -97,18 +106,23 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   const patch = useMutation({
     mutationFn: (body: ProjectPatch) =>
       api<ProjectSummary>(`/app/api/projects/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-    onSuccess: refresh,
+    onSuccess: async (_, body) => {
+      if (body.groupSetId) setNoSet(false);
+      await refresh();
+    },
   });
   const publish = useMutation({
     mutationFn: () => api<ProjectSummary>(`/app/api/projects/${id}/publish`, { method: "POST" }),
     onSuccess: async () => {
       setUnassigned(null);
+      setNoSet(false);
       await refresh();
       toast(t("project.published"), "success");
     },
     onError: (error) => {
       const students = unassignedStudents(error);
       if (students) setUnassigned(students);
+      else if (refusedWith(error, "no_group_set")) setNoSet(true);
       else failed(error);
     },
   });
@@ -224,6 +238,8 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   ];
 
   const status = projectStatus(project);
+  /** The set's page, coming back here (`?fromProject=<id>`): where the students in no group are placed. */
+  const setPage = groupSetPageOf(project);
   const counts = [
     t("project.counts.students", { n: project.counts.students }),
     t("project.counts.accepted", { n: project.counts.accepted }),
@@ -286,10 +302,31 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
           {releaseRefused}
         </Alert>
       ) : null}
+      {noSet ? (
+        <Alert
+          tone="danger"
+          icon={AlertTriangle}
+          title={t("project.noGroupSet.title")}
+          action={
+            <Button variant="secondary" size="sm" onClick={() => document.getElementById(FIELD_ID.groupSet)?.focus()}>
+              {t("project.groupSet.pick")}
+            </Button>
+          }
+        >
+          {t("project.noGroupSet.body")}
+        </Alert>
+      ) : null}
       {unassigned ? (
         <Alert
           tone="danger"
           icon={AlertTriangle}
+          action={
+            setPage ? (
+              <AppLink route={setPage} navigate={navigate} className={buttonClass("secondary", "sm")}>
+                {t("project.unassigned.open")}
+              </AppLink>
+            ) : undefined
+          }
           title={
             unassigned.length > 0
               ? t("project.unassigned.title", { n: unassigned.length })
@@ -314,6 +351,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
         </Alert>
       ) : null}
 
+      {project.groupMode ? <ProjectGroupSet project={project} patch={patch} navigate={navigate} /> : null}
       <ProjectSettings project={project} patch={patch} />
       <ProjectRepos project={project} onOpen={setOpenRepo} navigate={navigate} />
       {project.gradingMode === "auto" ? <ProjectCheckpoints project={project} /> : null}

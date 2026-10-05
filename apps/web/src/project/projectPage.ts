@@ -15,12 +15,14 @@ import {
   type ProjectErrorCode,
   type ProjectRepoReview,
   type ProjectRepoView,
+  type ProjectSummary,
   type ReviewCheckpoint,
 } from "@quiz/contracts";
 import { isVoidCheckpoint, reopens } from "@quiz/domain";
 
 import { ApiError, apiErrorMessage, refusalCodeOf } from "../api";
 import type { Dict, TFunction } from "../i18n";
+import type { RouteOf } from "../router";
 import type { Tone } from "../ui";
 
 export type UnassignedStudent = ProjectUnassigned["students"][number];
@@ -275,6 +277,9 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   strategy_frozen: "project.refusal.strategyFrozen",
   publish_mode_frozen: "project.refusal.publishModeFrozen",
   repo_unavailable: "project.refusal.repoUnavailable",
+  // ADR-070 (M3-15a): a group project's set.
+  no_group_set: "project.noGroupSet.title",
+  unknown_group_set: "project.refusal.unknownGroupSet",
   due_past: "project.refusal.duePast",
   due_after_deadline: "project.refusal.dueAfterDeadline",
   duplicate_checkpoint: "project.refusal.duplicateCheckpoint",
@@ -302,3 +307,10 @@ export function refusalMessage(error: unknown, t: TFunction): string {
   const key = refusalKey(error);
   return key ? t(key) : apiErrorMessage(error, t("error.save"));
 }
+
+/**
+ * The page of the group set a group project follows, coming back to the
+ * project (`fromProject`, W9); null while it names none.
+ */
+export const groupSetPageOf = (p: Pick<ProjectSummary, "id" | "classroomId" | "groupSetId">): RouteOf<"groupSet"> | null =>
+  p.groupSetId === null ? null : { view: "groupSet", classroomId: p.classroomId, id: p.groupSetId, fromProject: p.id };

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import type { ProjectSourceDetail } from "@quiz/contracts";
 
+import { GroupSetPicker } from "../group/GroupSetPicker";
 import { useT } from "../i18n";
 import {
   Card,
@@ -17,9 +18,6 @@ import {
 } from "../ui";
 import { chosenBranches, chosenProtected, FIELD_ID, type ProjectDraft, type ProjectField } from "./newProject";
 import { ProtectedFiles } from "./ProtectedFiles";
-
-/** Whether the form offers group mode: not before the groups' pages exist (M3-16). */
-const GROUPS_OFFERED = false;
 
 /** A setting whose control is a list, laid under its title rather than beside it. */
 function StackedRow({ title, desc, children }: { title: ReactNode; desc?: ReactNode; children: ReactNode }) {
@@ -97,11 +95,13 @@ function NumberRow({
  * the start for a scheduled one only, as `ProjectCreate` requires.
  */
 export function ProjectAdvanced({
+  classroomId,
   draft,
   detail,
   update,
   message,
 }: {
+  classroomId: string;
   draft: ProjectDraft;
   detail: ProjectSourceDetail | undefined;
   update: (patch: Partial<ProjectDraft>) => void;
@@ -237,15 +237,24 @@ export function ProjectAdvanced({
         </StackedRow>
       ) : null}
 
-      {/* Group mode waits for its pages (merge task M3-16): a group project
-          cannot be published without a group set, and nothing forms one in
-          the web app yet. The row comes back with the choice of the
-          classroom's sets (ADR-070 §7); the set's maximum size replaced the
-          project's (ADR-070 §2). */}
-      {GROUPS_OFFERED ? (
-        <SettingRow title={t("project.groups")}>
-          <Switch checked={draft.groupMode} label={t("project.groups")} onChange={(groupMode) => update({ groupMode })} />
-        </SettingRow>
+      {/* Group work (ADR-070 §7): the classroom's group sets, or a new one.
+          The set's maximum size replaced the project's (ADR-070 §2). Offered
+          in every build since Accept provisions group repositories
+          (M3-15b-1); a membership change reaching one answers `409
+          has_repo` until M3-15b-2. */}
+      <SettingRow title={t("project.groups")} desc={t("project.groups.desc")}>
+        <Switch checked={draft.groupMode} label={t("project.groups")} onChange={(groupMode) => update({ groupMode })} />
+      </SettingRow>
+      {draft.groupMode ? (
+        <StackedRow title={t("project.groupSet")} desc={t("project.groupSet.desc")}>
+          <GroupSetPicker
+            id={FIELD_ID.groupSet}
+            classroomId={classroomId}
+            value={draft.groupSetId}
+            onChange={(groupSetId) => update({ groupSetId })}
+            message={message("groupSet")}
+          />
+        </StackedRow>
       ) : null}
     </Card>
   );

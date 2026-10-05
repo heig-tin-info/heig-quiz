@@ -14,7 +14,14 @@ import { api } from "../api";
 import { toLocalInput } from "../evaluation/timing";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { activitiesKey, classroomKey, classroomProjectsKey, projectSourceKey, projectSourcesKey } from "../queryKeys";
+import {
+  activitiesKey,
+  classroomGroupSetsKey,
+  classroomKey,
+  classroomProjectsKey,
+  projectSourceKey,
+  projectSourcesKey,
+} from "../queryKeys";
 import type { Navigate } from "../router";
 import {
   Alert,
@@ -45,7 +52,7 @@ import {
 import { ProjectAdvanced } from "./ProjectAdvanced";
 
 /** The fields under "Advanced options": a message there unfolds it. */
-const ADVANCED_FIELDS: readonly ProjectField[] = ["grace"];
+const ADVANCED_FIELDS: readonly ProjectField[] = ["grace", "groupSet"];
 
 /**
  * The new project (F-PROJ-01, M3-11), one page at `/classrooms/:id/projects/
@@ -114,6 +121,13 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
         // The organization moved under the form: read it again.
         void qc.invalidateQueries({ queryKey: projectSourcesKey(classroomId) });
         if (place.branches) setAdvanced(true);
+      }
+      if (place?.at === "field" && place.field === "groupSet") {
+        // The set was deleted under the form: read the sets again, clear the
+        // choice, keep the refusal said under the field.
+        void qc.invalidateQueries({ queryKey: classroomGroupSetsKey(classroomId) });
+        setDraft((d) => ({ ...d, groupSetId: null }));
+        setAdvanced(true);
       }
     },
   });
@@ -346,7 +360,13 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
               {t(advancedOpen ? "eval.advanced.hide" : "eval.advanced")}
             </Button>
             {advancedOpen ? (
-              <ProjectAdvanced draft={draft} detail={detail.data} update={update} message={message} />
+              <ProjectAdvanced
+                classroomId={classroomId}
+                draft={draft}
+                detail={detail.data}
+                update={update}
+                message={message}
+              />
             ) : null}
           </div>
 

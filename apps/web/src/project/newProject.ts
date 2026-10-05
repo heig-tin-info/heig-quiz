@@ -38,6 +38,8 @@ export interface ProjectDraft {
   /** null: the source's suggestions (`suggestedProtected`), the default even while Advanced stays folded. */
   protectedFiles: string[] | null;
   groupMode: boolean;
+  /** The classroom's group set a group project follows (ADR-070 §7); sent only in group mode. */
+  groupSetId: string | null;
 }
 
 export const emptyDraft = (): ProjectDraft => ({
@@ -56,6 +58,7 @@ export const emptyDraft = (): ProjectDraft => ({
   scaleKind: "linear",
   protectedFiles: null,
   groupMode: false,
+  groupSetId: null,
 });
 
 /** The fields a message can stand under, and the DOM id of each control (focus, `fieldErrorProps`). */
@@ -66,6 +69,7 @@ export const FIELD_ID = {
   deadline: "project-deadline",
   duration: "project-duration",
   grace: "project-grace",
+  groupSet: "project-group-set",
 } as const;
 export type ProjectField = keyof typeof FIELD_ID;
 
@@ -104,6 +108,8 @@ function rawBody(draft: ProjectDraft, detail: ProjectSourceDetail | undefined): 
     gradingMode: draft.gradingMode,
     gradingScale: { kind: draft.scaleKind },
     groupMode: draft.groupMode,
+    // Never outside group mode: `ProjectCreate` refuses a set on an individual project.
+    ...(draft.groupMode && draft.groupSetId ? { groupSetId: draft.groupSetId } : {}),
   };
 }
 
@@ -121,6 +127,7 @@ const FIELD_OF: Record<string, ProjectField> = {
   deadlineAt: "deadline",
   durationMinutes: "duration",
   graceMinutes: "grace",
+  groupSetId: "groupSet",
 };
 
 /** What a field says when the schema refuses it, in the teacher's words. */
@@ -189,6 +196,8 @@ export function refusalPlace(error: unknown): RefusalPlace | null {
       return { at: "field", field: "name", message: "project.refusal.duplicateSlug" };
     case "distribution_failed":
       return { at: "form", message: "project.refusal.distributionFailed" };
+    case "unknown_group_set":
+      return { at: "field", field: "groupSet", message: "project.refusal.unknownGroupSet" };
     default:
       return null;
   }
