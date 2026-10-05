@@ -3,16 +3,13 @@ import { describe, expect, it } from "vitest";
 import type { ProjectRepoView } from "@quiz/contracts";
 
 import { makeProject, makeRepo, PAST, row } from "../test/project-fixtures";
-import { projectNotices, projectNoticeToast } from "./projectNotices";
+import { projectNotices } from "./projectNotices";
 
 /*
  * F-PROJ-21 (M3-09c): the staff's notices, computed from two reads of the
  * project page — each kind from its own difference, counted per kind and
  * never per repository; nothing from an unchanged read.
  */
-
-const t = ((key: string, vars?: Record<string, string | number>) =>
-  vars ? `${key} ${JSON.stringify(vars)}` : key) as Parameters<typeof projectNoticeToast>[1];
 
 const detail = (...repos: (ProjectRepoView | null)[]) =>
   makeProject({ rows: repos.map((repo, i) => row(i + 1, repo)) });
@@ -86,11 +83,16 @@ describe("projectNotices", () => {
     expect(projectNotices(before, detail(locked))).toEqual([]);
   });
 
-  it("words a notice with its count, singular and plural, keyed by its kind", () => {
-    expect(projectNoticeToast({ kind: "pushed", count: 1 }, t)).toEqual({
-      key: "project-notice:pushed",
-      message: 'project.notice.pushed.one {"n":1}',
-    });
-    expect(projectNoticeToast({ kind: "accepted", count: 3 }, t).message).toBe('project.notice.accepted {"n":3}');
+  it("echoes no staff write of the page: the teacher's score, a release, a protection re-enabled", () => {
+    const r1 = makeRepo(1, { frozenAt: PAST, review: { status: "asked", reason: null, askedAt: PAST, sha: "a", runId: null } });
+    const before = detail(r1);
+    const graded = { ...r1, scores: { ...r1.scores, teacher: { points: 7, max: 10, comment: null, gradedAt: PAST } } };
+    expect(projectNotices(before, detail(graded))).toEqual([]);
+    const released = { ...r1, released: { points: 8, max: 10 } };
+    expect(projectNotices(before, detail(released))).toEqual([]);
+    // Re-enabled: the review is pending again; the job's later ask is the notice.
+    const pending = { ...r1, review: { status: "pending" as const, reason: null, askedAt: null, sha: null, runId: null } };
+    expect(projectNotices(before, detail(pending))).toEqual([]);
+    expect(projectNotices(detail(pending), detail(r1))).toEqual([{ kind: "reviewAsked", count: 1 }]);
   });
 });

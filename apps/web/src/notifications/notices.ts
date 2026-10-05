@@ -14,6 +14,12 @@ export interface Notice {
   tone?: ToastTone;
 }
 
+/** A commit of a payload: what the two project pages compare a push by. */
+export type Commit = { sha: string } | null;
+
+/** Whether a push landed between two reads: the commit shown changed, or appeared. */
+export const pushed = (was: Commit | undefined, now: Commit): boolean => now !== null && now.sha !== was?.sha;
+
 /**
  * Toasts the notices of a page's data as it is re-read (F-PROJ-21, merge
  * task M3-09c). A notice is NOT a notification (ADR-030): nothing comes
@@ -24,26 +30,32 @@ export interface Notice {
  *
  * The rule of the `ToastGate`: the first read after the page mounts is the
  * BASELINE and toasts nothing — cached data shown before that read is not a
- * read (`isFetchedAfterMount`), so coming back to a page never replays what
+ * read (its `dataUpdatedAt` is older than the mount, whatever a failed
+ * refetch since says), so coming back to a page never replays what
  * happened while away. A read whose data is unchanged (the same reference,
  * by TanStack's structural sharing) notices nothing. A new query key resets
- * the baseline: the previous page's data is never compared with the next's.
+ * the baseline (`isFetchedAfterMount` false again): the previous page's
+ * data is never compared with the next's.
  */
 export function useNoticeToasts<T>(
-  query: Pick<UseQueryResult<T>, "data" | "isFetchedAfterMount">,
+  query: Pick<UseQueryResult<T>, "data" | "dataUpdatedAt" | "isFetchedAfterMount">,
   notices: (prev: T, next: T) => Notice[],
 ): void {
   const toast = useToast();
+  const mountedAt = useRef(Date.now());
   const prev = useRef<T | undefined>(undefined);
-  const { data, isFetchedAfterMount } = query;
+  // Read at effect time: the page hands a new arrow each render, which is no change.
+  const noticesNow = useRef(notices);
+  noticesNow.current = notices;
+  const { data, dataUpdatedAt, isFetchedAfterMount } = query;
   useEffect(() => {
-    if (!isFetchedAfterMount || data === undefined) {
+    if (!isFetchedAfterMount || data === undefined || dataUpdatedAt < mountedAt.current) {
       prev.current = undefined;
       return;
     }
     const before = prev.current;
     prev.current = data;
     if (before === undefined || before === data) return;
-    for (const n of notices(before, data)) toast(n.message, n.tone ?? "success", { key: n.key });
-  }, [data, isFetchedAfterMount, notices, toast]);
+    for (const n of noticesNow.current(before, data)) toast(n.message, n.tone ?? "success", { key: n.key });
+  }, [data, dataUpdatedAt, isFetchedAfterMount, toast]);
 }

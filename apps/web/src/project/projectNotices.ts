@@ -19,11 +19,18 @@
  * `project_grade_final`, F-NOTIF-13), which already toasts; the protected
  * files restored have no datum on the page (the `protectionSuspended` flag
  * and the bell cover the cap); a sync shows its own last-sync line (M3-07).
+ *
+ * A staff write on the page re-reads it (`refresh`), and none of the four
+ * differences is one a staff write makes: the teacher's score is
+ * `scores.teacher`, a release writes `released`, a lock, a deadline or a
+ * resend touch nothing compared, and re-enabling the protection makes the
+ * review pending again (`askedAt` null) — the job asks it later, which IS
+ * a notice. So the read after a write echoes no toast of the write's own.
  */
 import type { ProjectDetail, ProjectRepoView } from "@quiz/contracts";
 
 import type { Dict, TFunction } from "../i18n";
-import type { Notice } from "../notifications/notices";
+import { pushed, type Notice } from "../notifications/notices";
 
 export type ProjectNoticeKind = "accepted" | "pushed" | "scored" | "reviewAsked";
 
@@ -37,9 +44,6 @@ const KINDS: readonly ProjectNoticeKind[] = ["accepted", "pushed", "scored", "re
 
 const reposOf = (p: ProjectDetail): Map<string, ProjectRepoView> =>
   new Map(p.rows.flatMap(({ repo }) => (repo ? [[repo.id, repo] as const] : [])));
-
-const pushed = (was: ProjectRepoView, now: ProjectRepoView): boolean =>
-  now.lastCommit !== null && now.lastCommit.sha !== was.lastCommit?.sha;
 
 const scored = (was: ProjectRepoView, now: ProjectRepoView): boolean =>
   now.scores.current !== null && now.scores.current.runId !== was.scores.current?.runId;
@@ -58,21 +62,15 @@ export function projectNotices(prev: ProjectDetail, next: ProjectDetail): Projec
       counts.accepted += 1;
       continue;
     }
-    if (pushed(was, repo)) counts.pushed += 1;
+    if (pushed(was.lastCommit, repo.lastCommit)) counts.pushed += 1;
     if (scored(was, repo)) counts.scored += 1;
     if (reviewAsked(was, repo)) counts.reviewAsked += 1;
   }
   return KINDS.filter((kind) => counts[kind] > 0).map((kind) => ({ kind, count: counts[kind] }));
 }
 
-const KEY: Record<ProjectNoticeKind, { one: keyof Dict; other: keyof Dict }> = {
-  accepted: { one: "project.notice.accepted.one", other: "project.notice.accepted" },
-  pushed: { one: "project.notice.pushed.one", other: "project.notice.pushed" },
-  scored: { one: "project.notice.scored.one", other: "project.notice.scored" },
-  reviewAsked: { one: "project.notice.reviewAsked.one", other: "project.notice.reviewAsked" },
-};
-
-/** A notice worded for the toast: its count in the reader's language, keyed by kind so a later one of the same kind replaces it. */
+/** A notice worded for the toast: its count in the reader's language (`.one` for a single one), keyed by kind so a later one of the same kind replaces it. */
 export function projectNoticeToast({ kind, count }: ProjectNotice, t: TFunction): Notice {
-  return { key: `project-notice:${kind}`, message: t(count === 1 ? KEY[kind].one : KEY[kind].other, { n: count }) };
+  const key: keyof Dict = `project.notice.${kind}${count === 1 ? ".one" : ""}`;
+  return { key: `project-notice:${kind}`, message: t(key, { n: count }) };
 }

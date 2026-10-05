@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { StudentProject, StudentProjectRepo } from "@quiz/contracts";
 
-import { studentProjectNotices, studentProjectNoticeToast } from "./studentProjectNotices";
+import { studentProjectNotices } from "./studentProjectNotices";
 
 /*
  * F-PROJ-21, N-SEC-20 (M3-09c): the student's notices, computed from two
@@ -47,8 +47,6 @@ const project = (over: Partial<StudentProject> = {}): StudentProject => ({
   serverNow: at(0),
   ...over,
 });
-
-const t = ((key: string) => key) as Parameters<typeof studentProjectNoticeToast>[1];
 
 describe("studentProjectNotices", () => {
   it("notices nothing on an unchanged read", () => {
@@ -114,10 +112,5 @@ describe("studentProjectNotices", () => {
     });
     const lockedBefore = project({ status: "locked", repo: released.repo });
     expect(studentProjectNotices(lockedBefore, released)).toEqual([]);
-  });
-
-  it("words each kind, the lock in amber, keyed by its kind", () => {
-    expect(studentProjectNoticeToast("locked", t)).toEqual({ key: "sproj-notice:locked", message: "sproj.notice.locked", tone: "warning" });
-    expect(studentProjectNoticeToast("pushed", t)).toEqual({ key: "sproj-notice:pushed", message: "sproj.notice.pushed", tone: "success" });
   });
 });

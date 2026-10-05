@@ -3,7 +3,7 @@ import { act, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "../api";
-import { makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
+import { fail, makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { useNoticeToasts, type Notice } from "./notices";
 
 /*
@@ -68,6 +68,24 @@ describe("useNoticeToasts", () => {
     await waitFor(() => expect(screen.getByTestId("n")).toHaveTextContent("1"));
     expect(screen.queryByRole("status")).toBeNull();
     bump("a");
+    await reread();
+    expect(await screen.findByText("n rose to 2")).toBeInTheDocument();
+  });
+
+  it("takes no baseline from cached data when the first refetch fails: the next success is the baseline", async () => {
+    const counter = { n: 1 };
+    let failing = true;
+    mockFetch({ "GET /probe/a": () => (failing ? fail(500, { message: "down" }) : ok({ ...counter })) });
+    const queryClient = makeQueryClient();
+    queryClient.setQueryData<Counter>(KEY("a"), { n: 0 });
+    const { reread } = setup("a", queryClient);
+    await reread();
+    expect(screen.getByTestId("n")).toHaveTextContent("0");
+    failing = false;
+    await reread();
+    await waitFor(() => expect(screen.getByTestId("n")).toHaveTextContent("1"));
+    expect(screen.queryByRole("status")).toBeNull();
+    counter.n = 2;
     await reread();
     expect(await screen.findByText("n rose to 2")).toBeInTheDocument();
   });

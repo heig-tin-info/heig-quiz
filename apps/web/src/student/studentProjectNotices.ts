@@ -26,7 +26,7 @@
 import type { StudentProject } from "@quiz/contracts";
 
 import type { Dict, TFunction } from "../i18n";
-import type { Notice } from "../notifications/notices";
+import { pushed, type Notice } from "../notifications/notices";
 import type { ToastTone } from "../notify";
 
 export type StudentProjectNoticeKind = "accepted" | "locked" | "pushed" | "scored";
@@ -43,7 +43,7 @@ export function studentProjectNotices(prev: StudentProject, next: StudentProject
   if (!was.locked && repo.locked) out.push("locked");
   const open = !repo.locked && Date.parse(next.deadlineAt) > Date.parse(next.serverNow);
   if (!open) return out;
-  if (repo.lastCommit !== null && repo.lastCommit.sha !== was.lastCommit?.sha) out.push("pushed");
+  if (pushed(was.lastCommit, repo.lastCommit)) out.push("pushed");
   if (repo.score !== null && (was.score === null || was.score.points !== repo.score.points || was.score.max !== repo.score.max)) {
     out.push("scored");
   }
