@@ -46,6 +46,8 @@ export interface Ctx {
   /** Mapped source classroom id → its Quiz classroom. */
   mapped: Map<string, Mapped>;
   decisions: OpenDecisions;
+  /** The run's clock (`ImportOptions.now`, else the source's own `now()`): what "the last 30 days" is measured from. */
+  now: Date;
   /** The `--actor`, null when unresolved (a dry run then still runs). */
   actorId: string | null;
   /** `import_classroom.id_map`, loaded once and kept current by `remember`: source table → source id → target id. */
@@ -102,14 +104,16 @@ export function tallyMapped(ctx: Ctx, table: string, sourceIds: readonly string[
   });
 }
 
-/** A Quiz table whose rows the import may own: a uuid `id` primary key. */
-export type OwnedTable = PgTable & { id: AnyPgColumn };
+/** A Quiz table whose rows the import may own: a uuid `id` primary key, or the `idColumn` the row names. */
+export type OwnedTable = PgTable;
 
 /** The columns the import owns of one row: Drizzle property names → values, as inserted. */
 export interface OwnedRow {
   sourceTable: string;
   sourceId: string;
   table: OwnedTable;
+  /** The primary key, when it is not `table.id` (a journal's row is keyed on its classroom). Its value is the id map's target id. */
+  idColumn?: AnyPgColumn;
   /** For the report. */
   label: string;
   values: Record<string, unknown>;
@@ -126,9 +130,11 @@ async function currentValues(ctx: Ctx, row: OwnedRow, targetId: string): Promise
   const [found] = await ctx.db
     .select(Object.fromEntries(Object.keys(row.values).map((k) => [k, columns[k]!])))
     .from(row.table)
-    .where(eq(row.table.id, targetId));
+    .where(eq(keyOf(row), targetId));
   return found as Record<string, unknown> | undefined;
 }
+
+const keyOf = (row: OwnedRow): AnyPgColumn => row.idColumn ?? (row.table as PgTable & { id: AnyPgColumn }).id;
 
 const mapRow = (row: OwnedRow): SQL =>
   and(eq(importIdMap.sourceTable, row.sourceTable), eq(importIdMap.sourceId, row.sourceId))!;
@@ -208,7 +214,7 @@ export async function syncOwned(ctx: Ctx, row: OwnedRow): Promise<SyncOutcome> {
   if (hashOf(current) !== entry.importedHash) {
     return keep(ctx, row, targetId, "modified in Quiz since the previous import; classroom's row changed too");
   }
-  await ctx.db.update(row.table).set(row.values).where(eq(row.table.id, targetId));
+  await ctx.db.update(row.table).set(row.values).where(eq(keyOf(row), targetId));
   await setBaseline(hashOf((await currentValues(ctx, row, targetId)) ?? {}));
   ctx.report.reimport.overwritten[row.sourceTable] = (ctx.report.reimport.overwritten[row.sourceTable] ?? 0) + 1;
   return "overwritten";

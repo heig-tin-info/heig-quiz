@@ -42,6 +42,8 @@ export const FINDINGS = {
   staff: "Course staff",
   enrollments: "Enrollments",
   reimport: "Kept on re-import (modified in Quiz since the previous import)",
+  journals: "Classroom journals",
+  webhooks: "Webhook deliveries",
   audit: "Legacy audit",
   roles: "Role changes",
   "not carried": "Not carried (later parts of M8-01)",

@@ -28,6 +28,10 @@ import {
   githubClassroomLinks,
   githubOrganizations,
   importIdMap,
+  classroomJournals,
+  journalAssets,
+  journalPages,
+  webhookDeliveries,
   importRuns,
   legacyClassroomAuditLog,
   teacherGrants,
@@ -444,7 +448,7 @@ describe("import-classroom frame (M8-01a)", () => {
     const before = await count();
     const dry = await runImport(w.db, config, snapshot, MAPPING, { ...DECIDED, apply: false });
     expect(dry.parity.redLines).toEqual([]);
-    expect(dry.parity.tables.map((t) => t.table)).toEqual(["enrollments", "legacy_classroom_audit_log", "teacher_grants", "users"]);
+    expect(dry.parity.tables.map((t) => t.table)).toEqual(expect.arrayContaining(["enrollments", "legacy_classroom_audit_log", "teacher_grants", "users"]));
     expect(dry.parity.tables.every((t) => t.missing === 0)).toBe(true);
     const applied = await runImport(w.db, config, snapshot, MAPPING, DECIDED);
     expect(applied.parity.tables).toEqual(dry.parity.tables);
@@ -670,5 +674,155 @@ describe("import-classroom frame (M8-01a)", () => {
     expect(applied.parity.redLines).toEqual(["repositories exist on GitHub: repository missing"]);
     expect(applied.parity.notRun).toEqual([]);
     expect(await w.db.select().from(importRuns)).toHaveLength(1);
+  });
+});
+
+describe("import-classroom journals and webhook deliveries (M8-01d)", () => {
+  const J1 = "c3000000-0000-4000-8000-000000000001";
+  const J2 = "c3000000-0000-4000-8000-000000000002";
+  const journals = (db: Db) => db.select().from(classroomJournals).orderBy(classroomJournals.fullName);
+  const parityOf = (r: Awaited<ReturnType<typeof runImport>>, table: string) => r.parity.tables.find((t) => t.table === table);
+  const deliveries = (db: Db) => db.select().from(webhookDeliveries).orderBy(webhookDeliveries.deliveryId);
+  const idMap = (db: Db) => db.select().from(importIdMap).orderBy(importIdMap.sourceTable, importIdMap.sourceId);
+
+  it("imports each attachment pending, copies no page nor asset, and writes nothing the second time", async () => {
+    const w = await world();
+    const dry = await runImport(w.db, config, snapshot, MAPPING, { ...DECIDED, apply: false });
+    expect(dry.parity.redLines).toEqual([]);
+    expect(await journals(w.db)).toEqual([]);
+    const first = await runImport(w.db, config, snapshot, MAPPING, DECIDED);
+    expect(first.outcome).toBe("applied");
+    expect(first.written).toMatchObject({ classroom_journals: 2, webhook_deliveries: 4 });
+    expect(first.parity.redLines).toEqual([]);
+    expect(parityOf(first, "classroom_journals")).toMatchObject({ source: 2, carried: 2, leftOut: 0, missing: 0 });
+    expect(parityOf(first, "webhook_deliveries")).toMatchObject({ source: 4, carried: 4, missing: 0 });
+
+    const rows = await journals(w.db);
+    expect(rows).toHaveLength(2);
+    const ada = (await userOf(w.db, eq(users.email, "ada.lovelace@heig-vd.ch")))!;
+    expect(rows.find((r) => r.classroomId === w.progA)).toMatchObject({
+      mode: "github", githubRepoId: 2001, fullName: "heig-prog-a/journal", ref: "main", rootPath: "docs",
+      syncStatus: "pending", lastCommitSha: null, lastSyncedAt: null, version: 0, createdBy: ada.id,
+    });
+    expect(rows.find((r) => r.classroomId === w.mi)).toMatchObject({ githubRepoId: 2002, ref: "spring", rootPath: "", syncStatus: "pending", syncError: null });
+    // I65: classroom's rendered copy is never carried, the ingestion rebuilds it.
+    expect(await w.db.select().from(journalPages)).toEqual([]);
+    expect(await w.db.select().from(journalAssets)).toEqual([]);
+
+    // The post-commit check reads the rows back: pending is a warning, not a red line.
+    expect(first.parity.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ check: "journals re-ingested", severity: "warn", detail: expect.stringContaining("heig-prog-a/journal@main") }),
+      expect.objectContaining({ check: "journals re-ingested", severity: "info", detail: "0 of 2 imported journal(s) at sync_status ok" }),
+    ]));
+    const dryAgain = await runImport(w.db, config, snapshot, MAPPING, { ...DECIDED, apply: false });
+    expect(dryAgain.parity.notRun).toEqual(["journals re-ingested: not run (dry run)"]);
+
+    const after = [await journals(w.db), await deliveries(w.db), await idMap(w.db)];
+    const second = await runImport(w.db, config, snapshot, MAPPING, DECIDED);
+    expect(second.outcome).toBe("nothing_to_do");
+    expect([await journals(w.db), await deliveries(w.db), await idMap(w.db)]).toEqual(after);
+  });
+
+  it("copies the last 30 days of deliveries, all as processed", async () => {
+    const w = await world();
+    const source = variant((s) => {
+      s.webhookDeliveries.push({
+        deliveryId: "cc000000-0000-4000-8000-000000000009",
+        event: "push",
+        action: null,
+        payload: { ref: "refs/heads/main" },
+        receivedAt: new Date("2026-10-04T10:00:00Z"),
+        processedAt: null,
+        error: null,
+      });
+    });
+    const report = await runImport(w.db, config, source, MAPPING, DECIDED);
+    expect(report.findings.webhooks).toEqual([
+      expect.stringContaining("1 delivery(ies) not yet processed by classroom"),
+      expect.stringContaining("1 delivery(ies) older than 30 days not copied"),
+    ]);
+    const rows = await deliveries(w.db);
+    expect(rows).toHaveLength(5);
+    expect(rows.every((r) => r.processedAt !== null)).toBe(true);
+    expect(rows.find((r) => r.deliveryId.endsWith("0009"))).toMatchObject({ processedAt: NOW, payload: { ref: "refs/heads/main" } });
+    expect(rows.find((r) => r.deliveryId.endsWith("0004"))).toMatchObject({ event: "repository", action: "renamed", error: "handler failed once" });
+    expect(rows.some((r) => r.deliveryId.endsWith("0005"))).toBe(false);
+  });
+
+  it("imports pending a journal whose organization has no App installed, and says so", async () => {
+    const w = await world();
+    await w.db.update(githubOrganizations).set({ installationId: null }).where(eq(githubOrganizations.githubOrgId, 1001));
+    const report = await runImport(w.db, config, snapshot, MAPPING, DECIDED);
+    expect(await journals(w.db)).toHaveLength(2);
+    expect(report.findings.journals).toEqual([expect.stringMatching(/"Prog-A" \(PROG\).*imported pending, but Quiz's App does not act on heig-prog-a #1001/)]);
+  });
+
+  it("leaves out a journal of another organization, one with no repository id, and one whose classroom has its own", async () => {
+    const w = await world();
+    const source = variant((s) => {
+      s.journalAttachments.find((a) => a.classroomId === J1)!.orgId = "c2000000-0000-4000-8000-000000000002";
+      s.journalAttachments.find((a) => a.classroomId === J2)!.githubRepoId = null;
+    });
+    const report = await runImport(w.db, config, source, MAPPING, DECIDED);
+    expect(await journals(w.db)).toEqual([]);
+    expect(parityOf(report, "classroom_journals")).toMatchObject({ source: 2, carried: 0, leftOut: 2, missing: 0 });
+    expect(report.findings.journals).toEqual([
+      expect.stringContaining("belongs to heig-info1, not to the classroom's heig-prog-a"),
+      expect.stringContaining("never resolved its repository id"),
+    ]);
+
+    // A Quiz classroom with a journal of its own keeps it; the same repository is merged.
+    const w2 = await world();
+    await w2.db.insert(classroomJournals).values([
+      { classroomId: w2.progA, mode: "quiz", createdBy: w2.t1 },
+      { classroomId: w2.mi, mode: "github", githubRepoId: 2002, fullName: "heig-info1/renamed", ref: "spring", syncStatus: "ok", createdBy: w2.t1 },
+    ]);
+    const second = await runImport(w2.db, config, snapshot, MAPPING, DECIDED);
+    expect(second.written.classroom_journals).toBeUndefined();
+    expect(parityOf(second, "classroom_journals")).toMatchObject({ source: 2, carried: 1, leftOut: 1, missing: 0 });
+    expect(second.findings.journals).toEqual([expect.stringContaining("already has a journal (in Quiz); Quiz's kept")]);
+    expect((await journals(w2.db)).map((r) => [r.mode, r.fullName])).toEqual([["github", "heig-info1/renamed"], ["quiz", null]]);
+    expect((await w2.db.select().from(importIdMap)).find((e) => e.sourceTable === "classroom_journals")).toMatchObject({ how: "merged" });
+  });
+
+  it("keeps one row per classroom reading the same journal", async () => {
+    const w = await world();
+    const progB = randomUUID();
+    await w.db.insert(classrooms).values({ id: progB, courseId: w.prog, name: "Prog-B" });
+    const [org] = await w.db.select().from(githubOrganizations).where(eq(githubOrganizations.githubOrgId, 1001));
+    await w.db.insert(githubClassroomLinks).values({ classroomId: progB, orgId: org!.id, linkedBy: w.t1 });
+    const sourceB = "c3000000-0000-4000-8000-0000000000b1";
+    const source = variant((s) => {
+      const a = s.classrooms.find((c) => c.id === J1)!;
+      s.classrooms.push({ ...a, id: sourceB, name: "Prog-B" });
+      s.journalAttachments.push({ ...s.journalAttachments.find((j) => j.classroomId === J1)!, classroomId: sourceB });
+    });
+    const mapping = { classrooms: [...MAPPING.classrooms, { source: { id: sourceB }, target: { course: "PROG", classroom: "Prog-B" } }] };
+    const report = await runImport(w.db, config, source, mapping, DECIDED);
+    expect(report.refusals).toEqual([]);
+    const rows = (await journals(w.db)).filter((r) => r.githubRepoId === 2001);
+    expect(rows.map((r) => r.classroomId).sort()).toEqual([w.progA, progB].sort());
+    expect(parityOf(report, "classroom_journals")).toMatchObject({ source: 3, carried: 3, missing: 0 });
+  });
+
+  it("follows classroom's repository on re-import unless Quiz changed the row, and asks the copy again", async () => {
+    const w = await world();
+    await runImport(w.db, config, snapshot, MAPPING, DECIDED);
+    const moved = (ref: string) => variant((s) => { s.journalAttachments.find((a) => a.classroomId === J1)!.ref = ref; });
+    // The ingestion has run since: ok, a commit, a version.
+    await w.db.update(classroomJournals).set({ syncStatus: "ok", lastCommitSha: "f".repeat(40), version: 3 }).where(eq(classroomJournals.classroomId, w.progA));
+
+    const second = await runImport(w.db, config, moved("autumn"), MAPPING, DECIDED);
+    expect(second.outcome).toBe("applied");
+    expect(second.reimport.overwritten).toEqual({ classroom_journals: 1 });
+    const [row] = await w.db.select().from(classroomJournals).where(eq(classroomJournals.classroomId, w.progA));
+    expect(row).toMatchObject({ ref: "autumn", syncStatus: "pending", version: 4, syncError: null });
+    expect((await runImport(w.db, config, moved("autumn"), MAPPING, DECIDED)).outcome).toBe("nothing_to_do");
+
+    // Quiz changed it (a teacher chose another folder): classroom's change is kept out, listed.
+    await w.db.update(classroomJournals).set({ rootPath: "slides" }).where(eq(classroomJournals.classroomId, w.progA));
+    const third = await runImport(w.db, config, moved("winter"), MAPPING, DECIDED);
+    expect(third.reimport.kept).toEqual([expect.objectContaining({ table: "classroom_journals", sourceId: J1, targetId: w.progA })]);
+    expect(await w.db.select().from(classroomJournals).where(eq(classroomJournals.classroomId, w.progA))).toEqual([expect.objectContaining({ ref: "autumn", rootPath: "slides" })]);
   });
 });

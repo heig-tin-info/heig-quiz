@@ -635,3 +635,33 @@ INSERT INTO "audit_log" ("actor_user_id", "actor_type", "action", "subject_type"
   ('c1000000-0000-4000-8000-000000000001', 'user', 'grant.created', 'teacher_grant', 'c6000000-0000-4000-8000-000000000001', NULL, '2026-02-05 08:00:00+00'),
   ('c1000000-0000-4000-8000-000000000004', 'user', 'staff.added', 'classroom', 'c3000000-0000-4000-8000-000000000001', '{"role": "assistant"}', '2026-02-25 08:00:00+00'),
   (NULL, 'system', 'deadline.applied', 'assignment', 'c7000000-0000-4000-8000-000000000003', NULL, '2026-09-15 08:00:00+00');
+
+-- ---- Synthetic data, part 3 (M8-01d): journals and recent deliveries ------
+-- Ids: ce… journals, cf… journal pages and assets, cc…0003+ more webhook
+-- deliveries. Prog-A reads a journal of its own organization (with pages and
+-- an asset, which the import never copies); Info1-MI a journal of its own
+-- organization on another branch and folder; the dropped Sandbox one whose
+-- repository id is not resolved. The deliveries: two processed within the
+-- 30 days before 2026-10-05, one older than that.
+
+INSERT INTO "journals" ("id", "org_id", "github_repo_id", "full_name", "ref", "root_path", "created_by", "created_at", "last_commit_sha", "last_synced_at", "sync_status", "sync_error") VALUES
+  ('ce000000-0000-4000-8000-000000000001', 'c2000000-0000-4000-8000-000000000001', 2001, 'heig-prog-a/journal', 'main', 'docs', 'c1000000-0000-4000-8000-000000000002', '2026-03-01 08:00:00+00', 'ffffffffffffffffffffffffffffffffffffffff', '2026-09-30 08:00:00+00', 'ok', NULL),
+  ('ce000000-0000-4000-8000-000000000002', 'c2000000-0000-4000-8000-000000000002', 2002, 'heig-info1/handouts', 'spring', '', 'c1000000-0000-4000-8000-000000000002', '2026-03-02 08:00:00+00', NULL, NULL, 'error', 'Repository not found for this installation'),
+  ('ce000000-0000-4000-8000-000000000003', 'c2000000-0000-4000-8000-000000000003', NULL, 'heig-sandbox/journal', 'main', '', 'c1000000-0000-4000-8000-000000000003', '2026-03-03 08:00:00+00', NULL, NULL, 'pending', NULL);
+
+INSERT INTO "classroom_journals" ("classroom_id", "journal_id", "attached_at", "attached_by") VALUES
+  ('c3000000-0000-4000-8000-000000000001', 'ce000000-0000-4000-8000-000000000001', '2026-03-01 09:00:00+00', 'c1000000-0000-4000-8000-000000000002'),
+  ('c3000000-0000-4000-8000-000000000002', 'ce000000-0000-4000-8000-000000000002', '2026-03-02 09:00:00+00', 'c1000000-0000-4000-8000-000000000002'),
+  ('c3000000-0000-4000-8000-000000000003', 'ce000000-0000-4000-8000-000000000003', '2026-03-03 09:00:00+00', 'c1000000-0000-4000-8000-000000000003');
+
+INSERT INTO "journal_pages" ("id", "journal_id", "path", "parent_path", "sort_key", "title", "blob_sha", "markdown", "html") VALUES
+  ('cf000000-0000-4000-8000-000000000001', 'ce000000-0000-4000-8000-000000000001', 'index.md', '', 'index.md', 'Welcome', 'aaaa000000000000000000000000000000000001', '# Welcome', '<h1>Welcome</h1>'),
+  ('cf000000-0000-4000-8000-000000000002', 'ce000000-0000-4000-8000-000000000001', 'week-1.md', '', 'week-1.md', 'Week 1', 'aaaa000000000000000000000000000000000002', '# Week 1', '<h1>Week 1</h1>');
+
+INSERT INTO "journal_assets" ("id", "journal_id", "path", "blob_sha", "content_type", "size", "data") VALUES
+  ('cf000000-0000-4000-8000-000000000003', 'ce000000-0000-4000-8000-000000000001', 'img/logo.png', 'bbbb000000000000000000000000000000000001', 'image/png', 3, '\x010203');
+
+INSERT INTO "webhook_deliveries" ("delivery_id", "event", "action", "payload", "received_at", "processed_at", "error") VALUES
+  ('cc000000-0000-4000-8000-000000000003', 'push', NULL, '{"ref": "refs/heads/main", "after": "ffffffffffffffffffffffffffffffffffffffff"}', '2026-09-28 10:00:00+00', '2026-09-28 10:00:02+00', NULL),
+  ('cc000000-0000-4000-8000-000000000004', 'repository', 'renamed', '{"action": "renamed"}', '2026-09-29 10:00:00+00', '2026-09-29 10:00:01+00', 'handler failed once'),
+  ('cc000000-0000-4000-8000-000000000005', 'push', NULL, '{"ref": "refs/heads/main"}', '2026-08-01 10:00:00+00', '2026-08-01 10:00:01+00', NULL);

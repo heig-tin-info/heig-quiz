@@ -14,6 +14,8 @@
 import type { CheckFinding } from "./report.js";
 import type { Ctx } from "./ctx.js";
 import { importLegacyAudit } from "./steps-audit.js";
+import { importJournals, journalsReingested } from "./steps-journals.js";
+import { importWebhookDeliveries } from "./steps-webhooks.js";
 import {
   importEnrollments,
   importGithubLinks,
@@ -52,9 +54,11 @@ export const REGISTRY: Registry = {
     { name: "grants", run: importGrants },
     { name: "staff", run: importStaff },
     { name: "enrollments", run: importEnrollments },
-    // M8-01b…d insert here, before the legacy audit.
+    // M8-01b, c insert here (projects, groups), before the journals.
+    { name: "classroom journals", run: importJournals },
+    { name: "webhook deliveries", run: importWebhookDeliveries },
     { name: "legacy audit", run: importLegacyAudit },
     { name: "roles", run: recomputeRoles },
   ],
-  checks: [],
+  checks: [journalsReingested],
 };

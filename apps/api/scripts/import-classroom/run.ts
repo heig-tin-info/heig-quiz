@@ -257,6 +257,7 @@ export async function runImport(
         resolved: [...identities].filter(([, i]) => targetOf(i) !== undefined),
         mapped,
         decisions,
+        now: options.now ?? snapshot.activity.now,
         actorId,
         known,
         parity: new Map(),
