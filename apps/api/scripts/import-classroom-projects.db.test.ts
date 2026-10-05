@@ -633,18 +633,38 @@ describe("import-classroom projects (M8-01b)", () => {
       );
     });
 
-    it("stops a copy whose deadline passes between two runs, and never undoes it", async () => {
+    it("stops the copy it creates once, never re-stops it, and keeps the stop out of the re-import baseline", async () => {
       const w = await world();
       await runImport(w.db, config, snapshot, MAPPING, DECIDED);
-      const stoppedOf = async () => (await w.db.select({ at: projectGroups.stoppedAt }).from(projectGroups).where(eq(projectGroups.projectId, ID.beta))).map((g) => g.at);
-      expect(await stoppedOf()).toEqual([null]);
-      const past = edited(ID.beta, (a) => { a.deadlineAt = new Date(NOW.getTime() - 3_600_000); });
-      await runImport(w.db, config, past, MAPPING, { ...DECIDED, now: new Date(NOW.getTime() + 60_000) });
-      expect(await stoppedOf()).toEqual([new Date(NOW.getTime() + 60_000)]);
-      expect((await one(w.db.select().from(projects).where(eq(projects.id, ID.beta))))!.groupsStoppedAt).toEqual(new Date(NOW.getTime() + 60_000));
-      // A later run on the old state does not reopen it.
+      const stoppedOf = async (id: string) => (await w.db.select({ at: projectGroups.stoppedAt }).from(projectGroups).where(eq(projectGroups.projectId, id))).map((g) => g.at);
+      expect(await stoppedOf(ID.gamma)).toEqual([NOW, NOW]);
+      // A staff resync lifts the stops in Quiz; a later run, with a source rename, must not stop the copy again.
+      await w.db.update(projectGroups).set({ stoppedAt: null }).where(eq(projectGroups.projectId, ID.gamma));
+      await w.db.update(projects).set({ groupsStoppedAt: null }).where(eq(projects.id, ID.gamma));
+      const renamed = variant((s) => { s.groups.find((g) => g.id === ID.gammaTeam1)!.name = "Squad G"; });
+      const later = await runImport(w.db, config, renamed, MAPPING, { ...DECIDED, now: new Date(NOW.getTime() + 60_000) });
+      expect(await stoppedOf(ID.gamma)).toEqual([null, null]);
+      expect((await one(w.db.select().from(projects).where(eq(projects.id, ID.gamma))))!.groupsStoppedAt).toBeNull();
+      // The stop at creation was no edit: the rename applied, nothing was kept.
+      expect(later.reimport.kept).toEqual([]);
+      expect(later.reimport.overwritten).toEqual({ assignment_groups: 1, "assignment_groups (set)": 1 });
+      expect((await one(w.db.select().from(projectGroups).where(eq(projectGroups.id, ID.gammaTeam1))))!.name).toBe("Squad G");
+    });
+
+    it("lists the members of a group the copy refused as left out, with the reason", async () => {
+      const w = await world();
       await runImport(w.db, config, snapshot, MAPPING, DECIDED);
-      expect(await stoppedOf()).toEqual([new Date(NOW.getTime() + 60_000)]);
+      // Beta's copy group is gone and unmapped, and Quiz now holds a group of the same name and slug in the copy.
+      await w.db.delete(projectGroupMembers).where(eq(projectGroupMembers.groupId, ID.groupBeta));
+      await w.db.delete(projectGroups).where(eq(projectGroups.id, ID.groupBeta));
+      const memberIds = snapshot.groupMembers.filter((m) => m.groupId === ID.groupBeta).map((m) => m.id);
+      await w.db.delete(importIdMap).where(and(eq(importIdMap.sourceTable, "assignment_groups"), eq(importIdMap.sourceId, ID.groupBeta)));
+      await w.db.delete(importIdMap).where(and(eq(importIdMap.sourceTable, "assignment_group_members"), inArray(importIdMap.sourceId, memberIds)));
+      await w.db.insert(projectGroups).values({ id: randomUUID(), projectId: ID.beta, name: "Team 1", slug: "team-1", position: 0, createdAt: NOW });
+      const report = await runImport(w.db, config, snapshot, MAPPING, { ...DECIDED, apply: false });
+      expect(report.parity.redLines.filter((l) => /^assignment_group_members/.test(l))).toEqual([]);
+      expect(report.parity.redLines.some((l) => /^assignment_groups/.test(l))).toBe(true);
+      expect(report.parity.findings.some((f) => f.check === "assignment_group_members left out" && f.detail.includes("its group was not carried"))).toBe(true);
     });
 
     it("reports a member missing from the Quiz roster, places no one for them and records no access", async () => {
@@ -748,9 +768,9 @@ describe("import-classroom projects (M8-01b)", () => {
       ));
       const noOwner = variant((s) => { for (const c of s.classrooms) c.teacherId = randomUUID(); });
       const report = await runImport(w.db, config, noOwner, MAPPING, { ...DECIDED, apply: false, actorEmail: "nobody@heig-vd.ch" });
-      // Not an abort (the set's NOT NULL creator is the project's); the b tally's own line for a known project with no creator is not this task's.
+      // Not an abort (the set's NOT NULL creator is the project's), and a project an earlier run carried stays carried.
       expect(report.outcome).toBe("rolled_back");
-      expect(report.parity.redLines.filter((l) => /group/.test(l))).toEqual([]);
+      expect(report.parity.redLines).toEqual([]);
     });
 
     it("records no access for a member Quiz's staff added to a group", async () => {
@@ -774,6 +794,8 @@ describe("import-classroom projects (M8-01b)", () => {
       const second = await runImport(w.db, config, snapshot, MAPPING, DECIDED);
       expect(second.outcome).toBe("nothing_to_do");
       expect((await one(w.db.select().from(projectRepoAccess).where(eq(projectRepoAccess.id, row!.id))))!.revokedAt).toEqual(revokedAt);
+      // A revoked grant is said, not counted as carried.
+      expect(second.parity.tables.find((t) => t.table === "group repository access")).toMatchObject({ source: 3, carried: 2, leftOut: 1, missing: 0 });
     });
 
     it("overwrites an untouched group row from classroom and keeps one Quiz renamed, listing it", async () => {

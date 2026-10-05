@@ -101,7 +101,7 @@ export async function importGroups(ctx: Ctx) {
   const live = await carrySets(ctx, carried, gone);
   const memberLeftOut = await carryMembers(ctx, carried, gone);
   await nameTheSets(ctx, carried.filter((a) => live.has(a.id) && !setsBefore.has(a.id)));
-  await stopCopies(ctx, carried);
+  await stopCopies(ctx, carried.filter((a) => (ctx.groupsOfProject.get(a.id) ?? []).some((g) => ctx.known.get("assignment_groups")?.has(g.id) && !ctx.carriedBefore.groups.has(g.id))));
   tallyGroups(ctx, carried, memberLeftOut);
 }
 
@@ -112,8 +112,6 @@ async function carrySets(ctx: Ctx, carried: SourceAssignment[], gone: Gone): Pro
   // The set's creator is the carried project's own (a run without --actor may not resolve one).
   const creators = new Map<string, string>();
   for (const row of await ctx.db.select({ id: projects.id, createdBy: projects.createdBy }).from(projects).where(inArray(projects.id, carried.map((a) => a.id)))) creators.set(row.id, row.createdBy);
-  const groupsOf = new Map<string, SourceGroup[]>();
-  for (const g of ctx.snapshot.groups) groupsOf.set(g.assignmentId, [...(groupsOf.get(g.assignmentId) ?? []), g]);
   const setRows: OwnedRow[] = [];
   const groupRows: OwnedRow[] = [];
   const copyRows: OwnedRow[] = [];
@@ -131,7 +129,7 @@ async function carrySets(ctx: Ctx, carried: SourceAssignment[], gone: Gone): Pro
       label: `group set "${a.name}"`,
       values: { classroomId: ctx.mapped.get(a.classroomId)!.classroomId, name: a.name, maxSize: a.groupMaxSize, openUntil: null, createdBy, createdAt: a.createdAt },
     });
-    for (const g of groupsOf.get(a.id) ?? []) {
+    for (const g of ctx.groupsOfProject.get(a.id) ?? []) {
       if (gone.setGroups.has(g.id) || gone.copyGroups.has(g.id)) continue;
       groupRows.push({
         sourceTable: SET_GROUP,
@@ -145,7 +143,7 @@ async function carrySets(ctx: Ctx, carried: SourceAssignment[], gone: Gone): Pro
         sourceId: g.id,
         table: projectGroups,
         label: `"${g.name}" of "${a.name}"`,
-        values: { projectId: a.id, name: g.name, slug: g.slug, position: g.position, sourceGroupId: g.id, stoppedAt: null, createdAt: g.createdAt },
+        values: { projectId: a.id, name: g.name, slug: g.slug, position: g.position, sourceGroupId: g.id, createdAt: g.createdAt },
       });
     }
   }
@@ -170,7 +168,11 @@ async function carryMembers(ctx: Ctx, carried: SourceAssignment[], gone: Gone): 
   const leftOut = new Map<string, string>();
   for (const m of ctx.snapshot.groupMembers) {
     const a = placed.get(m.assignmentId);
-    if (!a || !copyGroups?.has(m.groupId)) continue;
+    if (!a) continue;
+    if (!copyGroups?.has(m.groupId)) {
+      leftOut.set(m.id, "its group was not carried (refused or kept, see the findings)");
+      continue;
+    }
     const line = lines?.get(m.enrollmentId);
     if (line === undefined) {
       leftOut.set(m.id, "not on the Quiz roster (--missing-students=report)");
@@ -185,7 +187,7 @@ async function carryMembers(ctx: Ctx, carried: SourceAssignment[], gone: Gone): 
     } else {
       const label = `member of "${a.name}"`;
       setRows.push({ sourceTable: SET_MEMBER, sourceId: m.id, table: studentGroupMembers, label, values: { setId: a.id, groupId: m.groupId, enrollmentId: line, addedAt: m.addedAt } });
-      copyRows.push({ sourceTable: "assignment_group_members", sourceId: m.id, table: projectGroupMembers, label, values: { projectId: a.id, groupId: m.groupId, enrollmentId: line, addedAt: m.addedAt, departingAt: null } });
+      copyRows.push({ sourceTable: "assignment_group_members", sourceId: m.id, table: projectGroupMembers, label, values: { projectId: a.id, groupId: m.groupId, enrollmentId: line, addedAt: m.addedAt } });
     }
   }
   await carryOwned(ctx, setRows, () => "not carried: the set already places this roster line in a group");
@@ -202,7 +204,9 @@ function tallyGroups(ctx: Ctx, carried: SourceAssignment[], memberLeftOut: Map<s
   const groups = ctx.snapshot.groups.filter((g) => scope.has(g.assignmentId));
   const members = ctx.snapshot.groupMembers.filter((m) => scope.has(m.assignmentId));
   const notPlaced = "its project is not a carried group project";
-  tallyMapped(ctx, "assignment_groups", groups.map((g) => g.id), new Map(groups.filter((g) => !placed.has(g.assignmentId)).map((g) => [g.id, notPlaced])));
+  const copies = ctx.known.get("assignment_groups");
+  const groupWhy = (g: SourceGroup) => (!placed.has(g.assignmentId) ? notPlaced : !copies?.has(g.id) && !ctx.known.get(SET)?.has(g.assignmentId) ? "its group set was not carried (refused or kept, see the findings)" : null);
+  tallyMapped(ctx, "assignment_groups", groups.map((g) => g.id), new Map(groups.flatMap((g) => { const why = groupWhy(g); return why ? [[g.id, why] as [string, string]] : []; })));
   for (const m of members) if (!placed.has(m.assignmentId)) memberLeftOut.set(m.id, notPlaced);
   const carriedMembers = ctx.known.get("assignment_group_members");
   tallyMapped(ctx, "assignment_group_members", members.map((m) => m.id), new Map([...memberLeftOut].filter(([id]) => !carriedMembers?.has(id))));
@@ -228,11 +232,13 @@ async function nameTheSets(ctx: Ctx, created: SourceAssignment[]) {
 }
 
 /**
- * The copy of a project stops, once, through the project module's own
- * `stopProjects`, when QUIZ's project is past its deadline, applied or
- * archived: the decision reads Quiz's row, never the source's, so a deadline
- * a teacher moved in Quiz keeps its copy following (and the groups staff
- * added since). Written as Quiz writes it at the deadline, never undone.
+ * The copy of a project this run created stops, through the project module's
+ * own `stopProjects`, when QUIZ's project is past its deadline, applied or
+ * archived: the decision reads Quiz's row, never the source's. Only on the
+ * run that creates the copy: after that Quiz's ticker owns the stops, and a
+ * staff resync lifts them, so a later run never stops (nor re-stops) a copy.
+ * `stopped_at` and `departing_at` are not owned columns (outside the
+ * re-import hash), so the stop is no "edit in Quiz".
  */
 async function stopCopies(ctx: Ctx, carried: SourceAssignment[]) {
   if (carried.length === 0) return;
@@ -297,13 +303,12 @@ export async function importGroupRepoAccess(ctx: Ctx) {
     }
   }
   await insertAll(ctx, projectRepoAccess, rows);
-  const present = await presentKeys(
+  const keyOf = (r: { repoId: string; enrollmentId: string; githubUserId: number }) => `${r.repoId}:${r.enrollmentId}:${r.githubUserId}`;
+  const live = await presentKeys(
     [...new Set(rows.map((r) => r.repoId))],
-    async (repoIds) => (await ctx.db.select({ r: projectRepoAccess.repoId, e: projectRepoAccess.enrollmentId, g: projectRepoAccess.githubUserId }).from(projectRepoAccess).where(inArray(projectRepoAccess.repoId, repoIds))).map((x) => `${x.r}:${x.e}:${x.g}`),
+    async (repoIds) => (await ctx.db.select().from(projectRepoAccess).where(inArray(projectRepoAccess.repoId, repoIds))).filter((x) => x.revokedAt === null && x.revokingAt === null).map(keyOf),
   );
-  tally(ctx, "group repository access", {
-    source: pairs,
-    carried: rows.filter((r) => present.has(`${r.repoId}:${r.enrollmentId}:${r.githubUserId}`)).length,
-    leftOut,
-  });
+  // A row Quiz revoked (or is revoking) is left as it is and is not a carried grant: said, not counted.
+  for (const r of rows) if (!live.has(keyOf(r))) leftOut.push(`${r.repoId} / ${r.enrollmentId}: its access was revoked in Quiz, left as it is`);
+  tally(ctx, "group repository access", { source: pairs, carried: rows.filter((r) => live.has(keyOf(r))).length, leftOut });
 }

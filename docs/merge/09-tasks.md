@@ -4236,8 +4236,11 @@ serves now (16a), and what waits for the group repositories (16b).
     assignment; ids kept in every table, the id map's `assignment_groups` /
     `assignment_group_members` being the COPY's (the set's are `… (set)`);
     `projects.group_set_id` set only for a set this run created, never moved;
-    a copy whose deadline is past, applied or archived is stopped through
-    `stopProjects` at the run's clock (the source has no such instant), once.
+    a copy this run creates is stopped through `stopProjects` at the run's
+    clock (the source has no such instant) when QUIZ's project is past its
+    deadline, applied or archived; never on a later run (Quiz's ticker owns the
+    stops, a staff resync lifts them), and `stopped_at` / `departing_at` are
+    not owned columns.
     A set, group or roster line Quiz deleted since an earlier run is not
     recreated and nothing is placed under it (listed). Members missing from
     the Quiz roster are reported, never placed (`--missing-students report`);

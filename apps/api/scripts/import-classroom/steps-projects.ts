@@ -24,7 +24,7 @@ import { and, eq, getTableName, inArray, isNull } from "drizzle-orm";
 
 import { githubClassroomLinks, projectCheckpoints, projects } from "../../src/db/schema.js";
 import { nameOf, note, remember, syncOwned, tallyMapped, target, written, type Ctx, type OwnedRow } from "./ctx.js";
-import type { SourceAssignment, SourceSnapshot, SourceStudentRepo } from "./source.js";
+import type { SourceAssignment, SourceGroup, SourceSnapshot, SourceStudentRepo } from "./source.js";
 
 /** The assignments of the mapped classrooms: what a source row is in scope for (parity). */
 export const assignmentsInScope = (ctx: Ctx): SourceAssignment[] => ctx.snapshot.assignments.filter((a) => ctx.mapped.has(a.classroomId));
@@ -35,13 +35,20 @@ export function reposInScope(ctx: Ctx): SourceStudentRepo[] {
   return ctx.snapshot.studentRepos.filter((r) => ids.has(r.assignmentId));
 }
 
+/** The source groups of each assignment. */
+export function groupsOfProject(snapshot: SourceSnapshot): Map<string, SourceGroup[]> {
+  const byProject = new Map<string, SourceGroup[]>();
+  for (const g of snapshot.groups) byProject.set(g.assignmentId, [...(byProject.get(g.assignmentId) ?? []), g]);
+  return byProject;
+}
+
 /** The student members of each group (source user and roster line), in member order: a staff seat is never a member (ADR-070 §2). */
-export function groupUsersOf(snapshot: SourceSnapshot): Map<string, { userId: string; enrollmentId: string }[]> {
+export function groupUsersOf(snapshot: SourceSnapshot): Map<string, { userId: string; enrollmentId: string; memberId: string }[]> {
   const lines = new Map(snapshot.enrollments.map((e) => [e.id, e]));
-  const byGroup = new Map<string, { userId: string; enrollmentId: string }[]>();
+  const byGroup = new Map<string, { userId: string; enrollmentId: string; memberId: string }[]>();
   for (const m of snapshot.groupMembers) {
     const line = lines.get(m.enrollmentId);
-    if (line?.userId && !line.staff) byGroup.set(m.groupId, [...(byGroup.get(m.groupId) ?? []), { userId: line.userId, enrollmentId: line.id }]);
+    if (line?.userId && !line.staff) byGroup.set(m.groupId, [...(byGroup.get(m.groupId) ?? []), { userId: line.userId, enrollmentId: line.id, memberId: m.id }]);
   }
   return byGroup;
 }
@@ -57,9 +64,9 @@ export function groupUsersOf(snapshot: SourceSnapshot): Map<string, { userId: st
 export function repoOwner(ctx: Ctx, r: SourceStudentRepo): string | undefined {
   const own = target(ctx, r.userId);
   if (own !== undefined || r.groupId === null) return own;
-  const placed = ctx.known.get("enrollments");
-  for (const { userId, enrollmentId } of ctx.groupUsers.get(r.groupId) ?? []) {
-    if (!placed?.has(enrollmentId)) continue;
+  const placed = ctx.known.get("assignment_group_members");
+  for (const { userId, memberId } of ctx.groupUsers.get(r.groupId) ?? []) {
+    if (!placed?.has(memberId)) continue;
     const found = target(ctx, userId);
     if (found !== undefined) return found;
   }
@@ -144,7 +151,8 @@ export async function importProjects(ctx: Ctx) {
       continue;
     }
     if (!createdBy) {
-      leftOut.set(a.id, "no creator to record (its classroom's owner is unresolved and there is no --actor)");
+      // A project an earlier run carried stays carried: nothing to write, nothing lost.
+      if (!ctx.known.get("assignments")?.has(a.id)) leftOut.set(a.id, "no creator to record (its classroom's owner is unresolved and there is no --actor)");
       continue;
     }
     rows.push({

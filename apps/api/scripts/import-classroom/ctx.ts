@@ -57,9 +57,10 @@ export interface Ctx {
   /** `import_classroom.id_map`, loaded once and kept current by `remember`: source table → source id → target id. */
   known: Map<string, Map<string, string>>;
   /** The source user ids of the roster lines of each group, in member order (`repoOwner`). */
-  groupUsers: Map<string, { userId: string; enrollmentId: string }[]>;
+  groupUsers: Map<string, { userId: string; enrollmentId: string; memberId: string }[]>;
   /** The source's groups and roster lines by id. */
   groupsById: Map<string, SourceGroup>;
+  groupsOfProject: Map<string, SourceGroup[]>;
   linesById: Map<string, SourceEnrollment>;
   /** Group and member source ids an earlier run had carried before this one wrote (the group checks leave them alone: Quiz's staff may have edited them since). */
   carriedBefore: { groups: Set<string>; members: Set<string> };
