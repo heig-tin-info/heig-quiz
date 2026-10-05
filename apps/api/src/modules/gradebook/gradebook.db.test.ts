@@ -459,6 +459,14 @@ describe("the staff's marks (D06, 2026-10-05)", () => {
       const refused = await call("PUT", markUrl("evaluation", "E1", seats[0]!), assistant.headers, { kind: "absent", override: true });
       expect([refused.statusCode, refused.json().error]).toEqual([403, "owner_required"]);
       expect(cellOf(await staffTable(), 0, "E1")).toMatchObject({ kind: "grade", mark: null });
+      // An owner's override of a released grade: an assistant may neither change nor clear it, the owner may.
+      expect((await call("PUT", markUrl("evaluation", "E1", seats[0]!), teacher.headers, { kind: "absent", override: true })).statusCode).toBe(200);
+      const edit = await call("PUT", markUrl("evaluation", "E1", seats[0]!), assistant.headers, { kind: "score", points: 9, max: 10 });
+      expect([edit.statusCode, edit.json().error]).toEqual([403, "owner_required"]);
+      const clear = await call("DELETE", markUrl("evaluation", "E1", seats[0]!), assistant.headers);
+      expect([clear.statusCode, clear.json().error]).toEqual([403, "owner_required"]);
+      expect(cellOf(await staffTable(), 0, "E1")).toMatchObject({ kind: "absent", source: "mark" });
+      expect((await call("DELETE", markUrl("evaluation", "E1", seats[0]!), teacher.headers)).statusCode).toBe(200);
       // Without the override it is still the 409 anyone gets.
       expect((await call("PUT", markUrl("evaluation", "E1", seats[0]!), assistant.headers, { kind: "absent" })).json().error).toBe("grade_exists");
       // An absence on an empty cell, and a mark on a column not released, stay open to every member.

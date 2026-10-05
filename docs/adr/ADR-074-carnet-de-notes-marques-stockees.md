@@ -106,9 +106,9 @@ to students only if the teacher publishes it. Two gaps remained.
    gets nothing). Settings and marks are open to every member of the staff,
    an assistant included (ADR-068: a classroom's settings), with one
    exception (orchestrator, 2026-10-05, following the owner-only release and
-   correction publication of ADR-068 §3): a mark that **replaces a real grade
-   on a released column** (`override: true`) is an **owner's** act, `403
-   owner_required` for an assistant. Marks on a column not released, and an
+   correction publication of ADR-068 §3): publishing, **changing or clearing a mark over a real grade on a
+   released column** (a published correction; `override: true`) is an
+   **owner's** act, `403 owner_required` for an assistant. Marks on a column not released, and an
    absence over an empty cell, stay open to every member; what makes a grade
    final stays the activity's own release. An **archived** classroom's
    gradebook is read-only (`409 classroom_archived`). The settings are audited

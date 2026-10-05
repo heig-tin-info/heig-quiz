@@ -102,6 +102,31 @@ async function seatOf(db: Db, classroomId: string, enrollmentId: string, { claim
 /** The accounts of the classroom's claimed students, whom a change may reach. */
 const studentUserIds = async (db: Db | Tx, classroomId: string) => (await claimedSeats(db, classroomId)).map((s) => s.userId);
 
+/**
+ * A mark over a real grade is deliberate (`grade_exists` without `override`
+ * for a new one), and on a RELEASED column publishing, changing or clearing
+ * it is the owner's, as the release is (ADR-068, ADR-074 §9): `403
+ * owner_required` for an assistant. A cell with no real grade beneath, and a
+ * column not released, stay open to every member.
+ */
+async function guardOverride(
+  db: Db,
+  entry: GradebookEntry,
+  seat: { id: string; userId: string | null },
+  { replacing, override }: { replacing: boolean; override: boolean },
+  ctx: WriteContext,
+): Promise<void> {
+  const beneath = (await entry.staffCells(db, [{ enrollmentId: seat.id, userId: seat.userId ?? "" }])).get(seat.id);
+  if (!beneath?.hasGrade) return;
+  if (replacing && !override) {
+    throw new GradebookError("grade_exists", "A grade already stands there: set the mark with override to replace it", {
+      activityId: entry.activityId,
+      enrollmentId: seat.id,
+    });
+  }
+  if (entry.released && !ctx.owner) throw new GradebookError("owner_required", "Only an owner of this course may alter a released grade");
+}
+
 /** A mark as the audit records it. */
 const markFacts = (mark: { kind: string; points: number | null; max: number | null; comment: string | null } | undefined) =>
   mark === undefined ? null : { kind: mark.kind, points: mark.points, max: mark.max, comment: mark.comment };
@@ -122,19 +147,7 @@ export async function setMark(db: Db, scope: RoomScope, params: GradebookMarkPar
     .from(gradebookMarks)
     .innerJoin(gradebookColumns, eq(gradebookColumns.id, gradebookMarks.columnId))
     .where(and(eq(gradebookMarks.enrollmentId, seat.id), columnOf(entry)));
-  if (!stored) {
-    const beneath = (await entry.staffCells(db, [{ enrollmentId: seat.id, userId: seat.userId! }])).get(seat.id);
-    if (beneath?.hasGrade) {
-      if (body.override !== true) {
-        throw new GradebookError("grade_exists", "A grade already stands there: set the mark with override to replace it", {
-          activityId: entry.activityId,
-          enrollmentId: seat.id,
-        });
-      }
-      // Replacing a grade the students read is what the release made final: an owner's, as the release is.
-      if (entry.released && !ctx.owner) throw new GradebookError("owner_required", "Only an owner of this course may replace a released grade");
-    }
-  }
+  await guardOverride(db, entry, seat, { replacing: !stored, override: body.override === true }, ctx);
 
   const values = {
     kind: body.kind,
@@ -182,6 +195,7 @@ export async function clearMark(db: Db, scope: RoomScope, params: GradebookMarkP
   const entry = await entryOf(db, scope.room.id, params.kind, params.activityId);
   // An unclaimed line is allowed: a student who lost their claim after a mark was set keeps it, and it must stay clearable.
   const seat = await seatOf(db, scope.room.id, params.eid, { claimed: false });
+  await guardOverride(db, entry, seat, { replacing: false, override: true }, ctx);
   const cleared = await db.transaction(async (tx) => {
     await lockClassroom(tx, scope.room.id);
     const [row] = await tx
