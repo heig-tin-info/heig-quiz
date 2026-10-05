@@ -49,6 +49,7 @@ import {
   type IconType,
   type TipSide,
 } from "./ui";
+import { usePaletteProjects } from "./paletteProjects";
 import { coursesKey, poolsKey } from "./queryKeys";
 import { BottomNav, SLOT_LOOK } from "./student/BottomNav";
 import { bottomNavShown, sidebarSlots } from "./student/bottomNavSlots";
@@ -500,6 +501,7 @@ export function Shell({
     queryFn: () => api("/app/api/pools"),
     enabled: teacherUi,
   });
+  const projects = usePaletteProjects(teacherUi, palette);
   const themeChoice = useThemeChoice();
   const resolvedTheme = useResolvedTheme();
   const { open: openHelp } = useHelp();
@@ -713,6 +715,7 @@ export function Shell({
           onToggleStudentView={onToggleStudentView}
           courses={courses.data ?? []}
           pools={pools.data ?? []}
+          projects={projects}
           themeChoice={themeChoice}
           resolvedTheme={resolvedTheme}
           setThemeChoice={setThemeChoice}

@@ -141,13 +141,19 @@ function ProjectBody({ project, readOnly, navigate }: { project: StudentProject;
         }
         description={
           <>
-            <p>
+            <p data-coach="sproj.deadline">
               {project.courseCode} · {timing}
             </p>
             {readOnly ? <p className="mt-0.5 text-[13px]">{t("sproj.readOnly")}</p> : null}
           </>
         }
-        actions={action ? <RowActionControl action={action} className="w-full sm:w-auto" /> : undefined}
+        actions={
+          action ? (
+            <span className="block w-full sm:w-auto" data-coach="sproj.action">
+              <RowActionControl action={action} className="w-full sm:w-auto" />
+            </span>
+          ) : undefined
+        }
       />
 
       <section className="space-y-3">
@@ -262,7 +268,7 @@ const points = (p: number, max: number | null): string => (max === null ? format
 function ScoreSection({ repo }: { repo: StudentProjectRepo }) {
   const t = useT();
   return (
-    <section className="space-y-3">
+    <section className="space-y-3" data-coach="sproj.score">
       <SectionHeading title={t("sproj.score")} />
       {repo.score ? (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -295,7 +301,7 @@ function ScoreSection({ repo }: { repo: StudentProjectRepo }) {
 function ReleaseSection({ release }: { release: NonNullable<StudentProject["release"]> }) {
   const t = useT();
   return (
-    <section className="space-y-3">
+    <section className="space-y-3" data-coach="sproj.score">
       <SectionHeading title={t("sproj.result")} description={t("sproj.result.publishedAt", { when: isoDateTime(release.at) })} />
       <div className="grid gap-3 sm:grid-cols-2">
         <Stat label={t("sproj.score.final")} value={release.points === null ? "—" : points(release.points, release.max)} />

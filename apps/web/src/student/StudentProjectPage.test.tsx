@@ -8,6 +8,7 @@ import type { Locale } from "../i18n";
 import { makeMe } from "../test/fixtures";
 import { fail, makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { meKey } from "../queryKeys";
+import { TOURS } from "../coach/catalog";
 import { StudentProjectPage } from "./StudentProjectPage";
 
 /*
@@ -295,6 +296,26 @@ describe("a reader who is not the student", () => {
     expect(await screen.findByText("Read-only view: the student's actions are not available")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open the invitation" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Resend the invitation" })).toBeNull();
+  });
+});
+
+describe("the student's tour (M7-01)", () => {
+  it("finds the action, the score and the deadline on the page", async () => {
+    mockFetch({ [URL]: ok(project({ status: "to_accept", repo: null })) });
+    render();
+    await screen.findByRole("heading", { level: 1, name: /Pointeurs/ });
+    const tour = TOURS.find((t) => t.id === "sproj")!;
+    expect(tour.audience).toBe("student");
+    for (const step of tour.steps.filter((s) => s.id !== "sproj.score")) {
+      expect(document.querySelector(step.target), step.id).not.toBeNull();
+    }
+  });
+
+  it("finds the score once the repository exists", async () => {
+    mockFetch({ [URL]: ok(project()) });
+    render();
+    await screen.findByText("Indicative score");
+    expect(document.querySelector('[data-coach="sproj.score"]')).not.toBeNull();
   });
 });
 
