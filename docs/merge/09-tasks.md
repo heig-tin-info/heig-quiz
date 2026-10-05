@@ -4338,7 +4338,7 @@ serves now (16a), and what waits for the group repositories (16b).
   - `P:domain/legacyClassroom.ts` (pure, `legacyRule(path)`: every row of
     §6.6 as a rule, malformed ids as `not_found`, journal segments that
     never climb), `P:contracts/legacy.ts` (`LegacyClassroomParams`,
-    `LegacyGone`), `Q:modules/legacy/{routes,service}.ts` (`GET
+    `LegacyGone`); journal paths are vetted by the contract's `safeJournalPath`/`encodeJournalPath`, `Q:modules/legacy/{routes,service}.ts` (`GET
     /legacy/classroom/*`, outside `/app/api`: a browser navigates to it),
     `legacy.db.test.ts` (one case per row, then who reaches a target).
   - **Fixed rows** answer the same to everyone: 302 (`/settings`, `/`,
@@ -4367,6 +4367,12 @@ serves now (16a), and what waits for the group repositories (16b).
     (`/classrooms/:id/groups/:setId`) or the classroom's sets, staff only (a
     student gets the project page). `/app/codespace/start/:aid` leads to the
     project page: Quiz has no codespace start route before M6-06/M6-07.
+  - **For M8-03**: the Caddy fragment must send every human-clicked path,
+    `/app/api/users/:uid/avatar` included (the `@gone /app/api/*` matcher
+    would swallow it), to `/legacy/classroom{uri}`; Caddy answers only
+    `POST /webhooks/github` itself. `importClassroomMap` keeps the first
+    id-map target: a later run that maps a classroom elsewhere does not
+    update the row.
   - **Not done** (needs the Caddy fragment or a product decision): the
     HMAC-honouring of an old unsubscribe link (the row allows a plain
     redirect; none is implemented, the secret is not carried); the

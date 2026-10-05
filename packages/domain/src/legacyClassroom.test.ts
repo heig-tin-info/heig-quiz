@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { journalSegments, legacyRule, type LegacyRule } from "./legacyClassroom.js";
+import { legacyRule, type LegacyRule } from "./legacyClassroom.js";
 
 const C = "11111111-1111-4111-8111-111111111111";
 const A = "22222222-2222-4222-8222-222222222222";
@@ -16,10 +16,10 @@ const ROWS: [string, string, LegacyRule][] = [
   ["/app/codespace/start/:aid", `/app/codespace/start/${A}`, { kind: "start", assignmentId: A }],
   ["/app/email/unsub", "/app/email/unsub", { kind: "redirect", to: "/settings" }],
   ["/classrooms/:id", `/classrooms/${C}`, { kind: "classroom", classroomId: C }],
-  ["/classrooms/:id/assignments/:aid", `/classrooms/${C}/assignments/${A}`, { kind: "project", classroomId: C, assignmentId: A }],
-  ["/classrooms/:id/assignments/:aid/groups", `/classrooms/${C}/assignments/${A}/groups`, { kind: "groups", classroomId: C, assignmentId: A }],
-  ["/classrooms/:cid/journal", `/classrooms/${C}/journal`, { kind: "journal", classroomId: C, path: [] }],
-  ["/classrooms/:cid/journal/<path>", `/classrooms/${C}/journal/10-w1/README.md`, { kind: "journal", classroomId: C, path: ["10-w1", "README.md"] }],
+  ["/classrooms/:id/assignments/:aid", `/classrooms/${C}/assignments/${A}`, { kind: "project", assignmentId: A }],
+  ["/classrooms/:id/assignments/:aid/groups", `/classrooms/${C}/assignments/${A}/groups`, { kind: "groups", assignmentId: A }],
+  ["/classrooms/:cid/journal", `/classrooms/${C}/journal`, { kind: "journal", classroomId: C, path: "" }],
+  ["/classrooms/:cid/journal/<path>", `/classrooms/${C}/journal/10-w1/README.md`, { kind: "journal", classroomId: C, path: "10-w1/README.md" }],
   ["/settings", "/settings", { kind: "redirect", to: "/settings" }],
   ["/admin", "/admin", { kind: "redirect", to: "/admin" }],
   ["/", "/", { kind: "redirect", to: "/" }],
@@ -61,11 +61,7 @@ describe("legacyRule: edges", () => {
     expect(legacyRule("/app/somethingnew")).toEqual({ kind: "redirect", to: "/" });
   });
 
-  it("a journal path never climbs", () => {
-    expect(journalSegments(["a", "..", "b"])).toEqual(["a"]);
-    expect(journalSegments([".", "a"])).toEqual([]);
-    expect(journalSegments(["a\\b"])).toEqual([]);
-    expect(journalSegments(["a", "b/c"])).toEqual(["a"]);
-    expect(legacyRule(`/classrooms/${C}/journal/x/../y`)).toEqual({ kind: "journal", classroomId: C, path: ["x"] });
+  it("a journal path is the raw remainder, vetted later by the contract", () => {
+    expect(legacyRule(`/classrooms/${C}/journal/x/../y`)).toEqual({ kind: "journal", classroomId: C, path: "x/../y" });
   });
 });

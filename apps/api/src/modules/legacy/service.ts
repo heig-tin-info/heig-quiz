@@ -17,21 +17,17 @@
  */
 import { and, eq } from "drizzle-orm";
 
+import { encodeJournalPath, safeJournalPath } from "@quiz/contracts";
 import type { LegacyRule } from "@quiz/domain";
 
 import type { SessionAuth } from "../../auth/session.js";
 import type { Db } from "../../db/client.js";
-import { avatars, importIdMap } from "../../db/schema.js";
-import {
-  findAccessibleProject,
-  findReadableClassroom,
-  findStudentProject,
-  seesUser,
-  type Caller,
-} from "../guards.js";
+import { importIdMap } from "../../db/schema.js";
+import { findVisibleAvatar } from "../avatar.js";
+import { findAccessibleProject, findReadableClassroom, findStudentProjectView, type Caller } from "../guards.js";
 
 /** The rules that need an entity: everything the pure rule cannot answer alone. */
-export type LookupRule = Extract<LegacyRule, { kind: "classroom" | "project" | "groups" | "journal" | "start" | "avatar" }>;
+type LookupRule = Extract<LegacyRule, { kind: "classroom" | "project" | "groups" | "journal" | "start" | "avatar" }>;
 
 /** The Quiz id an old row became, through the id map; null when the import did not carry it. */
 async function mapped(db: Db, table: "classrooms" | "assignments" | "users", sourceId: string): Promise<string | null> {
@@ -42,9 +38,6 @@ async function mapped(db: Db, table: "classrooms" | "assignments" | "users", sou
     .limit(1);
   return row?.targetId ?? null;
 }
-
-/** A journal page path as the web router writes it: one encoded segment each. */
-const encodePath = (segments: readonly string[]) => segments.map(encodeURIComponent).join("/");
 
 /**
  * The Quiz path a rule leads this caller to, or null (a 404 the route sends
@@ -63,9 +56,10 @@ export async function resolve(
       const id = await mapped(db, "classrooms", rule.classroomId);
       if (!id) return null;
       if (!(await findReadableClassroom(db, caller, auth, id, { studentView: false }))) return null;
-      return rule.kind === "classroom"
-        ? `/classrooms/${id}`
-        : `/classrooms/${id}/journal${rule.path.length > 0 ? `/${encodePath(rule.path)}` : ""}`;
+      if (rule.kind === "classroom") return `/classrooms/${id}`;
+      // A path the contract refuses (a traversal, a dotfile) lands on the journal's home.
+      const page = safeJournalPath(rule.path);
+      return `/classrooms/${id}/journal${page ? `/${encodeJournalPath(page)}` : ""}`;
     }
     case "project":
     case "groups":
@@ -73,8 +67,8 @@ export async function resolve(
       const id = await mapped(db, "assignments", rule.assignmentId);
       if (!id) return null;
       const staff = await findAccessibleProject(db, caller, id);
-      // The students' side: a claimed student seat on a published project.
-      if (!staff && !(await findStudentProject(db, caller.id, id))) return null;
+      // The students' side, by the rule of the page the link lands on (an archived classroom still reads).
+      if (!staff && !(await findStudentProjectView(db, caller, auth, id))) return null;
       // The staff's groups page: the project's set when it names one, else
       // the classroom's sets. A student, who has no such page, gets the
       // project, where their group is.
@@ -87,12 +81,7 @@ export async function resolve(
     case "avatar": {
       const id = await mapped(db, "users", rule.userId);
       if (!id) return null;
-      const [row] = await db
-        .select({ userId: avatars.userId })
-        .from(avatars)
-        .where(and(eq(avatars.userId, id), seesUser(caller, id)))
-        .limit(1);
-      return row ? `/app/api/users/${id}/avatar` : null;
+      return (await findVisibleAvatar(db, caller, id)) ? `/app/api/users/${id}/avatar` : null;
     }
   }
 }

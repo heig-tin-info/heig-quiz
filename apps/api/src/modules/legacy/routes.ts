@@ -19,7 +19,7 @@
  */
 import type { FastifyInstance } from "fastify";
 
-import { LegacyClassroomParams } from "@quiz/contracts";
+import { LegacyClassroomParams, type LegacyGone } from "@quiz/contracts";
 import { LEGACY_HOME, legacyRule } from "@quiz/domain";
 
 import { callerOf, ownPortalSession } from "../guards.js";
@@ -30,7 +30,7 @@ export async function legacyPlugin(app: FastifyInstance) {
   app.get("/legacy/classroom/*", async (req, reply) => {
     const params = LegacyClassroomParams.safeParse(req.params);
     if (!params.success) return notFound(reply);
-    const gone = () => reply.code(410).send({ error: "moved", to: LEGACY_HOME });
+    const gone = () => reply.code(410).send({ error: "moved", to: LEGACY_HOME } satisfies LegacyGone);
     const rule = legacyRule(`/${params.data["*"]}`);
 
     switch (rule.kind) {
@@ -40,16 +40,15 @@ export async function legacyPlugin(app: FastifyInstance) {
         return gone();
       case "not_found":
         return notFound(reply);
-      case "avatar": {
-        if (!req.user || !ownPortalSession(req.auth)) return gone();
-        const to = await resolve(app.db, callerOf(req), req.auth, rule);
-        return to ? reply.redirect(to, 302) : gone();
-      }
       default: {
-        if (!req.user) return reply.redirect(`/app/auth/login?next=${encodeURIComponent(req.url)}`, 302);
-        if (!ownPortalSession(req.auth)) return notFound(reply);
+        // The avatar answers 410 where the others answer 404 (and never a login).
+        const miss = () => (rule.kind === "avatar" ? gone() : notFound(reply));
+        if (!req.user) {
+          return rule.kind === "avatar" ? gone() : reply.redirect(`/app/auth/login?next=${encodeURIComponent(req.url)}`, 302);
+        }
+        if (!ownPortalSession(req.auth)) return miss();
         const to = await resolve(app.db, callerOf(req), req.auth, rule);
-        return to ? reply.redirect(to, 302) : notFound(reply);
+        return to ? reply.redirect(to, 302) : miss();
       }
     }
   });

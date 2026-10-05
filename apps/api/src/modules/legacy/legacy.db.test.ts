@@ -8,12 +8,13 @@
  */
 import { randomUUID } from "node:crypto";
 
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createApiToken } from "../../auth/tokens.js";
 import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { defaultProjectGradingScale } from "@quiz/contracts";
-import { avatars, githubOrganizations, groupSets, importIdMap, projects } from "../../db/schema.js";
+import { avatars, classrooms, githubOrganizations, groupSets, importIdMap, projects } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 
@@ -88,25 +89,11 @@ afterAll(async () => server.close());
 const L = "/legacy/classroom";
 
 describe("every row of §6.6, as the Caddy fragment hands it over", () => {
-  // [row, old path, status, location]
-  const ROWS: [string, string, number, string | undefined][] = [
-    ["POST /webhooks/github (410)", "/webhooks/github", 410, undefined],
-    ["/app/auth/github/callback", "/app/auth/github/callback", 302, "/settings"],
-    ["/setup/github/installed", "/setup/github/installed", 302, "/"],
-    ["/app/auth/* (edu-ID)", "/app/auth/callback", 302, "/"],
-    ["/app/email/unsub", "/app/email/unsub", 302, "/settings"],
-    ["/settings", "/settings", 302, "/settings"],
-    ["/admin", "/admin", 302, "/admin"],
-    ["/", "/", 302, "/"],
-    ["/app/api/*", "/app/api/classrooms", 410, undefined],
-    ["/app/events", "/app/events", 410, undefined],
-    ["/kc/*", "/kc/realms/x", 410, undefined],
-    ["/healthz", "/healthz", 410, undefined],
-    ["/metrics", "/metrics", 410, undefined],
-    ["/app/api/journals/:jid/assets/*", `/app/api/journals/${randomUUID()}/assets/a.png`, 410, undefined],
-  ];
-  it.each(ROWS)("%s", async (_row, path, status, to) => {
-    // Whoever asks: the fixed rows need no session.
+  // The table of rows is the domain test's; here, one 302 and one 410 over HTTP.
+  it.each([
+    ["a redirect", "/app/auth/github/callback", 302, "/settings"],
+    ["a dead API", "/app/api/classrooms", 410, undefined],
+  ] as const)("%s, whoever asks", async (_row, path, status, to) => {
     for (const headers of [{}, teacher.headers]) {
       const res = await get(`${L}${path}`, headers);
       expect(res.statusCode).toBe(status);
@@ -172,7 +159,9 @@ describe("every row of §6.6, as the Caddy fragment hands it over", () => {
 
   it("a journal path never climbs out of the journal", async () => {
     const res = await get(`${L}/classrooms/${old.classroom}/journal/a/..%2F..%2Fb`, teacher.headers);
-    expect(location(res)).toBe(`/classrooms/${classroomId}/journal/a`);
+    expect(location(res)).toBe(`/classrooms/${classroomId}/journal`);
+    const dot = await get(`${L}/classrooms/${old.classroom}/journal/.github/x.md`, teacher.headers);
+    expect(location(dot)).toBe(`/classrooms/${classroomId}/journal`);
   });
 });
 
@@ -209,6 +198,19 @@ describe("who reaches a target (invariant 6)", () => {
     const path = `${L}/classrooms/${old.classroom}/assignments/${old.draft}`;
     expect(location(await get(path, teacher.headers))).toBe(`/projects/${draftId}`);
     expect((await get(path, student.headers)).statusCode).toBe(404);
+  });
+
+  it("a student of an archived classroom still reaches the project page the link lands on", async () => {
+    const seeded = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [student.id], questions: 0 });
+    const room = randomUUID();
+    const was = classroomId;
+    classroomId = seeded.classroomId;
+    const p = await project({ state: "published" });
+    classroomId = was;
+    await server.app.db.update(classrooms).set({ archivedAt: new Date() }).where(eq(classrooms.id, seeded.classroomId));
+    await server.app.db.insert(importIdMap).values({ sourceTable: "assignments", sourceId: room, targetId: p, how: "created" });
+    const res = await get(`${L}/classrooms/${old.classroom}/assignments/${room}`, student.headers);
+    expect([res.statusCode, location(res)]).toEqual([302, `/projects/${p}`]);
   });
 
   it("the student never gets the staff's groups page", async () => {
