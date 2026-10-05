@@ -50,8 +50,8 @@ const groupsPerProject: ImportCheck = {
     const wanted = new Map<string, { name: string; ids: string[] }>();
     for (const g of ctx.snapshot.groups) {
       if (!known?.has(g.id) || ctx.carriedBefore.groups.has(g.id)) continue;
-      const entry = wanted.get(g.assignmentId) ?? { name: names.get(g.assignmentId) ?? g.assignmentId, ids: [] };
-      wanted.set(g.assignmentId, { ...entry, ids: [...entry.ids, g.id] });
+      if (!wanted.has(g.assignmentId)) wanted.set(g.assignmentId, { name: names.get(g.assignmentId) ?? g.assignmentId, ids: [] });
+      wanted.get(g.assignmentId)!.ids.push(g.id);
     }
     return perParent(ctx, "groups", "project", wanted, async (ids) =>
       (await ctx.db.select({ id: projectGroups.id, parentId: projectGroups.projectId }).from(projectGroups).where(inArray(projectGroups.projectId, ids))),
@@ -63,12 +63,11 @@ const membersPerGroup: ImportCheck = {
   name: "members per group",
   async run(ctx) {
     const known = ctx.known.get("assignment_group_members");
-    const names = new Map(ctx.snapshot.groups.map((g) => [g.id, g.name]));
     const wanted = new Map<string, { name: string; ids: string[] }>();
     for (const m of ctx.snapshot.groupMembers) {
       if (!known?.has(m.id) || ctx.carriedBefore.members.has(m.id)) continue;
-      const entry = wanted.get(m.groupId) ?? { name: names.get(m.groupId) ?? m.groupId, ids: [] };
-      wanted.set(m.groupId, { ...entry, ids: [...entry.ids, m.id] });
+      if (!wanted.has(m.groupId)) wanted.set(m.groupId, { name: ctx.groupsById.get(m.groupId)?.name ?? m.groupId, ids: [] });
+      wanted.get(m.groupId)!.ids.push(m.id);
     }
     return perParent(ctx, "members", "group", wanted, async (ids) =>
       (await ctx.db.select({ id: projectGroupMembers.id, parentId: projectGroupMembers.groupId }).from(projectGroupMembers).where(inArray(projectGroupMembers.groupId, ids))),

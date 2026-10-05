@@ -17,7 +17,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 import { PGlite } from "@electric-sql/pglite";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import type { AppConfig } from "../src/config.js";
@@ -722,6 +722,47 @@ describe("import-classroom projects (M8-01b)", () => {
       const tables = Object.fromEntries(report.parity.tables.map((t) => [t.table, t]));
       expect(tables["group repositories"]).toMatchObject({ source: 3, carried: 2, leftOut: 1, missing: 0 });
       expect(report.findings.projects?.some((l) => l.includes("Team 2") && l.includes("deleted in Quiz"))).toBe(true);
+    });
+
+    it("never stops a copy on a re-run because of the source: Quiz's own deadline decides", async () => {
+      const w = await world();
+      await runImport(w.db, config, snapshot, MAPPING, DECIDED);
+      // A teacher moved Beta's deadline far ahead in Quiz; classroom's says it is past.
+      await w.db.update(projects).set({ deadlineAt: new Date(NOW.getTime() + 30 * 86_400_000) }).where(eq(projects.id, ID.beta));
+      const past = edited(ID.beta, (a) => { a.deadlineAt = new Date(NOW.getTime() - 3_600_000); });
+      await runImport(w.db, config, past, MAPPING, { ...DECIDED, now: new Date(NOW.getTime() + 60_000) });
+      expect((await w.db.select({ at: projectGroups.stoppedAt }).from(projectGroups).where(eq(projectGroups.projectId, ID.beta))).map((g) => g.at)).toEqual([null]);
+      expect((await one(w.db.select().from(projects).where(eq(projects.id, ID.beta))))!.groupsStoppedAt).toBeNull();
+    });
+
+    it("takes a set's creator from the carried project, so a run without an actor does not abort", async () => {
+      const w = await world();
+      await runImport(w.db, config, snapshot, MAPPING, DECIDED);
+      // The set of Beta is gone from the id map and from Quiz (as before M8-01c), its project is carried.
+      await w.db.delete(studentGroupMembers).where(eq(studentGroupMembers.setId, ID.beta));
+      await w.db.delete(studentGroups).where(eq(studentGroups.setId, ID.beta));
+      await w.db.delete(groupSets).where(eq(groupSets.id, ID.beta));
+      await w.db.delete(importIdMap).where(and(
+        inArray(importIdMap.sourceTable, ["assignments (group set)", "assignment_groups (set)", "assignment_group_members (set)"]),
+        inArray(importIdMap.sourceId, [ID.beta, ID.groupBeta, ...snapshot.groupMembers.filter((m) => m.groupId === ID.groupBeta).map((m) => m.id)]),
+      ));
+      const noOwner = variant((s) => { for (const c of s.classrooms) c.teacherId = randomUUID(); });
+      const report = await runImport(w.db, config, noOwner, MAPPING, { ...DECIDED, apply: false, actorEmail: "nobody@heig-vd.ch" });
+      // Not an abort (the set's NOT NULL creator is the project's); the b tally's own line for a known project with no creator is not this task's.
+      expect(report.outcome).toBe("rolled_back");
+      expect(report.parity.redLines.filter((l) => /group/.test(l))).toEqual([]);
+    });
+
+    it("records no access for a member Quiz's staff added to a group", async () => {
+      const w = await world();
+      await runImport(w.db, config, snapshot, MAPPING, DECIDED);
+      const zedUser = await quizUser(w.db, "q-zed2", { email: "zed2@heig-vd.ch" });
+      await w.db.insert(githubAccounts).values({ userId: zedUser, githubUserId: 7777, login: "gh-zed" });
+      const zed = randomUUID();
+      await w.db.insert(enrollments).values({ id: zed, classroomId: w.progA, nom: "Zed", prenom: "Zed", email: "zed2@heig-vd.ch", userId: zedUser, claimedAt: new Date() });
+      await w.db.insert(projectGroupMembers).values({ id: randomUUID(), projectId: ID.beta, groupId: ID.groupBeta, enrollmentId: zed });
+      expect((await runImport(w.db, config, snapshot, MAPPING, DECIDED)).outcome).toBe("nothing_to_do");
+      expect(await w.db.select().from(projectRepoAccess).where(eq(projectRepoAccess.enrollmentId, zed))).toEqual([]);
     });
 
     it("never revokes or rewrites an access Quiz already holds", async () => {

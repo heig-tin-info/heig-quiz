@@ -35,13 +35,13 @@ export function reposInScope(ctx: Ctx): SourceStudentRepo[] {
   return ctx.snapshot.studentRepos.filter((r) => ids.has(r.assignmentId));
 }
 
-/** The source user ids of the roster lines of each group, in member order. */
-export function groupUsersOf(snapshot: SourceSnapshot): Map<string, string[]> {
-  const lines = new Map(snapshot.enrollments.map((e) => [e.id, e.userId]));
-  const byGroup = new Map<string, string[]>();
+/** The student members of each group (source user and roster line), in member order: a staff seat is never a member (ADR-070 §2). */
+export function groupUsersOf(snapshot: SourceSnapshot): Map<string, { userId: string; enrollmentId: string }[]> {
+  const lines = new Map(snapshot.enrollments.map((e) => [e.id, e]));
+  const byGroup = new Map<string, { userId: string; enrollmentId: string }[]>();
   for (const m of snapshot.groupMembers) {
-    const user = lines.get(m.enrollmentId);
-    if (user) byGroup.set(m.groupId, [...(byGroup.get(m.groupId) ?? []), user]);
+    const line = lines.get(m.enrollmentId);
+    if (line?.userId && !line.staff) byGroup.set(m.groupId, [...(byGroup.get(m.groupId) ?? []), { userId: line.userId, enrollmentId: line.id }]);
   }
   return byGroup;
 }
@@ -57,8 +57,10 @@ export function groupUsersOf(snapshot: SourceSnapshot): Map<string, string[]> {
 export function repoOwner(ctx: Ctx, r: SourceStudentRepo): string | undefined {
   const own = target(ctx, r.userId);
   if (own !== undefined || r.groupId === null) return own;
-  for (const user of (ctx.groupUsers.get(r.groupId) ?? [])) {
-    const found = target(ctx, user);
+  const placed = ctx.known.get("enrollments");
+  for (const { userId, enrollmentId } of ctx.groupUsers.get(r.groupId) ?? []) {
+    if (!placed?.has(enrollmentId)) continue;
+    const found = target(ctx, userId);
     if (found !== undefined) return found;
   }
   return undefined;

@@ -278,6 +278,8 @@ export async function runImport(
         actorId,
         known,
         groupUsers: groupUsersOf(snapshot),
+        groupsById: new Map(snapshot.groups.map((g) => [g.id, g])),
+        linesById: new Map(snapshot.enrollments.map((e) => [e.id, e])),
         goneCopyGroups: new Set(),
         carriedBefore: { groups: new Set(), members: new Set() },
         parity: new Map(),

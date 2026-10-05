@@ -52,7 +52,7 @@ import { repoMembers } from "../../src/modules/project/groupRepos.js";
 import { stopProjects } from "../../src/modules/project/service.js";
 import { note, tally, tallyMapped, written, type Ctx, type OwnedRow } from "./ctx.js";
 import type { SourceAssignment, SourceGroup, SourceGroupMember } from "./source.js";
-import { assignmentsInScope, carryOwned, creatorOf, reposInScope } from "./steps-projects.js";
+import { assignmentsInScope, carryOwned, reposInScope } from "./steps-projects.js";
 import { IN_CHUNK, insertAll, presentKeys } from "./steps-repos.js";
 
 /** The id-map names of what is under a set (the copy's rows use the source's own table names). */
@@ -95,9 +95,8 @@ export async function importGroups(ctx: Ctx) {
     copyGroups: await goneSince(ctx, "assignment_groups", projectGroups),
   };
   ctx.goneCopyGroups = gone.copyGroups;
-  const names = new Map(ctx.snapshot.groups.map((g) => [g.id, g.name]));
   for (const a of carried) if (gone.sets.has(a.id)) note(ctx, "projects", `group set of "${a.name}": deleted in Quiz since the previous import, not recreated`);
-  for (const id of new Set([...gone.setGroups, ...gone.copyGroups])) note(ctx, "projects", `group "${names.get(id) ?? id}": deleted in Quiz since the previous import, not recreated`);
+  for (const id of new Set([...gone.setGroups, ...gone.copyGroups])) note(ctx, "projects", `group "${ctx.groupsById.get(id)?.name ?? id}": deleted in Quiz since the previous import, not recreated`);
 
   const live = await carrySets(ctx, carried, gone);
   const memberLeftOut = await carryMembers(ctx, carried, gone);
@@ -110,6 +109,9 @@ type Gone = { sets: Set<string>; setGroups: Set<string>; copyGroups: Set<string>
 
 /** The sets, their groups and the project's copy of each group; returns the ids of the sets that are live in Quiz. */
 async function carrySets(ctx: Ctx, carried: SourceAssignment[], gone: Gone): Promise<Set<string>> {
+  // The set's creator is the carried project's own (a run without --actor may not resolve one).
+  const creators = new Map<string, string>();
+  for (const row of await ctx.db.select({ id: projects.id, createdBy: projects.createdBy }).from(projects).where(inArray(projects.id, carried.map((a) => a.id)))) creators.set(row.id, row.createdBy);
   const groupsOf = new Map<string, SourceGroup[]>();
   for (const g of ctx.snapshot.groups) groupsOf.set(g.assignmentId, [...(groupsOf.get(g.assignmentId) ?? []), g]);
   const setRows: OwnedRow[] = [];
@@ -117,13 +119,17 @@ async function carrySets(ctx: Ctx, carried: SourceAssignment[], gone: Gone): Pro
   const copyRows: OwnedRow[] = [];
   for (const a of carried) {
     if (gone.sets.has(a.id)) continue;
+    const createdBy = creators.get(a.id);
+    if (!createdBy) {
+      note(ctx, "projects", `project ${a.name}: not in Quiz, its group set is not carried`);
+      continue;
+    }
     setRows.push({
       sourceTable: SET,
       sourceId: a.id,
       table: groupSets,
       label: `group set "${a.name}"`,
-      // Carried projects have a creator (importProjects), and so does their set.
-      values: { classroomId: ctx.mapped.get(a.classroomId)!.classroomId, name: a.name, maxSize: a.groupMaxSize, openUntil: null, createdBy: creatorOf(ctx, a)!, createdAt: a.createdAt },
+      values: { classroomId: ctx.mapped.get(a.classroomId)!.classroomId, name: a.name, maxSize: a.groupMaxSize, openUntil: null, createdBy, createdAt: a.createdAt },
     });
     for (const g of groupsOf.get(a.id) ?? []) {
       if (gone.setGroups.has(g.id) || gone.copyGroups.has(g.id)) continue;
@@ -205,8 +211,8 @@ function tallyGroups(ctx: Ctx, carried: SourceAssignment[], memberLeftOut: Map<s
 }
 
 function memberLabel(ctx: Ctx, m: SourceGroupMember, a: SourceAssignment): string {
-  const e = ctx.snapshot.enrollments.find((x) => x.id === m.enrollmentId);
-  const g = ctx.snapshot.groups.find((x) => x.id === m.groupId);
+  const e = ctx.linesById.get(m.enrollmentId);
+  const g = ctx.groupsById.get(m.groupId);
   return `group member ${e ? `${e.prenom} ${e.nom} <${e.email}>` : m.enrollmentId} of "${g?.name ?? m.groupId}" in "${a.name}"`;
 }
 
@@ -222,12 +228,19 @@ async function nameTheSets(ctx: Ctx, created: SourceAssignment[]) {
 }
 
 /**
- * The copy of a project whose deadline is past (or applied, or archived) is
- * stopped, once, through the project module's own `stopProjects`: written as
- * Quiz writes it at the deadline, and never undone by a later run.
+ * The copy of a project stops, once, through the project module's own
+ * `stopProjects`, when QUIZ's project is past its deadline, applied or
+ * archived: the decision reads Quiz's row, never the source's, so a deadline
+ * a teacher moved in Quiz keeps its copy following (and the groups staff
+ * added since). Written as Quiz writes it at the deadline, never undone.
  */
 async function stopCopies(ctx: Ctx, carried: SourceAssignment[]) {
-  const due = carried.filter((a) => a.deadlineAppliedAt !== null || a.archivedAt !== null || a.deadlineAt <= ctx.now).map((a) => a.id);
+  if (carried.length === 0) return;
+  const rows = await ctx.db
+    .select({ id: projects.id, deadlineAt: projects.deadlineAt, appliedAt: projects.deadlineAppliedAt, archivedAt: projects.archivedAt })
+    .from(projects)
+    .where(inArray(projects.id, carried.map((a) => a.id)));
+  const due = rows.filter((p) => p.appliedAt !== null || p.archivedAt !== null || p.deadlineAt <= ctx.now).map((p) => p.id);
   const stopped = await stopProjects(ctx.db, due, ctx.now);
   written(ctx, "project_groups (stopped)", stopped.length);
   if (stopped.length > 0) note(ctx, "projects", `${stopped.length} group(s) of projects whose deadline is past stopped following their set`);
@@ -238,7 +251,7 @@ async function stopCopies(ctx: Ctx, carried: SourceAssignment[]) {
  * for each live carried group repository, whoever Quiz's own `repoMembers`
  * says reads it and has a linked GitHub account, recorded as `recordGrant`
  * records one, `invited_at` the later of the repository's creation and the
- * member's placement (the repository's for a member the staff placed since). Nothing
+ * member's placement. Only members the import placed (a member Quiz's staff added is invited by Quiz). Nothing
  * is asked of GitHub and nothing is revoked; a row present is left as it is.
  * A member with no linked account is invited by Quiz when they link.
  */
@@ -264,12 +277,13 @@ export async function importGroupRepoAccess(ctx: Ctx) {
   for (const repo of quiz) {
     if (repo.groupId === null || repo.provisionStatus !== "ok" || repo.fullName === null || repo.githubRepoId === null || repo.deletedAt !== null) continue;
     for (const member of await repoMembers(ctx.db, repo, classrooms.get(repo.projectId)!)) {
+      const placed = addedAt.get(`${repo.groupId}:${member.enrollmentId}`);
+      if (placed === undefined) continue; // a member Quiz's staff added: Quiz invites them itself
       pairs += 1;
       if (!member.account) {
         leftOut.push(`${repo.fullName} / ${member.enrollmentId}: no linked GitHub account in Quiz, invited when they link`);
         continue;
       }
-      const placed = addedAt.get(`${repo.groupId}:${member.enrollmentId}`) ?? repo.acceptedAt;
       rows.push({
         id: randomUUID(),
         repoId: repo.id,

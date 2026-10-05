@@ -147,7 +147,7 @@ function repoRow(
   facts: { scored: (id: string | null) => ScoreLike | null; committed: Map<string, Date> },
 ): OwnedRow {
   const student = ctx.usersById.get(r.userId);
-  const group = r.groupId === null ? undefined : ctx.snapshot.groups.find((g) => g.id === r.groupId);
+  const group = r.groupId === null ? undefined : ctx.groupsById.get(r.groupId);
   const released = a.gradesValidatedAt !== null;
   const final = released
     ? resolveFinalScore({

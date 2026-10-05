@@ -4249,7 +4249,7 @@ serves now (16a), and what waits for the group repositories (16b).
     never a revocation, never a call to GitHub.
   - **Parity**: tallies `assignment_groups`, `assignment_group_members`,
     `assignments (group set)`, `group repositories`, `group repository
-    access`; checks `groups per project`, `members per group` (a row an
+    access`; checks `groups per project`, `members per group` (the group repositories join `repositories per project`; a row an
     earlier run carried is exempt: a set is live in Quiz). None is
     `githubBound`. With a, b, c and d delivered, the M8-01 acceptance is the
     dry-run on the fixture (clean) and on a staging copy of a dump.
