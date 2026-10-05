@@ -288,7 +288,6 @@ describe("resyncPlan and syncWork (ADR-070 §4; M3-15b-2b)", () => {
       { groupId: "c2", enrollmentId: "e1", kind: "join" },
     ]);
     expect(r.now.update).toEqual([{ id: "c1", name: "Renamed", slug: "a", position: 0 }]);
-    expect(r.closed).toEqual([]);
   });
 
   it("keeps a group with a repository whose set group is gone; its members follow the set out of it (R1)", () => {
@@ -308,12 +307,14 @@ describe("resyncPlan and syncWork (ADR-070 §4; M3-15b-2b)", () => {
     const after = set([...groups3, ["g4", "D"]], [["e1", "g3"], ["e2", "g4"], ["e3", "g3"]]);
     const base = copy([["e1", "c1"], ["e3", "c3"]]);
     const closed = resyncPlan(after, base, none, true);
-    expect(closed.closed).toEqual([
-      { groupId: "c3", enrollmentId: "e1", kind: "join" },
-      { groupId: "g4", enrollmentId: "e2", kind: "join" },
+    expect(closed.consequences).toEqual([
+      { groupId: "c1", enrollmentId: "e1", kind: "lose" },
+      { groupId: "c3", enrollmentId: "e1", kind: "join", acceptClosed: true },
+      { groupId: "g4", enrollmentId: "e2", kind: "join", acceptClosed: true },
     ]);
-    expect(closed.consequences).toContainEqual({ groupId: "c1", enrollmentId: "e1", kind: "lose" });
-    expect(resyncPlan(after, base, none, false).closed).toEqual([]);
+    // Held by its departure, or applied at once.
+    expect(closed.now.place).toEqual([{ enrollmentId: "e2", sourceGroupId: "g4", from: null }]);
+    expect(resyncPlan(after, base, none, false).consequences).toEqual([{ groupId: "c1", enrollmentId: "e1", kind: "lose" }]);
   });
 
   it("owes the following copy's moves and the stored keys the set still asks for", () => {

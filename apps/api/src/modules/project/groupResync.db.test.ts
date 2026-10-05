@@ -13,21 +13,26 @@
  *   group is gone kept), R2 (the release refused while a resync is owed),
  *   R3 (an arrival into a group without a repository once Accept is closed,
  *   flagged);
- * - a per-group stop on a following project; the refusals (a draft, an
- *   archived or released project); a roster removal during the resync's
- *   revocation (502); a repository's deadline applied mid-resync keeping
- *   the resync's marks.
+ * - a per-group stop on a following project; a draft (nothing to
+ *   resync); the refusals (no set, an archived classroom, an archived or
+ *   released project); staff only (invariant 6); a set's write putting a
+ *   student back between the job's read and its departure; a roster
+ *   removal during the resync's revocation (502); a repository's deadline
+ *   applied mid-resync keeping the resync's marks.
  */
 import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import { GroupConsequences, ProjectDetail, ProjectErrorCode, ProjectSummary } from "@quiz/contracts";
 
-import { projectGroupMembers, projectGroups, projects } from "../../db/schema.js";
+import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { createApiToken } from "../../auth/tokens.js";
+import { classrooms, projectGroupMembers, projectGroups, projects } from "../../db/schema.js";
 import {
   accept,
   acceptInvitation,
   auditsOf,
+  call,
   config,
   groupOf,
   groupProject,
@@ -43,10 +48,12 @@ import {
   server,
   setOk,
   staff,
+  teacher,
   useGroupWorld,
   world,
   type Student,
 } from "./groupTesting.js";
+import { beginDeparture, syncSteps } from "./groupCopy.js";
 import { claimGroupSyncWork, runGroupSyncJob } from "./groupSync.js";
 import { projectTick } from "./jobs.js";
 
@@ -179,6 +186,25 @@ describe("Resync with the set after the deadline (ADR-070 §4, §6)", () => {
     expect(seats(a)[ana.login]).toBe("push");
     expect((await projectRow(project.id)).groupResync).toEqual([]);
     expect(await drifted(project.id)).toBe(true);
+  });
+
+  it("holds a resync's departure the set undid between the job's read and the departure: nothing revoked", async () => {
+    const { project, set, ben, a, line } = await twoRepos();
+    await deadlinePassed();
+    await setOk(await moveTo(set, line(ben), null));
+    await confirmResync(project.id);
+    const steps = await syncSteps(db(), project.id, server.app.clock.now());
+    const [departure] = steps.departures;
+    expect(departure).toMatchObject({ enrollmentId: line(ben), resync: true });
+    // The set puts Ben back before the job's departure begins.
+    await setOk(await moveTo(set, line(ben), groupOf(set, "Group 1").id));
+    const repo = (await repoRows(project.id)).find((r) => r.fullName === a)!;
+    expect(await beginDeparture(db(), project.id, line(ben), departure!.groupId, repo.id, server.app.clock.now())).toBe("held");
+    await sync(project.id);
+    expect(seats(a)[ben.login]).toBe("push");
+    expect(await auditsOf(repo.id, "project_group.repo_revoke")).toEqual([]);
+    expect(await placeOf(project.id, line(ben))).toEqual({ group: "Group 1", departing: false });
+    expect((await projectRow(project.id)).groupResync).toEqual([]);
   });
 
   it("keeps a frozen group with a repository whose set group was deleted; its members follow the set (R1)", async () => {
@@ -314,7 +340,7 @@ describe("Resync with the set on a following project, and its refusals", () => {
     expect(pendingInvitations(b)).toContain(ben!.login);
   });
 
-  it("refuses a draft, an archived project and a released one", async () => {
+  it("has nothing to resync in a draft; refuses no set, an archived classroom, a released and an archived project", async () => {
     const [ana] = [await newStudent()];
     const { project, room, set } = await groupProject([ana!], [[0]]);
     const created = await staff("POST", `/app/api/classrooms/${room.id}/projects`, {
@@ -325,13 +351,42 @@ describe("Resync with the set on a following project, and its refusals", () => {
       groupSetId: set.set.id,
     });
     const draft = ProjectSummary.parse(created.json());
-    expect(refusal(await resync(draft.id))).toEqual([409, "not_draft"]);
+    expect((await resync(draft.id)).statusCode).toBe(204);
     expect(await drifted(draft.id)).toBe(false);
 
+    await db().update(projects).set({ groupSetId: null }).where(eq(projects.id, project.id));
+    expect(refusal(await resync(project.id))).toEqual([409, "no_group_set"]);
+    await db().update(projects).set({ groupSetId: set.set.id }).where(eq(projects.id, project.id));
+    await db().update(classrooms).set({ archivedAt: new Date(NOW) }).where(eq(classrooms.id, room.id));
+    expect(refusal(await resync(project.id))).toEqual([409, "classroom_archived"]);
+    await db().update(classrooms).set({ archivedAt: null }).where(eq(classrooms.id, room.id));
     await db().update(projects).set({ releasedAt: new Date(NOW) }).where(eq(projects.id, project.id));
     expect(refusal(await resync(project.id))).toEqual([409, "released"]);
     expect((await staff("POST", `/app/api/projects/${project.id}/archive`)).statusCode).toBe(200);
     expect(refusal(await resync(project.id))).toEqual([409, "project_archived"]);
+  });
+
+  it("answers a student, another teacher, an impersonation and a token as nobody (invariant 6)", async () => {
+    const { project, set, ana, ben, line } = await twoRepos();
+    await deadlinePassed();
+    await setOk(await moveTo(set, line(ben), groupOf(set, "Group 2").id));
+    const stranger = await server.signIn("teacher");
+    const { token } = await createApiToken(db(), teacher.id, { name: "t", expiresInDays: null });
+    const s = await createSession(db(), teacher.id, 8, { kind: "impersonation", actorUserId: (await server.signIn("admin")).id, evaluationId: null });
+    const impersonation = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
+    const callers: [string, Record<string, string>, [number, string]][] = [
+      ["student", ana.headers, [404, "not_found"]],
+      ["stranger", stranger.headers, [404, "not_found"]],
+      // An impersonation is read-only outside development (ADR-034 §4): the hook's 403 first.
+      ["impersonation", impersonation, [403, "impersonation_read_only"]],
+      ["token", { authorization: `Bearer ${token}` }, [404, "not_found"]],
+    ];
+    for (const [who, headers, expected] of callers) {
+      const res = await call("POST", `/app/api/projects/${project.id}/groups/resync`, headers, {});
+      expect([res.statusCode, res.json().error], who).toEqual(expected);
+    }
+    // Nothing written: the copy still drifts, nothing stored.
+    expect([await drifted(project.id), (await projectRow(project.id)).groupResync]).toEqual([true, []]);
   });
 
   it("refuses a roster removal while the resync's revocation is under way and GitHub refuses it (502)", async () => {

@@ -22,33 +22,26 @@
  * - A stopped group with a repository whose set group was deleted is kept
  *   (R1): its repository and frozen score stay, its members follow the set.
  *
- * Refused: a draft (`not_draft`: its copy follows), a project that follows
- * no set (`no_group_set`), an archived project (`project_archived`), a released one
- * (`released`), an archived classroom (`classroom_archived`). The release
- * is refused while a resync is owed (`group_sync_pending`, `grades.ts`, R2).
+ * A draft's copy follows its set: there is nothing to resync (204).
+ * Refused: a project that follows no set (`no_group_set`), an archived
+ * project (`project_archived`), a released one (`released`), an archived
+ * classroom (`classroom_archived`). The release is refused while a resync
+ * is owed (`group_sync_pending`, `grades.ts`, R2).
  *
- * Lock order, a set's write's: the classroom FOR SHARE, the set FOR SHARE,
- * the project FOR UPDATE.
+ * Lock order, a set's write's: the classroom FOR SHARE, then the job's
+ * (`lockSync`): the set FOR SHARE, the project FOR UPDATE.
  */
 import { eq } from "drizzle-orm";
 
-import { consequenceDelta, consequenceKey, copyFollows, isEmptyPlan, syncWork } from "@quiz/domain";
+import { consequenceDelta, consequenceKey, isEmptyPlan, syncWork } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
 import type { Db } from "../../db/client.js";
-import { classrooms, groupSets, projects } from "../../db/schema.js";
+import { classrooms, projects } from "../../db/schema.js";
 import { DomainError } from "../http.js";
 import { ProjectError } from "./errors.js";
-import { acceptClosed, applyPlan, copyWork, describeConsequences, markDepartures, type CopyWork, type WorkFrame } from "./groupCopy.js";
+import { applyPlan, copyWork, describeConsequences, frameOf, lockSync, markDepartures, type CopyWork } from "./groupCopy.js";
 import type { ProjectRow } from "./views.js";
-
-/** The frame a project's row gives the copy's work, unlocked. */
-const frameOf = (project: ProjectRow, now: Date): WorkFrame => ({
-  setId: project.groupSetId,
-  follows: project.groupSetId !== null && copyFollows(project),
-  stored: project.groupResync,
-  acceptClosed: acceptClosed(project, now),
-});
 
 /** What a resync would do that the job does not already owe: what applies at once, and the consequences it adds. */
 function resyncDelta(found: CopyWork) {
@@ -81,32 +74,25 @@ export interface ResyncInput {
 export async function resyncGroups(db: Db, projectId: string, input: ResyncInput): Promise<{ due: boolean } | null> {
   const { now } = input;
   return db.transaction(async (tx) => {
-    const [named] = await tx
-      .select({ classroomId: projects.classroomId, setId: projects.groupSetId })
-      .from(projects)
-      .where(eq(projects.id, projectId));
+    const [named] = await tx.select({ classroomId: projects.classroomId }).from(projects).where(eq(projects.id, projectId));
     if (!named) throw new DomainError("not_found", 404, "No such project");
     const [room] = await tx.select({ archivedAt: classrooms.archivedAt }).from(classrooms).where(eq(classrooms.id, named.classroomId)).for("share");
-    if (named.setId) await tx.select({ id: groupSets.id }).from(groupSets).where(eq(groupSets.id, named.setId)).for("share");
-    const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
+    const { project, frame } = await lockSync(tx, projectId, now);
     if (!project) throw new DomainError("not_found", 404, "No such project");
-    if (project.state === "draft") throw new ProjectError("not_draft", "A draft's groups follow their set: there is nothing to resync");
+    if (project.state === "draft") return null;
     if (!project.groupMode || project.groupSetId === null) throw new ProjectError("no_group_set", "The project follows no group set");
     if (project.archivedAt !== null) throw new ProjectError("project_archived", "An archived project's groups are not resynced");
     if (project.releasedAt !== null) throw new ProjectError("released", "A released project's groups are not resynced");
     if (room && room.archivedAt !== null) throw new ProjectError("classroom_archived", "The classroom is archived: its group sets are read-only");
 
-    const frame = frameOf(project, now);
     const found = await copyWork(tx, project.id, frame);
     const { now: applied, added } = resyncDelta(found);
     if (isEmptyPlan(applied) && added.length === 0) return null;
     let confirmed: { digest: string; frozen: string[] } | null = null;
     if (added.length > 0) {
-      const closed = new Set(found.resync.closed.map((c) => `${project.id}:${consequenceKey(c)}`));
       const details = await describeConsequences(
         tx,
         added.map((c) => ({ ...c, projectId: project.id })),
-        closed,
       );
       if (input.confirm !== details.digest) {
         throw new ProjectError("needs_confirmation", "This resync has consequences on GitHub: confirm them", details);
@@ -115,11 +101,15 @@ export async function resyncGroups(db: Db, projectId: string, input: ResyncInput
       confirmed = { digest: details.digest, frozen: [...new Set(frozen)].sort() };
     }
 
-    // What touches no repository, at once; then every consequence the set
-    // still asks for, stored with the ids of the groups just created.
+    // What touches no repository, at once. The consequences left are read
+    // again from the copy as it now stands: an R3 arrival into a group the
+    // resync just created is keyed by the copy group's new id (it was named
+    // by the set's), and those applied at once are no longer owed. Each is
+    // stored: every one was confirmed now or was already owed.
     if (!isEmptyPlan(applied)) await applyPlan(tx, project.id, found.copy, applied, now);
-    const after = await copyWork(tx, project.id, { ...frame, stored: [] });
-    const owed = syncWork(after.following?.split.consequences ?? null, after.resync.consequences, after.resync.consequences.map(consequenceKey));
+    const after = await copyWork(tx, project.id, frame);
+    const keys = after.resync.consequences.map(consequenceKey);
+    const owed = syncWork(after.following?.split.consequences ?? null, after.resync.consequences, keys);
     const due = owed.work.length > 0;
     await tx
       .update(projects)

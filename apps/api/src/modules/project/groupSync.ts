@@ -37,6 +37,8 @@ import type { FastifyInstance } from "fastify";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
+import type { SyncStep } from "@quiz/domain";
+
 import { SYSTEM_ACTOR } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
@@ -46,7 +48,7 @@ import { PROJECT_GROUP_SYNC_QUEUE } from "../../jobs.js";
 import { followInvitation, inviteAccount, notRecorded, revocationClient, revokeDeparture, type RevokeContext } from "./access.js";
 import { isLive, ts } from "./deadline.js";
 import { repoChanged } from "./events.js";
-import { beginDeparture, beginStrayRevocation, completeArrival, completeDeparture, settleSync, syncSteps, type SyncMove } from "./groupCopy.js";
+import { beginDeparture, beginStrayRevocation, completeArrival, completeDeparture, settleSync, syncSteps } from "./groupCopy.js";
 import { groupRepoWhere, repoMembers } from "./groupRepos.js";
 import { claimLeases, FAILED_RETRY_MS, heldLease, type ProjectJob } from "./lease.js";
 import type { ProjectRow } from "./views.js";
@@ -119,7 +121,7 @@ const revokeContext = (app: FastifyInstance, resync = false): RevokeContext => (
  * written, the next group's repository invited, or the access given back
  * when the set put the student back meanwhile.
  */
-async function depart(app: FastifyInstance, client: Octokit | null, project: ProjectRow, step: SyncMove, pass: Pass) {
+async function depart(app: FastifyInstance, client: Octokit | null, project: ProjectRow, step: SyncStep, pass: Pass) {
   const db = app.db;
   const repo = await groupRepo(db, project.id, step.groupId);
   if (repo === null) return;
@@ -134,7 +136,7 @@ async function depart(app: FastifyInstance, client: Octokit | null, project: Pro
 }
 
 /** One arrival into copy group `groupId`: written, then invited (when it has a repository). */
-async function arrive(app: FastifyInstance, client: Octokit | null, project: ProjectRow, step: SyncMove, pass: Pass) {
+async function arrive(app: FastifyInstance, client: Octokit | null, project: ProjectRow, step: SyncStep, pass: Pass) {
   if (!(await completeArrival(app.db, project.id, step.enrollmentId, step.groupId, app.clock.now()))) return;
   pass.moved.add(step.enrollmentId);
   await inviteMember(app, client, project, step.groupId, step.enrollmentId, step.resync);

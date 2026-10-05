@@ -439,8 +439,8 @@ export type ProjectSummary = z.infer<typeof ProjectSummary>;
  *     read-only);
  *   - `needs_confirmation` — its consequences not confirmed, or confirmed
  *     by a stale digest: the body is the group routes' (`GroupConsequences`);
- *   - `not_draft` — a draft's resync: a draft's copy follows its set;
- *     `no_group_set` — a project that follows no set;
+ *   - `no_group_set` — a project that follows no set (a draft's resync
+ *     is a 204: its copy follows its set);
  *   - `group_sync_pending` — a release while a confirmed resync is not
  *     fully applied by the `group.sync` job (product owner R2).
  * The response schemas of the refusals come with their first consumer
@@ -1060,7 +1060,7 @@ export type ProjectRepoScores = z.infer<typeof ProjectRepoScores>;
  * What touches no repository is applied at once; the rest is the
  * `group.sync` job's, the release refused meanwhile (`409
  * group_sync_pending`). The copy stays stopped: a set's write after it is
- * a drift again. 204, also when there is nothing to resync.
+ * a drift again. 204, also when there is nothing to resync (a draft).
  */
 export const ProjectGroupResync = z.strictObject({ confirm: GroupConfirm.optional() });
 export type ProjectGroupResync = z.infer<typeof ProjectGroupResync>;

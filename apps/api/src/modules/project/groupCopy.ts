@@ -72,6 +72,7 @@ import {
   type ResyncPlan,
   type SetState,
   type SyncStep,
+  deadlinePassed,
 } from "@quiz/domain";
 
 import type { Db, Tx } from "../../db/client.js";
@@ -252,7 +253,8 @@ const CLEARED = { departingAt: null } as const;
  * A member row's departure is one a confirmed resync owes (M3-15b-2b): its
  * `lose` key is in its project's `group_resync`. Its mark is the job's to
  * clear — never a stop's (a repository's deadline applied mid-resync) nor
- * a set's write's.
+ * a set's write's. The SQL twin of `consequenceKey` (`@quiz/domain`),
+ * whose format is persisted: the two change together, with a migration.
  */
 const RESYNC_DEPARTURE = sql`EXISTS (SELECT 1 FROM ${projects} WHERE ${projects.id} = ${projectGroupMembers.projectId}
   AND ${projects.groupResync} @> jsonb_build_array(${projectGroupMembers.groupId}::text || ':' || ${projectGroupMembers.enrollmentId}::text || ':lose'))`;
@@ -309,52 +311,51 @@ export async function copiesBefore(tx: Tx, setId: string, following: readonly { 
 /**
  * The consequences named for the staff, in a canonical order, and their
  * digest (SHA-256 of that order's keys, `project:group:line:kind`): each
- * `frozen` when its copy group stopped, `acceptClosed` when `closed` holds
- * its key (a resync's R3 arrival). A group the copy lacks yet is the set's
- * (a resync's R3 arrival into a group it creates).
+ * `frozen` when its copy group stopped; a resync's R3 arrival
+ * (`acceptClosed`) with no repository — a group whose provisioning failed
+ * before GitHub made one has none, its row's name notwithstanding — and,
+ * into a group the resync creates, named after the set's group.
  */
-export async function describeConsequences(
-  tx: Tx,
-  added: (PlanConsequence & { projectId: string })[],
-  closed: ReadonlySet<string> = new Set(),
-): Promise<GroupConsequences> {
+export async function describeConsequences(tx: Tx, added: (PlanConsequence & { projectId: string })[]): Promise<GroupConsequences> {
   const ids = [...new Set(added.map((c) => c.groupId))];
   const copied = await tx
-    .select({ id: projectGroups.id, name: projectGroups.name, repo: projectRepos.fullName, stoppedAt: projectGroups.stoppedAt })
+    .select({ id: projectGroups.id, name: projectGroups.name, projectName: projects.name, repo: projectRepos.fullName, stoppedAt: projectGroups.stoppedAt })
     .from(projectGroups)
+    .innerJoin(projects, eq(projects.id, projectGroups.projectId))
     .leftJoin(projectRepos, eq(projectRepos.groupId, projectGroups.id))
     .where(inArray(projectGroups.id, ids));
-  const fresh = ids.filter((id) => !copied.some((g) => g.id === id));
-  const ofSet = fresh.length === 0 ? [] : await tx.select({ id: studentGroups.id, name: studentGroups.name }).from(studentGroups).where(inArray(studentGroups.id, fresh));
-  const named = await tx
-    .select({ id: projects.id, name: projects.name })
-    .from(projects)
-    .where(inArray(projects.id, [...new Set(added.map((c) => c.projectId))]));
+  const groupOf = new Map<string, { name: string; projectName?: string; repo: string | null; stoppedAt: Date | null }>(copied.map((g) => [g.id, g]));
+  const fresh = ids.filter((id) => !groupOf.has(id));
+  if (fresh.length > 0) {
+    const ofSet = await tx.select({ id: studentGroups.id, name: studentGroups.name }).from(studentGroups).where(inArray(studentGroups.id, fresh));
+    for (const g of ofSet) groupOf.set(g.id, { name: g.name, repo: null, stoppedAt: null });
+  }
+  const projectNameOf = async (projectId: string) =>
+    (await tx.select({ name: projects.name }).from(projects).where(eq(projects.id, projectId)))[0]!.name;
   const lines = await tx
     .select({ id: enrollments.id, nom: enrollments.nom, prenom: enrollments.prenom })
     .from(enrollments)
     .where(inArray(enrollments.id, [...new Set(added.map((c) => c.enrollmentId))]));
-  const groupOf = new Map([...copied, ...ofSet.map((g) => ({ ...g, repo: null, stoppedAt: null }))].map((g) => [g.id, g]));
-  const projectOf = new Map(named.map((p) => [p.id, p.name]));
   const lineOf = new Map(lines.map((l) => [l.id, l]));
   const keyed = added.map((c) => ({ c, key: `${c.projectId}:${consequenceKey(c)}` })).sort((a, b) => (a.key < b.key ? -1 : 1));
-  const consequences = keyed.map(({ c, key }): GroupConsequence => {
+  const consequences: GroupConsequence[] = [];
+  for (const { c } of keyed) {
     const group = groupOf.get(c.groupId)!;
     const line = lineOf.get(c.enrollmentId)!;
-    return {
+    consequences.push({
       projectId: c.projectId,
-      projectName: projectOf.get(c.projectId)!,
+      projectName: group.projectName ?? (await projectNameOf(c.projectId)),
       groupId: c.groupId,
       groupName: group.name,
-      repo: group.repo,
+      repo: c.acceptClosed ? null : group.repo,
       enrollmentId: c.enrollmentId,
       nom: line.nom,
       prenom: line.prenom,
       kind: c.kind,
       frozen: group.stoppedAt !== null,
-      acceptClosed: closed.has(key),
-    };
-  });
+      acceptClosed: c.acceptClosed === true,
+    });
+  }
   const digest = createHash("sha256")
     .update(JSON.stringify(keyed.map((k) => k.key)))
     .digest("hex");
@@ -501,9 +502,6 @@ export async function reposWithAccessToRevoke(db: Db | Tx, projectId: string): P
 
 // ---------------------------------------------------------------- the copy's work (`group.sync`, *Resync*)
 
-/** Whether Accept of the project is closed: its deadline has passed (`acceptRefusal`'s `deadline_passed`), the R3 of a resync. */
-export const acceptClosed = (project: { deadlineAt: Date }, now: Date): boolean => now.getTime() >= project.deadlineAt.getTime();
-
 /** What the copy's work is read with: the set it names, whether it follows, the resync's stored keys, whether Accept is closed. */
 export interface WorkFrame {
   setId: string | null;
@@ -511,6 +509,16 @@ export interface WorkFrame {
   stored: readonly string[];
   acceptClosed: boolean;
 }
+
+type ProjectRow = typeof projects.$inferSelect;
+
+/** The frame a project's row gives the copy's work: Accept closed is its deadline passed (R3). */
+export const frameOf = (project: ProjectRow, now: Date): WorkFrame => ({
+  setId: project.groupSetId,
+  follows: project.groupSetId !== null && copyFollows(project),
+  stored: project.groupResync,
+  acceptClosed: deadlinePassed(project, now),
+});
 
 /** The copy's work ({@link copyWork}). */
 export interface CopyWork {
@@ -543,33 +551,28 @@ export async function copyWork(db: Db | Tx, projectId: string, at: WorkFrame): P
 // ---------------------------------------------------------------- the job's steps (`groupSync.ts`)
 
 /**
- * The job's frame on one project: its set FOR SHARE (a set's write waits),
- * then the project FOR UPDATE — the order of a set's write. The set the
- * project names, whether its copy follows it ({@link copyFollows}), the
- * resync's stored keys, whether Accept is closed.
+ * The frame on one project: its set FOR SHARE (a set's write waits), then
+ * the project FOR UPDATE — the order of a set's write; the job's, and a
+ * resync's after its classroom. The project's row, and its frame
+ * ({@link frameOf}); none for a project gone.
  */
-async function lockSync(tx: Tx, projectId: string, now: Date): Promise<WorkFrame> {
+export async function lockSync(tx: Tx, projectId: string, now: Date): Promise<{ project: ProjectRow | null; frame: WorkFrame }> {
   const [named] = await tx.select({ setId: projects.groupSetId }).from(projects).where(eq(projects.id, projectId));
   if (named?.setId) await tx.select({ id: groupSets.id }).from(groupSets).where(eq(groupSets.id, named.setId)).for("share");
-  const [project] = await tx
-    .select({ setId: projects.groupSetId, groupsStoppedAt: projects.groupsStoppedAt, groupResync: projects.groupResync, deadlineAt: projects.deadlineAt })
-    .from(projects)
-    .where(eq(projects.id, projectId))
-    .for("update");
-  const setId = project?.setId ?? null;
-  return {
-    setId,
-    follows: setId !== null && copyFollows(project!),
-    stored: project?.groupResync ?? [],
-    acceptClosed: project !== undefined && acceptClosed(project, now),
-  };
+  const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
+  if (!project) return { project: null, frame: { setId: null, follows: false, stored: [], acceptClosed: false } };
+  return { project, frame: frameOf(project, now) };
 }
 
 /** The copy's work under the job's locks, with its frame. */
 async function jobWork(tx: Tx, projectId: string, now: Date): Promise<CopyWork & { frame: WorkFrame }> {
-  const frame = await lockSync(tx, projectId, now);
+  const { frame } = await lockSync(tx, projectId, now);
   return { ...(await copyWork(tx, projectId, frame)), frame };
 }
+
+/** Whether the work owes, as a confirmed resync's, the departure of `enrollmentId` from copy group `groupId` (stops lifted). */
+const owesResyncDeparture = (work: readonly SyncStep[], groupId: string, enrollmentId: string): boolean =>
+  work.some((c) => c.resync && c.kind === "lose" && c.groupId === groupId && c.enrollmentId === enrollmentId);
 
 /**
  * The job's work written back under its locks: the stored keys no longer
@@ -581,36 +584,27 @@ async function writeWork(tx: Tx, projectId: string, found: CopyWork & { frame: W
   await markDepartures(tx, projectId, found.work, now);
 }
 
-/** One step of the job: `resync` when a confirmed resync owes it (audited `via: "group.resync"`). */
-export interface SyncMove {
-  enrollmentId: string;
-  groupId: string;
-  resync: boolean;
-}
-
 /** The project's work waiting for GitHub, as its job finds it. */
 export interface SyncSteps {
-  /** A student leaving copy group `groupId`, which has a repository (for another group, or for none). */
-  departures: SyncMove[];
+  /** A student leaving copy group `groupId`, which has a repository (for another group, or for none); `resync` when a confirmed resync owes it. */
+  departures: SyncStep[];
   /** A student joining copy group `groupId` — with a repository, or none (a resync's R3) — from no group or from a group without one. */
-  arrivals: SyncMove[];
+  arrivals: SyncStep[];
   /** The stray grants no departure covers (an invitation's failed take-back): revoked as they stand. */
   strays: { grantId: string; repoId: string }[];
 }
-
-const move = ({ enrollmentId, groupId, resync }: SyncStep): SyncMove => ({ enrollmentId, groupId, resync });
 
 /** What the job has to do, read under its locks ({@link writeWork}). */
 export async function syncSteps(db: Db, projectId: string, now: Date): Promise<SyncSteps> {
   return db.transaction(async (tx) => {
     const found = await jobWork(tx, projectId, now);
     await writeWork(tx, projectId, found, now);
-    const departures = found.work.filter((c) => c.kind === "lose").map(move);
+    const departures = found.work.filter((c) => c.kind === "lose");
     const leaving = new Set(departures.map((d) => d.enrollmentId));
     const covered = new Set(departures.map((d) => `${d.groupId}:${d.enrollmentId}`));
     return {
       departures,
-      arrivals: found.work.filter((c) => c.kind === "join" && !leaving.has(c.enrollmentId)).map(move),
+      arrivals: found.work.filter((c) => c.kind === "join" && !leaving.has(c.enrollmentId)),
       strays: (await strayGrants(tx, projectId))
         .filter(({ grant, repo }) => !covered.has(`${repo.groupId}:${grant.enrollmentId}`))
         .map(({ grant, repo }) => ({ grantId: grant.id, repoId: repo.id })),
@@ -654,24 +648,22 @@ async function memberForUpdate(tx: Tx, projectId: string, enrollmentId: string) 
   return row ?? null;
 }
 
-const loseKey = (groupId: string, enrollmentId: string) => consequenceKey({ groupId, enrollmentId, kind: "lose" });
-
 /**
  * The first step of a departure from copy group `groupId`, whose
  * repository is `repoId`: under the job's locks and the member row FOR
  * UPDATE, only while the student still departs from that group and it has
- * not stopped — or a confirmed resync owes the departure, stops lifted —
- * then their grants there not revoked yet are marked `revoking_at` in the
+ * not stopped — or the work owes it as a confirmed resync's, stops lifted
+ * ({@link owesResyncDeparture}) —, then their grants there not revoked yet are marked `revoking_at` in the
  * same transaction, and returned for GitHub. Otherwise `held`: a stop or
  * the set's write came first, nothing is revoked and the copy is left as it
  * stands.
  */
 export async function beginDeparture(db: Db, projectId: string, enrollmentId: string, groupId: string, repoId: string, now: Date): Promise<GrantRow[] | "held"> {
   return db.transaction(async (tx) => {
-    const { stored } = await lockSync(tx, projectId, now);
+    const { work } = await jobWork(tx, projectId, now);
     const row = await memberForUpdate(tx, projectId, enrollmentId);
     if (!row || row.member.groupId !== groupId || row.member.departingAt === null) return "held";
-    if (row.stoppedAt !== null && !stored.includes(loseKey(groupId, enrollmentId))) return "held";
+    if (row.stoppedAt !== null && !owesResyncDeparture(work, groupId, enrollmentId)) return "held";
     return tx
       .update(projectRepoAccess)
       .set({ revokingAt: now })
@@ -715,14 +707,15 @@ export type Departure = { outcome: "moved"; to: string } | { outcome: "left" } |
  * the copy never claims one GitHub no longer gives): no step for the
  * student — in step, `kept`; a place into a copy group that truly follows
  * — `moved`; otherwise (no group, a stopped target, the project stopped) —
- * `left`. A departure a confirmed resync owes counts its target as
- * following (M3-15b-2b: a frozen A→B move ends `moved`), as far as the
- * resync confirmed it: into a group with a repository, or one without
- * while Accept is closed (R3), only if that arrival is owed too.
+ * `left`. A departure a confirmed resync owes ({@link owesResyncDeparture})
+ * counts its target as following (M3-15b-2b: a frozen A→B move ends
+ * `moved`), as far as the resync confirmed it: an arrival the plan names as
+ * a consequence — into a group with a repository, or one without while
+ * Accept is closed (R3) — only if it is owed too.
  */
 export async function completeDeparture(db: Db, projectId: string, enrollmentId: string, groupId: string, repoId: string, now: Date): Promise<Departure> {
   return db.transaction(async (tx): Promise<Departure> => {
-    const frame = await lockSync(tx, projectId, now);
+    const { frame } = await lockSync(tx, projectId, now);
     const row = await memberForUpdate(tx, projectId, enrollmentId);
     if (!row || row.member.groupId !== groupId) return { outcome: "gone" };
     await assertNoLiveGrant(tx, enrollmentId, repoId);
@@ -732,12 +725,15 @@ export async function completeDeparture(db: Db, projectId: string, enrollmentId:
       await tx.update(projectGroupMembers).set(CLEARED).where(eq(projectGroupMembers.id, row.member.id));
       return { outcome: "kept" };
     }
-    const owed = new Set(work.map(consequenceKey));
-    const resynced = work.some((c) => c.resync && consequenceKey(c) === loseKey(groupId, enrollmentId));
+    const resynced = owesResyncDeparture(work, groupId, enrollmentId);
     const to = step && copy.groups.find((g) => g.sourceGroupId === step.sourceGroupId && (resynced || !g.stopped));
-    const confirmed = (target: { id: string; slugFixed?: boolean }) =>
-      target.slugFixed || frame.acceptClosed ? owed.has(consequenceKey({ groupId: target.id, enrollmentId, kind: "join" })) : true;
-    if (to && (resynced ? confirmed(to) : frame.follows)) {
+    const owed = new Set(work.map(consequenceKey));
+    // The arrival the plan names as a consequence, if any, must be owed too.
+    const confirmed = (target: string) => {
+      const join = resync.consequences.find((c) => c.kind === "join" && c.groupId === target && c.enrollmentId === enrollmentId);
+      return join === undefined || owed.has(consequenceKey(join));
+    };
+    if (to && (resynced ? confirmed(to.id) : frame.follows)) {
       await tx.update(projectGroupMembers).set({ groupId: to.id, addedAt: now, ...CLEARED }).where(eq(projectGroupMembers.id, row.member.id));
       return { outcome: "moved", to: to.id };
     }
