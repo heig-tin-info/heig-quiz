@@ -2,12 +2,12 @@ import { useMutation, useQueryClient, type UseMutationResult } from "@tanstack/r
 import { GitCompareArrows, RefreshCw, UsersRound } from "lucide-react";
 import { useState } from "react";
 
-import { ProjectGroupResync, type GroupConsequences, type ProjectDetail, type ProjectPatch, type ProjectSummary } from "@quiz/contracts";
+import { ProjectGroupResync, type ProjectDetail, type ProjectPatch, type ProjectSummary } from "@quiz/contracts";
 
 import { api, refusedWith } from "../api";
 import { AppLink } from "../AppLink";
 import { useClassroomGroupSets } from "../group/api";
-import { ConsequencesDialog } from "../group/ConsequencesDialog";
+import { ConsequencesDialog, type Asked } from "../group/ConsequencesDialog";
 import { GroupSetPicker, setLabel } from "../group/GroupSetPicker";
 import { needsConfirmation } from "../group/groupRules";
 import { useT } from "../i18n";
@@ -126,8 +126,7 @@ export function ProjectGroupSet({
       {resync.asked ? (
         <ConsequencesDialog
           kind="resync"
-          consequences={resync.asked.consequences}
-          changedSince={resync.asked.changedSince}
+          asked={resync.asked}
           confirming={resync.confirming}
           onConfirm={resync.confirm}
           onCancel={resync.cancel}
@@ -147,17 +146,18 @@ function useResync(project: ProjectDetail) {
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
-  const [asked, setAsked] = useState<(GroupConsequences & { changedSince: boolean }) | null>(null);
+  const [asked, setAsked] = useState<Asked | null>(null);
   const send = useMutation({
     mutationFn: (confirm: string | undefined) =>
       api<void>(`/app/api/projects/${project.id}/groups/resync`, {
         method: "POST",
         body: JSON.stringify(ProjectGroupResync.parse(confirm === undefined ? {} : { confirm })),
       }),
-    onSuccess: async (_, confirm) => {
+    // A 204, whether it applied at once or the difference was confirmed: the page is read again.
+    onSuccess: async () => {
       setAsked(null);
       await qc.invalidateQueries({ queryKey: projectKey(project.id) });
-      toast(t(confirm === undefined ? "project.resync.nothing" : "project.resync.done"), "success");
+      toast(t("project.resync.done"), "success");
     },
     onError: (error, confirm) => {
       const consequences = needsConfirmation(error);

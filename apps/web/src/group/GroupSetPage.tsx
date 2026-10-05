@@ -5,7 +5,6 @@ import { useState } from "react";
 import {
   GroupMaxSize,
   type ClassroomDetail,
-  type GroupConsequences,
   type GroupRandomForm,
   type GroupSetDetail,
 } from "@quiz/contracts";
@@ -40,7 +39,7 @@ import {
   type MenuItem,
 } from "../ui";
 import { setWrite, useGroupSet, useGroupSetWrites } from "./api";
-import { ConsequencesDialog } from "./ConsequencesDialog";
+import { ConsequencesDialog, type Asked } from "./ConsequencesDialog";
 import { GroupBoard } from "./GroupBoard";
 import {
   gone,
@@ -110,7 +109,7 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
   });
   const { write, confirm: confirmWrite, cancel: cancelWrite } = useGroupSetWrites(id);
   /** A move waiting for the confirmation of its GitHub consequences (ADR-070 §6), the queue held meanwhile. */
-  const [asked, setAsked] = useState<(Move & GroupConsequences & { changedSince: boolean }) | null>(null);
+  const [asked, setAsked] = useState<({ move: Move } & Asked) | null>(null);
   const [confirming, setConfirming] = useState(false);
   const failed = (error: unknown) => {
     const refusal = projectsRefusal(error);
@@ -125,8 +124,7 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
   /** A move's toast: with Undo (the reverse move, the latest only) when it took effect at once, without once confirmed. */
   const moved = (m: Move, answer: GroupSetDetail, undo: boolean) => {
     const group = answer.groups.find((g) => g.id === m.groupId)?.name;
-    const key = group ? (undo ? "groups.moved" : "groups.movedConfirmed") : undo ? "groups.movedOut" : "groups.movedOutConfirmed";
-    toast(t(key, { name: m.name, group: group ?? "" }), "success", {
+    toast(t(MOVED[group ? "into" : "out"][undo ? "now" : "confirmed"], { name: m.name, group: group ?? "" }), "success", {
       key: `group-undo:${id}`,
       ...(undo ? { action: { label: t("groups.undo"), run: () => void undoMove(m) } } : {}),
     });
@@ -135,7 +133,7 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
   /** A refused move: its consequences asked for (the move stays drawn), else the refusal said. */
   const refused = (m: Move, changedSince: boolean) => (error: unknown) => {
     const consequences = needsConfirmation(error);
-    if (consequences) setAsked({ ...m, ...consequences, changedSince });
+    if (consequences) setAsked({ move: m, ...consequences, changedSince });
     else failed(error);
   };
 
@@ -161,7 +159,7 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
   /** The move sent again with the digest of what the dialog named; a stale digest names them again. */
   const onConfirm = () => {
     if (!asked) return;
-    const m: Move = { enrollmentId: asked.enrollmentId, groupId: asked.groupId, previous: asked.previous, name: asked.name };
+    const m = asked.move;
     setConfirming(true);
     confirmWrite(setWrite.place(m.enrollmentId, m.groupId, asked.digest))
       .then(
@@ -398,8 +396,7 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
       {asked ? (
         <ConsequencesDialog
           kind="move"
-          consequences={asked.consequences}
-          changedSince={asked.changedSince}
+          asked={asked}
           confirming={confirming}
           onConfirm={onConfirm}
           onCancel={onCancelConfirm}
@@ -430,6 +427,12 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
     </div>
   );
 }
+
+/** A move's toast, by where the student went and whether it took effect at once (with Undo) or was confirmed. */
+const MOVED = {
+  into: { now: "groups.moved", confirmed: "groups.movedConfirmed" },
+  out: { now: "groups.movedOut", confirmed: "groups.movedOutConfirmed" },
+} as const;
 
 /** A student's move on the board: where to, from where (for Undo), and their name for the toast. */
 interface Move {

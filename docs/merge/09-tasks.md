@@ -3130,12 +3130,14 @@ serves now (16a), and what waits for the group repositories (16b).
   board.
 - **As delivered** (branch `merge/M3-16b-groups-web`). No migration.
   - **API** (`Q:modules/project/detail.ts`): `ProjectDetailRow.group`
-    (`ProjectDetailGroup`: the copy group's id, name, `stopped`) — null for
-    a student in no group of the copy, or reading their own individual
+    (`ProjectDetailGroup`: the copy group's id, name, `stopped`) — the group
+    `seatRepos(…).seat()` reads the seat's repository through, null for a
+    student in no group of the copy, or reading their own individual
     repository (heig-classroom's lot 1); a repository no roster student
     reads carries its group (R1's group kept with no member);
-    `ProjectDetail.groupSyncPending` (`group_resync` not empty, R2) and
-    `counts.groups` (the copy's groups, 0 for an individual project).
+    `ProjectDetail.groupSyncPending` (`groupSyncOwed`, `groupResync.ts`, the
+    release's own R2 predicate) and `counts.groups` (the copy's groups, 0
+    for an individual project).
     Tests: `detail.groups.db.test.ts` (a student in no group, R1's orphan
     row after a confirmed resync, `groupSyncPending` before and after the
     job), `detail.db.test.ts` (none on an individual project).
@@ -3147,7 +3149,8 @@ serves now (16a), and what waits for the group repositories (16b).
     the optimistic move stays drawn, every queued or new write is rejected
     unsent (`WriteHeld`, worded `groups.confirm.held`), `confirm(request)`
     resends the move with `setWrite.place(…, digest)`, `cancel()` puts the
-    last answer back. A confirmed move's toast has no Undo; an Undo meeting
+    last answer back; Escape does not cancel while the confirmation is in
+    flight. A confirmed move's toast has no Undo; an Undo meeting
     the 409 opens the same dialog for the reverse move. `has_repo` is said
     for a group's deletion only. Pure rules (`groupRules.ts`):
     `needsConfirmation` (strict `GroupConsequences`), `consequencesByProject`,
@@ -3157,15 +3160,18 @@ serves now (16a), and what waits for the group repositories (16b).
     "no group" —; the column "Group", sorted by its name; the repository and
     its scores once; members by name and GitHub login, "No member" for R1's
     orphan); `RepoSheet` by repository id, titled by the group, its members
-    and whether it follows the set; *access to revoke* an amber flag
+    and whether it follows the set (one `MemberList`, `parts.tsx`, for the
+    row and the sheet); *access to revoke* an amber flag
     (`repoFlags`, outside `counts.alerts`); "N groups" in the counts.
     `ProjectGroupSet`: the drift (`offersResync`: drifted, neither released
     nor archived) as a warning alert with *Resync with the set* a secondary;
     `POST …/groups/resync` asked bare, then confirmed with the digest (the
     dialog's `kind="resync"`: distinct frozen repositories, "Will have no
-    repository — Accept is closed", the rest by repository); a 204 refetches
-    and toasts; `released`, `project_archived`, `classroom_archived`,
-    `no_group_set` worded; "A resync is being applied on GitHub" while
+    repository — Accept is closed", the rest by repository); a 204, applied
+    at once or confirmed, refetches and says "Groups resynced with the set";
+    `released`, `project_archived`, `classroom_archived`, `no_group_set`,
+    `needs_confirmation` worded, and a 404 (`not_found`, once in `api.ts`'s
+    `WORDED`); "A resync is being applied on GitHub" while
     `groupSyncPending`, and Release disabled with its line under the header.
     `GroupSetUse.follows` worded "follow the set until the deadline".
   - **Mock** (`?groups=1&projects=1`): "Mini-projet — en binômes"
@@ -3174,7 +3180,8 @@ serves now (16a), and what waits for the group repositories (16b).
     — en binômes" (locked, not released, a stopped copy the set drifted
     from: its resync names three frozen repositories and an arrival without
     one; confirmed, the copy takes the set, owed two reads, the release
-    refused `group_sync_pending` meanwhile); a move of the pairs reaching
+    refused `group_sync_pending` meanwhile; a resync with nothing reaching
+    GitHub applies at once, 204); a move of the pairs reaching
     the following project's repositories answers `409 needs_confirmation`
     (`mockDigest`). Checked by `contract.test.ts`. Scenes
     `group-set-confirm`, `project-group-rows`, `project-group-drift`,
@@ -3193,7 +3200,9 @@ serves now (16a), and what waits for the group repositories (16b).
     click then click, not by a pointer drag (the drag reports through the
     same `onMove`); a group's stop on its repository's own deadline is said
     in its sheet, not as a badge on the row; the drift alert is hidden, not
-    only its button, once released or archived.
+    only its button, once released or archived; an archived CLASSROOM is
+    not on `ProjectDetail`, so the drift still offers *Resync* there and
+    the refusal `classroom_archived` is worded (left for review).
 
 ### M3-17 — Groups formed by the students (ADR-070 lot 2)
 - **Depends on**: M3-15a, M3-16, M3-09.

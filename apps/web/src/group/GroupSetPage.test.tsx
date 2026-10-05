@@ -354,6 +354,30 @@ describe("a move that reaches GitHub (ADR-070 §6, M3-16b)", () => {
     expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
   });
 
+  it("keeps the dialog through Escape while the confirmation is in flight: its answer decides", async () => {
+    const { fetchMock } = routes(makeSet(), { [`PUT ${SET_BASE}/members/${alice}`]: confirmed });
+    let release!: () => void;
+    const gate = new Promise<void>((done) => (release = done));
+    const answer = fetchMock.getMockImplementation()!;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(init?.body ?? "").includes("confirm")) await gate;
+        return answer(input, init);
+      }),
+    );
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Move Dupont Alice to…" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Groupe 2" }));
+    const dialog = await screen.findByRole("dialog", { name: "Confirm the change on GitHub" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Confirm the move" }));
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("dialog", { name: "Confirm the change on GitHub" })).toBeInTheDocument();
+    release();
+    expect(await screen.findByText("Dupont Alice moved to Groupe 2. GitHub follows.")).toBeInTheDocument();
+    expect(within(screen.getByRole("listitem", { name: "Groupe 2" })).getByText("Dupont Alice")).toBeInTheDocument();
+  });
+
   it("puts the student back on Cancel, and sends nothing more", async () => {
     const { calls } = routes(makeSet(), { [`PUT ${SET_BASE}/members/${alice}`]: asked() });
     renderPage();

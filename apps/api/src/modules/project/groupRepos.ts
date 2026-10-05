@@ -42,9 +42,15 @@ export async function copyGroupOf(db: Db | Tx, projectId: string, enrollmentId: 
 export const groupRepoWhere = (projectId: string, groupId: string) =>
   and(eq(projectRepos.projectId, projectId), eq(projectRepos.groupId, groupId));
 
-/** Which repository each student seat of some projects reads: `of(projectId, enrollmentId)`, or null. */
+/**
+ * Which repository each student seat of some projects reads: `of(projectId,
+ * enrollmentId)`, or null; and `seat(…)`, that repository with the copy
+ * group the seat reads it through (`groupId` null for a seat in no group,
+ * or reading its own live individual repository).
+ */
 export interface SeatRepos {
   of(projectId: string, enrollmentId: string): RepoRow | null;
+  seat(projectId: string, enrollmentId: string): { repo: RepoRow | null; groupId: string | null };
 }
 
 /**
@@ -54,7 +60,7 @@ export interface SeatRepos {
  * none (ADR-018). `enrollmentIds` narrows the seats read.
  */
 export async function seatRepos(db: Db | Tx, projects: readonly SeatProject[], enrollmentIds?: readonly string[]): Promise<SeatRepos> {
-  if (projects.length === 0 || enrollmentIds?.length === 0) return { of: () => null };
+  if (projects.length === 0 || enrollmentIds?.length === 0) return { of: () => null, seat: () => ({ repo: null, groupId: null }) };
   const projectIds = projects.map((p) => p.id);
   const lines = enrollmentIds === undefined ? undefined : [...enrollmentIds];
   const [repos, seats, places] = await Promise.all([
@@ -79,15 +85,16 @@ export async function seatRepos(db: Db | Tx, projects: readonly SeatProject[], e
   const userOf = new Map(seats.map((s) => [s.id, s.userId]));
   const groupOf = new Map(places.map((p) => [`${p.projectId}:${p.enrollmentId}`, p.groupId]));
   const grouped = new Set(projects.filter((p) => p.groupMode).map((p) => p.id));
-  return {
-    of(projectId, enrollmentId) {
-      if (!userOf.has(enrollmentId)) return null;
-      const userId = userOf.get(enrollmentId);
-      const mine = userId ? own.get(`${projectId}:${userId}`) : undefined;
-      const group = grouped.has(projectId) ? groupOf.get(`${projectId}:${enrollmentId}`) : undefined;
-      return pickStudentRepo(mine, group === undefined ? undefined : ofGroup.get(group)) ?? null;
-    },
+  const seat = (projectId: string, enrollmentId: string) => {
+    if (!userOf.has(enrollmentId)) return { repo: null, groupId: null };
+    const userId = userOf.get(enrollmentId);
+    const mine = userId ? own.get(`${projectId}:${userId}`) : undefined;
+    const group = grouped.has(projectId) ? groupOf.get(`${projectId}:${enrollmentId}`) : undefined;
+    const repo = pickStudentRepo(mine, group === undefined ? undefined : ofGroup.get(group)) ?? null;
+    // Through its group unless the seat reads its own repository.
+    return { repo, groupId: repo !== null && repo.groupId === null ? null : (group ?? null) };
   };
+  return { of: (projectId, enrollmentId) => seat(projectId, enrollmentId).repo, seat };
 }
 
 /** {@link seatRepos} for one seat of one project. */

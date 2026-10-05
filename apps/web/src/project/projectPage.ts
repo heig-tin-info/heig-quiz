@@ -23,6 +23,7 @@ import {
 import { isVoidCheckpoint, reopens } from "@quiz/domain";
 
 import { ApiError, refusalCodeOf, wordedRefusal } from "../api";
+import { studentName } from "../group/groupRules";
 import type { Dict, TFunction } from "../i18n";
 import type { RouteOf } from "../router";
 import type { Tone } from "../ui";
@@ -348,7 +349,8 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   sync_failed: "project.refusal.syncFailed",
   // ADR-070's R2 (M3-15b-2b): a release while a confirmed resync of the groups is applied.
   group_sync_pending: "project.refusal.groupSyncPending",
-  // *Resync with the set* (M3-15b-2b, M3-16b): `needs_confirmation` is its dialog's.
+  // *Resync with the set* (M3-15b-2b, M3-16b): `needs_confirmation` opens its dialog, worded here if it cannot.
+  needs_confirmation: "groups.refusal.needsConfirmation",
   released: "project.refusal.released",
   classroom_archived: "project.refusal.classroomArchived",
 };
@@ -382,8 +384,6 @@ export type RepoEntry =
   | { kind: "group"; key: string; label: string; group: ProjectDetailGroup; members: ProjectStudent[]; repo: ProjectRepoView | null }
   | { kind: "student"; key: string; label: string; student: ProjectStudent; repo: ProjectRepoView | null };
 
-const studentLabel = (s: Pick<ProjectStudent, "nom" | "prenom">) => `${s.nom} ${s.prenom}`;
-
 /**
  * The page's rows as the table draws them. Rows stay per student on the
  * wire (`ProjectDetailRow.group`); a group project's are gathered here into
@@ -398,7 +398,7 @@ export function repoEntries(p: Pick<ProjectDetail, "groupMode" | "rows">): RepoE
   const groups = new Map<string, Extract<RepoEntry, { kind: "group" }>>();
   for (const { student, repo, group } of p.rows) {
     if (!p.groupMode || group === null) {
-      students.push({ kind: "student", key: repo?.id ?? student.enrollmentId ?? student.email, label: studentLabel(student), student, repo });
+      students.push({ kind: "student", key: repo?.id ?? student.enrollmentId ?? student.email, label: studentName(student), student, repo });
       continue;
     }
     let entry = groups.get(group.id);

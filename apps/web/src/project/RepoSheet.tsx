@@ -19,7 +19,7 @@ import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { projectKey, projectRunsKey } from "../queryKeys";
 import { Badge, Button, Fact, FieldError, fieldErrorProps, isoDateTime, RelativeTime, Sheet } from "../ui";
-import { CiBadge, RepoLink, SyncBadge } from "./parts";
+import { CiBadge, MemberList, RepoLink, SyncBadge } from "./parts";
 import { actionable, refusalMessage, repoEntryOf, repoFlags, shortSha } from "./projectPage";
 import { RunHistory } from "./RunHistory";
 import { ScoreSection } from "./TeacherScoreForm";
@@ -159,18 +159,7 @@ export function RepoSheet({
           {entry.kind === "group" ? (
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
               <Fact label={t("project.sheet.members")}>
-                {entry.members.length === 0 ? (
-                  <span className="text-fg-faint">{t("project.repo.noMember")}</span>
-                ) : (
-                  <ul className="space-y-0.5">
-                    {entry.members.map((m) => (
-                      <li key={m.enrollmentId ?? m.email}>
-                        {m.nom} {m.prenom}
-                        {m.githubLogin ? <span className="ml-2 font-mono text-xs text-fg-faint">{m.githubLogin}</span> : null}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <MemberList members={entry.members} />
               </Fact>
               <Fact label={t("project.groupSet")}>
                 {t(entry.group.stopped ? "project.sheet.stopped" : "project.sheet.follows")}

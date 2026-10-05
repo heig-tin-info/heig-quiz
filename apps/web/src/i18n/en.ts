@@ -87,6 +87,7 @@ export const en = {
   // that stands for everyone it could not draw.
   "people.more": "{n} more",
   "error.server": "The server did not answer. Try again in a moment.",
+  "error.notFound": "This no longer exists, or it is not open to you.",
   "error.save": "Could not save this change.",
   "error.noEmail": "Your account has no e-mail address to send to.",
   "error.rateLimited": "Too many tries in a minute. Wait a moment and try again.",
@@ -4282,8 +4283,7 @@ export const en = {
   "project.resync.noRepo": "Will have no repository — Accept is closed",
   "project.resync.repos": "Repositories",
   "project.resync.submit": "Resync",
-  "project.resync.done": "Resync confirmed. GitHub follows in the background.",
-  "project.resync.nothing": "The groups already match the set.",
+  "project.resync.done": "Groups resynced with the set.",
   "project.resync.pending": "A resync is being applied on GitHub.",
   "project.release.waitsResync": "The release waits for the resync of the groups to be applied on GitHub.",
   "project.noGroupSet.title": "Choose a group set first",

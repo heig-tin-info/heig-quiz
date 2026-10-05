@@ -614,11 +614,11 @@ describe("a group project's rows, drift and resync (ADR-070 §4, M3-16b)", () =>
     expect(screen.queryByRole("button", { name: "Resync with the set" })).toBeNull();
   });
 
-  it("reads the page again on a 204: nothing to resync", async () => {
+  it("reads the page again on a 204 applied at once (nothing reaching GitHub), and says it", async () => {
     const { calls } = routes(groupProject({ groupsDrifted: true }), { [SETS]: ok([]), [`POST ${RESYNC}`]: noContent() });
     renderPage();
     await userEvent.click(await screen.findByRole("button", { name: "Resync with the set" }));
-    expect(await screen.findByText("The groups already match the set.")).toBeInTheDocument();
+    expect(await screen.findByText("Groups resynced with the set.")).toBeInTheDocument();
     expect(writes(calls).map((c) => c.body)).toEqual([{}]);
     await waitFor(() => expect(calls.filter((c) => c.url === BASE && c.method === "GET").length).toBeGreaterThan(1));
   });
@@ -653,7 +653,7 @@ describe("a group project's rows, drift and resync (ADR-070 §4, M3-16b)", () =>
     expect(within(dialog).getByText("Will have no repository — Accept is closed")).toBeInTheDocument();
     expect(within(dialog).getByText("Dupont Chloé")).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole("button", { name: "Resync" }));
-    expect(await screen.findByText("Resync confirmed. GitHub follows in the background.")).toBeInTheDocument();
+    expect(await screen.findByText("Groups resynced with the set.")).toBeInTheDocument();
     expect(writes(calls).map((c) => c.body)).toEqual([{}, { confirm: digest }]);
     expect(screen.queryByRole("dialog")).toBeNull();
   });

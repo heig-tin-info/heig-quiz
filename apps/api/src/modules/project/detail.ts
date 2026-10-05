@@ -47,13 +47,13 @@ import { changedAfterRelease, projectPrimaryAction, resolveFinalScore, reviewSta
 import { iso, isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
-import { enrollments, githubAccounts, gradeDispatches, projectGradeRuns, projectGroupMembers, projectGroups, projectRepos, users } from "../../db/schema.js";
+import { enrollments, githubAccounts, gradeDispatches, projectGradeRuns, projectGroups, projectRepos, users } from "../../db/schema.js";
 import { installationClient } from "../../github/app.js";
 import { isRateLimited, readRepoLiveState, type LiveRead } from "../../github/metrics.js";
 import { projectInstallation } from "../github/service.js";
 import { isLive, releaseCounts, repoDeadlineState } from "./deadline.js";
 import { reposWithAccessToRevoke } from "./groupCopy.js";
-import { groupsDrifted } from "./groupResync.js";
+import { groupsDrifted, groupSyncOwed } from "./groupResync.js";
 import { seatRepos } from "./groupRepos.js";
 import { forEachLimit } from "./lease.js";
 import { studentRepos, type RepoRow } from "./repos.js";
@@ -302,27 +302,14 @@ function repoView(
   };
 }
 
-/**
- * The copy's groups of a group project (ADR-070 §4; M3-16b), by id, and the
- * group each roster line is in (a departing member included: the copy holds
- * them until GitHub revoked them). Empty for an individual project.
- */
-async function copyGroups(db: Db, project: ProjectRow): Promise<{ groups: Map<string, ProjectDetailGroup>; placeOf: Map<string, string> }> {
-  if (!project.groupMode) return { groups: new Map(), placeOf: new Map() };
-  const [groups, places] = await Promise.all([
-    db
-      .select({ id: projectGroups.id, name: projectGroups.name, stoppedAt: projectGroups.stoppedAt })
-      .from(projectGroups)
-      .where(eq(projectGroups.projectId, project.id)),
-    db
-      .select({ enrollmentId: projectGroupMembers.enrollmentId, groupId: projectGroupMembers.groupId })
-      .from(projectGroupMembers)
-      .where(eq(projectGroupMembers.projectId, project.id)),
-  ]);
-  return {
-    groups: new Map(groups.map((g) => [g.id, { id: g.id, name: g.name, stopped: g.stoppedAt !== null }])),
-    placeOf: new Map(places.map((p) => [p.enrollmentId, p.groupId])),
-  };
+/** The groups of a group project's copy (ADR-070 §4; M3-16b), by id; none for an individual project. */
+async function copyGroups(db: Db, project: ProjectRow): Promise<Map<string, ProjectDetailGroup>> {
+  if (!project.groupMode) return new Map();
+  const groups = await db
+    .select({ id: projectGroups.id, name: projectGroups.name, stoppedAt: projectGroups.stoppedAt })
+    .from(projectGroups)
+    .where(eq(projectGroups.projectId, project.id));
+  return new Map(groups.map((g) => [g.id, { id: g.id, name: g.name, stopped: g.stoppedAt !== null }]));
 }
 
 export interface DetailOptions {
@@ -388,16 +375,14 @@ export async function projectDetail(
   // N-SEC-20: never the group repository's creator for having created it);
   // one row per student, each member reading the group's.
   const [seats, copy] = await Promise.all([seatRepos(db, [project]), copyGroups(db, project)]);
-  const groupOfRepo = (repo: RepoRow) => (repo.groupId === null ? null : (copy.groups.get(repo.groupId) ?? null));
+  const groupOf = (groupId: string | null) => (groupId === null ? null : (copy.get(groupId) ?? null));
   const shown = new Set<string>();
   const rows: ProjectDetailRow[] = roster.map((s) => {
-    const repo = seats.of(project.id, s.enrollmentId);
+    const { repo, groupId } = seats.seat(project.id, s.enrollmentId);
     const view = repo === null ? undefined : views.get(repo.id);
     if (view) shown.add(repo!.id);
-    const place = copy.placeOf.get(s.enrollmentId);
     return {
-      // A student reading their own individual repository (heig-classroom's lot 1) is a row of their own.
-      group: repo !== null && repo.groupId === null ? null : place === undefined ? null : (copy.groups.get(place) ?? null),
+      group: groupOf(groupId),
       student: {
         enrollmentId: s.enrollmentId,
         userId: s.userId,
@@ -432,7 +417,7 @@ export async function projectDetail(
         claimed: false,
         githubLogin,
       };
-      rows.push({ student, repo: views.get(repo.id)!, group: groupOfRepo(repo) });
+      rows.push({ student, repo: views.get(repo.id)!, group: groupOf(repo.groupId) });
     }
   }
 
@@ -444,7 +429,7 @@ export async function projectDetail(
     ...(await projectSummary(db, project, now)),
     releasedAt: isoOrNull(project.releasedAt),
     groupsDrifted: await groupsDrifted(db, project, now),
-    groupSyncPending: project.groupResync.length > 0,
+    groupSyncPending: groupSyncOwed(project),
     primaryAction: projectPrimaryAction({
       state: project.state,
       archived: project.archivedAt !== null,
@@ -460,7 +445,7 @@ export async function projectDetail(
     counts: {
       students: roster.length,
       accepted: accepted.length,
-      groups: copy.groups.size,
+      groups: copy.size,
       ...counts,
       toVerify: accepted.filter((v) => v.flags.toVerify).length,
       alerts: accepted.filter((v) => v.flags.multiple || v.flags.protectionSuspended).length,

@@ -1,6 +1,6 @@
 import { FolderGit2, Loader2, Lock, LockOpen, Snowflake, Users } from "lucide-react";
 
-import type { ProjectDetail, ProjectRepoView, ProjectStudent } from "@quiz/contracts";
+import type { ProjectDetail, ProjectRepoView } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import type { Navigate } from "../router";
@@ -20,17 +20,10 @@ import {
   useSortableTable,
   type Column,
 } from "../ui";
-import { CiBadge, RepoLink, Score, SyncBadge } from "./parts";
+import { CiBadge, MemberList, RepoLink, Score, StudentAccount, SyncBadge } from "./parts";
 import { repoEntries, repoFlags, reviewTag, shortSha, type RepoEntry } from "./projectPage";
 
 type SortKey = "student" | "score" | "deadline";
-
-/** A student's second line: the GitHub account they linked, or that their seat is not claimed. */
-function StudentAccount({ student }: { student: ProjectStudent }) {
-  const t = useT();
-  if (!student.claimed) return <span className="text-xs text-fg-faint">{t("project.repo.notClaimed")}</span>;
-  return student.githubLogin ? <span className="font-mono text-xs text-fg-faint">{student.githubLogin}</span> : null;
-}
 
 /**
  * The identity cell of a row: a group's name over its members, each by name
@@ -46,18 +39,7 @@ function IdentityCell({ entry, groupMode }: { entry: RepoEntry; groupMode: boole
     return (
       <span className="flex flex-col gap-0.5">
         <span className={cx("font-semibold", deleted && "font-medium")}>{entry.label}</span>
-        {entry.members.length === 0 ? (
-          <span className="text-xs text-fg-faint">{t("project.repo.noMember")}</span>
-        ) : (
-          <span className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-fg-muted">
-            {entry.members.map((m) => (
-              <span key={m.enrollmentId ?? m.email} className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
-                {m.nom} {m.prenom}
-                <StudentAccount student={m} />
-              </span>
-            ))}
-          </span>
-        )}
+        <MemberList members={entry.members} className="text-xs text-fg-muted" />
       </span>
     );
   }

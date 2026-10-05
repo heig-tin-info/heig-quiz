@@ -120,21 +120,24 @@ export function useGroupSetWrites(setId: string) {
   const inFlight = useRef(0);
   /** The set as the server last answered it, or as it stood when the queue started. */
   const server = useRef<GroupSetDetail | undefined>(undefined);
-  /** A confirmation is asked: nothing is sent until it is answered. */
-  const held = useRef(false);
-  /** The drawn set is not the server's since a hold: kept as the base until the hold's write settles. */
-  const holding = useRef(false);
+  /**
+   * The hold of a confirmation: `asked` — nothing is sent until the page
+   * answers; `confirming` — the held write is sent again with its digest.
+   * While not `none`, the drawn set is not the server's: `server` stays the
+   * base to put back.
+   */
+  const hold = useRef<"none" | "asked" | "confirming">("none");
 
   return useMemo(() => {
     const key = groupSetKey(setId);
     const putBack = () => {
-      holding.current = false;
+      hold.current = "none";
       if (server.current) qc.setQueryData(key, server.current);
       void qc.invalidateQueries({ queryKey: key });
     };
     const write = (request: SetWrite, optimistic?: (detail: GroupSetDetail) => GroupSetDetail): Promise<GroupSetDetail> => {
-      if (held.current) return Promise.reject(new WriteHeld());
-      if (inFlight.current === 0 && !holding.current) server.current = qc.getQueryData<GroupSetDetail>(key);
+      if (hold.current === "asked") return Promise.reject(new WriteHeld());
+      if (inFlight.current === 0 && hold.current === "none") server.current = qc.getQueryData<GroupSetDetail>(key);
       inFlight.current += 1;
       if (optimistic) {
         // A read in flight would land over the move.
@@ -142,7 +145,7 @@ export function useGroupSetWrites(setId: string) {
         qc.setQueryData<GroupSetDetail>(key, (d) => (d ? optimistic(d) : d));
       }
       const send = () => {
-        if (held.current) throw new WriteHeld();
+        if (hold.current === "asked") throw new WriteHeld();
         return api<GroupSetDetail>(`/app/api/group-sets/${setId}${request.path}`, {
           method: request.method,
           ...(request.body === undefined ? {} : { body: JSON.stringify(request.body) }),
@@ -155,7 +158,7 @@ export function useGroupSetWrites(setId: string) {
           inFlight.current -= 1;
           server.current = answer;
           if (inFlight.current === 0) {
-            holding.current = false;
+            hold.current = "none";
             qc.setQueryData(key, answer);
           }
           void qc.invalidateQueries({ queryKey: groupSetListsKey });
@@ -164,9 +167,8 @@ export function useGroupSetWrites(setId: string) {
         (error: unknown) => {
           inFlight.current -= 1;
           if (refusedWith(error, "needs_confirmation")) {
-            held.current = true;
-            holding.current = true;
-          } else if (inFlight.current === 0 && !held.current) {
+            hold.current = "asked";
+          } else if (inFlight.current === 0 && hold.current !== "asked") {
             putBack();
           }
           throw error;
@@ -177,12 +179,12 @@ export function useGroupSetWrites(setId: string) {
       write,
       /** Ends the hold by sending `request` — the held write with its digest. */
       confirm: (request: SetWrite): Promise<GroupSetDetail> => {
-        held.current = false;
+        hold.current = "confirming";
         return write(request);
       },
       /** Ends the hold without sending: the last answer is drawn again. */
       cancel: () => {
-        held.current = false;
+        hold.current = "none";
         if (inFlight.current === 0) putBack();
       },
     };

@@ -154,18 +154,14 @@ export function provideMoveConsequences(fn: MoveConsequences): void {
 
 /**
  * The digest of some consequences (ADR-070 §6): 64 hex characters, as
- * `GroupConfirm` parses them — an FNV-1a of their canonical list, not the
- * API's SHA-256, but as stable: the same consequences, the same digest.
+ * `GroupConfirm` parses them — a 32-bit hash of their sorted keys, eight
+ * times over; not the API's SHA-256, but as stable.
  */
 export function mockDigest(consequences: readonly GroupConsequence[]): string {
   const canonical = consequences.map((c) => `${c.projectId}:${c.groupId}:${c.enrollmentId}:${c.kind}`).sort().join("|");
-  let hash = 0x811c9dc5;
-  const words: string[] = [];
-  for (let round = 0; round < 8; round += 1) {
-    for (const ch of `${round}${canonical}`) hash = Math.imul(hash ^ ch.charCodeAt(0), 0x01000193) >>> 0;
-    words.push(hash.toString(16).padStart(8, "0"));
-  }
-  return words.join("");
+  let hash = 0;
+  for (const ch of canonical) hash = (Math.imul(hash, 31) + ch.charCodeAt(0)) >>> 0;
+  return hash.toString(16).padStart(8, "0").repeat(8);
 }
 
 /** `409 needs_confirmation` with the consequences and their digest, as the group routes and the resync answer it. */

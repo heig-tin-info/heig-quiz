@@ -1,13 +1,26 @@
 import { Snowflake, TriangleAlert, UserMinus, UserPlus } from "lucide-react";
 
-import type { GroupConsequence } from "@quiz/contracts";
+import type { GroupConsequences } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { Alert, Badge, Button, Modal } from "../ui";
 import { consequencesByProject, resyncSections, type RepoConsequences } from "./groupRules";
 
+/**
+ * A confirmation asked by the server (`409 needs_confirmation`): what it
+ * named and its digest, and whether it names them again because the digest
+ * sent was stale (`changedSince`).
+ */
+export type Asked = GroupConsequences & { changedSince: boolean };
+
 /** A list's caption: the 12 px uppercase eyebrow of a note (DESIGN.md, NotePanel). */
 const eyebrow = "text-xs font-semibold uppercase tracking-wide text-fg-faint";
+
+/** Each side of a repository's consequences: its words and its icon. */
+const COPY = {
+  lose: { label: "groups.confirm.lose", icon: UserMinus },
+  join: { label: "groups.confirm.join", icon: UserPlus },
+} as const;
 
 /** One repository a confirmation names: its name (or "being created"), its group, who loses it, who joins it. */
 function RepoBlock({ repo }: { repo: RepoConsequences }) {
@@ -27,24 +40,18 @@ function RepoBlock({ repo }: { repo: RepoConsequences }) {
           </Badge>
         ) : null}
       </p>
-      {repo.lose.length > 0 ? (
-        <p className="flex items-start gap-2 text-sm">
-          <UserMinus aria-hidden className="mt-0.5 size-4 shrink-0 text-fg-faint" />
-          <span>
-            <span className="text-fg-muted">{t("groups.confirm.lose")} · </span>
-            {repo.lose.join(", ")}
-          </span>
-        </p>
-      ) : null}
-      {repo.join.length > 0 ? (
-        <p className="flex items-start gap-2 text-sm">
-          <UserPlus aria-hidden className="mt-0.5 size-4 shrink-0 text-fg-faint" />
-          <span>
-            <span className="text-fg-muted">{t("groups.confirm.join")} · </span>
-            {repo.join.join(", ")}
-          </span>
-        </p>
-      ) : null}
+      {(["lose", "join"] as const).map((kind) => {
+        const { label, icon: Glyph } = COPY[kind];
+        return repo[kind].length > 0 ? (
+          <p key={kind} className="flex items-start gap-2 text-sm">
+            <Glyph aria-hidden className="mt-0.5 size-4 shrink-0 text-fg-faint" />
+            <span>
+              <span className="text-fg-muted">{t(label)} · </span>
+              {repo[kind].join(", ")}
+            </span>
+          </p>
+        ) : null;
+      })}
     </li>
   );
 }
@@ -74,15 +81,13 @@ const RepoList = ({ repos }: { repos: RepoConsequences[] }) => (
  */
 export function ConsequencesDialog({
   kind,
-  consequences,
-  changedSince,
+  asked: { consequences, changedSince },
   confirming,
   onConfirm,
   onCancel,
 }: {
   kind: "move" | "resync";
-  consequences: readonly GroupConsequence[];
-  changedSince: boolean;
+  asked: Asked;
   confirming: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -94,7 +99,8 @@ export function ConsequencesDialog({
   return (
     <Modal
       title={t(resync ? "project.resync.title" : "groups.confirm.title")}
-      onClose={onCancel}
+      // Escape cancels, except while the confirmation is in flight: its answer decides.
+      onClose={confirming ? () => undefined : onCancel}
       scroll
       footer={
         <>

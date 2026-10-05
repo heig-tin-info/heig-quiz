@@ -701,6 +701,10 @@ function copyOf(p: MockProject): CopyGroup[] {
   return p.copy ?? setGroupsOf(p.summary.groupSetId).map((g) => ({ ...g, stopped: false }));
 }
 
+/** A copy's groups as one comparable string: a stopped copy has drifted when its set's differs. */
+const copyKey = (groups: { id: string; name: string; members: string[] }[]): string =>
+  JSON.stringify(groups.map((g) => [g.id, g.name, [...g.members].sort()]));
+
 const groupRepo = (p: MockProject, groupId: string | null) => (groupId === null ? undefined : p.repos.find((r) => r.groupId === groupId));
 
 /** One GitHub consequence of a write (ADR-070 §6), as `GroupConsequence` names it. */
@@ -912,7 +916,7 @@ function detailOf(p: MockProject): ProjectDetail {
         repo: repoView(p, r),
       })),
   ];
-  const drifted = resyncConsequences(p).length > 0;
+  const drifted = p.copy !== null && p.summary.groupSetId !== null && copyKey(p.copy) !== copyKey(setGroupsOf(p.summary.groupSetId));
   const pending = p.resyncReads > 0;
   if (pending) p.resyncReads -= 1;
   const live = p.repos.filter((r) => isLive(p, r));
@@ -969,9 +973,10 @@ function detailOf(p: MockProject): ProjectDetail {
 
 /**
  * *Resync with the set* (ADR-070 §4, M3-15b-2b): refused once released or
- * archived; nothing to resync is a 204; otherwise `409 needs_confirmation`
- * until the digest comes back, then the copy takes the set's groups —
- * still stopped — and the job owes it for two reads (R2).
+ * archived; with GitHub consequences, `409 needs_confirmation` until the
+ * digest comes back; then (a 204 either way) the copy takes the set's
+ * groups — still stopped — and, if anything reached GitHub, the job owes
+ * it for two reads (R2).
  */
 on("POST", "/app/api/projects/:id/groups/resync", (m, raw) => {
   const p = projectOr404(m.groups!.id!);
@@ -982,10 +987,10 @@ on("POST", "/app/api/projects/:id/groups/resync", (m, raw) => {
   if (p.summary.archivedAt !== null) throw refuse(409, "project_archived", "An archived project resyncs nothing");
   if (p.releasedAt !== null) throw refuse(409, "released", "The project is released");
   const consequences = resyncConsequences(p);
-  if (consequences.length === 0) return undefined;
-  if (parsed.data.confirm !== mockDigest(consequences)) throw confirmationNeeded(consequences);
-  p.copy = setGroupsOf(p.summary.groupSetId).map((g) => ({ ...g, stopped: true }));
-  p.resyncReads = 2;
+  if (consequences.length > 0 && parsed.data.confirm !== mockDigest(consequences)) throw confirmationNeeded(consequences);
+  // Applied: the copy takes the set's groups, still stopped; what reaches GitHub is owed for two reads.
+  if (p.copy !== null) p.copy = setGroupsOf(p.summary.groupSetId).map((g) => ({ ...g, stopped: true }));
+  if (consequences.length > 0) p.resyncReads = 2;
   return undefined;
 });
 

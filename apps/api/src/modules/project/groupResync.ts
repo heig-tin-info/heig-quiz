@@ -49,6 +49,12 @@ function resyncDelta(found: CopyWork) {
 }
 
 /**
+ * A confirmed resync not fully applied by the `group.sync` job yet (product
+ * owner R2): the release waits for it, and the page says so.
+ */
+export const groupSyncOwed = (project: Pick<ProjectRow, "groupResync">): boolean => project.groupResync.length > 0;
+
+/**
  * The project page's `groupsDrifted` (F-PROJ-13): a published group
  * project's copy differs from its set where it stopped following —
  * *Resync with the set* would change something. Read without locks.
