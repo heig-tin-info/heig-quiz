@@ -326,7 +326,25 @@ const EnvSchema = z.object({
   /** The App's own user-to-server OAuth, for account linking (no OAuth App). */
   GITHUB_APP_CLIENT_ID: z.string().trim().default(""),
   GITHUB_APP_CLIENT_SECRET: z.string().trim().default(""),
+
+  // --- Online workspace portal (apps/codespace, ADR-047) ---
+
+  /**
+   * The portal's base URL. Empty (the default) means the feature does not
+   * exist: its routes answer 404 and its jobs do nothing. Set, it needs the
+   * secret below, in every environment (see `loadConfig`).
+   */
+  CODESPACE_URL: z.string().trim().default(""),
+  /**
+   * HS256 key shared with the portal, for the launch and service tokens
+   * (M6-01). Environment only (ADR-010): never in the database, a payload or
+   * a log. At least `CODESPACE_LAUNCH_SECRET_MIN` characters.
+   */
+  CODESPACE_LAUNCH_SECRET: z.string().trim().default(""),
 });
+
+/** The shortest launch secret accepted (ADR-047 section 5). */
+export const CODESPACE_LAUNCH_SECRET_MIN = 32;
 
 /** The shortest webhook secret production accepts (N-SEC-16). */
 export const GITHUB_WEBHOOK_SECRET_MIN = 32;
@@ -441,6 +459,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     const github = githubRefusal(parsed.data);
     if (github) throw new Error(`Invalid configuration: ${github}`);
   }
+  // A portal URL without a signing key would mint nothing the portal accepts
+  // (or, worse, a guessable one): refused in development too. The answer
+  // there is to leave both unset (the feature is off) or set a real secret.
+  if (parsed.data.CODESPACE_URL !== "" && parsed.data.CODESPACE_LAUNCH_SECRET.length < CODESPACE_LAUNCH_SECRET_MIN) {
+    throw new Error(
+      `Invalid configuration: CODESPACE_URL requires CODESPACE_LAUNCH_SECRET of at least ${CODESPACE_LAUNCH_SECRET_MIN} characters`,
+    );
+  }
   // `http` without an address is a runner that is silently never called: the
   // process refuses to start rather than grade every code question by hand
   // without saying so.
@@ -465,6 +491,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     // must not follow the process around.
     ASSETS_DIR: resolve(parsed.data.ASSETS_DIR),
     RUNNER_URL: parsed.data.RUNNER_URL.trim().replace(/\/+$/, ""),
+    CODESPACE_URL: parsed.data.CODESPACE_URL.replace(/\/+$/, ""),
     RUNNER_TOKEN: parsed.data.RUNNER_TOKEN.trim(),
     SCW_SECRET_KEY: parsed.data.SCW_SECRET_KEY.trim(),
     SCW_DEFAULT_PROJECT_ID: parsed.data.SCW_DEFAULT_PROJECT_ID.trim(),
