@@ -561,10 +561,10 @@ describe("protected files after a sync (ADR-062 addendum)", () => {
       });
     // The student's copy is the old version: restored to the new one, on top of their work.
     const studentHead = head(repo.fullName!);
-    const restored = await restore();
+    const { restored } = await restore();
     expect(restored).toMatchObject({ files: [GRADING], covered: studentHead });
     expect(world.read(repo.fullName!, "main", GRADING)).toBe("grade: v2");
-    // Already the distribution's: nothing to restore.
-    expect(await restore()).toBeNull();
+    // Already the distribution's: nothing to restore (the head read, no restore commit).
+    expect(await restore()).toEqual({ head: head(repo.fullName!), restored: null });
   });
 });
