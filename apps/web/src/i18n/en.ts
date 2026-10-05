@@ -412,6 +412,12 @@ export const en = {
   "admin.task.deliveries.purge": "GitHub event retention",
   "admin.task.deliveries.purge.desc":
     "Clears the content of the GitHub events processed more than 30 days ago, and keeps their record.",
+  "admin.task.reconcile.grades": "GitHub project runs",
+  "admin.task.reconcile.grades.desc":
+    "Reads the latest completed runs of the project repositories quiet for 30 minutes, so a score GitHub failed to announce is still captured.",
+  "admin.task.reconcile.repos": "GitHub project repositories",
+  "admin.task.reconcile.repos.desc":
+    "Follows renamed and deleted project repositories, refreshes their last commit, and re-invites a student still without access, at most once a day.",
   "admin.task.llm.review": "LLM review of the questions",
   "admin.task.llm.review.desc": "Between 1 and 6 a.m., reviews the latest version of the questions of the pools that asked, within a quarter of the day's AI cap.",
   "admin.kiosk": "Kiosk stations",

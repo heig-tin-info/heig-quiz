@@ -345,6 +345,14 @@ export const projectRepos = pgTable(
      */
     invitationResentAt: timestamp("invitation_resent_at", { withTimezone: true }),
     /**
+     * The reconciliation's last re-invite of a pending invitation (F-PROJ-07,
+     * N-RES-08, M3-06): at most once a day per repository, claimed on the row
+     * before GitHub is called; a student's own repository only, and never
+     * once the repository is frozen. The staff's resend neither reads nor
+     * writes it: the two never wait for each other.
+     */
+    invitationReinvitedAt: timestamp("invitation_reinvited_at", { withTimezone: true }),
+    /**
      * The repository's own deadline, an individual extension set by its
      * staff (D13 as amended 2026-10-02); null: the project's. The EFFECTIVE
      * deadline, `coalesce(deadline_at, projects.deadline_at)`, is what every

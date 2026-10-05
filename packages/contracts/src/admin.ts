@@ -70,6 +70,8 @@ export const SCHEDULED_TASK_KEYS = [
   "health.checks",
   "reconcile.deliveries",
   "deliveries.purge",
+  "reconcile.grades",
+  "reconcile.repos",
   "llm.review",
 ] as const;
 export type ScheduledTaskKey = (typeof SCHEDULED_TASK_KEYS)[number];

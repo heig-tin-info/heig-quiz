@@ -410,6 +410,12 @@ export const fr: Record<keyof Dict, string> = {
   "admin.task.deliveries.purge": "Conservation des événements GitHub",
   "admin.task.deliveries.purge.desc":
     "Efface le contenu des événements GitHub traités il y a plus de 30 jours, et en garde la trace.",
+  "admin.task.reconcile.grades": "Exécutions des projets GitHub",
+  "admin.task.reconcile.grades.desc":
+    "Relit les dernières exécutions terminées des dépôts de projet silencieux depuis 30 minutes, pour qu'un score que GitHub n'a pas annoncé soit tout de même saisi.",
+  "admin.task.reconcile.repos": "Dépôts des projets GitHub",
+  "admin.task.reconcile.repos.desc":
+    "Suit les dépôts de projet renommés ou supprimés, rafraîchit leur dernier commit et réinvite un étudiant toujours sans accès, au plus une fois par jour.",
   "admin.task.llm.review": "Revue LLM des questions",
   "admin.task.llm.review.desc": "Entre 1 h et 6 h, relit la dernière version des questions des pools qui l'ont demandé, dans la limite d'un quart du plafond d'IA du jour.",
   "admin.kiosk": "Postes kiosque",
