@@ -25,7 +25,7 @@ import { Z } from "./ui";
  * menu has nowhere else to say so, because the menu closes as it is picked.
  * It is neutral on purpose — nothing has gone right or wrong yet.
  */
-type ToastTone = "success" | "error" | "warning" | "progress";
+export type ToastTone = "success" | "error" | "warning" | "progress";
 
 const TONE_ICONS: Record<ToastTone, typeof CheckCircle2> = {
   success: CheckCircle2,

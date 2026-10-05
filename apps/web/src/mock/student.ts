@@ -627,6 +627,9 @@ const evaluationHome = (): EvaluationHome => {
 // card its repository, with the invitation pending, for the rest of the
 // page's life; Resend keeps the staff's minute. Hand-written, like the home:
 // the teacher's projects of `project.ts` are another persona's world.
+// `?notices=1` (M3-09c): the fake stream pushes to the open project's
+// repository a moment after the page's first read and hints `projects`, so
+// the page's notices can be seen (`arriveStudentProjectActivity`).
 export const STUDENT_PROJECT_OPEN = "77777777-7777-4777-8777-777777777701";
 export const STUDENT_PROJECT_SOON = "77777777-7777-4777-8777-777777777702";
 export const STUDENT_PROJECT_PAST = "77777777-7777-4777-8777-777777777703";
@@ -651,6 +654,13 @@ const studentRepoName = (title: string) =>
 const acceptedHere = new Set<string>();
 /** When each invitation was last resent here: the staff's minute (F-PROJ-07). */
 const resentAt = new Map<string, number>();
+/** The pushes to the open project's repository in this page's life (`?notices=1`): each one scores two points more. */
+let pushedHere = 0;
+
+/** `?notices=1` (F-PROJ-21, M3-09c): a push lands on the open project's repository, with its score; the stream then hints `projects`. */
+export function arriveStudentProjectActivity(): void {
+  pushedHere += 1;
+}
 
 const studentProjectCards = (): StudentProjectCard[] => {
   if (!flags.projects || flags.empty) return [];
@@ -690,7 +700,9 @@ const studentProjectView = (card: StudentProjectCard): StudentProject => {
   const { invitation, repoFullName, repoUrl, ...facts } = card;
   const sha = (seed: string) => seed.repeat(40).slice(0, 40);
   const released = card.status === "released";
-  const at = released ? iso(-7 * D - 3 * H) : iso(-2 * H);
+  // The open project's repository moves with each push of `?notices=1`: another commit, two points more.
+  const pushes = card.id === STUDENT_PROJECT_OPEN ? pushedHere : 0;
+  const at = released ? iso(-7 * D - 3 * H) : pushes > 0 ? new Date().toISOString() : iso(-2 * H);
   const deleted = card.id === STUDENT_PROJECT_DELETED;
   const url = repoUrl ?? `https://github.com/${studentRepoName(card.title)}`;
   const graded = invitation === "accepted" && !deleted;
@@ -703,16 +715,16 @@ const studentProjectView = (card: StudentProjectCard): StudentProject => {
           invitation: invitation ?? "accepted",
           deleted,
           locked: released,
-          lastCommit: graded || deleted ? { sha: sha(card.id.slice(-2)), at } : null,
+          lastCommit: graded || deleted ? { sha: sha(`${card.id.slice(-2)}${pushes}`), at } : null,
           ciStatus: graded ? "pass" : "none",
           run: graded
-            ? { sha: sha(card.id.slice(-2)), url: `${url}/actions/runs/${card.id.slice(-4)}`, conclusion: "success", completedAt: at }
+            ? { sha: sha(`${card.id.slice(-2)}${pushes}`), url: `${url}/actions/runs/${card.id.slice(-4)}`, conclusion: "success", completedAt: at }
             : null,
           score: !graded
             ? null
             : released
               ? { points: 18, max: 20, grade: { grade: 5.5, fellBack: false }, frozen: true }
-              : { points: 34, max: 40, grade: { grade: 5.3, fellBack: false }, frozen: false },
+              : { points: Math.min(40, 34 + 2 * pushes), max: 40, grade: { grade: 5.3, fellBack: false }, frozen: false },
         };
   return {
     ...facts,

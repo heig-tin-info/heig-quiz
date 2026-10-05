@@ -8,6 +8,7 @@ import { api, ApiError, refusedWith } from "../api";
 import { AppLink } from "../AppLink";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
+import { useNoticeToasts } from "../notifications/notices";
 import { useToast } from "../notify";
 import { activitiesKey, classroomGroupSetsKey, classroomKey, classroomProjectsKey, projectKey } from "../queryKeys";
 import type { Navigate } from "../router";
@@ -31,6 +32,7 @@ import { projectStateLabel, projectStateTone } from "./common";
 import { ProjectCheckpoints } from "./ProjectCheckpoints";
 import { FIELD_ID } from "./newProject";
 import { ProjectGroupSet } from "./ProjectGroupSet";
+import { projectNotices, projectNoticeToast } from "./projectNotices";
 import { ProjectRepos } from "./ProjectRepos";
 import { ProjectSettings } from "./ProjectSettings";
 import {
@@ -90,6 +92,8 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
     enabled: classroomId !== null,
     queryFn: () => api(`/app/api/classrooms/${classroomId}`),
   });
+  // F-PROJ-21 (M3-09c): what each re-read found changed, counted per kind.
+  useNoticeToasts(detail, (prev, next) => projectNotices(prev, next).map((n) => projectNoticeToast(n, t)));
 
   /** What a write changed besides the page: the classroom's lists and the Activities. */
   const refresh = async () => {

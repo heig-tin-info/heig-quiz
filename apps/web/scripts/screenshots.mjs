@@ -324,6 +324,9 @@ const scenes = [
       await p.getByText(/^(Scores released on|Scores publiés le)/).waitFor();
     },
   },
+  // F-PROJ-21 (M3-09c): the notices of a re-read — the fake stream moves the
+  // repositories 2.5 s in and hints `projects`; the toasts stand six seconds.
+  { name: "project-notices", role: "teacher", path: "/projects/pj-published?projects=1&notices=1", settle: 4500 },
   // ADR-070 (M3-16a): the classroom's Groups tab — empty, then three sets,
   // one named by a project —, a set's page in each state (some students in
   // no group and a group above its maximum, everyone placed, empty, an
@@ -639,6 +642,8 @@ const scenes = [
   { name: "student-project-released", role: "student", path: `/projects/${SPROJ.past}?projects=1` },
   { name: "student-project-provisioning", role: "student", path: `/projects/${SPROJ.accept}?projects=1&provisioning=1`, act: async (p) => { await p.getByRole("button", { name: /^(accept|accepter)$/i }).click(); await p.getByRole("button", { name: /up to a minute|jusqu'à une minute/i }).waitFor(); } },
   { name: "student-project-relink", role: "student", path: `/projects/${SPROJ.accept}?projects=1&stale=1`, fold: true, act: async (p) => { await p.getByRole("button", { name: /^(accept|accepter)$/i }).click(); await p.getByRole("link", { name: /relink github|relier github/i }).waitFor(); } },
+  // F-PROJ-21 (M3-09c): a push and its score noticed on the open project (`?notices=1`, the stream's `projects` hint 2.5 s in).
+  { name: "student-project-notices", role: "student", path: `/projects/${SPROJ.open}?projects=1&notices=1`, settle: 4500 },
   // F-ORG-14, F-RES-04: the student's Grades, by classroom — every status
   // once, PRG1-2024 archived; `?many=1` a term of weekly series.
   { name: "student-grades", role: "student", path: "/grades" },

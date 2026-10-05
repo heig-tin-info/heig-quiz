@@ -30,7 +30,10 @@
  *
  * The page's first read of a project says `liveStale: true` — the live
  * state of its repositories was not all read in time —, the next ones not:
- * the page's one early refetch is seen once per project.
+ * the page's one early refetch is seen once per project. `?notices=1`
+ * (M3-09c): the fake stream moves the published project's repositories a
+ * moment after the first read and hints `projects`, so the page's notices
+ * can be seen (`arriveProjectActivity`).
  */
 import {
   PROJECT_DEFAULTS,
@@ -174,6 +177,40 @@ function run(
   };
 }
 
+/** A repository's name on GitHub: `<slug>-<login>` in the classroom's organization (F-PROJ-05). */
+const repoName = (slug: string, student: RosterEntry) =>
+  `${ORG}/${slug}-${(student.githubLogin ?? `${student.prenom}-${student.nom}`).toLowerCase()}`;
+
+/** A repository of the mock from what names it, every other field at its quiet default: provisioned, accepted, open, nothing run. */
+function mockRepo(over: Pick<MockRepo, "id" | "enrollmentId" | "student" | "fullName" | "acceptedAt"> & Partial<MockRepo>): MockRepo {
+  return {
+    provisionStatus: "ok",
+    provisionError: null,
+    invitationStatus: "accepted",
+    lastCommit: null,
+    ciStatus: "none",
+    live: null,
+    deadlineAt: null,
+    deadlineAppliedAt: null,
+    frozenAt: null,
+    locked: false,
+    archived: false,
+    staffLock: null,
+    degraded: false,
+    teacher: null,
+    released: null,
+    protectionSuspended: false,
+    deleted: false,
+    runs: [],
+    currentRunId: null,
+    frozenRunId: null,
+    reviewRunId: null,
+    dispatch: null,
+    resentAt: null,
+    ...over,
+  };
+}
+
 /**
  * The repositories of a seeded project: one per claimed student but every
  * tenth (not accepted), each variant decided by the student's rank so the
@@ -188,39 +225,22 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
   claimed.forEach((student, i) => {
     if (i % 10 === 0) return;
     const id = repoId(seed, i + 1);
-    const name = `${ORG}/${project.slug}-${(student.githubLogin ?? `${student.prenom}-${student.nom}`).toLowerCase()}`;
     const variant = i % 12;
     const runs: GradeRunView[] = [];
-    const base: MockRepo = {
+    const base = mockRepo({
       id,
       enrollmentId: student.id,
       student,
-      fullName: name,
-      provisionStatus: "ok",
-      provisionError: null,
-      invitationStatus: "accepted",
+      fullName: repoName(project.slug, student),
       acceptedAt: iso(seed.start + i * H),
       lastCommit: { sha: sha(i * 7 + 1), at: iso(seed.start + (i + 1) * 6 * H) },
       ciStatus: "pass",
       live: { commitCount: 3 + i, checksPassed: 1, checksTotal: 1, stale: false },
-      deadlineAt: null,
       deadlineAppliedAt: locked ? project.deadlineAt : null,
       frozenAt: locked ? iso(seed.deadline + 30 * 60_000) : null,
       locked,
-      archived: false,
-      staffLock: null,
-      degraded: false,
-      teacher: null,
-      released: null,
-      protectionSuspended: false,
-      deleted: false,
       runs,
-      currentRunId: null,
-      frozenRunId: null,
-      reviewRunId: null,
-      dispatch: null,
-      resentAt: null,
-    };
+    });
     const scored = (n: number, at: number, over: Partial<GradeRunView> = {}) => {
       const r = run(id, n, at, over);
       runs.unshift(r);
@@ -313,36 +333,24 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
     githubLogin: "eleve-ancien",
   };
   const goneId = repoId(seed, 999);
-  repos.push({
-    id: goneId,
-    enrollmentId: null,
-    student: gone,
-    fullName: `${ORG}/${project.slug}-eleve-ancien`,
-    provisionStatus: "ok",
-    provisionError: null,
-    invitationStatus: "accepted",
-    acceptedAt: iso(seed.start + 2 * H),
-    lastCommit: { sha: sha(99), at: iso(seed.start + 3 * D) },
-    ciStatus: "pass",
-    live: null,
-    deadlineAt: null,
-    deadlineAppliedAt: locked ? project.deadlineAt : null,
-    frozenAt: locked ? iso(seed.deadline + 30 * 60_000) : null,
-    locked,
-    archived: false,
-    staffLock: null,
-    degraded: false,
-    teacher: null,
-    released: null,
-    protectionSuspended: false,
-    deleted: false,
-    runs: [run(goneId, 1, seed.start + 3 * D, { points: 5, testsPassed: 5 })],
-    currentRunId: `${goneId}-run-1`,
-    frozenRunId: locked ? `${goneId}-run-1` : null,
-    reviewRunId: null,
-    dispatch: locked ? { sha: sha(99), dispatchedAt: iso(seed.deadline + 31 * 60_000) } : null,
-    resentAt: null,
-  });
+  repos.push(
+    mockRepo({
+      id: goneId,
+      enrollmentId: null,
+      student: gone,
+      fullName: repoName(project.slug, gone),
+      acceptedAt: iso(seed.start + 2 * H),
+      lastCommit: { sha: sha(99), at: iso(seed.start + 3 * D) },
+      ciStatus: "pass",
+      deadlineAppliedAt: locked ? project.deadlineAt : null,
+      frozenAt: locked ? iso(seed.deadline + 30 * 60_000) : null,
+      locked,
+      runs: [run(goneId, 1, seed.start + 3 * D, { points: 5, testsPassed: 5 })],
+      currentRunId: `${goneId}-run-1`,
+      frozenRunId: locked ? `${goneId}-run-1` : null,
+      dispatch: locked ? { sha: sha(99), dispatchedAt: iso(seed.deadline + 31 * 60_000) } : null,
+    }),
+  );
   return repos;
 }
 
@@ -468,6 +476,46 @@ export function addMockProject(summary: ProjectSummary, classroom: MockProject["
   const project: MockProject = { summary, classroom, releasedAt: null, repos: [], checkpoints: [], read: false };
   CREATED.push(project);
   PROJECTS.set(summary.id, project);
+}
+
+/**
+ * `?notices=1` (F-PROJ-21, M3-09c): what the next re-read of "Labo 2 —
+ * pointeurs" finds changed — three pushes, two of them scored, one
+ * acceptance — so the page's notices can be seen. The fake stream calls
+ * it a moment after the page's first read, then hints `projects`; nothing
+ * without `?projects=1`, nor for the student persona.
+ */
+export function arriveProjectActivity(): void {
+  seeded();
+  const p = PROJECTS.get("pj-published");
+  if (!p) return;
+  const at = new Date().toISOString();
+  p.repos
+    .filter((r) => r.enrollmentId !== null && r.provisionStatus === "ok" && r.invitationStatus === "accepted" && !r.deleted && r.runs.length > 0)
+    .slice(0, 3)
+    .forEach((r, i) => {
+      r.lastCommit = { sha: sha(500 + i), at };
+      if (r.live) r.live = { ...r.live, commitCount: r.live.commitCount + 1 };
+      if (i < 2) {
+        const captured = run(r.id, 50 + i, 0, { points: 9, testsPassed: 9, headSha: r.lastCommit.sha });
+        r.runs.unshift(captured);
+        r.currentRunId = captured.id;
+      }
+    });
+  const taken = new Set(p.repos.map((r) => r.enrollmentId));
+  const student = classroomRoster(p.summary.classroomId).find((s) => s.status === "claimed" && !taken.has(s.id));
+  if (!student) return;
+  p.repos.push(
+    mockRepo({
+      id: repoId(SEEDS.find((s) => s.id === "pj-published")!, 900),
+      enrollmentId: student.id,
+      student,
+      fullName: repoName(p.summary.slug, student),
+      acceptedAt: at,
+      invitationStatus: "pending",
+      live: { commitCount: 1, checksPassed: null, checksTotal: null, stale: false },
+    }),
+  );
 }
 
 /** What a set is used by (ADR-070 §4): the projects naming it, archived or not, following or stopped. */

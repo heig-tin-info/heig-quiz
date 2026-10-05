@@ -1896,6 +1896,38 @@ former M3-09 card are kept below, under the task that inherits each.
   reminder itself is).
 - **Tests**: web, on the re-read payloads: each notice from its difference,
   nothing on an unchanged payload.
+- **Decisions** (spec challenge and product owner, 2026-10-05): the notices
+  are ephemeral toasts on TWO pages — the staff's project page and the
+  student's project — computed in the browser from the page's data before
+  and after each re-read (the 30 s refetch, the `projects` hint), worded
+  through `t()` en/fr, shown through the existing toast primitive. No
+  server work, no new field, no notification behind them, no per-kind
+  preference in v1 (heig-classroom's `notifyPrefs` is not ported). Staff:
+  **one notice per kind per re-read, with a count** ("3 pushes received"),
+  never one per repository. **Dropped**: "protected files restored" (no
+  datum on the page; the `protectionSuspended` flag and the bell cover the
+  cap) and "sync done" (M3-07 shows its last-sync line and counts itself).
+  No deadline notice for the staff and no release notice for the students:
+  `project_deadline_applied` and `project_grade_final` already toast
+  through the notification kinds (`notifications/toasts.ts`), never
+  doubled. Nothing on the first read (the `ToastGate` rule), nothing on an
+  unchanged read. F-PROJ-21 amended.
+- **As delivered** (branch `merge/M3-09c-project-notices`): one hook,
+  `useNoticeToasts(query, notices)` (`Q:apps/web/src/notifications/notices.ts`),
+  generic over a page's data: the first read after mount is the baseline
+  (cached data is not a read, nor is a failed refetch), a new key a new
+  baseline, the existing toast primitive keyed per kind. Two pure
+  functions it is given: `project/projectNotices.ts` (the four staff kinds,
+  counted per kind) and `student/studentProjectNotices.ts` (the four student
+  kinds over `StudentProject` alone; a push and a score only while the
+  project is open on the payload's `serverNow`). Keys `project.notice.*`
+  (`.one` for a single one) and `sproj.notice.*`; `?notices=1` mock scene.
+  Decisions taken alone: an acceptance is a repository that appeared
+  (heig-classroom's `assignment_accepted`), not an invitation accepted on
+  GitHub; the student's "acceptance" is their invitation accepted only; the
+  lock is the one `warning`-toned notice; the read after a staff write of
+  the page echoes nothing, because no compared field is one such a write
+  changes (said and tested in `projectNotices.ts`).
 
 ### M3-10 — Web: projects in Activities, "New ▾"
 - **Depends on**: M3-01 contracts, M1-05. ‖ M3-11.
