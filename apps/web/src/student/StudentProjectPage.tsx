@@ -31,6 +31,7 @@ import type { ProjectInvitationResent, StudentProject, StudentProjectRepo } from
 import { api, ApiError } from "../api";
 import { Grade } from "../Grade";
 import { useT } from "../i18n";
+import { useNoticeToasts } from "../notifications/notices";
 import { useToast } from "../notify";
 import { CiBadge } from "../project/parts";
 import { studentProjectKey, studentRootKey } from "../queryKeys";
@@ -62,6 +63,7 @@ import {
   studentRefusalCode,
   studentRefusalMessage,
 } from "./projectRow";
+import { studentProjectNotices, studentProjectNoticeToast } from "./studentProjectNotices";
 
 const isNotFound = (error: unknown) => error instanceof ApiError && error.status === 404;
 
@@ -72,6 +74,8 @@ export function StudentProjectPage({ id, navigate }: { id: string; navigate: Nav
     queryKey: studentProjectKey(id),
     queryFn: () => api(`/app/api/student/projects/${id}`),
   });
+  // F-PROJ-21 (M3-09c): what each re-read of their own repository found changed.
+  useNoticeToasts(project, (prev, next) => studentProjectNotices(prev, next).map((k) => studentProjectNoticeToast(k, t)));
 
   // A project the caller holds no seat for, a draft, an archived one: all
   // read as a project that does not exist (invariant 6).

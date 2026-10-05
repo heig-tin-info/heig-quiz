@@ -2469,6 +2469,11 @@ export const en = {
   "sproj.invitation.pending": "Invitation pending on GitHub",
   "sproj.invitation.accepted": "Invitation accepted",
   "sproj.locked": "Read-only since the deadline",
+  // F-PROJ-21 (M3-09c): the page's notices, from the re-read of the student's own repository.
+  "sproj.notice.accepted": "Invitation accepted: the repository is yours.",
+  "sproj.notice.locked": "The deadline has been applied: your repository is now read-only.",
+  "sproj.notice.pushed": "Your push has been received.",
+  "sproj.notice.scored": "A new indicative score is in.",
   "sproj.refusal.notStarted": "This project has not started yet.",
   "sproj.refusal.deadlinePassed": "The deadline has passed: this project can no longer be accepted.",
   "sproj.refusal.noGroup": "You are in no group of this project. Ask your teacher.",
@@ -4457,6 +4462,15 @@ export const en = {
   "project.release.again.confirm.body":
     "The release's snapshot is rewritten with today's final scores: the “modified after publication” marks go, and the students' grades and the gradebook follow. The students are not notified again.",
   "project.released": "Scores released: {scored} of {repos} repositories have one",
+  // F-PROJ-21 (M3-09c): the page's notices, counted per kind on each re-read.
+  "project.notice.accepted.one": "1 acceptance: a new repository",
+  "project.notice.accepted": "{n} acceptances: new repositories",
+  "project.notice.pushed.one": "1 push received",
+  "project.notice.pushed": "{n} pushes received",
+  "project.notice.scored.one": "1 score captured",
+  "project.notice.scored": "{n} scores captured",
+  "project.notice.reviewAsked.one": "1 final review dispatched",
+  "project.notice.reviewAsked": "{n} final reviews dispatched",
   "project.release.refused": "The scores were not released",
   "project.release.refusal.notFrozen": "Not yet: {frozen} of {live} live repositories are frozen for good.",
   "project.release.refusal.toVerify": "The score of {names} rests on a run to verify. Set it by hand first.",
