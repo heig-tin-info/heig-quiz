@@ -1264,6 +1264,66 @@ under the half that serves them.
     commit; a student committing with an unlinked e-mail is left to the
     push webhook, whose sender names them. A staff unlock after the
     freeze (no reopen) does not widen the 24-hour window.
+- **M3-06b — As delivered** (branch `merge/M3-06b-restored-heads`; the
+  three restored-heads edges of M3-04, settled 2026-10-05 by the spec
+  challenge and the product owner, ADR-062 addendum 6):
+  - **The window's upper bound** (`restoredHeads`, `Q:modules/project/grading.ts`)
+    is `GREATEST(reverts.created_at, receipt(covered_sha))`, a `LEFT JOIN`
+    on the covered head's receipt (`created_at` alone while it has none): a
+    head received between the restore's `now` and the covered head's
+    receipt no longer escapes. The stored `to_verify` may lag for a head
+    received late; `refreshScoreSelection` now makes the column follow the
+    set at every reselection (the restore's, each ingest's, and
+    `reconcile.grades` (15 min), whose `ingestRuns` step calls it per
+    candidate repository, DB-only: a lagging flag is caught up within the
+    period with no new run), and the score was never wrong:
+    `selectScoreRun` reads the set. `protection.ts` lost its own bulk
+    update for it.
+  - **The window's branch**: `reverts.branch text NULL` (migration
+    `0073_project_reverts_edges`, no backfill), written by `recordRestore`;
+    the join reads `between.branch = COALESCE(reverts.branch, tampering.branch)`,
+    so the rows written before keep their behaviour. Known limit: receipts
+    are one per sha, so a head first received on A then pushed on B escapes
+    B's window (per-branch receipts out of scope); a run belongs to a sha,
+    only the window is per branch.
+  - **A 422 on the move** (product owner): `reverts.revert_sha` nullable;
+    the 422 sets `revert_sha` null — `covered_sha` kept, the head the
+    attempt read — instead of deleting the row, reselects (the runs
+    flagged at once) and throws (the delivery is retried). The `answered`
+    check skips a null row; `recordRestore` fills it in through
+    `ON CONFLICT (repo_id, head_sha) DO UPDATE … WHERE revert_sha IS NULL`
+    (its restore, covered head, branch and `created_at` are the retry's)
+    and its cap count ignores null rows; a retry that finds nothing to
+    restore leaves the null row and still reselects (`pending`). A null
+    row's window: the heads from its receipt to `created_at` when
+    `covered_sha` is set (the fix pushed after the read is outside), its
+    head alone otherwise (a `CASE` upper bound in the window join).
+  - **Nothing to restore** (review round 1, a gap of M3-04): the adapter
+    answers `RevertOutcome {head, restored}` and exposes its one comparison
+    `alteredFiles(octokit, {…, sha, paths})` (commit, tree, the reference
+    blobs: the paths whose blob differs from the distribution's); a push
+    that touched a protected file whose head a clean head had overtaken
+    when its delivery was handled (`head !== push.after`) is read at
+    `push.after` (the hit files only, on that path only): altered ⇒ a null
+    row, head alone (`covered_sha` null, `files` the altered ones), its
+    runs `to_verify`; identical ⇒ a fix delivered late, no row. A push
+    whose own head is clean (`head === push.after`) writes no row; a
+    refused `beforeMove` (the cap) writes none either. Limit: never-
+    delivered tampered heads between S and the clean one count.
+  - Tests (`ingest.db.test.ts`, "protected files"): a head on `dev` inside
+    `main`'s window not flagged (S first received on `dev`); X received
+    between `created_at` and S2's receipt flagged, a push on the restore
+    not; a 422 then a retry finding the fix (null row with `covered_sha`
+    = S, S `to_verify` at once, the fix the score, five restores still pass
+    the cap, no restore audit); a 422 then a retry that restores (row
+    filled, `created_at` the retry's, a redelivery answered, S1 flagged);
+    S, S1, 422, the fix (S and S1 `to_verify`, the fix the score); S then
+    the fix before S's delivery (null row, S `to_verify`, the fix's own
+    delivery writes no row and counts, a redelivery answered); S, F1 (the
+    fix), F2, every delivery handled with head F2 (S's null row only, F1
+    and F2 count).
+    `failedDelivery(payload)` beside `handled`. The student leak test
+    (`studentView.db.test.ts`, `toVerify`/`to_verify`) stays green.
 
 ### M3-07 — Sync of the source repository
 - **Depends on**: M2-04, M3-02, D12. ‖ M3-05, M3-06.

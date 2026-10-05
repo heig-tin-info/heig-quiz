@@ -27,6 +27,12 @@ export interface RevertResult {
   covered: string;
 }
 
+/** What a restore attempt found: the branch head it read, and the restore commit, or null when every file was the distribution's already. */
+export interface RevertOutcome {
+  head: string;
+  restored: RevertResult | null;
+}
+
 /** The distribution's blob of `path` at `ref`, with its content; null when there is no such file. */
 async function referenceBlob(
   octokit: Octokit,
@@ -51,6 +57,41 @@ async function referenceBlob(
   }
 }
 
+/**
+ * THE comparison of a commit's protected files with the distribution's
+ * (M3-06b): the `paths` whose blob at `sha` is not the distribution's at
+ * `branch`, with the distribution's content — what a restore of `sha` would
+ * put back. A path absent from the distribution has no reference and is
+ * never listed; a truncated tree listing knows nothing of the paths it left
+ * out, so they count as altered. `baseTree` is the commit's tree, for the
+ * restore built on it.
+ */
+export async function alteredFiles(
+  octokit: Octokit,
+  opts: { org: string; studentRepo: string; squashedRepo: string; branch: string; sha: string; paths: string[] },
+): Promise<{ baseTree: string; altered: { path: string; content: string }[] }> {
+  const { org, studentRepo, squashedRepo, branch, sha, paths } = opts;
+  const { data: commit } = await octokit.request("GET /repos/{owner}/{repo}/git/commits/{commit_sha}", {
+    owner: org,
+    repo: studentRepo,
+    commit_sha: sha,
+  });
+  const { data: tree } = await octokit.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", {
+    owner: org,
+    repo: studentRepo,
+    tree_sha: commit.tree.sha,
+    recursive: "true",
+  });
+  const at = new Map(tree.truncated ? [] : tree.tree.map((e) => [e.path, e.sha] as const));
+  const altered: { path: string; content: string }[] = [];
+  for (const path of paths) {
+    const reference = await referenceBlob(octokit, org, squashedRepo, path, branch);
+    if (!reference || at.get(path) === reference.sha) continue;
+    altered.push({ path, content: reference.content });
+  }
+  return { baseTree: commit.tree.sha, altered };
+}
+
 export async function revertProtectedFiles(opts: {
   octokit: Octokit;
   org: string;
@@ -65,9 +106,8 @@ export async function revertProtectedFiles(opts: {
    * refuses it: the branch is left where it is and nothing is restored.
    */
   beforeMove: (commit: RevertResult) => Promise<boolean>;
-}): Promise<RevertResult | null> {
+}): Promise<RevertOutcome> {
   const { octokit, org, studentRepo, squashedRepo, branch, paths } = opts;
-  if (paths.length === 0) return null;
 
   const { data: ref } = await octokit.request("GET /repos/{owner}/{repo}/git/ref/{ref}", {
     owner: org,
@@ -75,39 +115,23 @@ export async function revertProtectedFiles(opts: {
     ref: `heads/${branch}`,
   });
   const headSha = ref.object.sha;
-  const { data: headCommit } = await octokit.request("GET /repos/{owner}/{repo}/git/commits/{commit_sha}", {
-    owner: org,
-    repo: studentRepo,
-    commit_sha: headSha,
-  });
-  const { data: headTree } = await octokit.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", {
-    owner: org,
-    repo: studentRepo,
-    tree_sha: headCommit.tree.sha,
-    recursive: "true",
-  });
-  // A truncated listing knows nothing of the paths it left out: they are restored.
-  const atHead = new Map(headTree.truncated ? [] : headTree.tree.map((e) => [e.path, e.sha] as const));
+  const { baseTree, altered } = await alteredFiles(octokit, { org, studentRepo, squashedRepo, branch, sha: headSha, paths });
+  if (altered.length === 0) return { head: headSha, restored: null };
 
   const tree: { path: string; mode: "100644"; type: "blob"; sha: string }[] = [];
-  for (const path of paths) {
-    // Absent from the distribution: the protected file has no reference.
-    const reference = await referenceBlob(octokit, org, squashedRepo, path, branch);
-    if (!reference || atHead.get(path) === reference.sha) continue;
+  for (const { path, content } of altered) {
     const { data: blob } = await octokit.request("POST /repos/{owner}/{repo}/git/blobs", {
       owner: org,
       repo: studentRepo,
-      content: reference.content,
+      content,
       encoding: "base64",
     });
     tree.push({ path, mode: "100644", type: "blob", sha: blob.sha });
   }
-  if (tree.length === 0) return null;
-
   const { data: newTree } = await octokit.request("POST /repos/{owner}/{repo}/git/trees", {
     owner: org,
     repo: studentRepo,
-    base_tree: headCommit.tree.sha,
+    base_tree: baseTree,
     tree,
   });
   const files = tree.map((t) => t.path);
@@ -119,7 +143,7 @@ export async function revertProtectedFiles(opts: {
     parents: [headSha],
   });
   const result = { sha: commit.sha, files, covered: headSha };
-  if (!(await opts.beforeMove(result))) return null;
+  if (!(await opts.beforeMove(result))) return { head: headSha, restored: null };
   // Strict fast-forward: force=false; in case of a race, GitHub refuses.
   await octokit.request("PATCH /repos/{owner}/{repo}/git/refs/{ref}", {
     owner: org,
@@ -128,7 +152,7 @@ export async function revertProtectedFiles(opts: {
     sha: commit.sha,
     force: false,
   });
-  return result;
+  return { head: headSha, restored: result };
 }
 
 /** GitHub's compare lists at most this many files: past it, the list is not the whole change. */

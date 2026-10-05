@@ -14,6 +14,9 @@
  *   restores twice; past five restores in an hour, suspended, audited once,
  *   its runs `to_verify`; a run on a restored head never the score, in
  *   either order; the CI state of the student's commit after a restore;
+ *   the restored-heads window read on the restore's branch and bounded by
+ *   the covered head's receipt; a move GitHub refused (422) answered by a
+ *   row without a restore, filled in by a retry that restores (M3-06b);
  * - runs: counted only on a handed-out branch and a head that is no bot
  *   commit; once per (repository, run, attempt); GRADE parsed (`ok`,
  *   `multiple`, `malformed` with its reason, `no_annotation`); the current
@@ -132,6 +135,13 @@ const ciRoute: Route = (url, req) => {
 let refsRefused = false;
 const refsDown: Route = (url) =>
   refsRefused && /\/git\/ref\//.test(url.pathname) ? json({ message: "Unprocessable" }, 422) : undefined;
+/** While set, GitHub refuses the NEXT move of a branch (a student's push raced the restore): the 422 of a fast-forward refused. */
+let moveRefused = false;
+const moveDown: Route = (url, req) => {
+  if (!moveRefused || req.method !== "PATCH" || !/\/git\/refs\//.test(url.pathname)) return undefined;
+  moveRefused = false;
+  return json({ message: "Update is not a fast forward" }, 422);
+};
 
 /** Every hint published, as the bus carried it. */
 const hints: Extract<BusMessage, { kind: "hint" }>[] = [];
@@ -145,6 +155,16 @@ async function handled(event: string, payload: object, id = randomUUID()): Promi
     expect(row?.error ?? null).toBeNull();
     expect(row?.processedAt).not.toBeNull();
     // A restore is a few git processes: slower than waitFor's default second.
+  }, { timeout: 20_000 });
+  return id;
+}
+/** A push delivery whose handling fails (the error kept on its row, for a retry): its id. */
+async function failedDelivery(payload: object): Promise<string> {
+  const id = randomUUID();
+  expect((await deliver("push", payload, id)).statusCode).toBe(200);
+  await vi.waitFor(async () => {
+    const [row] = await server.app.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.deliveryId, id));
+    expect(row?.error).toBeTruthy();
   }, { timeout: 20_000 });
   return id;
 }
@@ -280,7 +300,7 @@ beforeAll(async () => {
   vi.stubGlobal("fetch", gh.fetch);
   setRemoteBaseForTests(`file://${world.dir}`);
   server = await testServer(ENV);
-  gh.routes = [orgsRoute(() => []), usersRoute, refsDown, ciRoute, world.route];
+  gh.routes = [orgsRoute(() => []), usersRoute, refsDown, moveDown, ciRoute, world.route];
   teacher = await server.signIn("teacher");
   unsubscribe = subscribe((m) => {
     if (m.kind === "hint") hints.push(m);
@@ -436,12 +456,7 @@ describe("protected files (F-PROJ-08)", () => {
     server.clock.advance(MINUTE);
     const base = head(f);
     const sha = world.commit(f.fullName, "main", { [GRADING]: "grade: always 6" });
-    const sId = randomUUID();
-    expect((await deliver("push", pushPayload(f, { branch: "main", before: base, after: sha, files: { [GRADING]: "x" } }), sId)).statusCode).toBe(200);
-    await vi.waitFor(async () => {
-      const [row] = await server.app.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.deliveryId, sId));
-      expect(row?.error).toBeTruthy();
-    }, { timeout: 20_000 });
+    const sId = await failedDelivery(pushPayload(f, { branch: "main", before: base, after: sha, files: { [GRADING]: "x" } }));
     refsRefused = false;
     const later: string[] = [];
     for (const content of ["more", "and more"]) {
@@ -566,6 +581,280 @@ describe("protected files (F-PROJ-08)", () => {
     }
     expect(await restores(f)).toHaveLength(MAX_RESTORES_PER_HOUR + 2);
     expect((await repoRow(f.projectId)).protectionSuspendedAt).toBeNull();
+  });
+
+  it("reads the window on the restore's branch, not on the branch the tampering sha was first received on (M3-06b)", async () => {
+    const f = await acceptedRepo({ branches: ["main", "dev"] });
+    // `dev` on main's head, so that one commit can be pushed on both branches.
+    const base = head(f);
+    world.git(f.fullName, "branch", "-f", "dev", base);
+    const s = world.commit(f.fullName, "dev", { [GRADING]: "grade: always 6" });
+    await handled("push", pushPayload(f, { branch: "dev", before: base, after: s, files: { [GRADING]: "x" } }));
+    expect(await restores(f)).toHaveLength(0); // the distribution's `dev` has no grading.yml: nothing to restore, no row
+
+    // An honest head on `dev`, received after S (the student moved `dev` back and pushed on).
+    world.git(f.fullName, "update-ref", "refs/heads/dev", base);
+    server.clock.advance(MINUTE);
+    const honest = await push(f, { "src/main.c": "honest on dev" }, { branch: "dev" });
+
+    // S pushed on `main`: its receipt stays `dev`'s (one per sha); the restore answers it on `main`.
+    server.clock.advance(MINUTE);
+    world.git(f.fullName, "update-ref", "refs/heads/main", s);
+    await handled("push", pushPayload(f, { branch: "main", before: base, after: s, files: { [GRADING]: "x" } }));
+    expect(await restores(f)).toEqual([expect.objectContaining({ headSha: s, coveredSha: s, branch: "main" })]);
+    expect(world.read(f.fullName, head(f), GRADING)).toBe("grade: v1");
+
+    // The honest head of `dev` is inside the window's times, on the other branch: it counts.
+    scored(honest.after, { title: "GRADE", message: "4/6" });
+    const run = runPayload(f, honest.after, { head_branch: "dev" });
+    await handled("workflow_run", run);
+    expect(await runOf(f, run.workflow_run.id)).toMatchObject({ points: 4, toVerify: false });
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBe((await runOf(f, run.workflow_run.id))!.id);
+  });
+
+  it("bounds the window by the covered head's receipt when it lands after the restore began (M3-06b)", async () => {
+    const f = await acceptedRepo();
+    const honest = await push(f, { "src/main.c": "honest" });
+    scored(honest.after, { title: "GRADE", message: "3/6" });
+    await handled("workflow_run", runPayload(f, honest.after));
+
+    // S's delivery fails at first; S1 is received; X and S2 are pushed but their deliveries lag.
+    refsRefused = true;
+    server.clock.advance(MINUTE);
+    const base = head(f);
+    const s = world.commit(f.fullName, "main", { [GRADING]: "grade: always 6" });
+    const sId = await failedDelivery(pushPayload(f, { branch: "main", before: base, after: s, files: { [GRADING]: "x" } }));
+    refsRefused = false;
+    server.clock.advance(MINUTE);
+    const s1 = (await push(f, { "src/main.c": "more" })).after;
+    const x = world.commit(f.fullName, "main", { "src/main.c": "and more" });
+    const s2 = world.commit(f.fullName, "main", { "src/main.c": "even more" });
+
+    // The retry restores on S2 (`covered`), at `created_at`...
+    server.clock.advance(MINUTE);
+    await processDelivery(server.app, loadConfig({ NODE_ENV: "test", ...ENV }), sId);
+    expect(await restores(f)).toEqual([expect.objectContaining({ headSha: s, coveredSha: s2 })]);
+    // ...and X's and S2's receipts land after it: X ran the altered files too.
+    for (const [before, after] of [[s1, x], [x, s2]] as const) {
+      server.clock.advance(MINUTE);
+      await handled("push", pushPayload(f, { branch: "main", before, after, files: { "src/main.c": "y" } }));
+    }
+    // A push on top of the restore, received after S2's receipt, counts again.
+    server.clock.advance(MINUTE);
+    const fresh = await push(f, { "src/main.c": "after the restore" });
+
+    const flagged = [s, s1, x, s2];
+    for (const h of [...flagged, fresh.after]) {
+      scored(h, { title: "GRADE", message: "6/6" });
+      server.clock.advance(MINUTE);
+      await handled("workflow_run", runPayload(f, h));
+    }
+    const all = await runs(f);
+    for (const h of flagged) expect(all.find((r) => r.headSha === h)).toMatchObject({ toVerify: true });
+    const freshRun = all.find((r) => r.headSha === fresh.after)!;
+    expect(freshRun).toMatchObject({ toVerify: false });
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBe(freshRun.id);
+  });
+
+  it("answers a push whose move GitHub refused and whose retry finds the files put back: a row without a restore, the head to verify, no restore counted (M3-06b)", async () => {
+    const f = await acceptedRepo();
+    const honest = await push(f, { "src/main.c": "honest" });
+    scored(honest.after, { title: "GRADE", message: "3/6" });
+    const honestRun = runPayload(f, honest.after);
+    await handled("workflow_run", honestRun);
+
+    // S's run is in before its push is handled: the current score, for now.
+    server.clock.advance(MINUTE);
+    const base = head(f);
+    const s = world.commit(f.fullName, "main", { [GRADING]: "grade: always 6" });
+    scored(s, { title: "GRADE", message: "6/6" });
+    const sRun = runPayload(f, s);
+    await handled("workflow_run", sRun);
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBe((await runOf(f, sRun.workflow_run.id))!.id);
+
+    // The restore's move is refused (a 422 race): the row stays, without its restore.
+    moveRefused = true;
+    const sId = await failedDelivery(pushPayload(f, { branch: "main", before: base, after: s, files: { [GRADING]: "x" } }));
+    expect(head(f)).toBe(s);
+    expect(await restores(f)).toEqual([expect.objectContaining({ headSha: s, revertSha: null, coveredSha: s, branch: "main" })]);
+    // S's run is flagged at once, not at the retry.
+    expect(await runOf(f, sRun.workflow_run.id)).toMatchObject({ toVerify: true });
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBe((await runOf(f, honestRun.workflow_run.id))!.id);
+
+    // The student puts the file back themselves: nothing to restore, and no row of its own.
+    server.clock.advance(MINUTE);
+    const fix = await push(f, { [GRADING]: "grade: v1" });
+    expect(head(f)).toBe(fix.after);
+    expect(await restores(f)).toHaveLength(1);
+
+    // S's delivery retried: the row stays without a restore; S's run to verify and out of the score.
+    server.clock.advance(MINUTE);
+    await processDelivery(server.app, loadConfig({ NODE_ENV: "test", ...ENV }), sId);
+    expect(head(f)).toBe(fix.after);
+    expect(await restores(f)).toEqual([expect.objectContaining({ headSha: s, revertSha: null })]);
+    expect(await auditOf(f.repo.id, "project_repo.restore")).toHaveLength(0);
+    expect(await runOf(f, sRun.workflow_run.id)).toMatchObject({ points: 6, toVerify: true });
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBe((await runOf(f, honestRun.workflow_run.id))!.id);
+
+    // The fix is the student's own: it counts.
+    scored(fix.after, { title: "GRADE", message: "5/6" });
+    server.clock.advance(MINUTE);
+    const fixRun = runPayload(f, fix.after);
+    await handled("workflow_run", fixRun);
+    expect(await runOf(f, fixRun.workflow_run.id)).toMatchObject({ toVerify: false });
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBe((await runOf(f, fixRun.workflow_run.id))!.id);
+
+    // The row never counted toward the cap: five restores still pass.
+    for (let i = 0; i < MAX_RESTORES_PER_HOUR; i++) {
+      server.clock.advance(MINUTE);
+      await push(f, { [GRADING]: `grade: attempt ${i}` });
+    }
+    expect((await restores(f)).filter((r) => r.revertSha !== null)).toHaveLength(MAX_RESTORES_PER_HOUR);
+    expect((await repoRow(f.projectId)).protectionSuspendedAt).toBeNull();
+  });
+
+  it("fills the row in when the retry of a refused move restores; a redelivery is then answered (M3-06b)", async () => {
+    const f = await acceptedRepo();
+    server.clock.advance(MINUTE);
+    const base = head(f);
+    const s = world.commit(f.fullName, "main", { [GRADING]: "grade: always 6" });
+    moveRefused = true;
+    const payload = pushPayload(f, { branch: "main", before: base, after: s, files: { [GRADING]: "x" } });
+    const sId = await failedDelivery(payload);
+    expect(await restores(f)).toEqual([expect.objectContaining({ headSha: s, coveredSha: s, revertSha: null })]);
+
+    // The student pushes on, the file still tampered; the retry restores on S1.
+    server.clock.advance(MINUTE);
+    const s1 = (await push(f, { "src/main.c": "more" })).after;
+    server.clock.advance(MINUTE);
+    await processDelivery(server.app, loadConfig({ NODE_ENV: "test", ...ENV }), sId);
+    const restored = head(f);
+    expect(world.git(f.fullName, "rev-parse", `${restored}^`).trim()).toBe(s1);
+    expect(world.read(f.fullName, restored, GRADING)).toBe("grade: v1");
+    const [row] = await restores(f);
+    expect(row).toMatchObject({ headSha: s, revertSha: restored, coveredSha: s1, branch: "main" });
+    expect(row!.createdAt.toISOString()).toBe(server.clock.now().toISOString());
+    expect(await auditOf(f.repo.id, "project_repo.restore")).toHaveLength(1);
+
+    // A redelivery of S: answered, nothing restored nor counted twice.
+    await handled("push", payload);
+    expect(head(f)).toBe(restored);
+    expect(await restores(f)).toHaveLength(1);
+
+    // S1, received inside the filled row's window, never counts.
+    scored(s1, { title: "GRADE", message: "6/6" });
+    server.clock.advance(MINUTE);
+    const run = runPayload(f, s1);
+    await handled("workflow_run", run);
+    expect(await runOf(f, run.workflow_run.id)).toMatchObject({ toVerify: true });
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBeNull();
+  });
+
+  it("keeps the heads a refused attempt read: S and S1 (still tampered) to verify after the 422, the fix pushed after counts (M3-06b)", async () => {
+    const f = await acceptedRepo();
+    server.clock.advance(MINUTE);
+    const base = head(f);
+    const s = world.commit(f.fullName, "main", { [GRADING]: "grade: always 6" });
+    server.clock.advance(MINUTE);
+    const s1 = (await push(f, { "src/main.c": "more work, grading.yml still tampered" })).after;
+    scored(s1, { title: "GRADE", message: "6/6" });
+    server.clock.advance(MINUTE);
+    const s1Run = runPayload(f, s1);
+    await handled("workflow_run", s1Run);
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBe((await runOf(f, s1Run.workflow_run.id))!.id);
+
+    // S's delivery: the restore built on S1 is refused (the fix landed meanwhile).
+    moveRefused = true;
+    server.clock.advance(MINUTE);
+    const sId = await failedDelivery(pushPayload(f, { branch: "main", before: base, after: s, files: { [GRADING]: "x" } }));
+    expect(await restores(f)).toEqual([expect.objectContaining({ headSha: s, coveredSha: s1, revertSha: null })]);
+    expect(await runOf(f, s1Run.workflow_run.id)).toMatchObject({ toVerify: true });
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBeNull();
+
+    // The fix, pushed after the attempt read the branch: outside the window.
+    server.clock.advance(MINUTE);
+    const fix = await push(f, { [GRADING]: "grade: v1" });
+    server.clock.advance(MINUTE);
+    await processDelivery(server.app, loadConfig({ NODE_ENV: "test", ...ENV }), sId);
+    expect(head(f)).toBe(fix.after);
+    expect(await restores(f)).toEqual([expect.objectContaining({ headSha: s, coveredSha: s1, revertSha: null })]);
+
+    scored(s, { title: "GRADE", message: "6/6" });
+    server.clock.advance(MINUTE);
+    const sRun = runPayload(f, s);
+    await handled("workflow_run", sRun);
+    expect(await runOf(f, sRun.workflow_run.id)).toMatchObject({ toVerify: true });
+    scored(fix.after, { title: "GRADE", message: "5/6" });
+    server.clock.advance(MINUTE);
+    const fixRun = runPayload(f, fix.after);
+    await handled("workflow_run", fixRun);
+    expect(await runOf(f, fixRun.workflow_run.id)).toMatchObject({ toVerify: false });
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBe((await runOf(f, fixRun.workflow_run.id))!.id);
+  });
+
+  it("answers a tampering push whose head a clean head had overtaken before its delivery: its head alone to verify, no restore (M3-06b)", async () => {
+    const f = await acceptedRepo();
+    server.clock.advance(MINUTE);
+    const base = head(f);
+    const s = world.commit(f.fullName, "main", { [GRADING]: "grade: always 6" });
+    const fix = world.commit(f.fullName, "main", { [GRADING]: "grade: v1" });
+    scored(s, { title: "GRADE", message: "6/6" });
+    const sRun = runPayload(f, s);
+    await handled("workflow_run", sRun);
+
+    // S's delivery, handled with the fix already on the branch: nothing to restore, the push answered all the same.
+    await handled("push", pushPayload(f, { branch: "main", before: base, after: s, files: { [GRADING]: "x" } }));
+    expect(head(f)).toBe(fix);
+    expect(await restores(f)).toEqual([
+      expect.objectContaining({ headSha: s, revertSha: null, coveredSha: null, branch: "main", files: [GRADING] }),
+    ]);
+    expect(await auditOf(f.repo.id, "project_repo.restore")).toHaveLength(0);
+    expect(await runOf(f, sRun.workflow_run.id)).toMatchObject({ toVerify: true });
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBeNull();
+
+    // The fix's own delivery: its head leaves the files the distribution's, no row; its run counts.
+    server.clock.advance(MINUTE);
+    await handled("push", pushPayload(f, { branch: "main", before: s, after: fix, files: { [GRADING]: "grade: v1" } }));
+    expect(await restores(f)).toHaveLength(1);
+    scored(fix, { title: "GRADE", message: "5/6" });
+    server.clock.advance(MINUTE);
+    const fixRun = runPayload(f, fix);
+    await handled("workflow_run", fixRun);
+    expect(await runOf(f, fixRun.workflow_run.id)).toMatchObject({ toVerify: false });
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBe((await runOf(f, fixRun.workflow_run.id))!.id);
+
+    // A redelivery of S: answered, nothing more.
+    await handled("push", pushPayload(f, { branch: "main", before: base, after: s, files: { [GRADING]: "x" } }));
+    expect(await restores(f)).toHaveLength(1);
+    expect(head(f)).toBe(fix);
+  });
+
+  it("never flags a clean fix delivered late: F1 restores grading.yml, F2 adds work, F1 handled with head F2 (M3-06b)", async () => {
+    const f = await acceptedRepo();
+    server.clock.advance(MINUTE);
+    const base = head(f);
+    const s = world.commit(f.fullName, "main", { [GRADING]: "grade: always 6" });
+    const f1 = world.commit(f.fullName, "main", { [GRADING]: "grade: v1" });
+    const f2 = world.commit(f.fullName, "main", { "src/main.c": "work on top of the fix" });
+    // Every delivery handled with F2 on the branch: S read at its head is altered, F1 is not.
+    await handled("push", pushPayload(f, { branch: "main", before: base, after: s, files: { [GRADING]: "x" } }));
+    server.clock.advance(MINUTE);
+    await handled("push", pushPayload(f, { branch: "main", before: s, after: f1, files: { [GRADING]: "grade: v1" } }));
+    server.clock.advance(MINUTE);
+    await handled("push", pushPayload(f, { branch: "main", before: f1, after: f2, files: { "src/main.c": "y" } }));
+    expect(head(f)).toBe(f2);
+    expect(await restores(f)).toEqual([expect.objectContaining({ headSha: s, revertSha: null, coveredSha: null })]);
+
+    for (const [sha, grade] of [[s, "6/6"], [f1, "4/6"], [f2, "5/6"]] as const) {
+      scored(sha, { title: "GRADE", message: grade });
+      server.clock.advance(MINUTE);
+      await handled("workflow_run", runPayload(f, sha));
+    }
+    const all = await runs(f);
+    expect(all.find((r) => r.headSha === s)).toMatchObject({ toVerify: true });
+    expect(all.find((r) => r.headSha === f1)).toMatchObject({ points: 4, toVerify: false });
+    expect(all.find((r) => r.headSha === f2)).toMatchObject({ points: 5, toVerify: false });
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBe(all.find((r) => r.headSha === f2)!.id);
   });
 });
 

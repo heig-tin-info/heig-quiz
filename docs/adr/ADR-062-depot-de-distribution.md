@@ -60,6 +60,57 @@ amended to match:
    counts again.
    Defence in depth: a head received as a bot's push (`push_receipts.is_bot`)
    never counts either, even with no `bot_commits` row.
+6. **The window's edges, and a move GitHub refused** (2026-10-05, the spec
+   challenge and the product owner; merge task M3-06b). (a) The window
+   closes at the later of the restore's `created_at` (taken before the
+   branch is read) and the receipt of `covered_sha`
+   (`GREATEST(reverts.created_at, receipt(covered_sha))`, `created_at` alone
+   while the covered head has no receipt — it may arrive later or never): a
+   head received between the two, already on the branch under the covered
+   head, ran the altered files too. Known limit, conservative: when the
+   covered head's receipt lands after the branch moved onto the restore, a
+   push on top of the restore received before that late receipt falls
+   inside the window and is `to_verify` — the staff verify it, the score
+   is never wrong. (b) The window is read on the restore's
+   branch (`reverts.branch`, migration `0073`; the receipt's branch on the
+   rows written before): a receipt is one per sha, so a sha first received
+   on another branch no longer drags the window onto it. Known limit, per
+   branch receipts being out of scope: a head first received on branch A,
+   then pushed on B inside B's window, escapes B's window; a run belongs to
+   a sha, not a branch, so only the window is per branch. (c) A 422 on the
+   move (a student's push raced the restore) no longer takes the `reverts`
+   row back: the row stays without its restore (`revert_sha` null) but
+   with the head the attempt read (`covered_sha`), and the delivery is
+   retried; a retry that restores fills the row in (its restore, its
+   covered head, its branch, its `created_at`); a retry that finds the
+   files put back by the student leaves the null row — the push is
+   answered: **the heads up to the refused attempt's covered head**,
+   bounded by its `created_at` (taken before the branch was read, so the
+   fix pushed after the read has a later receipt and is outside), have
+   their runs `to_verify`, never the score; the fix counts; no restore
+   commit, no count toward the cap (a move that did not happen is no
+   restore), no new audit action (the row is the record). The runs are
+   flagged and the score reselected on the 422 itself, not at the retry.
+   (d) A push that touched a protected file but whose head a clean head had
+   already overtaken when its delivery was handled (S then the fix, before
+   S's delivery) is read at its own head — the hit files, compared with the
+   distribution's exactly as the branch head is (`alteredFiles`, the one
+   comparison): altered, it gets the same row, its head alone
+   (`covered_sha` null, nothing restored), its runs ran its own copy; the
+   distribution's, it is a fix delivered late and writes no row — a false
+   `to_verify` is not free, the release refuses with `409 to_verify` until
+   the teacher settles it. Known limit: the tampered heads between S and
+   the clean one, never delivered as tampering themselves, count. A push
+   whose own head leaves the protected files the distribution's writes no
+   row: it is no tampering. The stored `to_verify`
+   of a run follows the set at every reselection (`refreshScoreSelection`):
+   a run ingested before a late receipt widened its window is flagged at
+   the repository's next reselection — a restore, a run ingested by the
+   webhook, or `reconcile.grades` (15 min), which reselects every quiet
+   repository in scope and so re-flags without a new run or a GitHub call —
+   and the score never waited for the flag, it reads the set
+   (`selectScoreRun`). The student never sees
+   `to_verify` (N-SEC-20).
 
 ## Context
 

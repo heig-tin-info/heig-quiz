@@ -512,6 +512,13 @@
       "when": 1791190635068,
       "tag": "0072_project_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1791191918579,
+      "tag": "0073_project_reverts_edges",
+      "breakpoints": true
     }
   ]
 }
