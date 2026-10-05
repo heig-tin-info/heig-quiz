@@ -12,9 +12,9 @@
  * never touched: a slug or a repository it holds that the import needs too
  * leaves the source row uncarried, which the parity report makes a red line.
  *
- * Not carried here, on purpose: group repositories and the groups
- * themselves (M8-01c: a group project is imported WITHOUT its group set, to
- * be filled by that step), organizations and links (D20, D22), the codespace
+ * Not carried here, on purpose: the groups themselves (`steps-groups.ts`,
+ * M8-01c: a group project is imported WITHOUT its group set, which that step
+ * fills in), organizations and links (D20, D22), the codespace
  * columns (refused by the pre-flight), `llm_dispatched_at` (it becomes the
  * ledger's synthetic row, `steps-repos.ts`).
  */
@@ -24,12 +24,10 @@ import { and, eq, getTableName, inArray, isNull } from "drizzle-orm";
 
 import { githubClassroomLinks, projectCheckpoints, projects } from "../../src/db/schema.js";
 import { nameOf, note, remember, syncOwned, tallyMapped, target, written, type Ctx, type OwnedRow } from "./ctx.js";
-import type { SourceAssignment, SourceStudentRepo } from "./source.js";
+import type { SourceAssignment, SourceGroup, SourceSnapshot, SourceStudentRepo } from "./source.js";
 
 /** The assignments of the mapped classrooms: what a source row is in scope for (parity). */
 export const assignmentsInScope = (ctx: Ctx): SourceAssignment[] => ctx.snapshot.assignments.filter((a) => ctx.mapped.has(a.classroomId));
-
-const GROUP_REPO_REASON = "group repository (M8-01c)";
 
 /** Every repository of the assignments in scope. */
 export function reposInScope(ctx: Ctx): SourceStudentRepo[] {
@@ -37,15 +35,63 @@ export function reposInScope(ctx: Ctx): SourceStudentRepo[] {
   return ctx.snapshot.studentRepos.filter((r) => ids.has(r.assignmentId));
 }
 
+/** The source groups of each assignment. */
+export function groupsOfProject(snapshot: SourceSnapshot): Map<string, SourceGroup[]> {
+  const byProject = new Map<string, SourceGroup[]>();
+  for (const g of snapshot.groups) byProject.set(g.assignmentId, [...(byProject.get(g.assignmentId) ?? []), g]);
+  return byProject;
+}
+
+/** The student members of each group (source user and roster line), in member order: a staff seat is never a member (ADR-070 §2). */
+export function groupUsersOf(snapshot: SourceSnapshot): Map<string, { userId: string; enrollmentId: string; memberId: string }[]> {
+  const lines = new Map(snapshot.enrollments.map((e) => [e.id, e]));
+  const byGroup = new Map<string, { userId: string; enrollmentId: string; memberId: string }[]>();
+  for (const m of snapshot.groupMembers) {
+    const line = lines.get(m.enrollmentId);
+    if (line?.userId && !line.staff) byGroup.set(m.groupId, [...(byGroup.get(m.groupId) ?? []), { userId: line.userId, enrollmentId: line.id, memberId: m.id }]);
+  }
+  return byGroup;
+}
+
 /**
- * Why the import leaves a repository out, or null when it carries it. M8-01c
- * lifts the first case: it is the ONE place that says "individual only".
+ * Who a repository is recorded under (`project_repos.user_id`, NOT NULL): its
+ * student's Quiz account; for a group's repository whose creator is not
+ * imported (a development account, a roster line gone), the first member
+ * who is, so the repository is not lost. `user_id` only records who
+ * accepted, a group repository is read through the copy's members
+ * (`repoMembers`).
+ */
+export function repoOwner(ctx: Ctx, r: SourceStudentRepo): string | undefined {
+  const own = target(ctx, r.userId);
+  if (own !== undefined || r.groupId === null) return own;
+  const placed = ctx.known.get("assignment_group_members");
+  for (const { userId, memberId } of ctx.groupUsers.get(r.groupId) ?? []) {
+    if (!placed?.has(memberId)) continue;
+    const found = target(ctx, userId);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+/** Why a repository whose copy group Quiz deleted is left out (a foreign key would refuse it). */
+export const GROUP_GONE = "its group was deleted in Quiz since the previous import";
+
+/**
+ * Why the import leaves a repository out, or null when it carries it. A
+ * group's repository is carried with its group (`steps-groups.ts`, M8-01c).
  */
 export function repoLeftOut(ctx: Ctx, r: SourceStudentRepo): string | null {
-  if (r.groupId !== null) return GROUP_REPO_REASON;
   if (!ctx.known.get("assignments")?.has(r.assignmentId)) return "its project was not carried";
-  if (target(ctx, r.userId) === undefined) return `its student is not imported (${nameOf(ctx.usersById.get(r.userId))})`;
+  if (r.groupId !== null && ctx.goneCopyGroups.has(r.groupId)) return GROUP_GONE;
+  if (r.groupId !== null && !ctx.known.get("assignment_groups")?.has(r.groupId)) return "its group was not carried";
+  if (repoOwner(ctx, r) === undefined) return `its student is not imported (${nameOf(ctx.usersById.get(r.userId))})`;
   return null;
+}
+
+/** The creator recorded for a project, or a group set: the classroom's owner, else the `--actor`. */
+export function creatorOf(ctx: Ctx, a: SourceAssignment): string | null {
+  const owner = ctx.snapshot.classrooms.find((c) => c.id === a.classroomId)?.teacherId ?? null;
+  return target(ctx, owner) ?? ctx.actorId;
 }
 
 /**
@@ -94,19 +140,19 @@ export async function importProjects(ctx: Ctx) {
         .where(inArray(githubClassroomLinks.classroomId, [...ctx.mapped.values()].map((d) => d.classroomId)))
     ).map((l) => [l.classroomId, l.orgId]),
   );
-  const owners = new Map(ctx.snapshot.classrooms.map((c) => [c.id, c.teacherId]));
   const leftOut = new Map<string, string>();
   const rows: OwnedRow[] = [];
   for (const a of assignmentsInScope(ctx)) {
     const dest = ctx.mapped.get(a.classroomId)!;
     const orgId = links.get(dest.classroomId);
-    const createdBy = target(ctx, owners.get(a.classroomId) ?? null) ?? ctx.actorId;
+    const createdBy = creatorOf(ctx, a);
     if (!orgId) {
       leftOut.set(a.id, "its Quiz classroom is not connected to GitHub");
       continue;
     }
     if (!createdBy) {
-      leftOut.set(a.id, "no creator to record (its classroom's owner is unresolved and there is no --actor)");
+      // A project an earlier run carried stays carried: nothing to write, nothing lost.
+      if (!ctx.known.get("assignments")?.has(a.id)) leftOut.set(a.id, "no creator to record (its classroom's owner is unresolved and there is no --actor)");
       continue;
     }
     rows.push({
@@ -147,9 +193,6 @@ export async function importProjects(ctx: Ctx) {
         createdAt: a.createdAt,
       },
     });
-    if (a.groupMode) {
-      note(ctx, "not carried", `project ${a.name}: a group project, imported without its group set (M8-01c)`);
-    }
     if (a.sourceAheadSha !== null) {
       note(ctx, "projects", `project ${a.name}: the source is ahead of the distribution repository (shown ahead with no number: Quiz has no record of the heads handed out)`);
     }

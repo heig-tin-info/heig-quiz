@@ -118,6 +118,8 @@ export interface SourceAssignment {
   /** `free`, or an online codespace mode, which Quiz does not carry (pre-flight `work-mode`). */
   workMode: string;
   groupMode: boolean;
+  /** The group assignment's advisory size (the set's `max_size`). */
+  groupMaxSize: number | null;
   branches: string[];
   protectedFiles: string[];
   sourceAheadSha: string | null;
@@ -230,9 +232,15 @@ export interface SourceRevert {
 export interface SourceGroup {
   id: string;
   assignmentId: string;
+  name: string;
+  slug: string;
+  position: number;
+  createdAt: Date;
 }
 
 export interface SourceGroupMember {
+  id: string;
+  addedAt: Date;
   groupId: string;
   assignmentId: string;
   enrollmentId: string;
@@ -352,7 +360,7 @@ const STATEMENTS: { [K in Exclude<keyof SourceSnapshot, "activity">]: string } =
       squashed_repo_id::double precision AS "squashedRepoId", squashed_full_name AS "squashedFullName",
       source_strategy AS "sourceStrategy", deadline_strategy AS "deadlineStrategy",
       grading_mode AS "gradingMode", publish_mode AS "publishMode", duration_minutes AS "durationMinutes",
-      work_mode AS "workMode", group_mode AS "groupMode", branches, protected_files AS "protectedFiles",
+      work_mode AS "workMode", group_mode AS "groupMode", group_max_size AS "groupMaxSize", branches, protected_files AS "protectedFiles",
       source_ahead_sha AS "sourceAheadSha", source_pushed_at AS "sourcePushedAt", synced_at AS "syncedAt",
       deadline_applied_at AS "deadlineAppliedAt", frozen_at AS "frozenAt",
       llm_dispatched_at AS "llmDispatchedAt", reminder_sent_at AS "reminderSentAt",
@@ -392,8 +400,10 @@ const STATEMENTS: { [K in Exclude<keyof SourceSnapshot, "activity">]: string } =
   reverts: `SELECT id, student_repo_id AS "studentRepoId", revert_sha::text AS "revertSha", files,
       created_at AS "createdAt"
     FROM reverts ORDER BY id`,
-  groups: `SELECT id, assignment_id AS "assignmentId" FROM assignment_groups ORDER BY id`,
-  groupMembers: `SELECT group_id AS "groupId", assignment_id AS "assignmentId", enrollment_id AS "enrollmentId"
+  groups: `SELECT id, assignment_id AS "assignmentId", name, slug, position, created_at AS "createdAt"
+    FROM assignment_groups ORDER BY id`,
+  groupMembers: `SELECT id, added_at AS "addedAt", group_id AS "groupId", assignment_id AS "assignmentId",
+      enrollment_id AS "enrollmentId"
     FROM assignment_group_members ORDER BY id`,
   // `id` is a bigserial: read as double precision, exact far beyond any audit log.
   auditLog: `SELECT id::double precision AS id, actor_user_id AS "actorUserId", actor_type AS "actorType",

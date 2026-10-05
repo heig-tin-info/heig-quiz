@@ -29,7 +29,7 @@ import type { Identity } from "./identity.js";
 import { targetOf } from "./identity.js";
 import type { Destination } from "./mapping.js";
 import type { ImportReport, OpenDecisions } from "./report.js";
-import type { SourceSnapshot, SourceUser } from "./source.js";
+import type { SourceEnrollment, SourceGroup, SourceSnapshot, SourceUser } from "./source.js";
 
 export type Mapped = Extract<Destination, { kind: "mapped" }>;
 export type Finding = keyof ImportReport["findings"] & string;
@@ -56,6 +56,16 @@ export interface Ctx {
   actorId: string | null;
   /** `import_classroom.id_map`, loaded once and kept current by `remember`: source table → source id → target id. */
   known: Map<string, Map<string, string>>;
+  /** The source user ids of the roster lines of each group, in member order (`repoOwner`). */
+  groupUsers: Map<string, { userId: string; enrollmentId: string; memberId: string }[]>;
+  /** The source's groups and roster lines by id. */
+  groupsById: Map<string, SourceGroup>;
+  groupsOfProject: Map<string, SourceGroup[]>;
+  linesById: Map<string, SourceEnrollment>;
+  /** Group and member source ids an earlier run had carried before this one wrote (the group checks leave them alone: Quiz's staff may have edited them since). */
+  carriedBefore: { groups: Set<string>; members: Set<string> };
+  /** Source ids of the copy groups an earlier run carried and Quiz deleted since (`importGroups`): nothing is carried under them. */
+  goneCopyGroups: Set<string>;
   /** Source rows each table meant to carry, filled by the steps (`tally`), read by the parity report. */
   parity: Map<string, ParityEntry>;
   report: ImportReport;

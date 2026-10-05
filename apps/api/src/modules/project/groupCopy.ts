@@ -432,14 +432,14 @@ export async function replaceGroupCopy(tx: Tx, projectId: string, setId: string 
  * completes (`completeDeparture`), or a confirmed resync owes it
  * ({@link RESYNC_DEPARTURE}): a resync lifts the stops.
  */
-export async function stopGroups(tx: Tx, which: { projectIds: readonly string[] } | { groupIds: readonly string[] }, now: Date): Promise<void> {
+export async function stopGroups(tx: Tx, which: { projectIds: readonly string[] } | { groupIds: readonly string[] }, now: Date): Promise<string[]> {
   const where = "projectIds" in which ? inArray(projectGroups.projectId, [...which.projectIds]) : inArray(projectGroups.id, [...which.groupIds]);
   const stopped = await tx
     .update(projectGroups)
     .set({ stoppedAt: now })
     .where(and(where, isNull(projectGroups.stoppedAt)))
     .returning({ id: projectGroups.id });
-  if (stopped.length === 0) return;
+  if (stopped.length === 0) return [];
   await tx
     .update(projectGroupMembers)
     .set(CLEARED)
@@ -453,6 +453,7 @@ export async function stopGroups(tx: Tx, which: { projectIds: readonly string[] 
         sql`NOT ${RESYNC_DEPARTURE}`,
       ),
     );
+  return stopped.map((g) => g.id);
 }
 
 /**
@@ -461,13 +462,13 @@ export async function stopGroups(tx: Tx, which: { projectIds: readonly string[] 
  * first writing (a reopen or an unarchive never clears it), every group of
  * their copies stopped with them.
  */
-export async function stopProjects(tx: Tx, ids: readonly string[], now: Date): Promise<void> {
-  if (ids.length === 0) return;
+export async function stopProjects(tx: Tx, ids: readonly string[], now: Date): Promise<string[]> {
+  if (ids.length === 0) return [];
   await tx
     .update(projects)
     .set({ groupsStoppedAt: sql`coalesce(${projects.groupsStoppedAt}, ${now.toISOString()}::timestamptz)` })
     .where(inArray(projects.id, [...ids]));
-  await stopGroups(tx, { projectIds: ids }, now);
+  return stopGroups(tx, { projectIds: ids }, now);
 }
 
 // ---------------------------------------------------------------- stray grants

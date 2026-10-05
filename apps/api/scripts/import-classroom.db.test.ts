@@ -427,7 +427,7 @@ describe("import-classroom frame (M8-01a)", () => {
       unprocessedWebhooks: 0,
       queue: { readable: true, pending: [] },
     });
-    expect(snapshot.assignments).toHaveLength(4);
+    expect(snapshot.assignments).toHaveLength(5);
     expect(snapshot.auditLog).toHaveLength(4);
   });
 

@@ -4213,8 +4213,8 @@ serves now (16a), and what waits for the group repositories (16b).
     the column is outside the re-import hash. A repository's own marker is
     for an own deadline, which classroom has none.
   - **Left out on purpose, listed in the parity report**: group
-    repositories and every row under them (one place, `repoLeftOut`, M8-01c
-    lifts it), a repository whose student is not imported (a development
+    repositories and every row under them (one place, `repoLeftOut`; M8-01c
+    lifted it, see "As delivered (c)"), a repository whose student is not imported (a development
     account), receipts of a repository without a GitHub id. Individual
     repositories inside a group project are carried and listed, live or not
     (`isLiveIndividualRepo`, the M3-08 note): a live one holds its student out
@@ -4231,6 +4231,39 @@ serves now (16a), and what waits for the group repositories (16b).
     `grade_runs` / `bot_commits` / `grade_dispatches` / `reverts` /
     `push_receipts` to widen for group repositories; the `project_groups`
     copy, `groups_stopped_at` and `group_set_id` are c's.
+- **As delivered (c)** (branch `merge/M8-01c-import-groups`; no migration):
+  - **Where**: `Q:apps/api/scripts/import-classroom/steps-groups.ts` (sets,
+    copies, members, stops, invited accounts) and `checks-groups.ts`,
+    registered BEFORE "project repositories" (a repository's `group_id` names
+    a copy group); the group repositories and their children go through
+    `steps-repos.ts` (`repoLeftOut` lifted, tally `group repositories`, the
+    `repositories per project` check also compares `group_id`). Fixture part 4
+    (Pair Gamma); tests in `scripts/import-classroom-projects.db.test.ts`.
+  - **Decisions**: one `group_sets` row per group project, named after it
+    (ADR-070 §10), so a classroom that reused its groups gets one set per
+    assignment; ids kept in every table, the id map's `assignment_groups` /
+    `assignment_group_members` being the COPY's (the set's are `… (set)`);
+    `projects.group_set_id` set only for a set this run created, never moved;
+    a copy this run creates is stopped through `stopProjects` at the run's
+    clock (the source has no such instant) when QUIZ's project is past its
+    deadline, applied or archived; never on a later run (Quiz's ticker owns the
+    stops, a staff resync lifts them), and `stopped_at` / `departing_at` are
+    not owned columns.
+    A set, group or roster line Quiz deleted since an earlier run is not
+    recreated and nothing is placed under it (listed). Members missing from
+    the Quiz roster are reported, never placed (`--missing-students report`);
+    staff seats never. A group repository whose creator is not imported is
+    recorded under the first member who is, else it is a red line.
+  - **Access**: `project_repo_access` is filled from Quiz's own `repoMembers`
+    for each live carried group repository (`invited_at` the later of the
+    repository's `accepted_at` and the member's `added_at`), insert-only,
+    never a revocation, never a call to GitHub.
+  - **Parity**: tallies `assignment_groups`, `assignment_group_members`,
+    `assignments (group set)`, `group repositories`, `group repository
+    access`; checks `groups per project`, `members per group` (the group repositories join `repositories per project`; a row an
+    earlier run carried is exempt: a set is live in Quiz). None is
+    `githubBound`. With a, b, c and d delivered, the M8-01 acceptance is the
+    dry-run on the fixture (clean) and on a staging copy of a dump.
 - **Depends on**: every schema task (M2-01, M3-01, M4-01, M5-03, M6-06 if
   in scope), D11.
 - **Goal**: the whole order of §2.5, the verification report, the legacy

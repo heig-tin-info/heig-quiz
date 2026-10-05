@@ -1,6 +1,6 @@
 /**
  * The ONE place that orders the import: every writing step, every check. A
- * later part of M8-01 (b projects, c groups, d journals and webhooks) adds a
+ * part of M8-01 (b projects, c groups, d journals and webhooks) added a
  * `steps-<entity>.ts` and one line here, in foreign-key order, and touches no
  * other shared file. The order is that of docs/merge/02 §2.5: identity and
  * rosters, then what hangs on them, the legacy audit, and the role recompute
@@ -13,8 +13,10 @@
  */
 import type { CheckFinding } from "./report.js";
 import type { Ctx } from "./ctx.js";
+import { groupChecks } from "./checks-groups.js";
 import { projectChecks } from "./checks-projects.js";
 import { importLegacyAudit } from "./steps-audit.js";
+import { importGroupRepoAccess, importGroups } from "./steps-groups.js";
 import { importCheckpoints, importProjects, importReminders } from "./steps-projects.js";
 import { importBotCommits, importDispatches, importGradeRuns, importPushReceipts, importRepos, importReverts } from "./steps-repos.js";
 import { importJournals, ingestImportedJournals, journalsReingested } from "./steps-journals.js";
@@ -72,19 +74,21 @@ export const REGISTRY: Registry = {
     // M8-01b: projects and what hangs on them, in foreign-key order.
     { name: "projects", run: importProjects },
     { name: "checkpoints", run: importCheckpoints },
+    // M8-01c: the group sets and the projects' copies, before the repositories that name a copy group.
+    { name: "group sets and groups", run: importGroups },
     { name: "project repositories", run: importRepos },
+    { name: "group repository access", run: importGroupRepoAccess },
     { name: "grade runs", run: importGradeRuns },
     { name: "bot commits", run: importBotCommits },
     { name: "review ledger", run: importDispatches },
     { name: "reverts", run: importReverts },
     { name: "push receipts", run: importPushReceipts },
     { name: "project reminders", run: importReminders },
-    // M8-01c (groups) inserts here, before the journals.
     { name: "classroom journals", run: importJournals },
     { name: "webhook deliveries", run: importWebhookDeliveries },
     { name: "legacy audit", run: importLegacyAudit },
     { name: "roles", run: recomputeRoles },
   ],
   afterCommit: [{ name: "journal ingestion", run: ingestImportedJournals }],
-  checks: [...projectChecks, journalsReingested],
+  checks: [...projectChecks, ...groupChecks, journalsReingested],
 };
