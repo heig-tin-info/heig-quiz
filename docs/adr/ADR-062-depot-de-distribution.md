@@ -79,16 +79,25 @@ amended to match:
    then pushed on B inside B's window, escapes B's window; a run belongs to
    a sha, not a branch, so only the window is per branch. (c) A 422 on the
    move (a student's push raced the restore) no longer takes the `reverts`
-   row back: the row stays without its restore (`revert_sha` null,
-   `covered_sha` null) and the delivery is retried; a retry that restores
-   fills the row in (its restore, its covered head, its branch, its
-   `created_at`); a retry that finds the files put back by the student
-   leaves the null row — the push is answered, **the tampered head alone**
-   is restored (its runs `to_verify`, never the score; the later heads are
-   the student's own fix and count), no restore commit, no count toward the
-   cap (a move that did not happen is no restore), no new audit action (the
-   row is the record). An ordinary push leaving the protected files the
-   distribution's writes no row: it is no tampering. The stored `to_verify`
+   row back: the row stays without its restore (`revert_sha` null) but
+   with the head the attempt read (`covered_sha`), and the delivery is
+   retried; a retry that restores fills the row in (its restore, its
+   covered head, its branch, its `created_at`); a retry that finds the
+   files put back by the student leaves the null row — the push is
+   answered: **the heads up to the refused attempt's covered head**,
+   bounded by its `created_at` (taken before the branch was read, so the
+   fix pushed after the read has a later receipt and is outside), have
+   their runs `to_verify`, never the score; the fix counts; no restore
+   commit, no count toward the cap (a move that did not happen is no
+   restore), no new audit action (the row is the record). The runs are
+   flagged and the score reselected on the 422 itself, not at the retry.
+   (d) A push that touched a protected file but whose head a clean head had
+   already overtaken when its delivery was handled (S then the fix, before
+   S's delivery) gets the same row, its head alone (`covered_sha` null,
+   nothing restored): its runs ran its own copy. Conservative limit: the
+   tampered heads between it and the clean one, never delivered as
+   tampering themselves, count. A push whose own head leaves the protected
+   files the distribution's writes no row: it is no tampering. The stored `to_verify`
    of a run follows the set at every reselection (`refreshScoreSelection`):
    a run ingested before a late receipt widened its window is flagged at
    the repository's next reselection — a restore, or a run ingested by the
