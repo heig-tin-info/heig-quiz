@@ -68,3 +68,15 @@ pnpm docs:screenshots -- --list
 A scene that needs an earlier phase than the instance is in (the lobby, for
 instance, once the exercise has started) needs a fresh seed: stop the
 instance, delete `apps/api/.data/pglite-docs`, seed and start again.
+
+## Mock captures (`mock-*`)
+
+The `mock-<scene>-light.png` / `-dark.png` files are **not** taken by
+`docs-screenshots.mjs` and are not in `manifest.json`. They are captures of
+the browser mock (`pnpm --filter @quiz/web dev:mock`, then
+`apps/web/scripts/screenshots.mjs --only=<scene>`, 1440 px wide, with and
+without `--dark`) for screens whose real-instance scenes do not exist yet:
+projects, group sets, the journal and the GitHub connection. The data is the
+mock's, in French. Orchestrator decision, 2026-10-05: mock captures are
+acceptable until the seeded scenes cover these screens; retake them there
+and drop the `mock-` prefix then.

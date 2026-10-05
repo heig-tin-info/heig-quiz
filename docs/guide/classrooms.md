@@ -103,7 +103,8 @@ The period is changed where it is written: click it beside the name, or **Set pe
 
 - **Name**: **Rename** opens a dialog with the name; **Save** changes it everywhere it is shown.
 - **Drill**: the switch that turns the classroom's spaced practice on or off (see the **Drill** tab above).
-- **GitHub**: see [Connecting a classroom to GitHub](#connecting-a-classroom-to-github) below.
+- **GitHub**: see [Connecting a classroom to GitHub](#connecting-a-classroom-to-github) below, and [Connecting GitHub](github.md) for the whole setup.
+- **Journal**: the course documentation, in Quiz or in a repository (see [The journal](journal.md)).
 - **Archive** puts a finished classroom aside without deleting anything: it leaves the sidebar and the course card, and its roster, evaluations and results stay readable on its own page, marked *archived*. **Restore**, in the same row, brings it back. Today no list shows the archived classrooms, so keep the page's address (or a bookmark) if you expect to come back to one.
 - **Delete classroom** is the other thing entirely. The roster, the evaluations, the attempts, the answers and their gradings go, after a confirmation that names the classroom. The questions of the pools are never touched.
 
@@ -119,8 +120,7 @@ GitHub is optional: a classroom that is never connected is a plain Quiz classroo
 - Once connected, the section shows the organization and three checks: the App installed with access to every repository (the only one that blocks), the organization's plan (on the free plan, no rulesets and no organization secrets for private repositories), and the `ANTHROPIC_API_KEY` secret the LLM review of projects needs (present, missing, or unknown when the App cannot read secrets).
 - **Disconnect** deletes nothing on GitHub. It is refused while the classroom has a journal: remove the journal first.
 
-!!! note "Editing a journal page"
-    **Edit**, above a page of the **Journal** tab, opens it in the editor; **Save** commits it to the repository. A picture you drop or paste is committed into the repository at once, in an `images/` folder beside the page, before you save. If you then cancel, the page is unchanged but the picture stays in the repository: delete it there if you do not want it.
+Once connected, the classroom can hold [projects](projects.md) (**New**, then **Project**, on the Evaluations tab) and its **Groups** tab keeps the [group sets](groups.md) they follow. Installing the App, the checks and what students must do to link their account are in [Connecting GitHub](github.md).
 
 Your own GitHub account is linked from your **Settings** page, in its **GitHub** card, which shows once you are on the staff of a connected classroom. **Link GitHub** goes through GitHub's authorisation and comes back to the page you started from, with a message saying it is linked, already linked to another Quiz account, or failed. **Unlink** undoes it.
 
