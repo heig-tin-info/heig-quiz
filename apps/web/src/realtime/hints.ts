@@ -77,6 +77,10 @@ export const HINT_ROOTS: Record<HintKind, readonly string[] | "all"> = {
   // hinted `projects` besides. A student's: their Groups tab, the
   // Activities row and the tab's existence (`student`, M3-17).
   groups: ["group-sets", "student"],
+  // A classroom's gradebook changed (M5-03a): the staff's table under the
+  // classroom, the student's cells under `student`. M5-04 names its own
+  // roots when the Grades tabs land.
+  gradebook: ["classroom", "student"],
   mutation: "all",
 };
 

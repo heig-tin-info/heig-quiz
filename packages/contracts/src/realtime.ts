@@ -262,6 +262,11 @@ export const HintEvent = z.object({
       // classroom when the set reaches them (open, or named by a published
       // project; M3-17), NEVER on `classroom:<id>` (N-SEC-20). No data.
       "groups",
+      // A classroom's gradebook changed (M5-03a): a mark, a setting, the mean
+      // published. On `course:<id>` of its staff and, for what a student reads
+      // (a released cell, the published mean), `user:<id>` of the claimed
+      // students; NEVER `classroom:<id>`. No data.
+      "gradebook",
       "mutation",
     ]),
   ),
