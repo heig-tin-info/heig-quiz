@@ -65,13 +65,18 @@ describe("helpTopics", () => {
 
 /*
  * A topic belongs to a role's palette when that role can reach the `HelpIcon`
- * that opens it. Outside the teacher UI that is `student-home` (StudentHome);
+ * that opens it. Outside the teacher UI that is `student-home`, `student-project`
+ * (StudentProjectPage) and `student-groups` (StudentGroups);
  * every other source is hosted by a teacher screen, and a student offered
  * "Add students" is offered the documentation of a page they never see.
  */
 describe("helpTopics outside the teacher UI", () => {
   it("gives a student exactly the topics a student screen can open", () => {
-    expect(helpTopics("en", false).map((t) => t.topic).sort()).toEqual(["student-home"]);
+    expect(helpTopics("en", false).map((t) => t.topic).sort()).toEqual([
+      "student-groups",
+      "student-home",
+      "student-project",
+    ]);
   });
 
   it("keeps the teacher documentation out of it", () => {

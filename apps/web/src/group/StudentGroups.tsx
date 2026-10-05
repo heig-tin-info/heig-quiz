@@ -158,6 +158,7 @@ function SetSection({ classroomId, view, primary }: { classroomId: string; view:
     <section className="space-y-3" aria-label={set.name}>
       <SectionHeading
         title={set.name}
+        help="student-groups"
         description={line}
         actions={
           writable ? (

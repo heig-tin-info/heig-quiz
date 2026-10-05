@@ -151,7 +151,7 @@ function ProjectBody({ project, readOnly, navigate }: { project: StudentProject;
       />
 
       <section className="space-y-3">
-        <SectionHeading title={t("sproj.repo")} />
+        <SectionHeading title={t("sproj.repo")} help="student-project" />
         {project.repo && !project.repo.deleted ? (
           <RepoCard project={project} repo={project.repo} readOnly={readOnly} now={now} />
         ) : (

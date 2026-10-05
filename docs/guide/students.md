@@ -202,9 +202,21 @@ For a graded quiz, nothing shows until your teacher publishes the results: the p
 
 Once published, the page shows your **Grade** and your **Points**, then one card per question with your answer and its score. According to the feedback policy of the evaluation, a card may also show the expected answer, an **Explanation** written by the teacher, and **Your teacher's comment** on your answer. If your teacher adjusts a grading afterwards and publishes again, the page updates.
 
+## Projects
+
+A project is graded work in your own GitHub repository. It shows on your home and on your classroom's page like a quiz, and its one button follows where you are: **Link GitHub** (once), **Accept**, **Open the invitation**, then **Open repository**. The page of the project shows your repository, the indicative score while you work, and the final score and grade once your teacher releases them. The whole path, step by step, is in [Projects, groups and the journal](student-projects.md).
+
+## Groups
+
+For a group project your teacher may let the students form the groups. Your classroom page then has a **Groups** tab where you create, join, leave or rename a group until the date shown. See [Forming a group](student-projects.md#forming-a-group).
+
+## The journal
+
+If your teacher keeps a journal for the course, your classroom page has a **Journal** tab: the pages of the course to read, with a table of contents. See [The journal](student-projects.md#the-journal).
+
 ## Settings
 
-**Settings**, in the menu under your name, holds your profile as the platform knows it and your preferences: **Language** (English or French, saved on your account so it follows you across devices), **Appearance** (**Light**, **Dark** or **System**) and the date format.
+**Settings**, in the menu under your name, holds your profile as the platform knows it and your preferences: **Language** (English or French, saved on your account so it follows you across devices), **Appearance** (**Light**, **Dark** or **System**) and the date format. Your linked GitHub account, if any, and the channels of your notifications are there too.
 
 <figure markdown="span">
   ![The settings of a student: profile with name, e-mail and last sign-in, then Language, Appearance and Date format](../assets/screenshots/student-settings-light.png#only-light)

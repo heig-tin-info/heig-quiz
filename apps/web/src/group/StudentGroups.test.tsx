@@ -142,7 +142,7 @@ describe("what the reader may not change", () => {
     const region = await section();
     expect(within(region).getByText("Closed")).toBeInTheDocument();
     expect(within(region).getByRole("listitem", { name: "Les As" })).toBeInTheDocument();
-    expect(within(region).queryByRole("button")).toBeNull();
+    expect(within(region).queryAllByRole("button", { name: (n) => n !== "Help" })).toEqual([]);
     const other = screen.getByRole("region", { name: "Binômes" });
     expect(within(other).getByText("You are in no group of this set. Your teachers will place you.")).toBeInTheDocument();
   });
@@ -151,7 +151,7 @@ describe("what the reader may not change", () => {
     renderTab([makeView({ writable: false })]);
     const region = await section();
     expect(within(region).getByText("You can see these groups, not change them here.")).toBeInTheDocument();
-    expect(within(region).queryByRole("button")).toBeNull();
+    expect(within(region).queryAllByRole("button", { name: (n) => n !== "Help" })).toEqual([]);
   });
 
   it("says when there is nothing to form, and when the list failed", async () => {
