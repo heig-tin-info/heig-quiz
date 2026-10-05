@@ -446,3 +446,29 @@ describe("ClassroomView — the Journal tab", () => {
     await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r1" }, { replace: true }));
   });
 });
+
+describe("the Grades tab (F-GBOOK-01, F-GBOOK-04, M5-04)", () => {
+  const BOOK = `${ROOM}/gradebook`;
+  const table = { classroomId: "r1", archived: false, meanPublished: false, columns: [], rows: [] };
+
+  it("is a route of its own whose one primary is Export CSV, a plain download of the table", async () => {
+    mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()), [`GET ${BOOK}`]: ok(table) });
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} routeTab="grades" />);
+    expect(await screen.findByRole("tab", { name: /Grades/ })).toHaveAttribute("aria-selected", "true");
+    const exportLink = await screen.findByRole("link", { name: /Export CSV/ });
+    expect(exportLink).toHaveAttribute("href", `${BOOK}.csv`);
+    expect(exportLink).toHaveAttribute("download");
+    expect(exportLink.className).toContain("bg-accent");
+    // Neither of the other tabs' primaries.
+    expect(screen.queryByRole("button", { name: /Add students|New evaluation|New group set/ })).toBeNull();
+    expect(await screen.findByText("Nothing graded yet")).toBeVisible();
+  });
+
+  it("opens from the tabs on /classrooms/:id/grades", async () => {
+    mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()), [`GET ${EVALUATIONS}`]: ok([]) });
+    const navigate = vi.fn();
+    renderWithProviders(<ClassroomView id="r1" navigate={navigate} />);
+    await userEvent.click(await screen.findByRole("tab", { name: /Grades/ }));
+    expect(navigate).toHaveBeenCalledWith({ view: "classroomGrades", id: "r1" });
+  });
+});

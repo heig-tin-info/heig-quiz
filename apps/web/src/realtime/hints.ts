@@ -29,6 +29,8 @@ const EVALUATION_ROOTS = [
   "student",
   "poll",
   "classroom",
+  // A release or a regrade moves a cell of the classroom's gradebook (M5-04).
+  "gradebook",
   // Templates are evaluations filed under their course (ADR-031).
   "course",
 ] as const;
@@ -41,9 +43,11 @@ export const HINT_ROOTS: Record<HintKind, readonly string[] | "all"> = {
   // GitHub setup return (M2-02) raises it too: the organizations the connect
   // sheet offers, and the classroom's link (under `classroom`).
   // An archived classroom's sets turn read-only (`group-sets`, M3-16a).
-  classrooms: ["courses", "course", "classroom", "student", "activities", "github", "group-sets"],
+  // An archived classroom's gradebook turns read-only (`gradebook`, M5-04).
+  classrooms: ["courses", "course", "classroom", "student", "activities", "github", "group-sets", "gradebook"],
   // A roster line added or removed is a student of every group set (ADR-070 §2).
-  roster: ["courses", "course", "classroom", "evaluations", "evaluation", "dashboard", "student", "group-sets"],
+  // A roster line is a row of the gradebook.
+  roster: ["courses", "course", "classroom", "evaluations", "evaluation", "dashboard", "student", "group-sets", "gradebook"],
   pool: [
     "pools",
     "pool",
@@ -71,16 +75,16 @@ export const HINT_ROOTS: Record<HintKind, readonly string[] | "all"> = {
   // turns "Open the invitation" into "Open repository" without a reload.
   // A project archived, or naming another set, changes the sets' "used by"
   // (`groupSetsKey`, M3-16a).
-  projects: ["classroom", "project", "group-sets", "student"],
+  // A released or rescored project is a cell of the gradebook (`gradebook`, M5-04).
+  projects: ["classroom", "project", "group-sets", "student", "gradebook"],
   // A classroom's group sets changed (ADR-070, M3-15a): the Groups tab and
   // every set's page (`groupSetsKey`, M3-16a). A copy that changed is
   // hinted `projects` besides. A student's: their Groups tab, the
   // Activities row and the tab's existence (`student`, M3-17).
   groups: ["group-sets", "student"],
-  // A classroom's gradebook changed (M5-03a): the staff's table under the
-  // classroom, the student's cells under `student`. M5-04 names its own
-  // roots when the Grades tabs land.
-  gradebook: ["classroom", "student"],
+  // A classroom's gradebook changed (M5-03a): the staff's table and the
+  // student's own cells, both under the `gradebook` root (M5-04).
+  gradebook: ["gradebook"],
   mutation: "all",
 };
 

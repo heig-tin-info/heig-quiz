@@ -1555,6 +1555,49 @@ One question's answers as a table (`src/grading/`, origin
   `leading` (the verdict glyph before the title) and `actions` (↑ / ↓
   before the close button).
 
+## The gradebook (ADR-074, M5-04)
+
+The classroom's Grades tab (`src/gradebook/`). The teacher's is a MATRIX, not
+a table in the sense of the rules above: a row per claimed student, a column
+per exam, exercise or graded project, so the seven-column limit and the
+priority classes do not apply — the number of columns is the classroom's.
+What replaces them:
+
+- **Scroll.** The card is the scroller (`overflow-x-auto`) and is `relative`:
+  the cells' `sr-only` spans are absolute, and a scroller that is not
+  positioned lets them lay out past its edge, on the PAGE (it scrolled
+  sideways at 390 px until this was found). The student column is sticky on
+  the left on its own fill; the mean is sticky on the right from `@2xl`
+  (42 rem of card) and scrolls with the rest below it. On a phone the e-mail
+  under the name goes, so the first grade column stays on screen.
+- **Head.** A column's title (13 px semibold, truncated) with its kind and
+  weight under it in 11 px muted ("Not counted" when it is left out of the
+  mean), and the menu of its settings behind a faint chevron: whether it
+  counts, its weight. A column NOT released carries a `zinc` badge with the
+  eye-off icon and a `surface-2` strip over its whole height; its cells show
+  no grade of the activity (a mark of the teacher's stands there) and the
+  column is out of the mean.
+- **Cell.** The grade as `Grade` writes it, centred, tabular. A cell is a
+  `Menu` trigger — absent, a score, clear the mark — except on an archived
+  classroom, where it is plain text. A pencil beside a grade says "set by
+  the teacher"; an amber triangle says "changed since the release".
+- **The absence `a1.0`.** A 22 px `rounded-md` chip, mono 12 px semibold, in
+  `info` over `info-soft` — a colour of its own. A real 1.0 is a grade, in
+  `danger`; the absence is an administrative status that counts as 1.0, and
+  the two must never read alike, so the sigil borrows none of the verdict
+  colours (green, amber and red all mean a verdict, as on the live grid).
+  The text is the notation of the school and of the CSV, the same in every
+  language; the tooltip and the screen reader say what it stands for.
+- **Primary.** Export CSV, in the page header (`variant="primary"`), a plain
+  download link. The switch "Students see their mean" is a `SettingRow`
+  above the matrix, never an accent; every other action is a menu or a
+  dialog (a score has three fields, a weight one).
+- **The student's** is a list in one card, hairline rows, the same at every
+  width: the activity bold, kind · date · weight under it, the value on the
+  right in 17 px semibold — a grade, `a1.0`, a dash, "indicative" under its
+  points, or "grade not shared". The mean is the last row on `surface-2`,
+  present only when the payload carries it.
+
 ## Poll outcome donut (launcher, "Recent polls")
 
 A 36 px ring beside each row of the launcher's "Recent polls" (issue #161,

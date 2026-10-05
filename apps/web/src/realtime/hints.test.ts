@@ -48,6 +48,11 @@ describe("hint kinds -> query-key roots", () => {
     for (const root of ["classroom", "project", "student"]) expect(roots).toContain(root);
   });
 
+  it("refreshes only the gradebook's own root on a gradebook hint, and on a release, a roster change or an archive (M5-04)", () => {
+    expect(hintRoots(["gradebook"])).toEqual(new Set(["gradebook"]));
+    for (const kind of ["results", "projects", "roster", "classrooms"]) expect(hintRoots([kind])).toContain("gradebook");
+  });
+
   it("falls back to everything for mutation, an unknown kind or no kind", () => {
     expect(hintRoots(["mutation"])).toBe("all");
     expect(hintRoots(["pool", "from-a-newer-server"])).toBe("all");

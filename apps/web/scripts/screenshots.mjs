@@ -341,6 +341,33 @@ const scenes = [
   // project's group work, and a draft group project with and without its set.
   { name: "classroom-groups-empty", role: "teacher", path: "/classrooms/r1/groups" },
   { name: "classroom-groups", role: "teacher", path: "/classrooms/r1/groups?groups=1&projects=1" },
+  // M5-04 (F-GBOOK): the classroom's Grades tab. The teacher's matrix (an a1.0
+  // cell, a column not released, the mean), a cell's menu, a column's menu,
+  // a classroom without a gradebook (the empty state); the student's own cells
+  // (grade, a1.0, indicative, grade not shared, the published mean).
+  { name: "classroom-grades", role: "teacher", path: "/classrooms/r1/grades" },
+  {
+    name: "classroom-grades-cell-menu",
+    role: "teacher",
+    path: "/classrooms/r1/grades",
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(marks for|marques pour) /i }).first().click();
+      await p.getByRole("menu").waitFor();
+    },
+  },
+  {
+    name: "classroom-grades-column-menu",
+    role: "teacher",
+    path: "/classrooms/r1/grades",
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("columnheader").nth(1).getByRole("button").click();
+      await p.getByRole("menu").waitFor();
+    },
+  },
+  { name: "classroom-grades-empty", role: "teacher", path: "/classrooms/r2/grades" },
+  { name: "classroom-grades-student", role: "student", path: "/classrooms/r1/grades" },
   { name: "group-set", role: "teacher", path: `${SET_FINAL}?groups=1&projects=1` },
   { name: "group-set-placed", role: "teacher", path: `${SET_PAIRS}?groups=1&projects=1` },
   { name: "group-set-empty", role: "teacher", path: `${SET_EMPTY}?groups=1` },

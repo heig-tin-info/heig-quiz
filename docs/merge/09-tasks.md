@@ -3873,6 +3873,22 @@ serves now (16a), and what waits for the group repositories (16b).
     student's `withheld` cell (policy `none`) and `indicative` cell (points,
     no grade) say why there is no grade. The global `/grades` page keeps its
     own rows (`StudentGrades`): moving it onto the gradebook is M5-04's call.
+- **As delivered (M5-03b)**, branch `merge/M5-04-grades-web`:
+  - `GET /app/api/classrooms/:id/gradebook.csv` (`modules/gradebook/csv.ts`),
+    staff only on the same load as the table (outsider 404, student 403, no
+    session 401), the F-RES-02 format: UTF-8 BOM, `;`, CRLF, `email;last_name;
+    first_name;<one column per gradebook column, in the table's order>;mean`,
+    one row per claimed student seat (staff seats are never in the table), a
+    grade at one decimal, an absence — derived or marked — written `a1.0` (a
+    string, never a number: it must not read as a real 1.0), an empty cell
+    empty, the mean empty when null. A column not released has its header
+    suffixed ` (unreleased)` (as ` (bonus)` is in the results CSV), titles cut
+    at 30 characters like the results'. No audit: the results export audits
+    nothing either. No xlsx.
+  - The CSV conventions moved out of `modules/results/csv.ts` into
+    `apps/api/src/csv.ts` (`csvField`, `line`, `grade`, `points`, `csvFile`,
+    `csvFilename`, `BOM`): one writer, the results export re-exports what its
+    tests import.
 
 ### M5-04 — Web: Grades tabs
 - **Depends on**: M5-03.
@@ -3883,6 +3899,43 @@ serves now (16a), and what waits for the group repositories (16b).
   on the server (`studentEvaluationRows` takes a classroom id; a classroom
   route loaded through `readableClassroom`), plus project grades; not a
   second component, and no filtering in the browser.
+- **As delivered (M5-04)**, branch `merge/M5-04-grades-web`:
+  - Route `classroomGrades` (`/classrooms/:id/grades`) leaves `preview`:
+    one address, two pages (`ClassroomView routeTab="grades"` and
+    `StudentClassroom tab="grades"`); `ComingSoon.tsx` and its `soon.*` keys
+    are deleted (it was the last user). The `preview` / `CLASSROOM_PAGES`
+    mechanism stays in `router.ts`, with no route using it.
+  - Staff (`gradebook/StaffGradebook.tsx`): the matrix (sticky student column,
+    mean pinned from `@2xl`, the card scrolls, never the page), the absence
+    `a1.0` as a chip of its own in `info` (`gradebook/cells.tsx`; DESIGN.md ›
+    The gradebook), a column not released badged and tinted and out of the
+    mean, **Export CSV** the page's one primary (a plain link in the header),
+    a menu per cell (absent, a score in a dialog, clear the mark), a menu per
+    column (counts in the mean, the weight in a dialog), the "Students see
+    their mean" switch. A `409 grade_exists` asks (`useConfirm`) and resends
+    with `override: true`; `403 owner_required`, `422 score_above_max` and
+    `409 classroom_archived` are worded (`gbook.refusal.*`); an archived
+    classroom draws no menu and a disabled switch.
+  - Student (`gradebook/StudentGradebook.tsx`): their own cells from
+    `GET /student/classrooms/:id/gradebook`, worded — grade, `a1.0`, dash,
+    "indicative" under its points, "grade not shared" — and the mean and the
+    weights only when the payload has them. Always a tab of the student's
+    classroom page (the Tabs now always has Activities and Grades).
+  - Decision on the global `/grades` page: it **stays on `StudentGrades`**.
+    Its rows carry a status, the feedback link and the pending count, which
+    the gradebook's cells do not (and must not) carry; moving it would mean
+    widening the gradebook payload or losing the page's links. The classroom
+    tab is a separate small list for the same reason (the card's note said
+    "reuse the table"; the payloads differ). Revisit with the mean on the
+    global page.
+  - Query keys under a root of their own, `gradebook` (`classroomGradebookKey`,
+    `studentGradebookKey`); the `gradebook` hint names only that root, and
+    the `results`, `projects`, `roster` and `classrooms` hints now reach it
+    too (a release, a rescore, a roster change and an archive move cells).
+  - Mock: `mock/gradebook.ts` serves both sides over PRG1-2026 (six columns,
+    the persona's own cells) and PRG1-2024 (archived, read-only), with the
+    server's refusals; checked by `contract.test.ts`. Scenes
+    `classroom-grades`, `-cell-menu`, `-column-menu`, `-empty`, `-student`.
 
 ## M6 — Online workspace and SEB (after the cutover if D09 says so)
 

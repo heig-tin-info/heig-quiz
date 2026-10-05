@@ -3,10 +3,12 @@ import {
   BookOpen,
   ClipboardList,
   Dumbbell,
+  Download,
   GraduationCap,
   Plus,
   UsersRound,
   Settings as SettingsIcon,
+  Sheet as GradesIcon,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -20,6 +22,8 @@ import { PeriodFields, periodBody, periodInvalid, type PeriodDraft } from "./Cla
 import { ClassroomSettings } from "./ClassroomSettings";
 import { ClassroomDrill } from "./drill/ClassroomDrill";
 import { githubAbsent, useClassroomGithub } from "./github/api";
+import { gradebookCsvPath } from "./gradebook/api";
+import { StaffGradebook } from "./gradebook/StaffGradebook";
 import { useCreateGroupSet } from "./group/api";
 import { GroupSetList } from "./group/GroupSetList";
 import { useT } from "./i18n";
@@ -40,6 +44,7 @@ import {
   EmptyState,
   FormDialog,
   GithubIcon,
+  LinkButton,
   PageHeader,
   ParentLink,
   QueryError,
@@ -72,20 +77,23 @@ import { invalidateHint } from "./realtime/hints";
  * staff bar holds Refresh; Edit, its primary inside a page, is M4-06's.
  * The Groups (ADR-070, M3-16a) are a route too (`/classrooms/:id/groups`):
  * the classroom's group sets, whose primary, "New group set", takes the
- * header's slot and leads straight to the new set's page.
+ * header's slot and leads straight to the new set's page. So are the Grades
+ * (F-GBOOK, M5-04, `/classrooms/:id/grades`): the gradebook's matrix, whose
+ * primary, "Export CSV", takes the header's slot.
  */
 
-type RouteTab = "journal" | "groups" | "settings";
+type RouteTab = "journal" | "groups" | "grades" | "settings";
 export type ClassroomTab = ClassroomQueryTab | RouteTab;
 type Tab = ClassroomTab;
 
 /**
  * The tabs that are routes of their own (`/classrooms/:id/<tab>`), not a
- * `?tab=` on the classroom's address: the Journal, the Groups and the Settings.
+ * `?tab=` on the classroom's address: the Journal, the Groups, the Grades and the Settings.
  */
 const ROUTE_TABS: Record<RouteTab, (id: string) => Route> = {
   journal: (id) => ({ view: "classroomJournal", id }),
   groups: (id) => ({ view: "classroomGroups", id }),
+  grades: (id) => ({ view: "classroomGrades", id }),
   settings: (id) => ({ view: "classroomSettings", id }),
 };
 const isRouteTab = (t: Tab): t is RouteTab => t in ROUTE_TABS;
@@ -342,6 +350,11 @@ export function ClassroomView({
               <Button loading={newSet.isPending} onClick={createSet}>
                 <Plus /> {t("groups.new")}
               </Button>
+            ) : tab === "grades" ? (
+              // A plain link: the CSV is a GET the browser does on its own (F-GBOOK-04).
+              <LinkButton variant="primary" href={gradebookCsvPath(id)} download>
+                <Download /> {t("gbook.export")}
+              </LinkButton>
             ) : null}
           </>
         }
@@ -371,6 +384,8 @@ export function ClassroomView({
             { value: "roster", label: t("roster.title"), count: data.roster.length, icon: Users },
             // ADR-070: who works with whom, beside who is in the classroom.
             { value: "groups", label: t("groups.tab"), icon: UsersRound },
+            // F-GBOOK-01: every grade of the classroom, and the mean.
+            { value: "grades", label: t("gbook.tab"), icon: GradesIcon },
             { value: "settings", label: t("classroomSettings.tab"), icon: SettingsIcon },
           ]}
         />
@@ -418,6 +433,8 @@ export function ClassroomView({
             creating={newSet.isPending}
             readOnly={Boolean(data.archivedAt)}
           />
+        ) : tab === "grades" ? (
+          <StaffGradebook classroomId={id} />
         ) : tab === "drill" ? (
           <ClassroomDrill room={data} onSettings={() => openTab("settings")} />
         ) : (
