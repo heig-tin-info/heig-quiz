@@ -66,6 +66,12 @@ export const users = pgTable(
      */
     coachEnabled: boolean("coach_enabled"),
     /**
+     * The on-screen calculator an evaluation provides (ADR-069) works in
+     * reverse Polish notation for this user; null means no, the infix one.
+     * Kept on the account so it follows a student to the exam station.
+     */
+    rpnCalculator: boolean("rpn_calculator"),
+    /**
      * The coach marks this user has read or dismissed, by id. One in this set
      * is never shown again; one shipped later is, so a new feature introduces
      * itself to the people who already know the rest.

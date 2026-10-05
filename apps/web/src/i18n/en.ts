@@ -2656,6 +2656,12 @@ export const en = {
   "calc.standard": "Standard",
   "calc.scientific": "Scientific",
   "calc.keys": "Calculator keys",
+  "calc.rpn": "RPN",
+  "calc.stack": "Stack",
+  "calc.error.operands": "Not enough values on the stack",
+  "calc.key.roll": "Roll the stack down",
+  "calc.key.swap": "Swap the top two values",
+  "calc.key.enter": "Enter: put the number on the stack",
   "calc.error.divideByZero": "Cannot divide by zero",
   "calc.error.invalid": "Invalid input",
   "calc.error.overflow": "Overflow",
@@ -3918,6 +3924,8 @@ export const en = {
   "settings.coach": "Discovery tips",
   "settings.coachHint": "Bubbles that introduce each screen the first time you open it, and help when you seem stuck.",
   "settings.coachReplay": "Show them again",
+  "settings.rpnCalculator": "RPN calculator",
+  "settings.rpnCalculatorHint": "The calculator an exam provides works in reverse Polish notation: 3 Enter 4 + gives 7, no equals key, no parentheses.",
   "settings.coachReplayed": "The tips will show again on every screen.",
 
   // The Activities section (#190): every activity across classrooms.

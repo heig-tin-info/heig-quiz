@@ -2,7 +2,9 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import { renderWithProviders } from "../test/render";
+import { meKey } from "../queryKeys";
+import { makeMe } from "../test/fixtures";
+import { makeQueryClient, renderWithProviders } from "../test/render";
 import { CalculatorDock } from "./CalculatorDock";
 
 /*
@@ -99,5 +101,55 @@ describe("the calculator dock", () => {
     await openDock("standard");
     expect(screen.queryByRole("button", { name: "sine" })).toBeNull();
     expect(screen.getByRole("button", { name: "Percent" })).toBeInTheDocument();
+  });
+});
+
+describe("the calculator dock in reverse Polish notation", () => {
+  async function openRpn(kind: "standard" | "scientific") {
+    const user = userEvent.setup();
+    const queryClient = makeQueryClient();
+    queryClient.setQueryData(meKey, makeMe({ role: "student", rpnCalculator: true }));
+    renderWithProviders(<CalculatorDock kind={kind} />, { queryClient });
+    await user.click(screen.getByRole("button", { name: "Calculator" }));
+    return user;
+  }
+
+  it("says so, and has an Enter key where the infix one has Equals", async () => {
+    await openRpn("standard");
+    expect(screen.getByText("Standard · RPN")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Enter: put the number on the stack/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Equals" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Swap the top two values" })).toBeInTheDocument();
+  });
+
+  it("computes 3 Enter 4 + from its keys, showing the stack", async () => {
+    const user = await openRpn("standard");
+    const keys = screen.getByRole("group", { name: "Calculator keys" });
+    for (const name of ["3", /Enter/, "4"]) await user.click(within(keys).getByRole("button", { name }));
+    expect(within(screen.getByRole("list", { name: "Stack" })).getByText("3")).toBeInTheDocument();
+    await user.click(within(keys).getByRole("button", { name: "Plus" }));
+    expect(display()).toHaveTextContent("7");
+  });
+
+  it("is driven by the keyboard: Enter puts the number on the stack", async () => {
+    const user = await openRpn("standard");
+    await user.keyboard("2{Enter}3*5{Enter}+");
+    expect(display()).toHaveTextContent("11");
+  });
+
+  it("names a missing operand", async () => {
+    const user = await openRpn("standard");
+    await user.keyboard("5+");
+    expect(display()).toHaveTextContent("Not enough values on the stack");
+  });
+
+  it("keeps the scientific keys, with the stack's in place of the parentheses", async () => {
+    const user = await openRpn("scientific");
+    expect(screen.getByRole("button", { name: "sine" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open parenthesis" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Roll the stack down" })).toBeInTheDocument();
+    await user.keyboard("30");
+    await user.click(screen.getByRole("button", { name: "sine" }));
+    expect(display()).toHaveTextContent("0.5");
   });
 });

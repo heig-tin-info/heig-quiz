@@ -9,17 +9,22 @@
  * The keyboard drives it while focus is inside, never otherwise: digits
  * typed in an answer field stay in the answer.
  */
-import { Delete } from "lucide-react";
+import { CornerDownLeft, Delete } from "lucide-react";
 import { useReducer, type KeyboardEvent, type MouseEvent, type ReactNode, type Ref } from "react";
 
 import {
   display,
+  displayRpn,
   expression,
   initialCalculator,
+  initialRpn,
+  levelsRpn,
   press,
+  pressRpn,
   type CalculatorKey,
   type CalculatorMode,
   type CalculatorState,
+  type RpnState,
   type TrigFn,
 } from "@quiz/domain";
 
@@ -90,6 +95,9 @@ const K = {
   equals: { label: "=", name: "calc.key.equals", key: { kind: "equals" }, tone: "equals", kbd: ["=", "Enter"] },
   neg: { label: "+/−", name: "calc.key.neg", key: { kind: "fn", fn: "neg" }, tone: "digit" },
   dot: { label: ".", name: "calc.key.dot", key: { kind: "dot" }, tone: "digit", kbd: [".", ","] },
+  swap: { label: "x⇄y", name: "calc.key.swap", key: { kind: "swap" } },
+  roll: { label: "R↓", name: "calc.key.roll", key: { kind: "roll" } },
+  enter: { label: <CornerDownLeft className="size-4" aria-hidden />, name: "calc.key.enter", key: { kind: "enter" }, tone: "equals", kbd: ["Enter"] },
 } satisfies Record<string, KeyDef>;
 
 /** Windows's standard layout, four columns. */
@@ -113,6 +121,20 @@ const SCIENTIFIC: Slot[] = [
   { normal: K.ln, second: K.powE }, K.neg, digit(0), K.dot, K.equals,
 ];
 
+/**
+ * The same keypads for reverse Polish notation: `=` becomes Enter, and the
+ * keys that only an expression needs (`%`, parentheses) give their place to
+ * the stack's.
+ */
+const RPN_KEYS = new Map<string, Slot>([
+  ["percent", K.swap],
+  ["open", K.swap],
+  ["close", K.roll],
+  ["equals", K.enter],
+]);
+const rpnSlots = (slots: Slot[]): Slot[] =>
+  slots.map((slot) => ("normal" in slot ? slot : (RPN_KEYS.get(slot.key.kind) ?? slot)));
+
 const TRIG: TrigFn[] = ["sin", "cos", "tan", "sec", "csc", "cot"];
 
 /**
@@ -129,26 +151,77 @@ function keymap(slots: Slot[]): Map<string, CalculatorKey> {
   );
 }
 
-const KEYMAP: Record<CalculatorKind, Map<string, CalculatorKey>> = {
-  standard: keymap(STANDARD),
-  scientific: keymap(SCIENTIFIC),
+const KEYMAPS: Record<CalculatorKind, Record<"infix" | "rpn", Map<string, CalculatorKey>>> = {
+  standard: { infix: keymap(STANDARD), rpn: keymap(rpnSlots(STANDARD)) },
+  scientific: { infix: keymap(SCIENTIFIC), rpn: keymap(rpnSlots(SCIENTIFIC)) },
 };
 
 /**
  * `ref` is the keypad's root, focusable: the dock focuses it on open, so the
- * keyboard drives the calculator at once.
+ * keyboard drives the calculator at once. `rpn` is the user's setting
+ * (reverse Polish notation): the same keys, the stack instead of the
+ * expression.
  */
-export function Calculator({ kind, ref }: { kind: CalculatorKind; ref?: Ref<HTMLDivElement> }) {
-  const t = useT();
+export function Calculator({ kind, rpn = false, ref }: { kind: CalculatorKind; rpn?: boolean; ref?: Ref<HTMLDivElement> }) {
+  return rpn ? <RpnCalculator kind={kind} ref={ref} /> : <InfixCalculator kind={kind} ref={ref} />;
+}
+
+function InfixCalculator({ kind, ref }: { kind: CalculatorKind; ref?: Ref<HTMLDivElement> }) {
   const [state, dispatch] = useReducer(press, initialCalculator);
+  return (
+    <Keypad
+      kind={kind}
+      mode="infix"
+      slots={kind === "scientific" ? SCIENTIFIC : STANDARD}
+      state={state}
+      dispatch={dispatch}
+      display={<Display state={state} />}
+      ref={ref}
+    />
+  );
+}
+
+function RpnCalculator({ kind, ref }: { kind: CalculatorKind; ref?: Ref<HTMLDivElement> }) {
+  const [state, dispatch] = useReducer(pressRpn, initialRpn);
+  return (
+    <Keypad
+      kind={kind}
+      mode="rpn"
+      slots={rpnSlots(kind === "scientific" ? SCIENTIFIC : STANDARD)}
+      state={state}
+      dispatch={dispatch}
+      display={<RpnDisplay state={state} />}
+      ref={ref}
+    />
+  );
+}
+
+/** What the two engines share on the screen: the keys, the keyboard and the angle toggles. */
+function Keypad({
+  kind,
+  mode,
+  slots,
+  state,
+  dispatch,
+  display,
+  ref,
+}: {
+  kind: CalculatorKind;
+  mode: "infix" | "rpn";
+  slots: Slot[];
+  state: Pick<CalculatorState | RpnState, "unit" | "second" | "hyp">;
+  dispatch: (key: CalculatorKey) => void;
+  display: ReactNode;
+  ref?: Ref<HTMLDivElement>;
+}) {
+  const t = useT();
   const scientific = kind === "scientific";
-  const slots = scientific ? SCIENTIFIC : STANDARD;
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     // Enter on a key reached with Tab presses that key, as on any button.
     if (e.key === "Enter" && e.target !== e.currentTarget) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    const key = KEYMAP[kind].get(e.key);
+    const key = KEYMAPS[kind][mode].get(e.key);
     if (key === undefined) return;
     e.preventDefault();
     dispatch(key);
@@ -163,7 +236,7 @@ export function Calculator({ kind, ref }: { kind: CalculatorKind; ref?: Ref<HTML
 
   return (
     <div ref={ref} tabIndex={-1} onKeyDown={onKeyDown} onMouseDown={onMouseDown} className="flex flex-col gap-3 focus:outline-none">
-      <Display state={state} />
+      {display}
       {scientific ? (
         <div className="flex flex-col gap-1">
           <div className="mb-2 flex items-center gap-2">
@@ -234,6 +307,29 @@ function Display({ state }: { state: CalculatorState }) {
       <p dir="rtl" className="h-5 truncate text-[13px] text-fg-muted">
         <span dir="ltr">{expression(state)}</span>
       </p>
+      <output aria-live="polite" className={cx("block truncate font-semibold leading-tight tabular-nums select-all", size)}>
+        {value}
+      </output>
+    </div>
+  );
+}
+
+function RpnDisplay({ state }: { state: RpnState }) {
+  const t = useT();
+  const value = state.error ? t(`calc.error.${state.error}`) : displayRpn(state);
+  const size = state.error || value.length > 16 ? "text-[18px]" : value.length > 11 ? "text-[22px]" : "text-[28px]";
+  // Levels 3, 2, 1 above the number: what an operator is about to take.
+  const levels = levelsRpn(state);
+  return (
+    <div className="rounded-field bg-surface-2 px-3 py-2 text-right">
+      <ol aria-label={t("calc.stack")} className="h-[3.75rem] text-[13px] leading-5 text-fg-muted tabular-nums">
+        {levels.map((v, i) => (
+          <li key={i} className="flex justify-between gap-2">
+            <span className="text-fg-faint">{levels.length - i}:</span>
+            <span className="truncate">{v}</span>
+          </li>
+        ))}
+      </ol>
       <output aria-live="polite" className={cx("block truncate font-semibold leading-tight tabular-nums select-all", size)}>
         {value}
       </output>

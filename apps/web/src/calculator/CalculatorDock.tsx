@@ -16,12 +16,15 @@
 import { Calculator as CalculatorIcon, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 
+import { useMe } from "../api";
 import { useT } from "../i18n";
 import { cx, IconButton, Z } from "../ui";
 import { Calculator, type CalculatorKind } from "./Calculator";
 
 export function CalculatorDock({ kind }: { kind: CalculatorKind }) {
   const t = useT();
+  // The user's setting: reverse Polish notation, on the same keys.
+  const rpn = useMe().data?.rpnCalculator === true;
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const keypad = useRef<HTMLDivElement>(null);
@@ -61,14 +64,14 @@ export function CalculatorDock({ kind }: { kind: CalculatorKind }) {
           <h2 id={titleId} className="text-[13px] font-semibold">
             {t("calc.open")}
           </h2>
-          <span className="text-[12px] text-fg-faint">{t(`calc.${kind}`)}</span>
+          <span className="text-[12px] text-fg-faint">{t(`calc.${kind}`)}{rpn ? ` · ${t("calc.rpn")}` : ""}</span>
           <span className="ml-auto">
             <IconButton label={t("calc.close")} size="sm" onClick={close}>
               <X />
             </IconButton>
           </span>
         </div>
-        <Calculator ref={keypad} kind={kind} />
+        <Calculator ref={keypad} kind={kind} rpn={rpn} />
       </section>
       <button
         ref={trigger}

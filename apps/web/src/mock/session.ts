@@ -37,6 +37,7 @@ export let me: Me | null = {
   dateFormat: null,
   mcqPolicy: null,
   coach: { enabled: null, seen: [] },
+  rpnCalculator: null,
   ...(flags.impersonating
     ? {
         session: {

@@ -57,3 +57,19 @@ describe("coach marks", () => {
     expect((await seen({ seen: ["a"], reset: true })).statusCode).toBe(400);
   });
 });
+
+describe("calculator preference", () => {
+  it("keeps the RPN calculator preference on the account", async () => {
+    expect((await me()).rpnCalculator).toBeNull();
+    for (const rpnCalculator of [true, false]) {
+      const res = await server.app.inject({
+        method: "PATCH",
+        url: "/app/api/me",
+        headers: teacher.headers,
+        payload: { rpnCalculator },
+      });
+      expect(res.statusCode).toBe(200);
+      expect((await me()).rpnCalculator).toBe(rpnCalculator);
+    }
+  });
+});

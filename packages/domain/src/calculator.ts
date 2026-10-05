@@ -38,7 +38,7 @@ export type UnaryFn =
 /** The six trigonometric keys; `second` and `hyp` pick the variant. */
 export type TrigFn = "sin" | "cos" | "tan" | "sec" | "csc" | "cot";
 
-export type CalculatorError = "divideByZero" | "invalid" | "overflow";
+export type CalculatorError = "divideByZero" | "invalid" | "overflow" | "operands";
 
 export type CalculatorKey =
   | { kind: "digit"; digit: number }
@@ -55,6 +55,10 @@ export type CalculatorKey =
   | { kind: "open" }
   | { kind: "close" }
   | { kind: "equals" }
+  /** The RPN keypad's: `enter` puts the number on the stack, `swap` exchanges the top two, `roll` brings the bottom one to the top. */
+  | { kind: "enter" }
+  | { kind: "swap" }
+  | { kind: "roll" }
   | { kind: "unit" }
   | { kind: "second" }
   | { kind: "hyp" };
@@ -119,14 +123,14 @@ const PRECEDENCE: Record<BinaryOp, number> = {
   logBase: 3,
 };
 
-class CalcFailure extends Error {
+export class CalcFailure extends Error {
   constructor(readonly code: CalculatorError) {
     super(code);
   }
 }
 
 /** A result the calculator can go on with: a number, and a finite one. */
-function settle(v: number): number {
+export function settle(v: number): number {
   if (Number.isNaN(v)) throw new CalcFailure("invalid");
   if (!Number.isFinite(v)) throw new CalcFailure("overflow");
   return v;
@@ -149,7 +153,7 @@ export function formatNumber(v: number): string {
   return String(r === 0 ? 0 : r);
 }
 
-function binary(op: BinaryOp, a: number, b: number): number {
+export function binary(op: BinaryOp, a: number, b: number): number {
   switch (op) {
     case "+":
       return cancel(a + b, a, b);
@@ -184,7 +188,7 @@ function factorial(n: number): number {
   return r;
 }
 
-function unary(fn: UnaryFn, x: number): number {
+export function unary(fn: UnaryFn, x: number): number {
   switch (fn) {
     case "neg":
       return -x;
@@ -334,6 +338,15 @@ function trigLabel(fn: TrigFn, x: string, s: CalculatorState): string {
   return `${fn}${s.hyp ? "h" : ""}${s.second ? "⁻¹" : ""}(${x}${degrees})`;
 }
 
+/** A trigonometric key applied to `x`, in the unit and the `2nd` / `hyp` variant in force. */
+export function trigValue(
+  fn: TrigFn,
+  x: number,
+  s: { unit: AngleUnit; second: boolean; hyp: boolean },
+): number {
+  return settle(s.second ? inverse(fn, x, s.unit, s.hyp) : s.hyp ? hyperbolic(fn, x) : circular(fn, x, s.unit));
+}
+
 /** Shunting-yard over a token list; unmatched `(` close at the end. */
 function evaluate(tokens: Token[]): number {
   const values: number[] = [];
@@ -407,13 +420,13 @@ function typed(state: CalculatorState, edit: (text: string) => string): Calculat
   return { ...base, entry: { kind: "typed", text: edit(text) } };
 }
 
-const CONSTANTS: Record<"pi" | "e", Operand> = {
+export const CONSTANTS: Record<"pi" | "e", Operand> = {
   pi: { value: Math.PI, label: "π" },
   e: { value: Math.E, label: "e" },
 };
 
 /** ± on digits being typed: flips their sign, or the exponent's once there is one. */
-function negateTyped(t: string): string {
+export function negateTyped(t: string): string {
   if (t.includes("e")) return t.replace(/e([+-])/, (_, s: string) => (s === "+" ? "e-" : "e+"));
   if (t.startsWith("-")) return t.slice(1);
   return t === "0" ? t : `-${t}`;
@@ -421,21 +434,27 @@ function negateTyped(t: string): string {
 
 const digitCount = (text: string) => text.replace(/e.*$/, "").replace(/[^0-9]/g, "").length;
 
+/** A digit typed after `t`, the operand being formed. */
+export function appendDigit(t: string, digit: number): string {
+  // Three digits of exponent, the most a double can use.
+  if (t.includes("e")) return /e[+-]\d{3}$/.test(t) ? t : t + digit;
+  if (digitCount(t) >= MAX_DIGITS) return t;
+  if (t === "0") return String(digit);
+  if (t === "-0") return `-${digit}`;
+  return t + digit;
+}
+
+/** The decimal point typed after `t`; a second one, or one in the exponent, is ignored. */
+export function appendDot(t: string): string {
+  return t.includes(".") || t.includes("e") ? t : `${t}.`;
+}
+
 function apply(state: CalculatorState, key: CalculatorKey): CalculatorState {
   switch (key.kind) {
     case "digit":
-      return typed(state, (t) => {
-        // Three digits of exponent, the most a double can use.
-        if (t.includes("e")) return /e[+-]\d{3}$/.test(t) ? t : t + key.digit;
-        if (digitCount(t) >= MAX_DIGITS) return t;
-        if (t === "0") return String(key.digit);
-        if (t === "-0") return `-${key.digit}`;
-        return t + key.digit;
-      });
+      return typed(state, (t) => appendDigit(t, key.digit));
     case "dot":
-      return typed(state, (t) =>
-        t.includes(".") || t.includes("e") ? t : `${t}.`,
-      );
+      return typed(state, appendDot);
     case "exp":
       if (state.entry?.kind !== "typed" || state.entry.text.includes("e")) return state;
       return { ...state, entry: { kind: "typed", text: `${state.entry.text}e+` } };
@@ -479,12 +498,8 @@ function apply(state: CalculatorState, key: CalculatorKey): CalculatorState {
     }
     case "trig": {
       const x = current(base);
-      const value = base.second
-        ? inverse(key.fn, x.value, base.unit, base.hyp)
-        : base.hyp
-          ? hyperbolic(key.fn, x.value)
-          : circular(key.fn, x.value, base.unit);
-      return { ...base, entry: { kind: "value", value: settle(value), label: trigLabel(key.fn, x.label, base) } };
+      const value = trigValue(key.fn, x.value, base);
+      return { ...base, entry: { kind: "value", value, label: trigLabel(key.fn, x.label, base) } };
     }
     case "percent": {
       // Like Windows: after + or −, x % is x percent of what precedes;
@@ -530,6 +545,11 @@ function apply(state: CalculatorState, key: CalculatorKey): CalculatorState {
         last: `${render(all)}${")".repeat(openCount(all))} =`,
       };
     }
+    // The RPN keypad's keys: the infix one does not draw them.
+    case "enter":
+    case "swap":
+    case "roll":
+      return base;
   }
 }
 

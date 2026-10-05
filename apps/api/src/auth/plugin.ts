@@ -394,6 +394,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
         dateFormat: u.dateFormat,
         mcqPolicy: u.mcqPolicy,
         coach: { enabled: u.coachEnabled, seen: u.coachSeen },
+        rpnCalculator: u.rpnCalculator,
         session: {
           kind: req.auth?.kind ?? "portal",
           evaluationId: req.auth?.evaluationId ?? null,

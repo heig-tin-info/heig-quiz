@@ -28,6 +28,7 @@ const ME: Me = {
   dateFormat: null,
   mcqPolicy: null,
   coach: { enabled: false, seen: [] },
+  rpnCalculator: null,
 };
 
 const makePool = (over: Partial<PoolSummary> = {}): PoolSummary => ({
