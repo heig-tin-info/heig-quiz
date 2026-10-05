@@ -4264,6 +4264,15 @@ serves now (16a), and what waits for the group repositories (16b).
     earlier run carried is exempt: a set is live in Quiz). None is
     `githubBound`. With a, b, c and d delivered, the M8-01 acceptance is the
     dry-run on the fixture (clean) and on a staging copy of a dump.
+- **Follow-ups (code review of #550, not blocking)**: scope the stop of an
+  already-followed copy to the groups created in this run (a new group in a past
+  project re-stops the groups staff re-opened); test `staffLines` before the
+  "not on the roster" branch of `carryMembers`; exempt repositories carried
+  before this run from the group-id comparison of `repositories per project`;
+  build `addedAt` from the members the import actually placed; batch
+  `repoMembers` per project (quadratic on a large project); drop the unused
+  `ctx` of `perParent`; one source for the creator of a set (`creatorOf`).
+
 - **Depends on**: every schema task (M2-01, M3-01, M4-01, M5-03, M6-06 if
   in scope), D11.
 - **Goal**: the whole order of §2.5, the verification report, the legacy
@@ -4392,6 +4401,15 @@ serves now (16a), and what waits for the group repositories (16b).
     redirect; none is implemented, the secret is not carried); the
     `Location` is relative (`/settings`), Caddy's `redir` to the Quiz host
     keeps the browser on `quiz.chevallier.io`.
+
+- **Follow-ups (code review of #547, not blocking)**: drop the path-classroom
+  id check of the project and groups rules (a dropped classroom's row is deleted,
+  so its still-reachable projects 404; the loaded access already protects them);
+  run `legacyRule` on the raw path or per decoded segment (`%2F` in a segment is
+  split before matching); a remap should also move `classroom_journals`; check
+  the status of the SPA not-found page (404, not 200); share one predicate
+  between `seesAvatar` and `findVisibleAvatar`; the remap note should name the
+  previous target.
 
 ### M8-03 — Caddy fragments
 - **Goal**: `infra/caddy/classroom-maintenance.caddy`,
