@@ -1330,7 +1330,7 @@ under the half that serves them.
     and the last `outcome`/`at`), `SYNC_OUTCOMES`, `ProjectSyncAccepted`,
     refusals `project_archived`, `sync_in_progress`, `source_rewritten`,
     `sync_failed`. `createSquashedRepo` returns `sourceHeads`, written at
-    the build. Migration `0071_project_sync` (regenerated after `0070_project_reconcile`) (`sync_job_at`, `source_heads`,
+    the build. Migration `0072_project_sync` (regenerated after `0071_rpn_calculator`) (`sync_job_at`, `source_heads`,
     `source_ahead`, `sync_outcome(_at)`, `project_sync_prs`; the old
     `sync_pr_number/state` copied into the default branch's row, then
     dropped).

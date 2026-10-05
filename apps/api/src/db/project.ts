@@ -528,7 +528,7 @@ export const projectRepos = pgTable(
  * than the row's changes nothing. The row's branch is what the page shows
  * for the repository's default branch. (heig-classroom's `sync_pr_number`
  * and `sync_pr_state` columns were this row for the default branch,
- * migration `0071`; the import maps them here, F-PROJ-20.)
+ * migration `0072`; the import maps them here, F-PROJ-20.)
  */
 export const projectSyncPrs = pgTable(
   "project_sync_prs",

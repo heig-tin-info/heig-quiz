@@ -9,7 +9,7 @@ handed-out sha by the orchestrator of the merge, validated by the spec
 challenger). Implemented by merge task M3-07:
 `apps/api/src/modules/project/sync.ts` (the request, the leased pass, the
 two webhook handlers, the page's state) on the adapters
-`apps/api/src/github/sync.ts`; migration `0071_project_sync` (regenerated after `0070_project_reconcile`). Tested by
+`apps/api/src/github/sync.ts`; migration `0072_project_sync` (regenerated after `0071_rpn_calculator`). Tested by
 `modules/project/sync.db.test.ts` against local bare repositories.
 
 Scope: F-PROJ-12 (amended the same day), the `project` module's sync and
