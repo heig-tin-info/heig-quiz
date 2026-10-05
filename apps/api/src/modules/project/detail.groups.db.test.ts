@@ -5,12 +5,15 @@
  * copy has a row of their own, R1's group kept with no member is a row of
  * its repository; `counts.groups` and `groupSyncPending` (R2).
  */
+import { randomUUID } from "node:crypto";
+
 import { describe, expect, it } from "vitest";
 
 import { GroupConsequences, ProjectDetail } from "@quiz/contracts";
 
+import { projectRepos } from "../../db/schema.js";
 import { claimGroupSyncWork, runGroupSyncJob } from "./groupSync.js";
-import { accept, config, groupOf, groupProject, moveTo, newStudent, server, setOk, staff, useGroupWorld } from "./groupTesting.js";
+import { accept, config, freshOrgId, groupOf, groupProject, moveTo, newStudent, NOW, server, setOk, staff, useGroupWorld } from "./groupTesting.js";
 import { projectTick } from "./jobs.js";
 
 useGroupWorld();
@@ -75,5 +78,34 @@ describe("the project page of a group project (M3-16b)", () => {
       [dan!.login]: [null, null],
     });
     expect(after.counts.groups).toBe(3);
+  });
+
+  it("gives a lot-1 individual repository's row no group, and keeps a departing member in their group's row (seat())", async () => {
+    const [ana, ben, cid] = [await newStudent(), await newStudent(), await newStudent()];
+    const { project, room, set } = await groupProject([ana!, ben!, cid!], [[0, 1], [2]]);
+    const line = (s: { id: string }) => room.lines.get(s.id)!;
+    expect((await accept(project.id, ana!)).statusCode).toBe(200);
+    const a = `${room.login}/lab-1-group-1`;
+    // heig-classroom's lot 1: a live individual repository of Cid's inside the group project — theirs.
+    const own = `${room.login}/lab-1-${cid!.login}`;
+    await server.app.db.insert(projectRepos).values({
+      id: randomUUID(),
+      projectId: project.id,
+      userId: cid!.id,
+      fullName: own,
+      githubRepoId: freshOrgId(),
+      provisionStatus: "ok",
+      invitationStatus: "accepted",
+      acceptedAt: new Date(NOW),
+    });
+    // Ben moved out of Group 1, confirmed, the job not run: still in Group 1, departing.
+    const asked = await moveTo(set, line(ben!), groupOf(set, "Group 2").id);
+    const { digest } = GroupConsequences.parse(asked.json());
+    await setOk(await staff("PUT", `/app/api/group-sets/${set.set.id}/members/${line(ben!)}`, { groupId: groupOf(set, "Group 2").id, confirm: digest }));
+
+    const rows = (await detail(project.id)).rows;
+    const rowOf = (s: { id: string }) => rows.find((r) => r.student.enrollmentId === line(s))!;
+    expect([rowOf(cid!).group, rowOf(cid!).repo?.fullName]).toEqual([null, own]);
+    expect([rowOf(ben!).group?.name, rowOf(ben!).repo?.fullName, rowOf(ben!).repo?.accessToRevoke]).toEqual(["Group 1", a, true]);
   });
 });
