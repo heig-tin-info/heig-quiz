@@ -42,6 +42,7 @@ export * from "./evaluationConfig.js";
 export * from "./finalScore.js";
 export * from "./format.js";
 export * from "./grade.js";
+export * from "./gradebook.js";
 export * from "./groupRepo.js";
 export * from "./groupSets.js";
 export * from "./health.js";
