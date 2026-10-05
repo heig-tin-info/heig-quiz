@@ -23,7 +23,7 @@ import { DEADLINE_REMINDER_MS } from "@quiz/domain";
 import { and, eq, getTableName, inArray, isNull } from "drizzle-orm";
 
 import { githubClassroomLinks, projectCheckpoints, projects } from "../../src/db/schema.js";
-import { nameOf, note, remember, syncOwned, tallyMapped, target, written, type Ctx, type OwnedRow, type OwnedTable } from "./ctx.js";
+import { nameOf, note, remember, syncOwned, tallyMapped, target, written, type Ctx, type OwnedRow } from "./ctx.js";
 import type { SourceAssignment, SourceStudentRepo } from "./source.js";
 
 /** The assignments of the mapped classrooms: what a source row is in scope for (parity). */
@@ -61,12 +61,12 @@ export async function carryOwned(ctx: Ctx, rows: OwnedRow[], conflict: (row: Own
       await syncOwned(ctx, row);
       continue;
     }
-    const table: OwnedTable = row.table;
+    const table = row.table;
     const done = await ctx.db
       .insert(table)
       .values({ id: row.sourceId, ...row.values } as never)
       .onConflictDoNothing()
-      .returning({ id: table.id });
+      .returning();
     if (done.length === 0) {
       note(ctx, "projects", `${row.sourceTable} ${row.label}: ${conflict(row)}`);
       continue;
