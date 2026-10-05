@@ -23,7 +23,7 @@ Three ways, which you can mix:
 
 - **By hand.** **New group**, then drag students from *No group* into a group, or use the keyboard: Space to pick up, arrows to move, Space to drop. A student is in at most one group of a set. **Undo** reverts a move.
 - **At random.** **Form at random** shuffles the students in no group into groups of the **Group size** you choose, whose sizes differ by at most one. Choose whether the remainder goes to smaller groups or to larger ones (23 students by 3: seven groups of 3 and one of 2, or five of 3 and two of 4). Groups already formed are not touched.
-- **By the students.** **Open to students…** asks for a maximum size and a date. Until then, students create, name, join and leave groups themselves from a **Groups** tab of their classroom, up to the maximum, and you keep every right. At the closing nothing happens by itself: you place whoever is left. Once a group of the set has a repository in a project, the set is frozen for the students and only you change it. See [Projects, for students](student-projects.md).
+- **By the students.** **Open to students…** asks for a maximum size and a date. Until then, students create, name, join and leave groups themselves from a **Groups** tab of their classroom, up to the maximum, and you keep every right. At the closing nothing happens by itself: you place whoever is left. Once a group of the set has a repository in a project, the set is frozen for the students and only you change it. See [Projects, groups and the journal](student-projects.md).
 
 <figure markdown="span">
   ![The dialog opening a group set to the students until a date](../assets/screenshots/mock-group-set-open-dialog-light.png#only-light)

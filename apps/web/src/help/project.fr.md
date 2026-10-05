@@ -15,7 +15,7 @@ Une ligne par étudiant ou par groupe : le dépôt, l'état de l'invitation, le
 dernier commit, la CI, les scores et les drapeaux (verrouillé, après
 l'échéance, à vérifier, supprimé sur GitHub, accès à retirer). Une ligne
 ouvre un panneau avec les exécutions, **Renvoyer** l'invitation, l'échéance
-propre au dépôt, **Verrouiller maintenant** et la note de l'enseignant.
+propre au dépôt, **Verrouiller maintenant** et le score de l'enseignant.
 
 ## Scores
 
@@ -26,7 +26,7 @@ quand son gel est définitif. Le score **final** est celui de l'enseignant,
 sinon celui de la revue, sinon le score gelé. Les étudiants voient un score
 *indicatif* jusqu'à ce que vous **publiiez les scores**. Un score *à
 vérifier* repose sur une exécution dont les fichiers protégés ont été
-restaurés : il bloque la publication tant que vous n'avez pas saisi la note
+restaurés : il bloque la publication tant que vous n'avez pas saisi le score
 de l'enseignant.
 
 ## Échéance

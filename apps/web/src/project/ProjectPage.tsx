@@ -315,6 +315,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
             {archived ? <Badge tone="zinc">{t("classrooms.archived")}</Badge> : null}
           </span>
         }
+        help="project"
         description={
           <>
             <p data-testid="project-status">{t(status.key, { date: isoDateTime(status.date) })}</p>

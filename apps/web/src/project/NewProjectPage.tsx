@@ -146,6 +146,7 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
         room.data ? <ParentLink onClick={back}>{room.data.name}</ParentLink> : <Skeleton className="h-4 w-24" />
       }
       title={t("project.new")}
+      help="project-new"
       description={t("project.new.desc")}
     />
   );

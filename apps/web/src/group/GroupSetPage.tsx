@@ -307,6 +307,7 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
             />
           )
         }
+        help="groups"
         description={
           <>
             <p className="tabular-nums">{counts.join(" · ")}</p>

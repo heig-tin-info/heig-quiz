@@ -44,11 +44,11 @@ Once connected, the **GitHub** section shows the organization and three checks, 
 
 Quiz invites **people**, so each needs a linked account: you, to be added as a collaborator on a journal repository, and every student, to accept a project. Linking is not a sign-in and gives Quiz no right on your own repositories.
 
-On your **Settings** page, the **GitHub** card appears once you are on the staff of a connected classroom. **Link GitHub** goes through GitHub's authorisation and comes back to the page you started from, with a message saying it is linked, already linked to another Quiz account, or failed. One GitHub account belongs to one Quiz account. **Unlink** undoes it. Editing a journal kept in Quiz needs no linked account.
+On your **Settings** page, the **GitHub** card appears once you are on the staff of a connected classroom, or hold a seat as a student in one. **Link GitHub** goes through GitHub's authorisation and comes back to the page you started from, with a message saying it is linked, already linked to another Quiz account, or failed. One GitHub account belongs to one Quiz account. **Unlink** undoes it. Editing a journal kept in Quiz needs no linked account.
 
 ## What students must do
 
-A student who has not linked a GitHub account still sees the projects of the classroom, and a card that leads to the link; only **Accept** waits for it. Nothing else urges them, so tell them before the project opens: they link from their Settings, then accept, and GitHub invites them to their repository, which they accept on GitHub. See [Projects, for students](student-projects.md).
+A student who has not linked a GitHub account still sees the projects of the classroom, and a card that leads to the link; only **Accept** waits for it. Nothing else urges them, so tell them before the project opens: they link from their Settings, then accept, and GitHub invites them to their repository, which they accept on GitHub. See [Projects, groups and the journal](student-projects.md).
 
 ## Troubleshooting
 

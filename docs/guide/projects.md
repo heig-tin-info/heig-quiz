@@ -21,7 +21,7 @@ The form asks for a **Name**, a **Source repository** (only a repository of the 
 - **History**: **One commit** (default) gives each branch as one commit holding the source's files, without what is reserved for the staff (a `student/` overlay and a `.studentignore` shape what students get); **Whole history** keeps the source's history as it is.
 - **Publication**: **By hand**, or **At the start**, where Quiz publishes at the start date.
 - **Deadline as**: a date, or a duration counted from publication.
-- **At the deadline**: **Lock** (default) refuses every push after the deadline; **Mark** leaves the repository open and pushes one empty commit as a marker.
+- **At the deadline**: **Lock** (default) refuses every push after the deadline; **Mark** leaves the repository open and pushes one empty commit per handed-out branch as a marker.
 - **Grace**: minutes after the deadline during which a run started in time may still finish (30 by default).
 - **Score**: **Automatic**, or **None** (no score is shown and no review is dispatched).
 - **Grade scale**: **Linear** (1 + 5 × points / maximum, capped at 6, rounded to a tenth), or **Score is the grade** for a score out of 6.

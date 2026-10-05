@@ -122,7 +122,7 @@ GitHub is optional: a classroom that is never connected is a plain Quiz classroo
 
 Once connected, the classroom can hold [projects](projects.md) (**New**, then **Project**, on the Evaluations tab) and its **Groups** tab keeps the [group sets](groups.md) they follow. Installing the App, the checks and what students must do to link their account are in [Connecting GitHub](github.md).
 
-Your own GitHub account is linked from your **Settings** page, in its **GitHub** card, which shows once you are on the staff of a connected classroom. **Link GitHub** goes through GitHub's authorisation and comes back to the page you started from, with a message saying it is linked, already linked to another Quiz account, or failed. **Unlink** undoes it.
+Your own GitHub account is linked from your **Settings** page, in its **GitHub** card, which shows once you are on the staff of a connected classroom, or hold a seat as a student in one. **Link GitHub** goes through GitHub's authorisation and comes back to the page you started from, with a message saying it is linked, already linked to another Quiz account, or failed. **Unlink** undoes it.
 
 ### Deleting a course
 
