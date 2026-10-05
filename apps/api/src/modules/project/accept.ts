@@ -55,12 +55,8 @@ import { DomainError } from "../http.js";
 import { followInvitation, inviteAccount, recordGrant } from "./access.js";
 import { ProjectError } from "./errors.js";
 import { copyGroupOf, groupRepoWhere, repoMembers, seatRepo, type AccountRow, type GroupRow } from "./groupRepos.js";
+import { PROVISION_CLAIM_STALE_MS, type RepoRow } from "./repos.js";
 import type { ProjectRow } from "./views.js";
-
-type RepoRow = typeof projectRepos.$inferSelect;
-
-/** A claim older than this is taken over: the request that held it died. */
-const PROVISION_CLAIM_STALE_MS = 5 * 60_000;
 
 /** The student's view of their row: their own repository, nothing of the project's (N-SEC-20). */
 const acceptance = (row: RepoRow): ProjectAcceptance => ({

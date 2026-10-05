@@ -596,7 +596,9 @@ export async function updateEnrollment(
     return updated;
   };
   try {
-    const updated = await (emailChanged && entry.userId !== null ? afterRevocation(db, entry.id, ctx, "roster.update", update) : update(db));
+    // Every e-mail change goes behind the guard: the line may have been
+    // claimed since it was loaded.
+    const updated = await (emailChanged ? afterRevocation(db, entry.id, ctx, "roster.update", update) : update(db));
     if (emailChanged) accessRevoked([entry.userId]);
     return updated;
   } catch (err) {
@@ -615,7 +617,7 @@ export async function unclaimEnrollment(
   entry: Pick<EnrollmentRecord, "id" | "userId">,
   ctx: Revocation,
 ): Promise<EnrollmentRecord | undefined> {
-  const unclaim = async (tx: Db | Tx) => {
+  const unclaim = async (tx: Tx) => {
     const [updated] = await tx
       .update(enrollments)
       .set({ userId: null, claimedAt: null, conflictFlag: false })
@@ -623,7 +625,8 @@ export async function unclaimEnrollment(
       .returning();
     return updated;
   };
-  const updated = await (entry.userId !== null ? afterRevocation(db, entry.id, ctx, "roster.unclaim", unclaim) : unclaim(db));
+  // Behind the guard whatever the loaded line said: it may have been claimed since.
+  const updated = await afterRevocation(db, entry.id, ctx, "roster.unclaim", unclaim);
   accessRevoked([entry.userId]);
   return updated;
 }

@@ -2316,9 +2316,13 @@ stops a group) are ADR-070's amendment and F-PROJ-06/F-PROJ-17's wording.
   `project_group.repo_invite`), `inviteOnGithubLink` (after a link, best
   effort), `revokeEnrollmentAccess` (installation clients first — an
   installation GitHub no longer knows, 404/403 on its token, is
-  `app_not_installed`; a first provisioning under way is `RevokeFailed`,
-  retried once it is done; a failed one's repository found by its id;
-  then each recorded account by its immutable id's login of today, its
+  `app_not_installed`; a first provisioning under way (its claim fresh) is
+  `RevokeFailed`, retried once it is done; a failed one's, or one whose
+  claim went stale, found by its id; each recorded account marked revoked
+  BEFORE GitHub is asked (live again if GitHub refuses), so that an
+  invitation's re-check either finds it live — its invitation landed
+  before the revocation listed them, and is cancelled — or takes itself
+  back; then each by its immutable id's login of today, its
   pending invitation (`pendingInvitees`) cancelled BEFORE its seat; a
   repository left with no live account has `invitation_status` `none`;
   the P1 skips `app_not_installed`, `repo_deleted`, `not_provisioned`,
@@ -2327,8 +2331,9 @@ stops a group) are ADR-070's amendment and F-PROJ-06/F-PROJ-17's wording.
   each audited `project_group.repo_revoke`). ONE guard for the four roster
   writes that take a line or its account away, `afterRevocation` in the
   `org` service: `removeEnrollment`, `unclaimEnrollment`,
-  `updateEnrollment` (an e-mail change, after `duplicate_email` is ruled
-  out) and `selfEnroll` (a student line turned staff seat, after
+  `updateEnrollment` (every e-mail change, after `duplicate_email` is
+  ruled out: the line may have been claimed since it was loaded) and
+  `selfEnroll` (a student line turned staff seat, after
   `already_enrolled` is ruled out) revoke first, then write in a
   transaction behind `releaseLine`; `RevokeFailed` is worded `502
   revoke_failed`, every refusal through `rosterRefusal`
@@ -2360,7 +2365,7 @@ stops a group) are ADR-070's amendment and F-PROJ-06/F-PROJ-17's wording.
   `repo_name_taken` until the first is done; the M8-01 import must
   check heig-classroom's individual repositories inside group assignments
   (lot-1 leftovers) against `isLiveIndividualRepo`.
-- **Tests**: `groupRepos.db.test.ts` (30): the first Accept and its
+- **Tests**: `groupRepos.db.test.ts` (32): the first Accept and its
   invitations and grants, a later member, two at once, `no_group`, the
   name disambiguated, an invitation on link; the creator moved out (no
   row, no student view or card, no hint, no resend); the staff's resend
@@ -2373,8 +2378,9 @@ stops a group) are ADR-070's amendment and F-PROJ-06/F-PROJ-17's wording.
   (its state cleared), a resend with no student (`repo_unavailable`); the
   races interleaved through the fake GitHub (a line removed before or
   while it is invited; an account recorded during a removal, an unclaim, a
-  self-enroll; a removal and a set's move during the first provisioning; a
-  move out during an Accept), a classroom deleted with its grants, the backfill statement on an M3-03 row. Domain:
+  self-enroll; a removal and a set's move during the first provisioning, a
+  stale one; an invitation landing between a revocation's listing and its
+  seat's removal; a move out during an Accept), a classroom deleted with its grants, the backfill statement on an M3-03 row. Domain:
   `planReachesRepoGroup`.
 
 #### M3-15b-2 — The follow on GitHub: `group.sync`, the per-group stop, confirmations

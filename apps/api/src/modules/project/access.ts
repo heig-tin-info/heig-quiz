@@ -48,7 +48,7 @@ import { currentLogin, inviteCollaborator, isInvitationRefused, revokeCollaborat
 import { projectInstallation } from "../github/service.js";
 import { ProjectError } from "./errors.js";
 import { seatRepos, type RepoMember } from "./groupRepos.js";
-import type { RepoRow } from "./repos.js";
+import { provisioningNow, type RepoRow } from "./repos.js";
 
 /** The account invited: its line and the line's user, its immutable id and the login GitHub knew it by then. */
 export interface InvitedAccount {
@@ -312,14 +312,16 @@ async function nameOnGithub(octokit: Octokit, repo: RepoRow): Promise<string | n
 /**
  * Takes one recorded account out of one repository, or says why there is
  * nothing to take. Throws when GitHub refuses — and while the repository's
- * first provisioning is under way (`pending`): it may still invite the
- * account after this ran, so the caller retries once it is done.
+ * first provisioning is under way (`pending`, its claim fresh): it may
+ * still invite the account after this ran, so the caller retries once it
+ * is done. A claim gone stale is a provisioning that died: treated as a
+ * failed one, its repository found by its id, if GitHub made it.
  */
-async function revokeGrant(octokit: Octokit | null, repo: RepoRow, grant: GrantRow): Promise<Revoked> {
+async function revokeGrant(octokit: Octokit | null, repo: RepoRow, grant: GrantRow, now: Date): Promise<Revoked> {
   const skipped = (reason: SkipReason, login = grant.githubLogin): Revoked => ({ outcome: "skipped", login, reason });
   if (repo.deletedAt !== null) return skipped("repo_deleted");
   if (octokit === null) return skipped("app_not_installed");
-  if (repo.provisionStatus === "pending") throw new Error("the repository is being provisioned");
+  if (provisioningNow(repo, now)) throw new Error("the repository is being provisioned");
   const fullName = await nameOnGithub(octokit, repo);
   if (fullName === null) return skipped(repo.githubRepoId === null ? "not_provisioned" : "repo_deleted");
   // The account invited, by its immutable id: its login of today.
@@ -403,10 +405,15 @@ export async function revokeEnrollmentAccess(db: Db, config: AppConfig, enrollme
     throw failed(err, null);
   });
   for (const { grant, repo, orgId } of grants) {
-    const revoked = await revokeGrant(clients.get(orgId)!, repo, grant).catch((err: unknown) => {
+    // Marked BEFORE GitHub is asked: an invitation of this account whose
+    // re-check (`inviteAccount`) still finds it live landed before this
+    // revocation lists the invitations, which then cancels it; one that
+    // finds it revoked takes itself back. Live again if GitHub refuses.
+    await db.update(projectRepoAccess).set({ revokedAt: ctx.now }).where(eq(projectRepoAccess.id, grant.id));
+    const revoked = await revokeGrant(clients.get(orgId)!, repo, grant, ctx.now).catch(async (err: unknown) => {
+      await db.update(projectRepoAccess).set({ revokedAt: null }).where(eq(projectRepoAccess.id, grant.id));
       throw failed(err, repo);
     });
-    await db.update(projectRepoAccess).set({ revokedAt: ctx.now }).where(eq(projectRepoAccess.id, grant.id));
     await db
       .update(projectRepos)
       .set({ invitationStatus: "none" })

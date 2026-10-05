@@ -202,17 +202,26 @@ const acceptInvitation = (fullName: string, login: string) => {
 const removeLine = (room: Room, line: string) => staff("DELETE", `/app/api/classrooms/${room.id}/roster/${line}`);
 
 /**
- * A hook the next matching GitHub call runs first (once), before the call
- * goes on to the world: how a test interleaves a request with another's.
+ * Hooks a matching GitHub call runs first (each once), before the call goes
+ * on to the world, and `after` once it landed: how a test interleaves a
+ * request with another's.
  */
-let hook: { match: (url: URL, method: string) => boolean; run: () => Promise<void> } | null = null;
+interface Hook {
+  match: (url: URL, method: string) => boolean;
+  run: () => Promise<void>;
+  after?: () => void;
+}
+let hooks: Hook[] = [];
+const on = (h: Hook) => void hooks.push(h);
 const hookRoute: Route = (url, req) => {
-  const h = hook;
-  if (!h || !h.match(url, req.method)) return undefined;
-  hook = null;
+  const at = hooks.findIndex((h) => h.match(url, req.method));
+  if (at < 0) return undefined;
+  const [h] = hooks.splice(at, 1);
   return (async () => {
-    await h.run();
-    return (world.route(url, req) ?? usersRoute(url, req) ?? json({ message: "Not Found" }, 404))!;
+    await h!.run();
+    const res = world.route(url, req) ?? usersRoute(url, req) ?? json({ message: "Not Found" }, 404);
+    h!.after?.();
+    return res;
   })() as unknown as Response;
 };
 /** Installations whose token GitHub refuses (gone without a webhook). */
@@ -232,7 +241,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   server.clock.set(NOW);
-  hook = null;
+  hooks = [];
 });
 
 afterAll(async () => {
@@ -636,10 +645,10 @@ describe("the races of an invitation and a departure (R1–R3)", () => {
     const { project, room } = await groupProject([ana!, ben!], [[0, 1]]);
     const line = room.lines.get(ben!.id)!;
     // Ben's line goes while Ana's Accept asks GitHub for Ben's login.
-    hook = {
+    on({
       match: (url, method) => method === "GET" && url.pathname === `/user/${ben!.githubUserId}`,
       run: async () => void (await removeLine(room, line)),
-    };
+    });
     expect((await accept(project.id, ana!)).statusCode).toBe(200);
     const fullName = `${room.login}/lab-1-group-1`;
     expect(seats(fullName)).toEqual({ [ana!.login]: "push" });
@@ -652,13 +661,13 @@ describe("the races of an invitation and a departure (R1–R3)", () => {
     const line = room.lines.get(ben!.id)!;
     const fullName = `${room.login}/lab-1-group-1`;
     // Ben's grant is recorded; his removal runs before GitHub's answer to his invitation.
-    hook = {
+    on({
       match: (url, method) => method === "PUT" && url.pathname.endsWith(`/collaborators/${ben!.login}`),
       run: async () => {
         const res = await removeLine(room, line);
         expect(res.statusCode, res.body).toBe(204);
       },
-    };
+    });
     expect((await accept(project.id, ana!)).statusCode).toBe(200);
     expect(await server.app.db.select().from(enrollments).where(eq(enrollments.id, line))).toEqual([]);
     expect(seats(fullName)).toEqual({ [ana!.login]: "push" });
@@ -674,13 +683,13 @@ describe("the races of an invitation and a departure (R1–R3)", () => {
     const line = room.lines.get(ben!.id)!;
     const other = nextAccount++;
     accounts.set(other, `ben-other-${other}`);
-    hook = {
+    on({
       match: (url, method) => method === "GET" && url.pathname === `/user/${ben!.githubUserId}`,
       run: async () =>
         void (await server.app.db
           .insert(projectRepoAccess)
           .values({ id: randomUUID(), repoId: row!.id, enrollmentId: line, githubUserId: other, githubLogin: `ben-other-${other}`, invitedAt: new Date(NOW) })),
-    };
+    });
     expect(rosterRefusal(await write(room, line))).toEqual([502, "revoke_failed"]);
     const [kept] = await server.app.db.select().from(enrollments).where(eq(enrollments.id, line));
     expect([kept?.userId, kept?.staff]).toEqual([ben!.id, false]);
@@ -711,10 +720,10 @@ describe("the races of an invitation and a departure (R1–R3)", () => {
     const { project, room } = await groupProject([ana!, ben!], [[0, 1]]);
     const fullName = `${room.login}/lab-1-group-1`;
     let during: { statusCode: number; json: () => { error: unknown } } | undefined;
-    hook = {
+    on({
       match: (url, method) => method === "POST" && url.pathname === `/orgs/${room.login}/repos`,
       run: async () => void (during = await removeLine(room, room.lines.get(ana!.id)!)),
-    };
+    });
     expect((await accept(project.id, ana!)).statusCode).toBe(200);
     expect(rosterRefusal(during!)).toEqual([502, "revoke_failed"]);
     expect(seats(fullName)[ana!.login]).toBe("push");
@@ -726,10 +735,10 @@ describe("the races of an invitation and a departure (R1–R3)", () => {
     const [ana, ben] = [await newStudent(), await newStudent()];
     const { project, room, set } = await groupProject([ana!, ben!], [[0, 1]]);
     let during: { statusCode: number; json: () => { error: unknown } } | undefined;
-    hook = {
+    on({
       match: (url, method) => method === "POST" && url.pathname === `/orgs/${room.login}/repos`,
       run: async () => void (during = await moveTo(set, room.lines.get(ben!.id)!, null)),
-    };
+    });
     expect((await accept(project.id, ana!)).statusCode).toBe(200);
     expect(groupRefusal(during!)).toEqual([409, "has_repo"]);
     expect(seats(`${room.login}/lab-1-group-1`)[ben!.login]).toBe("push");
@@ -738,12 +747,77 @@ describe("the races of an invitation and a departure (R1–R3)", () => {
   it("answers no_group to a student moved out of their group during their Accept, nothing made", async () => {
     const [ana, ben] = [await newStudent(), await newStudent()];
     const { project, room, set } = await groupProject([ana!, ben!], [[0, 1]]);
-    hook = {
+    on({
       match: (url, method) => method === "GET" && url.pathname === `/user/${ana!.githubUserId}`,
       run: async () => void (await setOk(await moveTo(set, room.lines.get(ana!.id)!, null))),
-    };
+    });
     expect(acceptRefusal(await accept(project.id, ana!))).toEqual([409, "no_group"]);
     expect(await repoRows(project.id)).toEqual([]);
+  });
+
+  it("takes back an invitation landing between a revocation's listing of invitations and its seat's removal", async () => {
+    const [ana, ben] = [await newStudent(), await newStudent()];
+    const { project, room } = await groupProject([ana!, ben!], [[0, 1]]);
+    const fullName = `${room.login}/lab-1-group-1`;
+    const line = room.lines.get(ben!.id)!;
+    let removal: Promise<{ statusCode: number; body: string }> | undefined;
+    let listed!: () => void;
+    let landed!: () => void;
+    const invitationsListed = new Promise<void>((resolve) => (listed = resolve));
+    const putLanded = new Promise<void>((resolve) => (landed = resolve));
+    // Ana's Accept invites Ben: his removal starts, lists the invitations
+    // (none of his yet), then his invitation lands, then the removal takes
+    // his seat away (a pending invitation is no seat: nothing removed).
+    on({
+      match: (url, method) => method === "PUT" && url.pathname.endsWith(`/collaborators/${ben!.login}`),
+      run: async () => {
+        removal = removeLine(room, line);
+        await invitationsListed;
+      },
+      after: () => landed(),
+    });
+    on({
+      match: (url, method) => method === "DELETE" && url.pathname === `/repos/${fullName}/collaborators/${ben!.login}`,
+      run: async () => {
+        listed();
+        await putLanded;
+      },
+    });
+    expect((await accept(project.id, ana!)).statusCode).toBe(200);
+    const removed = await removal!;
+    expect(removed.statusCode, removed.body).toBe(204);
+    // The invitation's re-check found its grant revoked: it took itself back.
+    expect(seats(fullName)[ben!.login]).toBeUndefined();
+    expect(pendingInvitations(fullName)).not.toContain(ben!.login);
+  });
+
+  it("revokes past a first provisioning whose claim went stale (treated as failed)", async () => {
+    const [ana] = [await newStudent()];
+    const { project, room } = await groupProject([ana!], [[0]]);
+    const [group] = await server.app.db.select().from(projectGroups).where(eq(projectGroups.projectId, project.id));
+    // A provisioning that died before GitHub made anything: pending, claimed ten minutes ago.
+    const repoId = randomUUID();
+    await server.app.db.insert(projectRepos).values({
+      id: repoId,
+      projectId: project.id,
+      userId: ana!.id,
+      groupId: group!.id,
+      provisionStatus: "pending",
+      provisionClaimedAt: new Date(Date.parse(NOW) - 10 * 60_000),
+      acceptedAt: new Date(NOW),
+    });
+    await server.app.db.insert(projectRepoAccess).values({
+      id: randomUUID(),
+      repoId,
+      enrollmentId: room.lines.get(ana!.id)!,
+      githubUserId: ana!.githubUserId,
+      githubLogin: ana!.login,
+      invitedAt: new Date(NOW),
+    });
+    const res = await removeLine(room, room.lines.get(ana!.id)!);
+    expect(res.statusCode, res.body).toBe(204);
+    const [revoke] = await auditsOf(repoId, "project_group.repo_revoke");
+    expect(revoke!.payload).toMatchObject({ outcome: "skipped", reason: "not_provisioned" });
   });
 
   it("deletes a classroom whose lines hold recorded accounts", async () => {

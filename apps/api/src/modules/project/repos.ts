@@ -12,6 +12,18 @@ import { projectsChanged, repoChanged } from "./events.js";
 import { repoMembers } from "./groupRepos.js";
 
 export type RepoRow = typeof projectRepos.$inferSelect;
+
+/** A provisioning claim older than this is taken over: the request that held it died (Accept, and a revocation's wait). */
+export const PROVISION_CLAIM_STALE_MS = 5 * 60_000;
+
+/** A first provisioning under way: the row pending, its claim fresh by the server's clock. */
+export function provisioningNow(repo: Pick<RepoRow, "provisionStatus" | "provisionClaimedAt">, now: Date): boolean {
+  return (
+    repo.provisionStatus === "pending" &&
+    repo.provisionClaimedAt !== null &&
+    now.getTime() - repo.provisionClaimedAt.getTime() < PROVISION_CLAIM_STALE_MS
+  );
+}
 type ProjectRow = typeof projects.$inferSelect;
 
 /**
