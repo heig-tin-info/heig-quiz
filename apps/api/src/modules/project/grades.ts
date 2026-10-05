@@ -21,10 +21,11 @@
  *    `projects.released_at / by`; the readers keep showing the LIVE final
  *    score, flagged "changed after release" when it differs
  *    (`changedAfterRelease`, `@quiz/domain`). A release again rewrites the
- *    snapshots, audited again, and is not a new notification: M3-09 sends
- *    `project_grade_final` on the FIRST release only (`first`). No
- *    withdrawal. A reopen after the release is accepted (the deadline's
- *    rules): the teacher's score then waits for the new freeze.
+ *    snapshots, audited again, and is not a new notification:
+ *    `project_grade_final` goes to the students whose repositories the
+ *    release covered on the FIRST release only (`first`; M3-09b), after the
+ *    commit. No withdrawal. A reopen after the release is accepted (the
+ *    deadline's rules): the teacher's score then waits for the new freeze.
  *
  * Nothing here calls GitHub. Every write is audited (`project_repo.
  * grade_override`, `project.release`).
@@ -39,9 +40,11 @@ import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { projectRepos, projects } from "../../db/schema.js";
 import { DomainError } from "../http.js";
+import { notifyUsers } from "../notifications/service.js";
 import { isLive, releaseCounts, repoForUpdate } from "./deadline.js";
 import { releasableScore, repoScores, slotRuns, teacherRunMax } from "./detail.js";
 import { ProjectError } from "./errors.js";
+import { repoMembers } from "./groupRepos.js";
 import { studentRepos, type RepoRow } from "./repos.js";
 
 /** The teacher's score as the audit records it. */
@@ -111,7 +114,7 @@ export async function overrideScore(
  * in effect, audited each time.
  */
 export async function releaseProject(db: Db, projectId: string, actor: AuditActor, userId: string, now: Date): Promise<ProjectReleaseResult> {
-  return db.transaction(async (tx) => {
+  const { result, project, repos } = await db.transaction(async (tx) => {
     const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
     if (!project) throw new DomainError("not_found", 404, "No such project");
     if (project.gradingMode !== "auto") throw new ProjectError("grading_none", "The project is not graded");
@@ -148,6 +151,17 @@ export async function releaseProject(db: Db, projectId: string, actor: AuditActo
       subjectId: project.id,
       payload: { first, repos: repos.length, scored },
     });
-    return { releasedAt: iso(now), first, repos: repos.length, scored };
+    return { result: { releasedAt: iso(now), first, repos: repos.length, scored }, project, repos };
   });
+  // The FIRST release tells the students whose repositories it covered (the
+  // snapshots written, a staff seat's never among them — `repoMembers`, the
+  // one reader rule, N-SEC-20); a release again tells nobody (M3-08b,
+  // decision 3). No score travels. A query or two per repository: a release
+  // happens once per project.
+  if (result.first) {
+    const userIds: string[] = [];
+    for (const repo of repos) userIds.push(...(await repoMembers(db, repo, project.classroomId)).map((m) => m.userId));
+    await notifyUsers(db, userIds, { kind: "project_grade_final", projectId: project.id, projectTitle: project.name });
+  }
+  return result;
 }

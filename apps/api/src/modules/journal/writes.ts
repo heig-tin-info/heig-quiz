@@ -51,6 +51,7 @@ import {
 } from "../../db/schema.js";
 import { githubApp, githubStatus } from "../../github/app.js";
 import { inviteCollaborator } from "../../github/collaborators.js";
+import { actsOn } from "../github/service.js";
 import { DomainError } from "../http.js";
 import { JournalError } from "./errors.js";
 import { journalChanged } from "./events.js";
@@ -111,6 +112,7 @@ async function targetOf(db: Db, classroomId: string): Promise<Target> {
       githubOrgId: githubOrganizations.githubOrgId,
       installationId: githubOrganizations.installationId,
       status: githubOrganizations.status,
+      suspendedAt: githubOrganizations.suspendedAt,
       journal: classroomJournals,
     })
     .from(classrooms)
@@ -118,7 +120,8 @@ async function targetOf(db: Db, classroomId: string): Promise<Target> {
     .leftJoin(githubOrganizations, eq(githubOrganizations.id, githubClassroomLinks.orgId))
     .leftJoin(classroomJournals, eq(classroomJournals.classroomId, classrooms.id))
     .where(eq(classrooms.id, classroomId));
-  const active = row?.login && row.installationId !== null && row.status === "active";
+  // The one rule of an organization the App acts on (`actsOn`, `modules/github/service.ts`).
+  const active = row?.login && actsOn(row);
   return {
     org: active ? { login: row.login!, githubOrgId: row.githubOrgId, installationId: row.installationId! } : null,
     journal: row?.journal ?? null,

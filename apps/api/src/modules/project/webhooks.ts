@@ -25,7 +25,8 @@
  *
  * Out of this task: a push on a source repository (source ahead) and
  * `pull_request` on `sync/*` (M3-07); the live-state cache's reads (M3-08);
- * notices, notifications and mails (M3-09).
+ * the worded notices (M3-09c). The notifications are `notify.ts`'s, at the
+ * writes they announce (M3-09b): none of these handlers sends one.
  */
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";

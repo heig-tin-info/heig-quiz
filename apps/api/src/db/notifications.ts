@@ -27,6 +27,7 @@ import { users } from "./auth.js";
 import { evaluations } from "./evaluation.js";
 import { classrooms } from "./org.js";
 import { pools } from "./pool.js";
+import { projects } from "./project.js";
 
 /**
  * The kinds folded into one unread row per recipient and target (ADR-030
@@ -40,7 +41,10 @@ export const NOTIFICATION_FOLD_TARGETS = {
   roster_conflict: "classroomId",
   pool_question_added: "poolId",
   results_updated: "evaluationId",
-} as const satisfies Partial<Record<NotificationKind, "classroomId" | "poolId" | "evaluationId">>;
+  // The staff's project kinds (F-NOTIF-13, M3-09b): one unread entry per project.
+  project_deadline_applied: "projectId",
+  project_provision_failed: "projectId",
+} as const satisfies Partial<Record<NotificationKind, "classroomId" | "poolId" | "evaluationId" | "projectId">>;
 
 export type FoldedKind = keyof typeof NOTIFICATION_FOLD_TARGETS;
 
@@ -81,8 +85,10 @@ export const notifications = pgTable(
     poolId: uuid("pool_id").references(() => pools.id, { onDelete: "cascade" }),
     /** Same rule for a kind about an evaluation (`results_released`, `results_updated`, …). */
     evaluationId: uuid("evaluation_id").references(() => evaluations.id, { onDelete: "cascade" }),
-    /** Same rule for a kind about a classroom (`student_joined`, `roster_conflict`, `activity_scheduled`). */
+    /** Same rule for a kind about a classroom (`student_joined`, `roster_conflict`, `activity_scheduled`, `github_org_lost`). */
     classroomId: uuid("classroom_id").references(() => classrooms.id, { onDelete: "cascade" }),
+    /** Same rule for a kind about a project (the `project_*` kinds, F-NOTIF-13): a deleted project takes its bells. */
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     /** null = unread; the count of the bell is a count of nulls. */
     readAt: timestamp("read_at", { withTimezone: true }),
@@ -92,6 +98,7 @@ export const notifications = pgTable(
     index("notifications_pool_idx").on(t.poolId),
     index("notifications_evaluation_idx").on(t.evaluationId),
     index("notifications_classroom_idx").on(t.classroomId),
+    index("notifications_project_idx").on(t.projectId),
     ...(Object.keys(NOTIFICATION_FOLD_TARGETS) as FoldedKind[]).map((kind) =>
       uniqueIndex(`notifications_${kind}_fold_uq`)
         .on(t.userId, t[NOTIFICATION_FOLD_TARGETS[kind]])

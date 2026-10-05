@@ -29,7 +29,7 @@
 import { and, eq, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 
 import type { ProjectRepoDeadlineState } from "@quiz/contracts";
-import { checkpointDueAt, deadlineWantsLock, effectiveDeadline, receivedLate, reopens } from "@quiz/domain";
+import { checkpointDueAt, deadlineWantsLock, effectiveDeadline, receivedLate, reminderClaimAfterMove, reopens } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
 import { isoOrNull } from "../../clock.js";
@@ -190,7 +190,8 @@ export async function rescheduleCheckpoints(tx: Tx, projectId: string, deadlineA
 
 /**
  * The project's deadline moved by a patch, in the caller's transaction on
- * the row it locked: its checkpoints, the reminder re-armed (M3-09), and
+ * the row it locked: its checkpoints, the reminder re-armed when the new
+ * deadline is more than a day away (`reminderClaimAfterMove`, M3-09b), and
  * the repositories that follow it ({@link effectiveDeadlineMoved}). A
  * deadline already applied moved later REOPENS the project (F-PROJ-09):
  * `published` again, its final review undone, audited
@@ -210,7 +211,7 @@ export async function projectDeadlineMoved(
     .update(projects)
     .set({
       deadlineAt,
-      reminderSentAt: null,
+      reminderSentAt: reminderClaimAfterMove(before.reminderSentAt, deadlineAt, now),
       ...(reopen ? { state: "published" as const, deadlineAppliedAt: null } : {}),
     })
     .where(eq(projects.id, before.id))
@@ -308,8 +309,11 @@ export function releaseCounts(project: ProjectRow, repos: readonly RepoRow[]): {
  * `PUT /app/api/projects/:id/repos/:rid/deadline` (D13 as amended): the
  * repository's own deadline, ahead of now (`422 deadline_past`), or null for
  * the project's again; its runs requalified and, moved later after it was
- * applied, the repository reopened. Audited `project_repo.deadline_set`.
- * The caller asks for the deadline work (`requestDeadlineWork`).
+ * applied, the repository reopened. Its own day-before reminder (M3-09b):
+ * re-armed by a move more than a day ahead (`reminderClaimAfterMove`),
+ * meaningless (null) once it follows the project's again. Audited
+ * `project_repo.deadline_set`. The caller asks for the deadline work
+ * (`requestDeadlineWork`).
  */
 export async function setRepoDeadline(
   db: Db,
@@ -325,7 +329,8 @@ export async function setRepoDeadline(
       throw new ProjectError("deadline_past", "The deadline has passed");
     }
     if ((repo.deadlineAt?.getTime() ?? null) === (deadlineAt?.getTime() ?? null)) return;
-    await tx.update(projectRepos).set({ deadlineAt }).where(eq(projectRepos.id, repo.id));
+    const reminderSentAt = deadlineAt === null ? null : reminderClaimAfterMove(repo.reminderSentAt, deadlineAt, now);
+    await tx.update(projectRepos).set({ deadlineAt, reminderSentAt }).where(eq(projectRepos.id, repo.id));
     const reopened = await effectiveDeadlineMoved(tx, project, [repo.id], now);
     await audit(tx, {
       ...actor,

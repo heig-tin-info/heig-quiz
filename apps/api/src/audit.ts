@@ -101,6 +101,8 @@ export type AuditAction =
    */
   | "github_org.installation_resolved"
   | "github_org.installation_deleted"
+  /** GitHub suspended the installation, or lifted the suspension (`payload.suspended`, `payload.via`; M3-09b). */
+  | "github_org.installation_suspended"
   /** The organization's login changed on GitHub (`payload.from`, `payload.to`, `payload.via`). */
   | "github_org.renamed"
   /** The organization no longer exists on GitHub (`status: deleted`). */
@@ -277,8 +279,10 @@ export type AuditAction =
    * `project_repos` row. `accept`: `payload.repo` (the student's own full
    * name), `invitation`, `protected` (false: a plan without rulesets);
    * `accept_failed`: `payload.notify` — true on the row's FIRST failure
-   * only, which M3-09 tells the staff about (F-NOTIF-13), never for an
-   * invitation GitHub refused (the student relinks).
+   * only, which `project_provision_failed` tells the staff about
+   * (F-NOTIF-13, M3-09b), never for an invitation GitHub refused (the
+   * student relinks); `payload.reason`: `repo_name_taken`,
+   * `invitation_refused` or `github_error`.
    */
   | "project.accept"
   | "project.accept_failed"

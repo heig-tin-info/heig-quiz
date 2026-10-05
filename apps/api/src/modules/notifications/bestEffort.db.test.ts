@@ -36,6 +36,10 @@ import * as poolService from "../pool/service.js";
 import { sendDeadlineReminders } from "./deadline.js";
 import { notifyMany } from "./service.js";
 
+// The deadline scan goes through `notifyUsers`, which calls `notifyMany`
+// inside its own module, out of this mock's reach: that it swallows a
+// failure is `notifications.db.test.ts`'s; here the scan's claims are what
+// is held, whatever the fan-out did.
 vi.mock("./service.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./service.js")>()),
   notifyMany: vi.fn(async () => {
@@ -115,7 +119,7 @@ describe("a failing notification", () => {
     );
   });
 
-  it("never fails the deadline scan: every evaluation is tried, and the markers stay claimed", async () => {
+  it("never fails the deadline scan: every evaluation is claimed once, and the markers stay claimed", async () => {
     const closesAt = new Date("2027-03-01T12:00:00.000Z");
     const due = new Date(closesAt.getTime() - 3_600_000);
     const seeds: Seeded[] = [];
@@ -127,21 +131,16 @@ describe("a failing notification", () => {
         .where(eq(evaluations.id, seed.evaluationId));
       seeds.push(seed);
     }
-    vi.mocked(notifyMany).mockClear();
     const claimed = await sendDeadlineReminders(db, due);
-    const told = vi.mocked(notifyMany).mock.calls.map(([, d]) => d[0]?.payload);
     for (const seed of seeds) {
       expect(claimed.filter((c) => c.evaluationId === seed.evaluationId)).toHaveLength(2);
-      // The first fan-out failing did not stop the second one.
-      expect(told).toContainEqual(expect.objectContaining({ evaluationId: seed.evaluationId }));
       const markers = await db
         .select()
         .from(deadlineReminders)
         .where(eq(deadlineReminders.evaluationId, seed.evaluationId));
       expect(markers).toHaveLength(2);
     }
-    // Best-effort: a claimed reminder whose delivery failed is not sent again.
-    vi.mocked(notifyMany).mockClear();
+    // Best-effort: a claimed reminder is never claimed again, whatever its delivery did.
     const again = await sendDeadlineReminders(db, due);
     expect(again.filter((c) => seeds.some((s) => s.evaluationId === c.evaluationId))).toEqual([]);
   });

@@ -7,14 +7,13 @@
  * the topics, the audience and the coalescing (§10, "never publish an event
  * directly").
  */
-import { eq } from "drizzle-orm";
-
 import type { GradingProgressEvent } from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
-import { classrooms, courseStaff, isOwnedPoll } from "../../db/schema.js";
-import * as bus from "../realtime/bus.js";
+import { isOwnedPoll } from "../../db/schema.js";
 import { classroomIdOf, type EvaluationRecord } from "../evaluation/service.js";
+import { classroomStaffIds } from "../org/service.js";
+import * as bus from "../realtime/bus.js";
 
 /**
  * The teaching staff of the course an evaluation belongs to. They hold
@@ -28,12 +27,7 @@ export async function staffOf(db: Db, evaluation: EvaluationRecord): Promise<str
     return evaluation.createdBy === null ? [] : [evaluation.createdBy];
   }
   // A template (ADR-031) is never graded: `classroomIdOf` refuses it.
-  const rows = await db
-    .select({ userId: courseStaff.userId })
-    .from(courseStaff)
-    .innerJoin(classrooms, eq(classrooms.courseId, courseStaff.courseId))
-    .where(eq(classrooms.id, classroomIdOf(evaluation)));
-  return [...new Set(rows.map((r) => r.userId))];
+  return classroomStaffIds(db, classroomIdOf(evaluation));
 }
 
 export function progress(

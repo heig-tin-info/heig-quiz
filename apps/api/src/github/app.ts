@@ -136,6 +136,13 @@ export interface AppInstallation {
   login: string;
   /** `repository_selection: "all"`: the App reaches every repository (F-GH-03). */
   allRepositories: boolean;
+  /**
+   * GitHub's `suspended_at` is set: the installation exists but the App can
+   * do nothing there (its tokens are refused) until it is unsuspended. Told
+   * from a GONE installation (null), which is the App lost to the
+   * organization (F-PROJ-18, M3-09b): a suspension is not.
+   */
+  suspended: boolean;
 }
 
 interface RawInstallation {
@@ -146,19 +153,19 @@ interface RawInstallation {
 }
 
 /**
- * An organization's installation, or null for a user's, a malformed one, or
- * a SUSPENDED one: suspended, the App can do nothing there (its tokens are
- * refused), so Quiz treats it as not installed until it is unsuspended.
+ * An organization's installation, or null for a user's or a malformed one.
+ * A SUSPENDED one is returned as such (`suspended`): Quiz acts on it as on
+ * none until it is unsuspended, but knows it is still there.
  */
 function orgInstallation(data: RawInstallation): AppInstallation | null {
   const account = data.account;
-  if (data.suspended_at) return null;
   if (!account?.login || account.id === undefined || account.type !== "Organization") return null;
   return {
     installationId: data.id,
     githubOrgId: account.id,
     login: account.login,
     allRepositories: data.repository_selection === "all",
+    suspended: Boolean(data.suspended_at),
   };
 }
 

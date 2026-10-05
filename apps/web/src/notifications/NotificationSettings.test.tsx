@@ -14,9 +14,9 @@ import { mockFetch, ok, renderWithProviders } from "../test/render";
  * and the Teams link.
  */
 
-const STUDENT = notificationKindsFor({ role: "student", studentSeat: false, courseSeat: false });
-const TEACHER = notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false });
-const TEACHER_ON_A_ROSTER = notificationKindsFor({ role: "teacher", studentSeat: true, courseSeat: false });
+const STUDENT = notificationKindsFor({ role: "student", studentSeat: false, courseSeat: false, github: true });
+const TEACHER = notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false, github: true });
+const TEACHER_ON_A_ROSTER = notificationKindsFor({ role: "teacher", studentSeat: true, courseSeat: false, github: true });
 
 const ALL_ON = { bell: true, email: true, teams: true };
 const OFF = { available: false, linkedAt: null, teamsName: null, teamsUsername: null };
@@ -46,6 +46,13 @@ function settings(
       grading_ready: ALL_ON,
       pool_question_added: { bell: true, email: false, teams: false },
       system_alert: { bell: true, email: true, teams: false },
+      project_published: { bell: true, email: false, teams: false },
+      project_deadline_reminder: ALL_ON,
+      project_repo_invited: ALL_ON,
+      project_grade_final: ALL_ON,
+      project_deadline_applied: { bell: true, email: false, teams: false },
+      project_provision_failed: ALL_ON,
+      github_org_lost: ALL_ON,
     },
     kinds,
     email: "lea@heig.test",
@@ -61,7 +68,7 @@ describe("the notification settings", () => {
     renderWithProviders(<SettingsPage me={makeMe({ role: "student" })} />);
 
     const grid = await screen.findByRole("table", { name: "Notifications" });
-    expect(within(grid).getAllByRole("rowheader")).toHaveLength(5);
+    expect(within(grid).getAllByRole("rowheader")).toHaveLength(STUDENT.length);
     expect(within(grid).getByText("Results released")).toBeVisible();
     expect(within(grid).getByText("Exercise scheduled")).toBeVisible();
     expect(within(grid).getByText("Exercise open")).toBeVisible();
@@ -83,7 +90,7 @@ describe("the notification settings", () => {
     renderWithProviders(<SettingsPage me={makeMe({ role: "teacher" })} />);
 
     const grid = await screen.findByRole("table", { name: "Notifications" });
-    expect(within(grid).getAllByRole("rowheader")).toHaveLength(6);
+    expect(within(grid).getAllByRole("rowheader")).toHaveLength(TEACHER.length);
     const shared = within(grid).getByRole("switch", { name: "Pool shared with you: Email" });
     expect(shared).toHaveAttribute("aria-checked", "false");
     await user.click(shared);
@@ -110,7 +117,7 @@ describe("the notification settings", () => {
     mockFetch({ [GET]: ok(settings(UNLINKED, TEACHER_ON_A_ROSTER)) });
     renderWithProviders(<SettingsPage me={makeMe({ role: "teacher" })} />);
     const seated = await screen.findByRole("table", { name: "Notifications" });
-    expect(within(seated).getAllByRole("rowheader")).toHaveLength(11);
+    expect(within(seated).getAllByRole("rowheader")).toHaveLength(TEACHER_ON_A_ROSTER.length);
     expect(within(seated).getByText("Results released")).toBeVisible();
   });
 
@@ -178,7 +185,7 @@ describe("the notification settings", () => {
   });
 
   it("gives an administrator the platform health, by app and e-mail, never Teams (ADR-055 §5)", async () => {
-    const ADMIN = notificationKindsFor({ role: "admin", studentSeat: false, courseSeat: false });
+    const ADMIN = notificationKindsFor({ role: "admin", studentSeat: false, courseSeat: false, github: true });
     mockFetch({ [GET]: ok(settings(LINKED, ADMIN)) });
     renderWithProviders(<SettingsPage me={makeMe({ role: "admin" })} />);
     const grid = await screen.findByRole("table", { name: "Notifications" });

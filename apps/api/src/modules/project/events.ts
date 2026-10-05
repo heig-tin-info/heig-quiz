@@ -7,7 +7,8 @@
  * `classroom:<id>`, where every student of the classroom listens: a hint
  * there would tell a student when a classmate pushes or gets a score, and
  * make every student's client refetch on each of them (N-SEC-20, I41,
- * heig-classroom #38). The notices worded for people are M3-09's.
+ * heig-classroom #38). The notifications worded for people are
+ * `notify.ts`'s (M3-09b), the client-side notices M3-09c's.
  */
 import type { Topic } from "@quiz/contracts";
 

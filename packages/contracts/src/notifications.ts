@@ -34,6 +34,22 @@ const classroomCount = {
 export const SYSTEM_ALERT_STATES = ["failing", "still_failing", "recovered"] as const;
 export type SystemAlertState = (typeof SYSTEM_ALERT_STATES)[number];
 
+/** The project a project kind is about: its id and its name, nothing else of it. */
+const projectRef = {
+  projectId: z.uuid(),
+  projectTitle: z.string(),
+};
+
+/**
+ * Why a student's repository could not be made, as `project_provision_failed`
+ * names it (F-NOTIF-13): a repository of that name exists already in the
+ * organization — only the staff can resolve it — or GitHub failed, which
+ * the student retries. An invitation GitHub refused is not a reason here:
+ * the staff are not told of it (the student relinks their account).
+ */
+export const PROVISION_FAILURE_REASONS = ["repo_name_taken", "github_error"] as const;
+export type ProvisionFailureReason = (typeof PROVISION_FAILURE_REASONS)[number];
+
 /** What each kind carries; the web app renders the sentence from it. */
 export const NotificationPayload = z.discriminatedUnion("kind", [
   z.object({
@@ -134,6 +150,65 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
     poolName: z.string(),
     count: z.number().int().positive(),
   }),
+  // --- Projects (F-NOTIF-13, D18; merge task M3-09b). Ids and the project's
+  // name only: never a score, a login or a student's name (N-SEC-20). The
+  // entry opens the project (`/projects/:id`, the student's view for a
+  // student).
+  z.object({
+    /** A project of the recipient's classroom was published (once per project). */
+    kind: z.literal("project_published"),
+    ...projectRef,
+  }),
+  z.object({
+    /**
+     * The recipient's EFFECTIVE deadline on a project (their own, else the
+     * project's) is within 24 hours, once (F-NOTIF-06's rules). No date: see
+     * `deadline_approaching`.
+     */
+    kind: z.literal("project_deadline_reminder"),
+    ...projectRef,
+  }),
+  z.object({
+    /** Accept made the recipient's repository and the GitHub invitation awaits them. */
+    kind: z.literal("project_repo_invited"),
+    ...projectRef,
+  }),
+  z.object({
+    /** The scores of a project the recipient took part in were released (the FIRST release only). */
+    kind: z.literal("project_grade_final"),
+    ...projectRef,
+  }),
+  z.object({
+    /**
+     * The deadline job locked (or committed on) repositories of a project
+     * (staff): folded per project, `count` the repositories settled.
+     */
+    kind: z.literal("project_deadline_applied"),
+    ...projectRef,
+    count: z.number().int().positive(),
+  }),
+  z.object({
+    /**
+     * A student's repository could not be provisioned (staff): the row's
+     * first failure, never an invitation GitHub refused. Folded per project;
+     * `reason` the latest failure's, which names what the staff can do.
+     */
+    kind: z.literal("project_provision_failed"),
+    ...projectRef,
+    count: z.number().int().positive(),
+    reason: z.enum(PROVISION_FAILURE_REASONS),
+  }),
+  z.object({
+    /**
+     * The organization of a classroom was deleted on GitHub, or Quiz's App
+     * uninstalled from it (staff, F-PROJ-18): one entry per classroom
+     * linked to it. Opens the classroom's Settings.
+     */
+    kind: z.literal("github_org_lost"),
+    classroomId: z.uuid(),
+    classroomName: z.string(),
+    orgLogin: z.string(),
+  }),
   z.object({
     /**
      * Health checks of the platform changed state (ADR-055 §5), told to the
@@ -179,9 +254,16 @@ export const NOTIFICATION_KINDS = [
   "activity_available",
   "deadline_approaching",
   "results_updated",
+  "project_published",
+  "project_deadline_reminder",
+  "project_repo_invited",
+  "project_grade_final",
   "student_joined",
   "roster_conflict",
   "grading_ready",
+  "project_deadline_applied",
+  "project_provision_failed",
+  "github_org_lost",
   "pool_shared",
   "pool_ownership",
   "pool_question_added",
@@ -223,9 +305,19 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
   // A correction after the release: the bell, folded per evaluation; the
   // student already had the e-mail of the release (§h.5).
   results_updated: { bell: true, email: false, teams: false },
+  // The project kinds (F-NOTIF-13, ADR-030): on everywhere for what a
+  // student or a teacher must not miss, off outside the app for the news
+  // that can wait for the next visit.
+  project_published: { bell: true, email: false, teams: false },
+  project_deadline_reminder: { bell: true, email: true, teams: true },
+  project_repo_invited: { bell: true, email: true, teams: true },
+  project_grade_final: { bell: true, email: true, teams: true },
   student_joined: { bell: true, email: false, teams: false },
   roster_conflict: { bell: true, email: true, teams: true },
   grading_ready: { bell: true, email: true, teams: true },
+  project_deadline_applied: { bell: true, email: false, teams: false },
+  project_provision_failed: { bell: true, email: true, teams: true },
+  github_org_lost: { bell: true, email: true, teams: true },
   pool_shared: { bell: true, email: true, teams: true },
   pool_ownership: { bell: true, email: true, teams: true },
   pool_question_added: { bell: true, email: false, teams: false },
@@ -277,14 +369,38 @@ export const NOTIFICATION_AUDIENCE: Readonly<
   activity_available: "seat",
   deadline_approaching: "seat",
   results_updated: "seat",
+  project_published: "seat",
+  project_deadline_reminder: "seat",
+  project_repo_invited: "seat",
+  project_grade_final: "seat",
   student_joined: "course",
   roster_conflict: "course",
   grading_ready: "course",
+  project_deadline_applied: "course",
+  project_provision_failed: "course",
+  github_org_lost: "course",
   pool_shared: "pool",
   pool_ownership: "pool",
   pool_question_added: "pool",
   system_alert: "admin",
 };
+
+/**
+ * The kinds only a platform with Quiz's GitHub App ever sends (projects,
+ * F-NOTIF-13): without the App there is no project and no organization, so
+ * their toggles would control nothing (ADR-030: a kind enters the settings
+ * with its emitter). Every other kind is sent whatever the configuration.
+ */
+export const GITHUB_KINDS = [
+  "project_published",
+  "project_deadline_reminder",
+  "project_repo_invited",
+  "project_grade_final",
+  "project_deadline_applied",
+  "project_provision_failed",
+  "github_org_lost",
+] as const satisfies readonly NotificationKind[];
+const githubKinds: readonly NotificationKind[] = GITHUB_KINDS;
 
 /**
  * The kinds an account can receive, as the settings grid lists them (ADR-030
@@ -294,17 +410,21 @@ export const NOTIFICATION_AUDIENCE: Readonly<
  * The course kinds go to a teacher, whose course seat may come at any time,
  * and to an admin only while holding one: without it they are a row that
  * controls nothing (#287). The admin kinds go to an admin, and only there.
+ * The GitHub kinds ({@link GITHUB_KINDS}) only on a platform with the App.
  */
 export function notificationKindsFor({
   role,
   studentSeat,
   courseSeat,
+  github,
 }: {
   role: "student" | "teacher" | "admin";
   /** A claimed student seat (`enrollments.staff = false`). */
   studentSeat: boolean;
   /** A seat on a course staff (`course_staff`). */
   courseSeat: boolean;
+  /** The platform has Quiz's GitHub App configured (`GITHUB_APP_ID`). */
+  github: boolean;
 }): NotificationKind[] {
   const reaches = {
     seat: role === "student" || studentSeat,
@@ -312,7 +432,7 @@ export function notificationKindsFor({
     pool: role !== "student",
     admin: role === "admin",
   };
-  return NOTIFICATION_KINDS.filter((kind) => reaches[NOTIFICATION_AUDIENCE[kind]]);
+  return NOTIFICATION_KINDS.filter((kind) => reaches[NOTIFICATION_AUDIENCE[kind]] && (github || !githubKinds.includes(kind)));
 }
 
 /** The resolved grid: every kind × every channel, defaults filled in. */

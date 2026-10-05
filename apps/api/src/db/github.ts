@@ -40,9 +40,12 @@ import { classrooms } from "./org.js";
 /**
  * One organization known to Quiz's App (D23): learnt from the App's setup
  * return, an installation event, or the import of heig-classroom (M8-01).
- * Never deleted. Two independent facts, each held by one column only:
+ * Never deleted. Three independent facts, each held by one column only:
  *   - whether Quiz's App is installed: `installation_id` null or not;
+ *   - whether that installation is suspended by GitHub: `suspended_at`;
  *   - whether the organization still exists on GitHub: `status`.
+ * The App ACTS on an organization when it is installed, not suspended and
+ * active (`installed()` in `modules/github/service.ts`, the one rule).
  */
 export const githubOrganizations = pgTable("github_organizations", {
   id: uuid("id").primaryKey(),
@@ -56,6 +59,13 @@ export const githubOrganizations = pgTable("github_organizations", {
    */
   installationId: bigint("installation_id", { mode: "number" }).unique(),
   status: text("status", { enum: GITHUB_ORG_STATUSES }).notNull().default("active"),
+  /**
+   * The installation is suspended by GitHub (its `suspended_at`; M3-09b):
+   * kept with its id, so that a deletion after a suspension is still the
+   * installation going away, told to the staff once (F-PROJ-18). Null when
+   * the installation acts, or when there is none.
+   */
+  suspendedAt: timestamp("suspended_at", { withTimezone: true }),
   /** GitHub's billing plan (`free`, `team`, ...), read through the App; null while unread. */
   plan: text("plan"),
 });

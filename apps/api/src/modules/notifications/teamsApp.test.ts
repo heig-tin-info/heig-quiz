@@ -37,6 +37,7 @@ const OPTS = { appId: APP_ID, publicUrl: "https://quiz.chevallier.io" };
 const POOL = "11111111-1111-4111-8111-111111111111";
 const ATTEMPT = "33333333-3333-4333-8333-333333333333";
 const CLASSROOM = "44444444-4444-4444-8444-444444444444";
+const PROJECT = "55555555-5555-4555-8555-555555555555";
 
 const PAYLOADS: TeamsPayload[] = [
   {
@@ -49,6 +50,9 @@ const PAYLOADS: TeamsPayload[] = [
   { kind: "pool_ownership", poolId: POOL, poolName: "Électronique", fromName: "Grace Hopper" },
   { kind: "student_joined", classroomId: CLASSROOM, classroomName: "PRG1-2026", count: 3 },
   { kind: "roster_conflict", classroomId: CLASSROOM, classroomName: "PRG1-2026", count: 1 },
+  { kind: "project_deadline_reminder", projectId: PROJECT, projectTitle: "Lab 1" },
+  { kind: "project_provision_failed", projectId: PROJECT, projectTitle: "Lab 1", count: 2, reason: "repo_name_taken" },
+  { kind: "github_org_lost", classroomId: CLASSROOM, classroomName: "PRG1-2026", orgLogin: "heig-prg1" },
 ];
 
 function unpack() {
@@ -117,6 +121,19 @@ describe("the Teams app package", () => {
         "results_updated",
       ]),
     );
+    // The one bump of M3-09b: the seven project kinds of F-NOTIF-13, at 2.2.0.
+    expect(TEAMS_ACTIVITY_KINDS).toEqual(
+      expect.arrayContaining([
+        "project_published",
+        "project_deadline_reminder",
+        "project_repo_invited",
+        "project_grade_final",
+        "project_deadline_applied",
+        "project_provision_failed",
+        "github_org_lost",
+      ]),
+    );
+    expect(TEAMS_APP_VERSION).toBe("2.2.0");
     // Semver, as Teams wants it; the value itself is bumped by hand.
     expect(TEAMS_APP_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
     expect(new Set(types.map((a) => a.type)).size).toBe(types.length);

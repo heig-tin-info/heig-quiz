@@ -477,6 +477,13 @@
       "when": 1791157496389,
       "tag": "0067_project_repo_access",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1791179432998,
+      "tag": "0068_project_notifications",
+      "breakpoints": true
     }
   ]
 }

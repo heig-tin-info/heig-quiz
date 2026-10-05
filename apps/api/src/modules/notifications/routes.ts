@@ -29,6 +29,7 @@ import {
 
 import { tracer } from "../../audit.js";
 import { teamsEnabled, type AppConfig } from "../../config.js";
+import { githubApp } from "../../github/app.js";
 import * as service from "./service.js";
 import { createSsoTokenVerifier, SsoAuthError } from "./ssoAuth.js";
 import { teamsAppPackage } from "./teamsApp.js";
@@ -77,8 +78,10 @@ export async function notificationsPlugin(app: FastifyInstance, opts: { config: 
 
   // --- Channels and preferences ------------------------------------------
 
+  // The project kinds are listed only where Quiz's App can send them (F-NOTIF-13).
+  const githubOn = githubApp(config) !== null;
   app.get("/app/api/notifications/settings", { preHandler: requireSession }, async (req) =>
-    service.notificationSettings(app.db, req.user!.id, teamsOn),
+    service.notificationSettings(app.db, req.user!.id, teamsOn, githubOn),
   );
 
   /** One toggle of the kinds × channels grid; answers with the whole settings. */
@@ -86,7 +89,7 @@ export async function notificationsPlugin(app: FastifyInstance, opts: { config: 
     const body = NotificationPreferencePut.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "validation" });
     await service.setPreference(app.db, req.user!.id, body.data);
-    return service.notificationSettings(app.db, req.user!.id, teamsOn);
+    return service.notificationSettings(app.db, req.user!.id, teamsOn, githubOn);
   });
 
   // --- Microsoft Teams: the tab ------------------------------------------
@@ -186,7 +189,7 @@ export async function notificationsPlugin(app: FastifyInstance, opts: { config: 
       await trace(req, "teams.unlink", "user", outcome.displaced, { via: "moved", to: userId });
     }
     await trace(req, "teams.link", "user", userId, { tenantId: outcome.link.tenantId });
-    return service.notificationSettings(app.db, userId, teamsOn);
+    return service.notificationSettings(app.db, userId, teamsOn, githubOn);
   });
 
   /** Forgets the link. Nothing is uninstalled at Microsoft: the user owns their Teams. */
@@ -194,6 +197,6 @@ export async function notificationsPlugin(app: FastifyInstance, opts: { config: 
     if (!teamsOn) return reply.code(503).send({ error: "teams_unavailable" });
     const removed = await service.unlinkTeams(app.db, { userId: req.user!.id });
     if (removed) await trace(req, "teams.unlink", "user", req.user!.id);
-    return service.notificationSettings(app.db, req.user!.id, teamsOn);
+    return service.notificationSettings(app.db, req.user!.id, teamsOn, githubOn);
   });
 }

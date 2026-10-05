@@ -15,6 +15,8 @@ const POOL = "11111111-1111-4111-8111-111111111111";
 const EVAL = "22222222-2222-4222-8222-222222222222";
 const ATTEMPT = "33333333-3333-4333-8333-333333333333";
 const CLASSROOM = "44444444-4444-4444-8444-444444444444";
+const PROJECT = "55555555-5555-4555-8555-555555555555";
+const project = { projectId: PROJECT, projectTitle: "Lab 1 — pointers" };
 
 const shared: NotificationPayload = {
   kind: "pool_shared",
@@ -89,6 +91,15 @@ describe("renderNotification", () => {
       { kind: "activity_scheduled", classroomId: CLASSROOM, classroomName: "PRG1-2026", count: 1 },
       { kind: "activity_available", activityKind: "evaluation", activityId: EVAL, activityTitle: "Série 3" },
       { kind: "deadline_approaching", evaluationId: EVAL, evaluationTitle: "Série 4" },
+      { kind: "project_published", ...project },
+      { kind: "project_deadline_reminder", ...project },
+      { kind: "project_repo_invited", ...project },
+      { kind: "project_grade_final", ...project },
+      { kind: "project_deadline_applied", ...project, count: 12 },
+      { kind: "project_deadline_applied", ...project, count: 1 },
+      { kind: "project_provision_failed", ...project, count: 2, reason: "github_error" },
+      { kind: "project_provision_failed", ...project, count: 1, reason: "repo_name_taken" },
+      { kind: "github_org_lost", classroomId: CLASSROOM, classroomName: "PRG1-2026", orgLogin: "heig-prg1" },
     ] satisfies NotificationPayload[]) {
       for (const locale of ["en", "fr"] as const) {
         const out = renderNotification(payload, locale, "https://quiz.test");
@@ -226,6 +237,50 @@ describe("deadline_approaching (#198 step 7)", () => {
     expect(out.subject).toBe("Se termine dans les 24 heures : Série 4");
     expect(out.text).toContain("moins de 24 heures");
     expect(out.text).toContain(`https://quiz.test/take/${EVAL}`);
+  });
+});
+
+describe("the project kinds (F-NOTIF-13, M3-09b)", () => {
+  it("open the project, and the classroom's Settings for a lost organization", () => {
+    for (const kind of [
+      "project_published",
+      "project_deadline_reminder",
+      "project_repo_invited",
+      "project_grade_final",
+    ] as const) {
+      expect(notificationPath({ kind, ...project })).toBe(`/projects/${PROJECT}`);
+    }
+    expect(notificationPath({ kind: "project_deadline_applied", ...project, count: 3 })).toBe(`/projects/${PROJECT}`);
+    expect(notificationPath({ kind: "project_provision_failed", ...project, count: 1, reason: "github_error" })).toBe(`/projects/${PROJECT}`);
+    expect(
+      notificationPath({ kind: "github_org_lost", classroomId: CLASSROOM, classroomName: "PRG1-2026", orgLogin: "heig-prg1" }),
+    ).toBe(`/classrooms/${CLASSROOM}/settings`);
+  });
+
+  it("names the cause of a failed provisioning, in the recipient's language, with a singular of its own", () => {
+    const taken = { kind: "project_provision_failed", ...project, count: 1, reason: "repo_name_taken" } as const;
+    const en = renderNotification(taken, "en", "https://quiz.test");
+    expect(en.subject).toBe("A repository could not be created: Lab 1 — pointers");
+    expect(en.text).toContain("a repository of that name exists already");
+    const fr = renderNotification({ ...taken, count: 3, reason: "github_error" }, "fr", "https://quiz.test");
+    expect(fr.subject).toBe("3 dépôts n'ont pas pu être créés : Lab 1 — pointers");
+    expect(fr.preview).toContain("Dernière cause : GitHub a échoué ou refusé");
+    expect(fr.topic).toBe("Lab 1 — pointers");
+  });
+
+  it("tells a student the scores are out, and says nothing of the score", () => {
+    const out = renderNotification({ kind: "project_grade_final", ...project }, "en", "https://quiz.test");
+    expect(out.subject).toBe("Scores released: Lab 1 — pointers");
+    expect(out.text).toContain(`https://quiz.test/projects/${PROJECT}`);
+    expect(out.text).not.toMatch(/\d+\s*\/\s*\d+/);
+    const lost = renderNotification(
+      { kind: "github_org_lost", classroomId: CLASSROOM, classroomName: "PRG1-2026", orgLogin: "heig-prg1" },
+      "fr",
+      "https://quiz.test",
+    );
+    expect(lost.subject).toBe("Organisation GitHub perdue : PRG1-2026");
+    expect(lost.text).toContain("heig-prg1");
+    expect(lost.topic).toBe("PRG1-2026");
   });
 });
 

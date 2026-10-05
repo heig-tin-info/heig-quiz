@@ -227,6 +227,46 @@ describe("the inbox in the account menu", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "attempt", evaluationId: "e6" });
   });
 
+  it("words a project's notifications and opens the project, or the classroom's settings for a lost organization (F-NOTIF-13)", async () => {
+    const at = new Date(Date.now() - 60_000).toISOString();
+    const invited: Notification = {
+      id: "p1",
+      payload: { kind: "project_repo_invited", projectId: "pj1", projectTitle: "Lab 1" },
+      createdAt: at,
+      readAt: null,
+    };
+    const failed: Notification = {
+      id: "p2",
+      payload: { kind: "project_provision_failed", projectId: "pj1", projectTitle: "Lab 1", count: 1, reason: "repo_name_taken" },
+      createdAt: at,
+      readAt: null,
+    };
+    const lost: Notification = {
+      id: "p3",
+      payload: { kind: "github_org_lost", classroomId: "c7", classroomName: "PRG1-2026", orgLogin: "heig-prg1" },
+      createdAt: at,
+      readAt: null,
+    };
+    mockFetch({
+      [`GET ${LIST}`]: ok({ items: [invited, failed, lost], unread: 3 }),
+      "POST /app/api/notifications/p1/read": { status: 204 },
+      "POST /app/api/notifications/p3/read": { status: 204 },
+    });
+    const navigate = vi.fn();
+    renderMenu(navigate);
+    await openInbox();
+    expect(
+      screen.getByText("A student's repository of “Lab 1” could not be created: a repository of that name exists already in the organization."),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByText("Your repository for “Lab 1” is ready: accept the invitation on GitHub."));
+    expect(navigate).toHaveBeenLastCalledWith({ view: "project", id: "pj1" });
+    await openInbox();
+    await userEvent.click(
+      screen.getByText("The organization heig-prg1 of PRG1-2026 was deleted on GitHub, or the app uninstalled from it."),
+    );
+    expect(navigate).toHaveBeenLastCalledWith({ view: "classroomSettings", id: "c7" });
+  });
+
   it("names the failing health checks to an administrator, and opens the System status", async () => {
     const alert: Notification = {
       id: "n10",

@@ -49,6 +49,8 @@ import {
   type AppInstallation,
 } from "../../github/app.js";
 import { DomainError } from "../http.js";
+import { notifyUsers } from "../notifications/service.js";
+import { classroomStaffIds } from "../org/service.js";
 import { sniffImage } from "../pool/assets.js";
 import { installationChanged } from "./events.js";
 
@@ -92,7 +94,11 @@ export function orgView(row: OrgRow): GithubOrg {
     login: row.login,
     // Derived from GitHub's immutable id: without one, the web draws initials.
     avatarUrl: row.githubOrgId === null ? null : `/app/api/github/orgs/${row.id}/avatar`,
-    installed: row.installationId !== null,
+    // Installed, not suspended, active (`actsOn`): a suspended installation
+    // shows as none. A deleted row never holds an installation (`markOrgDeleted`,
+    // `retireLoginHolders`), so `installed` and `status` stay the two
+    // independent facts the contract shows.
+    installed: actsOn(row),
     status: row.status,
     plan: row.plan,
   };
@@ -113,6 +119,7 @@ function systemAudit(
   action:
     | "github_org.installation_resolved"
     | "github_org.installation_deleted"
+    | "github_org.installation_suspended"
     | "github_org.renamed"
     | "github_org.deleted",
   orgId: string,
@@ -159,6 +166,7 @@ async function retireLoginHolders(db: Db, login: string, keep: string | null): P
       login: `${holder.login}~${holder.id}`,
       status: "deleted",
       installationId: null,
+      suspendedAt: null,
     });
     await systemAudit(db, "github_org.deleted", holder.id, {
       reason: "login_reused",
@@ -181,9 +189,44 @@ async function followRename(db: Db, row: OrgRow, login: string, via: Via): Promi
 }
 
 /**
- * The rows matching `where` forget their installation, each audited
- * `installation_deleted` with `via` and `extra`. Only rows that still held
- * one are written, so a replay writes and audits nothing.
+ * The organization is LOST to its classrooms (F-PROJ-18, F-NOTIF-13
+ * `github_org_lost`; M3-09b): GitHub no longer has the installation it held
+ * — uninstalled, or the organization deleted with it. The course staff of
+ * each of its non-archived classrooms are told, one entry per classroom,
+ * which opens that classroom's Settings. Called on the row's actual
+ * transition only (the installation it held forgotten), so a replay, a
+ * suspension (the installation stays, `suspended_at` set) and the status of
+ * an organization never installed tell nobody; GitHub's sender is no Quiz
+ * account, so F-NOTIF-11's "own action" cannot apply. Best-effort, after
+ * the write: a failure is logged.
+ */
+async function orgLost(db: Db, org: OrgRow): Promise<void> {
+  try {
+    const rooms = await db
+      .select({ classroomId: classrooms.id, classroomName: classrooms.name })
+      .from(githubClassroomLinks)
+      .innerJoin(classrooms, eq(classrooms.id, githubClassroomLinks.classroomId))
+      .where(and(eq(githubClassroomLinks.orgId, org.id), isNull(classrooms.archivedAt)));
+    for (const room of rooms) {
+      await notifyUsers(db, await classroomStaffIds(db, room.classroomId), {
+        kind: "github_org_lost",
+        classroomId: room.classroomId,
+        classroomName: room.classroomName,
+        orgLogin: org.login,
+      });
+    }
+  } catch (err) {
+    // The service layer has no logger (as `realtime/bus.ts`): stderr.
+    console.error(`github: telling the staff that ${org.login} is lost failed`, err);
+  }
+}
+
+/**
+ * The rows matching `where` forget their installation — GitHub no longer has
+ * it (a suspended one it still has: {@link recordInstallation}) —, each
+ * audited `installation_deleted` with `via` and `extra`, and their
+ * classrooms' staff told ({@link orgLost}). Only rows that still held one
+ * are written, so a replay writes, audits and tells nothing.
  */
 async function forgetInstallation(
   db: Db,
@@ -193,20 +236,22 @@ async function forgetInstallation(
 ): Promise<OrgRow[]> {
   const rows = await db
     .update(githubOrganizations)
-    .set({ installationId: null })
+    .set({ installationId: null, suspendedAt: null })
     .where(and(isNotNull(githubOrganizations.installationId), where))
     .returning();
   for (const row of rows) {
     await systemAudit(db, "github_org.installation_deleted", row.id, { via, ...extra });
+    await orgLost(db, row);
   }
   return rows;
 }
 
 /**
  * The row of an organization GitHub has just shown installed, created or
- * brought up to date: the installation, the login (a rename is followed by
- * the immutable id), `active`. Idempotent: a second call with the same
- * installation writes and audits nothing.
+ * brought up to date: the installation, its suspension (`suspended_at`,
+ * audited `installation_suspended` when it changes), the login (a rename
+ * is followed by the immutable id), `active`. Idempotent: a second call
+ * with the same installation writes and audits nothing.
  *
  * Matched by `github_org_id`; by login only for a row that has no id yet
  * (imported by M8-01). A row holding the login under ANOTHER id is never
@@ -231,6 +276,9 @@ export async function recordInstallation(
   if (known && known.login !== inst.login) known = await followRename(db, known, inst.login, via);
   else await retireLoginHolders(db, inst.login, known?.id ?? null);
   let row: OrgRow;
+  // When Quiz first saw the suspension, by its own clock (GitHub's own
+  // moment is not kept): the rule reads the column's presence, not its time.
+  const suspendedAt = inst.suspended ? (known?.suspendedAt ?? new Date()) : null;
   if (!known) {
     const [created] = await db
       .insert(githubOrganizations)
@@ -239,6 +287,7 @@ export async function recordInstallation(
         githubOrgId: inst.githubOrgId,
         login: inst.login,
         installationId: inst.installationId,
+        suspendedAt,
         status: "active",
       })
       .onConflictDoNothing()
@@ -257,12 +306,14 @@ export async function recordInstallation(
     const current =
       known.installationId === inst.installationId &&
       known.githubOrgId === inst.githubOrgId &&
-      known.status === "active";
+      known.status === "active" &&
+      (known.suspendedAt !== null) === inst.suspended;
     row = current
       ? known
       : await patchOrg(db, known.id, {
           installationId: inst.installationId,
           githubOrgId: inst.githubOrgId,
+          suspendedAt,
           status: "active",
         });
   }
@@ -271,14 +322,17 @@ export async function recordInstallation(
       installationId: inst.installationId,
       via,
     });
+  } else if ((known.suspendedAt !== null) !== inst.suspended) {
+    await systemAudit(db, "github_org.installation_suspended", row.id, { suspended: inst.suspended, via });
   }
   return row;
 }
 
 /** Re-reads the plan while it is unknown or `free`, so the warning clears once the organization upgrades. */
 async function refreshPlan(config: AppConfig, db: Db, org: OrgRow): Promise<OrgRow> {
-  if (org.installationId === null || (org.plan !== null && org.plan !== "free")) return org;
-  const plan = await fetchOrgPlan(config, org.installationId, org.login, HTTP_READ);
+  const acting = installed(org);
+  if (!acting || (org.plan !== null && org.plan !== "free")) return org;
+  const plan = await fetchOrgPlan(config, acting.installationId, org.login, HTTP_READ);
   return plan && plan !== org.plan ? patchOrg(db, org.id, { plan }) : org;
 }
 
@@ -303,9 +357,7 @@ export async function installedOrgs(
   const rows = await db
     .select()
     .from(githubOrganizations)
-    .where(
-      and(isNotNull(githubOrganizations.installationId), eq(githubOrganizations.status, "active")),
-    )
+    .where(ACTS)
     .orderBy(sql`lower(${githubOrganizations.login})`);
   return rows.map(orgView);
 }
@@ -332,12 +384,13 @@ async function syncInstallations(db: Db, config: AppConfig): Promise<void> {
 /**
  * An `installation` event, whatever its action: the event says only WHICH
  * installation changed, and GitHub's CURRENT state of it is what is
- * recorded (`GET /app/installations/{id}` with the App's JWT) — installed,
- * through {@link recordInstallation}; gone or suspended, forgotten. So a
- * delivery replayed out of order (a failed `created` replayed after the
- * `deleted` that followed it) can never bring back an installation GitHub
- * no longer has. A GitHub failure throws: the delivery is retried. The
- * organization touched, or null.
+ * recorded (`GET /app/installations/{id}` with the App's JWT) — installed
+ * or suspended, through {@link recordInstallation}; gone, forgotten and the
+ * staff told it is lost. So a delivery replayed out of order (a failed
+ * `created` replayed after the `deleted` that followed it) can never bring
+ * back an installation GitHub no longer has, and the webhook's `action`
+ * decides nothing (it only goes to the audit). A GitHub failure throws: the
+ * delivery is retried. The organization touched, or null.
  */
 export async function resyncInstallation(
   db: Db,
@@ -372,6 +425,8 @@ export async function renameOrg(db: Db, githubOrgId: number, login: string): Pro
 /**
  * An organization deleted on GitHub: `deleted`, its installation gone with
  * it. The row and its links stay (they are the history of its classrooms).
+ * Its staff are told once, when the installation goes with it ({@link
+ * orgLost}): an organization whose App was already gone told them then.
  */
 export async function markOrgDeleted(db: Db, githubOrgId: number): Promise<OrgRow | null> {
   const [row] = await db
@@ -379,11 +434,12 @@ export async function markOrgDeleted(db: Db, githubOrgId: number): Promise<OrgRo
     .from(githubOrganizations)
     .where(eq(githubOrganizations.githubOrgId, githubOrgId));
   if (!row || (row.status === "deleted" && row.installationId === null)) return row ?? null;
-  const deleted = await patchOrg(db, row.id, { status: "deleted", installationId: null });
+  const deleted = await patchOrg(db, row.id, { status: "deleted", installationId: null, suspendedAt: null });
   await systemAudit(db, "github_org.deleted", row.id, {
     via: "webhook",
     installationId: row.installationId,
   });
+  if (row.installationId !== null) await orgLost(db, deleted);
   return deleted;
 }
 
@@ -461,7 +517,13 @@ async function heal(db: Db, config: AppConfig, stored: OrgRow): Promise<Healed> 
       .where(eq(githubOrganizations.id, org.id));
     return { org: retired!, checks: UNKNOWN_CHECKS };
   }
+  if (inst?.suspended) {
+    // Still there, acting as none: nothing more is asked of GitHub.
+    return { org: await recordInstallation(db, inst, "healing"), checks: UNKNOWN_CHECKS };
+  }
   if (!inst) {
+    // The installation GitHub no longer has (a 404 the webhooks never told
+    // of) is forgotten, and its classrooms' staff told it is lost.
     const [forgotten] = await forgetInstallation(db, eq(githubOrganizations.id, org.id), "healing");
     org = forgotten ?? org;
     // Uninstalled, GitHub delivers nothing about the organization: whether it
@@ -533,8 +595,7 @@ async function suggestedOrg(db: Db, room: Room): Promise<string | null> {
       and(
         eq(classrooms.courseId, room.courseId),
         ne(classrooms.id, room.id),
-        isNotNull(githubOrganizations.installationId),
-        eq(githubOrganizations.status, "active"),
+        ACTS,
       ),
     )
     .groupBy(githubClassroomLinks.orgId)
@@ -581,7 +642,7 @@ export async function connectClassroom(
       .from(githubOrganizations)
       .where(eq(githubOrganizations.id, input.orgId));
     if (!org) throw new DomainError("not_found", 404, "Unknown organization");
-    if (org.installationId === null || org.status !== "active") {
+    if (!installed(org)) {
       throw refusal("app_not_installed", "Quiz's GitHub App is not installed on this organization");
     }
     await refuseWithJournal(tx, input.classroomId);
@@ -712,10 +773,35 @@ async function downloadAvatar(githubOrgId: number): Promise<OrgAvatar | null> {
 /** An organization row with Quiz's App installed on it. */
 export type InstalledOrg = OrgRow & { installationId: number };
 
-/** THE rule of an organization Quiz's App acts on: installed, and active. Null otherwise. */
-function installed(org: OrgRow): InstalledOrg | null {
-  return org.installationId !== null && org.status === "active" ? { ...org, installationId: org.installationId } : null;
+/** The three facts of an organization row the rule below reads (null: the row was not there, a left join). */
+export interface OrgFacts {
+  installationId: number | null;
+  suspendedAt: Date | null;
+  status: OrgRow["status"] | null;
 }
+
+/**
+ * THE rule of an organization Quiz's App acts on: installed, not suspended,
+ * and active. Pure; the one place the three conditions are spelled — the
+ * listing's and the sheet's `installed`, the projects' {@link installed},
+ * the journal's reads (`journal/ingest.ts`, `journal/writes.ts`) all call
+ * it. {@link ACTS} is its SQL twin for the scans.
+ */
+export function actsOn(org: OrgFacts): boolean {
+  return org.installationId !== null && org.suspendedAt === null && org.status === "active";
+}
+
+/** {@link actsOn}, narrowed to the row with its installation; null otherwise. */
+function installed(org: OrgRow): InstalledOrg | null {
+  return actsOn(org) ? { ...org, installationId: org.installationId! } : null;
+}
+
+/** {@link installed}, over a `github_organizations` row in SQL. */
+const ACTS = and(
+  isNotNull(githubOrganizations.installationId),
+  isNull(githubOrganizations.suspendedAt),
+  eq(githubOrganizations.status, "active"),
+)!;
 
 /**
  * A project's organization (`projects.org_id`, kept when its classroom is

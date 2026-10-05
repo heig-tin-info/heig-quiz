@@ -12,10 +12,16 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { NotificationPayload } from "@quiz/contracts";
+
 import { loadConfig, type AppConfig } from "../../config.js";
 import {
   auditLog,
+  classrooms,
+  courseStaff,
+  githubClassroomLinks,
   githubOrganizations,
+  notifications,
   pushReceipts,
   webhookDeliveries,
 } from "../../db/schema.js";
@@ -31,6 +37,7 @@ import {
   type FakeOrg,
 } from "../../github/testing.js";
 import { testServer, type TestServer } from "../../test/http.js";
+import { seedLive } from "../../test/live.js";
 import {
   PAYLOAD_RETENTION_MS,
   processDelivery,
@@ -38,7 +45,7 @@ import {
   reconcileDeliveries,
   REPLAY_AFTER_MS,
 } from "./deliveries.js";
-import { onEvent, onReceipt, resetGithubCaches } from "./service.js";
+import { onEvent, onReceipt, orgView, resetGithubCaches } from "./service.js";
 
 const SECRET = "w".repeat(40);
 const key = appKey();
@@ -296,15 +303,21 @@ describe("installation events (GitHub's current state recorded)", () => {
     expect(await audits("github_org.installation_deleted", org!.id)).toHaveLength(1);
   });
 
-  it("forgets a suspended installation and records it again when unsuspended", async () => {
+  it("keeps a suspended installation with its id, acting as none, and lifts the suspension when unsuspended", async () => {
     orgs = [fakeOrg(5002, "heig-suspended", 702)];
     await handled("installation", installation("created", 702));
     orgs = [fakeOrg(5002, "heig-suspended", 702, { suspended: true })];
     await handled("installation", installation("suspend", 702));
-    expect((await orgByGithubId(5002))?.installationId).toBeNull();
+    const suspended = await orgByGithubId(5002);
+    expect(suspended).toMatchObject({ installationId: 702, status: "active" });
+    expect(suspended!.suspendedAt).not.toBeNull();
+    expect(orgView(suspended!).installed).toBe(false);
+    const [audited] = await audits("github_org.installation_suspended", suspended!.id);
+    expect(audited!.payload).toMatchObject({ suspended: true, via: "webhook" });
     orgs = [fakeOrg(5002, "heig-suspended", 702)];
     await handled("installation", installation("unsuspend", 702));
-    expect((await orgByGithubId(5002))?.installationId).toBe(702);
+    expect(await orgByGithubId(5002)).toMatchObject({ installationId: 702, suspendedAt: null });
+    expect(await audits("github_org.installation_suspended", suspended!.id)).toHaveLength(2);
   });
 
   it("ignores a user's installation", async () => {
@@ -337,6 +350,92 @@ describe("installation events (GitHub's current state recorded)", () => {
     expect(await reconcileDeliveries(server.app, config)).toMatch(/^1 local deliveries replayed/);
     expect((await delivery(created))?.processedAt).not.toBeNull();
     expect((await orgByGithubId(5004))?.installationId ?? null).toBeNull();
+  });
+});
+
+/*
+ * F-PROJ-18, F-NOTIF-13 `github_org_lost` (M3-09b): the course staff of each
+ * non-archived classroom linked to the organization are told once when Quiz's
+ * App stops acting on it — uninstalled, or the organization deleted with its
+ * installation —, one entry per classroom; a suspension, a replay and an
+ * organization whose App was already gone tell nobody.
+ */
+describe("an organization lost (github_org_lost)", () => {
+  const lostBells = async (userId: string) =>
+    (
+      await server.app.db
+        .select({ payload: notifications.payload })
+        .from(notifications)
+        .where(eq(notifications.userId, userId))
+    )
+      .map((r) => NotificationPayload.parse(r.payload))
+      .filter((p) => p.kind === "github_org_lost");
+
+  /** Two classrooms of one course linked to `orgId`, one of them archived; the staff: a teacher and a colleague. */
+  async function linkedClassrooms(orgId: string) {
+    const db = server.app.db;
+    const teacher = await server.signIn("teacher");
+    const colleague = await server.signIn("teacher");
+    const student = await server.signIn("student");
+    const open = await seedLive(db, { teacherId: teacher.id, studentIds: [student.id], questions: 0 });
+    const archived = await seedLive(db, { teacherId: teacher.id, questions: 0 });
+    await db.insert(courseStaff).values({ courseId: open.courseId, userId: colleague.id });
+    await db.update(classrooms).set({ archivedAt: new Date() }).where(eq(classrooms.id, archived.classroomId));
+    for (const room of [open, archived]) {
+      await db.insert(githubClassroomLinks).values({ classroomId: room.classroomId, orgId, linkedBy: teacher.id, linkedAt: new Date() });
+    }
+    const [row] = await db.select({ name: classrooms.name }).from(classrooms).where(eq(classrooms.id, open.classroomId));
+    return { teacher, colleague, student, classroomId: open.classroomId, classroomName: row!.name };
+  }
+
+  it("tells the staff of its open classrooms once when the App is uninstalled, never on a suspension or a replay", async () => {
+    const org = await orgRow({ githubOrgId: 7001, login: "heig-lost", installationId: 901 });
+    const { teacher, colleague, student, classroomId, classroomName } = await linkedClassrooms(org.id);
+    // Suspended: GitHub's state, whatever the event said. Kept, nobody told.
+    orgs = [fakeOrg(7001, "heig-lost", 901, { suspended: true })];
+    await handled("installation", { action: "suspend", installation: { id: 901 } });
+    expect(await orgByGithubId(7001)).toMatchObject({ installationId: 901 });
+    expect(await lostBells(teacher.id)).toEqual([]);
+    // An unrelated event while suspended re-reads the same state: still nobody.
+    await handled("installation", { action: "new_permissions_accepted", installation: { id: 901 } });
+    expect(await lostBells(teacher.id)).toEqual([]);
+
+    orgs = [fakeOrg(7001, "heig-lost", 901)];
+    await handled("installation", { action: "unsuspend", installation: { id: 901 } });
+    orgs = [fakeOrg(7001, "heig-lost", null)];
+    await handled("installation", { action: "deleted", installation: { id: 901 } });
+    const lost = { kind: "github_org_lost", classroomId, classroomName, orgLogin: "heig-lost" };
+    expect(await lostBells(teacher.id)).toEqual([lost]);
+    expect(await lostBells(colleague.id)).toEqual([lost]);
+    expect(await lostBells(student.id)).toEqual([]);
+
+    // Replayed, and the organization then deleted too: told once already.
+    await handled("installation", { action: "deleted", installation: { id: 901 } });
+    await handled("organization", { action: "deleted", organization: { id: 7001, login: "heig-lost" } });
+    expect(await lostBells(teacher.id)).toEqual([lost]);
+  });
+
+  it("tells them once when the installation goes while suspended", async () => {
+    const org = await orgRow({ githubOrgId: 7003, login: "heig-suspended-gone", installationId: 903 });
+    const { teacher, classroomId, classroomName } = await linkedClassrooms(org.id);
+    orgs = [fakeOrg(7003, "heig-suspended-gone", 903, { suspended: true })];
+    await handled("installation", { action: "suspend", installation: { id: 903 } });
+    expect(await lostBells(teacher.id)).toEqual([]);
+    orgs = [fakeOrg(7003, "heig-suspended-gone", null)];
+    await handled("installation", { action: "deleted", installation: { id: 903 } });
+    expect(await lostBells(teacher.id)).toEqual([{ kind: "github_org_lost", classroomId, classroomName, orgLogin: "heig-suspended-gone" }]);
+    expect(await orgByGithubId(7003)).toMatchObject({ installationId: null, suspendedAt: null });
+  });
+
+  it("tells them when the organization is deleted with its installation, one entry per classroom", async () => {
+    const org = await orgRow({ githubOrgId: 7002, login: "heig-doomed", installationId: 902 });
+    const { teacher, classroomId } = await linkedClassrooms(org.id);
+    const second = await seedLive(server.app.db, { teacherId: teacher.id, questions: 0 });
+    await server.app.db
+      .insert(githubClassroomLinks)
+      .values({ classroomId: second.classroomId, orgId: org.id, linkedBy: teacher.id, linkedAt: new Date() });
+    await handled("organization", { action: "deleted", organization: { id: 7002, login: "heig-doomed" } });
+    expect((await lostBells(teacher.id)).map((p) => p.classroomId).sort()).toEqual([classroomId, second.classroomId].sort());
   });
 });
 

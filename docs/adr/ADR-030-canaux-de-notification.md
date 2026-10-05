@@ -6,9 +6,9 @@ Accepted (2026-09-26), consolidated through the 2026-10-01 amendments.
 This consolidation changes no decision. Extensions:
 [ADR-053](ADR-053-retrait-des-codes-d-entree.md) removes classroom join codes;
 [ADR-055](ADR-055-etat-du-systeme.md) adds admin system alerts;
-[ADR-035](ADR-035-fusion-de-classroom.md) accepts project kinds for the merge.
-Accepted project kinds and their defaults are a pending extension of this record,
-not evidence they are delivered: the current contracts contain twelve kinds.
+[ADR-035](ADR-035-fusion-de-classroom.md) accepts project kinds for the merge,
+delivered by merge task M3-09b (addendum of 2026-10-04 below): the contracts hold
+nineteen kinds.
 
 The [historical record](history/ADR-030-canaux-de-notification.md) preserves the
 rejected Teams transports, migration sequence, implementation steps and original
@@ -107,6 +107,13 @@ App is on for all. The predicates below are part of the decision, not mere UI hi
 | `pool_question_added` | Every publication, first or later version; pool owner and contributor/owner shares, not readers or author; folded per pool | Off |
 | `pool_shared`, `pool_ownership` | Existing sharing/ownership events for the affected account | On |
 | `system_alert` | Admin health failure, continued failure after a day, or recovery; not folded; ADR-055 | E-mail on; Teams forbidden |
+| `project_published` | `publishProject` committed, by hand or by the ticker (once: a draft publishes once); the classroom's claimed student seats; not folded | Off |
+| `project_deadline_reminder` | 24 h before the student's EFFECTIVE deadline, claimed and sent in one tick (below); claimed student seats | On |
+| `project_repo_invited` | Accept provisioned the repository in THIS request and GitHub left the invitation pending; the student; never on an idempotent repeat nor a resend | On |
+| `project_grade_final` | FIRST release only (`ProjectReleaseResult.first`); the students of the repositories the release covered, a staff seat's never; no score carried | On |
+| `project_deadline_applied` | A `project.deadline` job pass that locked or committed on at least one repository; the course staff; folded per project with the count | Off |
+| `project_provision_failed` | A row's FIRST provisioning failure, never an invitation GitHub refused; the course staff; folded per project, `reason` the latest (`repo_name_taken`, `github_error`) | On |
+| `github_org_lost` | The installation an organization held forgotten — uninstalled, deleted with it, or a 404 the healing met —; the course staff of each non-archived linked classroom, one entry per classroom; not folded; a suspension tells nobody | On |
 
 `activity_scheduled` claims `scheduled_announced_at` before sending. The marker is
 never cleared by rescheduling or returning to draft, and never copied to a new
@@ -235,18 +242,86 @@ Teams credentials hides its channel/routes without deleting links. Disabling mai
 credentials restores dry-run. Returning to the historical bot requires a migration
 and cannot reconstruct chats for links made by the current design.
 
-### Accepted project extension, not a delivered catalogue
+### The project kinds (addendum of 2026-10-04, merge task M3-09b)
 
-Merge decision D18 accepts student kinds `project_published`,
-`project_deadline_reminder`, `project_repo_invited`, `project_grade_final`, and staff
-kinds `project_deadline_applied`, `project_provision_failed`, `github_org_lost`.
-E-mail/Teams default on for reminder, invitation, final grade, provisioning failure
-and lost organization; off for the others. They must use the same notification
-entry, locale and per-kind preferences, not port classroom e-mails independently.
-Only `activity_available` has already adopted the neutral activity payload; remaining
-migration boundaries are I58–I60 in `docs/merge/07-incompatibilities.md`.
-Old classroom unsubscribe links are planned to lead to Quiz notification settings.
-A kind enters settings with its emitter, never as a toggle that does nothing.
+Merge decision D18 accepted, and M3-09b delivers, the student kinds
+`project_published`, `project_deadline_reminder`, `project_repo_invited`,
+`project_grade_final`, and the staff kinds `project_deadline_applied`,
+`project_provision_failed`, `github_org_lost` (F-NOTIF-13). They use the same
+notification entry, locale and per-kind preferences as every other kind; nothing of
+heig-classroom's mails was ported independently, and its `grade.final` mail on the
+final review is dropped (F-PROJ-15: the score reaches a student with the release).
+E-mail and Teams default on for the reminder, the invitation, the final grade, the
+provisioning failure and the lost organization; off for `project_published` and
+`project_deadline_applied`. The payloads carry the project's id and name and counts,
+never a score, a login or a student's name (N-SEC-20); the entry opens the project
+(`/projects/:id`, the student's view of it for a student), `github_org_lost` the
+classroom's Settings. The seven activity types were declared in ONE manifest bump,
+`TEAMS_APP_VERSION` 2.1.0 → 2.2.0.
+
+**Settings.** The kinds enter the grid with their emitters: on a platform without
+Quiz's GitHub App (`GITHUB_APP_ID` unset) they are never sent and not listed
+(`GITHUB_KINDS`, `notificationKindsFor({ github })`) — a toggle that does nothing is
+a lie.
+
+**A project fold target.** `notifications.project_id` lifts the payload's
+`projectId` (a foreign key: a deleted project takes its bells), and
+`NOTIFICATION_FOLD_TARGETS` gains `project_deadline_applied` and
+`project_provision_failed` on it — one unread entry per recipient and project, the
+partial unique indexes generated as for the other targets (migration `0068`).
+F-NOTIF-12's list is amended accordingly. The latest payload wins the fold, so a
+`project_provision_failed` entry names the LAST failure's `reason`.
+
+**The reminder** mirrors the deadline reminders above, on the student's EFFECTIVE
+deadline (their repository's own, else the project's), 24 hours before it — the one
+`DEADLINE_REMINDER_MS` of `@quiz/domain`, the evaluations' too —, with two claims in
+the project ticker (`projectTick`, every 20 s), each a conditional UPDATE whose
+returned rows alone are told: `projects.reminder_sent_at` claims the students under
+the project's deadline — every claimed student seat of the classroom, repository or
+not, except the members (individual or group) of a repository with its own deadline,
+a deleted one or one the staff locked by hand —; `project_repos.reminder_sent_at`
+claims the members of a repository with its own deadline. **Window rule**: as the
+evaluation scan reads `started_at`, both scans require the project's `start_at` to
+lie at least 24 hours before the deadline they read — a project published, or a
+repository handed its own deadline, within a day of it tells nobody; an own deadline
+given within a day on a project open for longer is reminded (the student's window is
+their time in the project). **Re-arm rule**: a deadline that moves (a project's
+patch, a repository's own deadline, a reopen) nulls the matching claim only when the
+new effective deadline is more than 24 hours away (`reminderClaimAfterMove`, the one
+domain rule); otherwise the claim stays — a reminder sent is never sent again, one
+still owed on a deadline brought nearer is still owed. A repository whose own
+deadline is taken back falls under the project's claim again: when that claim fired
+already, its members were reminded of their own deadline and are not reminded of the
+project's. The scan never reminds after the deadline, skips drafts, archived
+projects and archived classrooms, and a late pass catches up while the deadline lies
+ahead.
+
+**A lost organization.** The notice follows the ROW's transition and GitHub's
+STATE, never a webhook's words: the installation an organization held is forgotten
+by `forgetInstallation` when GitHub no longer has it (an `installation` webhook of
+any action re-read against `GET /app/installations/{id}`, the listing, the healing's
+404), or by `markOrgDeleted` when the organization goes with its installation; each
+tells the staff once. A SUSPENDED installation is not lost: GitHub still has it and
+lifts the suspension, so the row keeps its `installation_id` with
+`github_organizations.suspended_at` set (audited `installation_suspended` on each
+change) and the App acts on it as on none — `installed()` is the one rule, installed
+AND not suspended AND active, the listing, the connect sheet, the projects and the
+journal reading it alike — and a deletion after a suspension is still the
+installation going away, told once. An organization whose App was already gone tells
+nobody again when deleted; a row retired because another organization took its
+login (`retireLoginHolders`) tells nobody, a rename race being the likelier reading.
+GitHub's sender is no Quiz account, so F-NOTIF-11's "own action" cannot apply.
+
+**For the import (M8-01).** `projects.reminder_sent_at` and
+`project_repos.reminder_sent_at` are null = owed. The import must set them to the
+import time for every imported project or repository whose effective deadline lies
+within 24 hours of the import, or the first tick sends a burst; a deadline further
+ahead is legitimately reminded later and may stay null; heig-classroom's own marker,
+when one exists, is copied as it is.
+
+Only `activity_available` has adopted the neutral activity payload; the remaining
+boundaries are I58–I60 in `docs/merge/07-incompatibilities.md`. Old classroom
+unsubscribe links are planned to lead to Quiz notification settings.
 
 ## Consequences and alternatives
 
@@ -265,6 +340,12 @@ Teams designs and why their tenant/operational requirements failed.
 - `apps/api/src/db/notifications.ts`: folded targets and partial unique indexes.
 - `apps/api/src/modules/{evaluation/announce,grading/ready,results/updated}.ts` and
   `grading/service.ts`: committed event hooks and grade comparison.
+- `notifyUsers` (`notifications/service.ts`): one payload to an audience, best-effort,
+  the way every module tells people of a committed fact; `classroomStaffIds`
+  (`org/service.ts`): the one staff audience of a classroom.
+- `apps/api/src/modules/project/notify.ts` (audiences, the reminder's claims and the
+  sends), the trigger sites in `project/{lifecycle,accept,grades,jobs,deadline}.ts`
+  and `github/service.ts` (`orgLost`); `@quiz/domain/deadlineReminder.ts`.
 - `apps/api/src/modules/notifications/{ssoAuth,teamsLink,teams,teamsApp}.ts`: Teams
   identity, installation and transport; associated database/unit tests.
 - `apps/web/src/notifications/toasts.ts`, `App.tsx`: live baseline and quiet pages.

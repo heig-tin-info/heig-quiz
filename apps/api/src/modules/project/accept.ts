@@ -30,8 +30,14 @@
  * invites them (idempotent). Every account invited is recorded
  * (`access.ts`), what a departure revokes.
  *
- * The staff's notification of a failure is M3-09's; this task marks the one
- * failure that will notify (`payload.notify` of `project.accept_failed`).
+ * The notifications (F-NOTIF-13, M3-09b): a student is told their
+ * invitation awaits them (`project_repo_invited`) when THIS request invited
+ * them and GitHub left the invitation pending — the accepting student of a
+ * repository just provisioned, the members a group's first Accept invites,
+ * a later member joining — never on an idempotent repeat; the staff are
+ * told of the row's first failure (`project_provision_failed`,
+ * `payload.notify` of `project.accept_failed`, with its `reason`), never of
+ * an invitation GitHub refused, which only the student can fix.
  */
 import { randomUUID } from "node:crypto";
 
@@ -52,9 +58,11 @@ import { provisionStudentRepo, RepoNameTaken } from "../../github/provision.js";
 import { redactTokens } from "../../redact.js";
 import { projectInstallation, type InstalledOrg } from "../github/service.js";
 import { DomainError } from "../http.js";
+import { notifyUsers } from "../notifications/service.js";
 import { followInvitation, inviteAccount, recordGrant } from "./access.js";
 import { ProjectError } from "./errors.js";
 import { copyGroupOf, groupRepoWhere, repoMembers, seatRepo, type AccountRow, type GroupRow } from "./groupRepos.js";
+import { tellProjectStaff } from "./notify.js";
 import { PROVISION_CLAIM_STALE_MS, type RepoRow } from "./repos.js";
 import type { ProjectRow } from "./views.js";
 
@@ -240,6 +248,10 @@ async function acceptGroup(db: Db, config: AppConfig, input: AcceptInput, seat: 
 }
 
 const noGroup = () => new ProjectError("no_group", "You are in no group of this project: ask your teacher to place you");
+
+/** `project_repo_invited` to the accounts THIS request invited and GitHub left pending (F-NOTIF-13). */
+const tellInvited = (db: Db, project: ProjectRow, userIds: readonly string[]) =>
+  notifyUsers(db, userIds, { kind: "project_repo_invited", projectId: project.id, projectTitle: project.name });
 /** The seat left (removed, unclaimed, turned staff seat) during the Accept: the 404 of a project no longer reached. */
 const gone = () => new DomainError("not_found", 404, "No such project");
 
@@ -311,20 +323,31 @@ async function provision(db: Db, input: AcceptInput, row: RepoRow, github: Githu
       // shielded from force pushes (heig-classroom's degraded mode H8).
       payload: { repo: result.fullName, invitation: result.invitationStatus, protected: result.rulesetId !== null },
     });
+    if (result.invitationStatus === "pending") await tellInvited(db, project, [input.userId]);
     return updated!;
   } catch (err) {
     log.error({ err, repo: row.id }, "provisioning a student repository failed");
     // Only the student can fix a refused invitation (an account renamed
     // away, flagged or deleted): the staff are not told of it.
     const refused = isInvitationRefused(err);
+    const reason = err instanceof RepoNameTaken ? "repo_name_taken" : refused ? "invitation_refused" : "github_error";
     const first = await markProvisionFailed(db, row.id, now, redactTokens(String(err)));
     await audit(db, {
       ...input.actor,
       action: "project.accept_failed",
       subjectType: "project_repo",
       subjectId: row.id,
-      payload: { notify: first && !refused },
+      payload: { notify: first && !refused, reason },
     });
+    if (first && reason !== "invitation_refused") {
+      await tellProjectStaff(db, project, {
+        kind: "project_provision_failed",
+        projectId: project.id,
+        projectTitle: project.name,
+        count: 1,
+        reason,
+      });
+    }
     if (err instanceof RepoNameTaken) throw new ProjectError("repo_name_taken", "A repository of that name exists already");
     if (refused) throw new ProjectError("github_account_stale", "GitHub refused to invite your account: relink it");
     throw new ProjectError("provision_failed", "Creating your repository failed: try again");
@@ -339,7 +362,7 @@ async function provision(db: Db, input: AcceptInput, row: RepoRow, github: Githu
  * so one who left meanwhile is not invited from a stale list.
  */
 async function inviteGroup(db: Db, input: AcceptInput, repo: RepoRow, github: GithubSide): Promise<RepoRow> {
-  let pending = false;
+  const pending: string[] = [];
   for (const member of await repoMembers(db, repo, input.project.classroomId)) {
     if (member.enrollmentId === input.enrollmentId || member.account === null) continue;
     const ctx = { actor: input.actor, now: input.now, log: input.log, via: "accept", failure: "provision_failed" } as const;
@@ -347,9 +370,10 @@ async function inviteGroup(db: Db, input: AcceptInput, repo: RepoRow, github: Gi
       input.log.warn({ err, repo: repo.id, enrollmentId: member.enrollmentId }, "inviting a group member failed");
       return null;
     });
-    pending ||= invited?.invitation === "pending";
+    if (invited?.invitation === "pending") pending.push(member.userId);
   }
-  if (!pending || repo.invitationStatus === "pending") return repo;
+  await tellInvited(db, input.project, pending);
+  if (pending.length === 0 || repo.invitationStatus === "pending") return repo;
   await followInvitation(db, repo, "pending");
   return { ...repo, invitationStatus: "pending" };
 }
@@ -379,5 +403,6 @@ async function joinRepo(db: Db, config: AppConfig, input: AcceptInput, repo: Rep
   const invited = await inviteAccount(db, github.client.octokit, repo, member, ctx);
   if (invited === null) throw gone();
   await followInvitation(db, repo, invited.invitation);
+  if (invited.invitation === "pending") await tellInvited(db, input.project, [input.userId]);
   return { status: repo.provisionStatus, fullName: repo.fullName, invitationStatus: invited.invitation };
 }
