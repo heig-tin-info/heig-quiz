@@ -111,7 +111,7 @@ import {
   GradeGroup,
   GroupErrorCode,
   GroupSetDetail,
-  StudentGroupSet,
+  StudentGroupSets,
   GroupSetSummary,
   TemplateDetail,
   TemplatePullPreview,
@@ -521,7 +521,7 @@ const CHECKED: Case[] = [
   // The student's view of them (M3-17): every classroom's.
   ...courses
     .flatMap((c) => c.classrooms)
-    .map((r) => each("/app/api/classrooms/:id/group-sets/student", `/app/api/classrooms/${r.id}/group-sets/student`, StudentGroupSet)),
+    .map((r) => one("/app/api/classrooms/:id/group-sets/student", `/app/api/classrooms/${r.id}/group-sets/student`, StudentGroupSets)),
   // The drill (ADR-041, #317): the student's tab and the teacher's switch.
   one("/app/api/drill/session", "/app/api/drill/session", DrillSession),
   each("/app/api/drill/classrooms", "/app/api/drill/classrooms", DrillClassroom),

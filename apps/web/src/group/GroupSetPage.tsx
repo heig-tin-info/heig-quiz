@@ -216,9 +216,7 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
     write(setWrite.patch({ openUntil: null })).then(() => toast(t("groups.open.closed"), "success"), failed);
 
   const menuItems: MenuItem[] = [
-    detail.set.open
-      ? { label: t("groups.open.change"), icon: DoorOpen, onSelect: () => setOpening(true) }
-      : { label: t("groups.open.menu"), icon: DoorOpen, onSelect: () => setOpening(true) },
+    { label: t(detail.set.open ? "groups.open.change" : "groups.open.menu"), icon: DoorOpen, onSelect: () => setOpening(true) },
     ...(detail.set.open ? [{ label: t("groups.open.close"), icon: DoorClosed, onSelect: () => void closeToStudents() }] : []),
     { label: t("groups.maxSize.menu"), icon: Ruler, onSelect: () => setMaxOpen(true) },
     { label: t("groups.duplicate"), icon: Copy, onSelect: () => duplicate.mutate() },
@@ -370,6 +368,49 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
   );
 }
 
+/**
+ * The maximum group size, as typed: the draft and its parse. Empty is no
+ * maximum, unless `required` (an open set's, F-PROJ-22).
+ */
+function useMaxSize(initial: number | null, required: boolean) {
+  const t = useT();
+  const [draft, setDraft] = useState(initial === null ? "" : String(initial));
+  const parsed = draft.trim() === "" ? ({ success: !required, data: null } as const) : GroupMaxSize.safeParse(Number(draft));
+  const invalid = parsed.success ? undefined : t(required ? "groups.open.maxInvalid" : "groups.maxSize.invalid");
+  return { draft, setDraft, parsed, invalid };
+}
+
+/** The maximum size's field, with its refusal under it: the same in the maximum's dialog and the opening's. */
+function MaxSizeField({
+  id,
+  state,
+  placeholder,
+}: {
+  id: string;
+  state: ReturnType<typeof useMaxSize>;
+  placeholder?: string | undefined;
+}) {
+  const t = useT();
+  return (
+    <div className="flex flex-col gap-1">
+      <Field
+        id={id}
+        label={t("groups.maxSize")}
+        type="number"
+        min={1}
+        max={50}
+        width="w-24"
+        className="text-right tabular-nums"
+        placeholder={placeholder}
+        value={state.draft}
+        onChange={(e) => state.setDraft(e.target.value)}
+        {...fieldErrorProps(id, state.invalid)}
+      />
+      <FieldError id={id}>{state.invalid}</FieldError>
+    </div>
+  );
+}
+
 const MAX_ID = "group-set-max-size";
 
 /** The set's maximum group size: a warning on a group above it, never a refusal (ADR-070 §3). Empty: none. */
@@ -383,10 +424,9 @@ function MaxSizeDialog({
   onClose: () => void;
 }) {
   const t = useT();
-  const [draft, setDraft] = useState(value === null ? "" : String(value));
-  const parsed = draft.trim() === "" ? ({ success: true, data: null } as const) : GroupMaxSize.safeParse(Number(draft));
+  const max = useMaxSize(value, false);
+  const { parsed } = max;
   const submit = useMutation({ mutationFn: (maxSize: number | null) => save(maxSize), onSuccess: onClose });
-  const invalid = parsed.success ? undefined : t("groups.maxSize.invalid");
   return (
     <FormDialog
       title={t("groups.maxSize")}
@@ -399,22 +439,7 @@ function MaxSizeDialog({
       error={submit.isError ? <p className="text-[13px] text-danger">{groupRefusalMessage(submit.error, t)}</p> : null}
     >
       <p className="text-sm text-fg-muted">{t("groups.maxSize.desc")}</p>
-      <div className="flex flex-col gap-1">
-        <Field
-          id={MAX_ID}
-          label={t("groups.maxSize")}
-          type="number"
-          min={1}
-          max={50}
-          width="w-24"
-          className="text-right tabular-nums"
-          placeholder={t("groups.maxSize.none")}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          {...fieldErrorProps(MAX_ID, invalid)}
-        />
-        <FieldError id={MAX_ID}>{invalid}</FieldError>
-      </div>
+      <MaxSizeField id={MAX_ID} state={max} placeholder={t("groups.maxSize.none")} />
     </FormDialog>
   );
 }
@@ -452,11 +477,10 @@ function OpenDialog({
   const t = useT();
   const toast = useToast();
   const [until, setUntil] = useState(toLocalInput(openUntil ?? inAWeek()));
-  const [max, setMax] = useState(maxSize === null ? "" : String(maxSize));
+  const max = useMaxSize(maxSize, true);
   const at = fromLocalInput(until);
   const dateOk = at !== null && Date.parse(at) > Date.now();
-  const size = GroupMaxSize.safeParse(Number(max));
-  const sizeOk = max.trim() !== "" && size.success;
+  const size = max.parsed;
   const submit = useMutation({
     mutationFn: (body: { openUntil: string; maxSize: number }) => save(body),
     onSuccess: (detail) => {
@@ -468,10 +492,10 @@ function OpenDialog({
     <FormDialog
       title={t("groups.open.title")}
       onClose={onClose}
-      onSubmit={() => dateOk && size.success && submit.mutate({ openUntil: at!, maxSize: size.data })}
+      onSubmit={() => dateOk && size.success && size.data !== null && submit.mutate({ openUntil: at!, maxSize: size.data })}
       submitLabel={t("groups.open.submit")}
       submitting={submit.isPending}
-      canSubmit={dateOk && sizeOk}
+      canSubmit={dateOk && size.success}
       error={submit.isError ? <p className="text-[13px] text-danger">{groupRefusalMessage(submit.error, t)}</p> : null}
     >
       <p className="text-sm text-fg-muted">{t("groups.open.desc")}</p>
@@ -489,21 +513,7 @@ function OpenDialog({
           />
           <FieldError id={OPEN_UNTIL_ID}>{dateOk ? undefined : t("groups.open.dateInvalid")}</FieldError>
         </div>
-        <div className="flex flex-col gap-1">
-          <Field
-            id={OPEN_MAX_ID}
-            label={t("groups.maxSize")}
-            type="number"
-            min={1}
-            max={50}
-            width="w-24"
-            className="text-right tabular-nums"
-            value={max}
-            onChange={(e) => setMax(e.target.value)}
-            {...fieldErrorProps(OPEN_MAX_ID, sizeOk ? undefined : t("groups.open.maxInvalid"))}
-          />
-          <FieldError id={OPEN_MAX_ID}>{sizeOk ? undefined : t("groups.open.maxInvalid")}</FieldError>
-        </div>
+        <MaxSizeField id={OPEN_MAX_ID} state={max} />
       </div>
       <Alert tone="warning" icon={TriangleAlert}>
         <p>{t("groups.open.risk")}</p>

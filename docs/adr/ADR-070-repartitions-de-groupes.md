@@ -326,8 +326,8 @@ Decision 8, the students' side, settled before it was built:
 How it is built (orchestrator, M3-17):
 
 - **The student view** is one service of the module (`studentGroupSets`),
-  each field picked by hand: the set (`name`, `maxSize`, `openUntil`,
-  `open`), `serverNow`, `writable`, `myGroupId`, the groups (`name`,
+  each field picked by hand: `serverNow`, and per set the set (`name`,
+  `maxSize`, `openUntil`, `open`), `writable`, `myGroupId`, the groups (`name`,
   `size`, members' names) and, while open, `unplaced`; closed, the reader's
   own group alone. Never a roster line's id, a claim, an e-mail, a GitHub
   login, the projects naming the set. `writable` is the server's: open, no
@@ -339,12 +339,16 @@ How it is built (orchestrator, M3-17):
   false); the writes `POST /app/api/group-sets/:id/student/groups` (create
   and name, the creator moved in; the default name in the student's
   language), `PUT|DELETE …/student/membership` (join by group id, leave),
-  `PATCH …/student/groups/:gid` (rename their own), each answering the set
-  as its writer reads it. A write takes the caller's own portal session on a
-  claimed student seat of a set that reaches them (`studentGroupSet`,
-  `guards.ts`): an impersonation (in every environment), a teacher in the
-  student view, a staff seat, a `seb` or `kiosk` session, a token get the
-  404 of a missing set. Group ids only, never a roster line's.
+  `PATCH …/student/groups/:gid` (rename their own), each answering the
+  classroom's sets as its writer reads them (`{ serverNow, sets }`, the
+  read's own shape). A write takes the caller's own portal session on a
+  claimed student seat of a set that reaches them (`selfFormingSeat`, the
+  one rule the loader `studentGroupSet` and the read's `writable` share,
+  `guards.ts`): a teacher in the student view, a staff seat, a `seb` or
+  `kiosk` session, a token get the 404 of a missing set; an impersonation
+  the 404 in development, and the auth plugin's `403
+  impersonation_read_only` elsewhere (ADR-034). Group ids only, never a
+  roster line's.
 - **The checks**, under the set's lock (`writeSet`), BEFORE anything is
   written or stepped: open by the server's clock (`409 set_closed`, no
   grace); no group of the set with a repository in any project naming it,

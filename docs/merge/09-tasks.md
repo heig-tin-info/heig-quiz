@@ -3003,25 +3003,33 @@ serves now (16a), and what waits for the group repositories (16b).
   `set_frozen`, `group_full` (409); `student.ts`: `StudentActivities.groupSets`
   and `StudentClassroomPage.hasGroups`. No migration (`open_until` since
   0064). `guards.ts`: `openSet`, `studentVisibleSet` (S2, one SQL rule),
-  `findStudentGroupSet`/`studentGroupSet` (the writes' loader: own portal
-  session, claimed STUDENT seat, a set that reaches the students; anyone
-  else the 404). `project/groupCopy.ts`: `setHasRepo` (the copy's
-  `HAS_REPO` over every project naming the set, stopped and archived ones
-  included). `modules/group/service.ts`: `patchGroupSet` opens/closes
+  `publishedProject` (also read by `findStudentProject` and
+  `findStudentProjectView`; the other sites keep their own conditions),
+  `selfFormingSeat` (the one rule of who forms groups: own portal session,
+  claimed STUDENT seat), `findStudentGroupSet`/`studentGroupSet` (the
+  writes' loader; anyone else the 404). `project/groupCopy.ts`: `setFrozen`
+  (an `EXISTS` of the copy's `HAS_REPO` over every project naming the set,
+  stopped and archived ones included) and `setHasRepo`. `modules/group/service.ts`: `patchGroupSet` opens/closes
   (`max_size_required` when open after the write), a duplicate born
   closed; `writeSet` hints `groups` to the claimed students' `user:` topics
   when the set reaches them before or after the write (never
-  `classroom:`); the students' writes through `studentWrite` — open (no
+  `classroom:`); one read, `setRows` (`readOnly`, `open` = `openSet`,
+  `frozen` = `setFrozen`, as columns), behind the staff's list and detail,
+  the student view and `anyVisibleSet`; the staff's and the students'
+  writes share `insertGroup`, `renameIn`, `placeIn` (its `capacity` for
+  the students); the students' writes through `studentWrite` — open (no
   grace) and not frozen checked under the set's lock before the write and
-  any step, `group_full` at the maximum or above, the audit
-  `group.create|rename|member_move` with `self: true` and the line — and
-  the student view `studentGroupSets` (fields picked by hand; closed: own
-  group only, no `unplaced`), `studentGroupSetCards`, `hasStudentGroupSets`
-  (read by `activity/service.ts`). Routes: `GET
+  any step, `group_full` at the maximum or above, one audit per write
+  (`group.create|rename|member_move`, `self: true`, the line) — and the
+  student view `studentGroupSets` (`{ serverNow, sets }`, fields picked by
+  hand, three reads whatever the number of sets; closed: own group only,
+  no `unplaced`), `studentGroupSetCards` (open and not frozen),
+  `hasStudentGroupSets` (read by `activity/service.ts`). Routes: `GET
   /app/api/classrooms/:id/group-sets/student` (`readableClassroom`, the
   student payload forced; `writable` only for the caller's own portal
   session on a student seat), `POST /app/api/group-sets/:id/student/groups`,
-  `PUT|DELETE …/student/membership`, `PATCH …/student/groups/:gid`.
+  `PUT|DELETE …/student/membership`, `PATCH …/student/groups/:gid`, each
+  answering the classroom's list as the writer reads it.
   Web: `group/StudentGroups.tsx` (the tab: one primary "Create a group" for
   the first set the reader may write while in no group of it, Join on a
   group not full, Rename and Leave on their own, drawn first; closed: own
@@ -3038,14 +3046,16 @@ serves now (16a), and what waits for the group repositories (16b).
   (`?groups=1`); scenes `student-groups*`, `student-home-groups`,
   `student-classroom-groups-row`, `student-view-groups`,
   `group-set-open-dialog`.
-- **Tests**: `group/studentGroups.db.test.ts` (11, on a server with the
-  development login): opening and closing (`max_size_required`, a past
+- **Tests**: `group/studentGroups.db.test.ts` (12, on a server with the
+  development login, and one without for an impersonation's `403
+  impersonation_read_only`): opening and closing (`max_size_required`, a past
   date, a duplicate closed, `classroom_archived`, audited); create (default
   name in the student's language), join, `group_full`, leave, rename (own
   only, `duplicate_name`), audited `self`; two joins racing for the last
   seat; a draft's copy stepped by a student's create; `set_closed` (no
   grace) and the 404 of an invisible closed set; `set_frozen` with a
-  repository in a following and in a stopped, archived copy; an archived
+  repository in a following and in a stopped, archived copy (and no
+  Activities row then); an archived
   classroom; an impersonation (development), a teacher in the student
   view, a staff seat, a stranger, a token (404), `seb` and `kiosk` (401);
   the leak search over every student-side body (a second classroom's set, a
@@ -3057,7 +3067,9 @@ serves now (16a), and what waits for the group repositories (16b).
   (13), `StudentClassroom.test.tsx` (the tab and the row, never the
   accent), `GroupSetPage.test.tsx` (the opening dialog, the banner's
   close), the router and bottom-bar tests, the mock contract check.
-- **Known gaps / for later**: a closed set used by a published project has
+- **Known gaps / for later**: the race for a group's last seat is tested on
+  PGlite, a single connection that serialises transactions anyway; the
+  set's FOR UPDATE is what holds it on PostgreSQL (review, 2026-10-05); a closed set used by a published project has
   no mock scene (the component test draws it); archiving a classroom does
   not clear `open_until` — an archived classroom's set is never open by
   rule (`openSet`), and stays closed if it is unarchived after its date.

@@ -58,6 +58,9 @@ export async function statsForTeacher(db: Db, caller: Caller, now: Date): Promis
   return { studentsInProgress: row?.n ?? 0 };
 }
 
+/** What every kind adds to the student's Activities: its cards, and the running polls. */
+type KindCards = Omit<StudentActivities, "groupSets">;
+
 /**
  * The student's Activities, every classroom or one: every kind's groups,
  * concatenated; and the group sets open to them (F-PROJ-22, S3), none to a
@@ -65,7 +68,7 @@ export async function statsForTeacher(db: Db, caller: Caller, now: Date): Promis
  */
 async function studentCards(db: Db, caller: Caller, now: Date, scope: StudentScope): Promise<StudentActivities> {
   const [kinds, groupSets] = await Promise.all([
-    Promise.all(KINDS.map((k): Promise<Omit<StudentActivities, "groupSets">> => k.studentCards(db, caller, now, scope))),
+    Promise.all(KINDS.map((k): Promise<KindCards> => k.studentCards(db, caller, now, scope))),
     scope.confined ? [] : studentGroupSetCards(db, caller.id, now, scope.classroomId),
   ]);
   return {

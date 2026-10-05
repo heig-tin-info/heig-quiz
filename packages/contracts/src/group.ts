@@ -253,8 +253,7 @@ export const GroupMemberName = z.object({ nom: z.string(), prenom: z.string() })
 export type GroupMemberName = z.infer<typeof GroupMemberName>;
 
 /**
- * One set as a student reads it (`GET /app/api/classrooms/:id/group-sets/student`,
- * and the answer of every student write), the group module's student exit
+ * One set as a student reads it (an item of {@link StudentGroupSets}), the group module's student exit
  * (ADR-070 §8, N-SEC-20). A set reaches a student while it is OPEN, or
  * while a published project of the classroom that is not archived names it.
  *
@@ -268,8 +267,7 @@ export type GroupMemberName = z.infer<typeof GroupMemberName>;
  * of the set with a repository, the classroom not archived, their own portal
  * session on a claimed student seat (so never a teacher in the student
  * view, nor an impersonation). `myGroupId`: the caller's group, null when in
- * none. `serverNow`: the server's clock, to count down to `openUntil` and
- * read the set again when it passes.
+ * none.
  */
 export const StudentGroupSet = z.object({
   set: z.object({
@@ -279,7 +277,6 @@ export const StudentGroupSet = z.object({
     openUntil: z.iso.datetime().nullable(),
     open: z.boolean(),
   }),
-  serverNow: z.iso.datetime(),
   writable: z.boolean(),
   myGroupId: z.uuid().nullable(),
   groups: z.array(z.object({ id: z.uuid(), name: z.string(), size: z.number().int(), members: z.array(GroupMemberName) })),
@@ -287,8 +284,13 @@ export const StudentGroupSet = z.object({
 });
 export type StudentGroupSet = z.infer<typeof StudentGroupSet>;
 
-/** The classroom's sets a student reads, the oldest first. */
-export const StudentGroupSets = z.array(StudentGroupSet);
+/**
+ * `GET /app/api/classrooms/:id/group-sets/student`, and the answer of every
+ * student write: the classroom's sets the caller reads, the oldest first.
+ * `serverNow`: the server's clock, to read them again when an `openUntil`
+ * passes. A write answers the whole list, so the screen is one cache entry.
+ */
+export const StudentGroupSets = z.object({ serverNow: z.iso.datetime(), sets: z.array(StudentGroupSet) });
 export type StudentGroupSets = z.infer<typeof StudentGroupSets>;
 
 /**

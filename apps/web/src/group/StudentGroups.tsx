@@ -29,7 +29,7 @@
 import { Pencil, Plus, Users } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { GroupName, type GroupMemberName, type StudentGroupSet } from "@quiz/contracts";
+import { GroupName, type GroupMemberName, type StudentGroupSet, type StudentGroupSets } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { useToast } from "../notify";
@@ -46,7 +46,7 @@ import {
   SectionHeading,
   Skeleton,
 } from "../ui";
-import { studentWrite, useStudentGroupSets, useStudentGroupWrite } from "./api";
+import { studentWrite, useStudentGroupSets, useStudentGroupWrite, type StudentWrite } from "./api";
 import { groupRefusalMessage, studentName } from "./groupRules";
 
 type Group = StudentGroupSet["groups"][number];
@@ -61,11 +61,11 @@ export const isFull = (group: Pick<Group, "size">, maxSize: number | null): bool
 export const primarySetId = (sets: readonly StudentGroupSet[]): string | null =>
   sets.find((s) => s.writable && s.myGroupId === null)?.set.id ?? null;
 
-/** How long until the soonest open set closes, by the server's clock of each answer; null when none is open. */
-export function untilClosing(sets: readonly StudentGroupSet[]): number | null {
+/** How long until the soonest open set closes, by the answer's server clock; null when none is open. */
+export function untilClosing({ serverNow, sets }: StudentGroupSets): number | null {
   const waits = sets
     .filter((s) => s.set.open && s.set.openUntil !== null)
-    .map((s) => Date.parse(s.set.openUntil!) - Date.parse(s.serverNow));
+    .map((s) => Date.parse(s.set.openUntil!) - Date.parse(serverNow));
   return waits.length === 0 ? null : Math.max(0, Math.min(...waits));
 }
 
@@ -105,7 +105,7 @@ export function StudentGroups({ classroomId }: { classroomId: string }) {
       />
     );
   }
-  const list = sets.data ?? [];
+  const list = sets.data?.sets ?? [];
   if (list.length === 0) {
     return (
       <Card>
@@ -138,17 +138,14 @@ function SetSection({ classroomId, view, primary }: { classroomId: string; view:
   // Their own group first: on a phone, the one card they act on is not ten cards down.
   const ordered = mine ? [mine, ...groups.filter((g) => g !== mine)] : groups;
 
-  /** Sends one write; its success said in a toast, a refusal worded. */
-  const send = (request: Parameters<typeof write.mutateAsync>[0]["request"], said: string) =>
-    write.mutateAsync({ setId: set.id, request }).then(
-      () => toast(said, "success"),
-      (error: unknown) => {
-        toast(groupRefusalMessage(error, t), "error");
-        throw error;
-      },
-    );
-  const join = (group: Group) => void send(studentWrite.join(group.id), t("sgroups.joined", { group: group.name })).catch(() => undefined);
-  const leave = (group: Group) => void send(studentWrite.leave(), t("sgroups.left", { group: group.name })).catch(() => undefined);
+  /** Sends one write, its success said in a toast; rejects with the refusal (the caller says it where it belongs). */
+  const send = (request: StudentWrite, said: string) =>
+    write.mutateAsync({ setId: set.id, request }).then(() => toast(said, "success"));
+  /** A button's write: a refusal in a toast. */
+  const act = (request: StudentWrite, said: string) =>
+    void send(request, said).catch((error: unknown) => toast(groupRefusalMessage(error, t), "error"));
+  const join = (group: Group) => act(studentWrite.join(group.id), t("sgroups.joined", { group: group.name }));
+  const leave = (group: Group) => act(studentWrite.leave(), t("sgroups.left", { group: group.name }));
 
   const line = set.open
     ? [
@@ -221,8 +218,8 @@ function SetSection({ classroomId, view, primary }: { classroomId: string; view:
           submitLabel={dialog.kind === "create" ? t("sgroups.create") : t("sgroups.rename")}
           submit={(name) =>
             dialog.kind === "create"
-              ? write.mutateAsync({ setId: set.id, request: studentWrite.create(name) }).then(() => toast(t("sgroups.created"), "success"))
-              : write.mutateAsync({ setId: set.id, request: studentWrite.rename(dialog.group.id, name) }).then(() => toast(t("sgroups.renamed"), "success"))
+              ? send(studentWrite.create(name), t("sgroups.created"))
+              : send(studentWrite.rename(dialog.group.id, name), t("sgroups.renamed"))
           }
           onClose={() => setDialog(null)}
         />

@@ -21,7 +21,7 @@ import {
   StudentGroupJoin,
   type GroupSetDetail,
   type GroupSetSummary,
-  type StudentGroupSet,
+  type StudentGroupSets,
 } from "@quiz/contracts";
 
 import { api } from "../api";
@@ -156,7 +156,7 @@ export function useGroupSetWrites(setId: string) {
 
 /** `GET /classrooms/:id/group-sets/student`: the classroom's sets as the caller reads them. */
 export function useStudentGroupSets(classroomId: string) {
-  return useQuery<StudentGroupSet[]>({
+  return useQuery<StudentGroupSets>({
     queryKey: studentGroupSetsKey(classroomId),
     queryFn: () => api(`/app/api/classrooms/${classroomId}/group-sets/student`),
   });
@@ -168,6 +168,8 @@ type StudentWrite =
   | { method: "PUT"; path: "/membership"; body: StudentGroupJoin }
   | { method: "DELETE"; path: "/membership"; body?: undefined }
   | { method: "PATCH"; path: `/groups/${string}`; body: GroupRename };
+
+export type { StudentWrite };
 
 export const studentWrite = {
   create: (name: string): StudentWrite => ({
@@ -181,23 +183,21 @@ export const studentWrite = {
 };
 
 /**
- * A student's write on set `setId` of `classroomId`: its answer replaces the
- * set in the classroom's list, and the student's pages (the Activities row
- * says their group) are read again. A refusal re-reads the list — the set
+ * A student's write on set `setId` of `classroomId`: its answer — the
+ * classroom's sets as the writer now reads them — replaces the list, and
+ * the student's pages (the Activities row says their group) are read again. A refusal re-reads the list — the set
  * may have closed, frozen or filled since — and is the caller's to say.
  */
 export function useStudentGroupWrite(classroomId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ setId, request }: { setId: string; request: StudentWrite }) =>
-      api<StudentGroupSet>(`/app/api/group-sets/${setId}/student${request.path}`, {
+      api<StudentGroupSets>(`/app/api/group-sets/${setId}/student${request.path}`, {
         method: request.method,
         ...(request.body === undefined ? {} : { body: JSON.stringify(request.body) }),
       }),
     onSuccess: (answer) => {
-      qc.setQueryData<StudentGroupSet[]>(studentGroupSetsKey(classroomId), (sets) =>
-        sets?.map((s) => (s.set.id === answer.set.id ? answer : s)),
-      );
+      qc.setQueryData(studentGroupSetsKey(classroomId), answer);
       void qc.invalidateQueries({ queryKey: studentClassroomKey(classroomId), exact: true });
       void qc.invalidateQueries({ queryKey: studentHomeKey });
     },

@@ -19,10 +19,12 @@
  * impersonation read it, `writable` false but for the first); and their
  * writes — create and name a group, join, leave, rename their own — by
  * their own portal session on a claimed student seat of a set that reaches
- * them (`studentGroupSet`): an impersonation (in every environment), a
- * teacher in the student view, a `seb` or `kiosk` session, a token get the
- * 404 of a missing set. Each answers the set as its writer now reads it
- * (`StudentGroupSet`), group ids only, never a roster line's.
+ * them (`studentGroupSet`): a teacher in the student view, a `seb` or
+ * `kiosk` session, a token get the 404 of a missing set; an impersonation
+ * the 404 in development, and the auth plugin's `403
+ * impersonation_read_only` elsewhere (ADR-034). Each answers the
+ * classroom's sets as its writer now reads them (`StudentGroupSets`), group
+ * ids only, never a roster line's.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
@@ -42,7 +44,7 @@ import {
 
 import { actorOf } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
-import { accessibleGroupSet, ownPortalSession, projectsClassroom, readableClassroom, studentGroupSet } from "../guards.js";
+import { accessibleGroupSet, projectsClassroom, readableClassroom, selfFormingSeat, studentGroupSet } from "../guards.js";
 import { studentRoute, teacherRoute } from "../http.js";
 import { requestGroupSync } from "../project/service.js";
 import * as service from "./service.js";
@@ -180,13 +182,16 @@ export async function groupPlugin(app: FastifyInstance, opts: { config: AppConfi
         service.studentGroupSets(
           app.db,
           scope.room.id,
-          { seatId: scope.seat?.id ?? null, writer: ownPortalSession(req.auth) && scope.seat !== null && !scope.seat.staff },
+          { seatId: scope.seat?.id ?? null, writer: selfFormingSeat(req.auth, scope.seat) },
           now,
         ),
     ),
   );
 
   const onStudentSet = { params: IdParam, load: studentGroupSet.bind(null, app) };
+  /** A write's answer: the classroom's sets as its writer reads them (the loader held `selfFormingSeat`). */
+  const asWriter = (scope: { room: { id: string }; seat: { id: string } }, now: Date) =>
+    service.studentGroupSets(app.db, scope.room.id, { seatId: scope.seat.id, writer: true }, now);
   const onStudentGroup = { params: GroupParams, load: studentGroupSet.bind(null, app) };
 
   /** A new group of the set, named by the student or "Group k", with them moved in. */
@@ -195,7 +200,7 @@ export async function groupPlugin(app: FastifyInstance, opts: { config: AppConfi
     session,
     student({ ...onStudentSet, body: StudentGroupCreate, optionalBody: true }, async ({ req, reply, now, body, scope }) => {
       await service.studentCreateGroup(app.db, scope, body.name, ctx(req, now));
-      return reply.code(201).send(await service.studentGroupSetView(app.db, scope.set.id, scope.seat.id, now));
+      return reply.code(201).send(await asWriter(scope, now));
     }),
   );
 
@@ -205,7 +210,7 @@ export async function groupPlugin(app: FastifyInstance, opts: { config: AppConfi
     session,
     student({ ...onStudentSet, body: StudentGroupJoin }, async ({ req, now, body, scope }) => {
       await service.studentJoin(app.db, scope, body.groupId, ctx(req, now));
-      return service.studentGroupSetView(app.db, scope.set.id, scope.seat.id, now);
+      return asWriter(scope, now);
     }),
   );
 
@@ -215,7 +220,7 @@ export async function groupPlugin(app: FastifyInstance, opts: { config: AppConfi
     session,
     student(onStudentSet, async ({ req, now, scope }) => {
       await service.studentLeave(app.db, scope, ctx(req, now));
-      return service.studentGroupSetView(app.db, scope.set.id, scope.seat.id, now);
+      return asWriter(scope, now);
     }),
   );
 
@@ -225,7 +230,7 @@ export async function groupPlugin(app: FastifyInstance, opts: { config: AppConfi
     session,
     student({ ...onStudentGroup, body: GroupRename }, async ({ req, now, params, body, scope }) => {
       await service.studentRenameGroup(app.db, scope, params.gid, body.name, ctx(req, now));
-      return service.studentGroupSetView(app.db, scope.set.id, scope.seat.id, now);
+      return asWriter(scope, now);
     }),
   );
 }

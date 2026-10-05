@@ -45,6 +45,7 @@ import {
   type RosterEntry,
   type StudentGroupSet,
   type StudentGroupSetCard,
+  type StudentGroupSets,
 } from "@quiz/contracts";
 import { defaultGroupName, defaultSetName, duplicateSetName, formRandomGroups, type NameLocale } from "@quiz/domain";
 
@@ -397,7 +398,6 @@ function studentSetOf(set: MockSet): StudentGroupSet {
   const placed = new Set(set.groups.flatMap((g) => g.members));
   return {
     set: { id: set.id, name: set.name, maxSize: set.maxSize, openUntil: set.openUntil, open },
-    serverNow: new Date().toISOString(),
     writable: open && role === "student",
     myGroupId: mine?.id ?? null,
     groups: shown.map((g) => {
@@ -408,10 +408,16 @@ function studentSetOf(set: MockSet): StudentGroupSet {
   };
 }
 
+/** The classroom's sets as the persona reads them: the read's answer, and every student write's. */
+const studentSetsOf = (classroomId: string): StudentGroupSets => ({
+  serverNow: new Date().toISOString(),
+  sets: visibleSets(classroomId).map(studentSetOf),
+});
+
 on("GET", "/app/api/classrooms/:id/group-sets/student", (m) => {
   const id = m.groups!.id!;
   if (!rooms.some((r) => r.id === id)) throw new MockError(404, "Not found");
-  return visibleSets(id).map(studentSetOf);
+  return studentSetsOf(id);
 });
 
 /** A set the student persona writes: open, or the refusal the API answers. */
@@ -436,7 +442,7 @@ on("POST", "/app/api/group-sets/:id/student/groups", (m, raw) => {
   const group: MockGroup = { id: groupId(), name, position: nextPosition(set), members: [] };
   set.groups.push(group);
   moveMe(set, group);
-  return studentSetOf(set);
+  return studentSetsOf(set.classroomId);
 });
 
 on("PUT", "/app/api/group-sets/:id/student/membership", (m, raw) => {
@@ -446,13 +452,13 @@ on("PUT", "/app/api/group-sets/:id/student/membership", (m, raw) => {
     if (set.maxSize !== null && group.members.length >= set.maxSize) throw refuse(409, "group_full", "This group is full", { max: set.maxSize });
     moveMe(set, group);
   }
-  return studentSetOf(set);
+  return studentSetsOf(set.classroomId);
 });
 
 on("DELETE", "/app/api/group-sets/:id/student/membership", (m) => {
   const set = studentWritable(m.groups!.id!);
   moveMe(set, null);
-  return studentSetOf(set);
+  return studentSetsOf(set.classroomId);
 });
 
 on("PATCH", "/app/api/group-sets/:id/student/groups/:gid", (m, raw) => {
@@ -462,7 +468,7 @@ on("PATCH", "/app/api/group-sets/:id/student/groups/:gid", (m, raw) => {
   const { name } = parsed(GroupRename, raw);
   if (set.groups.some((g) => g !== group && g.name === name)) throw refuse(409, "duplicate_name", `A group "${name}" already exists in this set`);
   group.name = name;
-  return studentSetOf(set);
+  return studentSetsOf(set.classroomId);
 });
 
 /** The student's Activities rows (S3): the open sets of their classrooms (one: the classroom page). */

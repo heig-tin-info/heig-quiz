@@ -35,7 +35,6 @@ import {
   GroupSetDetail,
   GroupSetSummary,
   StudentClassroomPage,
-  StudentGroupSet,
   StudentGroupSets,
   StudentHome,
   type SessionKind,
@@ -159,14 +158,19 @@ async function asStudent(res: Res, status = 200): Promise<Res> {
   return res;
 }
 const view = async (room: Room, headers: Headers) =>
-  StudentGroupSets.parse((await asStudent(await call("GET", `/app/api/classrooms/${room.id}/group-sets/student`, headers))).json());
+  StudentGroupSets.parse((await asStudent(await call("GET", `/app/api/classrooms/${room.id}/group-sets/student`, headers))).json()).sets;
 const setOf = async (room: Room, headers: Headers, setId: string) => (await view(room, headers)).find((s) => s.set.id === setId);
 const create = (setId: string, who: Who, payload: object = {}) => call("POST", `/app/api/group-sets/${setId}/student/groups`, who.headers, payload);
 const join = (setId: string, who: Who, groupId: string) => call("PUT", `/app/api/group-sets/${setId}/student/membership`, who.headers, { groupId });
 const leave = (setId: string, who: Who) => call("DELETE", `/app/api/group-sets/${setId}/student/membership`, who.headers);
 const rename = (setId: string, who: Who, groupId: string, name: string) =>
   call("PATCH", `/app/api/group-sets/${setId}/student/groups/${groupId}`, who.headers, { name });
-const answer = async (res: Res, status = 200) => StudentGroupSet.parse((await asStudent(res, status)).json());
+/** A write's answer (the classroom's sets as the writer reads them): set `setId` of it. */
+const answer = async (res: Res, setId: string, status = 200) => {
+  const list = StudentGroupSets.parse((await asStudent(res, status)).json());
+  expect(Date.parse(list.serverNow)).toBe(server.clock.now().getTime());
+  return list.sets.find((s) => s.set.id === setId)!;
+};
 
 /** A project row of `room` naming `setId` (the project module's routes are not registered here). */
 async function projectNaming(room: Room, setId: string, opts: { state?: "draft" | "published" | "locked"; stopped?: boolean; archived?: boolean } = {}) {
@@ -277,32 +281,32 @@ describe("a student forms their group (F-PROJ-22)", () => {
     const set = await newSet(room, "Projet", 2);
     const id = set.set.id;
 
-    const first = await answer(await create(id, ana), 201);
+    const first = await answer(await create(id, ana), id, 201);
     const g1 = first.groups.find((g) => g.name === "Group 1")!;
     expect(first).toMatchObject({ writable: true, myGroupId: g1.id, set: { open: true, maxSize: 2 } });
     expect(g1.members).toEqual([{ nom: room.names[0], prenom: "PrenomF0" }]);
     expect(first.unplaced!.map((s) => s.nom)).toEqual([...room.names.slice(1), room.unclaimed.name].sort());
 
-    const second = await answer(await join(id, ben, g1.id));
+    const second = await answer(await join(id, ben, g1.id), id);
     expect(second.groups[0]).toMatchObject({ id: g1.id, size: 2 });
     expect(refusal(await join(id, cleo, g1.id))).toEqual([409, "group_full"]);
 
     // Named by the student, in French by default.
-    const fr = await answer(await create(id, dan), 201);
+    const fr = await answer(await create(id, dan), id, 201);
     expect(fr.groups.map((g) => g.name)).toEqual(["Group 1", "Groupe 1"]);
-    const named = await answer(await create(id, cleo, { name: "Les As" }), 201);
+    const named = await answer(await create(id, cleo, { name: "Les As" }), id, 201);
     expect(named.groups.map((g) => g.name)).toEqual(["Group 1", "Groupe 1", "Les As"]);
     expect(refusal(await create(id, ben, { name: "Les As" }))).toEqual([409, "duplicate_name"]);
 
-    expect((await answer(await leave(id, ben))).myGroupId).toBeNull();
-    expect((await answer(await leave(id, ben))).myGroupId).toBeNull(); // nothing to leave: unchanged
+    expect((await answer(await leave(id, ben), id)).myGroupId).toBeNull();
+    expect((await answer(await leave(id, ben), id)).myGroupId).toBeNull(); // nothing to leave: unchanged
     // Only their own group is theirs to rename.
     expect((await rename(id, ben, g1.id, "Volé")).statusCode).toBe(404);
     expect(refusal(await rename(id, ana, g1.id, "Les As"))).toEqual([409, "duplicate_name"]);
-    const renamed = await answer(await rename(id, ana, g1.id, "Alpha"));
+    const renamed = await answer(await rename(id, ana, g1.id, "Alpha"), id);
     expect(renamed.groups.find((g) => g.id === g1.id)?.name).toBe("Alpha");
     // Ana leaves her group: emptied, it stays; she creates another one, moved out of nothing.
-    const emptied = await answer(await leave(id, ana));
+    const emptied = await answer(await leave(id, ana), id);
     expect(emptied.groups.find((g) => g.id === g1.id)).toMatchObject({ size: 0, members: [] });
 
     const audits = await server.app.db.select().from(auditLog).where(eq(auditLog.subjectId, id)).orderBy(auditLog.id);
@@ -322,7 +326,7 @@ describe("a student forms their group (F-PROJ-22)", () => {
     const room = await classroom("R");
     const [ana, ben, cleo] = room.students as [Who, Who, Who];
     const set = await newSet(room, "Course", 2);
-    const g = (await answer(await create(set.set.id, ana), 201)).groups[0]!;
+    const g = (await answer(await create(set.set.id, ana), set.set.id, 201)).groups[0]!;
     const results = await Promise.all([join(set.set.id, ben, g.id), join(set.set.id, cleo, g.id)]);
     expect(results.map((r) => r.statusCode).sort()).toEqual([200, 409]);
     expect(GroupErrorCode.parse((results.find((r) => r.statusCode === 409)!.json() as { error: unknown }).error)).toBe("group_full");
@@ -335,7 +339,7 @@ describe("a student forms their group (F-PROJ-22)", () => {
     const [ana] = room.students as [Who];
     const set = await newSet(room, "Brouillon", 3);
     const draft = await projectNaming(room, set.set.id, { state: "draft" });
-    await answer(await create(set.set.id, ana, { name: "Équipe A" }), 201);
+    await answer(await create(set.set.id, ana, { name: "Équipe A" }), set.set.id, 201);
     const copy = await server.app.db.select().from(projectGroups).where(eq(projectGroups.projectId, draft));
     expect(copy.map((g) => g.name)).toEqual(["Équipe A"]);
     const members = await server.app.db.select().from(projectGroupMembers).where(eq(projectGroupMembers.projectId, draft));
@@ -352,7 +356,7 @@ describe("what a student may not do (F-PROJ-22, invariant 6)", () => {
     const used = await newSet(room, "Utilisée", 2);
     const unused = await newSet(room, "Libre", 2);
     await projectNaming(room, used.set.id);
-    const g = (await answer(await create(used.set.id, ana), 201)).groups[0]!;
+    const g = (await answer(await create(used.set.id, ana), used.set.id, 201)).groups[0]!;
     server.clock.set(LATER); // open_until reached exactly: closed
     expect(refusal(await join(used.set.id, ben, g.id))).toEqual([409, "set_closed"]);
     expect(refusal(await create(used.set.id, ben))).toEqual([409, "set_closed"]);
@@ -369,7 +373,7 @@ describe("what a student may not do (F-PROJ-22, invariant 6)", () => {
       const room = await classroom(stopped ? "S" : "Z");
       const [ana, ben] = room.students as [Who, Who];
       const set = await newSet(room, "Gelée", 3);
-      const g = (await answer(await create(set.set.id, ana), 201)).groups[0]!;
+      const g = (await answer(await create(set.set.id, ana), set.set.id, 201)).groups[0]!;
       const project = await projectNaming(room, set.set.id, stopped ? { state: "locked", stopped: true, archived: true } : {});
       await repoIn(project, ana.id, stopped);
       expect(refusal(await join(set.set.id, ben, g.id))).toEqual([409, "set_frozen"]);
@@ -377,6 +381,9 @@ describe("what a student may not do (F-PROJ-22, invariant 6)", () => {
       expect(refusal(await rename(set.set.id, ana, g.id, "Autre"))).toEqual([409, "set_frozen"]);
       expect(refusal(await create(set.set.id, ben))).toEqual([409, "set_frozen"]);
       expect(await setOf(room, ana.headers, set.set.id)).toMatchObject({ writable: false, set: { open: true } });
+      // A frozen set invites nobody: no Activities row.
+      const home = StudentHome.parse((await asStudent(await call("GET", "/app/api/student/home", ana.headers))).json());
+      expect(home.groupSets).toEqual([]);
     }
   });
 
@@ -394,7 +401,7 @@ describe("what a student may not do (F-PROJ-22, invariant 6)", () => {
     const room = await classroom("I");
     const [ana] = room.students as [Who];
     const set = await newSet(room, "Ouverte", 2);
-    const g = (await answer(await create(set.set.id, ana), 201)).groups[0]!;
+    const g = (await answer(await create(set.set.id, ana), set.set.id, 201)).groups[0]!;
     const admin = await server.signIn("admin");
     const stranger = await server.signIn("student");
     const impersonation = await sessionOf(ana.id, { kind: "impersonation", actorUserId: admin.id });
@@ -435,6 +442,31 @@ describe("what a student may not do (F-PROJ-22, invariant 6)", () => {
   });
 });
 
+describe("an impersonation outside development (ADR-034)", () => {
+  it("is refused every write by the auth plugin, 403 impersonation_read_only, and reads read-only", async () => {
+    const prod = await testServer();
+    try {
+      prod.clock.set(NOW);
+      const db = prod.app.db;
+      const prof = await prod.signIn("teacher");
+      const ana = await prod.signIn("student");
+      const admin = await prod.signIn("admin");
+      const seeded = await seedLive(db, { teacherId: prof.id, studentIds: [ana.id], questions: 0 });
+      const created = await prod.app.inject({ method: "POST", url: `/app/api/classrooms/${seeded.classroomId}/group-sets`, headers: prof.headers, payload: {} });
+      const setId = GroupSetDetail.parse(created.json()).set.id;
+      await prod.app.inject({ method: "PATCH", url: `/app/api/group-sets/${setId}`, headers: prof.headers, payload: { openUntil: LATER, maxSize: 2 } });
+      const s = await createSession(db, ana.id, 8, { kind: "impersonation", actorUserId: admin.id, evaluationId: null });
+      const impersonation = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
+      const write = await prod.app.inject({ method: "POST", url: `/app/api/group-sets/${setId}/student/groups`, headers: impersonation, payload: {} });
+      expect([write.statusCode, (write.json() as { error: string }).error]).toEqual([403, "impersonation_read_only"]);
+      const read = await prod.app.inject({ method: "GET", url: `/app/api/classrooms/${seeded.classroomId}/group-sets/student`, headers: impersonation });
+      expect(StudentGroupSets.parse(read.json()).sets[0]).toMatchObject({ writable: false });
+    } finally {
+      await prod.close();
+    }
+  });
+});
+
 // ---------------------------------------------------------------- the student view
 
 describe("the student view, the group module's one exit (N-SEC-20)", () => {
@@ -449,9 +481,9 @@ describe("the student view, the group module's one exit (N-SEC-20)", () => {
     await detailOk(await staff("PUT", `/app/api/group-sets/${unused.set.id}/members/${room.lines[1]}`, { groupId: unusedGroup.id }));
     await newSet(other, "SecretOtherClassroomSet", 2);
     const set = await newSet(room, "Projet final", 2);
-    const mine = (await answer(await create(set.set.id, ana, { name: "Mine" }), 201)).groups[0]!;
-    await answer(await create(set.set.id, ben, { name: "SecretOtherGroup" }), 201);
-    await answer(await join(set.set.id, cleo, mine.id));
+    const mine = (await answer(await create(set.set.id, ana, { name: "Mine" }), set.set.id, 201)).groups[0]!;
+    await answer(await create(set.set.id, ben, { name: "SecretOtherGroup" }), set.set.id, 201);
+    await answer(await join(set.set.id, cleo, mine.id), set.set.id);
 
     // While open: every group and its members' names, the students in no group, nothing else.
     const open = (await setOf(room, ana.headers, set.set.id))!;
@@ -543,7 +575,7 @@ describe("the Activities row and the Groups tab (S1, S3)", () => {
     expect(await page()).toMatchObject({ hasGroups: false, activities: { groupSets: [] } });
 
     const set = await newSet(room, "Semestre", 3);
-    await answer(await create(set.set.id, ana, { name: "Nous" }), 201);
+    await answer(await create(set.set.id, ana, { name: "Nous" }), set.set.id, 201);
     const card = { id: set.set.id, classroomId: room.id, name: "Semestre", openUntil: LATER, myGroup: "Nous" };
     expect(await page()).toMatchObject({ hasGroups: true, activities: { groupSets: [card] } });
     const home = StudentHome.parse((await asStudent(await call("GET", "/app/api/student/home", ana.headers))).json());

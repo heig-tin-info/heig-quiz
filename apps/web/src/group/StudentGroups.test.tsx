@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import type { StudentGroupSet } from "@quiz/contracts";
+import type { StudentGroupSet, StudentGroupSets } from "@quiz/contracts";
 
 import { fail, makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { isFull, primarySetId, StudentGroups, untilClosing } from "./StudentGroups";
@@ -27,7 +27,6 @@ const NOW = "2026-10-05T10:00:00.000Z";
 function makeView(over: Partial<StudentGroupSet> = {}, setOver: Partial<StudentGroupSet["set"]> = {}): StudentGroupSet {
   return {
     set: { id: SET, name: "Projet final", maxSize: 2, openUntil: "2026-10-08T21:59:00.000Z", open: true, ...setOver },
-    serverNow: NOW,
     writable: true,
     myGroupId: null,
     groups: [
@@ -39,8 +38,11 @@ function makeView(over: Partial<StudentGroupSet> = {}, setOver: Partial<StudentG
   };
 }
 
+/** The list as the server answers it, read at `NOW`. */
+const list = (...sets: StudentGroupSet[]): StudentGroupSets => ({ serverNow: NOW, sets });
+
 function renderTab(sets: StudentGroupSet[] | ReturnType<typeof fail>, extra: Parameters<typeof mockFetch>[0] = {}) {
-  const fetched = mockFetch({ [`GET ${LIST}`]: Array.isArray(sets) ? ok(sets) : sets, ...extra });
+  const fetched = mockFetch({ [`GET ${LIST}`]: Array.isArray(sets) ? ok(list(...sets)) : sets, ...extra });
   renderWithProviders(<StudentGroups classroomId={ROOM} />, { queryClient: makeQueryClient() });
   return fetched;
 }
@@ -66,7 +68,7 @@ describe("an open set the reader is in no group of", () => {
 
   it("joins a group: the PUT with the group's id only", async () => {
     const after = makeView({ myGroupId: G2 });
-    const { calls } = renderTab([makeView()], { [`PUT ${BASE}/membership`]: ok(after) });
+    const { calls } = renderTab([makeView()], { [`PUT ${BASE}/membership`]: ok(list(after)) });
     await section();
     await userEvent.click(within(card("Groupe 2")).getByRole("button", { name: "Join" }));
     await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
@@ -79,7 +81,7 @@ describe("an open set the reader is in no group of", () => {
       [`POST ${BASE}/groups`]: (call) =>
         (call.body as { name?: string }).name === "Les As"
           ? fail(409, { error: "duplicate_name", message: "taken" })
-          : ok(makeView({ myGroupId: G2 })),
+          : ok(list(makeView({ myGroupId: G2 }))),
     });
     await userEvent.click(within(await section()).getByRole("button", { name: "Create a group" }));
     const dialog = await screen.findByRole("dialog");
@@ -103,8 +105,8 @@ describe("an open set the reader is in no group of", () => {
 describe("an open set the reader is in a group of", () => {
   it("has no primary; their group says so and offers Rename and Leave", async () => {
     const { calls } = renderTab([makeView({ myGroupId: G2 })], {
-      [`DELETE ${BASE}/membership`]: ok(makeView()),
-      [`PATCH ${BASE}/groups/${G2}`]: ok(makeView({ myGroupId: G2 })),
+      [`DELETE ${BASE}/membership`]: ok(list(makeView())),
+      [`PATCH ${BASE}/groups/${G2}`]: ok(list(makeView({ myGroupId: G2 }))),
     });
     const region = await section();
     expect(within(region).getByRole("button", { name: "Create a group" }).className).not.toContain("bg-accent");
@@ -163,7 +165,7 @@ describe("what the reader may not change", () => {
   });
 
   it("speaks French", async () => {
-    mockFetch({ [`GET ${LIST}`]: ok([makeView()]) });
+    mockFetch({ [`GET ${LIST}`]: ok(list(makeView())) });
     renderWithProviders(<StudentGroups classroomId={ROOM} />, { queryClient: makeQueryClient(), locale: "fr" });
     expect(await screen.findByRole("button", { name: "Créer un groupe" })).toBeInTheDocument();
     expect(screen.getByText("Pas encore dans un groupe")).toBeInTheDocument();
@@ -184,9 +186,9 @@ describe("the rules", () => {
     expect(primarySetId([makeView({ writable: false })])).toBeNull();
   });
 
-  it("waits for the soonest open set to close, by each answer's server clock", () => {
-    expect(untilClosing([makeView()])).toBe(Date.parse("2026-10-08T21:59:00.000Z") - Date.parse(NOW));
-    expect(untilClosing([makeView({}, { open: false, openUntil: null })])).toBeNull();
-    expect(untilClosing([makeView({ serverNow: "2026-10-09T00:00:00.000Z" })])).toBe(0);
+  it("waits for the soonest open set to close, by the answer's server clock", () => {
+    expect(untilClosing(list(makeView()))).toBe(Date.parse("2026-10-08T21:59:00.000Z") - Date.parse(NOW));
+    expect(untilClosing(list(makeView({}, { open: false, openUntil: null })))).toBeNull();
+    expect(untilClosing({ serverNow: "2026-10-09T00:00:00.000Z", sets: [makeView()] })).toBe(0);
   });
 });
