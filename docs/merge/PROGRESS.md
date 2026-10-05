@@ -153,7 +153,7 @@ In the critical path only if D09 finds online assignments in production.
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| M8-01 | Import script complete | in progress | schema tasks, D11 | `merge/M8-01a-import-frame` (a of a, b, c, d); `merge/M8-01d-import-journals` | #535 (a), #538 (d) | a: the frame (pre-flight, parity report, re-import semantics, `--final`, legacy audit, `steps-<entity>.ts` + `registry.ts`); d: classroom journals imported `pending` (re-ingested by the journal module, never copied, I65) and 30 days of webhook deliveries; b projects…, c groups to come: card M8-01, "As delivered (a)", "(d)" |
+| M8-01 | Import script complete | in progress | schema tasks, D11 | `merge/M8-01a-import-frame` (a of a, b, c, d); `merge/M8-01d-import-journals`; `merge/M8-01b-import-projects` | #535 (a), #538 (d), #539 (b) | a: the frame (pre-flight, parity report, re-import semantics, `--final`, legacy audit, `steps-<entity>.ts` + `registry.ts`); d: classroom journals imported `pending` (re-ingested by the journal module, never copied, I65) and 30 days of webhook deliveries; b: projects, checkpoints, individual repositories, runs, bot commits, review ledger (synthetic rule), reverts, push receipts, reminders, five parity checks, pre-flight `work-mode`; c groups to come: card M8-01, "As delivered (a)", "(b)", "(d)" |
 | M8-02 | Legacy URL resolver | todo | M8-01, M3-12, M4-04 | | | |
 | M8-03 | Caddy fragments | todo | — | | | |
 | M8-04 | Codespace identity remap | todo | M6 in scope | | | |

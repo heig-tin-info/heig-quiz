@@ -87,6 +87,14 @@ function reachedUsers(snapshot: SourceSnapshot, mapped: Map<string, Mapped>): st
   for (const c of snapshot.classrooms) if (mapped.has(c.id)) ids.add(c.teacherId);
   for (const s of snapshot.staff) if (mapped.has(s.classroomId) && s.userId) ids.add(s.userId);
   for (const e of snapshot.enrollments) if (mapped.has(e.classroomId) && e.userId) ids.add(e.userId);
+  // What the projects hang on (M8-01b): a student with a repository whose roster line is gone, the staff who graded or released.
+  const carried = new Set(snapshot.assignments.filter((a) => mapped.has(a.classroomId)).map((a) => a.id));
+  for (const a of snapshot.assignments) if (carried.has(a.id) && a.gradesValidatedBy) ids.add(a.gradesValidatedBy);
+  for (const r of snapshot.studentRepos) {
+    if (!carried.has(r.assignmentId)) continue;
+    ids.add(r.userId);
+    if (r.teacherGradedBy) ids.add(r.teacherGradedBy);
+  }
   return [...ids].sort();
 }
 

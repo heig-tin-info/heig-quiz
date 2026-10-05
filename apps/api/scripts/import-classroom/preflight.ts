@@ -10,8 +10,8 @@
  *   webhook, no deadline in the window, none overdue and unapplied) only
  *   refuse a `--final` apply. Without `--final` they are listed as
  *   `final_only`: what would refuse the final import.
- * - DATA checks (no dangling grade-run link, groups consistent with their
- *   assignment) refuse every `--apply`: what they find is wrong in the rows
+ * - DATA checks (no online work mode, no dangling grade-run link, groups
+ *   consistent with their assignment) refuse every `--apply`: what they find is wrong in the rows
  *   to carry, whatever the moment.
  *
  * What the database cannot say (the process is really stopped, classroom's
@@ -100,6 +100,17 @@ function deadlines({ snapshot, mappedClassroomIds, now, windowHours }: Preflight
   return problems;
 }
 
+/**
+ * An assignment worked online (a `work_mode` other than `free`, the
+ * codespace's) has no Quiz counterpart yet: M3-01 drops the columns and
+ * refuses the row, and so does the import, for every `--apply`.
+ */
+function workModes({ snapshot, mappedClassroomIds }: PreflightInput): string[] {
+  return snapshot.assignments
+    .filter((a) => mappedClassroomIds.has(a.classroomId) && a.workMode !== "free")
+    .map((a) => `assignment "${a.name}" (${a.id}): work mode ${a.workMode}, not carried by Quiz's projects`);
+}
+
 /** `student_repos.{current,frozen,llm}_grade_run_id` carry no foreign key in heig-classroom. */
 function gradeRunLinks({ snapshot, mappedClassroomIds }: PreflightInput): string[] {
   const runs = new Map(snapshot.gradeRuns.map((r) => [r.id, r.studentRepoId]));
@@ -157,7 +168,7 @@ function groupConsistency({ snapshot, mappedClassroomIds }: PreflightInput): str
 }
 
 const STATE_CHECKS = { "source-stopped": stopped, "queues-empty": queuesEmpty, "webhooks-processed": webhooksProcessed, deadlines } as const;
-const DATA_CHECKS = { "grade-run-links": gradeRunLinks, "group-consistency": groupConsistency } as const;
+const DATA_CHECKS = { "work-mode": workModes, "grade-run-links": gradeRunLinks, "group-consistency": groupConsistency } as const;
 
 export function sourcePreflight(input: PreflightInput): PreflightLine[] {
   const line = (id: string, check: (i: PreflightInput) => string[], failure: PreflightStatus): PreflightLine => {

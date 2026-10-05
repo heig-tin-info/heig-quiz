@@ -4105,7 +4105,7 @@ serves now (16a), and what waits for the group repositories (16b).
   - **Legacy audit**: `legacy_classroom_audit_log` (`source_id` unique,
     `actor_user_id` best-effort, `source_actor_user_id` always), insert-only,
     no route.
-  - **Left for b, c, d, and the runbook**: everything not above; the source
+  - **Left for c and the runbook**: everything not above and not in (b) or (d); the source
     state a database cannot show (process stopped, classroom's App silent on
     repositories, backups) is M8-05's.
 - **As delivered (d)** (branch `merge/M8-01d-import-journals`; no migration,
@@ -4152,6 +4152,77 @@ serves now (16a), and what waits for the group repositories (16b).
     sequentially, with the target database and no queue (`ImportOptions.ingestJournal`,
     wired by the CLI when Quiz's App is configured; without it the rows stay
     `pending`, a `warn`). A second run ingests nothing.
+- **As delivered (b)** (branch `merge/M8-01b-import-projects`; no
+  migration — every target column existed):
+  - `Q:apps/api/scripts/import-classroom/`: `steps-projects.ts` (projects,
+    checkpoints, reminders, and the shared `repoLeftOut`, `carryOwned`),
+    `steps-repos.ts` (repositories + sync pull requests, runs, bot commits,
+    ledger, restores, receipts), `checks-projects.ts` (the parity checks),
+    registered in `registry.ts` between the enrollments and the legacy audit;
+    `source.ts` now reads the milestones, every column of assignments and
+    repositories, the runs, receipts, bot commits, ledger and restores;
+    `Ctx.now` is the import's clock; `reachedUsers` (run.ts) also reaches
+    the student of a repository whose roster line is gone, and the staff who
+    graded or released. Fixture part 3 and
+    `scripts/import-classroom-projects.db.test.ts` (16).
+  - **Rows**: ids kept (the id map holds `assignments`,
+    `assignment_milestones`, `student_repos` for M8-02); a project and a
+    repository the import created follow the re-import rule (`syncOwned`),
+    runs, bot commits, ledger, restores, receipts and sync pull requests are
+    insert-only (a present row is left alone, whoever wrote it; parity reads
+    them by natural key). A Quiz project holding the same slug, distribution
+    repository or GitHub repository leaves the source row uncarried: a red
+    line, never an overwrite (D26 addendum of 2026-10-02).
+  - **Mapping** (M3-01 and following notes): `org_id` = the mapped classroom's
+    link, `created_by` = classroom's owner else the `--actor`, `grading_scale`
+    `score_is_grade`, `squashed_*` → `distribution_*`, `grades_validated_*` →
+    release, `source_heads` null, `group_set_id` null (c fills it), the
+    codespace columns refused by the pre-flight (`work-mode`, every `--apply`).
+    **The freeze is the repositories'**: each repository of an applied project
+    takes `deadline_applied_at`, of a frozen one `frozen_at`;
+    `deadline_committed_at` is read from the first `deadline` bot commit (a
+    `commit` project applied without one is listed: Quiz's job will make it);
+    `locked_at`, `ruleset_id`, the slots (`llm_grade_run_id` →
+    `review_grade_run_id`) as they are; `teacher_max` null. A released
+    project's repositories carry the final score at the import
+    (`resolveFinalScore`) as `released_points` / `released_max`, and the
+    teacher's comment as `released_comment`. Runs: `llm` → `review`,
+    `to_verify` false, no parse detail; restores keep `head_sha`,
+    `covered_sha`, `branch` null. `sync_pr_number` / `sync_pr_state` → the
+    `project_sync_prs` row of the default branch (state `open` when classroom
+    had none, `updated_at` the import's clock).
+  - **The ledger** (M3-05b note): `milestone` → `checkpoint`; an unconfirmed
+    row (`dispatched_at` null) kept as it is and listed; a confirmed
+    synthetic `deadline` row (`sha` the frozen run's head, `dispatched_at` the
+    assignment's `llm_dispatched_at`) for each repository with a frozen run
+    and no `deadline` row of a project graded `auto` whose
+    `llm_dispatched_at` is set (counted as `grade_dispatches (synthetic)`).
+    None for a project graded `none`: Quiz would never dispatch it, the row
+    would only claim a review.
+  - **The reminder** (M3-09b note): classroom's marker is copied; with none, a
+    project whose deadline is past or within 24 h of the import is marked at
+    the import time; only while Quiz's own marker is null (never undone), and
+    the column is outside the re-import hash. A repository's own marker is
+    for an own deadline, which classroom has none.
+  - **Left out on purpose, listed in the parity report**: group
+    repositories and every row under them (one place, `repoLeftOut`, M8-01c
+    lifts it), a repository whose student is not imported (a development
+    account), receipts of a repository without a GitHub id. Individual
+    repositories inside a group project are carried and listed, live or not
+    (`isLiveIndividualRepo`, the M3-08 note): a live one holds its student out
+    of the group's repository, as in Quiz. Notification preferences are not
+    carried (`notifyPrefs` is not ported, M3-09b); the M1-06 note says so.
+  - **Parity checks** (§2.5, over what was carried, a repository the re-import
+    kept excluded from the figures it would fail): repositories per project,
+    `sum(teacher_points)` per project, count of frozen grades per project,
+    every grade-run link resolves to a run of its repository, the latest push
+    receipt per repository equals the source's (a later Quiz receipt is a
+    warning). Each answers `info` with its figures when it passes.
+  - **What d and c inherit**: `Ctx.now`; `reachedUsers`; the `projects`
+    findings section; `repoLeftOut` and the tally of `student_repos` /
+    `grade_runs` / `bot_commits` / `grade_dispatches` / `reverts` /
+    `push_receipts` to widen for group repositories; the `project_groups`
+    copy, `groups_stopped_at` and `group_set_id` are c's.
 - **Depends on**: every schema task (M2-01, M3-01, M4-01, M5-03, M6-06 if
   in scope), D11.
 - **Goal**: the whole order of §2.5, the verification report, the legacy

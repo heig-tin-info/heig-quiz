@@ -101,27 +101,130 @@ export interface SourceAssignment {
   id: string;
   classroomId: string;
   name: string;
+  slug: string;
   state: string;
+  startAt: Date;
   deadlineAt: Date;
   graceMinutes: number;
+  sourceRepoId: number;
+  sourceFullName: string;
+  squashedRepoId: number | null;
+  squashedFullName: string | null;
+  sourceStrategy: string;
+  deadlineStrategy: string;
+  gradingMode: string;
+  publishMode: string;
+  durationMinutes: number | null;
+  /** `free`, or an online codespace mode, which Quiz does not carry (pre-flight `work-mode`). */
+  workMode: string;
+  groupMode: boolean;
+  branches: string[];
+  protectedFiles: string[];
+  sourceAheadSha: string | null;
+  sourcePushedAt: Date | null;
+  syncedAt: Date | null;
   deadlineAppliedAt: Date | null;
   frozenAt: Date | null;
+  llmDispatchedAt: Date | null;
+  reminderSentAt: Date | null;
+  gradesValidatedAt: Date | null;
+  gradesValidatedBy: string | null;
   archivedAt: Date | null;
-  groupMode: boolean;
+  createdAt: Date;
+}
+
+export interface SourceMilestone {
+  id: string;
+  assignmentId: string;
+  name: string;
+  dueAt: Date;
+  offsetDays: number | null;
+  dispatchedAt: Date | null;
+  createdAt: Date;
 }
 
 export interface SourceStudentRepo {
   id: string;
   assignmentId: string;
+  userId: string;
   groupId: string | null;
+  githubRepoId: number | null;
+  fullName: string | null;
+  defaultBranch: string | null;
+  provisionStatus: string;
+  provisionError: string | null;
+  provisionClaimedAt: Date | null;
+  deletedAt: Date | null;
+  acceptedAt: Date;
+  invitationStatus: string;
+  lockedAt: Date | null;
+  rulesetId: number | null;
+  lastCommitSha: string | null;
+  lastCommitAt: Date | null;
+  ciStatus: string;
+  syncPrNumber: number | null;
+  syncPrState: string | null;
   currentGradeRunId: string | null;
   frozenGradeRunId: string | null;
   llmGradeRunId: string | null;
+  teacherPoints: number | null;
+  teacherComment: string | null;
+  teacherGradedBy: string | null;
+  teacherGradedAt: Date | null;
 }
 
 export interface SourceGradeRun {
   id: string;
   studentRepoId: string;
+  workflowRunId: number;
+  runAttempt: number;
+  headBranch: string;
+  headSha: string;
+  conclusion: string;
+  gradePoints: number | null;
+  gradeMax: number | null;
+  testsPassed: number | null;
+  testsTotal: number | null;
+  parseStatus: string;
+  kind: string;
+  afterDeadline: boolean;
+  completedAt: Date;
+  createdAt: Date;
+}
+
+export interface SourcePushReceipt {
+  id: string;
+  studentRepoId: string;
+  branch: string;
+  headSha: string;
+  receivedAt: Date;
+  isBot: boolean;
+  forced: boolean;
+}
+
+export interface SourceBotCommit {
+  studentRepoId: string;
+  sha: string;
+  kind: string;
+  createdAt: Date;
+}
+
+export interface SourceDispatch {
+  id: string;
+  studentRepoId: string;
+  trigger: string;
+  milestoneId: string | null;
+  sha: string;
+  dispatchedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface SourceRevert {
+  id: string;
+  studentRepoId: string;
+  revertSha: string;
+  files: string[];
+  createdAt: Date;
 }
 
 export interface SourceGroup {
@@ -198,8 +301,13 @@ export interface SourceSnapshot {
   staff: SourceStaffSeat[];
   enrollments: SourceEnrollment[];
   assignments: SourceAssignment[];
+  milestones: SourceMilestone[];
   studentRepos: SourceStudentRepo[];
   gradeRuns: SourceGradeRun[];
+  pushReceipts: SourcePushReceipt[];
+  botCommits: SourceBotCommit[];
+  dispatches: SourceDispatch[];
+  reverts: SourceRevert[];
   groups: SourceGroup[];
   groupMembers: SourceGroupMember[];
   auditLog: SourceAuditRow[];
@@ -238,15 +346,52 @@ const STATEMENTS: { [K in Exclude<keyof SourceSnapshot, "activity">]: string } =
   enrollments: `SELECT id, classroom_id AS "classroomId", nom, prenom, email, status,
       user_id AS "userId", claimed_at AS "claimedAt", staff
     FROM enrollments ORDER BY id`,
-  assignments: `SELECT id, classroom_id AS "classroomId", name, state, deadline_at AS "deadlineAt",
-      grace_minutes AS "graceMinutes", deadline_applied_at AS "deadlineAppliedAt",
-      frozen_at AS "frozenAt", archived_at AS "archivedAt", group_mode AS "groupMode"
+  assignments: `SELECT id, classroom_id AS "classroomId", name, slug, state, start_at AS "startAt",
+      deadline_at AS "deadlineAt", grace_minutes AS "graceMinutes",
+      source_repo_id::double precision AS "sourceRepoId", source_full_name AS "sourceFullName",
+      squashed_repo_id::double precision AS "squashedRepoId", squashed_full_name AS "squashedFullName",
+      source_strategy AS "sourceStrategy", deadline_strategy AS "deadlineStrategy",
+      grading_mode AS "gradingMode", publish_mode AS "publishMode", duration_minutes AS "durationMinutes",
+      work_mode AS "workMode", group_mode AS "groupMode", branches, protected_files AS "protectedFiles",
+      source_ahead_sha AS "sourceAheadSha", source_pushed_at AS "sourcePushedAt", synced_at AS "syncedAt",
+      deadline_applied_at AS "deadlineAppliedAt", frozen_at AS "frozenAt",
+      llm_dispatched_at AS "llmDispatchedAt", reminder_sent_at AS "reminderSentAt",
+      grades_validated_at AS "gradesValidatedAt", grades_validated_by AS "gradesValidatedBy",
+      archived_at AS "archivedAt", created_at AS "createdAt"
     FROM assignments ORDER BY id`,
-  studentRepos: `SELECT id, assignment_id AS "assignmentId", group_id AS "groupId",
+  milestones: `SELECT id, assignment_id AS "assignmentId", name, due_at AS "dueAt", offset_days AS "offsetDays",
+      dispatched_at AS "dispatchedAt", created_at AS "createdAt"
+    FROM assignment_milestones ORDER BY id`,
+  studentRepos: `SELECT id, assignment_id AS "assignmentId", user_id AS "userId", group_id AS "groupId",
+      github_repo_id::double precision AS "githubRepoId", full_name AS "fullName",
+      default_branch AS "defaultBranch", provision_status AS "provisionStatus",
+      provision_error AS "provisionError", provision_claimed_at AS "provisionClaimedAt",
+      deleted_at AS "deletedAt", accepted_at AS "acceptedAt", invitation_status AS "invitationStatus",
+      locked_at AS "lockedAt", ruleset_id::double precision AS "rulesetId",
+      last_commit_sha AS "lastCommitSha", last_commit_at AS "lastCommitAt", ci_status AS "ciStatus",
+      sync_pr_number AS "syncPrNumber", sync_pr_state AS "syncPrState",
       current_grade_run_id AS "currentGradeRunId", frozen_grade_run_id AS "frozenGradeRunId",
-      llm_grade_run_id AS "llmGradeRunId"
+      llm_grade_run_id AS "llmGradeRunId", teacher_points AS "teacherPoints",
+      teacher_comment AS "teacherComment", teacher_graded_by AS "teacherGradedBy",
+      teacher_graded_at AS "teacherGradedAt"
     FROM student_repos ORDER BY id`,
-  gradeRuns: `SELECT id, student_repo_id AS "studentRepoId" FROM grade_runs ORDER BY id`,
+  gradeRuns: `SELECT id, student_repo_id AS "studentRepoId", workflow_run_id::double precision AS "workflowRunId",
+      run_attempt AS "runAttempt", head_branch AS "headBranch", head_sha::text AS "headSha", conclusion,
+      grade_points AS "gradePoints", grade_max AS "gradeMax", tests_passed AS "testsPassed",
+      tests_total AS "testsTotal", parse_status AS "parseStatus", kind, after_deadline AS "afterDeadline",
+      completed_at AS "completedAt", created_at AS "createdAt"
+    FROM grade_runs ORDER BY id`,
+  pushReceipts: `SELECT id, student_repo_id AS "studentRepoId", branch, head_sha::text AS "headSha",
+      received_at AS "receivedAt", is_bot AS "isBot", forced
+    FROM push_receipts ORDER BY id`,
+  botCommits: `SELECT student_repo_id AS "studentRepoId", sha::text AS sha, kind, created_at AS "createdAt"
+    FROM bot_commits ORDER BY student_repo_id, sha`,
+  dispatches: `SELECT id, student_repo_id AS "studentRepoId", trigger, milestone_id AS "milestoneId", sha::text AS sha,
+      dispatched_at AS "dispatchedAt", created_at AS "createdAt"
+    FROM grade_dispatches ORDER BY id`,
+  reverts: `SELECT id, student_repo_id AS "studentRepoId", revert_sha::text AS "revertSha", files,
+      created_at AS "createdAt"
+    FROM reverts ORDER BY id`,
   groups: `SELECT id, assignment_id AS "assignmentId" FROM assignment_groups ORDER BY id`,
   groupMembers: `SELECT group_id AS "groupId", assignment_id AS "assignmentId", enrollment_id AS "enrollmentId"
     FROM assignment_group_members ORDER BY id`,
