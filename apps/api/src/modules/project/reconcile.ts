@@ -329,9 +329,12 @@ async function reconcileInvitation({ app, octokit, ctx, located, counts, now }: 
 
 /**
  * The default branch's head as the student's last commit (F-PROJ-10): moved
- * only when the head is a person's — not recorded as a bot commit, neither
- * authored nor committed by Quiz's App or a workflow — and then its CI state
- * read again. No receipt is written: the receipt is the intake's (ADR-012).
+ * only when the head is a person's — not recorded as a bot commit, its
+ * author and committer named by GitHub and neither Quiz's App nor a
+ * workflow — and then its CI state read again. The reconciliation knows no
+ * pusher, so a head GitHub attributes to nobody (the App's own commits
+ * carry no account) never moves it: no pusher means no head move. No
+ * receipt is written: the receipt is the intake's (ADR-012).
  */
 async function refreshHead({ app, config, octokit, ctx, located, counts, now }: Step): Promise<void> {
   const db = app.db;
@@ -351,7 +354,8 @@ async function refreshHead({ app, config, octokit, ctx, located, counts, now }: 
     .from(botCommits)
     .where(and(eq(botCommits.repoId, ctx.repo.id), eq(botCommits.sha, head.sha)))
     .limit(1);
-  if (bot || pushedBy(config, head.author?.login) !== "person" || pushedBy(config, head.committer?.login) !== "person") return;
+  const logins = [head.author?.login, head.committer?.login].filter((login): login is string => typeof login === "string");
+  if (bot || logins.length === 0 || logins.some((login) => pushedBy(config, login) !== "person")) return;
   const date = head.commit.committer?.date ?? head.commit.author?.date;
   const at = date ? new Date(date) : now;
   await db
