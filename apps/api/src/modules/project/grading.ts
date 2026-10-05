@@ -20,7 +20,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
-import { and, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Octokit } from "octokit";
 import { z } from "zod";
@@ -198,9 +198,13 @@ async function receiptOf(db: Db, ctx: RepoContext, headSha: string): Promise<Dat
  * (M3-06b). Derived from the receipts the intake wrote, no GitHub read; a
  * push after the restore builds on it and counts again.
  *
- * A row without a restore (`revert_sha` null: GitHub refused the move and
- * the retry found the files put back, M3-06b) covers its head alone — the
- * later heads are the student's own fix.
+ * A row without a restore (`revert_sha` null, M3-06b): after a move GitHub
+ * refused, the attempt had read the branch (`covered_sha`), so the row
+ * covers the heads up to it, bounded by its `created_at` — taken before the
+ * branch was read, so the fix pushed after it has a later receipt and stays
+ * outside; a push whose head was already overtaken by a clean head when its
+ * delivery was handled (`covered_sha` null, nothing was restored) covers its
+ * head alone.
  */
 export async function restoredHeads(db: Db | Tx, ctx: { repo: Pick<RepoContext["repo"], "id" | "githubRepoId"> }): Promise<Set<string>> {
   const tampering = alias(pushReceipts, "tampering");
@@ -222,10 +226,15 @@ export async function restoredHeads(db: Db | Tx, ctx: { repo: Pick<RepoContext["
               eq(between.githubRepoId, tampering.githubRepoId),
               eq(between.branch, sql`COALESCE(${reverts.branch}, ${tampering.branch})`),
               gte(between.receivedAt, tampering.receivedAt),
-              lte(between.receivedAt, sql`GREATEST(${reverts.createdAt}, ${covered.receivedAt})`),
+              // A null upper bound (a head alone) matches nothing.
+              lte(
+                between.receivedAt,
+                sql`CASE WHEN ${reverts.revertSha} IS NOT NULL THEN GREATEST(${reverts.createdAt}, ${covered.receivedAt})
+                  WHEN ${reverts.coveredSha} IS NOT NULL THEN ${reverts.createdAt} END`,
+              ),
             ),
           )
-          .where(and(eq(reverts.repoId, ctx.repo.id), isNotNull(reverts.revertSha))),
+          .where(eq(reverts.repoId, ctx.repo.id)),
   ]);
   return new Set([
     ...rows.flatMap((r) => [r.head, r.covered].filter((sha): sha is string => sha !== null)),

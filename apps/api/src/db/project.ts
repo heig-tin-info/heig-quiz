@@ -714,15 +714,23 @@ export const reverts = pgTable(
       .notNull()
       .references(() => projectRepos.id, { onDelete: "cascade" }),
     /**
-     * The restore commit the branch was moved onto. Null (M3-06b) when
-     * GitHub refused the move (a student's push raced it, a 422) and the
-     * retry found nothing left to restore — the student put the files back
-     * themselves: the push is answered without a restore, and its head's
-     * runs stay `to_verify` (`restoredHeads`, `grading.ts`). A null row is
-     * no restore: it neither counts toward the cap nor answers a retry that
-     * can still restore, which fills it in.
+     * The restore commit the branch was moved onto. Null (M3-06b) on a push
+     * answered WITHOUT a restore, whose heads stay `to_verify`
+     * (`restoredHeads`, `grading.ts`). The row's states:
+     * - filled: `revert_sha` the restore, `covered_sha` the head it was
+     *   built on, `branch` the push's;
+     * - refused move (a 422, a student's push raced it): `revert_sha` null,
+     *   `covered_sha` the head the attempt read — covered up to it, bounded
+     *   by `created_at`; a retry that can restore fills the row in;
+     * - nothing to restore: `revert_sha` and `covered_sha` null — a clean
+     *   head had overtaken the push's when its delivery was handled; the
+     *   head alone;
+     * - imported from heig-classroom: `head_sha`, `covered_sha` and `branch`
+     *   null.
+     * A null row is no restore: it never counts toward the cap.
      */
     revertSha: text("revert_sha"),
+    /** The files restored; on a null row, the protected files the push touched (the tampering, not a restore). */
     files: text("files").array().notNull(),
     /**
      * The pushed head the restore answered (M3-04): a push redelivered never
@@ -738,11 +746,12 @@ export const reverts = pgTable(
      */
     coveredSha: text("covered_sha"),
     /**
-     * The branch the restore answered a push on (M3-06b): the window of
-     * heads it covers is read on this branch, not on the branch of the
-     * tampering head's receipt (a receipt is one per sha, and a sha may
-     * have been received on another branch first). Null on the rows written
-     * before, which fall back to the receipt's branch.
+     * The branch the row answered a push on (M3-06b; on a null row, the
+     * tampering push's branch): the window of heads it covers is read on
+     * this branch, not on the branch of the tampering head's receipt (a
+     * receipt is one per sha, and a sha may have been received on another
+     * branch first). Null on the rows written before, which fall back to the
+     * receipt's branch.
      */
     branch: text("branch"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),

@@ -27,6 +27,12 @@ export interface RevertResult {
   covered: string;
 }
 
+/** What a restore attempt found: the branch head it read, and the restore commit, or null when every file was the distribution's already. */
+export interface RevertOutcome {
+  head: string;
+  restored: RevertResult | null;
+}
+
 /** The distribution's blob of `path` at `ref`, with its content; null when there is no such file. */
 async function referenceBlob(
   octokit: Octokit,
@@ -65,9 +71,8 @@ export async function revertProtectedFiles(opts: {
    * refuses it: the branch is left where it is and nothing is restored.
    */
   beforeMove: (commit: RevertResult) => Promise<boolean>;
-}): Promise<RevertResult | null> {
+}): Promise<RevertOutcome> {
   const { octokit, org, studentRepo, squashedRepo, branch, paths } = opts;
-  if (paths.length === 0) return null;
 
   const { data: ref } = await octokit.request("GET /repos/{owner}/{repo}/git/ref/{ref}", {
     owner: org,
@@ -102,7 +107,7 @@ export async function revertProtectedFiles(opts: {
     });
     tree.push({ path, mode: "100644", type: "blob", sha: blob.sha });
   }
-  if (tree.length === 0) return null;
+  if (tree.length === 0) return { head: headSha, restored: null };
 
   const { data: newTree } = await octokit.request("POST /repos/{owner}/{repo}/git/trees", {
     owner: org,
@@ -119,7 +124,7 @@ export async function revertProtectedFiles(opts: {
     parents: [headSha],
   });
   const result = { sha: commit.sha, files, covered: headSha };
-  if (!(await opts.beforeMove(result))) return null;
+  if (!(await opts.beforeMove(result))) return { head: headSha, restored: null };
   // Strict fast-forward: force=false; in case of a race, GitHub refuses.
   await octokit.request("PATCH /repos/{owner}/{repo}/git/refs/{ref}", {
     owner: org,
@@ -128,7 +133,7 @@ export async function revertProtectedFiles(opts: {
     sha: commit.sha,
     force: false,
   });
-  return result;
+  return { head: headSha, restored: result };
 }
 
 /** GitHub's compare lists at most this many files: past it, the list is not the whole change. */
