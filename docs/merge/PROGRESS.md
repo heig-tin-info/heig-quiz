@@ -147,7 +147,7 @@ In the critical path only if D09 finds online assignments in production.
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
 | M7-01 | Palette, help, tours | review | screens | `merge/M7-c-palette-tours` | #534 | Palette: projects by name + Journal/Groups jumps; tours for the teacher and student project pages. Nudges and group/journal tours deferred. |
-| M7-02 | User guide | in progress | screens | `merge/M7-a-teacher-guide` | #530 | M7-02a (teacher side: GitHub, projects, groups, journal) in #530; M7-02b student page on `merge/M7-b-student-guide`. Mock captures. |
+| M7-02 | User guide | done | screens | `merge/M7-a-teacher-guide`, `merge/M7-b-student-guide` | #530, #528 | M7-02a (teacher side: GitHub, projects, groups, journal) merged in #530; M7-02b (student page, help topics `student-project` and `student-groups`, mock captures in both themes) merged in #528, then checked against main (groups ADR-070 lot 2, project page, journal). |
 
 ## M8 — Migration and cutover
 
