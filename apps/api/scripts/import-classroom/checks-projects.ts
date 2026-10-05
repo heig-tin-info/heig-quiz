@@ -43,7 +43,7 @@ async function carriedRows(ctx: Ctx) {
 function perProject(
   what: string,
   pick: "carried" | "carriedUnkept",
-  figure: (repos: SourceStudentRepo[], quiz: Map<string, QuizRepo>) => [source: number, quiz: number],
+  figure: (repos: SourceStudentRepo[], quiz: Map<string, QuizRepo>, ctx: Ctx) => [source: number, quiz: number],
 ): ImportCheck["run"] {
   return async (ctx) => {
     const found = await carriedRows(ctx);
@@ -53,7 +53,7 @@ function perProject(
     const findings: Found = [];
     let total = 0;
     for (const [projectId, repos] of byProject) {
-      const [source, quiz] = figure(repos, found.rows);
+      const [source, quiz] = figure(repos, found.rows, ctx);
       total += source;
       if (!same(source, quiz)) findings.push({ severity: "red", detail: `project "${names.get(projectId)}" (${projectId}): ${what}: source ${source}, Quiz ${quiz}` });
     }
@@ -62,10 +62,16 @@ function perProject(
   };
 }
 
-/** Every carried repository is a row of its project (a kept one still exists). */
+/** Every carried repository is a row of its project, a group's on its copy group (a kept one still exists). */
 const repositoriesPerProject: ImportCheck = {
   name: "repositories per project",
-  run: perProject("repositories", "carried", (repos, quiz) => [repos.length, repos.filter((r) => quiz.get(r.id)?.projectId === r.assignmentId).length]),
+  run: perProject("repositories", "carried", (repos, quiz, ctx) => [
+    repos.length,
+    repos.filter((r) => {
+      const row = quiz.get(r.id);
+      return row?.projectId === r.assignmentId && row.groupId === (r.groupId === null ? null : ctx.known.get("assignment_groups")?.get(r.groupId));
+    }).length,
+  ]),
 };
 
 /** `sum(teacher_points)` per project, over the rows Quiz did not re-score. */

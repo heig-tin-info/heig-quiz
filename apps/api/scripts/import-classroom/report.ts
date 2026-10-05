@@ -47,7 +47,7 @@ export const FINDINGS = {
   webhooks: "Webhook deliveries",
   audit: "Legacy audit",
   roles: "Role changes",
-  "not carried": "Not carried (later parts of M8-01)",
+  "not carried": "Not carried",
 } as const;
 
 export interface ParityRow {

@@ -1,10 +1,11 @@
 /**
  * The repositories of the projects and what hangs on them (merge task
  * M8-01b): `student_repos` → `project_repos`, then the runs, the bot commits,
- * the review ledger, the restores and the push receipts. Individual
- * repositories only: a group repository, and every row under one, waits for
- * M8-01c (`repoLeftOut`, one rule, lists them in the parity report as left
- * out on purpose; the row's `group_id` is already read from the group map).
+ * the review ledger, the restores and the push receipts. A group's
+ * repository is carried like an individual one, on its copy group (`group_id`
+ * is read from the group map, so `steps-groups.ts` runs first); `repoLeftOut`
+ * is the one rule that leaves a repository out, and the parity report lists
+ * it.
  *
  * The freeze is a repository's in Quiz (M3-05a), classroom's an assignment's:
  * each repository of an applied assignment takes its `deadline_applied_at`,
@@ -34,7 +35,7 @@ import {
 } from "../../src/db/schema.js";
 import { note, tally, target, written, type Ctx, type OwnedRow } from "./ctx.js";
 import type { SourceAssignment, SourceStudentRepo } from "./source.js";
-import { assignmentsInScope, carryOwned, repoLeftOut, reposInScope } from "./steps-projects.js";
+import { GROUP_GONE, assignmentsInScope, carryOwned, repoLeftOut, repoOwner, reposInScope } from "./steps-projects.js";
 
 const CHUNK = 500;
 /** Ids per `IN (…)`, for every read of Quiz by a list of ids (here and in the checks). */
@@ -44,6 +45,7 @@ export const IN_CHUNK = 2000;
 export const REPO_COLUMNS = {
   id: projectRepos.id,
   projectId: projectRepos.projectId,
+  groupId: projectRepos.groupId,
   teacherPoints: projectRepos.teacherPoints,
   currentGradeRunId: projectRepos.currentGradeRunId,
   frozenGradeRunId: projectRepos.frozenGradeRunId,
@@ -56,7 +58,7 @@ function childLeftOut(ctx: Ctx, repo: SourceStudentRepo): string | null {
 }
 
 /** Inserts in chunks, unless present; the number of rows written. */
-async function insertAll<T extends PgTable>(ctx: Ctx, table: T, rows: T["$inferInsert"][], label: string = getTableName(table)): Promise<number> {
+export async function insertAll<T extends PgTable>(ctx: Ctx, table: T, rows: T["$inferInsert"][], label: string = getTableName(table)): Promise<number> {
   let n = 0;
   for (let i = 0; i < rows.length; i += CHUNK) {
     const done = await ctx.db.insert(table).values(rows.slice(i, i + CHUNK)).onConflictDoNothing().returning();
@@ -145,6 +147,7 @@ function repoRow(
   facts: { scored: (id: string | null) => ScoreLike | null; committed: Map<string, Date> },
 ): OwnedRow {
   const student = ctx.usersById.get(r.userId);
+  const group = r.groupId === null ? undefined : ctx.snapshot.groups.find((g) => g.id === r.groupId);
   const released = a.gradesValidatedAt !== null;
   const final = released
     ? resolveFinalScore({
@@ -159,10 +162,10 @@ function repoRow(
     sourceTable: "student_repos",
     sourceId: r.id,
     table: projectRepos,
-    label: `${a.name} / ${student ? `${student.givenName} ${student.familyName}` : r.userId}`,
+    label: `${a.name} / ${group ? `group ${group.name}` : student ? `${student.givenName} ${student.familyName}` : r.userId}`,
     values: {
       projectId: a.id,
-      userId: target(ctx, r.userId),
+      userId: repoOwner(ctx, r),
       groupId: r.groupId === null ? null : (ctx.known.get("assignment_groups")?.get(r.groupId) ?? null),
       githubRepoId: r.githubRepoId,
       fullName: r.fullName,
@@ -220,7 +223,10 @@ export async function importRepos(ctx: Ctx) {
     }
     const a = assignments.get(r.assignmentId)!;
     const row = repoRow(ctx, r, a, facts);
-    if (a.groupMode) {
+    if (r.groupId !== null && target(ctx, r.userId) === undefined) {
+      note(ctx, "projects", `${row.label}: its creator is not imported, recorded under a member who is (a group repository is read through its members)`);
+    }
+    if (a.groupMode && r.groupId === null) {
       // A leftover from before acceptance knew about groups (M3-08): live, its student keeps working in it.
       const live = isLiveIndividualRepo({ groupId: null, provisionStatus: r.provisionStatus, fullName: r.fullName, deletedAt: r.deletedAt });
       note(
@@ -241,6 +247,13 @@ export async function importRepos(ctx: Ctx) {
     source: inScope.length,
     carried: inScope.filter((r) => known?.has(r.id)).length,
     leftOut: [...leftOut].map(([id, why]) => `${id}: ${why}`),
+  });
+  const groupRepos = inScope.filter((r) => r.groupId !== null);
+  // A group repository is never dropped quietly: only a deleted group (listed) excuses one.
+  tally(ctx, "group repositories", {
+    source: groupRepos.length,
+    carried: groupRepos.filter((r) => known?.has(r.id)).length,
+    leftOut: groupRepos.filter((r) => leftOut.get(r.id) === GROUP_GONE).map((r) => `${r.id}: ${GROUP_GONE}`),
   });
   await importSyncPrs(ctx, inScope.filter((r) => r.syncPrNumber !== null), assignments);
 }

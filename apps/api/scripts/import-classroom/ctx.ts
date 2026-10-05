@@ -56,6 +56,12 @@ export interface Ctx {
   actorId: string | null;
   /** `import_classroom.id_map`, loaded once and kept current by `remember`: source table → source id → target id. */
   known: Map<string, Map<string, string>>;
+  /** The source user ids of the roster lines of each group, in member order (`repoOwner`). */
+  groupUsers: Map<string, string[]>;
+  /** Group and member source ids an earlier run had carried before this one wrote (the group checks leave them alone: Quiz's staff may have edited them since). */
+  carriedBefore: { groups: Set<string>; members: Set<string> };
+  /** Source ids of the copy groups an earlier run carried and Quiz deleted since (`importGroups`): nothing is carried under them. */
+  goneCopyGroups: Set<string>;
   /** Source rows each table meant to carry, filled by the steps (`tally`), read by the parity report. */
   parity: Map<string, ParityEntry>;
   report: ImportReport;

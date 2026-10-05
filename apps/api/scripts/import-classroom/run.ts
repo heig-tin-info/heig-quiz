@@ -44,6 +44,7 @@ import { DEFAULT_WINDOW_HOURS, RUNBOOK, sourcePreflight } from "./preflight.js";
 import { REGISTRY, type Registry } from "./registry.js";
 import { DEFAULTS, newReport, type ImportReport, type OpenDecisions } from "./report.js";
 import type { SourceSnapshot } from "./source.js";
+import { groupUsersOf } from "./steps-projects.js";
 import { recordRun } from "./steps.js";
 
 export { DEFAULTS, formatReport, type ImportReport, type OpenDecisions } from "./report.js";
@@ -276,6 +277,9 @@ export async function runImport(
         ingestJournal: options.ingestJournal ?? null,
         actorId,
         known,
+        groupUsers: groupUsersOf(snapshot),
+        goneCopyGroups: new Set(),
+        carriedBefore: { groups: new Set(), members: new Set() },
         parity: new Map(),
         report,
       };

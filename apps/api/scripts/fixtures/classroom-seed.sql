@@ -747,3 +747,52 @@ INSERT INTO "grade_dispatches" ("id", "student_repo_id", "trigger", "milestone_i
   ('ce000000-0000-4000-8000-000000000001', 'c8000000-0000-4000-8000-000000000003', 'deadline', NULL, repeat('b', 40), '2026-09-15 09:00:05+00', '2026-09-15 09:00:01+00'),
   ('ce000000-0000-4000-8000-000000000002', 'c8000000-0000-4000-8000-000000000001', 'milestone', 'cf000000-0000-4000-8000-000000000001', repeat('2', 40), NULL, '2026-10-01 08:00:10+00'),
   ('ce000000-0000-4000-8000-000000000003', 'c8000000-0000-4000-8000-000000000004', 'milestone', 'cf000000-0000-4000-8000-000000000001', repeat('1', 40), '2026-10-01 08:00:30+00', '2026-10-01 08:00:11+00');
+
+-- ---- Synthetic data, part 4 (M8-01c): a second group assignment ----------------
+-- Ids: c7…05 the assignment, ca…02/03 its groups, cb…03..06 members, c8…0a
+-- repository, c9…07 run, cd…07 receipt, ce…04 ledger row, d0…02 revert. Pair
+-- Gamma (Prog-A) REUSES Beta's group "Team 1" (Sam and Sue, the same membership
+-- under another assignment: one set per assignment) and adds "Team 2" (Sid and
+-- Syd, the roster line that is not claimed: they are missing from the Quiz
+-- roster in the tests' world), whose repository does not exist yet. Its deadline
+-- is past, applied and frozen: its copy is stopped. Team 1's repository was
+-- made by Sue (who keeps no individual repository here, so she is invited).
+
+INSERT INTO "assignments" ("id", "classroom_id", "name", "slug", "state", "start_at", "deadline_at", "grace_minutes", "source_repo_id", "source_full_name", "branches", "protected_files", "deadline_applied_at", "frozen_at", "group_mode", "group_max_size", "created_at") VALUES
+  ('c7000000-0000-4000-8000-000000000005', 'c3000000-0000-4000-8000-000000000001', 'Pair Gamma', 'gamma', 'published', '2026-09-05 08:00:00+00', '2026-09-20 08:00:00+00', 30, 115, 'heig-prog-a/gamma-src', '{main}', '{README.md}', '2026-09-20 08:00:00+00', '2026-09-20 08:30:00+00', true, 3, '2026-08-24 08:00:00+00');
+
+INSERT INTO "assignment_groups" ("id", "assignment_id", "name", "slug", "position", "created_at") VALUES
+  ('ca000000-0000-4000-8000-000000000002', 'c7000000-0000-4000-8000-000000000005', 'Team 1', 'team-1', 0, '2026-09-06 08:00:00+00'),
+  ('ca000000-0000-4000-8000-000000000003', 'c7000000-0000-4000-8000-000000000005', 'Team 2', 'team-2', 1, '2026-09-06 08:00:00+00');
+
+INSERT INTO "assignment_group_members" ("id", "assignment_id", "group_id", "enrollment_id", "added_at") VALUES
+  ('cb000000-0000-4000-8000-000000000003', 'c7000000-0000-4000-8000-000000000005', 'ca000000-0000-4000-8000-000000000002', 'c5000000-0000-4000-8000-000000000001', '2026-09-06 08:00:00+00'),
+  ('cb000000-0000-4000-8000-000000000004', 'c7000000-0000-4000-8000-000000000005', 'ca000000-0000-4000-8000-000000000002', 'c5000000-0000-4000-8000-000000000002', '2026-09-06 08:00:00+00'),
+  ('cb000000-0000-4000-8000-000000000005', 'c7000000-0000-4000-8000-000000000005', 'ca000000-0000-4000-8000-000000000003', 'c5000000-0000-4000-8000-000000000003', '2026-09-06 08:00:00+00'),
+  ('cb000000-0000-4000-8000-000000000006', 'c7000000-0000-4000-8000-000000000005', 'ca000000-0000-4000-8000-000000000003', 'c5000000-0000-4000-8000-000000000004', '2026-09-06 08:00:00+00');
+
+UPDATE "assignments" SET "squashed_repo_id" = 215, "squashed_full_name" = 'heig-prog-a/gamma-squashed'
+  WHERE "id" = 'c7000000-0000-4000-8000-000000000005';
+
+INSERT INTO "student_repos" ("id", "assignment_id", "user_id", "group_id", "github_repo_id", "full_name", "default_branch", "provision_status", "accepted_at", "invitation_status") VALUES
+  ('c8000000-0000-4000-8000-00000000000a', 'c7000000-0000-4000-8000-000000000005', 'c1000000-0000-4000-8000-000000000012', 'ca000000-0000-4000-8000-000000000002', 9010, 'heig-prog-a/gamma-team-1', 'main', 'ok', '2026-09-07 08:00:00+00', 'accepted');
+
+INSERT INTO "grade_runs" ("id", "student_repo_id", "workflow_run_id", "run_attempt", "head_branch", "head_sha", "conclusion", "grade_points", "grade_max", "tests_passed", "tests_total", "parse_status", "kind", "after_deadline", "completed_at", "created_at") VALUES
+  ('c9000000-0000-4000-8000-000000000007', 'c8000000-0000-4000-8000-00000000000a', 70007, 1, 'main', repeat('7', 40), 'success', 4.5, 6, 9, 10, 'ok', 'ci', false, '2026-09-20 07:45:00+00', '2026-09-20 07:45:05+00');
+
+UPDATE "student_repos" SET "current_grade_run_id" = 'c9000000-0000-4000-8000-000000000007',
+  "frozen_grade_run_id" = 'c9000000-0000-4000-8000-000000000007', "locked_at" = '2026-09-20 08:00:10+00',
+  "last_commit_sha" = repeat('7', 40), "last_commit_at" = '2026-09-20 07:40:00+00', "ci_status" = 'pass'
+  WHERE "id" = 'c8000000-0000-4000-8000-00000000000a';
+
+INSERT INTO "push_receipts" ("id", "student_repo_id", "branch", "head_sha", "received_at", "is_bot", "forced") VALUES
+  ('cd000000-0000-4000-8000-000000000007', 'c8000000-0000-4000-8000-00000000000a', 'main', repeat('7', 40), '2026-09-20 07:40:00+00', false, false);
+
+INSERT INTO "bot_commits" ("student_repo_id", "sha", "kind", "created_at") VALUES
+  ('c8000000-0000-4000-8000-00000000000a', repeat('a', 40), 'deadline', '2026-09-20 08:00:05+00');
+
+INSERT INTO "reverts" ("id", "student_repo_id", "revert_sha", "files", "created_at") VALUES
+  ('d0000000-0000-4000-8000-000000000002', 'c8000000-0000-4000-8000-00000000000a', repeat('b', 40), '{README.md}', '2026-09-10 09:00:00+00');
+
+INSERT INTO "grade_dispatches" ("id", "student_repo_id", "trigger", "milestone_id", "sha", "dispatched_at", "created_at") VALUES
+  ('ce000000-0000-4000-8000-000000000004', 'c8000000-0000-4000-8000-00000000000a', 'deadline', NULL, repeat('7', 40), '2026-09-20 09:00:05+00', '2026-09-20 09:00:01+00');

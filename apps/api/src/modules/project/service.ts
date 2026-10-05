@@ -53,7 +53,7 @@ export { repoDeadline, setRepoDeadline, setStaffLock } from "./deadline.js";
 export { overrideScore, releaseProject } from "./grades.js";
 export { gradebookProjects, projectLiveScores, projectReleasedScore, type ProjectGradeCell } from "./gradebook.js";
 export { projectsChanged } from "./events.js";
-export { ConfirmationNeeded, copiesBefore, followingCopies, RepoGroupTouched, setFrozen, stepCopies } from "./groupCopy.js";
+export { ConfirmationNeeded, copiesBefore, followingCopies, RepoGroupTouched, setFrozen, stepCopies, stopProjects } from "./groupCopy.js";
 export { requestGroupSync } from "./groupSync.js";
 export { resyncGroups } from "./groupResync.js";
 export { inviteOnGithubLink, releaseLine, revokeEnrollmentAccess, RevokeFailed, type RevokeVia } from "./access.js";
