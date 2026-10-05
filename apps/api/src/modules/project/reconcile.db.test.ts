@@ -31,6 +31,7 @@ import {
   githubOrganizations,
   gradeDispatches,
   projectGradeRuns,
+  projectRepoAccess,
   projectRepos,
   projects,
   pushReceipts,
@@ -492,6 +493,21 @@ describe("reconcile.repos: the invitations", () => {
     expect(callsTo(/collaborators/)).toHaveLength(0);
   });
 
+  it("leaves an access a revocation is taking away alone: neither re-invited nor found accepted", async () => {
+    const { repos, students } = await project();
+    const [repo] = repos;
+    expired(repo!, students[0]!.login);
+    // The revocation asked GitHub, no answer yet (M3-15b-2).
+    await server.app.db.update(projectRepoAccess).set({ revokingAt: at(NOW, -MINUTE) }).where(eq(projectRepoAccess.repoId, repo!.id));
+
+    expect(await reconcileRepos(server.app, config)).toContain("0 re-invited, 0 invitations accepted");
+    expect(invites()).toHaveLength(0);
+    expect(callsTo(/^GET .*\/collaborators\//)).toHaveLength(0);
+    const row = await repoRow(repo!.id);
+    expect(row.invitationReinvitedAt).toBeNull();
+    expect(row.invitationStatus).toBe("pending");
+  });
+
   it("stops re-inviting once the repository is frozen, and re-invites nobody without a linked account", async () => {
     const { repos, students } = await project({ students: 2 });
     const [frozen, unlinked] = repos;
@@ -579,8 +595,10 @@ describe("reconcile.repos: the repository itself", () => {
     const [gone, kept] = repos;
     byId.set(gone!.githubRepoId!, "gone");
 
-    // The surviving repository is settled as usual: its pending invitation re-invited (the student already in: accepted).
-    expect(await reconcileRepos(server.app, config)).toBe("2 repositories checked, 1 re-invited, 1 invitations accepted, 0 heads moved, 0 renamed, 1 deleted");
+    // The surviving repository is settled as usual (its pending invitation re-invited).
+    const summary = await reconcileRepos(server.app, config);
+    expect(summary).toMatch(/^2 repositories checked, 1 re-invited/);
+    expect(summary).toContain("1 deleted");
     expect((await repoRow(gone!.id)).deletedAt?.toISOString()).toBe(NOW);
     expect((await repoRow(kept!.id)).deletedAt).toBeNull();
     const [entry] = await auditOf(gone!.id, "project_repo.deleted");

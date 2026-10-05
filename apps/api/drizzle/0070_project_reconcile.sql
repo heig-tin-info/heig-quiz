@@ -1,0 +1,1 @@
+ALTER TABLE "project_repos" ADD COLUMN "invitation_reinvited_at" timestamp with time zone;

@@ -1242,10 +1242,11 @@ under the half that serves them.
     are both named, both `User` and both persons (`pushedBy`); then
     `aggregateCiStatus` (exported from `grading.ts`). No receipt, no
     `protectFiles`.
-  - **Migration** `0069_project_reconcile` (`invitation_reinvited_at`;
-    M3-09b takes 0068, so the snapshot's `prevId` is 0067's: whichever of
-    the two lands second regenerates). `markRepoDeleted`'s `via` and
-    `InviteVia` gain `reconcile`.
+  - **Migration** `0070_project_reconcile` (`invitation_reinvited_at`),
+    regenerated after 0069 (`0069_group_sync`, M3-15b-2a) so its `when`
+    and `prevId` chain after it. `markRepoDeleted`'s `via` and `InviteVia`
+    gain `reconcile`. A grant with `revoking_at` set (M3-15b-2) is left
+    alone: never re-invited, never read for acceptance.
   - **Tests** `Q:modules/project/reconcile.db.test.ts` (both tasks against
     the fake GitHub: ingestion once from either path, the quiet and scope
     rules, the 404 rules, the rate-limit stop, the re-invite claim across

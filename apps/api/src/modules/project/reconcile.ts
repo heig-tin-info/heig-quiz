@@ -54,7 +54,7 @@ import { failFast, githubApp, githubStatus, ownerRepo, rateLimitReset } from "..
 import { forgetRepoLiveState } from "../../github/metrics.js";
 import type { ScheduledTask } from "../../ticker.js";
 import { pushedBy } from "../github/service.js";
-import { followInvitation, installationClients, inviteAccount } from "./access.js";
+import { followInvitation, installationClients, inviteAccount, notRecorded } from "./access.js";
 import { LIVE } from "./deadline.js";
 import { ProjectError } from "./errors.js";
 import { aggregateCiStatus, completedRun, ingestCompletedRun } from "./grading.js";
@@ -253,7 +253,11 @@ export function reconcileGrades(app: FastifyInstance, config: AppConfig): Promis
 
 // ---------------------------------------------------------------- reconcile.repos
 
-/** The day's re-invite claimed on the row: a student's own repository, pending, not frozen, none for a day. */
+/** A grant of the repository a revocation asked GitHub about, with no answer yet (M3-15b-2): the reconciliation leaves such a repository's access alone. */
+const BEING_REVOKED = sql`EXISTS (SELECT 1 FROM ${projectRepoAccess}
+  WHERE ${projectRepoAccess.repoId} = ${projectRepos.id} AND ${projectRepoAccess.revokingAt} IS NOT NULL)`;
+
+/** The day's re-invite claimed on the row: a student's own repository, pending, not frozen, no access being revoked, none for a day. */
 async function claimReinvite(db: Db, repoId: string, now: Date): Promise<boolean> {
   const claimed = await db
     .update(projectRepos)
@@ -264,6 +268,7 @@ async function claimReinvite(db: Db, repoId: string, now: Date): Promise<boolean
         eq(projectRepos.invitationStatus, "pending"),
         isNull(projectRepos.groupId),
         isNull(projectRepos.frozenAt),
+        sql`NOT ${BEING_REVOKED}`,
         or(isNull(projectRepos.invitationReinvitedAt), lte(projectRepos.invitationReinvitedAt, new Date(now.getTime() - REINVITE_INTERVAL_MS))),
       ),
     )
@@ -291,6 +296,8 @@ async function isCollaborator(octokit: Octokit, fullName: string, login: string)
  * the row following GitHub's answer; otherwise (frozen, or re-invited within
  * the day) looked for among the collaborators by the login recorded at the
  * invitation, since GitHub sends no event for an invitation accepted late.
+ * An access a revocation is taking away (`revoking_at`, M3-15b-2) is neither
+ * re-invited nor read: the revocation's answer settles it.
  */
 async function reconcileInvitation({ app, octokit, ctx, located, counts, now }: Step): Promise<void> {
   const db = app.db;
@@ -316,7 +323,7 @@ async function reconcileInvitation({ app, octokit, ctx, located, counts, now }: 
       app.log.warn({ code: err.code, repo: located.fullName }, "reconcile.repos: a re-invite was refused");
       return;
     }
-    if (!invited) return;
+    if (notRecorded(invited)) return;
     counts.reinvited += 1;
     if (invited.invitation === "accepted") counts.accepted += 1;
     await followInvitation(db, repo, invited.invitation);
@@ -326,7 +333,7 @@ async function reconcileInvitation({ app, octokit, ctx, located, counts, now }: 
   const grants = await db
     .select({ login: projectRepoAccess.githubLogin })
     .from(projectRepoAccess)
-    .where(and(eq(projectRepoAccess.repoId, repo.id), isNull(projectRepoAccess.revokedAt)));
+    .where(and(eq(projectRepoAccess.repoId, repo.id), isNull(projectRepoAccess.revokedAt), isNull(projectRepoAccess.revokingAt)));
   for (const { login } of grants) {
     if (!(await isCollaborator(octokit, located.fullName, login))) continue;
     counts.accepted += 1;
