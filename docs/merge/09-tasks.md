@@ -1191,6 +1191,73 @@ under the half that serves them.
   GitHub's answer (`accepted` on a 204). A repository re-enabled by its
   staff (`protection_reenabled_at`) is an ordinary repository again for
   `reconcile.repos`.
+- **Split** (orchestrator, 2026-10-05): **M3-06a** (this PR) is the two
+  scheduled tasks; **M3-06b** closes M3-04's three restored-heads edges
+  (the window bounded by the receipt of `covered_sha`, the restore's
+  branch stored on `reverts`, the runs of S after a 422 whose retry finds
+  nothing) and the rule the product owner decided the same day: *a 422
+  then nothing to restore ⇒ the run stays `to_verify`, with a `reverts`
+  row and no restore commit*.
+- **As delivered** (M3-06a, branch `merge/M3-06-reconciliation`):
+  - **Tasks** `Q:modules/project/reconcile.ts`, `RECONCILE_TASKS` in the
+    catalog (`reconcile.grades` 15 min, `reconcile.repos` daily; keys in
+    `SCHEDULED_TASK_KEYS`, names `admin.task.reconcile.*` en/fr), run by
+    the `system.task` worker; without the App they return at once. One
+    `pass` for both: the live repositories in scope (`reconciles` and
+    `isQuiet` of `@quiz/domain` `projectReconcile.ts`: 24 h after the
+    freeze unless a `deadline` dispatch is unanswered; quiet 30 min for
+    the grades), one fail-fast installation client per organization
+    (`failFast` in `github/app.ts`: `noRateLimitWait` on every request),
+    each repository located by `GET /repositories/{id}` — a 404 there ⇒
+    `markRepoDeleted(…, "reconcile")`; a new name ⇒ `followRepoRename`
+    (`repos.ts`, extracted from the `repository.renamed` handler, which
+    calls it) —, then settled; a rate limit stops the pass (logged, the
+    summary says so), any other failure of a repository is logged and the
+    pass goes on. Audit `project.reconciled` (subject the task key,
+    `{repos, runsIngested, reinvited, accepted, heads, renamed, deleted,
+    stoppedOnRateLimit}`) per pass that changed something or stopped.
+  - **`reconcile.grades`**: `GET /repos/{o}/{r}/actions/runs?status=completed&per_page=20`
+    under the current name, each run through `completedRun` (`grading.ts`,
+    the ONE mapping, `RawWorkflowRun` its schema — the `workflow_run`
+    handler uses both) then `ingestCompletedRun`; a 404 from the listing
+    deletes nothing. "Activity" for the quiet rule is the latest of the
+    push receipts and of the runs' `completed_at` (GitHub's clock, not
+    `created_at`: the two clocks never mix).
+  - **`reconcile.repos`**: a student's own pending invitation claimed
+    (`invitation_reinvited_at`, UPDATE … RETURNING, once a day, never once
+    frozen) then `inviteAccount(…, via: "reconcile")` with the login
+    `linkedLogin` returns today (no link: skipped, the claim stands;
+    `github_account_stale`: skipped and logged, the claim stands) and
+    `followInvitation`; not claimed ⇒ the recorded live grants' logins
+    looked for among the collaborators (`GET …/collaborators/{login}`,
+    204 ⇒ `accepted`). Group repositories: head and runs like any row,
+    invitations untouched (ADR-070, M3-15b). The default branch's head
+    (`GET …/commits?sha=<default>&per_page=1`) moves `last_commit_sha` and
+    `last_commit_at` only when not in `bot_commits` and its author and
+    committer are both named and persons (`pushedBy`); then
+    `aggregateCiStatus` (exported from `grading.ts`). No receipt, no
+    `protectFiles`.
+  - **Migration** `0069_project_reconcile` (`invitation_reinvited_at`;
+    M3-09b takes 0068, so the snapshot's `prevId` is 0067's: whichever of
+    the two lands second regenerates). `markRepoDeleted`'s `via` and
+    `InviteVia` gain `reconcile`.
+  - **Tests** `Q:modules/project/reconcile.db.test.ts` (both tasks against
+    the fake GitHub: ingestion once from either path, the quiet and scope
+    rules, the 404 rules, the rate-limit stop, the re-invite claim across
+    a day, acceptance found, frozen and unlinked, the head rules, the
+    rename), `grading.test.ts` (the mapping), `@quiz/domain`
+    `projectReconcile.test.ts` (the pure rules).
+  - **Accept leftovers** (product owner, 2026-10-05): reported only. A
+    row on `repo_name_taken` stays so — a repository is the row's only if
+    the row made it (rule of 2026-10-02), so no adoption by name; a stray
+    private repository left by an account renamed before success is not
+    looked for (I69). Nothing here finds it.
+  - **Interpretation taken** (to confirm in review): "no pusher means no
+    head move" is read as fail closed — a head whose author and committer
+    GitHub cannot name is nobody's and never becomes the student's last
+    commit; a student committing with an unlinked e-mail is left to the
+    push webhook, whose sender names them. A staff unlock after the
+    freeze (no reopen) does not widen the 24-hour window.
 
 ### M3-07 — Sync of the source repository
 - **Depends on**: M2-04, M3-02, D12. ‖ M3-05, M3-06.

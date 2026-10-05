@@ -174,7 +174,13 @@ layers:
   (`bot_commits(sync)`), open or comment the single sync PR, never merge.
 - `reconcile.grades` (15 min): repos quiet > 30 min, last 20 runs through
   `ingestCompletedRun`. `reconcile.repos` (24 h): pending invitations,
-  head, CI. `reconcile.deliveries` (24 h): local unprocessed > 10 min
+  head, CI. In Quiz (M3-06a, `Q:modules/project/reconcile.ts`) both are
+  bounded to the live repositories until 24 h after their freeze (unless a
+  final review is pending), locate each repository by id first (a 404 there
+  is terminal, elsewhere never), follow a rename through the webhook's path,
+  move the head only to a person's commit, re-invite at most once a day
+  until frozen, and stop at once on a rate limit (ADR-011 addendum,
+  2026-10-05). `reconcile.deliveries` (24 h): local unprocessed > 10 min
   re-enqueued; GitHub failures of the last 24 h redelivered (≤ 50).
   `purge.housekeeping`: payloads > 30 days (in Quiz, the scheduled task
   `deliveries.purge`, M2-04).
