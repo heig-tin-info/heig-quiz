@@ -38,6 +38,7 @@ import {
   ActivityCard,
   ActivityRow,
   ClassroomList,
+  GroupSetRow,
   PollRow,
   UpcomingByDay,
   useCardActions,
@@ -77,6 +78,7 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
   const drill = useDrillAvailability(true).session;
 
   const polls = home.data?.polls ?? [];
+  const groupSets = home.data?.groupSets ?? [];
   const open = home.data?.open ?? [];
   const upcoming = home.data?.upcoming ?? [];
 
@@ -107,7 +109,7 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
             {polls.map((poll) => (
               <PollRow key={poll.id} poll={poll} navigate={navigate} />
             ))}
-            {open.length === 0 && polls.length === 0 && !drill ? (
+            {open.length === 0 && polls.length === 0 && groupSets.length === 0 && !drill ? (
               <Card>
                 <EmptyState icon={CheckCircle2} title={t("shome.empty.title")}>
                   {t("shome.empty.body")}
@@ -119,6 +121,9 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
               ))
             )}
             {/* After what closes: an evaluation open now is the more urgent. */}
+            {groupSets.map((card) => (
+              <GroupSetRow key={card.id} card={card} navigate={navigate} />
+            ))}
             {drill ? <DrillRow session={drill} navigate={navigate} /> : null}
           </section>
 

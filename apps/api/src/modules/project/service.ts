@@ -51,7 +51,7 @@ export { projectDetail, repoRuns } from "./detail.js";
 export { repoDeadline, setRepoDeadline, setStaffLock } from "./deadline.js";
 export { overrideScore, releaseProject } from "./grades.js";
 export { projectsChanged } from "./events.js";
-export { ConfirmationNeeded, copiesBefore, followingCopies, RepoGroupTouched, stepCopies } from "./groupCopy.js";
+export { ConfirmationNeeded, copiesBefore, followingCopies, RepoGroupTouched, setHasRepo, stepCopies } from "./groupCopy.js";
 export { requestGroupSync } from "./groupSync.js";
 export { inviteOnGithubLink, releaseLine, revokeEnrollmentAccess, RevokeFailed, type RevokeVia } from "./access.js";
 export { resendInvitation } from "./invitation.js";

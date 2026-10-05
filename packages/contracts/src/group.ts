@@ -1,8 +1,11 @@
 /**
  * The `group` module's payloads (ADR-070, F-PROJ-06; merge task M3-15a):
  * a classroom's group sets, their groups, a student's place, the random
- * formation. Staff routes only, on the course's `staffAccess`; the
- * students' self-formation and their view of a set are lot 2 (M3-17).
+ * formation, on the course's `staffAccess`. Lot 2 (M3-17, F-PROJ-22): a
+ * set opened to its students until a date, their writes (create and name a
+ * group, join, leave, rename their own) and their view of the classroom's
+ * sets ({@link StudentGroupSet}), the group module's student exit
+ * (N-SEC-20).
  *
  * Words (ADR-070 §1): a **group** (fr *groupe*), a **group set** (fr
  * *répartition*), never a "team". A student is a roster line
@@ -34,13 +37,20 @@ export const GroupSetCreate = z.strictObject({
 });
 export type GroupSetCreate = z.infer<typeof GroupSetCreate>;
 
-/** `PATCH /app/api/group-sets/:id`: a rename, or its maximum size (null: none). */
+/**
+ * `PATCH /app/api/group-sets/:id`: a rename, its maximum size (null: none),
+ * or its opening to the students (F-PROJ-22): `openUntil` a date opens it
+ * until then by the server's clock (a date already past leaves it closed),
+ * null closes it. Open, the set needs a maximum size (`422
+ * max_size_required`).
+ */
 export const GroupSetPatch = z
   .strictObject({
     name: GroupSetName.optional(),
     maxSize: GroupMaxSize.nullable().optional(),
+    openUntil: z.iso.datetime().nullable().optional(),
   })
-  .refine((b) => b.name !== undefined || b.maxSize !== undefined, { message: "Nothing to update" });
+  .refine((b) => b.name !== undefined || b.maxSize !== undefined || b.openUntil !== undefined, { message: "Nothing to update" });
 export type GroupSetPatch = z.infer<typeof GroupSetPatch>;
 
 /** `POST /app/api/group-sets/:id/groups`: the name, by default "Group k" with the first free k. */
@@ -120,6 +130,10 @@ export const GroupSetSummary = z.object({
   placed: z.number().int(),
   unplaced: z.number().int(),
   createdAt: z.iso.datetime(),
+  /** Opened to the students until then (F-PROJ-22); null: never opened, or closed. */
+  openUntil: z.iso.datetime().nullable(),
+  /** Open to the students now, by the server's clock (`openUntil` ahead, the classroom not archived). */
+  open: z.boolean(),
   usedBy: z.array(GroupSetUse),
 });
 export type GroupSetSummary = z.infer<typeof GroupSetSummary>;
@@ -138,6 +152,9 @@ export const GroupSetDetail = z.object({
     maxSize: z.number().int().nullable(),
     createdAt: z.iso.datetime(),
     readOnly: z.boolean(),
+    /** As in {@link GroupSetSummary}. */
+    openUntil: z.iso.datetime().nullable(),
+    open: z.boolean(),
   }),
   groups: z.array(z.object({ id: z.uuid(), name: z.string(), position: z.number().int(), members: z.array(GroupStudent) })),
   unplaced: z.array(GroupStudent),
@@ -195,7 +212,14 @@ export type GroupConsequences = z.infer<typeof GroupConsequences>;
  *     without the digest of them, or with a stale one (another write
  *     changed them meanwhile): {@link GroupConsequences}. Sent again with
  *     `confirm: <digest>`, it is applied, the GitHub side by the
- *     `group.sync` job (M3-15b-2).
+ *     `group.sync` job (M3-15b-2);
+ *   - `max_size_required` (422) — opening a set with no maximum size, or
+ *     clearing it while the set is open (F-PROJ-22);
+ *   - and a student's write (F-PROJ-22, M3-17): `set_closed` (409) — the
+ *     set is not open any more (its `openUntil` passed, by the server's
+ *     clock, no grace); `set_frozen` (409) — a group of the set has a
+ *     repository in a project, so its groups are the staff's alone;
+ *     `group_full` (409) — the group holds the maximum size, or more.
  * A group, a student or a set out of reach is the 404 of a missing one.
  */
 /**
@@ -214,6 +238,84 @@ export const GROUP_REFUSALS = [
   "size_out_of_range",
   "has_repo",
   "needs_confirmation",
+  "max_size_required",
+  "set_closed",
+  "set_frozen",
+  "group_full",
 ] as const;
 export const GroupErrorCode = z.enum(GROUP_REFUSALS);
 export type GroupErrorCode = z.infer<typeof GroupErrorCode>;
+
+// ---------------------------------------------------------------- the students' side (F-PROJ-22, M3-17)
+
+/** A classmate as a student reads them: the first and last names, nothing else (N-SEC-20). */
+export const GroupMemberName = z.object({ nom: z.string(), prenom: z.string() });
+export type GroupMemberName = z.infer<typeof GroupMemberName>;
+
+/**
+ * One set as a student reads it (`GET /app/api/classrooms/:id/group-sets/student`,
+ * and the answer of every student write), the group module's student exit
+ * (ADR-070 §8, N-SEC-20). A set reaches a student while it is OPEN, or
+ * while a published project of the classroom that is not archived names it.
+ *
+ * - Open: every group (its name, its size, its members' names) and the
+ *   students in no group (`unplaced`).
+ * - Closed: their own group alone, if any (the projects follow it), and no
+ *   `unplaced`.
+ *
+ * Never a roster line's id, a claim, an e-mail, a GitHub login, the projects
+ * that name the set. `writable`: the caller may write now — open, no group
+ * of the set with a repository, the classroom not archived, their own portal
+ * session on a claimed student seat (so never a teacher in the student
+ * view, nor an impersonation). `myGroupId`: the caller's group, null when in
+ * none. `serverNow`: the server's clock, to count down to `openUntil` and
+ * read the set again when it passes.
+ */
+export const StudentGroupSet = z.object({
+  set: z.object({
+    id: z.uuid(),
+    name: z.string(),
+    maxSize: z.number().int().nullable(),
+    openUntil: z.iso.datetime().nullable(),
+    open: z.boolean(),
+  }),
+  serverNow: z.iso.datetime(),
+  writable: z.boolean(),
+  myGroupId: z.uuid().nullable(),
+  groups: z.array(z.object({ id: z.uuid(), name: z.string(), size: z.number().int(), members: z.array(GroupMemberName) })),
+  unplaced: z.array(GroupMemberName).optional(),
+});
+export type StudentGroupSet = z.infer<typeof StudentGroupSet>;
+
+/** The classroom's sets a student reads, the oldest first. */
+export const StudentGroupSets = z.array(StudentGroupSet);
+export type StudentGroupSets = z.infer<typeof StudentGroupSets>;
+
+/**
+ * `POST /app/api/group-sets/:id/student/groups`: a new group, named "Group k"
+ * (fr "Groupe k") by default in the student's language, with its creator
+ * moved in (out of the group they were in).
+ */
+export const StudentGroupCreate = z.strictObject({ name: GroupName.optional() });
+export type StudentGroupCreate = z.infer<typeof StudentGroupCreate>;
+
+/** `PUT /app/api/group-sets/:id/student/membership`: the caller into a group of the set, below its maximum size. */
+export const StudentGroupJoin = z.strictObject({ groupId: z.uuid() });
+export type StudentGroupJoin = z.infer<typeof StudentGroupJoin>;
+
+/**
+ * An open set in the student's Activities (F-ORG-14, F-ORG-15): "Form your
+ * group until …", in Open now, leading to the classroom's Groups tab. Never
+ * the urgent accent, never a notification.
+ */
+export const StudentGroupSetCard = z.object({
+  id: z.uuid(),
+  classroomId: z.uuid(),
+  classroomName: z.string(),
+  courseCode: z.string(),
+  name: z.string(),
+  openUntil: z.iso.datetime(),
+  /** The caller's group's name, null when in none. */
+  myGroup: z.string().nullable(),
+});
+export type StudentGroupSetCard = z.infer<typeof StudentGroupSetCard>;

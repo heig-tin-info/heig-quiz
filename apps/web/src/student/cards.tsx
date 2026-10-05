@@ -19,6 +19,7 @@ import type {
   EvaluationCard as EvaluationCardData,
   StudentActivityCard,
   StudentClassroom,
+  StudentGroupSetCard,
   StudentPollCard,
 } from "@quiz/contracts";
 
@@ -26,13 +27,14 @@ import { api } from "../api";
 import { feedbackLink } from "../grading";
 import { formatDuration, useT, type TFunction } from "../i18n";
 import { studentClassroomsKey } from "../queryKeys";
-import type { Navigate, Route } from "../router";
+import { routeToPath, type Navigate, type Route } from "../router";
 import {
   Badge,
   Card,
   cx,
   EmptyState,
   isoDateParts,
+  isoDateTime,
   localTimeZone,
   pressable,
   QueryError,
@@ -324,6 +326,36 @@ export function PollRow({
         primary,
         onClick: () => navigate({ view: "join", code: poll.code }),
       }}
+    />
+  );
+}
+
+/**
+ * A group set open to the student's self-formation (F-PROJ-22, S3): "Form
+ * your group until …", in Open now, leading to the classroom's Groups tab.
+ * Its button is never the page's primary — forming a group is not urgent
+ * the way an exam closing is — and nothing is notified.
+ */
+export function GroupSetRow({
+  card,
+  navigate,
+  showWhere = true,
+}: {
+  card: StudentGroupSetCard;
+  navigate: (r: Route) => void;
+  showWhere?: boolean;
+}) {
+  const t = useT();
+  const route: Route = { view: "classroomGroups", id: card.classroomId };
+  const go = () => navigate(route);
+  return (
+    <ActivityRow
+      title={t("sgroups.row.title", { when: isoDateTime(card.openUntil) })}
+      link={{ href: routeToPath(route), onNavigate: go }}
+      where={showWhere ? `${card.courseCode} · ${card.classroomName} · ${card.name}` : card.name}
+      line={card.myGroup === null ? t("sgroups.row.none") : t("sgroups.row.in", { group: card.myGroup })}
+      badge={{ label: t("sgroups.row.badge"), accent: false }}
+      action={{ label: t(card.myGroup === null ? "sgroups.row.choose" : "sgroups.row.see"), onClick: go }}
     />
   );
 }

@@ -154,6 +154,7 @@ function card(canRetake: boolean, keep: Keep = "best"): EvaluationCard {
 
 const home = (c: EvaluationCard): StudentHomeData => ({
   polls: [],
+  groupSets: [],
   open: [{ kind: "evaluation", ...c }],
   upcoming: [],
   past: [],

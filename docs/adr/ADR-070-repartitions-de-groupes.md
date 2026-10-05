@@ -32,7 +32,10 @@ Amended 2026-10-05 (product owner, merge task M3-15b-1): decisions 4 and
 see *Amendment of 2026-10-05* at the end of the Decision. Amended again the
 same day (product owner, merge task M3-15b-2): decisions 4 and 6 — *Resync*
 after the deadline, and a confirmation for every move touching a group with
-a repository; see *Second amendment of 2026-10-05*.
+a repository; see *Second amendment of 2026-10-05*. Amended a third time the
+same day (product owner, merge task M3-17): decision 8 — where the students
+form their groups, which sets they see, how they learn a set is open, and
+the unplaced students (S1–S4); see *Third amendment of 2026-10-05*.
 
 ## Context
 
@@ -299,6 +302,74 @@ meaning, which ADR-048 deliberately does not use.
   next pass asks again, and an access GitHub kept on a group repository
   whose line is no longer its member (a *stray grant*) is the job's to
   revoke and flags the repository *access to revoke*.
+
+### Third amendment of 2026-10-05 (product owner, M3-17)
+
+Decision 8, the students' side, settled before it was built:
+
+- **S1, where.** The student's classroom page gets a *Groups* tab (fr
+  *Groupes*), at the same address as the staff's, `/classrooms/:id/groups`,
+  role-dispatched like `/classrooms/:id` (F-ORG-15). It is drawn only while
+  a set reaches the classroom's students (the page's `hasGroups`, like
+  `hasJournal`).
+- **S2, which sets.** A student sees a set that is OPEN (its `open_until`
+  ahead by the server's clock, the classroom not archived), or one a
+  published project of the classroom that is not archived names. A closed
+  set no such project names is invisible.
+- **S3, how they learn of it.** An open set is a row in *Open now* of the
+  student's Activities, on the classroom page and the home: "Form your group
+  until …" (fr "Formez votre groupe jusqu'au …"), leading to the tab. It
+  never takes the urgent accent, and nothing is notified.
+- **S4, the unplaced.** While the set is open, the students also see the
+  students of the set in no group, by first and last name only.
+
+How it is built (orchestrator, M3-17):
+
+- **The student view** is one service of the module (`studentGroupSets`),
+  each field picked by hand: the set (`name`, `maxSize`, `openUntil`,
+  `open`), `serverNow`, `writable`, `myGroupId`, the groups (`name`,
+  `size`, members' names) and, while open, `unplaced`; closed, the reader's
+  own group alone. Never a roster line's id, a claim, an e-mail, a GitHub
+  login, the projects naming the set. `writable` is the server's: open, no
+  group of the set with a repository, the classroom not archived, the
+  reader's own portal session on a claimed student seat.
+- **Routes.** `GET /app/api/classrooms/:id/group-sets/student` through
+  `readableClassroom`'s student branch, the student payload forced (a
+  teacher in the student view and an impersonation read it, `writable`
+  false); the writes `POST /app/api/group-sets/:id/student/groups` (create
+  and name, the creator moved in; the default name in the student's
+  language), `PUT|DELETE …/student/membership` (join by group id, leave),
+  `PATCH …/student/groups/:gid` (rename their own), each answering the set
+  as its writer reads it. A write takes the caller's own portal session on a
+  claimed student seat of a set that reaches them (`studentGroupSet`,
+  `guards.ts`): an impersonation (in every environment), a teacher in the
+  student view, a staff seat, a `seb` or `kiosk` session, a token get the
+  404 of a missing set. Group ids only, never a roster line's.
+- **The checks**, under the set's lock (`writeSet`), BEFORE anything is
+  written or stepped: open by the server's clock (`409 set_closed`, no
+  grace); no group of the set with a repository in any project naming it,
+  stopped copies and archived projects included (`409 set_frozen`, the
+  same repository predicate as the copy's slug), so a student's write never
+  reaches `needs_confirmation`; `409 group_full` at the maximum or above
+  (a group the staff filled past it is full to the students), the lock
+  serialising the last seat. An emptied group stays; a student never
+  deletes one. The audit reuses `group.create`, `group.rename`,
+  `group.member_move` with `self: true` and the student's line.
+- **The staff.** `GroupSetPatch.openUntil`: a date opens the set until then
+  (a date already past leaves it closed), null closes it, reopening is
+  allowed, an archived classroom refuses it (`409 classroom_archived`); the
+  set open after the write needs a maximum size (`422 max_size_required`,
+  also for clearing it while open). The summary and the detail say
+  `openUntil` and `open`; a duplicate is born closed. The set's page opens
+  it from its menu (a date and the maximum, the risk said: a published
+  project on an open set can be accepted once everyone is placed, and its
+  first repository freezes the set) and says until when it is open, with
+  *Close to students*.
+- **Hints.** A write on a set that reaches the students, before or after it
+  (an opening, a closing), hints `groups` to the `user:` topic of every
+  claimed student of the classroom besides the course's staff; never
+  `classroom:`. Nothing ticks at the closing: the client reads the set again
+  when `openUntil` passes, by `serverNow`.
 
 ## Consequences
 

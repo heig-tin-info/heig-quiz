@@ -4,14 +4,14 @@ import type { GroupSetSummary } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import type { Navigate } from "../router";
-import { Button, Card, EmptyState, isoDateTime, pressable, QueryError, Skeleton, T } from "../ui";
+import { Badge, Button, Card, EmptyState, isoDateTime, pressable, QueryError, Skeleton, T } from "../ui";
 import { useClassroomGroupSets } from "./api";
 import { SetUses } from "./parts";
 
 /**
  * The classroom's Groups tab (ADR-070 §2, M3-16a): its group sets, the
- * oldest first, as the API lists them. A row is a set — its name, its
- * groups, the students placed and not placed, the projects that name it,
+ * oldest first, as the API lists them. A row is a set — its name (and
+ * "open" while its students form their groups, F-PROJ-22), its groups, the students placed and not placed, the projects that name it,
  * its date — and opens its page. "New group set", the tab's one primary
  * action, is in the classroom's header (`ClassroomView`), and in the empty
  * state.
@@ -96,7 +96,12 @@ export function GroupSetList({
               onClick={() => open(set)}
               {...pressable(() => open(set), "row")}
             >
-              <td className={`${T.td} font-semibold`}>{set.name}</td>
+              <td className={`${T.td} font-semibold`}>
+                <span className="inline-flex flex-wrap items-center gap-2">
+                  {set.name}
+                  {set.open ? <Badge tone="green">{t("groups.open.badge")}</Badge> : null}
+                </span>
+              </td>
               <td className={`${T.td} text-right tabular-nums`}>{set.groups}</td>
               <td className={`${T.td} text-right tabular-nums`}>{set.placed}</td>
               <td className={`${T.td} text-right tabular-nums ${set.unplaced > 0 ? "font-medium text-warning" : "text-fg-muted"}`}>

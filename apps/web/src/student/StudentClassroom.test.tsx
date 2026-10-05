@@ -53,6 +53,7 @@ const classroomPage = (over: Partial<StudentClassroomPage> = {}): StudentClassro
   },
   activities: {
     polls: [],
+    groupSets: [],
     open: [
       card({ id: "e-late", title: "Série 3 — Pointeurs", mode: "exercise", closesAt: inMinutes(3 * 24 * 60) }),
       card({ id: "e-soon", title: "Quiz 3 — Pointeurs", closesAt: inMinutes(20) }),
@@ -70,6 +71,7 @@ const classroomPage = (over: Partial<StudentClassroomPage> = {}): StudentClassro
     ],
   },
   hasJournal: false,
+  hasGroups: false,
   serverNow: new Date().toISOString(),
   ...over,
 });
@@ -131,7 +133,7 @@ describe("the student classroom page", () => {
   });
 
   it("says there is nothing to do, and leaves out the empty groups", async () => {
-    mockFetch({ [URL_R1]: ok(classroomPage({ activities: { polls: [], open: [], upcoming: [], past: [] } })) });
+    mockFetch({ [URL_R1]: ok(classroomPage({ activities: { polls: [], groupSets: [], open: [], upcoming: [], past: [] } })) });
     render();
     expect(await screen.findByText("Nothing to do in this classroom right now")).toBeVisible();
     expect(screen.queryByText("Coming up")).toBeNull();
@@ -151,6 +153,36 @@ describe("the student classroom page", () => {
     render();
     await screen.findByRole("heading", { level: 1, name: "PRG1-2026" });
     expect(screen.queryByRole("tablist")).toBeNull();
+  });
+
+  it("draws the Groups tab while a set reaches the students, and its row in Open now, never the accent (F-PROJ-22)", async () => {
+    const groupSets = [
+      {
+        id: "0190d3c4-0000-7000-8000-0000000000b1",
+        classroomId: "r1",
+        classroomName: "PRG1-2026",
+        courseCode: "PRG1",
+        name: "Projet final",
+        openUntil: "2026-10-08T21:59:00.000Z",
+        myGroup: null,
+      },
+    ];
+    const page = classroomPage({ hasGroups: true });
+    mockFetch({ [URL_R1]: ok({ ...page, activities: { ...page.activities, groupSets } }) });
+    const { navigate } = render();
+    const tab = await screen.findByRole("tab", { name: "Groups" });
+    expect(screen.queryByRole("tab", { name: "Journal" })).toBeNull();
+    const row = screen.getByText(/^Form your group until/).closest("div.rounded-card") as HTMLElement;
+    expect(within(row).getByText("Projet final")).toBeInTheDocument();
+    expect(within(row).getByText("You are in no group yet")).toBeInTheDocument();
+    const choose = within(row).getByRole("button", { name: "Choose a group" });
+    expect(choose.className).not.toContain("bg-accent");
+    // The one accent stays the most urgent activity's.
+    expect(document.querySelectorAll("button.bg-accent")).toHaveLength(1);
+    await userEvent.click(choose);
+    expect(navigate).toHaveBeenCalledWith({ view: "classroomGroups", id: "r1" });
+    await userEvent.click(tab);
+    expect(navigate).toHaveBeenLastCalledWith({ view: "classroomGroups", id: "r1" });
   });
 
   it("reads a 404 as a classroom that does not exist, with the way back to Courses", async () => {
@@ -189,7 +221,7 @@ describe("the classroom page's Coming up group, by day", () => {
       card({ id: "e-tue", title: "Série 5 — Tris", state: "scheduled", opensAt: at(6, 8) }),
       card({ id: "e-mon", title: "Série 4 — Récursivité", state: "scheduled", opensAt: at(5, 8) }),
     ];
-    mockFetch({ [URL_R1]: ok(classroomPage({ activities: { polls: [], open: [], upcoming, past: [] } })) });
+    mockFetch({ [URL_R1]: ok(classroomPage({ activities: { polls: [], groupSets: [], open: [], upcoming, past: [] } })) });
     render();
     await screen.findByText("Série 4 — Récursivité");
     expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual(["Tomorrow", "Later"]);
@@ -302,7 +334,7 @@ describe("the project rows of the classroom page (M3-13)", () => {
  */
 describe("the classroom page's Past group (issue #203, F-EVAL-15)", () => {
   const renderFr = (past: EvaluationCard[], navigate = vi.fn()) => {
-    const activities = { polls: [], open: [], upcoming: [], past: past.map((c) => ({ ...c, kind: "evaluation" as const })) };
+    const activities = { polls: [], groupSets: [], open: [], upcoming: [], past: past.map((c) => ({ ...c, kind: "evaluation" as const })) };
     mockFetch({ [URL_R1]: ok(classroomPage({ activities })) });
     renderWithProviders(<StudentClassroom id="r1" tab="activities" navigate={navigate} />, { locale: "fr" });
     return navigate;

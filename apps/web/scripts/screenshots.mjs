@@ -371,6 +371,19 @@ const scenes = [
       await p.getByRole("dialog").waitFor();
     },
   },
+  // F-PROJ-22 (M3-17): the set opened to its students — the banner, the
+  // dialog that opens it.
+  {
+    name: "group-set-open-dialog",
+    role: "teacher",
+    path: `${SET_PAIRS}?groups=1`,
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(more actions|plus d'actions)$/i }).click();
+      await p.getByRole("menuitem", { name: /^(open to students|ouvrir aux étudiants)…$/i }).click();
+      await p.getByRole("dialog").waitFor();
+    },
+  },
   {
     name: "project-new-groups",
     role: "teacher",
@@ -626,6 +639,34 @@ const scenes = [
   { name: "student-classroom-error", role: "student", path: "/classrooms/r1?fail=1", settle: 2500 },
   { name: "student-classroom-notfound", role: "student", path: "/classrooms/nope" },
   { name: "student-classroom-loading", role: "student", path: "/classrooms/r1?slow=1", settle: 300 },
+  // F-PROJ-22 (M3-17): "Projet final" open to the students (`?groups=1`): the
+  // row in Open now on the home and the classroom page, the Groups tab —
+  // in no group (Create the primary), then in the group they created —, a
+  // teacher in the student view (no control), and the create dialog.
+  { name: "student-home-groups", role: "student", path: "/?groups=1" },
+  { name: "student-classroom-groups-row", role: "student", path: "/classrooms/r1?groups=1" },
+  { name: "student-groups", role: "student", path: "/classrooms/r1/groups?groups=1" },
+  {
+    name: "student-groups-create",
+    role: "student",
+    path: "/classrooms/r1/groups?groups=1",
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(create a group|créer un groupe)$/i }).click();
+      await p.getByRole("dialog").waitFor();
+    },
+  },
+  {
+    name: "student-groups-mine",
+    role: "student",
+    path: "/classrooms/r1/groups?groups=1",
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(create a group|créer un groupe)$/i }).click();
+      await p.getByRole("dialog").getByRole("button", { name: /^(create a group|créer un groupe)$/i }).click();
+      await p.getByText(/^(your group|votre groupe)$/i).waitFor();
+    },
+  },
+  { name: "student-view-groups", role: "teacher", path: "/classrooms/r1/groups?groups=1", ss: { "quiz-view-as": "student", "quiz-view-as-return": "/classrooms/r1/groups" } },
   // M3-13 (F-PROJ-04, F-PROJ-15): the student's projects (`?projects=1`,
   // `mock/student.ts`): a row in each state on the home and the classroom
   // page, the rows without a GitHub account, a teacher in the student view

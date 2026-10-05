@@ -126,8 +126,9 @@ describe("the student's Courses and classroom page (M5-02, F-ORG-14/15)", () => 
           timeBonusPercent: 0,
           archived: false,
         },
-        activities: { polls: [], open: [], upcoming: [], past: [] },
+        activities: { polls: [], groupSets: [], open: [], upcoming: [], past: [] },
         hasJournal: true,
+        hasGroups: false,
         serverNow: new Date().toISOString(),
       }),
     });

@@ -130,6 +130,23 @@ async function setState(tx: Tx, setId: string): Promise<SetState> {
  */
 const HAS_REPO = sql<boolean>`(${projectRepos.id} IS NOT NULL AND (${projectRepos.provisionStatus} <> 'error' OR ${projectRepos.githubRepoId} IS NOT NULL))`;
 
+/**
+ * A set's groups are frozen to its students (F-PROJ-22, M3-17): a group of a
+ * copy of it — any project naming it, stopped copies and archived projects
+ * included — has a repository ({@link HAS_REPO}). Its students' writes are
+ * then refused before any step, so none ever reaches `needs_confirmation`.
+ */
+export async function setHasRepo(db: Db | Tx, setId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: projectRepos.id })
+    .from(projects)
+    .innerJoin(projectGroups, eq(projectGroups.projectId, projects.id))
+    .innerJoin(projectRepos, eq(projectRepos.groupId, projectGroups.id))
+    .where(and(eq(projects.groupSetId, setId), HAS_REPO))
+    .limit(1);
+  return row !== undefined;
+}
+
 type Copy = CopyState & { staffSeats: Set<string> };
 
 /** The copy: each group's slug fixed once it has a repository ({@link HAS_REPO}), its stop; and the staff seats in it. */

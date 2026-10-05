@@ -35,6 +35,8 @@ export function makeSet(over: Partial<GroupSetDetail> = {}, setOver: Partial<Gro
       maxSize: null,
       createdAt: "2026-10-01T08:00:00.000Z",
       readOnly: false,
+      openUntil: null,
+      open: false,
       ...setOver,
     },
     groups: [
@@ -56,6 +58,8 @@ export function makeSummary(over: Partial<GroupSetSummary> = {}): GroupSetSummar
     placed: 2,
     unplaced: 3,
     createdAt: "2026-10-01T08:00:00.000Z",
+    openUntil: null,
+    open: false,
     usedBy: [],
     ...over,
   };

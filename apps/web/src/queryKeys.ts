@@ -293,6 +293,12 @@ export const studentClassroomsKey = ["student", "classrooms"] as const;
 export const studentGradesKey = ["student", "grades"] as const;
 /** One classroom's student page (F-ORG-15), under the Courses list's key. */
 export const studentClassroomKey = (id: string) => [...studentClassroomsKey, id] as const;
+/**
+ * The classroom's group sets as its student reads them (F-PROJ-22, M3-17):
+ * under the student's classroom, so the `student` root — which the
+ * `groups` hint names — reaches it.
+ */
+export const studentGroupSetsKey = (classroomId: string) => [...studentClassroomKey(classroomId), "group-sets"] as const;
 /** Every drill read of the student (ADR-041): what an opt-out or a finished session invalidates. */
 export const drillRootKey = ["student", "drill"] as const;
 /** The classrooms whose drill the student is in or opted out of. */

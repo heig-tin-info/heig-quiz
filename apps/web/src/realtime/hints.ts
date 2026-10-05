@@ -74,8 +74,9 @@ export const HINT_ROOTS: Record<HintKind, readonly string[] | "all"> = {
   projects: ["classroom", "project", "group-sets", "student"],
   // A classroom's group sets changed (ADR-070, M3-15a): the Groups tab and
   // every set's page (`groupSetsKey`, M3-16a). A copy that changed is
-  // hinted `projects` besides.
-  groups: ["group-sets"],
+  // hinted `projects` besides. A student's: their Groups tab, the
+  // Activities row and the tab's existence (`student`, M3-17).
+  groups: ["group-sets", "student"],
   mutation: "all",
 };
 

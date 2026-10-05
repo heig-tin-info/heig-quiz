@@ -62,6 +62,7 @@ const lobby: AttemptOrLobby = {
 
 const home: StudentHome = {
   polls: [],
+  groupSets: [],
   open: [],
   upcoming: [],
   past: [],

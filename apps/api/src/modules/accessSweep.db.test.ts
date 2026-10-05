@@ -42,6 +42,8 @@ const STUDENT_ROUTES = new Set([
   // The journal's reads: a student of the classroom reads its journal (F-JRN-12).
   "GET /app/api/classrooms/:id/journal",
   "GET /app/api/classrooms/:id/journal/pages*",
+  // The group sets that reach the students, through the student branch (F-PROJ-22, M3-17).
+  "GET /app/api/classrooms/:id/group-sets/student",
 ]);
 
 /**

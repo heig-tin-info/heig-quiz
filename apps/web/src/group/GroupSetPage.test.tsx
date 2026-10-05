@@ -262,3 +262,50 @@ describe("the groups and the set", () => {
     expect(screen.getByText("2 groupes · 2 placés · 3 sans groupe")).toBeInTheDocument();
   });
 });
+
+describe("opening the set to its students (F-PROJ-22, M3-17)", () => {
+  it("opens it until a date with a binding maximum: the PATCH, the risk said, max_size_required worded", async () => {
+    const opened = makeSet({}, { maxSize: 3, openUntil: "2099-06-01T10:00:00.000Z", open: true });
+    const { calls } = routes(makeSet(), {
+      [`PATCH ${SET_BASE}`]: (call) =>
+        (call.body as { maxSize?: number }).maxSize === 50
+          ? fail(422, { error: "max_size_required", message: "needed" })
+          : ok(opened),
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "More actions" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Open to students…" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(/its first repository freezes the groups for the students/)).toBeInTheDocument();
+    const submit = within(dialog).getByRole("button", { name: "Open" });
+    // No maximum yet: it is required.
+    expect(submit).toBeDisabled();
+    const until = within(dialog).getByLabelText("Open until");
+    await userEvent.clear(until);
+    await userEvent.type(until, "2099-06-01T12:00");
+    const max = within(dialog).getByLabelText("Maximum size");
+    await userEvent.type(max, "50");
+    await userEvent.click(submit);
+    expect(await within(dialog).findByText("Set a maximum group size to open the groups to the students.")).toBeInTheDocument();
+    await userEvent.clear(max);
+    await userEvent.type(max, "3");
+    await userEvent.click(submit);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const patch = writes(calls).at(-1)!;
+    expect(patch.body).toEqual({ openUntil: new Date("2099-06-01T12:00").toISOString(), maxSize: 3 });
+    expect(await screen.findByText(/^Open to students until/, { selector: "p.font-semibold" })).toBeInTheDocument();
+  });
+
+  it("says until when an open set is open, and closes it", async () => {
+    const { calls } = routes(makeSet({}, { maxSize: 2, openUntil: "2099-06-01T10:00:00.000Z", open: true }), {
+      [`PATCH ${SET_BASE}`]: ok(makeSet({}, { maxSize: 2 })),
+    });
+    renderPage();
+    expect(await screen.findByText("They create, join and leave groups of at most 2.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Close to students" }));
+    await waitFor(() => expect(writes(calls)).toHaveLength(1));
+    expect(writes(calls)[0]!.body).toEqual({ openUntil: null });
+    await waitFor(() => expect(screen.queryByText("They create, join and leave groups of at most 2.")).toBeNull());
+  });
+});
+

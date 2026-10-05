@@ -258,7 +258,9 @@ export const HintEvent = z.object({
       // (N-SEC-20, I41). No data.
       "projects",
       // A classroom's group sets changed (ADR-070, M3-15a): on `course:<id>`
-      // of its staff only, NEVER on `classroom:<id>` (N-SEC-20). No data.
+      // of its staff, and on `user:<id>` of each claimed student of the
+      // classroom when the set reaches them (open, or named by a published
+      // project; M3-17), NEVER on `classroom:<id>` (N-SEC-20). No data.
       "groups",
       "mutation",
     ]),

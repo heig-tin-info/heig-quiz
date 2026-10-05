@@ -89,9 +89,11 @@ describe("routeToPath / parsePath", () => {
     expect(routeToPath({ view: "groupSet", classroomId: "c-1", id: "s-1", fromProject: "p-1" })).toBe(
       "/classrooms/c-1/groups/s-1?fromProject=p-1",
     );
-    // Staff pages: a student, or a teacher in the student view, gets the home.
-    expect(ROUTES.classroomGroups.studentSafe).toBe(false);
+    // A set's page is the staff's: a student, or a teacher in the student view, gets the home.
     expect(ROUTES.groupSet.studentSafe).toBe(false);
+    // The Groups tab is one address, two pages (F-PROJ-22, M3-17), under the Courses slot.
+    expect(ROUTES.classroomGroups.studentSafe).toBe(true);
+    expect(ROUTES.classroomGroups.bottomSlot).toBe("courses");
   });
 
   it("parses the project page and the new project in every build, since M3-12 (F-PROJ-13)", () => {
@@ -273,6 +275,8 @@ describe("ROUTES", () => {
       // The merge's student tabs: the Journal (M4-05); the Grades, only
       // under `CLASSROOM_PAGES` until M5-04.
       "classroomGrades",
+      // F-PROJ-22 (M3-17): the student's Groups tab.
+      "classroomGroups",
       "classroomJournal",
       "drill",
       "feedback",

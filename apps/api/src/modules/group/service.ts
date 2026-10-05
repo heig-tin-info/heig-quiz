@@ -26,20 +26,48 @@
  *
  * Default names are written in the creator's language (D10): "Group k"
  * (fr "Groupe k"), "Groups of <date> <time>" (fr "Groupes du …").
+ *
+ * **The students' side** (lot 2, F-PROJ-22, M3-17). The staff open a set to
+ * its students until a date (`open_until`, a maximum size then required:
+ * `422 max_size_required`). While it is open, a student of a claimed seat
+ * creates and names a group (moving in), joins one below the maximum, leaves
+ * theirs, renames theirs — each through `writeSet` like the staff's, checked
+ * under the set's lock BEFORE any step: open by the server's clock
+ * (`409 set_closed`, no grace), no group of the set with a repository in any
+ * project (`409 set_frozen`, so a student's write never reaches
+ * `needs_confirmation`), room left (`409 group_full`, the lock serialising
+ * the last seat). What a student reads is {@link studentGroupSets}, the
+ * module's one student exit (N-SEC-20): names, sizes, members' names —
+ * nothing else. A write on a set that reaches the students hints the
+ * `user:` topic of each claimed student of the classroom (never
+ * `classroom:`).
  */
 import { randomInt, randomUUID } from "node:crypto";
 
-import { and, asc, count, eq, inArray, isNull, max, ne } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNotNull, isNull, max, ne } from "drizzle-orm";
 
-import type { GroupMemberPut, GroupRandomForm, GroupRefusalProjects, GroupSetCreate, GroupSetDetail, GroupSetPatch, GroupSetSummary, GroupSetUse } from "@quiz/contracts";
+import type {
+  GroupMemberName,
+  GroupMemberPut,
+  GroupRandomForm,
+  GroupRefusalProjects,
+  GroupSetCreate,
+  GroupSetDetail,
+  GroupSetPatch,
+  GroupSetSummary,
+  GroupSetUse,
+  StudentGroupSet,
+  StudentGroupSetCard,
+} from "@quiz/contracts";
 import { copyFollows, defaultGroupName, defaultSetName, duplicateSetName, formRandomGroups, type NameLocale } from "@quiz/domain";
 
 import { audit, type AuditAction, type AuditActor } from "../../audit.js";
 import { iso } from "../../clock.js";
 import type { Db, Tx } from "../../db/client.js";
-import { classrooms, enrollments, groupSets, projects, studentGroupMembers, studentGroups } from "../../db/schema.js";
+import { classrooms, courses, enrollments, groupSets, projects, studentGroupMembers, studentGroups } from "../../db/schema.js";
+import { openSet, studentVisibleSet } from "../guards.js";
 import { DomainError } from "../http.js";
-import { ConfirmationNeeded, copiesBefore, followingCopies, projectsChanged, RepoGroupTouched, stepCopies } from "../project/service.js";
+import { ConfirmationNeeded, copiesBefore, followingCopies, projectsChanged, RepoGroupTouched, setHasRepo, stepCopies } from "../project/service.js";
 import { GroupError } from "./errors.js";
 import { groupsChanged } from "./events.js";
 
@@ -52,6 +80,11 @@ export interface WriteContext {
   locale: NameLocale;
   now: Date;
   confirm?: string | undefined;
+}
+
+/** A set as a student's write loaded it (`studentGroupSet`, `guards.ts`): the scope and the writer's claimed student seat. */
+export interface StudentSetScope extends SetScope {
+  seat: { id: string };
 }
 
 /** The set as its loader found it (`accessibleGroupSet`): the set, its classroom and course. */
@@ -91,10 +124,21 @@ async function usesOf(db: Db | Tx, setIds: readonly string[]): Promise<Map<strin
   return out;
 }
 
+/** Open to its students at `now` (F-PROJ-22): `open_until` ahead, the classroom not archived — {@link openSet}'s rule. */
+const isOpen = (set: Pick<SetRow, "openUntil">, archived: boolean, now: Date): boolean =>
+  set.openUntil !== null && set.openUntil > now && !archived;
+
 /** `GET /app/api/classrooms/:id/group-sets`: the classroom's sets, the oldest first. */
-export async function classroomGroupSets(db: Db, classroomId: string): Promise<GroupSetSummary[]> {
-  const sets = await db.select().from(groupSets).where(eq(groupSets.classroomId, classroomId)).orderBy(asc(groupSets.createdAt), asc(groupSets.id));
-  if (sets.length === 0) return [];
+export async function classroomGroupSets(db: Db, classroomId: string, now: Date): Promise<GroupSetSummary[]> {
+  const rows = await db
+    .select({ set: groupSets, archivedAt: classrooms.archivedAt })
+    .from(groupSets)
+    .innerJoin(classrooms, eq(classrooms.id, groupSets.classroomId))
+    .where(eq(groupSets.classroomId, classroomId))
+    .orderBy(asc(groupSets.createdAt), asc(groupSets.id));
+  if (rows.length === 0) return [];
+  const sets = rows.map((r) => r.set);
+  const archived = rows[0]!.archivedAt !== null;
   const ids = sets.map((s) => s.id);
   const groupCounts = await db
     .select({ setId: studentGroups.setId, n: count() })
@@ -121,13 +165,15 @@ export async function classroomGroupSets(db: Db, classroomId: string): Promise<G
       placed,
       unplaced: students!.n - placed,
       createdAt: iso(s.createdAt),
+      openUntil: s.openUntil === null ? null : iso(s.openUntil),
+      open: isOpen(s, archived, now),
       usedBy: uses.get(s.id) ?? [],
     };
   });
 }
 
 /** `GET /app/api/group-sets/:id`, and the answer of every write on the set. */
-export async function groupSetDetail(db: Db, setId: string): Promise<GroupSetDetail> {
+export async function groupSetDetail(db: Db, setId: string, now: Date): Promise<GroupSetDetail> {
   const [row] = await db
     .select({ set: groupSets, archivedAt: classrooms.archivedAt })
     .from(groupSets)
@@ -151,6 +197,8 @@ export async function groupSetDetail(db: Db, setId: string): Promise<GroupSetDet
       maxSize: set.maxSize,
       createdAt: iso(set.createdAt),
       readOnly: row.archivedAt !== null,
+      openUntil: set.openUntil === null ? null : iso(set.openUntil),
+      open: isOpen(set, row.archivedAt !== null, now),
     },
     groups: groups.map((g) => ({
       id: g.id,
@@ -175,8 +223,11 @@ async function lockClassroom(tx: Tx, classroomId: string): Promise<void> {
 /** The write's audit entry; null when it changed nothing (no audit, no hint). */
 type Written = { action: AuditAction; payload: Record<string, unknown> } | null;
 
-/** The project module's refusals of a step, worded as the group's. */
-async function stepRefusal(tx: Tx, err: unknown): Promise<never> {
+/** The project module's refusals of a step, worded as the group's; to a student, the set is frozen. */
+async function stepRefusal(tx: Tx, err: unknown, student: boolean): Promise<never> {
+  // Never reached: a student's write is refused before any step while a
+  // group of the set has a repository (`assertOpenToStudents`). Fail closed.
+  if (student && (err instanceof ConfirmationNeeded || err instanceof RepoGroupTouched)) throw frozen();
   if (err instanceof ConfirmationNeeded) {
     throw new GroupError("needs_confirmation", "This change has consequences on GitHub: confirm them", err.details);
   }
@@ -186,20 +237,48 @@ async function stepRefusal(tx: Tx, err: unknown): Promise<never> {
   throw new GroupError("has_repo", "This change deletes a group that has a repository on GitHub", details);
 }
 
+/** The set reaches its students at `now` ({@link studentVisibleSet}): a write on it is hinted to them too. */
+async function reachesStudents(tx: Tx, setId: string, now: Date): Promise<boolean> {
+  const [row] = await tx
+    .select({ id: groupSets.id })
+    .from(groupSets)
+    .innerJoin(classrooms, eq(classrooms.id, groupSets.classroomId))
+    .where(and(eq(groupSets.id, setId), studentVisibleSet(now)))
+    .limit(1);
+  return row !== undefined;
+}
+
+/** The accounts of the classroom's claimed student seats: whom a write on a set they read is hinted to. */
+async function claimedStudents(tx: Tx, classroomId: string): Promise<string[]> {
+  const rows = await tx
+    .select({ userId: enrollments.userId })
+    .from(enrollments)
+    .where(and(isStudentOf(classroomId), isNotNull(enrollments.userId)));
+  return rows.map((r) => r.userId!);
+}
+
 /**
  * One write of a set (see the module's header): the copies that follow it
  * are locked and read before the write and stepped after it, in its
  * transaction. The projects whose moves now wait for the `group.sync` job.
+ * `student`: a student's write — its refusals are the students'.
  */
-async function writeSet(db: Db, scope: SetScope, ctx: WriteContext, write: (tx: Tx, set: SetRow) => Promise<Written>): Promise<string[]> {
-  const stepped = await db.transaction(async (tx) => {
+async function writeSet(
+  db: Db,
+  scope: SetScope,
+  ctx: WriteContext,
+  write: (tx: Tx, set: SetRow) => Promise<Written>,
+  { student = false } = {},
+): Promise<string[]> {
+  const done = await db.transaction(async (tx) => {
     await lockClassroom(tx, scope.room.id);
     const [set] = await tx.select().from(groupSets).where(eq(groupSets.id, scope.set.id)).for("update");
     if (!set) throw notFound("group set");
     const before = await copiesBefore(tx, set.id, await followingCopies(tx, set.id));
+    const seenBefore = await reachesStudents(tx, set.id, ctx.now);
     const written = await write(tx, set);
     if (!written) return null;
-    const stepped = await stepCopies(tx, set.id, before, { now: ctx.now, confirm: ctx.confirm }).catch((err: unknown) => stepRefusal(tx, err));
+    const stepped = await stepCopies(tx, set.id, before, { now: ctx.now, confirm: ctx.confirm }).catch((err: unknown) => stepRefusal(tx, err, student));
     await audit(tx, {
       ...ctx.actor,
       action: written.action,
@@ -207,12 +286,14 @@ async function writeSet(db: Db, scope: SetScope, ctx: WriteContext, write: (tx: 
       subjectId: set.id,
       payload: { ...written.payload, copies: stepped.changed, deferred: stepped.due },
     });
-    return stepped;
+    // Seen by the students before or after (opened, closed, deleted): they re-read.
+    const seen = seenBefore || (await reachesStudents(tx, set.id, ctx.now));
+    return { stepped, readers: seen ? await claimedStudents(tx, set.classroomId) : [] };
   });
-  if (!stepped) return [];
-  groupsChanged(scope.course.id);
-  if (stepped.changed.length > 0) projectsChanged([scope.course.id]);
-  return stepped.due;
+  if (!done) return [];
+  groupsChanged(scope.course.id, done.readers);
+  if (done.stepped.changed.length > 0) projectsChanged([scope.course.id]);
+  return done.stepped.due;
 }
 
 // ---------------------------------------------------------------- sets
@@ -235,10 +316,27 @@ export async function createGroupSet(
   return id;
 }
 
-/** `PATCH /app/api/group-sets/:id`: its name, its maximum size. */
+/**
+ * `PATCH /app/api/group-sets/:id`: its name, its maximum size, its opening
+ * to the students (F-PROJ-22: a date opens it until then, null closes it,
+ * reopening allowed). A set open after the write needs a maximum size
+ * (`422 max_size_required`).
+ */
 export async function patchGroupSet(db: Db, scope: SetScope, body: GroupSetPatch, ctx: WriteContext): Promise<void> {
   await writeSet(db, scope, ctx, async (tx, set) => {
-    await tx.update(groupSets).set(body).where(eq(groupSets.id, set.id));
+    const openUntil = body.openUntil === undefined ? set.openUntil : body.openUntil === null ? null : new Date(body.openUntil);
+    const maxSize = body.maxSize === undefined ? set.maxSize : body.maxSize;
+    if (openUntil !== null && openUntil > ctx.now && maxSize === null) {
+      throw new GroupError("max_size_required", "A group set open to its students needs a maximum size");
+    }
+    await tx
+      .update(groupSets)
+      .set({
+        ...(body.name === undefined ? {} : { name: body.name }),
+        ...(body.maxSize === undefined ? {} : { maxSize: body.maxSize }),
+        ...(body.openUntil === undefined ? {} : { openUntil }),
+      })
+      .where(eq(groupSets.id, set.id));
     return { action: "group_set.update", payload: body };
   });
 }
@@ -246,7 +344,8 @@ export async function patchGroupSet(db: Db, scope: SetScope, body: GroupSetPatch
 /**
  * `POST /app/api/group-sets/:id/duplicate`: a new set of the same
  * classroom with the same groups and members (staff seats left out),
- * named "<name> (copy)" in the creator's language. Its id.
+ * named "<name> (copy)" in the creator's language, closed to the students.
+ * Its id.
  */
 export async function duplicateGroupSet(db: Db, scope: SetScope, ctx: WriteContext): Promise<string> {
   const id = randomUUID();
@@ -353,6 +452,30 @@ export async function deleteGroup(db: Db, scope: SetScope, groupId: string, ctx:
   });
 }
 
+/** The group of the set `enrollmentId` is in, null when in none. */
+async function groupNow(tx: Tx, setId: string, enrollmentId: string): Promise<string | null> {
+  const [current] = await tx
+    .select({ groupId: studentGroupMembers.groupId })
+    .from(studentGroupMembers)
+    .where(and(eq(studentGroupMembers.setId, setId), eq(studentGroupMembers.enrollmentId, enrollmentId)));
+  return current?.groupId ?? null;
+}
+
+/** `enrollmentId` into `groupId` of the set (moved out of the group they were in), or out of every group (null). */
+async function moveMember(tx: Tx, setId: string, enrollmentId: string, groupId: string | null, now: Date): Promise<void> {
+  if (groupId === null) {
+    await tx.delete(studentGroupMembers).where(and(eq(studentGroupMembers.setId, setId), eq(studentGroupMembers.enrollmentId, enrollmentId)));
+    return;
+  }
+  await tx
+    .insert(studentGroupMembers)
+    .values({ id: randomUUID(), setId, groupId, enrollmentId, addedAt: now })
+    .onConflictDoUpdate({
+      target: [studentGroupMembers.setId, studentGroupMembers.enrollmentId],
+      set: { groupId, addedAt: now },
+    });
+}
+
 /**
  * `PUT /app/api/group-sets/:id/members/:eid`: the student into a group of
  * the set, or out of every group (`groupId: null`). A roster line of
@@ -367,23 +490,9 @@ export async function placeStudent(db: Db, scope: SetScope, enrollmentId: string
       .where(and(eq(enrollments.id, enrollmentId), isStudentOf(set.classroomId)));
     if (!student) throw notFound("student");
     if (body.groupId !== null) await groupOf(tx, set.id, body.groupId);
-    const [current] = await tx
-      .select({ groupId: studentGroupMembers.groupId })
-      .from(studentGroupMembers)
-      .where(and(eq(studentGroupMembers.setId, set.id), eq(studentGroupMembers.enrollmentId, student.id)));
-    const from = current?.groupId ?? null;
+    const from = await groupNow(tx, set.id, student.id);
     if (from === body.groupId) return null;
-    if (body.groupId === null) {
-      await tx.delete(studentGroupMembers).where(and(eq(studentGroupMembers.setId, set.id), eq(studentGroupMembers.enrollmentId, student.id)));
-    } else {
-      await tx
-        .insert(studentGroupMembers)
-        .values({ id: randomUUID(), setId: set.id, groupId: body.groupId, enrollmentId: student.id, addedAt: ctx.now })
-        .onConflictDoUpdate({
-          target: [studentGroupMembers.setId, studentGroupMembers.enrollmentId],
-          set: { groupId: body.groupId, addedAt: ctx.now },
-        });
-    }
+    await moveMember(tx, set.id, student.id, body.groupId, ctx.now);
     return { action: "group.member_move", payload: { enrollmentId: student.id, from, to: body.groupId } };
   });
 }
@@ -422,4 +531,213 @@ export async function formRandom(db: Db, scope: SetScope, body: GroupRandomForm,
       payload: { size: body.size, remainder: body.remainder, groups: groups.map((g) => g.id), placed: free.length },
     };
   });
+}
+
+// ---------------------------------------------------------------- the students' writes (F-PROJ-22, M3-17)
+
+const frozen = () => new GroupError("set_frozen", "A group of this set has a repository: only the staff change its groups now");
+
+/**
+ * Under the set's lock, before anything is written or stepped: the set is
+ * open by the server's clock (`409 set_closed`, no grace — the loader found
+ * it reaching the student, it may have closed since) and no group of it has
+ * a repository in any project (`409 set_frozen`). The archived classroom is
+ * `lockClassroom`'s `409 classroom_archived`.
+ */
+async function assertOpenToStudents(tx: Tx, set: SetRow, now: Date): Promise<void> {
+  if (set.openUntil === null || !(now < set.openUntil)) throw new GroupError("set_closed", "This group set is closed to its students");
+  if (await setHasRepo(tx, set.id)) throw frozen();
+}
+
+/** A student's write: `writeSet`, the set open to them checked first; the audit names the student (`self`). */
+async function studentWrite(db: Db, scope: StudentSetScope, ctx: WriteContext, write: (tx: Tx, set: SetRow) => Promise<Written>): Promise<void> {
+  await writeSet(
+    db,
+    scope,
+    ctx,
+    async (tx, set) => {
+      await assertOpenToStudents(tx, set, ctx.now);
+      const written = await write(tx, set);
+      return written && { action: written.action, payload: { ...written.payload, enrollmentId: scope.seat.id, self: true } };
+    },
+    { student: true },
+  );
+}
+
+/**
+ * `POST /app/api/group-sets/:id/student/groups`: a new group, last, named
+ * "Group k" by default in the student's language, with the student moved in
+ * (their former group, emptied or not, stays).
+ */
+export async function studentCreateGroup(db: Db, scope: StudentSetScope, name: string | undefined, ctx: WriteContext): Promise<void> {
+  await studentWrite(db, scope, ctx, async (tx, set) => {
+    const { names, next } = await groupsSoFar(tx, set.id);
+    const chosen = name ?? defaultGroupName(names, ctx.locale);
+    if (names.has(chosen)) throw duplicateName(chosen);
+    const id = randomUUID();
+    const from = await groupNow(tx, set.id, scope.seat.id);
+    await tx.insert(studentGroups).values({ id, setId: set.id, name: chosen, position: next, createdAt: ctx.now });
+    await moveMember(tx, set.id, scope.seat.id, id, ctx.now);
+    return { action: "group.create", payload: { groupId: id, name: chosen, from } };
+  });
+}
+
+/** The students of a group, staff seats aside: its size against the maximum. */
+async function sizeOf(tx: Tx, set: SetRow, groupId: string): Promise<number> {
+  const [row] = await tx
+    .select({ n: count() })
+    .from(studentGroupMembers)
+    .innerJoin(enrollments, eq(enrollments.id, studentGroupMembers.enrollmentId))
+    .where(and(eq(studentGroupMembers.groupId, groupId), isStudentOf(set.classroomId)));
+  return row?.n ?? 0;
+}
+
+/**
+ * `PUT /app/api/group-sets/:id/student/membership`: the student into a group
+ * of the set below its maximum size (`409 group_full` at it or above — a
+ * group the staff filled past it included); the set's lock serialises two
+ * students racing for its last seat.
+ */
+export async function studentJoin(db: Db, scope: StudentSetScope, groupId: string, ctx: WriteContext): Promise<void> {
+  await studentWrite(db, scope, ctx, async (tx, set) => {
+    const group = await groupOf(tx, set.id, groupId);
+    const from = await groupNow(tx, set.id, scope.seat.id);
+    if (from === group.id) return null;
+    if (set.maxSize !== null && (await sizeOf(tx, set, group.id)) >= set.maxSize) {
+      throw new GroupError("group_full", `This group already has ${set.maxSize} member(s)`, { max: set.maxSize });
+    }
+    await moveMember(tx, set.id, scope.seat.id, group.id, ctx.now);
+    return { action: "group.member_move", payload: { from, to: group.id } };
+  });
+}
+
+/** `DELETE /app/api/group-sets/:id/student/membership`: the student out of their group (kept, even empty). */
+export async function studentLeave(db: Db, scope: StudentSetScope, ctx: WriteContext): Promise<void> {
+  await studentWrite(db, scope, ctx, async (tx, set) => {
+    const from = await groupNow(tx, set.id, scope.seat.id);
+    if (from === null) return null;
+    await moveMember(tx, set.id, scope.seat.id, null, ctx.now);
+    return { action: "group.member_move", payload: { from, to: null } };
+  });
+}
+
+/** `PATCH /app/api/group-sets/:id/student/groups/:gid`: the student's own group renamed; another group is the 404 of a missing one. */
+export async function studentRenameGroup(db: Db, scope: StudentSetScope, groupId: string, name: string, ctx: WriteContext): Promise<void> {
+  await studentWrite(db, scope, ctx, async (tx, set) => {
+    const group = await groupOf(tx, set.id, groupId);
+    if ((await groupNow(tx, set.id, scope.seat.id)) !== group.id) throw notFound("group");
+    if (group.name === name) return null;
+    await refuseTakenName(tx, set.id, name, group.id);
+    await tx.update(studentGroups).set({ name }).where(eq(studentGroups.id, group.id));
+    return { action: "group.rename", payload: { groupId: group.id, from: group.name, to: name } };
+  });
+}
+
+// ---------------------------------------------------------------- the students' view (N-SEC-20)
+
+/**
+ * Who reads: their claimed seat in the classroom (null: none, e.g. a teacher
+ * in the student view without one), and whether they may write — their own
+ * portal session on a claimed STUDENT seat.
+ */
+export interface StudentReader {
+  seatId: string | null;
+  writer: boolean;
+}
+
+/**
+ * ONE set as `reader` reads it — THE student exit of the module
+ * (ADR-070 §8, N-SEC-20). Every field is picked by hand: names, sizes,
+ * members' first and last names; never a roster line's id, a claim, an
+ * e-mail, a GitHub login, the projects naming it. Open: every group and the
+ * students in no group; closed: the reader's own group alone.
+ */
+async function studentView(db: Db, set: SetRow, archived: boolean, reader: StudentReader, now: Date): Promise<StudentGroupSet> {
+  const open = isOpen(set, archived, now);
+  const groups = await db.select({ id: studentGroups.id, name: studentGroups.name }).from(studentGroups).where(eq(studentGroups.setId, set.id)).orderBy(asc(studentGroups.position));
+  const students = await db
+    .select({ enrollmentId: enrollments.id, nom: enrollments.nom, prenom: enrollments.prenom, groupId: studentGroupMembers.groupId })
+    .from(enrollments)
+    .leftJoin(studentGroupMembers, and(eq(studentGroupMembers.enrollmentId, enrollments.id), eq(studentGroupMembers.setId, set.id)))
+    .where(isStudentOf(set.classroomId))
+    .orderBy(asc(enrollments.nom), asc(enrollments.prenom), asc(enrollments.id));
+  const name = (s: (typeof students)[number]): GroupMemberName => ({ nom: s.nom, prenom: s.prenom });
+  const myGroupId = reader.seatId === null ? null : (students.find((s) => s.enrollmentId === reader.seatId)?.groupId ?? null);
+  const shown = open ? groups : groups.filter((g) => g.id === myGroupId);
+  const writable = open && reader.writer && !(await setHasRepo(db, set.id));
+  return {
+    set: { id: set.id, name: set.name, maxSize: set.maxSize, openUntil: set.openUntil === null ? null : iso(set.openUntil), open },
+    serverNow: iso(now),
+    writable,
+    myGroupId,
+    groups: shown.map((g) => {
+      const members = students.filter((s) => s.groupId === g.id).map(name);
+      return { id: g.id, name: g.name, size: members.length, members };
+    }),
+    ...(open ? { unplaced: students.filter((s) => s.groupId === null).map(name) } : {}),
+  };
+}
+
+/**
+ * `GET /app/api/classrooms/:id/group-sets/student`: the classroom's sets
+ * that reach its students ({@link studentVisibleSet}), the oldest first, as
+ * `reader` reads them.
+ */
+export async function studentGroupSets(db: Db, classroomId: string, reader: StudentReader, now: Date): Promise<StudentGroupSet[]> {
+  const rows = await db
+    .select({ set: groupSets, archivedAt: classrooms.archivedAt })
+    .from(groupSets)
+    .innerJoin(classrooms, eq(classrooms.id, groupSets.classroomId))
+    .where(and(eq(groupSets.classroomId, classroomId), studentVisibleSet(now)))
+    .orderBy(asc(groupSets.createdAt), asc(groupSets.id));
+  return Promise.all(rows.map((r) => studentView(db, r.set, r.archivedAt !== null, reader, now)));
+}
+
+/** The answer of a student's write: the set as its writer now reads it. */
+export async function studentGroupSetView(db: Db, setId: string, seatId: string, now: Date): Promise<StudentGroupSet> {
+  const [row] = await db
+    .select({ set: groupSets, archivedAt: classrooms.archivedAt })
+    .from(groupSets)
+    .innerJoin(classrooms, eq(classrooms.id, groupSets.classroomId))
+    .where(eq(groupSets.id, setId));
+  if (!row) throw notFound("group set");
+  return studentView(db, row.set, row.archivedAt !== null, { seatId, writer: true }, now);
+}
+
+/** Whether a set of the classroom reaches its students: the student page's Groups tab (`hasGroups`). */
+export async function hasStudentGroupSets(db: Db, classroomId: string, now: Date): Promise<boolean> {
+  const [row] = await db
+    .select({ id: groupSets.id })
+    .from(groupSets)
+    .innerJoin(classrooms, eq(classrooms.id, groupSets.classroomId))
+    .where(and(eq(groupSets.classroomId, classroomId), studentVisibleSet(now)))
+    .limit(1);
+  return row !== undefined;
+}
+
+/**
+ * The open sets of the classrooms where `userId` holds a claimed seat (one
+ * classroom: the classroom page), the soonest closing first: the "Form your
+ * group until …" rows of the student's Activities (S3).
+ */
+export async function studentGroupSetCards(db: Db, userId: string, now: Date, classroomId?: string): Promise<StudentGroupSetCard[]> {
+  const rows = await db
+    .select({ set: groupSets, classroomName: classrooms.name, courseCode: courses.code, myGroup: studentGroups.name })
+    .from(enrollments)
+    .innerJoin(classrooms, eq(classrooms.id, enrollments.classroomId))
+    .innerJoin(courses, eq(courses.id, classrooms.courseId))
+    .innerJoin(groupSets, eq(groupSets.classroomId, classrooms.id))
+    .leftJoin(studentGroupMembers, and(eq(studentGroupMembers.setId, groupSets.id), eq(studentGroupMembers.enrollmentId, enrollments.id)))
+    .leftJoin(studentGroups, eq(studentGroups.id, studentGroupMembers.groupId))
+    .where(and(eq(enrollments.userId, userId), classroomId === undefined ? undefined : eq(enrollments.classroomId, classroomId), openSet(now)))
+    .orderBy(asc(groupSets.openUntil), asc(groupSets.id));
+  return rows.map((r) => ({
+    id: r.set.id,
+    classroomId: r.set.classroomId,
+    classroomName: r.classroomName,
+    courseCode: r.courseCode,
+    name: r.set.name,
+    openUntil: iso(r.set.openUntil!),
+    myGroup: r.myGroup,
+  }));
 }
