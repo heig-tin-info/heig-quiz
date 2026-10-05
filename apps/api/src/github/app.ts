@@ -91,6 +91,18 @@ export interface ReadOptions {
 }
 export const HTTP_READ: ReadOptions = { noRateLimitWait: true };
 
+/**
+ * `octokit` with every request answered at once on a rate limit (M3-06):
+ * what a scheduled pass over many repositories uses, so that a quota
+ * exhausted stops the pass — the next period resumes it — instead of
+ * waiting up to an hour inside the task. The same instance underneath (its
+ * hooks, its token); only `request` carries the option, so a helper handed
+ * this client passes it on without knowing.
+ */
+export function failFast(octokit: Octokit): Octokit {
+  return Object.create(octokit, { request: { value: octokit.request.defaults({ request: HTTP_READ }) } }) as Octokit;
+}
+
 /** The HTTP status GitHub answered with, when the error is an answer of GitHub's. */
 export function githubStatus(err: unknown): number | undefined {
   const status = (err as { status?: unknown } | null)?.status;

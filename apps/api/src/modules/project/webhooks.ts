@@ -36,9 +36,9 @@ import { githubOrganizations, projectRepos, projects, botCommits } from "../../d
 import { installationClient, isZeroSha } from "../../github/app.js";
 import { forgetRepoLiveState } from "../../github/metrics.js";
 import { onEvent, onReceipt, projectInstallation, pushedBy, type WebhookHandler } from "../github/service.js";
-import { ingestCompletedRun, isEligible, isLastStudentCommit, type CompletedRun } from "./grading.js";
+import { completedRun, ingestCompletedRun, isEligible, isLastStudentCommit, RawWorkflowRun } from "./grading.js";
 import { protectFiles } from "./protection.js";
-import { hintRepo, markRepoDeleted, repoContext, tracksRepo } from "./repos.js";
+import { followRepoRename, hintRepo, markRepoDeleted, repoContext, tracksRepo } from "./repos.js";
 
 const BRANCH_REF = /^refs\/heads\/(.+)$/;
 
@@ -99,19 +99,7 @@ const push: WebhookHandler = async (app, config, delivery) => {
 const WorkflowRunEvent = z.object({
   action: z.string(),
   repository: z.object({ id: z.number().int() }),
-  workflow_run: z.object({
-    id: z.number().int(),
-    run_attempt: z.number().int().optional(),
-    head_branch: z.string().nullish(),
-    head_sha: z.string(),
-    conclusion: z.string().nullish(),
-    path: z.string().optional(),
-    event: z.string().optional(),
-    check_suite_id: z.number().int().nullish(),
-    updated_at: z.string().optional(),
-    run_started_at: z.string().nullish(),
-    triggering_actor: z.object({ login: z.string() }).nullish(),
-  }),
+  workflow_run: RawWorkflowRun,
 });
 
 /**
@@ -126,23 +114,8 @@ const workflowRun: WebhookHandler = async (app, config, delivery) => {
   const ctx = await repoContext(app.db, event.data.repository.id);
   if (!ctx || ctx.repo.deletedAt !== null) return;
   forgetRepoLiveState(ctx.repo.fullName);
-  const raw = event.data.workflow_run;
-  const completedAt = raw.updated_at ? new Date(raw.updated_at) : delivery.receivedAt;
-  const startedAt = raw.run_started_at ? new Date(raw.run_started_at) : null;
-  const run: CompletedRun = {
-    workflowRunId: raw.id,
-    runAttempt: raw.run_attempt ?? 1,
-    headBranch: raw.head_branch ?? "",
-    headSha: raw.head_sha,
-    conclusion: raw.conclusion ?? "unknown",
-    path: raw.path ?? "",
-    event: raw.event ?? "",
-    // A re-run's triggering actor is who re-ran it; none at all counts as a person's (fail closed).
-    triggeredBy: pushedBy(config, raw.triggering_actor?.login),
-    checkSuiteId: raw.check_suite_id ?? null,
-    startedAt: startedAt && !Number.isNaN(startedAt.getTime()) ? startedAt : null,
-    completedAt: Number.isNaN(completedAt.getTime()) ? delivery.receivedAt : completedAt,
-  };
+  // The one mapping, the reconciliation's too (ADR-011 §1).
+  const run = completedRun(config, event.data.workflow_run, delivery.receivedAt);
   if (event.data.action !== "completed") {
     if (!isLastStudentCommit(ctx, run.headSha) || !(await isEligible(app.db, ctx, run))) return;
     await app.db.update(projectRepos).set({ ciStatus: "pending" }).where(eq(projectRepos.id, ctx.repo.id));
@@ -179,9 +152,8 @@ const RepositoryEvent = z.object({
 
 /**
  * `repository` renamed or deleted (F-PROJ-18). GitHub's id is the
- * reference: a rename refreshes the stored names — a student's repository,
- * and a project's source or distribution repository, which the restores
- * and the sync read by name — only where the stored name is the one the
+ * reference: a rename refreshes the stored names (`followRepoRename`, the
+ * reconciliation's path too) only where the stored name is the one the
  * rename left (`changes.repository.name.from`), so a stale rename replayed
  * after a later one changes nothing. A student's repository deleted is
  * marked so, terminal; a source or distribution deleted is left to the
@@ -194,25 +166,7 @@ const repository: WebhookHandler = async (app, _config, delivery) => {
   const ctx = await repoContext(app.db, repo.id);
   if (action === "renamed") {
     if (!changes) return;
-    // The name part only: the owner may differ, an organization renamed
-    // before its own rename event was applied.
-    const from = changes.repository.name.from;
-    const named = (column: AnyPgColumn) => sql`split_part(${column}, '/', 2) = ${from}`;
-    await app.db
-      .update(projects)
-      .set({ sourceFullName: repo.full_name })
-      .where(and(eq(projects.sourceRepoId, repo.id), named(projects.sourceFullName)));
-    await app.db
-      .update(projects)
-      .set({ distributionFullName: repo.full_name })
-      .where(and(eq(projects.distributionRepoId, repo.id), named(projects.distributionFullName)));
-    if (!ctx) return;
-    const [renamed] = await app.db
-      .update(projectRepos)
-      .set({ fullName: repo.full_name })
-      .where(and(eq(projectRepos.id, ctx.repo.id), named(projectRepos.fullName)))
-      .returning({ id: projectRepos.id });
-    if (!renamed) return;
+    if (!(await followRepoRename(app.db, repo.id, repo.full_name, changes.repository.name.from)) || !ctx) return;
   } else if (action === "deleted") {
     if (!ctx || !(await markRepoDeleted(app.db, ctx.repo.id, app.clock.now(), "webhook"))) return;
   } else {

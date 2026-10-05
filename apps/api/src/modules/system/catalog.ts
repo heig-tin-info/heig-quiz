@@ -12,9 +12,10 @@
  * (N-DATA-03). `health.checks` is this module's own: the health registry,
  * run every five minutes, telling the administrators of a check that fails
  * or recovers (ADR-055 §5, `alerts.ts`). `GITHUB_TASKS` replays and purges the
- * webhook deliveries (ADR-011, M2-04); `REVIEW_TASKS` reviews the questions
- * of the pools that asked, at night (ADR-060 §5); the other GitHub reconciliations join
- * with the task that ports them (M3-06). A new task also adds its key to
+ * webhook deliveries (ADR-011, M2-04); `RECONCILE_TASKS` catches up the
+ * projects' runs, invitations and repositories GitHub's webhooks missed
+ * (ADR-011, N-RES-08, M3-06); `REVIEW_TASKS` reviews the questions of the
+ * pools that asked, at night (ADR-060 §5). A new task also adds its key to
  * `SCHEDULED_TASK_KEYS` (`@quiz/contracts`) and its names to the web's
  * dictionaries.
  */
@@ -26,6 +27,7 @@ import { GITHUB_TASKS } from "../github/jobs.js";
 import { NOTIFICATION_TASKS } from "../notifications/jobs.js";
 import { POLL_TASKS } from "../poll/jobs.js";
 import { REVIEW_TASKS } from "../pool/jobs.js";
+import { RECONCILE_TASKS } from "../project/reconcile.js";
 import { runHealthAlerts } from "./alerts.js";
 
 export const SCHEDULED_TASKS: readonly ScheduledTask[] = [
@@ -45,6 +47,7 @@ export const SCHEDULED_TASKS: readonly ScheduledTask[] = [
   ...NOTIFICATION_TASKS,
   ...DRILL_TASKS,
   ...GITHUB_TASKS,
+  ...RECONCILE_TASKS,
   ...REVIEW_TASKS,
   {
     key: "health.checks",
