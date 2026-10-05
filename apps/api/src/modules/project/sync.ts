@@ -27,10 +27,12 @@
  *   not) or locked (`syncSkipReason`, `@quiz/domain`) —, the distribution's
  *   branch force-pushed to its `sync/<branch>` (the one ref the App ever
  *   forces), its head recorded in `bot_commits(sync)` BEFORE the ref moves
- *   (N-SEC-21), then GitHub's compare: no file differs → up to date, no
- *   pull request; else ONE pull request per branch — the stored one
- *   reused while it is open, else the open one found by its head, else
- *   opened — commented on an update. The outcome per repository is stored;
+ *   (N-SEC-21; the ref is left where it is when it already is at that
+ *   head: a retry pushes nothing again), then GitHub's compare: no file
+ *   differs → up to date, no pull request; else ONE pull request per branch
+ *   — the stored one reused while it is open, else the open one found by
+ *   its head, else opened — commented on when the update moved its head.
+ *   The outcome per repository is stored;
  *   a failure is recorded, the pass goes on, and the frame backdates the
  *   lease (a retry a few seconds on). `source_ahead_sha` is cleared only
  *   when no repository failed and it still is a sha the pass synced.
@@ -246,7 +248,8 @@ async function storePr(db: Db, repoId: string, branch: string, prNumber: number,
  * The sync pull request of a branch (F-PROJ-12): never two — the stored one
  * while GitHub says it is open, else the open one from `sync/<branch>`
  * found by its head (a row lost, a pull request opened by hand), else a new
- * one. An update comments on it. Titles, bodies and comments name the
+ * one. An open one is commented on when the update `moved` its head (a
+ * retry says nothing again). Titles, bodies and comments name the
  * DISTRIBUTION's commit (`head`), never the source (N-SEC-20), in English
  * (D12).
  */
@@ -256,6 +259,7 @@ async function upsertSyncPr(
   repo: RepoRow,
   branch: string,
   head: string,
+  moved: boolean,
   files: { filename: string; status: string }[],
   now: Date,
 ): Promise<"opened" | "updated"> {
@@ -284,12 +288,14 @@ async function upsertSyncPr(
     open = found[0]?.number ?? null;
   }
   if (open !== null) {
-    await octokit.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", {
-      owner,
-      repo: name,
-      issue_number: open,
-      body: `Updated to \`${short}\`. Files now included:\n\n${list}`,
-    });
+    if (moved) {
+      await octokit.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", {
+        owner,
+        repo: name,
+        issue_number: open,
+        body: `Updated to \`${short}\`. Files now included:\n\n${list}`,
+      });
+    }
     await storePr(db, repo.id, branch, open, "open", now);
     return "updated";
   }
@@ -306,6 +312,22 @@ async function upsertSyncPr(
   });
   await storePr(db, repo.id, branch, created.number, "open", now);
   return "opened";
+}
+
+/** The head of the repository's `sync/<branch>` on GitHub, or null when the App never pushed it. */
+async function syncRefHead(octokit: Octokit, owner: string, repo: string, branch: string): Promise<string | null> {
+  try {
+    const { data } = await octokit.request("GET /repos/{owner}/{repo}/git/ref/{ref}", {
+      owner,
+      repo,
+      ref: `heads/sync/${branch}`,
+      request: { retries: 0 },
+    });
+    return data.object.sha;
+  } catch (err) {
+    if (githubStatus(err) === 404) return null;
+    throw err;
+  }
 }
 
 /** The repository's outcome, and when (the server's clock). */
@@ -354,7 +376,9 @@ async function syncRepo(app: FastifyInstance, octokit: Octokit, ws: SyncWorkspac
     for (const branch of project.branches) {
       const head = await ws.headOf(branch);
       await db.insert(botCommits).values({ repoId: repo.id, sha: head, kind: "sync", createdAt: now }).onConflictDoNothing();
-      await ws.pushSyncRef(name, branch);
+      // The ref moves only when the distribution did (a retry pushes nothing again, and comments on nothing).
+      const moved = (await syncRefHead(octokit, owner, name, branch)) !== head;
+      if (moved) await ws.pushSyncRef(name, branch);
       const { data: cmp } = await octokit.request("GET /repos/{owner}/{repo}/compare/{basehead}", {
         owner,
         repo: name,
@@ -362,7 +386,7 @@ async function syncRepo(app: FastifyInstance, octokit: Octokit, ws: SyncWorkspac
       });
       const files = (cmp.files ?? []).map((f) => ({ filename: f.filename, status: f.status }));
       // No file differs: the student has everything already, no pull request (F-PROJ-12).
-      outcomes.push(files.length === 0 ? "up_to_date" : await upsertSyncPr(db, octokit, repo, branch, head, files, now));
+      outcomes.push(files.length === 0 ? "up_to_date" : await upsertSyncPr(db, octokit, repo, branch, head, moved, files, now));
     }
   } catch (err) {
     if (await gone(octokit, owner, name)) {
