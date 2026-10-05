@@ -307,7 +307,7 @@ export function ClassroomView({
             ) : null}
           </span>
         }
-        help="classroom"
+        help={tab === "groups" ? "groups" : tab === "journal" ? "journal" : "classroom"}
         actions={
           <>
             {/* Secondary, and to the left of the primary: it is a detour into
