@@ -153,7 +153,7 @@ In the critical path only if D09 finds online assignments in production.
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| M8-01 | Import script complete | todo | schema tasks, D11 | | | |
+| M8-01 | Import script complete | in progress | schema tasks, D11 | `merge/M8-01a-import-frame` (a of a, b, c, d) | | a: the frame (pre-flight, parity report, re-import semantics, `--final`, legacy audit, `steps-<entity>.ts` + `registry.ts`); b projects…, c groups, d journals + webhooks to come: card M8-01, "As delivered (a)" |
 | M8-02 | Legacy URL resolver | todo | M8-01, M3-12, M4-04 | | | |
 | M8-03 | Caddy fragments | todo | — | | | |
 | M8-04 | Codespace identity remap | todo | M6 in scope | | | |

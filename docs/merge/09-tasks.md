@@ -264,12 +264,13 @@ files it ports; writes en + fr for every string.
     (`GET /app/api/me/github`). The web mock serves its three GETs on
     them (`contract.test.ts`, CHECKED).
 - **For M8-01** (no import script yet, M1-06 is off the journal track):
-  `organizations` → `github_organizations` (id kept; `status`
-  `active` ⇒ `active`, `degraded` ⇒ `deleted`; `installation_id` NULL
-  whatever classroom held, D23: the healing of M2-02 resolves Quiz's
-  installation; `github_org_id`, `login`, `plan` copied);
-  `classrooms.org_id` → `github_classroom_links` (`linked_by` = the
-  remapped `teacher_id`, `linked_at` = the classroom's `created_at`);
+  **amended 2026-10-05 (product owner, D20/D22 addenda): organizations and
+  classroom links are NEVER imported** — the teachers install Quiz's App and
+  connect their classrooms by hand, and the import refuses a mapped
+  classroom not connected to its organization. The first two lines this note
+  used to carry (`organizations` → `github_organizations`, `classrooms.org_id`
+  → `github_classroom_links`) are dropped; a change in the count of either
+  table is a red line of the parity report. Still to import:
   `users.github_*` → `github_accounts` for the rows with a
   `github_user_id`, on the remapped user (two classroom users merged into
   one Quiz user with two GitHub ids: report, keep the newer link);
@@ -3998,6 +3999,62 @@ serves now (16a), and what waits for the group repositories (16b).
 ## M8 — Migration and cutover
 
 ### M8-01 — Import script complete
+- **Split (2026-10-05, orchestrator, product owner's decisions of the same
+  day)**: one task, four PRs, each a part of the same script. **a** the
+  frame: pre-flight, parity report, re-import semantics, the legacy audit
+  (delivered, below); **b** projects, checkpoints, repositories, grade runs,
+  ledgers, receipts, bot commits, reverts, notification preferences; **c**
+  groups → group sets (ADR-070); **d** journals and webhook deliveries. b, c
+  and d each add a `steps-<entity>.ts` and one line in `registry.ts`, `tally`
+  what they carry, apply `syncOwned` to the rows they create, and
+  extend the fixture; the parity checks that need GitHub register as
+  `githubBound`. The M8-01 acceptance (dry-run on the fixture and on a
+  staging copy of a dump, parity report clean) belongs to the last of them.
+- **As delivered (a)** (branch `merge/M8-01a-import-frame`; migration
+  `0075_legacy_classroom_audit`):
+  - `Q:apps/api/scripts/import-classroom/`: `ctx.ts` (the context, the
+    report helpers, `remember`, `tally`/`tallyMapped`, `syncOwned`),
+    `registry.ts` (the ONE ordered list of steps and checks),
+    `preflight.ts` (pure, over the snapshot), `report.ts` (the report
+    type, `formatReport`), `steps-audit.ts`; `source.ts` now reads
+    assignments, student repositories, grade-run ids, groups, members and
+    the whole `audit_log`, plus the source's activity and `pgboss.job`.
+  - **Re-import** (D26 addendum 2026-10-05): a row the import created is
+    overwritten from classroom unless Quiz modified it since (hash stored in
+    `id_map`: `target_table`, `imported_hash`, `source_hash`); kept and listed
+    (`reimport.kept`) otherwise. Applied to created users and created
+    enrollment lines; a step that creates rows builds an `OwnedRow` and calls
+    `remember(…, owned)` then `syncOwned` on the next run. A row without a
+    baseline (written by M1-06's version) adopts one when it equals
+    classroom's, is kept otherwise.
+  - **Decisions** (D08/D11/D22/D26 addenda): `--missing-students report` and
+    `--assistants skip` are the defaults, listed in `lists.*` on every run;
+    `--apply` no longer waits for them; organizations and links never imported
+    (red line if their count, or courses' or classrooms', moves).
+  - **Pre-flight**: STATE checks (source stopped: no task or webhook in the
+    last 10 minutes and none running; `pgboss.job` empty and readable; no
+    unprocessed webhook; no published assignment of a mapped classroom with
+    deadline or grace inside `--window-hours` (24), overdue and unapplied, or
+    applied and unfrozen) refuse only `--final`; before it they read "would
+    refuse --final" (the first import runs on a live classroom). DATA checks
+    (no dangling or foreign `*_grade_run_id`; group, member and group
+    repository agree on the assignment and the roster) refuse every
+    `--apply`. What no query can check is the report's `runbook` list, for
+    M8-05.
+  - **Parity report** (`report.parity`, `--report-json`): rows per table
+    `source` / `carried` / `leftOut` / `missing`; findings; `redLines`; `notRun`.
+    A step `tally`s what it meant to carry; `missing` not zero, a protected
+    table that moved or a `red` finding is a red line: exit status 3, and an
+    `--apply` that finds one inside its transaction rolls back (outcome
+    `red_lines`). `githubBound` checks run after the commit through a read
+    transaction, "not run" in a dry run; a red line found there is reported,
+    the data stays.
+  - **Legacy audit**: `legacy_classroom_audit_log` (`source_id` unique,
+    `actor_user_id` best-effort, `source_actor_user_id` always), insert-only,
+    no route.
+  - **Left for b, c, d, and the runbook**: everything not above; the source
+    state a database cannot show (process stopped, classroom's App silent on
+    repositories, backups) is M8-05's.
 - **Depends on**: every schema task (M2-01, M3-01, M4-01, M5-03, M6-06 if
   in scope), D11.
 - **Goal**: the whole order of §2.5, the verification report, the legacy

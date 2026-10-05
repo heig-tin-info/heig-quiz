@@ -1,69 +1,52 @@
 /**
- * The import itself (merge task M1-06, docs/merge/02-data-and-migration.md
- * §2.5, reduced to identity and rosters by the product owner, 2026-10-01).
+ * The import itself (merge tasks M1-06 and M8-01, docs/merge/02-data-and-
+ * migration.md §2.5): the FRAME that the entities plug into.
  *
  * Plan first, reading only: the mapping (D22), the identities (§2.4), the
- * open decisions. Then every write in ONE transaction, step by step
- * (`steps.ts`), rolled back at the end of a dry run (the default), committed
- * by `--apply`.
+ * decisions, the source's pre-flight (`preflight.ts`). Then every write in
+ * ONE transaction, step by step (`registry.ts`), the parity report built
+ * inside it, and the transaction rolled back at the end of a dry run (the
+ * default) or when an `--apply` finds a red line; committed otherwise.
+ * GitHub-bound checks (`ImportCheck.githubBound`) run after the commit, and
+ * are reported "not run" in a dry run.
+ *
+ * Two imports are expected (D26): a first one while heig-classroom lives,
+ * then the final one at the cutover (`--final`, which also enforces the
+ * source-state pre-flight). A row already imported is overwritten from
+ * classroom unless Quiz modified it since, in which case it is kept and
+ * listed (`ctx.ts`, `syncOwned`).
  *
  * Never written: the source; sessions and tokens; the `oidc_sub`, profile
  * or settings of a matched Quiz account; courses, classrooms, GitHub
- * organizations and classroom links; an existing enrollment's
+ * organizations and classroom links (D20, D22: teachers install the App and
+ * connect by hand; a red line if one moves); an existing enrollment's
  * `time_bonus_percent` and `note`; `users.role` other than through the
- * ordinary recompute; anything on GitHub. Projects, journals, webhooks, the
- * legacy audit, the parity report and the codespace are M8-01's.
+ * ordinary recompute; anything on GitHub before the post-commit checks.
  *
- * Idempotent: a source row in `import_classroom.id_map` is never imported
- * again, every other write is "insert unless present", and a run that
- * changed nothing rolls back and records nothing.
+ * Idempotent: a source row in `import_classroom.id_map` is not imported
+ * again (a row the import created is refreshed only by the re-import rule),
+ * every other write is "insert unless present", and a run that changed
+ * nothing rolls back and records nothing.
  */
 import { randomUUID } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 
 import type { AppConfig } from "../../src/config.js";
 import type { Db } from "../../src/db/client.js";
-import { importIdMap, users } from "../../src/db/schema.js";
+import { classrooms, courses, githubClassroomLinks, githubOrganizations, importIdMap, users } from "../../src/db/schema.js";
 import { normalizeEmail, ownersOf } from "../../src/identity.js";
+import type { Ctx, Mapped } from "./ctx.js";
+import { nameOf } from "./ctx.js";
 import { resolveIdentities, targetOf } from "./identity.js";
 import { resolveMapping, type ClassroomMapping } from "./mapping.js";
+import { DEFAULT_WINDOW_HOURS, RUNBOOK, sourcePreflight } from "./preflight.js";
+import { REGISTRY, type Registry } from "./registry.js";
+import { DEFAULTS, newReport, type ImportReport, type OpenDecisions } from "./report.js";
 import type { SourceSnapshot } from "./source.js";
-import {
-  importEnrollments,
-  importGithubLinks,
-  importGrants,
-  importProfiles,
-  importStaff,
-  importUsers,
-  nameOf,
-  recomputeRoles,
-  recordRun,
-  type Ctx,
-  type Mapped,
-} from "./steps.js";
+import { recordRun } from "./steps.js";
 
-/**
- * Decisions still open with the product owner (merge task M1-06): `--apply`
- * refuses until each is given explicitly; a dry run without one shows the
- * suggested answer, labelled as such.
- */
-export interface OpenDecisions {
-  /**
-   * (4) A heig-classroom ASSISTANT becomes staff of the Quiz course, which
-   * widens their access to every classroom of it (D04 (a)). `staff`
-   * (suggested): a seat, listed in the report; `skip`: no seat, listed.
-   */
-  assistants: "staff" | "skip";
-  /**
-   * (3) A student on the heig-classroom roster but not on the mapped Quiz
-   * roster. `enroll` (suggested): a line added (claimed when the account is
-   * known), listed; `report`: listed only.
-   */
-  missingStudents: "enroll" | "report";
-}
-
-export const SUGGESTED: OpenDecisions = { assistants: "staff", missingStudents: "enroll" };
+export { DEFAULTS, formatReport, type ImportReport, type OpenDecisions } from "./report.js";
 
 export interface ImportOptions extends Partial<OpenDecisions> {
   apply: boolean;
@@ -75,41 +58,19 @@ export interface ImportOptions extends Partial<OpenDecisions> {
   actorEmail: string;
   /** SHA-256 of the mapping file, recorded with the run. */
   mappingSha256: string;
-}
-
-/** The sections of findings, in the order of the steps. */
-const FINDINGS = {
-  source: "Source",
-  addresses: "Addresses",
-  github: "GitHub account links",
-  grants: "Teacher grants",
-  staff: "Course staff",
-  enrollments: "Enrollments",
-  roles: "Role changes",
-  "not carried": "Not carried (later tasks)",
-} as const;
-
-/** What the import did or would do. Lines name people: the operator's terminal only. */
-export interface ImportReport {
-  mode: "dry-run" | "apply";
-  outcome: "rolled_back" | "applied" | "nothing_to_do" | "refused";
-  /** Blocking: `--apply` writes nothing while there is one. */
-  refusals: string[];
-  mapping: string[];
-  decisions: string[];
-  identity: Record<
-    "alreadyImported" | "swissEduId" | "address" | "placeholder" | "created" | "ambiguous" | "excluded" | "notReached",
-    number
-  >;
-  /** Rows written, per table (a dry run counts what it rolled back). */
-  written: Record<string, number>;
-  /** Findings, by section. */
-  findings: Partial<Record<keyof typeof FINDINGS, string[]>>;
+  /** The cutover import: the source-state pre-flight then refuses (`preflight.ts`). */
+  final?: boolean;
+  /** The pre-flight's clock; the source's own `now()` by default. */
+  now?: Date;
+  /** Look-ahead for a deadline falling during the cutover; 24 h by default. */
+  windowHours?: number;
+  /** The steps and checks; `REGISTRY` by default (tests inject their own). */
+  registry?: Registry;
 }
 
 /** Ends the transaction without committing. */
 class Rollback extends Error {
-  constructor(readonly outcome: "rolled_back" | "nothing_to_do") {
+  constructor(readonly outcome: "rolled_back" | "nothing_to_do" | "red_lines") {
     super(outcome);
   }
 }
@@ -144,6 +105,49 @@ async function loadIdMap(db: Db): Promise<Map<string, Map<string, string>>> {
   return known;
 }
 
+/** Tables the import must never write: a changed count is a red line (D20, D22). */
+const PROTECTED = { courses, classrooms, github_organizations: githubOrganizations, github_classroom_links: githubClassroomLinks } as const;
+
+async function protectedCounts(db: Db | Ctx["db"]) {
+  const counts: Record<string, number> = {};
+  for (const [name, table] of Object.entries(PROTECTED)) {
+    const [row] = await db.select({ n: count() }).from(table);
+    counts[name] = row?.n ?? 0;
+  }
+  return counts;
+}
+
+/** The parity report, from what the steps tallied and what must not have moved. */
+async function buildParity(ctx: Ctx, before: Record<string, number>, registry: Registry) {
+  const { parity } = ctx.report;
+  for (const [table, entry] of [...ctx.parity].sort(([a], [b]) => a.localeCompare(b))) {
+    const row = {
+      table,
+      source: entry.source,
+      carried: entry.carried,
+      leftOut: entry.leftOut.length,
+      missing: entry.source - entry.carried - entry.leftOut.length,
+    };
+    parity.tables.push(row);
+    if (row.missing !== 0) {
+      parity.redLines.push(`${table}: ${row.missing} source row(s) neither carried nor left out on purpose (source ${row.source}, carried ${row.carried}, left out ${row.leftOut})`);
+    }
+    for (const line of entry.leftOut) parity.findings.push({ check: `${table} left out`, severity: "info", detail: line });
+  }
+  const after = await protectedCounts(ctx.db);
+  for (const [table, n] of Object.entries(before)) {
+    if (after[table] !== n) parity.redLines.push(`${table}: ${n} row(s) before the import, ${after[table]} after; the import never writes this table (D20, D22)`);
+  }
+  for (const check of registry.checks.filter((c) => !c.githubBound)) {
+    for (const f of await check.run(ctx)) record(ctx.report, { check: check.name, ...f });
+  }
+}
+
+function record(report: ImportReport, finding: ImportReport["parity"]["findings"][number]) {
+  report.parity.findings.push(finding);
+  if (finding.severity === "red") report.parity.redLines.push(`${finding.check}: ${finding.detail}`);
+}
+
 export async function runImport(
   db: Db,
   config: AppConfig,
@@ -151,16 +155,10 @@ export async function runImport(
   mapping: ClassroomMapping,
   options: ImportOptions,
 ): Promise<ImportReport> {
-  const report: ImportReport = {
-    mode: options.apply ? "apply" : "dry-run",
-    outcome: "refused",
-    refusals: [],
-    mapping: [],
-    decisions: [],
-    identity: { alreadyImported: 0, swissEduId: 0, address: 0, placeholder: 0, created: 0, ambiguous: 0, excluded: 0, notReached: 0 },
-    written: {},
-    findings: {},
-  };
+  const registry = options.registry ?? REGISTRY;
+  const final = options.final === true;
+  const report = newReport(options.apply ? "apply" : "dry-run", final);
+  report.runbook = [...RUNBOOK];
   const usersById = new Map(snapshot.users.map((u) => [u.id, u]));
 
   // --- Plan (reads only) ---------------------------------------------------
@@ -178,6 +176,17 @@ export async function runImport(
     if (e.email !== normalizeEmail(e.email)) {
       (report.findings.source ??= []).push(`enrollment ${e.id}: address not normalized, compared lowercased`);
     }
+  }
+
+  report.preflight = sourcePreflight({
+    snapshot,
+    mappedClassroomIds: new Set(mapped.keys()),
+    now: options.now ?? snapshot.activity.now,
+    windowHours: options.windowHours ?? DEFAULT_WINDOW_HOURS,
+    final,
+  });
+  for (const p of report.preflight.filter((p) => p.status === "refused")) {
+    report.refusals.push(...p.problems.map((x) => `pre-flight ${p.id}: ${x}`));
   }
 
   const known = await loadIdMap(db);
@@ -203,21 +212,18 @@ export async function runImport(
   if (typeof actor !== "string") report.refusals.push(...actor);
 
   const decisions: OpenDecisions = {
-    assistants: options.assistants ?? SUGGESTED.assistants,
-    missingStudents: options.missingStudents ?? SUGGESTED.missingStudents,
+    assistants: options.assistants ?? DEFAULTS.assistants,
+    missingStudents: options.missingStudents ?? DEFAULTS.missingStudents,
   };
-  for (const key of ["assistants", "missingStudents"] as const) {
-    const given = options[key] !== undefined;
-    const flag = key === "assistants" ? "--assistants" : "--missing-students";
-    report.decisions.push(`${flag}=${decisions[key]}${given ? "" : " (suggested, NOT decided)"}`);
-    if (options.apply && !given) {
-      report.refusals.push(`${flag} is an open decision of the product owner: give it explicitly to --apply`);
-    }
-  }
+  report.decisions.push(
+    `--assistants=${decisions.assistants}${options.assistants === undefined ? " (default, product owner 2026-10-05)" : ""}`,
+    `--missing-students=${decisions.missingStudents}${options.missingStudents === undefined ? " (default, product owner 2026-10-05)" : ""}`,
+  );
   if (options.apply && report.refusals.length > 0) return report;
 
   // --- Writes (one transaction) --------------------------------------------
   const startedAt = new Date();
+  let committed: Ctx | undefined;
   try {
     await db.transaction(async (tx) => {
       const ctx: Ctx = {
@@ -231,16 +237,15 @@ export async function runImport(
         decisions,
         actorId,
         known,
+        parity: new Map(),
         report,
       };
-      await importUsers(ctx);
-      await importProfiles(ctx);
-      await importGithubLinks(ctx);
-      await importGrants(ctx);
-      await importStaff(ctx);
-      await importEnrollments(ctx);
-      await recomputeRoles(ctx);
+      const before = await protectedCounts(tx);
+      for (const step of registry.steps) await step.run(ctx);
+      await buildParity(ctx, before, registry);
       if (!options.apply) throw new Rollback("rolled_back");
+      if (report.parity.redLines.length > 0) throw new Rollback("red_lines");
+      committed = ctx;
       if (Object.values(report.written).every((n) => n === 0)) throw new Rollback("nothing_to_do");
       await recordRun(ctx, { id: randomUUID(), startedAt, mappingSha256: options.mappingSha256 });
     });
@@ -249,51 +254,16 @@ export async function runImport(
     if (!(err instanceof Rollback)) throw err;
     report.outcome = err.outcome;
   }
-  return report;
-}
 
-/** The report, for a person to read. */
-export function formatReport(report: ImportReport): string {
-  const out: string[] = [];
-  const section = (title: string, lines: readonly string[]) => {
-    out.push("", `## ${title}`);
-    out.push(...(lines.length > 0 ? lines.map((l) => `- ${l}`) : ["- (none)"]));
-  };
-  const outcome = {
-    rolled_back: "dry run: every write below was rolled back",
-    applied: "applied",
-    nothing_to_do: "nothing to do: the database already holds this import, nothing written",
-    refused: "REFUSED: nothing written",
-  }[report.outcome];
-  out.push(`# heig-classroom import (M1-06), ${report.mode}: ${outcome}`);
-  section("Refusals (blocking --apply)", report.refusals);
-  section("Mapping", report.mapping);
-  section("Open decisions", report.decisions);
-  const i = report.identity;
-  section("Identity", [
-    `already imported: ${i.alreadyImported}`,
-    `matched by swiss_edu_id: ${i.swissEduId}`,
-    `matched by verified address: ${i.address}`,
-    `matched to an earlier placeholder account: ${i.placeholder}`,
-    `new accounts (classroom:<sub>, adopted at first login): ${i.created}`,
-    `ambiguous, not merged: ${i.ambiguous}`,
-    `left out (heig-classroom development accounts): ${i.excluded}`,
-    `not reached by a mapped classroom, not imported: ${i.notReached}`,
-  ]);
-  section(
-    "Rows written",
-    Object.entries(report.written)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([table, n]) => `${table}: ${n}`),
-  );
-  for (const [key, title] of Object.entries(FINDINGS) as [keyof typeof FINDINGS, string][]) {
-    const lines = report.findings[key];
-    if (lines) section(title, lines);
+  // --- GitHub-bound checks: after the commit, never in a dry run -----------
+  const bound = registry.checks.filter((c) => c.githubBound);
+  if (committed && (report.outcome === "applied" || report.outcome === "nothing_to_do")) {
+    const ctx = committed;
+    await db.transaction(async (tx) => {
+      for (const check of bound) for (const f of await check.run({ ...ctx, db: tx })) record(report, { check: check.name, ...f });
+    });
+  } else {
+    report.parity.notRun.push(...bound.map((c) => `${c.name}: not run (${options.apply ? "nothing was committed" : "dry run"})`));
   }
-  section("Not checked here (M8-01)", [
-    "heig-classroom stopped, its queues empty, no unprocessed webhook delivery",
-    "no assignment deadline + grace inside the window",
-    "projects, journals, webhooks, legacy audit, parity report, codespace",
-  ]);
-  return out.join("\n");
+  return report;
 }

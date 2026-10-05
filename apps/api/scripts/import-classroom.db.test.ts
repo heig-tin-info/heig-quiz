@@ -29,6 +29,7 @@ import {
   githubOrganizations,
   importIdMap,
   importRuns,
+  legacyClassroomAuditLog,
   teacherGrants,
   userEmails,
   userIdpClaims,
@@ -36,6 +37,8 @@ import {
 } from "../src/db/schema.js";
 import { testDb } from "../src/test/db.js";
 import type { ClassroomMapping } from "./import-classroom/mapping.js";
+import { sourcePreflight } from "./import-classroom/preflight.js";
+import { REGISTRY, type Registry } from "./import-classroom/registry.js";
 import { formatReport, runImport, type ImportOptions } from "./import-classroom/run.js";
 import { readSnapshot, type SourceSnapshot } from "./import-classroom/source.js";
 
@@ -64,7 +67,10 @@ const MAPPING: ClassroomMapping = {
   ],
 };
 
+const NOW = new Date("2026-10-05T08:00:00Z");
+
 const DECIDED: ImportOptions = {
+  now: NOW,
   apply: true,
   actorEmail: "quiz.admin@heig-vd.ch",
   mappingSha256: "0".repeat(64),
@@ -160,7 +166,7 @@ async function world(links: { progA: number | null; mi: number | null } = { prog
 
 /** Every table the import may write, row by row: equal means nothing written. */
 async function everything(db: Db) {
-  const tables = [users, userEmails, userIdpClaims, githubAccounts, teacherGrants, courseStaff, enrollments, importIdMap, importRuns, auditLog];
+  const tables = [users, userEmails, userIdpClaims, githubAccounts, teacherGrants, courseStaff, enrollments, importIdMap, importRuns, auditLog, legacyClassroomAuditLog];
   return Promise.all(tables.map((t) => db.select().from(t).orderBy(sql`1`)));
 }
 
@@ -334,24 +340,37 @@ describe("import-classroom", () => {
     expect(await everything(w.db)).toEqual(before);
   });
 
-  it("refuses an incomplete mapping, and an --apply without the open decisions", async () => {
+  it("refuses an incomplete mapping", async () => {
     const w = await world();
     const partial = { classrooms: MAPPING.classrooms.slice(0, 2) };
-    const report = await runImport(w.db, config, snapshot, partial, {
-      apply: true,
-      actorEmail: DECIDED.actorEmail,
-      mappingSha256: DECIDED.mappingSha256,
-    });
+    const report = await runImport(w.db, config, snapshot, partial, { ...DECIDED, apply: true });
     expect(report.outcome).toBe("refused");
-    expect(report.refusals).toEqual(expect.arrayContaining([
-      expect.stringContaining('mapping incomplete: "Sandbox"'),
-      expect.stringContaining("--assistants is an open decision"),
-      expect.stringContaining("--missing-students is an open decision"),
-    ]));
+    expect(report.refusals).toEqual([expect.stringContaining('mapping incomplete: "Sandbox"')]);
+  });
+
+  it("creates nothing for a missing student or an assistant by default, and lists them", async () => {
+    const w = await world();
+    const { assistants: _a, missingStudents: _m, ...asked } = DECIDED;
+    const report = await runImport(w.db, config, snapshot, MAPPING, asked);
+    expect(report.outcome).toBe("applied");
     expect(report.decisions).toEqual([
-      "--assistants=staff (suggested, NOT decided)",
-      "--missing-students=enroll (suggested, NOT decided)",
+      "--assistants=skip (default, product owner 2026-10-05)",
+      "--missing-students=report (default, product owner 2026-10-05)",
     ]);
+    expect(await w.db.select().from(enrollments).where(eq(enrollments.email, "s3.student@heig-vd.ch"))).toEqual([]);
+    const seats = await w.db.select({ userId: courseStaff.userId }).from(courseStaff).where(eq(courseStaff.courseId, w.prog));
+    expect(seats.map((s) => s.userId)).not.toContain(SRC.a1);
+    expect(report.lists.missingStudents.some((l) => l.includes("s3.student@heig-vd.ch"))).toBe(true);
+    expect(report.lists.skippedAssistants).toEqual([expect.stringContaining("Alan Turing")]);
+    // They are listed on every run, until the rosters are fixed: a second run still names them, writes nothing.
+    const again = await runImport(w.db, config, snapshot, MAPPING, asked);
+    expect(again.outcome).toBe("nothing_to_do");
+    expect(again.lists.missingStudents).toEqual(report.lists.missingStudents);
+    // Not red lines: left out on purpose.
+    expect(report.parity.redLines).toEqual([]);
+    const enrolled = report.parity.tables.find((t) => t.table === "enrollments")!;
+    expect(enrolled.leftOut).toBeGreaterThan(0);
+    expect(enrolled.missing).toBe(0);
   });
 
   it("leaves assistants and missing students out when told to", async () => {
@@ -379,5 +398,245 @@ describe("import-classroom", () => {
         return rows;
       }),
     ).rejects.toThrow(/read-only/);
+  });
+});
+
+/** A copy of the snapshot, edited: the source's state changed, nothing else. */
+function variant(edit: (s: SourceSnapshot) => void): SourceSnapshot {
+  const copy = structuredClone(snapshot);
+  edit(copy);
+  return copy;
+}
+
+const A1 = "c7000000-0000-4000-8000-000000000001";
+const HOUR = 3_600_000;
+
+describe("import-classroom frame (M8-01a)", () => {
+  it("reads the source's state for the pre-flight", () => {
+    expect(snapshot.activity).toMatchObject({
+      runningTasks: 0,
+      unprocessedWebhooks: 0,
+      queue: { readable: true, pending: [] },
+    });
+    expect(snapshot.assignments).toHaveLength(4);
+    expect(snapshot.auditLog).toHaveLength(4);
+  });
+
+  it("carries the legacy audit, actors remapped best-effort, and nothing twice", async () => {
+    const w = await world();
+    const report = await runImport(w.db, config, snapshot, MAPPING, DECIDED);
+    expect(report.outcome).toBe("applied");
+    const rows = await w.db.select().from(legacyClassroomAuditLog).orderBy(legacyClassroomAuditLog.sourceId);
+    expect(rows.map((r) => r.action)).toEqual(["classroom.created", "grant.created", "staff.added", "deadline.applied"]);
+    // Ada was reached (matched to her Quiz account), the root admin was not, the system has no actor.
+    expect(rows.map((r) => r.actorUserId)).toEqual([w.t1, null, SRC.a1, null]);
+    expect(rows[1]?.sourceActorUserId).toBe("c1000000-0000-4000-8000-000000000001");
+    expect(report.parity.tables.find((t) => t.table === "legacy_classroom_audit_log")).toMatchObject({ source: 4, carried: 4, missing: 0 });
+    const before = await everything(w.db);
+    expect((await runImport(w.db, config, snapshot, MAPPING, DECIDED)).outcome).toBe("nothing_to_do");
+    expect(await everything(w.db)).toEqual(before);
+  });
+
+  it("builds a clean parity report and never moves courses, classrooms, organizations or links", async () => {
+    const w = await world();
+    const count = async () =>
+      Promise.all([courses, classrooms, githubOrganizations, githubClassroomLinks].map(async (t) => (await w.db.select().from(t)).length));
+    const before = await count();
+    const dry = await runImport(w.db, config, snapshot, MAPPING, { ...DECIDED, apply: false });
+    expect(dry.parity.redLines).toEqual([]);
+    expect(dry.parity.tables.map((t) => t.table)).toEqual(["enrollments", "legacy_classroom_audit_log", "teacher_grants", "users"]);
+    expect(dry.parity.tables.every((t) => t.missing === 0)).toBe(true);
+    const applied = await runImport(w.db, config, snapshot, MAPPING, DECIDED);
+    expect(applied.parity.tables).toEqual(dry.parity.tables);
+    expect(await count()).toEqual(before);
+    // The report is plain data: it survives JSON.
+    expect(JSON.parse(JSON.stringify(applied)).parity.redLines).toEqual([]);
+  });
+
+  it("overwrites an untouched row on re-import, and keeps one Quiz modified, listing it", async () => {
+    const w = await world();
+    await runImport(w.db, config, snapshot, MAPPING, DECIDED);
+    const sidId = SRC.s3;
+    const sourceOf = (given: string, locale: "en" | "fr") =>
+      variant((s) => {
+        const u = s.users.find((x) => x.id === sidId)!;
+        u.givenName = given;
+        u.locale = locale;
+      });
+
+    // Untouched in Quiz: classroom's change reaches it.
+    const second = await runImport(w.db, config, sourceOf("Sidney", "en"), MAPPING, DECIDED);
+    expect(second.outcome).toBe("applied");
+    expect(second.written).toMatchObject({ "users (overwritten)": 1 });
+    expect(second.reimport.overwritten).toEqual({ users: 1 });
+    expect(second.reimport.kept).toEqual([]);
+    expect(await userOf(w.db, eq(users.id, sidId))).toMatchObject({ givenName: "Sidney", locale: "en" });
+    // ...and the run after it, the source unchanged, writes nothing.
+    expect((await runImport(w.db, config, sourceOf("Sidney", "en"), MAPPING, DECIDED)).outcome).toBe("nothing_to_do");
+
+    // Modified in Quiz since (a teacher fixed the name): kept, listed, every time.
+    await w.db.update(users).set({ givenName: "Sid (fixed in Quiz)" }).where(eq(users.id, sidId));
+    const third = await runImport(w.db, config, sourceOf("Sidonie", "fr"), MAPPING, DECIDED);
+    expect(third.outcome).toBe("nothing_to_do");
+    expect(third.reimport.kept).toEqual([expect.objectContaining({ table: "users", sourceId: sidId, targetId: sidId })]);
+    expect(third.findings.reimport?.[0]).toContain("modified in Quiz");
+    expect(await userOf(w.db, eq(users.id, sidId))).toMatchObject({ givenName: "Sid (fixed in Quiz)", locale: "en" });
+    expect((await runImport(w.db, config, sourceOf("Sidonie", "fr"), MAPPING, DECIDED)).reimport.kept).toHaveLength(1);
+    // Quiz modified it but classroom's side did not change since the last import: nothing to report.
+    expect((await runImport(w.db, config, sourceOf("Sidney", "en"), MAPPING, DECIDED)).reimport.kept).toEqual([]);
+  });
+
+  it("adopts a baseline for a row an earlier script version wrote, and keeps a row whose baseline no longer matches", async () => {
+    const w = await world();
+    await runImport(w.db, config, snapshot, MAPPING, DECIDED);
+    // An earlier import left no baseline: it equals classroom's, so the first re-import adopts it silently.
+    await w.db.update(importIdMap).set({ importedHash: null, sourceHash: null, targetTable: null }).where(eq(importIdMap.sourceId, SRC.s3));
+    const adopted = await runImport(w.db, config, snapshot, MAPPING, DECIDED);
+    expect(adopted.reimport.kept).toEqual([]);
+    expect(adopted.written).toEqual({ "import_classroom.id_map": 1 });
+    const [map] = await w.db.select().from(importIdMap).where(eq(importIdMap.sourceId, SRC.s3));
+    expect(map?.importedHash).not.toBeNull();
+
+    const changed = variant((s) => {
+      s.users.find((x) => x.id === SRC.s3)!.familyName = "Trois";
+    });
+    await w.db.delete(enrollments).where(eq(enrollments.userId, SRC.s3));
+    await w.db.update(importIdMap).set({ importedHash: "stale" }).where(eq(importIdMap.sourceId, SRC.s3));
+    const kept = await runImport(w.db, config, changed, MAPPING, DECIDED);
+    expect(kept.reimport.kept).toHaveLength(1);
+  });
+
+  it("refuses a final apply on the source's state, lists it otherwise", async () => {
+    const w = await world();
+    const busy = variant((s) => {
+      s.activity.unprocessedWebhooks = 2;
+      s.activity.runningTasks = 1;
+      s.activity.lastWebhookAt = new Date(NOW.getTime() - 60_000);
+      s.activity.queue.pending = [{ name: "webhook.process", state: "active", n: 3 }];
+    });
+    // The first import (not final) goes ahead, the report says what would refuse the last one.
+    const first = await runImport(w.db, config, busy, MAPPING, { ...DECIDED, apply: false });
+    expect(first.refusals).toEqual([]);
+    const states = Object.fromEntries(first.preflight.map((p) => [p.id, p.status]));
+    expect(states).toMatchObject({ "source-stopped": "final_only", "queues-empty": "final_only", "webhooks-processed": "final_only", deadlines: "ok", "grade-run-links": "ok", "group-consistency": "ok" });
+    expect(first.runbook.length).toBeGreaterThan(0);
+
+    const before = await everything(w.db);
+    const final = await runImport(w.db, config, busy, MAPPING, { ...DECIDED, final: true });
+    expect(final.outcome).toBe("refused");
+    expect(final.refusals).toEqual(expect.arrayContaining([
+      expect.stringContaining("pre-flight source-stopped: 1 scheduled task(s) running"),
+      expect.stringContaining("pre-flight queues-empty: queue webhook.process: 3 job(s) active"),
+      expect.stringContaining("pre-flight webhooks-processed: 2 webhook delivery(ies) not processed"),
+    ]));
+    expect(await everything(w.db)).toEqual(before);
+  });
+
+  it("checks deadlines, the queue and the grade-run links and groups from the source alone", () => {
+    const run = (edit: (s: SourceSnapshot) => void, final = true) => {
+      const s = variant(edit);
+      return sourcePreflight({
+        snapshot: s,
+        mappedClassroomIds: new Set(["c3000000-0000-4000-8000-000000000001", "c3000000-0000-4000-8000-000000000002"]),
+        now: NOW,
+        windowHours: 24,
+        final,
+      }).filter((p) => p.status !== "ok");
+    };
+    expect(run(() => {})).toEqual([]);
+    const deadline = (at: Date, applied: Date | null = null) => (s: SourceSnapshot) => {
+      const a = s.assignments.find((x) => x.id === A1)!;
+      a.deadlineAt = at;
+      a.deadlineAppliedAt = applied;
+    };
+    // Inside the window, its grace inside it too, overdue and unapplied, applied but not frozen.
+    expect(run(deadline(new Date(NOW.getTime() + 2 * HOUR)))[0]?.problems[0]).toContain("inside the 24 h window");
+    expect(run(deadline(new Date(NOW.getTime() - 10 * 60_000)))[0]?.problems[0]).toContain("not applied");
+    expect(run(deadline(new Date(NOW.getTime() - HOUR), new Date(NOW.getTime() - HOUR)))[0]?.problems[0]).toContain("not frozen");
+    // Just past the window: fine. A deadline already past whose grace is not over is the 'overdue' case above.
+    expect(run(deadline(new Date(NOW.getTime() + 25 * HOUR)))).toEqual([]);
+    // The dropped classroom's draft is out of scope whatever its dates.
+    expect(run((s) => { s.assignments.find((x) => x.id === "c7000000-0000-4000-8000-000000000004")!.deadlineAt = NOW; })).toEqual([]);
+    // The queue could not be read: not silently fine.
+    expect(run((s) => { s.activity.queue.readable = false; })[0]?.problems[0]).toContain("not checked");
+    // Dangling and foreign grade-run links, and a group of another assignment: refused even before the final import.
+    const links = run((s) => {
+      s.studentRepos.find((r) => r.id === "c8000000-0000-4000-8000-000000000001")!.frozenGradeRunId = "c9000000-0000-4000-8000-0000000000ff";
+      s.studentRepos.find((r) => r.id === "c8000000-0000-4000-8000-000000000001")!.llmGradeRunId = "c9000000-0000-4000-8000-000000000002";
+    }, false);
+    expect(links).toEqual([expect.objectContaining({ id: "grade-run-links", status: "refused" })]);
+    expect(links[0]?.problems).toEqual([expect.stringContaining("is not a grade run"), expect.stringContaining("belongs to another repository")]);
+    const groups = run((s) => {
+      s.groupMembers[0]!.assignmentId = A1;
+      s.studentRepos.find((r) => r.id === "c8000000-0000-4000-8000-000000000002")!.assignmentId = A1;
+    }, false);
+    expect(groups).toEqual([expect.objectContaining({ id: "group-consistency", status: "refused" })]);
+    expect(groups[0]?.problems.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("refuses --apply, even a first one, on a dangling grade-run link", async () => {
+    const w = await world();
+    const broken = variant((s) => {
+      s.studentRepos[0]!.currentGradeRunId = "c9000000-0000-4000-8000-0000000000ff";
+    });
+    const before = await everything(w.db);
+    const report = await runImport(w.db, config, broken, MAPPING, DECIDED);
+    expect(report.outcome).toBe("refused");
+    expect(report.refusals[0]).toContain("pre-flight grade-run-links");
+    expect(await everything(w.db)).toEqual(before);
+  });
+
+  it("fails the run on a red line: a dry run reports it, an apply rolls back", async () => {
+    const w = await world();
+    const registry: Registry = {
+      steps: [
+        ...REGISTRY.steps,
+        // A step that breaks the rule of D20/D22: it writes an organization.
+        { name: "rogue", run: async (ctx) => { await ctx.db.insert(githubOrganizations).values({ id: randomUUID(), githubOrgId: 4242, login: "rogue" }); } },
+      ],
+      checks: [{ name: "custom", run: async () => [{ severity: "red", detail: "mismatch" }, { severity: "warn", detail: "odd" }] }],
+    };
+    const before = await everything(w.db);
+    const dry = await runImport(w.db, config, snapshot, MAPPING, { ...DECIDED, apply: false, registry });
+    expect(dry.outcome).toBe("rolled_back");
+    expect(dry.parity.redLines).toEqual([
+      expect.stringContaining("github_organizations: 2 row(s) before the import, 3 after"),
+      "custom: mismatch",
+    ]);
+    const applied = await runImport(w.db, config, snapshot, MAPPING, { ...DECIDED, registry });
+    expect(applied.outcome).toBe("red_lines");
+    expect(await everything(w.db)).toEqual(before);
+    expect(await w.db.select().from(githubOrganizations)).toHaveLength(2);
+  });
+
+  it("runs GitHub-bound checks after the commit only: 'not run' in a dry run", async () => {
+    const w = await world();
+    const seen: string[] = [];
+    const registry: Registry = {
+      steps: REGISTRY.steps,
+      checks: [
+        {
+          name: "repositories exist on GitHub",
+          githubBound: true,
+          run: async (ctx) => {
+            // After the commit: the import's rows are visible through the read transaction.
+            seen.push(`${(await ctx.db.select().from(importRuns)).length} run(s)`);
+            return [{ severity: "red", detail: "repository missing" }];
+          },
+        },
+      ],
+    };
+    const dry = await runImport(w.db, config, snapshot, MAPPING, { ...DECIDED, apply: false, registry });
+    expect(seen).toEqual([]);
+    expect(dry.parity.notRun).toEqual(["repositories exist on GitHub: not run (dry run)"]);
+    expect(dry.parity.redLines).toEqual([]);
+
+    const applied = await runImport(w.db, config, snapshot, MAPPING, { ...DECIDED, registry });
+    expect(applied.outcome).toBe("applied");
+    expect(seen).toEqual(["1 run(s)"]);
+    // A red line found after the commit is reported (exit status 3), the data stays.
+    expect(applied.parity.redLines).toEqual(["repositories exist on GitHub: repository missing"]);
+    expect(applied.parity.notRun).toEqual([]);
+    expect(await w.db.select().from(importRuns)).toHaveLength(1);
   });
 });
