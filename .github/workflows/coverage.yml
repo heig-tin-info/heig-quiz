@@ -1,8 +1,13 @@
-# The test coverage of every workspace package, apart from `checks`: it runs
-# the suites unsharded with V8 coverage on, so it is the slowest job and never
-# holds up a merge or a deploy. It fails when a package falls under its floor
-# in coverage.floors.json (scripts/coverage-summary.mjs), prints the table in
-# the run's summary and keeps the HTML reports as an artifact.
+# The test coverage of every workspace package, INFORMATIVE: the `main`
+# ruleset requires ci.yml's `checks` alone, so this workflow never holds up a
+# merge or a deploy. It runs the suites with V8 coverage on, sharded like
+# ci.yml's test-app (the API in four, the SPA in three): unsharded, one job
+# took 15 to 18 minutes. Each shard writes a blob report (`--reporter=blob`,
+# `.vitest-reports/blob-<i>-<n>.json`, its coverage inside), `report` merges
+# them per package (`vitest run --merge-reports --coverage` regenerates the
+# json-summary and the HTML) and runs the ONE floors comparison against
+# coverage.floors.json (scripts/coverage-summary.mjs), which prints the table
+# in the run's summary. The HTML reports are kept as an artifact.
 name: Coverage
 
 on:
@@ -14,6 +19,11 @@ on:
       - "mockups/**"
       - "**/*.md"
   workflow_dispatch:
+  # Nightly on main, the same code as the day before: what it catches is a
+  # flaky test, and a suite drifting with the runner image or a dependency's
+  # new release, not a change of ours.
+  schedule:
+    - cron: "0 3 * * *"
 
 permissions:
   contents: read
@@ -23,17 +33,112 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  coverage:
+  # The API's and the SPA's suites, one shard per job, as in ci.yml. Each
+  # shard builds only the workspace packages its app imports (the tests
+  # resolve them through dist/) and leaves its blob for `report`, which reads
+  # the shard count back from the blobs' names: this list is its only source.
+  app:
+    name: ${{ matrix.pkg }} (${{ matrix.shard }}/${{ matrix.shards }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { pkg: api, shard: 1, shards: 4 }
+          - { pkg: api, shard: 2, shards: 4 }
+          - { pkg: api, shard: 3, shards: 4 }
+          - { pkg: api, shard: 4, shards: 4 }
+          - { pkg: web, shard: 1, shards: 3 }
+          - { pkg: web, shard: 2, shards: 3 }
+          - { pkg: web, shard: 3, shards: 3 }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: pnpm --filter "@quiz/${{ matrix.pkg }}^..." build
+      # `default` keeps the console output; `blob` writes the file merged
+      # below. The coverage reporters of vitest.shared.ts run at merge time.
+      - run: >
+          pnpm --filter "@quiz/${{ matrix.pkg }}" test
+          --shard=${{ matrix.shard }}/${{ matrix.shards }}
+          --coverage --reporter=default --reporter=blob
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage-blob-${{ matrix.pkg }}-${{ matrix.shard }}
+          path: apps/${{ matrix.pkg }}/.vitest-reports/
+          # upload-artifact (since v4.4) skips dot-prefixed paths by default:
+          # without this, `.vitest-reports/` uploads "No files were found".
+          # The `coverage/` uploads below are not hidden and need nothing.
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  # Every other package, unsharded with coverage on: their suites are short.
+  # The kiosk extension's plain-Node tests (ci.yml's test-rest) measure no
+  # coverage and have no floor, so they are not run here.
+  rest:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
-      # The packages the suites resolve through dist/; the SPA itself is not
-      # built (its tests run from the sources, as in ci.yml's test-app).
-      - run: pnpm -r --filter "!@quiz/web" build
-      # CI has the RAM the workstation lacks: the packages run side by side,
-      # not one at a time as `pnpm test:coverage` does locally.
-      - run: pnpm -r test --coverage
+      - run: pnpm -r --filter "!@quiz/api" --filter "!@quiz/web" build
+      - run: pnpm -r --filter "!@quiz/api" --filter "!@quiz/web" test --coverage
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage-rest
+          path: |
+            apps/runner/coverage/
+            packages/*/coverage/
+          if-no-files-found: error
+          retention-days: 1
+
+  # The merge and the floors, once. It runs after a failed shard too, so the
+  # failure is reported here, loudly, by the blob count rather than by a
+  # silent skip; but not after a cancellation (a superseded pull request
+  # run), which would only paint a red report over nothing.
+  report:
+    needs: [app, rest]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: coverage-blob-api-*
+          merge-multiple: true
+          path: apps/api/.vitest-reports
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: coverage-blob-web-*
+          merge-multiple: true
+          path: apps/web/.vitest-reports
+      - uses: actions/download-artifact@v7
+        with:
+          name: coverage-rest
+          path: .
+      # One blob per shard, or the merged figure would be a fraction of the
+      # truth and the floors would fail for the wrong reason. Vitest names a
+      # blob `blob-<i>-<n>.json`: the names must agree on one `n`, and there
+      # must be exactly `n` of them. `mkdir -p` so that a package with no
+      # download at all fails by this message, not by `find`'s under `-e`.
+      - name: Every shard left its blob
+        run: |
+          status=0
+          for pkg in api web; do
+            dir="apps/$pkg/.vitest-reports"
+            mkdir -p "$dir"
+            count=$(find "$dir" -name 'blob-*-*.json' | wc -l)
+            shards=$(find "$dir" -name 'blob-*-*.json' -printf '%f\n' | sed -n 's/^blob-[0-9]*-\([0-9]*\)\.json$/\1/p' | sort -u)
+            distinct=$(printf '%s\n' "$shards" | sed '/^$/d' | wc -l)
+            echo "$dir: $count blob report(s), shard count(s) in their names: $(echo ${shards:-none})"
+            if [ "$count" -lt 1 ] || [ "$distinct" -ne 1 ] || [ "$count" -ne "$shards" ]; then
+              echo "::error::$dir: expected one blob per shard (n identical files blob-<i>-<n>.json) — a shard failed or did not upload"
+              status=1
+            fi
+          done
+          exit $status
+      - run: pnpm --filter @quiz/api exec vitest run --merge-reports --coverage
+      - run: pnpm --filter @quiz/web exec vitest run --merge-reports --coverage
       - run: node scripts/coverage-summary.mjs
       - if: always()
         uses: actions/upload-artifact@v7

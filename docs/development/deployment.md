@@ -247,10 +247,12 @@ RUNNER_TOKEN="$(sed -n 's/^RUNNER_TOKEN=//p' .env.prod)" \
 `.github/workflows/ci.yml` has four stages:
 
 1. **checks**, on every push and pull request: parallel jobs run
-   `pnpm build` with `pnpm typecheck` (`build-typecheck`), the API's and the
-   SPA's tests in three shards each (`test-app`), and every other package's,
-   the runner's unit suite and the kiosk extension's included (`test-rest`).
-   The `checks` job aggregates them: it is the one required status. A pull
+   `pnpm build` with `pnpm typecheck` (`build-typecheck`), the API's tests
+   in four shards and the SPA's in three (`test-app`), and every other
+   package's, the runner's unit suite and the kiosk extension's included
+   (`test-rest`). The `checks` job aggregates them: it is the one required
+   status; the separate `Coverage` workflow (`coverage.yml`) is informative
+   and required by nothing. A pull
    request that changes only prose (`docs/`, `mockups/`, Markdown outside a
    `src/`) skips the jobs and passes `checks`; a push to `main` always runs
    them all.

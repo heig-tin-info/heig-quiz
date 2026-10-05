@@ -2,6 +2,8 @@ node_modules/
 dist/
 *.tsbuildinfo
 coverage/
+# Blob reports of a sharded vitest run (coverage.yml merges them on CI)
+.vitest-reports/
 
 # Embedded development database (DATABASE_URL=pglite://...)
 .data/

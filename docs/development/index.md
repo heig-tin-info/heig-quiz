@@ -299,8 +299,8 @@ On a workstation, run the suites one package at a time
 (`VITEST_MAX_WORKERS=4 pnpm -r --workspace-concurrency=1 test`, see
 [the repository rules](repository.md)). `.github/workflows/ci.yml` runs the
 same three steps on every push and pull request, on Node 24 with a frozen lockfile, split into parallel jobs
-under one `checks` status: build and typecheck, the API's and the SPA's
-suites in three shards each, and every other package (the runner's unit
+under one `checks` status: build and typecheck, the API's suite in four
+shards, the SPA's in three, and every other package (the runner's unit
 suite included). The runner's integration suite has its own workflow. On
 a push to `main` the same workflow then builds the two production images
 and deploys them; see [deployment](deployment.md).
@@ -321,9 +321,15 @@ tests. The floors are checked by the coverage command; a plain test run does not
 measure coverage (`vitest.shared.ts`), except in `packages/domain`, whose own
 config requires 100 % of its lines on every plain `pnpm test`.
 
-`.github/workflows/coverage.yml` does the same on every pull request and
-push to `main`, apart from `checks`: it never blocks a merge nor a deploy,
-shows the table in the run's summary and keeps the reports as an artifact.
+`.github/workflows/coverage.yml` does the same on every pull request, on
+every push to `main` and nightly, apart from `checks`. The API's and the
+SPA's suites run sharded as in `ci.yml`, each shard writing a blob report
+(`--reporter=blob`) that one `report` job merges per package
+(`vitest run --merge-reports --coverage`) before the single floors check;
+the table goes to the run's summary and the HTML reports to an artifact.
+`checks` is the only status the `main` ruleset requires: Coverage is
+informative and never blocks a merge nor a deploy (see
+[deployment, §4](deployment.md#4-continuous-deployment)).
 
 The test layout, including the database tests that run on PGlite against
 the real migrations, is described on the [repository page](repository.md#tests).
