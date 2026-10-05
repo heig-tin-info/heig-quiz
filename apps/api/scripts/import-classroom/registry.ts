@@ -22,6 +22,7 @@ import { importBotCommits, importDispatches, importGradeRuns, importPushReceipts
 import { importJournals, ingestImportedJournals, journalsReingested } from "./steps-journals.js";
 import { importWebhookDeliveries } from "./steps-webhooks.js";
 import {
+  importClassroomMap,
   importEnrollments,
   importGithubLinks,
   importGrants,
@@ -65,6 +66,7 @@ export interface Registry {
 
 export const REGISTRY: Registry = {
   steps: [
+    { name: "classroom map", run: importClassroomMap },
     { name: "users", run: importUsers },
     { name: "profiles", run: importProfiles },
     { name: "github links", run: importGithubLinks },

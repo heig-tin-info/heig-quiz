@@ -15,6 +15,7 @@ import { importAccountLink } from "../../src/auth/githubLink.js";
 import {
   avatars,
   enrollments,
+  importIdMap,
   importRuns,
   teacherGrants,
   userEmails,
@@ -200,6 +201,33 @@ export async function importGrants(ctx: Ctx) {
     }
   }
   tallyMapped(ctx, "teacher_grants", ctx.snapshot.grants.map((g) => g.id), leftOut);
+}
+
+/**
+ * The classroom map (merge task M8-02): each mapped classroom's old id and
+ * the Quiz classroom it became, in the id map, which the legacy URL resolver
+ * reads (`/legacy/classroom/classrooms/:id`). The import carries a classroom
+ * into an EXISTING Quiz one, so this is the only trace of the old id.
+ * `merged`, never `created`: the import owns no classroom row.
+ */
+export async function importClassroomMap(ctx: Ctx) {
+  const rows = ctx.known.get("classrooms") ?? new Map<string, string>();
+  for (const [sourceId, dest] of ctx.mapped) {
+    const held = rows.get(sourceId);
+    // A remap follows (`follow`): the mapping file sends the classroom elsewhere, no baseline to protect.
+    await remember(ctx, "classrooms", sourceId, dest.classroomId, "merged", undefined, true);
+    if (held !== undefined && held !== dest.classroomId) {
+      note(ctx, "reimport", `"${dest.classroomName}": the mapping now sends classroom ${sourceId} to ${dest.courseCode}/${dest.classroomName}, the legacy links follow`);
+    }
+  }
+  // A classroom the mapping file now drops or no longer names leads nowhere: its row goes.
+  const stale = [...rows.keys()].filter((id) => !ctx.mapped.has(id));
+  if (stale.length > 0) {
+    await ctx.db.delete(importIdMap).where(and(eq(importIdMap.sourceTable, "classrooms"), inArray(importIdMap.sourceId, stale)));
+    for (const id of stale) rows.delete(id);
+    written(ctx, "import_classroom.id_map", stale.length);
+    note(ctx, "reimport", `${stale.length} classroom(s) no longer mapped: the legacy links to ${stale.join(", ")} now lead nowhere`);
+  }
 }
 
 /**

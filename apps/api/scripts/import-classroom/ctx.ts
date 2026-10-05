@@ -19,7 +19,7 @@
  */
 import { createHash } from "node:crypto";
 
-import { and, eq, getTableColumns, getTableName, type SQL } from "drizzle-orm";
+import { and, eq, getTableColumns, getTableName, sql, type SQL } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
 import type { AppConfig } from "../../src/config.js";
@@ -161,12 +161,19 @@ export async function remember(
   targetId: string,
   how: string,
   owned?: OwnedRow,
+  /** The row follows a changed target (a classroom the mapping file sends elsewhere); an owned row never does. */
+  follow = false,
 ) {
-  const done = await ctx.db
-    .insert(importIdMap)
-    .values({ sourceTable, sourceId, targetId, how })
-    .onConflictDoNothing()
-    .returning({ sourceId: importIdMap.sourceId });
+  const insert = ctx.db.insert(importIdMap).values({ sourceTable, sourceId, targetId, how });
+  const done = await (
+    follow
+      ? insert.onConflictDoUpdate({
+          target: [importIdMap.sourceTable, importIdMap.sourceId],
+          set: { targetId },
+          setWhere: sql`${importIdMap.targetId} <> ${targetId}`,
+        })
+      : insert.onConflictDoNothing()
+  ).returning({ sourceId: importIdMap.sourceId });
   written(ctx, "import_classroom.id_map", done.length);
   if (done.length > 0) {
     if (!ctx.known.has(sourceTable)) ctx.known.set(sourceTable, new Map());

@@ -5,9 +5,10 @@ import { z } from "zod";
 import { AvatarMime } from "@quiz/contracts";
 
 import { audit } from "../audit.js";
+import type { Db } from "../db/client.js";
 import { avatars } from "../db/schema.js";
 import { publish } from "../events.js";
-import { callerOf, seesUser } from "./guards.js";
+import { callerOf, seesUser, type Caller } from "./guards.js";
 import { INERT_IMAGE_HEADERS, sniffImage } from "./pool/assets.js";
 
 /** `AvatarMime` is the one list (B-19); `app.ts` parses the same set. */
@@ -34,6 +35,26 @@ export function shownAvatar(
   pictureUrl: string | null,
 ): string | null {
   return uploadedAt && userId ? avatarUrl(userId, uploadedAt) : pictureUrl;
+}
+
+/** The user's uploaded picture, if the caller may see that user; null alike for no picture and no right (#318). */
+export async function findVisibleAvatar(db: Db, caller: Caller, userId: string) {
+  const [row] = await db
+    .select()
+    .from(avatars)
+    .where(and(eq(avatars.userId, userId), seesUser(caller, userId)))
+    .limit(1);
+  return row ?? null;
+}
+
+/** {@link findVisibleAvatar} without the image: whether the caller sees a picture of that user. */
+export async function seesAvatar(db: Db, caller: Caller, userId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ userId: avatars.userId })
+    .from(avatars)
+    .where(and(eq(avatars.userId, userId), seesUser(caller, userId)))
+    .limit(1);
+  return row !== undefined;
 }
 
 /**
@@ -115,13 +136,7 @@ export async function avatarPlugin(app: FastifyInstance) {
     async (req, reply) => {
       const params = UserParam.safeParse(req.params);
       if (!params.success) return reply.code(404).send({ error: "not_found" });
-      const [row] = await app.db
-        .select()
-        .from(avatars)
-        .where(
-          and(eq(avatars.userId, params.data.uid), seesUser(callerOf(req), params.data.uid)),
-        )
-        .limit(1);
+      const row = await findVisibleAvatar(app.db, callerOf(req), params.data.uid);
       // No picture and a picture the caller may not see answer alike (#318).
       if (!row) return reply.code(404).send({ error: "not_found" });
       return reply

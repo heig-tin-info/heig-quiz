@@ -4264,6 +4264,15 @@ serves now (16a), and what waits for the group repositories (16b).
     earlier run carried is exempt: a set is live in Quiz). None is
     `githubBound`. With a, b, c and d delivered, the M8-01 acceptance is the
     dry-run on the fixture (clean) and on a staging copy of a dump.
+- **Follow-ups (code review of #550, not blocking)**: scope the stop of an
+  already-followed copy to the groups created in this run (a new group in a past
+  project re-stops the groups staff re-opened); test `staffLines` before the
+  "not on the roster" branch of `carryMembers`; exempt repositories carried
+  before this run from the group-id comparison of `repositories per project`;
+  build `addedAt` from the members the import actually placed; batch
+  `repoMembers` per project (quadratic on a large project); drop the unused
+  `ctx` of `perParent`; one source for the creator of a set (`creatorOf`).
+
 - **Depends on**: every schema task (M2-01, M3-01, M4-01, M5-03, M6-06 if
   in scope), D11.
 - **Goal**: the whole order of §2.5, the verification report, the legacy
@@ -4334,6 +4343,73 @@ serves now (16a), and what waits for the group repositories (16b).
 - **Goal**: `/legacy/classroom/*` for every row of §6.6.
 - **Acceptance**: a table-driven test per row; targets load under
   `staffAccess`.
+- **As delivered** (branch `merge/M8-02-legacy-urls`):
+  - `P:domain/legacyClassroom.ts` (pure, `legacyRule(path)`: every row of
+    §6.6 as a rule, malformed ids as `not_found`), `P:contracts/legacy.ts` (`LegacyClassroomParams`,
+    `LegacyGone`); journal paths are vetted by the contract's `safeJournalPath`/`encodeJournalPath`, `Q:modules/legacy/{routes,service}.ts` (`GET
+    /legacy/classroom/*`, outside `/app/api`: a browser navigates to it),
+    `legacy.db.test.ts` (one 302, one 410, then who reaches a target; the per-row table is the domain test).
+  - **Fixed rows** answer the same to everyone: 302 (`/settings`, `/`,
+    `/admin`; a query is dropped, the e-mail unsubscribe included) or 410
+    `{ error: "moved", to: "/" }` for the dead APIs. A path no row names
+    falls to `/`, the last line of the Caddy fragment. `POST
+    /webhooks/github` is not routed here (Caddy answers it, a POST never
+    reaches `/legacy`); the GET of the same path is a 410.
+  - **Entity rows** (classroom, project, groups, journal, start): the old id
+    goes through `import_classroom.id_map` (`classrooms`, `assignments`,
+    `users`) and the target is LOADED under the caller's own portal session
+    by the guards' finders (`findReadableClassroom`, `findAccessibleProject`
+    = `staffAccess`, `findStudentProjectView`, the rule of the page the link lands on): staff or a seated student. An
+    unmapped, malformed, absent or unreachable target is the same 404 (the SPA's own not-found page for a navigation, `reply.callNotFound()`);
+    an impersonation is nobody. Nobody signed in (a `seb` or `kiosk` session,
+    a bearer token: the same) gets a 302 to `/app/auth/login?next=` the same
+    URL, identical for a real and a made-up id. The avatar answers 410 for
+    every reason, as the table says.
+  - **The import now writes the classroom map**: `importClassroomMap`
+    (`steps.ts`, first step of `registry.ts`) remembers each carried
+    classroom as `classrooms` (old id, Quiz classroom, `merged`). Before it
+    the id map held no classroom row but the journals' one.
+  - **Targets**: `/classrooms/:id`, `/classrooms/:id/journal[/<path>]`
+    (the page path is vetted by the contract's `safeJournalPath`, an unsafe one
+    lands on the journal home, and never checked against the pages: a page's
+    existence is not revealed), `/projects/:id`, for the groups the project's set
+    (`/classrooms/:id/groups/:setId`) or the classroom's sets, staff only (a
+    student gets the project page). `/app/codespace/start/:aid` leads to the
+    project page: Quiz has no codespace start route before M6-06/M6-07.
+  - **For M8-03**: the Caddy fragment must send every human-clicked path,
+    `/app/api/users/:uid/avatar` included (the `@gone /app/api/*` matcher
+    would swallow it), to `/legacy/classroom{uri}`; Caddy answers only
+    `POST /webhooks/github` itself. `importClassroomMap` follows a remap: a later
+    run that maps a classroom elsewhere updates the row and notes it.
+  - **Shapes**: the table names `/classrooms/:id`, `.../assignments/:aid`,
+    `.../assignments/:aid/groups` and `.../journal/<path>` only; any other
+    suffix under `/classrooms/:id/` is no row and falls to `/` (the
+    fragment's last line), not silently to the classroom. For an assignment
+    the path's classroom must be one the import carried (any mapping), else
+    the 404; it is not matched against the project's classroom, because a
+    remap moves the classroom and leaves the projects where they are. The
+    access loaded on the project is what protects it. A classroom the
+    mapping later drops loses its id-map row (and its links 404).
+    Identity-dependent answers carry `Cache-Control: no-store`.
+    A login `next` over 1500 encoded characters is dropped (the stash cookie
+    is signed and limited to 4 KB).
+  - **Deviation, codespace start**: `/app/codespace/start/:aid` goes to
+    `/projects/:id`, not to a Quiz "project start route" (none exists before
+    M6-06/M6-07); revisit then.
+  - **Not done** (needs the Caddy fragment or a product decision): the
+    HMAC-honouring of an old unsubscribe link (the row allows a plain
+    redirect; none is implemented, the secret is not carried); the
+    `Location` is relative (`/settings`), Caddy's `redir` to the Quiz host
+    keeps the browser on `quiz.chevallier.io`.
+
+- **Follow-ups (code review of #547, not blocking)**: drop the path-classroom
+  id check of the project and groups rules (a dropped classroom's row is deleted,
+  so its still-reachable projects 404; the loaded access already protects them);
+  run `legacyRule` on the raw path or per decoded segment (`%2F` in a segment is
+  split before matching); a remap should also move `classroom_journals`; check
+  the status of the SPA not-found page (404, not 200); share one predicate
+  between `seesAvatar` and `findVisibleAvatar`; the remap note should name the
+  previous target.
 
 ### M8-03 — Caddy fragments
 - **Goal**: `infra/caddy/classroom-maintenance.caddy`,
