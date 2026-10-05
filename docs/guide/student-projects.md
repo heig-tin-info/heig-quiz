@@ -117,7 +117,7 @@ In the **Groups** tab you can:
 2. **Join** a group that is not full. Your teacher sets the size limit.
 3. **Leave** your group, or **Rename** it.
 
-You see the names of the others and of the students who have no group yet, nothing more. When the date has passed, the groups close and your teacher places whoever has no group. As soon as one group of the set gets its repository, the groups can no longer change, so be sure before you accept.
+While the set is open you see the names of the others and of the students who have no group yet, nothing more. When the date has passed, the groups close: you then see only your own group, and your teacher places whoever has no group. As soon as one group of the set gets its repository, the groups can no longer change, so be sure before you accept.
 
 For a group project, **one member accepts** and the repository belongs to the group. Every member is invited on GitHub; a member who has not linked their GitHub account is invited only once they do. The score is the group's.
 

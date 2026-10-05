@@ -4048,6 +4048,14 @@ serves now (16a), and what waits for the group repositories (16b).
 ### M7-02 — User guide
 - **Goal**: guide pages for projects, the journal, GitHub setup (teachers,
   students); screenshots in both themes.
+- **As delivered** (#530, #528): **a** teacher guide (GitHub setup,
+  projects, groups, journal). **b** `docs/guide/student-projects.md` (link,
+  accept, invitation, push, score, deadline, release, notifications, forming
+  a group, journal), a pointer section in `docs/guide/students.md`, the
+  `student-project` and `student-groups` help topics (en and fr), and mock
+  screenshots in both themes under `docs/assets/screenshots/student-*`.
+  Checked against main afterwards: a closed group set shows a student only
+  their own group (ADR-070, decision 8), now stated in the guide.
 
 ## M8 — Migration and cutover
 
