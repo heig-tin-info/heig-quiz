@@ -407,6 +407,8 @@ export async function projectDetail(
 
   const accepted = [...views.values()];
   const counts = releaseCounts(project, repos);
+  // ONE predicate for the primary action and the page's Sync button: the sync's own `ahead` (M3-07).
+  const sync = projectSyncState(project, repos, now);
   return {
     ...(await projectSummary(db, project, now)),
     releasedAt: isoOrNull(project.releasedAt),
@@ -414,14 +416,14 @@ export async function projectDetail(
       state: project.state,
       archived: project.archivedAt !== null,
       gradingMode: project.gradingMode,
-      sourceAhead: project.sourceAheadSha !== null,
+      sourceAhead: sync.ahead !== null,
       ...counts,
       // Over the live repositories only: a non-live one never freezes, so its score to verify is released as none.
       unverified: liveRepos.filter((repo) => views.get(repo.id)!.scores.final?.toVerify === true).length,
       released: project.releasedAt !== null,
       changedAfterRelease: accepted.filter((v) => v.flags.changedAfterRelease).length,
     }),
-    sync: projectSyncState(project, repos, now),
+    sync,
     counts: {
       students: roster.length,
       accepted: accepted.length,

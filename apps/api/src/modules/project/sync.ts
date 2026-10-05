@@ -80,6 +80,10 @@ import type { ProjectRow } from "./views.js";
 
 /** The App's refs on a student repository: `sync/<branch>`. */
 const SYNC_REF = /^sync\/(.+)$/;
+
+/** A project a sync may reach: not archived, its distribution repository built — the job's and the page's one rule. */
+const canSync = (project: Pick<ProjectRow, "archivedAt" | "distributionFullName">): boolean =>
+  project.archivedAt === null && project.distributionFullName !== null;
 /** The pull request lists this many changed files at most. */
 const FILES_SHOWN = 50;
 
@@ -431,8 +435,8 @@ async function syncRepo(app: FastifyInstance, octokit: Octokit, ws: SyncWorkspac
 export async function runSyncJob(app: FastifyInstance, config: AppConfig, job: ProjectJob): Promise<void> {
   const db = app.db;
   const body = async ({ project, octokit, token, lost, each }: LeasedRun) => {
-    if (project.archivedAt !== null || project.distributionFullName === null) return;
-    const { owner, repo: squashedRepo } = ownerRepo(project.distributionFullName);
+    if (!canSync(project)) return;
+    const { owner, repo: squashedRepo } = ownerRepo(project.distributionFullName!);
     const tally: Record<SyncOutcome, number> = { opened: 0, updated: 0, up_to_date: 0, failed: 0, skipped: 0 };
     const repos = await studentRepos(db, project);
     const ws = await openSyncWorkspace({ token, org: owner, squashedRepo });
@@ -510,11 +514,10 @@ export function projectSyncState(project: ProjectRow, repos: readonly RepoRow[],
   const counts = Object.values(project.sourceAhead ?? {});
   const outcomes = repos.map((r) => r.syncOutcome).filter((o): o is SyncOutcome => o !== null);
   const count = (outcome: SyncOutcome) => outcomes.filter((o) => o === outcome).length;
-  // Never "ahead" on a project that cannot sync (archived, its distribution not built): the page offers nothing.
-  const canSync = project.archivedAt === null && project.distributionFullName !== null;
   return {
+    // Never "ahead" on a project that cannot sync: the page offers nothing, the primary action is not Sync.
     ahead:
-      !canSync || project.sourceAheadSha === null || project.sourcePushedAt === null
+      !canSync(project) || project.sourceAheadSha === null || project.sourcePushedAt === null
         ? null
         : {
             pushedAt: iso(project.sourcePushedAt),
