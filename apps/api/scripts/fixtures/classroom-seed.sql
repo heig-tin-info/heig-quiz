@@ -609,9 +609,9 @@ INSERT INTO "assignment_group_members" ("id", "assignment_id", "group_id", "enro
   ('cb000000-0000-4000-8000-000000000002', 'c7000000-0000-4000-8000-000000000002', 'ca000000-0000-4000-8000-000000000001', 'c5000000-0000-4000-8000-000000000002', '2026-09-11 08:00:00+00');
 
 INSERT INTO "student_repos" ("id", "assignment_id", "user_id", "group_id", "github_repo_id", "full_name", "default_branch", "provision_status", "current_grade_run_id", "frozen_grade_run_id") VALUES
-  ('c8000000-0000-4000-8000-000000000001', 'c7000000-0000-4000-8000-000000000001', 'c1000000-0000-4000-8000-000000000011', NULL, 9001, 'heig-prog-a/alpha-s1', 'main', 'ready', 'c9000000-0000-4000-8000-000000000001', NULL),
-  ('c8000000-0000-4000-8000-000000000002', 'c7000000-0000-4000-8000-000000000002', 'c1000000-0000-4000-8000-000000000011', 'ca000000-0000-4000-8000-000000000001', 9002, 'heig-prog-a/beta-team-1', 'main', 'ready', NULL, NULL),
-  ('c8000000-0000-4000-8000-000000000003', 'c7000000-0000-4000-8000-000000000003', 'c1000000-0000-4000-8000-000000000014', NULL, 9003, 'heig-info1/lab-1-s4', 'main', 'ready', 'c9000000-0000-4000-8000-000000000002', 'c9000000-0000-4000-8000-000000000002');
+  ('c8000000-0000-4000-8000-000000000001', 'c7000000-0000-4000-8000-000000000001', 'c1000000-0000-4000-8000-000000000011', NULL, 9001, 'heig-prog-a/alpha-s1', 'main', 'ok', 'c9000000-0000-4000-8000-000000000001', NULL),
+  ('c8000000-0000-4000-8000-000000000002', 'c7000000-0000-4000-8000-000000000002', 'c1000000-0000-4000-8000-000000000011', 'ca000000-0000-4000-8000-000000000001', 9002, 'heig-prog-a/beta-team-1', 'main', 'ok', NULL, NULL),
+  ('c8000000-0000-4000-8000-000000000003', 'c7000000-0000-4000-8000-000000000003', 'c1000000-0000-4000-8000-000000000014', NULL, 9003, 'heig-info1/lab-1-s4', 'main', 'ok', 'c9000000-0000-4000-8000-000000000002', 'c9000000-0000-4000-8000-000000000002');
 
 INSERT INTO "grade_runs" ("id", "student_repo_id", "workflow_run_id", "head_branch", "head_sha", "conclusion", "grade_points", "grade_max", "parse_status", "completed_at") VALUES
   ('c9000000-0000-4000-8000-000000000001', 'c8000000-0000-4000-8000-000000000001', 70001, 'main', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'success', 4, 6, 'ok', '2026-09-20 10:00:00+00'),
@@ -665,3 +665,85 @@ INSERT INTO "webhook_deliveries" ("delivery_id", "event", "action", "payload", "
   ('cc000000-0000-4000-8000-000000000003', 'push', NULL, '{"ref": "refs/heads/main", "after": "ffffffffffffffffffffffffffffffffffffffff"}', '2026-09-28 10:00:00+00', '2026-09-28 10:00:02+00', NULL),
   ('cc000000-0000-4000-8000-000000000004', 'repository', 'renamed', '{"action": "renamed"}', '2026-09-29 10:00:00+00', '2026-09-29 10:00:01+00', 'handler failed once'),
   ('cc000000-0000-4000-8000-000000000005', 'push', NULL, '{"ref": "refs/heads/main"}', '2026-08-01 10:00:00+00', '2026-08-01 10:00:01+00', NULL);
+
+-- ---- Synthetic data, part 3 (M8-01b): the projects' repositories and what hangs on them ----
+-- Ids: cf… milestones, cd… push receipts, ce… ledger rows, d0… reverts; the
+-- c8… repositories and c9… runs of part 2 grow. Alpha (published, a
+-- milestone dispatched, one never confirmed); Pair Beta (a group repository,
+-- two individual repositories inside it: one live, one pending); Lab 1
+-- (applied, frozen, final review dispatched, released: a repository with its
+-- ledger row, one without (the synthetic rule), a development account's).
+
+UPDATE "assignments" SET "squashed_repo_id" = 211, "squashed_full_name" = 'heig-prog-a/alpha-squashed',
+  "source_pushed_at" = '2026-09-18 09:00:00+00', "synced_at" = '2026-09-19 12:00:00+00',
+  "source_ahead_sha" = repeat('d', 40)
+  WHERE "id" = 'c7000000-0000-4000-8000-000000000001';
+UPDATE "assignments" SET "squashed_repo_id" = 212, "squashed_full_name" = 'heig-prog-a/beta-squashed'
+  WHERE "id" = 'c7000000-0000-4000-8000-000000000002';
+UPDATE "assignments" SET "squashed_repo_id" = 213, "squashed_full_name" = 'heig-info1/lab-1-squashed',
+  "deadline_strategy" = 'commit', "llm_dispatched_at" = '2026-09-15 09:00:00+00',
+  "grades_validated_at" = '2026-09-16 10:00:00+00', "grades_validated_by" = 'c1000000-0000-4000-8000-000000000002'
+  WHERE "id" = 'c7000000-0000-4000-8000-000000000003';
+
+INSERT INTO "assignment_milestones" ("id", "assignment_id", "name", "due_at", "offset_days", "dispatched_at", "created_at") VALUES
+  ('cf000000-0000-4000-8000-000000000001', 'c7000000-0000-4000-8000-000000000001', 'midterm', '2026-10-01 08:00:00+00', NULL, '2026-10-01 08:00:30+00', '2026-09-02 08:00:00+00'),
+  ('cf000000-0000-4000-8000-000000000002', 'c7000000-0000-4000-8000-000000000001', 'final-check', '2026-11-20 08:00:00+00', -11, NULL, '2026-09-02 08:00:00+00');
+
+INSERT INTO "student_repos" ("id", "assignment_id", "user_id", "group_id", "github_repo_id", "full_name", "default_branch", "provision_status", "accepted_at", "invitation_status") VALUES
+  ('c8000000-0000-4000-8000-000000000004', 'c7000000-0000-4000-8000-000000000001', 'c1000000-0000-4000-8000-000000000012', NULL, 9004, 'heig-prog-a/alpha-s2', 'main', 'ok', '2026-09-03 08:00:00+00', 'accepted'),
+  ('c8000000-0000-4000-8000-000000000005', 'c7000000-0000-4000-8000-000000000001', 'c1000000-0000-4000-8000-000000000013', NULL, NULL, NULL, NULL, 'pending', '2026-09-04 08:00:00+00', 'none'),
+  ('c8000000-0000-4000-8000-000000000006', 'c7000000-0000-4000-8000-000000000002', 'c1000000-0000-4000-8000-000000000012', NULL, 9006, 'heig-prog-a/beta-s2', 'main', 'ok', '2026-09-05 08:00:00+00', 'accepted'),
+  ('c8000000-0000-4000-8000-000000000007', 'c7000000-0000-4000-8000-000000000002', 'c1000000-0000-4000-8000-000000000013', NULL, NULL, NULL, NULL, 'pending', '2026-09-05 09:00:00+00', 'none'),
+  ('c8000000-0000-4000-8000-000000000008', 'c7000000-0000-4000-8000-000000000003', 'c1000000-0000-4000-8000-000000000016', NULL, 9008, 'heig-info1/lab-1-s7', 'main', 'ok', '2026-09-02 08:00:00+00', 'accepted'),
+  ('c8000000-0000-4000-8000-000000000009', 'c7000000-0000-4000-8000-000000000003', 'c1000000-0000-4000-8000-000000000017', NULL, 9009, 'heig-info1/lab-1-dev', 'main', 'ok', '2026-09-02 09:00:00+00', 'accepted');
+
+INSERT INTO "grade_runs" ("id", "student_repo_id", "workflow_run_id", "run_attempt", "head_branch", "head_sha", "conclusion", "grade_points", "grade_max", "tests_passed", "tests_total", "parse_status", "kind", "after_deadline", "completed_at", "created_at") VALUES
+  ('c9000000-0000-4000-8000-000000000003', 'c8000000-0000-4000-8000-000000000003', 70003, 1, 'main', repeat('c', 40), 'success', 5.5, 6, NULL, NULL, 'ok', 'llm', false, '2026-09-16 07:00:00+00', '2026-09-16 07:00:05+00'),
+  ('c9000000-0000-4000-8000-000000000004', 'c8000000-0000-4000-8000-000000000008', 70004, 1, 'main', repeat('e', 40), 'success', 3, 6, 6, 10, 'ok', 'ci', false, '2026-09-15 07:45:00+00', '2026-09-15 07:45:05+00'),
+  ('c9000000-0000-4000-8000-000000000005', 'c8000000-0000-4000-8000-000000000002', 70005, 1, 'main', repeat('f', 40), 'success', 2, 6, NULL, NULL, 'ok', 'ci', false, '2026-09-21 10:00:00+00', '2026-09-21 10:00:05+00'),
+  ('c9000000-0000-4000-8000-000000000006', 'c8000000-0000-4000-8000-000000000004', 70006, 2, 'main', repeat('1', 40), 'failure', NULL, NULL, NULL, NULL, 'malformed', 'ci', true, '2026-09-22 10:00:00+00', '2026-09-22 10:00:05+00');
+
+UPDATE "student_repos" SET "invitation_status" = 'accepted', "ruleset_id" = 5001, "last_commit_sha" = repeat('2', 40),
+  "last_commit_at" = '2026-09-20 10:00:00+00', "ci_status" = 'pass', "accepted_at" = '2026-09-02 08:00:00+00',
+  "sync_pr_number" = 7, "sync_pr_state" = 'open'
+  WHERE "id" = 'c8000000-0000-4000-8000-000000000001';
+UPDATE "student_repos" SET "accepted_at" = '2026-09-11 08:00:00+00', "invitation_status" = 'accepted', "locked_at" = NULL
+  WHERE "id" = 'c8000000-0000-4000-8000-000000000002';
+UPDATE "student_repos" SET "invitation_status" = 'accepted', "locked_at" = '2026-09-15 08:00:10+00',
+  "llm_grade_run_id" = 'c9000000-0000-4000-8000-000000000003', "accepted_at" = '2026-09-02 08:00:00+00',
+  "sync_pr_number" = 3, "sync_pr_state" = 'merged', "ci_status" = 'pass',
+  "last_commit_sha" = repeat('b', 40), "last_commit_at" = '2026-09-15 07:30:00+00'
+  WHERE "id" = 'c8000000-0000-4000-8000-000000000003';
+UPDATE "student_repos" SET "current_grade_run_id" = 'c9000000-0000-4000-8000-000000000006',
+  "teacher_points" = 5, "teacher_comment" = 'Good work', "teacher_graded_by" = 'c1000000-0000-4000-8000-000000000002',
+  "teacher_graded_at" = '2026-09-25 08:00:00+00', "ci_status" = 'fail'
+  WHERE "id" = 'c8000000-0000-4000-8000-000000000004';
+UPDATE "student_repos" SET "current_grade_run_id" = 'c9000000-0000-4000-8000-000000000004',
+  "frozen_grade_run_id" = 'c9000000-0000-4000-8000-000000000004', "locked_at" = '2026-09-15 08:00:10+00',
+  "teacher_points" = 4.5, "teacher_graded_by" = 'c1000000-0000-4000-8000-000000000002',
+  "teacher_graded_at" = '2026-09-16 09:00:00+00'
+  WHERE "id" = 'c8000000-0000-4000-8000-000000000008';
+-- Repository 2 (a group's) holds a run, a commit and a receipt too: all left out until M8-01c.
+UPDATE "student_repos" SET "current_grade_run_id" = 'c9000000-0000-4000-8000-000000000005'
+  WHERE "id" = 'c8000000-0000-4000-8000-000000000002';
+
+INSERT INTO "push_receipts" ("id", "student_repo_id", "branch", "head_sha", "received_at", "is_bot", "forced") VALUES
+  ('cd000000-0000-4000-8000-000000000001', 'c8000000-0000-4000-8000-000000000001', 'main', repeat('3', 40), '2026-09-19 09:00:00+00', true, false),
+  ('cd000000-0000-4000-8000-000000000002', 'c8000000-0000-4000-8000-000000000001', 'main', repeat('1', 40), '2026-09-20 09:00:00+00', false, false),
+  ('cd000000-0000-4000-8000-000000000003', 'c8000000-0000-4000-8000-000000000001', 'main', repeat('2', 40), '2026-09-20 10:00:00+00', false, true),
+  ('cd000000-0000-4000-8000-000000000004', 'c8000000-0000-4000-8000-000000000003', 'main', repeat('4', 40), '2026-09-15 07:00:00+00', false, false),
+  ('cd000000-0000-4000-8000-000000000005', 'c8000000-0000-4000-8000-000000000005', 'main', repeat('5', 40), '2026-09-04 09:00:00+00', false, false),
+  ('cd000000-0000-4000-8000-000000000006', 'c8000000-0000-4000-8000-000000000002', 'main', repeat('6', 40), '2026-09-21 09:00:00+00', false, false);
+
+INSERT INTO "bot_commits" ("student_repo_id", "sha", "kind", "created_at") VALUES
+  ('c8000000-0000-4000-8000-000000000001', repeat('3', 40), 'revert', '2026-09-19 09:00:00+00'),
+  ('c8000000-0000-4000-8000-000000000003', repeat('8', 40), 'deadline', '2026-09-15 08:00:05+00'),
+  ('c8000000-0000-4000-8000-000000000002', repeat('9', 40), 'sync', '2026-09-22 09:00:00+00');
+
+INSERT INTO "reverts" ("id", "student_repo_id", "revert_sha", "files", "created_at") VALUES
+  ('d0000000-0000-4000-8000-000000000001', 'c8000000-0000-4000-8000-000000000001', repeat('3', 40), '{README.md}', '2026-09-19 09:00:00+00');
+
+INSERT INTO "grade_dispatches" ("id", "student_repo_id", "trigger", "milestone_id", "sha", "dispatched_at", "created_at") VALUES
+  ('ce000000-0000-4000-8000-000000000001', 'c8000000-0000-4000-8000-000000000003', 'deadline', NULL, repeat('b', 40), '2026-09-15 09:00:05+00', '2026-09-15 09:00:01+00'),
+  ('ce000000-0000-4000-8000-000000000002', 'c8000000-0000-4000-8000-000000000001', 'milestone', 'cf000000-0000-4000-8000-000000000001', repeat('2', 40), NULL, '2026-10-01 08:00:10+00'),
+  ('ce000000-0000-4000-8000-000000000003', 'c8000000-0000-4000-8000-000000000004', 'milestone', 'cf000000-0000-4000-8000-000000000001', repeat('1', 40), '2026-10-01 08:00:30+00', '2026-10-01 08:00:11+00');

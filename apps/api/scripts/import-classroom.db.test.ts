@@ -453,7 +453,7 @@ describe("import-classroom frame (M8-01a)", () => {
     const before = await count();
     const dry = await runImport(w.db, config, snapshot, MAPPING, { ...DECIDED, apply: false });
     expect(dry.parity.redLines).toEqual([]);
-    expect(dry.parity.tables.map((t) => t.table)).toEqual(expect.arrayContaining(["enrollments", "legacy_classroom_audit_log", "teacher_grants", "users"]));
+    expect(dry.parity.tables.map((t) => t.table)).toEqual(expect.arrayContaining(["enrollments", "legacy_classroom_audit_log", "teacher_grants", "users", "assignments", "student_repos"]));
     expect(dry.parity.tables.every((t) => t.missing === 0)).toBe(true);
     const applied = await runImport(w.db, config, snapshot, MAPPING, DECIDED);
     expect(applied.parity.tables).toEqual(dry.parity.tables);

@@ -41,6 +41,7 @@ export const FINDINGS = {
   grants: "Teacher grants",
   staff: "Course staff",
   enrollments: "Enrollments",
+  projects: "Projects, repositories and what hangs on them",
   reimport: "Kept on re-import (modified in Quiz since the previous import)",
   journals: "Classroom journals",
   webhooks: "Webhook deliveries",

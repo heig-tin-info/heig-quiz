@@ -13,7 +13,10 @@
  */
 import type { CheckFinding } from "./report.js";
 import type { Ctx } from "./ctx.js";
+import { projectChecks } from "./checks-projects.js";
 import { importLegacyAudit } from "./steps-audit.js";
+import { importCheckpoints, importProjects, importReminders } from "./steps-projects.js";
+import { importBotCommits, importDispatches, importGradeRuns, importPushReceipts, importRepos, importReverts } from "./steps-repos.js";
 import { importJournals, ingestImportedJournals, journalsReingested } from "./steps-journals.js";
 import { importWebhookDeliveries } from "./steps-webhooks.js";
 import {
@@ -66,12 +69,22 @@ export const REGISTRY: Registry = {
     { name: "grants", run: importGrants },
     { name: "staff", run: importStaff },
     { name: "enrollments", run: importEnrollments },
-    // M8-01b, c insert here (projects, groups), before the journals.
+    // M8-01b: projects and what hangs on them, in foreign-key order.
+    { name: "projects", run: importProjects },
+    { name: "checkpoints", run: importCheckpoints },
+    { name: "project repositories", run: importRepos },
+    { name: "grade runs", run: importGradeRuns },
+    { name: "bot commits", run: importBotCommits },
+    { name: "review ledger", run: importDispatches },
+    { name: "reverts", run: importReverts },
+    { name: "push receipts", run: importPushReceipts },
+    { name: "project reminders", run: importReminders },
+    // M8-01c (groups) inserts here, before the journals.
     { name: "classroom journals", run: importJournals },
     { name: "webhook deliveries", run: importWebhookDeliveries },
     { name: "legacy audit", run: importLegacyAudit },
     { name: "roles", run: recomputeRoles },
   ],
   afterCommit: [{ name: "journal ingestion", run: ingestImportedJournals }],
-  checks: [journalsReingested],
+  checks: [...projectChecks, journalsReingested],
 };
