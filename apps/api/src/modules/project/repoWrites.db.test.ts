@@ -300,7 +300,10 @@ describe("the invitation resent (F-PROJ-07)", () => {
     expect([soon.statusCode, soon.json().error]).toEqual([429, "resend_too_soon"]);
     expect(inviteCalls(student.login)).toBe(calls);
 
-    // A minute later, the student had accepted meanwhile: the row follows GitHub's answer.
+    // A minute later, the student had accepted meanwhile (the invitation is
+    // no longer pending on GitHub): the row follows GitHub's answer.
+    const pending = world.invitations.get(repo!.fullName!)!;
+    for (const [id, who] of pending) if (who === student.login) pending.delete(id);
     server.clock.advance(1000);
     const later = await resend(p.id, repo!.id);
     expect(later.statusCode, later.body).toBe(200);
