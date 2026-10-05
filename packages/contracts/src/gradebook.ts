@@ -94,6 +94,8 @@ export const GRADEBOOK_REFUSALS = [
   "grade_exists",
   /** A score above its maximum. */
   "score_above_max",
+  /** A mark over a real grade of a released column: an owner's, as the release is (ADR-068). */
+  "owner_required",
 ] as const;
 export const GradebookErrorCode = z.enum(GRADEBOOK_REFUSALS);
 export type GradebookErrorCode = z.infer<typeof GradebookErrorCode>;

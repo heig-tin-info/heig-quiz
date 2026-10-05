@@ -5,7 +5,7 @@
  * and grades come through the `ActivityKind` registry (`GradebookEntry`),
  * never from here.
  */
-import { and, asc, eq, isNotNull } from "drizzle-orm";
+import { and, asc, eq, isNotNull, type SQL } from "drizzle-orm";
 
 import { countsByDefault, WEIGHT_DEFAULT, type GradebookColumnKind, type MarkOutcome } from "@quiz/domain";
 
@@ -30,6 +30,17 @@ export function defaultSettings(mode: GradebookColumnKind): ColumnSettings {
 
 /** The activity a stored column belongs to. */
 export const activityOf = (row: Pick<ColumnRow, "evaluationId" | "projectId">): string => row.evaluationId ?? row.projectId!;
+
+/** The stored column of an entry's activity, as a predicate. */
+export const columnOf = (entry: Pick<GradebookEntryFacts, "kind" | "activityId">): SQL =>
+  entry.kind === "evaluation" ? eq(gradebookColumns.evaluationId, entry.activityId) : eq(gradebookColumns.projectId, entry.activityId);
+
+/** The activity reference of a stored column's row, for an insert. */
+export const activityRef = (entry: Pick<GradebookEntryFacts, "kind" | "activityId">) =>
+  entry.kind === "evaluation" ? { evaluationId: entry.activityId } : { projectId: entry.activityId };
+
+/** The key of a cell in the maps of marks: an activity and a roster line. */
+export const cellKey = (activityId: string, enrollmentId: string): string => `${activityId}:${enrollmentId}`;
 
 /** The stored columns of a classroom, by activity id. */
 export async function storedColumns(db: Db | Tx, classroomId: string): Promise<Map<string, ColumnRow>> {
@@ -76,7 +87,7 @@ export interface MarkWithSetter extends MarkRow {
   setByName: string | null;
 }
 
-const setterName = (user: { givenName: string; familyName: string; email: string } | null): string | null =>
+const setterName = (user: Pick<typeof users.$inferSelect, "givenName" | "familyName" | "email"> | null): string | null =>
   user === null ? null : `${user.givenName} ${user.familyName}`.trim() || user.email;
 
 /**
@@ -85,7 +96,7 @@ const setterName = (user: { givenName: string; familyName: string; email: string
  */
 export async function marksByCell(db: Db | Tx, classroomId: string, enrollmentId?: string): Promise<Map<string, MarkWithSetter>> {
   const rows = await db
-    .select({ mark: gradebookMarks, column: gradebookColumns, setter: { givenName: users.givenName, familyName: users.familyName, email: users.email } })
+    .select({ mark: gradebookMarks, column: gradebookColumns, setter: users })
     .from(gradebookMarks)
     .innerJoin(gradebookColumns, eq(gradebookColumns.id, gradebookMarks.columnId))
     .leftJoin(users, eq(users.id, gradebookMarks.setBy))
@@ -93,7 +104,7 @@ export async function marksByCell(db: Db | Tx, classroomId: string, enrollmentId
   return new Map(
     rows.map(({ mark, column, setter }) => {
       const activityId = activityOf(column);
-      return [`${activityId}:${mark.enrollmentId}`, { ...mark, activityId, setByName: setterName(setter?.email == null ? null : setter) }];
+      return [cellKey(activityId, mark.enrollmentId), { ...mark, activityId, setByName: setterName(setter) }];
     }),
   );
 }

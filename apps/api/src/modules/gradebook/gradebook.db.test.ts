@@ -36,6 +36,7 @@ import type { Db } from "../../db/client.js";
 import {
   auditLog,
   classrooms,
+  courseStaff,
   enrollments,
   evaluationItems,
   evaluations,
@@ -156,7 +157,6 @@ async function play(id: string, takers: { student: number; points: number }[], r
       source: "manual",
       state: "validated",
       details: { manual: true },
-      comment: null,
       now,
     });
   }
@@ -450,6 +450,25 @@ describe("the staff's marks (D06, 2026-10-05)", () => {
         expect.objectContaining({ before: { kind: "absent", points: null, max: null, comment: null }, after: expect.objectContaining({ kind: "score", points: 4 }), override: false }),
       ]),
     );
+  });
+
+  it("leaves replacing a RELEASED grade to an owner: an assistant gets 403 owner_required, and keeps the rest", async () => {
+    const assistant = await server.signIn("teacher");
+    await db().insert(courseStaff).values({ courseId: seed.courseId, userId: assistant.id, role: "assistant" });
+    try {
+      const refused = await call("PUT", markUrl("evaluation", "E1", seats[0]!), assistant.headers, { kind: "absent", override: true });
+      expect([refused.statusCode, refused.json().error]).toEqual([403, "owner_required"]);
+      expect(cellOf(await staffTable(), 0, "E1")).toMatchObject({ kind: "grade", mark: null });
+      // Without the override it is still the 409 anyone gets.
+      expect((await call("PUT", markUrl("evaluation", "E1", seats[0]!), assistant.headers, { kind: "absent" })).json().error).toBe("grade_exists");
+      // An absence on an empty cell, and a mark on a column not released, stay open to every member.
+      expect((await call("PUT", markUrl("evaluation", "X1", seats[1]!), assistant.headers, { kind: "absent" })).statusCode).toBe(200);
+      expect((await call("PUT", markUrl("evaluation", "E3", seats[0]!), assistant.headers, { kind: "absent", override: true })).statusCode).toBe(200);
+      await call("DELETE", markUrl("evaluation", "X1", seats[1]!), assistant.headers);
+      await call("DELETE", markUrl("evaluation", "E3", seats[0]!), assistant.headers);
+    } finally {
+      await db().delete(courseStaff).where(eq(courseStaff.userId, assistant.id));
+    }
   });
 
   it("fills the empty cell of a project never accepted with the teacher's score, by the project's own scale", async () => {

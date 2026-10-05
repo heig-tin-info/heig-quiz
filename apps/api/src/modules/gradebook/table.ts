@@ -15,7 +15,7 @@
  * recomputed here; a staff mark wins over it (`resolveCell`).
  */
 import type { GradebookStaff, GradebookStaffCell, GradebookStudent, GradebookStudentCell } from "@quiz/contracts";
-import { ABSENT_GRADE, cellGrade, gradebookMean, resolveCell, type CellOutcome, type MeanColumn } from "@quiz/domain";
+import { cellGrade, gradebookMean, resolveCell, type CellOutcome, type MeanColumn } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -24,6 +24,7 @@ import { gradebookEntries, studentGradebookEntries } from "../activity/service.j
 import type { GradebookBeneath } from "../activity/kind.js";
 import type { ReadableClassroom } from "../guards.js";
 import {
+  cellKey,
   claimedSeats,
   inOrder,
   marksByCell,
@@ -79,7 +80,7 @@ export async function staffGradebook(db: Db, room: typeof classrooms.$inferSelec
     const counted: MeanColumn[] = [];
     for (const { entry, settings } of columns) {
       const under = beneath.get(entry.activityId)?.get(seat.enrollmentId) ?? NOTHING_BENEATH;
-      const mark = marks.get(`${entry.activityId}:${seat.enrollmentId}`);
+      const mark = marks.get(cellKey(entry.activityId, seat.enrollmentId));
       const outcome = resolveCell(mark ? markOutcome(mark, entry) : null, under.outcome);
       cells[entry.activityId] = staffCell(under, mark, outcome);
       if (entry.released) counted.push({ weight: settings.weight, counts: settings.counts, cell: outcome });
@@ -134,14 +135,14 @@ export async function studentGradebook(db: Db, scope: ReadableClassroom, userId:
   const counted: MeanColumn[] = [];
   for (const { entry, settings } of columns) {
     // A mark is the teacher's word on a released column; its comment and points never reach the student.
-    const mark = entry.markShown ? marks.get(`${entry.activityId}:${seat.id}`) : undefined;
+    const mark = entry.markShown ? marks.get(cellKey(entry.activityId, seat.id)) : undefined;
+    const shown = outcomeOf(entry.cell);
+    const outcome = mark ? resolveCell(markOutcome(mark, entry), shown) : shown;
     const cell: GradebookStudentCell = mark
-      ? mark.kind === "absent"
-        ? { kind: "absent", grade: ABSENT_GRADE, points: null, max: null }
-        : { kind: "grade", grade: entry.markGrade(mark.points!, mark.max!), points: null, max: null }
+      ? { kind: outcome.kind, grade: cellGrade(outcome), points: null, max: null }
       : entry.cell;
     cells[entry.activityId] = cell;
-    counted.push({ weight: settings.weight, counts: settings.counts, cell: outcomeOf(cell) });
+    counted.push({ weight: settings.weight, counts: settings.counts, cell: outcome });
   }
   return {
     classroomId: room.id,

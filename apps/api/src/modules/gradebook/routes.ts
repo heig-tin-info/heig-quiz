@@ -8,7 +8,7 @@
  * gets the 404 of a missing classroom. Every write answers the table as it
  * now stands (`GradebookStaff`). The settings and the marks are open to
  * every member of the staff, an assistant included (ADR-068: a classroom's
- * settings); what makes a grade final is the activity's own release.
+ * settings), but a mark replacing a released grade is an owner's (`403 owner_required`); what makes a grade final is the activity's own release.
  *
  * The STUDENT's route loads the classroom through `readableClassroom` with
  * the student payload forced: a student, a teacher in the student view and
@@ -28,7 +28,7 @@ import {
 } from "@quiz/contracts";
 
 import { actorOf } from "../../audit.js";
-import { accessibleClassroom, callerOf, readableClassroom, teacherGuard } from "../guards.js";
+import { accessibleClassroom, callerOf, isCourseOwner, readableClassroom, teacherGuard } from "../guards.js";
 import { studentRoute, teacherRoute } from "../http.js";
 import * as service from "./service.js";
 
@@ -37,9 +37,10 @@ export async function gradebookPlugin(app: FastifyInstance) {
   const teacher = teacherRoute(app);
   const student = studentRoute(app);
   const onClassroom = { params: IdParam, load: accessibleClassroom.bind(null, app) };
-  const ctx = (req: Parameters<typeof actorOf>[0], now: Date): service.WriteContext => ({
+  const ctx = async (req: Parameters<typeof actorOf>[0], now: Date, courseId: string): Promise<service.WriteContext> => ({
     actor: actorOf(req),
     userId: req.user!.id,
+    owner: await isCourseOwner(app.db, courseId, callerOf(req)),
     now,
   });
 
@@ -54,7 +55,7 @@ export async function gradebookPlugin(app: FastifyInstance) {
     "/app/api/classrooms/:id/gradebook",
     { preHandler: requireTeacher },
     teacher({ ...onClassroom, body: GradebookSettingsPatch }, async ({ req, now, body, scope }) => {
-      await service.patchSettings(app.db, scope, body, ctx(req, now));
+      await service.patchSettings(app.db, scope, body, await ctx(req, now, scope.course.id));
       return service.staffGradebook(app.db, scope.room);
     }),
   );
@@ -66,7 +67,7 @@ export async function gradebookPlugin(app: FastifyInstance) {
     teacher(
       { params: GradebookColumnParams, load: (req, reply, p) => accessibleClassroom(app, req, reply, p), body: GradebookColumnPatch },
       async ({ req, now, params, body, scope }) => {
-        await service.patchColumn(app.db, scope, params, body, ctx(req, now));
+        await service.patchColumn(app.db, scope, params, body, await ctx(req, now, scope.course.id));
         return service.staffGradebook(app.db, scope.room);
       },
     ),
@@ -79,7 +80,7 @@ export async function gradebookPlugin(app: FastifyInstance) {
     teacher(
       { params: GradebookMarkParams, load: (req, reply, p) => accessibleClassroom(app, req, reply, p), body: GradebookMarkPut },
       async ({ req, now, params, body, scope }) => {
-        await service.setMark(app.db, scope, params, body, ctx(req, now));
+        await service.setMark(app.db, scope, params, body, await ctx(req, now, scope.course.id));
         return service.staffGradebook(app.db, scope.room);
       },
     ),
@@ -92,7 +93,7 @@ export async function gradebookPlugin(app: FastifyInstance) {
     teacher(
       { params: GradebookMarkParams, load: (req, reply, p) => accessibleClassroom(app, req, reply, p) },
       async ({ req, now, params, scope }) => {
-        await service.clearMark(app.db, scope, params, ctx(req, now));
+        await service.clearMark(app.db, scope, params, await ctx(req, now, scope.course.id));
         return service.staffGradebook(app.db, scope.room);
       },
     ),
