@@ -288,3 +288,46 @@ describe("the GitHub App (N-SEC-16)", () => {
     ).not.toThrow();
   });
 });
+
+describe("the online workspace portal (ADR-047, M6-01)", () => {
+  const ON = { CODESPACE_URL: "https://codespace.example.ch/", CODESPACE_LAUNCH_SECRET: "s".repeat(32) };
+
+  it("is off with neither set, in production too", () => {
+    for (const env of [{}, PROD]) {
+      const config = loadConfig(env);
+      expect(config.CODESPACE_URL).toBe("");
+      expect(config.CODESPACE_LAUNCH_SECRET).toBe("");
+    }
+  });
+
+  it("boots with both, the trailing slash dropped", () => {
+    expect(loadConfig({ ...PROD, ...ON }).CODESPACE_URL).toBe("https://codespace.example.ch");
+    expect(loadConfig(ON).CODESPACE_URL).toBe("https://codespace.example.ch");
+  });
+
+  it("refuses a URL with a missing or short secret, in production and in development", () => {
+    for (const env of [PROD, {}]) {
+      expect(() => loadConfig({ ...env, CODESPACE_URL: ON.CODESPACE_URL })).toThrow(/CODESPACE_LAUNCH_SECRET/);
+      expect(() => loadConfig({ ...env, ...ON, CODESPACE_LAUNCH_SECRET: "s".repeat(31) })).toThrow(/CODESPACE_LAUNCH_SECRET/);
+      expect(() => loadConfig({ ...env, ...ON, CODESPACE_LAUNCH_SECRET: "change-me" })).toThrow(/CODESPACE_LAUNCH_SECRET/);
+    }
+  });
+
+  it("refuses a URL that is not http(s)", () => {
+    for (const url of ["codespace.example.ch", "ftp://codespace.example.ch", "javascript:alert(1)", "https://"]) {
+      expect(() => loadConfig({ ...ON, CODESPACE_URL: url })).toThrow(/CODESPACE_URL/);
+    }
+    expect(loadConfig({ ...ON, CODESPACE_URL: "http://localhost:4000" }).CODESPACE_URL).toBe("http://localhost:4000");
+  });
+
+  it("does not echo the secret in the refusal", () => {
+    let message = "";
+    try {
+      loadConfig({ CODESPACE_URL: ON.CODESPACE_URL, CODESPACE_LAUNCH_SECRET: "short-secret-value" });
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    expect(message).toMatch(/CODESPACE_LAUNCH_SECRET/);
+    expect(message).not.toContain("short-secret-value");
+  });
+});

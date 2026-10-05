@@ -100,6 +100,7 @@ export * from "./studentIgnore.js";
 export * from "./stats.js";
 export * from "./templatePull.js";
 export * from "./zone.js";
+export * from "./hs256.js";
 // `./drillSchedule.js` is NOT re-exported: it pulls `ts-fsrs`, which the web
 // bundle would then carry. The server imports `@quiz/domain/drillSchedule`.
 // `./parameters.js` is NOT re-exported either, for the same reason: it pulls

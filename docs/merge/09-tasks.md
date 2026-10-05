@@ -3847,6 +3847,26 @@ serves now (16a), and what waits for the group repositories (16b).
   `packages/contracts`; both issuers accepted; optional `seb` claim.
 - **Acceptance**: a token signed by classroom's current code verifies
   (fixture).
+- **As delivered** (branch `merge/M6-01-codespace-contracts`): no
+  migration, no route. `packages/domain/src/hs256.ts`: classroom's
+  `signHs256`/`verifyHs256` ported on Web Crypto alone (a global, no Node
+  import, so the domain stays platform-free; the comparison is
+  `crypto.subtle.verify`, constant time), plus `issuer` as one value or a
+  list, an optional `requireJti`, a `missing-jti` failure and a `malformed`
+  answer for a non-object header or payload; `alg` is checked before the
+  signature, `exp`/`iat` with a 30 s leeway. Single use of the `jti` stays
+  the portal's. `packages/contracts/src/codespace.ts`: `LaunchTokenClaims`
+  (`iss` in `heig-classroom` | `heig-quiz`, optional
+  `seb: {configKey}`), `ServiceTokenClaims`, `CodespaceAssignmentSync`,
+  `CodespaceAssignmentSyncResult`, the audiences and the 5 min / 2 min
+  lifetimes. Zod schemas, not classroom's interfaces; the wire shape is
+  unchanged. `config.ts`: `CODESPACE_URL` and `CODESPACE_LAUNCH_SECRET`
+  (>= 32 characters, environment only); a URL without the secret refuses to
+  start in every environment, development included (classroom's rule; the
+  way out is to leave both unset); with neither the feature is off. The
+  fixture in `packages/contracts/src/codespace.test.ts` was signed by
+  classroom's own `hs256.ts`, run locally. Nothing about a workspace
+  question in an evaluation (a separate ADR).
 
 ### M6-02 — `packages/seb`
 - **Depends on**: D21. ‖ M6-01.

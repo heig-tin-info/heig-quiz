@@ -27,3 +27,4 @@ export * from "./github.js";
 export * from "./project.js";
 export * from "./group.js";
 export * from "./llm.js";
+export * from "./codespace.js";
