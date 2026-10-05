@@ -1051,4 +1051,45 @@ describe("the zen player's connection", () => {
       await waitFor(() => expect(reconnects()).toHaveLength(1));
     },
   );
+
+  it("keeps what the student typed when a refetch lands before the autosave", async () => {
+    vi.stubGlobal("EventSource", FakeStream);
+    const view = attemptView();
+    // The server's copy is older than the field, and its clock has moved: a
+    // new object, as every real refetch is.
+    const later = attemptView({ serverNow: "2026-09-20T10:01:00.000Z" });
+    let refetched = 0;
+    mockFetch({
+      [`POST /app/api/evaluations/${EVAL}/attempt`]: ok(entry(view)),
+      [`GET /app/api/attempts/${ATTEMPT}`]: () => {
+        refetched += 1;
+        return ok(entry(later));
+      },
+      [`POST /app/api/attempts/${ATTEMPT}/position`]: noContent(),
+      [`POST /app/api/attempts/${ATTEMPT}/events`]: noContent(),
+      // Never acknowledged: the typing stays ahead of the server.
+      [`PUT /app/api/attempts/${ATTEMPT}/answers/i2`]: fail(503),
+    });
+    render(view);
+    const field = (await screen.findByLabelText("Votre réponse")) as HTMLInputElement;
+    await userEvent.type(field, "2");
+    await userEvent.keyboard("{Alt>}{ArrowLeft}{/Alt}");
+    expect(await screen.findByText("Question 1")).toBeInTheDocument();
+
+    const stream = FakeStream.last!;
+    act(() => {
+      stream.onopen?.();
+      stream.onerror?.();
+      stream.onopen?.();
+    });
+    await waitFor(() => expect(refetched).toBeGreaterThan(0));
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+
+    // Still on the question the student moved to, not on the stale bookmark…
+    expect(screen.getByText("Question 1")).toBeInTheDocument();
+    // …and the answer still holds the keystroke the server never stored.
+    await userEvent.keyboard("{Alt>}{ArrowRight}{/Alt}");
+    expect(await screen.findByText("Question 2")).toBeInTheDocument();
+    expect(((await screen.findByLabelText("Votre réponse")) as HTMLInputElement).value).toBe("42");
+  });
 });
