@@ -30,7 +30,10 @@
  *
  * The page's first read of a project says `liveStale: true` — the live
  * state of its repositories was not all read in time —, the next ones not:
- * the page's one early refetch is seen once per project.
+ * the page's one early refetch is seen once per project. `?notices=1`
+ * (M3-09c): the fake stream moves the published project's repositories a
+ * moment after the first read and hints `projects`, so the page's notices
+ * can be seen (`arriveProjectActivity`).
  */
 import {
   PROJECT_DEFAULTS,
@@ -468,6 +471,65 @@ export function addMockProject(summary: ProjectSummary, classroom: MockProject["
   const project: MockProject = { summary, classroom, releasedAt: null, repos: [], checkpoints: [], read: false };
   CREATED.push(project);
   PROJECTS.set(summary.id, project);
+}
+
+/**
+ * `?notices=1` (F-PROJ-21, M3-09c): what the next re-read of "Labo 2 —
+ * pointeurs" finds changed — three pushes, two of them scored, one
+ * acceptance — so the page's notices can be seen. The fake stream calls
+ * it a moment after the page's first read, then hints `projects`; nothing
+ * without `?projects=1`, nor for the student persona.
+ */
+export function arriveProjectActivity(): void {
+  seeded();
+  const p = PROJECTS.get("pj-published");
+  if (!p) return;
+  const at = new Date().toISOString();
+  p.repos
+    .filter((r) => r.enrollmentId !== null && r.provisionStatus === "ok" && r.invitationStatus === "accepted" && !r.deleted && r.runs.length > 0)
+    .slice(0, 3)
+    .forEach((r, i) => {
+      r.lastCommit = { sha: sha(500 + i), at };
+      if (r.live) r.live = { ...r.live, commitCount: r.live.commitCount + 1 };
+      if (i < 2) {
+        const captured = run(r.id, 50 + i, 0, { points: 9, testsPassed: 9, headSha: r.lastCommit.sha });
+        r.runs.unshift(captured);
+        r.currentRunId = captured.id;
+      }
+    });
+  const taken = new Set(p.repos.map((r) => r.enrollmentId));
+  const student = classroomRoster(p.summary.classroomId).find((s) => s.status === "claimed" && !taken.has(s.id));
+  if (!student) return;
+  p.repos.push({
+    id: repoId(SEEDS.find((s) => s.id === "pj-published")!, 900),
+    enrollmentId: student.id,
+    student,
+    fullName: `${ORG}/${p.summary.slug}-${(student.githubLogin ?? `${student.prenom}-${student.nom}`).toLowerCase()}`,
+    provisionStatus: "ok",
+    provisionError: null,
+    invitationStatus: "pending",
+    acceptedAt: at,
+    lastCommit: null,
+    ciStatus: "none",
+    live: { commitCount: 1, checksPassed: null, checksTotal: null, stale: false },
+    deadlineAt: null,
+    deadlineAppliedAt: null,
+    frozenAt: null,
+    locked: false,
+    archived: false,
+    staffLock: null,
+    degraded: false,
+    teacher: null,
+    released: null,
+    protectionSuspended: false,
+    deleted: false,
+    runs: [],
+    currentRunId: null,
+    frozenRunId: null,
+    reviewRunId: null,
+    dispatch: null,
+    resentAt: null,
+  });
 }
 
 /** What a set is used by (ADR-070 §4): the projects naming it, archived or not, following or stopped. */

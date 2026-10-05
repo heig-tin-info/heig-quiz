@@ -124,6 +124,7 @@ import {
 } from "./evaluation";
 import "./live";
 import {
+  arriveStudentProjectActivity,
   BASE_DEADLINE,
   STUDENT_ATTEMPT,
   STUDENT_EVAL,
@@ -135,7 +136,7 @@ import {
 import "./grading";
 import "./preview";
 import "./groups";
-import "./project";
+import { arriveProjectActivity } from "./project";
 import "./drill";
 import "./github";
 import "./projectNew";
@@ -310,6 +311,16 @@ class MockEventSource {
         this.after(1_500, () => {
           arriveNotification();
           this.onmessage?.(new MessageEvent("message", { data: JSON.stringify({ type: "hint", kinds: ["notifications"] }) }));
+        });
+      }
+      // `?notices=1` (F-PROJ-21, M3-09c): the project pages' notices — the
+      // stores move after the pages' first read, then the `projects` hint
+      // re-reads them; the notices are the pages' own comparison.
+      if (params.get("notices") === "1") {
+        this.after(2_500, () => {
+          arriveProjectActivity();
+          arriveStudentProjectActivity();
+          this.onmessage?.(new MessageEvent("message", { data: JSON.stringify({ type: "hint", kinds: ["projects"] }) }));
         });
       }
       return;
