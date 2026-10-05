@@ -10,6 +10,7 @@ import {
   CLASSROOM_ID,
   makeCheckpoint,
   makeDraft,
+  makeGroup,
   makeProject,
   makeRepo,
   makeRunList,
@@ -25,7 +26,8 @@ import { ProjectPage } from "./ProjectPage";
  * accent —, Publish's 409 with its names, archive and delete with their
  * confirmations, the edits as one PATCH each, the reopen asked first, the
  * table's flags, the row's sheet with its runs and its deadline and lock,
- * the checkpoints, the refetch rules, and the French of it all.
+ * the checkpoints, the refetch rules, and the French of it all; a group
+ * project's rows per group, its drift and *Resync* (M3-16b).
  */
 
 const ROOM = `/app/api/classrooms/${CLASSROOM_ID}`;
@@ -87,7 +89,7 @@ describe("the page's states", () => {
   });
 
   it("shows the empty roster with the way to add students", async () => {
-    routes(makeProject({ rows: [], counts: { students: 0, accepted: 0, live: 0, frozen: 0, toVerify: 0, alerts: 0 } }));
+    routes(makeProject({ rows: [], counts: { students: 0, accepted: 0, groups: 0, live: 0, frozen: 0, toVerify: 0, alerts: 0 } }));
     const { navigate } = renderPage();
     expect(await screen.findByText("No student in the roster")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Add students" }));
@@ -396,7 +398,7 @@ describe("the repositories", () => {
       row(8, makeRepo(8, { deadlineAt: AHEAD, invitationStatus: "pending", lastCommit: null, ciStatus: "none" })),
       row(9, null),
       row(10, null, { claimed: false }),
-      { student: { ...makeProject().rows[0]!.student, enrollmentId: null, nom: "Ancien", prenom: "Élève" }, repo: makeRepo(11) },
+      { student: { ...makeProject().rows[0]!.student, enrollmentId: null, nom: "Ancien", prenom: "Élève" }, repo: makeRepo(11), group: null },
     ],
   });
 
@@ -529,10 +531,153 @@ const frozenProject = (over: Partial<ProjectDetail> = {}) =>
     deadlineAt: PAST,
     deadlineAppliedAt: PAST,
     rows: [row(1, frozenRepo(1)), row(2, null)],
-    counts: { students: 2, accepted: 1, live: 1, frozen: 1, toVerify: 0, alerts: 0 },
+    counts: { students: 2, accepted: 1, groups: 0, live: 1, frozen: 1, toVerify: 0, alerts: 0 },
     editable: ["name", "deadlineAt", "protectedFiles"],
     ...over,
   });
+
+describe("a group project's rows, drift and resync (ADR-070 §4, M3-16b)", () => {
+  const SETS = `GET ${ROOM}/group-sets`;
+  const RESYNC = `${BASE}/groups/resync`;
+  const g1 = makeGroup(1);
+  const g2 = makeGroup(2, true);
+  const repoA = makeRepo(1, { fullName: "heig-tin-info/labo-2-groupe-1", accessToRevoke: true });
+  const orphan = makeRepo(3, { fullName: "heig-tin-info/labo-2-groupe-2" });
+  const groupProject = (over: Partial<ProjectDetail> = {}) =>
+    makeProject({
+      groupMode: true,
+      groupSetId: SET,
+      editable: [],
+      rows: [
+        row(0, repoA, {}, g1),
+        row(1, repoA, { githubLogin: null }, g1),
+        row(2, null, {}, null),
+        row(3, orphan, { enrollmentId: null }, g2),
+      ],
+      counts: { students: 3, accepted: 2, groups: 2, live: 2, frozen: 0, toVerify: 0, alerts: 0 },
+      ...over,
+    });
+  const consequence = (n: number, kind: "lose" | "join", over: Record<string, unknown> = {}) => ({
+    // A uuid, as `GroupConsequence` parses one (the fixture's project id is not).
+    projectId: "0190d3c4-0000-7000-8000-0000000000b4",
+    projectName: "Labo 2",
+    groupId: g1.id,
+    groupName: "Groupe 1",
+    repo: "heig-tin-info/labo-2-groupe-1",
+    enrollmentId: `0190d3c4-0000-7000-8000-00000000e00${n}`,
+    nom: "Dupont",
+    prenom: ["Alice", "Benoît", "Chloé"][n]!,
+    kind,
+    frozen: true,
+    acceptClosed: false,
+    ...over,
+  });
+
+  it("draws one row per group — its members by name and login, its repository once — then the students in none", async () => {
+    routes(groupProject(), { [SETS]: ok([]) });
+    renderPage();
+    const table = await screen.findByRole("table");
+    expect(within(table).getByRole("columnheader", { name: /Group/ })).toBeInTheDocument();
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows.map((r) => r.querySelector(".font-semibold")?.textContent)).toEqual(["Groupe 1", "Groupe 2", "Rochat Chloé"]);
+    expect(within(rows[0]!).getByText(/Dupont Alice/)).toBeInTheDocument();
+    expect(within(rows[0]!).getByText("student-0")).toBeInTheDocument();
+    expect(within(rows[0]!).getByText(/Martin Benoît/)).toBeInTheDocument();
+    expect(within(rows[0]!).getByText("access to revoke")).toBeInTheDocument();
+    expect(within(rows[1]!).getByText("No member")).toBeInTheDocument();
+    expect(within(rows[2]!).getByText("no group")).toBeInTheDocument();
+    expect(screen.getByText(/2 groups/)).toBeInTheDocument();
+    // A group's sheet: titled by the group, its members listed, whether it follows the set.
+    await userEvent.click(rows[0]!);
+    const sheet = await screen.findByRole("dialog", { name: "Groupe 1" });
+    expect(within(sheet).getByText("Members")).toBeInTheDocument();
+    expect(within(sheet).getByText("Follows the group set")).toBeInTheDocument();
+  });
+
+  it("says the drift with Resync as a secondary, hidden once released or archived", async () => {
+    routes(groupProject({ groupsDrifted: true, primaryAction: "release" }), { [SETS]: ok([]) });
+    renderPage();
+    expect(await screen.findByText("The group set changed since these groups stopped following it")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resync with the set" })).toBeInTheDocument();
+    // The page's primary stays the server's.
+    expect(screen.getByRole("button", { name: "Release scores" })).toBeInTheDocument();
+  });
+
+  it.each([
+    ["released", { releasedAt: PAST }],
+    ["archived", { archivedAt: PAST }],
+  ])("hides the drift once %s", async (_, over) => {
+    routes(groupProject({ groupsDrifted: true, ...over }), { [SETS]: ok([]) });
+    renderPage();
+    await screen.findByRole("table");
+    expect(screen.queryByText("The group set changed since these groups stopped following it")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Resync with the set" })).toBeNull();
+  });
+
+  it("reads the page again on a 204: nothing to resync", async () => {
+    const { calls } = routes(groupProject({ groupsDrifted: true }), { [SETS]: ok([]), [`POST ${RESYNC}`]: noContent() });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Resync with the set" }));
+    expect(await screen.findByText("The groups already match the set.")).toBeInTheDocument();
+    expect(writes(calls).map((c) => c.body)).toEqual([{}]);
+    await waitFor(() => expect(calls.filter((c) => c.url === BASE && c.method === "GET").length).toBeGreaterThan(1));
+  });
+
+  it("names the frozen repositories, the arrivals without one and the rest, then confirms with the digest", async () => {
+    const digest = "e".repeat(64);
+    const { calls } = routes(groupProject({ groupsDrifted: true }), {
+      [SETS]: ok([]),
+      [`POST ${RESYNC}`]: (call) =>
+        (call.body as { confirm?: string }).confirm === digest
+          ? noContent()
+          : fail(409, {
+              error: "needs_confirmation",
+              message: "x",
+              digest,
+              consequences: [
+                consequence(0, "lose"),
+                consequence(0, "join", { groupId: g2.id, groupName: "Groupe 2", repo: "heig-tin-info/labo-2-groupe-2" }),
+                consequence(2, "join", { groupId: g2.id, groupName: "Groupe 3", repo: null, frozen: false, acceptClosed: true }),
+              ],
+            }),
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Resync with the set" }));
+    const dialog = await screen.findByRole("dialog", { name: "Resync with the group set" });
+    const frozen = within(dialog).getByRole("status");
+    expect(within(frozen).getByText("Frozen repositories touched after their deadline")).toBeInTheDocument();
+    expect(within(frozen).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "heig-tin-info/labo-2-groupe-1",
+      "heig-tin-info/labo-2-groupe-2",
+    ]);
+    expect(within(dialog).getByText("Will have no repository — Accept is closed")).toBeInTheDocument();
+    expect(within(dialog).getByText("Dupont Chloé")).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Resync" }));
+    expect(await screen.findByText("Resync confirmed. GitHub follows in the background.")).toBeInTheDocument();
+    expect(writes(calls).map((c) => c.body)).toEqual([{}, { confirm: digest }]);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it.each([
+    ["released", "The scores are released: the groups can no longer be resynced."],
+    ["project_archived", "This project is archived: neither its source nor its groups can be synced."],
+    ["classroom_archived", "This classroom is archived: its group sets are read-only."],
+    ["no_group_set", "Choose a group set first"],
+  ])("words the resync's refusal %s", async (error, words) => {
+    routes(groupProject({ groupsDrifted: true }), { [SETS]: ok([]), [`POST ${RESYNC}`]: fail(409, { error, message: "x" }) });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Resync with the set" }));
+    expect(await screen.findByText(words)).toBeInTheDocument();
+  });
+
+  it("holds Release while a confirmed resync is applied, and says why", async () => {
+    routes(groupProject({ primaryAction: "release", groupSyncPending: true }), { [SETS]: ok([]) });
+    renderPage();
+    expect(await screen.findByRole("button", { name: "Release scores" })).toBeDisabled();
+    expect(screen.getByTestId("project-release-waits")).toHaveTextContent("The release waits for the resync of the groups to be applied on GitHub.");
+    expect(screen.getByText("A resync is being applied on GitHub.")).toBeInTheDocument();
+  });
+});
 
 describe("the release (F-PROJ-14, M3-12c)", () => {
   it("is the header's one button once the server names it; the confirmation says what a release does; the counts are toasted", async () => {

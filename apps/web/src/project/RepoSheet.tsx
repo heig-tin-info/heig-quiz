@@ -20,7 +20,7 @@ import { useToast } from "../notify";
 import { projectKey, projectRunsKey } from "../queryKeys";
 import { Badge, Button, Fact, FieldError, fieldErrorProps, isoDateTime, RelativeTime, Sheet } from "../ui";
 import { CiBadge, RepoLink, SyncBadge } from "./parts";
-import { actionable, refusalMessage, repoFlags, shortSha } from "./projectPage";
+import { actionable, refusalMessage, repoEntryOf, repoFlags, shortSha } from "./projectPage";
 import { RunHistory } from "./RunHistory";
 import { ScoreSection } from "./TeacherScoreForm";
 
@@ -44,7 +44,9 @@ function Section({ title, children }: { title: ReactNode; children: ReactNode })
  * re-enable of its protected files (F-PROJ-08), each written at once, and
  * the history of its runs. The row is read from the page's own data, so a
  * write here is seen on the table behind the sheet. The sheet's one primary
- * action is the score's Save.
+ * action is the score's Save. A group's repository (M3-16b) is titled by
+ * its group and lists its current members, by name and GitHub login, and
+ * whether the group still follows its set.
  */
 export function RepoSheet({
   project,
@@ -58,8 +60,8 @@ export function RepoSheet({
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
-  const row = project.rows.find((r) => r.repo?.id === repoId);
-  const repo = row?.repo ?? null;
+  const entry = repoEntryOf(project, repoId);
+  const repo = entry?.repo ?? null;
 
   /** What a route answered of the repository, laid over its row; then the page is read again. */
   const settle = (patch: (repo: ProjectRepoView) => ProjectRepoView) => {
@@ -118,7 +120,7 @@ export function RepoSheet({
     onError: failed,
   });
 
-  if (!row || !repo) return null;
+  if (!entry || !repo) return null;
   const can = actionable(repo, project);
   const busy = deadline.isPending || lock.isPending;
   const deadlineRefused = refusedWith(deadline.error, "deadline_past") ? t("project.refusal.deadlinePast") : undefined;
@@ -126,7 +128,7 @@ export function RepoSheet({
 
   return (
     <Sheet
-      title={`${row.student.nom} ${row.student.prenom}`}
+      title={entry.label}
       subtitle={repo.fullName ? <RepoLink fullName={repo.fullName} full icon /> : undefined}
       onClose={onClose}
       width="lg"
@@ -153,6 +155,27 @@ export function RepoSheet({
               </Button>
               <p className="text-[13px] text-fg-muted">{t("project.protection.reenable.desc")}</p>
             </div>
+          ) : null}
+          {entry.kind === "group" ? (
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
+              <Fact label={t("project.sheet.members")}>
+                {entry.members.length === 0 ? (
+                  <span className="text-fg-faint">{t("project.repo.noMember")}</span>
+                ) : (
+                  <ul className="space-y-0.5">
+                    {entry.members.map((m) => (
+                      <li key={m.enrollmentId ?? m.email}>
+                        {m.nom} {m.prenom}
+                        {m.githubLogin ? <span className="ml-2 font-mono text-xs text-fg-faint">{m.githubLogin}</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Fact>
+              <Fact label={t("project.groupSet")}>
+                {t(entry.group.stopped ? "project.sheet.stopped" : "project.sheet.follows")}
+              </Fact>
+            </dl>
           ) : null}
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
             <Fact label={t("project.sheet.invitation")}>

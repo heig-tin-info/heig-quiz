@@ -59,12 +59,15 @@ import { RepoSheet } from "./RepoSheet";
  * The staff's project page (F-PROJ-13, M3-12), `/projects/:id`: the header
  * — its name (renamed in place), its state, what is happening and the ONE
  * primary action the server names —, the settings still open to change
- * (F-PROJ-03), one row per student of the roster with their repository, and
+ * (F-PROJ-03), one row per student of the roster with their repository (per
+ * group in a group project, M3-16b, with its drift and *Resync*), and
  * the review checkpoints. A row opens its repository's sheet: the history
  * of its runs, its scores and the teacher's, its own deadline and its lock.
  *
  * The primary action is `primaryAction`, decided by the server and never
- * derived here: Publish and Release are buttons — Release confirmed first,
+ * derived here: Publish and Release are buttons — Release disabled, with a
+ * line saying why, while a confirmed resync of the groups is owed
+ * (`groupSyncPending`, M3-16b), and confirmed first,
  * since it makes the final scores the students' and the gradebook's
  * (F-PROJ-14), and worded as a release again once a score moved after the
  * release (the snapshot is rewritten, nobody is notified again); Sync when
@@ -261,11 +264,14 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   ];
 
   const status = projectStatus(project);
+  /** Release is the server's primary, held while a confirmed resync is not applied (`409 group_sync_pending` otherwise). */
+  const releaseWaits = project.primaryAction === "release" && project.groupSyncPending;
   /** The set's page, coming back here (`?fromProject=<id>`): where the students in no group are placed. */
   const setPage = groupSetPageOf(project);
   const { sync } = project;
   const counts = [
     t("project.counts.students", { n: project.counts.students }),
+    ...(project.groupMode ? [t("project.counts.groups", { n: project.counts.groups })] : []),
     t("project.counts.accepted", { n: project.counts.accepted }),
     t("project.counts.frozen", { n: project.counts.frozen, live: project.counts.live }),
     ...(project.counts.toVerify > 0 ? [t("project.counts.toVerify", { n: project.counts.toVerify })] : []),
@@ -313,6 +319,12 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
           <>
             <p data-testid="project-status">{t(status.key, { date: isoDateTime(status.date) })}</p>
             <p className="mt-0.5 tabular-nums text-fg-faint">{counts.join(" · ")}</p>
+            {/* ADR-070's R2 (M3-16b): the release waits for a confirmed resync of the groups. */}
+            {releaseWaits ? (
+              <p className="mt-0.5 text-fg-muted" data-testid="project-release-waits">
+                {t("project.release.waitsResync")}
+              </p>
+            ) : null}
             {sync.syncedAt && sync.last ? (
               <p className="mt-0.5 tabular-nums text-fg-faint" data-testid="project-sync-last">
                 {t("project.sync.last", { date: isoDateTime(sync.syncedAt), ...sync.last })}
@@ -328,7 +340,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
                 <Rocket /> {t("question.publish")}
               </Button>
             ) : project.primaryAction === "release" ? (
-              <Button onClick={() => void onRelease()} loading={release.isPending}>
+              <Button onClick={() => void onRelease()} loading={release.isPending} disabled={releaseWaits}>
                 <Send /> {t(again ? "project.release.again" : "project.release")}
               </Button>
             ) : project.primaryAction === "sync" ? (

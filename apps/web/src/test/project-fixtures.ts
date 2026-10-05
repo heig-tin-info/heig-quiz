@@ -8,6 +8,7 @@ import type {
   GradeRunList,
   GradeRunView,
   ProjectDetail,
+  ProjectDetailGroup,
   ProjectDetailRow,
   ProjectRepoView,
   ProjectStudent,
@@ -79,9 +80,22 @@ export function makeRepo(n: number, over: Partial<ProjectRepoView> = {}): Projec
   };
 }
 
-export const row = (n: number, repo: ProjectRepoView | null, student: Partial<ProjectStudent> = {}): ProjectDetailRow => ({
+export const row = (
+  n: number,
+  repo: ProjectRepoView | null,
+  student: Partial<ProjectStudent> = {},
+  group: ProjectDetailGroup | null = null,
+): ProjectDetailRow => ({
   student: makeStudent(n, student),
   repo,
+  group,
+});
+
+/** A copy group of a group project's page (M3-16b), following its set unless `stopped`. */
+export const makeGroup = (n: number, stopped = false): ProjectDetailGroup => ({
+  id: `0190d3c4-0000-7000-8000-00000000b${String(n).padStart(3, "0")}`,
+  name: `Groupe ${n}`,
+  stopped,
 });
 
 export function makeProject(over: Partial<ProjectDetail> = {}): ProjectDetail {
@@ -115,9 +129,10 @@ export function makeProject(over: Partial<ProjectDetail> = {}): ProjectDetail {
     editable: ["name", "deadlineAt", "deadlineStrategy", "protectedFiles"],
     releasedAt: null,
     groupsDrifted: false,
+    groupSyncPending: false,
     primaryAction: "none",
     sync: { ahead: null, inProgress: false, syncedAt: null, last: null },
-    counts: { students: rows.length, accepted, live: accepted, frozen: 0, toVerify: 0, alerts: 0 },
+    counts: { students: rows.length, accepted, groups: 0, live: accepted, frozen: 0, toVerify: 0, alerts: 0 },
     liveStale: false,
     rows,
     ...over,

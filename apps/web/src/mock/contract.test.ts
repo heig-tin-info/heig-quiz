@@ -109,6 +109,7 @@ import {
   StudentHome,
   StudentProject,
   GradeGroup,
+  GroupConsequences,
   GroupErrorCode,
   GroupSetDetail,
   StudentGroupSets,
@@ -597,10 +598,10 @@ describe("the mock answers what the contracts describe", () => {
 describe("the mock's projects (?projects=1)", () => {
   it("serves one project per state, on PRG1-2026 and in the Activities", async () => {
     const own = (await get(`/app/api/classrooms/${classroomId}/projects`)) as { state: string }[];
-    // `?groups=1` adds a draft group project (M3-16a).
-    expect(own.map((p) => p.state).sort()).toEqual(["draft", "draft", "locked", "published"]);
+    // `?groups=1` adds a draft group project (M3-16a), a published and a stopped one (M3-16b).
+    expect(own.map((p) => p.state).sort()).toEqual(["draft", "draft", "locked", "locked", "published", "published"]);
     const all = (await get("/app/api/activities")) as { kind: string }[];
-    expect(all.filter((a) => a.kind === "project")).toHaveLength(4);
+    expect(all.filter((a) => a.kind === "project")).toHaveLength(6);
   });
 });
 
@@ -793,7 +794,49 @@ describe("the mock's group sets (M3-16a, ?groups=1)", () => {
     const pairs = (await sets(classroomId)).find((s) => s.usedBy.length > 0)!;
     const refused = await send(`/app/api/group-sets/${pairs.id}`, "DELETE");
     expect(refused.status).toBe(409);
-    expect(refused.body).toMatchObject({ error: "set_in_use", projects: [{ id: pairs.usedBy[0]!.id, name: pairs.usedBy[0]!.name }] });
+    expect(refused.body).toMatchObject({ error: "set_in_use", projects: pairs.usedBy.map(({ id, name }) => ({ id, name })) });
+  });
+
+  // M3-16b: the group projects on the pairs — one stopped and drifted, one following with repositories.
+  const STOPPED = "/app/api/projects/0190d3c4-0000-7000-8000-0000000000b6";
+  /** Parsed strictly, uuids included: the page parses the body before it opens its dialog. */
+  const strictly = (body: unknown) => GroupConsequences.safeParse(body).error?.issues ?? [];
+
+  it("drifts a stopped group project: its resync names the frozen repositories and an arrival without one, then is owed (M3-16b)", async () => {
+    const before = (await get(STOPPED)) as ProjectDetail;
+    expect([before.groupsDrifted, before.groupSyncPending, before.primaryAction]).toEqual([true, false, "release"]);
+    expect(before.counts.groups).toBeGreaterThan(0);
+    expect(before.rows.every((r) => r.group !== null && r.group.stopped)).toBe(true);
+    const asked = await send(`${STOPPED}/groups/resync`, "POST", {});
+    expect([asked.status, refusal(asked.body)]).toEqual([409, "needs_confirmation"]);
+    expect(strictly(asked.body)).toEqual([]);
+    const { consequences, digest } = asked.body as GroupConsequences;
+    expect(new Set(consequences.filter((c) => c.frozen).map((c) => c.repo)).size).toBe(3);
+    expect(consequences.filter((c) => c.acceptClosed).map((c) => [c.kind, c.repo])).toEqual([["join", null]]);
+    expect((await send(`${STOPPED}/groups/resync`, "POST", { confirm: digest })).status).toBe(204);
+    const after = (await get(STOPPED)) as ProjectDetail;
+    expect([after.groupsDrifted, after.groupSyncPending]).toEqual([false, true]);
+    const release = await send(`${STOPPED}/release`, "POST");
+    expect([release.status, (release.body as { error: string }).error]).toEqual([409, "group_sync_pending"]);
+  });
+
+  it("asks to confirm a move reaching a following project's repository, and applies it with the digest (M3-16b)", async () => {
+    const pairs = (await sets(classroomId)).find((s) => s.usedBy.some((u) => u.follows && u.name.startsWith("Mini")))!;
+    const base = `/app/api/group-sets/${pairs.id}`;
+    const detail = (await get(base)) as GroupSetDetail;
+    const [first, second] = detail.groups;
+    const line = first!.members[0]!.enrollmentId;
+    const asked = await send(`${base}/members/${line}`, "PUT", { groupId: second!.id });
+    expect([asked.status, refusal(asked.body)]).toEqual([409, "needs_confirmation"]);
+    expect(strictly(asked.body)).toEqual([]);
+    const { consequences, digest } = asked.body as GroupConsequences;
+    expect(consequences.map((c) => [c.kind, c.groupName, c.repo !== null])).toEqual([
+      ["lose", first!.name, true],
+      ["join", second!.name, true],
+    ]);
+    const moved = await send(`${base}/members/${line}`, "PUT", { groupId: second!.id, confirm: digest });
+    expect(moved.status).toBe(200);
+    expect((moved.body as GroupSetDetail).groups[1]!.members.map((s) => s.enrollmentId)).toContain(line);
   });
 
   it("keeps an archived classroom's sets read-only (classroom_archived)", async () => {

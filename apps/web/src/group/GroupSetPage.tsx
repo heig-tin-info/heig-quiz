@@ -5,6 +5,7 @@ import { useState } from "react";
 import {
   GroupMaxSize,
   type ClassroomDetail,
+  type GroupConsequences,
   type GroupRandomForm,
   type GroupSetDetail,
 } from "@quiz/contracts";
@@ -39,10 +40,12 @@ import {
   type MenuItem,
 } from "../ui";
 import { setWrite, useGroupSet, useGroupSetWrites } from "./api";
+import { ConsequencesDialog } from "./ConsequencesDialog";
 import { GroupBoard } from "./GroupBoard";
 import {
   gone,
   groupRefusalMessage,
+  needsConfirmation,
   placeOf,
   projectsRefusal,
   studentName,
@@ -64,10 +67,18 @@ import { RandomFormDialog } from "./RandomFormDialog";
  * hand. "New group" is the secondary; the maximum size, the duplicate and
  * the deletion live in the overflow menu; the name is renamed in place.
  *
- * A move with no GitHub consequence — every move before M3-15b — takes
- * effect at once, and the toast that says so offers Undo for its few
- * seconds (ADR-070 §6): the reverse move, latest move only. Writes go one
- * at a time per set, in order (`useGroupSetWrites`). An archived
+ * A move with no GitHub consequence takes effect at once, and the toast
+ * that says so offers Undo for its few seconds (ADR-070 §6): the reverse
+ * move, latest move only. A move that reaches a group repository answers
+ * `409 needs_confirmation` (M3-16b): the move stays drawn, the queue holds
+ * every later write, and a dialog names the consequences the server listed
+ * — Confirm sends the move again with their digest (a stale digest names
+ * them again, "changed meanwhile"), Cancel puts the set back. A confirmed
+ * move's toast offers no Undo: undoing it is another move to confirm. An
+ * Undo meeting the 409 opens the same dialog. Deleting a group a following
+ * project holds with a repository stays refused (`409 has_repo`), its
+ * projects named above the board: its members are moved out one by one.
+ * Writes go one at a time per set, in order (`useGroupSetWrites`). An archived
  * classroom's set is read-only: every control is gone, an alert says why.
  *
  * Opening the set to its students (F-PROJ-22, M3-17) is in the overflow
@@ -97,7 +108,10 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
     queryKey: classroomKey(classroomId),
     queryFn: () => api(`/app/api/classrooms/${classroomId}`),
   });
-  const write = useGroupSetWrites(id);
+  const { write, confirm: confirmWrite, cancel: cancelWrite } = useGroupSetWrites(id);
+  /** A move waiting for the confirmation of its GitHub consequences (ADR-070 §6), the queue held meanwhile. */
+  const [asked, setAsked] = useState<(Move & GroupConsequences & { changedSince: boolean }) | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const failed = (error: unknown) => {
     const refusal = projectsRefusal(error);
     if (refusal) setBlocked(refusal);
@@ -108,24 +122,63 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
   const place = (enrollmentId: string, groupId: string | null) =>
     write(setWrite.place(enrollmentId, groupId), (d) => withMove(d, enrollmentId, groupId));
 
-  /** The reverse of a move (ADR-070 §6): offers no Undo of its own; a 404 is a group gone since. */
-  const undoMove = (enrollmentId: string, groupId: string | null) =>
-    place(enrollmentId, groupId).catch((error: unknown) => (gone(error) ? toast(t("groups.undoFailed"), "error") : failed(error)));
+  /** A move's toast: with Undo (the reverse move, the latest only) when it took effect at once, without once confirmed. */
+  const moved = (m: Move, answer: GroupSetDetail, undo: boolean) => {
+    const group = answer.groups.find((g) => g.id === m.groupId)?.name;
+    const key = group ? (undo ? "groups.moved" : "groups.movedConfirmed") : undo ? "groups.movedOut" : "groups.movedOutConfirmed";
+    toast(t(key, { name: m.name, group: group ?? "" }), "success", {
+      key: `group-undo:${id}`,
+      ...(undo ? { action: { label: t("groups.undo"), run: () => void undoMove(m) } } : {}),
+    });
+  };
 
-  /** A move, said in a toast that offers to undo it — the latest move only. */
+  /** A refused move: its consequences asked for (the move stays drawn), else the refusal said. */
+  const refused = (m: Move, changedSince: boolean) => (error: unknown) => {
+    const consequences = needsConfirmation(error);
+    if (consequences) setAsked({ ...m, ...consequences, changedSince });
+    else failed(error);
+  };
+
+  /** The reverse of a move (ADR-070 §6): offers no Undo of its own; a 404 is a group gone since. */
+  const undoMove = (m: Move) => {
+    const back = { ...m, groupId: m.previous, previous: m.groupId };
+    return place(back.enrollmentId, back.groupId).then(
+      () => undefined,
+      (error: unknown) => (gone(error) ? toast(t("groups.undoFailed"), "error") : refused(back, false)(error)),
+    );
+  };
+
+  /** A move, said in a toast that offers to undo it — or, reaching GitHub, confirmed first. */
   const move = (enrollmentId: string, groupId: string | null) => {
     const before = qc.getQueryData<GroupSetDetail>(groupSetKey(id));
     const student = before ? studentOf(before, enrollmentId) : undefined;
     const previous = before ? placeOf(before, enrollmentId) : undefined;
     if (!student || previous === undefined) return;
-    place(enrollmentId, groupId).then((answer) => {
-      const name = studentName(student);
-      const group = answer.groups.find((g) => g.id === groupId)?.name;
-      toast(group ? t("groups.moved", { name, group }) : t("groups.movedOut", { name }), "success", {
-        key: `group-undo:${id}`,
-        action: { label: t("groups.undo"), run: () => void undoMove(enrollmentId, previous) },
-      });
-    }, failed);
+    const m: Move = { enrollmentId, groupId, previous, name: studentName(student) };
+    place(enrollmentId, groupId).then((answer) => moved(m, answer, true), refused(m, false));
+  };
+
+  /** The move sent again with the digest of what the dialog named; a stale digest names them again. */
+  const onConfirm = () => {
+    if (!asked) return;
+    const m: Move = { enrollmentId: asked.enrollmentId, groupId: asked.groupId, previous: asked.previous, name: asked.name };
+    setConfirming(true);
+    confirmWrite(setWrite.place(m.enrollmentId, m.groupId, asked.digest))
+      .then(
+        (answer) => {
+          setAsked(null);
+          moved(m, answer, false);
+        },
+        (error: unknown) => {
+          setAsked(null);
+          refused(m, true)(error);
+        },
+      )
+      .finally(() => setConfirming(false));
+  };
+  const onCancelConfirm = () => {
+    cancelWrite();
+    setAsked(null);
   };
 
   const addGroup = useMutation({ mutationFn: () => write(setWrite.addGroup()), onError: failed });
@@ -342,6 +395,16 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
         />
       )}
 
+      {asked ? (
+        <ConsequencesDialog
+          kind="move"
+          consequences={asked.consequences}
+          changedSince={asked.changedSince}
+          confirming={confirming}
+          onConfirm={onConfirm}
+          onCancel={onCancelConfirm}
+        />
+      ) : null}
       {randomOpen ? (
         <RandomFormDialog
           detail={detail}
@@ -366,6 +429,14 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
       ) : null}
     </div>
   );
+}
+
+/** A student's move on the board: where to, from where (for Undo), and their name for the toast. */
+interface Move {
+  enrollmentId: string;
+  groupId: string | null;
+  previous: string | null;
+  name: string;
 }
 
 /**

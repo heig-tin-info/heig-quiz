@@ -3119,6 +3119,81 @@ serves now (16a), and what waits for the group repositories (16b).
   back, through the set's write queue; the *access to revoke* flag on a
   repository's row; `409 has_repo` (M3-16a's alert) giving way to the
   confirmation.
+- **Decided for it** (orchestrator, 2026-10-05, B1–B11): the rows stay
+  per student on the wire, each with its copy group, and the client groups
+  them; Release stays the server's primary, disabled while a confirmed
+  resync is owed; `has_repo` stays for deleting a group (no bulk "empty");
+  *access to revoke* amber, never red, not an alert; no Undo on a confirmed
+  move, an Undo meeting the 409 confirmed the same; members by name and
+  login, current members only; *Resync* never the primary, hidden once
+  released or archived; the dialog a modal, never a second banner over the
+  board.
+- **As delivered** (branch `merge/M3-16b-groups-web`). No migration.
+  - **API** (`Q:modules/project/detail.ts`): `ProjectDetailRow.group`
+    (`ProjectDetailGroup`: the copy group's id, name, `stopped`) — null for
+    a student in no group of the copy, or reading their own individual
+    repository (heig-classroom's lot 1); a repository no roster student
+    reads carries its group (R1's group kept with no member);
+    `ProjectDetail.groupSyncPending` (`group_resync` not empty, R2) and
+    `counts.groups` (the copy's groups, 0 for an individual project).
+    Tests: `detail.groups.db.test.ts` (a student in no group, R1's orphan
+    row after a confirmed resync, `groupSyncPending` before and after the
+    job), `detail.db.test.ts` (none on an individual project).
+  - **The set's page**: `group/ConsequencesDialog.tsx` (a modal that
+    scrolls: by project, then repository — "being created" when `repo` is
+    null —, then who loses and gets access; "changed meanwhile" on a stale
+    digest; Confirm its one primary). The write queue (`useGroupSetWrites`,
+    now `{ write, confirm, cancel }`) is HELD by `409 needs_confirmation`:
+    the optimistic move stays drawn, every queued or new write is rejected
+    unsent (`WriteHeld`, worded `groups.confirm.held`), `confirm(request)`
+    resends the move with `setWrite.place(…, digest)`, `cancel()` puts the
+    last answer back. A confirmed move's toast has no Undo; an Undo meeting
+    the 409 opens the same dialog for the reverse move. `has_repo` is said
+    for a group's deletion only. Pure rules (`groupRules.ts`):
+    `needsConfirmation` (strict `GroupConsequences`), `consequencesByProject`,
+    `resyncSections`.
+  - **The project page**: one row per group (`repoEntries` in
+    `projectPage.ts`: by name, numeric, then the students in no group —
+    "no group" —; the column "Group", sorted by its name; the repository and
+    its scores once; members by name and GitHub login, "No member" for R1's
+    orphan); `RepoSheet` by repository id, titled by the group, its members
+    and whether it follows the set; *access to revoke* an amber flag
+    (`repoFlags`, outside `counts.alerts`); "N groups" in the counts.
+    `ProjectGroupSet`: the drift (`offersResync`: drifted, neither released
+    nor archived) as a warning alert with *Resync with the set* a secondary;
+    `POST …/groups/resync` asked bare, then confirmed with the digest (the
+    dialog's `kind="resync"`: distinct frozen repositories, "Will have no
+    repository — Accept is closed", the rest by repository); a 204 refetches
+    and toasts; `released`, `project_archived`, `classroom_archived`,
+    `no_group_set` worded; "A resync is being applied on GitHub" while
+    `groupSyncPending`, and Release disabled with its line under the header.
+    `GroupSetUse.follows` worded "follow the set until the deadline".
+  - **Mock** (`?groups=1&projects=1`): "Mini-projet — en binômes"
+    (published, following the pairs, a repository per group but every
+    third, one with an access to revoke, one invitation pending) and "Labo 0
+    — en binômes" (locked, not released, a stopped copy the set drifted
+    from: its resync names three frozen repositories and an arrival without
+    one; confirmed, the copy takes the set, owed two reads, the release
+    refused `group_sync_pending` meanwhile); a move of the pairs reaching
+    the following project's repositories answers `409 needs_confirmation`
+    (`mockDigest`). Checked by `contract.test.ts`. Scenes
+    `group-set-confirm`, `project-group-rows`, `project-group-drift`,
+    `project-group-resync-confirm`.
+  - **Tests (web)**: `groupRules.test.ts`, `api.test.tsx` (the hold: a 409
+    then the digest, queued writes unsent, a stale digest held again,
+    Cancel), `GroupSetPage.test.tsx` (menu, click then click and Undo each
+    meeting the 409, confirmed, cancelled, stale; `has_repo` on a group's
+    deletion), `projectPage.test.ts`, `ProjectPage.test.tsx` (group rows with
+    no-group and orphan rows, the badge, the sheet, the drift hidden once
+    released or archived, the 204, the dialog and its digest, each refusal,
+    Release held).
+  - **Conservative choices** (noted for review): the board is not redrawn
+    read-only under the dialog — the modal takes the input and the queue
+    refuses writes —; the component test drives the move by the menu and by
+    click then click, not by a pointer drag (the drag reports through the
+    same `onMove`); a group's stop on its repository's own deadline is said
+    in its sheet, not as a badge on the row; the drift alert is hidden, not
+    only its button, once released or archived.
 
 ### M3-17 — Groups formed by the students (ADR-070 lot 2)
 - **Depends on**: M3-15a, M3-16, M3-09.

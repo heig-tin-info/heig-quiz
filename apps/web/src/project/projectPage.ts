@@ -12,9 +12,11 @@ import {
   type ProjectAcceptErrorCode,
   type ProjectCheckpointErrorCode,
   type ProjectDetail,
+  type ProjectDetailGroup,
   type ProjectErrorCode,
   type ProjectRepoReview,
   type ProjectRepoView,
+  type ProjectStudent,
   type ProjectSummary,
   type ReviewCheckpoint,
 } from "@quiz/contracts";
@@ -121,7 +123,8 @@ export interface RepoFlag {
 
 /**
  * The flags of a repository's row (M3-08a's `flags`, plus the degraded
- * lock of M3-05a), in the order they are drawn: what is wrong first.
+ * lock of M3-05a and *access to revoke* of a group repository, M3-16b), in
+ * the order they are drawn: what is wrong first.
  */
 export function repoFlags(repo: ProjectRepoView): RepoFlag[] {
   const flags: RepoFlag[] = [];
@@ -130,6 +133,8 @@ export function repoFlags(repo: ProjectRepoView): RepoFlag[] {
   if (repo.flags.protectionSuspended) flags.push({ key: "project.flag.conflict", tone: "amber" });
   if (repo.flags.toVerify) flags.push({ key: "project.flag.toVerify", tone: "amber" });
   if (repo.flags.changedAfterRelease) flags.push({ key: "project.flag.changed", tone: "amber" });
+  // ADR-070 §4 (M3-16b): an access GitHub has not revoked yet — the job retries it; never red.
+  if (repo.accessToRevoke) flags.push({ key: "project.flag.accessToRevoke", tone: "amber" });
   if (repo.flags.malformed !== null) flags.push({ key: "project.flag.malformed", tone: "zinc" });
   if (repo.degraded) flags.push({ key: repo.archived ? "project.flag.degraded" : "project.flag.noRuleset", tone: "zinc" });
   return flags;
@@ -259,9 +264,9 @@ export function releaseRefusal(error: unknown, project: ProjectDetail, t: TFunct
       return t("project.release.refusal.notFrozen", { frozen: body.data.frozen, live: body.data.live });
     }
     const { repos } = body.data;
-    const names = project.rows
-      .filter((r) => r.repo !== null && repos.includes(r.repo.id))
-      .map((r) => `${r.student.nom} ${r.student.prenom}`);
+    const names = repoEntries(project)
+      .filter((e) => e.repo !== null && repos.includes(e.repo.id))
+      .map((e) => e.label);
     return t("project.release.refusal.toVerify", { names: names.join(", ") || t("project.release.refusal.someRepos") });
   }
   return refusalMessage(error, t);
@@ -343,6 +348,9 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   sync_failed: "project.refusal.syncFailed",
   // ADR-070's R2 (M3-15b-2b): a release while a confirmed resync of the groups is applied.
   group_sync_pending: "project.refusal.groupSyncPending",
+  // *Resync with the set* (M3-15b-2b, M3-16b): `needs_confirmation` is its dialog's.
+  released: "project.refusal.released",
+  classroom_archived: "project.refusal.classroomArchived",
 };
 
 /** The dictionary key wording a refusal the page knows, or null (the server's message then). */
@@ -360,3 +368,59 @@ export const refusalMessage = (error: unknown, t: TFunction): string => wordedRe
  */
 export const groupSetPageOf = (p: Pick<ProjectSummary, "id" | "classroomId" | "groupSetId">): RouteOf<"groupSet"> | null =>
   p.groupSetId === null ? null : { view: "groupSet", classroomId: p.classroomId, id: p.groupSetId, fromProject: p.id };
+
+// ---------------------------------------------------------------- one row per group (ADR-070 §4, M3-16b)
+
+/**
+ * One row of the repositories' table: a group of a group project — its
+ * repository, read by every member, and its current members — or a student
+ * (an individual project's, a student in no group of the copy, a
+ * repository whose student left the roster). `label` names the row: the
+ * group's name, or the student's.
+ */
+export type RepoEntry =
+  | { kind: "group"; key: string; label: string; group: ProjectDetailGroup; members: ProjectStudent[]; repo: ProjectRepoView | null }
+  | { kind: "student"; key: string; label: string; student: ProjectStudent; repo: ProjectRepoView | null };
+
+const studentLabel = (s: Pick<ProjectStudent, "nom" | "prenom">) => `${s.nom} ${s.prenom}`;
+
+/**
+ * The page's rows as the table draws them. Rows stay per student on the
+ * wire (`ProjectDetailRow.group`); a group project's are gathered here into
+ * one per group, its repository read once (B10: its scores too), its
+ * members the roster students in it — a repository no roster student reads
+ * any more (R1's group kept, or its members gone) is its group's row with no
+ * member. The groups come by name, then the students in no group in the
+ * server's order. An individual project keeps one row per student.
+ */
+export function repoEntries(p: Pick<ProjectDetail, "groupMode" | "rows">): RepoEntry[] {
+  const students: RepoEntry[] = [];
+  const groups = new Map<string, Extract<RepoEntry, { kind: "group" }>>();
+  for (const { student, repo, group } of p.rows) {
+    if (!p.groupMode || group === null) {
+      students.push({ kind: "student", key: repo?.id ?? student.enrollmentId ?? student.email, label: studentLabel(student), student, repo });
+      continue;
+    }
+    let entry = groups.get(group.id);
+    if (!entry) {
+      entry = { kind: "group", key: group.id, label: group.name, group, members: [], repo: null };
+      groups.set(group.id, entry);
+    }
+    if (student.enrollmentId !== null) entry.members.push(student);
+    entry.repo ??= repo;
+  }
+  const byName = [...groups.values()].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+  return [...byName, ...students];
+}
+
+/** The row of the repository `repoId`, for its sheet. */
+export const repoEntryOf = (p: Pick<ProjectDetail, "groupMode" | "rows">, repoId: string): RepoEntry | undefined =>
+  repoEntries(p).find((e) => e.repo?.id === repoId);
+
+/**
+ * *Resync with the set* is offered (ADR-070 §4, M3-15b-2b): the copy
+ * drifted from its set, and the project is neither released nor archived
+ * (the resync would be refused). Hidden otherwise, the drift with it.
+ */
+export const offersResync = (p: Pick<ProjectDetail, "groupsDrifted" | "releasedAt" | "archivedAt">): boolean =>
+  p.groupsDrifted && p.releasedAt === null && p.archivedAt === null;

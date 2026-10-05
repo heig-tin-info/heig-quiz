@@ -11,12 +11,13 @@ import { groupSetKey } from "../queryKeys";
 import { GROUP_1, GROUP_2, makeSet, SET_ID, student } from "../test/group-fixtures";
 import { makeQueryClient } from "../test/render";
 import { setWrite, useGroupSetWrites } from "./api";
-import { placeOf, withMove } from "./groupRules";
+import { placeOf, withMove, WriteHeld } from "./groupRules";
 
 /*
  * The write queue of a set (M3-16a, W7): one request at a time, the cache
  * from the latest answer only, an error that ends the queue putting back
- * the last answer.
+ * the last answer; held by a `409 needs_confirmation` (M3-16b) until the
+ * page confirms or cancels.
  */
 
 /** A `fetch` whose answers the test hands out one by one. */
@@ -49,7 +50,8 @@ function setup() {
     </QueryClientProvider>
   );
   const { result } = renderHook(() => useGroupSetWrites(SET_ID), { wrapper });
-  return { qc, write: result.current, cached: () => qc.getQueryData<GroupSetDetail>(groupSetKey(SET_ID))! };
+  const { write, confirm, cancel } = result.current;
+  return { qc, write, confirm, cancel, cached: () => qc.getQueryData<GroupSetDetail>(groupSetKey(SET_ID))! };
 }
 
 const chloe = student(2).enrollmentId;
@@ -109,5 +111,81 @@ describe("a set's write queue", () => {
     });
     expect(placeOf(cached(), emma)).toBeNull();
     expect(placeOf(cached(), chloe)).toBe(GROUP_1);
+  });
+
+  describe("held by a confirmation (ADR-070 §6, M3-16b)", () => {
+    const DIGEST = "a".repeat(64);
+    const asked = (digest = DIGEST) => ({
+      error: "needs_confirmation",
+      message: "x",
+      consequences: [],
+      digest,
+    });
+    const bodyOf = (n: number) => JSON.parse(String(vi.mocked(fetch).mock.calls[n]![1]!.body)) as unknown;
+
+    it("keeps the move drawn on a 409, rejects the writes queued behind it unsent, and confirms with the digest", async () => {
+      const pending = deferredFetch();
+      const { write, confirm, cached } = setup();
+      let first!: Promise<GroupSetDetail>;
+      let second!: Promise<GroupSetDetail>;
+      act(() => {
+        first = write(...move(chloe, GROUP_1));
+        second = write(...move(emma, GROUP_2));
+      });
+      await waitFor(() => expect(pending).toHaveLength(1));
+      await act(async () => {
+        pending[0]!.resolve(409, asked());
+        await expect(first).rejects.toBeDefined();
+        await expect(second).rejects.toBeInstanceOf(WriteHeld);
+      });
+      // Nothing more was sent; the held move is still drawn; a new write is refused at once.
+      expect(pending).toHaveLength(1);
+      expect(placeOf(cached(), chloe)).toBe(GROUP_1);
+      await expect(write(...move(emma, GROUP_1))).rejects.toBeInstanceOf(WriteHeld);
+
+      let confirmed!: Promise<GroupSetDetail>;
+      act(() => {
+        confirmed = confirm(setWrite.place(chloe, GROUP_1, DIGEST));
+      });
+      await waitFor(() => expect(pending).toHaveLength(2));
+      expect(bodyOf(1)).toEqual({ groupId: GROUP_1, confirm: DIGEST });
+      const answer = withMove(makeSet(), chloe, GROUP_1);
+      await act(async () => {
+        pending[1]!.resolve(200, answer);
+        await confirmed;
+      });
+      expect(cached()).toEqual(answer);
+    });
+
+    it("is held again by a stale digest, and Cancel puts back the set as it was", async () => {
+      const pending = deferredFetch();
+      const { write, confirm, cancel, cached } = setup();
+      let first!: Promise<GroupSetDetail>;
+      act(() => {
+        first = write(...move(chloe, GROUP_1));
+      });
+      await waitFor(() => expect(pending).toHaveLength(1));
+      await act(async () => {
+        pending[0]!.resolve(409, asked());
+        await expect(first).rejects.toBeDefined();
+      });
+      let stale!: Promise<GroupSetDetail>;
+      act(() => {
+        stale = confirm(setWrite.place(chloe, GROUP_1, DIGEST));
+      });
+      await waitFor(() => expect(pending).toHaveLength(2));
+      await act(async () => {
+        pending[1]!.resolve(409, asked("b".repeat(64)));
+        await expect(stale).rejects.toBeDefined();
+      });
+      // Held again, the move still drawn.
+      expect(placeOf(cached(), chloe)).toBe(GROUP_1);
+      await expect(write(...move(emma, GROUP_1))).rejects.toBeInstanceOf(WriteHeld);
+      act(() => cancel());
+      expect(placeOf(cached(), chloe)).toBeNull();
+      // The hold is over: the next write is sent.
+      act(() => void write(...move(emma, GROUP_2)).catch(() => undefined));
+      await waitFor(() => expect(pending).toHaveLength(3));
+    });
   });
 });

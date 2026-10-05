@@ -11,7 +11,10 @@
  * Above `project.ts`, which reads it: a project names a set, and the
  * projects that name one are what a set says it is used by. That answer is
  * the project section's, handed in through {@link provideSetUses} so the
- * graph stays acyclic.
+ * graph stays acyclic — and so is a move's GitHub consequences
+ * ({@link provideMoveConsequences}, M3-16b): a move touching a group with
+ * a repository in a following project answers `409 needs_confirmation`
+ * until it is sent again with the digest ({@link mockDigest}).
  *
  * Scene flag `?groups=1`: PRG1-2026 (`r1`) has three sets — "Binômes des
  * labos", everyone in a pair, named by a draft group project; "Projet
@@ -29,6 +32,7 @@
  * the projects through `poll.ts`).
  */
 import {
+  GroupConsequences,
   GroupCreate,
   GroupMemberPut,
   GroupRandomForm,
@@ -37,6 +41,7 @@ import {
   GroupSetPatch,
   StudentGroupCreate,
   StudentGroupJoin,
+  type GroupConsequence,
   type GroupMemberName,
   type GroupSetDetail,
   type GroupSetSummary,
@@ -139,6 +144,47 @@ let usesOf: (setId: string) => GroupSetUse[] = () => [];
 export function provideSetUses(fn: (setId: string) => GroupSetUse[]): void {
   usesOf = fn;
 }
+
+/** What a move of `enrollmentId` from `from` to `to` (group ids, null: none) does on GitHub: the project section's answer. */
+type MoveConsequences = (setId: string, enrollmentId: string, from: string | null, to: string | null) => GroupConsequence[];
+let consequencesOf: MoveConsequences = () => [];
+export function provideMoveConsequences(fn: MoveConsequences): void {
+  consequencesOf = fn;
+}
+
+/**
+ * The digest of some consequences (ADR-070 §6): 64 hex characters, as
+ * `GroupConfirm` parses them — an FNV-1a of their canonical list, not the
+ * API's SHA-256, but as stable: the same consequences, the same digest.
+ */
+export function mockDigest(consequences: readonly GroupConsequence[]): string {
+  const canonical = consequences.map((c) => `${c.projectId}:${c.groupId}:${c.enrollmentId}:${c.kind}`).sort().join("|");
+  let hash = 0x811c9dc5;
+  const words: string[] = [];
+  for (let round = 0; round < 8; round += 1) {
+    for (const ch of `${round}${canonical}`) hash = Math.imul(hash ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+    words.push(hash.toString(16).padStart(8, "0"));
+  }
+  return words.join("");
+}
+
+/** `409 needs_confirmation` with the consequences and their digest, as the group routes and the resync answer it. */
+export const confirmationNeeded = (consequences: GroupConsequence[]) =>
+  refuse(409, "needs_confirmation", "This change has consequences on GitHub: confirm them", GroupConsequences.parse({ consequences, digest: mockDigest(consequences) }));
+
+/** A roster line's id as a consequence names it: a uuid, as `GroupConsequence` parses one (the mock's lines are `r1-s3`). */
+export const lineUuid = (enrollmentId: string): string => {
+  let n = 0;
+  for (const ch of enrollmentId) n = (n * 31 + ch.charCodeAt(0)) % 1_000_000_000_000;
+  return `0190d3c4-0000-7000-8000-${String(n).padStart(12, "0")}`;
+};
+
+/** The groups of set `id` as they stand (id, name, members' roster lines): a following project's copy. */
+export const setGroupsOf = (id: string): { id: string; name: string; members: string[] }[] =>
+  (SETS.find((s) => s.id === id)?.groups ?? [])
+    .slice()
+    .sort((a, b) => a.position - b.position)
+    .map((g) => ({ id: g.id, name: g.name, members: [...g.members] }));
 
 /** Whether `setId` is a set of `classroomId`: a project may only name one of its own classroom's. */
 export const isSetOf = (classroomId: string, id: string): boolean =>
@@ -347,8 +393,12 @@ on("PUT", "/app/api/group-sets/:id/members/:eid", (m, raw) => {
   const set = writable(m.groups!.id!);
   const eid = decodeURIComponent(m.groups!.eid!);
   if (!classroomRoster(set.classroomId).some((s) => s.id === eid)) throw new MockError(404, "Not found");
-  const { groupId: target } = parsed(GroupMemberPut, raw);
+  const { groupId: target, confirm } = parsed(GroupMemberPut, raw);
   const into = target === null ? null : groupOr404(set, target);
+  // M3-16b: a move reaching a group repository of a following project is confirmed first (ADR-070 §6).
+  const from = set.groups.find((g) => g.members.includes(eid))?.id ?? null;
+  const consequences = from === target ? [] : consequencesOf(set.id, eid, from, target);
+  if (consequences.length > 0 && confirm !== mockDigest(consequences)) throw confirmationNeeded(consequences);
   for (const g of set.groups) g.members = g.members.filter((x) => x !== eid);
   into?.members.push(eid);
   return detailOf(set);

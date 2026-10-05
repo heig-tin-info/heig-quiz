@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { GroupSetDetail } from "@quiz/contracts";
+import type { GroupConsequence, GroupSetDetail } from "@quiz/contracts";
 
 import { GROUP_1, GROUP_2, makeSet, ROOM_ID, SET_BASE, SET_ID, student } from "../test/group-fixtures";
 import { fail, makeQueryClient, mockFetch, ok, renderWithProviders, type RecordedCall, type RouteHandler } from "../test/render";
@@ -14,7 +14,9 @@ import { withMove } from "./groupRules";
  * menu and by click then click with the PUT it sends, Undo's reverse PUT and
  * its 404, the random formation's preview and cap, a group renamed in place
  * with its refusal, the deletion refused over the projects that follow it,
- * the archived classroom's read-only set, and the French of it.
+ * the archived classroom's read-only set, and the French of it; a move that
+ * reaches GitHub (M3-16b): its confirmation, confirmed, cancelled, stale,
+ * from the menu, click then click and Undo.
  */
 
 /** A project naming the set: a uuid, as `GroupRefusalProjects` parses it. */
@@ -236,22 +238,21 @@ describe("the groups and the set", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "project", id: PROJECT });
   });
 
-  it("names the projects whose group repository refuses a move (has_repo), and puts the student back", async () => {
+  it("names the projects whose group repository refuses a group's deletion (has_repo)", async () => {
     routes(makeSet(), {
-      [`PUT ${SET_BASE}/members/${student(0).enrollmentId}`]: fail(409, {
+      [`DELETE ${SET_BASE}/groups/${GROUP_1}`]: fail(409, {
         error: "has_repo",
         message: "1 project(s)",
         projects: [{ id: PROJECT, name: "Labo 4 — en binômes" }],
       }),
     });
     renderPage();
-    await userEvent.click(await screen.findByRole("button", { name: "Move Dupont Alice to…" }));
-    await userEvent.click(screen.getByRole("menuitem", { name: "No group" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Actions for Groupe 1" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Delete group" }));
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
     expect(await screen.findByText("This group has a repository: it cannot be deleted. Move its members out instead.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Labo 4 — en binômes" })).toBeInTheDocument();
-    await waitFor(() =>
-      expect(within(screen.getByRole("listitem", { name: "Groupe 1" })).getByText("Dupont Alice")).toBeInTheDocument(),
-    );
+    expect(within(screen.getByRole("listitem", { name: "Groupe 1" })).getByText("Dupont Alice")).toBeInTheDocument();
   });
 
   it("speaks French", async () => {
@@ -309,3 +310,101 @@ describe("opening the set to its students (F-PROJ-22, M3-17)", () => {
   });
 });
 
+describe("a move that reaches GitHub (ADR-070 §6, M3-16b)", () => {
+  const DIGEST = "c".repeat(64);
+  const STALE = "d".repeat(64);
+  const consequence = (n: number, kind: "lose" | "join", over: Partial<GroupConsequence> = {}): GroupConsequence => ({
+    projectId: PROJECT,
+    projectName: "Labo 4 — en binômes",
+    groupId: kind === "lose" ? GROUP_1 : GROUP_2,
+    groupName: kind === "lose" ? "Groupe 1" : "Groupe 2",
+    repo: kind === "lose" ? "heig-tin-info/labo-4-groupe-1" : null,
+    enrollmentId: student(n).enrollmentId,
+    nom: student(n).nom,
+    prenom: student(n).prenom,
+    kind,
+    frozen: false,
+    acceptClosed: false,
+    ...over,
+  });
+  /** `409 needs_confirmation` naming Alice leaving Groupe 1's repository and joining Groupe 2's, being created. */
+  const asked = (digest = DIGEST) =>
+    fail(409, { error: "needs_confirmation", message: "x", consequences: [consequence(0, "lose"), consequence(0, "join")], digest });
+  /** The PUT of Alice: refused until it carries `DIGEST`, then answered. */
+  const confirmed = (call: RecordedCall) =>
+    (call.body as { confirm?: string }).confirm === DIGEST ? moveAnswer()(call) : asked();
+  const alice = student(0).enrollmentId;
+
+  it("asks with the consequences named, keeps the move drawn, and confirms with the digest: no Undo then", async () => {
+    const { calls } = routes(makeSet(), { [`PUT ${SET_BASE}/members/${alice}`]: confirmed });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Move Dupont Alice to…" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Groupe 2" }));
+    const dialog = await screen.findByRole("dialog", { name: "Confirm the change on GitHub" });
+    expect(within(dialog).getByText("Labo 4 — en binômes")).toBeInTheDocument();
+    expect(within(dialog).getByText("heig-tin-info/labo-4-groupe-1")).toBeInTheDocument();
+    expect(within(dialog).getByText("Repository being created")).toBeInTheDocument();
+    expect(within(dialog).getAllByText("Dupont Alice")).toHaveLength(2);
+    // The move stays drawn behind the dialog.
+    expect(within(screen.getByRole("listitem", { name: "Groupe 2" })).getByText("Dupont Alice")).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Confirm the move" }));
+    expect(await screen.findByText("Dupont Alice moved to Groupe 2. GitHub follows.")).toBeInTheDocument();
+    expect(writes(calls).map((c) => c.body)).toEqual([{ groupId: GROUP_2 }, { groupId: GROUP_2, confirm: DIGEST }]);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+  });
+
+  it("puts the student back on Cancel, and sends nothing more", async () => {
+    const { calls } = routes(makeSet(), { [`PUT ${SET_BASE}/members/${alice}`]: asked() });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Move Dupont Alice to…" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "No group" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() =>
+      expect(within(screen.getByRole("listitem", { name: "Groupe 1" })).getByText("Dupont Alice")).toBeInTheDocument(),
+    );
+    expect(writes(calls)).toHaveLength(1);
+  });
+
+  it("names the consequences again when the digest went stale meanwhile", async () => {
+    let n = 0;
+    // Named with a digest that is stale by the time it comes back: named again, with `DIGEST`.
+    routes(makeSet(), { [`PUT ${SET_BASE}/members/${alice}`]: (call) => ((n += 1) === 1 ? asked(STALE) : confirmed(call)) });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Move Dupont Alice to…" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Groupe 2" }));
+    await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Confirm the move" }));
+    expect(await screen.findByText("The consequences changed meanwhile: check them again.")).toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Confirm the move" }));
+    expect(await screen.findByText("Dupont Alice moved to Groupe 2. GitHub follows.")).toBeInTheDocument();
+  });
+
+  it("asks the same for a move by click then click", async () => {
+    routes(makeSet(), { [`PUT ${SET_BASE}/members/${alice}`]: asked() });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: /^Dupont Alice/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Move into Groupe 2" }));
+    expect(await screen.findByRole("dialog", { name: "Confirm the change on GitHub" })).toBeInTheDocument();
+  });
+
+  it("asks the same when Undo meets it, and confirms the reverse move", async () => {
+    let n = 0;
+    const { calls } = routes(makeSet(), {
+      [`PUT ${SET_BASE}/members/${alice}`]: (call) => {
+        n += 1;
+        if (n === 2) return asked();
+        return moveAnswer()(call);
+      },
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Move Dupont Alice to…" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "No group" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Undo" }));
+    const dialog = await screen.findByRole("dialog", { name: "Confirm the change on GitHub" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Confirm the move" }));
+    await waitFor(() =>
+      expect(writes(calls).map((c) => c.body)).toEqual([{ groupId: null }, { groupId: GROUP_1 }, { groupId: GROUP_1, confirm: DIGEST }]),
+    );
+  });
+});

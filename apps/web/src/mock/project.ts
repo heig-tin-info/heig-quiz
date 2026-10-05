@@ -23,7 +23,14 @@
  * with three names. `?groups=1` (ADR-070, M3-16a): the draft is a group
  * project that names no set yet (Publish answers `409 no_group_set`), and a
  * second draft, "Labo 4 — en binômes", follows PRG1-2026's pairs
- * (`groups.ts`, which asks this section what its sets are used by). `?unreleased=1`: the locked project is not released yet,
+ * (`groups.ts`, which asks this section what its sets are used by). M3-16b
+ * adds two published group projects on the pairs, one row per group: "Mini-projet
+ * — en binômes" follows them (a move touching one of its repositories is
+ * confirmed first, one repository has an access to revoke), and "Labo 0 —
+ * en binômes", locked and not released, stopped at its deadline with a
+ * copy the set has drifted from — its resync names three frozen
+ * repositories and an arrival without one, and the release waits while the
+ * confirmed resync is applied (two reads). `?unreleased=1`: the locked project is not released yet,
  * so Release is its one action. Without `?projects=1` no classroom has a project, so the
  * default scenes are what they were. The other classrooms are not connected:
  * "New ▾ › Project" there leads to the Settings' connect sheet.
@@ -37,14 +44,17 @@
  */
 import {
   PROJECT_DEFAULTS,
+  ProjectGroupResync,
   ProjectPatch,
   ProjectReleaseRefusal,
   ReviewCheckpointCreate,
   ScoreOverride,
   type GradeRunList,
+  type GroupConsequence,
   type GradeRunView,
   type ProjectActivitySummary,
   type ProjectDetail,
+  type ProjectDetailGroup,
   type ProjectDetailRow,
   type ProjectInvitationResent,
   type ProjectReleaseResult,
@@ -71,7 +81,17 @@ import {
   teacherScoreMax,
 } from "@quiz/domain";
 
-import { isSetOf, provideSetUses, SET_PAIRS, unplacedClaimed } from "./groups";
+import {
+  confirmationNeeded,
+  isSetOf,
+  lineUuid,
+  mockDigest,
+  provideMoveConsequences,
+  provideSetUses,
+  SET_PAIRS,
+  setGroupsOf,
+  unplacedClaimed,
+} from "./groups";
 import { classroomRoster, courses, rooms } from "./org";
 import { D, flags, H, iso, MockError, MockPayload, nextId, now, on, refuse, role } from "./runtime";
 
@@ -116,6 +136,18 @@ interface MockRepo {
   syncPr: ProjectRepoSync["pr"];
   syncOutcome: ProjectRepoSync["outcome"];
   syncAt: string | null;
+  /** A group's repository (M3-16b): its set group's id, which the copy groups of the mock keep. */
+  groupId: string | null;
+  /** An access GitHub has not revoked yet (ADR-070 §4). */
+  accessToRevoke: boolean;
+}
+
+/** A group of a project's copy (ADR-070 §4): the set group's id and name, its members' roster lines, stopped or following. */
+interface CopyGroup {
+  id: string;
+  name: string;
+  members: string[];
+  stopped: boolean;
 }
 
 interface MockProject {
@@ -132,6 +164,10 @@ interface MockProject {
    * leaves it in progress for one read, then the next read settles it.
    */
   sync: { aheadAt: string | null; aheadCommits: number | null; syncedAt: string | null; inProgressReads: number };
+  /** A group project's stopped copy; null while it follows its set (it is then the set's groups). */
+  copy: CopyGroup[] | null;
+  /** A confirmed resync the job is applying (R2): pending for this many reads more. */
+  resyncReads: number;
 }
 
 /**
@@ -139,14 +175,21 @@ interface MockProject {
  * set parse them (`GroupRefusalProjects`).
  */
 const PJ_GROUP = "0190d3c4-0000-7000-8000-0000000000b4";
+/** The published group projects on the pairs (M3-16b): one following them, one stopped at its deadline. */
+const PJ_GROUP_LIVE = "0190d3c4-0000-7000-8000-0000000000b5";
+const PJ_GROUP_STOPPED = "0190d3c4-0000-7000-8000-0000000000b6";
 
-const SEEDS: { id: string; title: string; state: ProjectSummary["state"]; start: number; deadline: number }[] = [
+const SEEDS: { id: string; title: string; state: ProjectSummary["state"]; start: number; deadline: number; groupSet?: string }[] = [
   { id: "pj-draft", title: "Labo 3 — listes chaînées", state: "draft", start: 7 * D, deadline: 21 * D },
   { id: "pj-published", title: "Labo 2 — pointeurs", state: "published", start: -7 * D, deadline: 7 * D },
   { id: "pj-locked", title: "Labo 1 — premiers pas en C", state: "locked", start: -35 * D, deadline: -7 * D },
-  // `?groups=1`: a group project following PRG1-2026's pairs.
+  // `?groups=1`: group projects following PRG1-2026's pairs — a draft, a published one, one stopped.
   ...(flags.groups
-    ? [{ id: PJ_GROUP, title: "Labo 4 — en binômes", state: "draft" as const, start: 14 * D, deadline: 28 * D }]
+    ? [
+        { id: PJ_GROUP, title: "Labo 4 — en binômes", state: "draft" as const, start: 14 * D, deadline: 28 * D, groupSet: SET_PAIRS },
+        { id: PJ_GROUP_LIVE, title: "Mini-projet — en binômes", state: "published" as const, start: -10 * D, deadline: 10 * D, groupSet: SET_PAIRS },
+        { id: PJ_GROUP_STOPPED, title: "Labo 0 — en binômes", state: "locked" as const, start: -40 * D, deadline: -12 * D, groupSet: SET_PAIRS },
+      ]
     : []),
 ];
 
@@ -222,8 +265,75 @@ function mockRepo(over: Pick<MockRepo, "id" | "enrollmentId" | "student" | "full
     syncPr: null,
     syncOutcome: null,
     syncAt: null,
+    groupId: null,
+    accessToRevoke: false,
     ...over,
   };
+}
+
+/**
+ * The repositories of a group project (M3-16b): one per group but every
+ * fourth of a stopped one, every third of a following one (nobody accepted
+ * there), named `<slug>-groupe-k` and created by the group's first member;
+ * a stopped project's are frozen, locked and reviewed; a following one's
+ * second repository has an access to revoke, its fifth a pending invitation.
+ */
+function seedGroupRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, groups: CopyGroup[], roster: RosterEntry[]): MockRepo[] {
+  if (seed.state === "draft") return [];
+  const locked = seed.state === "locked";
+  return groups.flatMap((g, k) => {
+    const creator = roster.find((s) => s.id === g.members[0]);
+    if (!creator || k % (locked ? 4 : 3) === (locked ? 3 : 2)) return [];
+    const id = repoId(seed, k + 1);
+    const latest = run(id, 2, seed.start + (k + 2) * 6 * H, { points: 5 + (k % 6), testsPassed: 5 + (k % 6) });
+    const runs = [latest, run(id, 1, seed.start + D, { points: 3, testsPassed: 3, headSha: sha(k * 5) })];
+    const repo = mockRepo({
+      id,
+      enrollmentId: creator.id,
+      student: creator,
+      fullName: `${ORG}/${project.slug}-groupe-${k + 1}`,
+      acceptedAt: iso(seed.start + k * H),
+      lastCommit: { sha: latest.headSha, at: latest.completedAt },
+      ciStatus: k % 7 === 4 ? "fail" : "pass",
+      live: { commitCount: 4 + k, checksPassed: 1, checksTotal: 1, stale: false },
+      deadlineAppliedAt: locked ? project.deadlineAt : null,
+      frozenAt: locked ? iso(seed.deadline + 30 * 60_000) : null,
+      locked,
+      runs,
+      currentRunId: latest.id,
+      frozenRunId: locked ? latest.id : null,
+      dispatch: locked ? { sha: latest.headSha, dispatchedAt: iso(seed.deadline + 31 * 60_000) } : null,
+      groupId: g.id,
+      accessToRevoke: !locked && k === 1,
+      invitationStatus: !locked && k === 4 ? "pending" : "accepted",
+    });
+    if (locked) {
+      const review = run(id, 9, seed.deadline + 40 * 60_000, { kind: "review", points: 60 + (k % 7) * 5, max: 100, testsPassed: null, testsTotal: null, headSha: latest.headSha });
+      runs.unshift(review);
+      repo.reviewRunId = review.id;
+    }
+    return [repo];
+  });
+}
+
+/**
+ * A stopped copy the set has drifted from since the deadline (M3-16b): in
+ * the copy, the first member of Groupe 1 and of Groupe 2 are swapped (two
+ * frozen repositories each lose one and gain one), and the second member of
+ * Groupe 4 — a group with no repository — is still in Groupe 3: the resync
+ * takes them out of a third frozen repository into a group without one,
+ * Accept being closed (R3).
+ */
+function driftedCopy(groups: CopyGroup[]): CopyGroup[] {
+  const copy = groups.map((g) => ({ ...g, members: [...g.members], stopped: true }));
+  const [g1, g2, g3, g4] = copy;
+  if (g1?.members[0] && g2?.members[0]) [g1.members[0], g2.members[0]] = [g2.members[0], g1.members[0]];
+  const late = g4?.members[1];
+  if (g3 && g4 && late) {
+    g4.members = g4.members.filter((m) => m !== late);
+    g3.members.push(late);
+  }
+  return copy;
 }
 
 /**
@@ -471,16 +581,23 @@ function seeded(): MockProject[] {
       editable: [],
     };
     summary.editable = editableProjectFields({ state: summary.state, deadlineAt: new Date(summary.deadlineAt) }, new Date(now));
-    // `?groups=1`: the draft is a group project with no set yet; the second one follows the pairs.
+    // `?groups=1`: the draft is a group project with no set yet; the group seeds follow the pairs.
     if (flags.groups && seed.id === "pj-draft") summary.groupMode = true;
-    if (seed.id === PJ_GROUP) Object.assign(summary, { groupMode: true, groupSetId: SET_PAIRS });
+    if (seed.groupSet) Object.assign(summary, { groupMode: true, groupSetId: seed.groupSet });
+    const following = seed.groupSet ? setGroupsOf(seed.groupSet).map((g) => ({ ...g, stopped: false })) : [];
+    const copy = seed.groupSet && seed.state === "locked" ? driftedCopy(following) : null;
     const project: MockProject = {
       summary,
       classroom: { id: room.id, name: room.name, courseCode: course?.code ?? "" },
-      releasedAt: seed.state === "locked" && !flags.unreleased ? iso(-5 * D) : null,
-      repos: seedRepos(seed, summary, classroomRoster(room.id)),
+      // The stopped group project waits for its release: the resync is still allowed (M3-16b).
+      releasedAt: seed.state === "locked" && !flags.unreleased && !seed.groupSet ? iso(-5 * D) : null,
+      repos: seed.groupSet
+        ? seedGroupRepos(seed, summary, copy ?? following, classroomRoster(room.id))
+        : seedRepos(seed, summary, classroomRoster(room.id)),
       checkpoints: [],
       read: false,
+      copy,
+      resyncReads: 0,
       // `?ahead=1`: the source moved two hours ago, on the draft and the published project (M3-07).
       sync:
         flags.ahead && seed.state !== "locked"
@@ -519,6 +636,8 @@ export function addMockProject(summary: ProjectSummary, classroom: MockProject["
     checkpoints: [],
     read: false,
     sync: { aheadAt: null, aheadCommits: null, syncedAt: null, inProgressReads: 0 },
+    copy: null,
+    resyncReads: 0,
   };
   CREATED.push(project);
   PROJECTS.set(summary.id, project);
@@ -575,6 +694,69 @@ provideSetUses((setId) =>
       follows: p.summary.archivedAt === null && p.summary.deadlineAppliedAt === null,
     })),
 );
+
+/** A group project's copy: its stopped groups, or its set's as they stand while it follows. */
+function copyOf(p: MockProject): CopyGroup[] {
+  if (!p.summary.groupMode || p.summary.groupSetId === null) return [];
+  return p.copy ?? setGroupsOf(p.summary.groupSetId).map((g) => ({ ...g, stopped: false }));
+}
+
+const groupRepo = (p: MockProject, groupId: string | null) => (groupId === null ? undefined : p.repos.find((r) => r.groupId === groupId));
+
+/** One GitHub consequence of a write (ADR-070 §6), as `GroupConsequence` names it. */
+function consequence(p: MockProject, group: CopyGroup | { id: string; name: string }, line: string, kind: "lose" | "join", over: Partial<GroupConsequence> = {}): GroupConsequence {
+  const student = classroomRoster(p.summary.classroomId).find((s) => s.id === line);
+  return {
+    projectId: p.summary.id,
+    projectName: p.summary.name,
+    groupId: group.id,
+    groupName: group.name,
+    repo: groupRepo(p, group.id)?.fullName ?? null,
+    enrollmentId: lineUuid(line),
+    nom: student?.nom ?? "",
+    prenom: student?.prenom ?? "",
+    kind,
+    frozen: false,
+    acceptClosed: false,
+    ...over,
+  };
+}
+
+/** A set's move reaches the repositories of the published projects that FOLLOW it (ADR-070 §4): who loses, who joins. */
+provideMoveConsequences((setId, line, from, to) =>
+  [...seeded(), ...CREATED]
+    .filter((p) => p.summary.groupSetId === setId && p.summary.state !== "draft" && p.summary.archivedAt === null && p.copy === null)
+    .flatMap((p) => {
+      const groups = copyOf(p);
+      const named = (id: string | null) => groups.find((g) => g.id === id);
+      return [
+        ...(groupRepo(p, from) ? [consequence(p, named(from)!, line, "lose")] : []),
+        ...(groupRepo(p, to) ? [consequence(p, named(to)!, line, "join")] : []),
+      ];
+    }),
+);
+
+/**
+ * What *Resync with the set* would do to a stopped copy (M3-15b-2b): each
+ * student whose copy group is not their set group loses the frozen
+ * repository of the first and joins the second's — flagged `acceptClosed`
+ * when it has none (R3).
+ */
+function resyncConsequences(p: MockProject): GroupConsequence[] {
+  if (p.copy === null || p.summary.groupSetId === null) return [];
+  const set = setGroupsOf(p.summary.groupSetId);
+  const placeIn = (groups: { id: string; name: string; members: string[] }[], line: string) => groups.find((g) => g.members.includes(line));
+  const lines = new Set([...p.copy, ...set].flatMap((g) => g.members));
+  return [...lines].flatMap((line) => {
+    const was = placeIn(p.copy!, line);
+    const now = placeIn(set, line);
+    if (was?.id === now?.id) return [];
+    return [
+      ...(was && groupRepo(p, was.id) ? [consequence(p, was, line, "lose", { frozen: true })] : []),
+      ...(now ? [consequence(p, now, line, "join", groupRepo(p, now.id) ? { frozen: true } : { acceptClosed: true })] : []),
+    ];
+  });
+}
 
 const activityOf = (p: MockProject): ProjectActivitySummary => ({
   kind: "project",
@@ -660,7 +842,7 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
       deleted: r.deleted,
       changedAfterRelease: r.released !== null && changedAfterRelease(true, final, r.released),
     },
-    accessToRevoke: false,
+    accessToRevoke: r.accessToRevoke,
   };
 }
 
@@ -687,14 +869,20 @@ function settleSync(p: MockProject): void {
 function detailOf(p: MockProject): ProjectDetail {
   settleSync(p);
   const roster = classroomRoster(p.summary.classroomId);
-  const byEnrollment = new Map(p.repos.filter((r) => r.enrollmentId).map((r) => [r.enrollmentId!, r]));
+  // A group project (M3-16b): each student reads their copy group's repository; an individual one, their own.
+  const copy = copyOf(p);
+  const groupOfLine = new Map(copy.flatMap((g) => g.members.map((line) => [line, g] as const)));
+  const byEnrollment = new Map(p.repos.filter((r) => r.enrollmentId && r.groupId === null).map((r) => [r.enrollmentId!, r]));
+  const groupView = (g: CopyGroup | undefined): ProjectDetailGroup | null => (g ? { id: g.id, name: g.name, stopped: g.stopped } : null);
   const rows: ProjectDetailRow[] = [
     ...roster
       .slice()
       .sort((a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`))
       .map((s) => {
-        const repo = byEnrollment.get(s.id);
+        const group = groupOfLine.get(s.id);
+        const repo = p.summary.groupMode ? groupRepo(p, group?.id ?? null) : byEnrollment.get(s.id);
         return {
+          group: groupView(group),
           student: {
             enrollmentId: s.id,
             userId: s.userId,
@@ -707,9 +895,11 @@ function detailOf(p: MockProject): ProjectDetail {
           repo: repo ? repoView(p, repo) : null,
         };
       }),
+    // The repositories no roster student reads: a student who left, or a group no one is in any more.
     ...p.repos
-      .filter((r) => r.enrollmentId === null)
+      .filter((r) => (r.groupId === null ? r.enrollmentId === null : !copy.some((g) => g.id === r.groupId && g.members.length > 0)))
       .map((r) => ({
+        group: groupView(copy.find((g) => g.id === r.groupId)),
         student: {
           enrollmentId: null,
           userId: r.student.userId,
@@ -722,11 +912,15 @@ function detailOf(p: MockProject): ProjectDetail {
         repo: repoView(p, r),
       })),
   ];
+  const drifted = resyncConsequences(p).length > 0;
+  const pending = p.resyncReads > 0;
+  if (pending) p.resyncReads -= 1;
   const live = p.repos.filter((r) => isLive(p, r));
   const views = rows.map((r) => r.repo).filter((r): r is ProjectRepoView => r !== null);
   const counts = {
     students: roster.length,
     accepted: p.repos.length,
+    groups: copy.length,
     live: live.length,
     frozen: live.filter((r) => r.frozenAt !== null).length,
     toVerify: views.filter((r) => r.flags.toVerify).length,
@@ -764,13 +958,36 @@ function detailOf(p: MockProject): ProjectDetail {
     },
     // Stale only when there was live state to read.
     liveStale: !p.read && live.length > 0,
-    // The mock's copies never stop following their set (M3-16b draws the drift).
-    groupsDrifted: false,
+    // A stopped copy the set moved away from since (M3-16b); a confirmed resync owed for two reads (R2).
+    groupsDrifted: drifted && p.summary.state !== "draft",
+    groupSyncPending: pending,
     rows,
   };
   p.read = true;
   return detail;
 }
+
+/**
+ * *Resync with the set* (ADR-070 §4, M3-15b-2b): refused once released or
+ * archived; nothing to resync is a 204; otherwise `409 needs_confirmation`
+ * until the digest comes back, then the copy takes the set's groups —
+ * still stopped — and the job owes it for two reads (R2).
+ */
+on("POST", "/app/api/projects/:id/groups/resync", (m, raw) => {
+  const p = projectOr404(m.groups!.id!);
+  const parsed = ProjectGroupResync.safeParse(raw);
+  if (!parsed.success) throw new MockPayload(400, { error: "validation", message: parsed.error.message });
+  if (p.summary.state === "draft") return undefined;
+  if (!p.summary.groupMode || p.summary.groupSetId === null) throw refuse(409, "no_group_set", "The project follows no group set");
+  if (p.summary.archivedAt !== null) throw refuse(409, "project_archived", "An archived project resyncs nothing");
+  if (p.releasedAt !== null) throw refuse(409, "released", "The project is released");
+  const consequences = resyncConsequences(p);
+  if (consequences.length === 0) return undefined;
+  if (parsed.data.confirm !== mockDigest(consequences)) throw confirmationNeeded(consequences);
+  p.copy = setGroupsOf(p.summary.groupSetId).map((g) => ({ ...g, stopped: true }));
+  p.resyncReads = 2;
+  return undefined;
+});
 
 /** The source's sync (F-PROJ-12, M3-07): 202, the pass settled by the read after the next. */
 on("POST", "/app/api/projects/:id/sync", (m) => {
@@ -952,6 +1169,7 @@ on("PATCH", "/app/api/projects/:id/repos/:rid/score", (m, raw) => {
 on("POST", "/app/api/projects/:id/release", (m) => {
   const p = projectOr404(m.groups!.id!);
   if (p.summary.gradingMode !== "auto") throw refuse(409, "grading_none", "The project is not graded");
+  if (p.resyncReads > 0) throw refuse(409, "group_sync_pending", "A confirmed resync of the groups is still applied");
   const live = p.repos.filter((r) => isLive(p, r));
   const frozen = live.filter((r) => r.frozenAt !== null);
   // The two refusals that carry data, in the shape the page parses (`ProjectReleaseRefusal`).
