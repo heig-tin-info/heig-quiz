@@ -121,8 +121,8 @@ export const projects = pgTable(
     /**
      * The copy of the set stopped following it (ADR-070 §4, M3-15a): written
      * with the project's deadline applied, or its archive, and NEVER cleared
-     * — not by a reopen, nor by an unarchive (a stopped copy does not follow
-     * again by itself; *Resync* is M3-15b's).
+     * — not by a reopen, nor by an unarchive, nor by a *Resync* (a stopped
+     * copy does not follow again by itself; a resync is one-shot, M3-15b-2b).
      */
     groupsStoppedAt: timestamp("groups_stopped_at", { withTimezone: true }),
     branches: text("branches").array().notNull(),
@@ -204,6 +204,18 @@ export const projects = pgTable(
      * by the ticker: a sync is the staff's act.
      */
     syncJobAt: timestamp("sync_job_at", { withTimezone: true }),
+    /**
+     * A confirmed *Resync with the set* not fully applied yet (ADR-070 §4,
+     * M3-15b-2b): the keys (`<copy group>:<roster line>:<lose|join>`) of
+     * the consequences the staff confirmed, which the `group.sync` job
+     * applies with the copy's stops lifted, each dropped once done or no
+     * longer asked for by the set. Never extended by a set's write. While
+     * not empty, the release is refused (`409 group_sync_pending`).
+     */
+    groupResync: jsonb("group_resync").$type<string[]>().notNull().default([]),
+    /** The latest confirmed resync: when, and by whom (kept once applied). */
+    groupResyncAt: timestamp("group_resync_at", { withTimezone: true }),
+    groupResyncBy: uuid("group_resync_by").references(() => users.id),
     /**
      * The day-before reminder of the project's deadline sent (F-NOTIF-13,
      * M3-09b): claimed by the ticker's scan before it tells the students

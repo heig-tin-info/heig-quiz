@@ -4547,6 +4547,7 @@ export const en = {
   "project.release.refusal.someRepos": "some repositories",
   "project.refusal.notFrozen": "This repository is not frozen for good yet.",
   "project.refusal.gradingNone": "This project is not graded: no score, no release.",
+  "project.refusal.groupSyncPending": "The groups are still being resynced on GitHub: release the scores once it is done.",
   "project.refusal.scoreMaxRequired": "Give the maximum: this repository has no scored run to take it from.",
   "project.refusal.scoreMaxMismatch": "The maximum is the scored run's and cannot differ from it.",
   "project.refusal.scoreAboveMax": "The points exceed the maximum.",

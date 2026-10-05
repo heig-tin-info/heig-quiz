@@ -114,6 +114,7 @@ export function makeProject(over: Partial<ProjectDetail> = {}): ProjectDetail {
     accepted: accepted > 0,
     editable: ["name", "deadlineAt", "deadlineStrategy", "protectedFiles"],
     releasedAt: null,
+    groupsDrifted: false,
     primaryAction: "none",
     sync: { ahead: null, inProgress: false, syncedAt: null, last: null },
     counts: { students: rows.length, accepted, live: accepted, frozen: 0, toVerify: 0, alerts: 0 },

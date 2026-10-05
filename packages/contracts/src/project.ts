@@ -32,6 +32,7 @@ import {
 } from "@quiz/domain";
 
 import { Rounding } from "./evaluation.js";
+import { GroupConfirm } from "./group.js";
 
 // ---------------------------------------------------------- closed values
 
@@ -431,6 +432,17 @@ export type ProjectSummary = z.infer<typeof ProjectSummary>;
  *     was rewritten and the distribution repository cannot fast-forward:
  *     nothing was changed; `sync_failed` (502) — the distribution
  *     repository could not be updated: try again.
+ * *Resync with the set* (ADR-070 §4, M3-15b-2b; {@link ProjectGroupResync}):
+ *   - `released` — a resync once the project is released;
+ *   - `project_archived` — also a resync of an archived project;
+ *   - `classroom_archived` — a resync in an archived classroom (its sets are
+ *     read-only);
+ *   - `needs_confirmation` — its consequences not confirmed, or confirmed
+ *     by a stale digest: the body is the group routes' (`GroupConsequences`);
+ *   - `not_draft` — a draft's resync: a draft's copy follows its set;
+ *     `no_group_set` — a project that follows no set;
+ *   - `group_sync_pending` — a release while a confirmed resync is not
+ *     fully applied by the `group.sync` job (product owner R2).
  * The response schemas of the refusals come with their first consumer
  * (M3-11).
  */
@@ -465,6 +477,11 @@ export const PROJECT_REFUSALS = [
   "sync_in_progress",
   "source_rewritten",
   "sync_failed",
+  // M3-15b-2b: *Resync with the set*, and the release waiting for it.
+  "released",
+  "classroom_archived",
+  "needs_confirmation",
+  "group_sync_pending",
 ] as const;
 export const ProjectErrorCode = z.enum(PROJECT_REFUSALS);
 export type ProjectErrorCode = z.infer<typeof ProjectErrorCode>;
@@ -916,9 +933,14 @@ export type ProjectSyncAccepted = z.infer<typeof ProjectSyncAccepted>;
  * `liveStale`: some live state was served stale, or not read in time —
  * refetch shortly. `sync`: the source's sync ({@link ProjectSyncState}).
  * Rows: the roster by name, then the repositories whose student left it.
+ * `groupsDrifted` (F-PROJ-13, ADR-070 §4; M3-15b-2b): a published group
+ * project's copy differs from its set where the follow stopped — *Resync
+ * with the set* would change something —, whether the project still allows
+ * it or not (released, archived).
  */
 export const ProjectDetail = ProjectSummary.extend({
   releasedAt: z.iso.datetime().nullable(),
+  groupsDrifted: z.boolean(),
   primaryAction: ProjectPrimaryAction,
   sync: ProjectSyncState,
   counts: z.object({
@@ -1027,6 +1049,21 @@ export const ProjectRepoScores = z.object({
   changedAfterRelease: z.boolean(),
 });
 export type ProjectRepoScores = z.infer<typeof ProjectRepoScores>;
+
+/**
+ * `POST /app/api/projects/:id/groups/resync` (ADR-070 §4, §6; M3-15b-2b):
+ * the copy brought back in step with its set, every stop lifted — a frozen
+ * group's members included. The whole difference is named first: `409
+ * needs_confirmation` with its consequences (`GroupConsequences`, every
+ * frozen repository and every arrival without a repository once Accept is
+ * closed named) and their digest, applied once `confirm` sends it back.
+ * What touches no repository is applied at once; the rest is the
+ * `group.sync` job's, the release refused meanwhile (`409
+ * group_sync_pending`). The copy stays stopped: a set's write after it is
+ * a drift again. 204, also when there is nothing to resync.
+ */
+export const ProjectGroupResync = z.strictObject({ confirm: GroupConfirm.optional() });
+export type ProjectGroupResync = z.infer<typeof ProjectGroupResync>;
 
 /**
  * `POST /app/api/projects/:id/release` (F-PROJ-14, D05): the final scores

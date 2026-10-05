@@ -21,7 +21,9 @@
  * - **an arrival** is written to the copy, then invited (best effort: a
  *   student with no linked account is invited when they link, or accept);
  * - **a stray grant** (`STRAY_GRANT`: an access GitHub kept when an
- *   invitation could not be taken back) is revoked as it stands.
+ *   invitation could not be taken back) is revoked as it stands;
+ * - **a confirmed resync's steps** (M3-15b-2b, `group_resync`): the same,
+ *   with the copy's stops lifted, audited `via: "group.resync"`.
  *
  * **When it runs**: sent right after a set's write that leaves such a move
  * (`requestGroupSync`), and claimed by the ticker while
@@ -44,7 +46,7 @@ import { PROJECT_GROUP_SYNC_QUEUE } from "../../jobs.js";
 import { followInvitation, inviteAccount, notRecorded, revocationClient, revokeDeparture, type RevokeContext } from "./access.js";
 import { isLive, ts } from "./deadline.js";
 import { repoChanged } from "./events.js";
-import { beginDeparture, beginStrayRevocation, completeArrival, completeDeparture, settleSync, syncSteps } from "./groupCopy.js";
+import { beginDeparture, beginStrayRevocation, completeArrival, completeDeparture, settleSync, syncSteps, type SyncMove } from "./groupCopy.js";
 import { groupRepoWhere, repoMembers } from "./groupRepos.js";
 import { claimLeases, FAILED_RETRY_MS, heldLease, type ProjectJob } from "./lease.js";
 import type { ProjectRow } from "./views.js";
@@ -91,12 +93,12 @@ async function groupRepo(db: Db, projectId: string, groupId: string) {
  * effort: nothing without the App, a live repository, or a linked account
  * (a repository still provisioned invites its members once made).
  */
-async function inviteMember(app: FastifyInstance, client: Octokit | null, project: ProjectRow, groupId: string, enrollmentId: string): Promise<void> {
+async function inviteMember(app: FastifyInstance, client: Octokit | null, project: ProjectRow, groupId: string, enrollmentId: string, resync: boolean): Promise<void> {
   const repo = await groupRepo(app.db, project.id, groupId);
   if (client === null || repo === null || !isLive(repo, project)) return;
   const member = (await repoMembers(app.db, repo, project.classroomId)).find((m) => m.enrollmentId === enrollmentId);
   if (!member?.account) return;
-  const ctx = { actor: SYSTEM_ACTOR, now: app.clock.now(), log: app.log, via: "group.sync", failure: "invite_failed" } as const;
+  const ctx = { actor: SYSTEM_ACTOR, now: app.clock.now(), log: app.log, via: via(resync), failure: "invite_failed" } as const;
   try {
     const invited = await inviteAccount(app.db, client, repo, { ...member, account: member.account }, ctx);
     if (!notRecorded(invited)) await followInvitation(app.db, repo, invited.invitation);
@@ -105,7 +107,10 @@ async function inviteMember(app: FastifyInstance, client: Octokit | null, projec
   }
 }
 
-const revokeContext = (app: FastifyInstance): RevokeContext => ({ actor: SYSTEM_ACTOR, now: app.clock.now(), log: app.log, via: "group.sync" });
+/** A step's `via`: a confirmed resync's, or the set's move. */
+const via = (resync: boolean) => (resync ? "group.resync" : "group.sync");
+
+const revokeContext = (app: FastifyInstance, resync = false): RevokeContext => ({ actor: SYSTEM_ACTOR, now: app.clock.now(), log: app.log, via: via(resync) });
 
 /**
  * One departure out of copy group `groupId`: held when a stop or the set
@@ -114,25 +119,25 @@ const revokeContext = (app: FastifyInstance): RevokeContext => ({ actor: SYSTEM_
  * written, the next group's repository invited, or the access given back
  * when the set put the student back meanwhile.
  */
-async function depart(app: FastifyInstance, client: Octokit | null, project: ProjectRow, step: { enrollmentId: string; groupId: string }, pass: Pass) {
+async function depart(app: FastifyInstance, client: Octokit | null, project: ProjectRow, step: SyncMove, pass: Pass) {
   const db = app.db;
   const repo = await groupRepo(db, project.id, step.groupId);
   if (repo === null) return;
   const marked = await beginDeparture(db, project.id, step.enrollmentId, step.groupId, repo.id, app.clock.now());
   if (marked === "held") return;
-  await revokeDeparture(db, client, repo, step.enrollmentId, marked, revokeContext(app));
+  await revokeDeparture(db, client, repo, step.enrollmentId, marked, revokeContext(app, step.resync));
   const done = await completeDeparture(db, project.id, step.enrollmentId, step.groupId, repo.id, app.clock.now());
   if (done.outcome === "gone") return;
   pass.moved.add(step.enrollmentId);
-  if (done.outcome === "kept") await inviteMember(app, client, project, step.groupId, step.enrollmentId);
-  if (done.outcome === "moved") await inviteMember(app, client, project, done.to, step.enrollmentId);
+  if (done.outcome === "kept") await inviteMember(app, client, project, step.groupId, step.enrollmentId, step.resync);
+  if (done.outcome === "moved") await inviteMember(app, client, project, done.to, step.enrollmentId, step.resync);
 }
 
-/** One arrival into copy group `groupId`: written, then invited. */
-async function arrive(app: FastifyInstance, client: Octokit | null, project: ProjectRow, step: { enrollmentId: string; groupId: string }, pass: Pass) {
+/** One arrival into copy group `groupId`: written, then invited (when it has a repository). */
+async function arrive(app: FastifyInstance, client: Octokit | null, project: ProjectRow, step: SyncMove, pass: Pass) {
   if (!(await completeArrival(app.db, project.id, step.enrollmentId, step.groupId, app.clock.now()))) return;
   pass.moved.add(step.enrollmentId);
-  await inviteMember(app, client, project, step.groupId, step.enrollmentId);
+  await inviteMember(app, client, project, step.groupId, step.enrollmentId, step.resync);
 }
 
 /** One stray grant revoked, if it still is one. */

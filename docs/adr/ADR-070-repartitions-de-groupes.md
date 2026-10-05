@@ -35,7 +35,10 @@ after the deadline, and a confirmation for every move touching a group with
 a repository; see *Second amendment of 2026-10-05*. Amended a third time the
 same day (product owner, merge task M3-17): decision 8 — where the students
 form their groups, which sets they see, how they learn a set is open, and
-the unplaced students (S1–S4); see *Third amendment of 2026-10-05*.
+the unplaced students (S1–S4); see *Third amendment of 2026-10-05*. Amended a fourth
+time the same day (product owner, merge task M3-15b-2b): decisions 4 and 6
+— what *Resync* does with a deleted set group, the release, and an arrival
+without a repository; see *Fourth amendment of 2026-10-05*.
 
 ## Context
 
@@ -374,6 +377,38 @@ How it is built (orchestrator, M3-17):
   claimed student of the classroom besides the course's staff; never
   `classroom:`. Nothing ticks at the closing: the client reads the set again
   when `openUntil` passes, by `serverNow`.
+
+### Fourth amendment of 2026-10-05 (product owner, M3-15b-2b)
+
+- **R1, §4 — a deleted set group.** A stopped group with a repository whose
+  set group was since deleted is KEPT by *Resync*: its repository and its
+  frozen score stay; its members follow the set, each named as a `lose`
+  consequence; the repository may end with no member.
+- **R2, §4 — the release waits.** The release is refused (`409
+  group_sync_pending`) while a confirmed resync is not fully applied.
+- **R3, §6 — an arrival without a repository.** A resync may move a student
+  into a group without a repository after the deadline: allowed, and its
+  confirmation flags it (the student will have no repository, Accept being
+  closed).
+- **How it is built** (orchestrator): the resync is a durable confirmed
+  target, not a fence — the keys of the consequences confirmed are stored
+  on the project (`projects.group_resync`, with `group_resync_at` and
+  `_by`); the `group.sync` job applies only those keys, computing the plan
+  with every stop lifted, and drops a key once done or no longer asked for
+  by the set: a set's write after the confirmation never extends it. What
+  touches no repository (renames, new groups, moves between groups without
+  one) is applied in the request's transaction. The resync is one-shot:
+  `stopped_at` and `groups_stopped_at` are never cleared, so the copy stays
+  stopped and drifts again at the next write of the set (alternative 5).
+  The **drift** is a non-empty plan with the stops lifted (the project's and
+  each group's) beyond what the job already owes; a following copy with a
+  group stopped on its repository's deadline drifts too, and is resynced
+  the same way. A confirmed resync's departure out of a frozen group into
+  another ends *moved*, never *left*, as far as the arrival was confirmed;
+  its departure marks survive a stop and a set's write. Its GitHub writes
+  are audited `via: "group.resync"`, the request `project.group_resync`.
+  Refused: a draft (`not_draft`), an archived project (`archived`), a
+  released one (`released`), an archived classroom (`classroom_archived`).
 
 ## Consequences
 

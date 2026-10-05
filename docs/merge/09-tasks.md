@@ -2955,6 +2955,74 @@ are ADR-070's second amendment of 2026-10-05.
   project is released), as a durable intent the job applies.
 - **Tests**: a resync after the deadline, refused after the release, its
   confirmation naming the frozen repositories.
+- **As delivered** (branch `merge/M3-15b2b-group-resync`): the product
+  owner's R1–R3 are ADR-070's third amendment of 2026-10-05 and
+  F-PROJ-13/14's wording. Migration `0071_group_resync`
+  (`projects.group_resync` jsonb of consequence keys, `group_resync_at`,
+  `group_resync_by`). `@quiz/domain`: `groupSyncPlan`'s `keepRepoOrphans`
+  (R1: a group with a repository whose set group is gone kept, its name and
+  slug reserved, its members following the set), `liftStops`,
+  `resyncPlan` (the plan with every stop lifted, split as a set's write;
+  `closed`: R3's arrivals into a group without a repository once Accept is
+  closed, by the set group's id when the resync creates it) and `syncWork`
+  (what the job owes: the following copy's moves and the stored keys the
+  set still asks for, each flagged `resync`; an arrival whose departure no
+  one confirmed dropped). `Q:modules/project/groupResync.ts`:
+  `resyncGroups` (the classroom FOR SHARE, the set FOR SHARE, the project
+  FOR UPDATE; `not_draft`, `no_group_set`, `archived`, `released`,
+  `classroom_archived`; nothing to resync — the lifted plan applies nothing
+  and adds no consequence beyond the job's work — is a 204 with no audit;
+  the consequences ADDED to the job's work confirmed by digest through
+  `describeConsequences`, now with `frozen` and `acceptClosed`; the part
+  without a repository applied in the request; every consequence left
+  stored, the departures marked, the project due; audited
+  `project.group_resync`: `digest`, `consequences`, `frozenRepos`,
+  `applied`, `deferred`) and `groupsDrifted` (`ProjectDetail.
+  groupsDrifted`, published group projects, released or archived ones
+  included: the fact, not the offer). `groupCopy.ts`: `copyWork` (one read
+  of the copy's work for the job, the request and the page), the job's
+  steps on it — `beginDeparture` lets a stored departure out of a stopped
+  group, `completeDeparture` moves a stored departure into its target
+  stopped or not when the arrival was confirmed (into a group with a
+  repository, or without one while Accept is closed: its R3 key), else
+  `left`; `completeArrival` writes an R3 arrival too (no invitation) —,
+  `syncSteps`/`settleSync` drop the keys no longer owed; `RESYNC_DEPARTURE`
+  (one SQL predicate) keeps a stored departure's mark through a stop
+  (`stopGroups`) and a set's write (`markDepartures`). The job audits a
+  stored step's revocation and invitation `via: "group.resync"`. Release:
+  `409 group_sync_pending` while `group_resync` is not empty (R2). Route
+  `POST /app/api/projects/:id/groups/resync` (`ProjectGroupResync`,
+  `staffAccess`), 204; contracts: `GroupConsequence.frozen`,
+  `.acceptClosed`; `released`, `archived`, `classroom_archived`,
+  `needs_confirmation`, `group_sync_pending` in `PROJECT_REFUSALS`. Web:
+  `group_sync_pending` worded at the release (en, fr); `groupsDrifted`
+  false in the mock.
+  Conservative choices (noted for review): a draft's resync answers
+  `not_draft` as the plan says, though the code's name reads "not a draft";
+  an archived project is refused with a new `archived`; the resync stores
+  the following copy's pending moves too (they then count for R2 and are
+  audited `group.resync`); a project archived with a resync owed keeps
+  being revoked by the job (its invitations skipped: not live); a deadline
+  passing between the confirmation and the job turns an unconfirmed arrival
+  into a group without a repository into `left`.
+- **Tests**: `groupResync.db.test.ts` (10): nothing to resync (204, before
+  and after the deadline), every frozen repository named, a wrong and a
+  stale digest; a frozen A→B move ends moved, audited `via:
+  "group.resync"`, the copy still stopped; a set's write after the
+  confirmation never applied and a drift again; R1 (the group and its
+  repository kept, no member); R2 (released only once applied); R3 (into a
+  stopped group without repository, into one the resync creates, one moved
+  at once); a following copy's group stopped on its repository's deadline
+  (renamed at once, joined by the job); a repository's deadline applied
+  mid-resync keeping its mark; a draft, a released and an archived project
+  refused; a roster removal during the resync's refused revocation (502).
+  Domain: `resyncPlan`, R1's kept orphan, R3, `syncWork`. Web: the release
+  refusal's words.
+- **For M3-16b**: the drift banner and *Resync* on the project page
+  (`groupsDrifted`, the action hidden once `releasedAt` or `archivedAt`),
+  the confirmation dialog listing the distinct frozen repositories
+  (`frozen`) and the R3 arrivals (`acceptClosed`), the 204, and the
+  refusals `released`, `archived`, `classroom_archived`, `not_draft`.
 
 ### M3-16 — Groups (web)
 Split in two PRs (orchestrator, 2026-10-05): what the API of M3-15a

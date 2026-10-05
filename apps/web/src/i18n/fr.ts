@@ -4534,6 +4534,7 @@ export const fr: Record<keyof Dict, string> = {
   "project.release.refusal.someRepos": "certains dépôts",
   "project.refusal.notFrozen": "Ce dépôt n'est pas encore définitivement gelé.",
   "project.refusal.gradingNone": "Ce projet n'est pas noté : ni score, ni publication.",
+  "project.refusal.groupSyncPending": "Les groupes sont encore en cours de resynchronisation sur GitHub : publiez les scores une fois l'opération terminée.",
   "project.refusal.scoreMaxRequired": "Indiquez le maximum : ce dépôt n'a aucune exécution notée où le prendre.",
   "project.refusal.scoreMaxMismatch": "Le maximum est celui de l'exécution notée et ne peut en différer.",
   "project.refusal.scoreAboveMax": "Les points dépassent le maximum.",

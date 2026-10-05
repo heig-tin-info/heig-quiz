@@ -11,6 +11,9 @@
  *   until its own stop (M3-15b-2); `splitPlan`: what of them waits for
  *   GitHub (the `group.sync` job) and the consequences the staff confirm
  *   (§6), `consequenceDelta` the ones a write adds;
+ * - `resyncPlan`, `syncWork`: *Resync with the set* (M3-15b-2b) — the
+ *   difference with every stop lifted, and the work the `group.sync` job
+ *   owes: the following copy's moves and the confirmed resync's;
  * - `freeName`, `freeSlug`, `defaultGroupName`, `defaultSetName`: the names.
  *
  * The randomness and the clock are injected by the caller (`crypto`, the
@@ -138,24 +141,31 @@ export interface GroupSyncPlan {
  * renamed nor moved, its name and slug reserved; nobody leaves it and
  * nobody joins it — a move with one stopped end is held whole, the student
  * staying where the copy has them (M3-15b-2). Empty when in step.
+ *
+ * `keepRepoOrphans` (*Resync*, product owner R1, 2026-10-05): a group with
+ * a repository whose set group is gone is kept — never deleted, its name
+ * and slug reserved —, its members following the set out of it; it may end
+ * with no member.
  */
-export function groupSyncPlan(set: SetState, copy: CopyState): GroupSyncPlan {
+export function groupSyncPlan(set: SetState, copy: CopyState, opts: { keepRepoOrphans?: boolean } = {}): GroupSyncPlan {
   const plan: GroupSyncPlan = { delete: [], update: [], create: [], place: [], unplace: [] };
   const setIds = new Set(set.groups.map((g) => g.id));
   const bySource = new Map<string, CopyState["groups"][number]>();
+  const kept = new Set<string>();
   for (const g of copy.groups) {
     if (g.sourceGroupId !== null && setIds.has(g.sourceGroupId) && !bySource.has(g.sourceGroupId)) bySource.set(g.sourceGroupId, g);
+    else if (opts.keepRepoOrphans && g.slugFixed) kept.add(g.id);
     else if (!g.stopped) plan.delete.push(g.id);
   }
 
-  // The names and slugs of the copy once in step: the stopped groups and
-  // those whose name stays keep theirs first, the others take the first
-  // free ones.
+  // The names and slugs of the copy once in step: the stopped and kept
+  // groups and those whose name stays keep theirs first, the others take
+  // the first free ones.
   const ordered = [...set.groups].sort((a, b) => a.position - b.position);
   const names = new Set<string>();
   const slugs = new Set<string>();
   for (const g of copy.groups) {
-    if (!g.stopped) continue;
+    if (!g.stopped && !kept.has(g.id)) continue;
     names.add(g.name);
     slugs.add(g.slug);
   }
@@ -270,6 +280,80 @@ export const consequenceKey = (c: PlanConsequence): string => `${c.groupId}:${c.
 export function consequenceDelta<T extends PlanConsequence>(before: readonly PlanConsequence[], after: readonly T[]): T[] {
   const known = new Set(before.map(consequenceKey));
   return after.filter((c) => !known.has(consequenceKey(c)));
+}
+
+// ---------------------------------------------------------------- the resync
+
+/** `copy` with every group's stop lifted: what *Resync with the set* compares with the set (ADR-070 §4, M3-15b-2b). */
+export function liftStops(copy: CopyState): CopyState {
+  return { ...copy, groups: copy.groups.map((g) => ({ ...g, stopped: false })) };
+}
+
+/** A resync's plan ({@link resyncPlan}): the lifted plan, what applies at once, the consequences to confirm and, of them, the R3 arrivals. */
+export interface ResyncPlan {
+  plan: GroupSyncPlan;
+  now: GroupSyncPlan;
+  consequences: PlanConsequence[];
+  closed: PlanConsequence[];
+}
+
+/**
+ * *Resync with the set* (ADR-070 §4; M3-15b-2b): the difference of `set`
+ * and `copy` with every stop lifted ({@link liftStops}) and the groups
+ * with a repository whose set group is gone kept (`keepRepoOrphans`, R1),
+ * split as {@link splitPlan} splits a set's write. `closed` (product owner
+ * R3): while Accept is closed (`acceptClosed`, the project's deadline
+ * passed), each student it places into a group without a repository — a
+ * `join` the staff confirm though GitHub has nothing to do: that student
+ * will have no repository. Its `groupId` is the copy group's, or the SET
+ * group's when the copy has none yet (the resync creates it).
+ * `consequences` holds both kinds.
+ */
+export function resyncPlan(set: SetState, copy: CopyState, exempt: ReadonlySet<string>, acceptClosed: boolean): ResyncPlan {
+  const lifted = liftStops(copy);
+  const plan = groupSyncPlan(set, lifted, { keepRepoOrphans: true });
+  const split = splitPlan(lifted, plan, exempt);
+  const fixed = new Set(copy.groups.filter((g) => g.slugFixed).map((g) => g.id));
+  const bySource = new Map(copy.groups.flatMap((g) => (g.sourceGroupId === null ? [] : [[g.sourceGroupId, g.id] as const])));
+  const closed: PlanConsequence[] = [];
+  if (acceptClosed) {
+    for (const p of plan.place) {
+      const to = bySource.get(p.sourceGroupId);
+      if (to === undefined || !fixed.has(to)) closed.push({ groupId: to ?? p.sourceGroupId, enrollmentId: p.enrollmentId, kind: "join" });
+    }
+  }
+  return { plan, now: split.now, consequences: [...split.consequences, ...closed], closed };
+}
+
+/** One step of the `group.sync` job's work: `resync` when a confirmed resync owes it. */
+export type SyncStep = PlanConsequence & { resync: boolean };
+
+/**
+ * What the `group.sync` job owes a copy (M3-15b-2b): the moves a following
+ * copy waits for (`following`, null once the copy stopped) and those of
+ * the resync's `consequences` ({@link resyncPlan}) whose keys a confirmed
+ * resync `stored`. `kept`: the stored keys still owed — one the set no
+ * longer asks for is dropped (done, or undone), and so is an arrival whose
+ * student must first leave a group with a repository by a departure no
+ * one confirmed. A set's write after the confirmation never adds a key.
+ */
+export function syncWork(
+  following: readonly PlanConsequence[] | null,
+  consequences: readonly PlanConsequence[],
+  stored: readonly string[],
+): { work: SyncStep[]; kept: string[] } {
+  const asked = new Set(consequences.map(consequenceKey));
+  let kept = new Set(stored.filter((k) => asked.has(k)));
+  const owed = (keys: ReadonlySet<string>) => {
+    const out = new Map<string, SyncStep>();
+    for (const c of following ?? []) out.set(consequenceKey(c), { ...c, resync: false });
+    for (const c of consequences) if (keys.has(consequenceKey(c))) out.set(consequenceKey(c), { ...c, resync: true });
+    return out;
+  };
+  const first = owed(kept);
+  const blocked = new Set(consequences.filter((c) => c.kind === "lose" && !first.has(consequenceKey(c))).map((c) => c.enrollmentId));
+  kept = new Set([...kept].filter((k) => !(k.endsWith(":join") && blocked.has(k.split(":")[1]!))));
+  return { work: [...owed(kept).values()], kept: [...kept].sort() };
 }
 
 /** True when `plan` changes nothing. */

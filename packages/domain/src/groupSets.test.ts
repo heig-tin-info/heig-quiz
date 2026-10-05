@@ -12,7 +12,9 @@ import {
   groupSyncPlan,
   consequenceDelta,
   isEmptyPlan,
+  resyncPlan,
   splitPlan,
+  syncWork,
   type CopyState,
   type SetState,
 } from "./groupSets.js";
@@ -258,6 +260,84 @@ describe("splitPlan and consequenceDelta (ADR-070 §4, §6; M3-15b-2)", () => {
     expect(consequenceDelta(pending, pending)).toEqual([]);
     expect(consequenceDelta(pending, after)).toEqual([{ groupId: "c1", enrollmentId: "e3", kind: "join" }]);
     expect(consequenceDelta(after, pending)).toEqual([]);
+  });
+});
+
+describe("resyncPlan and syncWork (ADR-070 §4; M3-15b-2b)", () => {
+  const set = (groups: [string, string][], members: [string, string][] = []): SetState => ({
+    groups: groups.map(([id, name], position) => ({ id, name, position })),
+    members: members.map(([enrollmentId, groupId]) => ({ enrollmentId, groupId })),
+  });
+  // A stopped copy: c1 (source g1) and c2 (source g2) have a repository, c3 (source g3) none.
+  const copy = (members: [string, string][], extra: CopyState["groups"] = []): CopyState => ({
+    groups: [
+      { id: "c1", name: "A", slug: "a", position: 0, sourceGroupId: "g1", slugFixed: true, stopped: true },
+      { id: "c2", name: "B", slug: "b", position: 1, sourceGroupId: "g2", slugFixed: true, stopped: true },
+      { id: "c3", name: "C", slug: "c", position: 2, sourceGroupId: "g3", stopped: true },
+      ...extra,
+    ],
+    members: members.map(([enrollmentId, groupId]) => ({ enrollmentId, groupId })),
+  });
+  const groups3 = [["g1", "A"], ["g2", "B"], ["g3", "C"]] as [string, string][];
+  const none = new Set<string>();
+
+  it("lifts every stop: a frozen move is a lose and a join, a rename applies at once", () => {
+    const r = resyncPlan(set([["g1", "Renamed"], ["g2", "B"], ["g3", "C"]], [["e1", "g2"]]), copy([["e1", "c1"]]), none, false);
+    expect(r.consequences).toEqual([
+      { groupId: "c1", enrollmentId: "e1", kind: "lose" },
+      { groupId: "c2", enrollmentId: "e1", kind: "join" },
+    ]);
+    expect(r.now.update).toEqual([{ id: "c1", name: "Renamed", slug: "a", position: 0 }]);
+    expect(r.closed).toEqual([]);
+  });
+
+  it("keeps a group with a repository whose set group is gone; its members follow the set out of it (R1)", () => {
+    const r = resyncPlan(set([["g2", "B"], ["g3", "C"]], [["e1", "g2"]]), copy([["e1", "c1"], ["e2", "c1"]]), none, false);
+    expect(r.plan.delete).toEqual([]);
+    expect(r.consequences).toEqual([
+      { groupId: "c1", enrollmentId: "e1", kind: "lose" },
+      { groupId: "c2", enrollmentId: "e1", kind: "join" },
+      { groupId: "c1", enrollmentId: "e2", kind: "lose" },
+    ]);
+    // Its name stays reserved (a fixed slug never changes); a group without a repository whose set group is gone is deleted.
+    const named = resyncPlan(set([["g2", "A"]]), copy([]), none, false);
+    expect([named.plan.delete, named.now.update]).toEqual([["c3"], [{ id: "c2", name: "A 2", slug: "b", position: 0 }]]);
+  });
+
+  it("names each arrival into a group without a repository once Accept is closed (R3), a group the resync creates by its set group", () => {
+    const after = set([...groups3, ["g4", "D"]], [["e1", "g3"], ["e2", "g4"], ["e3", "g3"]]);
+    const base = copy([["e1", "c1"], ["e3", "c3"]]);
+    const closed = resyncPlan(after, base, none, true);
+    expect(closed.closed).toEqual([
+      { groupId: "c3", enrollmentId: "e1", kind: "join" },
+      { groupId: "g4", enrollmentId: "e2", kind: "join" },
+    ]);
+    expect(closed.consequences).toContainEqual({ groupId: "c1", enrollmentId: "e1", kind: "lose" });
+    expect(resyncPlan(after, base, none, false).closed).toEqual([]);
+  });
+
+  it("owes the following copy's moves and the stored keys the set still asks for", () => {
+    const lose = { groupId: "c1", enrollmentId: "e1", kind: "lose" as const };
+    const join = { groupId: "c2", enrollmentId: "e1", kind: "join" as const };
+    const other = { groupId: "c2", enrollmentId: "e2", kind: "join" as const };
+    // A set's write after the confirmation never adds a key.
+    expect(syncWork(null, [lose, join, other], ["c1:e1:lose", "c2:e1:join"])).toEqual({
+      work: [
+        { ...lose, resync: true },
+        { ...join, resync: true },
+      ],
+      kept: ["c1:e1:lose", "c2:e1:join"],
+    });
+    // Undone by the set: dropped.
+    expect(syncWork(null, [other], ["c1:e1:lose", "c2:e1:join"])).toEqual({ work: [], kept: [] });
+    // An arrival whose departure no one confirmed is dropped, not left waiting forever.
+    expect(syncWork(null, [lose, join], ["c2:e1:join"]).kept).toEqual([]);
+    // A following copy's own moves are owed too, flagged when also stored.
+    expect(syncWork([other], [lose, other], ["c1:e1:lose", "c2:e2:join"]).work).toEqual([
+      { ...other, resync: true },
+      { ...lose, resync: true },
+    ]);
+    expect(syncWork([other], [], []).work).toEqual([{ ...other, resync: false }]);
   });
 });
 

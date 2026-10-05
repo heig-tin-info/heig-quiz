@@ -185,8 +185,11 @@ export async function releaseLine(tx: Tx, enrollmentId: string): Promise<void> {
   await assertNoLiveGrant(tx, enrollmentId);
 }
 
-/** How an invitation came: an Accept (one's own, or a fellow member's), a link, a resend, the set's move (`group.sync`), the daily reconciliation (`reconcile`, M3-06). */
-export type InviteVia = "accept" | "link" | "resend" | "group.sync" | "reconcile";
+/**
+ * How an invitation came: an Accept (one's own, or a fellow member's), a link, a resend, the set's move (`group.sync`),
+ * a resync's (`group.resync`), the daily reconciliation (`reconcile`, M3-06).
+ */
+export type InviteVia = "accept" | "link" | "resend" | "group.sync" | "group.resync" | "reconcile";
 
 export interface InviteContext {
   actor: AuditActor;
@@ -327,8 +330,8 @@ export async function inviteOnGithubLink(db: Db, config: AppConfig, userId: stri
 /** Why a revocation had nothing to take (P1): the audit's `reason`. */
 type SkipReason = "app_not_installed" | "repo_deleted" | "not_provisioned" | "account_gone" | "not_invited";
 
-/** The roster write a revocation runs before, or the set's move (`group.sync`): the audit's `via`. */
-export type RevokeVia = "roster.remove" | "roster.unclaim" | "roster.update" | "roster.self_enroll" | "group.sync";
+/** The roster write a revocation runs before, or the set's move (`group.sync`), or a resync's (`group.resync`): the audit's `via`. */
+export type RevokeVia = "roster.remove" | "roster.unclaim" | "roster.update" | "roster.self_enroll" | "group.sync" | "group.resync";
 
 export interface RevokeContext {
   actor: AuditActor;

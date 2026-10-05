@@ -103,7 +103,9 @@ export async function overrideScore(
  * `POST /app/api/projects/:id/release` (F-PROJ-14, D05): the final scores
  * made the students' and the gradebook's. Refused on an ungraded project
  * (`grading_none`), while a live repository is not frozen for good, or
- * none is (`not_frozen`), and while a LIVE repository's final score rests on
+ * none is (`not_frozen`), while a confirmed *Resync with the set* is not
+ * fully applied (`group_sync_pending`, ADR-070's R2: who is in which group,
+ * hence whose score it is, is still moving), and while a LIVE repository's final score rests on
  * a run to verify (`to_verify`, F-PROJ-08: a score captured under a
  * suspended protection or on a restored head is released only once the
  * teacher's score settles it; the body names the repositories). A non-live
@@ -118,6 +120,7 @@ export async function releaseProject(db: Db, projectId: string, actor: AuditActo
     const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
     if (!project) throw new DomainError("not_found", 404, "No such project");
     if (project.gradingMode !== "auto") throw new ProjectError("grading_none", "The project is not graded");
+    if (project.groupResync.length > 0) throw new ProjectError("group_sync_pending", "A resync of the groups is still being applied on GitHub");
     const repos = await studentRepos(tx, project);
     const counts = releaseCounts(project, repos);
     if (!scoresFinal({ gradingMode: project.gradingMode, ...counts, unverified: 0 })) {
