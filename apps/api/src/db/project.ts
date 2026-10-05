@@ -507,6 +507,13 @@ export const projectRepoAccess = pgTable(
     githubLogin: text("github_login").notNull(),
     /** The last invitation's time (`app.clock`): no default. */
     invitedAt: timestamp("invited_at", { withTimezone: true }).notNull(),
+    /**
+     * A revocation asked GitHub and has no answer yet (M3-15b-2): the grant
+     * still counts as live (`revoked_at` null) for every check — a crash or
+     * a lease taken over leaves it set, and the next revocation asks again.
+     */
+    revokingAt: timestamp("revoking_at", { withTimezone: true }),
+    /** GitHub confirmed the revocation, or there was nothing to take (P1). */
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
   },
   (t) => [

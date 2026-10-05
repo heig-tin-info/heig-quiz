@@ -293,7 +293,12 @@ meaning, which ADR-048 deliberately does not use.
   write ADDS to the ones already waiting, by a SHA-256 digest of their
   sorted (project, group, roster line, kind). A failed pass retries after a
   backoff doubling from 30 s up to an hour. Each copy group's stop is
-  stored (`project_groups.stopped_at`).
+  stored (`project_groups.stopped_at`). An access is revoked only once
+  GitHub confirmed it (`project_repo_access.revoking_at` while asking): a
+  roster write meanwhile is refused (`502 revoke_failed`), a crashed job's
+  next pass asks again, and an access GitHub kept on a group repository
+  whose line is no longer its member (a *stray grant*) is the job's to
+  revoke and flags the repository *access to revoke*.
 
 ## Consequences
 

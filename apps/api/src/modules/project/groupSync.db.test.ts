@@ -18,9 +18,15 @@
  *   and the copy write (the departure completes, the arrival skipped); the
  *   set putting the student back meanwhile (invited again); an account
  *   recorded since the revocation (refused, then revoked);
+ * - a revocation counts once GitHub confirmed it (`revoking_at`): a roster
+ *   removal during the job's refused revocation is refused (502); a job
+ *   that crashed after its mark is asked again; a stray access (an
+ *   invitation GitHub would not take back) is flagged and retried;
  * - the per-group stop: a repository's deadline earlier than the project's
- *   stops its group for good — no rename, no move, even once extended —;
- *   the backfill of 0068.
+ *   stops its group for good — no rename, no move, even once extended —; a
+ *   departure whose group stopped before its revocation began is held,
+ *   nothing revoked; the backfill of 0068 (the audit log's first
+ *   application included).
  */
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -30,7 +36,7 @@ import { describe, expect, it } from "vitest";
 
 import { GroupConsequences, GroupSetDetail, ProjectDetail, ProjectSummary } from "@quiz/contracts";
 
-import { githubOrganizations, projectGroupMembers, projectGroups, projectRepoAccess, projectRepos, projects } from "../../db/schema.js";
+import { auditLog, githubOrganizations, projectGroupMembers, projectGroups, projectRepoAccess, projectRepos, projects } from "../../db/schema.js";
 import { inviteOnGithubLink } from "./access.js";
 import {
   accept,
@@ -62,9 +68,10 @@ import {
   world,
   type Student,
 } from "./groupTesting.js";
-import { claimGroupSyncWork, runGroupSyncJob, SYNC_RETRY_MS } from "./groupSync.js";
+import { beginDeparture } from "./groupCopy.js";
+import { claimGroupSyncWork, runGroupSyncJob } from "./groupSync.js";
 import { projectTick } from "./jobs.js";
-import { LEASE_MS } from "./lease.js";
+import { FAILED_RETRY_MS, LEASE_MS } from "./lease.js";
 
 useGroupWorld();
 
@@ -247,16 +254,16 @@ describe("the group.sync job (ADR-070 §4)", () => {
       const detail = ProjectDetail.parse((await staff("GET", `/app/api/projects/${project.id}`)).json());
       const rowOf = (s: Student) => detail.rows.find((r) => r.student.enrollmentId === line(s))!;
       expect([rowOf(ana).repo?.accessToRevoke, rowOf(ben).repo?.accessToRevoke]).toEqual([true, true]);
-      expect(await dueOf(project.id)).toEqual(new Date(Date.parse(NOW) + SYNC_RETRY_MS));
+      expect(await dueOf(project.id)).toEqual(new Date(Date.parse(NOW) + FAILED_RETRY_MS));
       // Not before the backoff; a second failure doubles it.
       expect(await sync(project.id)).toBe(0);
-      later(SYNC_RETRY_MS);
+      later(FAILED_RETRY_MS);
       await expect(sync(project.id)).rejects.toThrow();
-      expect(await dueOf(project.id)).toEqual(new Date(Date.parse(NOW) + 3 * SYNC_RETRY_MS));
+      expect(await dueOf(project.id)).toEqual(new Date(Date.parse(NOW) + 3 * FAILED_RETRY_MS));
     } finally {
       world.unrevokable.delete(a);
     }
-    later(3 * SYNC_RETRY_MS);
+    later(3 * FAILED_RETRY_MS);
     expect(await sync(project.id)).toBe(1);
     expect(seats(a)[ben.login]).toBeUndefined();
     expect(await placeOf(project.id, line(ben))).toBeNull();
@@ -386,11 +393,92 @@ describe("the races of a departure waiting for GitHub", () => {
     });
     await expect(sync(project.id)).rejects.toThrow();
     expect(await placeOf(project.id, line(ben))).toEqual({ group: "Group 1", departing: true, failed: false });
-    later(SYNC_RETRY_MS);
+    later(FAILED_RETRY_MS);
     await sync(project.id);
     expect(await placeOf(project.id, line(ben))).toBeNull();
     const logins = (await auditsOf(row.id, "project_group.repo_revoke")).map((e) => (e.payload as { login: string }).login);
     expect(logins).toEqual([ben.login, `ben-other-${other}`]);
+  });
+});
+
+describe("a revocation counts only once GitHub confirmed it (revoking_at)", () => {
+  it("refuses a roster removal while the job's revocation is under way and GitHub refuses it (502), never a silent cascade", async () => {
+    const { project, room, set, ben, a, line } = await twoRepos();
+    await confirmMove(set, line(ben), null);
+    world.unrevokable.add(a);
+    let during: { statusCode: number; json: () => { error: unknown } } | undefined;
+    try {
+      on({
+        match: (url, method) => method === "DELETE" && url.pathname === `/repos/${a}/collaborators/${ben.login}`,
+        run: async () => void (during = await removeLine(room, line(ben))),
+      });
+      await expect(sync(project.id)).rejects.toThrow();
+    } finally {
+      world.unrevokable.delete(a);
+    }
+    expect([during!.statusCode, during!.json().error]).toEqual([502, "revoke_failed"]);
+    expect(await placeOf(project.id, line(ben))).toEqual({ group: "Group 1", departing: true, failed: true });
+    expect(seats(a)[ben.login]).toBe("push");
+    // GitHub takes it now: the removal's retry revokes and proceeds.
+    expect((await removeLine(room, line(ben))).statusCode).toBe(204);
+    expect(seats(a)[ben.login]).toBeUndefined();
+  });
+
+  it("asks GitHub again after a job crashed between the mark and GitHub's answer", async () => {
+    const { project, room, set, ben, a, line } = await twoRepos();
+    await confirmMove(set, line(ben), null);
+    const [g1] = await db().select().from(projectGroups).where(and(eq(projectGroups.projectId, project.id), eq(projectGroups.name, "Group 1")));
+    const marked = await beginDeparture(db(), project.id, line(ben), g1!.id, (await repoOf(project.id, a)).id, new Date(NOW));
+    expect(marked).toHaveLength(1);
+    // Marked, not revoked: it counts as live — the page flags it, a roster write GitHub refuses is refused.
+    const detail = ProjectDetail.parse((await staff("GET", `/app/api/projects/${project.id}`)).json());
+    expect(detail.rows.find((r) => r.student.enrollmentId === line(ben))!.repo?.accessToRevoke).toBe(true);
+    world.unrevokable.add(a);
+    try {
+      expect((await removeLine(room, line(ben))).statusCode).toBe(502);
+    } finally {
+      world.unrevokable.delete(a);
+    }
+    const before = gh.calls.length;
+    expect(await sync(project.id)).toBe(1);
+    expect(gh.calls.slice(before)).toContain(`DELETE api.github.com/repos/${a}/collaborators/${ben.login}`);
+    expect(await placeOf(project.id, line(ben))).toBeNull();
+    const [grant] = await db().select().from(projectRepoAccess).where(eq(projectRepoAccess.enrollmentId, line(ben)));
+    expect([grant!.revokedAt !== null, grant!.revokingAt]).toEqual([true, null]);
+  });
+
+  it("flags and retries a stray access: an invitation GitHub would not take back after the student moved out", async () => {
+    const eve = await newStudent({ linked: false });
+    const [ana] = [await newStudent()];
+    const { project, room, set } = await groupProject([ana!, eve], [[0, 1]]);
+    expect((await accept(project.id, ana!)).statusCode).toBe(200);
+    const a = `${room.login}/lab-1-group-1`;
+    const line = room.lines.get(eve.id)!;
+    await link(eve.id, eve.githubUserId, eve.login);
+    // Eve's Accept invites her; before GitHub answers, the set moves her out and the job revokes her.
+    on({
+      match: (url, method) => method === "PUT" && url.pathname === `/repos/${a}/collaborators/${eve.login}`,
+      run: async () => {
+        await confirmMove(set, line, null);
+        await sync(project.id);
+        world.unrevokable.add(a);
+      },
+    });
+    try {
+      expect((await accept(project.id, eve)).statusCode).not.toBe(200);
+    } finally {
+      world.unrevokable.delete(a);
+    }
+    expect(await placeOf(project.id, line)).toBeNull();
+    const live = await db().select().from(projectRepoAccess).where(eq(projectRepoAccess.enrollmentId, line));
+    expect(live.map((g) => g.revokedAt)).toEqual([null]);
+    const flagged = () => staff("GET", `/app/api/projects/${project.id}`).then((r) => ProjectDetail.parse(r.json()).rows.some((row) => row.repo?.accessToRevoke));
+    expect(await flagged()).toBe(true);
+    expect(await dueOf(project.id)).not.toBeNull();
+    expect(await sync(project.id)).toBe(1);
+    expect(await flagged()).toBe(false);
+    expect(await dueOf(project.id)).toBeNull();
+    expect(seats(a)[eve.login]).toBeUndefined();
   });
 });
 
@@ -425,13 +513,47 @@ describe("a group stops at the first of its deadlines (the amendment of 2026-10-
     expect(names).toEqual(["Group 1", "Group 2"]);
   });
 
+  it("holds a departure whose group stops before its revocation began: nothing revoked, nothing audited", async () => {
+    const dan = await newStudent();
+    const [ana, ben] = [await newStudent(), await newStudent()];
+    const { project, room, set } = await groupProject([ana!, ben!, dan], [[0, 1, 2]]);
+    expect((await accept(project.id, ana!)).statusCode).toBe(200);
+    const a = `${room.login}/lab-1-group-1`;
+    const [row] = await repoRows(project.id);
+    expect((await staff("PUT", `/app/api/projects/${project.id}/repos/${row!.id}/deadline`, { deadlineAt: "2026-10-05T09:00:00.000Z" })).statusCode).toBe(200);
+    await confirmMove(set, room.lines.get(ben!.id)!, null);
+    await confirmMove(set, room.lines.get(dan.id)!, null);
+    // The first revocation's seat removal: the repository's deadline applies just before it.
+    on({
+      match: (url, method) => method === "DELETE" && url.pathname.startsWith(`/repos/${a}/collaborators/`),
+      run: async () => {
+        later(2 * 3_600_000);
+        await projectTick(server.app, config);
+      },
+    });
+    const before = gh.calls.length;
+    await sync(project.id);
+    const first = gh.calls.slice(before).find((c) => c.startsWith(`DELETE api.github.com/repos/${a}/collaborators/`))!.split("/").at(-1);
+    const [gone, held] = first === ben!.login ? [ben!, dan] : [dan, ben!];
+    expect(await placeOf(project.id, room.lines.get(gone.id)!)).toBeNull();
+    expect(await placeOf(project.id, room.lines.get(held.id)!)).toEqual({ group: "Group 1", departing: false, failed: false });
+    expect(seats(a)[held.login]).toBe("push");
+    const revoked = (await auditsOf(row!.id, "project_group.repo_revoke")).map((e) => (e.payload as { enrollmentId: string }).enrollmentId);
+    expect(revoked).toEqual([room.lines.get(gone.id)]);
+    expect(await dueOf(project.id)).toBeNull();
+  });
+
   it("backfills each group's stop from the first of its project's stop and its repository's deadline (0068)", async () => {
     const [ana, ben] = [await newStudent(), await newStudent()];
     const { project } = await groupProject([ana!, ben!], [[0], [1]]);
     expect((await accept(project.id, ana!)).statusCode).toBe(200);
     const [row] = await repoRows(project.id);
     const [first, second] = [new Date("2026-10-06T00:00:00.000Z"), new Date("2026-10-08T00:00:00.000Z")];
-    await db().update(projectRepos).set({ deadlineAppliedAt: first }).where(eq(projectRepos.id, row!.id));
+    // Applied first on the 6th, then reopened: only the audit log remembers it.
+    await db().update(projectRepos).set({ deadlineAppliedAt: null }).where(eq(projectRepos.id, row!.id));
+    await db()
+      .insert(auditLog)
+      .values({ actorType: "system", action: "project_repo.deadline_applied", subjectType: "project_repo", subjectId: row!.id, payload: {}, createdAt: first });
     await db().update(projects).set({ groupsStoppedAt: second }).where(eq(projects.id, project.id));
     const migration = readFileSync(new URL("../../../drizzle/0068_group_sync.sql", import.meta.url), "utf8");
     await db().execute(sql.raw(migration.slice(migration.indexOf('UPDATE "project_groups"'))));

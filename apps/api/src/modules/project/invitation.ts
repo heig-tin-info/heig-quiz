@@ -112,7 +112,7 @@ export async function resendInvitation(
         if (member.account === null) throw stale;
         const ctx = { actor, now, log, via: "resend", failure: "invite_failed" } as const;
         const done = await inviteAccount(db, octokit, repo, { ...member, account: member.account }, ctx);
-        if (done) invited.push(done);
+        if (typeof done === "object") invited.push(done);
       } catch (err) {
         // A group's member whose account cannot be invited is skipped; GitHub failing fails the resend.
         if (!group || !(err instanceof ProjectError && err.code === "github_account_stale")) throw err;

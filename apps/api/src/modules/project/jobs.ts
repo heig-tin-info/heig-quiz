@@ -64,7 +64,7 @@ import { deadlineWantsLock, effectiveDeadline, zonedIso } from "@quiz/domain";
 import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
-import { botCommits, classrooms, projectGroups, projectRepos, projects } from "../../db/schema.js";
+import { botCommits, classrooms, projectRepos, projects } from "../../db/schema.js";
 import { githubApp, githubStatus, ownerRepo } from "../../github/app.js";
 import { pushEmptyCommit } from "../../github/commit.js";
 import { lockStudentRepo, setRepoArchived, unlockStudentRepo } from "../../github/lock.js";
@@ -73,7 +73,7 @@ import { PROJECT_DEADLINE_QUEUE, PROJECT_DISPATCH_QUEUE, PROJECT_GROUP_SYNC_QUEU
 import type { TickTask } from "../../ticker.js";
 import { DomainError } from "../http.js";
 import { COMMIT_DUE, EFFECTIVE_DEADLINE, LIVE, NEEDS_WORK, ts } from "./deadline.js";
-import { stopGroups } from "./groupCopy.js";
+import { stopGroups, stopProjects } from "./groupCopy.js";
 import { claimGroupSyncWork, runGroupSyncJob } from "./groupSync.js";
 import { claimLeases, runLeased, type ProjectJob } from "./lease.js";
 import { publishProject } from "./lifecycle.js";
@@ -147,21 +147,16 @@ async function applyDeadlines(db: Db, now: Date): Promise<string[]> {
     if (ids.length === 0) return [];
     const locked = await tx
       .update(projects)
-      // The groups stop with the deadline, for good (ADR-070 §4): a reopen
-      // never clears it, so a copy stopped once keeps its first stop.
-      .set({ state: "locked", deadlineAppliedAt: now, groupsStoppedAt: sql`coalesce(${projects.groupsStoppedAt}, ${ts(now)})` })
+      .set({ state: "locked", deadlineAppliedAt: now })
       .where(and(inArray(projects.id, ids), due))
       .returning({ id: projects.id, deadlineAt: projects.deadlineAt });
-    if (locked.length > 0) {
-      await stopGroups(
-        tx,
-        inArray(
-          projectGroups.projectId,
-          locked.map((r) => r.id),
-        ),
-        now,
-      );
-    }
+    // The groups stop with the deadline, for good (ADR-070 §4): a reopen
+    // never clears it, so a copy stopped once keeps its first stop.
+    await stopProjects(
+      tx,
+      locked.map((r) => r.id),
+      now,
+    );
     for (const row of locked) {
       await audit(tx, {
         ...SYSTEM_ACTOR,
@@ -185,7 +180,7 @@ async function applyDeadlines(db: Db, now: Date): Promise<string[]> {
     await auditRepos(tx, "project_repo.deadline_applied", applied);
     // A group stops at the FIRST of its deadlines (the amendment of 2026-10-05).
     const groups = applied.flatMap((r) => (r.groupId === null ? [] : [r.groupId]));
-    if (groups.length > 0) await stopGroups(tx, inArray(projectGroups.id, groups), now);
+    if (groups.length > 0) await stopGroups(tx, { groupIds: groups }, now);
     return [...locked.map((r) => r.id), ...applied.map((r) => r.projectId)];
   });
 }

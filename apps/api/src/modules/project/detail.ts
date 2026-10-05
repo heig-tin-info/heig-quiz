@@ -50,7 +50,7 @@ import { installationClient } from "../../github/app.js";
 import { isRateLimited, readRepoLiveState, type LiveRead } from "../../github/metrics.js";
 import { projectInstallation } from "../github/service.js";
 import { isLive, releaseCounts, repoDeadlineState } from "./deadline.js";
-import { groupsWithAccessToRevoke } from "./groupCopy.js";
+import { reposWithAccessToRevoke } from "./groupCopy.js";
 import { seatRepos } from "./groupRepos.js";
 import { forEachLimit } from "./lease.js";
 import { studentRepos, type RepoRow } from "./repos.js";
@@ -292,7 +292,7 @@ function repoView(
       deleted: repo.deletedAt !== null || read?.state?.missing === true,
       changedAfterRelease: changed,
     },
-    accessToRevoke: repo.groupId !== null && toRevoke.has(repo.groupId),
+    accessToRevoke: toRevoke.has(repo.id),
   };
 }
 
@@ -340,7 +340,7 @@ export async function projectDetail(
   const [runs, facts, dispatches] = await Promise.all([slotRuns(db, repos), runFacts(db, repoIds), finalDispatches(db, repoIds)]);
   const liveRepos = repos.filter((repo) => isLive(repo, project));
   const { live, complete } = await liveStates(db, config, project, liveRepos, opts.log, opts.budgetMs ?? LIVE_BUDGET_MS);
-  const toRevoke = await groupsWithAccessToRevoke(db, project.id);
+  const toRevoke = await reposWithAccessToRevoke(db, project.id);
 
   const views = new Map(
     repos.map((repo) => [repo.id, repoView(project, repo, runs, facts.get(repo.id), dispatches.get(repo.id), live.get(repo.id), toRevoke)]),

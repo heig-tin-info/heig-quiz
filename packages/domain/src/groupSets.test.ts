@@ -222,9 +222,9 @@ describe("splitPlan and consequenceDelta (ADR-070 §4, §6; M3-15b-2)", () => {
   it("defers a member out, a member in and a move either way, with their consequences", () => {
     const base = copy([["e1", "c1"], ["e2", "c2"]]);
     const out = split(set([["g1", "A"], ["g2", "B"]], [["e2", "g2"]]), base);
-    expect([out.now.unplace, out.later.unplace, out.consequences]).toEqual([[], ["e1"], [{ groupId: "c1", enrollmentId: "e1", kind: "lose" }]]);
+    expect([out.now.unplace, out.consequences]).toEqual([[], [{ groupId: "c1", enrollmentId: "e1", kind: "lose" }]]);
     const into = split(set([["g1", "A"], ["g2", "B"]], [["e1", "g1"], ["e2", "g1"]]), base);
-    expect(into.later.place).toEqual([{ enrollmentId: "e2", sourceGroupId: "g1", from: "c2" }]);
+    expect(into.now.place).toEqual([]);
     expect(into.consequences).toEqual([{ groupId: "c1", enrollmentId: "e2", kind: "join" }]);
     const across = split(set([["g1", "A"], ["g2", "B"]], [["e1", "g2"], ["e3", "g1"], ["e2", "g2"]]), base);
     expect(across.consequences).toEqual([
@@ -237,7 +237,7 @@ describe("splitPlan and consequenceDelta (ADR-070 §4, §6; M3-15b-2)", () => {
   it("applies at once a rename, a position, a move without repository and an exempt departure", () => {
     const base = copy([["e1", "c1"], ["e2", "c2"]]);
     const renamed = split(set([["g2", "B"], ["g1", "Renamed"]], [["e1", "g1"], ["e2", "g2"]]), base);
-    expect([renamed.now.update.length, renamed.later, renamed.consequences]).toEqual([2, { place: [], unplace: [] }, []]);
+    expect([renamed.now.update.length, renamed.consequences]).toEqual([2, []]);
     const plain = split(set([["g1", "A"], ["g2", "B"]], [["e1", "g1"]]), base);
     expect([plain.now.unplace, plain.consequences]).toEqual([["e2"], []]);
     const staff = split(set([["g1", "A"], ["g2", "B"]], [["e2", "g2"]]), base, new Set(["e1"]));

@@ -20,7 +20,8 @@
  * - `inviteOnGithubLink` — a student who links their account is invited on
  *   their groups' existing repositories (best effort);
  * - `revokeDeparture` — the `group.sync` job's one-repository version of
- *   it: a member the set moves out of a group with a repository (M3-15b-2);
+ *   `revokeEnrollmentAccess`: a member the set moves out of a group with a
+ *   repository, or a stray access (M3-15b-2);
  * - `revokeEnrollmentAccess` — what the roster's writes call FIRST when a
  *   line leaves, or loses its account (F-PROJ-17, ADR-070 §5): every
  *   recorded account of the line taken out of every repository of the
@@ -30,13 +31,17 @@
  *   there is nothing left to take, and the audit says so (product owner,
  *   2026-10-05, P1).
  *
+ * A grant is revoked only once GitHub confirmed it (M3-15b-2):
+ * `revoking_at` while GitHub is asked, `revoked_at` after its answer; until
+ * then it is live for every check (`assertNoLiveGrant`).
+ *
  * The `org` module calls `revokeEnrollmentAccess` and `releaseLine` through
  * `service.ts` and words `RevokeFailed` as its `502 revoke_failed`; it never
  * reads nor writes these tables itself.
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq, isNull, ne, notExists } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, ne, notExists, sql } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
 import type { Octokit } from "octokit";
 
@@ -72,41 +77,49 @@ interface Grant {
 }
 
 /**
- * The account let into repository `repoId`, written BEFORE GitHub is asked,
- * in one short transaction that locks the line FOR SHARE: only while the
- * line is still claimed by `account.userId` as a STUDENT seat — null
- * otherwise, and nobody is invited. A roster write that takes the line or
- * its account away waits for this lock and then finds the row
- * (`releaseLine`). A group's repository also locks the line's member row of
- * the copy FOR SHARE (M3-15b-2): only a member of that group whose
- * departure is not pending is let in — a set's write marking it waits for
- * this lock, and the `group.sync` job then revokes what it finds. A row
- * already there is brought back (a new login, `revoked_at` cleared).
+ * Why no grant was recorded: the line's move out of the repository's group
+ * waits for GitHub (`departing`, M3-15b-2: try again once it is done), or
+ * the line is no longer that repository's (`gone`).
  */
-export async function recordGrant(db: Db, repoId: string, account: InvitedAccount, now: Date): Promise<Grant | null> {
+export type NotRecorded = "departing" | "gone";
+
+/**
+ * The account let into `repo`, written BEFORE GitHub is asked, in one short
+ * transaction that locks the line FOR SHARE: only while the line is still
+ * claimed by `account.userId` as a STUDENT seat — otherwise nobody is
+ * invited. A roster write that takes the line or its account away waits
+ * for this lock and then finds the row (`releaseLine`). A group's
+ * repository also locks the line's member row of the copy FOR SHARE
+ * (M3-15b-2): only a member of that group whose departure is not pending is
+ * let in — a set's write marking it waits for this lock, and the
+ * `group.sync` job then revokes what it finds. A row already there is
+ * brought back (a new login, `revoking_at` and `revoked_at` cleared).
+ */
+export async function recordGrant(db: Db, repo: RepoRow, account: InvitedAccount, now: Date): Promise<Grant | NotRecorded> {
   return db.transaction(async (tx) => {
     const [line] = await tx
       .select({ userId: enrollments.userId, staff: enrollments.staff })
       .from(enrollments)
       .where(eq(enrollments.id, account.enrollmentId))
       .for("share");
-    if (!line || line.userId !== account.userId || line.staff) return null;
-    const [repo] = await tx.select({ projectId: projectRepos.projectId, groupId: projectRepos.groupId }).from(projectRepos).where(eq(projectRepos.id, repoId));
-    if (repo?.groupId != null) {
+    if (!line || line.userId !== account.userId || line.staff) return "gone";
+    if (repo.groupId !== null) {
       const [member] = await tx
         .select({ groupId: projectGroupMembers.groupId, departingAt: projectGroupMembers.departingAt })
         .from(projectGroupMembers)
         .where(and(eq(projectGroupMembers.projectId, repo.projectId), eq(projectGroupMembers.enrollmentId, account.enrollmentId)))
         .for("share");
-      if (member?.groupId !== repo.groupId || member.departingAt !== null) return null;
+      if (member?.groupId !== repo.groupId) return "gone";
+      if (member.departingAt !== null) return "departing";
     }
+    const repoId = repo.id;
     const key = and(
       eq(projectRepoAccess.repoId, repoId),
       eq(projectRepoAccess.enrollmentId, account.enrollmentId),
       eq(projectRepoAccess.githubUserId, account.githubUserId),
     );
     const [before] = await tx.select().from(projectRepoAccess).where(key).for("update");
-    const fields = { githubLogin: account.login, invitedAt: now, revokedAt: null };
+    const fields = { githubLogin: account.login, invitedAt: now, revokingAt: null, revokedAt: null };
     if (!before) {
       const id = randomUUID();
       await tx.insert(projectRepoAccess).values({ id, repoId, enrollmentId: account.enrollmentId, githubUserId: account.githubUserId, ...fields });
@@ -114,7 +127,9 @@ export async function recordGrant(db: Db, repoId: string, account: InvitedAccoun
     }
     await tx.update(projectRepoAccess).set(fields).where(eq(projectRepoAccess.id, before.id));
     const undo = async () => {
-      if (before.revokedAt !== null) await db.update(projectRepoAccess).set({ revokedAt: before.revokedAt }).where(eq(projectRepoAccess.id, before.id));
+      if (before.revokedAt !== null || before.revokingAt !== null) {
+        await db.update(projectRepoAccess).set({ revokedAt: before.revokedAt, revokingAt: before.revokingAt }).where(eq(projectRepoAccess.id, before.id));
+      }
     };
     return { id: before.id, undo, fresh: before.revokedAt !== null };
   });
@@ -132,22 +147,39 @@ export class RevokeFailed extends Error {
 }
 
 /**
- * In the transaction of a roster write that takes line `enrollmentId` or
- * its account away, after `revokeEnrollmentAccess`: the line locked FOR
- * UPDATE (an invitation recording an account for it waits, then finds it
- * changed), and {@link RevokeFailed} while an account recorded for it is
- * still live — recorded since the revocation read them. The write is then
- * refused whole, and its retry revokes that account.
+ * {@link RevokeFailed} while an account of line `enrollmentId` (on
+ * repository `repoId` only, when given) is not revoked — live, or its
+ * revocation not confirmed by GitHub yet (`revoking_at`: a job asking, or
+ * one that crashed asking).
  */
-export async function releaseLine(tx: Tx, enrollmentId: string): Promise<void> {
-  await tx.select({ id: enrollments.id }).from(enrollments).where(eq(enrollments.id, enrollmentId)).for("update");
+export async function assertNoLiveGrant(tx: Tx, enrollmentId: string, repoId?: string): Promise<void> {
   const [live] = await tx
     .select({ repo: projectRepos.fullName })
     .from(projectRepoAccess)
     .innerJoin(projectRepos, eq(projectRepos.id, projectRepoAccess.repoId))
-    .where(and(eq(projectRepoAccess.enrollmentId, enrollmentId), isNull(projectRepoAccess.revokedAt)))
+    .where(
+      and(
+        eq(projectRepoAccess.enrollmentId, enrollmentId),
+        repoId === undefined ? undefined : eq(projectRepoAccess.repoId, repoId),
+        isNull(projectRepoAccess.revokedAt),
+      ),
+    )
     .limit(1);
   if (live) throw new RevokeFailed(live.repo);
+}
+
+/**
+ * In the transaction of a roster write that takes line `enrollmentId` or
+ * its account away, after `revokeEnrollmentAccess`: the line locked FOR
+ * UPDATE (an invitation recording an account for it waits, then finds it
+ * changed), and {@link RevokeFailed} while an account recorded for it is
+ * not revoked — recorded since the revocation read them, or still being
+ * revoked by the `group.sync` job. The write is then refused whole, and
+ * its retry revokes that account.
+ */
+export async function releaseLine(tx: Tx, enrollmentId: string): Promise<void> {
+  await tx.select({ id: enrollments.id }).from(enrollments).where(eq(enrollments.id, enrollmentId)).for("update");
+  await assertNoLiveGrant(tx, enrollmentId);
 }
 
 /** How an invitation came: an Accept (one's own, or a fellow member's), a link, a resend, the set's move (`group.sync`). */
@@ -168,24 +200,25 @@ export interface InviteContext {
  * may be somebody else's now), the grant recorded first, the invitation
  * (idempotent on GitHub's side: 204 for a collaborator), the grant taken
  * back if GitHub refuses it. Audited `project_group.repo_invite` (a resend
- * audits itself). Null when the line is gone. Refusals: `github_account_stale`
- * (the account deleted, renamed away or refused), `ctx.failure`.
+ * audits itself). {@link NotRecorded} when nobody was let in. Refusals:
+ * `github_account_stale` (the account deleted, renamed away or refused),
+ * `ctx.failure`.
  */
 export async function inviteAccount(
   db: Db,
   octokit: Octokit,
-  repo: Pick<RepoRow, "id" | "fullName">,
+  repo: RepoRow,
   member: RepoMember & { account: NonNullable<RepoMember["account"]> },
   ctx: InviteContext,
-): Promise<{ login: string; invitation: "pending" | "accepted"; fresh: boolean } | null> {
+): Promise<{ login: string; invitation: "pending" | "accepted"; fresh: boolean } | NotRecorded> {
   const login = await linkedLogin(db, octokit, member.userId, member.account).catch((err: unknown) => {
     ctx.log.warn({ err, repo: repo.id }, "GitHub login lookup failed");
     throw new ProjectError(ctx.failure, "GitHub cannot be reached: try again");
   });
   if (typeof login !== "string") throw new ProjectError("github_account_stale", "The GitHub account is gone or renamed: relink it");
   const account = { enrollmentId: member.enrollmentId, userId: member.userId, githubUserId: member.account.githubUserId, login };
-  const grant = await recordGrant(db, repo.id, account, ctx.now);
-  if (grant === null) return null;
+  const grant = await recordGrant(db, repo, account, ctx.now);
+  if (typeof grant === "string") return grant;
   const { owner, repo: name } = ownerRepo(repo.fullName!);
   let invitation: "pending" | "accepted";
   try {
@@ -196,24 +229,33 @@ export async function inviteAccount(
     ctx.log.error({ err, repo: repo.id }, "an invitation failed");
     throw new ProjectError(ctx.failure, "GitHub failed: try again");
   }
-  // The line's grant revoked (its line leaving, or losing its account) while
-  // GitHub was asked: the revocation may have run before this invitation
-  // landed — take it back. (A removed line took its grant with it: the row
-  // gone, the invitation is taken back all the same.)
+  // The line's grant being revoked or revoked (its line leaving, losing its
+  // account, or moved out of the group) while GitHub was asked: the
+  // revocation may have run before this invitation landed — take it back.
+  // (A removed line took its grant with it: the row gone, the invitation is
+  // taken back all the same.)
   const [live] = await db
     .select({ id: projectRepoAccess.id })
     .from(projectRepoAccess)
-    .where(and(eq(projectRepoAccess.id, grant.id), isNull(projectRepoAccess.revokedAt)));
+    .where(and(eq(projectRepoAccess.id, grant.id), isNull(projectRepoAccess.revokedAt), isNull(projectRepoAccess.revokingAt)));
   if (!live) {
     try {
       await revokeCollaborator(octokit, owner, name, login);
     } catch (err) {
-      // Still let in: the grant live again, for the next revocation to find.
-      await db.update(projectRepoAccess).set({ revokedAt: null }).where(eq(projectRepoAccess.id, grant.id));
+      // Still let in: the grant live again — a revocation still asking will
+      // not confirm it —, and a group's project due, for the `group.sync`
+      // job to take this stray access (`STRAY_GRANT`).
+      await db.update(projectRepoAccess).set({ revokedAt: null, revokingAt: null }).where(eq(projectRepoAccess.id, grant.id));
+      if (repo.groupId !== null) {
+        await db
+          .update(projects)
+          .set({ groupSyncDueAt: sql`coalesce(${projects.groupSyncDueAt}, ${ctx.now.toISOString()}::timestamptz)` })
+          .where(eq(projects.id, repo.projectId));
+      }
       const { status, message } = err as { status?: number; message?: string };
       ctx.log.error({ status, message, repo: repo.fullName, login }, "taking back the invitation of a line that left failed");
     }
-    return null;
+    return "gone";
   }
   if (ctx.via !== "resend") {
     await audit(db, {
@@ -272,7 +314,7 @@ export async function inviteOnGithubLink(db: Db, config: AppConfig, userId: stri
         via: "link",
         failure: "invite_failed",
       });
-      if (invited) await followInvitation(db, repo, invited.invitation);
+      if (typeof invited === "object") await followInvitation(db, repo, invited.invitation);
     } catch (err) {
       ctx.log.warn({ err, repo: repo.id }, "a group repository's invitation on link failed");
     }
@@ -292,7 +334,7 @@ export interface RevokeContext {
   via: RevokeVia;
 }
 
-type GrantRow = typeof projectRepoAccess.$inferSelect;
+export type GrantRow = typeof projectRepoAccess.$inferSelect;
 type Revoked = { outcome: "ok"; login: string; invitationsCancelled: number } | { outcome: "skipped"; login: string; reason: SkipReason };
 
 /**
@@ -319,13 +361,6 @@ async function installationClients(db: Db, config: AppConfig, orgIds: readonly s
   return clients;
 }
 
-/** A revocation asked while the repository's first provisioning runs: it may still invite the account, so the caller retries once it is done. */
-export class ProvisioningUnderWay extends Error {
-  constructor() {
-    super("the repository is being provisioned");
-    this.name = "ProvisioningUnderWay";
-  }
-}
 
 /** The repository's name on GitHub: the row's, or, for a row whose provisioning failed after GitHub made it, by its id; null when GitHub holds none. */
 async function nameOnGithub(octokit: Octokit, repo: RepoRow): Promise<string | null> {
@@ -352,7 +387,7 @@ async function revokeGrant(octokit: Octokit | null, repo: RepoRow, grant: GrantR
   const skipped = (reason: SkipReason, login = grant.githubLogin): Revoked => ({ outcome: "skipped", login, reason });
   if (repo.deletedAt !== null) return skipped("repo_deleted");
   if (octokit === null) return skipped("app_not_installed");
-  if (provisioningNow(repo, now)) throw new ProvisioningUnderWay();
+  if (provisioningNow(repo, now)) throw new Error("the repository is being provisioned");
   const fullName = await nameOnGithub(octokit, repo);
   if (fullName === null) return skipped(repo.githubRepoId === null ? "not_provisioned" : "repo_deleted");
   // The account invited, by its immutable id: its login of today.
@@ -369,9 +404,9 @@ async function revokeGrant(octokit: Octokit | null, repo: RepoRow, grant: GrantR
 }
 
 /**
- * The provisioned repositories the line reads (`seatRepos`: its own, or its
- * copy groups', a live individual one first) with no account of it ever
- * recorded: what the audit reports as skipped, `not_invited` (P1). (The
+ * The repositories the line reads (`seatRepos`: its own, or its copy
+ * groups', a live individual one first), whatever their provisioning, with
+ * no account of it ever recorded: what the audit reports as skipped, `not_invited` (P1). (The
  * backfill of 0067 recorded the individual repositories' students linked
  * at the migration; one who had unlinked before it is reported here too.)
  */
@@ -387,7 +422,7 @@ async function uninvitedRepos(db: Db, enrollmentId: string): Promise<RepoRow[]> 
   );
   return own.flatMap((p) => {
     const repo = seats.of(p.id, enrollmentId);
-    return repo !== null && repo.provisionStatus === "ok" && !granted.has(repo.id) ? [repo] : [];
+    return repo !== null && !granted.has(repo.id) ? [repo] : [];
   });
 }
 
@@ -395,8 +430,9 @@ async function uninvitedRepos(db: Db, enrollmentId: string): Promise<RepoRow[]> 
  * Takes every recorded account of roster line `enrollmentId` out of every
  * repository it was let into (a group's or the student's own), a pending
  * invitation then the collaborator seat, before the caller removes the
- * line or detaches its account. Each account is marked revoked and audited
- * as it goes, so a retry resumes where GitHub stopped; a repository left
+ * line or detaches its account — those a `group.sync` job is revoking
+ * (`revoking_at`) asked again. Each account is confirmed revoked and
+ * audited as it goes, so a retry resumes where GitHub stopped; a repository left
  * with no live account has its invitation state cleared (`none`). The
  * caller's write then runs behind {@link releaseLine}.
  *
@@ -435,29 +471,37 @@ export async function revokeEnrollmentAccess(db: Db, config: AppConfig, enrollme
 }
 
 /**
- * The `group.sync` job's departure (ADR-070 §4, M3-15b-2): every recorded
- * account of line `enrollmentId` taken out of the ONE repository `repo`,
- * as {@link revokeEnrollmentAccess} does — marked revoked before GitHub is
- * asked, a pending invitation cancelled before the seat, audited `via:
- * "group.sync"` —, `client` null when the App is not on the organization
- * (P1: skipped). No account ever recorded there is audited `not_invited`
- * (product owner, 2026-10-05: the move proceeds). Throws
- * {@link RevokeFailed}, the line's accounts live again, when GitHub refuses
- * or fails.
+ * The `group.sync` job's revocation of line `enrollmentId` on the ONE
+ * repository `repo` (ADR-070 §4, M3-15b-2): its `grants`, already marked
+ * `revoking_at` by the job under its locks (`beginDeparture`, a stray
+ * grant's), taken out as {@link revokeEnrollmentAccess} does — a pending
+ * invitation cancelled before the seat, confirmed `revoked_at`, audited
+ * `via: "group.sync"` —, `client` null when the App is not on the
+ * organization (P1: skipped). No account ever recorded there is audited
+ * `not_invited`, whatever the repository's provisioning (product owner,
+ * 2026-10-05: the move proceeds). Throws {@link RevokeFailed}, the
+ * account live again, when GitHub refuses or fails.
  */
-export async function revokeDeparture(db: Db, client: Octokit | null, repo: RepoRow, enrollmentId: string, ctx: RevokeContext): Promise<void> {
-  const grants = await db
-    .select()
-    .from(projectRepoAccess)
-    .where(and(eq(projectRepoAccess.repoId, repo.id), eq(projectRepoAccess.enrollmentId, enrollmentId)))
-    .orderBy(projectRepoAccess.githubUserId);
-  if (grants.length === 0 && repo.provisionStatus === "ok") {
-    await traceRevoke(db, repo, enrollmentId, ctx, { login: null, outcome: "skipped", reason: "not_invited" });
+export async function revokeDeparture(
+  db: Db,
+  client: Octokit | null,
+  repo: RepoRow,
+  enrollmentId: string,
+  grants: readonly GrantRow[],
+  ctx: RevokeContext,
+): Promise<void> {
+  if (grants.length === 0) {
+    const [ever] = await db
+      .select({ id: projectRepoAccess.id })
+      .from(projectRepoAccess)
+      .where(and(eq(projectRepoAccess.repoId, repo.id), eq(projectRepoAccess.enrollmentId, enrollmentId)))
+      .limit(1);
+    if (!ever) await traceRevoke(db, repo, enrollmentId, ctx, { login: null, outcome: "skipped", reason: "not_invited" });
     return;
   }
   await revokeGrants(
     db,
-    grants.filter((grant) => grant.revokedAt === null).map((grant) => ({ grant, repo, client })),
+    grants.map((grant) => ({ grant, repo, client })),
     enrollmentId,
     ctx,
   );
@@ -481,9 +525,19 @@ function traceRevoke(db: Db, repo: RepoRow, enrollmentId: string, ctx: RevokeCon
 }
 
 /**
- * Each live grant of `items` taken out of its repository, in order, through
- * its organization's client; {@link RevokeFailed} at the first GitHub
- * refuses, those before it done and audited.
+ * Each grant of `items` not revoked yet taken out of its repository, in
+ * order, through its organization's client; {@link RevokeFailed} at the
+ * first GitHub refuses, those before it done and audited.
+ *
+ * **A grant is revoked only once GitHub confirmed it** (or there was
+ * nothing to take): `revoking_at` is set before GitHub is asked — an
+ * invitation of this account whose re-check (`inviteAccount`) still finds
+ * it live landed before this revocation lists the invitations, which then
+ * cancels it; one that finds it revoking takes itself back —, `revoked_at`
+ * after GitHub's answer, only while still marked (an invitation's failed
+ * take-back made it live again meanwhile). Until then it counts as live
+ * everywhere (`releaseLine`, `completeDeparture`); a refusal clears the
+ * mark, a crash leaves it for the next revocation to ask again.
  */
 async function revokeGrants(
   db: Db,
@@ -492,15 +546,16 @@ async function revokeGrants(
   ctx: RevokeContext,
 ): Promise<void> {
   for (const { grant, repo, client } of items) {
-    // Marked BEFORE GitHub is asked: an invitation of this account whose
-    // re-check (`inviteAccount`) still finds it live landed before this
-    // revocation lists the invitations, which then cancels it; one that
-    // finds it revoked takes itself back. Live again if GitHub refuses.
-    await db.update(projectRepoAccess).set({ revokedAt: ctx.now }).where(eq(projectRepoAccess.id, grant.id));
+    const unrevoked = and(eq(projectRepoAccess.id, grant.id), isNull(projectRepoAccess.revokedAt));
+    await db.update(projectRepoAccess).set({ revokingAt: ctx.now }).where(unrevoked);
     const revoked = await revokeGrant(client, repo, grant, ctx.now).catch(async (err: unknown) => {
-      await db.update(projectRepoAccess).set({ revokedAt: null }).where(eq(projectRepoAccess.id, grant.id));
+      await db.update(projectRepoAccess).set({ revokingAt: null }).where(unrevoked);
       throw revokeFailed(err, repo, enrollmentId, ctx);
     });
+    await db
+      .update(projectRepoAccess)
+      .set({ revokedAt: ctx.now, revokingAt: null })
+      .where(and(unrevoked, isNotNull(projectRepoAccess.revokingAt)));
     await db
       .update(projectRepos)
       .set({ invitationStatus: "none" })

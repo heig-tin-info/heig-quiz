@@ -13,8 +13,9 @@
  * And the lifecycle calls `replaceGroupCopy` when a draft names a set,
  * another one, or none; the ticker and the archive call `stopGroups`; the
  * `group.sync` job (`groupSync.ts`) the steps of a move that waits for
- * GitHub (`syncSteps`, `completeDeparture`, `completeArrival`,
- * `settleSync`).
+ * GitHub (`syncSteps`, `beginDeparture`, `completeDeparture`,
+ * `completeArrival`, `beginStrayRevocation`, `settleSync`); the project
+ * page reads `reposWithAccessToRevoke` ({@link STRAY_GRANT}).
  *
  * **Lock order** — the set, then its projects in id order, then a copy's
  * member rows: a set's write locks its set row FOR UPDATE, then the
@@ -46,17 +47,17 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 
-import { and, asc, eq, inArray, isNotNull, isNull, notInArray, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 
 import type { GroupConsequence, GroupConsequences } from "@quiz/contracts";
 import {
   consequenceDelta,
+  consequenceKey,
+  copyFollows,
   groupSyncPlan,
   isEmptyPlan,
   splitPlan,
-  type copyFollows,
   type CopyState,
-  type DeferredSteps,
   type GroupSyncPlan,
   type PlanConsequence,
   type SetState,
@@ -74,7 +75,8 @@ import {
   studentGroupMembers,
   studentGroups,
 } from "../../db/schema.js";
-import { RevokeFailed } from "./access.js";
+import { assertNoLiveGrant, type GrantRow } from "./access.js";
+import type { RepoRow } from "./repos.js";
 
 /** A set's write would delete a copy group with a repository of each of `projectIds`: the group module's `409 has_repo`. */
 export class RepoGroupTouched extends Error {
@@ -214,9 +216,6 @@ function planOf(projectId: string, copy: Copy, set: SetState) {
   return { projectId, copy, plan, split: splitPlan(copy, plan, copy.staffSeats) };
 }
 
-/** No move waits for GitHub. */
-const nothingDeferred = (later: DeferredSteps): boolean => later.place.length === 0 && later.unplace.length === 0;
-
 const CLEARED = { departingAt: null, revokeFailedAt: null, revokeFailedReason: null } as const;
 
 /**
@@ -267,7 +266,7 @@ export async function copiesBefore(tx: Tx, setId: string, following: readonly { 
   return before;
 }
 
-/** The consequences named for the staff, in a canonical order, and their digest (SHA-256 of that order's keys). */
+/** The consequences named for the staff, in a canonical order, and their digest (SHA-256 of that order's keys, `project:group:line:kind`). */
 async function describeConsequences(tx: Tx, added: (PlanConsequence & { projectId: string })[]): Promise<GroupConsequences> {
   const groups = await tx
     .select({ id: projectGroups.id, name: projectGroups.name, projectName: projects.name, repo: projectRepos.fullName })
@@ -281,7 +280,7 @@ async function describeConsequences(tx: Tx, added: (PlanConsequence & { projectI
     .where(inArray(enrollments.id, [...new Set(added.map((c) => c.enrollmentId))]));
   const groupOf = new Map(groups.map((g) => [g.id, g]));
   const lineOf = new Map(lines.map((l) => [l.id, l]));
-  const keyed = added.map((c) => ({ c, key: [c.projectId, c.groupId, c.enrollmentId, c.kind] })).sort((a, b) => (a.key.join(" ") < b.key.join(" ") ? -1 : 1));
+  const keyed = added.map((c) => ({ c, key: `${c.projectId}:${consequenceKey(c)}` })).sort((a, b) => (a.key < b.key ? -1 : 1));
   const consequences = keyed.map(({ c }): GroupConsequence => {
     const group = groupOf.get(c.groupId)!;
     const line = lineOf.get(c.enrollmentId)!;
@@ -338,7 +337,7 @@ export async function stepCopies(tx: Tx, setId: string, before: CopiesBefore, op
       stepped.changed.push(p.projectId);
     }
     await markDepartures(tx, p.projectId, p.split.consequences, opts.now);
-    if (!nothingDeferred(p.split.later)) {
+    if (p.split.consequences.length > 0) {
       await tx.update(projects).set({ groupSyncDueAt: opts.now }).where(eq(projects.id, p.projectId));
       stepped.due.push(p.projectId);
     }
@@ -362,15 +361,16 @@ export async function replaceGroupCopy(tx: Tx, projectId: string, setId: string 
 // ---------------------------------------------------------------- the stops
 
 /**
- * The copy groups `where` selects stop following, for good (the amendment
- * of 2026-10-05): written in the transaction of the deadline applied (a
- * repository's, or the project's) or of the archive, under the project's
- * row lock. Their pending departures are dropped with their *access to
- * revoke*: a stopped group keeps its members — unless the `group.sync` job
- * already revoked one, whose departure then completes
- * (`completeDeparture`).
+ * The copy groups of `projectIds`, or the groups `groupIds`, stop following,
+ * for good (the amendment of 2026-10-05): written in the transaction of the
+ * deadline applied (a repository's, or the project's) or of the archive,
+ * under the project's row lock. Their pending departures are dropped with
+ * their *access to revoke*: a stopped group keeps its members — unless the
+ * `group.sync` job already marked one's revocation, whose departure then
+ * completes (`completeDeparture`).
  */
-export async function stopGroups(tx: Tx, where: SQL | undefined, now: Date): Promise<void> {
+export async function stopGroups(tx: Tx, which: { projectIds: readonly string[] } | { groupIds: readonly string[] }, now: Date): Promise<void> {
+  const where = "projectIds" in which ? inArray(projectGroups.projectId, [...which.projectIds]) : inArray(projectGroups.id, [...which.groupIds]);
   const stopped = await tx
     .update(projectGroups)
     .set({ stoppedAt: now })
@@ -391,15 +391,66 @@ export async function stopGroups(tx: Tx, where: SQL | undefined, now: Date): Pro
     );
 }
 
+/**
+ * The projects `ids` stop following their sets, for good (ADR-070 §4): the
+ * deadline applied, or the archive — `groups_stopped_at` kept from its
+ * first writing (a reopen or an unarchive never clears it), every group of
+ * their copies stopped with them.
+ */
+export async function stopProjects(tx: Tx, ids: readonly string[], now: Date): Promise<void> {
+  if (ids.length === 0) return;
+  await tx
+    .update(projects)
+    .set({ groupsStoppedAt: sql`coalesce(${projects.groupsStoppedAt}, ${now.toISOString()}::timestamptz)` })
+    .where(inArray(projects.id, [...ids]));
+  await stopGroups(tx, { projectIds: ids }, now);
+}
+
+// ---------------------------------------------------------------- stray grants
+
+/**
+ * A **stray grant** (M3-15b-2): an account not revoked (live, or its
+ * revocation unconfirmed) on a GROUP repository whose roster line is not a
+ * non-departing member of that repository's copy group — a departure the
+ * job has not completed, or an access GitHub kept when an invitation could
+ * not be taken back. Over `project_repo_access` joined to its
+ * `project_repos` row. The `group.sync` job revokes them; the project page
+ * flags their repository *access to revoke*.
+ */
+export const STRAY_GRANT = sql`(${projectRepoAccess.revokedAt} IS NULL AND ${projectRepos.groupId} IS NOT NULL AND NOT EXISTS (
+  SELECT 1 FROM ${projectGroupMembers} WHERE ${projectGroupMembers.groupId} = ${projectRepos.groupId}
+    AND ${projectGroupMembers.enrollmentId} = ${projectRepoAccess.enrollmentId} AND ${projectGroupMembers.departingAt} IS NULL))`;
+
+/** The stray grants of the project, with their repositories. */
+async function strayGrants(db: Db | Tx, projectId: string) {
+  return db
+    .select({ grant: projectRepoAccess, repo: projectRepos })
+    .from(projectRepoAccess)
+    .innerJoin(projectRepos, eq(projectRepos.id, projectRepoAccess.repoId))
+    .where(and(eq(projectRepos.projectId, projectId), STRAY_GRANT));
+}
+
+/**
+ * The project's repositories flagged *access to revoke* (F-PROJ-13): a
+ * stray grant on it, or a member whose revocation GitHub refused.
+ */
+export async function reposWithAccessToRevoke(db: Db | Tx, projectId: string): Promise<Set<string>> {
+  const flagged = await db
+    .selectDistinct({ repoId: projectRepos.id })
+    .from(projectGroupMembers)
+    .innerJoin(projectRepos, eq(projectRepos.groupId, projectGroupMembers.groupId))
+    .where(and(eq(projectGroupMembers.projectId, projectId), isNotNull(projectGroupMembers.revokeFailedAt)));
+  return new Set([...flagged.map((r) => r.repoId), ...(await strayGrants(db, projectId)).map((r) => r.repo.id)]);
+}
+
 // ---------------------------------------------------------------- the job's steps (`groupSync.ts`)
 
 /**
  * The job's frame on one project: its set FOR SHARE (a set's write waits),
  * then the project FOR UPDATE — the order of a set's write. The set the
- * project follows, or null when it no longer follows (its groups stopped,
- * or no set).
+ * project names, and whether its copy follows it ({@link copyFollows}).
  */
-async function lockSync(tx: Tx, projectId: string): Promise<string | null> {
+async function lockSync(tx: Tx, projectId: string): Promise<{ setId: string | null; follows: boolean }> {
   const [named] = await tx.select({ setId: projects.groupSetId }).from(projects).where(eq(projects.id, projectId));
   if (named?.setId) await tx.select({ id: groupSets.id }).from(groupSets).where(eq(groupSets.id, named.setId)).for("share");
   const [project] = await tx
@@ -407,22 +458,25 @@ async function lockSync(tx: Tx, projectId: string): Promise<string | null> {
     .from(projects)
     .where(eq(projects.id, projectId))
     .for("update");
-  return project?.setId && project.groupsStoppedAt === null ? project.setId : null;
-}
-
-/** The project's moves waiting for GitHub, as its job finds them. */
-export interface SyncSteps {
-  /** A student leaving copy group `groupId`, which has a repository (for another group, or for none). */
-  departures: { enrollmentId: string; groupId: string }[];
-  /** A student joining the copy group of `sourceGroupId`, which has a repository, from no group or from a group without one. */
-  arrivals: { enrollmentId: string; sourceGroupId: string }[];
+  const setId = project?.setId ?? null;
+  return { setId, follows: setId !== null && copyFollows(project!) };
 }
 
 /** The plan of the copy against its set, under the job's locks; null when it no longer follows. */
 async function syncPlan(tx: Tx, projectId: string) {
-  const setId = await lockSync(tx, projectId);
-  if (setId === null) return null;
-  return planOf(projectId, await copyState(tx, projectId), await setState(tx, setId));
+  const { setId, follows } = await lockSync(tx, projectId);
+  if (!follows) return null;
+  return planOf(projectId, await copyState(tx, projectId), await setState(tx, setId!));
+}
+
+/** The project's work waiting for GitHub, as its job finds it. */
+export interface SyncSteps {
+  /** A student leaving copy group `groupId`, which has a repository (for another group, or for none). */
+  departures: { enrollmentId: string; groupId: string }[];
+  /** A student joining copy group `groupId`, which has a repository, from no group or from a group without one. */
+  arrivals: { enrollmentId: string; groupId: string }[];
+  /** The stray grants no departure covers (an invitation's failed take-back): revoked as they stand. */
+  strays: { grantId: string; repoId: string }[];
 }
 
 /**
@@ -432,29 +486,32 @@ async function syncPlan(tx: Tx, projectId: string) {
 export async function syncSteps(db: Db, projectId: string, now: Date): Promise<SyncSteps> {
   return db.transaction(async (tx) => {
     const found = await syncPlan(tx, projectId);
-    if (found === null) return { departures: [], arrivals: [] };
-    const { copy, split } = found;
-    await markDepartures(tx, projectId, split.consequences, now);
-    const groupOf = new Map(copy.members.map((m) => [m.enrollmentId, m.groupId]));
-    const leaving = new Set(split.consequences.filter((c) => c.kind === "lose").map((c) => c.enrollmentId));
+    const consequences = found?.split.consequences ?? [];
+    if (found) await markDepartures(tx, projectId, consequences, now);
+    const leaving = new Set(consequences.filter((c) => c.kind === "lose").map((c) => c.enrollmentId));
+    const departures = consequences.filter((c) => c.kind === "lose").map(({ enrollmentId, groupId }) => ({ enrollmentId, groupId }));
+    const covered = new Set(departures.map((d) => `${d.groupId}:${d.enrollmentId}`));
     return {
-      departures: [...leaving].map((enrollmentId) => ({ enrollmentId, groupId: groupOf.get(enrollmentId)! })),
-      arrivals: split.later.place.filter((p) => !leaving.has(p.enrollmentId)).map(({ enrollmentId, sourceGroupId }) => ({ enrollmentId, sourceGroupId })),
+      departures,
+      arrivals: consequences.filter((c) => c.kind === "join" && !leaving.has(c.enrollmentId)).map(({ enrollmentId, groupId }) => ({ enrollmentId, groupId })),
+      strays: (await strayGrants(tx, projectId))
+        .filter(({ grant, repo }) => !covered.has(`${repo.groupId}:${grant.enrollmentId}`))
+        .map(({ grant, repo }) => ({ grantId: grant.id, repoId: repo.id })),
     };
   });
 }
 
 /**
- * Whether work is left once a pass of the job is done, under its locks:
- * nothing waiting clears the project's due mark and its failures; work
- * left keeps it — after a failed pass, from `retryAt(failures)` on (the
- * capped backoff), its failures counted.
+ * Whether work is left once a pass of the job is done, under its locks — a
+ * move waiting, or a stray grant: none clears the project's due mark and
+ * its failures; work left keeps it — after a failed pass, from
+ * `retryAt(failures)` on (the capped backoff), its failures counted.
  */
 export async function settleSync(db: Db, projectId: string, now: Date, retryAt: ((failures: number) => Date) | null): Promise<boolean> {
   return db.transaction(async (tx) => {
     const found = await syncPlan(tx, projectId);
     if (found !== null) await markDepartures(tx, projectId, found.split.consequences, now);
-    const waiting = found !== null && !nothingDeferred(found.split.later);
+    const waiting = (found !== null && found.split.consequences.length > 0) || (await strayGrants(tx, projectId)).length > 0;
     if (!waiting) {
       await tx.update(projects).set({ groupSyncDueAt: null, groupSyncFailures: 0 }).where(eq(projects.id, projectId));
     } else if (retryAt !== null) {
@@ -468,46 +525,58 @@ export async function settleSync(db: Db, projectId: string, now: Date, retryAt: 
   });
 }
 
-/** The set group the student is in (never a staff seat), and the copy group following it when it follows. */
-async function placeInSet(tx: Tx, projectId: string, setId: string | null, enrollmentId: string) {
-  const [placed] =
-    setId === null
-      ? []
-      : await tx
-          .select({ groupId: studentGroupMembers.groupId })
-          .from(studentGroupMembers)
-          .innerJoin(enrollments, and(eq(enrollments.id, studentGroupMembers.enrollmentId), eq(enrollments.staff, false)))
-          .where(and(eq(studentGroupMembers.setId, setId), eq(studentGroupMembers.enrollmentId, enrollmentId)));
-  if (!placed) return { sourceGroupId: null, target: null };
-  const [target] = await tx
-    .select({ id: projectGroups.id, stoppedAt: projectGroups.stoppedAt })
-    .from(projectGroups)
-    .where(and(eq(projectGroups.projectId, projectId), eq(projectGroups.sourceGroupId, placed.groupId)));
-  return { sourceGroupId: placed.groupId, target: target && target.stoppedAt === null ? target.id : null };
-}
-
-/** The member row of `enrollmentId` in the copy, locked FOR UPDATE, with its group's source and whether that group has a repository. */
+/** The member row of `enrollmentId` in the copy, locked FOR UPDATE, with its group's source and stop. */
 async function memberForUpdate(tx: Tx, projectId: string, enrollmentId: string) {
   const [row] = await tx
-    .select({ member: projectGroupMembers, sourceGroupId: projectGroups.sourceGroupId, hasRepo: HAS_REPO })
+    .select({ member: projectGroupMembers, sourceGroupId: projectGroups.sourceGroupId, stoppedAt: projectGroups.stoppedAt })
     .from(projectGroupMembers)
     .innerJoin(projectGroups, eq(projectGroups.id, projectGroupMembers.groupId))
-    .leftJoin(projectRepos, eq(projectRepos.groupId, projectGroups.id))
     .where(and(eq(projectGroupMembers.projectId, projectId), eq(projectGroupMembers.enrollmentId, enrollmentId)))
     .for("update", { of: projectGroupMembers });
   return row ?? null;
 }
 
-/** The set the project names, read under the job's locks. */
-async function namedSet(tx: Tx, projectId: string): Promise<string | null> {
-  const [project] = await tx.select({ setId: projects.groupSetId }).from(projects).where(eq(projects.id, projectId));
-  return project?.setId ?? null;
+/**
+ * The first step of a departure from copy group `groupId`, whose
+ * repository is `repoId`: under the job's locks and the member row FOR
+ * UPDATE, only while the student still departs from that group and it has
+ * not stopped — then their grants there not revoked yet are marked
+ * `revoking_at` in the same transaction, and returned for GitHub. Otherwise
+ * `held`: a stop or the set's write came first, nothing is revoked and the
+ * copy is left as it stands.
+ */
+export async function beginDeparture(db: Db, projectId: string, enrollmentId: string, groupId: string, repoId: string, now: Date): Promise<GrantRow[] | "held"> {
+  return db.transaction(async (tx) => {
+    await lockSync(tx, projectId);
+    const row = await memberForUpdate(tx, projectId, enrollmentId);
+    if (!row || row.member.groupId !== groupId || row.member.departingAt === null || row.stoppedAt !== null) return "held";
+    return tx
+      .update(projectRepoAccess)
+      .set({ revokingAt: now })
+      .where(and(eq(projectRepoAccess.repoId, repoId), eq(projectRepoAccess.enrollmentId, enrollmentId), isNull(projectRepoAccess.revokedAt)))
+      .returning();
+  });
+}
+
+/** A stray grant, still stray under the job's locks, marked `revoking_at` with its repository; null when it no longer is. */
+export async function beginStrayRevocation(db: Db, projectId: string, grantId: string, now: Date): Promise<{ grant: GrantRow; repo: RepoRow } | null> {
+  return db.transaction(async (tx) => {
+    await lockSync(tx, projectId);
+    const [found] = await tx
+      .select({ grant: projectRepoAccess, repo: projectRepos })
+      .from(projectRepoAccess)
+      .innerJoin(projectRepos, eq(projectRepos.id, projectRepoAccess.repoId))
+      .where(and(eq(projectRepoAccess.id, grantId), STRAY_GRANT))
+      .for("update", { of: projectRepoAccess });
+    if (!found) return null;
+    await tx.update(projectRepoAccess).set({ revokingAt: now }).where(eq(projectRepoAccess.id, grantId));
+    return { grant: { ...found.grant, revokingAt: now }, repo: found.repo };
+  });
 }
 
 /**
  * How a departure ended: `moved` into copy group `to` (whose repository, if
- * any, is then invited on); `left` the copy (the set has the student in no
- * group, or in one whose copy does not follow); `kept` in its group, the set
+ * any, is then invited on); `left` the copy; `kept` in its group, the set
  * having put the student back (their access, revoked meanwhile, is then
  * given again); `gone` — the row is no longer there (the roster line
  * removed) or no longer in that group.
@@ -517,32 +586,32 @@ export type Departure = { outcome: "moved"; to: string } | { outcome: "left" } |
 /**
  * The last step of a departure from copy group `groupId`, once GitHub
  * revoked the student's access to its repository `repoId`: under the job's
- * locks and the member row FOR UPDATE, refused ({@link RevokeFailed}) while
- * an account of the line on that repository is live — recorded since the
- * revocation read them —, then the row moved where the set now has the
- * student, or out of the copy. A stop that landed after the revocation does
- * not hold it: the copy never claims an access GitHub no longer gives; only
- * the arrival is then skipped.
+ * locks and the member row FOR UPDATE, refused (`RevokeFailed`) while
+ * an account of the line there is not revoked — recorded since, or made
+ * live again —, then decided from the plan of the copy against the set as
+ * they now stand, the group left counted as following (its access is gone:
+ * the copy never claims one GitHub no longer gives): in step — `kept`; a
+ * place into a copy group that follows — `moved`; otherwise (no group, a
+ * held target, the project stopped) — `left`.
  */
 export async function completeDeparture(db: Db, projectId: string, enrollmentId: string, groupId: string, repoId: string, now: Date): Promise<Departure> {
   return db.transaction(async (tx): Promise<Departure> => {
-    const follows = (await lockSync(tx, projectId)) !== null;
+    const { setId, follows } = await lockSync(tx, projectId);
     const row = await memberForUpdate(tx, projectId, enrollmentId);
     if (!row || row.member.groupId !== groupId) return { outcome: "gone" };
-    const place = await placeInSet(tx, projectId, await namedSet(tx, projectId), enrollmentId);
-    if (place.sourceGroupId !== null && place.sourceGroupId === row.sourceGroupId) {
+    await assertNoLiveGrant(tx, enrollmentId, repoId);
+    const set = setId === null ? { groups: [], members: [] } : await setState(tx, setId);
+    if (set.members.some((m) => m.enrollmentId === enrollmentId && m.groupId === row.sourceGroupId)) {
       await tx.update(projectGroupMembers).set(CLEARED).where(eq(projectGroupMembers.id, row.member.id));
       return { outcome: "kept" };
     }
-    const [live] = await tx
-      .select({ repo: projectRepos.fullName })
-      .from(projectRepoAccess)
-      .innerJoin(projectRepos, eq(projectRepos.id, projectRepoAccess.repoId))
-      .where(and(eq(projectRepoAccess.repoId, repoId), eq(projectRepoAccess.enrollmentId, enrollmentId), isNull(projectRepoAccess.revokedAt)));
-    if (live) throw new RevokeFailed(live.repo);
-    if (follows && place.target !== null) {
-      await tx.update(projectGroupMembers).set({ groupId: place.target, addedAt: now, ...CLEARED }).where(eq(projectGroupMembers.id, row.member.id));
-      return { outcome: "moved", to: place.target };
+    const copy = await copyState(tx, projectId);
+    const { plan } = planOf(projectId, { ...copy, groups: copy.groups.map((g) => (g.id === groupId ? { ...g, stopped: false } : g)) }, set);
+    const step = plan.place.find((p) => p.enrollmentId === enrollmentId);
+    const to = step && copy.groups.find((g) => g.sourceGroupId === step.sourceGroupId && !g.stopped);
+    if (follows && to) {
+      await tx.update(projectGroupMembers).set({ groupId: to.id, addedAt: now, ...CLEARED }).where(eq(projectGroupMembers.id, row.member.id));
+      return { outcome: "moved", to: to.id };
     }
     await tx.delete(projectGroupMembers).where(eq(projectGroupMembers.id, row.member.id));
     return { outcome: "left" };
@@ -550,28 +619,25 @@ export async function completeDeparture(db: Db, projectId: string, enrollmentId:
 }
 
 /**
- * An arrival into the copy group following set group `sourceGroupId`
- * (which has a repository), written before its invitation: under the job's
- * locks, only while the set still places the student there, that group
- * follows and the student is in no group with a repository (that is a
- * departure, which comes first). The copy group, or null when nothing was
+ * An arrival into copy group `groupId` (which has a repository), written
+ * before its invitation: under the job's locks, only while the plan of the
+ * copy against the set still places the student there from no group or
+ * from a group without one (a departure comes first). Whether it was
  * written.
  */
-export async function completeArrival(db: Db, projectId: string, enrollmentId: string, sourceGroupId: string, now: Date): Promise<string | null> {
+export async function completeArrival(db: Db, projectId: string, enrollmentId: string, groupId: string, now: Date): Promise<boolean> {
   return db.transaction(async (tx) => {
-    const setId = await lockSync(tx, projectId);
-    if (setId === null) return null;
-    const place = await placeInSet(tx, projectId, setId, enrollmentId);
-    if (place.sourceGroupId !== sourceGroupId || place.target === null) return null;
+    const found = await syncPlan(tx, projectId);
+    const arriving = found?.split.consequences.some((c) => c.kind === "join" && c.groupId === groupId && c.enrollmentId === enrollmentId);
+    const leaving = found?.split.consequences.some((c) => c.kind === "lose" && c.enrollmentId === enrollmentId);
+    if (!arriving || leaving) return false;
     const row = await memberForUpdate(tx, projectId, enrollmentId);
-    if (row?.member.groupId === place.target) return place.target;
-    if (row?.hasRepo) return null;
     if (row) {
-      await tx.update(projectGroupMembers).set({ groupId: place.target, addedAt: now, ...CLEARED }).where(eq(projectGroupMembers.id, row.member.id));
+      await tx.update(projectGroupMembers).set({ groupId, addedAt: now, ...CLEARED }).where(eq(projectGroupMembers.id, row.member.id));
     } else {
-      await tx.insert(projectGroupMembers).values({ id: randomUUID(), projectId, groupId: place.target, enrollmentId, addedAt: now });
+      await tx.insert(projectGroupMembers).values({ id: randomUUID(), projectId, groupId, enrollmentId, addedAt: now });
     }
-    return place.target;
+    return true;
   });
 }
 
@@ -588,13 +654,4 @@ export async function flagRevokeFailed(db: Db, projectId: string, enrollmentId: 
         isNotNull(projectGroupMembers.departingAt),
       ),
     );
-}
-
-/** The copy groups a member the set moved out still reaches, GitHub having refused their revocation: the page's *access to revoke*. */
-export async function groupsWithAccessToRevoke(db: Db | Tx, projectId: string): Promise<Set<string>> {
-  const rows = await db
-    .selectDistinct({ groupId: projectGroupMembers.groupId })
-    .from(projectGroupMembers)
-    .where(and(eq(projectGroupMembers.projectId, projectId), isNotNull(projectGroupMembers.revokeFailedAt)));
-  return new Set(rows.map((r) => r.groupId));
 }

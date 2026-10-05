@@ -211,9 +211,6 @@ export interface PlanConsequence {
   kind: "lose" | "join";
 }
 
-/** A plan's moves that wait for the `group.sync` job, as {@link splitPlan} sets them apart. */
-export type DeferredSteps = Pick<GroupSyncPlan, "place" | "unplace">;
-
 /**
  * `plan` split between what the set's own transaction applies and what
  * waits for GitHub (ADR-070 §4, M3-15b-2):
@@ -222,12 +219,11 @@ export type DeferredSteps = Pick<GroupSyncPlan, "place" | "unplace">;
  *     moves between groups without one, and the departure of a student of
  *     `exempt` (a staff seat, whose accounts were revoked when it became
  *     one);
- *   - `later` — the moves out of a group with a repository or into one,
- *     for the job: a departure waits for GitHub's revocation, an arrival is
- *     written then invited;
- *   - `consequences` — what `later` does on GitHub, one per student and
- *     group: `lose` out of a group with a repository, `join` into one
- *     (product owner, 2026-10-05: even when GitHub will have nothing to do);
+ *   - `consequences` — the moves left out of `now`, for the job, one per
+ *     student and group: `lose` out of a group with a repository (a
+ *     departure waits for GitHub's revocation), `join` into one (an arrival
+ *     is written, then invited) — product owner, 2026-10-05: even when
+ *     GitHub will have nothing to do;
  *   - `repoGroupsDeleted` — the groups with a repository the plan would
  *     delete: never done, the set's write is refused (`409 has_repo`).
  */
@@ -235,12 +231,11 @@ export function splitPlan(
   copy: CopyState,
   plan: GroupSyncPlan,
   exempt: ReadonlySet<string> = new Set(),
-): { now: GroupSyncPlan; later: DeferredSteps; consequences: PlanConsequence[]; repoGroupsDeleted: string[] } {
+): { now: GroupSyncPlan; consequences: PlanConsequence[]; repoGroupsDeleted: string[] } {
   const fixed = new Set(copy.groups.filter((g) => g.slugFixed).map((g) => g.id));
   const bySource = new Map(copy.groups.flatMap((g) => (g.sourceGroupId === null ? [] : [[g.sourceGroupId, g.id] as const])));
   const groupOf = new Map(copy.members.map((m) => [m.enrollmentId, m.groupId]));
   const now: GroupSyncPlan = { ...plan, place: [], unplace: [] };
-  const later: DeferredSteps = { place: [], unplace: [] };
   const consequences: PlanConsequence[] = [];
   for (const p of plan.place) {
     const to = bySource.get(p.sourceGroupId);
@@ -250,7 +245,6 @@ export function splitPlan(
       now.place.push(p);
       continue;
     }
-    later.place.push(p);
     if (losing) consequences.push({ groupId: p.from!, enrollmentId: p.enrollmentId, kind: "lose" });
     if (joining) consequences.push({ groupId: to, enrollmentId: p.enrollmentId, kind: "join" });
   }
@@ -260,10 +254,9 @@ export function splitPlan(
       now.unplace.push(e);
       continue;
     }
-    later.unplace.push(e);
     consequences.push({ groupId: from, enrollmentId: e, kind: "lose" });
   }
-  return { now, later, consequences, repoGroupsDeleted: plan.delete.filter((id) => fixed.has(id)) };
+  return { now, consequences, repoGroupsDeleted: plan.delete.filter((id) => fixed.has(id)) };
 }
 
 /** The key that identifies a consequence across two plans, and in a digest. */

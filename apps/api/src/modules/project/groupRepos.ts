@@ -14,7 +14,7 @@
  * (`pickStudentRepo`, `isLiveIndividualRepo` of `@quiz/domain`). Quiz's own
  * Accept never makes one in a group project.
  */
-import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { isLiveIndividualRepo, pickStudentRepo } from "@quiz/domain";
 
@@ -36,15 +36,6 @@ export async function copyGroupOf(db: Db | Tx, projectId: string, enrollmentId: 
     .where(and(eq(projectGroupMembers.projectId, projectId), eq(projectGroupMembers.enrollmentId, enrollmentId)))
     .limit(1);
   return row?.group ?? null;
-}
-
-/** Whether roster line `enrollmentId`'s move out of its copy group of `projectId` waits for GitHub (`departing_at`, M3-15b-2). */
-export async function isDeparting(db: Db | Tx, projectId: string, enrollmentId: string): Promise<boolean> {
-  const [row] = await db
-    .select({ id: projectGroupMembers.id })
-    .from(projectGroupMembers)
-    .where(and(eq(projectGroupMembers.projectId, projectId), eq(projectGroupMembers.enrollmentId, enrollmentId), isNotNull(projectGroupMembers.departingAt)));
-  return row !== undefined;
 }
 
 /** Where a copy group's repository row is: by the partial UNIQUE (project, group). */
