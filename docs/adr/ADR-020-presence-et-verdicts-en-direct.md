@@ -4,7 +4,8 @@
 
 Accepted (2026-09-22, both halves asked for by the product owner after the
 first real evaluation). It amends decision 4 of ADR-018 on one point, named
-below, and leaves the rest of it standing.
+below, and leaves the rest of it standing. [ADR-076](ADR-076-demarrage-explicite-d-une-tentative.md)
+adds a row to the table of decision A: the ready screen counts nobody.
 
 ## Context
 
@@ -72,6 +73,7 @@ adds is the side of the room:
 | `evaluation:<id>` | the teacher's live dashboard | yes, if staff | no |
 | `lobby:<id>` | a participant's waiting room | never | yes, with a seat |
 | `attempt:<id>` | the player, or a staff inspector | if staff | only one's OWN attempt |
+| none (ADR-076) | the ready screen of a running evaluation not yet started | no stream | no |
 
 The stream therefore carries a `participant` flag beside `staff`, and they
 are NOT each other's opposite: a teacher walking their own quiz is both. A

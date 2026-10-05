@@ -78,7 +78,7 @@ async function walkAsStaff(world: Awaited<ReturnType<typeof running>>) {
   );
   expect(enrolled.statusCode).toBe(201);
   const entered = await post(
-    `/app/api/evaluations/${world.seed.evaluationId}/attempt`,
+    `/app/api/evaluations/${world.seed.evaluationId}/attempt/start`,
     teacher.headers,
     {},
   );
@@ -175,7 +175,7 @@ describe("resetting one's own test attempt (ADR-018)", () => {
     // And the walk can start again: the route is idempotent per participant,
     // so this is the whole point of the reset.
     const again = await post(
-      `/app/api/evaluations/${world.seed.evaluationId}/attempt`,
+      `/app/api/evaluations/${world.seed.evaluationId}/attempt/start`,
       teacher.headers,
       {},
     );
@@ -195,7 +195,7 @@ describe("resetting one's own test attempt (ADR-018)", () => {
     const world = await running();
     await walkAsStaff(world);
     const studentEntry = await post(
-      `/app/api/evaluations/${world.seed.evaluationId}/attempt`,
+      `/app/api/evaluations/${world.seed.evaluationId}/attempt/start`,
       student.headers,
       {},
     );
@@ -240,7 +240,7 @@ describe("the staff attempt is shown, badged, and counted nowhere (ADR-018)", ()
     const world = await running();
     const staffEntry = await walkAsStaff(world);
     const studentEntry = await post(
-      `/app/api/evaluations/${world.seed.evaluationId}/attempt`,
+      `/app/api/evaluations/${world.seed.evaluationId}/attempt/start`,
       student.headers,
       {},
     );

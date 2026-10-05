@@ -19,7 +19,7 @@ import { testApp } from "../../test/db.js";
 import { type Payload, type TestServer, testServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { evaluationRows } from "../../test/grades.js";
-import { reload, seedLive } from "../../test/live.js";
+import { enterStarted, reload, seedLive } from "../../test/live.js";
 import {
   applyState,
   joinedItems,
@@ -98,7 +98,7 @@ async function sit(
   const now = app.clock.now();
   let current = attempt;
   if (!current) {
-    const entered = await live.enterEvaluation(db, {
+    const entered = await enterStarted(db, {
       evaluation,
       participant: await participant(evaluation, userId),
       now,
@@ -162,7 +162,7 @@ describe("a retake (F-EVAL-15)", () => {
 
     // The student's CURRENT attempt is the new one, for every reader.
     expect((await live.attemptOf(db, evaluation.id, student))!.id).toBe(second.id);
-    const entered = await live.enterEvaluation(db, {
+    const entered = await enterStarted(db, {
       evaluation,
       participant: await participant(evaluation, student),
       now: app.clock.now(),
@@ -188,7 +188,7 @@ describe("a retake (F-EVAL-15)", () => {
     const student = seed.studentIds[0]!;
     expect(await refusal(retake(app, evaluation, student))).toBe("no_attempt");
 
-    const entered = await live.enterEvaluation(db, {
+    const entered = await enterStarted(db, {
       evaluation,
       participant: await participant(evaluation, student),
       now: app.clock.now(),
@@ -282,7 +282,7 @@ describe("a retake (F-EVAL-15)", () => {
   it("grades an attempt once, on the submit that finished it", async () => {
     const { app, seed, evaluation, items } = await exercise();
     const student = seed.studentIds[0]!;
-    const entered = await live.enterEvaluation(db, {
+    const entered = await enterStarted(db, {
       evaluation,
       participant: await participant(evaluation, student),
       now: app.clock.now(),
@@ -302,7 +302,7 @@ describe("a retake (F-EVAL-15)", () => {
   it("keeps at most one unfinished attempt per student in the schema itself", async () => {
     const { app, seed, evaluation } = await exercise();
     const student = seed.studentIds[0]!;
-    await live.enterEvaluation(db, {
+    await enterStarted(db, {
       evaluation,
       participant: await participant(evaluation, student),
       now: app.clock.now(),
@@ -408,7 +408,7 @@ describe("grading and results with several attempts", () => {
       { durationS: 60, settings: { timing: "duration", lobby: "skip", retakes: { enabled: true, keep: "best", maxAttempts: null } } },
     );
     const student = seed.studentIds[0]!;
-    const entered = await live.enterEvaluation(db, {
+    const entered = await enterStarted(db, {
       evaluation,
       participant: await participant(evaluation, student),
       now: app.clock.now(),
@@ -598,7 +598,7 @@ describe("the screens with several attempts", () => {
   it("keeps skip and flag per attempt: attempt 2 starts clean, the grid shows attempt 2's", async () => {
     const { app, seed, evaluation, items } = await exercise();
     const student = seed.studentIds[0]!;
-    const entered = await live.enterEvaluation(db, {
+    const entered = await enterStarted(db, {
       evaluation,
       participant: await participant(evaluation, student),
       now: app.clock.now(),
@@ -682,7 +682,7 @@ describe("POST /evaluations/:id/retake", () => {
     const post = (url: string, headers: Record<string, string>, payload?: Payload) =>
       server.app.inject({ method: "POST", url, headers, ...(payload === undefined ? {} : { payload }) });
 
-    const entered = await post(`/app/api/evaluations/${seed.evaluationId}/attempt`, student.headers, {});
+    const entered = await post(`/app/api/evaluations/${seed.evaluationId}/attempt/start`, student.headers, {});
     expect(entered.statusCode).toBe(200);
     const firstId = entered.json().view.attempt.id as string;
 

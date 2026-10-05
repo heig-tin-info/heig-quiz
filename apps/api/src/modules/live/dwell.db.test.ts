@@ -53,7 +53,7 @@ async function world(o: { durationS?: number | null; mode?: EvaluationMode } = {
   await service.startEvaluation(db(), await reload(db(), seed.evaluationId), now());
   const entered = await server.app.inject({
     method: "POST",
-    url: `/app/api/evaluations/${seed.evaluationId}/attempt`,
+    url: `/app/api/evaluations/${seed.evaluationId}/attempt/start`,
     headers: student.headers,
     payload: {},
   });

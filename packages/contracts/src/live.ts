@@ -19,6 +19,7 @@ import {
   FeedbackPolicy,
   Navigation,
   RetakeKeep,
+  Timing,
   TrustedClient,
 } from "./evaluation.js";
 
@@ -119,37 +120,60 @@ export const AttemptView = z.object({
 });
 export type AttemptView = z.infer<typeof AttemptView>;
 
-export const LobbyView = z.object({
+/**
+ * The rules of an evaluation a student reads BEFORE the clock runs, said by
+ * the waiting room and by the ready screen alike (§6.3). Rules of the
+ * evaluation, not question content.
+ */
+export const EvaluationRules = z.object({
+  /**
+   * `settings.navigation`, so the screen can state the first of its three
+   * rules (F-LIVE-08): it says how the student may move, nothing about what
+   * they see.
+   */
+  navigation: Navigation,
+  /**
+   * The evaluation scores its choice questions with negative marking
+   * (ADR-026): said before anybody starts. The server always sends it;
+   * absent reads as off.
+   */
+  negativeMarking: z.boolean().optional(),
+  /** The calculator the screen will provide (ADR-069). Absent reads as none. */
+  calculator: CalculatorMode.optional(),
+  timeBonusPercent: z.number().int(),
+});
+export type EvaluationRules = z.infer<typeof EvaluationRules>;
+
+export const LobbyView = EvaluationRules.extend({
   evaluation: z.object({
     id: z.uuid(),
     title: z.string(),
     state: EvaluationState,
     announcedDurationS: z.number().int().nullable(),
   }),
-  /**
-   * `settings.navigation`, so the waiting room can state the first of its
-   * three rules (§6.3, F-LIVE-08). A rule of the evaluation, not question
-   * content: it says how the student may move, nothing about what they see.
-   */
-  navigation: Navigation,
-  /**
-   * The evaluation scores its choice questions with negative marking
-   * (ADR-026): the waiting room says so before anybody starts. A rule of the
-   * evaluation, like `navigation`, not question content. The server always
-   * sends it; absent reads as off.
-   */
-  negativeMarking: z.boolean().optional(),
-  /**
-   * The calculator the screen will provide (ADR-069), said in the waiting
-   * room like negative marking. Absent reads as none.
-   */
-  calculator: CalculatorMode.optional(),
   present: z.number().int(),
   enrolled: z.number().int(),
-  timeBonusPercent: z.number().int(),
   serverNow: z.iso.datetime(),
 });
 export type LobbyView = z.infer<typeof LobbyView>;
+
+/**
+ * The ready screen (ADR-076, issue #525): a `running` evaluation the
+ * participant has not started. Nothing was written to reach it — no attempt
+ * row, no presence — and the clock has not begun; `POST
+ * /evaluations/:id/attempt/start` is the explicit act. It carries the rules
+ * and what the Start button announces.
+ */
+export const ReadyView = EvaluationRules.extend({
+  evaluation: z.object({
+    id: z.uuid(),
+    title: z.string(),
+    timing: Timing,
+    announcedDurationS: z.number().int().nullable(),
+    closesAt: z.iso.datetime().nullable(),
+  }),
+});
+export type ReadyView = z.infer<typeof ReadyView>;
 
 /**
  * `POST /evaluations/:id/attempt` and `GET /attempts/:id` answer one of the
@@ -163,7 +187,19 @@ export const AttemptOrLobby = z.union([
 export type AttemptOrLobby = z.infer<typeof AttemptOrLobby>;
 
 /**
- * Empty since the access code was removed (ADR-053). Not strict: a client
+ * What the two entry routes answer, `POST /evaluations/:id/attempt` and
+ * `POST /evaluations/:id/attempt/start` (ADR-076): a `running` evaluation the
+ * participant has not started answers `ready`, nothing written.
+ */
+export const AttemptEntry = z.union([
+  ...AttemptOrLobby.options,
+  z.object({ kind: z.literal("ready"), view: ReadyView }),
+]);
+export type AttemptEntry = z.infer<typeof AttemptEntry>;
+
+/**
+ * Empty since the access code was removed (ADR-053); the body of both entry
+ * routes (`/attempt`, `/attempt/start`, ADR-076). Not strict: a client
  * from before the change still sends `accessCode`, which is stripped.
  */
 export const AttemptStartBody = z.object({});

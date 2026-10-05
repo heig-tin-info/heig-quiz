@@ -29,7 +29,7 @@ import { answers, attempts, evaluations, gradings, questions } from "../../db/sc
 import { fakeShort } from "../../test/fakeType.js";
 import { evaluationRows } from "../../test/grades.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
-import { reload, seedLive } from "../../test/live.js";
+import { enterStarted, reload, seedLive } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
 import { applyState, joinedItems, type EvaluationRecord } from "../evaluation/service.js";
 import { loadConfig, typeOf } from "../pool/config.js";
@@ -161,7 +161,7 @@ type Answers = [short: string, single: number[], multiple: number[]];
 async function sit(evaluation: EvaluationRecord, userId: string, answers: Answers) {
   const items = await joinedItems(db(), evaluation.id);
   const participant = (await live.participantOf(db(), evaluation, userId))!;
-  const entered = await live.enterEvaluation(db(), {
+  const entered = await enterStarted(db(), {
     evaluation,
     participant,
     now: server.clock.now(),
@@ -345,7 +345,7 @@ describe("a single-answer question takes ONE choice", () => {
     const { seed, items } = await build({});
     const evaluation = await applyState(db(), await reload(db(), seed.evaluationId), "running", server.clock.now());
     const participant = (await live.participantOf(db(), evaluation, students[0]!.id))!;
-    const entered = await live.enterEvaluation(db(), { evaluation, participant, now: server.clock.now() });
+    const entered = await enterStarted(db(), { evaluation, participant, now: server.clock.now() });
     let attempt = entered.attempt;
     if (attempt.state === "not_started") {
       attempt = await live.beginAttempt(db(), evaluation, attempt, participant, server.clock.now());

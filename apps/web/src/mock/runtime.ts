@@ -117,6 +117,7 @@ export const mockCalculator = (): { calculator?: CalculatorMode } =>
  */
 export type Scene =
   | "lobby"
+  | "ready"
   | "running"
   | "paused"
   | "closed"

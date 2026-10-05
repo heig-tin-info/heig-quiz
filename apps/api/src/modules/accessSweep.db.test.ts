@@ -39,6 +39,7 @@ type Who = Awaited<ReturnType<TestServer["signIn"]>>;
 /** The routes a student enrolled in the classroom legitimately reaches. */
 const STUDENT_ROUTES = new Set([
   "POST /app/api/evaluations/:id/attempt",
+  "POST /app/api/evaluations/:id/attempt/start",
   "POST /app/api/evaluations/:id/retake",
   // The journal's reads: a student of the classroom reads its journal (F-JRN-12).
   "GET /app/api/classrooms/:id/journal",

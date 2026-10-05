@@ -18,7 +18,7 @@ import { registerForTests } from "@quiz/registry/server";
 import { gradings } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
-import { publishQuestion, reload, seedLive } from "../../test/live.js";
+import { enterStarted, publishQuestion, reload, seedLive } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
 import { applyState, joinedItems, type EvaluationRecord } from "../evaluation/service.js";
 import * as templates from "../evaluation/templates.js";
@@ -96,7 +96,7 @@ async function sit(evaluation: EvaluationRecord, userId: string, short: string, 
   const items = await joinedItems(db(), evaluation.id);
   const participant = (await live.participantOf(db(), evaluation, userId))!;
   const now = server.clock.now();
-  let { attempt } = await live.enterEvaluation(db(), { evaluation, participant, now });
+  let { attempt } = await enterStarted(db(), { evaluation, participant, now });
   if (attempt.state === "not_started") {
     attempt = await live.beginAttempt(db(), evaluation, attempt, participant, now);
   }
@@ -164,7 +164,7 @@ describe("a bonus item", () => {
     const { seed } = await build();
     await applyState(db(), await reload(db(), seed.evaluationId), "running", server.clock.now());
     const entered = (
-      await send("POST", `/app/api/evaluations/${seed.evaluationId}/attempt`, {}, students[0])
+      await send("POST", `/app/api/evaluations/${seed.evaluationId}/attempt/start`, {}, students[0])
     ).json() as AttemptOrLobby;
     if (entered.kind !== "attempt") throw new Error("attempt expected");
     expect(entered.view.evaluation.totalPoints).toBe(2);

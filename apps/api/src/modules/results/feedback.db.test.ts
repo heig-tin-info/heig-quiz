@@ -174,7 +174,7 @@ async function gradedEvaluation() {
   );
 
   await post(`/app/api/evaluations/${seed.evaluationId}/start`, teacher.headers, { confirm: true });
-  const entered = await post(`/app/api/evaluations/${seed.evaluationId}/attempt`, student.headers, {});
+  const entered = await post(`/app/api/evaluations/${seed.evaluationId}/attempt/start`, student.headers, {});
   const view = entered.json().view as {
     attempt: { id: string };
     items: { id: string; type: string; student: unknown }[];
@@ -381,7 +381,7 @@ describe("an essay's grading criteria stay the teacher's (ADR-037)", () => {
     });
 
     await post(`/app/api/evaluations/${seed.evaluationId}/start`, teacher.headers, { confirm: true });
-    const entered = await post(`/app/api/evaluations/${seed.evaluationId}/attempt`, student.headers, {});
+    const entered = await post(`/app/api/evaluations/${seed.evaluationId}/attempt/start`, student.headers, {});
     const attemptId = entered.json().view.attempt.id as string;
     const saved = await server.app.inject({
       method: "PUT",
