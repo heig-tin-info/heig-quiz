@@ -217,7 +217,7 @@ Status values: `open`, `settled`, `superseded`.
 - Blocks: M8-01.
 - **Status**: settled 2026-10-01 (product owner, conversation), on the suggestion.
 - **Addendum (2026-10-05, product owner; merge task M8-01a)**: the table is
-  `legacy_classroom_audit_log` (migration `0075`), kept indefinitely, read by
+  `legacy_classroom_audit_log` (migration `0076`), kept indefinitely, read by
   an admin with `psql` like `audit_log` (no route for now). Insert-only,
   keyed on classroom's audit id; the actor is remapped best-effort, and
   classroom's own actor id is kept beside it.

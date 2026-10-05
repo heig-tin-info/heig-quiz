@@ -4011,7 +4011,7 @@ serves now (16a), and what waits for the group repositories (16b).
   `githubBound`. The M8-01 acceptance (dry-run on the fixture and on a
   staging copy of a dump, parity report clean) belongs to the last of them.
 - **As delivered (a)** (branch `merge/M8-01a-import-frame`; migration
-  `0075_legacy_classroom_audit`):
+  `0076_legacy_classroom_audit`):
   - `Q:apps/api/scripts/import-classroom/`: `ctx.ts` (the context, the
     report helpers, `remember`, `tally`/`tallyMapped`, `syncOwned`),
     `registry.ts` (the ONE ordered list of steps and checks),
