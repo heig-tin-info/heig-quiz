@@ -1,6 +1,6 @@
 /**
  * The legacy URL resolver (merge task M8-02, docs/merge/06 §6.6) over the
- * real application: one table, one case per row of §6.6, each asserting the
+ * real application: one fixed 302, one fixed 410 and the entity rows, each asserting the
  * status and the `Location` the Caddy fragment hands over to; then who
  * reaches a target (invariant 6): an entity off the caller's reach, one the
  * import never carried, and one that never existed answer ALIKE, for every

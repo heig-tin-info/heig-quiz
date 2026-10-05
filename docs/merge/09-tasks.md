@@ -4336,11 +4336,10 @@ serves now (16a), and what waits for the group repositories (16b).
   `staffAccess`.
 - **As delivered** (branch `merge/M8-02-legacy-urls`):
   - `P:domain/legacyClassroom.ts` (pure, `legacyRule(path)`: every row of
-    §6.6 as a rule, malformed ids as `not_found`, journal segments that
-    never climb), `P:contracts/legacy.ts` (`LegacyClassroomParams`,
+    §6.6 as a rule, malformed ids as `not_found`), `P:contracts/legacy.ts` (`LegacyClassroomParams`,
     `LegacyGone`); journal paths are vetted by the contract's `safeJournalPath`/`encodeJournalPath`, `Q:modules/legacy/{routes,service}.ts` (`GET
     /legacy/classroom/*`, outside `/app/api`: a browser navigates to it),
-    `legacy.db.test.ts` (one case per row, then who reaches a target).
+    `legacy.db.test.ts` (one 302, one 410, then who reaches a target; the per-row table is the domain test).
   - **Fixed rows** answer the same to everyone: 302 (`/settings`, `/`,
     `/admin`; a query is dropped, the e-mail unsubscribe included) or 410
     `{ error: "moved", to: "/" }` for the dead APIs. A path no row names
