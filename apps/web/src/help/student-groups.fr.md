@@ -22,4 +22,4 @@ ne peuvent plus changer.
 ## Projets de groupe
 
 Un membre accepte le projet et le dépôt appartient au groupe. Chaque membre
-doit d'abord relier son propre compte GitHub.
+est invité sur GitHub dès qu'il a lié son propre compte.

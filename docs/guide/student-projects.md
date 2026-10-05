@@ -69,12 +69,12 @@ Under **Score**, the page shows the score of the latest commit that was graded: 
 </figure>
 
 - **No score yet** means the automatic grading has not graded a commit of yours. Push, then wait a moment.
-- Some projects are graded by hand only. Then no score shows before the release.
+- Some projects are not graded: there is no score and no release.
 - Your teacher may also review your work after the deadline. That review is not shown until the release.
 
 ## 6. The deadline
 
-The deadline is the server's, like for an evaluation, and the page shows a countdown. At the deadline your repository becomes **read-only**: pushes are refused and the page reads **Read-only since the deadline**. What you pushed before the deadline counts, whatever the date written in your commit. The score is then **frozen**, and the page shows **Evaluated commit**: the one that counts.
+The deadline is the server's, like for an evaluation, and the page shows a countdown. If your teacher locked the project, your repository becomes **read-only** at the deadline: pushes are refused and the page reads **Read-only since the deadline**. Otherwise it stays open, but pushes made after the deadline do not count. Either way, what you pushed before the deadline counts, whatever the date written in your commit, and a grading run started in time may still finish a few minutes later. The score is then **frozen**, and the page shows **Evaluated commit**: the one that counts.
 
 A day before, you get a reminder. Your teacher can give one repository more time; if that is you, you hear it from them.
 
@@ -119,7 +119,7 @@ In the **Groups** tab you can:
 
 You see the names of the others and of the students who have no group yet, nothing more. When the date has passed, the groups close and your teacher places whoever has no group. As soon as one group of the set gets its repository, the groups can no longer change, so be sure before you accept.
 
-For a group project, **one member accepts** and the repository belongs to the group. Every member is invited on GitHub and must have linked their own GitHub account. The score is the group's.
+For a group project, **one member accepts** and the repository belongs to the group. Every member is invited on GitHub; a member who has not linked their GitHub account is invited only once they do. The score is the group's.
 
 ## The journal
 

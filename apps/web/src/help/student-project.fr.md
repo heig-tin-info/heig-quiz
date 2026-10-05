@@ -29,8 +29,10 @@ résolvez les conflits et fusionnez-la vous-même.
 
 ## L'échéance
 
-À l'échéance, votre dépôt passe en lecture seule et le score est figé sur le
-**Commit évalué**. L'horloge est celle du serveur, pas celle de votre
+À l'échéance, si l'enseignant a verrouillé le projet, votre dépôt passe en
+lecture seule ; sinon il reste ouvert, mais les pushs faits après l'échéance
+ne comptent pas. Le score est figé sur le **Commit évalué** ; une évaluation
+lancée à temps peut encore se terminer. L'horloge est celle du serveur, pas celle de votre
 ordinateur.
 
 ## La publication

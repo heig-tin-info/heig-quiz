@@ -29,8 +29,10 @@ conflicts and merge it yourself.
 
 ## The deadline
 
-At the deadline your repository becomes read-only and the score is frozen on
-the **evaluated commit**. The clock is the server's, not your computer's.
+At the deadline, if your teacher locked the project, your repository becomes
+read-only; otherwise it stays open, but pushes after the deadline do not
+count. The score is frozen on the **evaluated commit**; a grading run started
+in time may still finish. The clock is the server's, not your computer's.
 
 ## The release
 

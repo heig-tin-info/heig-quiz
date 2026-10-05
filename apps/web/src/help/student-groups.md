@@ -21,4 +21,4 @@ Once a group of the set gets its repository, the groups can no longer change.
 ## Group projects
 
 One member accepts the project and the repository belongs to the group. Every
-member must link their own GitHub account first.
+member is invited on GitHub once they have linked their own account.
