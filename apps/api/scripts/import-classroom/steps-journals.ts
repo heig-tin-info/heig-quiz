@@ -82,6 +82,7 @@ export async function importJournals(ctx: Ctx) {
           .update(classroomJournals)
           .set({ syncStatus: "pending", syncError: null, version: sql`${classroomJournals.version} + 1` })
           .where(eq(classroomJournals.classroomId, dest.classroomId));
+        ctx.journalsToIngest.add(dest.classroomId);
         note(ctx, "journals", `${where}: repository, branch or folder changed in classroom, overwritten; copy pending again`);
       }
       continue;
@@ -115,6 +116,7 @@ export async function importJournals(ctx: Ctx) {
       createdAt: a.attachedAt,
     });
     written(ctx, TABLE);
+    ctx.journalsToIngest.add(dest.classroomId);
     await remember(ctx, TABLE, a.classroomId, dest.classroomId, "created", row);
     const [link] = await ctx.db
       .select({ installationId: githubOrganizations.installationId, suspendedAt: githubOrganizations.suspendedAt, status: githubOrganizations.status })
@@ -129,10 +131,28 @@ export async function importJournals(ctx: Ctx) {
 }
 
 /**
+ * After the commit, outside any transaction: the journal module's own ingestion
+ * (`ingestJournal`, what a Refresh enqueues; never a second path) for every row
+ * this run created or overwrote, one after the other, in a stable order. The
+ * outcome is on the row (`ok`, `error` and its code), which `journalsReingested`
+ * reads next; a throw (the database) is reported and does not stop the others.
+ */
+export async function ingestImportedJournals(ctx: Omit<Ctx, "db">) {
+  if (!ctx.ingestJournal) return;
+  for (const classroomId of [...ctx.journalsToIngest].sort()) {
+    try {
+      await ctx.ingestJournal(classroomId);
+    } catch (err) {
+      note(ctx, "journals", `classroom ${classroomId}: ingestion failed, ${String((err as Error)?.message ?? err)}`);
+    }
+  }
+}
+
+/**
  * After the commit: every journal row the import carries is read back. `ok` is
- * what the card asks for; nothing in Quiz sweeps a `pending` row, so right
- * after the commit it is a `warn` (a Refresh of the journal, or a push, does
- * it), and an `error` is red with its code.
+ * what the card asks for; `pending` (a run with no GitHub App, so no
+ * ingestion) is a `warn` (a Refresh of the journal, or a push, does it), and
+ * an `error` is red with its code.
  */
 export const journalsReingested: ImportCheck = {
   name: "journals re-ingested",

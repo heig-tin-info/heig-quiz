@@ -41,7 +41,6 @@ export const RUNBOOK: readonly string[] = [
   "Quiz's App is installed and subscribed to the events the projects need, on the teachers' organizations",
   "both databases are backed up, the target before the final import",
   "the teachers' roster fixes are done: the report's missing students and skipped assistants are settled",
-  "every imported journal is Refreshed from its journal tab (or has received a push) after the commit: the rows arrive `pending` and nothing sweeps them (M8-01d)",
 ];
 
 export interface PreflightInput {

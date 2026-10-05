@@ -14,9 +14,14 @@ import { readFileSync } from "node:fs";
 
 import { PGlite } from "@electric-sql/pglite";
 import { and, count, eq, sql } from "drizzle-orm";
-import { beforeAll, describe, expect, it } from "vitest";
+import type { FastifyInstance } from "fastify";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import type { AppConfig } from "../src/config.js";
+import { systemClock } from "../src/clock.js";
+import { loadConfig, type AppConfig } from "../src/config.js";
+import { appKey, fakeGithub, orgsRoute } from "../src/github/testing.js";
+import { ingestJournal } from "../src/modules/journal/ingest.js";
+import { repoRoute, type FakeRepo } from "../src/modules/journal/testing.js";
 import type { Db } from "../src/db/client.js";
 import {
   auditLog,
@@ -824,5 +829,67 @@ describe("import-classroom journals and webhook deliveries (M8-01d)", () => {
     const third = await runImport(w.db, config, moved("winter"), MAPPING, DECIDED);
     expect(third.reimport.kept).toEqual([expect.objectContaining({ table: "classroom_journals", sourceId: J1, targetId: w.progA })]);
     expect(await w.db.select().from(classroomJournals).where(eq(classroomJournals.classroomId, w.progA))).toEqual([expect.objectContaining({ ref: "autumn", rootPath: "slides" })]);
+  });
+
+  describe("ingestion after the commit", () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    /** The journal module's own ingestion over `db`, against a fake GitHub holding both repositories. */
+    function ingestion(db: Db) {
+      const key = appKey();
+      const gh = fakeGithub();
+      const repos: FakeRepo[] = [
+        { id: 2001, owner: "heig-prog-a", name: "journal", branches: { main: { commit: "c1".padEnd(40, "0"), files: [{ path: "docs/index.md", content: "# Welcome\n" }, { path: "docs/week-1.md", content: "## One\n" }, { path: "other.md", content: "outside the root" }] } } },
+        { id: 2002, owner: "heig-info1", name: "handouts", branches: { spring: { commit: "c2".padEnd(40, "0"), files: [{ path: "README.md", content: "# Handouts\n" }] } } },
+      ];
+      gh.routes = [orgsRoute(() => []), repoRoute(() => repos)];
+      vi.stubGlobal("fetch", gh.fetch);
+      const ghConfig = loadConfig({ NODE_ENV: "test", GITHUB_APP_ID: "1", GITHUB_APP_PRIVATE_KEY_PATH: key.pem, GITHUB_APP_SLUG: "quiz-test" });
+      const app = { db, clock: systemClock, log: { warn: () => undefined } } as unknown as FastifyInstance;
+      const asked: string[] = [];
+      const ingest = (classroomId: string) => {
+        asked.push(classroomId);
+        return ingestJournal(app, ghConfig, classroomId);
+      };
+      return { ingest, asked, gh, remove: key.remove };
+    }
+
+    it("brings every journal the run created to ok through the journal's own ingestion, and none in a dry run", async () => {
+      const w = await world();
+      const g = ingestion(w.db);
+      try {
+        const dry = await runImport(w.db, config, snapshot, MAPPING, { ...DECIDED, apply: false, ingestJournal: g.ingest });
+        expect(g.asked).toEqual([]);
+        expect(g.gh.calls).toEqual([]);
+        expect(dry.parity.notRun).toEqual(["journals re-ingested: not run (dry run)"]);
+
+        const applied = await runImport(w.db, config, snapshot, MAPPING, { ...DECIDED, ingestJournal: g.ingest });
+        expect(g.asked.sort()).toEqual([w.progA, w.mi].sort());
+        expect((await journals(w.db)).map((r) => r.syncStatus)).toEqual(["ok", "ok"]);
+        expect((await w.db.select().from(journalPages).where(eq(journalPages.classroomId, w.progA))).map((p) => p.path).sort()).toEqual(["index.md", "week-1.md"]);
+        expect(applied.parity.redLines).toEqual([]);
+        expect(applied.parity.findings.filter((f) => f.check === "journals re-ingested")).toEqual([expect.objectContaining({ severity: "info", detail: "2 of 2 imported journal(s) at sync_status ok" })]);
+
+        // A second run creates and overwrites nothing: nothing is ingested again.
+        g.asked.length = 0;
+        expect((await runImport(w.db, config, snapshot, MAPPING, { ...DECIDED, ingestJournal: g.ingest })).outcome).toBe("nothing_to_do");
+        expect(g.asked).toEqual([]);
+      } finally {
+        g.remove();
+      }
+    });
+
+    it("reads a failed ingestion back as a red line, the row kept", async () => {
+      const w = await world();
+      const g = ingestion(w.db);
+      try {
+        await w.db.update(githubOrganizations).set({ installationId: null }).where(eq(githubOrganizations.githubOrgId, 1002));
+        const report = await runImport(w.db, config, snapshot, MAPPING, { ...DECIDED, ingestJournal: g.ingest });
+        expect(report.parity.redLines).toEqual([expect.stringMatching(/^journals re-ingested: heig-info1\/handouts@spring .*ingestion failed, \w+/)]);
+        expect((await journals(w.db)).map((r) => r.syncStatus).sort()).toEqual(["error", "ok"]);
+      } finally {
+        g.remove();
+      }
+    });
   });
 });

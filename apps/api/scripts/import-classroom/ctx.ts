@@ -48,6 +48,10 @@ export interface Ctx {
   decisions: OpenDecisions;
   /** The run's clock (`ImportOptions.now`, else the source's own `now()`): what "the last 30 days" is measured from. */
   now: Date;
+  /** Quiz classrooms whose journal row this run created or overwrote: ingested after the commit (`registry.ts`, `afterCommit`). */
+  journalsToIngest: Set<string>;
+  /** The journal module's ingestion, as the Refresh runs it; null when the run has no GitHub App (`ImportOptions.ingestJournal`). */
+  ingestJournal: ((classroomId: string) => Promise<unknown>) | null;
   /** The `--actor`, null when unresolved (a dry run then still runs). */
   actorId: string | null;
   /** `import_classroom.id_map`, loaded once and kept current by `remember`: source table → source id → target id. */
@@ -66,7 +70,7 @@ export interface ParityEntry {
   leftOut: string[];
 }
 
-export function note(ctx: Ctx, section: Finding, line: string) {
+export function note(ctx: Pick<Ctx, "report">, section: Finding, line: string) {
   (ctx.report.findings[section] ??= []).push(line);
 }
 

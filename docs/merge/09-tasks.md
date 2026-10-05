@@ -4145,9 +4145,13 @@ serves now (16a), and what waits for the group repositories (16b).
     `journals re-ingested` (`githubBound`): every imported journal read back
     after the commit, `ok` counted, `pending` a `warn`, `error` a red line
     with its code; "not run" in a dry run. **Nothing in Quiz sweeps a
-    `pending` journal row** (the ticker's `journal.visible_from` only
-    re-renders; a push or a Refresh enqueues the ingestion): the report's
-    runbook says to Refresh every imported journal (2 in production).
+    `pending` journal row** (a push or a Refresh enqueues the ingestion), so
+    the registry's `afterCommit` hook (`ingestImportedJournals`, never in a
+    dry run, outside any transaction, before the checks) calls the journal
+    module's own `ingestJournal` for every row the run created or overwrote,
+    sequentially, with the target database and no queue (`ImportOptions.ingestJournal`,
+    wired by the CLI when Quiz's App is configured; without it the rows stay
+    `pending`, a `warn`). A second run ingests nothing.
 - **Depends on**: every schema task (M2-01, M3-01, M4-01, M5-03, M6-06 if
   in scope), D11.
 - **Goal**: the whole order of §2.5, the verification report, the legacy

@@ -24,7 +24,12 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
+import type { FastifyInstance } from "fastify";
+
+import { systemClock } from "../src/clock.js";
 import { loadConfig } from "../src/config.js";
+import { githubApp } from "../src/github/app.js";
+import { ingestJournal } from "../src/modules/journal/ingest.js";
 import { createDb } from "../src/db/client.js";
 import { ClassroomMapping } from "./import-classroom/mapping.js";
 import { formatReport, runImport, type ImportOptions } from "./import-classroom/run.js";
@@ -84,6 +89,16 @@ async function main() {
   const source = await openSource(values.source);
   const target = createDb(config.DATABASE_URL);
   try {
+    // The journal module's own ingestion over the target database, as the queue's worker runs it (no queue here: `boss` unset).
+    if (githubApp(config)) {
+      const quiet = (message: string, detail?: unknown) => console.error(message, detail ?? "");
+      const app = {
+        db: target.db,
+        clock: systemClock,
+        log: { warn: (detail: unknown, message?: string) => quiet(message ?? "", detail) },
+      } as unknown as FastifyInstance;
+      options.ingestJournal = (classroomId) => ingestJournal(app, config, classroomId);
+    }
     const snapshot = await readSnapshot(source.query);
     const report = await runImport(target.db, config, snapshot, parsed.data, options);
     console.log(formatReport(report));

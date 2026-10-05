@@ -14,7 +14,7 @@
 import type { CheckFinding } from "./report.js";
 import type { Ctx } from "./ctx.js";
 import { importLegacyAudit } from "./steps-audit.js";
-import { importJournals, journalsReingested } from "./steps-journals.js";
+import { importJournals, ingestImportedJournals, journalsReingested } from "./steps-journals.js";
 import { importWebhookDeliveries } from "./steps-webhooks.js";
 import {
   importEnrollments,
@@ -41,8 +41,20 @@ export interface ImportCheck {
   run(ctx: Ctx): Promise<Omit<CheckFinding, "check">[]>;
 }
 
+/**
+ * Runs once the transaction has COMMITTED and never in a dry run, before the
+ * GitHub-bound checks, with no transaction open (`db` is gone from its context:
+ * a PGlite connection would deadlock on a second one). It reaches GitHub and
+ * the Quiz database through the owning module's own functions.
+ */
+export interface AfterCommit {
+  name: string;
+  run(ctx: Omit<Ctx, "db">): Promise<void>;
+}
+
 export interface Registry {
   steps: readonly ImportStep[];
+  afterCommit?: readonly AfterCommit[];
   checks: readonly ImportCheck[];
 }
 
@@ -60,5 +72,6 @@ export const REGISTRY: Registry = {
     { name: "legacy audit", run: importLegacyAudit },
     { name: "roles", run: recomputeRoles },
   ],
+  afterCommit: [{ name: "journal ingestion", run: ingestImportedJournals }],
   checks: [journalsReingested],
 };
