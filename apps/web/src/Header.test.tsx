@@ -1,8 +1,8 @@
-import { screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { SOURCES_URL, UserMenu, ViewModeToggle } from "./Header";
+import { Logo, SOURCES_URL, UserMenu, ViewModeToggle } from "./Header";
 import { enterStudentView, leaveStudentView, useStudentView } from "./studentView";
 import { makeMe } from "./test/fixtures";
 import { renderWithProviders } from "./test/render";
@@ -83,5 +83,32 @@ describe("UserMenu", () => {
     });
     expect(item).toHaveAttribute("title", commit.sha);
     expect(item).toHaveAttribute("href", `${SOURCES_URL}/commit/${commit.sha}`);
+  });
+});
+
+/**
+ * jsdom has no AnimationEvent, so React listens for the prefixed
+ * `webkitAnimationEnd`; the name is set on a plain event.
+ */
+function endAnimation(el: Element, animationName: string) {
+  const event = new Event("webkitAnimationEnd", { bubbles: true });
+  Object.defineProperty(event, "animationName", { value: animationName });
+  fireEvent(el, event);
+}
+
+describe("Logo", () => {
+  it("dances one round per hover, whether or not the pointer has left", () => {
+    render(<Logo />);
+    const logo = screen.getByRole("img", { name: "Quiz" });
+    fireEvent.pointerEnter(logo);
+    expect(logo).toHaveClass("is-dancing");
+    // The U's bounce ends mid-round; only the Q's peck closes it.
+    endAnimation(logo.querySelector(".logo-u")!, "logo-bounce");
+    expect(logo).toHaveClass("is-dancing");
+    // No pointerleave: the round ends all the same.
+    endAnimation(logo.querySelector(".logo-q")!, "logo-peck");
+    expect(logo).not.toHaveClass("is-dancing");
+    fireEvent.pointerEnter(logo);
+    expect(logo).toHaveClass("is-dancing");
   });
 });

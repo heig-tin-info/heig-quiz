@@ -36,9 +36,12 @@ import { meKey } from "./queryKeys";
  * colours are its own, outside the token scale, which is why nothing else on
  * a screen is allowed them.
  *
- * Inlined so that each bubble can move: under the pointer the four of them
- * dance (`.quiz-logo` in style.css). Leaving does not cut a step short — the
- * dance ends when its current round does, on the rest pose.
+ * Inlined so that each bubble can move: each time the pointer enters, the
+ * four of them dance one round (`.quiz-logo` in style.css), ending on the rest
+ * pose; another round takes another hover. A round is never looped: an
+ * infinite dance stopped by `pointerleave` danced on whenever that event was
+ * lost (the pointer leaving the window from the corner, the logo's link
+ * navigating, the drawer closing under it).
  *
  * `className` carries the WIDTH; the height follows. It is a drawn word, so
  * it is sized like a word — about 200 px in the sidebar, 110 px in the phone
@@ -46,22 +49,15 @@ import { meKey } from "./queryKeys";
  */
 export function Logo({ className = "w-28", id }: { className?: string; id?: string }) {
   const [dancing, setDancing] = useState(false);
-  const leaving = useRef(false);
   return (
     <span
       role="img"
       aria-label="Quiz"
       id={id}
       className={cx("quiz-logo block", dancing && "is-dancing", className)}
-      onPointerEnter={() => {
-        leaving.current = false;
-        setDancing(true);
-      }}
-      onPointerLeave={() => {
-        leaving.current = true;
-      }}
-      onAnimationIteration={(e) => {
-        if (leaving.current && e.animationName === "logo-peck") setDancing(false);
+      onPointerEnter={() => setDancing(true)}
+      onAnimationEnd={(e) => {
+        if (e.animationName === "logo-peck") setDancing(false);
       }}
       dangerouslySetInnerHTML={{ __html: quizLogo }}
     />

@@ -742,8 +742,9 @@ html.dark {
  * the Q pecks like a bird's head, its tail the beak; the U bounces like a
  * small ball, squashed where it lands; the i and the z squabble, bumping
  * into each other, one shove each. One round is 1.6 s (two bounces of the
- * U), every animation ends on the rest pose, and Logo stops at the end of a
- * round. Nothing moves under `prefers-reduced-motion`.
+ * U), every animation ends on the rest pose, and a hover plays one round:
+ * Logo drops `is-dancing` when the Q's peck ends. Nothing moves under
+ * `prefers-reduced-motion`.
  */
 .quiz-logo svg {
   display: block;
@@ -760,10 +761,10 @@ html.dark {
 .quiz-logo .logo-z { transform-origin: 197px 55px; }
 
 @media (prefers-reduced-motion: no-preference) {
-  .quiz-logo.is-dancing .logo-q { animation: logo-peck 1.6s ease-in-out infinite; }
-  .quiz-logo.is-dancing .logo-u { animation: logo-bounce 0.8s linear infinite; }
-  .quiz-logo.is-dancing .logo-i { animation: logo-squabble-i 1.6s ease-in-out infinite; }
-  .quiz-logo.is-dancing .logo-z { animation: logo-squabble-z 1.6s ease-in-out infinite; }
+  .quiz-logo.is-dancing .logo-q { animation: logo-peck 1.6s ease-in-out; }
+  .quiz-logo.is-dancing .logo-u { animation: logo-bounce 0.8s linear 2; }
+  .quiz-logo.is-dancing .logo-i { animation: logo-squabble-i 1.6s ease-in-out; }
+  .quiz-logo.is-dancing .logo-z { animation: logo-squabble-z 1.6s ease-in-out; }
 }
 
 /* Head back, two quick pecks, then a look around. */
