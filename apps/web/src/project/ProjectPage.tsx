@@ -1,8 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Archive, ArchiveRestore, Rocket, Send, Trash2 } from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, RefreshCw, Rocket, Send, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import type { ClassroomDetail, ProjectDetail, ProjectPatch, ProjectReleaseResult, ProjectSummary } from "@quiz/contracts";
+import type {
+  ClassroomDetail,
+  ProjectDetail,
+  ProjectPatch,
+  ProjectReleaseResult,
+  ProjectSummary,
+  ProjectSyncAccepted,
+} from "@quiz/contracts";
 
 import { api, ApiError, refusedWith } from "../api";
 import { AppLink } from "../AppLink";
@@ -37,6 +44,7 @@ import { ProjectRepos } from "./ProjectRepos";
 import { ProjectSettings } from "./ProjectSettings";
 import {
   hasFellBack,
+  offersSync,
   projectRefetchInterval,
   projectStatus,
   refusalMessage,
@@ -59,15 +67,18 @@ import { RepoSheet } from "./RepoSheet";
  * derived here: Publish and Release are buttons — Release confirmed first,
  * since it makes the final scores the students' and the gradebook's
  * (F-PROJ-14), and worded as a release again once a score moved after the
- * release (the snapshot is rewritten, nobody is notified again); Sync is
- * said in the header until its route exists (merge task M3-07); `none`
- * leaves the header to its sentence. Archive, Restore and Delete live in
- * the overflow menu — a deletion names the project, and says that nothing
- * is deleted on GitHub (F-PROJ-16).
+ * release (the snapshot is rewritten, nobody is notified again); Sync when
+ * the source is ahead (F-PROJ-12, M3-07: the distribution repository is
+ * updated and the students get a pull request each), offered as a
+ * secondary button beside Publish or Release while the source is ahead
+ * (`offersSync`); `none` leaves the header to its sentence. Archive,
+ * Restore and Delete live in the overflow menu — a deletion names the
+ * project, and says that nothing is deleted on GitHub (F-PROJ-16).
  *
- * The page refetches every 30 s while its tab is visible, and once a few
+ * The page refetches every 30 s while its tab is visible, and every few
  * seconds after a response whose live state was not all read in time
- * (`liveStale`); SSE comes with M3-09. A view never waits for GitHub.
+ * (`liveStale`) or while a sync runs; SSE comes with M3-09. A view never
+ * waits for GitHub.
  */
 export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }) {
   const t = useT();
@@ -139,6 +150,14 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
     },
     // Worded with what the body carries (the counts, the students to verify), where the names can be read.
     onError: (error) => setReleaseRefused(releaseRefusal(error, detail.data!, t)),
+  });
+  const syncNow = useMutation({
+    mutationFn: () => api<ProjectSyncAccepted>(`/app/api/projects/${id}/sync`, { method: "POST" }),
+    onSuccess: async () => {
+      await refresh();
+      toast(t("project.sync.started"), "success");
+    },
+    onError: failed,
   });
   const archive = useMutation({
     mutationFn: (on: boolean) =>
@@ -244,13 +263,22 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   const status = projectStatus(project);
   /** The set's page, coming back here (`?fromProject=<id>`): where the students in no group are placed. */
   const setPage = groupSetPageOf(project);
+  const { sync } = project;
   const counts = [
     t("project.counts.students", { n: project.counts.students }),
     t("project.counts.accepted", { n: project.counts.accepted }),
     t("project.counts.frozen", { n: project.counts.frozen, live: project.counts.live }),
     ...(project.counts.toVerify > 0 ? [t("project.counts.toVerify", { n: project.counts.toVerify })] : []),
     ...(project.counts.alerts > 0 ? [t("project.counts.alerts", { n: project.counts.alerts })] : []),
+    // The source ahead (F-PROJ-12): with its commits when the handed-out sha is known.
+    ...(sync.ahead ? [sync.ahead.commits === null ? t("project.counts.aheadUnknown") : t("project.counts.ahead", { n: sync.ahead.commits })] : []),
   ];
+  /** Sync: the primary button when the server names it, a secondary one beside Publish or Release while the source is ahead. */
+  const syncButton = (variant: "primary" | "secondary") => (
+    <Button variant={variant} onClick={() => syncNow.mutate()} loading={syncNow.isPending || sync.inProgress}>
+      <RefreshCw /> {t(sync.inProgress ? "project.sync.inProgress" : "project.sync")}
+    </Button>
+  );
 
   return (
     <div className="space-y-8">
@@ -285,18 +313,28 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
           <>
             <p data-testid="project-status">{t(status.key, { date: isoDateTime(status.date) })}</p>
             <p className="mt-0.5 tabular-nums text-fg-faint">{counts.join(" · ")}</p>
+            {sync.syncedAt && sync.last ? (
+              <p className="mt-0.5 tabular-nums text-fg-faint" data-testid="project-sync-last">
+                {t("project.sync.last", { date: isoDateTime(sync.syncedAt), ...sync.last })}
+              </p>
+            ) : null}
           </>
         }
         actions={
-          project.primaryAction === "publish" ? (
-            <Button onClick={() => publish.mutate()} loading={publish.isPending}>
-              <Rocket /> {t("question.publish")}
-            </Button>
-          ) : project.primaryAction === "release" ? (
-            <Button onClick={() => void onRelease()} loading={release.isPending}>
-              <Send /> {t(again ? "project.release.again" : "project.release")}
-            </Button>
-          ) : null
+          <span className="flex flex-wrap items-center gap-2">
+            {offersSync(project) ? syncButton("secondary") : null}
+            {project.primaryAction === "publish" ? (
+              <Button onClick={() => publish.mutate()} loading={publish.isPending}>
+                <Rocket /> {t("question.publish")}
+              </Button>
+            ) : project.primaryAction === "release" ? (
+              <Button onClick={() => void onRelease()} loading={release.isPending}>
+                <Send /> {t(again ? "project.release.again" : "project.release")}
+              </Button>
+            ) : project.primaryAction === "sync" ? (
+              syncButton("primary")
+            ) : null}
+          </span>
         }
         menu={<Menu items={menuItems} />}
       />

@@ -19,7 +19,7 @@ import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { projectKey, projectRunsKey } from "../queryKeys";
 import { Badge, Button, Fact, FieldError, fieldErrorProps, isoDateTime, RelativeTime, Sheet } from "../ui";
-import { CiBadge, RepoLink } from "./parts";
+import { CiBadge, RepoLink, SyncBadge } from "./parts";
 import { actionable, refusalMessage, repoFlags, shortSha } from "./projectPage";
 import { RunHistory } from "./RunHistory";
 import { ScoreSection } from "./TeacherScoreForm";
@@ -183,6 +183,15 @@ export function RepoSheet({
                 </span>
               ) : null}
             </Fact>
+            {/* The source's sync (F-PROJ-12, M3-07): its pull request or outcome, and when the last sync reached it. */}
+            {repo.sync.outcome !== null || repo.sync.pr !== null ? (
+              <Fact label={t("project.sheet.sync")}>
+                <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <SyncBadge repo={repo} />
+                  {repo.sync.at ? <RelativeTime iso={repo.sync.at} className="text-xs text-fg-muted" /> : null}
+                </span>
+              </Fact>
+            ) : null}
           </dl>
         </Section>
 

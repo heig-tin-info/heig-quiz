@@ -52,7 +52,9 @@ import {
   type ProjectRepoProtection,
   type ProjectRepoReview,
   type ProjectRepoScores,
+  type ProjectRepoSync,
   type ProjectRepoView,
+  type ProjectSyncAccepted,
   type ProjectSummary,
   type ReviewCheckpoint,
   type RosterEntry,
@@ -110,6 +112,10 @@ interface MockRepo {
   dispatch: { sha: string; dispatchedAt: string | null } | null;
   /** When the staff last resent the invitation (F-PROJ-07): once a minute. */
   resentAt: number | null;
+  /** The sync pull request of the default branch, and what the last sync did here (F-PROJ-12, M3-07). */
+  syncPr: ProjectRepoSync["pr"];
+  syncOutcome: ProjectRepoSync["outcome"];
+  syncAt: string | null;
 }
 
 interface MockProject {
@@ -120,6 +126,12 @@ interface MockProject {
   checkpoints: ReviewCheckpoint[];
   /** The page read it once already: the live state is warm. */
   read: boolean;
+  /**
+   * The source's sync (F-PROJ-12, M3-07): the source ahead since `aheadAt`
+   * by `aheadCommits`, the last pass, and the pass under way — a POST
+   * leaves it in progress for one read, then the next read settles it.
+   */
+  sync: { aheadAt: string | null; aheadCommits: number | null; syncedAt: string | null; inProgressReads: number };
 }
 
 /**
@@ -207,6 +219,9 @@ function mockRepo(over: Pick<MockRepo, "id" | "enrollmentId" | "student" | "full
     reviewRunId: null,
     dispatch: null,
     resentAt: null,
+    syncPr: null,
+    syncOutcome: null,
+    syncAt: null,
     ...over,
   };
 }
@@ -241,6 +256,24 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
       locked,
       runs,
     });
+    // `?ahead=1`: the published project was synced three days ago — a pull request open, merged,
+    // one updated, one that failed —, and the source moved since (M3-07).
+    if (flags.ahead && !locked && variant !== 1 && variant !== 2) {
+      const prNumber = 3 + (i % 5);
+      Object.assign(
+        base,
+        variant === 7 || variant === 9
+          ? { syncOutcome: "skipped" }
+          : variant === 3
+            ? { syncOutcome: "failed", syncPr: { number: prNumber, state: "open" } }
+            : variant % 3 === 0
+              ? { syncOutcome: "up_to_date", syncPr: { number: prNumber, state: "merged" } }
+              : variant % 3 === 1
+                ? { syncOutcome: "opened", syncPr: { number: prNumber, state: "open" } }
+                : { syncOutcome: "updated", syncPr: { number: prNumber, state: "open" } },
+        { syncAt: iso(-3 * D) },
+      );
+    }
     const scored = (n: number, at: number, over: Partial<GradeRunView> = {}) => {
       const r = run(id, n, at, over);
       runs.unshift(r);
@@ -448,6 +481,11 @@ function seeded(): MockProject[] {
       repos: seedRepos(seed, summary, classroomRoster(room.id)),
       checkpoints: [],
       read: false,
+      // `?ahead=1`: the source moved two hours ago, on the draft and the published project (M3-07).
+      sync:
+        flags.ahead && seed.state !== "locked"
+          ? { aheadAt: iso(-2 * H), aheadCommits: seed.state === "draft" ? null : 3, syncedAt: seed.state === "draft" ? null : iso(-3 * D), inProgressReads: 0 }
+          : { aheadAt: null, aheadCommits: null, syncedAt: null, inProgressReads: 0 },
     };
     const deadline = new Date(summary.deadlineAt);
     project.checkpoints =
@@ -473,7 +511,15 @@ const CREATED: MockProject[] = [];
 
 /** A project the new project form created, a draft on the lists from now on. */
 export function addMockProject(summary: ProjectSummary, classroom: MockProject["classroom"]): void {
-  const project: MockProject = { summary, classroom, releasedAt: null, repos: [], checkpoints: [], read: false };
+  const project: MockProject = {
+    summary,
+    classroom,
+    releasedAt: null,
+    repos: [],
+    checkpoints: [],
+    read: false,
+    sync: { aheadAt: null, aheadCommits: null, syncedAt: null, inProgressReads: 0 },
+  };
   CREATED.push(project);
   PROJECTS.set(summary.id, project);
 }
@@ -604,6 +650,7 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
       scoreMax: runMaxOf(r),
     },
     review: reviewOf(p, r),
+    sync: { pr: r.syncPr, outcome: r.syncOutcome, at: r.syncAt },
     released: r.released,
     flags: {
       protectionSuspended: r.protectionSuspended,
@@ -617,7 +664,28 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
   };
 }
 
+/**
+ * The pass a POST …/sync left under way, settled by the read after the next
+ * (the API's job): every live repository not locked nor past its deadline
+ * gets its pull request opened or updated, the others are skipped; the
+ * source is no longer ahead.
+ */
+function settleSync(p: MockProject): void {
+  if (p.sync.inProgressReads === 0) return;
+  if (--p.sync.inProgressReads > 0) return;
+  const at = iso(0);
+  let next = 10;
+  for (const r of p.repos) {
+    const open = isLive(p, r) && !r.locked && Date.parse(r.deadlineAt ?? p.summary.deadlineAt) > now;
+    if (!open) Object.assign(r, { syncOutcome: "skipped", syncAt: at });
+    else if (r.syncPr?.state === "open") Object.assign(r, { syncOutcome: "updated", syncAt: at });
+    else Object.assign(r, { syncOutcome: "opened", syncPr: { number: next++, state: "open" }, syncAt: at });
+  }
+  Object.assign(p.sync, { aheadAt: null, aheadCommits: null, syncedAt: at });
+}
+
 function detailOf(p: MockProject): ProjectDetail {
+  settleSync(p);
   const roster = classroomRoster(p.summary.classroomId);
   const byEnrollment = new Map(p.repos.filter((r) => r.enrollmentId).map((r) => [r.enrollmentId!, r]));
   const rows: ProjectDetailRow[] = [
@@ -671,7 +739,7 @@ function detailOf(p: MockProject): ProjectDetail {
       state: p.summary.state,
       archived: p.summary.archivedAt !== null,
       gradingMode: p.summary.gradingMode,
-      sourceAhead: false,
+      sourceAhead: p.sync.aheadAt !== null,
       live: counts.live,
       frozen: counts.frozen,
       unverified: live.filter((r) => finalOf(r)?.toVerify === true).length,
@@ -679,6 +747,21 @@ function detailOf(p: MockProject): ProjectDetail {
       changedAfterRelease: views.filter((r) => r.flags.changedAfterRelease).length,
     }),
     counts,
+    sync: {
+      ahead: p.sync.aheadAt === null ? null : { pushedAt: p.sync.aheadAt, commits: p.sync.aheadCommits },
+      inProgress: p.sync.inProgressReads > 0,
+      syncedAt: p.sync.syncedAt,
+      last:
+        p.repos.some((r) => r.syncOutcome !== null)
+          ? {
+              opened: p.repos.filter((r) => r.syncOutcome === "opened").length,
+              updated: p.repos.filter((r) => r.syncOutcome === "updated").length,
+              upToDate: p.repos.filter((r) => r.syncOutcome === "up_to_date").length,
+              failed: p.repos.filter((r) => r.syncOutcome === "failed").length,
+              skipped: p.repos.filter((r) => r.syncOutcome === "skipped").length,
+            }
+          : null,
+    },
     // Stale only when there was live state to read.
     liveStale: !p.read && live.length > 0,
     rows,
@@ -686,6 +769,17 @@ function detailOf(p: MockProject): ProjectDetail {
   p.read = true;
   return detail;
 }
+
+/** The source's sync (F-PROJ-12, M3-07): 202, the pass settled by the read after the next. */
+on("POST", "/app/api/projects/:id/sync", (m) => {
+  const p = projectOr404(m.groups!.id!);
+  if (p.summary.archivedAt !== null) throw refuse(409, "project_archived", "An archived project syncs nothing");
+  if (p.summary.distribution === null) throw refuse(409, "distribution_missing", "The distribution repository is not built");
+  if (p.sync.inProgressReads > 0) throw refuse(409, "sync_in_progress", "A sync is under way");
+  p.sync.inProgressReads = 2;
+  const answer: ProjectSyncAccepted = { requestedAt: iso(0) };
+  return answer;
+});
 
 on("GET", "/app/api/projects/:id", (m) => detailOf(projectOr404(m.groups!.id!)));
 

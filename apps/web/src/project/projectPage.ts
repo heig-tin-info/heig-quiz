@@ -36,17 +36,27 @@ export function unassignedStudents(error: unknown): UnassignedStudent[] | null {
 
 /** The page refetches every 30 s while its tab is visible (TanStack stops a hidden tab's interval). */
 export const REFETCH_MS = 30_000;
-/** …and once a few seconds after a response whose live state was not all read in time. */
+/** …and every few seconds after a response whose live state was not all read in time, or while a sync runs (M3-07). */
 export const LIVE_STALE_REFETCH_MS = 3_000;
 
 export const projectRefetchInterval = (detail: ProjectDetail | undefined): number =>
-  detail?.liveStale ? LIVE_STALE_REFETCH_MS : REFETCH_MS;
+  detail?.liveStale || detail?.sync.inProgress ? LIVE_STALE_REFETCH_MS : REFETCH_MS;
+
+/**
+ * Whether the header offers Sync beside another primary action (F-PROJ-12,
+ * M3-07): the source is ahead, or a sync runs, on a project that is not
+ * archived and has its distribution repository — a draft syncs its
+ * distribution, a project awaiting its release its open repositories. As
+ * the primary action, Sync is the server's word (`primaryAction`).
+ */
+export const offersSync = (p: ProjectDetail): boolean =>
+  p.archivedAt === null && p.distribution !== null && p.primaryAction !== "sync" && (p.sync.ahead !== null || p.sync.inProgress);
 
 /**
  * The sentence under the title: the project's situation, and the one action
  * the server names when there is one. It describes the primary button when
  * there is one (Publish, Release, a release again once a score moved after
- * the release); Sync is said, not drawn, until its route exists (M3-07).
+ * the release, Sync when the source is ahead, M3-07).
  * `date` is the instant the sentence names: the start of a scheduled draft,
  * the release, else the deadline.
  */
@@ -194,6 +204,38 @@ export function reviewTag(repo: ProjectRepoView): ReviewView | null {
   return reviewView(repo.review, repo.frozenAt);
 }
 
+/**
+ * The sync of a repository, as a tag of its row and a fact of its sheet
+ * (F-PROJ-12, M3-07): a failed sync first (red), else the pull request of
+ * its default branch — open (amber, linked), merged (green), closed (zinc)
+ * —, else an outcome worth a word (up to date, skipped); null when the
+ * sync never reached it.
+ */
+export interface SyncView {
+  key: keyof Dict;
+  tone: Tone;
+  /** The pull request's number, for the word. */
+  n?: number;
+  /** The pull request on GitHub. */
+  href: string | null;
+}
+
+export function syncTag(repo: ProjectRepoView): SyncView | null {
+  const { pr, outcome } = repo.sync;
+  if (outcome === "failed") return { key: "project.syncTag.failed", tone: "red", href: null };
+  if (pr) {
+    return {
+      key: `project.syncTag.${pr.state}`,
+      tone: pr.state === "open" ? "amber" : pr.state === "merged" ? "green" : "zinc",
+      n: pr.number,
+      href: repo.fullName ? `${repoHref(repo.fullName)}/pull/${pr.number}` : null,
+    };
+  }
+  if (outcome === "up_to_date") return { key: "project.syncTag.upToDate", tone: "zinc", href: null };
+  if (outcome === "skipped") return { key: "project.syncTag.skipped", tone: "zinc", href: null };
+  return null;
+}
+
 /** Why the sheet offers no teacher's score form: the project is not graded, or the repository is not frozen for good. */
 export type TeacherScoreBlock = "grading_none" | "not_frozen" | null;
 
@@ -294,6 +336,11 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   resend_too_soon: "project.refusal.resendTooSoon",
   invite_failed: "project.refusal.inviteFailed",
   github_account_stale: "project.refusal.githubAccountStale",
+  // The sync (M3-07).
+  project_archived: "project.refusal.projectArchived",
+  sync_in_progress: "project.refusal.syncInProgress",
+  source_rewritten: "project.refusal.sourceRewritten",
+  sync_failed: "project.refusal.syncFailed",
 };
 
 /** The dictionary key wording a refusal the page knows, or null (the server's message then). */
