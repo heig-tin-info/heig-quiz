@@ -3,12 +3,13 @@ import { describe, expect, it } from "vitest";
 import type { ProjectRepoView } from "@quiz/contracts";
 
 import { ApiError } from "../api";
-import { AHEAD, makeCheckpoint, makeProject, makeRepo, PAST, row } from "../test/project-fixtures";
+import { AHEAD, makeCheckpoint, makeGroup, makeProject, makeRepo, PAST, row } from "../test/project-fixtures";
 import {
   checkpointStatus,
   deadlineDesc,
   hasFellBack,
   isReopen,
+  offersResync,
   offersSync,
   LIVE_STALE_REFETCH_MS,
   projectRefetchInterval,
@@ -18,6 +19,7 @@ import {
   refusalMessage,
   releaseRefusal,
   reopenedRepos,
+  repoEntries,
   repoFlags,
   repoShortName,
   reviewTag,
@@ -53,7 +55,7 @@ describe("the header's sentence", () => {
   });
 
   it("tells a locked project not yet frozen from one frozen, and a released one", () => {
-    const counts = { students: 2, accepted: 2, live: 2, frozen: 1, toVerify: 0, alerts: 0 };
+    const counts = { students: 2, accepted: 2, groups: 0, live: 2, frozen: 1, toVerify: 0, alerts: 0 };
     expect(statusKey(makeProject({ state: "locked", counts }))).toBe("project.status.lockedFreezing");
     expect(statusKey(makeProject({ state: "locked", counts: { ...counts, frozen: 2 }, gradingMode: "none" }))).toBe(
       "project.status.locked",
@@ -120,6 +122,10 @@ describe("a repository's flags", () => {
       { key: "project.flag.malformed", tone: "zinc" },
       { key: "project.flag.degraded", tone: "zinc" },
     ]);
+  });
+
+  it("says an access to revoke in amber, never red (ADR-070 §4, M3-16b)", () => {
+    expect(repoFlags(makeRepo(1, { accessToRevoke: true }))).toEqual([{ key: "project.flag.accessToRevoke", tone: "amber" }]);
   });
 
   it("reads a degraded repository that is not archived as one without its ruleset", () => {
@@ -196,6 +202,18 @@ describe("the sync (F-PROJ-12, M3-07)", () => {
     expect(syncTag(sync({ pr: { number: 4, state: "closed" }, outcome: "updated" }))).toMatchObject({ key: "project.syncTag.closed", tone: "zinc" });
     expect(syncTag(sync({ outcome: "up_to_date" }))).toEqual({ key: "project.syncTag.upToDate", tone: "zinc", href: null });
     expect(syncTag(sync({ outcome: "skipped" }))).toEqual({ key: "project.syncTag.skipped", tone: "zinc", href: null });
+  });
+
+  it("words the resync's refusals (M3-16b)", () => {
+    for (const [code, key] of [
+      ["released", "project.refusal.released"],
+      ["classroom_archived", "project.refusal.classroomArchived"],
+      ["project_archived", "project.refusal.projectArchived"],
+      ["no_group_set", "project.noGroupSet.title"],
+      ["group_sync_pending", "project.refusal.groupSyncPending"],
+    ] as const) {
+      expect(refusalKey(new ApiError(409, { error: code, message: "" }))).toBe(key);
+    }
   });
 
   it("words the sync's refusals", () => {
@@ -374,4 +392,56 @@ describe("the teacher's score (F-PROJ-14)", () => {
 
 it("names a repository without its organization", () => {
   expect(repoShortName("heig-tin-info/labo-2-alice")).toBe("labo-2-alice");
+});
+
+describe("one row per group (ADR-070 §4, M3-16b)", () => {
+  const g1 = makeGroup(1);
+  const g2 = makeGroup(2, true);
+  const g10 = makeGroup(10);
+  const repoA = makeRepo(1);
+  const orphan = makeRepo(3);
+
+  it("gathers a group project's rows by group, by name: its repository once, its roster members; then the students in none", () => {
+    const entries = repoEntries(
+      makeProject({
+        groupMode: true,
+        rows: [
+          row(0, repoA, {}, g1),
+          row(1, null, {}, g10),
+          row(2, repoA, {}, g1),
+          row(3, null, {}, null),
+          // R1: a repository its group no longer holds anyone in, by its creator's account.
+          row(4, orphan, { enrollmentId: null }, g2),
+        ],
+      }),
+    );
+    expect(entries.map((e) => [e.kind, e.label, e.repo?.id ?? null, e.kind === "group" ? e.members.map((m) => m.prenom) : null])).toEqual([
+      ["group", "Groupe 1", repoA.id, ["Alice", "Chloé"]],
+      ["group", "Groupe 2", orphan.id, []],
+      ["group", "Groupe 10", null, ["Benoît"]],
+      ["student", "Favre David", null, null],
+    ]);
+  });
+
+  it("keeps one row per student in an individual project, whatever a row says", () => {
+    const entries = repoEntries(makeProject({ rows: [row(1, repoA), row(2, null, {}, g1)] }));
+    expect(entries.map((e) => [e.kind, e.label])).toEqual([
+      ["student", "Martin Benoît"],
+      ["student", "Rochat Chloé"],
+    ]);
+  });
+
+  it("names the groups of a refused release in group mode", () => {
+    const project = makeProject({ groupMode: true, rows: [row(0, repoA, {}, g1), row(2, repoA, {}, g1)] });
+    expect(releaseRefusal(new ApiError(409, { error: "to_verify", message: "", repos: [repoA.id] }), project, t)).toBe(
+      'project.release.refusal.toVerify {"names":"Groupe 1"}',
+    );
+  });
+
+  it("offers Resync on a drift only while the project is neither released nor archived", () => {
+    expect(offersResync(makeProject({ groupsDrifted: true }))).toBe(true);
+    expect(offersResync(makeProject({ groupsDrifted: false }))).toBe(false);
+    expect(offersResync(makeProject({ groupsDrifted: true, releasedAt: PAST }))).toBe(false);
+    expect(offersResync(makeProject({ groupsDrifted: true, archivedAt: PAST }))).toBe(false);
+  });
 });

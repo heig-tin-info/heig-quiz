@@ -214,7 +214,9 @@ describe("the project page (F-PROJ-13)", () => {
 
     const d = await detail(w.projectId);
     expect(d.rows).toHaveLength(4);
-    expect(d.counts).toEqual({ students: 3, accepted: 2, live: 2, frozen: 0, toVerify: 0, alerts: 0 });
+    expect(d.counts).toEqual({ students: 3, accepted: 2, groups: 0, live: 2, frozen: 0, toVerify: 0, alerts: 0 });
+    // An individual project: no copy group on any row, no resync owed (M3-16b).
+    expect([d.rows.every((r) => r.group === null), d.groupSyncPending]).toEqual([true, false]);
     expect(d.primaryAction).toBe("none");
     expect(d.liveStale).toBe(false);
 

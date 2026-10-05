@@ -8,7 +8,7 @@
  * to the last answer when the queue ends on an error.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useRef } from "react";
+import { useMemo, useRef } from "react";
 
 import {
   GroupCreate,
@@ -24,11 +24,11 @@ import {
   type StudentGroupSets,
 } from "@quiz/contracts";
 
-import { api } from "../api";
+import { api, refusedWith } from "../api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { classroomGroupSetsKey, groupSetKey, groupSetListsKey, studentClassroomKey, studentGroupSetsKey, studentHomeKey } from "../queryKeys";
-import { groupRefusalMessage } from "./groupRules";
+import { groupRefusalMessage, WriteHeld } from "./groupRules";
 
 /** `GET /classrooms/:id/group-sets`: the classroom's sets, the oldest first. */
 export function useClassroomGroupSets(classroomId: string) {
@@ -88,10 +88,11 @@ export const setWrite = {
     return body.success ? { method: "PATCH", path: `/groups/${groupId}`, body: body.data } : null;
   },
   deleteGroup: (groupId: string): SetWrite => ({ method: "DELETE", path: `/groups/${groupId}` }),
-  place: (enrollmentId: string, groupId: string | null): SetWrite => ({
+  /** `confirm`: the digest of the consequences the staff confirmed (ADR-070 §6). */
+  place: (enrollmentId: string, groupId: string | null, confirm?: string): SetWrite => ({
     method: "PUT",
     path: `/members/${enrollmentId}`,
-    body: GroupMemberPut.parse({ groupId }),
+    body: GroupMemberPut.parse(confirm === undefined ? { groupId } : { groupId, confirm }),
   }),
   random: (body: GroupRandomForm): SetWrite => ({ method: "POST", path: "/random", body: GroupRandomForm.parse(body) }),
 };
@@ -105,6 +106,13 @@ export const setWrite = {
  * that ends on an error puts back the last answer, and reads the set again:
  * whatever refused the write may have changed it (another teacher's
  * deletion).
+ *
+ * A write refused `409 needs_confirmation` (ADR-070 §6, M3-16b) HOLDS the
+ * queue: its optimistic step stays drawn while the page asks, every later
+ * write — queued already, or new — is rejected with {@link WriteHeld}
+ * rather than sent, and the page ends the hold with `confirm(request)`,
+ * the same write with the digest, or `cancel()`, which puts back the last
+ * answer.
  */
 export function useGroupSetWrites(setId: string) {
   const qc = useQueryClient();
@@ -112,44 +120,75 @@ export function useGroupSetWrites(setId: string) {
   const inFlight = useRef(0);
   /** The set as the server last answered it, or as it stood when the queue started. */
   const server = useRef<GroupSetDetail | undefined>(undefined);
+  /**
+   * The hold of a confirmation: `asked` — nothing is sent until the page
+   * answers; `confirming` — the held write is sent again with its digest.
+   * While not `none`, the drawn set is not the server's: `server` stays the
+   * base to put back.
+   */
+  const hold = useRef<"none" | "asked" | "confirming">("none");
 
-  return useCallback(
-    (request: SetWrite, optimistic?: (detail: GroupSetDetail) => GroupSetDetail): Promise<GroupSetDetail> => {
-      const key = groupSetKey(setId);
-      if (inFlight.current === 0) server.current = qc.getQueryData<GroupSetDetail>(key);
+  return useMemo(() => {
+    const key = groupSetKey(setId);
+    const putBack = () => {
+      hold.current = "none";
+      if (server.current) qc.setQueryData(key, server.current);
+      void qc.invalidateQueries({ queryKey: key });
+    };
+    const write = (request: SetWrite, optimistic?: (detail: GroupSetDetail) => GroupSetDetail): Promise<GroupSetDetail> => {
+      if (hold.current === "asked") return Promise.reject(new WriteHeld());
+      if (inFlight.current === 0 && hold.current === "none") server.current = qc.getQueryData<GroupSetDetail>(key);
       inFlight.current += 1;
       if (optimistic) {
         // A read in flight would land over the move.
         void qc.cancelQueries({ queryKey: key });
         qc.setQueryData<GroupSetDetail>(key, (d) => (d ? optimistic(d) : d));
       }
-      const send = () =>
-        api<GroupSetDetail>(`/app/api/group-sets/${setId}${request.path}`, {
+      const send = () => {
+        if (hold.current === "asked") throw new WriteHeld();
+        return api<GroupSetDetail>(`/app/api/group-sets/${setId}${request.path}`, {
           method: request.method,
           ...(request.body === undefined ? {} : { body: JSON.stringify(request.body) }),
         });
+      };
       const run = tail.current.then(send);
       tail.current = run.catch(() => undefined);
       return run.then(
         (answer) => {
           inFlight.current -= 1;
           server.current = answer;
-          if (inFlight.current === 0) qc.setQueryData(key, answer);
+          if (inFlight.current === 0) {
+            hold.current = "none";
+            qc.setQueryData(key, answer);
+          }
           void qc.invalidateQueries({ queryKey: groupSetListsKey });
           return answer;
         },
         (error: unknown) => {
           inFlight.current -= 1;
-          if (inFlight.current === 0) {
-            if (server.current) qc.setQueryData(key, server.current);
-            void qc.invalidateQueries({ queryKey: key });
+          if (refusedWith(error, "needs_confirmation")) {
+            hold.current = "asked";
+          } else if (inFlight.current === 0 && hold.current !== "asked") {
+            putBack();
           }
           throw error;
         },
       );
-    },
-    [qc, setId],
-  );
+    };
+    return {
+      write,
+      /** Ends the hold by sending `request` — the held write with its digest. */
+      confirm: (request: SetWrite): Promise<GroupSetDetail> => {
+        hold.current = "confirming";
+        return write(request);
+      },
+      /** Ends the hold without sending: the last answer is drawn again. */
+      cancel: () => {
+        hold.current = "none";
+        if (inFlight.current === 0) putBack();
+      },
+    };
+  }, [qc, setId]);
 }
 
 // ---------------------------------------------------------------- the student's side (F-PROJ-22, M3-17)

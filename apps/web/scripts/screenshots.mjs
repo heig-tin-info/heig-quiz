@@ -103,6 +103,9 @@ const SET_PAIRS = "/classrooms/r1/groups/5e7a0000-0000-4000-8000-000000000001";
 const SET_FINAL = "/classrooms/r1/groups/5e7a0000-0000-4000-8000-000000000002";
 const SET_EMPTY = "/classrooms/r1/groups/5e7a0000-0000-4000-8000-000000000003";
 const SET_ARCHIVED = "/classrooms/r6/groups/5e7a0000-0000-4000-8000-000000000004";
+/** The published group projects on the pairs (M3-16b): following, and stopped with a drift. */
+const PJ_GROUP_LIVE = "0190d3c4-0000-7000-8000-0000000000b5";
+const PJ_GROUP_STOPPED = "0190d3c4-0000-7000-8000-0000000000b6";
 
 const scenes = [
   // The Activities section (#190): the three views, the states.
@@ -405,6 +408,32 @@ const scenes = [
     },
   },
   { name: "project-group", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000b4?projects=1&groups=1" },
+  // M3-16b: a move reaching a following project's repositories, confirmed
+  // first; a published group project's rows per group (an access to
+  // revoke); a stopped one drifted from its set, and its resync's dialog.
+  {
+    name: "group-set-confirm",
+    role: "teacher",
+    path: `${SET_PAIRS}?groups=1&projects=1`,
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(move|déplacer) .+(to|vers)…$/i }).first().click();
+      await p.getByRole("menuitem", { name: /^(Group|Groupe) 2$/ }).click();
+      await p.getByRole("dialog").waitFor();
+    },
+  },
+  { name: "project-group-rows", role: "teacher", path: `/projects/${PJ_GROUP_LIVE}?projects=1&groups=1` },
+  { name: "project-group-drift", role: "teacher", path: `/projects/${PJ_GROUP_STOPPED}?projects=1&groups=1` },
+  {
+    name: "project-group-resync-confirm",
+    role: "teacher",
+    path: `/projects/${PJ_GROUP_STOPPED}?projects=1&groups=1`,
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(resync with the set|resynchroniser avec la répartition)$/i }).click();
+      await p.getByRole("dialog").waitFor();
+    },
+  },
   {
     name: "project-group-unassigned",
     role: "teacher",

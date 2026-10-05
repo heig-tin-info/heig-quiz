@@ -3,11 +3,12 @@
  * named on GitHub, a score as points out of their maximum, the final score
  * with its grade and source, a CI status as a tag.
  */
-import type { ProjectRepoView } from "@quiz/contracts";
+import type { ProjectRepoView, ProjectStudent } from "@quiz/contracts";
 
 import { GitPullRequest } from "lucide-react";
 
 import { Grade } from "../Grade";
+import { studentName } from "../group/groupRules";
 import { useT, type Dict } from "../i18n";
 import { Badge, cx, GithubIcon, type Tone } from "../ui";
 import { repoHref, repoShortName, syncTag } from "./projectPage";
@@ -113,4 +114,31 @@ export function CiBadge({ status }: { status: ProjectRepoView["ciStatus"] }) {
   const t = useT();
   if (status === "none") return <span className="text-fg-faint">—</span>;
   return <Badge tone={CI[status].tone}>{t(CI[status].key)}</Badge>;
+}
+
+/** A student's second line: the GitHub account they linked, or that their seat is not claimed. */
+export function StudentAccount({ student }: { student: ProjectStudent }) {
+  const t = useT();
+  if (!student.claimed) return <span className="text-xs text-fg-faint">{t("project.repo.notClaimed")}</span>;
+  return student.githubLogin ? <span className="font-mono text-xs text-fg-faint">{student.githubLogin}</span> : null;
+}
+
+/**
+ * A group's current members (ADR-070 §4, M3-16b, B7), each by name and
+ * GitHub login — "No member" for a repository its group no longer holds
+ * anyone in (R1). The table's row and the repository's sheet draw the same.
+ */
+export function MemberList({ members, className }: { members: ProjectStudent[]; className?: string }) {
+  const t = useT();
+  if (members.length === 0) return <span className={cx("text-fg-faint", className)}>{t("project.repo.noMember")}</span>;
+  return (
+    <ul className={cx("flex flex-wrap gap-x-3 gap-y-0.5", className)}>
+      {members.map((m) => (
+        <li key={m.enrollmentId ?? m.email} className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+          {studentName(m)}
+          <StudentAccount student={m} />
+        </li>
+      ))}
+    </ul>
+  );
 }

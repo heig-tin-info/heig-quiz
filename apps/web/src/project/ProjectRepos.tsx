@@ -1,6 +1,6 @@
 import { FolderGit2, Loader2, Lock, LockOpen, Snowflake, Users } from "lucide-react";
 
-import type { ProjectDetail, ProjectDetailRow, ProjectRepoView } from "@quiz/contracts";
+import type { ProjectDetail, ProjectRepoView } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import type { Navigate } from "../router";
@@ -20,10 +20,43 @@ import {
   useSortableTable,
   type Column,
 } from "../ui";
-import { CiBadge, RepoLink, Score, SyncBadge } from "./parts";
-import { repoFlags, reviewTag, shortSha } from "./projectPage";
+import { CiBadge, MemberList, RepoLink, Score, StudentAccount, SyncBadge } from "./parts";
+import { repoEntries, repoFlags, reviewTag, shortSha, type RepoEntry } from "./projectPage";
 
 type SortKey = "student" | "score" | "deadline";
+
+/**
+ * The identity cell of a row: a group's name over its members, each by name
+ * and GitHub login (M3-16b, B7: the current members only; "No member" for
+ * a repository its group no longer holds anyone in), or a student — with
+ * "left the roster", "no group" (a group project's student in none of its
+ * groups) or their account.
+ */
+function IdentityCell({ entry, groupMode }: { entry: RepoEntry; groupMode: boolean }) {
+  const t = useT();
+  const deleted = entry.repo?.flags.deleted === true;
+  if (entry.kind === "group") {
+    return (
+      <span className="flex flex-col gap-0.5">
+        <span className={cx("font-semibold", deleted && "font-medium")}>{entry.label}</span>
+        <MemberList members={entry.members} className="text-xs text-fg-muted" />
+      </span>
+    );
+  }
+  const { student } = entry;
+  return (
+    <span className="flex flex-wrap items-center gap-x-2">
+      <span className={cx("font-semibold", deleted && "font-medium")}>{entry.label}</span>
+      {student.enrollmentId === null ? (
+        <Badge tone="zinc">{t("project.repo.leftRoster")}</Badge>
+      ) : groupMode && entry.repo === null ? (
+        <Badge tone="zinc">{t("project.repo.noGroup")}</Badge>
+      ) : (
+        <StudentAccount student={student} />
+      )}
+    </span>
+  );
+}
 
 /** The repository's cell: its link, or why there is none yet. */
 function RepoCell({ repo }: { repo: ProjectRepoView | null }) {
@@ -100,7 +133,10 @@ function StateCell({ repo }: { repo: ProjectRepoView }) {
 /**
  * The repositories (F-PROJ-13): one row per student of the roster, their
  * repository or "not accepted", then the repositories whose student left the
- * roster — as the server orders them, until a column is sorted. Seven
+ * roster — as the server orders them, until a column is sorted. A group
+ * project (M3-16b) has one row per group instead — its repository, its
+ * scores once, its members under its name —, by name, then its students in
+ * no group; "Student" sorts by the group's name. Seven
  * columns at most; the ones a phone drops (repository, last commit, CI, the
  * deadline) are in the row's sheet, which a row with a repository opens.
  * A deleted repository stays, muted: it is a fact of the project.
@@ -119,14 +155,15 @@ export function ProjectRepos({
   navigate: Navigate;
 }) {
   const t = useT();
-  const { sorted, sort, toggle } = useSortableTable<ProjectDetailRow, SortKey>(
-    project.rows,
-    (row, key) =>
+  const entries = repoEntries(project);
+  const { sorted, sort, toggle } = useSortableTable<RepoEntry, SortKey>(
+    entries,
+    (entry, key) =>
       key === "student"
-        ? `${row.student.nom} ${row.student.prenom}`
+        ? entry.label
         : key === "score"
-          ? (row.repo?.scores.final?.points ?? -1)
-          : (row.repo?.effectiveDeadlineAt ?? ""),
+          ? (entry.repo?.scores.final?.points ?? -1)
+          : (entry.repo?.effectiveDeadlineAt ?? ""),
     null,
   );
 
@@ -134,7 +171,7 @@ export function ProjectRepos({
     <SectionHeading
       icon={FolderGit2}
       title={<span id="project-repos">{t("project.repos")}</span>}
-      count={project.rows.length}
+      count={entries.length}
       actions={
         project.liveStale ? (
           <span className="inline-flex items-center gap-1.5 text-xs text-fg-faint" role="status">
@@ -170,7 +207,7 @@ export function ProjectRepos({
   }
 
   const columns: Column<SortKey>[] = [
-    { key: "student", label: t("results.col.student") },
+    { key: "student", label: t(project.groupMode ? "project.col.group" : "results.col.student") },
     { key: "repo", label: t("project.col.repo"), sortable: false, className: T.colMid },
     { key: "commit", label: t("project.col.commit"), sortable: false, className: T.colLow },
     { key: "ci", label: t("project.col.ci"), sortable: false, className: T.colMid },
@@ -178,7 +215,7 @@ export function ProjectRepos({
     { key: "deadline", label: t("project.deadline"), className: T.colHigh },
     { key: "state", label: t("project.col.state"), sortable: false },
   ];
-  const noneAccepted = project.state === "published" && project.rows.every((r) => r.repo === null);
+  const noneAccepted = project.state === "published" && entries.every((e) => e.repo === null);
 
   return (
     <section aria-labelledby="project-repos" className="space-y-3">
@@ -188,13 +225,13 @@ export function ProjectRepos({
         <table className={T.table}>
           <TableHead columns={columns} sort={sort} onToggle={toggle} />
           <tbody>
-            {sorted.map(({ student, repo }) => {
-              const key = repo?.id ?? student.enrollmentId ?? student.email;
+            {sorted.map((entry) => {
+              const { repo } = entry;
               const opens = repo ? () => onOpen(repo.id) : undefined;
               const own = repo !== null && repo.deadlineAt !== null;
               return (
                 <tr
-                  key={key}
+                  key={entry.key}
                   className={cx(
                     T.row,
                     opens && `${T.rowHover} cursor-pointer`,
@@ -204,18 +241,7 @@ export function ProjectRepos({
                   {...(opens ? pressable(opens, "row") : {})}
                 >
                   <td className={T.td}>
-                    <span className="flex flex-wrap items-center gap-x-2">
-                      <span className={cx("font-semibold", repo?.flags.deleted && "font-medium")}>
-                        {student.nom} {student.prenom}
-                      </span>
-                      {student.enrollmentId === null ? (
-                        <Badge tone="zinc">{t("project.repo.leftRoster")}</Badge>
-                      ) : !student.claimed ? (
-                        <span className="text-xs text-fg-faint">{t("project.repo.notClaimed")}</span>
-                      ) : student.githubLogin ? (
-                        <span className="font-mono text-xs text-fg-faint">{student.githubLogin}</span>
-                      ) : null}
-                    </span>
+                    <IdentityCell entry={entry} groupMode={project.groupMode} />
                   </td>
                   <td className={`${T.td} ${T.colMid}`}>
                     <RepoCell repo={repo} />

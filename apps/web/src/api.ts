@@ -97,6 +97,8 @@ export async function api<T>(
  * `message` is English, and these reach a reader on any screen.
  */
 const WORDED: Partial<Record<string, keyof Dict>> = {
+  // A 404 of any route: something gone, or never the reader's (invariant 6).
+  not_found: "error.notFound",
   // ADR-034: every write of an admin acting as a student, in production.
   impersonation_read_only: "error.impersonationReadOnly",
   // ADR-050: publishing the correction, and a Reopen it forbids.

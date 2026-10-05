@@ -1,10 +1,19 @@
 /*
  * The group sets' rules on the web side (ADR-070, M3-16a), pure: where a
  * student is, the optimistic move, the words of a refusal, the sizes a
- * random formation would make. `GroupSetPage.tsx` and `GroupBoard.tsx`
- * draw them.
+ * random formation would make, and (M3-16b) the GitHub consequences of a
+ * write as its confirmation lists them. `GroupSetPage.tsx`,
+ * `GroupBoard.tsx` and `ConsequencesDialog.tsx` draw them.
  */
-import { GroupErrorCode, GroupRefusalProjects, type GroupRemainder, type GroupSetDetail, type GroupStudent } from "@quiz/contracts";
+import {
+  GroupConsequences,
+  GroupErrorCode,
+  GroupRefusalProjects,
+  type GroupConsequence,
+  type GroupRemainder,
+  type GroupSetDetail,
+  type GroupStudent,
+} from "@quiz/contracts";
 import { groupSizes } from "@quiz/domain";
 
 import { ApiError, refusalCodeOf } from "../api";
@@ -91,6 +100,18 @@ const REFUSAL_KEY: Record<GroupErrorCode, keyof Dict> = {
   group_full: "groups.refusal.groupFull",
 };
 
+/**
+ * A write refused while a confirmation waits (M3-16b): the queue of the set
+ * holds every later write rather than send it over a move the server has
+ * not applied yet. Worded, never sent.
+ */
+export class WriteHeld extends Error {
+  constructor() {
+    super("A change waits for its confirmation");
+    this.name = "WriteHeld";
+  }
+}
+
 /** A group, a student or a set out of reach: the 404 of a missing one (another teacher deleted it, say). */
 export const gone = (error: unknown): boolean => error instanceof ApiError && error.status === 404;
 
@@ -101,6 +122,7 @@ export const gone = (error: unknown): boolean => error instanceof ApiError && er
  * English).
  */
 export function groupRefusalMessage(error: unknown, t: TFunction): string {
+  if (error instanceof WriteHeld) return t("groups.confirm.held");
   const code = GroupErrorCode.safeParse(refusalCodeOf(error));
   if (code.success) {
     const max = error instanceof ApiError ? (error.body as { max?: unknown } | null)?.max : undefined;
@@ -123,4 +145,86 @@ export function projectsRefusal(error: unknown): ProjectsRefusal | null {
   if ((code !== "set_in_use" && code !== "has_repo") || !(error instanceof ApiError)) return null;
   const parsed = GroupRefusalProjects.safeParse(error.body);
   return { code, projects: parsed.success ? parsed.data.projects : [] };
+}
+
+// ---------------------------------------------------------------- GitHub consequences (ADR-070 §6, M3-16b)
+
+/**
+ * The consequences a `409 needs_confirmation` names (a set's write, or
+ * *Resync with the set*), with the digest to send back; null for any other
+ * error. The client never guesses them (ADR-070 §6).
+ */
+export function needsConfirmation(error: unknown): GroupConsequences | null {
+  if (!(error instanceof ApiError) || refusalCodeOf(error) !== "needs_confirmation") return null;
+  const parsed = GroupConsequences.safeParse(error.body);
+  return parsed.success ? parsed.data : null;
+}
+
+/** One repository a confirmation names: who loses it, who joins it. `repo` null: its first provisioning runs. */
+export interface RepoConsequences {
+  key: string;
+  repo: string | null;
+  groupName: string;
+  frozen: boolean;
+  lose: string[];
+  join: string[];
+}
+
+/** One project a confirmation names, its repositories in the order the server listed them. */
+export interface ProjectConsequences {
+  projectId: string;
+  projectName: string;
+  repos: RepoConsequences[];
+}
+
+/**
+ * The consequences grouped as the dialog lists them: by project, then by
+ * repository (a group's, by its copy group — a repository being created has
+ * no name yet), then the students losing it and joining it, by name.
+ */
+export function consequencesByProject(consequences: readonly GroupConsequence[]): ProjectConsequences[] {
+  const projects = new Map<string, ProjectConsequences>();
+  for (const c of consequences) {
+    let project = projects.get(c.projectId);
+    if (!project) {
+      project = { projectId: c.projectId, projectName: c.projectName, repos: [] };
+      projects.set(c.projectId, project);
+    }
+    const key = `${c.groupId}:${c.repo ?? ""}`;
+    let repo = project.repos.find((r) => r.key === key);
+    if (!repo) {
+      repo = { key, repo: c.repo, groupName: c.groupName, frozen: c.frozen, lose: [], join: [] };
+      project.repos.push(repo);
+    }
+    repo.frozen ||= c.frozen;
+    repo[c.kind].push(studentName(c));
+  }
+  for (const project of projects.values()) {
+    for (const repo of project.repos) {
+      repo.lose.sort((a, b) => a.localeCompare(b));
+      repo.join.sort((a, b) => a.localeCompare(b));
+    }
+  }
+  return [...projects.values()];
+}
+
+/**
+ * What *Resync with the set* names first (ADR-070's second and fourth
+ * amendments): the distinct frozen repositories it touches after their
+ * deadline, then the arrivals into a group without a repository once
+ * Accept is closed (R3: the student will have no repository), then the
+ * rest, by repository.
+ */
+export function resyncSections(consequences: readonly GroupConsequence[]): {
+  frozenRepos: string[];
+  noRepo: { name: string; groupName: string }[];
+  rest: RepoConsequences[];
+} {
+  const frozenRepos = [...new Set(consequences.flatMap((c) => (c.frozen && c.repo !== null ? [c.repo] : [])))].sort();
+  const noRepo = consequences
+    .filter((c) => c.acceptClosed)
+    .map((c) => ({ name: studentName(c), groupName: c.groupName }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const rest = consequencesByProject(consequences.filter((c) => !c.acceptClosed)).flatMap((p) => p.repos);
+  return { frozenRepos, noRepo, rest };
 }

@@ -875,8 +875,25 @@ export const ProjectStudent = z.object({
 });
 export type ProjectStudent = z.infer<typeof ProjectStudent>;
 
-/** One row of the project page: a student and their repository, null when they have not accepted. */
-export const ProjectDetailRow = z.object({ student: ProjectStudent, repo: ProjectRepoView.nullable() });
+/**
+ * The copy group a row belongs to in a group project (ADR-070 §4; M3-16b):
+ * the project's own group (`project_groups`), its name, and whether it
+ * stopped following the set (its deadline, or its repository's, applied).
+ */
+export const ProjectDetailGroup = z.object({ id: z.uuid(), name: z.string(), stopped: z.boolean() });
+export type ProjectDetailGroup = z.infer<typeof ProjectDetailGroup>;
+
+/**
+ * One row of the project page: a student and their repository, null when
+ * they have not accepted. In a group project, `group` is the copy group the
+ * student is in — every member of a group reads its repository, so the
+ * page draws one row per group from them —, null for a student in no group
+ * of the copy (or holding an individual repository of heig-classroom's lot
+ * 1, which is theirs). A group repository no roster student reads any more
+ * (its members left the roster, or R1's group kept with no member) is a row
+ * of its creator's account (`enrollmentId` null) carrying its group.
+ */
+export const ProjectDetailRow = z.object({ student: ProjectStudent, repo: ProjectRepoView.nullable(), group: ProjectDetailGroup.nullable() });
 export type ProjectDetailRow = z.infer<typeof ProjectDetailRow>;
 
 export const ProjectPrimaryAction = z.enum(PROJECT_PRIMARY_ACTIONS);
@@ -936,16 +953,21 @@ export type ProjectSyncAccepted = z.infer<typeof ProjectSyncAccepted>;
  * `groupsDrifted` (F-PROJ-13, ADR-070 §4; M3-15b-2b): a published group
  * project's copy differs from its set where the follow stopped — *Resync
  * with the set* would change something —, whether the project still allows
- * it or not (released, archived).
+ * it or not (released, archived). `groupSyncPending` (product owner R2;
+ * M3-16b): a confirmed resync is not fully applied by the `group.sync` job
+ * yet — the release answers `409 group_sync_pending` meanwhile.
+ * `counts.groups`: the groups of a group project's copy (0 otherwise).
  */
 export const ProjectDetail = ProjectSummary.extend({
   releasedAt: z.iso.datetime().nullable(),
   groupsDrifted: z.boolean(),
+  groupSyncPending: z.boolean(),
   primaryAction: ProjectPrimaryAction,
   sync: ProjectSyncState,
   counts: z.object({
     students: z.number().int(),
     accepted: z.number().int(),
+    groups: z.number().int(),
     live: z.number().int(),
     frozen: z.number().int(),
     toVerify: z.number().int(),

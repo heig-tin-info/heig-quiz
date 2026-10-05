@@ -1,21 +1,25 @@
 import { describe, expect, it } from "vitest";
 
-import { GROUP_REFUSALS } from "@quiz/contracts";
+import { GROUP_REFUSALS, type GroupConsequence } from "@quiz/contracts";
 
 import { ApiError } from "../api";
 import { en } from "../i18n/en";
 import { fr } from "../i18n/fr";
 import { GROUP_1, GROUP_2, makeSet, student } from "../test/group-fixtures";
 import {
+  consequencesByProject,
   defaultRandomSize,
   gone,
   groupRefusalMessage,
+  needsConfirmation,
   overMax,
   placeOf,
   projectsRefusal,
+  resyncSections,
   sizesSummary,
   stepZone,
   withMove,
+  WriteHeld,
 } from "./groupRules";
 
 /** A translator over a dictionary, `{var}` replaced, as `useT` does. */
@@ -99,5 +103,76 @@ describe("the keyboard drag's walk of the zones", () => {
     expect(stepZone(4, 2, "ArrowLeft")).toBe(1);
     expect(stepZone(4, 0, "ArrowUp")).toBe(0);
     expect(stepZone(4, 0, "KeyA")).toBeNull();
+  });
+});
+
+describe("the GitHub consequences of a write (ADR-070 §6, M3-16b)", () => {
+  const P1 = "0190d3c4-0000-7000-8000-0000000000b4";
+  const P2 = "0190d3c4-0000-7000-8000-0000000000b5";
+  const c = (n: number, kind: "lose" | "join", over: Partial<GroupConsequence> = {}): GroupConsequence => ({
+    projectId: P1,
+    projectName: "Labo 4",
+    groupId: GROUP_1,
+    groupName: "Groupe 1",
+    repo: "org/labo-4-groupe-1",
+    enrollmentId: student(n).enrollmentId,
+    nom: student(n).nom,
+    prenom: student(n).prenom,
+    kind,
+    frozen: false,
+    acceptClosed: false,
+    ...over,
+  });
+
+  it("reads a 409 needs_confirmation's consequences and digest, strictly, and nothing else", () => {
+    const body = { consequences: [c(0, "lose")], digest: "a".repeat(64) };
+    expect(needsConfirmation(new ApiError(409, { error: "needs_confirmation", message: "x", ...body }))).toEqual(body);
+    expect(needsConfirmation(new ApiError(409, { error: "needs_confirmation", message: "x", consequences: [], digest: "nope" }))).toBeNull();
+    expect(needsConfirmation(new ApiError(409, { error: "has_repo", message: "x", projects: [] }))).toBeNull();
+    expect(needsConfirmation(new Error("boom"))).toBeNull();
+  });
+
+  it("groups them by project, then repository (one being created apart), then who loses and joins, by name", () => {
+    const grouped = consequencesByProject([
+      c(1, "lose"),
+      c(0, "lose"),
+      c(2, "join", { groupId: GROUP_2, groupName: "Groupe 2", repo: null }),
+      c(0, "join", { projectId: P2, projectName: "Mini-projet", groupId: GROUP_2, groupName: "Groupe 2", repo: "org/mini-groupe-2" }),
+    ]);
+    expect(grouped).toEqual([
+      {
+        projectId: P1,
+        projectName: "Labo 4",
+        repos: [
+          { key: `${GROUP_1}:org/labo-4-groupe-1`, repo: "org/labo-4-groupe-1", groupName: "Groupe 1", frozen: false, lose: ["Dupont Alice", "Favre Benoît"], join: [] },
+          { key: `${GROUP_2}:`, repo: null, groupName: "Groupe 2", frozen: false, lose: [], join: ["Martin Chloé"] },
+        ],
+      },
+      {
+        projectId: P2,
+        projectName: "Mini-projet",
+        repos: [{ key: `${GROUP_2}:org/mini-groupe-2`, repo: "org/mini-groupe-2", groupName: "Groupe 2", frozen: false, lose: [], join: ["Dupont Alice"] }],
+      },
+    ]);
+  });
+
+  it("lists a resync's distinct frozen repositories first, then the arrivals without a repository, then the rest", () => {
+    const sections = resyncSections([
+      c(0, "lose", { frozen: true }),
+      c(1, "lose", { frozen: true }),
+      c(0, "join", { frozen: true, groupId: GROUP_2, groupName: "Groupe 2", repo: "org/labo-4-groupe-2" }),
+      c(4, "join", { acceptClosed: true, groupId: GROUP_2, groupName: "Groupe 3", repo: null }),
+    ]);
+    expect(sections.frozenRepos).toEqual(["org/labo-4-groupe-1", "org/labo-4-groupe-2"]);
+    expect(sections.noRepo).toEqual([{ name: "Vuille Emma", groupName: "Groupe 3" }]);
+    expect(sections.rest.map((r) => [r.repo, r.frozen, r.lose, r.join])).toEqual([
+      ["org/labo-4-groupe-1", true, ["Dupont Alice", "Favre Benoît"], []],
+      ["org/labo-4-groupe-2", true, [], ["Dupont Alice"]],
+    ]);
+  });
+
+  it("words a write held by a confirmation, never sent", () => {
+    expect(groupRefusalMessage(new WriteHeld(), tr(en) as never)).toBe(en["groups.confirm.held"]);
+    expect(groupRefusalMessage(new WriteHeld(), tr(fr) as never)).toBe(fr["groups.confirm.held"]);
   });
 });

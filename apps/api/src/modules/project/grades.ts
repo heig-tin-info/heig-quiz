@@ -45,6 +45,7 @@ import { isLive, releaseCounts, repoForUpdate } from "./deadline.js";
 import { releasableScore, repoScores, slotRuns, teacherRunMax } from "./detail.js";
 import { ProjectError } from "./errors.js";
 import { repoMembers } from "./groupRepos.js";
+import { groupSyncOwed } from "./groupResync.js";
 import { studentRepos, type RepoRow } from "./repos.js";
 
 /** The teacher's score as the audit records it. */
@@ -120,7 +121,7 @@ export async function releaseProject(db: Db, projectId: string, actor: AuditActo
     const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
     if (!project) throw new DomainError("not_found", 404, "No such project");
     if (project.gradingMode !== "auto") throw new ProjectError("grading_none", "The project is not graded");
-    if (project.groupResync.length > 0) throw new ProjectError("group_sync_pending", "A resync of the groups is still being applied on GitHub");
+    if (groupSyncOwed(project)) throw new ProjectError("group_sync_pending", "A resync of the groups is still being applied on GitHub");
     const repos = await studentRepos(tx, project);
     const counts = releaseCounts(project, repos);
     if (!scoresFinal({ gradingMode: project.gradingMode, ...counts, unverified: 0 })) {
