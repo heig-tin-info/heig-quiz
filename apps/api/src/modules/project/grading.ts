@@ -20,7 +20,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
-import { and, eq, gte, lte, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Octokit } from "octokit";
 import { z } from "zod";
@@ -189,14 +189,22 @@ async function receiptOf(db: Db, ctx: RepoContext, headSha: string): Promise<Dat
  * The heads a restore covered (F-PROJ-08): their runs used the student's
  * copy of the protected files and never count. For each restore, the
  * tampering push's head (`reverts.head_sha`), the head the restore was
- * built on (`covered_sha`), and every head received on that branch from
- * the tampering push's receipt to the restore (`reverts.created_at`) — a
+ * built on (`covered_sha`), and every head received on the restore's branch
+ * (`reverts.branch`; the receipt's branch on the rows written before) from
+ * the tampering push's receipt to the later of the restore (`created_at`,
+ * taken before the branch was read) and the covered head's receipt — a
  * student pushing S, S1, S2 before S's delivery is handled ran the altered
- * files in all three. Derived from the receipts the intake wrote, no
- * GitHub read; a push after the restore builds on it and counts again.
+ * files in all three, and S2's receipt may land after the restore began
+ * (M3-06b). Derived from the receipts the intake wrote, no GitHub read; a
+ * push after the restore builds on it and counts again.
+ *
+ * A row without a restore (`revert_sha` null: GitHub refused the move and
+ * the retry found the files put back, M3-06b) covers its head alone — the
+ * later heads are the student's own fix.
  */
 export async function restoredHeads(db: Db | Tx, ctx: { repo: Pick<RepoContext["repo"], "id" | "githubRepoId"> }): Promise<Set<string>> {
   const tampering = alias(pushReceipts, "tampering");
+  const covered = alias(pushReceipts, "covered");
   const between = alias(pushReceipts, "between");
   const [rows, window] = await Promise.all([
     db.select({ head: reverts.headSha, covered: reverts.coveredSha }).from(reverts).where(eq(reverts.repoId, ctx.repo.id)),
@@ -206,16 +214,18 @@ export async function restoredHeads(db: Db | Tx, ctx: { repo: Pick<RepoContext["
           .select({ head: between.headSha })
           .from(reverts)
           .innerJoin(tampering, and(eq(tampering.githubRepoId, ctx.repo.githubRepoId), eq(tampering.headSha, reverts.headSha)))
+          // No receipt yet (or ever) for the covered head: `GREATEST` skips the null.
+          .leftJoin(covered, and(eq(covered.githubRepoId, tampering.githubRepoId), eq(covered.headSha, reverts.coveredSha)))
           .innerJoin(
             between,
             and(
               eq(between.githubRepoId, tampering.githubRepoId),
-              eq(between.branch, tampering.branch),
+              eq(between.branch, sql`COALESCE(${reverts.branch}, ${tampering.branch})`),
               gte(between.receivedAt, tampering.receivedAt),
-              lte(between.receivedAt, reverts.createdAt),
+              lte(between.receivedAt, sql`GREATEST(${reverts.createdAt}, ${covered.receivedAt})`),
             ),
           )
-          .where(eq(reverts.repoId, ctx.repo.id)),
+          .where(and(eq(reverts.repoId, ctx.repo.id), isNotNull(reverts.revertSha))),
   ]);
   return new Set([
     ...rows.flatMap((r) => [r.head, r.covered].filter((sha): sha is string => sha !== null)),
@@ -230,6 +240,11 @@ export async function restoredHeads(db: Db | Tx, ctx: { repo: Pick<RepoContext["
  * commit received in time may still improve it. The grace is judged on the
  * row as the write finds it, never on the caller's copy, so a refresh
  * racing the ticker's definitive freeze never moves a frozen score (M3-05a).
+ *
+ * The stored `to_verify` of a run on a restored head follows the set here
+ * (F-PROJ-08): a run ingested before the restore, or before a late receipt
+ * widened its window (M3-06b), is flagged at the next reselection — the
+ * score itself never waited for the flag, it reads the set.
  */
 export async function refreshScoreSelection(
   db: Db | Tx,
@@ -239,6 +254,8 @@ export async function refreshScoreSelection(
     db.select().from(projectGradeRuns).where(eq(projectGradeRuns.repoId, ctx.repo.id)),
     restoredHeads(db, ctx),
   ]);
+  const lagging = runs.filter((r) => !r.toVerify && restored.has(r.headSha)).map((r) => r.id);
+  if (lagging.length > 0) await db.update(projectGradeRuns).set({ toVerify: true }).where(inArray(projectGradeRuns.id, lagging));
   const selected = selectScoreRun(runs, restored);
   await db
     .update(projectRepos)

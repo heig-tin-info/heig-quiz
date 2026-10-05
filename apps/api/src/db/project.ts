@@ -713,7 +713,16 @@ export const reverts = pgTable(
     repoId: uuid("repo_id")
       .notNull()
       .references(() => projectRepos.id, { onDelete: "cascade" }),
-    revertSha: text("revert_sha").notNull(),
+    /**
+     * The restore commit the branch was moved onto. Null (M3-06b) when
+     * GitHub refused the move (a student's push raced it, a 422) and the
+     * retry found nothing left to restore — the student put the files back
+     * themselves: the push is answered without a restore, and its head's
+     * runs stay `to_verify` (`restoredHeads`, `grading.ts`). A null row is
+     * no restore: it neither counts toward the cap nor answers a retry that
+     * can still restore, which fills it in.
+     */
+    revertSha: text("revert_sha"),
     files: text("files").array().notNull(),
     /**
      * The pushed head the restore answered (M3-04): a push redelivered never
@@ -728,6 +737,14 @@ export const reverts = pgTable(
      * rows.
      */
     coveredSha: text("covered_sha"),
+    /**
+     * The branch the restore answered a push on (M3-06b): the window of
+     * heads it covers is read on this branch, not on the branch of the
+     * tampering head's receipt (a receipt is one per sha, and a sha may
+     * have been received on another branch first). Null on the rows written
+     * before, which fall back to the receipt's branch.
+     */
+    branch: text("branch"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },
   (t) => [

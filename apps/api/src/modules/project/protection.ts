@@ -24,11 +24,18 @@
  * file already the distribution's, so a retry after a crash commits nothing.
  * The restore is recorded (its count and its bot commit) BEFORE the branch
  * moves, so a crash after the move loses neither.
+ *
+ * GitHub refusing the move (a student's push raced it, a 422) leaves the row
+ * without its restore (`revert_sha` null, M3-06b) and the delivery is
+ * retried: a retry that can restore fills the row in; one that finds the
+ * files put back by the student leaves it — the push is answered, its
+ * head's runs stay `to_verify`, and no restore is counted. An ordinary push
+ * leaving the files the distribution's is no tampering and writes no row.
  */
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
-import { and, count, eq, gt, gte, inArray } from "drizzle-orm";
+import { and, count, eq, gt, gte, isNotNull, isNull } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
 import type { ProjectRepoProtection } from "@quiz/contracts";
@@ -37,12 +44,12 @@ import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import { iso, isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { botCommits, projectGradeRuns, projectRepos, reverts } from "../../db/schema.js";
+import { botCommits, projectRepos, reverts } from "../../db/schema.js";
 import { githubStatus, installationClient, isZeroSha, ownerRepo } from "../../github/app.js";
 import { changedFiles, revertProtectedFiles, type RevertResult } from "../../github/revert.js";
 import { projectInstallation } from "../github/service.js";
 import { liveRepoForUpdate } from "./deadline.js";
-import { refreshScoreSelection, restoredHeads } from "./grading.js";
+import { refreshScoreSelection } from "./grading.js";
 import type { RepoContext } from "./repos.js";
 
 /** Restores in an hour past which restoring stops (F-PROJ-08). */
@@ -100,11 +107,13 @@ export async function protectFiles(
     return;
   }
   const [answered] = await db
-    .select({ id: reverts.id })
+    .select({ revertSha: reverts.revertSha })
     .from(reverts)
     .where(and(eq(reverts.repoId, repo.id), eq(reverts.headSha, push.after)))
     .limit(1);
-  if (answered) return;
+  if (answered?.revertSha != null) return;
+  /** A row without its restore: the retry of a move GitHub refused (M3-06b). */
+  const pending = answered !== undefined;
   const org = await projectInstallation(db, project.orgId);
   if (!org) return;
   const { octokit } = await installationClient(config, org.installationId);
@@ -134,29 +143,33 @@ export async function protectFiles(
     });
   } catch (err) {
     // GitHub refused the move (a student's push raced it): the restore did
-    // not happen, so it neither counts nor answers the push. Any other
-    // failure may have moved the branch: the record stays.
+    // not happen, so it neither counts nor covers a later head — the row
+    // keeps the tampered head alone, without its restore, for the retry.
+    // Any other failure may have moved the branch: the record stays.
     if (recorded.sha !== null && githubStatus(err) === 422) {
-      await db.delete(reverts).where(and(eq(reverts.repoId, repo.id), eq(reverts.revertSha, recorded.sha)));
+      await db
+        .update(reverts)
+        .set({ revertSha: null, coveredSha: null })
+        .where(and(eq(reverts.repoId, repo.id), eq(reverts.revertSha, recorded.sha)));
     }
     throw err;
   }
-  if (!result) return;
-  await audit(db, {
-    ...SYSTEM_ACTOR,
-    action: "project_repo.restore",
-    subjectType: "project_repo",
-    subjectId: repo.id,
-    payload: { files: result.files, sha: result.sha, head: push.after, covered: result.covered },
-  });
+  if (result) {
+    await audit(db, {
+      ...SYSTEM_ACTOR,
+      action: "project_repo.restore",
+      subjectType: "project_repo",
+      subjectId: repo.id,
+      payload: { files: result.files, sha: result.sha, head: push.after, covered: result.covered },
+    });
+  } else if (!pending) {
+    return; // the files are the distribution's already: nothing to answer
+  }
   // Every head the restore covered (`restoredHeads`: the pushed one and the
-  // later pushes already on the branch) ran the student's copy of the
+  // later pushes already on the branch — the pushed one alone after a 422
+  // whose retry found nothing left to restore) ran the student's copy of the
   // protected files: its runs flagged, and out of the score, whether they
   // finished before the restore or after.
-  await db
-    .update(projectGradeRuns)
-    .set({ toVerify: true })
-    .where(and(eq(projectGradeRuns.repoId, repo.id), inArray(projectGradeRuns.headSha, [...(await restoredHeads(db, ctx))])));
   await refreshScoreSelection(db, ctx);
 }
 
@@ -165,19 +178,22 @@ export async function protectFiles(
  * repository row's lock so that two pushes cannot both pass the cap: the
  * bot commit and the `reverts` row (the restore's count, answering the push
  * by its head). Past the cap, the protection is suspended instead (audited
- * once) and false refuses the move.
+ * once) and false refuses the move. A row left without its restore by a 422
+ * (M3-06b) is filled in, and only then counts.
  */
 async function recordRestore(db: Db, ctx: RepoContext, push: ProtectedPush, commit: RevertResult, now: Date): Promise<boolean> {
   return db.transaction(async (tx) => {
     const [row] = await tx.select().from(projectRepos).where(eq(projectRepos.id, ctx.repo.id)).for("update");
     if (!row || row.protectionSuspendedAt !== null) return false;
-    // Only the restores after a re-enable count toward the cap again (M3-08b).
+    // Only the restores after a re-enable count toward the cap again (M3-08b);
+    // a move that did not happen (`revert_sha` null) never did.
     const [recent] = await tx
       .select({ n: count() })
       .from(reverts)
       .where(
         and(
           eq(reverts.repoId, row.id),
+          isNotNull(reverts.revertSha),
           gte(reverts.createdAt, new Date(now.getTime() - HOUR_MS)),
           row.protectionReenabledAt === null ? undefined : gt(reverts.createdAt, row.protectionReenabledAt),
         ),
@@ -193,18 +209,17 @@ async function recordRestore(db: Db, ctx: RepoContext, push: ProtectedPush, comm
       });
       return false;
     }
+    const restore = { revertSha: commit.sha, files: commit.files, coveredSha: commit.covered, branch: push.branch, createdAt: now };
     const [counted] = await tx
       .insert(reverts)
-      .values({
-        id: randomUUID(),
-        repoId: row.id,
-        revertSha: commit.sha,
-        files: commit.files,
-        headSha: push.after,
-        coveredSha: commit.covered,
-        createdAt: now,
+      .values({ id: randomUUID(), repoId: row.id, headSha: push.after, ...restore })
+      // The row a 422 left without its restore takes this one; a row with its restore is left alone.
+      .onConflictDoUpdate({
+        target: [reverts.repoId, reverts.headSha],
+        targetWhere: isNotNull(reverts.headSha),
+        set: restore,
+        setWhere: isNull(reverts.revertSha),
       })
-      .onConflictDoNothing()
       .returning({ id: reverts.id });
     if (!counted) return false; // the same push answered meanwhile
     await tx.insert(botCommits).values({ repoId: row.id, sha: commit.sha, kind: "revert" }).onConflictDoNothing();
