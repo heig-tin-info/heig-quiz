@@ -2635,8 +2635,7 @@ are ADR-070's second amendment of 2026-10-05.
   `groups_stopped_at`, the repository's `deadline_applied_at` and the
   audit log's first `project_repo.deadline_applied` (a reopened repository
   keeps its group stopped); `project_repo_access.revoking_at`;
-  `project_group_members.departing_at`, `revoke_failed_at`,
-  `revoke_failed_reason`). `@quiz/domain`: `groupSyncPlan` per group (a
+  `project_group_members.departing_at`). `@quiz/domain`: `groupSyncPlan` per group (a
   stopped group is never deleted, renamed nor moved, its name and slug
   reserved; a move with one stopped end is held), `splitPlan` (what the
   set's transaction applies, what waits for the job, the consequences
@@ -2654,7 +2653,8 @@ are ADR-070's second amendment of 2026-10-05.
   live and the project due. A *stray grant* (`STRAY_GRANT`, one SQL
   predicate: not revoked, on a group repository whose line is not a
   non-departing member of its group) is the job's work and the page's
-  `accessToRevoke` (with a member whose revocation GitHub refused). `Q:modules/project/
+  `accessToRevoke` (a pending departure, a refused revocation, a failed
+  take-back alike). `Q:modules/project/
   groupCopy.ts`: `copiesBefore` (read under the set's lock before the
   write) and `stepCopies` (the delta of consequences, its SHA-256 digest
   over the sorted (project, group, line, kind), `ConfirmationNeeded`
@@ -2663,8 +2663,8 @@ are ADR-070's second amendment of 2026-10-05.
   and every group: tick step 2, the archive), `stopGroups` (tick step 3
   for a group whose repository's deadline is applied — the projects
   concerned locked FOR UPDATE first, in id order, with those whose own
-  deadline is due; a stop drops the group's pending departures and
-  flags), and the job's steps under its locks (set FOR SHARE, project FOR
+  deadline is due; a stop drops the group's pending departures), and
+  the job's steps under its locks (set FOR SHARE, project FOR
   UPDATE, the member row FOR UPDATE): `syncSteps` (departures, arrivals,
   stray grants), `beginDeparture` (only while the student departs from a
   group not stopped, the grants marked in the same transaction; otherwise
@@ -2685,20 +2685,14 @@ are ADR-070's second amendment of 2026-10-05.
   the resends skip them); `revokeDeparture` (one repository, the grants the
   job marked, `via: "group.sync"`, `not_invited` when none was ever
   recorded, whatever the provisioning — the roster's `not_invited` too);
-  `revocationClient`. *Access to revoke* is flagged only on a refusal
-  carrying GitHub's status (a provisioning under way is retried
-  unflagged). `repoMembers` leaves out departing members.
+  `revocationClient`; a refusal is logged and retried with the backoff. `repoMembers` leaves out departing members.
   Contracts: `confirm?` on `GroupMemberPut`, `GroupConsequence(s)`,
   `needs_confirmation` in `GROUP_REFUSALS`, `accessToRevoke` on
   `ProjectRepoView` (optional until the web's mock carries it, M3-16b).
   Audit: the set's writes name `payload.deferred`; `repo_revoke` and
   `repo_invite` take `via: "group.sync"`. `has_repo` stays for deleting a
   set group a following copy holds with a repository. Hints after a pass:
-  the course's staff and the moved students' `user:` topics. Known gap: a
-  roster removal racing a job between its revocation's mark and GitHub's
-  refusal finds the grant marked revoked and proceeds; the line's grant
-  rows go with it, so the access GitHub kept is only in the job's error
-  log.
+  the course's staff and the moved students' `user:` topics.
 - **Tests**: `groupSync.db.test.ts` (20): the consequences and their
   digest, a wrong and a stale digest, writes that add none (unrelated, a
   move back); a move between two following groups (revocation before

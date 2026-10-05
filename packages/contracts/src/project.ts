@@ -790,10 +790,12 @@ export const ProjectRepoView = ProjectRepoDeadlineState.extend({
     changedAfterRelease: z.boolean(),
   }),
   /**
-   * *Access to revoke* (F-PROJ-13, ADR-070 §4; M3-15b-2): a member the set
-   * moved out of this group still holds their access, GitHub having
-   * refused its revocation; the `group.sync` job retries it. Always sent
-   * by the API; optional until the web's mock carries it (M3-16b).
+   * *Access to revoke* (F-PROJ-13, ADR-070 §4; M3-15b-2): an account
+   * recorded on this group repository is not revoked although the copy no
+   * longer wants it — a departure the `group.sync` job has not revoked yet,
+   * one GitHub refused (retried by the job), or an invitation GitHub would
+   * not take back. Always sent by the API; optional until the web's mock
+   * carries it (M3-16b).
    */
   accessToRevoke: z.boolean().optional(),
 });

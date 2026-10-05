@@ -95,14 +95,14 @@ async function sync(projectId: string): Promise<number> {
   return jobs.length;
 }
 
-/** Where `line` is in the project's copy: its group's name, its pending departure and *access to revoke*; null when in none. */
+/** Where `line` is in the project's copy: its group's name and its pending departure; null when in none. */
 async function placeOf(projectId: string, line: string) {
   const [row] = await db()
-    .select({ group: projectGroups.name, departing: projectGroupMembers.departingAt, failed: projectGroupMembers.revokeFailedAt })
+    .select({ group: projectGroups.name, departing: projectGroupMembers.departingAt })
     .from(projectGroupMembers)
     .innerJoin(projectGroups, eq(projectGroups.id, projectGroupMembers.groupId))
     .where(and(eq(projectGroupMembers.projectId, projectId), eq(projectGroupMembers.enrollmentId, line)));
-  return row ? { group: row.group, departing: row.departing !== null, failed: row.failed !== null } : null;
+  return row ? { group: row.group, departing: row.departing !== null } : null;
 }
 
 const dueOf = async (projectId: string) => (await db().select({ due: projects.groupSyncDueAt }).from(projects).where(eq(projects.id, projectId)))[0]!.due;
@@ -143,7 +143,7 @@ describe("a set's write with GitHub consequences (ADR-070 §6)", () => {
     const done = await staff("PUT", `/app/api/group-sets/${set.set.id}/members/${line(ben)}`, { groupId: groupOf(set, "Group 2").id, confirm: details.digest });
     const after = await setOk(done);
     expect(groupOf(after, "Group 2").members.map((m) => m.enrollmentId)).toContain(line(ben));
-    expect(await placeOf(project.id, line(ben))).toEqual({ group: "Group 1", departing: true, failed: false });
+    expect(await placeOf(project.id, line(ben))).toEqual({ group: "Group 1", departing: true });
     expect(await dueOf(project.id)).toEqual(new Date(NOW));
     const move = (await auditsOf(set.set.id, "group.member_move")).filter((m) => (m.payload as { enrollmentId: string }).enrollmentId === line(ben)).at(-1);
     expect(move!.payload).toMatchObject({ copies: [], deferred: [project.id] });
@@ -173,7 +173,7 @@ describe("a set's write with GitHub consequences (ADR-070 §6)", () => {
     await setOk(await staff("PATCH", `/app/api/group-sets/${set.set.id}/groups/${groupOf(set, "Group 2").id}`, { name: "Les Pandas" }));
     // Back where the copy has him: no confirmation, the mark dropped, nothing left for the job.
     await setOk(await moveTo(set, line(ben), groupOf(set, "Group 1").id));
-    expect(await placeOf(project.id, line(ben))).toEqual({ group: "Group 1", departing: false, failed: false });
+    expect(await placeOf(project.id, line(ben))).toEqual({ group: "Group 1", departing: false });
     expect(await sync(project.id)).toBe(1);
     expect(await dueOf(project.id)).toBeNull();
     expect(await auditsOf((await repoRows(project.id))[0]!.id, "project_group.repo_revoke")).toEqual([]);
@@ -193,7 +193,7 @@ describe("the group.sync job (ADR-070 §4)", () => {
     // The revocation before the invitation.
     const writes = gh.calls.slice(before).filter((c) => /^(DELETE|PUT) /.test(c));
     expect(writes).toEqual([`DELETE api.github.com/repos/${a}/collaborators/${ben.login}`, `PUT api.github.com/repos/${b}/collaborators/${ben.login}`]);
-    expect(await placeOf(project.id, line(ben))).toEqual({ group: "Group 2", departing: false, failed: false });
+    expect(await placeOf(project.id, line(ben))).toEqual({ group: "Group 2", departing: false });
     expect(await dueOf(project.id)).toBeNull();
     const [ra, rb] = [await repoOf(project.id, a), await repoOf(project.id, b)];
     expect((await auditsOf(ra.id, "project_group.repo_revoke")).map((e) => e.payload)).toEqual([
@@ -247,7 +247,7 @@ describe("the group.sync job (ADR-070 §4)", () => {
     try {
       await expect(sync(project.id)).rejects.toThrow(/group.sync incomplete/);
       expect(seats(a)[ben.login]).toBe("push");
-      expect(await placeOf(project.id, line(ben))).toEqual({ group: "Group 1", departing: true, failed: true });
+      expect(await placeOf(project.id, line(ben))).toEqual({ group: "Group 1", departing: true });
       // The grant is live again: the roster's next revocation finds it.
       const [grant] = await db().select().from(projectRepoAccess).where(eq(projectRepoAccess.enrollmentId, line(ben)));
       expect(grant!.revokedAt).toBeNull();
@@ -293,8 +293,10 @@ describe("the group.sync job (ADR-070 §4)", () => {
     } finally {
       world.unrevokable.delete(a);
     }
-    expect(await placeOf(project.id, line(ben))).toMatchObject({ group: "Group 1", failed: true });
+    expect(await placeOf(project.id, line(ben))).toMatchObject({ group: "Group 1" });
     expect(await placeOf(second.id, line(ben))).toBeNull();
+    const flagged = async (id: string) => ProjectDetail.parse((await staff("GET", `/app/api/projects/${id}`)).json()).rows.some((r) => r.repo?.accessToRevoke);
+    expect([await flagged(project.id), await flagged(second.id)]).toEqual([true, false]);
     expect(seats(`${room.login}/lab-2-group-1`)[ben.login]).toBeUndefined();
   });
 
@@ -374,7 +376,7 @@ describe("the races of a departure waiting for GitHub", () => {
       run: async () => void (await setOk(await moveTo(set, line(ben), groupOf(set, "Group 1").id))),
     });
     await sync(project.id);
-    expect(await placeOf(project.id, line(ben))).toEqual({ group: "Group 1", departing: false, failed: false });
+    expect(await placeOf(project.id, line(ben))).toEqual({ group: "Group 1", departing: false });
     expect(pendingInvitations(a)).toContain(ben.login);
   });
 
@@ -392,7 +394,7 @@ describe("the races of a departure waiting for GitHub", () => {
           .values({ id: randomUUID(), repoId: row.id, enrollmentId: line(ben), githubUserId: other, githubLogin: `ben-other-${other}`, invitedAt: new Date(NOW) })),
     });
     await expect(sync(project.id)).rejects.toThrow();
-    expect(await placeOf(project.id, line(ben))).toEqual({ group: "Group 1", departing: true, failed: false });
+    expect(await placeOf(project.id, line(ben))).toEqual({ group: "Group 1", departing: true });
     later(FAILED_RETRY_MS);
     await sync(project.id);
     expect(await placeOf(project.id, line(ben))).toBeNull();
@@ -417,7 +419,7 @@ describe("a revocation counts only once GitHub confirmed it (revoking_at)", () =
       world.unrevokable.delete(a);
     }
     expect([during!.statusCode, during!.json().error]).toEqual([502, "revoke_failed"]);
-    expect(await placeOf(project.id, line(ben))).toEqual({ group: "Group 1", departing: true, failed: true });
+    expect(await placeOf(project.id, line(ben))).toEqual({ group: "Group 1", departing: true });
     expect(seats(a)[ben.login]).toBe("push");
     // GitHub takes it now: the removal's retry revokes and proceeds.
     expect((await removeLine(room, line(ben))).statusCode).toBe(204);
@@ -536,7 +538,7 @@ describe("a group stops at the first of its deadlines (the amendment of 2026-10-
     const first = gh.calls.slice(before).find((c) => c.startsWith(`DELETE api.github.com/repos/${a}/collaborators/`))!.split("/").at(-1);
     const [gone, held] = first === ben!.login ? [ben!, dan] : [dan, ben!];
     expect(await placeOf(project.id, room.lines.get(gone.id)!)).toBeNull();
-    expect(await placeOf(project.id, room.lines.get(held.id)!)).toEqual({ group: "Group 1", departing: false, failed: false });
+    expect(await placeOf(project.id, room.lines.get(held.id)!)).toEqual({ group: "Group 1", departing: false });
     expect(seats(a)[held.login]).toBe("push");
     const revoked = (await auditsOf(row!.id, "project_group.repo_revoke")).map((e) => (e.payload as { enrollmentId: string }).enrollmentId);
     expect(revoked).toEqual([room.lines.get(gone.id)]);

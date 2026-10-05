@@ -283,9 +283,8 @@ export const projectGroups = pgTable(
  * moves out of a group with a repository stays in it, `departing_at` set
  * (by the set's write, or the `group.sync` job), until the job has revoked
  * their access; no invitation of them on it is recorded meanwhile
- * (`recordGrant`). `revoke_failed_at` and its reason: GitHub refused that
- * revocation — the project page's *access to revoke*, retried by the job;
- * cleared when the row moves, or when the set puts the student back.
+ * (`recordGrant`). Their access not revoked yet is a stray grant — the
+ * project page's *access to revoke* (`STRAY_GRANT`), retried by the job.
  */
 export const projectGroupMembers = pgTable(
   "project_group_members",
@@ -302,8 +301,6 @@ export const projectGroupMembers = pgTable(
       .references(() => enrollments.id, { onDelete: "cascade" }),
     addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
     departingAt: timestamp("departing_at", { withTimezone: true }),
-    revokeFailedAt: timestamp("revoke_failed_at", { withTimezone: true }),
-    revokeFailedReason: text("revoke_failed_reason"),
   },
   (t) => [
     uniqueIndex("project_group_members_project_enrollment_uq").on(t.projectId, t.enrollmentId),

@@ -16,8 +16,8 @@
  *   the repository deleted, no account ever invited) is audited skipped and
  *   the move proceeds (P1); only then does the student leave the copy's
  *   group (`completeDeparture`), for the set's new group if it follows, or
- *   for none. GitHub refusing leaves them in it with *access to revoke*
- *   (`revoke_failed_at`), retried by the next pass;
+ *   for none. GitHub refusing leaves them in it, their access a stray
+ *   grant (*access to revoke*), retried by the next pass;
  * - **an arrival** is written to the copy, then invited (best effort: a
  *   student with no linked account is invited when they link, or accept);
  * - **a stray grant** (`STRAY_GRANT`: an access GitHub kept when an
@@ -39,13 +39,12 @@ import { SYSTEM_ACTOR } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { classrooms, enrollments, projectRepos, projects } from "../../db/schema.js";
-import { githubApp, githubStatus } from "../../github/app.js";
+import { githubApp } from "../../github/app.js";
 import { PROJECT_GROUP_SYNC_QUEUE } from "../../jobs.js";
-import { redactTokens } from "../../redact.js";
-import { followInvitation, inviteAccount, revocationClient, revokeDeparture, RevokeFailed, type RevokeContext } from "./access.js";
+import { followInvitation, inviteAccount, revocationClient, revokeDeparture, type RevokeContext } from "./access.js";
 import { isLive, ts } from "./deadline.js";
 import { repoChanged } from "./events.js";
-import { beginDeparture, beginStrayRevocation, completeArrival, completeDeparture, flagRevokeFailed, settleSync, syncSteps } from "./groupCopy.js";
+import { beginDeparture, beginStrayRevocation, completeArrival, completeDeparture, settleSync, syncSteps } from "./groupCopy.js";
 import { groupRepoWhere, repoMembers } from "./groupRepos.js";
 import { claimLeases, FAILED_RETRY_MS, heldLease, type ProjectJob } from "./lease.js";
 import type { ProjectRow } from "./views.js";
@@ -106,22 +105,14 @@ async function inviteMember(app: FastifyInstance, client: Octokit | null, projec
   }
 }
 
-/** GitHub's answer when it refused a revocation — the flag's reason, never a token —; null when GitHub did not answer (a failure, a provisioning under way). */
-function refusalReason(err: unknown): string | null {
-  const cause = err instanceof RevokeFailed ? err.cause : undefined;
-  const status = githubStatus(cause);
-  if (status === undefined) return null;
-  return redactTokens(`GitHub ${status}: ${(cause as { message?: string }).message ?? ""}`);
-}
-
 const revokeContext = (app: FastifyInstance): RevokeContext => ({ actor: SYSTEM_ACTOR, now: app.clock.now(), log: app.log, via: "group.sync" });
 
 /**
  * One departure out of copy group `groupId`: held when a stop or the set
- * came first (`beginDeparture`); else the access revoked — a refusal by
- * GitHub flags *access to revoke* —, the copy written, the next group's
- * repository invited, or the access given back when the set put the
- * student back meanwhile.
+ * came first (`beginDeparture`); else the access revoked — GitHub refusing
+ * leaves it a stray grant, *access to revoke*, retried —, the copy
+ * written, the next group's repository invited, or the access given back
+ * when the set put the student back meanwhile.
  */
 async function depart(app: FastifyInstance, client: Octokit | null, project: ProjectRow, step: { enrollmentId: string; groupId: string }, pass: Pass) {
   const db = app.db;
@@ -129,13 +120,7 @@ async function depart(app: FastifyInstance, client: Octokit | null, project: Pro
   if (repo === null) return;
   const marked = await beginDeparture(db, project.id, step.enrollmentId, step.groupId, repo.id, app.clock.now());
   if (marked === "held") return;
-  try {
-    await revokeDeparture(db, client, repo, step.enrollmentId, marked, revokeContext(app));
-  } catch (err) {
-    const reason = refusalReason(err);
-    if (reason !== null) await flagRevokeFailed(db, project.id, step.enrollmentId, step.groupId, reason, app.clock.now());
-    throw err;
-  }
+  await revokeDeparture(db, client, repo, step.enrollmentId, marked, revokeContext(app));
   const done = await completeDeparture(db, project.id, step.enrollmentId, step.groupId, repo.id, app.clock.now());
   if (done.outcome === "gone") return;
   pass.moved.add(step.enrollmentId);
