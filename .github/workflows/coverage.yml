@@ -65,6 +65,10 @@ jobs:
         with:
           name: coverage-blob-${{ matrix.pkg }}-${{ matrix.shard }}
           path: apps/${{ matrix.pkg }}/.vitest-reports/
+          # upload-artifact (since v4.4) skips dot-prefixed paths by default:
+          # without this, `.vitest-reports/` uploads "No files were found".
+          # The `coverage/` uploads below are not hidden and need nothing.
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
 
