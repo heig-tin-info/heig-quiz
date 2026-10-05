@@ -124,6 +124,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-057 — The journal in two modes: in Quiz, or in a GitHub repository](ADR-057-journal-two-modes.md)
 - [ADR-062 — Building a project's distribution repository, and never deleting on GitHub](ADR-062-depot-de-distribution.md)
 - [ADR-064 — A project's deadline: claims, leases and per-repository markers](ADR-064-echeance-des-projets-baux.md)
+- [ADR-073 — Syncing a project's source: a lease, one pull request per branch, the handed-out sha](ADR-073-synchronisation-de-la-source.md)
 
 ## Maintaining a record
 
