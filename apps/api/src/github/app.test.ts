@@ -121,6 +121,7 @@ describe("the App (Quiz's own, D23)", () => {
       githubOrgId: 7,
       login: "heig-tin-info",
       allRepositories: true,
+      suspended: false,
     });
     expect(await resolveOrgInstallation(config, "elsewhere")).toBeNull();
     // Signed with the App JWT, not anonymous.
@@ -145,12 +146,15 @@ describe("the App (Quiz's own, D23)", () => {
           { id: 1, account: { id: 11, login: "zeta-org", type: "Organization" }, repository_selection: "all" },
           { id: 2, account: { id: 12, login: "someone", type: "User" } },
           { id: 3, account: { id: 13, login: "alpha-org", type: "Organization" }, repository_selection: "selected" },
+          // Suspended: listed as such, so a scan tells it from a gone one (F-PROJ-18).
+          { id: 4, account: { id: 14, login: "paused-org", type: "Organization" }, repository_selection: "all", suspended_at: "2026-09-01T00:00:00Z" },
         ]),
       ),
     ];
     expect(await listInstalledOrgs(configured())).toEqual([
-      { installationId: 3, githubOrgId: 13, login: "alpha-org", allRepositories: false },
-      { installationId: 1, githubOrgId: 11, login: "zeta-org", allRepositories: true },
+      { installationId: 3, githubOrgId: 13, login: "alpha-org", allRepositories: false, suspended: false },
+      { installationId: 4, githubOrgId: 14, login: "paused-org", allRepositories: true, suspended: true },
+      { installationId: 1, githubOrgId: 11, login: "zeta-org", allRepositories: true, suspended: false },
     ]);
   });
 

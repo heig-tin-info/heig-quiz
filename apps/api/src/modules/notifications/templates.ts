@@ -66,6 +66,36 @@ const en = {
   "pool_question_added.body": "Colleagues published {count} questions in the pool “{poolName}”.",
   "pool_question_added.body.one": "A colleague published a question in the pool “{poolName}”.",
   "pool_question_added.action": "Open the pool",
+  // The project kinds (F-NOTIF-13, M3-09b): the project's name and counts,
+  // never a score nor a student's name.
+  "project_published.subject": "New project: {projectTitle}",
+  "project_published.body": "The project “{projectTitle}” is published in your classroom. Accept it to get your repository.",
+  "project_published.action": "Open the project",
+  "project_deadline_reminder.subject": "Deadline within 24 hours: {projectTitle}",
+  "project_deadline_reminder.body": "The deadline of the project “{projectTitle}” is in less than 24 hours. Push what you want graded before it.",
+  "project_deadline_reminder.action": "Open the project",
+  "project_repo_invited.subject": "Your repository is ready: {projectTitle}",
+  "project_repo_invited.body": "Your repository for the project “{projectTitle}” was created. Accept the invitation on GitHub to start working in it.",
+  "project_repo_invited.action": "Open the project",
+  "project_grade_final.subject": "Scores released: {projectTitle}",
+  "project_grade_final.body": "The scores of the project “{projectTitle}” are released.",
+  "project_grade_final.action": "See my score",
+  "project_deadline_applied.subject": "Deadline applied to {count} repositories: {projectTitle}",
+  "project_deadline_applied.subject.one": "Deadline applied to a repository: {projectTitle}",
+  "project_deadline_applied.body": "The deadline of “{projectTitle}” was applied to {count} repositories.",
+  "project_deadline_applied.body.one": "The deadline of “{projectTitle}” was applied to a repository.",
+  "project_deadline_applied.action": "Open the project",
+  "project_provision_failed.subject": "{count} repositories could not be created: {projectTitle}",
+  "project_provision_failed.subject.one": "A repository could not be created: {projectTitle}",
+  "project_provision_failed.body": "{count} student repositories of “{projectTitle}” could not be created. Last cause: {reason}.",
+  "project_provision_failed.body.one": "A student's repository of “{projectTitle}” could not be created: {reason}.",
+  "project_provision_failed.action": "Open the project",
+  "github_org_lost.subject": "GitHub organization lost: {classroomName}",
+  "github_org_lost.body": "The organization {orgLogin} of {classroomName} was deleted on GitHub, or HEIG Quiz's app was uninstalled from it. Nothing can be written to its repositories until it is connected again.",
+  "github_org_lost.action": "Open the classroom's settings",
+  // Why a repository could not be made (`project_provision_failed.reason`).
+  "reason.repo_name_taken": "a repository of that name exists already in the organization, which only the staff can resolve",
+  "reason.github_error": "GitHub failed or refused, and the student may try again",
   "system_alert.failing.subject": "{host}: health checks failing",
   "system_alert.failing.body": "Health checks of {host} failed on two runs in a row: {checks}.",
   "system_alert.still_failing.subject": "{host}: health checks still failing",
@@ -139,6 +169,21 @@ const en = {
   // parameters those kinds will carry.
   "activity.results_updated.description": "Your grade of a released evaluation changes",
   "activity.results_updated.template": "Results updated: {evaluationTitle}",
+  // The project kinds (F-NOTIF-13), declared in the one bump of M3-09b (2.2.0).
+  "activity.project_published.description": "A project is published in your classroom",
+  "activity.project_published.template": "New project: {projectTitle}",
+  "activity.project_deadline_reminder.description": "The deadline of a project is within 24 hours",
+  "activity.project_deadline_reminder.template": "Deadline within 24 hours: {projectTitle}",
+  "activity.project_repo_invited.description": "Your repository for a project is ready on GitHub",
+  "activity.project_repo_invited.template": "Your repository is ready: {projectTitle}",
+  "activity.project_grade_final.description": "The scores of a project are released",
+  "activity.project_grade_final.template": "Scores released: {projectTitle}",
+  "activity.project_deadline_applied.description": "The deadline of one of your projects was applied to its repositories",
+  "activity.project_deadline_applied.template": "{projectTitle}: deadline applied to {count} repository(ies)",
+  "activity.project_provision_failed.description": "A student's repository of one of your projects could not be created",
+  "activity.project_provision_failed.template": "{projectTitle}: {count} repository(ies) could not be created",
+  "activity.github_org_lost.description": "The GitHub organization of one of your classrooms was deleted or the app uninstalled",
+  "activity.github_org_lost.template": "GitHub organization lost: {classroomName}",
 } as const;
 
 type Key = keyof typeof en;
@@ -187,6 +232,33 @@ const fr: Record<Key, string> = {
   "pool_question_added.body": "Des collègues ont publié {count} questions dans la banque « {poolName} ».",
   "pool_question_added.body.one": "Un collègue a publié une question dans la banque « {poolName} ».",
   "pool_question_added.action": "Ouvrir la banque",
+  "project_published.subject": "Nouveau projet : {projectTitle}",
+  "project_published.body": "Le projet « {projectTitle} » est publié dans votre classe. Acceptez-le pour obtenir votre dépôt.",
+  "project_published.action": "Ouvrir le projet",
+  "project_deadline_reminder.subject": "Échéance dans les 24 heures : {projectTitle}",
+  "project_deadline_reminder.body": "L'échéance du projet « {projectTitle} » tombe dans moins de 24 heures. Poussez ce que vous voulez voir évalué avant.",
+  "project_deadline_reminder.action": "Ouvrir le projet",
+  "project_repo_invited.subject": "Votre dépôt est prêt : {projectTitle}",
+  "project_repo_invited.body": "Votre dépôt pour le projet « {projectTitle} » a été créé. Acceptez l'invitation sur GitHub pour commencer à y travailler.",
+  "project_repo_invited.action": "Ouvrir le projet",
+  "project_grade_final.subject": "Notes publiées : {projectTitle}",
+  "project_grade_final.body": "Les notes du projet « {projectTitle} » sont publiées.",
+  "project_grade_final.action": "Voir ma note",
+  "project_deadline_applied.subject": "Échéance appliquée à {count} dépôts : {projectTitle}",
+  "project_deadline_applied.subject.one": "Échéance appliquée à un dépôt : {projectTitle}",
+  "project_deadline_applied.body": "L'échéance de « {projectTitle} » a été appliquée à {count} dépôts.",
+  "project_deadline_applied.body.one": "L'échéance de « {projectTitle} » a été appliquée à un dépôt.",
+  "project_deadline_applied.action": "Ouvrir le projet",
+  "project_provision_failed.subject": "{count} dépôts n'ont pas pu être créés : {projectTitle}",
+  "project_provision_failed.subject.one": "Un dépôt n'a pas pu être créé : {projectTitle}",
+  "project_provision_failed.body": "{count} dépôts d'étudiants de « {projectTitle} » n'ont pas pu être créés. Dernière cause : {reason}.",
+  "project_provision_failed.body.one": "Le dépôt d'un étudiant de « {projectTitle} » n'a pas pu être créé : {reason}.",
+  "project_provision_failed.action": "Ouvrir le projet",
+  "github_org_lost.subject": "Organisation GitHub perdue : {classroomName}",
+  "github_org_lost.body": "L'organisation {orgLogin} de {classroomName} a été supprimée sur GitHub, ou l'application HEIG Quiz en a été désinstallée. Rien ne peut être écrit dans ses dépôts tant qu'elle n'est pas reconnectée.",
+  "github_org_lost.action": "Ouvrir les réglages de la classe",
+  "reason.repo_name_taken": "un dépôt de ce nom existe déjà dans l'organisation, ce que seul l'encadrement peut résoudre",
+  "reason.github_error": "GitHub a échoué ou refusé, et l'étudiant peut réessayer",
   "system_alert.failing.subject": "{host} : contrôles de santé en échec",
   "system_alert.failing.body": "Des contrôles de santé de {host} ont échoué deux fois de suite : {checks}.",
   "system_alert.still_failing.subject": "{host} : contrôles de santé toujours en échec",
@@ -250,6 +322,20 @@ const fr: Record<Key, string> = {
   "activity.deadline_approaching.template": "Se termine dans les 24 heures : {evaluationTitle}",
   "activity.results_updated.description": "Votre note d'une évaluation publiée change",
   "activity.results_updated.template": "Résultats mis à jour : {evaluationTitle}",
+  "activity.project_published.description": "Un projet est publié dans votre classe",
+  "activity.project_published.template": "Nouveau projet : {projectTitle}",
+  "activity.project_deadline_reminder.description": "L'échéance d'un projet tombe dans les 24 heures",
+  "activity.project_deadline_reminder.template": "Échéance dans les 24 heures : {projectTitle}",
+  "activity.project_repo_invited.description": "Votre dépôt pour un projet est prêt sur GitHub",
+  "activity.project_repo_invited.template": "Votre dépôt est prêt : {projectTitle}",
+  "activity.project_grade_final.description": "Les notes d'un projet sont publiées",
+  "activity.project_grade_final.template": "Notes publiées : {projectTitle}",
+  "activity.project_deadline_applied.description": "L'échéance d'un de vos projets a été appliquée à ses dépôts",
+  "activity.project_deadline_applied.template": "{projectTitle} : échéance appliquée à {count} dépôt(s)",
+  "activity.project_provision_failed.description": "Le dépôt d'un étudiant d'un de vos projets n'a pas pu être créé",
+  "activity.project_provision_failed.template": "{projectTitle} : {count} dépôt(s) n'ont pas pu être créés",
+  "activity.github_org_lost.description": "L'organisation GitHub d'une de vos classes a été supprimée ou l'application désinstallée",
+  "activity.github_org_lost.template": "Organisation GitHub perdue : {classroomName}",
 };
 
 const DICTS: Record<MailLocale, Record<Key, string>> = { en, fr };
@@ -313,6 +399,17 @@ function varsOf(payload: NotificationPayload, t: Record<Key, string>): Record<st
       return { evaluationTitle: payload.evaluationTitle, count: String(payload.count) };
     case "pool_question_added":
       return { poolName: payload.poolName, count: String(payload.count) };
+    case "project_published":
+    case "project_deadline_reminder":
+    case "project_repo_invited":
+    case "project_grade_final":
+      return { projectTitle: payload.projectTitle };
+    case "project_deadline_applied":
+      return { projectTitle: payload.projectTitle, count: String(payload.count) };
+    case "project_provision_failed":
+      return { projectTitle: payload.projectTitle, count: String(payload.count), reason: t[`reason.${payload.reason}`] };
+    case "github_org_lost":
+      return { classroomName: payload.classroomName, orgLogin: payload.orgLogin };
     case "system_alert":
       // `{host}` is added by `renderNotification`, which knows the address.
       return { checks: payload.checks.map((key) => t[`check.${key}`]).join(", ") };
@@ -365,6 +462,16 @@ export function notificationPath(payload: NotificationPayload): string {
       return `/take/${payload.evaluationId}`;
     case "system_alert":
       return "/admin?tab=system";
+    // The project: the staff's page, or the student's view of it (M3-13).
+    case "project_published":
+    case "project_deadline_reminder":
+    case "project_repo_invited":
+    case "project_grade_final":
+    case "project_deadline_applied":
+    case "project_provision_failed":
+      return `/projects/${payload.projectId}`;
+    case "github_org_lost":
+      return `/classrooms/${payload.classroomId}/settings`;
     case "activity_available":
       switch (payload.activityKind) {
         case "evaluation":
@@ -425,7 +532,7 @@ export function renderNotification(
     webUrl,
   });
   const topic =
-    teamsLine(vars.evaluationTitle ?? vars.poolName ?? vars.classroomName ?? "") || t["app.name.short"];
+    teamsLine(vars.evaluationTitle ?? vars.projectTitle ?? vars.poolName ?? vars.classroomName ?? "") || t["app.name.short"];
   const preview = teamsLine(fill(t[sentenceKey(payload, "body")], vars, plain));
 
   return { ...mail, topic, preview };

@@ -38,6 +38,7 @@ import { DomainError } from "../http.js";
 import { projectDeadlineMoved, rescheduleCheckpoints, ts } from "./deadline.js";
 import { ProjectError } from "./errors.js";
 import { replaceGroupCopy } from "./groupCopy.js";
+import { announcePublished } from "./notify.js";
 import { classroomClient, fetchSource, type Source } from "./sources.js";
 import type { ProjectRow } from "./views.js";
 
@@ -395,10 +396,12 @@ export async function unassignedStudents(db: Db | Tx, project: Pick<ProjectRow, 
  * group project with a claimed student in no group of its copy, or no
  * group at all, ADR-048; `students` the ones left out), `deadline_past`.
  * The ticker's publication meets the same refusals and leaves the draft as
- * it is. Nothing is sent to the students yet (M3-09).
+ * it is. Once committed, the classroom's students are told
+ * (`project_published`, F-NOTIF-13) — once per project, since a draft is
+ * published once.
  */
 export async function publishProject(db: Db, projectId: string, now: Date, actor: AuditActor): Promise<ProjectRow> {
-  return db.transaction(async (tx) => {
+  const row = await db.transaction(async (tx) => {
     const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
     if (!project) throw notFound();
     if (project.state !== "draft") throw new ProjectError("not_draft", "The project is already published");
@@ -441,6 +444,8 @@ export async function publishProject(db: Db, projectId: string, now: Date, actor
     });
     return row!;
   });
+  await announcePublished(db, row);
+  return row;
 }
 
 // ---------------------------------------------------------------- archive, delete

@@ -58,10 +58,15 @@ export interface InvitedAccount {
   login: string;
 }
 
-/** A grant written: its id, and how to take it back if GitHub refuses the invitation. */
+/**
+ * A grant written: its id, how to take it back if GitHub refuses the
+ * invitation, and whether it LET THE ACCOUNT IN — a row made, or a revoked
+ * one brought back — rather than finding it live already (a repeat).
+ */
 interface Grant {
   id: string;
   undo: () => Promise<void>;
+  fresh: boolean;
 }
 
 /**
@@ -91,13 +96,13 @@ export async function recordGrant(db: Db, repoId: string, account: InvitedAccoun
     if (!before) {
       const id = randomUUID();
       await tx.insert(projectRepoAccess).values({ id, repoId, enrollmentId: account.enrollmentId, githubUserId: account.githubUserId, ...fields });
-      return { id, undo: async () => void (await db.delete(projectRepoAccess).where(eq(projectRepoAccess.id, id))) };
+      return { id, undo: async () => void (await db.delete(projectRepoAccess).where(eq(projectRepoAccess.id, id))), fresh: true };
     }
     await tx.update(projectRepoAccess).set(fields).where(eq(projectRepoAccess.id, before.id));
     const undo = async () => {
       if (before.revokedAt !== null) await db.update(projectRepoAccess).set({ revokedAt: before.revokedAt }).where(eq(projectRepoAccess.id, before.id));
     };
-    return { id: before.id, undo };
+    return { id: before.id, undo, fresh: before.revokedAt !== null };
   });
 }
 
@@ -158,7 +163,7 @@ export async function inviteAccount(
   repo: Pick<RepoRow, "id" | "fullName">,
   member: RepoMember & { account: NonNullable<RepoMember["account"]> },
   ctx: InviteContext,
-): Promise<{ login: string; invitation: "pending" | "accepted" } | null> {
+): Promise<{ login: string; invitation: "pending" | "accepted"; fresh: boolean } | null> {
   const login = await linkedLogin(db, octokit, member.userId, member.account).catch((err: unknown) => {
     ctx.log.warn({ err, repo: repo.id }, "GitHub login lookup failed");
     throw new ProjectError(ctx.failure, "GitHub cannot be reached: try again");
@@ -205,7 +210,8 @@ export async function inviteAccount(
       payload: { repo: repo.fullName, enrollmentId: member.enrollmentId, login, invitation, via: ctx.via },
     });
   }
-  return { login, invitation };
+  // `fresh`: the account was let in by THIS call — what a notification of the invitation keys on.
+  return { login, invitation, fresh: grant.fresh };
 }
 
 /**

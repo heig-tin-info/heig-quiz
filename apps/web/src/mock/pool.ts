@@ -2389,7 +2389,7 @@ const notificationSettings: NotificationSettings = {
   },
   // The mock's teacher and admin hold a course seat and no student seat:
   // the staff kinds only.
-  kinds: notificationKindsFor({ role: me?.role ?? "student", studentSeat: false, courseSeat: true }),
+  kinds: notificationKindsFor({ role: me?.role ?? "student", studentSeat: false, courseSeat: true, github: true }),
   email: me?.email ?? "",
   teams: { available: true, linkedAt: null, teamsName: null, teamsUsername: null },
 };

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_CHANNEL_ENABLED,
+  GITHUB_KINDS,
   kindChannels,
   NOTIFICATION_CHANNELS,
   NOTIFICATION_KINDS,
@@ -79,41 +80,87 @@ describe("notificationKindsFor — the rows of the settings grid (#277)", () => 
     "activity_available",
     "deadline_approaching",
     "results_updated",
+    "project_published",
+    "project_deadline_reminder",
+    "project_repo_invited",
+    "project_grade_final",
   ];
-  const COURSE_KINDS = ["student_joined", "roster_conflict", "grading_ready"];
+  const COURSE_KINDS = [
+    "student_joined",
+    "roster_conflict",
+    "grading_ready",
+    "project_deadline_applied",
+    "project_provision_failed",
+    "github_org_lost",
+  ];
   const POOL_KINDS = ["pool_shared", "pool_ownership", "pool_question_added"];
   const STAFF_KINDS = [...COURSE_KINDS, ...POOL_KINDS];
   const ADMIN_KINDS = ["system_alert"];
 
   it("gives a student the seat kinds, with or without a claimed seat", () => {
-    expect(notificationKindsFor({ role: "student", studentSeat: false, courseSeat: false })).toEqual(SEAT_KINDS);
-    expect(notificationKindsFor({ role: "student", studentSeat: true, courseSeat: false })).toEqual(SEAT_KINDS);
+    expect(notificationKindsFor({ role: "student", studentSeat: false, courseSeat: false, github: true })).toEqual(SEAT_KINDS);
+    expect(notificationKindsFor({ role: "student", studentSeat: true, courseSeat: false, github: true })).toEqual(SEAT_KINDS);
   });
 
   it("gives a teacher without a student seat the staff kinds, course seat or not", () => {
-    expect(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false })).toEqual(STAFF_KINDS);
-    expect(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: true })).toEqual(STAFF_KINDS);
+    expect(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false, github: true })).toEqual(STAFF_KINDS);
+    expect(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: true, github: true })).toEqual(STAFF_KINDS);
   });
 
   it("gives an admin the course kinds only while holding a course seat (#287)", () => {
-    expect(notificationKindsFor({ role: "admin", studentSeat: false, courseSeat: false })).toEqual([
+    expect(notificationKindsFor({ role: "admin", studentSeat: false, courseSeat: false, github: true })).toEqual([
       ...POOL_KINDS,
       ...ADMIN_KINDS,
     ]);
-    expect(notificationKindsFor({ role: "admin", studentSeat: false, courseSeat: true })).toEqual([
+    expect(notificationKindsFor({ role: "admin", studentSeat: false, courseSeat: true, github: true })).toEqual([
       ...STAFF_KINDS,
       ...ADMIN_KINDS,
     ]);
   });
 
   it("gives the admin kinds to an admin only", () => {
-    expect(notificationKindsFor({ role: "teacher", studentSeat: true, courseSeat: true })).not.toContain("system_alert");
+    expect(notificationKindsFor({ role: "teacher", studentSeat: true, courseSeat: true, github: true })).not.toContain("system_alert");
   });
 
   it("gives a teacher on a roster every kind but the admin ones, and an admin every kind, in the catalogue order", () => {
-    expect(notificationKindsFor({ role: "teacher", studentSeat: true, courseSeat: false })).toEqual(
+    expect(notificationKindsFor({ role: "teacher", studentSeat: true, courseSeat: false, github: true })).toEqual(
       NOTIFICATION_KINDS.filter((k) => !ADMIN_KINDS.includes(k)),
     );
-    expect(notificationKindsFor({ role: "admin", studentSeat: true, courseSeat: true })).toEqual([...NOTIFICATION_KINDS]);
+    expect(notificationKindsFor({ role: "admin", studentSeat: true, courseSeat: true, github: true })).toEqual([...NOTIFICATION_KINDS]);
+  });
+
+  it("hides the project kinds on a platform without Quiz's GitHub App: a toggle that does nothing is a lie (F-NOTIF-13)", () => {
+    const shown = notificationKindsFor({ role: "admin", studentSeat: true, courseSeat: true, github: false });
+    const gated: readonly string[] = GITHUB_KINDS;
+    expect(shown).toEqual(NOTIFICATION_KINDS.filter((k) => !gated.includes(k)));
+    for (const kind of GITHUB_KINDS) expect(shown).not.toContain(kind);
+    // Every project kind is gated, and the lost organization with them.
+    for (const kind of NOTIFICATION_KINDS) {
+      if (kind.startsWith("project_")) expect(gated, kind).toContain(kind);
+    }
+    expect(gated).toContain("github_org_lost");
+    expect(GITHUB_KINDS).toHaveLength(7);
+  });
+});
+
+describe("the project kinds (F-NOTIF-13, D18)", () => {
+  it("are on by e-mail and Teams for what must not be missed, off for the news that can wait", () => {
+    for (const kind of ["project_deadline_reminder", "project_repo_invited", "project_grade_final", "project_provision_failed", "github_org_lost"] as const) {
+      expect(DEFAULT_CHANNEL_ENABLED[kind], kind).toEqual({ bell: true, email: true, teams: true });
+    }
+    for (const kind of ["project_published", "project_deadline_applied"] as const) {
+      expect(DEFAULT_CHANNEL_ENABLED[kind], kind).toEqual({ bell: true, email: false, teams: false });
+    }
+  });
+
+  it("carry ids, a title and counts, never a score nor a student", () => {
+    const project = { projectId: "11111111-1111-4111-8111-111111111111", projectTitle: "Lab 1" };
+    expect(NotificationPayload.parse({ kind: "project_published", ...project })).toEqual({ kind: "project_published", ...project });
+    const failed = { kind: "project_provision_failed", ...project, count: 2, reason: "repo_name_taken" };
+    expect(NotificationPayload.parse(failed)).toEqual(failed);
+    expect(NotificationPayload.safeParse({ kind: "project_provision_failed", ...project, count: 1, reason: "invitation_refused" }).success).toBe(false);
+    expect(NotificationPayload.safeParse({ kind: "project_grade_final", ...project, points: 5 }).success).toBe(true);
+    // A stray `points` is stripped, never carried: zod objects drop unknown keys.
+    expect(NotificationPayload.parse({ kind: "project_grade_final", ...project, points: 5 })).toEqual({ kind: "project_grade_final", ...project });
   });
 });

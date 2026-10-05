@@ -184,8 +184,8 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   /**
    * F-PROJ-14: the release, the course owner's (ADR-068) — every live repository frozen for good (`409
    * not_frozen`), the project graded (`409 grading_none`); a release again
-   * rewrites the snapshots. M3-09 sends `project_grade_final` to the
-   * students when `first` is true, here, and never on a release again.
+   * rewrites the snapshots. `releaseProject` sends `project_grade_final`
+   * to the students when `first` is true, and never on a release again.
    */
   app.post(
     "/app/api/projects/:id/release",

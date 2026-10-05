@@ -118,6 +118,28 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
       return t(`notif.systemAlert.${payload.state}`, {
         checks: payload.checks.map((key) => t(checkName(key))).join(", "),
       });
+    // The project kinds (F-NOTIF-13): the project's name, counts, never a score.
+    case "project_published":
+      return t("notif.projectPublished", { projectTitle: payload.projectTitle });
+    case "project_deadline_reminder":
+      return t("notif.projectDeadlineReminder", { projectTitle: payload.projectTitle });
+    case "project_repo_invited":
+      return t("notif.projectRepoInvited", { projectTitle: payload.projectTitle });
+    case "project_grade_final":
+      return t("notif.projectGradeFinal", { projectTitle: payload.projectTitle });
+    case "project_deadline_applied":
+      return t(payload.count === 1 ? "notif.projectDeadlineApplied.one" : "notif.projectDeadlineApplied", {
+        n: payload.count,
+        projectTitle: payload.projectTitle,
+      });
+    case "project_provision_failed":
+      return t(payload.count === 1 ? "notif.projectProvisionFailed.one" : "notif.projectProvisionFailed", {
+        n: payload.count,
+        projectTitle: payload.projectTitle,
+        reason: t(`notif.provisionReason.${payload.reason}`),
+      });
+    case "github_org_lost":
+      return t("notif.githubOrgLost", { classroom: payload.classroomName, org: payload.orgLogin });
   }
 }
 
@@ -126,8 +148,10 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
  * feedback page of the attempt whose results were released or updated, the roster
  * of the classroom, the grading panel of the evaluation, the student home
  * (exercises scheduled) or the attempt of an exercise that opened or of an
- * evaluation about to close. The e-mail and
- * the Teams message link to the same page (`templates.ts` on the server).
+ * evaluation about to close, the project a project kind is about (the
+ * staff's page, or the student's view of it) and the Settings of a
+ * classroom whose organization was lost. The e-mail and the Teams message
+ * link to the same page (`templates.ts` on the server).
  */
 function notificationRoute(payload: NotificationPayload): Route {
   switch (payload.kind) {
@@ -149,6 +173,15 @@ function notificationRoute(payload: NotificationPayload): Route {
       return { view: "attempt", evaluationId: payload.evaluationId };
     case "system_alert":
       return { view: "admin", tab: "system" };
+    case "project_published":
+    case "project_deadline_reminder":
+    case "project_repo_invited":
+    case "project_grade_final":
+    case "project_deadline_applied":
+    case "project_provision_failed":
+      return { view: "project", id: payload.projectId };
+    case "github_org_lost":
+      return { view: "classroomSettings", id: payload.classroomId };
     case "activity_available":
       switch (payload.activityKind) {
         case "evaluation":

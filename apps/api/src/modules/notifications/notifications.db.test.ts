@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 import { eq, sql } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
   DEFAULT_CHANNEL_ENABLED,
@@ -213,7 +213,7 @@ describe("a folded kind", () => {
     const { rows } = (await db.execute(
       sql`select indexname, indexdef from pg_indexes where tablename = 'notifications' and indexname like '%_fold_uq'`,
     )) as unknown as { rows: { indexname: string; indexdef: string }[] };
-    const column = { classroomId: "classroom_id", poolId: "pool_id", evaluationId: "evaluation_id" };
+    const column = { classroomId: "classroom_id", poolId: "pool_id", evaluationId: "evaluation_id", projectId: "project_id" };
     expect(rows.map((r) => r.indexname).sort()).toEqual(
       Object.keys(NOTIFICATION_FOLD_TARGETS).map((k) => `notifications_${k}_fold_uq`).sort(),
     );
@@ -419,19 +419,19 @@ describe("preferences", () => {
 
   it("reports the address and the Teams link, and hides a link when Teams is off", async () => {
     const dave = await seedUser("dave@heig.test");
-    const none = await service.notificationSettings(db, dave, true);
+    const none = await service.notificationSettings(db, dave, true, true);
     expect(none.email).toBe("dave@heig.test");
     expect(none.teams).toEqual({ available: true, linkedAt: null, teamsName: null, teamsUsername: null });
 
     await linkTeams(dave, new Date("2026-09-01T10:00:00Z"));
-    const linked = await service.notificationSettings(db, dave, true);
+    const linked = await service.notificationSettings(db, dave, true, true);
     expect(linked.teams).toEqual({
       available: true,
       linkedAt: "2026-09-01T10:00:00.000Z",
       teamsName: "Léa Teams",
       teamsUsername: "lea@heig-vd.ch",
     });
-    expect((await service.notificationSettings(db, dave, false)).teams).toEqual({
+    expect((await service.notificationSettings(db, dave, false, true)).teams).toEqual({
       available: false,
       linkedAt: null,
       teamsName: null,
@@ -440,7 +440,7 @@ describe("preferences", () => {
 
     // A link made before the username was recorded: unknown, so null.
     await db.update(teamsLinks).set({ teamsUsername: "" }).where(eq(teamsLinks.userId, dave));
-    expect((await service.notificationSettings(db, dave, true)).teams.teamsUsername).toBeNull();
+    expect((await service.notificationSettings(db, dave, true, true)).teams.teamsUsername).toBeNull();
 
     expect(await service.unlinkTeams(db, { userId: dave })).toBe(dave);
     expect(await service.unlinkTeams(db, { userId: dave })).toBeNull();
@@ -465,18 +465,18 @@ describe("preferences", () => {
         claimedAt: new Date(),
         staff,
       });
-    const kinds = async (userId: string) => (await service.notificationSettings(db, userId, true)).kinds;
+    const kinds = async (userId: string) => (await service.notificationSettings(db, userId, true, true)).kinds;
 
-    expect(await kinds(frank)).toEqual(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false }));
+    expect(await kinds(frank)).toEqual(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false, github: true }));
     await seat(true);
-    expect(await kinds(frank)).toEqual(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false }));
+    expect(await kinds(frank)).toEqual(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false, github: true }));
     await seat(false);
     // Every kind but the administrators' own (`system_alert`).
     expect(await kinds(frank)).toEqual(NOTIFICATION_KINDS.filter((k) => k !== "system_alert"));
 
     const gina = await seedUser("gina@heig.test");
     await db.update(users).set({ role: "student" }).where(eq(users.id, gina));
-    expect(await kinds(gina)).toEqual(notificationKindsFor({ role: "student", studentSeat: false, courseSeat: false }));
+    expect(await kinds(gina)).toEqual(notificationKindsFor({ role: "student", studentSeat: false, courseSeat: false, github: true }));
   });
 
   /*
@@ -486,7 +486,7 @@ describe("preferences", () => {
    */
   it("lists the course kinds to a seated admin, never to a seatless admin", async () => {
     const course = ["student_joined", "roster_conflict", "grading_ready"];
-    const kinds = async (userId: string) => (await service.notificationSettings(db, userId, true)).kinds;
+    const kinds = async (userId: string) => (await service.notificationSettings(db, userId, true, true)).kinds;
 
     const ines = await seedUser("ines@heig.test");
     await db.update(users).set({ role: "admin" }).where(eq(users.id, ines));
@@ -498,6 +498,27 @@ describe("preferences", () => {
     await db.insert(courses).values({ id: courseId, name: "Seated", code: `C-${courseId.slice(0, 8)}` });
     await db.insert(courseStaff).values({ courseId, userId: ines });
     expect(await kinds(ines)).toEqual(expect.arrayContaining(course));
+  });
+});
+
+describe("notifyUsers, the best-effort fan-out to an audience (M3-09b)", () => {
+  it("tells each account once, and logs instead of throwing when the send cannot be made", async () => {
+    const poolId = await seedPool("Audience");
+    const log = { error: vi.fn() };
+    await service.notifyUsers(db, [alice, bob, alice], poolShared(poolId, "Audience"), log);
+    for (const who of [alice, bob]) {
+      const rows = await db.select().from(notifications).where(eq(notifications.userId, who));
+      expect(rows.filter((r) => (r.payload as { poolId?: string }).poolId === poolId)).toHaveLength(1);
+    }
+    expect(log.error).not.toHaveBeenCalled();
+    // A payload the catalogue refuses: `notifyMany` throws, the caller never sees it.
+    await expect(
+      service.notifyUsers(db, [alice], { kind: "nope" } as unknown as NotificationPayload, log),
+    ).resolves.toBeUndefined();
+    expect(log.error).toHaveBeenCalledTimes(1);
+    // Nobody: nothing asked, nothing logged.
+    await service.notifyUsers(db, [], poolShared(poolId, "Audience"), log);
+    expect(log.error).toHaveBeenCalledTimes(1);
   });
 });
 

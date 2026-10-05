@@ -59,6 +59,7 @@ import {
 } from "../../db/schema.js";
 import { JOURNAL_INGEST_QUEUE } from "../../jobs.js";
 import { redactTokens } from "../../redact.js";
+import { actsOn } from "../github/service.js";
 import { journalChanged } from "./events.js";
 import {
   boundedClient,
@@ -98,6 +99,7 @@ async function snapshot(db: Db, classroomId: string): Promise<Snapshot | null> {
       row: classroomJournals,
       installationId: githubOrganizations.installationId,
       orgStatus: githubOrganizations.status,
+      suspendedAt: githubOrganizations.suspendedAt,
     })
     .from(classroomJournals)
     .leftJoin(githubClassroomLinks, eq(githubClassroomLinks.classroomId, classroomJournals.classroomId))
@@ -118,7 +120,10 @@ async function snapshot(db: Db, classroomId: string): Promise<Snapshot | null> {
   ]);
   return {
     row,
-    installationId: target.orgStatus === "active" ? target.installationId : null,
+    // The one rule of an organization the App acts on (`actsOn`, `modules/github/service.ts`).
+    installationId: actsOn({ installationId: target.installationId, suspendedAt: target.suspendedAt, status: target.orgStatus })
+      ? target.installationId
+      : null,
     pages: new Map(pages.map((p) => [p.path, p])),
     assets: new Map(assets.map((a) => [a.path, a.blobSha])),
   };

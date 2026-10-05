@@ -2,7 +2,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import type { NotificationSettings, TeamsLinkPreview } from "@quiz/contracts";
+import { DEFAULT_CHANNEL_ENABLED, type NotificationSettings, type TeamsLinkPreview } from "@quiz/contracts";
 
 import { makeMe } from "../test/fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
@@ -23,20 +23,8 @@ const preview: TeamsLinkPreview = {
   expiresAt: "2026-09-27T12:15:00.000Z",
 };
 const linked: NotificationSettings = {
-  matrix: {
-    results_released: { bell: true, email: true, teams: true },
-    activity_scheduled: { bell: true, email: false, teams: false },
-    activity_available: { bell: true, email: true, teams: true },
-    deadline_approaching: { bell: true, email: true, teams: true },
-    results_updated: { bell: true, email: false, teams: false },
-    pool_shared: { bell: true, email: true, teams: true },
-    pool_ownership: { bell: true, email: true, teams: true },
-    student_joined: { bell: true, email: false, teams: false },
-    roster_conflict: { bell: true, email: true, teams: true },
-    grading_ready: { bell: true, email: true, teams: true },
-    pool_question_added: { bell: true, email: false, teams: false },
-    system_alert: { bell: true, email: true, teams: false },
-  },
+  // The defaults of every kind: this page shows none of them.
+  matrix: structuredClone(DEFAULT_CHANNEL_ENABLED),
   kinds: ["results_released"],
   email: "marie.dupont@heig-vd.ch",
   teams: {

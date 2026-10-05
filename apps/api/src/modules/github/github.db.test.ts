@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { GithubClassroom, GithubOrg } from "@quiz/contracts";
+import { NotificationPayload, type GithubClassroom, type GithubOrg } from "@quiz/contracts";
 
 import {
   auditLog,
@@ -16,6 +16,7 @@ import {
   enrollments,
   githubClassroomLinks,
   githubOrganizations,
+  notifications,
 } from "../../db/schema.js";
 import {
   appKey,
@@ -401,6 +402,73 @@ describe("the lazy healing", () => {
     });
     expect(await audits("github_org.installation_deleted", gone.id)).toHaveLength(1);
     expect(await audits("github_org.deleted", gone.id)).toHaveLength(1);
+  });
+
+  it("tells the course staff once that the organization is lost, on the installation GitHub no longer has (F-NOTIF-13)", async () => {
+    const room = await classroom("heal-lost");
+    const gone = await orgRow({ login: "heig-heal-lost", githubOrgId: 931, installationId: 141, plan: "team" });
+    await link(room, gone.id);
+    const lost = async (userId: string) =>
+      (
+        await server.app.db
+          .select({ payload: notifications.payload })
+          .from(notifications)
+          .where(eq(notifications.userId, userId))
+      )
+        .map((r) => NotificationPayload.parse(r.payload))
+        .filter((p) => p.kind === "github_org_lost" && p.classroomId === room);
+    orgs = [];
+    expect((await call("GET", `/app/api/classrooms/${room}/github`, teacher)).statusCode).toBe(200);
+    const entry = { kind: "github_org_lost", classroomId: room, classroomName: "heal-lost", orgLogin: "heig-heal-lost" };
+    // The course's staff seats, each once; a teacher off the course never.
+    expect(await lost(teacher.id)).toEqual([entry]);
+    expect(await lost(colleague.id)).toEqual([entry]);
+    expect(await lost(outsider.id)).toEqual([]);
+    // Healed again past the minute: the installation is already forgotten, nobody is told twice.
+    server.clock.advance(HEAL_TTL_MS);
+    expect((await call("GET", `/app/api/classrooms/${room}/github`, teacher)).statusCode).toBe(200);
+    expect(await lost(teacher.id)).toEqual([entry]);
+  });
+
+  it("keeps a suspended installation it heals or lists, shown uninstalled, and tells nobody it is lost", async () => {
+    const room = await classroom("heal-suspended");
+    const org = await orgRow({ login: "heig-paused", githubOrgId: 951, installationId: 171, plan: "team" });
+    await link(room, org.id);
+    const lost = async (userId: string) =>
+      (
+        await server.app.db
+          .select({ payload: notifications.payload })
+          .from(notifications)
+          .where(eq(notifications.userId, userId))
+      )
+        .map((r) => NotificationPayload.parse(r.payload))
+        .filter((p) => p.kind === "github_org_lost" && p.classroomId === room);
+    orgs = [installedOrg(951, "heig-paused", 171, { suspended: true })];
+    // The healing, before any webhook: suspended, kept, not acting.
+    const healed = await call("GET", `/app/api/classrooms/${room}/github`, teacher);
+    expect(healed.json<GithubClassroom>().link).toMatchObject({
+      org: { id: org.id, installed: false, status: "active" },
+      checks: { allRepositories: null, llmSecret: "unknown" },
+    });
+    expect(await orgById(org.id)).toMatchObject({ installationId: 171, status: "active" });
+    expect((await orgById(org.id)).suspendedAt).not.toBeNull();
+    expect(await lost(teacher.id)).toEqual([]);
+    expect(await audits("github_org.installation_suspended", org.id)).toHaveLength(1);
+    // The listing: kept too, and not offered to connect.
+    const listed = (await call("GET", "/app/api/github/orgs", teacher)).json<GithubOrg[]>();
+    expect(listed.map((o) => o.id)).not.toContain(org.id);
+    expect(await orgById(org.id)).toMatchObject({ installationId: 171 });
+    expect(await lost(teacher.id)).toEqual([]);
+    // Nor can a classroom connect to it meanwhile.
+    const other = await classroom("heal-suspended-other");
+    expect((await call("PUT", `/app/api/classrooms/${other}/github`, teacher, { orgId: org.id })).json()).toMatchObject({ error: "app_not_installed" });
+    // Lifted: acting again, audited once more, still nobody told.
+    orgs = [installedOrg(951, "heig-paused", 171)];
+    server.clock.advance(HEAL_TTL_MS);
+    expect((await call("GET", `/app/api/classrooms/${room}/github`, teacher)).json<GithubClassroom>().link!.org.installed).toBe(true);
+    expect((await orgById(org.id)).suspendedAt).toBeNull();
+    expect(await audits("github_org.installation_suspended", org.id)).toHaveLength(2);
+    expect(await lost(teacher.id)).toEqual([]);
   });
 
   it("never re-points a known organization at another one that took its login", async () => {

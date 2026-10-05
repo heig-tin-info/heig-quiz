@@ -157,7 +157,14 @@ export const projects = pgTable(
      * `grade_dispatches` row.)
      */
     dispatchJobAt: timestamp("dispatch_job_at", { withTimezone: true }),
-    /** The day-before reminder sent (one shot, claimed by the ticker). */
+    /**
+     * The day-before reminder of the project's deadline sent (F-NOTIF-13,
+     * M3-09b): claimed by the ticker's scan before it tells the students
+     * under the project's deadline (`project_deadline_reminder`). Null:
+     * owed — or never due, the scan skipping a window under a day
+     * (`start_at`). A deadline moved more than a day ahead re-arms it
+     * (`reminderClaimAfterMove`, `@quiz/domain`).
+     */
     reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
     /** The final scores made the students' and the gradebook's (F-PROJ-14). */
     releasedAt: timestamp("released_at", { withTimezone: true }),
@@ -315,6 +322,14 @@ export const projectRepos = pgTable(
      * deadline rule reads (`effectiveDeadline`, `@quiz/domain`).
      */
     deadlineAt: timestamp("deadline_at", { withTimezone: true }),
+    /**
+     * The day-before reminder of the repository's OWN deadline sent
+     * (M3-09b): the project's claim leaves out the members of a repository
+     * with its own deadline, whose reminder is claimed here, per repository
+     * — `projects.reminder_sent_at`'s rules, on `deadline_at`. Meaningless
+     * (and left null) while the repository follows the project's deadline.
+     */
+    reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
     /**
      * The effective deadline applied (M3-05a): the provisional freeze written
      * (`frozen_grade_run_id`, the current score's run), the grace begun.

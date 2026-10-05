@@ -43,8 +43,12 @@ import {
   type RenderedNotification,
 } from "./templates.js";
 
-/** Bump by hand on any change of the package below (semver, as Teams wants it). */
-export const TEAMS_APP_VERSION = "2.1.0";
+/**
+ * Bump by hand on any change of the package below (semver, as Teams wants
+ * it). 2.2.0: the seven project kinds of F-NOTIF-13, declared in one go
+ * (merge task M3-09b).
+ */
+export const TEAMS_APP_VERSION = "2.2.0";
 const MANIFEST_VERSION = "1.17";
 const SCHEMAS = `https://developer.microsoft.com/en-us/json-schemas/teams/v${MANIFEST_VERSION}`;
 /** The red of the logo, as the icons use it. */
@@ -72,6 +76,14 @@ export const TEAMS_ACTIVITY_KINDS = [
   "activity_available",
   "deadline_approaching",
   "results_updated",
+  // The project kinds (F-NOTIF-13), the one bump of M3-09b: 2.2.0.
+  "project_published",
+  "project_deadline_reminder",
+  "project_repo_invited",
+  "project_grade_final",
+  "project_deadline_applied",
+  "project_provision_failed",
+  "github_org_lost",
 ] as const;
 type TeamsActivityKind = (typeof TEAMS_ACTIVITY_KINDS)[number];
 
@@ -92,6 +104,13 @@ export const TEAMS_ACTIVITY_TYPES: Record<TeamsActivityKind, string> = {
   activity_available: "activityAvailable",
   deadline_approaching: "deadlineApproaching",
   results_updated: "resultsUpdated",
+  project_published: "projectPublished",
+  project_deadline_reminder: "projectDeadlineReminder",
+  project_repo_invited: "projectRepoInvited",
+  project_grade_final: "projectGradeFinal",
+  project_deadline_applied: "projectDeadlineApplied",
+  project_provision_failed: "projectProvisionFailed",
+  github_org_lost: "githubOrgLost",
 };
 
 interface AppOptions {

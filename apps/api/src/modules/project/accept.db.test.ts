@@ -300,7 +300,10 @@ describe("a failure leaves a state the student retries", () => {
     expect(refusal(await accept(project.id, student))).toEqual([502, "provision_failed"]);
     const failures = await auditOf(row!.id, "project.accept_failed");
     // The first failure only is the one the staff hear of (M3-09 sends it).
-    expect(failures.map((f) => f.payload)).toEqual([{ notify: true }, { notify: false }]);
+    expect(failures.map((f) => f.payload)).toEqual([
+      { notify: true, reason: "github_error" },
+      { notify: false, reason: "github_error" },
+    ]);
 
     world.allowPushes();
     const res = await accept(project.id, student);
@@ -408,7 +411,7 @@ describe("the student's GitHub account", () => {
     expect(refusal(await accept(project.id, student))).toEqual([409, "github_account_stale"]);
     const [row] = await repoRows(project.id);
     expect(row!.provisionStatus).toBe("error");
-    expect((await auditOf(row!.id, "project.accept_failed")).map((f) => f.payload)).toEqual([{ notify: false }]);
+    expect((await auditOf(row!.id, "project.accept_failed")).map((f) => f.payload)).toEqual([{ notify: false, reason: "invitation_refused" }]);
     world.uninvitable.delete(student.login);
   });
 });

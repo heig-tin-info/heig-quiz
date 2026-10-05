@@ -175,6 +175,7 @@ export async function notifyMany(
           poolId: "poolId" in d.payload ? d.payload.poolId : null,
           evaluationId: evaluationIdOf(d.payload),
           classroomId: "classroomId" in d.payload ? d.payload.classroomId : null,
+          projectId: "projectId" in d.payload ? d.payload.projectId : null,
           payload: d.payload,
         }
       : null,
@@ -197,6 +198,38 @@ export async function notifyMany(
     if (external.length > 0) await enqueueDeliveries(d.userId, d.payload, external);
   }
   return bells.map((b) => (b ? notificationJson(byId.get(b.id)!) : null));
+}
+
+/** Where a best-effort send reports a failure: `app.log` from a job or the ticker, stderr from a service. */
+export interface NotifyLog {
+  error(obj: object, msg: string): void;
+}
+// The service layer has no logger (as `realtime/bus.ts`): stderr, which the process log collects.
+const stderrLog: NotifyLog = { error: (obj, msg) => console.error(msg, obj) };
+
+/**
+ * One payload to each of `userIds`, once each, BEST-EFFORT: the one way a
+ * module tells an audience of something that has already committed (a
+ * reminder, a release, an organization lost). A failure is logged and never
+ * thrown — the action it announces has happened, and must not look as if it
+ * had not (ADR-030). Nothing is sent to nobody.
+ */
+export async function notifyUsers(
+  db: Db,
+  userIds: readonly string[],
+  payload: NotificationPayload,
+  log: NotifyLog = stderrLog,
+): Promise<void> {
+  const unique = [...new Set(userIds)];
+  if (unique.length === 0) return;
+  try {
+    await notifyMany(
+      db,
+      unique.map((userId) => ({ userId, payload })),
+    );
+  } catch (err) {
+    log.error({ err, kind: payload.kind }, "notifications: telling an audience failed");
+  }
 }
 
 /** A kind folded per target (ADR-030 §e), per `NOTIFICATION_FOLD_TARGETS` (`db/notifications.ts`). */
@@ -402,11 +435,16 @@ export async function setPreference(
     });
 }
 
-/** `GET /notifications/settings`: the grid and its rows, the address, the Teams link. */
+/**
+ * `GET /notifications/settings`: the grid and its rows, the address, the
+ * Teams link. `githubAvailable`: the platform has Quiz's GitHub App, without
+ * which the project kinds are never sent and not listed (F-NOTIF-13).
+ */
 export async function notificationSettings(
   db: Db,
   userId: string,
   teamsAvailable: boolean,
+  githubAvailable: boolean,
 ): Promise<NotificationSettings> {
   const [matrix, link, [user], [seat], courseSeat] = await Promise.all([
     preferenceMatrix(db, userId),
@@ -432,6 +470,7 @@ export async function notificationSettings(
       role: user?.role ?? "student",
       studentSeat: seat !== undefined,
       courseSeat,
+      github: githubAvailable,
     }),
     email: user?.email ?? "",
     teams: {

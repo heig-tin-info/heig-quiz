@@ -1705,6 +1705,100 @@ former M3-09 card are kept below, under the task that inherits each.
   else (a student never receives another student's notification); the
   reminder claimed and sent together, per repository where a repository has
   its own deadline; `project_grade_final` on the first release only.
+- **Decisions** (orchestrator, 2026-10-04, within D18 and F-NOTIF-13):
+  seven kinds and no eighth — the staff's "review dispatched" notice is
+  NOT a notification (the project page shows the dispatch state);
+  `project_published` and `project_deadline_applied` off by e-mail and
+  Teams, the five others on; the reminder claimed per project and per
+  repository with its own deadline, re-armed only by a move more than 24 h
+  ahead; `project_deadline_applied` only when a pass locked or committed
+  (`locked + committed > 0`), folded per project (a project fold target,
+  F-NOTIF-12 amended); `project_provision_failed` with a `reason`;
+  `github_org_lost` on the row's actual transition, one notice per
+  organization per loss, per classroom; the project kinds hidden from the
+  settings without the App.
+- **As delivered** (branch `merge/M3-09b-project-notifications`):
+  - **Contracts** (`packages/contracts/src/notifications.ts`): the seven
+    kinds in `NOTIFICATION_KINDS` (the student kinds after
+    `results_updated`, the staff kinds after `grading_ready`), their
+    payloads (`{ projectId, projectTitle }`, plus `count` for the two
+    folded staff kinds, `reason: PROVISION_FAILURE_REASONS =
+    repo_name_taken | github_error` for the failure; `github_org_lost`
+    `{ classroomId, classroomName, orgLogin }`), `DEFAULT_CHANNEL_ENABLED`,
+    `NOTIFICATION_AUDIENCE` (`seat` / `course`), `GITHUB_KINDS` and
+    `notificationKindsFor({ …, github })` — the settings route passes
+    `githubApp(config) !== null`, so the grid (unchanged) lists them only
+    where the App exists.
+  - **Schema** (migration `0068_project_notifications`, additive):
+    `notifications.project_id` (FK cascade, index) lifted from the payload
+    by `notifyMany`; `NOTIFICATION_FOLD_TARGETS` gains
+    `project_deadline_applied` and `project_provision_failed` →
+    `projectId` (two partial unique indexes); `project_repos.reminder_sent_at`;
+    `github_organizations.suspended_at` (review round 1).
+  - **Pure rule** (`@quiz/domain/deadlineReminder.ts`, unit-tested):
+    `DEADLINE_REMINDER_MS` (the evaluations' reminder reads it too) and
+    `reminderClaimAfterMove` (re-armed only when the new deadline is more
+    than a day away). The window rule is the scans' (`start_at`).
+  - **Shared helpers** (review round 1): `notifyUsers(db, userIds, payload,
+    log?)` in `notifications/service.ts` — one payload to an audience,
+    deduped, best-effort — used by the project kinds, `orgLost` and the
+    evaluations' `sendDeadlineReminders`; `classroomStaffIds(db,
+    classroomId)` in `org/service.ts`, used by the project's staff kinds,
+    `orgLost` and `grading/events.ts`'s `staffOf`; `repoUserIds(db, repos)`
+    over many repositories in one query.
+  - **Templates** (`notifications/templates.ts`, en/fr, Teams activity
+    strings included; `reason.*` sentences); `notificationPath`:
+    `/projects/:id`, `/classrooms/:id/settings` for `github_org_lost`;
+    the Teams topic takes `projectTitle`. `teamsApp.ts`:
+    `TEAMS_ACTIVITY_KINDS` + 7, `TEAMS_APP_VERSION` 2.1.0 → 2.2.0.
+  - **Emitters** (`Q:modules/project/notify.ts`: `classroomStudentIds`,
+    `announcePublished`, `tellProjectStaff`, `remindDeadlines`; best-effort,
+    after commit): `publishProject` (by hand and the ticker) →
+    `project_published`;
+    `acceptProject` → `project_repo_invited` to whom THIS request invited
+    and GitHub left pending — the accepting student of a repository just
+    provisioned, the members a group's first Accept invites, a later
+    member joining (`tellInvited`; rebased over M3-15b-1) —,
+    `project_provision_failed`
+    to the staff on the row's first failure (audit `project.accept_failed`
+    gains `payload.reason`: `repo_name_taken` | `invitation_refused` |
+    `github_error`); `releaseProject` → `project_grade_final` to the
+    students of the repositories the release covered, `first` only;
+    `runDeadlineJob` → `project_deadline_applied` with `locked +
+    committed` when > 0; `projectTick` step 4b `remindDeadlines` (the
+    project claim — group members of a repository with its own deadline
+    left out too —, then the repository claim, `LIVE`, no staff lock, both
+    under `start_at <= deadline − 24 h`); `projectDeadlineMoved` and
+    `setRepoDeadline` apply the re-arm rule; `github/service.ts` `orgLost`
+    from `forgetInstallation` and `markOrgDeleted` (when the row held an
+    installation): the course staff of each non-archived linked
+    classroom, one entry per classroom. **A suspended installation is
+    kept** (`suspended_at`, audited `github_org.installation_suspended`)
+    and acts as none (`installed()`: installed, not suspended, active —
+    the listing, the connect sheet, the projects and the journal read the
+    same rule); GitHub's state decides, never the webhook's action, and
+    a deletion after a suspension is told once.
+  - **Web**: `NotificationPanel` words the seven kinds (`notif.project*`,
+    `notif.githubOrgLost`, `notif.provisionReason.*`) and opens
+    `{ view: "project" }` / `{ view: "classroomSettings" }`;
+    `settings.kind.<kind>[.desc]` ×7 in `en.ts` and `fr.ts`; the mock's
+    settings pass `github: true`.
+  - **Tests**: `project/notifications.db.test.ts` (each kind to its
+    audience and nobody else, the fold, the reason, the reminder's two
+    claims and its rules, first release only, deadline applied only when
+    something locked); `github/webhooks.db.test.ts` and
+    `github.db.test.ts` (org lost via webhook and healing, told once per
+    classroom, never on a suspension); `templates.test.ts`,
+    `teamsApp.test.ts` (seven kinds at 2.2.0), the contracts' and the
+    domain's unit tests, the web panel and settings tests.
+  - **Review round 1** (2026-10-04): the suspension model above; the
+    settle-at-start claim dropped for the scans' `start_at` rule (an own
+    deadline given within a day on a project open for longer IS reminded:
+    the student's window is their time in the project); the shared
+    helpers; `GITHUB_KINDS` a `const` array.
+  - Not done here: the F-PROJ-21 notices (M3-09c); a notice when
+    `retireLoginHolders` retires an installed row (a rename race is the
+    likelier reading: documented, not sent).
 
 ### M3-09c — Real-time notices of projects (F-PROJ-21)
 - **Depends on**: M3-09a, M3-12a.
@@ -1721,6 +1815,12 @@ former M3-09 card are kept below, under the task that inherits each.
   `project_grade_runs` row `ok`), the suspension (audit
   `project_repo.revert_cap`), a repository deleted (audit
   `project_repo.deleted`).
+- **From M3-09b** (2026-10-04): the notices are NOT the notifications —
+  `project_deadline_applied` reaches the staff's bell once per job pass,
+  and the student's reminder their bell; a notice worded from the re-read
+  payload must not repeat them. The facts a notice may read now include
+  `project_repos.reminder_sent_at` (not shown to the student: the
+  reminder itself is).
 - **Tests**: web, on the re-read payloads: each notice from its difference,
   nothing on an unchanged payload.
 
@@ -2198,6 +2298,13 @@ release. The original card's notes stay here; each part has its card below.
   `release` is set (the final score, its grade, the teacher's comment).
   Mock: `?projects=1`, ids `STUDENT_PROJECT_OPEN`, `_SOON`, `_PAST` of
   `mock/student.ts`.
+- **From M3-09b** (2026-10-04): every student notification of a project
+  (`project_published`, `project_deadline_reminder`, `project_repo_invited`,
+  `project_grade_final`) opens `/projects/:id` — the bell's `{ view:
+  "project", id }` and the e-mail's link alike — so the route MUST serve a
+  student the student's view (`GET /app/api/student/projects/:id`), with
+  the invitation link and the resend on it: a student landing there from
+  "Your repository is ready" expects the button, not the staff's 404.
 - **Scenes**: `-unlinked`, `-accept`, `-invitation-pending`, `-ready`,
   `-released`; the default `student-home` unchanged.
 - **Decisions** (orchestrator, 2026-10-04, from the spec and the
@@ -3275,6 +3382,17 @@ serves now (16a), and what waits for the group repositories (16b).
   imported as they are: Quiz never sends them again, its staff see them
   "not confirmed". Likewise a milestone already dispatched keeps its
   `dispatched_at` (`project_checkpoints`), or it fires again.
+- **From M3-09b** (2026-10-04): the day-before reminder is claimed on
+  `projects.reminder_sent_at` and `project_repos.reminder_sent_at` (own
+  deadline), both null = owed; the scan skips a window under a day on
+  `start_at`, nothing else. The import must set them to the import time
+  for every imported project or repository whose effective deadline lies
+  within 24 h of the import (and may for any deadline already past), or the
+  first `projectTick` reminds every student of those projects at once; a
+  deadline further ahead is legitimately reminded later and may stay null.
+  heig-classroom's own marker, when one exists, is copied as it is. An
+  imported organization keeps `suspended_at` null unless heig-classroom
+  knew it suspended.
 
 ### M8-02 — Legacy URL resolver
 - **Depends on**: M8-01 (id map), M3-12, M4-04.

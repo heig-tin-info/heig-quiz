@@ -21,6 +21,9 @@
  *    good (`frozen_at`, audited `project_repo.frozen`; one archived as its
  *    lock or with its protection suspended is audited
  *    `project_repo.review_skipped`, M3-05b);
+ * 4b. the day-before reminders due are claimed and sent (`remindDeadlines`,
+ *    `notify.ts`, M3-09b): no HTTP, the notifications' own jobs carry the
+ *    e-mails;
  * 5. with a queue only, a project with GitHub work left (`NEEDS_WORK`) has
  *    its LEASE taken (`deadline_job_at`, null or ten minutes old) and one
  *    `project.deadline` job sent;
@@ -66,6 +69,7 @@ import { DomainError } from "../http.js";
 import { COMMIT_DUE, EFFECTIVE_DEADLINE, LIVE, NEEDS_WORK, ts } from "./deadline.js";
 import { claimLeases, runLeased, type ProjectJob } from "./lease.js";
 import { publishProject } from "./lifecycle.js";
+import { remindDeadlines, tellProjectStaff } from "./notify.js";
 import { hintProjectStaff, hintRepo, markRepoDeleted, type RepoRow } from "./repos.js";
 import { claimReviewWork, runReviewJob } from "./review.js";
 import type { ProjectRow } from "./views.js";
@@ -276,6 +280,7 @@ export async function projectTick(app: FastifyInstance, config: AppConfig): Prom
     ...(await freezeDue(app.db, now)),
   ];
   await hintProjectStaff(app.db, changed);
+  await remindDeadlines(app.db, now, app.log);
   if (!app.boss) return;
   await sendDeadlineJobs(app, config, await claimDeadlineWork(app.db, now));
   // The final reviews and the checkpoints due (M3-05b): their own lease, their own queue.
@@ -487,6 +492,18 @@ export async function runDeadlineJob(app: FastifyInstance, config: AppConfig, jo
         subjectId: project.id,
         payload: { strategy: project.deadlineStrategy, ...tally, failed },
       });
+    }
+    // The staff hear of the repositories the deadline settled — locked, or
+    // given their commit —, folded per project (F-NOTIF-13); an unlock or a
+    // deletion is not the deadline applied.
+    const settled = tally.locked + tally.committed;
+    if (settled > 0) {
+      await tellProjectStaff(
+        db,
+        project,
+        { kind: "project_deadline_applied", projectId: project.id, projectTitle: project.name, count: settled },
+        app.log,
+      );
     }
   });
 }

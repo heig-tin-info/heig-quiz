@@ -22,7 +22,8 @@
  *   - no marker exists yet in `deadline_reminders`.
  *
  * Individual extensions (accommodation, a "+N min" to one student) are
- * ignored: the reminder is keyed on the common `closes_at` alone.
+ * ignored: the reminder is keyed on the common `closes_at` alone. The 24
+ * hours are `DEADLINE_REMINDER_MS` of `@quiz/domain`, the projects' too.
  *
  * The claim IS the selection: one `INSERT … SELECT … ON CONFLICT DO NOTHING
  * RETURNING` writes the markers of every due pair, and only the pairs it
@@ -33,29 +34,21 @@
  */
 import { and, eq, inArray, isNotNull, lte, gt, ne, notExists, sql } from "drizzle-orm";
 
+import { DEADLINE_REMINDER_MS } from "@quiz/domain";
+
 import type { Db } from "../../db/client.js";
 import { attempts, deadlineReminders, enrollments, evaluations } from "../../db/schema.js";
-import { notifyMany } from "./service.js";
-
-/** How long before `closes_at` the reminder is due. Fixed: no setting (§d, §g). */
-export const DEADLINE_REMINDER_MS = 24 * 3_600_000;
-
-/** Where a failed fan-out is reported: the ticker passes `app.log`. */
-export interface ReminderLog {
-  error(obj: object, msg: string): void;
-}
-
-/** Outside the ticker (a script, a test), stderr. */
-const stderrLog: ReminderLog = { error: (obj, msg) => console.error(msg, obj) };
+import { notifyUsers, type NotifyLog } from "./service.js";
 
 /**
  * Claims and sends every reminder due at `now`. Returns the pairs this pass
- * claimed (the ones it told, or tried to).
+ * claimed (the ones it told, or tried to). `log`: the ticker's `app.log`;
+ * stderr outside it.
  */
 export async function sendDeadlineReminders(
   db: Db,
   now: Date,
-  log: ReminderLog = stderrLog,
+  log?: NotifyLog,
 ): Promise<{ evaluationId: string; userId: string }[]> {
   const horizon = new Date(now.getTime() + DEADLINE_REMINDER_MS);
   const due = db
@@ -124,23 +117,12 @@ export async function sendDeadlineReminders(
   );
   // One fan-out per evaluation, so one that fails does not silence the others.
   for (const evaluationId of ids) {
-    try {
-      await notifyMany(
-        db,
-        claimed
-          .filter((c) => c.evaluationId === evaluationId)
-          .map((c) => ({
-            userId: c.userId,
-            payload: {
-              kind: "deadline_approaching" as const,
-              evaluationId,
-              evaluationTitle: titles.get(evaluationId) ?? "",
-            },
-          })),
-      );
-    } catch (err) {
-      log.error({ err, evaluationId }, "notifications: the deadline reminders failed");
-    }
+    await notifyUsers(
+      db,
+      claimed.filter((c) => c.evaluationId === evaluationId).map((c) => c.userId),
+      { kind: "deadline_approaching", evaluationId, evaluationTitle: titles.get(evaluationId) ?? "" },
+      log,
+    );
   }
   return claimed;
 }
