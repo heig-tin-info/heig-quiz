@@ -3,8 +3,9 @@
  * list alike (F-GBOOK-01, ADR-074, M5-04): a grade as every screen writes it,
  * the school's absence mark as a sigil of its own, a dash for nothing.
  */
-import type { GradebookColumnKind } from "@quiz/contracts";
+import type { GradebookColumnKind, GradebookStaffRow } from "@quiz/contracts";
 
+import { Grade } from "../Grade";
 import type { Dict } from "../i18n";
 import { cx, Tip } from "../ui";
 
@@ -39,3 +40,10 @@ export const Dash = ({ className }: { className?: string }) => (
     —
   </span>
 );
+
+/** A grade, or a dash where there is none (a null mean, an empty cell). */
+export const GradeOrDash = ({ value }: { value: number | null }) =>
+  value === null ? <Dash /> : <Grade value={value} />;
+
+/** A student as the matrix and its dialogs name them. */
+export const fullName = (row: Pick<GradebookStaffRow, "prenom" | "nom">) => `${row.prenom} ${row.nom}`.trim();

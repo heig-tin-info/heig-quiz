@@ -37,12 +37,10 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { validWeight } from "@quiz/domain";
 import type { GradebookColumn, GradebookMarkPut, GradebookStaff, GradebookStaffCell, GradebookStaffRow } from "@quiz/contracts";
 
 import { refusedWith } from "../api";
 import { useConfirm } from "../confirm";
-import { Grade } from "../Grade";
 import { useT, type TFunction } from "../i18n";
 import { useToast } from "../notify";
 import {
@@ -50,22 +48,18 @@ import {
   Card,
   cx,
   EmptyState,
-  Field,
-  FormDialog,
   Menu,
   QueryError,
   Skeleton,
   SettingRow,
   Switch,
-  Textarea,
   Tip,
   T,
   type MenuItem,
 } from "../ui";
 import { gradebookRefusalMessage, useGradebookWrites, useStaffGradebook } from "./api";
-import { AbsentSigil, Dash, MODE_LABEL } from "./cells";
-
-const fullName = (row: GradebookStaffRow) => `${row.prenom} ${row.nom}`.trim();
+import { ScoreDialog, WeightDialog } from "./dialogs";
+import { AbsentSigil, Dash, fullName, GradeOrDash, MODE_LABEL } from "./cells";
 
 /**
  * The mean stays in view while the grades scroll under it, once the card has
@@ -114,36 +108,33 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const readOnly = data.archived;
 
-  /** Runs one write; a refusal is a toast, in words. True when it went through. */
-  const attempt = async (write: () => Promise<unknown>): Promise<boolean> => {
+  /**
+   * Runs one write; a refusal is a toast, in words. True when it went through.
+   * `onExists` takes over a `409 grade_exists` instead (the override's question).
+   */
+  const attempt = async (write: () => Promise<unknown>, onExists?: () => Promise<boolean>): Promise<boolean> => {
     try {
       await write();
       return true;
     } catch (error) {
+      if (onExists && refusedWith(error, "grade_exists")) return onExists();
       toast(gradebookRefusalMessage(error, t), "error");
       return false;
     }
   };
 
   /** A mark; over a real grade the server asks for `override`, and so do we. */
-  const putMark = async (column: GradebookColumn, row: GradebookStaffRow, mark: GradebookMarkPut): Promise<boolean> => {
-    try {
-      await writes.setMark(column, row.enrollmentId, mark);
-      return true;
-    } catch (error) {
-      if (!refusedWith(error, "grade_exists")) {
-        toast(gradebookRefusalMessage(error, t), "error");
-        return false;
-      }
-    }
-    const replace = await confirm({
-      title: t("gbook.override.title"),
-      message: t("gbook.override.body", { student: fullName(row), column: column.title }),
-      confirmLabel: t("gbook.override.confirm"),
-      danger: true,
-    });
-    return replace ? attempt(() => writes.setMark(column, row.enrollmentId, { ...mark, override: true })) : false;
-  };
+  const putMark = (column: GradebookColumn, row: GradebookStaffRow, mark: GradebookMarkPut): Promise<boolean> =>
+    attempt(
+      () => writes.setMark(column, row.enrollmentId, mark),
+      async () =>
+        (await confirm({
+          title: t("gbook.override.title"),
+          message: t("gbook.override.body", { student: fullName(row), column: column.title }),
+          confirmLabel: t("gbook.override.confirm"),
+          danger: true,
+        })) && attempt(() => writes.setMark(column, row.enrollmentId, { ...mark, override: true })),
+    );
 
   const cellItems = (column: GradebookColumn, row: GradebookStaffRow, cell: GradebookStaffCell): MenuItem[] => [
     { label: t("gbook.cell.absent"), icon: UserX, onSelect: () => void putMark(column, row, { kind: "absent" }) },
@@ -249,7 +240,7 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
                 <td
                   className={cx(T.td, "text-right font-semibold tabular-nums", MEAN_PIN, "@2xl:bg-surface @2xl:group-hover:bg-surface-2")}
                 >
-                  {row.mean === null ? <Dash /> : <Grade value={row.mean} />}
+                  <GradeOrDash value={row.mean} />
                 </td>
               </tr>
             ))}
@@ -369,9 +360,9 @@ function CellFace({ cell, t }: { cell: GradebookStaffCell; t: TFunction }) {
   const marked = cell.source === "mark";
   return (
     <>
-      {cell.kind === "grade" && cell.grade !== null ? (
+      {cell.kind === "grade" ? (
         <span className="font-semibold">
-          <Grade value={cell.grade} />
+          <GradeOrDash value={cell.grade} />
         </span>
       ) : cell.kind === "absent" ? (
         <AbsentSigil why={t(marked ? "gbook.absent.marked" : "gbook.absent.derived")} />
@@ -389,106 +380,5 @@ function CellFace({ cell, t }: { cell: GradebookStaffCell; t: TFunction }) {
         </Tip>
       ) : null}
     </>
-  );
-}
-
-/** Parses what a person typed in a number field: a comma is a decimal point; anything else is NaN. */
-const numberOf = (text: string): number => (text.trim() === "" ? Number.NaN : Number(text.trim().replace(",", ".")));
-
-/** The teacher's own score for one student of one column: points out of a maximum, and a staff-only comment. */
-function ScoreDialog({
-  row,
-  column,
-  cell,
-  submitting,
-  onClose,
-  onSubmit,
-}: {
-  row: GradebookStaffRow;
-  column: GradebookColumn;
-  cell: GradebookStaffCell | undefined;
-  submitting: boolean;
-  onClose: () => void;
-  onSubmit: (mark: GradebookMarkPut) => void;
-}) {
-  const t = useT();
-  const [points, setPoints] = useState(cell?.points == null ? "" : String(cell.points));
-  const [max, setMax] = useState(cell?.max == null ? "" : String(cell.max));
-  const [comment, setComment] = useState(cell?.mark?.comment ?? "");
-  const p = numberOf(points);
-  const m = numberOf(max);
-  const valid = p >= 0 && m > 0 && p <= m;
-  return (
-    <FormDialog
-      title={t("gbook.score.title", { student: fullName(row) })}
-      onClose={onClose}
-      submitLabel={t("gbook.score.submit")}
-      submitting={submitting}
-      canSubmit={valid}
-      onSubmit={() => onSubmit({ kind: "score", points: p, max: m, comment: comment.trim() || null })}
-    >
-      <p className="text-sm text-fg-muted">{column.title}</p>
-      <div className="flex gap-3">
-        <Field
-          label={t("gbook.score.points")}
-          inputMode="decimal"
-          value={points}
-          onChange={(e) => setPoints(e.target.value)}
-          autoFocus
-          width="w-28"
-        />
-        <Field
-          label={t("gbook.score.max")}
-          inputMode="decimal"
-          value={max}
-          onChange={(e) => setMax(e.target.value)}
-          width="w-28"
-        />
-      </div>
-      <Textarea
-        label={t("gbook.score.comment")}
-        value={comment}
-        maxLength={2000}
-        onChange={(e) => setComment(e.target.value)}
-      />
-    </FormDialog>
-  );
-}
-
-/** A column's weight in the mean: 0 to 10, at the tenth. */
-function WeightDialog({
-  column,
-  submitting,
-  onClose,
-  onSubmit,
-}: {
-  column: GradebookColumn;
-  submitting: boolean;
-  onClose: () => void;
-  onSubmit: (weight: number) => void;
-}) {
-  const t = useT();
-  const [text, setText] = useState(String(column.weight));
-  const weight = numberOf(text);
-  return (
-    <FormDialog
-      title={t("gbook.weight.title", { column: column.title })}
-      onClose={onClose}
-      submitLabel={t("common.save")}
-      submitting={submitting}
-      canSubmit={validWeight(weight)}
-      dense
-      onSubmit={() => onSubmit(weight)}
-    >
-      <Field
-        label={t("gbook.weight.label")}
-        description={t("gbook.weight.hint")}
-        inputMode="decimal"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        autoFocus
-        width="w-28"
-      />
-    </FormDialog>
   );
 }

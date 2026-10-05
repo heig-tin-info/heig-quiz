@@ -25,11 +25,10 @@ import { Trophy } from "lucide-react";
 import { formatPoints } from "@quiz/domain";
 import type { GradebookStudent, GradebookStudentCell, GradebookStudentColumn } from "@quiz/contracts";
 
-import { Grade } from "../Grade";
 import { useT, type TFunction } from "../i18n";
 import { Badge, Card, EmptyState, isoDateParts, QueryError, Skeleton } from "../ui";
 import { useStudentGradebook } from "./api";
-import { AbsentSigil, Dash, MODE_LABEL } from "./cells";
+import { AbsentSigil, Dash, GradeOrDash, MODE_LABEL } from "./cells";
 
 export function StudentGradebook({ classroomId }: { classroomId: string }) {
   const t = useT();
@@ -103,7 +102,7 @@ function Mean({ data }: { data: GradebookStudent }) {
         <p className="mt-0.5 text-[13px] text-fg-muted">{t("gbook.mean.studentHelp")}</p>
       </div>
       <div className="shrink-0 text-right text-[17px] font-semibold leading-snug tabular-nums">
-        {data.mean === null ? <Dash /> : <Grade value={data.mean} />}
+        <GradeOrDash value={data.mean} />
       </div>
     </li>
   );
@@ -113,7 +112,7 @@ function Mean({ data }: { data: GradebookStudent }) {
 function CellFace({ cell, t }: { cell: GradebookStudentCell | undefined; t: TFunction }) {
   switch (cell?.kind) {
     case "grade":
-      return cell.grade === null ? <Dash /> : <Grade value={cell.grade} />;
+      return <GradeOrDash value={cell.grade} />;
     case "absent":
       return <AbsentSigil why={t("gbook.absent.student")} />;
     case "withheld":

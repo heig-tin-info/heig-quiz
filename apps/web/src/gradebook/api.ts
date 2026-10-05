@@ -9,15 +9,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   GradebookColumnPatch,
-  GradebookErrorCode,
   GradebookMarkPut,
   GradebookSettingsPatch,
   type GradebookColumn,
+  type GradebookErrorCode,
   type GradebookStaff,
   type GradebookStudent,
 } from "@quiz/contracts";
 
-import { api, refusalCodeOf } from "../api";
+import { api, wordedRefusal } from "../api";
 import type { Dict, TFunction } from "../i18n";
 import { classroomGradebookKey, studentGradebookKey } from "../queryKeys";
 
@@ -54,10 +54,7 @@ const REFUSAL_KEY: Record<GradebookErrorCode, keyof Dict> = {
 };
 
 /** What a failed write says, always in the reader's language; the server's message is English. */
-export function gradebookRefusalMessage(error: unknown, t: TFunction): string {
-  const code = GradebookErrorCode.safeParse(refusalCodeOf(error));
-  return t(code.success ? REFUSAL_KEY[code.data] : "error.save");
-}
+export const gradebookRefusalMessage = (error: unknown, t: TFunction): string => wordedRefusal(error, REFUSAL_KEY, t);
 
 /**
  * The staff's writes of one classroom's gradebook. Each one resolves with the

@@ -45,7 +45,7 @@ import {
 
 import { ME_LINE } from "./groups";
 import { classroomRoster, rooms } from "./org";
-import { D, flags, iso, MockPayload, on, refuse, role } from "./runtime";
+import { D, iso, MockPayload, on, refuse, role } from "./runtime";
 
 /** What lies beneath a cell of an activity: the activity's own result for one student. */
 type Beneath =
@@ -200,7 +200,7 @@ function staffCell(column: MockColumn, line: string, book: MockBook): GradebookS
     points: stored ? stored.points : underPoints.points,
     max: stored ? stored.max : underPoints.max,
     source: stored ? "mark" : under.kind === "grade" ? (column.kind === "project" ? "teacher" : "results") : under.kind === "absent" ? "derived" : null,
-    changedAfterRelease: !stored && column.kind === "project" && column.released && line === ME_LINE,
+    changedAfterRelease: false,
     hasGrade: under.kind === "grade",
     mark,
   };
@@ -302,7 +302,6 @@ on("PATCH", "/app/api/classrooms/:id/gradebook/columns/:kind/:activityId", (m, r
   const patch = parsed(GradebookColumnPatch, raw);
   if (patch.weight !== undefined) column.weight = patch.weight;
   if (patch.counts !== undefined) column.counts = patch.counts;
-  if (patch.position !== undefined) column.position = patch.position;
   return staffTable(room, book);
 });
 
@@ -320,8 +319,6 @@ on("PUT", "/app/api/classrooms/:id/gradebook/columns/:kind/:activityId/marks/:ei
   if (over && !replacing && !body.override) {
     throw refuse(409, "grade_exists", "A grade already stands in this cell; send it again with override");
   }
-  // ADR-068: replacing a RELEASED grade is an owner's (`?assistant=1`).
-  if (over && !replacing && flags.assistant) throw refuse(403, "owner_required", "Only an owner may replace a released grade");
   book.marks.set(key(column, line), {
     kind: body.kind,
     points: body.kind === "score" ? body.points : null,
