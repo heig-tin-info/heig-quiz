@@ -62,7 +62,7 @@ describe("HS256", () => {
 
   it("pins aud and iss", async () => {
     const token = await signHs256(base, secret);
-    expect(await verifyHs256(token, secret, { audience: "other", now: () => 1100 })).toEqual({ ok: false, reason: "bad-audience" });
+    expect(await verifyHs256(token, secret, { audience: "other", issuer: "heig-classroom", now: () => 1100 })).toEqual({ ok: false, reason: "bad-audience" });
     expect(await verifyHs256(token, secret, { audience: "heig-codespace", issuer: "x", now: () => 1100 })).toEqual({ ok: false, reason: "bad-issuer" });
     const quiz = await signHs256({ ...base, iss: "heig-quiz" }, secret);
     const both = { audience: "heig-codespace", issuer: ["heig-classroom", "heig-quiz"], now: () => 1100 };

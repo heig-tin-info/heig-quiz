@@ -313,6 +313,13 @@ describe("the online workspace portal (ADR-047, M6-01)", () => {
     }
   });
 
+  it("refuses a URL that is not http(s)", () => {
+    for (const url of ["codespace.example.ch", "ftp://codespace.example.ch", "javascript:alert(1)", "https://"]) {
+      expect(() => loadConfig({ ...ON, CODESPACE_URL: url })).toThrow(/CODESPACE_URL/);
+    }
+    expect(loadConfig({ ...ON, CODESPACE_URL: "http://localhost:4000" }).CODESPACE_URL).toBe("http://localhost:4000");
+  });
+
   it("does not echo the secret in the refusal", () => {
     let message = "";
     try {

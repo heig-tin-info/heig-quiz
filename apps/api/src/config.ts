@@ -334,7 +334,11 @@ const EnvSchema = z.object({
    * exist: its routes answer 404 and its jobs do nothing. Set, it needs the
    * secret below, in every environment (see `loadConfig`).
    */
-  CODESPACE_URL: z.string().trim().default(""),
+  CODESPACE_URL: z
+    .string()
+    .trim()
+    .default("")
+    .refine((v) => v === "" || /^https?:\/\/[^\s/]+/i.test(v), "must be an http(s) URL"),
   /**
    * HS256 key shared with the portal, for the launch and service tokens
    * (M6-01). Environment only (ADR-010): never in the database, a payload or

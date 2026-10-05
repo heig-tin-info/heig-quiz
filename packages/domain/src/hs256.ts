@@ -46,8 +46,11 @@ export async function signHs256(claims: Record<string, unknown>, secret: string)
 export interface VerifyHs256Options {
   /** Expected `aud`; rejected when absent or different. */
   audience: string;
-  /** Expected `iss` (or any of several: the transition accepts two); rejected when absent or different. */
-  issuer?: string | readonly string[];
+  /**
+   * Expected `iss` (or any of several: the transition accepts two); rejected
+   * when absent or different. Required: an unpinned issuer must not compile.
+   */
+  issuer: string | readonly string[];
   /** Reject a token without a non-empty string `jti` (the launch token). */
   requireJti?: boolean;
   /** Injectable clock (Unix seconds). */
@@ -99,11 +102,9 @@ export async function verifyHs256<T extends Record<string, unknown>>(
   if (typeof exp !== "number" || exp + skew < now) return { ok: false, reason: "expired" };
   if (typeof iat === "number" && iat - skew > now) return { ok: false, reason: "not-yet-valid" };
   if (claims["aud"] !== opts.audience) return { ok: false, reason: "bad-audience" };
-  if (opts.issuer !== undefined) {
-    const accepted = typeof opts.issuer === "string" ? [opts.issuer] : opts.issuer;
-    const iss = claims["iss"];
-    if (typeof iss !== "string" || !accepted.includes(iss)) return { ok: false, reason: "bad-issuer" };
-  }
+  const accepted = typeof opts.issuer === "string" ? [opts.issuer] : opts.issuer;
+  const iss = claims["iss"];
+  if (typeof iss !== "string" || !accepted.includes(iss)) return { ok: false, reason: "bad-issuer" };
   const jti = claims["jti"];
   if (opts.requireJti && (typeof jti !== "string" || jti === "")) return { ok: false, reason: "missing-jti" };
   return { ok: true, claims };
