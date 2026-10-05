@@ -78,8 +78,15 @@ export const PROVISION_STATUSES = ["pending", "ok", "error"] as const;
 export const INVITATION_STATUSES = ["none", "pending", "accepted"] as const;
 /** Pass / fail of a repository without `grading.yml` (F-PROJ-10). */
 export const CI_STATUSES = ["none", "pending", "pass", "fail"] as const;
-/** The sync pull request of a repository (F-PROJ-12): one at most. */
+/** The sync pull request of a repository's branch (F-PROJ-12): one at most per branch (`project_sync_prs`). */
 export const SYNC_PR_STATES = ["open", "merged", "closed"] as const;
+/**
+ * What the last sync did to a repository (F-PROJ-12, M3-07): a pull request
+ * opened, the open one updated (a comment), nothing to send (`up_to_date`),
+ * GitHub failing (`failed`, retried by the next sync), or the repository
+ * left alone (`skipped`: locked, past its effective deadline, or gone).
+ */
+export const SYNC_OUTCOMES = ["opened", "updated", "up_to_date", "failed", "skipped"] as const;
 
 /**
  * Why a grade run has a score or none (F-PROJ-10, `extractScore` of
@@ -415,6 +422,15 @@ export type ProjectSummary = z.infer<typeof ProjectSummary>;
  *   - `invitation_not_pending` — a resend of an invitation that is not
  *     pending; `resend_too_soon` (429) — resent less than a minute ago;
  *     `invite_failed` (502) — GitHub failed the resend.
+ * The sync (F-PROJ-12, M3-07; `POST /app/api/projects/:id/sync`):
+ *   - `project_archived` — an archived project syncs nothing (a draft syncs
+ *     its distribution repository, a locked project its open repositories);
+ *   - `sync_in_progress` — a sync of the project is under way (its lease is
+ *     held; a failed pass frees it within a minute);
+ *   - `source_rewritten` — with the `whole` strategy, the source's history
+ *     was rewritten and the distribution repository cannot fast-forward:
+ *     nothing was changed; `sync_failed` (502) — the distribution
+ *     repository could not be updated: try again.
  * The response schemas of the refusals come with their first consumer
  * (M3-11).
  */
@@ -444,6 +460,11 @@ export const PROJECT_REFUSALS = [
   "invitation_not_pending",
   "resend_too_soon",
   "invite_failed",
+  // The sync (F-PROJ-12, M3-07).
+  "project_archived",
+  "sync_in_progress",
+  "source_rewritten",
+  "sync_failed",
 ] as const;
 export const ProjectErrorCode = z.enum(PROJECT_REFUSALS);
 export type ProjectErrorCode = z.infer<typeof ProjectErrorCode>;
@@ -732,6 +753,26 @@ export const ProjectRepoReview = z.object({
 });
 export type ProjectRepoReview = z.infer<typeof ProjectRepoReview>;
 
+export const SyncPrState = z.enum(SYNC_PR_STATES);
+export type SyncPrState = z.infer<typeof SyncPrState>;
+export const SyncOutcome = z.enum(SYNC_OUTCOMES);
+export type SyncOutcome = z.infer<typeof SyncOutcome>;
+
+/**
+ * Where the source's sync stands on a repository (F-PROJ-12, M3-07): the
+ * pull request of its DEFAULT branch — the one the row shows; a project
+ * handing out several branches has one per branch — by its number and
+ * state (`open`, `merged`, `closed`, as GitHub's `pull_request` events kept
+ * it), null when none was ever opened; and what the last sync did to the
+ * repository (`outcome`, at `at`), null before the first.
+ */
+export const ProjectRepoSync = z.object({
+  pr: z.object({ number: z.number().int(), state: SyncPrState }).nullable(),
+  outcome: SyncOutcome.nullable(),
+  at: z.iso.datetime().nullable(),
+});
+export type ProjectRepoSync = z.infer<typeof ProjectRepoSync>;
+
 /**
  * A repository on the staff's project page: its deadline and lock
  * ({@link ProjectRepoDeadlineState}), its provisioning and invitation, the
@@ -780,6 +821,7 @@ export const ProjectRepoView = ProjectRepoDeadlineState.extend({
     scoreMax: z.number().nullable(),
   }),
   review: ProjectRepoReview,
+  sync: ProjectRepoSync,
   released: z.object({ points: z.number().nullable(), max: z.number().nullable() }).nullable(),
   flags: z.object({
     protectionSuspended: z.boolean(),
@@ -824,6 +866,43 @@ export const ProjectPrimaryAction = z.enum(PROJECT_PRIMARY_ACTIONS);
 export type ProjectPrimaryAction = z.infer<typeof ProjectPrimaryAction>;
 
 /**
+ * The source's sync, for the staff (F-PROJ-12, M3-07). `ahead`: the source
+ * holds commits on a handed-out branch that the distribution repository
+ * lacks — since `pushedAt` (the server's receipt of the push), `commits` of
+ * them when the handed-out sha is known (null for a project built before
+ * it was recorded, or when GitHub could not count them) — null when the
+ * source and the distribution agree. `inProgress`: a sync holds the
+ * project's lease (the page refetches shortly). `syncedAt`: the last pass
+ * that finished. `last`: what that pass, and the retries since, did to each
+ * repository — the counts of the repositories' last outcomes
+ * ({@link ProjectRepoSync}) — null before any sync reached a repository.
+ */
+export const ProjectSyncState = z.object({
+  ahead: z.object({ pushedAt: z.iso.datetime(), commits: z.number().int().nullable() }).nullable(),
+  inProgress: z.boolean(),
+  syncedAt: z.iso.datetime().nullable(),
+  last: z.object({
+    opened: z.number().int(),
+    updated: z.number().int(),
+    upToDate: z.number().int(),
+    failed: z.number().int(),
+    skipped: z.number().int(),
+  }).nullable(),
+});
+export type ProjectSyncState = z.infer<typeof ProjectSyncState>;
+
+/**
+ * `POST /app/api/projects/:id/sync` (F-PROJ-12): the distribution
+ * repository was updated in the request, and the pass over the repositories
+ * (the `sync/<branch>` refs, the pull requests) is queued — 202. Refused
+ * `409 project_archived`, `409 sync_in_progress`, `409 distribution_missing`,
+ * `409 source_rewritten`, `502 sync_failed`; never refused for a source that
+ * is not ahead (a retry after a failed pass).
+ */
+export const ProjectSyncAccepted = z.object({ requestedAt: z.iso.datetime() });
+export type ProjectSyncAccepted = z.infer<typeof ProjectSyncAccepted>;
+
+/**
  * `GET /app/api/projects/:id` (F-PROJ-13): the project for its staff
  * ({@link ProjectSummary}) and its page — STAFF ONLY, never reused nor
  * filtered for a student (N-SEC-20: the student's projection is M3-09's).
@@ -833,12 +912,13 @@ export type ProjectPrimaryAction = z.infer<typeof ProjectPrimaryAction>;
  * verify, the rows with an alert (`multiple`, or protection suspended).
  * `primaryAction` is the server's (`projectPrimaryAction`, `@quiz/domain`).
  * `liveStale`: some live state was served stale, or not read in time —
- * refetch shortly. Rows: the roster by name, then the repositories whose
- * student left it.
+ * refetch shortly. `sync`: the source's sync ({@link ProjectSyncState}).
+ * Rows: the roster by name, then the repositories whose student left it.
  */
 export const ProjectDetail = ProjectSummary.extend({
   releasedAt: z.iso.datetime().nullable(),
   primaryAction: ProjectPrimaryAction,
+  sync: ProjectSyncState,
   counts: z.object({
     students: z.number().int(),
     accepted: z.number().int(),

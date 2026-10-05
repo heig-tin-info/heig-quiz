@@ -59,6 +59,7 @@ import {
   GRADE_RUN_PARSE_STATUSES,
   GRADE_RUN_KINDS,
   SOURCE_STRATEGIES,
+  SYNC_OUTCOMES,
   SYNC_PR_STATES,
   type ProjectGradingScale,
 } from "@quiz/contracts";
@@ -126,9 +127,34 @@ export const projects = pgTable(
     groupsStoppedAt: timestamp("groups_stopped_at", { withTimezone: true }),
     branches: text("branches").array().notNull(),
     protectedFiles: text("protected_files").array().notNull(),
-    /** The source's head when it is ahead of the distribution repository (F-PROJ-12). */
+    /**
+     * The source's head when it is ahead of the distribution repository
+     * (F-PROJ-12, M3-07): the `after` of the last push to a handed-out
+     * branch of the source, with the server's receipt of that push. Set by
+     * the source push handler on every non-archived project of the source
+     * (drafts included: Publish never hands out a stale distribution);
+     * cleared by a sync pass that failed no repository, and only while it
+     * still is the sha the pass synced — a push landing meanwhile keeps the
+     * source ahead. Never a student's (N-SEC-20).
+     */
     sourceAheadSha: text("source_ahead_sha"),
     sourcePushedAt: timestamp("source_pushed_at", { withTimezone: true }),
+    /**
+     * How many commits each pushed branch holds past its handed-out sha
+     * (`source_heads`), by branch, as GitHub's compare counted them at the
+     * push — null when it could not. Merged by each push, cleared with
+     * `source_ahead_sha`.
+     */
+    sourceAhead: jsonb("source_ahead").$type<Record<string, number | null>>(),
+    /**
+     * The source's sha handed out per branch: written when the distribution
+     * repository is built and at each sync (the commits the students may
+     * receive), what "ahead" is counted from. Null on a project built before
+     * it was recorded, and on heig-classroom's imported rows (F-PROJ-20):
+     * the source is then shown ahead with no number.
+     */
+    sourceHeads: jsonb("source_heads").$type<Record<string, string>>(),
+    /** The last sync pass that finished (F-PROJ-12). */
     syncedAt: timestamp("synced_at", { withTimezone: true }),
     /** Validated by `ProjectGradingScale` of `@quiz/contracts` (D05); no default, the service writes it. */
     gradingScale: jsonb("grading_scale").$type<ProjectGradingScale>().notNull(),
@@ -169,6 +195,15 @@ export const projects = pgTable(
     groupSyncJobAt: timestamp("group_sync_job_at", { withTimezone: true }),
     /** Failed `group.sync` passes in a row, the backoff's exponent; zero once a pass leaves nothing waiting. */
     groupSyncFailures: integer("group_sync_failures").notNull().default(0),
+    /**
+     * The lease of the project's `project.sync` job (F-PROJ-12, M3-07): the
+     * same claim, renewal and expiry as `deadline_job_at`, taken by the
+     * staff's request — which updates the distribution repository while it
+     * holds it — and given back by the job once every repository has its
+     * outcome; held, the request is `409 sync_in_progress`. Never claimed
+     * by the ticker: a sync is the staff's act.
+     */
+    syncJobAt: timestamp("sync_job_at", { withTimezone: true }),
     /**
      * The day-before reminder of the project's deadline sent (F-NOTIF-13,
      * M3-09b): claimed by the ticker's scan before it tells the students
@@ -404,9 +439,15 @@ export const projectRepos = pgTable(
     lastCommitSha: text("last_commit_sha"),
     lastCommitAt: timestamp("last_commit_at", { withTimezone: true }),
     ciStatus: text("ci_status", { enum: CI_STATUSES }).notNull().default("none"),
-    /** The open sync pull request (F-PROJ-12): one at most. */
-    syncPrNumber: integer("sync_pr_number"),
-    syncPrState: text("sync_pr_state", { enum: SYNC_PR_STATES }),
+    /**
+     * What the last sync did to the repository (F-PROJ-12, M3-07), and when
+     * (the server's clock): opened or updated its pull request, found it up
+     * to date, failed on GitHub (the next sync retries it), or skipped it
+     * (locked, past its effective deadline, gone). Its pull requests are
+     * `project_sync_prs`. Null until a sync reaches it.
+     */
+    syncOutcome: text("sync_outcome", { enum: SYNC_OUTCOMES }),
+    syncOutcomeAt: timestamp("sync_outcome_at", { withTimezone: true }),
     /**
      * The runs that fill the three CI slots, by id, with no foreign key (as
      * heig-classroom): the current score's run, the frozen one, the final
@@ -475,6 +516,33 @@ export const projectRepos = pgTable(
       .on(t.projectId)
       .where(sql`${t.deadlineAppliedAt} IS NOT NULL AND ${t.frozenAt} IS NULL`),
   ],
+);
+
+/**
+ * The sync pull requests of a repository (F-PROJ-12, M3-07): ONE per
+ * handed-out branch — "never two" reads per branch (product owner,
+ * 2026-10-05) —, the App's own, from `sync/<branch>` onto `<branch>`.
+ * Written by the sync job when it opens or reuses one, and by the
+ * `pull_request` events of the App's pull requests, which keep `state`
+ * (`open`, `merged`, `closed`); a replayed event for an older pull request
+ * than the row's changes nothing. The row's branch is what the page shows
+ * for the repository's default branch. (heig-classroom's `sync_pr_number`
+ * and `sync_pr_state` columns were this row for the default branch,
+ * migration `0068`; the import maps them here, F-PROJ-20.)
+ */
+export const projectSyncPrs = pgTable(
+  "project_sync_prs",
+  {
+    repoId: uuid("repo_id")
+      .notNull()
+      .references(() => projectRepos.id, { onDelete: "cascade" }),
+    branch: text("branch").notNull(),
+    prNumber: integer("pr_number").notNull(),
+    state: text("state", { enum: SYNC_PR_STATES }).notNull(),
+    /** The server's clock, or the event's receipt: no default. */
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.repoId, t.branch] })],
 );
 
 /**
