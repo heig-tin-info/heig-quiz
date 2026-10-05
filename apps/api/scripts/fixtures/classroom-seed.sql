@@ -585,3 +585,53 @@ INSERT INTO "enrollments" ("id", "classroom_id", "nom", "prenom", "email", "stat
   ('c5000000-0000-4000-8000-000000000007', 'c3000000-0000-4000-8000-000000000002', 'Seven', 'Sol', 's7.student@heig-vd.ch', 'claimed', 'c1000000-0000-4000-8000-000000000016', '2026-03-01 08:00:00+00', false, false),
   ('c5000000-0000-4000-8000-000000000008', 'c3000000-0000-4000-8000-000000000003', 'Five', 'Sky', 's5.student@heig-vd.ch', 'claimed', 'c1000000-0000-4000-8000-000000000015', '2026-03-01 08:00:00+00', false, false),
   ('c5000000-0000-4000-8000-000000000009', 'c3000000-0000-4000-8000-000000000002', 'Dev', 'Carol', 'carol@heig.test', 'claimed', 'c1000000-0000-4000-8000-000000000017', '2026-03-01 08:00:00+00', false, false);
+
+-- ---- Synthetic data, part 2 (M8-01a): what the import's frame reads --------
+-- Ids: c7… assignments, c8… student repositories, c9… grade runs,
+-- ca… groups, cb… group members, cc… webhook deliveries. Three assignments
+-- in carried classrooms (a published one with a far deadline, a group one, a
+-- frozen one) and a draft in the dropped classroom; their repositories, grade
+-- runs and a group; a quiet source (no recent webhook or task, an empty
+-- queue, nothing unprocessed); and a short audit log. Later parts of M8-01
+-- (projects, journals, webhooks) grow it.
+
+INSERT INTO "assignments" ("id", "classroom_id", "name", "slug", "state", "start_at", "deadline_at", "grace_minutes", "source_repo_id", "source_full_name", "branches", "protected_files", "deadline_applied_at", "frozen_at", "group_mode", "group_max_size", "created_at") VALUES
+  ('c7000000-0000-4000-8000-000000000001', 'c3000000-0000-4000-8000-000000000001', 'Project Alpha', 'alpha', 'published', '2026-09-01 08:00:00+00', '2026-12-01 08:00:00+00', 30, 111, 'heig-prog-a/alpha-src', '{main}', '{README.md}', NULL, NULL, false, NULL, '2026-08-20 08:00:00+00'),
+  ('c7000000-0000-4000-8000-000000000002', 'c3000000-0000-4000-8000-000000000001', 'Pair Beta', 'beta', 'published', '2026-09-10 08:00:00+00', '2026-12-15 08:00:00+00', 30, 112, 'heig-prog-a/beta-src', '{main}', '{README.md}', NULL, NULL, true, 2, '2026-08-21 08:00:00+00'),
+  ('c7000000-0000-4000-8000-000000000003', 'c3000000-0000-4000-8000-000000000002', 'Lab 1', 'lab-1', 'published', '2026-09-01 08:00:00+00', '2026-09-15 08:00:00+00', 30, 113, 'heig-info1/lab-1-src', '{main}', '{README.md}', '2026-09-15 08:00:00+00', '2026-09-15 08:30:00+00', false, NULL, '2026-08-22 08:00:00+00'),
+  ('c7000000-0000-4000-8000-000000000004', 'c3000000-0000-4000-8000-000000000003', 'Sandbox draft', 'draft', 'draft', '2026-09-01 08:00:00+00', '2026-12-31 08:00:00+00', 30, 114, 'heig-sandbox/draft-src', '{main}', '{README.md}', NULL, NULL, false, NULL, '2026-08-23 08:00:00+00');
+
+INSERT INTO "assignment_groups" ("id", "assignment_id", "name", "slug", "position", "created_at") VALUES
+  ('ca000000-0000-4000-8000-000000000001', 'c7000000-0000-4000-8000-000000000002', 'Team 1', 'team-1', 0, '2026-09-11 08:00:00+00');
+
+INSERT INTO "assignment_group_members" ("id", "assignment_id", "group_id", "enrollment_id", "added_at") VALUES
+  ('cb000000-0000-4000-8000-000000000001', 'c7000000-0000-4000-8000-000000000002', 'ca000000-0000-4000-8000-000000000001', 'c5000000-0000-4000-8000-000000000001', '2026-09-11 08:00:00+00'),
+  ('cb000000-0000-4000-8000-000000000002', 'c7000000-0000-4000-8000-000000000002', 'ca000000-0000-4000-8000-000000000001', 'c5000000-0000-4000-8000-000000000002', '2026-09-11 08:00:00+00');
+
+INSERT INTO "student_repos" ("id", "assignment_id", "user_id", "group_id", "github_repo_id", "full_name", "default_branch", "provision_status", "current_grade_run_id", "frozen_grade_run_id") VALUES
+  ('c8000000-0000-4000-8000-000000000001', 'c7000000-0000-4000-8000-000000000001', 'c1000000-0000-4000-8000-000000000011', NULL, 9001, 'heig-prog-a/alpha-s1', 'main', 'ready', 'c9000000-0000-4000-8000-000000000001', NULL),
+  ('c8000000-0000-4000-8000-000000000002', 'c7000000-0000-4000-8000-000000000002', 'c1000000-0000-4000-8000-000000000011', 'ca000000-0000-4000-8000-000000000001', 9002, 'heig-prog-a/beta-team-1', 'main', 'ready', NULL, NULL),
+  ('c8000000-0000-4000-8000-000000000003', 'c7000000-0000-4000-8000-000000000003', 'c1000000-0000-4000-8000-000000000014', NULL, 9003, 'heig-info1/lab-1-s4', 'main', 'ready', 'c9000000-0000-4000-8000-000000000002', 'c9000000-0000-4000-8000-000000000002');
+
+INSERT INTO "grade_runs" ("id", "student_repo_id", "workflow_run_id", "head_branch", "head_sha", "conclusion", "grade_points", "grade_max", "parse_status", "completed_at") VALUES
+  ('c9000000-0000-4000-8000-000000000001', 'c8000000-0000-4000-8000-000000000001', 70001, 'main', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'success', 4, 6, 'ok', '2026-09-20 10:00:00+00'),
+  ('c9000000-0000-4000-8000-000000000002', 'c8000000-0000-4000-8000-000000000003', 70002, 'main', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'success', 5, 6, 'ok', '2026-09-15 07:30:00+00');
+
+INSERT INTO "webhook_deliveries" ("delivery_id", "event", "action", "payload", "received_at", "processed_at") VALUES
+  ('cc000000-0000-4000-8000-000000000001', 'push', NULL, '{"ref": "refs/heads/main"}', '2026-09-20 10:00:00+00', '2026-09-20 10:00:01+00'),
+  ('cc000000-0000-4000-8000-000000000002', 'workflow_run', 'completed', '{"action": "completed"}', '2026-09-20 10:05:00+00', '2026-09-20 10:05:01+00');
+
+INSERT INTO "scheduled_tasks" ("key", "enabled", "interval_minutes", "last_run_at", "last_status") VALUES
+  ('deadline-sweep', true, 1, '2026-10-01 07:00:00+00', 'ok');
+
+-- pg-boss's queue table, reduced to what the pre-flight reads (production's
+-- `pgboss.job` has more columns and an enum state); nothing unfinished here.
+CREATE SCHEMA "pgboss";
+CREATE TABLE "pgboss"."job" ("id" serial PRIMARY KEY, "name" text NOT NULL, "state" text NOT NULL);
+INSERT INTO "pgboss"."job" ("name", "state") VALUES ('webhook.process', 'completed'), ('email.send', 'failed');
+
+INSERT INTO "audit_log" ("actor_user_id", "actor_type", "action", "subject_type", "subject_id", "payload", "created_at") VALUES
+  ('c1000000-0000-4000-8000-000000000002', 'user', 'classroom.created', 'classroom', 'c3000000-0000-4000-8000-000000000001', '{"name": "Prog-A"}', '2026-02-20 08:00:00+00'),
+  ('c1000000-0000-4000-8000-000000000001', 'user', 'grant.created', 'teacher_grant', 'c6000000-0000-4000-8000-000000000001', NULL, '2026-02-05 08:00:00+00'),
+  ('c1000000-0000-4000-8000-000000000004', 'user', 'staff.added', 'classroom', 'c3000000-0000-4000-8000-000000000001', '{"role": "assistant"}', '2026-02-25 08:00:00+00'),
+  (NULL, 'system', 'deadline.applied', 'assignment', 'c7000000-0000-4000-8000-000000000003', NULL, '2026-09-15 08:00:00+00');

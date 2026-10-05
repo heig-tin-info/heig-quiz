@@ -9,14 +9,12 @@
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import { audit } from "../../src/audit.js";
+import { placeholderSub } from "../../src/auth/adoption.js";
 import { addAddresses, recordIdpClaims } from "../../src/auth/claims.js";
 import { importAccountLink } from "../../src/auth/githubLink.js";
-import type { AppConfig } from "../../src/config.js";
-import type { Tx } from "../../src/db/client.js";
 import {
   avatars,
   enrollments,
-  importIdMap,
   importRuns,
   teacherGrants,
   userEmails,
@@ -28,92 +26,69 @@ import type { CourseRole } from "@quiz/contracts";
 
 import { addStaff, changeStaffSeat, claimLines, type ClaimMatch } from "../../src/modules/org/service.js";
 import { syncRoleOfUser } from "../../src/roles.js";
-import { targetOf, type Identity } from "./identity.js";
-import type { Destination } from "./mapping.js";
-import type { ImportReport, OpenDecisions } from "./run.js";
-import type { SourceSnapshot, SourceUser } from "./source.js";
 
-export type Mapped = Extract<Destination, { kind: "mapped" }>;
-export type Finding = keyof ImportReport["findings"] & string;
+import { targetOf } from "./identity.js";
+import { listed, nameOf, note, remember, syncOwned, tallyMapped, target, written, type Ctx, type OwnedRow } from "./ctx.js";
+import type { SourceUser } from "./source.js";
 
-/** What every step reads and appends to. */
-export interface Ctx {
-  db: Tx;
-  config: AppConfig;
-  snapshot: SourceSnapshot;
-  usersById: Map<string, SourceUser>;
-  identities: Map<string, Identity>;
-  /** The identities that stand for a Quiz account, by source id. */
-  resolved: [string, Identity][];
-  /** Mapped source classroom id → its Quiz classroom. */
-  mapped: Map<string, Mapped>;
-  decisions: OpenDecisions;
-  /** The `--actor`, null when unresolved (a dry run then still runs). */
-  actorId: string | null;
-  /** `import_classroom.id_map`, loaded once: source table → source id → target id. */
-  known: Map<string, Map<string, string>>;
-  report: ImportReport;
-}
+export { nameOf, type Ctx, type Finding, type Mapped } from "./ctx.js";
 
-export function note(ctx: Ctx, section: Finding, line: string) {
-  (ctx.report.findings[section] ??= []).push(line);
-}
+/** The columns of a classroom user the import owns in the Quiz account it created (the re-import rule, `ctx.ts`). */
+const userRow = (u: SourceUser): OwnedRow => ({
+  sourceTable: "users",
+  sourceId: u.id,
+  table: users,
+  label: nameOf(u),
+  values: {
+    oidcSub: placeholderSub(u.oidcSub),
+    email: u.email,
+    emailVerified: u.emailVerified,
+    givenName: u.givenName,
+    familyName: u.familyName,
+    swissEduId: u.swissEduId,
+    pictureUrl: u.pictureUrl,
+    lastLoginAt: u.lastLoginAt,
+    locale: u.locale,
+    dateFormat: u.dateFormat,
+    anonymizedAt: u.anonymizedAt,
+    createdAt: u.createdAt,
+  },
+});
 
-export function written(ctx: Ctx, table: string, n = 1) {
-  if (n > 0) ctx.report.written[table] = (ctx.report.written[table] ?? 0) + n;
-}
-
-export function nameOf(user: SourceUser | undefined): string {
-  if (!user) return "unknown user";
-  if (user.anonymizedAt) return `anonymized user ${user.id}`;
-  return `${user.givenName} ${user.familyName} <${user.email}> (${user.id})`;
-}
-
-const target = (ctx: Ctx, sourceUserId: string | null) =>
-  sourceUserId === null ? undefined : targetOf(ctx.identities.get(sourceUserId));
-
-async function remember(ctx: Ctx, sourceTable: string, sourceId: string, targetId: string, how: string) {
-  const done = await ctx.db
-    .insert(importIdMap)
-    .values({ sourceTable, sourceId, targetId, how })
-    .onConflictDoNothing()
-    .returning({ sourceId: importIdMap.sourceId });
-  written(ctx, "import_classroom.id_map", done.length);
-}
-
-/** New accounts under their placeholder sub; matches recorded in the map. */
+/**
+ * New accounts under their placeholder sub; matches recorded in the map. An
+ * account this import created is refreshed from classroom on a later run
+ * unless Quiz changed it since (`syncOwned`: a first login rewrites the sub,
+ * so an adopted account is Quiz's from then on).
+ */
 export async function importUsers(ctx: Ctx) {
+  const leftOut = new Map<string, string>();
   for (const [sourceId, identity] of ctx.identities) {
     const u = ctx.usersById.get(sourceId)!;
     if (identity.kind === "excluded") {
       note(ctx, "source", `${nameOf(u)}: ${identity.reason}, not imported`);
+      leftOut.set(sourceId, identity.reason);
+      continue;
+    }
+    if (identity.kind === "ambiguous") {
+      leftOut.set(sourceId, "ambiguous identity");
       continue;
     }
     if (identity.kind === "new") {
-      await ctx.db.insert(users).values({
-        id: identity.targetId,
-        oidcSub: identity.sub,
-        email: u.email,
-        emailVerified: u.emailVerified,
-        givenName: u.givenName,
-        familyName: u.familyName,
-        swissEduId: u.swissEduId,
-        pictureUrl: u.pictureUrl,
-        lastLoginAt: u.lastLoginAt,
-        locale: u.locale,
-        dateFormat: u.dateFormat,
-        anonymizedAt: u.anonymizedAt,
-        createdAt: u.createdAt,
-      });
+      const row = userRow(u);
+      await ctx.db.insert(users).values({ id: identity.targetId, ...row.values } as typeof users.$inferInsert);
       written(ctx, "users");
-      await remember(ctx, "users", sourceId, identity.targetId, "created");
+      await remember(ctx, "users", sourceId, identity.targetId, "created", row);
     } else if (identity.kind === "matched") {
       await remember(ctx, "users", sourceId, identity.targetId, identity.how);
+    } else {
+      await syncOwned(ctx, userRow(u));
     }
     if (u.emailPrefs && Object.keys(u.emailPrefs).length > 0) {
       note(ctx, "not carried", `${nameOf(u)}: e-mail preferences (notification kinds come with M3-09)`);
     }
   }
+  tallyMapped(ctx, "users", [...ctx.identities.keys()], leftOut);
 }
 
 /**
@@ -195,18 +170,20 @@ export async function importGrants(ctx: Ctx) {
       .filter((r) => r.verified && resolved.has(r.userId))
       .map((r) => normalizeEmail(r.email)),
   );
-  const done = ctx.known.get("teacher_grants") ?? new Map<string, string>();
+  const leftOut = new Map<string, string>();
   for (const grant of ctx.snapshot.grants) {
     const email = normalizeEmail(grant.email);
     if (!reached.has(email)) {
       note(ctx, "grants", `${email}: not reached by a mapped classroom, not imported`);
+      leftOut.set(grant.id, "not reached by a mapped classroom");
       continue;
     }
-    if (done.has(grant.id)) continue;
+    if (ctx.known.get("teacher_grants")?.has(grant.id)) continue;
     if (grant.codespaceEnabled) note(ctx, "not carried", `${email}: the online workspace grant (M6)`);
     const createdBy = target(ctx, grant.createdBy) ?? ctx.actorId;
     if (!createdBy) {
       note(ctx, "grants", `${email}: no creator to record, not imported`);
+      leftOut.set(grant.id, "no creator to record");
       continue;
     }
     const created = await createTeacherGrant(ctx.db, { id: grant.id, email, createdBy, createdAt: grant.createdAt });
@@ -222,6 +199,7 @@ export async function importGrants(ctx: Ctx) {
       if (existing) await remember(ctx, "teacher_grants", grant.id, existing.id, "merged");
     }
   }
+  tallyMapped(ctx, "teacher_grants", ctx.snapshot.grants.map((g) => g.id), leftOut);
 }
 
 /**
@@ -252,7 +230,7 @@ export async function importStaff(ctx: Ctx) {
       if (!s.userId) note(ctx, "staff", `"${c.name}": pending seat ${s.email} (no account), not imported — invite by hand`);
       else if (!who) note(ctx, "staff", `"${c.name}": seat of ${whom} unresolved`);
       else if (s.role === "assistant" && ctx.decisions.assistants === "skip") {
-        note(ctx, "staff", `"${c.name}": assistant ${whom} left out (--assistants=skip)`);
+        listed(ctx, "skippedAssistants", "staff", `"${c.name}": assistant ${whom} left out (--assistants=skip)`);
       } else {
         await seat(dest.courseId, who, s.role === "teacher" ? "owner" : "assistant");
         if (s.role === "assistant") {
@@ -272,9 +250,20 @@ const NOBODY = "00000000-0000-0000-0000-000000000000";
  * claims carried by the roster's own claim pass (`claimLines`).
  */
 export async function importEnrollments(ctx: Ctx) {
-  const done = ctx.known.get("enrollments") ?? new Map<string, string>();
+  const done = new Set(ctx.known.get("enrollments")?.keys());
+  const leftOut = new Map<string, string>();
+  const lineRow = (e: (typeof ctx.snapshot.enrollments)[number]): OwnedRow => ({
+    sourceTable: "enrollments",
+    sourceId: e.id,
+    table: enrollments,
+    label: `${e.prenom} ${e.nom} <${normalizeEmail(e.email)}>`,
+    values: { nom: e.nom, prenom: e.prenom, email: normalizeEmail(e.email), staff: e.staff },
+  });
   for (const [sourceRoomId, dest] of ctx.mapped) {
-    const lines = ctx.snapshot.enrollments.filter((e) => e.classroomId === sourceRoomId && !done.has(e.id));
+    const inRoom = ctx.snapshot.enrollments.filter((e) => e.classroomId === sourceRoomId);
+    // A line this import created is refreshed from classroom unless Quiz changed it.
+    for (const e of inRoom.filter((e) => done.has(e.id))) await syncOwned(ctx, lineRow(e));
+    const lines = inRoom.filter((e) => !done.has(e.id));
     if (lines.length === 0) continue;
     const label = (e: (typeof lines)[number]) =>
       `"${dest.classroomName}" (${dest.courseCode}): ${e.prenom} ${e.nom} <${normalizeEmail(e.email)}>`;
@@ -287,7 +276,10 @@ export async function importEnrollments(ctx: Ctx) {
     const missing = lines.filter((e) => !byEmail.has(normalizeEmail(e.email)));
     const added = new Set<string>();
     if (missing.length > 0 && ctx.decisions.missingStudents === "report") {
-      for (const e of missing) note(ctx, "enrollments", `${label(e)}: not on the Quiz roster, not added (--missing-students=report)`);
+      for (const e of missing) {
+        listed(ctx, "missingStudents", "enrollments", `${label(e)}: not on the Quiz roster, not added (--missing-students=report)`);
+        leftOut.set(e.id, "not on the Quiz roster (--missing-students=report)");
+      }
     } else if (missing.length > 0) {
       const inserted = await ctx.db
         .insert(enrollments)
@@ -323,10 +315,12 @@ export async function importEnrollments(ctx: Ctx) {
       } else if (who && line.userId !== who) {
         note(ctx, "enrollments", `${label(e)}: claimed in Quiz by another account, Quiz's kept`);
       }
-      await remember(ctx, "enrollments", e.id, line.id, added.has(email) ? "created" : "merged");
+      await remember(ctx, "enrollments", e.id, line.id, added.has(email) ? "created" : "merged", added.has(email) ? lineRow(e) : undefined);
     }
     written(ctx, "enrollments (claimed)", await claimLines(ctx.db, matches, ctx.actorId ?? NOBODY));
   }
+  const inScope = ctx.snapshot.enrollments.filter((e) => ctx.mapped.has(e.classroomId));
+  tallyMapped(ctx, "enrollments", inScope.map((e) => e.id), leftOut);
 }
 
 /** Roles, through the one rule (roles.ts), without pool succession. */
@@ -345,7 +339,12 @@ export async function recomputeRoles(ctx: Ctx) {
 
 /** The run and its audit row: only an `--apply` that wrote something. */
 export async function recordRun(ctx: Ctx, run: { id: string; startedAt: Date; mappingSha256: string }) {
-  const counts = { identity: ctx.report.identity, written: ctx.report.written };
+  const { overwritten, kept } = ctx.report.reimport;
+  const counts = {
+    identity: ctx.report.identity,
+    written: ctx.report.written,
+    reimport: { overwritten, kept: kept.length },
+  };
   await ctx.db.insert(importRuns).values({
     id: run.id,
     startedAt: run.startedAt,

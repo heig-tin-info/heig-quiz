@@ -82,6 +82,14 @@ Status values: `open`, `settled`, `superseded`.
     (`--missing-students enroll|report`); (4) an assistant becoming staff
     of the course widens their access to the whole course (D04 (a)) —
     suggested: yes, listed in the dry run (`--assistants staff|skip`).
+  - **Settled 2026-10-05 (product owner, conversation; merge task M8-01a)**:
+    (3) `--missing-students report` and (4) `--assistants skip` are the
+    DEFAULTS: nothing is created for a student absent from the mapped Quiz
+    roster nor for a classroom assistant, and each is listed in the report
+    (`lists.missingStudents`, `lists.skippedAssistants`, on every run) so
+    the product owner has the rosters fixed by hand before the final
+    import. `--apply` no longer waits for the flags; `enroll` and `staff`
+    stay implemented, as explicit choices.
 
 ### D16 — Rename Quiz's "attempt journal"
 - **Suggested**: yes, "attempt log" in docs and comments (not in table
@@ -208,6 +216,11 @@ Status values: `open`, `settled`, `superseded`.
   clean.
 - Blocks: M8-01.
 - **Status**: settled 2026-10-01 (product owner, conversation), on the suggestion.
+- **Addendum (2026-10-05, product owner; merge task M8-01a)**: the table is
+  `legacy_classroom_audit_log` (migration `0076`), kept indefinitely, read by
+  an admin with `psql` like `audit_log` (no route for now). Insert-only,
+  keyed on classroom's audit id; the actor is remapped best-effort, and
+  classroom's own actor id is kept beside it.
 
 ### D12 — Language of text written into GitHub
 - (Seed READMEs, sync PR bodies, bot commit messages, revert commits.)
@@ -304,6 +317,14 @@ Status values: `open`, `settled`, `superseded`.
   produced by M0-02.
 - Blocks: M8-06.
 - **Status**: settled 2026-10-01 (product owner, conversation): the teachers create their classrooms in Quiz themselves; the merge produces a correspondence table *classroom name in heig-classroom → classroom name in Quiz*, the product owner has the teachers validate it, confirms, and the import runs on it. A classroom-classroom maps to an existing Quiz classroom (merged into it), never to a new one created by the import.
+- **Addendum (2026-10-05, product owner; merge task M8-01a)**: GitHub
+  organizations and classroom↔organization links are **never imported**:
+  teachers install Quiz's App and connect their classrooms by hand
+  (D20, F-GH-02). The import writes no `github_organizations` and no
+  `github_classroom_links` row, and neither do courses nor classrooms: a
+  change in the row count or content (a fingerprint) of any of the four is a red line of the parity
+  report, and an `--apply` that finds it rolls back. The M2-01 card's note
+  that said otherwise is amended.
 
 ## Taken with the journal-first reordering (2026-09-30)
 
@@ -384,6 +405,22 @@ Status values: `open`, `settled`, `superseded`.
   The students see no project until the project's student view lands
   (M3-09), with its leak test (N-SEC-20): until then the staff alone see
   them. M3-14's pilot still runs on staging with the staging App.
+- **Addendum (2026-10-05, product owner, conversation; merge task M8-01a)**:
+  **re-import semantics, the D26 mirror.** The import runs twice: a first
+  one while classroom still lives, then a final one at the cutover
+  (`--final`, which also enforces the source-state pre-flight: classroom
+  stopped, queue empty, no unprocessed webhook, no deadline in the window).
+  A row already imported is **overwritten from classroom unless Quiz has
+  modified it since the previous import**; such a row is kept and listed in
+  the report. Mechanism (`import-classroom/ctx.ts`, `syncOwned`): only a row
+  the import CREATED is owned by it; `id_map` stores a hash of the owned
+  columns as the import left them (`imported_hash`) and of classroom's row
+  (`source_hash`); a later run overwrites when classroom's side changed and
+  the Quiz row still hashes to `imported_hash`, keeps and lists it
+  otherwise (modified or deleted in Quiz), and does nothing when classroom's
+  side is unchanged. A row merely MERGED into an existing Quiz row (matched
+  account, roster line) is Quiz's and never rewritten. A hash, not a
+  timestamp, because not every Quiz table has an `updated_at`.
 
 ### D27 — Which repositories a journal may use
 - **Answer**: any repository of the classroom's organization, as in

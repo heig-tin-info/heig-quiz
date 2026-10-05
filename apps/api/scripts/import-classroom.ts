@@ -1,21 +1,27 @@
 /**
- * Imports heig-classroom's people and rosters into Quiz (ADR-035, merge task
- * M1-06; docs/merge/02-data-and-migration.md §2.5). M8-01 completes it with
- * projects, journals, webhooks and the legacy audit; until then it switches
- * nothing (spec 06 no. 45: the import, once complete, is the switch).
+ * Imports heig-classroom's data into Quiz (ADR-035, merge tasks M1-06 and
+ * M8-01; docs/merge/02-data-and-migration.md §2.5). Complete only when every
+ * part of M8-01 has landed; until then it switches nothing (spec 06 no. 45:
+ * the complete import is the switch).
  *
  *   pnpm --filter @quiz/api import:classroom \
  *     --source postgres://reader@…/hgc --mapping mapping.json \
- *     --actor admin@heig-vd.ch [--dry-run | --apply] \
- *     [--assistants staff|skip] [--missing-students enroll|report]
+ *     --actor admin@heig-vd.ch [--dry-run | --apply] [--final] \
+ *     [--report-json report.json] [--window-hours 24] \
+ *     [--assistants skip|staff] [--missing-students report|enroll]
  *
  * The target is the `DATABASE_URL` of the environment, as for the API. A dry
  * run (the default) does every write in a transaction it rolls back, and
- * prints the report. `--apply` refuses while the report has a refusal or an
- * open decision is not given (`run.ts`, `OpenDecisions`).
+ * prints the full report. `--apply` refuses while the report has a refusal
+ * (`run.ts`). `--final` marks the cutover import, which also enforces the
+ * source-state pre-flight (`preflight.ts`). `--report-json` writes the report
+ * as JSON (it names people: keep it off shared places).
+ *
+ * Exit status: 0 clean; 1 error; 2 refused; 3 red lines in the parity report
+ * (an `--apply` that finds one wrote nothing).
  */
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
 import { loadConfig } from "../src/config.js";
@@ -26,7 +32,8 @@ import { openSource, readSnapshot } from "./import-classroom/source.js";
 
 const USAGE =
   "usage: import-classroom --source <classroom DATABASE_URL> --mapping <file.json> --actor <admin e-mail> " +
-  "[--dry-run | --apply] [--assistants staff|skip] [--missing-students enroll|report]";
+  "[--dry-run | --apply] [--final] [--report-json <file>] [--window-hours <n>] " +
+  "[--assistants skip|staff] [--missing-students report|enroll]";
 
 function choice<T extends string>(value: string | undefined, allowed: readonly T[], flag: string): T | undefined {
   if (value === undefined) return undefined;
@@ -44,6 +51,9 @@ async function main() {
       apply: { type: "boolean" },
       assistants: { type: "string" },
       "missing-students": { type: "string" },
+      final: { type: "boolean" },
+      "report-json": { type: "string" },
+      "window-hours": { type: "string" },
     },
     strict: true,
   });
@@ -58,9 +68,15 @@ async function main() {
     apply: values.apply === true,
     actorEmail: values.actor,
     mappingSha256: createHash("sha256").update(raw).digest("hex"),
+    final: values.final === true,
   };
-  const assistants = choice(values.assistants, ["staff", "skip"], "--assistants");
-  const missingStudents = choice(values["missing-students"], ["enroll", "report"], "--missing-students");
+  if (values["window-hours"] !== undefined) {
+    const hours = Number(values["window-hours"]);
+    if (!Number.isFinite(hours) || hours < 0) throw new Error("--window-hours: a number of hours, 0 or more");
+    options.windowHours = hours;
+  }
+  const assistants = choice(values.assistants, ["skip", "staff"], "--assistants");
+  const missingStudents = choice(values["missing-students"], ["report", "enroll"], "--missing-students");
   if (assistants) options.assistants = assistants;
   if (missingStudents) options.missingStudents = missingStudents;
 
@@ -71,7 +87,9 @@ async function main() {
     const snapshot = await readSnapshot(source.query);
     const report = await runImport(target.db, config, snapshot, parsed.data, options);
     console.log(formatReport(report));
+    if (values["report-json"]) writeFileSync(values["report-json"], `${JSON.stringify(report, null, 2)}\n`);
     if (report.outcome === "refused") process.exitCode = 2;
+    else if (report.parity.redLines.length > 0) process.exitCode = 3;
   } finally {
     await source.close();
     await target.close();

@@ -9,7 +9,18 @@
  * the legacy URL resolver will read (M8-02). `runs` records every `--apply`
  * that wrote something, with its report.
  */
-import { jsonb, pgSchema, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  bigserial,
+  index,
+  jsonb,
+  pgSchema,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 export const importClassroom = pgSchema("import_classroom");
 
@@ -28,8 +39,50 @@ export const importIdMap = importClassroom.table(
     /** How the row was mapped: `created`, `swiss_edu_id`, `address`, `merged`, … */
     how: text("how").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * Re-import baseline (M8-01a, product owner 2026-10-05). Only a row the
+     * import CREATED (`how = 'created'`) is owned by it: `target_table` is
+     * the Quiz table it became, `imported_hash` the hash of the columns the
+     * import owns as the import left them, `source_hash` the hash of what
+     * classroom held. A later run overwrites the Quiz row when classroom's
+     * side changed and the Quiz row still hashes to `imported_hash`; a row
+     * Quiz changed since is kept and listed. Null on rows an earlier
+     * version of the script wrote: the first re-import adopts a baseline.
+     */
+    targetTable: text("target_table"),
+    importedHash: text("imported_hash"),
+    sourceHash: text("source_hash"),
   },
   (t) => [primaryKey({ columns: [t.sourceTable, t.sourceId] })],
+);
+
+/**
+ * heig-classroom's `audit_log`, kept as it was (D11, settled 2026-10-01): a
+ * history nothing in Quiz writes after the import, so Quiz's own closed
+ * audit union stays clean. Kept indefinitely. No route reads it: like
+ * `audit_log`, it is forensics, read by an admin with `psql`.
+ *
+ * `source_id` is classroom's `audit_log.id`, the idempotency key (a second
+ * run inserts nothing). The actor is remapped best-effort: `actor_user_id`
+ * is the Quiz account when the import reached the person, null otherwise;
+ * `source_actor_user_id` keeps classroom's id either way, so the map can be
+ * redone through `import_classroom.id_map`. No foreign key, on purpose.
+ */
+export const legacyClassroomAuditLog = pgTable(
+  "legacy_classroom_audit_log",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    sourceId: bigint("source_id", { mode: "number" }).notNull().unique(),
+    actorUserId: uuid("actor_user_id"),
+    sourceActorUserId: uuid("source_actor_user_id"),
+    actorType: text("actor_type").notNull(),
+    action: text("action").notNull(),
+    subjectType: text("subject_type").notNull(),
+    subjectId: text("subject_id").notNull(),
+    payload: jsonb("payload"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("legacy_classroom_audit_subject_idx").on(t.subjectType, t.subjectId)],
 );
 
 /** One `--apply` that wrote something; a dry run rolls back and leaves none. */

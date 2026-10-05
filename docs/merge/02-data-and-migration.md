@@ -177,8 +177,15 @@ environment's `DATABASE_URL`.
   `--actor <admin e-mail>` (recorded on the run and on a grant whose
   creator is not imported), `--dry-run` (default: one transaction, rolled
   back, full report) or `--apply`, and the open decisions
-  `--assistants staff|skip` (item 4) and `--missing-students
-  enroll|report` (item 3), which `--apply` requires explicitly.
+  `--assistants skip|staff` (item 4) and `--missing-students
+  report|enroll` (item 3), whose defaults (`skip`, `report`) the product
+  owner settled on 2026-10-05 (nothing is created, each is listed);
+  `--final` (the cutover import: also enforces the source-state
+  pre-flight), `--report-json <file>`, `--window-hours <n>`.
+- **Re-import** (D26 addendum, 2026-10-05): a first import, then a final
+  one. A row already imported is overwritten from classroom unless Quiz
+  modified it since the previous import (a hash in `id_map`), in which case
+  it is kept and listed; only rows the import created are overwritten.
 - **Idempotency**: schema `import_classroom` (migration `0052`) with
   `id_map(source_table, source_id, target_id, how)` and `runs`; "insert
   unless it exists" everywhere else. A second `--apply` writes nothing: a
