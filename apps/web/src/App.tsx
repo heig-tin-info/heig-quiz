@@ -280,8 +280,15 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   // The pages of the classroom merge, placeholders until their screens ship
   // (`CLASSROOM_PAGES`, `router.ts`).
   classroomGrades: (_, c) => <ComingSoon title="bnav.grades" navigate={c.navigate} teacherUi={c.teacherUi} />,
-  // ADR-070 (M3-16a): the classroom's Groups tab, a route of its own, and one group set's page.
-  classroomGroups: (r, c) => <ClassroomView id={r.id} navigate={c.navigate} routeTab="groups" />,
+  // ADR-070 (M3-16a): the classroom's Groups tab, a route of its own, and one
+  // group set's page. F-PROJ-22 (M3-17): one address, the student's Groups tab
+  // for a student, a teacher in the student view, an impersonation.
+  classroomGroups: (r, c) =>
+    c.teacherUi ? (
+      <ClassroomView id={r.id} navigate={c.navigate} routeTab="groups" />
+    ) : (
+      <StudentClassroom id={r.id} tab="groups" navigate={c.navigate} />
+    ),
   // Keyed: one set to the next (a duplicate) starts a fresh page, its write queue included.
   groupSet: (r, c) => <GroupSetPage key={r.id} classroomId={r.classroomId} id={r.id} navigate={c.navigate} />,
   // F-PROJ-13: the staff's project page (M3-12); F-PROJ-15: one address, the

@@ -48,6 +48,7 @@ import { diagramServer } from "@quiz/qt-diagram/server";
 import type { DiagramConfig } from "@quiz/qt-diagram/client";
 import { pollOfTeacher, teacherPolls } from "./poll";
 import { hasMockJournal } from "./journal";
+import { hasStudentGroups, studentGroupSetCards } from "./groups";
 import { studentRooms } from "./org";
 
 // --- 4. The student: home, lobby and player (WP9) --------------------------
@@ -754,6 +755,7 @@ const studentHome = (): StudentHomeData => {
   }
   return {
     polls: home.polls,
+    groupSets: flags.empty ? [] : studentGroupSetCards(),
     open: [...tag(home.open), ...groups.open],
     upcoming: [...tag(home.upcoming), ...groups.upcoming],
     past: [...tag(home.past), ...groups.past],
@@ -909,11 +911,13 @@ on("GET", "/app/api/student/classrooms/:id", (m): StudentClassroomPage => {
     classroom: { ...header, archived: false },
     activities: {
       polls: inRoom(home.polls),
+      groupSets: inRoom(home.groupSets),
       open: inRoom(home.open),
       upcoming: inRoom(home.upcoming),
       past: inRoom(home.past),
     },
     hasJournal: hasMockJournal(id),
+    hasGroups: hasStudentGroups(id),
     serverNow: home.serverNow,
   };
 });

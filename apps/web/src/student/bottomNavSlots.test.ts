@@ -27,7 +27,7 @@ describe("the lit slot (#191)", () => {
   });
 
   it("leads Courses to the student's classrooms, and lights it on a classroom's page (D07) and a project's (M3-13)", () => {
-    for (const path of ["/courses", "/classrooms/c1", "/projects/p1"]) {
+    for (const path of ["/courses", "/classrooms/c1", "/classrooms/c1/groups", "/projects/p1"]) {
       expect(bottomSlotOf(parsePath(path))).toBe("courses");
       expect(bottomNavShown(parsePath(path), false)).toBe(true);
     }

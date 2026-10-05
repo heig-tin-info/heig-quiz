@@ -45,6 +45,7 @@ const card = (over: Partial<EvaluationCard>): EvaluationCard & { kind: "evaluati
 
 const home: StudentHomeData = {
   polls: [],
+  groupSets: [],
   open: [card({})],
   upcoming: [
     card({ id: "e2", title: "Série 4 — Récursivité", mode: "exercise", state: "scheduled" }),

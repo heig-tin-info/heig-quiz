@@ -15,6 +15,10 @@ const STATUS: Record<GroupErrorCode, number> = {
   size_out_of_range: 422,
   has_repo: 409,
   needs_confirmation: 409,
+  max_size_required: 422,
+  set_closed: 409,
+  set_frozen: 409,
+  group_full: 409,
 };
 
 /** A refusal: `{ error: code, message, ...details }`. */

@@ -22,6 +22,7 @@ import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { enrollments } from "../../db/schema.js";
 import type { Caller, ReadableClassroom } from "../guards.js";
+import { hasStudentGroupSets, studentGroupSetCards } from "../group/service.js";
 import { hasJournal } from "../journal/service.js";
 import { studentClassroomHeader } from "../org/service.js";
 import { evaluationActivity } from "./evaluation.js";
@@ -57,11 +58,22 @@ export async function statsForTeacher(db: Db, caller: Caller, now: Date): Promis
   return { studentsInProgress: row?.n ?? 0 };
 }
 
-/** The student's Activities, every classroom or one: every kind's groups, concatenated. */
+/** What every kind adds to the student's Activities: its cards, and the running polls. */
+type KindCards = Omit<StudentActivities, "groupSets">;
+
+/**
+ * The student's Activities, every classroom or one: every kind's groups,
+ * concatenated; and the group sets open to them (F-PROJ-22, S3), none to a
+ * confined session.
+ */
 async function studentCards(db: Db, caller: Caller, now: Date, scope: StudentScope): Promise<StudentActivities> {
-  const kinds: StudentActivities[] = await Promise.all(KINDS.map((k) => k.studentCards(db, caller, now, scope)));
+  const [kinds, groupSets] = await Promise.all([
+    Promise.all(KINDS.map((k): Promise<KindCards> => k.studentCards(db, caller, now, scope))),
+    scope.confined ? [] : studentGroupSetCards(db, caller.id, now, scope.classroomId),
+  ]);
   return {
     polls: kinds.flatMap((k) => k.polls),
+    groupSets,
     open: kinds.flatMap((k) => k.open),
     upcoming: kinds.flatMap((k) => k.upcoming),
     past: kinds.flatMap((k) => k.past),
@@ -83,9 +95,10 @@ export async function studentHome(db: Db, caller: Caller, auth: SessionAuth | nu
  * `GET /student/classrooms/:id` (F-ORG-15): the student payload of a
  * classroom `scope` loaded through `readableClassroom`, whoever the caller
  * is — a student, a teacher in the student view, an impersonation session.
- * Whether the Journal tab exists is the `journal` module's answer; a
- * project is listed in Activities like an evaluation, never in a tab of its
- * own.
+ * Whether the Journal tab exists is the `journal` module's answer, the
+ * Groups tab the `group` module's (a set that reaches the students,
+ * F-PROJ-22); a project is listed in Activities like an evaluation, never
+ * in a tab of its own.
  */
 export async function studentClassroomPage(
   db: Db,
@@ -93,15 +106,17 @@ export async function studentClassroomPage(
   scope: ReadableClassroom,
   now: Date,
 ): Promise<StudentClassroomPage> {
-  const [classroom, activities, journal] = await Promise.all([
+  const [classroom, activities, journal, groups] = await Promise.all([
     studentClassroomHeader(db, scope),
     studentCards(db, caller, now, { classroomId: scope.room.id, confined: false }),
     hasJournal(db, scope.room.id),
+    hasStudentGroupSets(db, scope.room.id, now),
   ]);
   return {
     classroom,
     activities,
     hasJournal: journal,
+    hasGroups: groups,
     serverNow: iso(now),
   };
 }

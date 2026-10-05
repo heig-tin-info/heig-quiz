@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, Copy, Plus, Ruler, Shuffle, Trash2, TriangleAlert, UserPlus, Users } from "lucide-react";
+import { Archive, Copy, DoorClosed, DoorOpen, Plus, Ruler, Shuffle, Trash2, TriangleAlert, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -12,6 +12,7 @@ import {
 import { api, ApiError } from "../api";
 import { AppLink } from "../AppLink";
 import { useConfirm } from "../confirm";
+import { fromLocalInput, toLocalInput } from "../evaluation/timing";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { classroomGroupSetsKey, classroomKey, groupSetKey } from "../queryKeys";
@@ -26,6 +27,7 @@ import {
   FieldError,
   fieldErrorProps,
   FormDialog,
+  isoDateTime,
   Menu,
   PageError,
   PageHeader,
@@ -67,6 +69,11 @@ import { RandomFormDialog } from "./RandomFormDialog";
  * seconds (ADR-070 §6): the reverse move, latest move only. Writes go one
  * at a time per set, in order (`useGroupSetWrites`). An archived
  * classroom's set is read-only: every control is gone, an alert says why.
+ *
+ * Opening the set to its students (F-PROJ-22, M3-17) is in the overflow
+ * menu — a date and the maximum size, which then binds them, in one dialog
+ * that says what an open set risks; while it is open, a neutral alert under
+ * the header says until when, with "Close to students" beside it.
  */
 export function GroupSetPage({ classroomId, id, navigate }: { classroomId: string; id: string; navigate: Navigate }) {
   const t = useT();
@@ -77,6 +84,7 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
   const [project] = useSearchParam("fromProject", "");
   const [randomOpen, setRandomOpen] = useState(false);
   const [maxOpen, setMaxOpen] = useState(false);
+  const [opening, setOpening] = useState(false);
   /**
    * A refusal over projects — the deletion of a set they name (`set_in_use`),
    * a write reaching a group that has a repository (`has_repo`) — said
@@ -204,7 +212,12 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
     }
   };
 
+  const closeToStudents = () =>
+    write(setWrite.patch({ openUntil: null })).then(() => toast(t("groups.open.closed"), "success"), failed);
+
   const menuItems: MenuItem[] = [
+    { label: t(detail.set.open ? "groups.open.change" : "groups.open.menu"), icon: DoorOpen, onSelect: () => setOpening(true) },
+    ...(detail.set.open ? [{ label: t("groups.open.close"), icon: DoorClosed, onSelect: () => void closeToStudents() }] : []),
     { label: t("groups.maxSize.menu"), icon: Ruler, onSelect: () => setMaxOpen(true) },
     { label: t("groups.duplicate"), icon: Copy, onSelect: () => duplicate.mutate() },
     { label: t("groups.delete"), icon: Trash2, danger: true, separator: true, onSelect: () => void onDeleteSet() },
@@ -272,6 +285,19 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
 
       {readOnly ? (
         <Alert tone="neutral" icon={Archive} title={t("groups.refusal.classroomArchived")} />
+      ) : detail.set.open && detail.set.openUntil !== null ? (
+        <Alert
+          tone="neutral"
+          icon={DoorOpen}
+          title={t("groups.open.banner", { when: isoDateTime(detail.set.openUntil) })}
+          action={
+            <Button variant="secondary" size="sm" onClick={() => void closeToStudents()}>
+              {t("groups.open.close")}
+            </Button>
+          }
+        >
+          {detail.set.maxSize !== null ? <p>{t("groups.open.bannerBody", { max: detail.set.maxSize })}</p> : null}
+        </Alert>
       ) : null}
       {blocked ? (
         <Alert
@@ -323,6 +349,14 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
           onClose={() => setRandomOpen(false)}
         />
       ) : null}
+      {opening ? (
+        <OpenDialog
+          openUntil={detail.set.open ? detail.set.openUntil : null}
+          maxSize={detail.set.maxSize}
+          save={(body) => write(setWrite.patch(body))}
+          onClose={() => setOpening(false)}
+        />
+      ) : null}
       {maxOpen ? (
         <MaxSizeDialog
           value={detail.set.maxSize}
@@ -330,6 +364,49 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
           onClose={() => setMaxOpen(false)}
         />
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The maximum group size, as typed: the draft and its parse. Empty is no
+ * maximum, unless `required` (an open set's, F-PROJ-22).
+ */
+function useMaxSize(initial: number | null, required: boolean) {
+  const t = useT();
+  const [draft, setDraft] = useState(initial === null ? "" : String(initial));
+  const parsed = draft.trim() === "" ? ({ success: !required, data: null } as const) : GroupMaxSize.safeParse(Number(draft));
+  const invalid = parsed.success ? undefined : t(required ? "groups.open.maxInvalid" : "groups.maxSize.invalid");
+  return { draft, setDraft, parsed, invalid };
+}
+
+/** The maximum size's field, with its refusal under it: the same in the maximum's dialog and the opening's. */
+function MaxSizeField({
+  id,
+  state,
+  placeholder,
+}: {
+  id: string;
+  state: ReturnType<typeof useMaxSize>;
+  placeholder?: string | undefined;
+}) {
+  const t = useT();
+  return (
+    <div className="flex flex-col gap-1">
+      <Field
+        id={id}
+        label={t("groups.maxSize")}
+        type="number"
+        min={1}
+        max={50}
+        width="w-24"
+        className="text-right tabular-nums"
+        placeholder={placeholder}
+        value={state.draft}
+        onChange={(e) => state.setDraft(e.target.value)}
+        {...fieldErrorProps(id, state.invalid)}
+      />
+      <FieldError id={id}>{state.invalid}</FieldError>
     </div>
   );
 }
@@ -347,10 +424,9 @@ function MaxSizeDialog({
   onClose: () => void;
 }) {
   const t = useT();
-  const [draft, setDraft] = useState(value === null ? "" : String(value));
-  const parsed = draft.trim() === "" ? ({ success: true, data: null } as const) : GroupMaxSize.safeParse(Number(draft));
+  const max = useMaxSize(value, false);
+  const { parsed } = max;
   const submit = useMutation({ mutationFn: (maxSize: number | null) => save(maxSize), onSuccess: onClose });
-  const invalid = parsed.success ? undefined : t("groups.maxSize.invalid");
   return (
     <FormDialog
       title={t("groups.maxSize")}
@@ -363,22 +439,85 @@ function MaxSizeDialog({
       error={submit.isError ? <p className="text-[13px] text-danger">{groupRefusalMessage(submit.error, t)}</p> : null}
     >
       <p className="text-sm text-fg-muted">{t("groups.maxSize.desc")}</p>
-      <div className="flex flex-col gap-1">
-        <Field
-          id={MAX_ID}
-          label={t("groups.maxSize")}
-          type="number"
-          min={1}
-          max={50}
-          width="w-24"
-          className="text-right tabular-nums"
-          placeholder={t("groups.maxSize.none")}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          {...fieldErrorProps(MAX_ID, invalid)}
-        />
-        <FieldError id={MAX_ID}>{invalid}</FieldError>
+      <MaxSizeField id={MAX_ID} state={max} placeholder={t("groups.maxSize.none")} />
+    </FormDialog>
+  );
+}
+
+const OPEN_UNTIL_ID = "group-set-open-until";
+const OPEN_MAX_ID = "group-set-open-max";
+
+/** A week from now at 23:59, in the browser's zone: where the opening's date starts. */
+function inAWeek(): string {
+  const at = new Date();
+  at.setDate(at.getDate() + 7);
+  at.setHours(23, 59, 0, 0);
+  return at.toISOString();
+}
+
+/**
+ * Opening the set to its students (F-PROJ-22), or moving its closing: the
+ * date (the browser's zone, `datetime-local`; the server's clock decides)
+ * and the maximum size, required while it is open and binding for the
+ * students. Says what an open set risks: a published project on it can be
+ * accepted once everyone is placed, and its first repository freezes the
+ * groups for the students.
+ */
+function OpenDialog({
+  openUntil,
+  maxSize,
+  save,
+  onClose,
+}: {
+  openUntil: string | null;
+  maxSize: number | null;
+  save: (body: { openUntil: string; maxSize: number }) => Promise<GroupSetDetail>;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const toast = useToast();
+  const [until, setUntil] = useState(toLocalInput(openUntil ?? inAWeek()));
+  const max = useMaxSize(maxSize, true);
+  const at = fromLocalInput(until);
+  const dateOk = at !== null && Date.parse(at) > Date.now();
+  const size = max.parsed;
+  const submit = useMutation({
+    mutationFn: (body: { openUntil: string; maxSize: number }) => save(body),
+    onSuccess: (detail) => {
+      toast(t("groups.open.opened", { when: isoDateTime(detail.set.openUntil ?? at!) }), "success");
+      onClose();
+    },
+  });
+  return (
+    <FormDialog
+      title={t("groups.open.title")}
+      onClose={onClose}
+      onSubmit={() => dateOk && size.success && size.data !== null && submit.mutate({ openUntil: at!, maxSize: size.data })}
+      submitLabel={t("groups.open.submit")}
+      submitting={submit.isPending}
+      canSubmit={dateOk && size.success}
+      error={submit.isError ? <p className="text-[13px] text-danger">{groupRefusalMessage(submit.error, t)}</p> : null}
+    >
+      <p className="text-sm text-fg-muted">{t("groups.open.desc")}</p>
+      <div className="flex flex-wrap items-start gap-4">
+        <div className="flex flex-col gap-1">
+          <Field
+            id={OPEN_UNTIL_ID}
+            label={t("groups.open.until")}
+            type="datetime-local"
+            width="w-56"
+            min={toLocalInput(new Date().toISOString())}
+            value={until}
+            onChange={(e) => setUntil(e.target.value)}
+            {...fieldErrorProps(OPEN_UNTIL_ID, dateOk ? undefined : t("groups.open.dateInvalid"))}
+          />
+          <FieldError id={OPEN_UNTIL_ID}>{dateOk ? undefined : t("groups.open.dateInvalid")}</FieldError>
+        </div>
+        <MaxSizeField id={OPEN_MAX_ID} state={max} />
       </div>
+      <Alert tone="warning" icon={TriangleAlert}>
+        <p>{t("groups.open.risk")}</p>
+      </Alert>
     </FormDialog>
   );
 }

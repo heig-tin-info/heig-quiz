@@ -20,6 +20,13 @@
  * archived) has one, read-only. With `?many=1` the pairs of PRG1-2026 are
  * sixty: the board of a class of 120. Without the flag no classroom has a
  * set, so the default scenes are what they were.
+ *
+ * The students' side (F-PROJ-22, M3-17): "Projet final" is open to the
+ * students for three days, and the student persona is one of its eight
+ * students in no group (`ME_LINE`); their view of the classroom's sets,
+ * their four writes (`set_closed`, `group_full`, `duplicate_name`), and the
+ * Activities row and the Groups tab, which `student.ts` reads (as it reads
+ * the projects through `poll.ts`).
  */
 import {
   GroupCreate,
@@ -28,15 +35,21 @@ import {
   GroupRename,
   GroupSetCreate,
   GroupSetPatch,
+  StudentGroupCreate,
+  StudentGroupJoin,
+  type GroupMemberName,
   type GroupSetDetail,
   type GroupSetSummary,
   type GroupSetUse,
   type GroupStudent,
   type RosterEntry,
+  type StudentGroupSet,
+  type StudentGroupSetCard,
+  type StudentGroupSets,
 } from "@quiz/contracts";
 import { defaultGroupName, defaultSetName, duplicateSetName, formRandomGroups, type NameLocale } from "@quiz/domain";
 
-import { classroomRoster, rooms } from "./org";
+import { classroomRoster, rooms, studentRooms } from "./org";
 import { D, flags, H, iso, MockError, MockPayload, on, rand, refuse, role } from "./runtime";
 
 /** The seeded sets' ids: uuids, as a project's `groupSetId` must be (`ProjectPatch`). */
@@ -59,6 +72,8 @@ interface MockSet {
   name: string;
   maxSize: number | null;
   createdAt: string;
+  /** Open to the students until then (F-PROJ-22); null: closed. */
+  openUntil: string | null;
   groups: MockGroup[];
 }
 
@@ -92,6 +107,7 @@ if (flags.groups) {
       name: "Binômes des labos",
       maxSize: 2,
       createdAt: iso(-20 * D),
+      openUntil: null,
       groups: cut(r1, Array.from({ length: Math.floor(r1.length / 2) }, () => 2)),
     },
     {
@@ -100,16 +116,19 @@ if (flags.groups) {
       name: "Projet final",
       maxSize: 4,
       createdAt: iso(-3 * D),
+      // Open to the students for three days (M3-17).
+      openUntil: iso(3 * D),
       // Four, four, five (above the maximum), three, and an empty group; the rest in none.
       groups: [...cut(r1, [4, 4, 5, 3]), { id: groupId(), name: "Groupe 5", position: 4, members: [] }],
     },
-    { id: SET_EMPTY, classroomId: "r1", name: defaultSetName(new Date(Date.now() - H), "fr"), maxSize: null, createdAt: iso(-H), groups: [] },
+    { id: SET_EMPTY, classroomId: "r1", name: defaultSetName(new Date(Date.now() - H), "fr"), maxSize: null, createdAt: iso(-H), openUntil: null, groups: [] },
     {
       id: SET_ARCHIVED,
       classroomId: "r6",
       name: "Binômes 2024",
       maxSize: 2,
       createdAt: iso(-700 * D),
+      openUntil: null,
       groups: cut(classroomRoster("r6"), Array.from({ length: 10 }, () => 2)),
     },
   );
@@ -143,10 +162,14 @@ const studentView = (s: RosterEntry): GroupStudent => ({
 });
 const byName = (a: RosterEntry, b: RosterEntry) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`);
 
+/** An archived classroom's sets are read-only, and never open. */
+const archivedRoom = (set: MockSet): boolean => (rooms.find((r) => r.id === set.classroomId)?.archivedAt ?? null) !== null;
+/** Open to the students now: `openUntil` ahead, the classroom not archived. */
+const isOpen = (set: MockSet): boolean => set.openUntil !== null && Date.parse(set.openUntil) > Date.now() && !archivedRoom(set);
+
 function detailOf(set: MockSet): GroupSetDetail {
   const students = classroomRoster(set.classroomId).slice().sort(byName);
   const placed = new Set(set.groups.flatMap((g) => g.members));
-  const room = rooms.find((r) => r.id === set.classroomId);
   return {
     set: {
       id: set.id,
@@ -154,7 +177,9 @@ function detailOf(set: MockSet): GroupSetDetail {
       name: set.name,
       maxSize: set.maxSize,
       createdAt: set.createdAt,
-      readOnly: (room?.archivedAt ?? null) !== null,
+      readOnly: archivedRoom(set),
+      openUntil: set.openUntil,
+      open: isOpen(set),
     },
     groups: set.groups
       .slice()
@@ -181,6 +206,8 @@ function summaryOf(set: MockSet): GroupSetSummary {
     placed,
     unplaced: students.length - placed,
     createdAt: set.createdAt,
+    openUntil: set.openUntil,
+    open: isOpen(set),
     usedBy: usesOf(set.id),
   };
 }
@@ -241,6 +268,7 @@ on("POST", "/app/api/classrooms/:id/group-sets", (m, raw) => {
     name: body.name ?? defaultSetName(new Date(), nameLocale()),
     maxSize: body.maxSize ?? null,
     createdAt: iso(0),
+    openUntil: null,
     groups: [],
   };
   SETS.push(set);
@@ -252,8 +280,14 @@ on("GET", "/app/api/group-sets/:id", (m) => detailOf(setOr404(m.groups!.id!)));
 on("PATCH", "/app/api/group-sets/:id", (m, raw) => {
   const set = writable(m.groups!.id!);
   const body = parsed(GroupSetPatch, raw);
+  const openUntil = body.openUntil === undefined ? set.openUntil : body.openUntil;
+  const maxSize = body.maxSize === undefined ? set.maxSize : body.maxSize;
+  if (openUntil !== null && Date.parse(openUntil) > Date.now() && maxSize === null) {
+    throw refuse(422, "max_size_required", "A group set open to its students needs a maximum size");
+  }
   if (body.name !== undefined) set.name = body.name;
-  if (body.maxSize !== undefined) set.maxSize = body.maxSize;
+  set.maxSize = maxSize;
+  set.openUntil = openUntil;
   return detailOf(set);
 });
 
@@ -272,6 +306,7 @@ on("POST", "/app/api/group-sets/:id/duplicate", (m) => {
     id: setId(),
     name: duplicateSetName(source.name, nameLocale()),
     createdAt: iso(0),
+    openUntil: null,
     groups: source.groups.map((g) => ({ ...g, id: groupId(), members: [...g.members] })),
   };
   SETS.push(copy);
@@ -336,3 +371,121 @@ on("POST", "/app/api/group-sets/:id/random", (m, raw) => {
   }
   return detailOf(set);
 });
+
+// ---------------------------------------------------------------- the students' side (F-PROJ-22, M3-17)
+
+/** The student persona's roster line in PRG1-2026: one of "Projet final"'s students in no group. */
+const ME_LINE = (() => {
+  const r1 = classroomRoster("r1");
+  return r1[16]?.id ?? r1[0]?.id ?? "";
+})();
+
+/** The sets a student of `classroomId` reads: the open ones (no published project names a mock set). */
+const visibleSets = (classroomId: string): MockSet[] => SETS.filter((s) => s.classroomId === classroomId && isOpen(s));
+
+const nameOf = (s: RosterEntry): GroupMemberName => ({ nom: s.nom, prenom: s.prenom });
+const groupOfLine = (set: MockSet, line: string): MockGroup | undefined => set.groups.find((g) => g.members.includes(line));
+
+/** The student view of one set (the API's `StudentGroupSet`): names and sizes, nothing else. */
+function studentSetOf(set: MockSet): StudentGroupSet {
+  const students = classroomRoster(set.classroomId).slice().sort(byName);
+  const open = isOpen(set);
+  const mine = role === "student" ? groupOfLine(set, ME_LINE) : undefined;
+  const shown = set.groups
+    .slice()
+    .sort((a, b) => a.position - b.position)
+    .filter((g) => open || g === mine);
+  const placed = new Set(set.groups.flatMap((g) => g.members));
+  return {
+    set: { id: set.id, name: set.name, maxSize: set.maxSize, openUntil: set.openUntil, open },
+    writable: open && role === "student",
+    myGroupId: mine?.id ?? null,
+    groups: shown.map((g) => {
+      const members = students.filter((s) => g.members.includes(s.id)).map(nameOf);
+      return { id: g.id, name: g.name, size: members.length, members };
+    }),
+    ...(open ? { unplaced: students.filter((s) => !placed.has(s.id)).map(nameOf) } : {}),
+  };
+}
+
+/** The classroom's sets as the persona reads them: the read's answer, and every student write's. */
+const studentSetsOf = (classroomId: string): StudentGroupSets => ({
+  serverNow: new Date().toISOString(),
+  sets: visibleSets(classroomId).map(studentSetOf),
+});
+
+on("GET", "/app/api/classrooms/:id/group-sets/student", (m) => {
+  const id = m.groups!.id!;
+  if (!rooms.some((r) => r.id === id)) throw new MockError(404, "Not found");
+  return studentSetsOf(id);
+});
+
+/** A set the student persona writes: open, or the refusal the API answers. */
+function studentWritable(id: string): MockSet {
+  const set = SETS.find((s) => s.id === id);
+  if (role !== "student" || !set || !isOpen(set)) {
+    if (set && role === "student" && set.openUntil !== null) throw refuse(409, "set_closed", "This group set is closed to its students");
+    throw new MockError(404, "Not found");
+  }
+  return set;
+}
+const moveMe = (set: MockSet, into: MockGroup | null) => {
+  for (const g of set.groups) g.members = g.members.filter((x) => x !== ME_LINE);
+  into?.members.push(ME_LINE);
+};
+
+on("POST", "/app/api/group-sets/:id/student/groups", (m, raw) => {
+  const set = studentWritable(m.groups!.id!);
+  const body = parsed(StudentGroupCreate, raw);
+  const name = body.name ?? defaultGroupName(takenNames(set), nameLocale());
+  if (takenNames(set).has(name)) throw refuse(409, "duplicate_name", `A group "${name}" already exists in this set`);
+  const group: MockGroup = { id: groupId(), name, position: nextPosition(set), members: [] };
+  set.groups.push(group);
+  moveMe(set, group);
+  return studentSetsOf(set.classroomId);
+});
+
+on("PUT", "/app/api/group-sets/:id/student/membership", (m, raw) => {
+  const set = studentWritable(m.groups!.id!);
+  const group = groupOr404(set, parsed(StudentGroupJoin, raw).groupId);
+  if (!group.members.includes(ME_LINE)) {
+    if (set.maxSize !== null && group.members.length >= set.maxSize) throw refuse(409, "group_full", "This group is full", { max: set.maxSize });
+    moveMe(set, group);
+  }
+  return studentSetsOf(set.classroomId);
+});
+
+on("DELETE", "/app/api/group-sets/:id/student/membership", (m) => {
+  const set = studentWritable(m.groups!.id!);
+  moveMe(set, null);
+  return studentSetsOf(set.classroomId);
+});
+
+on("PATCH", "/app/api/group-sets/:id/student/groups/:gid", (m, raw) => {
+  const set = studentWritable(m.groups!.id!);
+  const group = groupOr404(set, m.groups!.gid!);
+  if (!group.members.includes(ME_LINE)) throw new MockError(404, "Not found");
+  const { name } = parsed(GroupRename, raw);
+  if (set.groups.some((g) => g !== group && g.name === name)) throw refuse(409, "duplicate_name", `A group "${name}" already exists in this set`);
+  group.name = name;
+  return studentSetsOf(set.classroomId);
+});
+
+/** The student's Activities rows (S3): the open sets of their classrooms (one: the classroom page). */
+export const studentGroupSetCards = (classroomId?: string): StudentGroupSetCard[] =>
+    studentRooms()
+      .filter((room) => classroomId === undefined || room.id === classroomId)
+      .flatMap((room) =>
+        visibleSets(room.id).map((s) => ({
+          id: s.id,
+          classroomId: room.id,
+          classroomName: room.name,
+          courseCode: room.courseCode,
+          name: s.name,
+          openUntil: s.openUntil!,
+          myGroup: role === "student" ? (groupOfLine(s, ME_LINE)?.name ?? null) : null,
+        })),
+      );
+
+/** The classroom page's Groups tab (S1): a set reaches its students. */
+export const hasStudentGroups = (classroomId: string): boolean => visibleSets(classroomId).length > 0;

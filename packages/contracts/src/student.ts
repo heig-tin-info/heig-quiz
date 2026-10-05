@@ -9,6 +9,7 @@
  */
 import { z } from "zod";
 
+import { StudentGroupSetCard } from "./group.js";
 import { EvaluationCard, StudentPollCard } from "./live.js";
 import { StudentProjectCard } from "./project.js";
 
@@ -42,10 +43,13 @@ export type StudentActivityCard = z.infer<typeof StudentActivityCard>;
  * sorted as its module sorts it: Open now is what the student can still do;
  * Upcoming what is coming (a project before its start); Past what is over
  * (a project locked or released for them). `polls` are the running polls
- * (issue #163), never an activity card.
+ * (issue #163), never an activity card; `groupSets` the group sets open to
+ * the student's self-formation (F-PROJ-22), drawn in Open now, never an
+ * activity card either.
  */
 export const StudentActivities = z.object({
   polls: z.array(StudentPollCard),
+  groupSets: z.array(StudentGroupSetCard),
   open: z.array(StudentActivityCard),
   upcoming: z.array(StudentActivityCard),
   /**
@@ -72,6 +76,8 @@ export const StudentClassroomPage = z.object({
   activities: StudentActivities,
   /** The Journal tab (F-JRN-07): the classroom has a journal, whatever it shows this caller. */
   hasJournal: z.boolean(),
+  /** The Groups tab (F-PROJ-22): a group set of the classroom reaches its students (`StudentGroupSet`). */
+  hasGroups: z.boolean(),
   serverNow: z.iso.datetime(),
 });
 export type StudentClassroomPage = z.infer<typeof StudentClassroomPage>;

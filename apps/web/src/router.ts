@@ -401,7 +401,9 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     bottomSlot: "courses",
   },
   // ADR-070 (M3-16a): a group set, then the Groups tab that lists them, in
-  // every build. Staff pages: a student's UI gets the home.
+  // every build. A set's page is the staff's: a student's UI gets the home.
+  // The Groups tab is role-dispatched like the classroom (F-PROJ-22, M3-17):
+  // the student's page of it lists the sets they form their group in.
   groupSet: {
     path: (r) =>
       `/classrooms/${r.classroomId}/groups/${r.id}${r.fromProject ? `?fromProject=${encodeURIComponent(r.fromProject)}` : ""}`,
@@ -413,7 +415,8 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     path: (r) => `/classrooms/${r.id}/groups`,
     match: ([head, id, tail, leaf]) =>
       head === "classrooms" && id && tail === "groups" && leaf === undefined ? { view: "classroomGroups", id } : null,
-    studentSafe: false,
+    studentSafe: true,
+    bottomSlot: "courses",
   },
   classroomGrades: {
     path: (r) => `/classrooms/${r.id}/grades`,

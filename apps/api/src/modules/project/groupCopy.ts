@@ -47,7 +47,7 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 
-import { and, asc, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, exists, inArray, isNotNull, isNull, notInArray, sql, type AnyColumn, type SQL } from "drizzle-orm";
 
 import type { GroupConsequence, GroupConsequences } from "@quiz/contracts";
 import {
@@ -129,6 +129,25 @@ async function setState(tx: Tx, setId: string): Promise<SetState> {
  * to freeze). Over `project_groups` left-joined to its `project_repos` row.
  */
 const HAS_REPO = sql<boolean>`(${projectRepos.id} IS NOT NULL AND (${projectRepos.provisionStatus} <> 'error' OR ${projectRepos.githubRepoId} IS NOT NULL))`;
+
+/**
+ * A set's groups are frozen to its students (F-PROJ-22, M3-17): a group of a
+ * copy of it — any project naming it, stopped copies and archived projects
+ * included — has a repository ({@link HAS_REPO}). As an `EXISTS` over
+ * `setId` (a column of the outer query, or an id), so a read takes it as a
+ * column; the students' writes are refused on it before any step, so none
+ * ever reaches `needs_confirmation`.
+ */
+export function setFrozen(db: Db | Tx, setId: AnyColumn | string): SQL {
+  return exists(
+    db
+      .select({ id: projectRepos.id })
+      .from(projects)
+      .innerJoin(projectGroups, eq(projectGroups.projectId, projects.id))
+      .innerJoin(projectRepos, eq(projectRepos.groupId, projectGroups.id))
+      .where(and(eq(projects.groupSetId, setId), HAS_REPO)),
+  );
+}
 
 type Copy = CopyState & { staffSeats: Set<string> };
 

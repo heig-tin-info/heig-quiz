@@ -8,7 +8,9 @@
  * classroom has one, Journal (`/classrooms/:id/journal/<path>`), which is the
  * M4-04 reader under this page's compact header (in every build since
  * M4-05; `hasJournal` is false on a platform without Quiz's App, so no tab
- * there); the grades stay an anchor of the home until M5-04.
+ * there); Groups (`/classrooms/:id/groups`, F-PROJ-22, M3-17) while a group
+ * set reaches the students (`hasGroups`); the grades stay an anchor of the
+ * home until M5-04.
  *
  * The four decisions:
  *   - Type: the classroom's name at the page-title step; the activity titles
@@ -29,11 +31,12 @@ import { useEffect } from "react";
 import type { StudentActivities, StudentActivityCard, StudentClassroomPage } from "@quiz/contracts";
 
 import { api, ApiError } from "../api";
+import { StudentGroups } from "../group/StudentGroups";
 import { useT } from "../i18n";
 import { JournalReader } from "../journal/JournalReader";
 import { studentClassroomKey } from "../queryKeys";
 import { useServerNow } from "../realtime/useServerClock";
-import type { Navigate } from "../router";
+import type { Navigate, Route } from "../router";
 import {
   Badge,
   Button,
@@ -50,13 +53,21 @@ import {
   ActivityCard,
   BonusBadge,
   finished,
+  GroupSetRow,
   PollRow,
   UpcomingByDay,
   useCardActions,
 } from "./cards";
 import { needsStudentAction } from "./projectRow";
 
-export type ClassroomTab = "activities" | "journal";
+export type ClassroomTab = "activities" | "journal" | "groups";
+
+/** Each tab's route. */
+const TAB_ROUTE: Record<ClassroomTab, (id: string) => Route> = {
+  activities: (id) => ({ view: "classroom", id }),
+  journal: (id) => ({ view: "classroomJournal", id }),
+  groups: (id) => ({ view: "classroomGroups", id }),
+};
 
 type Header = StudentClassroomPage["classroom"];
 
@@ -115,7 +126,9 @@ export function StudentClassroom({
   });
   const toCourses = () => navigate({ view: "studentCourses" });
   // The Journal's address on a classroom that has none (removed meanwhile,
-  // or no App on the platform): the classroom's page, in place.
+  // or no App on the platform): the classroom's page, in place. The Groups
+  // tab stays drawn while it is the tab being read, its own empty state
+  // saying a set has closed meanwhile.
   const noJournal = tab === "journal" && page.data !== undefined && !page.data.hasJournal;
   useEffect(() => {
     if (noJournal) navigate({ view: "classroom", id }, { replace: true });
@@ -148,20 +161,21 @@ export function StudentClassroom({
   }
 
   const data = page.data;
-  // The Journal tab: only when the classroom has one (F-JRN-07). Kept while
-  // it is the tab being read.
+  // The Journal tab: only when the classroom has one (F-JRN-07); the Groups
+  // tab while a set reaches the students (F-PROJ-22). Each kept while it is
+  // the tab being read.
+  const items = [
+    { value: "activities" as const, label: t("sroom.tab.activities") },
+    ...(data?.hasJournal || tab === "journal" ? [{ value: "journal" as const, label: t("sroom.tab.journal") }] : []),
+    ...(data?.hasGroups || tab === "groups" ? [{ value: "groups" as const, label: t("sroom.tab.groups") }] : []),
+  ];
   const tabs =
-    data?.hasJournal || tab === "journal" ? (
+    items.length > 1 ? (
       <Tabs<ClassroomTab>
         label={t("sroom.tabs")}
         value={tab}
-        onChange={(next) =>
-          navigate(next === "journal" ? { view: "classroomJournal", id } : { view: "classroom", id })
-        }
-        items={[
-          { value: "activities", label: t("sroom.tab.activities") },
-          { value: "journal", label: t("sroom.tab.journal") },
-        ]}
+        onChange={(next) => navigate(TAB_ROUTE[next](id))}
+        items={items}
       />
     ) : null;
 
@@ -201,7 +215,11 @@ export function StudentClassroom({
     <div className="space-y-6">
       <ClassroomHeader room={data.classroom} onCourses={toCourses} />
       {tabs}
-      <Activities activities={data.activities} serverNow={data.serverNow} navigate={navigate} />
+      {tab === "groups" ? (
+        <StudentGroups classroomId={id} />
+      ) : (
+        <Activities activities={data.activities} serverNow={data.serverNow} navigate={navigate} />
+      )}
     </div>
   );
 }
@@ -266,14 +284,14 @@ function Activities({
   // project and `mostUrgent` all read it.
   const now = useServerNow(serverNow);
   const actions = useCardActions(navigate);
-  const { polls, open, upcoming, past } = activities;
+  const { polls, groupSets, open, upcoming, past } = activities;
   const urgent = mostUrgent(activities, now);
 
   return (
     <div className="space-y-8">
       <section className="space-y-3">
         <SectionHeading title={t("shome.open")} />
-        {polls.length === 0 && open.length === 0 ? (
+        {polls.length === 0 && open.length === 0 && groupSets.length === 0 ? (
           <Card>
             <EmptyState icon={CheckCircle2} title={t("sroom.empty.title")}>
               {t("sroom.empty.body")}
@@ -285,6 +303,10 @@ function Activities({
         ))}
         {open.map((card) => (
           <ActivityCard key={card.id} card={card} group="open" now={now} navigate={navigate} primary={card.id === urgent} showWhere={false} actions={actions} />
+        ))}
+        {/* Never the urgent accent (S3): after what closes. */}
+        {groupSets.map((card) => (
+          <GroupSetRow key={card.id} card={card} navigate={navigate} showWhere={false} />
         ))}
       </section>
 

@@ -571,6 +571,93 @@ export async function accessibleGroupSet(
   return (await findAccessibleGroupSet(app.db, callerOf(req), params.id)) ?? notFound(reply);
 }
 
+// ---------------------------------------------------------------------------
+// Group sets, the students' side (F-PROJ-22, ADR-070 §8; merge task M3-17).
+// A student reads a classroom's sets through its student branch
+// (`readableClassroom`, the student payload forced); a set reaches them only
+// while it is open or a published project names it ({@link studentVisibleSet}).
+// A student WRITES only by their own portal session on a claimed student
+// seat ({@link selfFormingSeat}, {@link studentGroupSet}): a teacher in the
+// student view, a staff seat, a `seb` or `kiosk` session, a token get the
+// 404 of a missing set; an impersonation the 404 in development, and the
+// auth plugin's `403 impersonation_read_only` elsewhere (ADR-034).
+// ---------------------------------------------------------------------------
+
+/**
+ * A set open to its students now (F-PROJ-22): `open_until` ahead by the
+ * server's clock, its classroom not archived. On a query that has
+ * `group_sets` and `classrooms` in scope.
+ */
+export function openSet(now: Date): SQL {
+  // Never NULL: the read takes it as a boolean column (`open`).
+  return sql`(${qualified(groupSets.openUntil)} IS NOT NULL AND ${qualified(groupSets.openUntil)} > ${now.toISOString()}::timestamptz AND ${qualified(classrooms.archivedAt)} IS NULL)`;
+}
+
+/**
+ * A project the students of its classroom see: published (not a draft) and
+ * not archived. On a query that has `projects` in scope.
+ */
+export function publishedProject(): SQL {
+  return sql`(${qualified(projects.state)} <> 'draft' AND ${qualified(projects.archivedAt)} IS NULL)`;
+}
+
+/**
+ * THE rule of which sets reach a student of their classroom (ADR-070 §8 as
+ * amended 2026-10-05, S2): an {@link openSet open} one, or one a
+ * {@link publishedProject published project} of the classroom names. A
+ * closed set no such project names never shows. On a query that has
+ * `group_sets` and `classrooms` in scope.
+ */
+export function studentVisibleSet(now: Date): SQL {
+  return sql`(${openSet(now)} OR EXISTS (SELECT 1 FROM ${projects} WHERE ${qualified(projects.groupSetId)} = ${qualified(groupSets.id)} AND ${publishedProject()}))`;
+}
+
+/**
+ * THE rule of who forms groups (F-PROJ-22): the caller's own portal session
+ * (not delegated, not confined, not a token) on a claimed STUDENT seat of the
+ * classroom — a staff seat (ADR-018), hence a teacher in the student view,
+ * never does. The writes' loader and the student view's `writable` both ask it.
+ */
+export function selfFormingSeat(
+  auth: Pick<SessionAuth, "kind" | "actorUserId"> | null,
+  seat: { staff: boolean } | null,
+): boolean {
+  return ownPortalSession(auth) && seat !== null && !seat.staff;
+}
+
+/**
+ * The set, its classroom, its course and the caller's seat, if
+ * {@link selfFormingSeat} holds for the caller there and the set reaches its
+ * students now; null otherwise.
+ */
+export async function findStudentGroupSet(
+  db: Db,
+  userId: string,
+  auth: Pick<SessionAuth, "kind" | "actorUserId"> | null,
+  setId: string,
+  now: Date,
+) {
+  const [row] = await db
+    .select({ set: groupSets, room: classrooms, course: courses, seat: { id: enrollments.id, staff: enrollments.staff } })
+    .from(groupSets)
+    .innerJoin(classrooms, eq(groupSets.classroomId, classrooms.id))
+    .innerJoin(courses, eq(classrooms.courseId, courses.id))
+    .innerJoin(enrollments, and(eq(enrollments.classroomId, classrooms.id), eq(enrollments.userId, userId)))
+    .where(and(eq(groupSets.id, setId), studentVisibleSet(now)))
+    .limit(1);
+  return row && selfFormingSeat(auth, row.seat) ? row : null;
+}
+
+/** {@link findStudentGroupSet} for the request's own session, answering the 404 (invariant 6). */
+export async function studentGroupSet(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  params: { id: string },
+) {
+  return (await findStudentGroupSet(app.db, callerOf(req).id, req.auth, params.id, app.clock.now())) ?? notFound(reply);
+}
+
 /**
  * The student's side of a project (F-PROJ-05, N-SEC-20; merge task M3-03):
  * a project that is not a draft nor archived, of a classroom where the
@@ -587,14 +674,15 @@ export async function findStudentProject(db: Db, userId: string, projectId: stri
     )
     // An archived classroom takes no new work (product owner, 2026-10-02).
     .innerJoin(classrooms, and(eq(classrooms.id, projects.classroomId), isNull(classrooms.archivedAt)))
-    .where(and(eq(projects.id, projectId), ne(projects.state, "draft"), isNull(projects.archivedAt)))
+    .where(and(eq(projects.id, projectId), publishedProject()))
     .limit(1);
   return row ?? null;
 }
 
 /**
  * {@link findStudentProject} for the caller's own portal session, answering
- * the 404 (invariant 6): an impersonation (in every environment, ADR-034),
+ * the 404 (invariant 6): an impersonation (the 404 in development; the auth
+ * plugin's `403 impersonation_read_only` elsewhere, ADR-034),
  * a Bearer token, a `seb` or `kiosk` session never accept a project.
  */
 export async function studentProject(
@@ -631,7 +719,7 @@ export async function findStudentProjectView(
   const [project] = await db
     .select()
     .from(projects)
-    .where(and(eq(projects.id, projectId), ne(projects.state, "draft"), isNull(projects.archivedAt)))
+    .where(and(eq(projects.id, projectId), publishedProject()))
     .limit(1);
   if (!project) return null;
   const room = await findReadableClassroom(db, user, auth, project.classroomId, { studentView: true });

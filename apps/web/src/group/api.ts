@@ -1,6 +1,7 @@
 /*
  * The reads and writes of the group sets (ADR-070, M3-16a), on the routes
- * of `apps/api/src/modules/group/routes.ts`. Every write of a set answers
+ * of `apps/api/src/modules/group/routes.ts`; and the student's (F-PROJ-22,
+ * M3-17): their view of the classroom's sets, their four writes. Every write of a set answers
  * the set as it now stands (`GroupSetDetail`) but its deletion and its
  * duplication, and goes through ONE queue per set: one request at a time,
  * the cache set from the latest answer only, an optimistic move rolled back
@@ -16,14 +17,17 @@ import {
   GroupRename,
   GroupSetCreate,
   GroupSetPatch,
+  StudentGroupCreate,
+  StudentGroupJoin,
   type GroupSetDetail,
   type GroupSetSummary,
+  type StudentGroupSets,
 } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { classroomGroupSetsKey, groupSetKey, groupSetListsKey } from "../queryKeys";
+import { classroomGroupSetsKey, groupSetKey, groupSetListsKey, studentClassroomKey, studentGroupSetsKey, studentHomeKey } from "../queryKeys";
 import { groupRefusalMessage } from "./groupRules";
 
 /** `GET /classrooms/:id/group-sets`: the classroom's sets, the oldest first. */
@@ -146,4 +150,55 @@ export function useGroupSetWrites(setId: string) {
     },
     [qc, setId],
   );
+}
+
+// ---------------------------------------------------------------- the student's side (F-PROJ-22, M3-17)
+
+/** `GET /classrooms/:id/group-sets/student`: the classroom's sets as the caller reads them. */
+export function useStudentGroupSets(classroomId: string) {
+  return useQuery<StudentGroupSets>({
+    queryKey: studentGroupSetsKey(classroomId),
+    queryFn: () => api(`/app/api/classrooms/${classroomId}/group-sets/student`),
+  });
+}
+
+/** One write of a student, under `/group-sets/:id/student`, its body built by the route's own schema (invariant 7). */
+export type StudentWrite =
+  | { method: "POST"; path: "/groups"; body: StudentGroupCreate }
+  | { method: "PUT"; path: "/membership"; body: StudentGroupJoin }
+  | { method: "DELETE"; path: "/membership"; body?: undefined }
+  | { method: "PATCH"; path: `/groups/${string}`; body: GroupRename };
+
+export const studentWrite = {
+  create: (name: string): StudentWrite => ({
+    method: "POST",
+    path: "/groups",
+    body: StudentGroupCreate.parse(name.trim() === "" ? {} : { name }),
+  }),
+  join: (groupId: string): StudentWrite => ({ method: "PUT", path: "/membership", body: StudentGroupJoin.parse({ groupId }) }),
+  leave: (): StudentWrite => ({ method: "DELETE", path: "/membership" }),
+  rename: (groupId: string, name: string): StudentWrite => ({ method: "PATCH", path: `/groups/${groupId}`, body: GroupRename.parse({ name }) }),
+};
+
+/**
+ * A student's write on set `setId` of `classroomId`: its answer — the
+ * classroom's sets as the writer now reads them — replaces the list, and
+ * the student's pages (the Activities row says their group) are read again. A refusal re-reads the list — the set
+ * may have closed, frozen or filled since — and is the caller's to say.
+ */
+export function useStudentGroupWrite(classroomId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ setId, request }: { setId: string; request: StudentWrite }) =>
+      api<StudentGroupSets>(`/app/api/group-sets/${setId}/student${request.path}`, {
+        method: request.method,
+        ...(request.body === undefined ? {} : { body: JSON.stringify(request.body) }),
+      }),
+    onSuccess: (answer) => {
+      qc.setQueryData(studentGroupSetsKey(classroomId), answer);
+      void qc.invalidateQueries({ queryKey: studentClassroomKey(classroomId), exact: true });
+      void qc.invalidateQueries({ queryKey: studentHomeKey });
+    },
+    onError: () => void qc.invalidateQueries({ queryKey: studentGroupSetsKey(classroomId) }),
+  });
 }
