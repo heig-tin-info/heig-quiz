@@ -61,7 +61,16 @@ import { fmt } from "@quiz/core/client";
 import { lockedBlock } from "@quiz/ui";
 
 import type { Diagnostic } from "./diagnostics.js";
-import { CodeArea, LazyMonaco, MONACO_LANGUAGE, MonacoBoundary, monacoAvailable } from "./MonacoHost.js";
+import {
+  CodeArea,
+  fitPx,
+  LazyMonaco,
+  LINE_PX,
+  MONACO_LANGUAGE,
+  MonacoBoundary,
+  monacoAvailable,
+  PAGE_WHEEL,
+} from "./MonacoHost.js";
 import type { CodeLanguage, CodeSegment } from "./schema.js";
 import { isMarkerLine, stripMarkerLines, trimTrailingNewline } from "./segments.js";
 
@@ -497,9 +506,7 @@ export interface LockedEditorProps {
   monaco?: boolean | undefined;
 }
 
-const LINE_PX = 19;
 const MIN_PX = 4 * LINE_PX;
-const MAX_PX = 30 * LINE_PX;
 
 /** The stacked fallback of decision 5. */
 function Stack({
@@ -569,6 +576,7 @@ export function LockedEditor(props: LockedEditorProps): ReactNode {
       lineNumbersMinChars: 3,
       renderLineHighlight: "none" as const,
       overviewRulerLanes: 0,
+      scrollbar: PAGE_WHEEL,
       padding: { top: 8, bottom: 8 },
       // A drop lands where the mouse is, not where the cursor was: the
       // read-only switch of decision 3 cannot see it coming.
@@ -603,7 +611,7 @@ export function LockedEditor(props: LockedEditorProps): ReactNode {
     current.load(latest.current.segments, latest.current.regions);
     current.setEditable(latest.current.onChange !== undefined);
     current.setDiagnostics(latest.current.diagnostics ?? []);
-    const fit = () => setHeight(Math.min(MAX_PX, Math.max(MIN_PX, editor.getContentHeight())));
+    const fit = () => setHeight(fitPx(editor.getContentHeight(), MIN_PX));
     editor.onDidContentSizeChange(fit);
     fit();
     editor.onDidDispose(() => {
@@ -619,7 +627,7 @@ export function LockedEditor(props: LockedEditorProps): ReactNode {
       <MonacoBoundary fallback={stack}>
         <Suspense fallback={stack}>
           <LazyMonaco
-            height={`${height ?? Math.min(MAX_PX, Math.max(MIN_PX, initial.text.split("\n").length * LINE_PX + 16))}px`}
+            height={`${height ?? fitPx(initial.text.split("\n").length * LINE_PX + 16, MIN_PX)}px`}
             language={MONACO_LANGUAGE[language]}
             theme={dark ? "vs-dark" : "light"}
             defaultValue={initial.text}
