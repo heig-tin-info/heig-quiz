@@ -60,6 +60,37 @@ amended to match:
    counts again.
    Defence in depth: a head received as a bot's push (`push_receipts.is_bot`)
    never counts either, even with no `bot_commits` row.
+6. **The window's edges, and a move GitHub refused** (2026-10-05, the spec
+   challenge and the product owner; merge task M3-06b). (a) The window
+   closes at the later of the restore's `created_at` (taken before the
+   branch is read) and the receipt of `covered_sha`
+   (`GREATEST(reverts.created_at, receipt(covered_sha))`, `created_at` alone
+   while the covered head has no receipt — it may arrive later or never): a
+   head received between the two, already on the branch under the covered
+   head, ran the altered files too. (b) The window is read on the restore's
+   branch (`reverts.branch`, migration `0069`; the receipt's branch on the
+   rows written before): a receipt is one per sha, so a sha first received
+   on another branch no longer drags the window onto it. Known limit, per
+   branch receipts being out of scope: a head first received on branch A,
+   then pushed on B inside B's window, escapes B's window; a run belongs to
+   a sha, not a branch, so only the window is per branch. (c) A 422 on the
+   move (a student's push raced the restore) no longer takes the `reverts`
+   row back: the row stays without its restore (`revert_sha` null,
+   `covered_sha` null) and the delivery is retried; a retry that restores
+   fills the row in (its restore, its covered head, its branch, its
+   `created_at`); a retry that finds the files put back by the student
+   leaves the null row — the push is answered, **the tampered head alone**
+   is restored (its runs `to_verify`, never the score; the later heads are
+   the student's own fix and count), no restore commit, no count toward the
+   cap (a move that did not happen is no restore), no new audit action (the
+   row is the record). An ordinary push leaving the protected files the
+   distribution's writes no row: it is no tampering. The stored `to_verify`
+   of a run follows the set at every reselection (`refreshScoreSelection`):
+   a run ingested before a late receipt widened its window is flagged at
+   the repository's next reselection — a restore, or a run ingested by the
+   webhook or by `reconcile.grades` — and the score never waited for the
+   flag, it reads the set (`selectScoreRun`). The student never sees
+   `to_verify` (N-SEC-20).
 
 ## Context
 

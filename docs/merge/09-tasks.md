@@ -1264,6 +1264,45 @@ under the half that serves them.
     commit; a student committing with an unlinked e-mail is left to the
     push webhook, whose sender names them. A staff unlock after the
     freeze (no reopen) does not widen the 24-hour window.
+- **M3-06b — As delivered** (branch `merge/M3-06b-restored-heads`; the
+  three restored-heads edges of M3-04, settled 2026-10-05 by the spec
+  challenge and the product owner, ADR-062 addendum 6):
+  - **The window's upper bound** (`restoredHeads`, `Q:modules/project/grading.ts`)
+    is `GREATEST(reverts.created_at, receipt(covered_sha))`, a `LEFT JOIN`
+    on the covered head's receipt (`created_at` alone while it has none): a
+    head received between the restore's `now` and the covered head's
+    receipt no longer escapes. The stored `to_verify` may lag for a head
+    received late; `refreshScoreSelection` now makes the column follow the
+    set at every reselection (the restore's, each ingest's — the webhook's
+    or `reconcile.grades`'), and the score was never wrong: `selectScoreRun`
+    reads the set. `protection.ts` lost its own bulk update for it.
+  - **The window's branch**: `reverts.branch text NULL` (migration
+    `0069_project_reverts_edges`, no backfill), written by `recordRestore`;
+    the join reads `between.branch = COALESCE(reverts.branch, tampering.branch)`,
+    so the rows written before keep their behaviour. Known limit: receipts
+    are one per sha, so a head first received on A then pushed on B escapes
+    B's window (per-branch receipts out of scope); a run belongs to a sha,
+    only the window is per branch.
+  - **A 422 on the move** (product owner): `reverts.revert_sha` nullable;
+    the 422 sets `revert_sha` and `covered_sha` null instead of deleting
+    the row, then throws (the delivery is retried). The `answered` check
+    skips a null row; `recordRestore` fills it in through
+    `ON CONFLICT (repo_id, head_sha) DO UPDATE … WHERE revert_sha IS NULL`
+    (its restore, covered head, branch and `created_at` are the retry's)
+    and its cap count ignores null rows; a retry that finds nothing to
+    restore leaves the null row and still reselects (`pending`): the head's
+    runs `to_verify`, out of the score, no restore commit, no audit. A null
+    row's window is its head alone (`isNotNull(revert_sha)` on the window
+    join): the later heads are the student's own fix. An ordinary "nothing
+    to restore" writes no row.
+  - Tests (`ingest.db.test.ts`, "protected files"): a head on `dev` inside
+    `main`'s window not flagged (S first received on `dev`); X received
+    between `created_at` and S2's receipt flagged, a push on the restore
+    not; a 422 then a retry finding the fix (null row, S `to_verify`, the
+    fix the score, five restores still pass the cap, no restore audit); a
+    422 then a retry that restores (row filled, `created_at` the retry's, a
+    redelivery answered, S1 flagged). The student leak test
+    (`studentView.db.test.ts`, `toVerify`/`to_verify`) stays green.
 
 ### M3-07 — Sync of the source repository
 - **Depends on**: M2-04, M3-02, D12. ‖ M3-05, M3-06.
