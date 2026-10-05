@@ -177,6 +177,40 @@ function run(
   };
 }
 
+/** A repository's name on GitHub: `<slug>-<login>` in the classroom's organization (F-PROJ-05). */
+const repoName = (slug: string, student: RosterEntry) =>
+  `${ORG}/${slug}-${(student.githubLogin ?? `${student.prenom}-${student.nom}`).toLowerCase()}`;
+
+/** A repository of the mock from what names it, every other field at its quiet default: provisioned, accepted, open, nothing run. */
+function mockRepo(over: Pick<MockRepo, "id" | "enrollmentId" | "student" | "fullName" | "acceptedAt"> & Partial<MockRepo>): MockRepo {
+  return {
+    provisionStatus: "ok",
+    provisionError: null,
+    invitationStatus: "accepted",
+    lastCommit: null,
+    ciStatus: "none",
+    live: null,
+    deadlineAt: null,
+    deadlineAppliedAt: null,
+    frozenAt: null,
+    locked: false,
+    archived: false,
+    staffLock: null,
+    degraded: false,
+    teacher: null,
+    released: null,
+    protectionSuspended: false,
+    deleted: false,
+    runs: [],
+    currentRunId: null,
+    frozenRunId: null,
+    reviewRunId: null,
+    dispatch: null,
+    resentAt: null,
+    ...over,
+  };
+}
+
 /**
  * The repositories of a seeded project: one per claimed student but every
  * tenth (not accepted), each variant decided by the student's rank so the
@@ -191,39 +225,22 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
   claimed.forEach((student, i) => {
     if (i % 10 === 0) return;
     const id = repoId(seed, i + 1);
-    const name = `${ORG}/${project.slug}-${(student.githubLogin ?? `${student.prenom}-${student.nom}`).toLowerCase()}`;
     const variant = i % 12;
     const runs: GradeRunView[] = [];
-    const base: MockRepo = {
+    const base = mockRepo({
       id,
       enrollmentId: student.id,
       student,
-      fullName: name,
-      provisionStatus: "ok",
-      provisionError: null,
-      invitationStatus: "accepted",
+      fullName: repoName(project.slug, student),
       acceptedAt: iso(seed.start + i * H),
       lastCommit: { sha: sha(i * 7 + 1), at: iso(seed.start + (i + 1) * 6 * H) },
       ciStatus: "pass",
       live: { commitCount: 3 + i, checksPassed: 1, checksTotal: 1, stale: false },
-      deadlineAt: null,
       deadlineAppliedAt: locked ? project.deadlineAt : null,
       frozenAt: locked ? iso(seed.deadline + 30 * 60_000) : null,
       locked,
-      archived: false,
-      staffLock: null,
-      degraded: false,
-      teacher: null,
-      released: null,
-      protectionSuspended: false,
-      deleted: false,
       runs,
-      currentRunId: null,
-      frozenRunId: null,
-      reviewRunId: null,
-      dispatch: null,
-      resentAt: null,
-    };
+    });
     const scored = (n: number, at: number, over: Partial<GradeRunView> = {}) => {
       const r = run(id, n, at, over);
       runs.unshift(r);
@@ -316,36 +333,24 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
     githubLogin: "eleve-ancien",
   };
   const goneId = repoId(seed, 999);
-  repos.push({
-    id: goneId,
-    enrollmentId: null,
-    student: gone,
-    fullName: `${ORG}/${project.slug}-eleve-ancien`,
-    provisionStatus: "ok",
-    provisionError: null,
-    invitationStatus: "accepted",
-    acceptedAt: iso(seed.start + 2 * H),
-    lastCommit: { sha: sha(99), at: iso(seed.start + 3 * D) },
-    ciStatus: "pass",
-    live: null,
-    deadlineAt: null,
-    deadlineAppliedAt: locked ? project.deadlineAt : null,
-    frozenAt: locked ? iso(seed.deadline + 30 * 60_000) : null,
-    locked,
-    archived: false,
-    staffLock: null,
-    degraded: false,
-    teacher: null,
-    released: null,
-    protectionSuspended: false,
-    deleted: false,
-    runs: [run(goneId, 1, seed.start + 3 * D, { points: 5, testsPassed: 5 })],
-    currentRunId: `${goneId}-run-1`,
-    frozenRunId: locked ? `${goneId}-run-1` : null,
-    reviewRunId: null,
-    dispatch: locked ? { sha: sha(99), dispatchedAt: iso(seed.deadline + 31 * 60_000) } : null,
-    resentAt: null,
-  });
+  repos.push(
+    mockRepo({
+      id: goneId,
+      enrollmentId: null,
+      student: gone,
+      fullName: repoName(project.slug, gone),
+      acceptedAt: iso(seed.start + 2 * H),
+      lastCommit: { sha: sha(99), at: iso(seed.start + 3 * D) },
+      ciStatus: "pass",
+      deadlineAppliedAt: locked ? project.deadlineAt : null,
+      frozenAt: locked ? iso(seed.deadline + 30 * 60_000) : null,
+      locked,
+      runs: [run(goneId, 1, seed.start + 3 * D, { points: 5, testsPassed: 5 })],
+      currentRunId: `${goneId}-run-1`,
+      frozenRunId: locked ? `${goneId}-run-1` : null,
+      dispatch: locked ? { sha: sha(99), dispatchedAt: iso(seed.deadline + 31 * 60_000) } : null,
+    }),
+  );
   return repos;
 }
 
@@ -500,36 +505,17 @@ export function arriveProjectActivity(): void {
   const taken = new Set(p.repos.map((r) => r.enrollmentId));
   const student = classroomRoster(p.summary.classroomId).find((s) => s.status === "claimed" && !taken.has(s.id));
   if (!student) return;
-  p.repos.push({
-    id: repoId(SEEDS.find((s) => s.id === "pj-published")!, 900),
-    enrollmentId: student.id,
-    student,
-    fullName: `${ORG}/${p.summary.slug}-${(student.githubLogin ?? `${student.prenom}-${student.nom}`).toLowerCase()}`,
-    provisionStatus: "ok",
-    provisionError: null,
-    invitationStatus: "pending",
-    acceptedAt: at,
-    lastCommit: null,
-    ciStatus: "none",
-    live: { commitCount: 1, checksPassed: null, checksTotal: null, stale: false },
-    deadlineAt: null,
-    deadlineAppliedAt: null,
-    frozenAt: null,
-    locked: false,
-    archived: false,
-    staffLock: null,
-    degraded: false,
-    teacher: null,
-    released: null,
-    protectionSuspended: false,
-    deleted: false,
-    runs: [],
-    currentRunId: null,
-    frozenRunId: null,
-    reviewRunId: null,
-    dispatch: null,
-    resentAt: null,
-  });
+  p.repos.push(
+    mockRepo({
+      id: repoId(SEEDS.find((s) => s.id === "pj-published")!, 900),
+      enrollmentId: student.id,
+      student,
+      fullName: repoName(p.summary.slug, student),
+      acceptedAt: at,
+      invitationStatus: "pending",
+      live: { commitCount: 1, checksPassed: null, checksTotal: null, stale: false },
+    }),
+  );
 }
 
 /** What a set is used by (ADR-070 §4): the projects naming it, archived or not, following or stopped. */
