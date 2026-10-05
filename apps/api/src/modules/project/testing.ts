@@ -14,7 +14,8 @@
  * only), a compare, and `commit` for a push made outside the App. From
  * M3-05a, a ruleset deleted and a repository archived (read-only until
  * un-archived). From M3-15b, a collaborator removed and the pending
- * invitations listed and cancelled (a revocation), or refused (`unrevokable`).
+ * invitations listed and cancelled (a revocation), or refused (`unrevokable`),
+ * and a repository by its id.
  * Test support only; nothing in the application imports it.
  */
 import { execFileSync } from "node:child_process";
@@ -328,6 +329,10 @@ export function repoWorld(): RepoWorld {
         return repoWrite(m[1]!, m[2]!, m[3] ?? "", req);
       }
       if (req.method !== "GET") return undefined;
+      if ((m = /^\/repositories\/(\d+)$/.exec(path))) {
+        const fullName = [...world.ids].find(([name, id]) => id === Number(m![1]) && world.exists(name))?.[0];
+        return fullName === undefined ? undefined : json(repoJson(fullName.split("/")[0]!, fullName.split("/")[1]!));
+      }
       if ((m = /^\/orgs\/([^/]+)\/repos$/.exec(path))) {
         const org = m[1]!;
         const names = [...world.ids.keys()].filter((f) => f.startsWith(`${org}/`)).map((f) => f.slice(org.length + 1));

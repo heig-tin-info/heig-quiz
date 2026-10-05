@@ -59,6 +59,14 @@ export async function inviteCollaborator(
   return res.status === 201 ? "pending" : "accepted";
 }
 
+/** The pending invitations of `owner/repo`: each one's id and its invitee's login. */
+export async function pendingInvitees(octokit: Octokit, owner: string, repo: string): Promise<{ id: number; login: string }[]> {
+  const { data } = await octokit.request("GET /repos/{owner}/{repo}/invitations", { owner, repo, per_page: 100 });
+  return data.flatMap((i: { id: number | bigint; invitee?: { login?: string } | null }) =>
+    i.invitee?.login ? [{ id: Number(i.id), login: i.invitee.login }] : [],
+  );
+}
+
 /**
  * Takes every access of `login` away from `owner/repo`: a pending
  * invitation first — cancelled before the seat, so that it cannot be
@@ -72,19 +80,12 @@ export async function revokeCollaborator(
   repo: string,
   login: string,
 ): Promise<{ invitationsCancelled: number }> {
-  const { data: invitations } = await octokit.request(
-    "GET /repos/{owner}/{repo}/invitations",
-    { owner, repo, per_page: 100 },
-  );
-  const mine = invitations.filter(
-    (i: { invitee?: { login?: string } | null }) =>
-      i.invitee?.login?.toLowerCase() === login.toLowerCase(),
-  );
+  const mine = (await pendingInvitees(octokit, owner, repo)).filter((i) => i.login.toLowerCase() === login.toLowerCase());
   for (const invitation of mine) {
     await octokit.request("DELETE /repos/{owner}/{repo}/invitations/{invitation_id}", {
       owner,
       repo,
-      invitation_id: Number(invitation.id),
+      invitation_id: invitation.id,
     });
   }
   try {

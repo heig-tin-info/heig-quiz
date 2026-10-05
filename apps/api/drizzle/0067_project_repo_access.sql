@@ -9,9 +9,10 @@ CREATE TABLE "project_repo_access" (
 );
 --> statement-breakpoint
 ALTER TABLE "project_repo_access" ADD CONSTRAINT "project_repo_access_repo_id_project_repos_id_fk" FOREIGN KEY ("repo_id") REFERENCES "public"."project_repos"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "project_repo_access" ADD CONSTRAINT "project_repo_access_enrollment_id_enrollments_id_fk" FOREIGN KEY ("enrollment_id") REFERENCES "public"."enrollments"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_repo_access" ADD CONSTRAINT "project_repo_access_enrollment_id_enrollments_id_fk" FOREIGN KEY ("enrollment_id") REFERENCES "public"."enrollments"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "project_repo_access_repo_enrollment_account_uq" ON "project_repo_access" USING btree ("repo_id","enrollment_id","github_user_id");--> statement-breakpoint
-CREATE INDEX "project_repo_access_live_idx" ON "project_repo_access" USING btree ("enrollment_id") WHERE "project_repo_access"."revoked_at" IS NULL;--> statement-breakpoint
+CREATE INDEX "project_repo_access_live_idx" ON "project_repo_access" USING btree ("enrollment_id") WHERE "project_repo_access"."revoked_at" IS NULL;
+--> statement-breakpoint
 -- The invited accounts of the individual repositories M3-03 provisioned
 -- before this table: the student's link of today stands for the account
 -- invited at Accept (the best this database knows), on their student seat

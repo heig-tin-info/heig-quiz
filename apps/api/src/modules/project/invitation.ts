@@ -36,6 +36,7 @@ import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { projectRepoAccess, projectRepos } from "../../db/schema.js";
 import { installationClient, ownerRepo } from "../../github/app.js";
+import { pendingInvitees } from "../../github/collaborators.js";
 import { projectInstallation } from "../github/service.js";
 import { inviteAccount } from "./access.js";
 import { liveRepoForUpdate } from "./deadline.js";
@@ -52,8 +53,7 @@ export const RESEND_INTERVAL_MS = 60_000;
  */
 async function stillOut(db: Db, octokit: Octokit, repo: RepoRow, members: RepoMember[]): Promise<RepoMember[]> {
   const { owner, repo: name } = ownerRepo(repo.fullName!);
-  const { data } = await octokit.request("GET /repos/{owner}/{repo}/invitations", { owner, repo: name, per_page: 100 });
-  const pending = new Set(data.map((i: { invitee?: { login?: string } | null }) => i.invitee?.login?.toLowerCase()));
+  const pending = new Set((await pendingInvitees(octokit, owner, name)).map((i) => i.login.toLowerCase()));
   const grants = await db
     .select()
     .from(projectRepoAccess)

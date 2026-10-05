@@ -21,10 +21,11 @@
  *   repository deleted, a student never invited proceed, audited `skipped`;
  * - the races, interleaved through the fake GitHub: a line removed before
  *   its invitation is recorded (never invited), or while GitHub is asked
- *   (the invitation taken back), an account recorded during a removal (the
- *   line's delete refused, `502`, retried), a student moved out of their
- *   group during their Accept (`no_group`); a classroom deleted with its
- *   grants; the backfill of 0067.
+ *   (the invitation taken back); an account recorded during a removal, an
+ *   unclaim or a self-enroll (`502`, retried); a removal during the first
+ *   provisioning (`502`, retried); a set's move during it (`has_repo`); a
+ *   student moved out of their group during their Accept (`no_group`); a
+ *   classroom deleted with its grants; the backfill of 0067.
  */
 import { randomUUID } from "node:crypto";
 
@@ -664,27 +665,74 @@ describe("the races of an invitation and a departure (R1–R3)", () => {
     expect(pendingInvitations(fullName)).toEqual([ana!.login]);
   });
 
-  it("refuses a removal whose line got an account recorded meanwhile (502), then takes it on retry", async () => {
+  /** Ben's line gets another account recorded while `write` revokes his: `502`, then the retry passes. */
+  const recordedMeanwhile = async (write: (room: Room, line: string) => Promise<{ statusCode: number; body: string; json: () => { error: unknown } }>) => {
     const [ana, ben] = [await newStudent(), await newStudent()];
     const { project, room } = await groupProject([ana!, ben!], [[0, 1]]);
     expect((await accept(project.id, ana!)).statusCode).toBe(200);
     const [row] = await repoRows(project.id);
     const line = room.lines.get(ben!.id)!;
     const other = nextAccount++;
-    accounts.set(other, "ben-other");
-    // While the removal revokes Ben's recorded account, an invitation records another one.
+    accounts.set(other, `ben-other-${other}`);
     hook = {
       match: (url, method) => method === "GET" && url.pathname === `/user/${ben!.githubUserId}`,
       run: async () =>
         void (await server.app.db
           .insert(projectRepoAccess)
-          .values({ id: randomUUID(), repoId: row!.id, enrollmentId: line, githubUserId: other, githubLogin: "ben-other", invitedAt: new Date(NOW) })),
+          .values({ id: randomUUID(), repoId: row!.id, enrollmentId: line, githubUserId: other, githubLogin: `ben-other-${other}`, invitedAt: new Date(NOW) })),
     };
-    expect(rosterRefusal(await removeLine(room, line))).toEqual([502, "revoke_failed"]);
-    expect(await server.app.db.select().from(enrollments).where(eq(enrollments.id, line))).toHaveLength(1);
-    expect((await removeLine(room, line)).statusCode).toBe(204);
+    expect(rosterRefusal(await write(room, line))).toEqual([502, "revoke_failed"]);
+    const [kept] = await server.app.db.select().from(enrollments).where(eq(enrollments.id, line));
+    expect([kept?.userId, kept?.staff]).toEqual([ben!.id, false]);
+    const retried = await write(room, line);
+    expect(retried.statusCode, retried.body).toBeLessThan(300);
     const logins = (await auditsOf(row!.id, "project_group.repo_revoke")).map((a) => (a.payload as { login: string }).login);
-    expect(logins).toEqual([ben!.login, "ben-other"]);
+    expect(logins).toEqual([ben!.login, `ben-other-${other}`]);
+  };
+
+  it("refuses a removal whose line got an account recorded meanwhile (502), then takes it on retry", async () => {
+    await recordedMeanwhile((room, line) => removeLine(room, line));
+  });
+
+  it("refuses an unclaim whose line got an account recorded meanwhile (502), then takes it on retry", async () => {
+    await recordedMeanwhile((room, line) => staff("POST", `/app/api/classrooms/${room.id}/roster/${line}/unclaim`));
+  });
+
+  it("refuses a self-enroll whose line got an account recorded meanwhile (502), then takes it on retry", async () => {
+    const [me] = await server.app.db.select().from(users).where(eq(users.id, teacher.id));
+    await recordedMeanwhile(async (room, line) => {
+      await server.app.db.update(enrollments).set({ email: me!.email }).where(eq(enrollments.id, line));
+      return staff("POST", `/app/api/classrooms/${room.id}/self-enroll`);
+    });
+  });
+
+  it("refuses a removal while the group's first provisioning runs (502), then revokes once it is done", async () => {
+    const [ana, ben] = [await newStudent(), await newStudent()];
+    const { project, room } = await groupProject([ana!, ben!], [[0, 1]]);
+    const fullName = `${room.login}/lab-1-group-1`;
+    let during: { statusCode: number; json: () => { error: unknown } } | undefined;
+    hook = {
+      match: (url, method) => method === "POST" && url.pathname === `/orgs/${room.login}/repos`,
+      run: async () => void (during = await removeLine(room, room.lines.get(ana!.id)!)),
+    };
+    expect((await accept(project.id, ana!)).statusCode).toBe(200);
+    expect(rosterRefusal(during!)).toEqual([502, "revoke_failed"]);
+    expect(seats(fullName)[ana!.login]).toBe("push");
+    expect((await removeLine(room, room.lines.get(ana!.id)!)).statusCode).toBe(204);
+    expect(seats(fullName)[ana!.login]).toBeUndefined();
+  });
+
+  it("refuses a set's move out of a group whose first provisioning runs (has_repo)", async () => {
+    const [ana, ben] = [await newStudent(), await newStudent()];
+    const { project, room, set } = await groupProject([ana!, ben!], [[0, 1]]);
+    let during: { statusCode: number; json: () => { error: unknown } } | undefined;
+    hook = {
+      match: (url, method) => method === "POST" && url.pathname === `/orgs/${room.login}/repos`,
+      run: async () => void (during = await moveTo(set, room.lines.get(ben!.id)!, null)),
+    };
+    expect((await accept(project.id, ana!)).statusCode).toBe(200);
+    expect(groupRefusal(during!)).toEqual([409, "has_repo"]);
+    expect(seats(`${room.login}/lab-1-group-1`)[ben!.login]).toBe("push");
   });
 
   it("answers no_group to a student moved out of their group during their Accept, nothing made", async () => {
@@ -698,7 +746,7 @@ describe("the races of an invitation and a departure (R1–R3)", () => {
     expect(await repoRows(project.id)).toEqual([]);
   });
 
-  it("deletes a classroom whose lines hold accounts recorded (no cascade from the line)", async () => {
+  it("deletes a classroom whose lines hold recorded accounts", async () => {
     const [ana] = [await newStudent()];
     const { project, room } = await groupProject([ana!], [[0]]);
     expect((await accept(project.id, ana!)).statusCode).toBe(200);

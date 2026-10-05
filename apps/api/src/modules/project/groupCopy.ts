@@ -75,9 +75,11 @@ async function setState(tx: Tx, setId: string): Promise<SetState> {
 }
 
 /**
- * The copy, each group's slug fixed when GitHub holds its repository (a
- * repository id recorded: a first Accept that failed before creating it
- * freezes nothing), and the staff seats in it.
+ * The copy, each group's slug fixed once its repository row exists — from
+ * the first Accept's claim on, so that no member moves while it is
+ * provisioned (the members it invites are read after it) — unless that
+ * Accept failed before GitHub made the repository (`error`, no id: nothing
+ * to freeze); and the staff seats in it.
  */
 async function copyState(tx: Tx, projectId: string): Promise<CopyState & { staffSeats: Set<string> }> {
   const groups = await tx
@@ -87,7 +89,7 @@ async function copyState(tx: Tx, projectId: string): Promise<CopyState & { staff
       slug: projectGroups.slug,
       position: projectGroups.position,
       sourceGroupId: projectGroups.sourceGroupId,
-      slugFixed: sql<boolean>`${projectRepos.githubRepoId} IS NOT NULL`,
+      slugFixed: sql<boolean>`(${projectRepos.id} IS NOT NULL AND (${projectRepos.provisionStatus} <> 'error' OR ${projectRepos.githubRepoId} IS NOT NULL))`,
     })
     .from(projectGroups)
     .leftJoin(projectRepos, eq(projectRepos.groupId, projectGroups.id))

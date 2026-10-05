@@ -341,8 +341,9 @@ export type AuditAction =
    * the teacher's score, `payload.before` and `after` (`points`, `max`,
    * `comment`; null when none); `protection_reenabled`: the protected files
    * restored again, `payload.suspendedAt`; `invite_resent`: a pending
-   * invitation sent again with `push`, `payload.login`, `invitationStatus`
-   * as GitHub answered.
+   * invitation sent again with `push`, `payload.logins` (the accounts
+   * invited: the student, or a group's members still out), and
+   * `invitationStatus` as GitHub answered.
    */
   | "project_repo.grade_override"
   | "project_repo.protection_reenabled"
@@ -352,10 +353,11 @@ export type AuditAction =
    * line (ADR-048 lot 2, ADR-070 §4–§5; merge task M3-15b), subject the
    * `project_repos` row — a group's, or (a revocation) a student's own.
    * `repo_invite`: `payload.repo`, `enrollmentId`, `login`, `invitation`
-   * (`pending` | `accepted`), `via` (`accept`, `link`); `repo_revoke`:
+   * (`pending` | `accepted`), `via` (`accept`, `link`; a resend audits
+   * `project_repo.invite_resent`); `repo_revoke`:
    * `payload.repo`, `enrollmentId`, `login` (null: none was ever invited),
    * `outcome` (`ok` | `skipped`), `reason` of a skip (`app_not_installed`,
-   * `repo_deleted`, `account_gone`, `not_invited`), `invitationsCancelled`
+   * `repo_deleted`, `not_provisioned`, `account_gone`, `not_invited`), `invitationsCancelled`
    * of a revocation, `via` (`roster.remove`, `roster.unclaim`,
    * `roster.update`, `roster.self_enroll`).
    */

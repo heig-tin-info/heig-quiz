@@ -104,6 +104,7 @@ export const en = {
   "error.githubJournalAttached": "This classroom has a journal: remove the journal first, then disconnect it or change its GitHub organization.",
   "error.githubAppNotInstalled": "Quiz's GitHub App is not installed on this organization. Install it, then try again.",
   "error.githubRevokeFailed": "GitHub did not take this student's access to the project repositories away. Nothing was changed: try again.",
+  "error.alreadyEnrolled": "You are already in this classroom's roster under another address.",
   "error.superPowersActive": "Super Powers are already on. Switch them off first to start a new hour.",
   "error.superPowersRequired": "This takes Super Powers. Switch them on in Settings first.",
   "error.ownerRequired": "Only an owner of the course may do that.",

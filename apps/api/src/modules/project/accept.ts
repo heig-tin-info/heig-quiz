@@ -45,7 +45,7 @@ import { audit, type AuditActor } from "../../audit.js";
 import { linkedLogin } from "../../auth/githubLink.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { githubAccounts, projectRepos, projects } from "../../db/schema.js";
+import { githubAccounts, projectRepoAccess, projectRepos, projects } from "../../db/schema.js";
 import { installationClient, ownerRepo, type InstallationClient } from "../../github/app.js";
 import { isInvitationRefused } from "../../github/collaborators.js";
 import { provisionStudentRepo, RepoNameTaken } from "../../github/provision.js";
@@ -244,6 +244,8 @@ async function acceptGroup(db: Db, config: AppConfig, input: AcceptInput, seat: 
 }
 
 const noGroup = () => new ProjectError("no_group", "You are in no group of this project: ask your teacher to place you");
+/** The seat left (removed, unclaimed, turned staff seat) during the Accept: the 404 of a project no longer reached. */
+const gone = () => new DomainError("not_found", 404, "No such project");
 
 /**
  * The name of a group's repository: `<project slug>-<group slug>`, the
@@ -267,13 +269,14 @@ async function groupRepoNameFor(db: Db, project: ProjectRow, group: GroupRow, or
 /**
  * Provisions `row` as `targetRepo` for the Accept that claimed it, the
  * accepting student invited under `login` — their account recorded FIRST
- * (R1: a line removed meanwhile is not provisioned for); audited
+ * (R1: a seat removed or detached meanwhile is not provisioned for, the
+ * 404 of a project they no longer reach); audited
  * `project.accept`, or `project.accept_failed` and the refusal.
  */
 async function provision(db: Db, input: AcceptInput, row: RepoRow, github: GithubSide, login: string, targetRepo: string): Promise<RepoRow> {
   const { project, now, log } = input;
-  const account = { enrollmentId: input.enrollmentId, githubUserId: github.account.githubUserId, login };
-  if ((await recordGrant(db, row.id, account, now)) === null) throw new DomainError("not_found", 404, "No such project");
+  const account = { enrollmentId: input.enrollmentId, userId: input.userId, githubUserId: github.account.githubUserId, login };
+  if ((await recordGrant(db, row.id, account, now)) === null) throw gone();
   try {
     const result = await provisionStudentRepo({
       octokit: github.client.octokit,
@@ -359,15 +362,26 @@ async function inviteGroup(db: Db, input: AcceptInput, repo: RepoRow, github: Gi
  * The student's Accept on a provisioned repository they are not (or no
  * longer) let into — their group's, made by a fellow member, or their own
  * whose access a roster change revoked: they are invited (idempotent on
- * GitHub's side), and the answer is THEIR invitation. Refused as a first
- * Accept would be on their account or the App.
+ * GitHub's side), and the answer is THEIR invitation. An account of theirs
+ * already recorded live on a repository whose invitations are all accepted
+ * is answered at once, with no call to GitHub. Refused as a first Accept
+ * would be on their account or the App.
  */
 async function joinRepo(db: Db, config: AppConfig, input: AcceptInput, repo: RepoRow): Promise<ProjectAcceptance> {
+  if (repo.invitationStatus === "accepted") {
+    const [live] = await db
+      .select({ id: projectRepoAccess.id })
+      .from(projectRepoAccess)
+      .innerJoin(githubAccounts, and(eq(githubAccounts.userId, input.userId), eq(githubAccounts.githubUserId, projectRepoAccess.githubUserId)))
+      .where(and(eq(projectRepoAccess.repoId, repo.id), eq(projectRepoAccess.enrollmentId, input.enrollmentId), isNull(projectRepoAccess.revokedAt)))
+      .limit(1);
+    if (live) return acceptance(repo);
+  }
   const github = await githubSide(db, config, input);
   const member = { enrollmentId: input.enrollmentId, userId: input.userId, account: github.account };
   const ctx = { actor: input.actor, now: input.now, log: input.log, via: "accept", failure: "provision_failed" } as const;
   const invited = await inviteAccount(db, github.client.octokit, repo, member, ctx);
-  if (invited === null) throw new DomainError("not_found", 404, "No such project");
+  if (invited === null) throw gone();
   await followInvitation(db, repo, invited.invitation);
   return { status: repo.provisionStatus, fullName: repo.fullName, invitationStatus: invited.invitation };
 }

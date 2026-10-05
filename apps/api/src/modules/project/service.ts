@@ -34,7 +34,9 @@
  * repository is whose through the copy (`groupRepos.ts`, N-SEC-20), and the
  * accounts let in (`access.ts`): recorded at each invitation, invited when a
  * student links GitHub (`auth/githubLink.ts`), revoked before the roster's
- * writes take a line or its account away (`org` routes).
+ * writes take a line or its account away and guarded in their transaction
+ * (`revokeEnrollmentAccess`, `releaseLine`, `RevokeFailed`: the `org`
+ * service).
  */
 export { acceptProject } from "./accept.js";
 export { createCheckpoint, deleteCheckpoint, listCheckpoints } from "./checkpoints.js";
@@ -43,7 +45,7 @@ export { repoDeadline, setRepoDeadline, setStaffLock } from "./deadline.js";
 export { overrideScore, releaseProject } from "./grades.js";
 export { projectsChanged } from "./events.js";
 export { followingCopies, RepoGroupTouched, stepCopies } from "./groupCopy.js";
-export { forgetGrants, inviteOnGithubLink, revokeEnrollmentAccess, type RevokeVia } from "./access.js";
+export { inviteOnGithubLink, releaseLine, revokeEnrollmentAccess, RevokeFailed, type RevokeVia } from "./access.js";
 export { resendInvitation } from "./invitation.js";
 export { reenableProtection } from "./protection.js";
 export { requestDeadlineWork } from "./jobs.js";
