@@ -1298,7 +1298,7 @@ under the half that serves them.
     distribution only; never refused for a source that is not ahead.
   - `runSyncJob` in `runLeased` (which now hands the body the installation
     `token`): every student repository, re-read before its push, skipped
-    when not live, past its effective deadline or locked (`syncSkipReason`,
+    when not live, past its effective deadline or locked (`syncSkips`,
     `@quiz/domain`); the distribution's head recorded in `bot_commits(sync)`
     before `sync/<branch>` is forced (left alone when already there);
     GitHub's compare `branch...sync/branch` with no file → `up_to_date`;
@@ -1308,7 +1308,9 @@ under the half that serves them.
     distribution's sha. Outcome per repository
     (`project_repos.sync_outcome`, `_at`: opened / updated / up_to_date /
     failed / skipped); a failed repository recorded, the pass goes on, the
-    frame backdates the lease; a push the repository refuses is probed:
+    frame gives the lease back (`runLeased`'s `onFailure: "release"`:
+    nothing re-claims a sync but the staff, at once); a push the
+    repository refuses is probed:
     a 404 marks it deleted (`via: sync`). Then `synced_at`,
     `source_ahead_sha`/`source_pushed_at`/`source_ahead` cleared only when
     nothing failed and the sha is one of `source_heads`; audited
@@ -1341,7 +1343,7 @@ under the half that serves them.
   - Tests: `sync.db.test.ts` (nine cases over local bare repositories,
     the fake GitHub now answering pull requests and a compare by refs),
     the leak test extended with the source's sha and the sync's words,
-    `syncSkipReason` unit test, the page's and the rules' web tests.
+    `syncSkips` unit test, the page's and the rules' web tests.
   - Not done here: the import's mapping of `sync_pr_number` (M8-01, the
     migration's copy stands for Quiz's own rows); a notification kind for a
     merged pull request (none, D18); the student's notice (M3-09c).

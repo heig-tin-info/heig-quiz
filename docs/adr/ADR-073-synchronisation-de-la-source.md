@@ -51,8 +51,9 @@ asks for one.
    receipt.
 2. **The request updates the distribution; a leased job does the rest.**
    `POST /app/api/projects/:pid/sync` takes the project's `sync_job_at`
-   lease (ADR-064 §3's claim, renewal, backdating and release, a third
-   column beside the deadline's and the dispatches'; held: `409
+   lease (ADR-064 §3's claim, renewal and release, a third column beside
+   the deadline's and the dispatches', never backdated: nothing re-claims a
+   sync but the staff; held: `409
    sync_in_progress`), updates the distribution repository in the request —
    seconds, on the asynchronous git runner, as the build does — so that a
    rewritten source under the `whole` strategy is refused there and then
@@ -66,7 +67,7 @@ asks for one.
 3. **The pass**, in `runLeased`'s frame: every student repository, four at
    a time, re-read just before its push and **skipped** when it is not live,
    past its EFFECTIVE deadline — locked or not — or locked
-   (`syncSkipReason`, `@quiz/domain`). The distribution's head is recorded
+   (`syncSkips`, `@quiz/domain`). The distribution's head is recorded
    in `bot_commits(sync)` BEFORE `sync/<branch>` is forced to it (the one
    ref the App ever forces; left where it is when already there, so a retry
    pushes nothing again). **Up to date** is GitHub's compare of
@@ -91,8 +92,9 @@ asks for one.
    `sync_outcome_at`: opened, updated, up to date, failed, skipped) and the
    page shows the counts of the repositories' last outcomes; the pass is
    audited `project.synced` with the counts and the failed repositories'
-   names. A failure is recorded, the pass goes on, and the frame backdates
-   the lease (a retry some 30 s on). **`source_ahead_sha` is cleared only
+   names. A failure is recorded, the pass goes on, and the frame gives the
+   lease back (the staff ask again at once; a retry pushes and comments
+   only where the head moved). **`source_ahead_sha` is cleared only
    when no repository failed and it still is one of the shas the pass
    synced** — a push landing meanwhile keeps the source ahead.
 7. **Protected files** need nothing more: a restore puts back the
