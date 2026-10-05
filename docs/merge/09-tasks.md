@@ -4350,8 +4350,8 @@ serves now (16a), and what waits for the group repositories (16b).
     goes through `import_classroom.id_map` (`classrooms`, `assignments`,
     `users`) and the target is LOADED under the caller's own portal session
     by the guards' finders (`findReadableClassroom`, `findAccessibleProject`
-    = `staffAccess`, `findStudentProject`): staff or a seated student. An
-    unmapped, malformed, absent or unreachable target is the same 404 body;
+    = `staffAccess`, `findStudentProjectView`, the rule of the page the link lands on): staff or a seated student. An
+    unmapped, malformed, absent or unreachable target is the same 404 (the SPA's own not-found page for a navigation, `reply.callNotFound()`);
     an impersonation is nobody. Nobody signed in (a `seb` or `kiosk` session,
     a bearer token: the same) gets a 302 to `/app/auth/login?next=` the same
     URL, identical for a real and a made-up id. The avatar answers 410 for
@@ -4369,9 +4369,18 @@ serves now (16a), and what waits for the group repositories (16b).
   - **For M8-03**: the Caddy fragment must send every human-clicked path,
     `/app/api/users/:uid/avatar` included (the `@gone /app/api/*` matcher
     would swallow it), to `/legacy/classroom{uri}`; Caddy answers only
-    `POST /webhooks/github` itself. `importClassroomMap` keeps the first
-    id-map target: a later run that maps a classroom elsewhere does not
-    update the row.
+    `POST /webhooks/github` itself. `importClassroomMap` follows a remap: a later
+    run that maps a classroom elsewhere updates the row and notes it.
+  - **Shapes**: the table names `/classrooms/:id`, `.../assignments/:aid`,
+    `.../assignments/:aid/groups` and `.../journal/<path>` only; any other
+    suffix under `/classrooms/:id/` is no row and falls to `/` (the
+    fragment's last line), not silently to the classroom. For an assignment
+    the path's classroom must be the assignment's own (id map), else the 404.
+    A login `next` over 1500 encoded characters is dropped (the stash cookie
+    is signed and limited to 4 KB).
+  - **Deviation, codespace start**: `/app/codespace/start/:aid` goes to
+    `/projects/:id`, not to a Quiz "project start route" (none exists before
+    M6-06/M6-07); revisit then.
   - **Not done** (needs the Caddy fragment or a product decision): the
     HMAC-honouring of an old unsubscribe link (the row allows a plain
     redirect; none is implemented, the secret is not carried); the

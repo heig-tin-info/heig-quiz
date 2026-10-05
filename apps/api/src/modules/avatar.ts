@@ -5,9 +5,9 @@ import { z } from "zod";
 import { AvatarMime } from "@quiz/contracts";
 
 import { audit } from "../audit.js";
+import type { Db } from "../db/client.js";
 import { avatars } from "../db/schema.js";
 import { publish } from "../events.js";
-import type { Db } from "../db/client.js";
 import { callerOf, seesUser, type Caller } from "./guards.js";
 import { INERT_IMAGE_HEADERS, sniffImage } from "./pool/assets.js";
 

@@ -7,6 +7,9 @@
  * kind of caller.
  */
 import { randomUUID } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -35,7 +38,7 @@ const get = (url: string, headers: Record<string, string> = {}) => server.app.in
 const location = (res: { headers: Record<string, unknown> }) => res.headers.location;
 
 const nextOrg = { n: 9000 };
-async function project(over: Partial<typeof projects.$inferInsert>): Promise<string> {
+async function project(over: Partial<typeof projects.$inferInsert>, room: string = classroomId): Promise<string> {
   const db = server.app.db;
   const n = nextOrg.n++;
   const orgId = randomUUID();
@@ -43,7 +46,7 @@ async function project(over: Partial<typeof projects.$inferInsert>): Promise<str
   const id = randomUUID();
   await db.insert(projects).values({
     id,
-    classroomId,
+    classroomId: room,
     orgId,
     name: `Lab ${n}`,
     slug: `lab-${n}`,
@@ -180,8 +183,11 @@ describe("who reaches a target (invariant 6)", () => {
     for (const headers of [stranger.headers, outsider.headers]) {
       for (const url of targets()) {
         const real = await get(url, headers);
-        const absent = await get(missing(url), headers);
-        expect([url, real.statusCode, real.body]).toEqual([url, 404, absent.body]);
+        const gone = missing(url);
+        const absent = await get(gone, headers);
+        // The default 404 names the route asked: compare what is left of it.
+        const bare = (body: string, u: string) => body.replace(u, "");
+        expect([url, real.statusCode, bare(real.body, url)]).toEqual([url, 404, bare(absent.body, gone)]);
         expect(absent.statusCode).toBe(404);
       }
     }
@@ -190,7 +196,7 @@ describe("who reaches a target (invariant 6)", () => {
   it("an id the import never carried, and a malformed one, are the same 404", async () => {
     for (const path of [`/classrooms/${old.unmapped}`, "/classrooms/nope", `/classrooms/${old.classroom}/assignments/${old.unmapped}`, "/app/codespace/start/nope"]) {
       const res = await get(`${L}${path}`, teacher.headers);
-      expect([path, res.statusCode, res.json()]).toEqual([path, 404, { error: "not_found" }]);
+      expect([path, res.statusCode]).toEqual([path, 404]);
     }
   });
 
@@ -202,15 +208,28 @@ describe("who reaches a target (invariant 6)", () => {
 
   it("a student of an archived classroom still reaches the project page the link lands on", async () => {
     const seeded = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [student.id], questions: 0 });
-    const room = randomUUID();
-    const was = classroomId;
-    classroomId = seeded.classroomId;
-    const p = await project({ state: "published" });
-    classroomId = was;
+    const [oldRoom, oldAssignment] = [randomUUID(), randomUUID()];
+    const p = await project({ state: "published" }, seeded.classroomId);
     await server.app.db.update(classrooms).set({ archivedAt: new Date() }).where(eq(classrooms.id, seeded.classroomId));
-    await server.app.db.insert(importIdMap).values({ sourceTable: "assignments", sourceId: room, targetId: p, how: "created" });
-    const res = await get(`${L}/classrooms/${old.classroom}/assignments/${room}`, student.headers);
+    await server.app.db.insert(importIdMap).values([
+      { sourceTable: "classrooms", sourceId: oldRoom, targetId: seeded.classroomId, how: "merged" },
+      { sourceTable: "assignments", sourceId: oldAssignment, targetId: p, how: "created" },
+    ]);
+    const res = await get(`${L}/classrooms/${oldRoom}/assignments/${oldAssignment}`, student.headers);
     expect([res.statusCode, location(res)]).toEqual([302, `/projects/${p}`]);
+  });
+
+  it("the classroom of the path must be the assignment's own, else the 404 of a missing one", async () => {
+    const other = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [student.id], questions: 0 });
+    const otherOld = randomUUID();
+    await server.app.db.insert(importIdMap).values({ sourceTable: "classrooms", sourceId: otherOld, targetId: other.classroomId, how: "merged" });
+    for (const tail of ["", "/groups"]) {
+      const wrong = await get(`${L}/classrooms/${otherOld}/assignments/${old.assignment}${tail}`, teacher.headers);
+      const unmapped = await get(`${L}/classrooms/${old.unmapped}/assignments/${old.assignment}${tail}`, teacher.headers);
+      const absent = await get(`${L}/classrooms/${otherOld}/assignments/${randomUUID()}${tail}`, teacher.headers);
+      expect([wrong.statusCode, unmapped.statusCode, absent.statusCode]).toEqual([404, 404, 404]);
+      
+    }
   });
 
   it("the student never gets the staff's groups page", async () => {
@@ -226,6 +245,22 @@ describe("who reaches a target (invariant 6)", () => {
     const { token } = await createApiToken(server.app.db, teacher.id, { name: "t", expiresInDays: null });
     const res = await get(`${L}/classrooms/${old.classroom}`, { authorization: `Bearer ${token}` });
     expect(location(res)).toContain("/app/auth/login?next=");
+  });
+
+  it("a seb and a kiosk session are nobody here: the login, like no session", async () => {
+    const seeded = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [student.id], questions: 0 });
+    for (const kind of ["seb", "kiosk"] as const) {
+      const s = await createSession(server.app.db, student.id, 8, { kind, actorUserId: null, evaluationId: seeded.evaluationId });
+      const headers = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
+      const url = `${L}/classrooms/${old.classroom}`;
+      const res = await get(url, headers);
+      expect([kind, res.statusCode, location(res)]).toEqual([kind, 302, `/app/auth/login?next=${encodeURIComponent(url)}`]);
+    }
+  });
+
+  it("a URL too long for the login's stash is sent to the login without its way back", async () => {
+    const res = await get(`${L}/classrooms/${old.classroom}/journal/${"a".repeat(90)}/${"b".repeat(90)}/${"c".repeat(90)}/${"d".repeat(90)}/${"e".repeat(90)}/${"f".repeat(90)}/${"g".repeat(90)}/${"h".repeat(90)}/${"i".repeat(90)}/${"j".repeat(90)}/${"k".repeat(90)}/${"l".repeat(90)}/${"m".repeat(90)}/${"n".repeat(90)}/${"o".repeat(90)}/${"p".repeat(90)}.md`);
+    expect([res.statusCode, location(res)]).toEqual([302, "/app/auth/login"]);
   });
 
   it("nobody signed in is sent to the login that comes back to the same URL, real entity or not", async () => {
@@ -245,5 +280,26 @@ describe("who reaches a target (invariant 6)", () => {
     expect((await get(`${L}/classrooms/${old.classroom}`, admin.headers)).statusCode).toBe(404);
     const powers = await server.signInWithSuperPowers();
     expect(location(await get(`${L}/classrooms/${old.classroom}`, powers.headers))).toBe(`/classrooms/${classroomId}`);
+  });
+});
+
+describe("a refusal for a navigation is the SPA's own not-found page", () => {
+  it("serves the same page for a missing and for an unreachable target", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "quiz-static-"));
+    writeFileSync(join(dir, "index.html"), "<!doctype html><title>spa</title>");
+    const spa = await testServer({ STATIC_DIR: dir });
+    try {
+      const stranger2 = await spa.signIn("teacher");
+      const [real, absent] = await Promise.all([
+        spa.app.inject({ method: "GET", url: `${L}/classrooms/${old.classroom}`, headers: stranger2.headers }),
+        spa.app.inject({ method: "GET", url: `${L}/classrooms/${randomUUID()}`, headers: stranger2.headers }),
+      ]);
+      expect([real.statusCode, real.headers["content-type"]]).toEqual([absent.statusCode, absent.headers["content-type"]]);
+      expect(real.body).toBe(absent.body);
+      expect(real.body).toContain("<title>spa</title>");
+    } finally {
+      await spa.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

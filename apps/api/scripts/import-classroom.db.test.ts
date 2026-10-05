@@ -249,6 +249,33 @@ describe("import-classroom", () => {
     expect(rows.every((r) => r.how === "merged")).toBe(true);
   });
 
+  it("follows a remap: the mapping file sends a classroom elsewhere on a later run (M8-02)", async () => {
+    const w = await world();
+    await runImport(w.db, config, snapshot, MAPPING, DECIDED);
+    // A second Quiz classroom of the same course, connected to the same organization.
+    const [link] = await w.db.select().from(githubClassroomLinks).where(eq(githubClassroomLinks.classroomId, w.progA));
+    const [course] = await w.db.select({ courseId: classrooms.courseId }).from(classrooms).where(eq(classrooms.id, w.progA));
+    const progB = randomUUID();
+    await w.db.insert(classrooms).values({ id: progB, courseId: course!.courseId, name: "Prog-B" });
+    await w.db.insert(githubClassroomLinks).values({ classroomId: progB, orgId: link!.orgId, linkedBy: link!.linkedBy });
+    const MI = "c3000000-0000-4000-8000-000000000002";
+    const remapped: ClassroomMapping = {
+      classrooms: [
+        { source: { name: "Prog-A" }, target: { course: "PROG", classroom: "Prog-B" } },
+        { source: { id: MI }, target: { course: "INFO1", classroom: "MI-2026" } },
+        { source: { name: "Sandbox" }, drop: true, note: "test classroom" },
+      ],
+    };
+    const again = await runImport(w.db, config, snapshot, remapped, DECIDED);
+    expect(again.refusals).toEqual([]);
+    const rows = await w.db.select().from(importIdMap).where(eq(importIdMap.sourceTable, "classrooms"));
+    expect(Object.fromEntries(rows.map((r) => [r.sourceId, r.targetId]))).toEqual({ [SRC.progA]: progB, [MI]: w.mi });
+    // ...and back: X -> A then X -> B then X -> A.
+    await runImport(w.db, config, snapshot, MAPPING, DECIDED);
+    const back = await w.db.select().from(importIdMap).where(and(eq(importIdMap.sourceTable, "classrooms"), eq(importIdMap.sourceId, SRC.progA)));
+    expect(back[0]!.targetId).toBe(w.progA);
+  });
+
   it("does not import the people of a dropped classroom", async () => {
     const w = await world();
     const report = await runImport(w.db, config, snapshot, MAPPING, DECIDED);

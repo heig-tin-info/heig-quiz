@@ -23,15 +23,21 @@ import { LegacyClassroomParams, type LegacyGone } from "@quiz/contracts";
 import { LEGACY_HOME, legacyRule } from "@quiz/domain";
 
 import { callerOf, ownPortalSession } from "../guards.js";
-import { notFound } from "../http.js";
 import { resolve } from "./service.js";
+
+/** What the login's signed stash cookie can carry (it must stay well under 4 KB). */
+const NEXT_MAX = 1500;
 
 export async function legacyPlugin(app: FastifyInstance) {
   app.get("/legacy/classroom/*", async (req, reply) => {
     const params = LegacyClassroomParams.safeParse(req.params);
-    if (!params.success) return notFound(reply);
+    // The SPA's own not-found handling for a navigation, the one answer for every refusal.
+    const notFound = () => reply.callNotFound();
+    if (!params.success) return notFound();
     const gone = () => reply.code(410).send({ error: "moved", to: LEGACY_HOME } satisfies LegacyGone);
     const rule = legacyRule(`/${params.data["*"]}`);
+    // The avatar answers 410 where the other entity rows answer 404.
+    const deny = () => (rule.kind === "avatar" ? gone() : notFound());
 
     switch (rule.kind) {
       case "redirect":
@@ -39,16 +45,17 @@ export async function legacyPlugin(app: FastifyInstance) {
       case "gone":
         return gone();
       case "not_found":
-        return notFound(reply);
+        return notFound();
       default: {
-        // The avatar answers 410 where the others answer 404 (and never a login).
-        const miss = () => (rule.kind === "avatar" ? gone() : notFound(reply));
         if (!req.user) {
-          return rule.kind === "avatar" ? gone() : reply.redirect(`/app/auth/login?next=${encodeURIComponent(req.url)}`, 302);
+          if (rule.kind === "avatar") return gone();
+          // A URL too long for the stash is sent without its way back.
+          const next = encodeURIComponent(req.url);
+          return reply.redirect(next.length <= NEXT_MAX ? `/app/auth/login?next=${next}` : "/app/auth/login", 302);
         }
-        if (!ownPortalSession(req.auth)) return miss();
+        if (!req.auth || !ownPortalSession(req.auth)) return deny();
         const to = await resolve(app.db, callerOf(req), req.auth, rule);
-        return to ? reply.redirect(to, 302) : miss();
+        return to ? reply.redirect(to, 302) : deny();
       }
     }
   });

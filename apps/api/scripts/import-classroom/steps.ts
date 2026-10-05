@@ -15,6 +15,7 @@ import { importAccountLink } from "../../src/auth/githubLink.js";
 import {
   avatars,
   enrollments,
+  importIdMap,
   importRuns,
   teacherGrants,
   userEmails,
@@ -210,7 +211,20 @@ export async function importGrants(ctx: Ctx) {
  * `merged`, never `created`: the import owns no classroom row.
  */
 export async function importClassroomMap(ctx: Ctx) {
-  for (const [sourceId, dest] of ctx.mapped) await remember(ctx, "classrooms", sourceId, dest.classroomId, "merged");
+  for (const [sourceId, dest] of ctx.mapped) {
+    const held = ctx.known.get("classrooms")?.get(sourceId);
+    if (held === undefined) await remember(ctx, "classrooms", sourceId, dest.classroomId, "merged");
+    else if (held !== dest.classroomId) {
+      // A remap: the mapping file now sends the classroom elsewhere. No baseline to protect (`merged`, never owned).
+      await ctx.db
+        .update(importIdMap)
+        .set({ targetId: dest.classroomId })
+        .where(and(eq(importIdMap.sourceTable, "classrooms"), eq(importIdMap.sourceId, sourceId)));
+      ctx.known.get("classrooms")!.set(sourceId, dest.classroomId);
+      written(ctx, "import_classroom.id_map");
+      note(ctx, "reimport", `"${dest.classroomName}": the mapping now sends classroom ${sourceId} to ${dest.courseCode}/${dest.classroomName}, the legacy links follow`);
+    }
+  }
 }
 
 /**

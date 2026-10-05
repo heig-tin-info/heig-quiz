@@ -16,8 +16,8 @@ const ROWS: [string, string, LegacyRule][] = [
   ["/app/codespace/start/:aid", `/app/codespace/start/${A}`, { kind: "start", assignmentId: A }],
   ["/app/email/unsub", "/app/email/unsub", { kind: "redirect", to: "/settings" }],
   ["/classrooms/:id", `/classrooms/${C}`, { kind: "classroom", classroomId: C }],
-  ["/classrooms/:id/assignments/:aid", `/classrooms/${C}/assignments/${A}`, { kind: "project", assignmentId: A }],
-  ["/classrooms/:id/assignments/:aid/groups", `/classrooms/${C}/assignments/${A}/groups`, { kind: "groups", assignmentId: A }],
+  ["/classrooms/:id/assignments/:aid", `/classrooms/${C}/assignments/${A}`, { kind: "project", classroomId: C, assignmentId: A }],
+  ["/classrooms/:id/assignments/:aid/groups", `/classrooms/${C}/assignments/${A}/groups`, { kind: "groups", classroomId: C, assignmentId: A }],
   ["/classrooms/:cid/journal", `/classrooms/${C}/journal`, { kind: "journal", classroomId: C, path: "" }],
   ["/classrooms/:cid/journal/<path>", `/classrooms/${C}/journal/10-w1/README.md`, { kind: "journal", classroomId: C, path: "10-w1/README.md" }],
   ["/settings", "/settings", { kind: "redirect", to: "/settings" }],
@@ -51,8 +51,11 @@ describe("legacyRule: edges", () => {
     expect(legacyRule("/app/api/users/nope/avatar")).toEqual({ kind: "gone" });
   });
 
-  it("sub-pages of a classroom with no row of their own land on the classroom", () => {
-    expect(legacyRule(`/classrooms/${C}/roster`)).toEqual({ kind: "classroom", classroomId: C });
+  it("a suffix no row names is no row: the fallback, never a silent resolution", () => {
+    const home = { kind: "redirect", to: "/" };
+    for (const tail of ["/roster", "/assignments", `/assignments/${A}/other`, `/assignments/${A}/groups/x`, `/assignments/${A}/groups/x/y`]) {
+      expect(legacyRule(`/classrooms/${C}${tail}`)).toEqual(home);
+    }
   });
 
   it("an unknown path falls to the home, as the last line of the fragment", () => {

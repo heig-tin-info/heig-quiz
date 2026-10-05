@@ -21,10 +21,10 @@ export type LegacyRule =
   | { kind: "gone" }
   /** `/classrooms/:id` and every sub-page of it that has no row of its own. */
   | { kind: "classroom"; classroomId: string }
-  /** `/classrooms/:id/assignments/:aid` (the classroom id is not read: the assignment id decides). */
-  | { kind: "project"; assignmentId: string }
+  /** `/classrooms/:id/assignments/:aid`. */
+  | { kind: "project"; classroomId: string; assignmentId: string }
   /** `/classrooms/:id/assignments/:aid/groups`. */
-  | { kind: "groups"; assignmentId: string }
+  | { kind: "groups"; classroomId: string; assignmentId: string }
   /** `/classrooms/:cid/journal/<path>`; `path` is the raw remainder, to be vetted by `safeJournalPath` (empty: the journal's home). */
   | { kind: "journal"; classroomId: string; path: string }
   /** `/app/codespace/start/:aid` (the old `.seb` startURL). */
@@ -74,13 +74,13 @@ export function legacyRule(path: string): LegacyRule {
 
   if (a === "classrooms" && b !== undefined) {
     if (!isId(b)) return { kind: "not_found" };
-    if (c === "assignments" && d !== undefined) {
-      if (!isId(d)) return { kind: "not_found" };
-      if (e === "groups") return { kind: "groups", assignmentId: d };
-      return { kind: "project", assignmentId: d };
-    }
     if (c === "journal") return { kind: "journal", classroomId: b, path: parts.slice(3).join("/") };
-    return { kind: "classroom", classroomId: b };
+    // The table names these shapes only: any other suffix is no row, so the fragment's last line.
+    if (parts.length === 2) return { kind: "classroom", classroomId: b };
+    if (c === "assignments" && (parts.length === 4 || (parts.length === 5 && e === "groups"))) {
+      if (!isId(d)) return { kind: "not_found" };
+      return { kind: e === "groups" ? "groups" : "project", classroomId: b, assignmentId: d };
+    }
   }
 
   // Every other path, `/`, `/setup/github/installed` and `/app/auth/*` among them: the home.

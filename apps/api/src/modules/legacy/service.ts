@@ -22,7 +22,7 @@ import type { LegacyRule } from "@quiz/domain";
 
 import type { SessionAuth } from "../../auth/session.js";
 import type { Db } from "../../db/client.js";
-import { importIdMap } from "../../db/schema.js";
+import { importIdMap, projects } from "../../db/schema.js";
 import { findVisibleAvatar } from "../avatar.js";
 import { findAccessibleProject, findReadableClassroom, findStudentProjectView, type Caller } from "../guards.js";
 
@@ -47,7 +47,7 @@ async function mapped(db: Db, table: "classrooms" | "assignments" | "users", sou
 export async function resolve(
   db: Db,
   caller: Caller,
-  auth: Pick<SessionAuth, "kind" | "actorUserId"> | null,
+  auth: Pick<SessionAuth, "kind" | "actorUserId">,
   rule: LookupRule,
 ): Promise<string | null> {
   switch (rule.kind) {
@@ -66,6 +66,12 @@ export async function resolve(
     case "start": {
       const id = await mapped(db, "assignments", rule.assignmentId);
       if (!id) return null;
+      // The old classroom of the path must be the assignment's own.
+      if ("classroomId" in rule) {
+        const room = await mapped(db, "classrooms", rule.classroomId);
+        const [owner] = await db.select({ classroomId: projects.classroomId }).from(projects).where(eq(projects.id, id)).limit(1);
+        if (!room || owner?.classroomId !== room) return null;
+      }
       const staff = await findAccessibleProject(db, caller, id);
       // The students' side, by the rule of the page the link lands on (an archived classroom still reads).
       if (!staff && !(await findStudentProjectView(db, caller, auth, id))) return null;
