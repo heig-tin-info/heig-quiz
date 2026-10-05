@@ -4334,6 +4334,44 @@ serves now (16a), and what waits for the group repositories (16b).
 - **Goal**: `/legacy/classroom/*` for every row of §6.6.
 - **Acceptance**: a table-driven test per row; targets load under
   `staffAccess`.
+- **As delivered** (branch `merge/M8-02-legacy-urls`):
+  - `P:domain/legacyClassroom.ts` (pure, `legacyRule(path)`: every row of
+    §6.6 as a rule, malformed ids as `not_found`, journal segments that
+    never climb), `P:contracts/legacy.ts` (`LegacyClassroomParams`,
+    `LegacyGone`), `Q:modules/legacy/{routes,service}.ts` (`GET
+    /legacy/classroom/*`, outside `/app/api`: a browser navigates to it),
+    `legacy.db.test.ts` (one case per row, then who reaches a target).
+  - **Fixed rows** answer the same to everyone: 302 (`/settings`, `/`,
+    `/admin`; a query is dropped, the e-mail unsubscribe included) or 410
+    `{ error: "moved", to: "/" }` for the dead APIs. A path no row names
+    falls to `/`, the last line of the Caddy fragment. `POST
+    /webhooks/github` is not routed here (Caddy answers it, a POST never
+    reaches `/legacy`); the GET of the same path is a 410.
+  - **Entity rows** (classroom, project, groups, journal, start): the old id
+    goes through `import_classroom.id_map` (`classrooms`, `assignments`,
+    `users`) and the target is LOADED under the caller's own portal session
+    by the guards' finders (`findReadableClassroom`, `findAccessibleProject`
+    = `staffAccess`, `findStudentProject`): staff or a seated student. An
+    unmapped, malformed, absent or unreachable target is the same 404 body;
+    an impersonation is nobody. Nobody signed in (a `seb` or `kiosk` session,
+    a bearer token: the same) gets a 302 to `/app/auth/login?next=` the same
+    URL, identical for a real and a made-up id. The avatar answers 410 for
+    every reason, as the table says.
+  - **The import now writes the classroom map**: `importClassroomMap`
+    (`steps.ts`, first step of `registry.ts`) remembers each carried
+    classroom as `classrooms` (old id, Quiz classroom, `merged`). Before it
+    the id map held no classroom row but the journals' one.
+  - **Targets**: `/classrooms/:id`, `/classrooms/:id/journal[/<path>]`
+    (the page path is passed through, never checked: a page's existence is
+    not revealed), `/projects/:id`, for the groups the project's set
+    (`/classrooms/:id/groups/:setId`) or the classroom's sets, staff only (a
+    student gets the project page). `/app/codespace/start/:aid` leads to the
+    project page: Quiz has no codespace start route before M6-06/M6-07.
+  - **Not done** (needs the Caddy fragment or a product decision): the
+    HMAC-honouring of an old unsubscribe link (the row allows a plain
+    redirect; none is implemented, the secret is not carried); the
+    `Location` is relative (`/settings`), Caddy's `redir` to the Quiz host
+    keeps the browser on `quiz.chevallier.io`.
 
 ### M8-03 — Caddy fragments
 - **Goal**: `infra/caddy/classroom-maintenance.caddy`,

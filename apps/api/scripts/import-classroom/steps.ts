@@ -203,6 +203,17 @@ export async function importGrants(ctx: Ctx) {
 }
 
 /**
+ * The classroom map (merge task M8-02): each mapped classroom's old id and
+ * the Quiz classroom it became, in the id map, which the legacy URL resolver
+ * reads (`/legacy/classroom/classrooms/:id`). The import carries a classroom
+ * into an EXISTING Quiz one, so this is the only trace of the old id.
+ * `merged`, never `created`: the import owns no classroom row.
+ */
+export async function importClassroomMap(ctx: Ctx) {
+  for (const [sourceId, dest] of ctx.mapped) await remember(ctx, "classrooms", sourceId, dest.classroomId, "merged");
+}
+
+/**
  * Course staff: the owner and the claimed seats of each mapped classroom,
  * with their roles (ADR-068, D04 (c)): the classroom's owner and a `teacher`
  * seat become owners of the course, an `assistant` seat an assistant. A seat

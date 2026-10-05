@@ -238,6 +238,17 @@ describe("import-classroom", () => {
     });
   });
 
+  it("maps each carried classroom's old id to its Quiz classroom, for the legacy URL resolver (M8-02)", async () => {
+    const w = await world();
+    await runImport(w.db, config, snapshot, MAPPING, DECIDED);
+    const rows = await w.db.select().from(importIdMap).where(eq(importIdMap.sourceTable, "classrooms"));
+    expect(Object.fromEntries(rows.map((r) => [r.sourceId, r.targetId]))).toEqual({
+      [SRC.progA]: w.progA,
+      "c3000000-0000-4000-8000-000000000002": w.mi,
+    });
+    expect(rows.every((r) => r.how === "merged")).toBe(true);
+  });
+
   it("does not import the people of a dropped classroom", async () => {
     const w = await world();
     const report = await runImport(w.db, config, snapshot, MAPPING, DECIDED);
