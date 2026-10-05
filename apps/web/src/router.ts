@@ -431,14 +431,17 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     studentSafe: true,
     bottomSlot: "courses",
   },
-  // F-PROJ-13 (M3-12): the staff's project page, in every build. It takes
-  // no tail: `/projects/:id/<anything>` reads as home.
+  // F-PROJ-13 (M3-12): the staff's project page, in every build. One
+  // address, two pages (F-PROJ-15, M3-13): a student, a teacher in the
+  // student view and an impersonation get the student's project, under the
+  // Courses slot like the classroom's pages it hangs off.
   project: {
     path: (r) => `/projects/${r.id}`,
     match: ([head, id, tail]) =>
       head === "projects" && id && tail === undefined ? { view: "project", id } : null,
-    studentSafe: false,
+    studentSafe: true,
     section: "activities",
+    bottomSlot: "courses",
   },
   activities: { ...fixed("activities", { view: "activities" }), section: "activities" },
   pools: {

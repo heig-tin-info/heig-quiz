@@ -12,6 +12,7 @@ import type {
   EvaluationGradeRow,
   GradeGroup,
   LobbyView,
+  ProjectAcceptance,
   ProjectInvitationResent,
   StudentClassroomPage,
   StudentGrades,
@@ -23,6 +24,7 @@ import {
   D,
   H,
   MockError,
+  MockPayload,
   flags,
   iso,
   mockCalculator,
@@ -613,57 +615,109 @@ const evaluationHome = (): EvaluationHome => {
   };
 };
 
-// M3-09a (F-PROJ-04, F-PROJ-15): the student's projects of PRG1-2026 under
-// `?projects=1` — one in progress with an indicative score, one starting in
-// three days, one locked at last week's deadline and released — as cards of
-// the home and the classroom page, each served as a view derived from its
-// card (M3-13 fleshes them out). Hand-written, like the home: the teacher's
-// projects of `project.ts` are another persona's world.
+// M3-09a, M3-13 (F-PROJ-04, F-PROJ-05, F-PROJ-07, F-PROJ-15): the student's
+// projects of PRG1-2026 under `?projects=1`, one per state of the row's
+// button (`docs/merge/05-web.md` §5.3) and of the page: in progress with an
+// indicative score (ready), to accept (the project open, no repository), an
+// invitation pending, one whose repository GitHub lost, one starting in
+// three days, one locked that was never accepted, one released. With
+// `?unlinked=1` the persona has no GitHub account, so the open ones lead to
+// linking it. Accept (`?provisioning=1`: twenty seconds; `?refused=1`:
+// `repo_name_taken`; `?stale=1`: `github_account_stale`) gives the accepting
+// card its repository, with the invitation pending, for the rest of the
+// page's life; Resend keeps the staff's minute. Hand-written, like the home:
+// the teacher's projects of `project.ts` are another persona's world.
 export const STUDENT_PROJECT_OPEN = "77777777-7777-4777-8777-777777777701";
 export const STUDENT_PROJECT_SOON = "77777777-7777-4777-8777-777777777702";
 export const STUDENT_PROJECT_PAST = "77777777-7777-4777-8777-777777777703";
-const PROJECT_ORG = "heig-tin-info";
-const STUDENT_LOGIN = "lea-perret";
+export const STUDENT_PROJECT_ACCEPT = "77777777-7777-4777-8777-777777777704";
+export const STUDENT_PROJECT_INVITED = "77777777-7777-4777-8777-777777777705";
+export const STUDENT_PROJECT_LOCKED = "77777777-7777-4777-8777-777777777706";
+export const STUDENT_PROJECT_DELETED = "77777777-7777-4777-8777-777777777707";
+export const STUDENT_PROJECT_IDS = [
+  STUDENT_PROJECT_OPEN,
+  STUDENT_PROJECT_SOON,
+  STUDENT_PROJECT_PAST,
+  STUDENT_PROJECT_ACCEPT,
+  STUDENT_PROJECT_INVITED,
+  STUDENT_PROJECT_LOCKED,
+  STUDENT_PROJECT_DELETED,
+] as const;
+/** The student's repository of a project, `<slug>-<login>` in the classroom's organization, the slug from the title's head ("Labo 1 — …" ⇒ `labo-1`). */
+const studentRepoName = (title: string) =>
+  `heig-tin-info/${title.split(" — ")[0]!.normalize("NFD").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase()}-lea-perret`;
+
+/** The projects accepted in this page's life (Accept below), their invitation pending. */
+const acceptedHere = new Set<string>();
+/** When each invitation was last resent here: the staff's minute (F-PROJ-07). */
+const resentAt = new Map<string, number>();
 
 const studentProjectCards = (): StudentProjectCard[] => {
   if (!flags.projects || flags.empty) return [];
-  const base = { kind: "project" as const, classroomId: "r1", classroomName: "PRG1-2026", courseCode: "PRG1", githubLinked: true };
-  const repo = (slug: string) => {
-    const fullName = `${PROJECT_ORG}/${slug}-${STUDENT_LOGIN}`;
-    return { repoFullName: fullName, repoUrl: `https://github.com/${fullName}`, invitation: "accepted" as const };
+  const base = {
+    kind: "project" as const,
+    classroomId: "r1",
+    classroomName: "PRG1-2026",
+    courseCode: "PRG1",
+    githubLinked: !flags.unlinked,
   };
+  const repo = (title: string, invitation: "pending" | "accepted") => {
+    const fullName = studentRepoName(title);
+    return { repoFullName: fullName, repoUrl: `https://github.com/${fullName}`, invitation };
+  };
+  const none = { invitation: null, repoFullName: null, repoUrl: null };
+  const toAccept = (id: string, title: string) =>
+    acceptedHere.has(id) ? { status: "in_progress" as const, ...repo(title, "pending") } : { status: "to_accept" as const, ...none };
   return [
-    { ...base, id: STUDENT_PROJECT_OPEN, title: "Labo 1 — Pointeurs et tableaux", startAt: iso(-3 * D), deadlineAt: iso(6 * D + 4 * H), status: "in_progress", ...repo("labo-1") },
-    { ...base, id: STUDENT_PROJECT_SOON, title: "Labo 2 — Listes chaînées", startAt: iso(3 * D), deadlineAt: iso(17 * D), status: "to_accept", invitation: null, repoFullName: null, repoUrl: null },
-    { ...base, id: STUDENT_PROJECT_PAST, title: "Labo 0 — Prise en main", startAt: iso(-21 * D), deadlineAt: iso(-7 * D), status: "released", ...repo("labo-0") },
+    { ...base, id: STUDENT_PROJECT_OPEN, title: "Labo 1 — Pointeurs et tableaux", startAt: iso(-3 * D), deadlineAt: iso(6 * D + 4 * H), status: "in_progress", ...repo("Labo 1", "accepted") },
+    { ...base, id: STUDENT_PROJECT_ACCEPT, title: "Labo 2 — Listes chaînées", startAt: iso(-D), deadlineAt: iso(13 * D), ...toAccept(STUDENT_PROJECT_ACCEPT, "Labo 2") },
+    { ...base, id: STUDENT_PROJECT_INVITED, title: "Mini-projet — Jeu de la vie", startAt: iso(-2 * D), deadlineAt: iso(27 * D), status: "in_progress", ...repo("Mini-projet", "pending") },
+    // Provisioned, then deleted on GitHub: the card names no repository (M3-09a).
+    { ...base, id: STUDENT_PROJECT_DELETED, title: "Labo 1b — Révision des pointeurs", startAt: iso(-5 * D), deadlineAt: iso(2 * D), status: "in_progress", ...none },
+    { ...base, id: STUDENT_PROJECT_SOON, title: "Labo 3 — Arbres binaires", startAt: iso(3 * D), deadlineAt: iso(17 * D), ...toAccept(STUDENT_PROJECT_SOON, "Labo 3") },
+    { ...base, id: STUDENT_PROJECT_LOCKED, title: "Exercice préliminaire — Compilation", startAt: iso(-30 * D), deadlineAt: iso(-14 * D), status: "locked", ...none },
+    { ...base, id: STUDENT_PROJECT_PAST, title: "Labo 0 — Prise en main", startAt: iso(-21 * D), deadlineAt: iso(-7 * D), status: "released", ...repo("Labo 0", "accepted") },
   ];
 };
 
-/** The view of one of the cards above: its repository as the card names it, a score on the open one, the release on the past one. */
+/**
+ * The view of one of the cards above: its repository as the card names it
+ * (deleted on the one GitHub lost), a current score on the open one, the
+ * frozen score and the release on the past one, nothing yet on a pending
+ * invitation.
+ */
 const studentProjectView = (card: StudentProjectCard): StudentProject => {
   const { invitation, repoFullName, repoUrl, ...facts } = card;
   const sha = (seed: string) => seed.repeat(40).slice(0, 40);
   const released = card.status === "released";
   const at = released ? iso(-7 * D - 3 * H) : iso(-2 * H);
+  const deleted = card.id === STUDENT_PROJECT_DELETED;
+  const url = repoUrl ?? `https://github.com/${studentRepoName(card.title)}`;
+  const graded = invitation === "accepted" && !deleted;
+  const repo: StudentProject["repo"] =
+    repoFullName === null && !deleted
+      ? null
+      : {
+          fullName: repoFullName ?? studentRepoName(card.title),
+          url,
+          invitation: invitation ?? "accepted",
+          deleted,
+          locked: released,
+          lastCommit: graded || deleted ? { sha: sha(card.id.slice(-2)), at } : null,
+          ciStatus: graded ? "pass" : "none",
+          run: graded
+            ? { sha: sha(card.id.slice(-2)), url: `${url}/actions/runs/${card.id.slice(-4)}`, conclusion: "success", completedAt: at }
+            : null,
+          score: !graded
+            ? null
+            : released
+              ? { points: 18, max: 20, grade: { grade: 5.5, fellBack: false }, frozen: true }
+              : { points: 34, max: 40, grade: { grade: 5.3, fellBack: false }, frozen: false },
+        };
   return {
     ...facts,
     gradingMode: "auto",
-    repo:
-      repoFullName === null || repoUrl === null || invitation === null
-        ? null
-        : {
-            fullName: repoFullName,
-            url: repoUrl,
-            invitation,
-            deleted: false,
-            locked: released,
-            lastCommit: { sha: sha(card.id.slice(-2)), at },
-            ciStatus: "pass",
-            run: { sha: sha(card.id.slice(-2)), url: `${repoUrl}/actions/runs/${card.id.slice(-4)}`, conclusion: "success", completedAt: at },
-            score: released
-              ? { points: 18, max: 20, grade: { grade: 5.5, fellBack: false }, frozen: true }
-              : { points: 34, max: 40, grade: { grade: 5.3, fellBack: false }, frozen: false },
-          },
+    repo,
     release: released
       ? { at: iso(-5 * D), points: 18, max: 20, grade: { grade: 5.5, fellBack: false }, comment: "Très bon travail, attention aux fuites mémoire dans la libération de la liste." }
       : null,
@@ -681,7 +735,7 @@ const studentHome = (): StudentHomeData => {
       startAt: new Date(card.startAt),
       deadlineAt: new Date(card.deadlineAt),
       released: card.status === "released",
-      accepted: card.repoFullName !== null,
+      accepted: card.status === "in_progress",
       locked: card.status === "locked",
     };
     groups[studentProjectGroup(facts, new Date(now))].push(card);
@@ -705,8 +759,34 @@ const studentProjectOr404 = (id: string | undefined): StudentProjectCard => {
 
 on("GET", "/app/api/student/projects/:id", (m): StudentProject => studentProjectView(studentProjectOr404(m.groups!.id)));
 
+/** A refusal of Accept or Resend as the API words it: `{ error, message }`, 502 for GitHub failing, 429 for too soon, 409 otherwise. */
+const projectRefusal = (code: string) =>
+  new MockPayload(
+    code === "provision_failed" || code === "invite_failed" ? 502 : code === "resend_too_soon" ? 429 : 409,
+    { error: code, message: code },
+  );
+
+on("POST", "/app/api/student/projects/:id/accept", async (m): Promise<ProjectAcceptance> => {
+  const card = studentProjectOr404(m.groups!.id);
+  if (flags.refused) throw projectRefusal("repo_name_taken");
+  if (flags.stale) throw projectRefusal("github_account_stale");
+  if (card.repoFullName !== null) return { status: "ok", fullName: card.repoFullName, invitationStatus: card.invitation ?? "accepted" };
+  if (card.status !== "to_accept") throw projectRefusal("deadline_passed");
+  if (Date.parse(card.startAt) > Date.now()) throw projectRefusal("not_started");
+  if (!card.githubLinked) throw projectRefusal("github_not_linked");
+  // F-PROJ-05: under a minute; `?provisioning=1` lets the waiting button be seen.
+  if (flags.provisioning) await new Promise((r) => setTimeout(r, 20_000));
+  acceptedHere.add(card.id);
+  return { status: "ok", fullName: studentRepoName(card.title), invitationStatus: "pending" };
+});
+
 on("POST", "/app/api/student/projects/:id/invite", (m): ProjectInvitationResent => {
-  if (studentProjectOr404(m.groups!.id).invitation !== "pending") throw new MockError(409, "invitation_not_pending");
+  const card = studentProjectOr404(m.groups!.id);
+  if (card.repoFullName === null) throw projectRefusal("repo_unavailable");
+  if (card.invitation !== "pending") throw projectRefusal("invitation_not_pending");
+  const last = resentAt.get(card.id);
+  if (last !== undefined && Date.now() - last < 60_000) throw projectRefusal("resend_too_soon");
+  resentAt.set(card.id, Date.now());
   return { invitationStatus: "pending", resentAt: new Date().toISOString() };
 });
 

@@ -59,7 +59,9 @@ const home: StudentHomeData = {
       results: "available",
     }),
   ],
-  serverNow: "2026-09-20T10:00:00.000Z",
+  // The page samples it into the server clock (invariant 5): the fixture's
+  // clock is this machine's, so every countdown reads as the cards are dated.
+  serverNow: new Date().toISOString(),
 };
 
 const render = (navigate = vi.fn()) => ({
@@ -224,8 +226,9 @@ describe("the student home", () => {
     expect(screen.queryByText("Rien à faire pour l'instant")).toBeNull();
   });
 
-  // M3-09a (F-PROJ-04): a project card, drawn minimally until M3-13 — title, status, deadline, no button.
-  it("lists a project among what is open, with its status and no button yet", async () => {
+  // M3-09a, M3-13 (F-PROJ-04): a project card among the evaluations — title,
+  // status, deadline, and its one action; a ready repository is a link.
+  it("lists a project among what is open, with its status and its repository", async () => {
     const project: StudentProjectCard = {
       kind: "project",
       id: "p1",
@@ -245,18 +248,26 @@ describe("the student home", () => {
       "GET /app/api/student/home": ok({ ...home, open: [card({}), project] }),
       "GET /app/api/student/classrooms": ok([]),
     });
-    render();
+    const { navigate } = render();
     const row = (await screen.findByText("Labo 1 — Pointeurs")).closest("div.rounded-card") as HTMLElement;
     expect(within(row).getByText("Projet")).toBeInTheDocument();
     expect(within(row).getByText(/en cours · /)).toBeInTheDocument();
     expect(within(row).queryByRole("button")).toBeNull();
-    // The evaluation beside it keeps its one action.
-    expect(screen.getByRole("button", { name: "Commencer" })).toBeInTheDocument();
+    // The title is the door to the project's page.
+    const title = within(row).getByRole("link", { name: "Labo 1 — Pointeurs" });
+    expect(title).toHaveAttribute("href", "/projects/p1");
+    await userEvent.click(title);
+    expect(navigate).toHaveBeenCalledWith({ view: "project", id: "p1" });
+    const open = within(row).getByRole("link", { name: "Ouvrir le dépôt" });
+    expect(open).toHaveAttribute("href", "https://github.com/heig/labo-1-lea");
+    // A ready repository never takes the accent: the evaluation beside it keeps the one red fill.
+    expect(open).not.toHaveClass("bg-accent");
+    expect(screen.getByRole("button", { name: "Commencer" })).toHaveClass("bg-accent");
   });
 
   it("shows the empty state when nothing is open", async () => {
     mockFetch({
-      "GET /app/api/student/home": ok({ open: [], upcoming: [], past: [], serverNow: "x" }),
+      "GET /app/api/student/home": ok({ open: [], upcoming: [], past: [], serverNow: new Date().toISOString() }),
       "GET /app/api/student/classrooms": ok([]),
     });
     render();
@@ -389,7 +400,8 @@ describe("Coming up, grouped by day", () => {
 
   const renderUpcoming = (upcoming: EvaluationCard[]) => {
     mockFetch({
-      "GET /app/api/student/home": ok({ ...home, open: [], upcoming }),
+      // The server's clock is the faked one: the day buckets are judged on it.
+      "GET /app/api/student/home": ok({ ...home, open: [], upcoming, serverNow: new Date().toISOString() }),
       "GET /app/api/student/classrooms": ok([]),
     });
     render();

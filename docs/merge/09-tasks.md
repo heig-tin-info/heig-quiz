@@ -1698,6 +1698,9 @@ former M3-09 card are kept below, under the task that inherits each.
 - **From M3-04** (2026-10-02): the hints exist (kind `projects`, to the
   repository's students' `user:` and the course's `course:`, never
   `classroom:`; `Q:modules/project/events.ts`, tested).
+- **From M3-13** (2026-10-04): a student's entry about a project links to
+  `/projects/:id` — one address, which serves the student's project page to
+  a student and the staff's page to the staff (`App.tsx`, F-ORG-15).
 - **Tests**: each kind sent once at its trigger, to its audience and nobody
   else (a student never receives another student's notification); the
   reminder claimed and sent together, per repository where a repository has
@@ -2197,6 +2200,129 @@ release. The original card's notes stay here; each part has its card below.
   `mock/student.ts`.
 - **Scenes**: `-unlinked`, `-accept`, `-invitation-pending`, `-ready`,
   `-released`; the default `student-home` unchanged.
+- **Decisions** (orchestrator, 2026-10-04, from the spec and the
+  precedents): one address, `/projects/:id`, dispatched by role as
+  `/classrooms/:id` is (F-ORG-15, ADR-018); ONE action per row by state;
+  a teacher in the student view and an impersonation see no action, one
+  muted line; the ready repository is a secondary external link, never
+  the accent; `"student"` added to the `projects` hint roots; M3-12a's
+  "students cannot accept yet" hint dropped.
+- **As delivered** (branch `merge/M3-13-student-project-row`, web only).
+  What M3-09b, M3-09c, M3-15 and M5-03 inherit:
+  - **The row** (`student/ProjectRow.tsx`, rules in `student/projectRow.ts`,
+    pure and unit-tested): `projectActionKind(facts, now)` names the one
+    action of a project — `link` (no GitHub account, open or not yet
+    started: "Link GitHub", the account link flow of `github/api.ts` with
+    `return` = the current page), `accept` (linked, published, start passed,
+    deadline not passed, no repository: "Accept"), `notStarted` (linked,
+    before the start: nothing), `invitation` (repository with a pending
+    invitation: "Open the invitation" → `<repoUrl>/invitations`, a new
+    tab), `open` ("Open repository", a secondary link, locked or not),
+    `notAccepted` (locked or released without a repository), `deleted` (a
+    card in progress that names no repository is one GitHub lost,
+    `factsOfCard`; the page reads `repo.deleted`; nothing is made again).
+    `ProjectFacts.repo` is a variant: live (url, invitation), deleted, or
+    null. ONE wording per state (`STATE_KEY`, `sproj.state.*` and
+    `sproj.invitation.pending`), on the row's line after status · deadline
+    and in the page's repository card alike; `github_not_linked` is worded
+    with the same key. Upcoming keeps no button (DESIGN.md, "Coming up").
+    `ACCENT_KINDS` = link, accept, invitation: `primary` lights those only;
+    `mostUrgent` (`StudentClassroom.tsx`) ranks a project by its deadline
+    only while `needsStudentAction`, so a ready repository never takes the
+    classroom page's accent (decided here: the invitation counts as a step
+    to take, so it may wear the accent). **The title is the door to the
+    project's page** (`RowLink` on `ActivityRow`: a real `/projects/:id`
+    href, `navigate` on a plain click; `ActivityCard` and `UpcomingByDay`
+    take `navigate`). `ActivityRow` moved to `student/ActivityRow.tsx`
+    (re-exported by `cards.tsx`) with the two countdown lines every row
+    shares, `leftLine` and `startsLine` (`timeLeftLine` and `upcomingLine`
+    of `cards.tsx` are written on them); `RowAction` gained `href` +
+    `external` for the links.
+  - **The clock is the server's** (invariant 5): the home, the classroom's
+    Activities and the project page read `useServerNow(serverNow)`
+    (`realtime/useServerClock.ts`: the payload's `serverNow` sampled into
+    `useServerClock`, `useNow(30_000) + clock.offset`) — the offset is
+    state, so a sample that moves it re-renders at once; every
+    countdown, the start gate of Accept, the "Evaluated commit" label and
+    `mostUrgent` judge on it, never on the browser's clock alone.
+  - **Accept** (`useProjectAction`): `POST /app/api/student/projects/:id/accept`;
+    the button says "Creating your repository… (up to a minute)" while it
+    waits; success toasts what to do next (by `invitationStatus`);
+    `provision_in_progress` and `invitation_not_pending` re-read instead
+    of resending (`REREAD_REFUSALS`, a `progress` toast);
+    `github_account_stale` turns the button into "Relink GitHub"; every
+    other refusal is worded (`studentRefusalMessage`, `sproj.refusal.*`:
+    `app_not_installed`, `distribution_missing`, `repo_name_taken` all say
+    "ask your teacher"; `provision_failed` says try again). The wording
+    mechanism is ONE, `wordedRefusal(error, table, t)` in `api.ts`: the
+    project page (`refusalMessage`) and the student's row each keep only
+    their table. Every write settles by invalidating the `student` root
+    (`studentRootKey`), so the home, the classroom page and the project
+    page re-read.
+  - **Read-only readers** (`useStudentReadOnly`): a teacher in the student
+    view (`useStudentView`) or a session of kind `impersonation`
+    (`useMe`) get no button and no Resend, the line `sproj.readOnly`.
+  - **The page** (`student/StudentProjectPage.tsx`, `studentProjectKey(id)`
+    under the `student` root): header with the classroom as parent (named
+    once), the status badge, the course code and the deadline ("Due …",
+    plus "· … left" only while time remains; the start while it is ahead),
+    the one action (primary while a step is to take, secondary for a ready
+    repository, none read-only); "My repository" (the name as a GitHub
+    link, the invitation state with the student's Resend — `429
+    resend_too_soon` worded, `invitation_not_pending` re-read,
+    `repo_unavailable`, `invite_failed` —, the lock, the last commit — the
+    EVALUATED commit once the deadline is applied or passed — with
+    `project/parts.tsx`'s `CiBadge`, translated: GitHub's raw conclusion is
+    never printed); "Score" before the release: the current score as
+    "Indicative score" or the frozen one as "Score at the deadline", both
+    with an "indicative until your teacher publishes" hint, the grade
+    (`results.col.grade`) with an `indicative` hint, the run line ("See
+    the run on GitHub", its time; the sha is in the commit line already);
+    nothing at all under grading `none`; "No score yet" without a graded
+    run; "Result" once released: final score, grade, "Published on", the
+    teacher's comment (`feedback.comment`) in an outlined `NotePanel`.
+    States: skeleton, 404 ("does not exist, or no seat", back to the
+    activities), error with retry (`activities.kind.project` as its
+    title). Phone: the action full width under the title — `PageHeader`
+    now gives its actions row the whole width under `sm` whenever that row
+    is ONE control with no help and no menu (desktop unchanged). 49 `sproj.*`
+    keys, en + fr.
+  - **Routing**: `project` is `studentSafe` with `bottomSlot: "courses"`
+    (its `section` stays the teacher's Activities); `App.tsx` gives the
+    staff `ProjectPage` and everyone else `StudentProjectPage`.
+    `realtime/hints.ts`: `projects` → `classroom`, `project`, `student`.
+  - **Renamed**: M3-12a's `project.repos.noneAccepted` (en/fr, "… The
+    students' side of projects is not open yet") is `project.repos.none`,
+    "No repository yet: a row fills once its student accepts the project."
+    (`project/ProjectRepos.tsx`, one line).
+  - **Mock** (`mock/student.ts`, `?projects=1`): seven cards, one per state
+    (`STUDENT_PROJECT_OPEN|SOON|PAST|ACCEPT|INVITED|LOCKED|DELETED`;
+    `STUDENT_PROJECT_IDS` is what `contract.test.ts` parses the view for),
+    the repository's name derived from the title's head (`studentRepoName`);
+    `?unlinked=1` unlinks the persona; the accept route provisions the card
+    for the page's life (`?provisioning=1`: twenty seconds; `?refused=1`:
+    `409 repo_name_taken`; `?stale=1`: `409 github_account_stale`, plain
+    flags of `mock/runtime.ts`); the invite route keeps the minute.
+    `contract.test.ts` also POSTs Accept (`ProjectAcceptance`, a refusal
+    of `PROJECT_ACCEPT_REFUSALS`, `?refused=1` through `flags`) and the
+    Resend (`ProjectInvitationResent`, then 429). Scenes
+    `student-home-projects[-unlinked]`, `student-classroom-projects`,
+    `student-view-classroom-projects`,
+    `student-project[-accept|-unlinked|-invited|-deleted|-released|-provisioning|-relink]`.
+  - **Tests**: `student/projectRow.test.ts` (the kind per state, the card's
+    deleted inference, every refusal worded), `student/ProjectRow.test.tsx`
+    (the title link, the action per state, the accent, read-only readers,
+    the Accept flow: wait, re-read, relink, each refusal),
+    `student/StudentProjectPage.test.tsx` (states, facts, indicative and
+    frozen wording, the server's clock over the browser's, no raw
+    conclusion, release block, Resend and its refusals, read-only,
+    French), `hints.test.ts`, `router.test.ts`,
+    `bottomNavSlots.test.ts`, `StudentClassroom.test.tsx` (`mostUrgent` with
+    projects, the rows), `StudentHome.test.tsx`; the Grades page's project
+    row (M3-01) renders unchanged with the merged contracts.
+  - Not done here: the notifications (M3-09b: an entry about a project
+    links to `/projects/:id`, which now serves the student), the F-PROJ-21
+    notices (M3-09c), a group's repository (M3-15), clone commands.
 
 ### M3-14 — Pilot and load test
 - **Depends on**: M3-01…13, M2-06.

@@ -67,6 +67,14 @@ const ATTEMPT_PAST = "22222222-2222-4222-8222-222222222223";
 const TEMPLATE_INSTANCE = "eeeeeeee-0000-4000-8000-000000000026";
 /** The journal page the editor scenes open (M4-06). */
 const JOURNAL_EDIT = "/classrooms/r1/journal/10-semaine-1/10-pointeurs.md";
+/** The student persona's projects (M3-13, `STUDENT_PROJECT_*` of `mock/student.ts`), one per state. */
+const SPROJ = {
+  open: "77777777-7777-4777-8777-777777777701",
+  past: "77777777-7777-4777-8777-777777777703",
+  accept: "77777777-7777-4777-8777-777777777704",
+  invited: "77777777-7777-4777-8777-777777777705",
+  deleted: "77777777-7777-4777-8777-777777777707",
+};
 
 /** A pending pairing of the mock's station n° 7, code BCDF-GHJK (ADR-051 §7). */
 const KIOSK_PAIRING = {
@@ -612,6 +620,25 @@ const scenes = [
   { name: "student-classroom-error", role: "student", path: "/classrooms/r1?fail=1", settle: 2500 },
   { name: "student-classroom-notfound", role: "student", path: "/classrooms/nope" },
   { name: "student-classroom-loading", role: "student", path: "/classrooms/r1?slow=1", settle: 300 },
+  // M3-13 (F-PROJ-04, F-PROJ-15): the student's projects (`?projects=1`,
+  // `mock/student.ts`): a row in each state on the home and the classroom
+  // page, the rows without a GitHub account, a teacher in the student view
+  // (no button), and the student's project page — ready with its indicative
+  // score, to accept, without a linked account, invitation pending,
+  // repository deleted, released; Accept under way (`?provisioning=1`) and
+  // refused on a stale account (`?stale=1`, Relink GitHub).
+  { name: "student-home-projects", role: "student", path: "/?projects=1" },
+  { name: "student-home-projects-unlinked", role: "student", path: "/?projects=1&unlinked=1" },
+  { name: "student-classroom-projects", role: "student", path: "/classrooms/r1?projects=1" },
+  { name: "student-view-classroom-projects", role: "teacher", path: "/classrooms/r1?projects=1", ss: { "quiz-view-as": "student", "quiz-view-as-return": "/classrooms/r1" } },
+  { name: "student-project", role: "student", path: `/projects/${SPROJ.open}?projects=1` },
+  { name: "student-project-accept", role: "student", path: `/projects/${SPROJ.accept}?projects=1` },
+  { name: "student-project-unlinked", role: "student", path: `/projects/${SPROJ.accept}?projects=1&unlinked=1` },
+  { name: "student-project-invited", role: "student", path: `/projects/${SPROJ.invited}?projects=1` },
+  { name: "student-project-deleted", role: "student", path: `/projects/${SPROJ.deleted}?projects=1` },
+  { name: "student-project-released", role: "student", path: `/projects/${SPROJ.past}?projects=1` },
+  { name: "student-project-provisioning", role: "student", path: `/projects/${SPROJ.accept}?projects=1&provisioning=1`, act: async (p) => { await p.getByRole("button", { name: /^(accept|accepter)$/i }).click(); await p.getByRole("button", { name: /up to a minute|jusqu'à une minute/i }).waitFor(); } },
+  { name: "student-project-relink", role: "student", path: `/projects/${SPROJ.accept}?projects=1&stale=1`, fold: true, act: async (p) => { await p.getByRole("button", { name: /^(accept|accepter)$/i }).click(); await p.getByRole("link", { name: /relink github|relier github/i }).waitFor(); } },
   // F-ORG-14, F-RES-04: the student's Grades, by classroom — every status
   // once, PRG1-2024 archived; `?many=1` a term of weekly series.
   { name: "student-grades", role: "student", path: "/grades" },

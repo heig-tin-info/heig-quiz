@@ -181,7 +181,7 @@ export function ProjectRepos({
   return (
     <section aria-labelledby="project-repos" className="space-y-3">
       {heading}
-      {noneAccepted ? <p className="text-sm text-fg-muted">{t("project.repos.noneAccepted")}</p> : null}
+      {noneAccepted ? <p className="text-sm text-fg-muted">{t("project.repos.none")}</p> : null}
       <Card className={`${T.container} overflow-x-auto`}>
         <table className={T.table}>
           <TableHead columns={columns} sort={sort} onToggle={toggle} />

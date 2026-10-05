@@ -53,6 +53,9 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  *   owner (`mock/org.ts`, ADR-068).
  * `calculator`: the student's evaluation provides the scientific calculator
  *   (ADR-069); `stdcalc`: the standard one.
+ * `provisioning`: the student's Accept of a project takes twenty seconds
+ *   (`mock/student.ts`, M3-13); `refused`: it is refused `409
+ *   repo_name_taken`; `stale`: `409 github_account_stale` (Relink GitHub).
  */
 export const FLAG_NAMES = [
   "empty",
@@ -84,6 +87,9 @@ export const FLAG_NAMES = [
   "assistant",
   "calculator",
   "stdcalc",
+  "provisioning",
+  "refused",
+  "stale",
 ] as const;
 type FlagName = (typeof FLAG_NAMES)[number];
 export const flags = {} as Record<FlagName, boolean>;

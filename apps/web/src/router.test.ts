@@ -281,6 +281,8 @@ describe("ROUTES", () => {
       "kiosk",
       "oauthConsent",
       "pair",
+      // F-PROJ-15 (M3-13): one address, the student's project for a student.
+      "project",
       "settings",
       // F-ORG-14: the student's Courses (M5-02) and Grades.
       "studentCourses",

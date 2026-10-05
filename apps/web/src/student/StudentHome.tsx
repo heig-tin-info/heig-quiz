@@ -30,8 +30,9 @@ import { api } from "../api";
 import { useDrillAvailability } from "../drill/api";
 import { sessionCourses, sessionLine } from "../drill/format";
 import { useT } from "../i18n";
+import { useServerNow } from "../realtime/useServerClock";
 import type { Route } from "../router";
-import { Card, EmptyState, PageHeader, QueryError, SectionHeading, Skeleton, useNow } from "../ui";
+import { Card, EmptyState, PageHeader, QueryError, SectionHeading, Skeleton } from "../ui";
 import { studentHomeKey } from "../queryKeys";
 import {
   ActivityCard,
@@ -62,11 +63,13 @@ function DrillRow({ session, navigate }: { session: DrillSession; navigate: (r: 
 
 export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => void }) {
   const t = useT();
-  const now = useNow(30_000);
   const home = useQuery<StudentHomeData>({
     queryKey: studentHomeKey,
     queryFn: () => api("/app/api/student/home"),
   });
+  // The server's clock (invariant 5): every countdown and start gate reads
+  // the payload's `serverNow`, never the browser's clock alone.
+  const now = useServerNow(home.data?.serverNow);
   const actions = useCardActions(navigate);
 
   // ADR-041 §6 (#317): today's drill, while it holds something — the home's
@@ -112,7 +115,7 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
               </Card>
             ) : (
               open.map((card) => (
-                <ActivityCard key={card.id} card={card} group="open" now={now} primary actions={actions} />
+                <ActivityCard key={card.id} card={card} group="open" now={now} navigate={navigate} primary actions={actions} />
               ))
             )}
             {/* After what closes: an evaluation open now is the more urgent. */}
@@ -124,7 +127,7 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
             {upcoming.length === 0 ? (
               <Card className="px-5 py-4 text-sm text-fg-muted">{t("shome.upcoming.empty")}</Card>
             ) : (
-              <UpcomingByDay cards={upcoming} now={now} />
+              <UpcomingByDay cards={upcoming} now={now} navigate={navigate} />
             )}
           </section>
         </>

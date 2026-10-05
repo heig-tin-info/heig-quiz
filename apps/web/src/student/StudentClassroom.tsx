@@ -32,6 +32,7 @@ import { api, ApiError } from "../api";
 import { useT } from "../i18n";
 import { JournalReader } from "../journal/JournalReader";
 import { studentClassroomKey } from "../queryKeys";
+import { useServerNow } from "../realtime/useServerClock";
 import type { Navigate } from "../router";
 import {
   Badge,
@@ -44,7 +45,6 @@ import {
   SectionHeading,
   Skeleton,
   Tabs,
-  useNow,
 } from "../ui";
 import {
   ActivityCard,
@@ -54,6 +54,7 @@ import {
   UpcomingByDay,
   useCardActions,
 } from "./cards";
+import { needsStudentAction } from "./projectRow";
 
 export type ClassroomTab = "activities" | "journal";
 
@@ -73,15 +74,19 @@ function dueAt(card: StudentActivityCard): string | null {
  *   1. a running poll — it happens in the room, now, and lasts minutes;
  *   2. a card still to do with no deadline;
  *   3. a card already done and open to a retake.
+ * A project whose repository is ready asks nothing of the student and is
+ * not ranked at all (M3-13): its "Open repository" never takes the accent.
  * Ties keep the server's order. `null` when nothing is open.
  */
-export function mostUrgent({ polls, open }: Pick<StudentActivities, "polls" | "open">): string | null {
+export function mostUrgent({ polls, open }: Pick<StudentActivities, "polls" | "open">, now = Date.now()): string | null {
   const ranked = [
-    ...open.map((card) => {
-      const due = dueAt(card);
-      const rank = card.kind === "evaluation" && finished(card) ? 3 : due === null ? 2 : 0;
-      return { id: card.id, rank, due: due === null ? 0 : Date.parse(due) };
-    }),
+    ...open
+      .filter((card) => card.kind !== "project" || needsStudentAction(card, now))
+      .map((card) => {
+        const due = dueAt(card);
+        const rank = card.kind === "evaluation" && finished(card) ? 3 : due === null ? 2 : 0;
+        return { id: card.id, rank, due: due === null ? 0 : Date.parse(due) };
+      }),
     ...polls.map((poll) => ({ id: poll.id, rank: 1, due: 0 })),
   ];
   // `Array.prototype.sort` is stable: ties keep the server's order.
@@ -196,7 +201,7 @@ export function StudentClassroom({
     <div className="space-y-6">
       <ClassroomHeader room={data.classroom} onCourses={toCourses} />
       {tabs}
-      <Activities activities={data.activities} navigate={navigate} />
+      <Activities activities={data.activities} serverNow={data.serverNow} navigate={navigate} />
     </div>
   );
 }
@@ -247,12 +252,22 @@ function Breadcrumb({ room, onCourses }: { room: Header; onCourses: () => void }
  * Open now, Upcoming (by day, as on the home), Past: the home's cards for
  * this classroom, one accent among them.
  */
-function Activities({ activities, navigate }: { activities: StudentActivities; navigate: Navigate }) {
+function Activities({
+  activities,
+  serverNow,
+  navigate,
+}: {
+  activities: StudentActivities;
+  serverNow: string;
+  navigate: Navigate;
+}) {
   const t = useT();
-  const now = useNow(30_000);
+  // The server's clock (invariant 5): the countdowns, the start gate of a
+  // project and `mostUrgent` all read it.
+  const now = useServerNow(serverNow);
   const actions = useCardActions(navigate);
   const { polls, open, upcoming, past } = activities;
-  const urgent = mostUrgent(activities);
+  const urgent = mostUrgent(activities, now);
 
   return (
     <div className="space-y-8">
@@ -269,14 +284,14 @@ function Activities({ activities, navigate }: { activities: StudentActivities; n
           <PollRow key={poll.id} poll={poll} navigate={navigate} primary={poll.id === urgent} showWhere={false} />
         ))}
         {open.map((card) => (
-          <ActivityCard key={card.id} card={card} group="open" now={now} primary={card.id === urgent} showWhere={false} actions={actions} />
+          <ActivityCard key={card.id} card={card} group="open" now={now} navigate={navigate} primary={card.id === urgent} showWhere={false} actions={actions} />
         ))}
       </section>
 
       {upcoming.length > 0 ? (
         <section className="space-y-3">
           <SectionHeading title={t("shome.upcoming")} />
-          <UpcomingByDay cards={upcoming} now={now} showWhere={false} />
+          <UpcomingByDay cards={upcoming} now={now} navigate={navigate} showWhere={false} />
         </section>
       ) : null}
 
@@ -284,7 +299,7 @@ function Activities({ activities, navigate }: { activities: StudentActivities; n
         <section className="space-y-3">
           <SectionHeading title={t("shome.past")} />
           {past.map((card) => (
-            <ActivityCard key={card.id} card={card} group="past" now={now} showWhere={false} actions={actions} />
+            <ActivityCard key={card.id} card={card} group="past" now={now} navigate={navigate} showWhere={false} actions={actions} />
           ))}
         </section>
       ) : null}
