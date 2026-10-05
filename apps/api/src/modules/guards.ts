@@ -217,6 +217,11 @@ export async function requireCourseRole(
   return null;
 }
 
+/** Whether the caller is an owner of the course (ADR-068): for a write whose role requirement depends on its effect. */
+export async function isCourseOwner(db: Db, courseId: string, user: Pick<Caller, "id" | "reach">): Promise<boolean> {
+  return courseRoleAllows(await courseRoleOf(db, courseId, user), "owner");
+}
+
 /**
  * A route loader of invariant 6 with the role step after it: the entity
  * under `staffAccess` (the loader's own 404), then — when `needed` is given

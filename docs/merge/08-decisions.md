@@ -140,6 +140,15 @@ Status values: `open`, `settled`, `superseded`.
   only if the teacher publishes it; no ranking.
 - Blocks: M5-03.
 - **Status**: settled 2026-10-01 (product owner, conversation), on the suggestion.
+  2026-10-05 (product owner, with the orchestrator), addendum: **weights are
+  0 to 10 at the tenth (default 1)**; the mean is computed from the
+  **displayed tenth-rounded cell grades**; the **absence a1.0** has two
+  sources — derived (a released exam not taken; an exercise not opened is an
+  empty cell) and a **stored staff mark** (`absent`, or the teacher's own
+  `score`, which also fills the cell of a project never accepted); a mark
+  wins over the grade beneath it, with an explicit `override` to replace a
+  real grade; marks are staff-only until the column is released
+  ([ADR-074](../adr/ADR-074-carnet-de-notes-marques-stockees.md), M5-03a).
 
 ### D07 — The student's door to the classroom page
 - **Options**: (a) the classroom cards of the home always open the

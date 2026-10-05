@@ -526,6 +526,13 @@
       "when": 1791195532230,
       "tag": "0074_group_resync",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1791204579162,
+      "tag": "0075_gradebook",
+      "breakpoints": true
     }
   ]
 }

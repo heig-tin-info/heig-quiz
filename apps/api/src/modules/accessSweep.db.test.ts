@@ -32,6 +32,7 @@ import { attempts, courseStaff, enrollments, evaluations, journalPageRevisions, 
 import { fakeShort } from "../test/fakeType.js";
 import { routesOf, testServer, type Method, type TestServer } from "../test/http.js";
 import { seedLive } from "../test/live.js";
+import * as evaluationService from "./evaluation/service.js";
 
 type Who = Awaited<ReturnType<TestServer["signIn"]>>;
 
@@ -110,6 +111,9 @@ async function world(): Promise<World> {
     .select({ id: journalPageRevisions.id })
     .from(journalPageRevisions)
     .where(eq(journalPageRevisions.classroomId, seed.classroomId));
+  // A closed exam of the classroom: the gradebook's column (`kind`, `activityId`), which a draft has none of.
+  const graded = await evaluationService.createEvaluation(db, { classroomId: seed.classroomId, title: "Graded", mode: "exam", createdBy: owner.id });
+  await db.update(evaluations).set({ state: "closed" }).where(eq(evaluations.id, graded.id));
   const attemptId = randomUUID();
   await db.insert(attempts).values({ id: attemptId, evaluationId: seed.evaluationId, userId: enrolled.id, seed: 1 });
   return {
@@ -130,6 +134,8 @@ async function world(): Promise<World> {
       tag: "malloc",
       number: "1",
       revisionId: revision!.id,
+      kind: "evaluation",
+      activityId: graded.id,
     },
   };
 }

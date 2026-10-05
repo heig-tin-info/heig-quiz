@@ -112,6 +112,21 @@ export type AuditAction =
   | "grading.run"
   | "grading.validate"
   /**
+   * The gradebook's staff writes (ADR-074, F-GBOOK-06; merge task M5-03a),
+   * subject the classroom. `gradebook.mark_set`: `payload.activityKind` (the
+   * activity's: `evaluation` | `project`), `activityId`, `enrollmentId`,
+   * `before` and `after` (the mark: `{ kind, points, max, comment }`, null
+   * for none), `override` (a real grade lay beneath); `mark_cleared`: the
+   * same, `after` null. `column_updated`: `kind`, `activityId`, `before`
+   * and `after` (`{ weight, counts, position }`). `mean_published` /
+   * `mean_unpublished`: no payload. Never a grade of another student.
+   */
+  | "gradebook.mark_set"
+  | "gradebook.mark_cleared"
+  | "gradebook.column_updated"
+  | "gradebook.mean_published"
+  | "gradebook.mean_unpublished"
+  /**
    * A classroom's group sets (ADR-070, merge task M3-15a), subject the set,
    * by its staff. `group_set.create`: `payload.name`, `maxSize`; `update`:
    * the fields sent; `duplicate`: subject the NEW set, `payload.from`,

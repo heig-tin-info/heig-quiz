@@ -41,6 +41,7 @@ export type EventType =
   | "journal"
   | "projects"
   | "groups"
+  | "gradebook"
   | "mutation";
 
 /**

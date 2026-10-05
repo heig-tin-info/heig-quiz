@@ -1,5 +1,5 @@
 /** The reads of the `evaluation` module: views, items, rosters, lists. */
-import { and, asc, count, desc, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, ne, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import {
@@ -317,6 +317,24 @@ export function studentEvaluationRows(db: Db, userId: string, classroomId?: stri
       and(
         eq(enrollments.userId, userId),
         classroomId === undefined ? undefined : eq(enrollments.classroomId, classroomId),
+      ),
+    );
+}
+
+/**
+ * The evaluations of a classroom the gradebook has a column for (F-GBOOK-01,
+ * D06): exams and exercises that are no draft — a poll never has one. The
+ * caller has loaded the classroom (`staffAccess` or `readableClassroom`).
+ */
+export function gradebookEvaluations(db: Db, classroomId: string): Promise<EvaluationRecord[]> {
+  return db
+    .select()
+    .from(evaluations)
+    .where(
+      and(
+        eq(evaluations.classroomId, classroomId),
+        inArray(evaluations.mode, ["exam", "exercise"]),
+        ne(evaluations.state, "draft"),
       ),
     );
 }

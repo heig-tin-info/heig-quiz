@@ -69,6 +69,7 @@ export {
   joinedItem,
   parameterizedItems,
   studentEvaluationRows,
+  gradebookEvaluations,
   totalPointsByEvaluation,
   itemCountsByEvaluation,
   itemRows,

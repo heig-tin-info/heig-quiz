@@ -17,10 +17,17 @@ import { studentBoard, type PastEntry } from "./attempt.js";
  * them (`gradeReadable`), the indicative points alone where the feedback
  * page already shows them before the release (`PastEntry.early`), and opens
  * the feedback page only where it has something to show. A staff seat that
- * took no attempt is not listed (ADR-018 §3).
+ * took no attempt is not listed (ADR-018 §3). `classroomId` narrows it to one
+ * classroom the caller has loaded through `readableClassroom`: the
+ * gradebook's student cells (M5-03a) read the same rows, never a second rule.
  */
-export async function studentGrades(db: Db, userId: string, now: Date): Promise<StudentGrades> {
-  const { past } = await studentBoard(db, userId, now);
+export async function studentGrades(
+  db: Db,
+  userId: string,
+  now: Date,
+  classroomId?: string,
+): Promise<StudentGrades> {
+  const { past } = await studentBoard(db, userId, now, classroomId);
   const groups = new Map<string, GradeGroup>();
   for (const entry of past) {
     if (entry.row.staff && entry.row.attempt === null) continue;
