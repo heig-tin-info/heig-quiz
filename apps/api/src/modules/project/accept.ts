@@ -59,7 +59,7 @@ import { redactTokens } from "../../redact.js";
 import { projectInstallation, type InstalledOrg } from "../github/service.js";
 import { DomainError } from "../http.js";
 import { notifyUsers } from "../notifications/service.js";
-import { followInvitation, inviteAccount, recordGrant, type NotRecorded } from "./access.js";
+import { followInvitation, inviteAccount, notRecorded, recordGrant, type NotRecorded } from "./access.js";
 import { ProjectError } from "./errors.js";
 import { copyGroupOf, groupRepoWhere, repoMembers, seatRepo, type AccountRow, type GroupRow } from "./groupRepos.js";
 import { tellProjectStaff } from "./notify.js";
@@ -266,7 +266,7 @@ const gone = () => new DomainError("not_found", 404, "No such project");
  * out of the group waits for GitHub (M3-15b-2) — `provision_in_progress`,
  * try again once it is done —, else the seat left ({@link gone}).
  */
-const notRecorded = (why: NotRecorded): DomainError =>
+const refusalOf = (why: NotRecorded): DomainError =>
   why === "departing" ? new ProjectError("provision_in_progress", "Your group is changing: try again in a moment") : gone();
 
 /**
@@ -299,7 +299,7 @@ async function provision(db: Db, input: AcceptInput, row: RepoRow, github: Githu
   const { project, now, log } = input;
   const account = { enrollmentId: input.enrollmentId, userId: input.userId, githubUserId: github.account.githubUserId, login };
   const grant = await recordGrant(db, row, account, now);
-  if (typeof grant === "string") throw notRecorded(grant);
+  if (notRecorded(grant)) throw refusalOf(grant);
   try {
     const result = await provisionStudentRepo({
       octokit: github.client.octokit,
@@ -386,9 +386,10 @@ async function inviteGroup(db: Db, input: AcceptInput, repo: RepoRow, github: Gi
       input.log.warn({ err, repo: repo.id, enrollmentId: member.enrollmentId }, "inviting a group member failed");
       return null;
     });
-    pending ||= typeof invited === "object" && invited?.invitation === "pending";
+    if (invited === null || notRecorded(invited)) continue;
+    pending ||= invited.invitation === "pending";
     // Told once: when THIS call let them in (`fresh`), never on a repeat GitHub answers `pending` to again.
-    if (typeof invited === "object" && invited?.invitation === "pending" && invited.fresh) letIn.push(member.userId);
+    if (invited.invitation === "pending" && invited.fresh) letIn.push(member.userId);
   }
   await tellInvited(db, input.project, letIn);
   if (!pending || repo.invitationStatus === "pending") return repo;
@@ -419,7 +420,7 @@ async function joinRepo(db: Db, config: AppConfig, input: AcceptInput, repo: Rep
   const member = { enrollmentId: input.enrollmentId, userId: input.userId, account: github.account };
   const ctx = { actor: input.actor, now: input.now, log: input.log, via: "accept", failure: "provision_failed" } as const;
   const invited = await inviteAccount(db, github.client.octokit, repo, member, ctx);
-  if (typeof invited === "string") throw notRecorded(invited);
+  if (notRecorded(invited)) throw refusalOf(invited);
   await followInvitation(db, repo, invited.invitation);
   // Told once: a member invited by a fellow's Accept, clicking Accept themselves, is re-invited but not re-told.
   if (invited.invitation === "pending" && invited.fresh) await tellInvited(db, input.project, [input.userId]);

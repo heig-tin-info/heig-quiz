@@ -41,7 +41,7 @@ import type { Db } from "../../db/client.js";
 import { classrooms, enrollments, projectRepos, projects } from "../../db/schema.js";
 import { githubApp } from "../../github/app.js";
 import { PROJECT_GROUP_SYNC_QUEUE } from "../../jobs.js";
-import { followInvitation, inviteAccount, revocationClient, revokeDeparture, type RevokeContext } from "./access.js";
+import { followInvitation, inviteAccount, notRecorded, revocationClient, revokeDeparture, type RevokeContext } from "./access.js";
 import { isLive, ts } from "./deadline.js";
 import { repoChanged } from "./events.js";
 import { beginDeparture, beginStrayRevocation, completeArrival, completeDeparture, settleSync, syncSteps } from "./groupCopy.js";
@@ -99,7 +99,7 @@ async function inviteMember(app: FastifyInstance, client: Octokit | null, projec
   const ctx = { actor: SYSTEM_ACTOR, now: app.clock.now(), log: app.log, via: "group.sync", failure: "invite_failed" } as const;
   try {
     const invited = await inviteAccount(app.db, client, repo, { ...member, account: member.account }, ctx);
-    if (typeof invited === "object") await followInvitation(app.db, repo, invited.invitation);
+    if (!notRecorded(invited)) await followInvitation(app.db, repo, invited.invitation);
   } catch (err) {
     app.log.warn({ err, repo: repo.id, enrollmentId }, "group.sync: an invitation failed");
   }

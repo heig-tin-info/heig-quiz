@@ -25,7 +25,7 @@
  * - the per-group stop: a repository's deadline earlier than the project's
  *   stops its group for good — no rename, no move, even once extended —; a
  *   departure whose group stopped before its revocation began is held,
- *   nothing revoked; the backfill of 0068 (the audit log's first
+ *   nothing revoked; the backfill of 0069 (the audit log's first
  *   application included).
  */
 import { randomUUID } from "node:crypto";
@@ -545,7 +545,7 @@ describe("a group stops at the first of its deadlines (the amendment of 2026-10-
     expect(await dueOf(project.id)).toBeNull();
   });
 
-  it("backfills each group's stop from the first of its project's stop and its repository's deadline (0068)", async () => {
+  it("backfills each group's stop from the first of its project's stop and its repository's deadline (0069)", async () => {
     const [ana, ben] = [await newStudent(), await newStudent()];
     const { project } = await groupProject([ana!, ben!], [[0], [1]]);
     expect((await accept(project.id, ana!)).statusCode).toBe(200);
@@ -557,7 +557,7 @@ describe("a group stops at the first of its deadlines (the amendment of 2026-10-
       .insert(auditLog)
       .values({ actorType: "system", action: "project_repo.deadline_applied", subjectType: "project_repo", subjectId: row!.id, payload: {}, createdAt: first });
     await db().update(projects).set({ groupsStoppedAt: second }).where(eq(projects.id, project.id));
-    const migration = readFileSync(new URL("../../../drizzle/0068_group_sync.sql", import.meta.url), "utf8");
+    const migration = readFileSync(new URL("../../../drizzle/0069_group_sync.sql", import.meta.url), "utf8");
     await db().execute(sql.raw(migration.slice(migration.indexOf('UPDATE "project_groups"'))));
     const groups = await db().select().from(projectGroups).where(eq(projectGroups.projectId, project.id));
     expect(Object.fromEntries(groups.map((g) => [g.slug, g.stoppedAt]))).toEqual({ "group-1": first, "group-2": second });

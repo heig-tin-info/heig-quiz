@@ -38,7 +38,7 @@ import { projectRepoAccess, projectRepos } from "../../db/schema.js";
 import { installationClient, ownerRepo } from "../../github/app.js";
 import { pendingInvitees } from "../../github/collaborators.js";
 import { projectInstallation } from "../github/service.js";
-import { inviteAccount } from "./access.js";
+import { inviteAccount, notRecorded } from "./access.js";
 import { liveRepoForUpdate } from "./deadline.js";
 import { ProjectError } from "./errors.js";
 import { repoMembers, type RepoMember } from "./groupRepos.js";
@@ -112,7 +112,7 @@ export async function resendInvitation(
         if (member.account === null) throw stale;
         const ctx = { actor, now, log, via: "resend", failure: "invite_failed" } as const;
         const done = await inviteAccount(db, octokit, repo, { ...member, account: member.account }, ctx);
-        if (typeof done === "object") invited.push(done);
+        if (!notRecorded(done)) invited.push(done);
       } catch (err) {
         // A group's member whose account cannot be invited is skipped; GitHub failing fails the resend.
         if (!group || !(err instanceof ProjectError && err.code === "github_account_stale")) throw err;

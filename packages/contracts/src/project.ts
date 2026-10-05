@@ -794,10 +794,9 @@ export const ProjectRepoView = ProjectRepoDeadlineState.extend({
    * recorded on this group repository is not revoked although the copy no
    * longer wants it — a departure the `group.sync` job has not revoked yet,
    * one GitHub refused (retried by the job), or an invitation GitHub would
-   * not take back. Always sent by the API; optional until the web's mock
-   * carries it (M3-16b).
+   * not take back.
    */
-  accessToRevoke: z.boolean().optional(),
+  accessToRevoke: z.boolean(),
 });
 export type ProjectRepoView = z.infer<typeof ProjectRepoView>;
 

@@ -83,6 +83,9 @@ interface Grant {
  */
 export type NotRecorded = "departing" | "gone";
 
+/** Nobody was let in: {@link recordGrant}'s and {@link inviteAccount}'s answer when they record no grant. */
+export const notRecorded = (answer: object | NotRecorded): answer is NotRecorded => typeof answer === "string";
+
 /**
  * The account let into `repo`, written BEFORE GitHub is asked, in one short
  * transaction that locks the line FOR SHARE: only while the line is still
@@ -218,7 +221,7 @@ export async function inviteAccount(
   if (typeof login !== "string") throw new ProjectError("github_account_stale", "The GitHub account is gone or renamed: relink it");
   const account = { enrollmentId: member.enrollmentId, userId: member.userId, githubUserId: member.account.githubUserId, login };
   const grant = await recordGrant(db, repo, account, ctx.now);
-  if (typeof grant === "string") return grant;
+  if (notRecorded(grant)) return grant;
   const { owner, repo: name } = ownerRepo(repo.fullName!);
   let invitation: "pending" | "accepted";
   try {
@@ -314,7 +317,7 @@ export async function inviteOnGithubLink(db: Db, config: AppConfig, userId: stri
         via: "link",
         failure: "invite_failed",
       });
-      if (typeof invited === "object") await followInvitation(db, repo, invited.invitation);
+      if (!notRecorded(invited)) await followInvitation(db, repo, invited.invitation);
     } catch (err) {
       ctx.log.warn({ err, repo: repo.id }, "a group repository's invitation on link failed");
     }
@@ -355,7 +358,7 @@ export async function revocationClient(db: Db, config: AppConfig, orgId: string)
 }
 
 /** {@link revocationClient} of each organization. */
-async function installationClients(db: Db, config: AppConfig, orgIds: readonly string[]): Promise<Map<string, Octokit | null>> {
+export async function installationClients(db: Db, config: AppConfig, orgIds: readonly string[]): Promise<Map<string, Octokit | null>> {
   const clients = new Map<string, Octokit | null>();
   for (const orgId of new Set(orgIds)) clients.set(orgId, await revocationClient(db, config, orgId));
   return clients;

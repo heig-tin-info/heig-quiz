@@ -2629,7 +2629,7 @@ are ADR-070's second amendment of 2026-10-05.
   move; `409 needs_confirmation` with the consequences and their digest;
   the *access to revoke* flag.
 - **As delivered** (branch `merge/M3-15b2a-group-sync`): migration
-  `0068_group_sync` (`projects.group_sync_due_at`, `group_sync_job_at`,
+  `0069_group_sync` (`projects.group_sync_due_at`, `group_sync_job_at`,
   `group_sync_failures`, a partial index on the due mark;
   `project_groups.stopped_at`, backfilled from the first of
   `groups_stopped_at`, the repository's `deadline_applied_at` and the
@@ -2688,7 +2688,7 @@ are ADR-070's second amendment of 2026-10-05.
   `revocationClient`; a refusal is logged and retried with the backoff. `repoMembers` leaves out departing members.
   Contracts: `confirm?` on `GroupMemberPut`, `GroupConsequence(s)`,
   `needs_confirmation` in `GROUP_REFUSALS`, `accessToRevoke` on
-  `ProjectRepoView` (optional until the web's mock carries it, M3-16b).
+  `ProjectRepoView`; the web words `needs_confirmation` with a placeholder until M3-16b's dialog.
   Audit: the set's writes name `payload.deferred`; `repo_revoke` and
   `repo_invite` take `via: "group.sync"`. `has_repo` stays for deleting a
   set group a following copy holds with a repository. Hints after a pass:
