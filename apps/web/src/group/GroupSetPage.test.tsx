@@ -247,7 +247,7 @@ describe("the groups and the set", () => {
     renderPage();
     await userEvent.click(await screen.findByRole("button", { name: "Move Dupont Alice to…" }));
     await userEvent.click(screen.getByRole("menuitem", { name: "No group" }));
-    expect(await screen.findByText("This group already has a repository: its members cannot change yet.")).toBeInTheDocument();
+    expect(await screen.findByText("This group has a repository: it cannot be deleted. Move its members out instead.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Labo 4 — en binômes" })).toBeInTheDocument();
     await waitFor(() =>
       expect(within(screen.getByRole("listitem", { name: "Groupe 1" })).getByText("Dupont Alice")).toBeInTheDocument(),

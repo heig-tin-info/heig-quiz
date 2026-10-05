@@ -84,6 +84,7 @@ const REFUSAL_KEY: Record<GroupErrorCode, keyof Dict> = {
   nobody_to_place: "groups.refusal.nobodyToPlace",
   size_out_of_range: "groups.refusal.sizeOutOfRange",
   has_repo: "groups.refusal.hasRepo",
+  needs_confirmation: "groups.refusal.needsConfirmation",
 };
 
 /** A group, a student or a set out of reach: the 404 of a missing one (another teacher deleted it, say). */

@@ -7,8 +7,10 @@
  *   remainder going to smaller or to larger ones, at the staff's choice;
  * - `copyFollows`: whether a project's copy still follows its set (§4);
  * - `groupSyncPlan`: the difference between a set and a following copy, as
- *   the operations that bring the copy in step (§4); `planReachesRepoGroup`:
- *   whether they reach a group with a repository on GitHub (M3-15b);
+ *   the operations that bring the copy in step (§4), each group following
+ *   until its own stop (M3-15b-2); `splitPlan`: what of them waits for
+ *   GitHub (the `group.sync` job) and the consequences the staff confirm
+ *   (§6), `consequenceDelta` the ones a write adds;
  * - `freeName`, `freeSlug`, `defaultGroupName`, `defaultSetName`: the names.
  *
  * The randomness and the clock are injected by the caller (`crypto`, the
@@ -83,10 +85,20 @@ export interface SetState {
 /**
  * A project's copy as {@link groupSyncPlan} reads it. `slugFixed`: the group
  * has a repository, named after its slug, which never changes again
- * (ADR-070 §4; M3-15b).
+ * (ADR-070 §4; M3-15b). `stopped`: the group no longer follows its set —
+ * the first of its project's deadline and its repository's own was applied,
+ * or the project was archived (the amendment of 2026-10-05; M3-15b-2).
  */
 export interface CopyState {
-  groups: readonly { id: string; name: string; slug: string; position: number; sourceGroupId: string | null; slugFixed?: boolean }[];
+  groups: readonly {
+    id: string;
+    name: string;
+    slug: string;
+    position: number;
+    sourceGroupId: string | null;
+    slugFixed?: boolean;
+    stopped?: boolean;
+  }[];
   members: readonly { enrollmentId: string; groupId: string }[];
 }
 
@@ -121,7 +133,11 @@ export interface GroupSyncPlan {
  * clashes is disambiguated (`freeName`, `freeSlug`), and a kept group's
  * slug never changes unless its name does — nor ever once fixed (a group
  * with a repository: its slug is reserved first, its name alone follows).
- * Empty when in step.
+ *
+ * **A stopped group** (`stopped`) keeps what it holds: never deleted,
+ * renamed nor moved, its name and slug reserved; nobody leaves it and
+ * nobody joins it — a move with one stopped end is held whole, the student
+ * staying where the copy has them (M3-15b-2). Empty when in step.
  */
 export function groupSyncPlan(set: SetState, copy: CopyState): GroupSyncPlan {
   const plan: GroupSyncPlan = { delete: [], update: [], create: [], place: [], unplace: [] };
@@ -129,14 +145,20 @@ export function groupSyncPlan(set: SetState, copy: CopyState): GroupSyncPlan {
   const bySource = new Map<string, CopyState["groups"][number]>();
   for (const g of copy.groups) {
     if (g.sourceGroupId !== null && setIds.has(g.sourceGroupId) && !bySource.has(g.sourceGroupId)) bySource.set(g.sourceGroupId, g);
-    else plan.delete.push(g.id);
+    else if (!g.stopped) plan.delete.push(g.id);
   }
 
-  // The names and slugs of the copy once in step: the groups whose name
-  // stays keep theirs first, the others take the first free ones.
+  // The names and slugs of the copy once in step: the stopped groups and
+  // those whose name stays keep theirs first, the others take the first
+  // free ones.
   const ordered = [...set.groups].sort((a, b) => a.position - b.position);
   const names = new Set<string>();
   const slugs = new Set<string>();
+  for (const g of copy.groups) {
+    if (!g.stopped) continue;
+    names.add(g.name);
+    slugs.add(g.slug);
+  }
   for (const g of ordered) {
     const kept = bySource.get(g.id);
     if (kept?.slugFixed) slugs.add(kept.slug);
@@ -147,6 +169,7 @@ export function groupSyncPlan(set: SetState, copy: CopyState): GroupSyncPlan {
   }
   for (const g of ordered) {
     const kept = bySource.get(g.id);
+    if (kept?.stopped) continue;
     if (kept && kept.name === g.name) {
       if (kept.position !== g.position) plan.update.push({ id: kept.id, name: kept.name, slug: kept.slug, position: g.position });
       continue;
@@ -160,6 +183,7 @@ export function groupSyncPlan(set: SetState, copy: CopyState): GroupSyncPlan {
   }
 
   const sourceOf = new Map(copy.groups.map((g) => [g.id, g.sourceGroupId]));
+  const stopped = new Set(copy.groups.filter((g) => g.stopped).map((g) => g.id));
   const deleted = new Set(plan.delete);
   const inCopy = new Map(copy.members.map((m) => [m.enrollmentId, m.groupId]));
   const inSet = new Set<string>();
@@ -167,32 +191,85 @@ export function groupSyncPlan(set: SetState, copy: CopyState): GroupSyncPlan {
     inSet.add(m.enrollmentId);
     const current = inCopy.get(m.enrollmentId);
     if (current !== undefined && !deleted.has(current) && sourceOf.get(current) === m.groupId) continue;
+    // Held: out of a stopped group, or into one.
+    if ((current !== undefined && stopped.has(current)) || bySource.get(m.groupId)?.stopped) continue;
     plan.place.push({ enrollmentId: m.enrollmentId, sourceGroupId: m.groupId, from: current === undefined || deleted.has(current) ? null : current });
   }
   for (const m of copy.members) {
-    if (!inSet.has(m.enrollmentId) && !deleted.has(m.groupId)) plan.unplace.push(m.enrollmentId);
+    if (!inSet.has(m.enrollmentId) && !deleted.has(m.groupId) && !stopped.has(m.groupId)) plan.unplace.push(m.enrollmentId);
   }
   return plan;
 }
 
 /**
- * Whether `plan` reaches, on GitHub's side, a copy group whose slug is fixed
- * (it has a repository, ADR-070 §4): deletes it, takes a student out of it,
- * or brings one in. Its rename and its position are no GitHub change, nor
- * is the departure of a student of `exempt` (a staff seat, whose accounts
- * were revoked when it became one). Until the `group.sync` job (M3-15b-2)
- * such a step is refused whole, `409 has_repo`.
+ * A step's consequence on GitHub (ADR-070 §6): roster line `enrollmentId`
+ * losing the repository of copy group `groupId`, or joining it.
  */
-export function planReachesRepoGroup(copy: CopyState, plan: GroupSyncPlan, exempt: ReadonlySet<string> = new Set()): boolean {
+export interface PlanConsequence {
+  groupId: string;
+  enrollmentId: string;
+  kind: "lose" | "join";
+}
+
+/**
+ * `plan` split between what the set's own transaction applies and what
+ * waits for GitHub (ADR-070 §4, M3-15b-2):
+ *   - `now` — every operation that touches no copy group with a repository
+ *     (`slugFixed`): the deletions, renames, positions and creations, the
+ *     moves between groups without one, and the departure of a student of
+ *     `exempt` (a staff seat, whose accounts were revoked when it became
+ *     one);
+ *   - `consequences` — the moves left out of `now`, for the job, one per
+ *     student and group: `lose` out of a group with a repository (a
+ *     departure waits for GitHub's revocation), `join` into one (an arrival
+ *     is written, then invited) — product owner, 2026-10-05: even when
+ *     GitHub will have nothing to do;
+ *   - `repoGroupsDeleted` — the groups with a repository the plan would
+ *     delete: never done, the set's write is refused (`409 has_repo`).
+ */
+export function splitPlan(
+  copy: CopyState,
+  plan: GroupSyncPlan,
+  exempt: ReadonlySet<string> = new Set(),
+): { now: GroupSyncPlan; consequences: PlanConsequence[]; repoGroupsDeleted: string[] } {
   const fixed = new Set(copy.groups.filter((g) => g.slugFixed).map((g) => g.id));
-  if (fixed.size === 0) return false;
   const bySource = new Map(copy.groups.flatMap((g) => (g.sourceGroupId === null ? [] : [[g.sourceGroupId, g.id] as const])));
   const groupOf = new Map(copy.members.map((m) => [m.enrollmentId, m.groupId]));
-  return (
-    plan.delete.some((id) => fixed.has(id)) ||
-    plan.place.some((p) => (p.from !== null && fixed.has(p.from)) || fixed.has(bySource.get(p.sourceGroupId) ?? "")) ||
-    plan.unplace.some((e) => !exempt.has(e) && fixed.has(groupOf.get(e)!))
-  );
+  const now: GroupSyncPlan = { ...plan, place: [], unplace: [] };
+  const consequences: PlanConsequence[] = [];
+  for (const p of plan.place) {
+    const to = bySource.get(p.sourceGroupId);
+    const losing = p.from !== null && fixed.has(p.from);
+    const joining = to !== undefined && fixed.has(to);
+    if (!losing && !joining) {
+      now.place.push(p);
+      continue;
+    }
+    if (losing) consequences.push({ groupId: p.from!, enrollmentId: p.enrollmentId, kind: "lose" });
+    if (joining) consequences.push({ groupId: to, enrollmentId: p.enrollmentId, kind: "join" });
+  }
+  for (const e of plan.unplace) {
+    const from = groupOf.get(e)!;
+    if (exempt.has(e) || !fixed.has(from)) {
+      now.unplace.push(e);
+      continue;
+    }
+    consequences.push({ groupId: from, enrollmentId: e, kind: "lose" });
+  }
+  return { now, consequences, repoGroupsDeleted: plan.delete.filter((id) => fixed.has(id)) };
+}
+
+/** The key that identifies a consequence across two plans, and in a digest. */
+export const consequenceKey = (c: PlanConsequence): string => `${c.groupId}:${c.enrollmentId}:${c.kind}`;
+
+/**
+ * The consequences of `after` that `before` did not have: what a write adds
+ * (ADR-070 §6). A move already waiting for GitHub before the write is not
+ * the write's to confirm again.
+ */
+export function consequenceDelta<T extends PlanConsequence>(before: readonly PlanConsequence[], after: readonly T[]): T[] {
+  const known = new Set(before.map(consequenceKey));
+  return after.filter((c) => !known.has(consequenceKey(c)));
 }
 
 /** True when `plan` changes nothing. */

@@ -565,6 +565,7 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
       deleted: r.deleted,
       changedAfterRelease: r.released !== null && changedAfterRelease(true, final, r.released),
     },
+    accessToRevoke: false,
   };
 }
 

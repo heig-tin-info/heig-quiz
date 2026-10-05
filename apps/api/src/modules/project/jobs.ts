@@ -16,7 +16,10 @@
  * 2. a project whose deadline has come is `locked`;
  * 3. a repository whose effective deadline has come gets its provisional
  *    freeze (`frozen_grade_run_id` := the current score's run) and
- *    `deadline_applied_at` (audited `project_repo.deadline_applied`);
+ *    `deadline_applied_at` (audited `project_repo.deadline_applied`); a
+ *    group's repository stops its copy group (`stopGroups`, M3-15b-2), as
+ *    step 2 stops every group of its project — the projects concerned
+ *    locked first, in id order;
  * 4. a repository past its effective deadline + the grace is frozen for
  *    good (`frozen_at`, audited `project_repo.frozen`; one archived as its
  *    lock or with its protection suspended is audited
@@ -29,7 +32,10 @@
  *    `project.deadline` job sent;
  * 6. with a queue only, a project with a review dispatch due (a final
  *    review, a checkpoint: `review.ts`, M3-05b) has its OTHER lease taken
- *    (`dispatch_job_at`) and one `project.dispatch` job sent.
+ *    (`dispatch_job_at`) and one `project.dispatch` job sent;
+ * 7. with a queue only, a project whose group moves wait for GitHub
+ *    (`group_sync_due_at` come, M3-15b-2) has its third lease taken
+ *    (`group_sync_job_at`) and one `group.sync` job sent (`groupSync.ts`).
  *
  * Steps 3 to 6 cover the repositories that take deadline work (`LIVE`):
  * provisioned, not deleted, of a project not archived. The leases are
@@ -50,7 +56,7 @@
  * it — the receipt time does (ADR-012).
  */
 import type { FastifyInstance } from "fastify";
-import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, exists, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
 import { deadlineWantsLock, effectiveDeadline, zonedIso } from "@quiz/domain";
@@ -63,10 +69,12 @@ import { githubApp, githubStatus, ownerRepo } from "../../github/app.js";
 import { pushEmptyCommit } from "../../github/commit.js";
 import { lockStudentRepo, setRepoArchived, unlockStudentRepo } from "../../github/lock.js";
 import { isPlanRestriction } from "../../github/provision.js";
-import { PROJECT_DEADLINE_QUEUE, PROJECT_DISPATCH_QUEUE, type JobQueue } from "../../jobs.js";
+import { PROJECT_DEADLINE_QUEUE, PROJECT_DISPATCH_QUEUE, PROJECT_GROUP_SYNC_QUEUE, type JobQueue } from "../../jobs.js";
 import type { TickTask } from "../../ticker.js";
 import { DomainError } from "../http.js";
 import { COMMIT_DUE, EFFECTIVE_DEADLINE, LIVE, NEEDS_WORK, ts } from "./deadline.js";
+import { stopGroups, stopProjects } from "./groupCopy.js";
+import { claimGroupSyncWork, runGroupSyncJob } from "./groupSync.js";
 import { claimLeases, runLeased, type ProjectJob } from "./lease.js";
 import { publishProject } from "./lifecycle.js";
 import { remindDeadlines, tellProjectStaff } from "./notify.js";
@@ -123,20 +131,32 @@ async function applyDeadlines(db: Db, now: Date): Promise<string[]> {
       isNull(projects.archivedAt),
       sql`${projects.deadlineAt} <= ${ts(now)}`,
     );
-    // The rows first, in id order: the order of a group set's write
-    // (`followingCopies`), which locks the same rows, so the two never
-    // deadlock (ADR-070 §4).
-    const ids = (await tx.select({ id: projects.id }).from(projects).where(due).orderBy(asc(projects.id)).for("update")).map((r) => r.id);
-    const locked =
-      ids.length === 0
-        ? []
-        : await tx
-            .update(projects)
-            // The groups stop with the deadline, for good (ADR-070 §4): a reopen
-            // never clears it, so a copy stopped once keeps its first stop.
-            .set({ state: "locked", deadlineAppliedAt: now, groupsStoppedAt: sql`coalesce(${projects.groupsStoppedAt}, ${ts(now)})` })
-            .where(inArray(projects.id, ids))
-            .returning({ id: projects.id, deadlineAt: projects.deadlineAt });
+    const repoDue = and(LIVE, isNull(projectRepos.deadlineAppliedAt), sql`${EFFECTIVE_DEADLINE} <= ${ts(now)}`);
+    // The rows first, in id order — the projects due and those holding a
+    // repository due: the order of a group set's write (`followingCopies`),
+    // which locks the same rows, so the two never deadlock, and the groups
+    // these stop are read stopped by any write that follows (ADR-070 §4).
+    const ids = (
+      await tx
+        .select({ id: projects.id })
+        .from(projects)
+        .where(or(due, exists(tx.select({ id: projectRepos.id }).from(projectRepos).where(and(eq(projectRepos.projectId, projects.id), repoDue)))))
+        .orderBy(asc(projects.id))
+        .for("update")
+    ).map((r) => r.id);
+    if (ids.length === 0) return [];
+    const locked = await tx
+      .update(projects)
+      .set({ state: "locked", deadlineAppliedAt: now })
+      .where(and(inArray(projects.id, ids), due))
+      .returning({ id: projects.id, deadlineAt: projects.deadlineAt });
+    // The groups stop with the deadline, for good (ADR-070 §4): a reopen
+    // never clears it, so a copy stopped once keeps its first stop.
+    await stopProjects(
+      tx,
+      locked.map((r) => r.id),
+      now,
+    );
     for (const row of locked) {
       await audit(tx, {
         ...SYSTEM_ACTOR,
@@ -150,16 +170,17 @@ async function applyDeadlines(db: Db, now: Date): Promise<string[]> {
       .update(projectRepos)
       .set({ deadlineAppliedAt: now, frozenGradeRunId: sql`${projectRepos.currentGradeRunId}` })
       .from(projects)
-      .where(
-        and(
-          eq(projects.id, projectRepos.projectId),
-          LIVE,
-          isNull(projectRepos.deadlineAppliedAt),
-          sql`${EFFECTIVE_DEADLINE} <= ${ts(now)}`,
-        ),
-      )
-      .returning({ id: projectRepos.id, projectId: projectRepos.projectId, deadlineAt: EFFECTIVE_DEADLINE.mapWith(projects.deadlineAt) });
+      .where(and(eq(projects.id, projectRepos.projectId), inArray(projectRepos.projectId, ids), repoDue))
+      .returning({
+        id: projectRepos.id,
+        projectId: projectRepos.projectId,
+        groupId: projectRepos.groupId,
+        deadlineAt: EFFECTIVE_DEADLINE.mapWith(projects.deadlineAt),
+      });
     await auditRepos(tx, "project_repo.deadline_applied", applied);
+    // A group stops at the FIRST of its deadlines (the amendment of 2026-10-05).
+    const groups = applied.flatMap((r) => (r.groupId === null ? [] : [r.groupId]));
+    if (groups.length > 0) await stopGroups(tx, { groupIds: groups }, now);
     return [...locked.map((r) => r.id), ...applied.map((r) => r.projectId)];
   });
 }
@@ -285,6 +306,8 @@ export async function projectTick(app: FastifyInstance, config: AppConfig): Prom
   await sendDeadlineJobs(app, config, await claimDeadlineWork(app.db, now));
   // The final reviews and the checkpoints due (M3-05b): their own lease, their own queue.
   for (const job of await claimReviewWork(app.db, now)) await app.boss.send(PROJECT_DISPATCH_QUEUE, job);
+  // The group moves waiting for GitHub (M3-15b-2): a third lease, a third queue.
+  for (const job of await claimGroupSyncWork(app.db, now)) await app.boss.send(PROJECT_GROUP_SYNC_QUEUE, job);
 }
 
 /** The project's deadline work, asked by a staff action: claimed and run unless a job already holds it. */
@@ -295,12 +318,14 @@ export async function requestDeadlineWork(app: FastifyInstance, config: AppConfi
 /** The ticker's project task (ADR-006 addendum): clock-bound, neither configurable nor disableable. */
 export const PROJECT_TASKS: readonly TickTask[] = [{ name: "project.deadlines", everyMs: PROJECT_TICK_MS, run: projectTick }];
 
-/** The workers of `project.deadline` and `project.dispatch`, registered only with Quiz's App (`app.ts`). */
+/** The workers of `project.deadline`, `project.dispatch` and `group.sync`, registered only with Quiz's App (`app.ts`). */
 export async function registerProjectJobs(app: FastifyInstance, queue: JobQueue, config: AppConfig): Promise<void> {
   await queue.createQueue(PROJECT_DEADLINE_QUEUE, { retryLimit: 0 });
   await queue.work<ProjectJob>(PROJECT_DEADLINE_QUEUE, (job) => runDeadlineJob(app, config, job));
   await queue.createQueue(PROJECT_DISPATCH_QUEUE, { retryLimit: 0 });
   await queue.work<ProjectJob>(PROJECT_DISPATCH_QUEUE, (job) => runReviewJob(app, config, job));
+  await queue.createQueue(PROJECT_GROUP_SYNC_QUEUE, { retryLimit: 0 });
+  await queue.work<ProjectJob>(PROJECT_GROUP_SYNC_QUEUE, (job) => runGroupSyncJob(app, config, job));
 }
 
 // ---------------------------------------------------------------- the job

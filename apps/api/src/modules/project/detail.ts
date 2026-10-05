@@ -50,6 +50,7 @@ import { installationClient } from "../../github/app.js";
 import { isRateLimited, readRepoLiveState, type LiveRead } from "../../github/metrics.js";
 import { projectInstallation } from "../github/service.js";
 import { isLive, releaseCounts, repoDeadlineState } from "./deadline.js";
+import { reposWithAccessToRevoke } from "./groupCopy.js";
 import { seatRepos } from "./groupRepos.js";
 import { forEachLimit } from "./lease.js";
 import { studentRepos, type RepoRow } from "./repos.js";
@@ -268,6 +269,7 @@ function repoView(
   facts: RunFacts | undefined,
   dispatch: DispatchRow | undefined,
   read: LiveRead | undefined,
+  toRevoke: ReadonlySet<string>,
 ): ProjectRepoView {
   const { scores, released, changedAfterRelease: changed } = repoScores(project, repo, runs);
   return {
@@ -290,6 +292,7 @@ function repoView(
       deleted: repo.deletedAt !== null || read?.state?.missing === true,
       changedAfterRelease: changed,
     },
+    accessToRevoke: toRevoke.has(repo.id),
   };
 }
 
@@ -337,9 +340,10 @@ export async function projectDetail(
   const [runs, facts, dispatches] = await Promise.all([slotRuns(db, repos), runFacts(db, repoIds), finalDispatches(db, repoIds)]);
   const liveRepos = repos.filter((repo) => isLive(repo, project));
   const { live, complete } = await liveStates(db, config, project, liveRepos, opts.log, opts.budgetMs ?? LIVE_BUDGET_MS);
+  const toRevoke = await reposWithAccessToRevoke(db, project.id);
 
   const views = new Map(
-    repos.map((repo) => [repo.id, repoView(project, repo, runs, facts.get(repo.id), dispatches.get(repo.id), live.get(repo.id))]),
+    repos.map((repo) => [repo.id, repoView(project, repo, runs, facts.get(repo.id), dispatches.get(repo.id), live.get(repo.id), toRevoke)]),
   );
   // Whose repository: a student's own, or their copy group's (`seatRepos`,
   // N-SEC-20: never the group repository's creator for having created it);

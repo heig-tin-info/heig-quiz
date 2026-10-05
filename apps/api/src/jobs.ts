@@ -89,6 +89,18 @@ export const PROJECT_DEADLINE_QUEUE = "project.deadline";
 export const PROJECT_DISPATCH_QUEUE = "project.dispatch";
 
 /**
+ * The moves of a group set that wait for GitHub, for one project's copy
+ * (ADR-070 §4, merge task M3-15b-2): `{ projectId, lease }`, sent right
+ * after a set's write leaves some (`projects.group_sync_due_at`), or by the
+ * ticker once it holds the project's lease (`projects.group_sync_job_at`).
+ * As {@link PROJECT_DEADLINE_QUEUE}: `standard`, no dedupe, no retry by
+ * the queue; a failed pass moves the due mark later (a backoff capped at an
+ * hour), a crashed one leaves its lease to expire. Without a queue nothing
+ * sends it: the moves wait (documented, M3-15b-2).
+ */
+export const PROJECT_GROUP_SYNC_QUEUE = "group.sync";
+
+/**
  * One AI pass over a brainstorm (ADR-072): `{ evaluationId, lease }`, sent a
  * few seconds after the answer that claimed the poll's lease
  * (`poll_ai_runs.lease_at`). A `standard` queue, no dedupe, no retry: the

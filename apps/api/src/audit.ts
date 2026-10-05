@@ -120,10 +120,13 @@ export type AuditAction =
    * `member_move`: `enrollmentId`, `from`, `to` (group ids, null: none);
    * `random_form`: `size`, `remainder`, `groups` (the new ones), `placed`.
    * Every write but the sets' creation and duplication also names
-   * `payload.copies`: the projects whose copy it changed (ADR-070 §4;
-   * always empty for a deletion, which no following copy allows). A write
-   * whose step would reach a copy group with a repository is refused
-   * (`409 has_repo`, M3-15b-1) and audits nothing.
+   * `payload.copies`: the projects whose copy it changed in its own
+   * transaction (ADR-070 §4; always empty for a deletion, which no
+   * following copy allows), and `deferred`: those whose moves out of or
+   * into a group with a repository it left to the `group.sync` job
+   * (M3-15b-2), their consequences confirmed. A write that would delete a
+   * copy group with a repository (`409 has_repo`), or whose consequences
+   * were not confirmed (`409 needs_confirmation`), audits nothing.
    */
   | "group_set.create"
   | "group_set.update"
@@ -357,13 +360,14 @@ export type AuditAction =
    * line (ADR-048 lot 2, ADR-070 §4–§5; merge task M3-15b), subject the
    * `project_repos` row — a group's, or (a revocation) a student's own.
    * `repo_invite`: `payload.repo`, `enrollmentId`, `login`, `invitation`
-   * (`pending` | `accepted`), `via` (`accept`, `link`; a resend audits
-   * `project_repo.invite_resent`); `repo_revoke`:
-   * `payload.repo`, `enrollmentId`, `login` (null: none was ever invited),
-   * `outcome` (`ok` | `skipped`), `reason` of a skip (`app_not_installed`,
-   * `repo_deleted`, `not_provisioned`, `account_gone`, `not_invited`), `invitationsCancelled`
-   * of a revocation, `via` (`roster.remove`, `roster.unclaim`,
-   * `roster.update`, `roster.self_enroll`).
+   * (`pending` | `accepted`), `via` (`accept`, `link`, `group.sync` — a
+   * set's move, M3-15b-2; a resend audits `project_repo.invite_resent`);
+   * `repo_revoke`: `payload.repo`, `enrollmentId`, `login` (null: none was
+   * ever invited), `outcome` (`ok` | `skipped`), `reason` of a skip
+   * (`app_not_installed`, `repo_deleted`, `not_provisioned`,
+   * `account_gone`, `not_invited`), `invitationsCancelled` of a
+   * revocation, `via` (`roster.remove`, `roster.unclaim`, `roster.update`,
+   * `roster.self_enroll`, `group.sync`).
    */
   | "project_group.repo_invite"
   | "project_group.repo_revoke"

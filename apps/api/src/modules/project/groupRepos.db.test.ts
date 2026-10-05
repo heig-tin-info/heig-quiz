@@ -11,8 +11,10 @@
  *   disambiguated; a student linking later is invited;
  * - whose repository: through the copy, never its creator moved out (no
  *   row, no student view, no hint, no resend);
- * - the set: a step reaching a group with a repository is `409 has_repo`,
- *   nothing written; a rename follows, the slug fixed;
+ * - the set: a move reaching a group with a repository asks for its
+ *   confirmation (`409 needs_confirmation`, nothing written; the job is
+ *   `groupSync.db.test.ts`), its deletion is `409 has_repo`; a rename
+ *   follows, the slug fixed;
  * - leaving: a removal, an unclaim, an e-mail change, a self-enroll revoke
  *   the RECORDED accounts first (an unlinked and relinked student's too, an
  *   individual repository's too, its invitation state cleared); GitHub
@@ -23,7 +25,7 @@
  *   its invitation is recorded (never invited), or while GitHub is asked
  *   (the invitation taken back); an account recorded during a removal, an
  *   unclaim or a self-enroll (`502`, retried); a removal during the first
- *   provisioning (`502`, retried); a set's move during it (`has_repo`); a
+ *   provisioning (`502`, retried); a set's move during it (held, never invited); a
  *   student moved out of their group during their Accept (`no_group`); a
  *   classroom deleted with its grants; the backfill of 0067.
  */
@@ -32,16 +34,13 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 import { and, eq, sql } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { GroupErrorCode, GroupSetDetail, ProjectAcceptErrorCode, ProjectDetail, ProjectSummary, RosterErrorCode, StudentProject } from "@quiz/contracts";
+import { ProjectDetail, ProjectSummary, StudentProject } from "@quiz/contracts";
 
-import { loadConfig } from "../../config.js";
 import {
-  auditLog,
   enrollments,
   githubAccounts,
-  githubClassroomLinks,
   githubOrganizations,
   notifications,
   projectGroupMembers,
@@ -53,205 +52,46 @@ import {
   users,
 } from "../../db/schema.js";
 import { subscribe } from "../../events.js";
-import { setRemoteBaseForTests } from "../../github/git.js";
-import { appKey, fakeGithub, json, orgsRoute, type Route } from "../../github/testing.js";
-import { testServer, type TestServer } from "../../test/http.js";
-import { seedLive } from "../../test/live.js";
 import { inviteOnGithubLink } from "./access.js";
+import {
+  accept,
+  acceptInvitation,
+  acceptRefusal,
+  accounts,
+  auditsOf,
+  call,
+  config,
+  connectedClassroom,
+  freshAccountId,
+  freshOrgId,
+  gh,
+  goneInstallations,
+  grantsOf,
+  groupOf,
+  groupProject,
+  groupRefusal,
+  IN_A_WEEK,
+  link,
+  moveTo,
+  newStudent,
+  NOW,
+  on,
+  pendingInvitations,
+  removeLine,
+  repoRows,
+  rosterRefusal,
+  seats,
+  server,
+  setOk,
+  staff,
+  teacher,
+  useGroupWorld,
+  world,
+  type Room,
+} from "./groupTesting.js";
 import { hintRepo, repoContext } from "./repos.js";
-import { repoWorld } from "./testing.js";
 
-const key = appKey();
-const gh = fakeGithub();
-const world = repoWorld();
-const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: "w".repeat(40),
-};
-const config = loadConfig({ NODE_ENV: "test", ...ENV });
-const NOW = "2026-10-05T08:00:00.000Z";
-const IN_A_WEEK = "2026-10-12T22:00:00.000Z";
-
-type Headers = Record<string, string>;
-type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
-interface Student {
-  id: string;
-  headers: Headers;
-  githubUserId: number;
-  login: string;
-}
-
-let server: TestServer;
-let teacher: { id: string; headers: Headers };
-let nextOrg = 61_000;
-let nextAccount = 81_000;
-
-/** GitHub's accounts, by immutable id: today's login. Missing: deleted. */
-const accounts = new Map<number, string>();
-const usersRoute: Route = (url, req) => {
-  const m = /^\/user\/(\d+)$/.exec(url.pathname);
-  if (url.host !== "api.github.com" || req.method !== "GET" || !m) return undefined;
-  const login = accounts.get(Number(m[1]));
-  return login === undefined ? undefined : json({ id: Number(m[1]), login });
-};
-
-const call = (method: Method, url: string, headers: Headers, payload?: object) =>
-  server.app.inject({ method, url, headers, ...(payload === undefined ? {} : { payload }) });
-const staff = (method: Method, url: string, payload?: object) => call(method, url, teacher.headers, payload);
-const accept = (projectId: string, who: { headers: Headers }) => call("POST", `/app/api/student/projects/${projectId}/accept`, who.headers);
-const acceptRefusal = (res: { statusCode: number; json: () => { error: unknown } }) => [res.statusCode, ProjectAcceptErrorCode.parse(res.json().error)];
-const groupRefusal = (res: { statusCode: number; json: () => { error: unknown } }) => [res.statusCode, GroupErrorCode.parse(res.json().error)];
-const rosterRefusal = (res: { statusCode: number; json: () => { error: unknown } }) => [res.statusCode, RosterErrorCode.parse(res.json().error)];
-
-/** A student with a linked GitHub account (unless `linked: false`). */
-async function newStudent(opts: { linked?: boolean } = {}): Promise<Student> {
-  const signed = await server.signIn("student");
-  const githubUserId = nextAccount++;
-  const login = `kid${githubUserId}`;
-  if (opts.linked !== false) await link(signed.id, githubUserId, login);
-  return { ...signed, githubUserId, login };
-}
-
-async function link(userId: string, githubUserId: number, login: string) {
-  await server.app.db.insert(githubAccounts).values({ userId, githubUserId, login });
-  accounts.set(githubUserId, login);
-}
-
-interface Org {
-  login: string;
-  orgId: string;
-}
-
-interface Room extends Org {
-  id: string;
-  /** The roster line of each student, by user id. */
-  lines: Map<string, string>;
-}
-
-/** A classroom of `teacher`'s course connected to an organization holding `starter` (a new one, unless `org` is given). */
-async function connectedClassroom(students: Student[], org?: Org): Promise<Room> {
-  const db = server.app.db;
-  const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 0 });
-  let at = org;
-  if (!at) {
-    const n = nextOrg++;
-    const login = `gorg-${n}`;
-    world.orgIds[login] = n;
-    world.source(login, "starter", { main: { "README.md": "# Lab" } });
-    const orgId = randomUUID();
-    await db.insert(githubOrganizations).values({ id: orgId, login, githubOrgId: n, installationId: n });
-    at = { login, orgId };
-  }
-  await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId: at.orgId, linkedBy: teacher.id, linkedAt: new Date() });
-  const lines = await db.select().from(enrollments).where(eq(enrollments.classroomId, seeded.classroomId));
-  return { id: seeded.classroomId, login: at.login, orgId: at.orgId, lines: new Map(lines.map((l) => [l.userId!, l.id])) };
-}
-
-async function setOk(res: { statusCode: number; body: string; json: () => unknown }): Promise<GroupSetDetail> {
-  expect(res.statusCode, res.body).toBeLessThan(300);
-  return GroupSetDetail.parse(res.json());
-}
-
-/**
- * A published group project `Lab 1` of a fresh classroom of `students`,
- * following a set whose groups are `groups` (indexes into `students`),
- * named "Group 1", "Group 2"…
- */
-async function groupProject(students: Student[], groups: number[][], org?: Org) {
-  const room = await connectedClassroom(students, org);
-  let set = await setOk(await staff("POST", `/app/api/classrooms/${room.id}/group-sets`, {}));
-  for (const [k, members] of groups.entries()) {
-    set = await setOk(await staff("POST", `/app/api/group-sets/${set.set.id}/groups`, { name: `Group ${k + 1}` }));
-    const group = set.groups.find((g) => g.name === `Group ${k + 1}`)!;
-    for (const i of members) {
-      set = await setOk(await staff("PUT", `/app/api/group-sets/${set.set.id}/members/${room.lines.get(students[i]!.id)}`, { groupId: group.id }));
-    }
-  }
-  const created = await staff("POST", `/app/api/classrooms/${room.id}/projects`, {
-    name: "Lab 1",
-    sourceRepo: "starter",
-    deadlineAt: IN_A_WEEK,
-    groupMode: true,
-    groupSetId: set.set.id,
-  });
-  expect(created.statusCode, created.body).toBe(201);
-  const project = ProjectSummary.parse(created.json());
-  const published = await staff("POST", `/app/api/projects/${project.id}/publish`);
-  expect(published.statusCode, published.body).toBe(200);
-  return { project, room, set };
-}
-
-const groupOf = (set: GroupSetDetail, name: string) => set.groups.find((g) => g.name === name)!;
-const moveTo = (set: GroupSetDetail, line: string, groupId: string | null) =>
-  staff("PUT", `/app/api/group-sets/${set.set.id}/members/${line}`, { groupId });
-const repoRows = (projectId: string) => server.app.db.select().from(projectRepos).where(eq(projectRepos.projectId, projectId));
-const grantsOf = (repoId: string) => server.app.db.select().from(projectRepoAccess).where(eq(projectRepoAccess.repoId, repoId));
-const auditsOf = (subjectId: string, action: string) =>
-  server.app.db
-    .select()
-    .from(auditLog)
-    .where(and(eq(auditLog.subjectId, subjectId), eq(auditLog.action, action)));
-const seats = (fullName: string) => Object.fromEntries(world.collaborators.get(fullName) ?? []);
-const pendingInvitations = (fullName: string) => [...(world.invitations.get(fullName)?.values() ?? [])];
-/** The invitation of `login` accepted on GitHub: a collaborator from now on. */
-const acceptInvitation = (fullName: string, login: string) => {
-  const pending = world.invitations.get(fullName)!;
-  for (const [id, who] of pending) if (who === login) pending.delete(id);
-};
-const removeLine = (room: Room, line: string) => staff("DELETE", `/app/api/classrooms/${room.id}/roster/${line}`);
-
-/**
- * Hooks a matching GitHub call runs first (each once), before the call goes
- * on to the world, and `after` once it landed: how a test interleaves a
- * request with another's.
- */
-interface Hook {
-  match: (url: URL, method: string) => boolean;
-  run: () => Promise<void>;
-  after?: () => void;
-}
-let hooks: Hook[] = [];
-const on = (h: Hook) => void hooks.push(h);
-const hookRoute: Route = (url, req) => {
-  const at = hooks.findIndex((h) => h.match(url, req.method));
-  if (at < 0) return undefined;
-  const [h] = hooks.splice(at, 1);
-  return (async () => {
-    await h!.run();
-    const res = world.route(url, req) ?? usersRoute(url, req) ?? json({ message: "Not Found" }, 404);
-    h!.after?.();
-    return res;
-  })() as unknown as Response;
-};
-/** Installations whose token GitHub refuses (gone without a webhook). */
-const goneInstallations = new Set<number>();
-const tokensRoute: Route = (url, req) => {
-  const m = /^\/app\/installations\/(\d+)\/access_tokens$/.exec(url.pathname);
-  return req.method === "POST" && m && goneInstallations.has(Number(m[1])) ? json({ message: "Not Found" }, 404) : undefined;
-};
-
-beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  setRemoteBaseForTests(`file://${world.dir}`);
-  server = await testServer(ENV);
-  gh.routes = [hookRoute, tokensRoute, orgsRoute(() => []), usersRoute, world.route];
-  teacher = await server.signIn("teacher");
-});
-
-beforeEach(() => {
-  server.clock.set(NOW);
-  hooks = [];
-});
-
-afterAll(async () => {
-  await server.close();
-  vi.unstubAllGlobals();
-  setRemoteBaseForTests(null);
-  world.remove();
-  key.remove();
-});
+useGroupWorld();
 
 // ---------------------------------------------------------------- Accept
 
@@ -444,8 +284,8 @@ describe("a group's repository is a student's through the copy only (N-SEC-20)",
 
 // ---------------------------------------------------------------- the set
 
-describe("a set's write that would reach a group with a repository (until M3-15b-2)", () => {
-  it("is refused whole, 409 has_repo: a member out, a member in, the group deleted", async () => {
+describe("a set's write reaching a group with a repository", () => {
+  it("asks to confirm a member out, a member in (409 needs_confirmation, nothing written), and refuses the group's deletion (has_repo)", async () => {
     const [ana, ben, cid] = [await newStudent(), await newStudent(), await newStudent()];
     const { project, room, set } = await groupProject([ana!, ben!, cid!], [[0, 1], [2]]);
     expect((await accept(project.id, ana!)).statusCode).toBe(200);
@@ -453,12 +293,12 @@ describe("a set's write that would reach a group with a repository (until M3-15b
     const copyBefore = await server.app.db.select().from(projectGroupMembers).where(eq(projectGroupMembers.projectId, project.id));
     const setBefore = await server.app.db.select().from(studentGroupMembers).where(eq(studentGroupMembers.setId, set.set.id));
 
-    const out = await moveTo(set, room.lines.get(ben!.id)!, g2.id);
-    expect(groupRefusal(out)).toEqual([409, "has_repo"]);
-    expect(out.json().projects).toEqual([{ id: project.id, name: "Lab 1" }]);
-    expect(groupRefusal(await moveTo(set, room.lines.get(cid!.id)!, g1.id))).toEqual([409, "has_repo"]);
-    expect(groupRefusal(await moveTo(set, room.lines.get(ana!.id)!, null))).toEqual([409, "has_repo"]);
-    expect(groupRefusal(await staff("DELETE", `/app/api/group-sets/${set.set.id}/groups/${g1.id}`))).toEqual([409, "has_repo"]);
+    expect(groupRefusal(await moveTo(set, room.lines.get(ben!.id)!, g2.id))).toEqual([409, "needs_confirmation"]);
+    expect(groupRefusal(await moveTo(set, room.lines.get(cid!.id)!, g1.id))).toEqual([409, "needs_confirmation"]);
+    expect(groupRefusal(await moveTo(set, room.lines.get(ana!.id)!, null))).toEqual([409, "needs_confirmation"]);
+    const deleted = await staff("DELETE", `/app/api/group-sets/${set.set.id}/groups/${g1.id}`);
+    expect(groupRefusal(deleted)).toEqual([409, "has_repo"]);
+    expect(deleted.json().projects).toEqual([{ id: project.id, name: "Lab 1" }]);
 
     expect(await server.app.db.select().from(projectGroupMembers).where(eq(projectGroupMembers.projectId, project.id))).toEqual(copyBefore);
     expect(await server.app.db.select().from(studentGroupMembers).where(eq(studentGroupMembers.setId, set.set.id))).toEqual(setBefore);
@@ -570,7 +410,7 @@ describe("leaving the roster, or an account, revokes the recorded accounts first
     acceptInvitation(fullName, ben!.login);
     // Ben unlinks, and links another account, which nobody invited.
     await server.app.db.delete(githubAccounts).where(eq(githubAccounts.userId, ben!.id));
-    await link(ben!.id, nextAccount++, "ben-new");
+    await link(ben!.id, freshAccountId(), "ben-new");
     world.collaborators.get(fullName)!.set("ben-new", "push");
     expect((await removeLine(room, room.lines.get(ben!.id)!)).statusCode).toBe(204);
     expect(seats(fullName)[ben!.login]).toBeUndefined();
@@ -650,7 +490,7 @@ describe("leaving the roster, or an account, revokes the recorded accounts first
     const { project, room } = await groupProject([ana!], [[0]]);
     expect((await accept(project.id, ana!)).statusCode).toBe(200);
     const [row] = await repoRows(project.id);
-    const gone = nextOrg++;
+    const gone = freshOrgId();
     goneInstallations.add(gone);
     await server.app.db.update(githubOrganizations).set({ installationId: gone }).where(eq(githubOrganizations.id, room.orgId));
     expect((await removeLine(room, room.lines.get(ana!.id)!)).statusCode).toBe(204);
@@ -703,7 +543,7 @@ describe("the races of an invitation and a departure (R1–R3)", () => {
     expect((await accept(project.id, ana!)).statusCode).toBe(200);
     const [row] = await repoRows(project.id);
     const line = room.lines.get(ben!.id)!;
-    const other = nextAccount++;
+    const other = freshAccountId();
     accounts.set(other, `ben-other-${other}`);
     on({
       match: (url, method) => method === "GET" && url.pathname === `/user/${ben!.githubUserId}`,
@@ -753,17 +593,24 @@ describe("the races of an invitation and a departure (R1–R3)", () => {
     expect(seats(fullName)[ana!.login]).toBeUndefined();
   });
 
-  it("refuses a set's move out of a group whose first provisioning runs (has_repo)", async () => {
+  it("holds a confirmed move out of a group whose first provisioning runs: the member leaving is not invited", async () => {
     const [ana, ben] = [await newStudent(), await newStudent()];
     const { project, room, set } = await groupProject([ana!, ben!], [[0, 1]]);
-    let during: { statusCode: number; json: () => { error: unknown } } | undefined;
+    let during: { statusCode: number; body: string } | undefined;
     on({
       match: (url, method) => method === "POST" && url.pathname === `/orgs/${room.login}/repos`,
-      run: async () => void (during = await moveTo(set, room.lines.get(ben!.id)!, null)),
+      run: async () => {
+        const asked = await moveTo(set, room.lines.get(ben!.id)!, null);
+        expect(groupRefusal(asked)).toEqual([409, "needs_confirmation"]);
+        during = await staff("PUT", `/app/api/group-sets/${set.set.id}/members/${room.lines.get(ben!.id)}`, { groupId: null, confirm: asked.json().digest });
+      },
     });
     expect((await accept(project.id, ana!)).statusCode).toBe(200);
-    expect(groupRefusal(during!)).toEqual([409, "has_repo"]);
-    expect(seats(`${room.login}/lab-1-group-1`)[ben!.login]).toBe("push");
+    expect(during!.statusCode, during!.body).toBe(200);
+    // Ben's departure waits for the job: still in the copy, never invited.
+    expect(seats(`${room.login}/lab-1-group-1`)[ben!.login]).toBeUndefined();
+    const copy = await server.app.db.select().from(projectGroupMembers).where(eq(projectGroupMembers.projectId, project.id));
+    expect(copy.find((m) => m.enrollmentId === room.lines.get(ben!.id))?.departingAt).not.toBeNull();
   });
 
   it("answers no_group to a student moved out of their group during their Accept, nothing made", async () => {
@@ -870,7 +717,7 @@ describe("the races of an invitation and a departure (R1–R3)", () => {
       projectId: project.id,
       userId: ana.id,
       fullName: `${room.login}/before-${ana.login}`,
-      githubRepoId: nextOrg++,
+      githubRepoId: freshOrgId(),
       provisionStatus: "ok",
       invitationStatus: "accepted",
       acceptedAt: new Date(NOW),

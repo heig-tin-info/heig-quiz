@@ -22,7 +22,7 @@ import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 
 import type { FastifyBaseLogger } from "fastify";
-import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
 import { defaultProjectGradingScale, type ProjectCreate, type ProjectPatch } from "@quiz/contracts";
 import { PROJECT_PATCH_FIELDS, projectFieldRefusal, repoName, SLUG_MAX, slugify, type ProjectPatchField } from "@quiz/domain";
@@ -35,9 +35,9 @@ import { githubStatus, type InstallationClient } from "../../github/app.js";
 import { createSquashedRepo } from "../../github/squash.js";
 import { purgeProjectReceipts, type InstalledOrg } from "../github/service.js";
 import { DomainError } from "../http.js";
-import { projectDeadlineMoved, rescheduleCheckpoints, ts } from "./deadline.js";
+import { projectDeadlineMoved, rescheduleCheckpoints } from "./deadline.js";
 import { ProjectError } from "./errors.js";
-import { replaceGroupCopy } from "./groupCopy.js";
+import { replaceGroupCopy, stopProjects } from "./groupCopy.js";
 import { announcePublished } from "./notify.js";
 import { classroomClient, fetchSource, type Source } from "./sources.js";
 import type { ProjectRow } from "./views.js";
@@ -465,13 +465,10 @@ export async function setProjectArchived(
   return db.transaction(async (tx) => {
     const [row] = await tx
       .update(projects)
-      .set(
-        archived
-          ? { archivedAt: now, groupsStoppedAt: sql`coalesce(${projects.groupsStoppedAt}, ${ts(now)})` }
-          : { archivedAt: null },
-      )
+      .set({ archivedAt: archived ? now : null })
       .where(eq(projects.id, project.id))
       .returning();
+    if (archived) await stopProjects(tx, [project.id], now);
     await audit(tx, {
       ...actor,
       action: archived ? "project.archive" : "project.unarchive",

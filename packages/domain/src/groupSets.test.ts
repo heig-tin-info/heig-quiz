@@ -10,8 +10,9 @@ import {
   freeSlug,
   groupSizes,
   groupSyncPlan,
+  consequenceDelta,
   isEmptyPlan,
-  planReachesRepoGroup,
+  splitPlan,
   type CopyState,
   type SetState,
 } from "./groupSets.js";
@@ -172,7 +173,38 @@ describe("groupSyncPlan (ADR-070 §4)", () => {
   });
 });
 
-describe("planReachesRepoGroup (M3-15b)", () => {
+describe("a stopped group (M3-15b-2)", () => {
+  const set = (groups: [string, string][], members: [string, string][] = []): SetState => ({
+    groups: groups.map(([id, name], position) => ({ id, name, position })),
+    members: members.map(([enrollmentId, groupId]) => ({ enrollmentId, groupId })),
+  });
+  // c1 (source g1) stopped; c2 (source g2) follows.
+  const copy = (members: [string, string][], c1: Partial<CopyState["groups"][number]> = {}): CopyState => ({
+    groups: [
+      { id: "c1", name: "A", slug: "a", position: 0, sourceGroupId: "g1", stopped: true, ...c1 },
+      { id: "c2", name: "B", slug: "b", position: 1, sourceGroupId: "g2" },
+    ],
+    members: members.map(([enrollmentId, groupId]) => ({ enrollmentId, groupId })),
+  });
+
+  it("is neither renamed, moved nor deleted, and keeps its name and slug from the others", () => {
+    const renamed = groupSyncPlan(set([["g2", "A"], ["g1", "Renamed"]]), copy([]));
+    expect(renamed.update).toEqual([{ id: "c2", name: "A 2", slug: "a-2", position: 0 }]);
+    // Its set group deleted: it stays.
+    expect(groupSyncPlan(set([["g2", "B"]]), copy([])).delete).toEqual([]);
+  });
+
+  it("holds a move with one stopped end, either way, and a departure from it", () => {
+    const base = copy([["e1", "c1"], ["e2", "c2"]]);
+    expect(groupSyncPlan(set([["g1", "A"], ["g2", "B"]], [["e1", "g2"], ["e2", "g2"]]), base).place).toEqual([]);
+    expect(groupSyncPlan(set([["g1", "A"], ["g2", "B"]], [["e1", "g1"], ["e2", "g1"]]), base).place).toEqual([]);
+    expect(groupSyncPlan(set([["g1", "A"], ["g2", "B"]], [["e2", "g2"]]), base).unplace).toEqual([]);
+    // Into it from no group: held too.
+    expect(groupSyncPlan(set([["g1", "A"], ["g2", "B"]], [["e1", "g1"], ["e2", "g2"], ["e3", "g1"]]), base).place).toEqual([]);
+  });
+});
+
+describe("splitPlan and consequenceDelta (ADR-070 §4, §6; M3-15b-2)", () => {
   const set = (groups: [string, string][], members: [string, string][] = []): SetState => ({
     groups: groups.map(([id, name], position) => ({ id, name, position })),
     members: members.map(([enrollmentId, groupId]) => ({ enrollmentId, groupId })),
@@ -185,29 +217,47 @@ describe("planReachesRepoGroup (M3-15b)", () => {
     ],
     members: members.map(([enrollmentId, groupId]) => ({ enrollmentId, groupId })),
   });
-  const reaches = (s: SetState, c: CopyState, exempt?: Set<string>) => planReachesRepoGroup(c, groupSyncPlan(s, c), exempt);
+  const split = (s: SetState, c: CopyState, exempt?: Set<string>) => splitPlan(c, groupSyncPlan(s, c), exempt);
 
-  it("is reached by a member out, a member in, a move either way, and its deletion", () => {
+  it("defers a member out, a member in and a move either way, with their consequences", () => {
     const base = copy([["e1", "c1"], ["e2", "c2"]]);
-    expect(reaches(set([["g1", "A"], ["g2", "B"]], [["e2", "g2"]]), base)).toBe(true);
-    expect(reaches(set([["g1", "A"], ["g2", "B"]], [["e1", "g1"], ["e2", "g1"]]), base)).toBe(true);
-    expect(reaches(set([["g1", "A"], ["g2", "B"]], [["e1", "g2"], ["e2", "g2"]]), base)).toBe(true);
-    expect(reaches(set([["g2", "B"]], [["e2", "g2"]]), copy([["e2", "c2"]]))).toBe(true);
+    const out = split(set([["g1", "A"], ["g2", "B"]], [["e2", "g2"]]), base);
+    expect([out.now.unplace, out.consequences]).toEqual([[], [{ groupId: "c1", enrollmentId: "e1", kind: "lose" }]]);
+    const into = split(set([["g1", "A"], ["g2", "B"]], [["e1", "g1"], ["e2", "g1"]]), base);
+    expect(into.now.place).toEqual([]);
+    expect(into.consequences).toEqual([{ groupId: "c1", enrollmentId: "e2", kind: "join" }]);
+    const across = split(set([["g1", "A"], ["g2", "B"]], [["e1", "g2"], ["e3", "g1"], ["e2", "g2"]]), base);
+    expect(across.consequences).toEqual([
+      { groupId: "c1", enrollmentId: "e1", kind: "lose" },
+      { groupId: "c1", enrollmentId: "e3", kind: "join" },
+    ]);
+    expect(across.now.place).toEqual([]);
   });
 
-  it("is not reached by its rename, its position, a group without repository, nor an exempt departure", () => {
+  it("applies at once a rename, a position, a move without repository and an exempt departure", () => {
     const base = copy([["e1", "c1"], ["e2", "c2"]]);
-    expect(reaches(set([["g2", "B"], ["g1", "Renamed"]], [["e1", "g1"], ["e2", "g2"]]), base)).toBe(false);
-    expect(reaches(set([["g1", "A"], ["g2", "B"]], [["e1", "g1"]]), base)).toBe(false);
-    expect(reaches(set([["g1", "A"], ["g2", "B"]], [["e2", "g2"]]), base, new Set(["e1"]))).toBe(false);
-    expect(reaches(set([["g1", "A"]], [["e1", "g1"]]), copy([["e1", "c1"]]))).toBe(false);
+    const renamed = split(set([["g2", "B"], ["g1", "Renamed"]], [["e1", "g1"], ["e2", "g2"]]), base);
+    expect([renamed.now.update.length, renamed.consequences]).toEqual([2, []]);
+    const plain = split(set([["g1", "A"], ["g2", "B"]], [["e1", "g1"]]), base);
+    expect([plain.now.unplace, plain.consequences]).toEqual([["e2"], []]);
+    const staff = split(set([["g1", "A"], ["g2", "B"]], [["e2", "g2"]]), base, new Set(["e1"]));
+    expect([staff.now.unplace, staff.consequences]).toEqual([["e1"], []]);
+    const across = split(set([["g1", "A"], ["g2", "B"], ["g3", "C"]], [["e1", "g1"], ["e2", "g3"]]), base);
+    expect([across.now.place, across.consequences]).toEqual([[{ enrollmentId: "e2", sourceGroupId: "g3", from: "c2" }], []]);
   });
 
-  it("is never reached in a copy without repository, and a sourceless group is deleted as any", () => {
-    const plain: CopyState = { groups: [{ id: "c2", name: "B", slug: "b", position: 0, sourceGroupId: "g2" }], members: [{ enrollmentId: "e2", groupId: "c2" }] };
-    expect(reaches(set([], []), plain)).toBe(false);
+  it("names the deletion of a group with a repository, which is never done", () => {
+    expect(split(set([["g2", "B"]], [["e2", "g2"]]), copy([["e2", "c2"]])).repoGroupsDeleted).toEqual(["c1"]);
     const orphan: CopyState = { groups: [{ id: "c9", name: "Old", slug: "old", position: 0, sourceGroupId: null, slugFixed: true }], members: [] };
-    expect(reaches(set([["g1", "A"]]), orphan)).toBe(true);
+    expect(splitPlan(orphan, groupSyncPlan(set([["g1", "A"]]), orphan)).repoGroupsDeleted).toEqual(["c9"]);
+  });
+
+  it("asks a write to confirm only what it adds", () => {
+    const pending = [{ groupId: "c1", enrollmentId: "e1", kind: "lose" as const }];
+    const after = [...pending, { groupId: "c1", enrollmentId: "e3", kind: "join" as const }];
+    expect(consequenceDelta(pending, pending)).toEqual([]);
+    expect(consequenceDelta(pending, after)).toEqual([{ groupId: "c1", enrollmentId: "e3", kind: "join" }]);
+    expect(consequenceDelta(after, pending)).toEqual([]);
   });
 });
 

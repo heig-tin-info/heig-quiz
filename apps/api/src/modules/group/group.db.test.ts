@@ -245,9 +245,9 @@ describe("groups by hand (ADR-070 §3)", () => {
     expect(detail.unplaced.map((s) => s.enrollmentId)).toEqual(room.lines);
     const moves = (await auditOf(set.set.id)).filter((a) => a.action === "group.member_move").map((a) => a.payload);
     expect(moves).toEqual([
-      { enrollmentId: eid, from: null, to: g1!.id, copies: [] },
-      { enrollmentId: eid, from: g1!.id, to: g2!.id, copies: [] },
-      { enrollmentId: eid, from: g2!.id, to: null, copies: [] },
+      { enrollmentId: eid, from: null, to: g1!.id, copies: [], deferred: [] },
+      { enrollmentId: eid, from: g1!.id, to: g2!.id, copies: [], deferred: [] },
+      { enrollmentId: eid, from: g2!.id, to: null, copies: [], deferred: [] },
     ]);
   });
 

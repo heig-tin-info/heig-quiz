@@ -5,8 +5,10 @@
  * `packages/contracts/src/group.ts` (invariant 7); every write answers the
  * set as it now stands (`GroupSetDetail`), but a set's deletion (204).
  *
- * Registered whatever the GitHub configuration (`app.ts`): a set touches no
- * repository before M3-15b. Open to every member of a course's staff, by
+ * Registered whatever the GitHub configuration (`app.ts`): without Quiz's
+ * App no repository exists, and no move waits for the `group.sync` job
+ * (M3-15b-2), which a member's place sends once it is applied. Open to
+ * every member of a course's staff, by
  * their own portal session (`projectsClassroom`, `accessibleGroupSet`): a
  * student, a teacher off the staff, an impersonation, a `seb` or `kiosk`
  * session, a token get the 404 of a missing set (invariant 6). The
@@ -27,11 +29,13 @@ import {
 } from "@quiz/contracts";
 
 import { actorOf } from "../../audit.js";
+import type { AppConfig } from "../../config.js";
 import { accessibleGroupSet, projectsClassroom } from "../guards.js";
 import { teacherRoute } from "../http.js";
+import { requestGroupSync } from "../project/service.js";
 import * as service from "./service.js";
 
-export async function groupPlugin(app: FastifyInstance) {
+export async function groupPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const teacher = teacherRoute(app);
   const session = { preHandler: (req: FastifyRequest, reply: FastifyReply) => app.requireSession(req, reply) };
   const onSet = { params: IdParam, load: accessibleGroupSet.bind(null, app) };
@@ -126,12 +130,17 @@ export async function groupPlugin(app: FastifyInstance) {
     }),
   );
 
-  /** A student into a group of the set, or out of every group (`groupId: null`). */
+  /**
+   * A student into a group of the set, or out of every group (`groupId:
+   * null`); `409 needs_confirmation` until its GitHub consequences are
+   * confirmed (`confirm`), then the `group.sync` job sent (M3-15b-2).
+   */
   app.put(
     "/app/api/group-sets/:id/members/:eid",
     session,
     teacher({ ...onMember, body: GroupMemberPut }, async ({ req, now, params, body, scope }) => {
-      await service.placeStudent(app.db, scope, params.eid, body, ctx(req, now));
+      const due = await service.placeStudent(app.db, scope, params.eid, body, { ...ctx(req, now), confirm: body.confirm });
+      await requestGroupSync(app, opts.config, due);
       return service.groupSetDetail(app.db, scope.set.id);
     }),
   );

@@ -484,6 +484,13 @@
       "when": 1791179432998,
       "tag": "0068_project_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1791183659267,
+      "tag": "0069_group_sync",
+      "breakpoints": true
     }
   ]
 }

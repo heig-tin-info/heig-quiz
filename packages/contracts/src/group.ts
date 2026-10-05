@@ -52,10 +52,17 @@ export const GroupRename = z.strictObject({ name: GroupName });
 export type GroupRename = z.infer<typeof GroupRename>;
 
 /**
+ * A write's confirmation of its GitHub consequences (ADR-070 §6): the
+ * `digest` of the `409 needs_confirmation` it answers ({@link GroupConsequences}).
+ */
+export const GroupConfirm = z.string().regex(/^[0-9a-f]{64}$/);
+
+/**
  * `PUT /app/api/group-sets/:id/members/:eid`: the student into a group of
  * the set (moved out of the one they were in), or out of every group (null).
+ * `confirm`: the digest of the consequences the staff confirmed (ADR-070 §6).
  */
-export const GroupMemberPut = z.strictObject({ groupId: z.uuid().nullable() });
+export const GroupMemberPut = z.strictObject({ groupId: z.uuid().nullable(), confirm: GroupConfirm.optional() });
 export type GroupMemberPut = z.infer<typeof GroupMemberPut>;
 
 export const GroupRemainder = z.enum(GROUP_REMAINDERS);
@@ -139,6 +146,36 @@ export const GroupSetDetail = z.object({
 export type GroupSetDetail = z.infer<typeof GroupSetDetail>;
 
 /**
+ * One GitHub consequence of a set's write (ADR-070 §6; merge task
+ * M3-15b-2): a student (a roster line, by name) who loses (`lose`) the
+ * repository of a following project's copy group, or joins it (`join`).
+ * `repo` is the repository's full name, null while its first provisioning
+ * runs. Named even when GitHub will have nothing to do — no account
+ * invited, the App gone — since it changes whose repository and grade it
+ * is (product owner, 2026-10-05).
+ */
+export const GroupConsequence = z.object({
+  projectId: z.uuid(),
+  projectName: z.string(),
+  groupId: z.uuid(),
+  groupName: z.string(),
+  repo: z.string().nullable(),
+  enrollmentId: z.uuid(),
+  nom: z.string(),
+  prenom: z.string(),
+  kind: z.enum(["lose", "join"]),
+});
+export type GroupConsequence = z.infer<typeof GroupConsequence>;
+
+/**
+ * The details of `needs_confirmation`: the consequences the write ADDS to
+ * those already waiting for GitHub, and their `digest` (SHA-256, hex, of
+ * their canonical list), to send back as `confirm`.
+ */
+export const GroupConsequences = z.object({ consequences: z.array(GroupConsequence), digest: GroupConfirm });
+export type GroupConsequences = z.infer<typeof GroupConsequences>;
+
+/**
  * The refusals of the group routes, `{ error, message, ...details }`,
  * worded by the web app (statuses in the API's `modules/group/errors.ts`):
  *   - `classroom_archived` (409) — any write on a set of an archived
@@ -150,12 +187,15 @@ export type GroupSetDetail = z.infer<typeof GroupSetDetail>;
  *     the set already in a group;
  *   - `size_out_of_range` (422) — a random formation's size above the
  *     number of students to place;
- *   - `has_repo` (409) — a write whose step would reach a group of a
- *     following project's copy that has a repository: a member leaving or
- *     joining it, or its deletion (`projects`: id and name of each). Until
- *     the `group.sync` job (M3-15b-2) a membership change on GitHub is
- *     refused, never half-done; a rename still follows (the slug, hence the
- *     repository's name, is fixed).
+ *   - `has_repo` (409) — deleting a group whose following copy in a
+ *     project has a repository (`projects`: id and name of each); emptying
+ *     it is allowed, member by member. A rename follows (the slug, hence
+ *     the repository's name, is fixed);
+ *   - `needs_confirmation` (409) — a write with GitHub consequences sent
+ *     without the digest of them, or with a stale one (another write
+ *     changed them meanwhile): {@link GroupConsequences}. Sent again with
+ *     `confirm: <digest>`, it is applied, the GitHub side by the
+ *     `group.sync` job (M3-15b-2).
  * A group, a student or a set out of reach is the 404 of a missing one.
  */
 /**
@@ -166,6 +206,14 @@ export type GroupSetDetail = z.infer<typeof GroupSetDetail>;
 export const GroupRefusalProjects = z.object({ projects: z.array(z.object({ id: z.uuid(), name: z.string() })) });
 export type GroupRefusalProjects = z.infer<typeof GroupRefusalProjects>;
 
-export const GROUP_REFUSALS = ["classroom_archived", "set_in_use", "duplicate_name", "nobody_to_place", "size_out_of_range", "has_repo"] as const;
+export const GROUP_REFUSALS = [
+  "classroom_archived",
+  "set_in_use",
+  "duplicate_name",
+  "nobody_to_place",
+  "size_out_of_range",
+  "has_repo",
+  "needs_confirmation",
+] as const;
 export const GroupErrorCode = z.enum(GROUP_REFUSALS);
 export type GroupErrorCode = z.infer<typeof GroupErrorCode>;
