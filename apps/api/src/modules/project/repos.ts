@@ -109,14 +109,14 @@ export async function hintProjectStaff(db: Db, projectIds: readonly string[]): P
  * Nothing retries a deleted repository, nothing is deleted here. True only
  * for the call that marked it, which audits it. `via`: GitHub's `repository`
  * event, the 404 a deadline's lock, unlock or commit met (M3-05a), a
- * review dispatch's (M3-05b), or the reconciliation's read of the repository
- * by its id (M3-06).
+ * review dispatch's (M3-05b), the reconciliation's read of the repository
+ * by its id (M3-06), or a sync's push (M3-07).
  */
 export async function markRepoDeleted(
   db: Db,
   repoId: string,
   now: Date,
-  via: "webhook" | "deadline" | "dispatch" | "reconcile",
+  via: "webhook" | "deadline" | "dispatch" | "reconcile" | "sync",
 ): Promise<boolean> {
   const marked = await db
     .update(projectRepos)

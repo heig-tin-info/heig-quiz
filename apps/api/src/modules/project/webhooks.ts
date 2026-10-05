@@ -23,10 +23,11 @@
  * Every change to a student's repository is hinted to its students' `user:`
  * topics and its course's staff, never to the classroom (`events.ts`).
  *
- * Out of this task: a push on a source repository (source ahead) and
- * `pull_request` on `sync/*` (M3-07); the live-state cache's reads (M3-08);
- * the worded notices (M3-09c). The notifications are `notify.ts`'s, at the
- * writes they announce (M3-09b): none of these handlers sends one.
+ * A push on a SOURCE repository (the source ahead) and `pull_request` on
+ * `sync/*` are `sync.ts`'s handlers (M3-07), registered here beside these.
+ * Out of this file: the live-state cache's reads (M3-08); the worded
+ * notices (M3-09c). The notifications are `notify.ts`'s, at the writes they
+ * announce (M3-09b): none of these handlers sends one.
  */
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
@@ -39,6 +40,7 @@ import { onEvent, onReceipt, projectInstallation, pushedBy, type WebhookHandler 
 import { completedRun, ingestCompletedRun, isEligible, isLastStudentCommit, RawWorkflowRun } from "./grading.js";
 import { protectFiles } from "./protection.js";
 import { followRepoRename, hintRepo, markRepoDeleted, moveLastCommit, repoContext, tracksRepo } from "./repos.js";
+import { pullRequest, sourcePush } from "./sync.js";
 
 const BRANCH_REF = /^refs\/heads\/(.+)$/;
 
@@ -220,4 +222,7 @@ export function registerProjectHandlers(): void {
   onEvent("member", member);
   onEvent("repository", repository);
   onEvent("organization", organization);
+  // The source's sync (M3-07): a push on a SOURCE repository, the App's pull requests.
+  onEvent("push", sourcePush);
+  onEvent("pull_request", pullRequest);
 }

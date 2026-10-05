@@ -310,6 +310,21 @@ export type AuditAction =
   | "project.review_dispatched"
   | "project.checkpoint_dispatched"
   /**
+   * The source's sync (F-PROJ-12; merge task M3-07), subject the project.
+   * By the staff: `sync_requested` — the distribution repository updated in
+   * the request, `payload.changed` (the branches whose content changed),
+   * `sourceHeads` (the source's shas now handed out, by branch); by the
+   * `project.sync` job: `synced` — one entry per pass, `payload.opened`,
+   * `updated`, `upToDate`, `failed`, `skipped` (counts) and `failedRepos`
+   * (full names: the next sync retries them); `sync_failed` — the
+   * distribution repository could not be updated, `payload.reason`
+   * (`source_rewritten`: the `whole` strategy cannot fast-forward a rewritten
+   * source; `github`: GitHub or git failed), nothing was changed.
+   */
+  | "project.sync_requested"
+  | "project.synced"
+  | "project.sync_failed"
+  /**
    * A review checkpoint authored or removed by the staff (F-PROJ-11; merge
    * task M3-05b), subject the checkpoint: `payload.projectId`, `name`,
    * `dueAt`, `offsetDays` (null: an absolute date).

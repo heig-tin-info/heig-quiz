@@ -195,6 +195,20 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     ),
   );
 
+  /**
+   * F-PROJ-12 (M3-07): the source's sync — the distribution repository
+   * updated in the request, the pass over the repositories (the
+   * `sync/<branch>` refs, the pull requests) queued: 202. A draft syncs its
+   * distribution only; an archived project is refused.
+   */
+  app.post(
+    "/app/api/projects/:id/sync",
+    session,
+    teacher(onProject, async ({ req, reply, now, scope }) =>
+      reply.code(202).send(await service.requestSync(app, config, scope.project, actorOf(req), now, req.log)),
+    ),
+  );
+
   // ------------------------------------------------------------ one repository (M3-05a)
 
   const onRepo = { params: ProjectRepoParams, load: accessibleProjectRepo.bind(null, app) };

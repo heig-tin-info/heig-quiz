@@ -30,6 +30,9 @@
  * From M3-15a: a group project's copy of its group set (`groupCopy.ts`),
  * which the `group` module steps in its own transaction, never writing
  * these tables itself (ADR-070 §4).
+ * From M3-07: the source's sync (`sync.ts`): the source ahead, the staff's
+ * request updating the distribution repository and the leased
+ * `project.sync` pass over the repositories, the App's pull requests.
  * From M3-15b-1: a group's repository at Accept (`accept.ts`), whose
  * repository is whose through the copy (`groupRepos.ts`, N-SEC-20), and the
  * accounts let in (`access.ts`): recorded at each invitation, invited when a
@@ -67,4 +70,5 @@ export {
 export { ProjectError } from "./errors.js";
 export { listSources, sourceDetail } from "./sources.js";
 export { studentProject, studentProjectCards, studentResendInvitation } from "./studentView.js";
+export { requestSync } from "./sync.js";
 export { classroomProjects, projectSummary, teacherProjects, type ProjectRow } from "./views.js";

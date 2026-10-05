@@ -36,6 +36,7 @@ import {
   type ProjectRepoLive,
   type ProjectRepoReview,
   type ProjectRepoScores,
+  type ProjectRepoSync,
   type ProjectRepoView,
   type ProjectSlotScore,
   type ProjectStudent,
@@ -54,6 +55,7 @@ import { reposWithAccessToRevoke } from "./groupCopy.js";
 import { seatRepos } from "./groupRepos.js";
 import { forEachLimit } from "./lease.js";
 import { studentRepos, type RepoRow } from "./repos.js";
+import { projectSyncState, repoSyncViews } from "./sync.js";
 import { projectSummary, type ProjectRow } from "./views.js";
 
 /** Live-state reads in flight for one page view. */
@@ -261,13 +263,14 @@ function reviewView(project: ProjectRow, repo: RepoRow, dispatch: DispatchRow | 
   return { ...state, askedAt: isoOrNull(state.askedAt) };
 }
 
-/** One repository's row, from its stored state, its slot runs, its runs' facts, its ledger row and its live read. */
+/** One repository's row, from its stored state, its slot runs, its runs' facts, its ledger row, its sync and its live read. */
 function repoView(
   project: ProjectRow,
   repo: RepoRow,
   runs: Map<string, RunRow>,
   facts: RunFacts | undefined,
   dispatch: DispatchRow | undefined,
+  sync: ProjectRepoSync,
   read: LiveRead | undefined,
   toRevoke: ReadonlySet<string>,
 ): ProjectRepoView {
@@ -283,6 +286,7 @@ function repoView(
     live: liveView(read),
     scores,
     review: reviewView(project, repo, dispatch),
+    sync,
     released,
     flags: {
       protectionSuspended: repo.protectionSuspendedAt !== null,
@@ -337,13 +341,21 @@ export async function projectDetail(
     .orderBy(enrollments.nom, enrollments.prenom, enrollments.id);
   const repos = await studentRepos(db, project);
   const repoIds = repos.map((repo) => repo.id);
-  const [runs, facts, dispatches] = await Promise.all([slotRuns(db, repos), runFacts(db, repoIds), finalDispatches(db, repoIds)]);
+  const [runs, facts, dispatches, syncs] = await Promise.all([
+    slotRuns(db, repos),
+    runFacts(db, repoIds),
+    finalDispatches(db, repoIds),
+    repoSyncViews(db, project, repos),
+  ]);
   const liveRepos = repos.filter((repo) => isLive(repo, project));
   const { live, complete } = await liveStates(db, config, project, liveRepos, opts.log, opts.budgetMs ?? LIVE_BUDGET_MS);
   const toRevoke = await reposWithAccessToRevoke(db, project.id);
 
   const views = new Map(
-    repos.map((repo) => [repo.id, repoView(project, repo, runs, facts.get(repo.id), dispatches.get(repo.id), live.get(repo.id), toRevoke)]),
+    repos.map((repo) => [
+      repo.id,
+      repoView(project, repo, runs, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), toRevoke),
+    ]),
   );
   // Whose repository: a student's own, or their copy group's (`seatRepos`,
   // N-SEC-20: never the group repository's creator for having created it);
@@ -409,6 +421,7 @@ export async function projectDetail(
       released: project.releasedAt !== null,
       changedAfterRelease: accepted.filter((v) => v.flags.changedAfterRelease).length,
     }),
+    sync: projectSyncState(project, repos, now),
     counts: {
       students: roster.length,
       accepted: accepted.length,
