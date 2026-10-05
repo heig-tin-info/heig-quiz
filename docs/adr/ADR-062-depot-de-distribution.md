@@ -67,7 +67,11 @@ amended to match:
    (`GREATEST(reverts.created_at, receipt(covered_sha))`, `created_at` alone
    while the covered head has no receipt — it may arrive later or never): a
    head received between the two, already on the branch under the covered
-   head, ran the altered files too. (b) The window is read on the restore's
+   head, ran the altered files too. Known limit, conservative: when the
+   covered head's receipt lands after the branch moved onto the restore, a
+   push on top of the restore received before that late receipt falls
+   inside the window and is `to_verify` — the staff verify it, the score
+   is never wrong. (b) The window is read on the restore's
    branch (`reverts.branch`, migration `0069`; the receipt's branch on the
    rows written before): a receipt is one per sha, so a sha first received
    on another branch no longer drags the window onto it. Known limit, per
