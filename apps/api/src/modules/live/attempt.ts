@@ -1084,7 +1084,7 @@ export async function lobbyView(
 }
 
 /** What the ready screen says (ADR-076): the rules and what Start announces, no content. */
-export function readyView(evaluation: EvaluationRecord, participant: Participant): ReadyView {
+function readyView(evaluation: EvaluationRecord, participant: Participant): ReadyView {
   return {
     ...rulesOf(evaluation, participant),
     evaluation: {

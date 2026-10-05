@@ -58,7 +58,6 @@ export {
   previewView,
   lobbyView,
   enterEvaluation,
-  readyView,
   isOpen,
   assertOpen,
   submitAttempt,
