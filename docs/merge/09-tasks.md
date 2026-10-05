@@ -3828,6 +3828,50 @@ serves now (16a), and what waits for the group repositories (16b).
   cell. The source of a cell (I42) is `final.source`: `teacher`, `review`
   or `ci`. A teacher's score carries its own maximum (`teacher_max`):
   never rescale it to the CI's.
+- **Split** (2026-10-05): **M5-03a** is the domain, the tables and the API
+  (below); **M5-03b** the CSV/xlsx export (F-GBOOK-04, staff rows dropped,
+  ADR-018 §5, the format of F-RES-02, and how a mark travels in the file).
+- **As delivered (M5-03a)**, [ADR-074](../adr/ADR-074-carnet-de-notes-marques-stockees.md),
+  migration `0075_gradebook`:
+  - `packages/domain/src/gradebook.ts`: `CellOutcome` (grade, absent,
+    empty), `resolveCell` (a mark wins), `notTakenCell`, `gradebookMean`
+    (integer tenths, weights 0 to 10 at the tenth), `countsByDefault`;
+    unit-tested at 100 %.
+  - Tables `gradebook_columns` (exactly one of `evaluation_id` /
+    `project_id`, `weight`, `counts`, `position`; made by the first write
+    that names the activity, defaults otherwise), `gradebook_marks`
+    (`absent` | `score`, staff comment, unique per column and student) and
+    `gradebook_settings` (`mean_published`, one row per classroom, off
+    without one). The exercise opt-in is the per-column `counts` flag, not a
+    classroom setting.
+  - `ActivityKind.gradebookEntries` / `studentGradebookEntries`
+    (`modules/activity/`): the evaluation adapter reads `resultsView` (staff)
+    and `studentGrades` narrowed to a classroom (student); the project
+    adapter reads `project/gradebook.ts` (`projectLiveScores` through
+    `repoScores` / `releasableScore` / `scoreGrade`, `projectReleasedScore`
+    the release's snapshot). `gradebook` imports neither `results` nor
+    `project`.
+  - Routes (`modules/gradebook/routes.ts`, contracts in
+    `packages/contracts/src/gradebook.ts`): `GET` and `PATCH
+    /app/api/classrooms/:id/gradebook` (`GradebookStaff`; the PATCH
+    publishes or stops the mean), `PATCH …/gradebook/columns/:kind/:activityId`
+    (weight, counts, position), `PUT` / `DELETE …/columns/:kind/:activityId/marks/:eid`
+    (`409 grade_exists` without `override: true`, `422 score_above_max`),
+    each write answering the table; `GET /app/api/student/classrooms/:id/gradebook`
+    (`GradebookStudent`, through `readableClassroom`, the mean key absent
+    unless published). Errors: `GradebookErrorCode`. Audit:
+    `gradebook.mark_set`, `mark_cleared`, `column_updated`, `mean_published`,
+    `mean_unpublished`. Hint `gradebook` (staff topic and the claimed
+    students' `user:` topics).
+  - For M5-03b: the staff's table is `staffGradebook`
+    (`modules/gradebook/table.ts`), the format of the cells (grade, `a1.0`
+    for an absence, empty) is `GradebookStaffCell`.
+  - For M5-04: staff columns include the ones not released (marks can be set
+    there, their grades are not shown nor in the mean); a student's columns
+    are their Grades rows of the classroom plus the released projects; a
+    student's `withheld` cell (policy `none`) and `indicative` cell (points,
+    no grade) say why there is no grade. The global `/grades` page keeps its
+    own rows (`StudentGrades`): moving it onto the gradebook is M5-04's call.
 
 ### M5-04 — Web: Grades tabs
 - **Depends on**: M5-03.
