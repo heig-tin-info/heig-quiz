@@ -170,7 +170,12 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
   // --- Adopting a fresh view ----------------------------------------------
   useEffect(() => {
     if (!view) return;
-    dispatch({ type: "load", view });
+    // Read before `seed` raises the local revisions to the view's: an item
+    // still above it holds keystrokes the server has not acknowledged.
+    const unsaved = new Set(
+      view.items.filter((item) => saver.revisionOf(item.id) > item.revision).map((item) => item.id),
+    );
+    dispatch({ type: "load", view, unsaved });
     for (const item of view.items) saver.seed(item.id, item.revision);
     sample(view.attempt.serverNow);
     setDeadlineAt(view.attempt.deadlineAt === null ? null : Date.parse(view.attempt.deadlineAt));

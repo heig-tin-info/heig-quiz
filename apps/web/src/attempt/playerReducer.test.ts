@@ -106,6 +106,21 @@ describe("playerReducer: loading", () => {
     const state = load(view("free", [item(1), item(2)], "i9"));
     expect(state.index).toBe(0);
   });
+
+  it("keeps on a refetch the answers typed since the view, and the question on screen", () => {
+    const first = load(view("free", [item(1, { answer: { text: "a" }, revision: 2 }), item(2)], "i1"));
+    const typed = playerReducer(
+      playerReducer(first, { type: "answer", itemId: "i1", payload: { text: "ab" } }),
+      { type: "goto", itemId: "i2" },
+    );
+    // The refetch answered before the autosave did: older text, older bookmark.
+    const refetched = view("free", [item(1, { answer: { text: "a" }, revision: 2 }), item(2)], "i1");
+    const kept = playerReducer(typed, { type: "load", view: refetched, unsaved: new Set(["i1"]) });
+    expect(kept.answers.i1).toEqual({ text: "ab" });
+    expect(currentItem(kept)?.id).toBe("i2");
+    // Nothing unsaved: the server's answer wins (another tab wrote it).
+    expect(playerReducer(typed, { type: "load", view: refetched }).answers.i1).toEqual({ text: "a" });
+  });
 });
 
 describe("playerReducer: free navigation", () => {

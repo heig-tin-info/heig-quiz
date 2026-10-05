@@ -59,7 +59,12 @@ export interface PlayerState {
 }
 
 export type PlayerAction =
-  | { type: "load"; view: AttemptView }
+  /**
+   * `unsaved`: the items whose local answer is newer than the view's — typed
+   * since, not yet acknowledged. A refetch that landed mid-typing must not
+   * hand the editor back an older text.
+   */
+  | { type: "load"; view: AttemptView; unsaved?: ReadonlySet<string> }
   | { type: "goto"; itemId: string }
   | { type: "move"; delta: 1 | -1 }
   /**
@@ -185,12 +190,18 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
       const items = action.view.items.map(toItem);
       const answers: Record<string, unknown> = {};
       for (const item of action.view.items) {
-        if (item.answer !== null) answers[item.id] = item.answer;
+        if (action.unsaved?.has(item.id) === true && item.id in state.answers) {
+          answers[item.id] = state.answers[item.id];
+        } else if (item.answer !== null) {
+          answers[item.id] = item.answer;
+        }
       }
-      // F-LIVE-06: the position comes back with the answers. An unknown
-      // `lastItemId` (a shuffled order the server no longer serves) falls
-      // back to the first question rather than to nothing.
-      const resumed = action.view.attempt.lastItemId;
+      // F-LIVE-06: the position comes back with the answers — on the first
+      // load. A refetch keeps the question on screen: the bookmark it carries
+      // may predate the student's last move. An unknown `lastItemId` (a
+      // shuffled order the server no longer serves) falls back to the first
+      // question rather than to nothing.
+      const resumed = currentItem(state)?.id ?? action.view.attempt.lastItemId;
       const index = Math.max(
         0,
         items.findIndex((i) => i.id === resumed),
