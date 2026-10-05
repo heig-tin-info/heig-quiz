@@ -147,7 +147,7 @@ In the critical path only if D09 finds online assignments in production.
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
 | M7-01 | Palette, help, tours | todo | screens | | | |
-| M7-02 | User guide | todo | screens | | | |
+| M7-02 | User guide | in progress | screens | `merge/M7-a-teacher-guide` | #530 | M7-02a (teacher side: GitHub, projects, groups, journal) in #530; M7-02b student page on `merge/M7-b-student-guide`. Mock captures. |
 
 ## M8 — Migration and cutover
 
