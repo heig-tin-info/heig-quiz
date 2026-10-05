@@ -64,6 +64,12 @@ export interface ImportOptions extends Partial<OpenDecisions> {
   now?: Date;
   /** Look-ahead for a deadline falling during the cutover; 24 h by default. */
   windowHours?: number;
+  /**
+   * The journal module's ingestion for one classroom (`ingestJournal` over the
+   * target database, the same function a Refresh enqueues); without it the
+   * imported journals stay `pending` until a Refresh or a push.
+   */
+  ingestJournal?: (classroomId: string) => Promise<unknown>;
   /** The steps and checks; `REGISTRY` by default (tests inject their own). */
   registry?: Registry;
 }
@@ -257,6 +263,9 @@ export async function runImport(
         resolved: [...identities].filter(([, i]) => targetOf(i) !== undefined),
         mapped,
         decisions,
+        now: options.now ?? snapshot.activity.now,
+        journalsToIngest: new Set(),
+        ingestJournal: options.ingestJournal ?? null,
         actorId,
         known,
         parity: new Map(),
@@ -282,6 +291,8 @@ export async function runImport(
   const bound = registry.checks.filter((c) => c.githubBound);
   if (committed && (report.outcome === "applied" || report.outcome === "nothing_to_do")) {
     const ctx = committed;
+    const { db: _closed, ...afterCtx } = ctx;
+    for (const step of registry.afterCommit ?? []) await step.run(afterCtx);
     await db.transaction(async (tx) => {
       for (const check of bound) for (const f of await check.run({ ...ctx, db: tx })) record(report, { check: check.name, ...f });
     });

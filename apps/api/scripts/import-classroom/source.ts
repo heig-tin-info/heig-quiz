@@ -147,6 +147,30 @@ export interface SourceAuditRow {
   createdAt: Date;
 }
 
+/** A classroom's journal attachment, with the journal it reads (M8-01d): never its pages nor assets (I65). */
+export interface SourceJournalAttachment {
+  classroomId: string;
+  journalId: string;
+  orgId: string;
+  githubRepoId: number | null;
+  fullName: string;
+  ref: string;
+  rootPath: string;
+  attachedAt: Date;
+  attachedBy: string;
+}
+
+/** A webhook delivery as received (M8-01d). */
+export interface SourceWebhookDelivery {
+  deliveryId: string;
+  event: string;
+  action: string | null;
+  payload: Record<string, unknown>;
+  receivedAt: Date;
+  processedAt: Date | null;
+  error: string | null;
+}
+
 /**
  * What the source says about being stopped (pre-flight, `preflight.ts`): its
  * own clock, the freshest sign of life, and what its work queue still holds.
@@ -179,6 +203,8 @@ export interface SourceSnapshot {
   groups: SourceGroup[];
   groupMembers: SourceGroupMember[];
   auditLog: SourceAuditRow[];
+  journalAttachments: SourceJournalAttachment[];
+  webhookDeliveries: SourceWebhookDelivery[];
 }
 
 /**
@@ -228,6 +254,14 @@ const STATEMENTS: { [K in Exclude<keyof SourceSnapshot, "activity">]: string } =
   auditLog: `SELECT id::double precision AS id, actor_user_id AS "actorUserId", actor_type AS "actorType",
       action, subject_type AS "subjectType", subject_id AS "subjectId", payload, created_at AS "createdAt"
     FROM audit_log ORDER BY id`,
+  journalAttachments: `SELECT cj.classroom_id AS "classroomId", cj.journal_id AS "journalId", j.org_id AS "orgId",
+      j.github_repo_id::double precision AS "githubRepoId", j.full_name AS "fullName", j.ref,
+      j.root_path AS "rootPath", cj.attached_at AS "attachedAt", cj.attached_by AS "attachedBy"
+    FROM classroom_journals cj JOIN journals j ON j.id = cj.journal_id ORDER BY cj.classroom_id`,
+  // Whole table (a few thousand rows): the 30-day window is the run's clock, applied by the step.
+  webhookDeliveries: `SELECT delivery_id AS "deliveryId", event, action, payload, received_at AS "receivedAt",
+      processed_at AS "processedAt", error
+    FROM webhook_deliveries ORDER BY received_at, delivery_id`,
 };
 
 /**

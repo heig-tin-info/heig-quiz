@@ -4108,6 +4108,50 @@ serves now (16a), and what waits for the group repositories (16b).
   - **Left for b, c, d, and the runbook**: everything not above; the source
     state a database cannot show (process stopped, classroom's App silent on
     repositories, backups) is M8-05's.
+- **As delivered (d)** (branch `merge/M8-01d-import-journals`; no migration,
+  every target column existed):
+  - `Q:apps/api/scripts/import-classroom/steps-journals.ts` and
+    `steps-webhooks.ts`, registered before the legacy audit (journals, then
+    deliveries); `source.ts` reads `journalAttachments` (`classroom_journals`
+    joined to `journals`; never pages nor assets, I65) and the whole
+    `webhook_deliveries`; `ctx.ts` gains `Ctx.now` (the run's clock) and
+    `OwnedRow.idColumn` (a table keyed on something else than `id`: a journal
+    row is keyed on its classroom, and the id map's target id is the Quiz
+    classroom id).
+  - **Journals**: one `classroom_journals` row per attachment of a mapped
+    classroom (mode `github`, repository id, full name, branch, folder),
+    `sync_status = pending`, `created_by` the remapped `attached_by` else the
+    `--actor`, `created_at` = `attached_at`; one journal read by several
+    classrooms is several rows. Left out and listed (`findings.journals`,
+    tallied as left out): a journal of ANOTHER organization than its
+    classroom's (Quiz reads through the classroom's own installation, which
+    cannot see that repository), a journal with no repository id yet
+    (`classroom_journals_mode_ck`), a Quiz classroom that already has a
+    journal elsewhere (Quiz's kept; the same repository and branch is merged),
+    no author to record. A journal whose organization has no App acting
+    (not installed, suspended, not active: `actsOn`) is imported PENDING and
+    reported: the row is inert and heals with the first Refresh or push.
+    Re-import: `syncOwned` over mode, repository id, full name, branch and
+    folder; an overwritten row goes back to `pending`, `sync_error` cleared,
+    `version` + 1 (fix J2). A rename the ingestion followed counts as a Quiz
+    change and the row is kept.
+  - **Webhook deliveries**: those received in the 30 days before the run's
+    clock, copied insert-only into `webhook_deliveries` (same key, GitHub's
+    delivery id), all recorded as PROCESSED (an unprocessed one is stamped
+    with the import's time, listed in `findings.webhooks`: Quiz's
+    `reconcile.deliveries` would otherwise replay classroom's payloads
+    through its own handlers). Older rows are counted, not copied.
+  - **Parity**: `classroom_journals` and `webhook_deliveries` tallied; check
+    `journals re-ingested` (`githubBound`): every imported journal read back
+    after the commit, `ok` counted, `pending` a `warn`, `error` a red line
+    with its code; "not run" in a dry run. **Nothing in Quiz sweeps a
+    `pending` journal row** (a push or a Refresh enqueues the ingestion), so
+    the registry's `afterCommit` hook (`ingestImportedJournals`, never in a
+    dry run, outside any transaction, before the checks) calls the journal
+    module's own `ingestJournal` for every row the run created or overwrote,
+    sequentially, with the target database and no queue (`ImportOptions.ingestJournal`,
+    wired by the CLI when Quiz's App is configured; without it the rows stay
+    `pending`, a `warn`). A second run ingests nothing.
 - **Depends on**: every schema task (M2-01, M3-01, M4-01, M5-03, M6-06 if
   in scope), D11.
 - **Goal**: the whole order of §2.5, the verification report, the legacy
