@@ -35,6 +35,7 @@ import {
   projectRepos,
   projects,
   pushReceipts,
+  reverts,
   webhookDeliveries,
 } from "../../db/schema.js";
 import { setRemoteBaseForTests } from "../../github/git.js";
@@ -306,6 +307,25 @@ describe("reconcile.grades", () => {
     expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 0 runs ingested");
     expect(await runsOf(repo!)).toHaveLength(2);
     expect(await auditOf("reconcile.grades", "project.reconciled")).toHaveLength(passes);
+  });
+
+  it("catches up a run's lagging to_verify on a restored head, with no new run and no GitHub call for it (M3-06b)", async () => {
+    const { repos } = await project();
+    const [repo] = repos;
+    const sha = head(repo!);
+    const run = list(repo!, sha);
+    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 1 runs ingested");
+    const [row] = await runsOf(repo!);
+    expect(row).toMatchObject({ workflowRunId: run.id, toVerify: false });
+    expect((await repoRow(repo!.id)).currentGradeRunId).toBe(row!.id);
+
+    // The head turns out restored after the run was ingested: a row answering its push, the head alone.
+    await server.app.db.insert(reverts).values({ id: randomUUID(), repoId: repo!.id, headSha: sha, files: [CI], branch: "main", createdAt: server.clock.now() });
+    gh.calls.length = 0;
+    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 0 runs ingested");
+    expect((await runsOf(repo!))[0]).toMatchObject({ toVerify: true });
+    expect((await repoRow(repo!.id)).currentGradeRunId).toBeNull();
+    expect(callsTo(/\/actions\/runs$/)).toHaveLength(1); // the listing, nothing more
   });
 
   it("writes one row for a run the webhook already delivered: the two paths build the same event (ADR-011)", async () => {

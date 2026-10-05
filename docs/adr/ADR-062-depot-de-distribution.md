@@ -72,7 +72,7 @@ amended to match:
    push on top of the restore received before that late receipt falls
    inside the window and is `to_verify` — the staff verify it, the score
    is never wrong. (b) The window is read on the restore's
-   branch (`reverts.branch`, migration `0069`; the receipt's branch on the
+   branch (`reverts.branch`, migration `0073`; the receipt's branch on the
    rows written before): a receipt is one per sha, so a sha first received
    on another branch no longer drags the window onto it. Known limit, per
    branch receipts being out of scope: a head first received on branch A,
@@ -105,9 +105,11 @@ amended to match:
    row: it is no tampering. The stored `to_verify`
    of a run follows the set at every reselection (`refreshScoreSelection`):
    a run ingested before a late receipt widened its window is flagged at
-   the repository's next reselection — a restore, or a run ingested by the
-   webhook or by `reconcile.grades` — and the score never waited for the
-   flag, it reads the set (`selectScoreRun`). The student never sees
+   the repository's next reselection — a restore, a run ingested by the
+   webhook, or `reconcile.grades` (15 min), which reselects every quiet
+   repository in scope and so re-flags without a new run or a GitHub call —
+   and the score never waited for the flag, it reads the set
+   (`selectScoreRun`). The student never sees
    `to_verify` (N-SEC-20).
 
 ## Context

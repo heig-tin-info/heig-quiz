@@ -1273,11 +1273,14 @@ under the half that serves them.
     head received between the restore's `now` and the covered head's
     receipt no longer escapes. The stored `to_verify` may lag for a head
     received late; `refreshScoreSelection` now makes the column follow the
-    set at every reselection (the restore's, each ingest's — the webhook's
-    or `reconcile.grades`'), and the score was never wrong: `selectScoreRun`
-    reads the set. `protection.ts` lost its own bulk update for it.
+    set at every reselection (the restore's, each ingest's, and
+    `reconcile.grades` (15 min), whose `ingestRuns` step calls it per
+    candidate repository, DB-only: a lagging flag is caught up within the
+    period with no new run), and the score was never wrong:
+    `selectScoreRun` reads the set. `protection.ts` lost its own bulk
+    update for it.
   - **The window's branch**: `reverts.branch text NULL` (migration
-    `0069_project_reverts_edges`, no backfill), written by `recordRestore`;
+    `0073_project_reverts_edges`, no backfill), written by `recordRestore`;
     the join reads `between.branch = COALESCE(reverts.branch, tampering.branch)`,
     so the rows written before keep their behaviour. Known limit: receipts
     are one per sha, so a head first received on A then pushed on B escapes

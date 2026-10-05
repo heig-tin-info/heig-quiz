@@ -57,7 +57,7 @@ import { pushedBy } from "../github/service.js";
 import { followInvitation, installationClients, inviteAccount, notRecorded } from "./access.js";
 import { LIVE } from "./deadline.js";
 import { ProjectError } from "./errors.js";
-import { aggregateCiStatus, completedRun, ingestCompletedRun } from "./grading.js";
+import { aggregateCiStatus, completedRun, ingestCompletedRun, refreshScoreSelection } from "./grading.js";
 import { repoMembers } from "./groupRepos.js";
 import { followRepoRename, hintRepo, markRepoDeleted, moveLastCommit, type RepoContext } from "./repos.js";
 
@@ -240,6 +240,10 @@ async function ingestRuns({ app, config, octokit, ctx, located, counts, now }: S
   for (const raw of data.workflow_runs) {
     if ((await ingestCompletedRun(app, octokit, ctx, completedRun(config, raw, now))) !== null) ingested += 1;
   }
+  // A run on a restored head whose stored `to_verify` lags (a receipt that
+  // widened the window after it was ingested, M3-06b) is caught up here,
+  // with no new run and no GitHub call: the column follows the set.
+  await refreshScoreSelection(app.db, ctx);
   if (ingested === 0) return;
   counts.runsIngested += ingested;
   forgetRepoLiveState(located.fullName);
