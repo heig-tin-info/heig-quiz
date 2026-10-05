@@ -3,7 +3,8 @@
  * found by GitHub's immutable repository id, never by name; who hears of a
  * change to it; and its one terminal state, deleted on GitHub.
  */
-import { and, eq, inArray, isNotNull, isNull, notInArray, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, notInArray, or, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
@@ -107,14 +108,15 @@ export async function hintProjectStaff(db: Db, projectIds: readonly string[]): P
  * Terminal and idempotent: the repository is gone from GitHub (F-PROJ-18).
  * Nothing retries a deleted repository, nothing is deleted here. True only
  * for the call that marked it, which audits it. `via`: GitHub's `repository`
- * event, the 404 a deadline's lock, unlock or commit met (M3-05a), or a
- * review dispatch's (M3-05b).
+ * event, the 404 a deadline's lock, unlock or commit met (M3-05a), a
+ * review dispatch's (M3-05b), or the reconciliation's read of the repository
+ * by its id (M3-06).
  */
 export async function markRepoDeleted(
   db: Db,
   repoId: string,
   now: Date,
-  via: "webhook" | "deadline" | "dispatch",
+  via: "webhook" | "deadline" | "dispatch" | "reconcile",
 ): Promise<boolean> {
   const marked = await db
     .update(projectRepos)
@@ -130,4 +132,47 @@ export async function markRepoDeleted(
     payload: { via },
   });
   return true;
+}
+
+/**
+ * The student's last commit (F-PROJ-10): `sha`, at the commit's own time
+ * `at` (an ISO string GitHub gave) or, when it gave none or an unreadable
+ * one, `fallback` — the delivery's receipt, or the reconciliation's clock.
+ * The push webhook's write and the reconciliation's (M3-06).
+ */
+export async function moveLastCommit(db: Db, repoId: string, sha: string, at: string | null | undefined, fallback: Date): Promise<void> {
+  const date = at ? new Date(at) : fallback;
+  await db
+    .update(projectRepos)
+    .set({ lastCommitSha: sha, lastCommitAt: Number.isNaN(date.getTime()) ? fallback : date })
+    .where(eq(projectRepos.id, repoId));
+}
+
+/**
+ * A repository renamed on GitHub (F-PROJ-18), followed by its immutable id:
+ * the stored names — a student's repository, and a project's source or
+ * distribution repository, which the restores and the sync read by name —
+ * become `fullName`, only where the stored name part is `from` (the name
+ * the rename left), so a stale rename replayed after a later one changes
+ * nothing. The name part only: the owner may differ, an organization
+ * renamed before its own rename event was applied. The `repository.renamed`
+ * webhook's path and the reconciliation's (ADR-011). True when a student's
+ * repository row was renamed.
+ */
+export async function followRepoRename(db: Db, githubRepoId: number, fullName: string, from: string): Promise<boolean> {
+  const named = (column: AnyPgColumn) => sql`split_part(${column}, '/', 2) = ${from}`;
+  await db
+    .update(projects)
+    .set({ sourceFullName: fullName })
+    .where(and(eq(projects.sourceRepoId, githubRepoId), named(projects.sourceFullName)));
+  await db
+    .update(projects)
+    .set({ distributionFullName: fullName })
+    .where(and(eq(projects.distributionRepoId, githubRepoId), named(projects.distributionFullName)));
+  const renamed = await db
+    .update(projectRepos)
+    .set({ fullName })
+    .where(and(eq(projectRepos.githubRepoId, githubRepoId), named(projectRepos.fullName)))
+    .returning({ id: projectRepos.id });
+  return renamed.length > 0;
 }

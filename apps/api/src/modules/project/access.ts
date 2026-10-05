@@ -185,8 +185,8 @@ export async function releaseLine(tx: Tx, enrollmentId: string): Promise<void> {
   await assertNoLiveGrant(tx, enrollmentId);
 }
 
-/** How an invitation came: an Accept (one's own, or a fellow member's), a link, a resend, the set's move (`group.sync`). */
-export type InviteVia = "accept" | "link" | "resend" | "group.sync";
+/** How an invitation came: an Accept (one's own, or a fellow member's), a link, a resend, the set's move (`group.sync`), the daily reconciliation (`reconcile`, M3-06). */
+export type InviteVia = "accept" | "link" | "resend" | "group.sync" | "reconcile";
 
 export interface InviteContext {
   actor: AuditActor;

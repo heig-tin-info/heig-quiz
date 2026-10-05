@@ -270,6 +270,15 @@ export type AuditAction =
   | "project.deadline_enforced"
   | "project.deadline_reopened"
   /**
+   * One pass of a reconciliation (N-RES-08, ADR-011; merge task M3-06),
+   * subject the scheduled task (`reconcile.grades`, `reconcile.repos`), one
+   * entry per pass that changed something or stopped: `payload.repos`
+   * (read), `runsIngested`, `reinvited`, `accepted` (invitations found
+   * accepted), `heads` (last commits moved), `renamed`, `deleted` (counts),
+   * `stoppedOnRateLimit`.
+   */
+  | "project.reconciled"
+  /**
    * The release (F-PROJ-14, D05; merge task M3-08b), subject the project:
    * the final scores snapshotted per repository — `payload.first` (never
    * released before: the one release M3-09 notifies), `repos` (snapshots
@@ -361,7 +370,8 @@ export type AuditAction =
    * `project_repos` row — a group's, or (a revocation) a student's own.
    * `repo_invite`: `payload.repo`, `enrollmentId`, `login`, `invitation`
    * (`pending` | `accepted`), `via` (`accept`, `link`, `group.sync` — a
-   * set's move, M3-15b-2; a resend audits `project_repo.invite_resent`);
+   * set's move, M3-15b-2 —, `reconcile` — the daily re-invite, M3-06; a
+   * resend audits `project_repo.invite_resent`);
    * `repo_revoke`: `payload.repo`, `enrollmentId`, `login` (null: none was
    * ever invited), `outcome` (`ok` | `skipped`), `reason` of a skip
    * (`app_not_installed`, `repo_deleted`, `not_provisioned`,

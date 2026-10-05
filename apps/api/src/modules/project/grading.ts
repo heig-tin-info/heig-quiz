@@ -23,6 +23,7 @@ import type { FastifyInstance } from "fastify";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Octokit } from "octokit";
+import { z } from "zod";
 
 import {
   effectiveDeadline,
@@ -34,9 +35,11 @@ import {
   type ScoreParse,
 } from "@quiz/domain";
 
+import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import { botCommits, gradeDispatches, projectGradeRuns, projectRepos, projects, pushReceipts, reverts } from "../../db/schema.js";
 import { ownerRepo } from "../../github/app.js";
+import { pushedBy } from "../github/service.js";
 import type { RepoContext } from "./repos.js";
 
 /** The raw test counters `score` ≥ 0.7.2 prints beside the score: "passed/total". */
@@ -71,6 +74,57 @@ export interface CompletedRun {
   startedAt: Date | null;
   /** GitHub's completion time. */
   completedAt: Date;
+}
+
+/**
+ * A workflow run as GitHub describes it, in a `workflow_run` delivery and
+ * in the listing of a repository's runs alike: the fields the ingestion
+ * reads, nothing else validated (every other field is GitHub's business).
+ */
+export const RawWorkflowRun = z.object({
+  // Octokit's types declare GitHub's ids `number | bigint` (I62); they stay below 2^53.
+  id: z.union([z.number().int(), z.bigint()]),
+  run_attempt: z.number().int().nullish(),
+  head_branch: z.string().nullish(),
+  head_sha: z.string(),
+  conclusion: z.string().nullish(),
+  path: z.string().nullish(),
+  event: z.string().nullish(),
+  check_suite_id: z.union([z.number().int(), z.bigint()]).nullish(),
+  updated_at: z.string().nullish(),
+  run_started_at: z.string().nullish(),
+  triggering_actor: z.object({ login: z.string() }).nullish(),
+});
+export type RawWorkflowRun = z.infer<typeof RawWorkflowRun>;
+
+/** `iso` as a date, or null when absent or unreadable. */
+function dateOrNull(iso: string | null | undefined): Date | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * THE mapping of GitHub's run into the ingestion's (ADR-011 §1: the webhook
+ * and the reconciliation build the same event). `receivedAt` stands for a
+ * completion time GitHub left out — the delivery's receipt, or the
+ * reconciliation's clock.
+ */
+export function completedRun(config: AppConfig, raw: RawWorkflowRun, receivedAt: Date): CompletedRun {
+  return {
+    workflowRunId: Number(raw.id),
+    runAttempt: raw.run_attempt ?? 1,
+    headBranch: raw.head_branch ?? "",
+    headSha: raw.head_sha,
+    conclusion: raw.conclusion ?? "unknown",
+    path: raw.path ?? "",
+    event: raw.event ?? "",
+    // A re-run's triggering actor is who re-ran it; none at all counts as a person's (fail closed).
+    triggeredBy: pushedBy(config, raw.triggering_actor?.login),
+    checkSuiteId: raw.check_suite_id == null ? null : Number(raw.check_suite_id),
+    startedAt: dateOrNull(raw.run_started_at),
+    completedAt: dateOrNull(raw.updated_at) ?? receivedAt,
+  };
 }
 
 /**
@@ -238,7 +292,7 @@ async function readAnnotations(
 }
 
 /** Pass / fail over every run of a commit (F-PROJ-10): the CI state of a repository. */
-async function aggregateCiStatus(
+export async function aggregateCiStatus(
   octokit: Octokit,
   fullName: string,
   headSha: string,
