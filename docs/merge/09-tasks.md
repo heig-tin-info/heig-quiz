@@ -1896,6 +1896,76 @@ former M3-09 card are kept below, under the task that inherits each.
   reminder itself is).
 - **Tests**: web, on the re-read payloads: each notice from its difference,
   nothing on an unchanged payload.
+- **Decisions** (spec challenge and product owner, 2026-10-05): the notices
+  are ephemeral toasts on TWO pages — the staff's project page and the
+  student's project — computed in the browser from the page's data before
+  and after each re-read (the 30 s refetch, the `projects` hint), worded
+  through `t()` en/fr, shown through the existing toast primitive. No
+  server work, no new field, no notification behind them, no per-kind
+  preference in v1 (heig-classroom's `notifyPrefs` is not ported). Staff:
+  **one notice per kind per re-read, with a count** ("3 pushes received"),
+  never one per repository. **Dropped**: "protected files restored" (no
+  datum on the page; the `protectionSuspended` flag and the bell cover the
+  cap) and "sync done" (M3-07 shows its last-sync line and counts itself).
+  No deadline notice for the staff and no release notice for the students:
+  `project_deadline_applied` and `project_grade_final` already toast
+  through the notification kinds (`notifications/toasts.ts`), never
+  doubled. Nothing on the first read (the `ToastGate` rule), nothing on an
+  unchanged read.
+- **As delivered** (branch `merge/M3-09c-project-notices`):
+  - **`useNoticeToasts(query, notices)`**
+    (`Q:apps/web/src/notifications/notices.ts`): the one hook, generic over
+    the page's data. It keeps the previous read, calls the page's pure
+    `notices(prev, next)` and toasts each `Notice` (`{ key, message, tone }`)
+    through `useToast`, `key`ed per kind so a later notice of the same kind
+    replaces the standing one instead of stacking. The first read after the
+    page mounts is the baseline — cached data shown before it is not a read
+    (`isFetchedAfterMount`), so coming back to a page never replays what
+    happened while away; an unchanged read (the same reference, TanStack's
+    structural sharing) says nothing; a new query key starts a new
+    baseline. `ToastTone` is exported from `notify.tsx`; no second toast
+    primitive.
+  - **Staff** (`Q:apps/web/src/project/projectNotices.ts`, pure):
+    `projectNotices(prev, next): { kind, count }[]` over `ProjectDetail`'s
+    rows, by repository id — `accepted` (a repository the previous read did
+    not have: F-PROJ-05's Accept; its distribution commits are no push),
+    `pushed` (`lastCommit.sha` changed, or appeared), `scored`
+    (`scores.current.runId` changed, or appeared: the frozen and review
+    slots filling at the freeze are not a capture), `reviewAsked`
+    (`review.askedAt` changed, or appeared). A repository that
+    disappeared, the lock, the deadline and the flags notice nothing.
+    `projectNoticeToast` words it, `.one` / plural, keys
+    `project.notice.*`. `ProjectPage.tsx` changed by one hook call only
+    (M3-07 edits its header and rows).
+  - **Student** (`Q:apps/web/src/student/studentProjectNotices.ts`, pure,
+    N-SEC-20): `studentProjectNotices(prev, next): kind[]` over
+    `StudentProject` alone — `accepted` (their invitation pending →
+    accepted), `locked` (their repository open → locked: the deadline
+    applied; amber tone), `pushed` and `scored` (an indicative score
+    appearing, or its points or maximum changing — the current score
+    becoming the frozen one is the same score) only while the project is
+    open: not locked and the deadline ahead of the payload's `serverNow`
+    (the commit and score the view stands on are the SELECTED run's after
+    that, F-PROJ-15). Nothing of a repository appearing (the student's own
+    Accept, or the bell's `project_repo_invited`), deleted, or gone; nothing
+    of the release. Keys `sproj.notice.*`.
+  - **Mock** (`?notices=1`): the fake stream moves the published project's
+    repositories (three pushes, two scored, one acceptance) and the
+    student's open repository (a push, two points more) 2.5 s after the
+    first read, then hints `projects`; scenes `project-notices` and
+    `student-project-notices` in `screenshots.mjs`.
+  - **Tests**: the pure functions (each notice from its own difference;
+    unchanged ⇒ none; the counts; the frozen flag alone is not a score;
+    nothing after the deadline but the lock), and the hook (nothing on the
+    first read, cached data is no read, a new key is a new baseline, one
+    standing notice per kind).
+  - **Decisions taken alone**: an acceptance is a repository that appeared
+    (heig-classroom's `assignment_accepted`), not an invitation accepted
+    on GitHub, which changes the row's tag without a notice; the student's
+    "acceptance completed" is the invitation accepted only; the lock is the
+    one notice in the `warning` tone (the next push is refused — nothing
+    went wrong); notices are keyed per kind, so a page re-read every 30 s
+    never stacks more than four.
 
 ### M3-10 — Web: projects in Activities, "New ▾"
 - **Depends on**: M3-01 contracts, M1-05. ‖ M3-11.
