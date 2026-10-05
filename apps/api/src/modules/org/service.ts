@@ -10,7 +10,8 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, or, sql, type SQL } from "drizzle-orm";
+import type { FastifyBaseLogger } from "fastify";
 
 import type {
   CourseRole,
@@ -20,7 +21,9 @@ import type {
 } from "@quiz/contracts";
 import { effectiveCourseRole, staffChangeRefusal, type StaffChange } from "@quiz/domain";
 
-import { isUniqueViolation, type Db } from "../../db/client.js";
+import type { AuditActor } from "../../audit.js";
+import type { AppConfig } from "../../config.js";
+import { isUniqueViolation, type Db, type Tx } from "../../db/client.js";
 import {
   avatars,
   classrooms,
@@ -33,7 +36,9 @@ import {
 import { shownAvatar } from "../avatar.js";
 import { countTemplates } from "../evaluation/service.js";
 import { purgeProjectReceipts } from "../github/service.js";
+import { releaseLine, revokeEnrollmentAccess, RevokeFailed, type RevokeVia } from "../project/service.js";
 import { accessRevoked } from "../realtime/bus.js";
+import { rosterRefusal } from "./errors.js";
 
 export { claimEnrollments, claimLines, type ClaimMatch } from "./roster.js";
 
@@ -473,85 +478,166 @@ export async function setDrillOptOut(
 // --- Roster entries -----------------------------------------------------------
 
 /**
+ * What the roster's writes need to revoke a line's GitHub accesses first
+ * (F-PROJ-17, ADR-070 §5): the `project` module's `revokeEnrollmentAccess`,
+ * `502 revoke_failed` when GitHub does not take them, nothing written.
+ */
+export interface Revocation {
+  config: AppConfig;
+  actor: AuditActor;
+  now: Date;
+  log: FastifyBaseLogger;
+}
+
+/**
+ * THE guard of a roster write that takes line `enrollmentId` or its
+ * account away (a removal, an unclaim, an e-mail change, a self-enroll
+ * turning it into a staff seat): its GitHub accesses revoked first, then
+ * `write` in a transaction behind `releaseLine` — which refuses while an
+ * account recorded for the line since is still live. `RevokeFailed` is
+ * worded `502 revoke_failed` (`rosterRefusal`): nothing written, retry.
+ */
+async function afterRevocation<T>(db: Db, enrollmentId: string, ctx: Revocation, via: RevokeVia, write: (tx: Tx) => Promise<T>): Promise<T> {
+  try {
+    await revokeEnrollmentAccess(db, ctx.config, enrollmentId, { ...ctx, via });
+    return await db.transaction(async (tx) => {
+      await releaseLine(tx, enrollmentId);
+      return write(tx);
+    });
+  } catch (err) {
+    if (err instanceof RevokeFailed) throw rosterRefusal("revoke_failed", { repo: err.repo });
+    throw err;
+  }
+}
+
+/**
  * A teacher takes a (staff) seat in their own classroom, claimed at once and
- * flagged `staff` so it stays out of the headcount. Throws on
- * UNIQUE(classroom_id, user_id): already enrolled under another address.
+ * flagged `staff` so it stays out of the headcount. A student line holding
+ * their e-mail becomes that seat, behind `afterRevocation`. `409
+ * already_enrolled` when they hold another line (UNIQUE(classroom_id,
+ * user_id)), checked before anything is revoked.
  */
 export async function selfEnroll(
   db: Db,
   classroomId: string,
   me: { id: string; email: string; givenName: string; familyName: string },
+  ctx: Revocation,
 ): Promise<void> {
-  await db
-    .insert(enrollments)
-    .values({
-      id: randomUUID(),
-      classroomId,
-      nom: me.familyName,
-      prenom: me.givenName,
-      email: me.email.trim().toLowerCase(),
-      userId: me.id,
-      claimedAt: new Date(),
-      staff: true,
-    })
-    .onConflictDoUpdate({
-      target: [enrollments.classroomId, enrollments.email],
-      set: { userId: me.id, claimedAt: new Date(), staff: true },
-    });
+  const email = me.email.trim().toLowerCase();
+  const lines = await db
+    .select()
+    .from(enrollments)
+    .where(and(eq(enrollments.classroomId, classroomId), or(eq(enrollments.email, email), eq(enrollments.userId, me.id))));
+  if (lines.some((l) => l.email !== email)) throw rosterRefusal("already_enrolled");
+  const seat = async (tx: Db | Tx) => {
+    await tx
+      .insert(enrollments)
+      .values({
+        id: randomUUID(),
+        classroomId,
+        nom: me.familyName,
+        prenom: me.givenName,
+        email,
+        userId: me.id,
+        claimedAt: new Date(),
+        staff: true,
+      })
+      .onConflictDoUpdate({
+        target: [enrollments.classroomId, enrollments.email],
+        set: { userId: me.id, claimedAt: new Date(), staff: true },
+      });
+  };
+  const taken = lines.find((l) => !l.staff);
+  try {
+    await (taken ? afterRevocation(db, taken.id, ctx, "roster.self_enroll", seat) : seat(db));
+  } catch (err) {
+    if (isUniqueViolation(err, "enrollments_classroom_user_uq")) throw rosterRefusal("already_enrolled");
+    throw err;
+  }
 }
 
 /**
  * Edits one roster entry. Changing the e-mail (`emailChanged`) invalidates
  * the attachment: the entry is again claimable by the holder of the new
- * address. Throws on UNIQUE(classroom_id, email).
+ * address — once the address is known to be free (`409 duplicate_email`),
+ * behind `afterRevocation` when it detaches an account.
  */
 export async function updateEnrollment(
   db: Db,
-  entry: Pick<EnrollmentRecord, "id" | "userId">,
+  entry: Pick<EnrollmentRecord, "id" | "userId" | "classroomId">,
   patch: EnrollmentPatch,
   email: string | undefined,
   emailChanged: boolean,
+  ctx: Revocation,
 ) {
-  const [updated] = await db
-    .update(enrollments)
-    .set({
-      ...(patch.nom ? { nom: patch.nom } : {}),
-      ...(patch.prenom ? { prenom: patch.prenom } : {}),
-      ...(email ? { email } : {}),
-      ...(patch.timeBonusPercent !== undefined
-        ? { timeBonusPercent: patch.timeBonusPercent }
-        : {}),
-      ...(patch.note !== undefined ? { note: patch.note } : {}),
-      ...(emailChanged ? { userId: null, claimedAt: null, conflictFlag: false } : {}),
-    })
-    .where(eq(enrollments.id, entry.id))
-    .returning();
-  if (emailChanged) accessRevoked([entry.userId]);
-  return updated;
+  if (emailChanged && email !== undefined) {
+    const [taken] = await db
+      .select({ id: enrollments.id })
+      .from(enrollments)
+      .where(and(eq(enrollments.classroomId, entry.classroomId), eq(enrollments.email, email), ne(enrollments.id, entry.id)))
+      .limit(1);
+    if (taken) throw rosterRefusal("duplicate_email");
+  }
+  const update = async (tx: Db | Tx) => {
+    const [updated] = await tx
+      .update(enrollments)
+      .set({
+        ...(patch.nom ? { nom: patch.nom } : {}),
+        ...(patch.prenom ? { prenom: patch.prenom } : {}),
+        ...(email ? { email } : {}),
+        ...(patch.timeBonusPercent !== undefined
+          ? { timeBonusPercent: patch.timeBonusPercent }
+          : {}),
+        ...(patch.note !== undefined ? { note: patch.note } : {}),
+        ...(emailChanged ? { userId: null, claimedAt: null, conflictFlag: false } : {}),
+      })
+      .where(eq(enrollments.id, entry.id))
+      .returning();
+    return updated;
+  };
+  try {
+    // Every e-mail change goes behind the guard: the line may have been
+    // claimed since it was loaded.
+    const updated = await (emailChanged ? afterRevocation(db, entry.id, ctx, "roster.update", update) : update(db));
+    if (emailChanged) accessRevoked([entry.userId]);
+    return updated;
+  } catch (err) {
+    if (isUniqueViolation(err, "enrollments_classroom_email_uq")) throw rosterRefusal("duplicate_email");
+    throw err;
+  }
 }
 
 /**
  * Detaches a roster line from its account, or removes it: either way its
- * student loses the classroom, and their open streams are closed (#248).
+ * student loses the classroom, and their open streams are closed (#248) —
+ * behind `afterRevocation`.
  */
 export async function unclaimEnrollment(
   db: Db,
   entry: Pick<EnrollmentRecord, "id" | "userId">,
+  ctx: Revocation,
 ): Promise<EnrollmentRecord | undefined> {
-  const [updated] = await db
-    .update(enrollments)
-    .set({ userId: null, claimedAt: null, conflictFlag: false })
-    .where(eq(enrollments.id, entry.id))
-    .returning();
+  const unclaim = async (tx: Tx) => {
+    const [updated] = await tx
+      .update(enrollments)
+      .set({ userId: null, claimedAt: null, conflictFlag: false })
+      .where(eq(enrollments.id, entry.id))
+      .returning();
+    return updated;
+  };
+  // Behind the guard whatever the loaded line said: it may have been claimed since.
+  const updated = await afterRevocation(db, entry.id, ctx, "roster.unclaim", unclaim);
   accessRevoked([entry.userId]);
   return updated;
 }
 
+/** Removes a line behind `afterRevocation`; its recorded accounts, revoked, go with it. */
 export async function removeEnrollment(
   db: Db,
   entry: Pick<EnrollmentRecord, "id" | "userId">,
+  ctx: Revocation,
 ): Promise<void> {
-  await db.delete(enrollments).where(eq(enrollments.id, entry.id));
+  await afterRevocation(db, entry.id, ctx, "roster.remove", (tx) => tx.delete(enrollments).where(eq(enrollments.id, entry.id)));
   accessRevoked([entry.userId]);
 }
 

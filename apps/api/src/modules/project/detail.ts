@@ -50,6 +50,7 @@ import { installationClient } from "../../github/app.js";
 import { isRateLimited, readRepoLiveState, type LiveRead } from "../../github/metrics.js";
 import { projectInstallation } from "../github/service.js";
 import { isLive, releaseCounts, repoDeadlineState } from "./deadline.js";
+import { seatRepos } from "./groupRepos.js";
 import { forEachLimit } from "./lease.js";
 import { studentRepos, type RepoRow } from "./repos.js";
 import { projectSummary, type ProjectRow } from "./views.js";
@@ -301,8 +302,9 @@ export interface DetailOptions {
 /**
  * `GET /app/api/projects/:id` (F-PROJ-13): the project's summary, its
  * counts, its primary action, and one row per student of the roster
- * (staff seats excepted) with their repository — null when they have not
- * accepted —, then the repositories whose student has left the roster. A
+ * (staff seats excepted) with their repository — their group's in a group
+ * project, null when there is none yet —, then the repositories no student
+ * of the roster reads any more. A
  * repository of a user who now holds a STAFF seat of the classroom is left
  * out altogether — rows, counts and the release's readiness
  * (`studentRepos`, `releaseCounts`: the release reads the same): a staff
@@ -330,7 +332,6 @@ export async function projectDetail(
     .leftJoin(githubAccounts, eq(githubAccounts.userId, enrollments.userId))
     .where(and(eq(enrollments.classroomId, project.classroomId), eq(enrollments.staff, false)))
     .orderBy(enrollments.nom, enrollments.prenom, enrollments.id);
-  // Individual repositories (M3-03); a group's rows join their members with M3-15.
   const repos = await studentRepos(db, project);
   const repoIds = repos.map((repo) => repo.id);
   const [runs, facts, dispatches] = await Promise.all([slotRuns(db, repos), runFacts(db, repoIds), finalDispatches(db, repoIds)]);
@@ -338,30 +339,43 @@ export async function projectDetail(
   const { live, complete } = await liveStates(db, config, project, liveRepos, opts.log, opts.budgetMs ?? LIVE_BUDGET_MS);
 
   const views = new Map(
-    repos.map((repo) => [repo.userId, repoView(project, repo, runs, facts.get(repo.id), dispatches.get(repo.id), live.get(repo.id))]),
+    repos.map((repo) => [repo.id, repoView(project, repo, runs, facts.get(repo.id), dispatches.get(repo.id), live.get(repo.id))]),
   );
-  const rows: ProjectDetailRow[] = roster.map((s) => ({
-    student: {
-      enrollmentId: s.enrollmentId,
-      userId: s.userId,
-      nom: s.nom,
-      prenom: s.prenom,
-      email: s.email,
-      claimed: s.claimedAt !== null && s.userId !== null,
-      githubLogin: s.githubLogin,
-    },
-    repo: (s.userId !== null && views.get(s.userId)) || null,
-  }));
-  // The repositories whose student has left the roster since, by their account.
-  const onRoster = new Set(roster.map((s) => s.userId));
-  const leavers = repos.filter((repo) => !onRoster.has(repo.userId)).map((repo) => repo.userId);
-  if (leavers.length > 0) {
+  // Whose repository: a student's own, or their copy group's (`seatRepos`,
+  // N-SEC-20: never the group repository's creator for having created it);
+  // one row per student, each member reading the group's.
+  const seats = await seatRepos(db, [project]);
+  const shown = new Set<string>();
+  const rows: ProjectDetailRow[] = roster.map((s) => {
+    const repo = seats.of(project.id, s.enrollmentId);
+    const view = repo === null ? undefined : views.get(repo.id);
+    if (view) shown.add(repo!.id);
+    return {
+      student: {
+        enrollmentId: s.enrollmentId,
+        userId: s.userId,
+        nom: s.nom,
+        prenom: s.prenom,
+        email: s.email,
+        claimed: s.claimedAt !== null && s.userId !== null,
+        githubLogin: s.githubLogin,
+      },
+      repo: view ?? null,
+    };
+  });
+  // The repositories no student of the roster reads any more — their
+  // student left it, or every member left their group —, by the account
+  // that accepted them.
+  const unread = repos.filter((repo) => !shown.has(repo.id));
+  if (unread.length > 0) {
     const accounts = await db
       .select({ user: users, githubLogin: githubAccounts.login })
       .from(users)
       .leftJoin(githubAccounts, eq(githubAccounts.userId, users.id))
-      .where(inArray(users.id, leavers));
-    for (const { user, githubLogin } of accounts) {
+      .where(inArray(users.id, [...new Set(unread.map((repo) => repo.userId))]));
+    const byUser = new Map(accounts.map((a) => [a.user.id, a]));
+    for (const repo of unread) {
+      const { user, githubLogin } = byUser.get(repo.userId)!;
       const student: ProjectStudent = {
         enrollmentId: null,
         userId: user.id,
@@ -371,7 +385,7 @@ export async function projectDetail(
         claimed: false,
         githubLogin,
       };
-      rows.push({ student, repo: views.get(user.id)! });
+      rows.push({ student, repo: views.get(repo.id)! });
     }
   }
 
@@ -387,7 +401,7 @@ export async function projectDetail(
       sourceAhead: project.sourceAheadSha !== null,
       ...counts,
       // Over the live repositories only: a non-live one never freezes, so its score to verify is released as none.
-      unverified: liveRepos.filter((repo) => views.get(repo.userId)!.scores.final?.toVerify === true).length,
+      unverified: liveRepos.filter((repo) => views.get(repo.id)!.scores.final?.toVerify === true).length,
       released: project.releasedAt !== null,
       changedAfterRelease: accepted.filter((v) => v.flags.changedAfterRelease).length,
     }),

@@ -27,6 +27,10 @@ Delivery: cards M3-15, M3-16 (lot 1) and M3-17 (lot 2) of the
 [merge progress](../merge/PROGRESS.md); until M3-15, no group route exists
 and Accept answers `409 no_group` for any group project (M3-03).
 
+Amended 2026-10-05 (product owner, merge task M3-15b-1): decisions 4 and
+5 — the first deadline stops a group, and what "nothing to revoke" means;
+see *Amendment of 2026-10-05* at the end of the Decision.
+
 ## Context
 
 ADR-048 came from heig-classroom with three choices: a group belongs to one
@@ -242,6 +246,31 @@ meaning, which ADR-048 deliberately does not use.
       student's screen of it.
     - ADR-048 lot 3 (per-member invitation follow-up, a per-member
       adjustment of the group's score) is unchanged and still later.
+
+### Amendment of 2026-10-05 (product owner, M3-15b-1)
+
+- **§4, the first deadline stops a group.** A group of the copy stops
+  following at the FIRST of its deadlines: the project's (already
+  `groups_stopped_at`) or, earlier, its repository's own (ADR-064). A
+  repository whose deadline is extended past the project's does not keep
+  its group following. (The per-group stop is stored by M3-15b-2.)
+- **§5, nothing to revoke.** When GitHub cannot be asked — the App not
+  installed or uninstalled, the organization or the repository deleted on
+  GitHub (`deleted_at`), the member never had an account invited — there is
+  nothing to revoke: the removal proceeds, and the audit records the
+  revocation as skipped with its reason. Only a refusal by a repository
+  GitHub can reach refuses the removal (`502 revoke_failed`: roster, sets
+  and copies unchanged). The account revoked is the one Quiz INVITED,
+  recorded at each invitation (`project_repo_access`), never the user's link
+  of today. The same revocation runs before an unclaim, an e-mail change
+  that detaches the seat's account, and a self-enroll that turns the seat
+  into a staff seat.
+- **Delivery split** (orchestrator): M3-15b-1 delivers the group
+  repositories at Accept, the record of invited accounts, the invitation on
+  a link and the synchronous revocations; until M3-15b-2 (the `group.sync`
+  job, the per-group stop, `needs_confirmation`, *access to revoke*,
+  *Resync*), a set's write whose step would reach a copy group with a
+  repository is refused whole, `409 has_repo`, and a rename still follows.
 
 ## Consequences
 

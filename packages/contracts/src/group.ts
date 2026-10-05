@@ -149,9 +149,23 @@ export type GroupSetDetail = z.infer<typeof GroupSetDetail>;
  *   - `nobody_to_place` (409) — a random formation with every student of
  *     the set already in a group;
  *   - `size_out_of_range` (422) — a random formation's size above the
- *     number of students to place.
+ *     number of students to place;
+ *   - `has_repo` (409) — a write whose step would reach a group of a
+ *     following project's copy that has a repository: a member leaving or
+ *     joining it, or its deletion (`projects`: id and name of each). Until
+ *     the `group.sync` job (M3-15b-2) a membership change on GitHub is
+ *     refused, never half-done; a rename still follows (the slug, hence the
+ *     repository's name, is fixed).
  * A group, a student or a set out of reach is the 404 of a missing one.
  */
-export const GROUP_REFUSALS = ["classroom_archived", "set_in_use", "duplicate_name", "nobody_to_place", "size_out_of_range"] as const;
+/**
+ * The details of `set_in_use` and `has_repo`: EVERY project concerned, by
+ * id and name (the projects naming the set; the following projects whose
+ * copy the write would reach on GitHub).
+ */
+export const GroupRefusalProjects = z.object({ projects: z.array(z.object({ id: z.uuid(), name: z.string() })) });
+export type GroupRefusalProjects = z.infer<typeof GroupRefusalProjects>;
+
+export const GROUP_REFUSALS = ["classroom_archived", "set_in_use", "duplicate_name", "nobody_to_place", "size_out_of_range", "has_repo"] as const;
 export const GroupErrorCode = z.enum(GROUP_REFUSALS);
 export type GroupErrorCode = z.infer<typeof GroupErrorCode>;

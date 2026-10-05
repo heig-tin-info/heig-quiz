@@ -13,7 +13,10 @@
  * calls (a file's contents, blobs, trees, commits, a ref moved fast-forward
  * only), a compare, and `commit` for a push made outside the App. From
  * M3-05a, a ruleset deleted and a repository archived (read-only until
- * un-archived). Test support only; nothing in the application imports it.
+ * un-archived). From M3-15b, a collaborator removed and the pending
+ * invitations listed and cancelled (a revocation), or refused (`unrevokable`),
+ * and a repository by its id.
+ * Test support only; nothing in the application imports it.
  */
 import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -60,6 +63,10 @@ export interface RepoWorld {
   collaborators: Map<string, Map<string, string>>;
   /** Logins GitHub refuses to invite (an account renamed away): the 403 of the collaborators endpoint. */
   uninvitable: Set<string>;
+  /** The pending invitations of each repository, by `org/name`: invitation id → login. Accepted once removed from here. */
+  invitations: Map<string, Map<number, string>>;
+  /** Repositories, by `org/name`, that refuse every collaborator removal (a 403). */
+  unrevokable: Set<string>;
   /** A repository with commits on `branches` (`file` → content), as a teacher pushed it. */
   source: (org: string, name: string, branches: Record<string, Record<string, string>>, commits?: number) => void;
   /** The empty repository `org/name`, as a failed build leaves it. */
@@ -143,6 +150,7 @@ export function repoWorld(): RepoWorld {
   });
 
   let nextRuleset = 1;
+  let nextInvitation = 1;
   /** A write on an existing repository: its default branch, a ruleset, an invitation. */
   const repoWrite = (org: string, name: string, rest: string, req: RequestInit & { method: string }): Response | undefined => {
     const fullName = `${org}/${name}`;
@@ -199,7 +207,28 @@ export function repoWorld(): RepoWorld {
       world.collaborators.set(fullName, seats);
       const invited = seats.has(login);
       seats.set(login, (JSON.parse(String(req.body)) as { permission: string }).permission);
-      return invited ? new Response(null, { status: 204 }) : json({ id: 1, invitee: { login } }, 201);
+      if (invited) return new Response(null, { status: 204 });
+      const id = nextInvitation++;
+      const pending = world.invitations.get(fullName) ?? new Map<number, string>();
+      world.invitations.set(fullName, pending);
+      pending.set(id, login);
+      return json({ id, invitee: { login } }, 201);
+    }
+    // A collaborator removed (GitHub: a pending invitation is not one, 404), or an invitation cancelled.
+    if (req.method === "DELETE" && (m = /^\/collaborators\/([^/]+)$/.exec(rest))) {
+      if (world.unrevokable.has(fullName)) return json({ message: "Must have admin rights to Repository." }, 403);
+      const login = m[1]!;
+      const pending = [...(world.invitations.get(fullName)?.values() ?? [])].includes(login);
+      if (pending || !world.collaborators.get(fullName)?.delete(login)) return json({ message: "Not Found" }, 404);
+      return new Response(null, { status: 204 });
+    }
+    if (req.method === "DELETE" && (m = /^\/invitations\/(\d+)$/.exec(rest))) {
+      const pending = world.invitations.get(fullName);
+      const login = pending?.get(Number(m[1]));
+      if (login === undefined) return json({ message: "Not Found" }, 404);
+      pending!.delete(Number(m[1]));
+      world.collaborators.get(fullName)?.delete(login);
+      return new Response(null, { status: 204 });
     }
     return undefined;
   };
@@ -217,6 +246,8 @@ export function repoWorld(): RepoWorld {
     archived: new Set(),
     collaborators: new Map(),
     uninvitable: new Set(),
+    invitations: new Map(),
+    unrevokable: new Set(),
     release(ok) {
       writeFileSync(join(dir, "release"), ok ? "0" : "1");
     },
@@ -298,6 +329,10 @@ export function repoWorld(): RepoWorld {
         return repoWrite(m[1]!, m[2]!, m[3] ?? "", req);
       }
       if (req.method !== "GET") return undefined;
+      if ((m = /^\/repositories\/(\d+)$/.exec(path))) {
+        const fullName = [...world.ids].find(([name, id]) => id === Number(m![1]) && world.exists(name))?.[0];
+        return fullName === undefined ? undefined : json(repoJson(fullName.split("/")[0]!, fullName.split("/")[1]!));
+      }
       if ((m = /^\/orgs\/([^/]+)\/repos$/.exec(path))) {
         const org = m[1]!;
         const names = [...world.ids.keys()].filter((f) => f.startsWith(`${org}/`)).map((f) => f.slice(org.length + 1));
@@ -320,6 +355,9 @@ export function repoWorld(): RepoWorld {
         return json(branches.filter((b) => b === m![1]).map((b) => ({ ref: `refs/heads/${b}` })));
       }
       if (rest === "/rulesets") return world.freePlan ? planRefusal() : json(world.rulesets.get(fullName) ?? []);
+      if (rest === "/invitations") {
+        return json([...(world.invitations.get(fullName) ?? new Map<number, string>())].map(([id, login]) => ({ id, invitee: { login } })));
+      }
       if ((m = /^\/contents\/(.+)$/.exec(rest))) {
         const sha = blobOf(fullName, url.searchParams.get("ref") ?? "HEAD", m[1]!);
         if (!sha) return undefined;

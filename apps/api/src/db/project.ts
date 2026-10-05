@@ -426,6 +426,52 @@ export const projectRepos = pgTable(
 );
 
 /**
+ * A GitHub account let into a repository for a roster line (M3-15b,
+ * ADR-070 §4–§5, F-PROJ-17): written when Quiz invites it — at Accept, a
+ * group's first Accept for every member, a member's later Accept, a resend,
+ * a link — and what a departure revokes. The account is the one INVITED,
+ * by its immutable id and the login it was invited under, never the user's
+ * link of today: a student who unlinks or relinks between the invitation
+ * and their departure still loses the account that holds the seat.
+ *
+ * One row per (repository, line, account); `revoked_at` set once GitHub
+ * took the access away, or there was nothing left to take (the App gone,
+ * the repository deleted); an invitation of the same account again clears
+ * it. **Written BEFORE GitHub is asked**, under the line's lock and only
+ * while the line is still claimed by the account's user as a student seat
+ * (`recordGrant`); taken back if GitHub refuses. A roster write that takes
+ * the line or its account away revokes these rows first, then, in its own
+ * transaction, locks the line and refuses while one is still live
+ * (`releaseLine`, `502 revoke_failed`, retried). The line's removal then
+ * takes its rows with it (the trace is the audit's,
+ * `project_group.repo_revoke`).
+ */
+export const projectRepoAccess = pgTable(
+  "project_repo_access",
+  {
+    id: uuid("id").primaryKey(),
+    repoId: uuid("repo_id")
+      .notNull()
+      .references(() => projectRepos.id, { onDelete: "cascade" }),
+    enrollmentId: uuid("enrollment_id")
+      .notNull()
+      .references(() => enrollments.id, { onDelete: "cascade" }),
+    githubUserId: bigint("github_user_id", { mode: "number" }).notNull(),
+    githubLogin: text("github_login").notNull(),
+    /** The last invitation's time (`app.clock`): no default. */
+    invitedAt: timestamp("invited_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("project_repo_access_repo_enrollment_account_uq").on(t.repoId, t.enrollmentId, t.githubUserId),
+    // A departure reads the line's live grants.
+    index("project_repo_access_live_idx")
+      .on(t.enrollmentId)
+      .where(sql`${t.revokedAt} IS NULL`),
+  ],
+);
+
+/**
  * One counted run of `grading.yml` on a repository, with its score or why it
  * has none (F-PROJ-10). Immutable; once per (repository, run, attempt).
  * `points` and `max` are doubles, as the CI reported them: a score, never a

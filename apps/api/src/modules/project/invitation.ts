@@ -14,31 +14,61 @@
  * reads none of this: two paths, one rule each.
  *
  * The student's own resend is the project's student view's (M3-09).
+ *
+ * Whom (M3-15b): the repository's readers (`repoMembers`) — an
+ * individual repository's student seat (none: `409 repo_unavailable`), a
+ * group's members of the copy, never `project_repos.user_id` (N-SEC-20).
+ * The staff's resend on a group's re-invites the members still out: an
+ * invitation pending on GitHub, or no account recorded; a member whose
+ * account cannot be invited is skipped. A student's own resend invites
+ * them alone. Each invitation goes through `inviteAccount` (recorded
+ * first, what a departure revokes).
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
+import type { Octokit } from "octokit";
 import type { FastifyBaseLogger } from "fastify";
 
 import type { ProjectInvitationResent } from "@quiz/contracts";
 
 import { audit, type AuditActor } from "../../audit.js";
-import { linkedLogin } from "../../auth/githubLink.js";
 import { iso } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { projectRepos } from "../../db/schema.js";
+import { projectRepoAccess, projectRepos } from "../../db/schema.js";
 import { installationClient, ownerRepo } from "../../github/app.js";
-import { inviteCollaborator, isInvitationRefused } from "../../github/collaborators.js";
+import { pendingInvitees } from "../../github/collaborators.js";
 import { projectInstallation } from "../github/service.js";
+import { inviteAccount } from "./access.js";
 import { liveRepoForUpdate } from "./deadline.js";
 import { ProjectError } from "./errors.js";
+import { repoMembers, type RepoMember } from "./groupRepos.js";
+import type { RepoRow } from "./repos.js";
 
 /** The least time between two resends of one repository's invitation. */
 export const RESEND_INTERVAL_MS = 60_000;
 
 /**
+ * The members of a group's repository still out: an invitation of theirs
+ * pending on GitHub, or no account of theirs recorded (never invited).
+ */
+async function stillOut(db: Db, octokit: Octokit, repo: RepoRow, members: RepoMember[]): Promise<RepoMember[]> {
+  const { owner, repo: name } = ownerRepo(repo.fullName!);
+  const pending = new Set((await pendingInvitees(octokit, owner, name)).map((i) => i.login.toLowerCase()));
+  const grants = await db
+    .select()
+    .from(projectRepoAccess)
+    .where(and(eq(projectRepoAccess.repoId, repo.id), isNull(projectRepoAccess.revokedAt)));
+  return members.filter((m) => {
+    const mine = grants.filter((g) => g.enrollmentId === m.enrollmentId);
+    return mine.length === 0 || mine.some((g) => pending.has(g.githubLogin.toLowerCase()));
+  });
+}
+
+/**
  * `POST /app/api/projects/:id/repos/:rid/invite`: the invitation sent
  * again, `invitationStatus` as GitHub answered (`accepted` when the student
- * already is a collaborator: the row follows).
+ * already is a collaborator: the row follows; a group's is pending while
+ * any member's is). `only`: the student's own resend, by their seat.
  */
 export async function resendInvitation(
   db: Db,
@@ -48,6 +78,7 @@ export async function resendInvitation(
   actor: AuditActor,
   now: Date,
   log: FastifyBaseLogger,
+  only?: string,
 ): Promise<ProjectInvitationResent> {
   // The minute claimed on the row before GitHub is called.
   const { project, repo } = await db.transaction(async (tx) => {
@@ -61,30 +92,34 @@ export async function resendInvitation(
   });
 
   // GitHub's part: a failure here means the resend did not happen, and the minute is given back.
-  let login: string;
-  let invitationStatus: "pending" | "accepted";
+  const invited: { login: string; invitation: "pending" | "accepted" }[] = [];
   try {
     const org = await projectInstallation(db, project.orgId);
     if (!org) throw new ProjectError("app_not_installed", "Quiz's GitHub App no longer acts on the project's organization");
     const { octokit } = await installationClient(config, org.installationId);
-    const found = await linkedLogin(db, octokit, repo.userId).catch((err: unknown) => {
-      log.warn({ err, repo: repo.id }, "GitHub login lookup failed");
-      throw new ProjectError("invite_failed", "GitHub cannot be reached: try again");
-    });
-    if (typeof found !== "string") {
-      throw new ProjectError("github_account_stale", "The student's GitHub account is gone or renamed: they must relink it");
+    const members = await repoMembers(db, repo, project.classroomId);
+    const group = repo.groupId !== null && only === undefined;
+    const targets = only !== undefined ? members.filter((m) => m.enrollmentId === only) : group ? await stillOut(db, octokit, repo, members) : members;
+    if (targets.length === 0) {
+      throw group
+        ? new ProjectError("invitation_not_pending", "Every member of the group is in")
+        : new ProjectError("repo_unavailable", "The repository has no student on the roster to invite");
     }
-    login = found;
-    const { owner, repo: name } = ownerRepo(repo.fullName!);
-    try {
-      invitationStatus = await inviteCollaborator(octokit, owner, name, login, "push");
-    } catch (err) {
-      if (isInvitationRefused(err)) {
-        throw new ProjectError("github_account_stale", "GitHub refused to invite the student's account: they must relink it");
+    const stale = new ProjectError("github_account_stale", "The student's GitHub account is gone or renamed: they must relink it");
+    let refusal: unknown = stale;
+    for (const member of targets) {
+      try {
+        if (member.account === null) throw stale;
+        const ctx = { actor, now, log, via: "resend", failure: "invite_failed" } as const;
+        const done = await inviteAccount(db, octokit, repo, { ...member, account: member.account }, ctx);
+        if (done) invited.push(done);
+      } catch (err) {
+        // A group's member whose account cannot be invited is skipped; GitHub failing fails the resend.
+        if (!group || !(err instanceof ProjectError && err.code === "github_account_stale")) throw err;
+        refusal = err;
       }
-      log.error({ err, repo: repo.id }, "resending an invitation failed");
-      throw new ProjectError("invite_failed", "GitHub refused the invitation: try again");
     }
+    if (invited.length === 0) throw refusal;
   } catch (err) {
     await db
       .update(projectRepos)
@@ -93,15 +128,19 @@ export async function resendInvitation(
     throw err;
   }
 
-  // GitHub accepted: the row follows its answer, audited with it.
+  // GitHub accepted: the row follows its answer, audited with it — one
+  // member's own answer never speaks for the rest of their group.
+  const invitationStatus = invited.some((i) => i.invitation === "pending") ? "pending" : "accepted";
   await db.transaction(async (tx) => {
-    await tx.update(projectRepos).set({ invitationStatus }).where(eq(projectRepos.id, repo.id));
+    if (repo.groupId === null || only === undefined) {
+      await tx.update(projectRepos).set({ invitationStatus }).where(eq(projectRepos.id, repo.id));
+    }
     await audit(tx, {
       ...actor,
       action: "project_repo.invite_resent",
       subjectType: "project_repo",
       subjectId: repo.id,
-      payload: { login, invitationStatus },
+      payload: { logins: invited.map((i) => i.login), invitationStatus },
     });
   });
   return { invitationStatus, resentAt: iso(now) };

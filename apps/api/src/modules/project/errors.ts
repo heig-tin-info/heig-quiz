@@ -2,7 +2,8 @@
  * The project lifecycle's refusals (`ProjectErrorCode`), Accept's
  * (`ProjectAcceptErrorCode`) and the review checkpoints'
  * (`ProjectCheckpointErrorCode`), worded by the web app (invariant 1): one
- * class, its status by code.
+ * class, its status by code. (A revocation's `revoke_failed` is a roster
+ * refusal, `rosterRefusal` of the `org` module.)
  */
 import type { ProjectAcceptErrorCode, ProjectCheckpointErrorCode, ProjectErrorCode } from "@quiz/contracts";
 
