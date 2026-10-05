@@ -103,7 +103,7 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
     expect(started.json().state).toBe("running");
 
     const entered = await post(
-      `/app/api/evaluations/${seed.evaluationId}/attempt`,
+      `/app/api/evaluations/${seed.evaluationId}/attempt/start`,
       student.headers,
       {},
     );
@@ -114,7 +114,7 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
     expect(entered.json().view.attempt.serverNow).toBeDefined();
 
     // Idempotent over HTTP too.
-    const again = await post(`/app/api/evaluations/${seed.evaluationId}/attempt`, student.headers, {});
+    const again = await post(`/app/api/evaluations/${seed.evaluationId}/attempt/start`, student.headers, {});
     expect(again.json().view.attempt.id).toBe(attemptId);
   });
 
@@ -137,7 +137,7 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
     });
     try {
       const writes: [string, Payload][] = [
-        [`/app/api/evaluations/${seed.evaluationId}/attempt`, {}],
+        [`/app/api/evaluations/${seed.evaluationId}/attempt/start`, {}],
         [`/app/api/attempts/${attemptId}/position`, { itemId }],
         [`/app/api/attempts/${attemptId}/events`, { kind: "reconnect" }],
       ];
@@ -154,7 +154,7 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
 
   it("keeps a student out of someone else's classroom and attempt", async () => {
     expect(
-      (await post(`/app/api/evaluations/${seed.evaluationId}/attempt`, outsider.headers, {})).statusCode,
+      (await post(`/app/api/evaluations/${seed.evaluationId}/attempt/start`, outsider.headers, {})).statusCode,
     ).toBe(404);
     expect((await get(`/app/api/attempts/${attemptId}`, outsider.headers)).statusCode).toBe(404);
   });
@@ -465,7 +465,7 @@ describe("closing and reopening one attempt around the close (#95)", () => {
       questions: 2,
     });
     await post(`${base()}/start`, teacher.headers, { confirm: true });
-    const entered = await post(`${base()}/attempt`, pupil.headers, {});
+    const entered = await post(`${base()}/attempt/start`, pupil.headers, {});
     attemptId = entered.json().view.attempt.id;
     const itemId = entered.json().view.items[0].id;
     await server.app.inject({
@@ -570,7 +570,7 @@ describe("running code from an attempt (decision D14)", () => {
       questions: 1,
     });
     await post(`/app/api/evaluations/${own.evaluationId}/start`, teacher.headers, { confirm: true });
-    const entered = await post(`/app/api/evaluations/${own.evaluationId}/attempt`, other.headers, {});
+    const entered = await post(`/app/api/evaluations/${own.evaluationId}/attempt/start`, other.headers, {});
     const attemptId = entered.json().view.attempt.id;
     const itemId = entered.json().view.items[0].id;
 
@@ -610,7 +610,7 @@ describe("the room restriction reads the address Caddy saw (H2)", () => {
     // address after it.
     const forged = await server.app.inject({
       method: "POST",
-      url: `/app/api/evaluations/${own.evaluationId}/attempt`,
+      url: `/app/api/evaluations/${own.evaluationId}/attempt/start`,
       headers: { ...learner.headers, "x-forwarded-for": "10.20.0.1, 203.0.113.9" },
       payload: {},
     });
@@ -621,7 +621,7 @@ describe("the room restriction reads the address Caddy saw (H2)", () => {
     // left-most entry claims.
     const inRoom = await server.app.inject({
       method: "POST",
-      url: `/app/api/evaluations/${own.evaluationId}/attempt`,
+      url: `/app/api/evaluations/${own.evaluationId}/attempt/start`,
       headers: { ...learner.headers, "x-forwarded-for": "1.2.3.4, 10.20.0.7" },
       payload: {},
     });
@@ -643,7 +643,7 @@ describe("the room restriction reads the address Caddy saw (H2)", () => {
     await post(`/app/api/evaluations/${own.evaluationId}/start`, teacher.headers, { confirm: true });
     const inRoom = { ...learner.headers, "x-forwarded-for": "10.20.0.7" };
     const away = { ...learner.headers, "x-forwarded-for": "203.0.113.9" };
-    const entered = await post(`/app/api/evaluations/${own.evaluationId}/attempt`, inRoom, {});
+    const entered = await post(`/app/api/evaluations/${own.evaluationId}/attempt/start`, inRoom, {});
     const attemptId = entered.json().view.attempt.id as string;
 
     // The same session cookie, carried out of the room.
@@ -669,7 +669,7 @@ describe("entering an evaluation after the access code (ADR-053)", () => {
     });
     await post(`/app/api/evaluations/${own.evaluationId}/start`, teacher.headers, { confirm: true });
     // A player loaded before the deploy: the key is stripped, never a 400.
-    const res = await post(`/app/api/evaluations/${own.evaluationId}/attempt`, learner.headers, {
+    const res = await post(`/app/api/evaluations/${own.evaluationId}/attempt/start`, learner.headers, {
       accessCode: "OPEN",
     });
     expect(res.statusCode).toBe(200);
@@ -686,7 +686,7 @@ describe("the attempt journal takes only what a client may write (F-EVAL-13)", (
       questions: 1,
     });
     await post(`/app/api/evaluations/${own.evaluationId}/start`, teacher.headers, { confirm: true });
-    const entered = await post(`/app/api/evaluations/${own.evaluationId}/attempt`, learner.headers, {});
+    const entered = await post(`/app/api/evaluations/${own.evaluationId}/attempt/start`, learner.headers, {});
     const url = `/app/api/attempts/${entered.json().view.attempt.id}/events`;
 
     for (const forged of [
@@ -727,7 +727,7 @@ describe("the lobby hands out no question content (C1)", () => {
       server.clock.now(),
     );
 
-    const entered = await post(`/app/api/evaluations/${own.evaluationId}/attempt`, learner.headers, {});
+    const entered = await post(`/app/api/evaluations/${own.evaluationId}/attempt/start`, learner.headers, {});
     expect(entered.statusCode).toBe(200);
     expect(entered.json().kind).toBe("lobby");
 

@@ -217,7 +217,7 @@ describe("in production (no development login)", () => {
       });
       expect(started.statusCode, started.body).toBe(200);
       // The attempt page, reloaded: a sign of life for the student, none for somebody acting as them.
-      const entered = await call(w.server, "POST", `/app/api/evaluations/${w.seed.evaluationId}/attempt`, w.student.headers);
+      const entered = await call(w.server, "POST", `/app/api/evaluations/${w.seed.evaluationId}/attempt/start`, w.student.headers);
       const attemptId = entered.json().view.attempt.id as string;
       await w.server.app.db.update(attempts).set({ presentAt: null }).where(eq(attempts.id, attemptId));
       expect((await call(w.server, "GET", `/app/api/attempts/${attemptId}`, as)).statusCode).toBe(200);
@@ -302,7 +302,7 @@ describe("in development (AUTH_DEV_LOGIN)", () => {
       (await call(w.server, "POST", `/app/api/evaluations/${evaluationId}/start`, w.teacher.headers, { confirm: true }))
         .statusCode,
     ).toBe(200);
-    const entered = await call(w.server, "POST", `/app/api/evaluations/${evaluationId}/attempt`, as);
+    const entered = await call(w.server, "POST", `/app/api/evaluations/${evaluationId}/attempt/start`, as);
     expect(entered.statusCode, entered.body).toBe(200);
     const attemptId = entered.json().view.attempt.id as string;
     const saved = await call(w.server, "PUT", `/app/api/attempts/${attemptId}/answers/${itemIds[0]}`, as, {
@@ -328,7 +328,7 @@ describe("in development (AUTH_DEV_LOGIN)", () => {
     expect(
       (await call(w.server, "POST", `/app/api/evaluations/${id}/start`, w.teacher.headers, { confirm: true })).statusCode,
     ).toBe(200);
-    const first = await call(w.server, "POST", `/app/api/evaluations/${id}/attempt`, as);
+    const first = await call(w.server, "POST", `/app/api/evaluations/${id}/attempt/start`, as);
     expect(first.statusCode, first.body).toBe(200);
     const firstId = first.json().view.attempt.id as string;
     expect((await call(w.server, "POST", `/app/api/attempts/${firstId}/submit`, as, { confirm: true })).statusCode).toBe(200);

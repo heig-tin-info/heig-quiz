@@ -18,7 +18,9 @@ import {
   type AttemptOrLobby,
   type AttemptView,
   type EvaluationCard,
+  type EvaluationRules,
   type LobbyView,
+  type ReadyView,
   type StudentPollCard,
 } from "@quiz/contracts";
 import { shuffle, streamSeed } from "@quiz/core/rng";
@@ -596,6 +598,11 @@ async function drawInstances(
  * inserts number 1 again, is refused, and reads the row that is already
  * there, so two tabs opened at the same second share one seed, one start and
  * one deadline. A retake is {@link retakeAttempt}, never this.
+ *
+ * It is called only once the participant is admitted (ADR-076): by the lobby
+ * or paused entry, by a trusted client's entry, or by the explicit Start
+ * (`enterEvaluation` with `start`) — never by a mere look at a running evaluation,
+ * which answers the ready screen and writes nothing.
  */
 export async function ensureAttempt(
   db: Db,
@@ -1039,10 +1046,22 @@ async function viewOf(
   };
 }
 
+/** The rules both the waiting room and the ready screen state (`EvaluationRules`). */
+function rulesOf(evaluation: EvaluationRecord, participant: Participant): EvaluationRules {
+  const settings = settingsOf(evaluation);
+  return {
+    navigation: settings.navigation,
+    negativeMarking: negativeMarkingEnabled(evaluation),
+    calculator: calculatorOn(evaluation.mode, settings.calculator),
+    timeBonusPercent: participant.timeBonusPercent,
+  };
+}
+
 /**
  * What the waiting room shows a student. Mirrored on the teacher's launch
  * step by `lobbyPreviewView` (`apps/web/src/evaluation/LobbyPreview.tsx`,
- * #152): a field added here belongs there too.
+ * #152), and sharing its rules with the ready screen (`readyView`): a field
+ * added to `EvaluationRules` belongs to all three.
  */
 export async function lobbyView(
   db: Db,
@@ -1051,19 +1070,30 @@ export async function lobbyView(
   now: Date,
 ): Promise<LobbyView> {
   return {
+    ...rulesOf(evaluation, participant),
     evaluation: {
       id: evaluation.id,
       title: evaluation.title,
       state: evaluation.state,
       announcedDurationS: evaluation.durationS,
     },
-    navigation: settingsOf(evaluation).navigation,
-    negativeMarking: negativeMarkingEnabled(evaluation),
-    calculator: calculatorOn(evaluation.mode, settingsOf(evaluation).calculator),
     present: presence.count(evaluation.id),
     enrolled: await enrolledCount(db, evaluation),
-    timeBonusPercent: participant.timeBonusPercent,
     serverNow: iso(now),
+  };
+}
+
+/** What the ready screen says (ADR-076): the rules and what Start announces, no content. */
+export function readyView(evaluation: EvaluationRecord, participant: Participant): ReadyView {
+  return {
+    ...rulesOf(evaluation, participant),
+    evaluation: {
+      id: evaluation.id,
+      title: evaluation.title,
+      timing: settingsOf(evaluation).timing,
+      announcedDurationS: evaluation.durationS,
+      closesAt: isoOrNull(evaluation.closesAt),
+    },
   };
 }
 
@@ -1071,11 +1101,24 @@ export async function lobbyView(
 
 type EnterResult =
   | { kind: "attempt"; view: AttemptView; attempt: AttemptRecord }
-  | { kind: "lobby"; view: LobbyView; attempt: AttemptRecord };
+  | { kind: "lobby"; view: LobbyView; attempt: AttemptRecord }
+  // Nothing was written: there is no attempt row (ADR-076).
+  | { kind: "ready"; view: ReadyView; attempt: null };
 
 /**
- * `POST /evaluations/:id/attempt` (F-LIVE-01). Idempotent end to end: the row,
- * the seed and the start instant are created at most once.
+ * `POST /evaluations/:id/attempt` and `…/attempt/start` (F-LIVE-01,
+ * ADR-076). Idempotent end to end: the row, the seed and the start instant
+ * are created at most once.
+ *
+ * Entering is not starting. On a `running` evaluation a participant with NO
+ * attempt row, who did not ask to `start`, gets the ready screen and NOTHING
+ * is written — no row, no presence, no clock — so a look at a link never
+ * consumes an attempt. `start` is true for the explicit Start and for a
+ * trusted client (`seb`, `kiosk`), whose pairing already is the explicit act.
+ * A participant whose row exists begins directly, and in `lobby` and
+ * `paused` the row and the presence are still created here: the waiting room
+ * counts them (F-LIVE-02/03, `beginWaitingAttempts`). A retake is
+ * {@link retakeAttempt}, started by its own click.
  */
 export async function enterEvaluation(
   db: Db,
@@ -1083,9 +1126,10 @@ export async function enterEvaluation(
     evaluation: EvaluationRecord;
     participant: Participant;
     now: Date;
+    start: boolean;
   },
 ): Promise<EnterResult> {
-  const { evaluation, participant, now } = input;
+  const { evaluation, participant, now, start } = input;
   // A guest (no user) only ever joins a poll, which is not entered here.
   if (evaluation.mode === "poll" || participant.userId === null) {
     throw new LiveError("not_implemented", 501, "poll is phase 2");
@@ -1099,6 +1143,9 @@ export async function enterEvaluation(
   // A closed evaluation still hands back a finished attempt: the student
   // must be able to reopen the page and see what they submitted.
   if (!open && existing === null) throw new NotOpen();
+  if (existing === null && evaluation.state === "running" && !start) {
+    return { kind: "ready", view: readyView(evaluation, participant), attempt: null };
+  }
 
   let attempt = existing ?? (await ensureAttempt(db, evaluation, participant, now));
   await markPresent(db, attempt.id, now);

@@ -115,7 +115,7 @@ describe("a staff member in the roster is a body in the room (F-LIVE-02, F-LIVE-
       (await post(`/app/api/classrooms/${seed.classroomId}/self-enroll`, teacher.headers))
         .statusCode,
     ).toBe(201);
-    const entered = await post(`/app/api/evaluations/${evaluation.id}/attempt`, teacher.headers);
+    const entered = await post(`/app/api/evaluations/${evaluation.id}/attempt/start`, teacher.headers);
     expect(entered.statusCode).toBe(200);
     expect(entered.json().kind).toBe("lobby");
 
@@ -193,7 +193,7 @@ describe("a staff member in the roster is a body in the room (F-LIVE-02, F-LIVE-
     const db = server.app.db;
     const { seed, evaluation } = await world("running");
     await post(`/app/api/classrooms/${seed.classroomId}/self-enroll`, teacher.headers);
-    const entered = await post(`/app/api/evaluations/${evaluation.id}/attempt`, teacher.headers);
+    const entered = await post(`/app/api/evaluations/${evaluation.id}/attempt/start`, teacher.headers);
     const attemptId = entered.json().view.attempt.id;
     const stream = await openStream(teacher.headers, `attempt:${attemptId}`);
     await settle();
@@ -207,7 +207,7 @@ describe("the Results switch colours a cell from the answer (ADR-020)", () => {
   it("returns a live verdict per cell, only when the results were asked for", async () => {
     const db = server.app.db;
     const { seed, evaluation, items } = await world("running", 2);
-    const entered = await post(`/app/api/evaluations/${evaluation.id}/attempt`, student.headers);
+    const entered = await post(`/app/api/evaluations/${evaluation.id}/attempt/start`, student.headers);
     const attemptId = entered.json().view.attempt.id;
     const right = items[0]!;
     const wrong = items[1]!;
@@ -269,7 +269,7 @@ describe("the Results switch colours a cell from the answer (ADR-020)", () => {
     });
     try {
       const { evaluation, items } = await world("running", 1);
-      const entered = await post(`/app/api/evaluations/${evaluation.id}/attempt`, student.headers);
+      const entered = await post(`/app/api/evaluations/${evaluation.id}/attempt/start`, student.headers);
       await save(entered.json().view.attempt.id, items[0]!.item.id, "a whole essay");
       const view = (
         await get(`/app/api/evaluations/${evaluation.id}/dashboard?results=1`, teacher.headers)
@@ -284,7 +284,7 @@ describe("the Results switch colours a cell from the answer (ADR-020)", () => {
 
   it("leaves an unanswered cell blank rather than calling it wrong", async () => {
     const { evaluation, items } = await world("running", 2);
-    await post(`/app/api/evaluations/${evaluation.id}/attempt`, student.headers);
+    await post(`/app/api/evaluations/${evaluation.id}/attempt/start`, student.headers);
     const view = (
       await get(`/app/api/evaluations/${evaluation.id}/dashboard?results=1`, teacher.headers)
     ).json();
@@ -297,7 +297,7 @@ describe("the Results switch colours a cell from the answer (ADR-020)", () => {
   it("does not let a preview overwrite a grading on record", async () => {
     const db = server.app.db;
     const { evaluation, items } = await world("running", 1);
-    const entered = await post(`/app/api/evaluations/${evaluation.id}/attempt`, student.headers);
+    const entered = await post(`/app/api/evaluations/${evaluation.id}/attempt/start`, student.headers);
     const attemptId = entered.json().view.attempt.id;
     await save(attemptId, items[0]!.item.id, "answer-q0");
     // A teacher decided otherwise, in the panel: a validated zero.

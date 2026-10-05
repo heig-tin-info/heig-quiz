@@ -26,6 +26,7 @@ export const SITTING_ROUTES = new Set([
   "GET /app/api/me",
   "GET /app/api/events",
   "POST /app/api/evaluations/:id/attempt",
+  "POST /app/api/evaluations/:id/attempt/start",
   "GET /app/api/attempts/:id",
   "PUT /app/api/attempts/:id/answers/:itemId",
   "POST /app/api/attempts/:id/answers/:itemId/done",

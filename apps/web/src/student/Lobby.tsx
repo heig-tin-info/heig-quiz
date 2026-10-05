@@ -21,7 +21,7 @@
 import { useState, type ReactNode } from "react";
 import { Calculator as CalculatorIcon, CheckCheck, CircleMinus, Save, ShieldCheck } from "lucide-react";
 
-import { LobbyView } from "@quiz/contracts";
+import { LobbyView, type EvaluationRules } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { useEventStream } from "../realtime/useEventStream";
@@ -68,6 +68,62 @@ export type LobbyScreenView = Pick<
   "evaluation" | "navigation" | "negativeMarking" | "calculator" | "timeBonusPercent"
 >;
 
+/** The minutes a student has once their extra time (`timeBonusPercent` of the duration) is added. */
+export function minutesWithBonus(durationS: number, timeBonusPercent: number): number {
+  return Math.round((durationS + Math.round((durationS * timeBonusPercent) / 100)) / 60);
+}
+
+/**
+ * The rules card of the waiting room and of the ready screen (ADR-076): three
+ * fixed lines (§6.3), the navigation rule first — `EvaluationRules` carries the
+ * evaluation's `settings.navigation` for exactly this line. A fourth when the
+ * evaluation uses negative marking (ADR-026): the student must know that a
+ * guess costs points BEFORE the first question, and this is the one screen
+ * they read while they have time to. Rules of the evaluation, no content.
+ */
+export function RulesCard({
+  view,
+  className,
+  size = "page",
+}: {
+  view: Pick<EvaluationRules, "navigation" | "negativeMarking" | "calculator">;
+  className?: string;
+  size?: keyof typeof SIZES;
+}) {
+  const t = useT();
+  const rules = [
+    { icon: CheckCheck, ...NAV_COPY[view.navigation] } as const,
+    ...(view.negativeMarking === true
+      ? [{ icon: CircleMinus, title: "lobby.negative.title", body: "lobby.negative.body" } as const]
+      : []),
+    // ADR-069: where the calculator is, before the clock runs.
+    ...(view.calculator !== undefined && view.calculator !== "none"
+      ? [
+          {
+            icon: CalculatorIcon,
+            title: "lobby.calculator.title",
+            body: `lobby.calculator.body.${view.calculator}`,
+          } as const,
+        ]
+      : []),
+    { icon: Save, title: "lobby.saving.title", body: "lobby.saving.body" } as const,
+    { icon: ShieldCheck, title: "lobby.attempt.title", body: "lobby.attempt.body" } as const,
+  ];
+  return (
+    <Card className={cx("w-full divide-y divide-line text-left", className)}>
+      {rules.map((rule) => (
+        <div key={rule.title} className={cx("flex items-start gap-3", SIZES[size].rule)}>
+          <rule.icon className="mt-0.5 size-4 shrink-0 text-fg-faint" aria-hidden />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">{t(rule.title)}</p>
+            <p className="mt-0.5 text-[13px] leading-relaxed text-fg-muted">{t(rule.body)}</p>
+          </div>
+        </div>
+      ))}
+    </Card>
+  );
+}
+
 /**
  * The waiting room as a picture: what the student reads, from props alone —
  * no stream, no clock, no request. {@link Lobby} feeds it live; the teacher's
@@ -98,33 +154,8 @@ export function LobbyScreen({
   const t = useT();
   const percent = enrolled > 0 ? Math.round((present / enrolled) * 100) : 0;
   const durationS = view.evaluation.announcedDurationS;
-  const bonusS = durationS === null ? null : Math.round((durationS * view.timeBonusPercent) / 100);
   const size = SIZES[compact ? "compact" : "page"];
   const { Root, Title, gap } = size;
-
-  // Three fixed lines (§6.3), the navigation rule first: `LobbyView` carries
-  // the evaluation's `settings.navigation` for exactly this line. A fourth
-  // when the evaluation uses negative marking (ADR-026): the student must
-  // know that a guess costs points BEFORE the first question, and this is
-  // the one screen they read while they have time to.
-  const rules = [
-    { icon: CheckCheck, ...NAV_COPY[view.navigation] } as const,
-    ...(view.negativeMarking === true
-      ? [{ icon: CircleMinus, title: "lobby.negative.title", body: "lobby.negative.body" } as const]
-      : []),
-    // ADR-069: where the calculator is, before the clock runs.
-    ...(view.calculator !== undefined && view.calculator !== "none"
-      ? [
-          {
-            icon: CalculatorIcon,
-            title: "lobby.calculator.title",
-            body: `lobby.calculator.body.${view.calculator}`,
-          } as const,
-        ]
-      : []),
-    { icon: Save, title: "lobby.saving.title", body: "lobby.saving.body" } as const,
-    { icon: ShieldCheck, title: "lobby.attempt.title", body: "lobby.attempt.body" } as const,
-  ];
 
   return (
     <Root
@@ -166,26 +197,13 @@ export function LobbyScreen({
           itself stays bare (the sentence used to sit under every question). */}
       <p className="mt-2 text-[13px] text-fg-muted">{t("lobby.hint.saving")}</p>
 
-      <Card className={cx(gap, "w-full divide-y divide-line text-left")}>
-        {rules.map((rule) => (
-          <div
-            key={rule.title}
-            className={cx("flex items-start gap-3", size.rule)}
-          >
-            <rule.icon className="mt-0.5 size-4 shrink-0 text-fg-faint" aria-hidden />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold">{t(rule.title)}</p>
-              <p className="mt-0.5 text-[13px] leading-relaxed text-fg-muted">{t(rule.body)}</p>
-            </div>
-          </div>
-        ))}
-      </Card>
+      <RulesCard view={view} className={gap} size={compact ? "compact" : "page"} />
 
-      {view.timeBonusPercent > 0 && bonusS !== null ? (
+      {view.timeBonusPercent > 0 && durationS !== null ? (
         <Badge tone="accent" className="mt-5">
           {t("lobby.bonus", {
             n: view.timeBonusPercent,
-            time: t("lobby.duration", { n: Math.round((durationS! + bonusS) / 60) }),
+            time: t("lobby.duration", { n: minutesWithBonus(durationS, view.timeBonusPercent) }),
           })}
         </Badge>
       ) : null}

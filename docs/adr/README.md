@@ -97,6 +97,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-066 — A wide question beside a pinned rail](ADR-066-question-large-et-rail-fixe.md)
 - [ADR-067 — Grading an exercise at hand-in](ADR-067-correction-a-la-remise-des-exercices.md)
 - [ADR-069 — A calculator provided on the student's screen](ADR-069-calculatrice-fournie.md)
+- [ADR-076 — An attempt starts by an explicit Start, not by opening the link](ADR-076-demarrage-explicite-d-une-tentative.md)
 
 ### Question analytics
 

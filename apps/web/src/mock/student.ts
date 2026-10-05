@@ -12,6 +12,7 @@ import type {
   EvaluationGradeRow,
   GradeGroup,
   LobbyView,
+  ReadyView,
   ProjectAcceptance,
   ProjectInvitationResent,
   StudentClassroomPage,
@@ -58,8 +59,11 @@ import { studentRooms } from "./org";
 // closure. `?scene=` (read in section 0) picks which one the fake backend
 // serves:
 //
-//   ?scene=lobby | running | paused | closed | extend | single | marks | forward
-//          | exercise                                 (running by default)
+//   ?scene=lobby | ready | running | paused | closed | extend | single | marks
+//          | forward | exercise                       (running by default)
+//
+// `ready` is a running evaluation the student has not started (ADR-076): the
+// entry route answers the ready screen until `POST …/attempt/start`.
 //
 // `marks` is the question list of issue #89 with every state at once:
 // answered, "won't answer", flagged, and nothing yet. `forward` is the same
@@ -953,11 +957,36 @@ on("GET", `/app/api/attempts/${STUDENT_ATTEMPT}/feedback`, () => ({
   evaluation: { id: STUDENT_EVAL, title: "Quiz 3 — Pointeurs et lois fondamentales" },
 }));
 
+/** ADR-076: the `ready` scene stays on the ready screen until Start is pressed. */
+let readyStarted = false;
+export const studentReadyView = (): ReadyView => ({
+  evaluation: {
+    id: STUDENT_EVAL,
+    title: "Quiz 3 — Pointeurs et lois fondamentales",
+    timing: "duration",
+    announcedDurationS: 20 * 60,
+    closesAt: null,
+  },
+  navigation: "free",
+  negativeMarking: flags.negative,
+  calculator: mockCalculator().calculator ?? "none",
+  timeBonusPercent: 33,
+});
+
 on("POST", "/app/api/evaluations/:id/attempt", () =>
   scene === "lobby"
     ? { kind: "lobby", view: studentLobbyView() }
-    : { kind: "attempt", view: studentAttemptView() },
+    : scene === "ready" && !readyStarted
+      ? { kind: "ready", view: studentReadyView() }
+      : { kind: "attempt", view: studentAttemptView() },
 );
+
+on("POST", "/app/api/evaluations/:id/attempt/start", () => {
+  readyStarted = true;
+  return scene === "lobby"
+    ? { kind: "lobby", view: studentLobbyView() }
+    : { kind: "attempt", view: studentAttemptView() };
+});
 
 // Like the API: the lobby until the evaluation starts, the attempt after.
 on("GET", "/app/api/attempts/:id", () =>

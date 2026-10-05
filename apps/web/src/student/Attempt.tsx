@@ -1,12 +1,19 @@
 /**
  * `/take/:evaluationId` — the one student route the server routes itself.
  *
- * `POST /evaluations/:id/attempt` is idempotent (`INSERT … ON CONFLICT DO
- * NOTHING`) and answers `{ kind: "lobby" | "attempt", view }` (deviation
- * W5-14): the client never decides whether an evaluation has started, it asks
- * and renders what came back. A reload of this URL therefore lands exactly
- * where the student was — the lobby before the start, their own answers and
- * their own position after (F-LIVE-06).
+ * `POST /evaluations/:id/attempt` is idempotent and answers
+ * `{ kind: "lobby" | "ready" | "attempt", view }` (deviation W5-14): the
+ * client never decides whether an evaluation has started, it asks and renders
+ * what came back. A reload of this URL therefore lands exactly where the
+ * student was — the lobby before the start, the ready screen on a running
+ * evaluation they have not started, their own answers and their own position
+ * after (F-LIVE-06).
+ *
+ * Opening the route never starts an attempt (ADR-076, issue #525): `ready`
+ * writes nothing, and the clock begins when the student presses Start on it
+ * (`POST …/attempt/start`, whose answer replaces this query's data). Only a
+ * `seb` or `kiosk` session, whose pairing already was the act, is answered
+ * with the attempt directly.
  *
  * The refusals of §4.4 each have a screen: a network that is not allowed and
  * an evaluation that is not open. There is no access code to type (ADR-053).
@@ -14,7 +21,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Lock, UserX } from "lucide-react";
 
-import type { AttemptOrLobby } from "@quiz/contracts";
+import type { AttemptEntry } from "@quiz/contracts";
 
 import { ApiError, api, useMe } from "../api";
 import { feedbackLink } from "../grading";
@@ -24,6 +31,7 @@ import { leaveStudentView, studentViewOn } from "../studentView";
 import { Button, Card, EmptyState, QueryError, Spinner } from "../ui";
 import { Lobby } from "./Lobby";
 import { Player } from "./Player";
+import { Ready } from "./Ready";
 import { attemptEntryKey } from "../queryKeys";
 import { toKiosk } from "../kiosk/navigation";
 
@@ -44,7 +52,7 @@ export function AttemptPage({
   const me = useMe();
   const staff = me.data?.role === "teacher" || me.data?.role === "admin";
 
-  const entry = useQuery<AttemptOrLobby>({
+  const entry = useQuery<AttemptEntry>({
     queryKey: attemptEntryKey(evaluationId),
     // A refusal the server SPELLS OUT (a blocked network, an evaluation that
     // is not open) has its own screen below and must never be retried. A
@@ -57,7 +65,7 @@ export function AttemptPage({
     // A POST behind a query: the route is idempotent by design, and this is
     // the only way the same refetch path serves the lobby and the player.
     queryFn: () =>
-      api<AttemptOrLobby>(`/app/api/evaluations/${evaluationId}/attempt`, { method: "POST" }),
+      api<AttemptEntry>(`/app/api/evaluations/${evaluationId}/attempt`, { method: "POST" }),
   });
 
   // ADR-051 §7: a kiosk station has no home but its own screen.
@@ -133,6 +141,7 @@ export function AttemptPage({
   }
 
   const data = entry.data!;
+  if (data.kind === "ready") return <Ready view={data.view} onLater={home} />;
   if (data.kind === "lobby") {
     return (
       <Lobby

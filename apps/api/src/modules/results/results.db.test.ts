@@ -22,7 +22,7 @@ import { testApp, testDatabase } from "../../test/db.js";
 import { seedCodeEvaluation } from "../../test/codeFixture.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
 import { evaluationRows } from "../../test/grades.js";
-import { reload, seedLive } from "../../test/live.js";
+import { enterStarted, reload, seedLive } from "../../test/live.js";
 import { applyState, isLegalTransition, joinedItems } from "../evaluation/service.js";
 import { runEvaluationGrading } from "../grading/jobs.js";
 import * as grading from "../grading/service.js";
@@ -549,7 +549,7 @@ describe("the per-question debrief (F-RES-03, ADR-033)", () => {
         continue;
       }
       const participant = (await live.participantOf(db, evaluation, seed.studentIds[index]!))!;
-      const { attempt } = await live.enterEvaluation(db, { evaluation, participant, now: app.clock.now() });
+      const { attempt } = await enterStarted(db, { evaluation, participant, now: app.clock.now() });
       if (text !== undefined) {
         await live.saveAnswer(db, {
           evaluation,

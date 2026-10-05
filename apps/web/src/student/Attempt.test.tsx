@@ -1,7 +1,7 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { AttemptOrLobby, AttemptView, LobbyView, ServerEvent } from "@quiz/contracts";
+import type { AttemptEntry, AttemptOrLobby, AttemptView, LobbyView, ReadyView, ServerEvent } from "@quiz/contracts";
 
 import { makeAttemptView } from "../test/attempt-fixtures";
 import { elapse, flowingClock } from "../test/clock";
@@ -178,4 +178,68 @@ it("keeps the mounted player and its local answer across a failed background ent
   expect(screen.getByText("Question 1")).toBeInTheDocument();
   expect(screen.getAllByRole("radio")[0]).toBe(input);
   expect(input).toBeChecked();
+});
+
+/*
+ * ADR-076 (issue #525): a running evaluation the student has not started
+ * answers `ready`. Nothing is started by looking; Start is the explicit act.
+ */
+describe("/take/:id on a running evaluation not yet started", () => {
+  const readyView: ReadyView = {
+    evaluation: {
+      id: EVAL,
+      title: "Quiz 3 — Pointeurs",
+      timing: "duration",
+      announcedDurationS: 1200,
+      closesAt: null,
+    },
+    navigation: "free",
+    negativeMarking: false,
+    timeBonusPercent: 25,
+  };
+
+  function renderReady(navigate = vi.fn()) {
+    vi.stubGlobal("EventSource", FakeStream);
+    const mock = mockFetch({
+      [`POST /app/api/evaluations/${EVAL}/attempt`]: () =>
+        ok({ kind: "ready", view: readyView } satisfies AttemptEntry),
+      [`POST /app/api/evaluations/${EVAL}/attempt/start`]: () =>
+        ok({ kind: "attempt", view: attemptView } satisfies AttemptOrLobby),
+      [`GET /app/api/attempts/${ATTEMPT}`]: () =>
+        ok({ kind: "attempt", view: attemptView } satisfies AttemptOrLobby),
+      [`POST /app/api/attempts/${ATTEMPT}/position`]: noContent(),
+      [`POST /app/api/attempts/${ATTEMPT}/events`]: noContent(),
+    });
+    const result = renderWithProviders(<AttemptPage evaluationId={EVAL} navigate={navigate} />, {
+      locale: "fr",
+      route: `/take/${EVAL}`,
+    });
+    return { ...result, ...mock, navigate };
+  }
+
+  it("announces the clock, with the extra time, and starts nothing by itself", async () => {
+    const { calls } = renderReady();
+    expect(await screen.findByRole("button", { name: "Commencer" })).toBeInTheDocument();
+    expect(screen.getByText(/Le chronomètre de 25 minutes/)).toBeInTheDocument();
+    expect(calls.filter((c) => c.url.endsWith("/attempt/start"))).toEqual([]);
+    // No stream: the ready screen counts nobody present.
+    expect(streams).toHaveLength(0);
+  });
+
+  it("starts on Start and mounts the player", async () => {
+    const { calls } = renderReady();
+    await act(async () => {
+      (await screen.findByRole("button", { name: "Commencer" })).click();
+    });
+    expect(await screen.findByText("Question 1")).toBeInTheDocument();
+    expect(calls.filter((c) => c.url === `/app/api/evaluations/${EVAL}/attempt/start`)).toHaveLength(1);
+  });
+
+  it("goes back home on Later", async () => {
+    const { navigate } = renderReady();
+    await act(async () => {
+      (await screen.findByRole("button", { name: "Plus tard" })).click();
+    });
+    expect(navigate).toHaveBeenCalledWith({ view: "home" });
+  });
 });

@@ -175,6 +175,9 @@ step "student attempt"
 login "$STUDENT" lea
 api "$STUDENT" POST "/app/api/evaluations/$EVAL_ID/attempt" '{}'
 expect 200 "POST /evaluations/:id/attempt"
+[ "$(jq -r .kind <"$BODY")" = "ready" ] || fail "attempt: opening the link did not answer the ready screen"
+api "$STUDENT" POST "/app/api/evaluations/$EVAL_ID/attempt/start" '{}'
+expect 200 "POST /evaluations/:id/attempt/start"
 [ "$(jq -r .kind <"$BODY")" = "attempt" ] || fail "attempt: the student landed in the lobby"
 ATTEMPT_ID="$(jqx '.view.attempt.id' 'attempt id')"
 ITEM_ID="$(jqx '[.view.items[] | select(.type=="short")][0].id' 'a short item')"

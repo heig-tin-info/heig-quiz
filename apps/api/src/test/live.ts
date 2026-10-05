@@ -26,6 +26,7 @@ import {
   questions,
   users,
 } from "../db/schema.js";
+import { enterEvaluation } from "../modules/live/service.js";
 import * as evaluationService from "../modules/evaluation/service.js";
 import { loadConfig, typeOf } from "../modules/pool/config.js";
 import * as poolService from "../modules/pool/service.js";
@@ -177,4 +178,14 @@ export async function seedLive(db: Db, options: SeedOptions = {}): Promise<Seede
 /** Reloads the evaluation row; every service call takes the fresh one. */
 export async function reload(db: Db, evaluationId: string) {
   return (await evaluationService.byId(db, evaluationId))!;
+}
+
+/**
+ * The explicit Start of a participant (ADR-076): enters with `start: true`,
+ * which always answers an attempt or the lobby, never the ready screen.
+ */
+export async function enterStarted(db: Db, input: Omit<Parameters<typeof enterEvaluation>[1], "start">) {
+  const result = await enterEvaluation(db, { ...input, start: true });
+  if (result.kind === "ready") throw new Error("a started entry never answers ready");
+  return result;
 }

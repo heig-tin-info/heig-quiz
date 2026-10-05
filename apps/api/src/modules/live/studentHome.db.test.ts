@@ -18,7 +18,7 @@ import type { Db } from "../../db/client.js";
 import { evaluations } from "../../db/schema.js";
 import { testApp, testDb } from "../../test/db.js";
 import { fakeShort } from "../../test/fakeType.js";
-import { reload, seedLive } from "../../test/live.js";
+import { enterStarted, reload, seedLive } from "../../test/live.js";
 import { applyState, joinedItems, type EvaluationRecord } from "../evaluation/service.js";
 import * as results from "../results/service.js";
 import * as live from "./service.js";
@@ -68,7 +68,7 @@ async function handIn(app: App, evaluation: EvaluationRecord, userId: string, at
   const current =
     attempt ??
     (
-      await live.enterEvaluation(db, {
+      await enterStarted(db, {
         evaluation,
         participant: (await live.participantOf(db, evaluation, userId))!,
         now,
@@ -180,7 +180,7 @@ describe("the student home after a hand-in (issue #203)", () => {
       durationS: 60,
       settings: { timing: "duration" },
     });
-    await live.enterEvaluation(db, {
+    await enterStarted(db, {
       evaluation,
       participant: (await live.participantOf(db, evaluation, student))!,
       now: app.clock.now(),

@@ -127,7 +127,7 @@ describe("the attempt (ADR-056 §5, invariant 4)", () => {
 
   it("draws each attempt its own values at its creation, and serves no trace of the template", async () => {
     for (const [name, who] of [["alice", alice], ["bob", bob]] as const) {
-      const entered = await post(`/app/api/evaluations/${seed.evaluationId}/attempt`, who.headers, {});
+      const entered = await post(`/app/api/evaluations/${seed.evaluationId}/attempt/start`, who.headers, {});
       expect(entered.statusCode).toBe(200);
       const view = entered.json().view as { attempt: { id: string }; items: { id: string; student: unknown }[] };
       attemptOf.set(name, view.attempt.id);

@@ -30,7 +30,7 @@ import {
 import { subscribe, type BusMessage } from "../../events.js";
 import { testDb } from "../../test/db.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
-import { reload, seedLive } from "../../test/live.js";
+import { enterStarted, reload, seedLive } from "../../test/live.js";
 import { UnavailableRunner } from "../runner/unavailable.js";
 import {
   applyState,
@@ -105,9 +105,9 @@ describe("entering an evaluation (F-LIVE-01)", () => {
     const row = await applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
     const participant = (await service.participantOf(db, row, seed.studentIds[0]!))!;
 
-    const first = await service.enterEvaluation(db, { evaluation: row, participant, now: clock.now() });
+    const first = await enterStarted(db, { evaluation: row, participant, now: clock.now() });
     clock.advance(1_000);
-    const second = await service.enterEvaluation(db, { evaluation: row, participant, now: clock.now() });
+    const second = await enterStarted(db, { evaluation: row, participant, now: clock.now() });
 
     expect(first.attempt.id).toBe(second.attempt.id);
     expect(first.attempt.seed).toBe(second.attempt.seed);
@@ -122,7 +122,7 @@ describe("entering an evaluation (F-LIVE-01)", () => {
     const seed = await seedLive(db);
     const row = await applyState(db, await reload(db, seed.evaluationId), "lobby", clock.now());
     const participant = (await service.participantOf(db, row, seed.studentIds[0]!))!;
-    const result = await service.enterEvaluation(db, { evaluation: row, participant, now: clock.now() });
+    const result = await enterStarted(db, { evaluation: row, participant, now: clock.now() });
     expect(result.kind).toBe("lobby");
     if (result.kind === "lobby") expect(result.view.enrolled).toBe(2);
     // The row exists but has not started: no clock is running yet.
@@ -601,7 +601,7 @@ describe("teacher controls (F-LIVE-11, F-LIVE-12)", () => {
     const paused = await service.pauseEvaluation(db, evaluation, clock.now());
     const late = (await service.participantOf(db, paused, seed.studentIds[1]!))!;
 
-    const entered = await service.enterEvaluation(db, { evaluation: paused, participant: late, now: clock.now() });
+    const entered = await enterStarted(db, { evaluation: paused, participant: late, now: clock.now() });
     // No question content on a clock that has not started.
     expect(entered.kind).toBe("lobby");
     expect(entered.attempt.state).toBe("not_started");
@@ -627,7 +627,7 @@ describe("teacher controls (F-LIVE-11, F-LIVE-12)", () => {
     });
     const paused = await service.pauseEvaluation(db, evaluation, clock.now());
     const late = (await service.participantOf(db, paused, seed.studentIds[1]!))!;
-    const entered = await service.enterEvaluation(db, { evaluation: paused, participant: late, now: clock.now() });
+    const entered = await enterStarted(db, { evaluation: paused, participant: late, now: clock.now() });
     expect(entered.kind).toBe("lobby");
 
     clock.advance(600_000);

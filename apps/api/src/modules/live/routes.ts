@@ -15,6 +15,7 @@ import {
   AttemptEventBody,
   AttemptParam,
   AnswerParam,
+  AttemptEntry,
   AttemptStartBody,
   AutosaveRequest,
   DashboardQuery,
@@ -37,7 +38,7 @@ import {
 } from "@quiz/contracts";
 
 import { tracer, type AuditAction } from "../../audit.js";
-import { SITTING, delegated } from "../../auth/session.js";
+import { SITTING, confined, delegated } from "../../auth/session.js";
 import { iso } from "../../clock.js";
 import {
   loadEvaluation,
@@ -140,10 +141,13 @@ export async function livePlugin(app: FastifyInstance) {
   // The student's home, `GET /app/api/student/home`, is the `activity`
   // module's since M3-09a: it lists every kind of activity.
 
-  /** F-LIVE-01. Idempotent: the same student always lands on the same attempt. */
-  app.post(
-    "/app/api/evaluations/:id/attempt",
-    sit,
+  /**
+   * F-LIVE-01, ADR-076. Entering is not starting: a participant with no
+   * attempt on a running evaluation is answered `ready` and nothing is
+   * written (no row, no presence, no lobby event). A `seb` or `kiosk`
+   * session begins directly, its pairing being the explicit act. Idempotent.
+   */
+  const entry = (explicit: boolean) =>
     student(
       {
         params: IdParam,
@@ -162,18 +166,25 @@ export async function livePlugin(app: FastifyInstance) {
           evaluation: scope.evaluation,
           participant,
           now,
+          // The explicit Start, or a trusted client whose pairing was the act.
+          start: explicit || confined(req.auth),
         });
-        events.lobbyChanged(
-          scope.evaluation.id,
-          presence.count(scope.evaluation.id),
-          await service.enrolledCount(app.db, scope.evaluation),
-        );
-        return result.kind === "lobby"
-          ? { kind: "lobby", view: result.view }
-          : { kind: "attempt", view: result.view };
+        if (result.kind !== "ready") {
+          events.lobbyChanged(
+            scope.evaluation.id,
+            presence.count(scope.evaluation.id),
+            await service.enrolledCount(app.db, scope.evaluation),
+          );
+        }
+        // The answer is the view and nothing else: the attempt row (seed,
+        // drawn values) never leaves the service (invariant 4).
+        const { attempt: _row, ...answer } = result;
+        return answer satisfies AttemptEntry;
       },
-    ),
-  );
+    );
+  app.post("/app/api/evaluations/:id/attempt", sit, entry(false));
+  /** ADR-076: the explicit Start of the ready screen. Same loader, same guards. */
+  app.post("/app/api/evaluations/:id/attempt/start", sit, entry(true));
 
   /**
    * F-EVAL-15 (ADR-025): another attempt on an exercise that allows several.

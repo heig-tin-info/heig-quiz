@@ -31,7 +31,7 @@ import { GRADING_EVALUATION_QUEUE, GRADING_RUNNER_QUEUE, type JobQueue } from ".
 import { codeConfig } from "../../test/codeFixture.js";
 import { testApp, testDb } from "../../test/db.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
-import { reload, seedLive } from "../../test/live.js";
+import { enterStarted, reload, seedLive } from "../../test/live.js";
 import { addItems, applyState, joinedItems, type EvaluationRecord } from "../evaluation/service.js";
 import { registerGradingJobs } from "../grading/jobs.js";
 import { manualOverride } from "../grading/service.js";
@@ -154,7 +154,7 @@ async function running(
   const items = await joinedItems(db, evaluation.id);
   const itemOf = (type: string) => items.find((i) => i.question.type === type)!.item;
   const participant = (await live.participantOf(db, evaluation, seed.studentIds[0]!))!;
-  const entered = await live.enterEvaluation(db, { evaluation, participant, now: app.clock.now() });
+  const entered = await enterStarted(db, { evaluation, participant, now: app.clock.now() });
   return { seed, evaluation, attempt: entered.attempt, mcq: itemOf("mcq"), code: itemOf("code") };
 }
 

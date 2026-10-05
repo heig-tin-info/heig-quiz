@@ -104,7 +104,7 @@ Every requirement is identified `F-AREA-nn`, with its original planning phase P1
 
 | Id | Requirement | Phase | Prio |
 |---|---|---|---|
-| F-LIVE-01 | The student sees on their home page the open evaluations of their classrooms and enters one in a single click. | P1 | M |
+| F-LIVE-01 | The student sees on their home page the open evaluations of their classrooms and enters one in a single click; an attempt begins only by an explicit Start, except for trusted clients (SEB, kiosk) and a retake ([ADR-076](../adr/ADR-076-demarrage-explicite-d-une-tentative.md)). | P1 | M |
 | F-LIVE-02 | In the waiting room they see the number of students present out of the number enrolled, as a progress ring, and the announced duration. | P1 | M |
 | F-LIVE-03 | Before starting, the teacher sees the list of those present, those absent, and the students with extra time, and confirms. | P1 | M |
 | F-LIVE-04 | The start is propagated to every client in under one second. | P1 | M |

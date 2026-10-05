@@ -765,6 +765,8 @@ const scenes = [
   // Issue #270: an exam sat in Safe Exam Browser — its card opens the steps.
   { name: "student-seb", role: "student", path: "/?seb=1", act: (p) => p.getByRole("button", { name: /^(open in safe exam browser|ouvrir dans safe exam browser)$/i }).first().click() },
   { name: "student-lobby", role: "student", path: `${TAKE}?scene=lobby` },
+  // ADR-076: a running evaluation not yet started: one Start, the clock said before it.
+  { name: "student-ready", role: "student", path: `${TAKE}?scene=ready` },
   { name: "player-mcq", role: "student", path: `${TAKE}?scene=running` },
   { name: "player-cloze", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 2) },
   { name: "player-short", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 3) },

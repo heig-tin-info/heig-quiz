@@ -622,7 +622,7 @@ describe("a preview writes nothing", () => {
     // A running evaluation with a real attempt beside it, so the counts are
     // taken where rows COULD appear.
     await evaluationService.applyState(db, await reload(db, w.evaluationId), "running", now);
-    const entered = await post(`/app/api/evaluations/${w.evaluationId}/attempt`, student.headers, {});
+    const entered = await post(`/app/api/evaluations/${w.evaluationId}/attempt/start`, student.headers, {});
     expect(entered.statusCode).toBe(200);
     setRunner(recorder().runner);
 
