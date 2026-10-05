@@ -102,17 +102,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: coverage-blob-api-*
           merge-multiple: true
           path: apps/api/.vitest-reports
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: coverage-blob-web-*
           merge-multiple: true
           path: apps/web/.vitest-reports
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: coverage-rest
           path: .
