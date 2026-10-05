@@ -59,6 +59,8 @@
  *   preview.ts     5b. the teacher's stateless preview of an evaluation;
  *   groups.ts      5b'. a classroom's group sets, their groups, the moves
  *                      and the random formation (`?groups=1`, M3-16a);
+ *   gradebook.ts   5d. a classroom's gradebook: the staff's table and its
+ *                      writes, the student's own cells (M5-04);
  *   project.ts     5c. a classroom's projects, one project's page, its
  *                      repositories' runs and its checkpoints (`?projects=1`,
  *                      M3-10, M3-12);
@@ -136,6 +138,7 @@ import {
 import "./grading";
 import "./preview";
 import "./groups";
+import "./gradebook";
 import { arriveProjectActivity } from "./project";
 import "./drill";
 import "./github";

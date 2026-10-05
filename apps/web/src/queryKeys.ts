@@ -126,6 +126,17 @@ export const groupSetListsKey = [...groupSetsKey, "classroom"] as const;
 export const classroomGroupSetsKey = (classroomId: string) => [...groupSetListsKey, classroomId] as const;
 export const groupSetKey = (id: string) => [...groupSetsKey, "set", id] as const;
 /**
+ * A classroom's gradebook (F-GBOOK, M5-04), under a root of its own,
+ * `gradebook`, which the `gradebook` hint names (`realtime/hints.ts`): the
+ * staff's table (`GET /classrooms/:id/gradebook`, the answer of every write
+ * on it) and the student's own cells
+ * (`GET /student/classrooms/:id/gradebook`, a teacher in the student view
+ * included). A release, a roster change or an archive raise it too.
+ */
+export const gradebookRootKey = ["gradebook"] as const;
+export const classroomGradebookKey = (classroomId: string) => [...gradebookRootKey, "staff", classroomId] as const;
+export const studentGradebookKey = (classroomId: string) => [...gradebookRootKey, "student", classroomId] as const;
+/**
  * The organizations Quiz's App is installed on (the connect sheet's picker).
  * Its own root, which the `classrooms` hint names: an installation that
  * completes adds a row while the sheet is open.

@@ -12,7 +12,6 @@ import { type Dict, useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
 import { useGithubLinkReturn } from "./github/linkReturn";
 import { CoachLayer } from "./coach/CoachLayer";
-import { ComingSoon } from "./ComingSoon";
 import { useRoute, type Navigate, type Route, type RouteOf } from "./router";
 import { ImpersonationBanner, Shell, StudentViewBanner } from "./Shell";
 import { SuperPowersBanner } from "./SuperPowers";
@@ -277,9 +276,14 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
     ) : (
       <StudentClassroom id={r.id} tab="journal" path={r.path} navigate={c.navigate} />
     ),
-  // The pages of the classroom merge, placeholders until their screens ship
-  // (`CLASSROOM_PAGES`, `router.ts`).
-  classroomGrades: (_, c) => <ComingSoon title="bnav.grades" navigate={c.navigate} teacherUi={c.teacherUi} />,
+  // F-GBOOK-01, F-GBOOK-05 (M5-04): both roles, each the Grades tab of their
+  // classroom page; the student's asks for the student payload.
+  classroomGrades: (r, c) =>
+    c.teacherUi ? (
+      <ClassroomView id={r.id} navigate={c.navigate} routeTab="grades" />
+    ) : (
+      <StudentClassroom id={r.id} tab="grades" navigate={c.navigate} />
+    ),
   // ADR-070 (M3-16a): the classroom's Groups tab, a route of its own, and one
   // group set's page. F-PROJ-22 (M3-17): one address, the student's Groups tab
   // for a student, a teacher in the student view, an impersonation.

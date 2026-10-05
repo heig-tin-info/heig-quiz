@@ -71,10 +71,18 @@ describe("routeToPath / parsePath", () => {
 
   it("parses none of the classroom merge's other routes while CLASSROOM_PAGES is off", () => {
     // A production build: every such address reads as it did before them.
-    expect(parsePath("/classrooms/c-1/grades")).toEqual({ view: "classroom", id: "c-1" });
     // M3-16a: a project's groups page is gone; its address reads as home.
     expect(parsePath("/projects/p-1/groups")).toEqual({ view: "home" });
     expect(parsePath("/projects/x/groups")).toEqual({ view: "home" });
+  });
+
+  it("parses the classroom's Grades in every build, since M5-04 (F-GBOOK-01, F-GBOOK-05)", () => {
+    expect(ROUTES.classroomGrades.preview).toBeUndefined();
+    expect(routeToPath({ view: "classroomGrades", id: "c-1" })).toBe("/classrooms/c-1/grades");
+    expect(parsePath("/classrooms/c-1/grades")).toEqual({ view: "classroomGrades", id: "c-1" });
+    // One address, two pages, under the Courses slot.
+    expect(ROUTES.classroomGrades.studentSafe).toBe(true);
+    expect(ROUTES.classroomGrades.bottomSlot).toBe("courses");
   });
 
   it("parses the classroom's Groups and a group set in every build, since M3-16a (ADR-070)", () => {
@@ -272,8 +280,7 @@ describe("ROUTES", () => {
       "attempt",
       // F-ORG-15: the student's page of the classroom (M5-02).
       "classroom",
-      // The merge's student tabs: the Journal (M4-05); the Grades, only
-      // under `CLASSROOM_PAGES` until M5-04.
+      // The merge's student tabs: the Journal (M4-05) and the Grades (M5-04).
       "classroomGrades",
       // F-PROJ-22 (M3-17): the student's Groups tab.
       "classroomGroups",

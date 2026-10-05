@@ -249,9 +249,8 @@ export interface RouteSpec<V extends Route["view"]> {
 
 /**
  * The gate of the classroom merge's routes (ADR-035, `docs/merge/05-web.md`
- * §5.1–§5.2) whose routes exist before their screens do: the classroom's
- * Grades tab, which renders a placeholder (`ComingSoon`) until its task
- * ships the real screen (M5-04). A screen that links to one asks
+ * §5.1–§5.2) whose routes exist before their screens do. The last of them,
+ * the classroom's Grades tab, shipped with M5-04. A screen that links to one asks
  * `routeEnabled` first, so production never shows a door to a page that
  * does not parse. The new project and the project page left it with M3-12,
  * the classroom's Groups and a group set's page were never in it (M3-16a).
@@ -424,7 +423,6 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
       head === "classrooms" && id && tail === "grades" ? { view: "classroomGrades", id } : null,
     studentSafe: true,
     bottomSlot: "courses",
-    preview: true,
   },
   // Role-dispatched (F-ORG-15): the teacher's classroom, or the student's page
   // of it (M5-02), whose Activities tab it is.

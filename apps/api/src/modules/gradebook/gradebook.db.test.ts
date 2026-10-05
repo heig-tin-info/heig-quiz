@@ -668,6 +668,85 @@ describe("the student's own cells (F-GBOOK-05, F-RES-04) and what must never rea
   });
 });
 
+describe("the CSV export (F-GBOOK-04, M5-03b)", () => {
+  const csvUrl = () => `${base()}.csv`;
+  const read = async () => {
+    const res = await call("GET", csvUrl(), teacher.headers);
+    expect(res.statusCode, res.body).toBe(200);
+    return res;
+  };
+  /** The file's lines under the BOM: the header, then a row per student. */
+  const linesOf = async () => (await read()).payload.slice(1).trimEnd().split("\r\n");
+
+  it("is the F-RES-02 format: a UTF-8 BOM, `;`, CRLF, an attachment", async () => {
+    const res = await read();
+    expect(res.headers["content-type"]).toContain("text/csv");
+    expect(res.headers["content-disposition"]).toMatch(/^attachment; filename="[a-z0-9-]+\.csv"$/);
+    expect(res.rawPayload.subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]));
+    expect(res.payload.endsWith("\r\n")).toBe(true);
+  });
+
+  it("has a row per claimed student, a column per gradebook column in order, and the mean", async () => {
+    const table = await staffTable();
+    const [header, ...rows] = await linesOf();
+    expect(header!.split(";")).toEqual([
+      "email",
+      "last_name",
+      "first_name",
+      ...table.columns.map((c) => `${c.title}${c.released ? "" : " (unreleased)"}`),
+      "mean",
+    ]);
+    expect(rows).toHaveLength(3);
+    // Never the teacher's staff seat, nor the roster line nobody claimed.
+    expect(rows.join("\n")).not.toContain("seated@heig.test");
+    expect(rows.join("\n")).not.toContain("unclaimed@heig.test");
+    for (const [i, row] of rows.entries()) {
+      const fields = row.split(";");
+      const source = table.rows[i]!;
+      expect(fields.slice(0, 3)).toEqual([source.email, source.nom, source.prenom]);
+      expect(fields).toHaveLength(3 + table.columns.length + 1);
+      expect(fields.at(-1)).toBe(source.mean === null ? "" : source.mean.toFixed(1));
+    }
+  });
+
+  it("writes a grade at one decimal, the absence `a1.0`, an empty cell empty", async () => {
+    const table = await staffTable();
+    const rows = (await linesOf()).slice(1);
+    const at = (student: number, name: string) => {
+      const index = table.columns.findIndex((c) => c.activityId === col[name]);
+      const row = table.rows.findIndex((r) => r.enrollmentId === seats[student]);
+      return rows[row]!.split(";")[3 + index];
+    };
+    expect(at(0, "E1")).toBe("5.0");
+    expect(at(1, "E1")).toBe("3.5");
+    // A derived absence.
+    expect(at(2, "E1")).toBe("a1.0");
+    expect(at(1, "E2")).toBe("a1.0");
+    expect(at(1, "X1")).toBe("");
+    // The unreleased column shows no grade of the activity.
+    expect(at(0, "E3")).toBe("");
+  });
+
+  it("carries a staff absence mark as a1.0 too", async () => {
+    const put = await call("PUT", markUrl("evaluation", "X1", seats[2]!), teacher.headers, { kind: "absent" });
+    expect(put.statusCode, put.body).toBe(200);
+    try {
+      const table = await staffTable();
+      const rows = (await linesOf()).slice(1);
+      const index = 3 + table.columns.findIndex((c) => c.activityId === col["X1"]);
+      expect(rows[table.rows.findIndex((r) => r.enrollmentId === seats[2])]!.split(";")[index]).toBe("a1.0");
+    } finally {
+      await call("DELETE", markUrl("evaluation", "X1", seats[2]!), teacher.headers);
+    }
+  });
+
+  it("is a staff read: a teacher off the staff gets the 404, a student the teacher guard's 403, nobody 401", async () => {
+    expect((await call("GET", csvUrl(), outsider.headers)).statusCode).toBe(404);
+    expect((await call("GET", csvUrl(), students[0]!.headers)).statusCode).toBe(403);
+    expect((await call("GET", csvUrl(), {})).statusCode).toBe(401);
+  });
+});
+
 describe("who reaches the gradebook (invariant 6)", () => {
   it("answers a teacher off the staff with the 404 of a missing classroom, a student with the teacher guard's 403, an anonymous caller 401", async () => {
     for (const [headers, status] of [[outsider.headers, 404], [students[0]!.headers, 403]] as const) {

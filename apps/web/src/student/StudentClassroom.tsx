@@ -9,8 +9,9 @@
  * M4-04 reader under this page's compact header (in every build since
  * M4-05; `hasJournal` is false on a platform without Quiz's App, so no tab
  * there); Groups (`/classrooms/:id/groups`, F-PROJ-22, M3-17) while a group
- * set reaches the students (`hasGroups`); the grades stay an anchor of the
- * home until M5-04.
+ * set reaches the students (`hasGroups`); and Grades
+ * (`/classrooms/:id/grades`, F-GBOOK-05, M5-04), always: their own cells of
+ * the gradebook, the student payload the server narrows.
  *
  * The four decisions:
  *   - Type: the classroom's name at the page-title step; the activity titles
@@ -31,6 +32,7 @@ import { useEffect } from "react";
 import type { StudentActivities, StudentActivityCard, StudentClassroomPage } from "@quiz/contracts";
 
 import { api, ApiError } from "../api";
+import { StudentGradebook } from "../gradebook/StudentGradebook";
 import { StudentGroups } from "../group/StudentGroups";
 import { useT } from "../i18n";
 import { JournalReader } from "../journal/JournalReader";
@@ -60,13 +62,14 @@ import {
 } from "./cards";
 import { needsStudentAction } from "./projectRow";
 
-export type ClassroomTab = "activities" | "journal" | "groups";
+export type ClassroomTab = "activities" | "journal" | "groups" | "grades";
 
 /** Each tab's route. */
 const TAB_ROUTE: Record<ClassroomTab, (id: string) => Route> = {
   activities: (id) => ({ view: "classroom", id }),
   journal: (id) => ({ view: "classroomJournal", id }),
   groups: (id) => ({ view: "classroomGroups", id }),
+  grades: (id) => ({ view: "classroomGrades", id }),
 };
 
 type Header = StudentClassroomPage["classroom"];
@@ -168,6 +171,7 @@ export function StudentClassroom({
     { value: "activities" as const, label: t("sroom.tab.activities") },
     ...(data?.hasJournal || tab === "journal" ? [{ value: "journal" as const, label: t("sroom.tab.journal") }] : []),
     ...(data?.hasGroups || tab === "groups" ? [{ value: "groups" as const, label: t("sroom.tab.groups") }] : []),
+    { value: "grades" as const, label: t("gbook.tab") },
   ];
   const tabs =
     items.length > 1 ? (
@@ -217,6 +221,8 @@ export function StudentClassroom({
       {tabs}
       {tab === "groups" ? (
         <StudentGroups classroomId={id} />
+      ) : tab === "grades" ? (
+        <StudentGradebook classroomId={id} />
       ) : (
         <Activities activities={data.activities} serverNow={data.serverNow} navigate={navigate} />
       )}

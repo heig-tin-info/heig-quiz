@@ -109,6 +109,9 @@ import {
   StudentHome,
   StudentProject,
   GradeGroup,
+  GradebookErrorCode,
+  GradebookStaff,
+  GradebookStudent,
   GroupConsequences,
   GroupErrorCode,
   GroupSetDetail,
@@ -523,6 +526,13 @@ const CHECKED: Case[] = [
   ...courses
     .flatMap((c) => c.classrooms)
     .map((r) => one("/app/api/classrooms/:id/group-sets/student", `/app/api/classrooms/${r.id}/group-sets/student`, StudentGroupSets)),
+  // The gradebook (M5-04): every classroom's table, and its student side (the persona's own cells).
+  ...[...courses.flatMap((c) => c.classrooms).map((r) => r.id), ARCHIVED_ROOM].map((room) =>
+    one("/app/api/classrooms/:id/gradebook", `/app/api/classrooms/${room}/gradebook`, GradebookStaff),
+  ),
+  ...courses
+    .flatMap((c) => c.classrooms)
+    .map((r) => one("/app/api/student/classrooms/:id/gradebook", `/app/api/student/classrooms/${r.id}/gradebook`, GradebookStudent)),
   // The drill (ADR-041, #317): the student's tab and the teacher's switch.
   one("/app/api/drill/session", "/app/api/drill/session", DrillSession),
   each("/app/api/drill/classrooms", "/app/api/drill/classrooms", DrillClassroom),
@@ -845,5 +855,65 @@ describe("the mock's group sets (M3-16a, ?groups=1)", () => {
     expect(detail.set.readOnly).toBe(true);
     const refused = await send(`/app/api/group-sets/${set!.id}/groups`, "POST", {});
     expect(refusal(refused.body)).toBe("classroom_archived");
+  });
+});
+
+describe("the mock's gradebook (M5-04)", () => {
+  const send = async (path: string, method: string, body?: unknown) => {
+    const res = await fetch(path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+    return { status: res.status, body: res.status === 204 ? null : ((await res.json()) as unknown) };
+  };
+  const table = async (room = classroomId) => (await get(`/app/api/classrooms/${room}/gradebook`)) as GradebookStaff;
+  const refusal = (body: unknown) => GradebookErrorCode.parse((body as { error?: unknown }).error);
+  const marks = (t: GradebookStaff, column: GradebookStaff["columns"][number], eid: string) =>
+    `/app/api/classrooms/${t.classroomId}/gradebook/columns/${column.kind}/${column.activityId}/marks/${eid}`;
+
+  it("has its columns and its claimed students on PRG1-2026, an absence a1.0 and a column not released; none elsewhere", async () => {
+    const t = await table();
+    expect(t.columns.map((c) => c.released)).toContain(false);
+    expect(t.rows.length).toBeGreaterThan(5);
+    const kinds = new Set(t.rows.flatMap((r) => Object.values(r.cells).map((c) => c.kind)));
+    expect([...kinds].sort()).toEqual(["absent", "empty", "grade"]);
+    // Nothing of an unreleased column but a staff mark; and it is out of the mean.
+    const unreleased = t.columns.find((c) => !c.released)!;
+    const shown = t.rows.map((r) => r.cells[unreleased.activityId]!).filter((c) => c.kind !== "empty");
+    expect(shown.every((c) => c.source === "mark")).toBe(true);
+    expect((await table("r2")).columns).toEqual([]);
+  });
+
+  it("refuses a mark over a real grade without override (409), then takes it; clears it; refuses a score above its maximum (422)", async () => {
+    const t = await table();
+    const column = t.columns.find((c) => c.released && c.mode === "exam")!;
+    const row = t.rows.find((r) => r.cells[column.activityId]!.hasGrade)!;
+    const url = marks(t, column, row.enrollmentId);
+    const refused = await send(url, "PUT", { kind: "absent" });
+    expect([refused.status, refusal(refused.body)]).toEqual([409, "grade_exists"]);
+    const over = await send(url, "PUT", { kind: "absent", override: true });
+    expect(issuesOf(GradebookStaff, over.body)).toEqual([]);
+    const marked = (over.body as GradebookStaff).rows.find((r) => r.enrollmentId === row.enrollmentId)!.cells[column.activityId]!;
+    expect(marked).toMatchObject({ kind: "absent", grade: 1, source: "mark", hasGrade: true });
+    const high = await send(url, "PUT", { kind: "score", points: 25, max: 20 });
+    expect([high.status, refusal(high.body)]).toEqual([422, "score_above_max"]);
+    const cleared = (await send(url, "DELETE")).body as GradebookStaff;
+    expect(cleared.rows.find((r) => r.enrollmentId === row.enrollmentId)!.cells[column.activityId]!.mark).toBeNull();
+  });
+
+  it("answers the column and mean settings with the table, the mean following the weights and the counted flag", async () => {
+    const t = await table();
+    const column = t.columns.find((c) => c.kind === "evaluation" && c.released)!;
+    const path = `/app/api/classrooms/${t.classroomId}/gradebook/columns/${column.kind}/${column.activityId}`;
+    const patched = (await send(path, "PATCH", { weight: 4.5, counts: false })).body as GradebookStaff;
+    expect(issuesOf(GradebookStaff, patched)).toEqual([]);
+    expect(patched.columns.find((c) => c.activityId === column.activityId)).toMatchObject({ weight: 4.5, counts: false });
+    expect((await send(path, "PATCH", { weight: 11 })).status).toBe(400);
+    const off = (await send(`/app/api/classrooms/${t.classroomId}/gradebook`, "PATCH", { meanPublished: false })).body as GradebookStaff;
+    expect(off.meanPublished).toBe(false);
+  });
+
+  it("is read-only on the archived classroom (409 classroom_archived)", async () => {
+    const t = await table(ARCHIVED_ROOM);
+    expect(t.archived).toBe(true);
+    const refused = await send(`/app/api/classrooms/${ARCHIVED_ROOM}/gradebook`, "PATCH", { meanPublished: true });
+    expect([refused.status, refusal(refused.body)]).toEqual([409, "classroom_archived"]);
   });
 });

@@ -421,7 +421,7 @@ on("POST", "/app/api/group-sets/:id/random", (m, raw) => {
 // ---------------------------------------------------------------- the students' side (F-PROJ-22, M3-17)
 
 /** The student persona's roster line in PRG1-2026: one of "Projet final"'s students in no group. */
-const ME_LINE = (() => {
+export const ME_LINE = (() => {
   const r1 = classroomRoster("r1");
   return r1[16]?.id ?? r1[0]?.id ?? "";
 })();

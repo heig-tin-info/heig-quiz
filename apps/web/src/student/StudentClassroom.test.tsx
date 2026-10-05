@@ -148,11 +148,29 @@ describe("the student classroom page", () => {
     expect(screen.getByRole("tab", { name: "Activities" })).toHaveAttribute("aria-selected", "true");
   });
 
-  it("shows no tab at all where the classroom has no journal, as without Quiz's App", async () => {
+  it("shows Activities and Grades alone where the classroom has no journal, as without Quiz's App", async () => {
     mockFetch({ [URL_R1]: ok(classroomPage({ hasJournal: false })) });
     render();
     await screen.findByRole("heading", { level: 1, name: "PRG1-2026" });
-    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Activities", "Grades"]);
+    expect(screen.queryByRole("tab", { name: "Journal" })).toBeNull();
+  });
+
+  it("opens the Grades tab on its own address, and reads the gradebook there (F-GBOOK-05, M5-04)", async () => {
+    mockFetch({ [URL_R1]: ok(classroomPage()), "GET /app/api/student/classrooms/r1/gradebook": ok({ classroomId: "r1", columns: [], cells: {} }) });
+    const { navigate } = render();
+    await userEvent.click(await screen.findByRole("tab", { name: "Grades" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "classroomGrades", id: "r1" });
+  });
+
+  it("draws the student's gradebook under the Grades tab, selected", async () => {
+    mockFetch({
+      [URL_R1]: ok(classroomPage()),
+      "GET /app/api/student/classrooms/r1/gradebook": ok({ classroomId: "r1", columns: [], cells: {} }),
+    });
+    renderWithProviders(<StudentClassroom id="r1" tab="grades" navigate={vi.fn()} />);
+    expect(await screen.findByText("No grades yet")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Grades" })).toHaveAttribute("aria-selected", "true");
   });
 
   it("draws the Groups tab while a set reaches the students, and its row in Open now, never the accent (F-PROJ-22)", async () => {
