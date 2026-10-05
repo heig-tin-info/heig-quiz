@@ -14,7 +14,8 @@
  *   registry (`modules/activity/`), so this module imports neither
  *   `results` nor `project` directly.
  *
- * The CSV export (F-GBOOK-04) is M5-03b.
+ * The CSV export (F-GBOOK-04, M5-03b) is `csv.ts`, served by `routes.ts` from
+ * the staff's table.
  */
 export { GradebookError } from "./errors.js";
 export { gradebookChanged } from "./events.js";

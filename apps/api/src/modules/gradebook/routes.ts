@@ -13,8 +13,10 @@
  * The STUDENT's route loads the classroom through `readableClassroom` with
  * the student payload forced: a student, a teacher in the student view and
  * an impersonation session all read the caller's own cells; a `seb` or
- * `kiosk` session and anyone off the classroom get the 404. The CSV export
- * (F-GBOOK-04) is M5-03b.
+ * `kiosk` session and anyone off the classroom get the 404.
+ *
+ * The CSV export (F-GBOOK-04, M5-03b) is a staff read like the table, in the
+ * format of F-RES-02; like the results export it audits nothing.
  */
 import type { FastifyInstance } from "fastify";
 
@@ -27,9 +29,11 @@ import {
   IdParam,
 } from "@quiz/contracts";
 
+import { csvFilename } from "../../csv.js";
 import { actorOf } from "../../audit.js";
 import { accessibleClassroom, callerOf, isCourseOwner, readableClassroom, teacherGuard } from "../guards.js";
 import { studentRoute, teacherRoute } from "../http.js";
+import { gradebookCsv } from "./csv.js";
 import * as service from "./service.js";
 
 export async function gradebookPlugin(app: FastifyInstance) {
@@ -48,6 +52,19 @@ export async function gradebookPlugin(app: FastifyInstance) {
     "/app/api/classrooms/:id/gradebook",
     { preHandler: requireTeacher },
     teacher(onClassroom, async ({ scope }) => service.staffGradebook(app.db, scope.room)),
+  );
+
+  /** F-GBOOK-04: the table as a file for Excel (UTF-8 BOM, `;`), the absence written `a1.0`. */
+  app.get(
+    "/app/api/classrooms/:id/gradebook.csv",
+    { preHandler: requireTeacher },
+    teacher(onClassroom, async ({ reply, scope }) => {
+      const table = await service.staffGradebook(app.db, scope.room);
+      return reply
+        .type("text/csv; charset=utf-8")
+        .header("content-disposition", `attachment; filename="${csvFilename(`${scope.room.name} gradebook`, "gradebook")}"`)
+        .send(gradebookCsv(table));
+    }),
   );
 
   /** F-GBOOK-05, F-GBOOK-06: publish the mean to the students, or stop. */
