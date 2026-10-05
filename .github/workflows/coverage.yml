@@ -19,7 +19,9 @@ on:
       - "mockups/**"
       - "**/*.md"
   workflow_dispatch:
-  # A nightly run on main, so the floors are measured even on a quiet day.
+  # Nightly on main, the same code as the day before: what it catches is a
+  # flaky test, and a suite drifting with the runner image or a dependency's
+  # new release, not a change of ours.
   schedule:
     - cron: "0 3 * * *"
 
@@ -33,8 +35,8 @@ concurrency:
 jobs:
   # The API's and the SPA's suites, one shard per job, as in ci.yml. Each
   # shard builds only the workspace packages its app imports (the tests
-  # resolve them through dist/) and leaves its blob for `report`. The shard
-  # count is repeated in `report`'s assertion: keep the two in step.
+  # resolve them through dist/) and leaves its blob for `report`, which reads
+  # the shard count back from the blobs' names: this list is its only source.
   app:
     name: ${{ matrix.pkg }} (${{ matrix.shard }}/${{ matrix.shards }})
     runs-on: ubuntu-latest
@@ -85,11 +87,13 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # The merge and the floors, once. `always()` so that a failed shard is
-  # reported here, loudly, by the blob count rather than by a silent skip.
+  # The merge and the floors, once. It runs after a failed shard too, so the
+  # failure is reported here, loudly, by the blob count rather than by a
+  # silent skip; but not after a cancellation (a superseded pull request
+  # run), which would only paint a red report over nothing.
   report:
     needs: [app, rest]
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -109,16 +113,22 @@ jobs:
           name: coverage-rest
           path: .
       # One blob per shard, or the merged figure would be a fraction of the
-      # truth and the floors would fail for the wrong reason.
+      # truth and the floors would fail for the wrong reason. Vitest names a
+      # blob `blob-<i>-<n>.json`: the names must agree on one `n`, and there
+      # must be exactly `n` of them. `mkdir -p` so that a package with no
+      # download at all fails by this message, not by `find`'s under `-e`.
       - name: Every shard left its blob
         run: |
           status=0
-          for spec in api:4 web:3; do
-            pkg=${spec%:*} expected=${spec#*:}
-            found=$(find "apps/$pkg/.vitest-reports" -name 'blob-*.json' 2>/dev/null | wc -l)
-            echo "apps/$pkg: $found of $expected blob report(s)"
-            if [ "$found" -ne "$expected" ]; then
-              echo "::error::apps/$pkg: $found blob report(s) instead of $expected — a shard failed or did not upload"
+          for pkg in api web; do
+            dir="apps/$pkg/.vitest-reports"
+            mkdir -p "$dir"
+            count=$(find "$dir" -name 'blob-*-*.json' | wc -l)
+            shards=$(find "$dir" -name 'blob-*-*.json' -printf '%f\n' | sed -n 's/^blob-[0-9]*-\([0-9]*\)\.json$/\1/p' | sort -u)
+            distinct=$(printf '%s\n' "$shards" | sed '/^$/d' | wc -l)
+            echo "$dir: $count blob report(s), shard count(s) in their names: $(echo ${shards:-none})"
+            if [ "$count" -lt 1 ] || [ "$distinct" -ne 1 ] || [ "$count" -ne "$shards" ]; then
+              echo "::error::$dir: expected one blob per shard (n identical files blob-<i>-<n>.json) — a shard failed or did not upload"
               status=1
             fi
           done
