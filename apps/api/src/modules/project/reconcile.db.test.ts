@@ -141,9 +141,19 @@ const commitsRoute: Route = (url, req) => {
   if (headMissing.has(fullName)) return json({ message: "Not Found" }, 404);
   const sha = world.git(fullName, "rev-parse", url.searchParams.get("sha") ?? "main").trim();
   const login = authors.get(sha);
-  const account = login === undefined || login === null ? null : { login };
-  return json([{ sha, commit: { author: { date: "2026-10-04T12:00:00Z" }, committer: { date: "2026-10-04T12:00:00Z" } }, author: account, committer: account }]);
+  const account = login === undefined || login === null ? null : { login, type: login.endsWith("[bot]") ? "Bot" : "User" };
+  return json([
+    {
+      sha,
+      commit: { author: { date: "2026-10-04T12:00:00Z" }, committer: { date: "2026-10-04T12:00:00Z" } },
+      author: account,
+      // A commit GitHub attributes only half: its author named, its committer's e-mail nobody's.
+      committer: halfAttributed.has(sha) ? null : account,
+    },
+  ]);
 };
+/** Commits whose committer GitHub cannot name, while it names the author. */
+const halfAttributed = new Set<string>();
 
 /** GitHub's answer to "is this login a collaborator?": 204, or 404 for a stranger or a pending invitee. */
 const collaboratorRoute: Route = (url, req) => {
@@ -250,6 +260,7 @@ beforeEach(async () => {
   authors.clear();
   aliases.clear();
   headMissing.clear();
+  halfAttributed.clear();
   byId.clear();
 });
 
@@ -520,15 +531,19 @@ describe("reconcile.repos: the head", () => {
     expect(await reconcileRepos(server.app, config)).toContain("0 heads moved");
   });
 
-  it("never moves it to a bot's head, nor to one GitHub attributes to nobody: no pusher means no head move", async () => {
-    const { repos, students } = await project({ students: 3 });
-    const [workflow, restored, nobody] = repos;
+  it("never moves it to a bot's head, nor to one GitHub attributes to nobody or only half: no pusher means no head move", async () => {
+    const { repos, students } = await project({ students: 4 });
+    const [workflow, restored, nobody, half] = repos;
     authors.set(world.commit(workflow!.fullName!, "main", { "notes.txt": "graded" }), "github-actions[bot]");
     const restore = world.commit(restored!.fullName!, "main", { "src/main.c": "int main(){}" });
     authors.set(restore, students[1]!.login);
     await server.app.db.insert(botCommits).values({ repoId: restored!.id, sha: restore, kind: "revert" });
     // The App's own commits carry no GitHub account: the provisioning's head, as GitHub lists it.
     authors.set(world.commit(nobody!.fullName!, "main", { "x": "y" }), null);
+    // A student's authorship on a commit nobody is named as committing (an App commit `bot_commits` missed).
+    const halfSha = world.commit(half!.fullName!, "main", { "x": "z" });
+    authors.set(halfSha, students[3]!.login);
+    halfAttributed.add(halfSha);
 
     expect(await reconcileRepos(server.app, config)).toContain("0 heads moved");
     for (const repo of repos) expect((await repoRow(repo!.id)).lastCommitSha).toBeNull();
@@ -559,22 +574,21 @@ describe("reconcile.repos: the repository itself", () => {
     expect(await reconcileRepos(server.app, config)).toContain("0 renamed");
   });
 
-  it("marks a repository deleted on a 404 by its id — terminal, audited once — and the grades pass does the same", async () => {
+  it("marks a repository deleted on a 404 by its id: terminal, audited once", async () => {
     const { repos } = await project({ students: 2 });
-    const [gone, other] = repos;
+    const [gone, kept] = repos;
     byId.set(gone!.githubRepoId!, "gone");
-    byId.set(other!.githubRepoId!, "gone");
-    list(other!, head(other!));
 
-    expect(await reconcileRepos(server.app, config)).toBe("2 repositories checked, 0 re-invited, 0 invitations accepted, 0 heads moved, 0 renamed, 2 deleted");
+    // The surviving repository is settled as usual: its pending invitation re-invited (the student already in: accepted).
+    expect(await reconcileRepos(server.app, config)).toBe("2 repositories checked, 1 re-invited, 1 invitations accepted, 0 heads moved, 0 renamed, 1 deleted");
     expect((await repoRow(gone!.id)).deletedAt?.toISOString()).toBe(NOW);
+    expect((await repoRow(kept!.id)).deletedAt).toBeNull();
     const [entry] = await auditOf(gone!.id, "project_repo.deleted");
     expect(entry?.payload).toEqual({ via: "reconcile" });
 
     // Deleted rows are out of scope: nothing more happens to them.
-    expect(await reconcileRepos(server.app, config)).toBe("0 repositories checked, 0 re-invited, 0 invitations accepted, 0 heads moved, 0 renamed, 0 deleted");
+    expect(await reconcileRepos(server.app, config)).toBe("1 repositories checked, 0 re-invited, 0 invitations accepted, 0 heads moved, 0 renamed, 0 deleted");
     expect(await auditOf(gone!.id, "project_repo.deleted")).toHaveLength(1);
-    expect(await runsOf(other!)).toHaveLength(0);
   });
 
   it("the grades pass marks a repository deleted on its 404 by id too", async () => {

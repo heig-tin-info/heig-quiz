@@ -16,11 +16,12 @@
  *   repository re-invited at most once a day (`invitation_reinvited_at`,
  *   claimed before GitHub is called) until the repository is frozen, or
  *   found accepted meanwhile; the default branch's head, moved only when it
- *   is a person's — not in `bot_commits`, neither authored nor committed by
- *   a bot: the reconciliation knows no pusher — with its CI state. It writes
- *   no push receipt (the intake's alone, ADR-012) and restores nothing (the
- *   push webhook's). A group's invitations wait for ADR-070's per-member
- *   follow-up (M3-15b); its head and runs are reconciled like any row's.
+ *   is a person's — not in `bot_commits`, its author and committer both
+ *   named by GitHub and neither a bot: the reconciliation knows no pusher —
+ *   with its CI state. It writes no push receipt (the intake's alone,
+ *   ADR-012) and restores nothing (the push webhook's). A group's
+ *   invitations wait for ADR-070's per-member follow-up (M3-15b); its head
+ *   and runs are reconciled like any row's.
  *
  * Both locate each repository by its immutable id first: a 404 there, once
  * the installation's token was obtained, is the repository gone
@@ -40,7 +41,7 @@
  * logged and the pass goes on to the next.
  */
 import type { FastifyInstance } from "fastify";
-import { and, asc, eq, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
 import { isQuiet, reconciles } from "@quiz/domain";
@@ -49,16 +50,16 @@ import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { botCommits, classrooms, gradeDispatches, projectGradeRuns, projectRepoAccess, projectRepos, projects, pushReceipts } from "../../db/schema.js";
-import { failFast, githubApp, githubStatus, installationClient, ownerRepo, rateLimitReset } from "../../github/app.js";
+import { failFast, githubApp, githubStatus, ownerRepo, rateLimitReset } from "../../github/app.js";
 import { forgetRepoLiveState } from "../../github/metrics.js";
 import type { ScheduledTask } from "../../ticker.js";
-import { projectInstallation, pushedBy } from "../github/service.js";
-import { followInvitation, inviteAccount } from "./access.js";
+import { pushedBy } from "../github/service.js";
+import { followInvitation, installationClients, inviteAccount } from "./access.js";
 import { LIVE } from "./deadline.js";
 import { ProjectError } from "./errors.js";
 import { aggregateCiStatus, completedRun, ingestCompletedRun } from "./grading.js";
 import { repoMembers } from "./groupRepos.js";
-import { followRepoRename, hintRepo, markRepoDeleted, type RepoContext } from "./repos.js";
+import { followRepoRename, hintRepo, markRepoDeleted, moveLastCommit, type RepoContext } from "./repos.js";
 
 /** The completed runs read per repository (heig-classroom's figure): the lost webhooks of a quiet half hour fit in far fewer. */
 const RUNS_PER_REPO = 20;
@@ -67,9 +68,8 @@ export const REINVITE_INTERVAL_MS = 24 * 3_600_000;
 
 type TaskKey = "reconcile.grades" | "reconcile.repos";
 
-/** What one pass counted: the audit's payload, and the summary's figures. */
+/** What one pass changed: the audit's payload beside the repositories read, and the summary's figures. */
 interface Counts {
-  repos: number;
   runsIngested: number;
   reinvited: number;
   accepted: number;
@@ -78,11 +78,8 @@ interface Counts {
   deleted: number;
 }
 
-/** A repository in scope, as the pass read it, with what the scope rule needs. */
-interface Candidate extends RepoContext {
-  lastActivityAt: Date | null;
-  reviewAsked: boolean;
-}
+/** A repository in scope, as the pass read it. */
+type Candidate = RepoContext;
 
 /** The repository as GitHub names it today. */
 interface Located {
@@ -103,43 +100,51 @@ interface Step {
 /** A failure GitHub answered for its rate limit: the pass stops on it. */
 const rateLimited = (err: unknown): boolean => rateLimitReset(err, Date.now()) !== null;
 
-/**
- * The live repositories in scope (`reconciles`), the quiet ones only when
- * `quiet`, with their project and course; one read.
- */
-async function candidates(db: Db, now: Date, quiet: boolean): Promise<Candidate[]> {
-  const lastActivityAt = sql<string | Date | null>`greatest(
-    (SELECT max(${pushReceipts.receivedAt}) FROM ${pushReceipts} WHERE ${pushReceipts.githubRepoId} = ${projectRepos.githubRepoId}),
-    (SELECT max(${projectGradeRuns.completedAt}) FROM ${projectGradeRuns} WHERE ${projectGradeRuns.repoId} = ${projectRepos.id}))`.mapWith(
-    (v: string | Date | null) => (v === null ? null : new Date(v)),
-  );
+/** The live repositories in scope (`reconciles`), with their project and course; one read. */
+async function candidates(db: Db, now: Date): Promise<Candidate[]> {
   const reviewAsked = sql<boolean>`EXISTS (SELECT 1 FROM ${gradeDispatches}
     WHERE ${gradeDispatches.repoId} = ${projectRepos.id} AND ${gradeDispatches.trigger} = 'deadline')`.mapWith(Boolean);
   const rows = await db
-    .select({ repo: projectRepos, project: projects, courseId: classrooms.courseId, lastActivityAt, reviewAsked })
+    .select({ repo: projectRepos, project: projects, courseId: classrooms.courseId, reviewAsked })
     .from(projectRepos)
     .innerJoin(projects, eq(projects.id, projectRepos.projectId))
     .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
     .where(LIVE)
     .orderBy(asc(projects.id), asc(projectRepos.id));
-  return rows.filter((r) => reconciles(r.repo, r.reviewAsked, now) && (!quiet || isQuiet(r.lastActivityAt, now)));
+  return rows.filter((r) => reconciles(r.repo, r.reviewAsked, now)).map(({ reviewAsked: _asked, ...ctx }) => ctx);
 }
 
 /**
- * The fail-fast client of a project's organization, or null when Quiz's App
- * does not act on it — not installed, suspended, or gone without our
- * hearing of it (GitHub answers the token's request 404 or 403).
+ * The candidates QUIET for 30 minutes (`isQuiet`): nothing happened to them
+ * — the latest of their push receipts and of their runs' completion (GitHub's
+ * clock, never the row's `created_at`: the two clocks do not mix) is older
+ * than that, or there was none.
  */
-async function clientFor(db: Db, config: AppConfig, orgId: string): Promise<Octokit | null> {
-  const org = await projectInstallation(db, orgId);
-  if (!org) return null;
-  try {
-    return failFast((await installationClient(config, org.installationId)).octokit);
-  } catch (err) {
-    const status = githubStatus(err);
-    if (status !== 404 && status !== 403) throw err;
-    return null;
+async function quietCandidates(db: Db, now: Date): Promise<Candidate[]> {
+  const rows = await candidates(db, now);
+  if (rows.length === 0) return rows;
+  const ids = rows.map((r) => r.repo.id);
+  const latest = (column: typeof pushReceipts.receivedAt | typeof projectGradeRuns.completedAt) =>
+    sql<string | Date>`max(${column})`.mapWith((v: string | Date) => new Date(v));
+  const [receipts, runs] = await Promise.all([
+    db
+      .select({ id: projectRepos.id, at: latest(pushReceipts.receivedAt) })
+      .from(pushReceipts)
+      .innerJoin(projectRepos, eq(projectRepos.githubRepoId, pushReceipts.githubRepoId))
+      .where(inArray(projectRepos.id, ids))
+      .groupBy(projectRepos.id),
+    db
+      .select({ id: projectGradeRuns.repoId, at: latest(projectGradeRuns.completedAt) })
+      .from(projectGradeRuns)
+      .where(inArray(projectGradeRuns.repoId, ids))
+      .groupBy(projectGradeRuns.repoId),
+  ]);
+  const activity = new Map<string, Date>();
+  for (const { id, at } of [...receipts, ...runs]) {
+    const known = activity.get(id);
+    if (!known || known < at) activity.set(id, at);
   }
+  return rows.filter((r) => isQuiet(activity.get(r.repo.id) ?? null, now));
 }
 
 /**
@@ -171,32 +176,36 @@ async function locate(app: FastifyInstance, octokit: Octokit, ctx: Candidate, co
 }
 
 /**
- * One pass: every repository in scope located, then `settle`d, one
- * organization's client at a time; a rate limit stops it, any other failure
- * of a repository is logged. Audited `project.reconciled` when it changed
+ * One pass: the repositories `select` returns, located then `settle`d, with
+ * one fail-fast client per organization Quiz's App acts on
+ * (`installationClients`); a rate limit stops it, any other failure of a
+ * repository is logged. Audited `project.reconciled` when it changed
  * something or stopped; the summary is the task's last message.
  */
 async function pass(
   app: FastifyInstance,
   config: AppConfig,
   task: TaskKey,
-  quiet: boolean,
+  select: (db: Db, now: Date) => Promise<Candidate[]>,
   settle: (step: Step) => Promise<void>,
-  summary: (counts: Counts) => string,
+  summary: (repos: number, counts: Counts) => string,
 ): Promise<string> {
   if (!githubApp(config)) return "GitHub App not configured";
   const now = app.clock.now();
-  const counts: Counts = { repos: 0, runsIngested: 0, reinvited: 0, accepted: 0, heads: 0, renamed: 0, deleted: 0 };
-  const clients = new Map<string, Octokit | null>();
+  const rows = await select(app.db, now);
+  const clients = await installationClients(
+    app.db,
+    config,
+    rows.map((r) => r.project.orgId),
+  );
+  const counts: Counts = { runsIngested: 0, reinvited: 0, accepted: 0, heads: 0, renamed: 0, deleted: 0 };
+  let repos = 0;
   let stopped = false;
-  for (const ctx of await candidates(app.db, now, quiet)) {
-    let octokit = clients.get(ctx.project.orgId);
-    if (octokit === undefined) {
-      octokit = await clientFor(app.db, config, ctx.project.orgId);
-      clients.set(ctx.project.orgId, octokit);
-    }
-    if (octokit === null) continue;
-    counts.repos += 1;
+  for (const ctx of rows) {
+    const client = clients.get(ctx.project.orgId);
+    if (!client) continue;
+    const octokit = failFast(client);
+    repos += 1;
     try {
       const located = await locate(app, octokit, ctx, counts);
       if (located) await settle({ app, config, octokit, ctx, located, counts, now });
@@ -209,16 +218,16 @@ async function pass(
       app.log.warn({ err, task, repo: ctx.repo.fullName }, "reconciliation: a repository failed");
     }
   }
-  if (stopped || Object.entries(counts).some(([key, n]) => key !== "repos" && n > 0)) {
+  if (stopped || Object.values(counts).some((n) => n > 0)) {
     await audit(app.db, {
       ...SYSTEM_ACTOR,
       action: "project.reconciled",
       subjectType: "scheduled_task",
       subjectId: task,
-      payload: { ...counts, stoppedOnRateLimit: stopped },
+      payload: { repos, ...counts, stoppedOnRateLimit: stopped },
     });
   }
-  return summary(counts) + (stopped ? ", stopped on GitHub's rate limit" : "");
+  return summary(repos, counts) + (stopped ? ", stopped on GitHub's rate limit" : "");
 }
 
 // ---------------------------------------------------------------- reconcile.grades
@@ -239,7 +248,7 @@ async function ingestRuns({ app, config, octokit, ctx, located, counts, now }: S
 
 /** `reconcile.grades`: the runs of the quiet repositories in scope. */
 export function reconcileGrades(app: FastifyInstance, config: AppConfig): Promise<string> {
-  return pass(app, config, "reconcile.grades", true, ingestRuns, (c) => `${c.repos} quiet repositories checked, ${c.runsIngested} runs ingested`);
+  return pass(app, config, "reconcile.grades", quietCandidates, ingestRuns, (repos, c) => `${repos} quiet repositories checked, ${c.runsIngested} runs ingested`);
 }
 
 // ---------------------------------------------------------------- reconcile.repos
@@ -327,14 +336,24 @@ async function reconcileInvitation({ app, octokit, ctx, located, counts, now }: 
   }
 }
 
+/** A GitHub account on a commit, as the API attaches it: a user named, or nobody (null, or an empty object: an e-mail GitHub knows no account for). */
+type CommitAccount = { login?: string; type?: string } | null | undefined;
+
+/** A person's account: named, a `User` (never a `Bot`), and neither Quiz's App nor a workflow (`pushedBy`). */
+function isPerson(config: AppConfig, account: CommitAccount): boolean {
+  if (typeof account?.login !== "string") return false;
+  return (account.type === undefined || account.type === "User") && pushedBy(config, account.login) === "person";
+}
+
 /**
  * The default branch's head as the student's last commit (F-PROJ-10): moved
  * only when the head is a person's — not recorded as a bot commit, its
- * author and committer named by GitHub and neither Quiz's App nor a
- * workflow — and then its CI state read again. The reconciliation knows no
- * pusher, so a head GitHub attributes to nobody (the App's own commits
- * carry no account) never moves it: no pusher means no head move. No
- * receipt is written: the receipt is the intake's (ADR-012).
+ * author AND its committer both named by GitHub and both persons — and then
+ * its CI state read again. The reconciliation knows no pusher, so a head
+ * GitHub attributes to nobody, or only half (the App's own commits carry no
+ * account; one it made with a person's authorship has none as committer),
+ * never moves it: no pusher means no head move. No receipt is written: the
+ * receipt is the intake's (ADR-012).
  */
 async function refreshHead({ app, config, octokit, ctx, located, counts, now }: Step): Promise<void> {
   const db = app.db;
@@ -354,14 +373,8 @@ async function refreshHead({ app, config, octokit, ctx, located, counts, now }: 
     .from(botCommits)
     .where(and(eq(botCommits.repoId, ctx.repo.id), eq(botCommits.sha, head.sha)))
     .limit(1);
-  const logins = [head.author?.login, head.committer?.login].filter((login): login is string => typeof login === "string");
-  if (bot || logins.length === 0 || logins.some((login) => pushedBy(config, login) !== "person")) return;
-  const date = head.commit.committer?.date ?? head.commit.author?.date;
-  const at = date ? new Date(date) : now;
-  await db
-    .update(projectRepos)
-    .set({ lastCommitSha: head.sha, lastCommitAt: Number.isNaN(at.getTime()) ? now : at })
-    .where(eq(projectRepos.id, ctx.repo.id));
+  if (bot || !isPerson(config, head.author) || !isPerson(config, head.committer)) return;
+  await moveLastCommit(db, ctx.repo.id, head.sha, head.commit.committer?.date ?? head.commit.author?.date, now);
   counts.heads += 1;
   try {
     const ciStatus = await aggregateCiStatus(octokit, located.fullName, head.sha);
@@ -386,10 +399,10 @@ export function reconcileRepos(app: FastifyInstance, config: AppConfig): Promise
     app,
     config,
     "reconcile.repos",
-    false,
+    candidates,
     refreshRepo,
-    (c) =>
-      `${c.repos} repositories checked, ${c.reinvited} re-invited, ${c.accepted} invitations accepted, ${c.heads} heads moved, ${c.renamed} renamed, ${c.deleted} deleted`,
+    (repos, c) =>
+      `${repos} repositories checked, ${c.reinvited} re-invited, ${c.accepted} invitations accepted, ${c.heads} heads moved, ${c.renamed} renamed, ${c.deleted} deleted`,
   );
 }
 

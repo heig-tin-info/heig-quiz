@@ -97,7 +97,10 @@ export const HTTP_READ: ReadOptions = { noRateLimitWait: true };
  * exhausted stops the pass — the next period resumes it — instead of
  * waiting up to an hour inside the task. The same instance underneath (its
  * hooks, its token); only `request` carries the option, so a helper handed
- * this client passes it on without knowing.
+ * this client passes it on without knowing. Known limit: `paginate`,
+ * `rest.*` and `graphql` stay bound to the original instance and do not
+ * inherit it — no reconciliation helper uses them; one that would must take
+ * `request` directly.
  */
 export function failFast(octokit: Octokit): Octokit {
   return Object.create(octokit, { request: { value: octokit.request.defaults({ request: HTTP_READ }) } }) as Octokit;

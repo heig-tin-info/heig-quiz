@@ -38,7 +38,7 @@ import { forgetRepoLiveState } from "../../github/metrics.js";
 import { onEvent, onReceipt, projectInstallation, pushedBy, type WebhookHandler } from "../github/service.js";
 import { completedRun, ingestCompletedRun, isEligible, isLastStudentCommit, RawWorkflowRun } from "./grading.js";
 import { protectFiles } from "./protection.js";
-import { followRepoRename, hintRepo, markRepoDeleted, repoContext, tracksRepo } from "./repos.js";
+import { followRepoRename, hintRepo, markRepoDeleted, moveLastCommit, repoContext, tracksRepo } from "./repos.js";
 
 const BRANCH_REF = /^refs\/heads\/(.+)$/;
 
@@ -84,11 +84,7 @@ const push: WebhookHandler = async (app, config, delivery) => {
   if (by === "workflow") {
     await app.db.insert(botCommits).values({ repoId: ctx.repo.id, sha: after, kind: "grader" }).onConflictDoNothing();
   } else if (by === "person") {
-    const at = head_commit?.timestamp ? new Date(head_commit.timestamp) : delivery.receivedAt;
-    await app.db
-      .update(projectRepos)
-      .set({ lastCommitSha: after, lastCommitAt: Number.isNaN(at.getTime()) ? delivery.receivedAt : at })
-      .where(eq(projectRepos.id, ctx.repo.id));
+    await moveLastCommit(app.db, ctx.repo.id, after, head_commit?.timestamp, delivery.receivedAt);
   }
   if (by !== "app") {
     await protectFiles(app, config, ctx, { branch, before, after, forced: forced ?? false, commits: commits ?? [] });

@@ -135,6 +135,20 @@ export async function markRepoDeleted(
 }
 
 /**
+ * The student's last commit (F-PROJ-10): `sha`, at the commit's own time
+ * `at` (an ISO string GitHub gave) or, when it gave none or an unreadable
+ * one, `fallback` — the delivery's receipt, or the reconciliation's clock.
+ * The push webhook's write and the reconciliation's (M3-06).
+ */
+export async function moveLastCommit(db: Db, repoId: string, sha: string, at: string | null | undefined, fallback: Date): Promise<void> {
+  const date = at ? new Date(at) : fallback;
+  await db
+    .update(projectRepos)
+    .set({ lastCommitSha: sha, lastCommitAt: Number.isNaN(date.getTime()) ? fallback : date })
+    .where(eq(projectRepos.id, repoId));
+}
+
+/**
  * A repository renamed on GitHub (F-PROJ-18), followed by its immutable id:
  * the stored names — a student's repository, and a project's source or
  * distribution repository, which the restores and the sync read by name —

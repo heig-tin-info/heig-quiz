@@ -1206,8 +1206,12 @@ under the half that serves them.
     `pass` for both: the live repositories in scope (`reconciles` and
     `isQuiet` of `@quiz/domain` `projectReconcile.ts`: 24 h after the
     freeze unless a `deadline` dispatch is unanswered; quiet 30 min for
-    the grades), one fail-fast installation client per organization
-    (`failFast` in `github/app.ts`: `noRateLimitWait` on every request),
+    the grades, computed for that pass only), the installation clients of
+    the candidates' organizations through `installationClients`
+    (`access.ts`, now exported: the one rule of "the App is not on this
+    organization"), each wrapped by `failFast` (`github/app.ts`:
+    `noRateLimitWait` on every `request`; `paginate`, `rest.*` and
+    `graphql` do not inherit it and no helper here uses them),
     each repository located by `GET /repositories/{id}` — a 404 there ⇒
     `markRepoDeleted(…, "reconcile")`; a new name ⇒ `followRepoRename`
     (`repos.ts`, extracted from the `repository.renamed` handler, which
@@ -1233,8 +1237,9 @@ under the half that serves them.
     204 ⇒ `accepted`). Group repositories: head and runs like any row,
     invitations untouched (ADR-070, M3-15b). The default branch's head
     (`GET …/commits?sha=<default>&per_page=1`) moves `last_commit_sha` and
-    `last_commit_at` only when not in `bot_commits` and its author and
-    committer are both named and persons (`pushedBy`); then
+    `last_commit_at` (`moveLastCommit` of `repos.ts`, the push webhook's
+    write too) only when not in `bot_commits` and its author AND committer
+    are both named, both `User` and both persons (`pushedBy`); then
     `aggregateCiStatus` (exported from `grading.ts`). No receipt, no
     `protectFiles`.
   - **Migration** `0069_project_reconcile` (`invitation_reinvited_at`;

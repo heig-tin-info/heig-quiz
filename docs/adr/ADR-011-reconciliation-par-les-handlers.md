@@ -97,9 +97,13 @@ pure rule is `reconciles` and `isQuiet` of `@quiz/domain`):
    only when it is a person's: not recorded in `bot_commits`, and its
    author and committer both named by GitHub and neither Quiz's App nor a
    workflow. A head GitHub attributes to nobody (the App's own commits
-   carry no account) never moves it. The reconciliation writes no push
-   receipt (the intake's alone, ADR-012) and restores no protected file
-   (the push webhook's).
+   carry no account), or only half (an author named, a committer not),
+   never moves it. The product consequence: a student's commit whose
+   author and committer e-mails are not linked to a GitHub account is
+   never recovered by the reconciliation; only its push webhook (whose
+   sender names the student), or a later attributed commit, moves the
+   head. The reconciliation writes no push receipt (the intake's alone,
+   ADR-012) and restores no protected file (the push webhook's).
 4. **The daily re-invite** (F-PROJ-07) is claimed on the row
    (`project_repos.invitation_reinvited_at`, at most once a day) before
    GitHub is called, for a student's own repository whose invitation is
