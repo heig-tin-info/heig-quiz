@@ -119,13 +119,19 @@ interface MockProject {
   read: boolean;
 }
 
+/**
+ * The group project's id: a uuid, as the refusals naming the projects of a
+ * set parse them (`GroupRefusalProjects`).
+ */
+const PJ_GROUP = "0190d3c4-0000-7000-8000-0000000000b4";
+
 const SEEDS: { id: string; title: string; state: ProjectSummary["state"]; start: number; deadline: number }[] = [
   { id: "pj-draft", title: "Labo 3 — listes chaînées", state: "draft", start: 7 * D, deadline: 21 * D },
   { id: "pj-published", title: "Labo 2 — pointeurs", state: "published", start: -7 * D, deadline: 7 * D },
   { id: "pj-locked", title: "Labo 1 — premiers pas en C", state: "locked", start: -35 * D, deadline: -7 * D },
   // `?groups=1`: a group project following PRG1-2026's pairs.
   ...(flags.groups
-    ? [{ id: "pj-group", title: "Labo 4 — en binômes", state: "draft" as const, start: 14 * D, deadline: 28 * D }]
+    ? [{ id: PJ_GROUP, title: "Labo 4 — en binômes", state: "draft" as const, start: 14 * D, deadline: 28 * D }]
     : []),
 ];
 
@@ -426,7 +432,7 @@ function seeded(): MockProject[] {
     summary.editable = editableProjectFields({ state: summary.state, deadlineAt: new Date(summary.deadlineAt) }, new Date(now));
     // `?groups=1`: the draft is a group project with no set yet; the second one follows the pairs.
     if (flags.groups && seed.id === "pj-draft") summary.groupMode = true;
-    if (seed.id === "pj-group") Object.assign(summary, { groupMode: true, groupSetId: SET_PAIRS });
+    if (seed.id === PJ_GROUP) Object.assign(summary, { groupMode: true, groupSetId: SET_PAIRS });
     const project: MockProject = {
       summary,
       classroom: { id: room.id, name: room.name, courseCode: course?.code ?? "" },
@@ -507,7 +513,6 @@ function projectOr404(id: string): MockProject {
   if (role === "student" || !p) throw new MockError(404, "Not found");
   return p;
 }
-
 
 /** A live repository: provisioned, not deleted, its project not archived (`LIVE` of `deadline.ts`). */
 const isLive = (p: MockProject, r: MockRepo) => r.provisionStatus === "ok" && !r.deleted && p.summary.archivedAt === null;

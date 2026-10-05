@@ -7,7 +7,6 @@ import { refusedWith } from "../api";
 import { AppLink } from "../AppLink";
 import { useClassroomGroupSets } from "../group/api";
 import { GroupSetPicker, setLabel } from "../group/GroupSetPicker";
-import { textLink } from "../group/parts";
 import { useT } from "../i18n";
 import { classroomGroupSetsKey } from "../queryKeys";
 import type { Navigate } from "../router";
@@ -19,7 +18,7 @@ import { groupSetPageOf, refusalMessage } from "./projectPage";
  * The group set a group project follows (ADR-070 §4, §7; M3-16a): a
  * draft chooses it here (`PATCH groupSetId`), so a draft made without one,
  * or whose set was deleted, can be fixed; once published it is said, with
- * a link to the set's page that comes back here (`?from=project:<id>`),
+ * a link to the set's page that comes back here (`?fromProject=<id>`),
  * and whether its groups still follow the set or stopped at the deadline.
  * The drift of a stopped copy and *Resync* are M3-16b's.
  */
@@ -76,7 +75,7 @@ export function ProjectGroupSet({
             <AppLink
               route={setPage}
               navigate={navigate}
-              className={`${textLink} font-medium text-fg underline decoration-line-strong`}
+              className="font-medium text-fg underline decoration-line-strong underline-offset-2"
             >
               {editable ? t("project.groupSet.open") : setLabel(set, t)}
             </AppLink>

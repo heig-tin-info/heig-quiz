@@ -4,7 +4,6 @@ import { useState } from "react";
 
 import {
   GroupMaxSize,
-  GroupRename,
   type ClassroomDetail,
   type GroupRandomForm,
   type GroupSetDetail,
@@ -34,12 +33,22 @@ import {
   ParentLink,
   QueryError,
   Skeleton,
+  textLink,
   type MenuItem,
 } from "../ui";
 import { setWrite, useGroupSet, useGroupSetWrites } from "./api";
 import { GroupBoard } from "./GroupBoard";
-import { gone, groupRefusalMessage, placeOf, setInUseProjects, studentName, studentOf, withMove } from "./groupRules";
-import { SetUses, textLink } from "./parts";
+import {
+  gone,
+  groupRefusalMessage,
+  placeOf,
+  projectsRefusal,
+  studentName,
+  studentOf,
+  withMove,
+  type ProjectsRefusal,
+} from "./groupRules";
+import { SetUses } from "./parts";
 import { RandomFormDialog } from "./RandomFormDialog";
 
 /**
@@ -68,8 +77,12 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
   const [project] = useSearchParam("fromProject", "");
   const [randomOpen, setRandomOpen] = useState(false);
   const [maxOpen, setMaxOpen] = useState(false);
-  /** The projects that refused the deletion (`409 set_in_use`), said above the board. */
-  const [inUse, setInUse] = useState<{ id: string; name: string }[] | null>(null);
+  /**
+   * A refusal over projects — the deletion of a set they name (`set_in_use`),
+   * a write reaching a group that has a repository (`has_repo`) — said
+   * above the board with the projects as links.
+   */
+  const [blocked, setBlocked] = useState<ProjectsRefusal | null>(null);
 
   const set = useGroupSet(id);
   const room = useQuery<ClassroomDetail>({
@@ -77,7 +90,11 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
     queryFn: () => api(`/app/api/classrooms/${classroomId}`),
   });
   const write = useGroupSetWrites(id);
-  const failed = (error: unknown) => toast(groupRefusalMessage(error, t), "error");
+  const failed = (error: unknown) => {
+    const refusal = projectsRefusal(error);
+    if (refusal) setBlocked(refusal);
+    else toast(groupRefusalMessage(error, t), "error");
+  };
 
   /** A student into `groupId` (`null`: no group), drawn at once. */
   const place = (enrollmentId: string, groupId: string | null) =>
@@ -85,9 +102,7 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
 
   /** The reverse of a move (ADR-070 §6): offers no Undo of its own; a 404 is a group gone since. */
   const undoMove = (enrollmentId: string, groupId: string | null) =>
-    place(enrollmentId, groupId).catch((error: unknown) =>
-      toast(gone(error) ? t("groups.undoFailed") : groupRefusalMessage(error, t), "error"),
-    );
+    place(enrollmentId, groupId).catch((error: unknown) => (gone(error) ? toast(t("groups.undoFailed"), "error") : failed(error)));
 
   /** A move, said in a toast that offers to undo it — the latest move only. */
   const move = (enrollmentId: string, groupId: string | null) => {
@@ -126,11 +141,7 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
       toast(t("groups.deleted"), "success");
       navigate({ view: "classroomGroups", id: classroomId });
     },
-    onError: (error) => {
-      const projects = setInUseProjects(error);
-      if (projects) setInUse(projects);
-      else failed(error);
-    },
+    onError: failed,
   });
 
   if (set.isLoading) return <PageSkeleton />;
@@ -170,17 +181,17 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
     }
   };
   const onRenameGroup = async (groupId: string, name: string): Promise<string | null> => {
-    const body = GroupRename.safeParse({ name });
-    if (!body.success) return t("groups.name.invalid");
+    const request = setWrite.renameGroup(groupId, name);
+    if (!request) return t("groups.name.invalid");
     try {
-      await write(setWrite.renameGroup(groupId, body.data));
+      await write(request);
       return null;
     } catch (error) {
       return groupRefusalMessage(error, t);
     }
   };
   const onDeleteSet = async () => {
-    setInUse(null);
+    setBlocked(null);
     if (
       await confirm({
         title: t("groups.deleteConfirm.title", { name: detail.set.name }),
@@ -262,11 +273,15 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
       {readOnly ? (
         <Alert tone="neutral" icon={Archive} title={t("groups.refusal.classroomArchived")} />
       ) : null}
-      {inUse ? (
-        <Alert tone="danger" icon={TriangleAlert} title={t("groups.inUse.title")}>
-          <p>{t("groups.inUse.body")}</p>
+      {blocked ? (
+        <Alert
+          tone="danger"
+          icon={TriangleAlert}
+          title={t(blocked.code === "set_in_use" ? "groups.inUse.title" : "groups.refusal.hasRepo")}
+        >
+          <p>{t(blocked.code === "set_in_use" ? "groups.inUse.body" : "groups.hasRepo.body")}</p>
           <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-            {inUse.map((p) => (
+            {blocked.projects.map((p) => (
               <li key={p.id}>
                 <AppLink route={{ view: "project", id: p.id }} navigate={navigate} className={`${textLink} font-medium text-fg`}>
                   {p.name}

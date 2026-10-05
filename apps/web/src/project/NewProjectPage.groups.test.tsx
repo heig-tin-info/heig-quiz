@@ -7,15 +7,13 @@ import type { ProjectSourceDetail, ProjectSourceRepo, ProjectSummary } from "@qu
 import { makeSet, makeSummary, SET_ID } from "../test/group-fixtures";
 import { fail, makeQueryClient, mockFetch, ok, renderWithProviders, type RouteHandler } from "../test/render";
 
+import { NewProjectPage } from "./NewProjectPage";
+
 /*
- * The new project's group work (ADR-070 §7, M3-16a), with group mode
- * offered: until M3-15b-1 merges it is, only where `CLASSROOM_PAGES` is on
- * (`GROUPS_OFFERED`), so the flag is stubbed before the form is imported.
- * The classroom's sets, "Create new groups" that makes one and picks it, the
- * set sent in group mode only, and a set deleted under the form.
+ * The new project's group work (ADR-070 §7, M3-16a): the classroom's sets,
+ * "Create new groups" that makes one and picks it, the set sent in group
+ * mode only, and a set deleted under the form.
  */
-vi.stubEnv("VITE_CLASSROOM_PAGES", "1");
-const { NewProjectPage } = await import("./NewProjectPage");
 
 const ROOM = "r1";
 const BASE = `/app/api/classrooms/${ROOM}`;

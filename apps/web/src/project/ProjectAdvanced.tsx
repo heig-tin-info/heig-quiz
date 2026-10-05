@@ -4,7 +4,6 @@ import type { ProjectSourceDetail } from "@quiz/contracts";
 
 import { GroupSetPicker } from "../group/GroupSetPicker";
 import { useT } from "../i18n";
-import { CLASSROOM_PAGES } from "../router";
 import {
   Card,
   cx,
@@ -19,16 +18,6 @@ import {
 } from "../ui";
 import { chosenBranches, chosenProtected, FIELD_ID, type ProjectDraft, type ProjectField } from "./newProject";
 import { ProtectedFiles } from "./ProtectedFiles";
-
-/**
- * Whether the form offers group mode (ADR-070 §7). The groups' pages ship
- * with M3-16a, but Accept answers `409 no_group` for any group project until
- * the group repositories do (M3-15b-1): until then the mode is offered where
- * `CLASSROOM_PAGES` is on — the browser mock, or a build made with
- * `VITE_CLASSROOM_PAGES=1`; staging runs the production image, so not
- * there. THE switch to flip to `true` once M3-15b-1 is merged.
- */
-export const GROUPS_OFFERED: boolean = CLASSROOM_PAGES;
 
 /** A setting whose control is a list, laid under its title rather than beside it. */
 function StackedRow({ title, desc, children }: { title: ReactNode; desc?: ReactNode; children: ReactNode }) {
@@ -249,13 +238,14 @@ export function ProjectAdvanced({
       ) : null}
 
       {/* Group work (ADR-070 §7): the classroom's group sets, or a new one.
-          The set's maximum size replaced the project's (ADR-070 §2). */}
-      {GROUPS_OFFERED ? (
-        <SettingRow title={t("project.groups")} desc={t("project.groups.desc")}>
-          <Switch checked={draft.groupMode} label={t("project.groups")} onChange={(groupMode) => update({ groupMode })} />
-        </SettingRow>
-      ) : null}
-      {GROUPS_OFFERED && draft.groupMode ? (
+          The set's maximum size replaced the project's (ADR-070 §2). Offered
+          in every build since Accept provisions group repositories
+          (M3-15b-1); a membership change reaching one answers `409
+          has_repo` until M3-15b-2. */}
+      <SettingRow title={t("project.groups")} desc={t("project.groups.desc")}>
+        <Switch checked={draft.groupMode} label={t("project.groups")} onChange={(groupMode) => update({ groupMode })} />
+      </SettingRow>
+      {draft.groupMode ? (
         <StackedRow title={t("project.groupSet")} desc={t("project.groupSet.desc")}>
           <GroupSetPicker
             id={FIELD_ID.groupSet}

@@ -5,19 +5,19 @@ import { useState } from "react";
 import type { ClassroomDetail, ProjectDetail, ProjectPatch, ProjectReleaseResult, ProjectSummary } from "@quiz/contracts";
 
 import { api, ApiError, refusedWith } from "../api";
+import { AppLink } from "../AppLink";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { activitiesKey, classroomGroupSetsKey, classroomKey, classroomProjectsKey, projectKey } from "../queryKeys";
-import { AppLink } from "../AppLink";
 import type { Navigate } from "../router";
 import {
   Alert,
   Badge,
   Button,
+  buttonClass,
   EditableTitle,
   isoDateTime,
-  buttonClass,
   Menu,
   PageError,
   PageHeader,
@@ -238,7 +238,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   ];
 
   const status = projectStatus(project);
-  /** The set's page, coming back here (`?from=`): where the students in no group are placed. */
+  /** The set's page, coming back here (`?fromProject=<id>`): where the students in no group are placed. */
   const setPage = groupSetPageOf(project);
   const counts = [
     t("project.counts.students", { n: project.counts.students }),

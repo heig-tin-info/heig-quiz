@@ -4108,6 +4108,7 @@ export const en = {
   "groups.refusal.nobodyToPlace": "Everyone is already in a group.",
   "groups.refusal.sizeOutOfRange": "Choose a size from 1 to {max}.",
   "groups.gone": "This group or student is no longer in the set. The set is shown as it now stands.",
+  "groups.hasRepo.body": "The group's repository belongs to these projects:",
   "groups.refusal.hasRepo": "This group already has a repository: its members cannot change yet.",
   "project.groups.desc": "The students work in the groups of a group set, one repository per group.",
   "project.groupSet": "Group set",

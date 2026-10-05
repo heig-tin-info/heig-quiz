@@ -78,11 +78,11 @@ type SetWrite =
 export const setWrite = {
   patch: (body: GroupSetPatch): SetWrite => ({ method: "PATCH", path: "", body: GroupSetPatch.parse(body) }),
   addGroup: (): SetWrite => ({ method: "POST", path: "/groups", body: GroupCreate.parse({}) }),
-  renameGroup: (groupId: string, body: GroupRename): SetWrite => ({
-    method: "PATCH",
-    path: `/groups/${groupId}`,
-    body: GroupRename.parse(body),
-  }),
+  /** Null when the name is no name (no letter nor digit): the caller says so. */
+  renameGroup: (groupId: string, name: string): SetWrite | null => {
+    const body = GroupRename.safeParse({ name });
+    return body.success ? { method: "PATCH", path: `/groups/${groupId}`, body: body.data } : null;
+  },
   deleteGroup: (groupId: string): SetWrite => ({ method: "DELETE", path: `/groups/${groupId}` }),
   place: (enrollmentId: string, groupId: string | null): SetWrite => ({
     method: "PUT",

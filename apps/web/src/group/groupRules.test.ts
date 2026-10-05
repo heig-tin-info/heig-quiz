@@ -12,7 +12,7 @@ import {
   groupRefusalMessage,
   overMax,
   placeOf,
-  setInUseProjects,
+  projectsRefusal,
   sizesSummary,
   stepZone,
   withMove,
@@ -80,10 +80,12 @@ describe("the refusals, worded in both languages", () => {
     expect(groupRefusalMessage(new ApiError(500, { message: "boom" }), tr(en) as never)).toBe(en["error.save"]);
   });
 
-  it("reads the projects of a set_in_use, and a 404 as an Undo whose group is gone", () => {
-    const inUse = new ApiError(409, { error: "set_in_use", message: "x", projects: [{ id: "p1", name: "Labo 4" }] });
-    expect(setInUseProjects(inUse)).toEqual([{ id: "p1", name: "Labo 4" }]);
-    expect(setInUseProjects(new ApiError(409, { error: "duplicate_name" }))).toBeNull();
+  it("reads the projects of set_in_use and has_repo (GroupRefusalProjects), and a 404 as an Undo whose group is gone", () => {
+    const projects = [{ id: "0190d3c4-0000-7000-8000-0000000000b4", name: "Labo 4" }];
+    for (const code of ["set_in_use", "has_repo"] as const) {
+      expect(projectsRefusal(new ApiError(409, { error: code, message: "x", projects }))).toEqual({ code, projects });
+    }
+    expect(projectsRefusal(new ApiError(409, { error: "duplicate_name" }))).toBeNull();
     expect(gone(new ApiError(404, { message: "Not found" }))).toBe(true);
     expect(gone(new ApiError(409, { error: "classroom_archived" }))).toBe(false);
   });

@@ -2405,7 +2405,7 @@ serves now (16a), and what waits for the group repositories (16b).
   a set's page: the students in no group and the groups, drag and drop
   with a keyboard equivalent, *Undo* for a move (none reaches GitHub
   before M3-15b), the random formation (size, smaller / larger); the
-  project form's group work (`GROUPS_OFFERED`) with the classroom's sets
+  project form's group work with the classroom's sets
   and *Create new groups*; a draft's set chosen on its page, the set a
   group project follows shown there. Read `apps/web/DESIGN.md` and the
   `quiz-ui` skill first.
@@ -2414,10 +2414,10 @@ serves now (16a), and what waits for the group repositories (16b).
   `t()`, in `en.ts` and `fr.ts`, like the others of `PROJECT_REFUSALS`;
   the hint kind `groups` names its query roots in `realtime/hints.ts`.
 - **Decided for it** (orchestrator, 2026-10-05): (1) the Groups tab and
-  the set's page ship to production; the form's group mode is offered only
-  where `CLASSROOM_PAGES` is on (the browser mock; staging runs the
-  production image, so not there) until M3-15b-1 merges (Accept answers
-  `409 no_group` today); (2) the routes are `/classrooms/:id/groups` (a
+  the set's page ship to production; the form's group mode was to wait
+  for M3-15b-1 (Accept answered `409 no_group`), which merged first: it is
+  offered in every build, a membership change reaching a group repository
+  answering `409 has_repo` until M3-15b-2 (orchestrator, 2026-10-05); (2) the routes are `/classrooms/:id/groups` (a
   route tab) and `/classrooms/:id/groups/:setId`, staff only, and
   `/projects/:id/groups` goes; (3) one primary on the set's page, *Form at
   random*, none once everyone is placed; (4) `@dnd-kit` after the
@@ -2439,10 +2439,9 @@ serves now (16a), and what waits for the group repositories (16b).
     set from the latest answer once the queue is empty, rolled back to the
     last answer and read again when it ends on an error); `groupRules.ts` (pure:
     `placeOf`, `withMove`, `sizesSummary` on `groupSizes`, the refusals'
-    words — a 404 "no longer in the set", never the server's English;
-    `groups.refusal.hasRepo` worded ahead of M3-15b-1, wired after the
-    rebase (TODO) —, `set_in_use`'s projects read with a local schema
-    until the contract's `GroupRefusalProjects` (TODO), `stepZone`); `GroupSetList`,
+    words — a 404 "no longer in the set", never the server's English —,
+    `projectsRefusal`: `set_in_use` and `has_repo` with their projects
+    (`GroupRefusalProjects`), said above the board as links, `stepZone`); `GroupSetList`,
     `GroupSetPage` (name renamed in place, *New group*, menu: maximum
     size, duplicate, delete), `GroupBoard` (pointer and keyboard drag,
     the keyboard walking the zones in reading order; click
@@ -2458,8 +2457,7 @@ serves now (16a), and what waits for the group repositories (16b).
     `classroomGroupSetsKey`, `groupSetKey`), named by the hints `groups`,
     `roster`, `projects` and `classrooms` (an archive turns an open set
     read-only).
-  - **Projects**: `GROUPS_OFFERED = CLASSROOM_PAGES` in
-    `ProjectAdvanced.tsx`, THE switch to flip once M3-15b-1 is merged; the
+  - **Projects**: the form's group mode in every build (no gate left); the
     draft's `groupSetId`, sent in group mode only; `unknown_group_set`
     under the picker, the choice cleared. `ProjectGroupSet` on the page:
     a draft's picker (`PATCH groupSetId`, its refusal under it), the set's
@@ -2480,8 +2478,8 @@ serves now (16a), and what waits for the group repositories (16b).
   `409 needs_confirmation` dialog of a membership write that reaches
   GitHub (ADR-070 §6), naming the consequences and sending the digest
   back, through the set's write queue; the *access to revoke* flag on a
-  repository's row; `GROUPS_OFFERED` turned on everywhere (if M3-15b-1
-  has not done it).
+  repository's row; `409 has_repo` (M3-16a's alert) giving way to the
+  confirmation.
 
 ### M3-17 — Groups formed by the students (ADR-070 lot 2)
 - **Depends on**: M3-15a, M3-16, M3-09.

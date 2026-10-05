@@ -3,10 +3,7 @@ import type { GroupSetUse } from "@quiz/contracts";
 import { AppLink } from "../AppLink";
 import { useT } from "../i18n";
 import type { Navigate } from "../router";
-import { Badge } from "../ui";
-
-/** A link in running text: the parent's ink until hovered, then `fg` and an underline. */
-export const textLink = "underline-offset-2 transition-colors hover:text-fg hover:underline";
+import { Badge, textLink } from "../ui";
 
 /**
  * The projects that name a set (ADR-070 §4), each a link to its page: an

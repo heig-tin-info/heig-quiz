@@ -4,12 +4,10 @@
  * random formation would make. `GroupSetPage.tsx` and `GroupBoard.tsx`
  * draw them.
  */
-import { z } from "zod";
-
-import { GroupErrorCode, type GroupRemainder, type GroupSetDetail, type GroupStudent } from "@quiz/contracts";
+import { GroupErrorCode, GroupRefusalProjects, type GroupRemainder, type GroupSetDetail, type GroupStudent } from "@quiz/contracts";
 import { groupSizes } from "@quiz/domain";
 
-import { ApiError, refusalCodeOf, refusedWith } from "../api";
+import { ApiError, refusalCodeOf } from "../api";
 import type { Dict, TFunction } from "../i18n";
 
 /** A student as the board writes them: family name first, like the roster and the project page. */
@@ -85,8 +83,7 @@ const REFUSAL_KEY: Record<GroupErrorCode, keyof Dict> = {
   duplicate_name: "groups.refusal.duplicateName",
   nobody_to_place: "groups.refusal.nobodyToPlace",
   size_out_of_range: "groups.refusal.sizeOutOfRange",
-  // TODO(M3-15b-1): `has_repo` joins `GROUP_REFUSALS` there; once rebased:
-  // has_repo: "groups.refusal.hasRepo",
+  has_repo: "groups.refusal.hasRepo",
 };
 
 /** A group, a student or a set out of reach: the 404 of a missing one (another teacher deleted it, say). */
@@ -107,16 +104,18 @@ export function groupRefusalMessage(error: unknown, t: TFunction): string {
   return t(gone(error) ? "groups.gone" : "error.save");
 }
 
-/**
- * The `409 set_in_use` body (`modules/group/errors.ts`): the projects that
- * are not archived and name the set. Read here, where it is worded.
- * TODO(M3-15b-1): parse it with the contract's `GroupRefusalProjects` once
- * rebased on it.
- */
-const SetInUseBody = z.object({ projects: z.array(z.object({ id: z.string(), name: z.string() })) });
+/** The refusals that name every project concerned (`GroupRefusalProjects`). */
+export type ProjectsRefusal = { code: "set_in_use" | "has_repo"; projects: GroupRefusalProjects["projects"] };
 
-export function setInUseProjects(error: unknown): { id: string; name: string }[] | null {
-  if (!refusedWith(error, "set_in_use") || !(error instanceof ApiError)) return null;
-  const parsed = SetInUseBody.safeParse(error.body);
-  return parsed.success ? parsed.data.projects : [];
+/**
+ * `409 set_in_use` (the projects that are not archived and name the set)
+ * and `409 has_repo` (the following projects whose copy's group already
+ * has a repository, M3-15b-1), with their projects; null for anything
+ * else.
+ */
+export function projectsRefusal(error: unknown): ProjectsRefusal | null {
+  const code = refusalCodeOf(error);
+  if ((code !== "set_in_use" && code !== "has_repo") || !(error instanceof ApiError)) return null;
+  const parsed = GroupRefusalProjects.safeParse(error.body);
+  return { code, projects: parsed.success ? parsed.data.projects : [] };
 }

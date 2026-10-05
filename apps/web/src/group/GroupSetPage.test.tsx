@@ -17,6 +17,9 @@ import { withMove } from "./groupRules";
  * the archived classroom's read-only set, and the French of it.
  */
 
+/** A project naming the set: a uuid, as `GroupRefusalProjects` parses it. */
+const PROJECT = "0190d3c4-0000-7000-8000-0000000000b4";
+
 function routes(set: GroupSetDetail | RouteHandler, extra: Record<string, RouteHandler> = {}) {
   return mockFetch({
     [`GET ${SET_BASE}`]: typeof set === "function" || "status" in set ? (set as RouteHandler) : ok(set),
@@ -221,7 +224,7 @@ describe("the groups and the set", () => {
       [`DELETE ${SET_BASE}`]: fail(409, {
         error: "set_in_use",
         message: "1 project(s)",
-        projects: [{ id: "p-1", name: "Labo 4 — en binômes" }],
+        projects: [{ id: PROJECT, name: "Labo 4 — en binômes" }],
       }),
     });
     const { navigate } = renderPage();
@@ -230,7 +233,25 @@ describe("the groups and the set", () => {
     await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
     expect(await screen.findByText("This group set is in use")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("link", { name: "Labo 4 — en binômes" }));
-    expect(navigate).toHaveBeenCalledWith({ view: "project", id: "p-1" });
+    expect(navigate).toHaveBeenCalledWith({ view: "project", id: PROJECT });
+  });
+
+  it("names the projects whose group repository refuses a move (has_repo), and puts the student back", async () => {
+    routes(makeSet(), {
+      [`PUT ${SET_BASE}/members/${student(0).enrollmentId}`]: fail(409, {
+        error: "has_repo",
+        message: "1 project(s)",
+        projects: [{ id: PROJECT, name: "Labo 4 — en binômes" }],
+      }),
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Move Dupont Alice to…" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "No group" }));
+    expect(await screen.findByText("This group already has a repository: its members cannot change yet.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Labo 4 — en binômes" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(within(screen.getByRole("listitem", { name: "Groupe 1" })).getByText("Dupont Alice")).toBeInTheDocument(),
+    );
   });
 
   it("speaks French", async () => {

@@ -26,6 +26,9 @@ import { HelpIcon, type IconType } from "./layers";
  */
 export { buttonClass };
 
+/** A link in running text: the parent's ink until hovered, then `fg` and an underline. */
+export const textLink = "underline-offset-2 transition-colors hover:text-fg hover:underline";
+
 export function Button({
   children,
   variant = "primary",

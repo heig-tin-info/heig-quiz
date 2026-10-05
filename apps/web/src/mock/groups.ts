@@ -187,7 +187,6 @@ function summaryOf(set: MockSet): GroupSetSummary {
 
 // ---------------------------------------------------------------- loaders and refusals
 
-
 /** A classroom of the staff persona, or the 404 of a missing one (a student reads the same 404). */
 function staffRoom(id: string) {
   const room = rooms.find((r) => r.id === id);
