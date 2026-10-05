@@ -210,8 +210,6 @@ export async function syncOwned(ctx: Ctx, row: OwnedRow): Promise<SyncOutcome> {
   }
   await ctx.db.update(row.table).set(row.values).where(eq(row.table.id, targetId));
   await setBaseline(hashOf((await currentValues(ctx, row, targetId)) ?? {}));
-  const label = `${row.sourceTable} (overwritten)`;
-  written(ctx, label);
   ctx.report.reimport.overwritten[row.sourceTable] = (ctx.report.reimport.overwritten[row.sourceTable] ?? 0) + 1;
   return "overwritten";
 }

@@ -339,7 +339,12 @@ export async function recomputeRoles(ctx: Ctx) {
 
 /** The run and its audit row: only an `--apply` that wrote something. */
 export async function recordRun(ctx: Ctx, run: { id: string; startedAt: Date; mappingSha256: string }) {
-  const counts = { identity: ctx.report.identity, written: ctx.report.written };
+  const { overwritten, kept } = ctx.report.reimport;
+  const counts = {
+    identity: ctx.report.identity,
+    written: ctx.report.written,
+    reimport: { overwritten, kept: kept.length },
+  };
   await ctx.db.insert(importRuns).values({
     id: run.id,
     startedAt: run.startedAt,

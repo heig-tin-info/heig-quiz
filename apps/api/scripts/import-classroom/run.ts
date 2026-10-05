@@ -30,7 +30,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { count, eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import type { AppConfig } from "../../src/config.js";
 import type { Db } from "../../src/db/client.js";
@@ -105,20 +105,31 @@ async function loadIdMap(db: Db): Promise<Map<string, Map<string, string>>> {
   return known;
 }
 
-/** Tables the import must never write: a changed count is a red line (D20, D22). */
+/**
+ * Tables the import must never write (D20, D22). A fingerprint, not a count:
+ * the row count and a hash of every row's text, so an UPDATE trips the red
+ * line as well as an INSERT or DELETE.
+ */
 const PROTECTED = { courses, classrooms, github_organizations: githubOrganizations, github_classroom_links: githubClassroomLinks } as const;
 
-async function protectedCounts(db: Db | Ctx["db"]) {
-  const counts: Record<string, number> = {};
+async function protectedFingerprints(db: Db | Ctx["db"]) {
+  const prints: Record<string, { n: number; hash: string }> = {};
   for (const [name, table] of Object.entries(PROTECTED)) {
-    const [row] = await db.select({ n: count() }).from(table);
-    counts[name] = row?.n ?? 0;
+    const res = (await db.execute(
+      sql`SELECT count(*)::int AS n, md5(coalesce(string_agg(t::text, '|' ORDER BY t::text), '')) AS hash FROM ${table} AS t`,
+    )) as unknown as { rows: { n: number; hash: string }[] };
+    prints[name] = res.rows[0]!;
   }
-  return counts;
+  return prints;
+}
+
+/** Every red line, derived from the findings in ONE place. */
+function deriveRedLines(report: ImportReport) {
+  report.parity.redLines = report.parity.findings.filter((f) => f.severity === "red").map((f) => `${f.check}: ${f.detail}`);
 }
 
 /** The parity report, from what the steps tallied and what must not have moved. */
-async function buildParity(ctx: Ctx, before: Record<string, number>, registry: Registry) {
+async function buildParity(ctx: Ctx, before: Awaited<ReturnType<typeof protectedFingerprints>>, registry: Registry) {
   const { parity } = ctx.report;
   for (const [table, entry] of [...ctx.parity].sort(([a], [b]) => a.localeCompare(b))) {
     const row = {
@@ -130,22 +141,33 @@ async function buildParity(ctx: Ctx, before: Record<string, number>, registry: R
     };
     parity.tables.push(row);
     if (row.missing !== 0) {
-      parity.redLines.push(`${table}: ${row.missing} source row(s) neither carried nor left out on purpose (source ${row.source}, carried ${row.carried}, left out ${row.leftOut})`);
+      record(ctx.report, {
+        check: table,
+        severity: "red",
+        detail: `${row.missing} source row(s) neither carried nor left out on purpose (source ${row.source}, carried ${row.carried}, left out ${row.leftOut})`,
+      });
     }
     for (const line of entry.leftOut) parity.findings.push({ check: `${table} left out`, severity: "info", detail: line });
   }
-  const after = await protectedCounts(ctx.db);
-  for (const [table, n] of Object.entries(before)) {
-    if (after[table] !== n) parity.redLines.push(`${table}: ${n} row(s) before the import, ${after[table]} after; the import never writes this table (D20, D22)`);
+  const after = await protectedFingerprints(ctx.db);
+  for (const [table, was] of Object.entries(before)) {
+    const now = after[table]!;
+    if (now.n !== was.n || now.hash !== was.hash) {
+      record(ctx.report, {
+        check: table,
+        severity: "red",
+        detail: `${was.n} row(s) before the import, ${now.n} after${now.n === was.n ? " (content changed)" : ""}; the import never writes this table (D20, D22)`,
+      });
+    }
   }
   for (const check of registry.checks.filter((c) => !c.githubBound)) {
     for (const f of await check.run(ctx)) record(ctx.report, { check: check.name, ...f });
   }
+  deriveRedLines(ctx.report);
 }
 
 function record(report: ImportReport, finding: ImportReport["parity"]["findings"][number]) {
   report.parity.findings.push(finding);
-  if (finding.severity === "red") report.parity.redLines.push(`${finding.check}: ${finding.detail}`);
 }
 
 export async function runImport(
@@ -240,13 +262,14 @@ export async function runImport(
         parity: new Map(),
         report,
       };
-      const before = await protectedCounts(tx);
+      const before = await protectedFingerprints(tx);
       for (const step of registry.steps) await step.run(ctx);
       await buildParity(ctx, before, registry);
       if (!options.apply) throw new Rollback("rolled_back");
       if (report.parity.redLines.length > 0) throw new Rollback("red_lines");
       committed = ctx;
-      if (Object.values(report.written).every((n) => n === 0)) throw new Rollback("nothing_to_do");
+      const overwritten = Object.values(report.reimport.overwritten).reduce((a, b) => a + b, 0);
+      if (overwritten === 0 && Object.values(report.written).every((n) => n === 0)) throw new Rollback("nothing_to_do");
       await recordRun(ctx, { id: randomUUID(), startedAt, mappingSha256: options.mappingSha256 });
     });
     report.outcome = "applied";
@@ -262,6 +285,7 @@ export async function runImport(
     await db.transaction(async (tx) => {
       for (const check of bound) for (const f of await check.run({ ...ctx, db: tx })) record(report, { check: check.name, ...f });
     });
+    deriveRedLines(report);
   } else {
     report.parity.notRun.push(...bound.map((c) => `${c.name}: not run (${options.apply ? "nothing was committed" : "dry run"})`));
   }

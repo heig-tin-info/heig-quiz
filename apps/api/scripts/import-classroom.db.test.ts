@@ -467,7 +467,6 @@ describe("import-classroom frame (M8-01a)", () => {
     // Untouched in Quiz: classroom's change reaches it.
     const second = await runImport(w.db, config, sourceOf("Sidney", "en"), MAPPING, DECIDED);
     expect(second.outcome).toBe("applied");
-    expect(second.written).toMatchObject({ "users (overwritten)": 1 });
     expect(second.reimport.overwritten).toEqual({ users: 1 });
     expect(second.reimport.kept).toEqual([]);
     expect(await userOf(w.db, eq(users.id, sidId))).toMatchObject({ givenName: "Sidney", locale: "en" });
@@ -532,7 +531,7 @@ describe("import-classroom frame (M8-01a)", () => {
     expect(await everything(w.db)).toEqual(before);
   });
 
-  it("checks deadlines, the queue and the grade-run links and groups from the source alone", () => {
+  describe("pre-flight from the source alone", () => {
     const run = (edit: (s: SourceSnapshot) => void, final = true) => {
       const s = variant(edit);
       return sourcePreflight({
@@ -543,35 +542,54 @@ describe("import-classroom frame (M8-01a)", () => {
         final,
       }).filter((p) => p.status !== "ok");
     };
-    expect(run(() => {})).toEqual([]);
     const deadline = (at: Date, applied: Date | null = null) => (s: SourceSnapshot) => {
       const a = s.assignments.find((x) => x.id === A1)!;
       a.deadlineAt = at;
       a.deadlineAppliedAt = applied;
     };
-    // Inside the window, its grace inside it too, overdue and unapplied, applied but not frozen.
-    expect(run(deadline(new Date(NOW.getTime() + 2 * HOUR)))[0]?.problems[0]).toContain("inside the 24 h window");
-    expect(run(deadline(new Date(NOW.getTime() - 10 * 60_000)))[0]?.problems[0]).toContain("not applied");
-    expect(run(deadline(new Date(NOW.getTime() - HOUR), new Date(NOW.getTime() - HOUR)))[0]?.problems[0]).toContain("not frozen");
-    // Just past the window: fine. A deadline already past whose grace is not over is the 'overdue' case above.
-    expect(run(deadline(new Date(NOW.getTime() + 25 * HOUR)))).toEqual([]);
-    // The dropped classroom's draft is out of scope whatever its dates.
-    expect(run((s) => { s.assignments.find((x) => x.id === "c7000000-0000-4000-8000-000000000004")!.deadlineAt = NOW; })).toEqual([]);
-    // The queue could not be read: not silently fine.
-    expect(run((s) => { s.activity.queue.readable = false; })[0]?.problems[0]).toContain("not checked");
-    // Dangling and foreign grade-run links, and a group of another assignment: refused even before the final import.
-    const links = run((s) => {
-      s.studentRepos.find((r) => r.id === "c8000000-0000-4000-8000-000000000001")!.frozenGradeRunId = "c9000000-0000-4000-8000-0000000000ff";
-      s.studentRepos.find((r) => r.id === "c8000000-0000-4000-8000-000000000001")!.llmGradeRunId = "c9000000-0000-4000-8000-000000000002";
-    }, false);
-    expect(links).toEqual([expect.objectContaining({ id: "grade-run-links", status: "refused" })]);
-    expect(links[0]?.problems).toEqual([expect.stringContaining("is not a grade run"), expect.stringContaining("belongs to another repository")]);
-    const groups = run((s) => {
-      s.groupMembers[0]!.assignmentId = A1;
-      s.studentRepos.find((r) => r.id === "c8000000-0000-4000-8000-000000000002")!.assignmentId = A1;
-    }, false);
-    expect(groups).toEqual([expect.objectContaining({ id: "group-consistency", status: "refused" })]);
-    expect(groups[0]?.problems.length).toBeGreaterThanOrEqual(2);
+
+    it("finds nothing wrong in the fixture", () => {
+      expect(run(() => {})).toEqual([]);
+    });
+
+    it("refuses a deadline inside the window", () => {
+      expect(run(deadline(new Date(NOW.getTime() + 2 * HOUR)))[0]?.problems[0]).toContain("inside the 24 h window");
+    });
+
+    it("refuses a deadline overdue and not applied", () => {
+      expect(run(deadline(new Date(NOW.getTime() - 10 * 60_000)))[0]?.problems[0]).toContain("not applied");
+    });
+
+    it("refuses a deadline applied whose grace is over but not frozen", () => {
+      expect(run(deadline(new Date(NOW.getTime() - HOUR), new Date(NOW.getTime() - HOUR)))[0]?.problems[0]).toContain("not frozen");
+    });
+
+    it("lets a deadline just past the window, and the dropped classroom's assignments, go", () => {
+      expect(run(deadline(new Date(NOW.getTime() + 25 * HOUR)))).toEqual([]);
+      expect(run((s) => { s.assignments.find((x) => x.id === "c7000000-0000-4000-8000-000000000004")!.deadlineAt = NOW; })).toEqual([]);
+    });
+
+    it("does not take an unreadable queue for an empty one", () => {
+      expect(run((s) => { s.activity.queue.readable = false; })[0]?.problems[0]).toContain("not checked");
+    });
+
+    it("refuses dangling and foreign grade-run links, even before the final import", () => {
+      const links = run((s) => {
+        s.studentRepos.find((r) => r.id === "c8000000-0000-4000-8000-000000000001")!.frozenGradeRunId = "c9000000-0000-4000-8000-0000000000ff";
+        s.studentRepos.find((r) => r.id === "c8000000-0000-4000-8000-000000000001")!.llmGradeRunId = "c9000000-0000-4000-8000-000000000002";
+      }, false);
+      expect(links).toEqual([expect.objectContaining({ id: "grade-run-links", status: "refused" })]);
+      expect(links[0]?.problems).toEqual([expect.stringContaining("is not a grade run"), expect.stringContaining("belongs to another repository")]);
+    });
+
+    it("refuses a group, member or repository of another assignment, even before the final import", () => {
+      const groups = run((s) => {
+        s.groupMembers[0]!.assignmentId = A1;
+        s.studentRepos.find((r) => r.id === "c8000000-0000-4000-8000-000000000002")!.assignmentId = A1;
+      }, false);
+      expect(groups).toEqual([expect.objectContaining({ id: "group-consistency", status: "refused" })]);
+      expect(groups[0]?.problems.length).toBeGreaterThanOrEqual(2);
+    });
   });
 
   it("refuses --apply, even a first one, on a dangling grade-run link", async () => {
@@ -607,6 +625,20 @@ describe("import-classroom frame (M8-01a)", () => {
     expect(applied.outcome).toBe("red_lines");
     expect(await everything(w.db)).toEqual(before);
     expect(await w.db.select().from(githubOrganizations)).toHaveLength(2);
+  });
+
+  it("trips a red line on an UPDATE of a protected table, not only on an insert or delete", async () => {
+    const w = await world();
+    const registry: Registry = {
+      steps: [
+        ...REGISTRY.steps,
+        { name: "rogue", run: async (ctx) => { await ctx.db.update(courses).set({ name: "Renamed by the import" }).where(eq(courses.id, w.prog)); } },
+      ],
+      checks: [],
+    };
+    const report = await runImport(w.db, config, snapshot, MAPPING, { ...DECIDED, registry });
+    expect(report.outcome).toBe("red_lines");
+    expect(report.parity.redLines).toEqual([expect.stringContaining("courses: 2 row(s) before the import, 2 after (content changed)")]);
   });
 
   it("runs GitHub-bound checks after the commit only: 'not run' in a dry run", async () => {

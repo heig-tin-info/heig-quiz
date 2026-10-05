@@ -322,7 +322,7 @@ Status values: `open`, `settled`, `superseded`.
   teachers install Quiz's App and connect their classrooms by hand
   (D20, F-GH-02). The import writes no `github_organizations` and no
   `github_classroom_links` row, and neither do courses nor classrooms: a
-  change in the count of any of the four is a red line of the parity
+  change in the row count or content (a fingerprint) of any of the four is a red line of the parity
   report, and an `--apply` that finds it rolls back. The M2-01 card's note
   that said otherwise is amended.
 
