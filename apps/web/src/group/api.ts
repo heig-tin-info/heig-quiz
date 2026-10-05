@@ -163,13 +163,11 @@ export function useStudentGroupSets(classroomId: string) {
 }
 
 /** One write of a student, under `/group-sets/:id/student`, its body built by the route's own schema (invariant 7). */
-type StudentWrite =
+export type StudentWrite =
   | { method: "POST"; path: "/groups"; body: StudentGroupCreate }
   | { method: "PUT"; path: "/membership"; body: StudentGroupJoin }
   | { method: "DELETE"; path: "/membership"; body?: undefined }
   | { method: "PATCH"; path: `/groups/${string}`; body: GroupRename };
-
-export type { StudentWrite };
 
 export const studentWrite = {
   create: (name: string): StudentWrite => ({

@@ -3009,7 +3009,7 @@ serves now (16a), and what waits for the group repositories (16b).
   claimed STUDENT seat), `findStudentGroupSet`/`studentGroupSet` (the
   writes' loader; anyone else the 404). `project/groupCopy.ts`: `setFrozen`
   (an `EXISTS` of the copy's `HAS_REPO` over every project naming the set,
-  stopped and archived ones included) and `setHasRepo`. `modules/group/service.ts`: `patchGroupSet` opens/closes
+  stopped and archived ones included). `modules/group/service.ts`: `patchGroupSet` opens/closes
   (`max_size_required` when open after the write), a duplicate born
   closed; `writeSet` hints `groups` to the claimed students' `user:` topics
   when the set reaches them before or after the write (never
@@ -3018,12 +3018,13 @@ serves now (16a), and what waits for the group repositories (16b).
   the student view and `anyVisibleSet`; the staff's and the students'
   writes share `insertGroup`, `renameIn`, `placeIn` (its `capacity` for
   the students); the students' writes through `studentWrite` — open (no
-  grace) and not frozen checked under the set's lock before the write and
-  any step, `group_full` at the maximum or above, one audit per write
+  grace) and not frozen, re-read through `setRows` under the set's lock
+  before the write and any step, `group_full` at the maximum or above, one audit per write
   (`group.create|rename|member_move`, `self: true`, the line) — and the
   student view `studentGroupSets` (`{ serverNow, sets }`, fields picked by
   hand, three reads whatever the number of sets; closed: own group only,
-  no `unplaced`), `studentGroupSetCards` (open and not frozen),
+  no `unplaced`), `studentGroupSetCards` (open and not frozen, a claimed
+  STUDENT seat's only: a teacher in the student view gets no row),
   `hasStudentGroupSets` (read by `activity/service.ts`). Routes: `GET
   /app/api/classrooms/:id/group-sets/student` (`readableClassroom`, the
   student payload forced; `writable` only for the caller's own portal

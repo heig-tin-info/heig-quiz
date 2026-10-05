@@ -68,7 +68,7 @@ import type { Db, Tx } from "../../db/client.js";
 import { classrooms, courses, enrollments, groupSets, projects, studentGroupMembers, studentGroups } from "../../db/schema.js";
 import { openSet, studentVisibleSet } from "../guards.js";
 import { DomainError } from "../http.js";
-import { ConfirmationNeeded, copiesBefore, followingCopies, projectsChanged, RepoGroupTouched, setFrozen, setHasRepo, stepCopies } from "../project/service.js";
+import { ConfirmationNeeded, copiesBefore, followingCopies, projectsChanged, RepoGroupTouched, setFrozen, stepCopies } from "../project/service.js";
 import { GroupError } from "./errors.js";
 import { groupsChanged } from "./events.js";
 
@@ -552,15 +552,17 @@ const frozen = () => new GroupError("set_frozen", "A group of this set has a rep
 /**
  * A student's write: `writeSet`, the set checked under its lock before
  * anything is written or stepped — still open by the server's clock (`409
- * set_closed`, no grace: the loader found it open by {@link openSet}, the
- * archive is `lockClassroom`'s `409 classroom_archived`), and not frozen
- * (`409 set_frozen`). The audit names the student (`self`, their line).
+ * set_closed`, no grace: {@link openSet} read again under the lock; the
+ * archive is `lockClassroom`'s `409 classroom_archived` first), and not
+ * frozen (`409 set_frozen`, {@link setFrozen}). The audit names the student (`self`, their line).
  */
 async function studentWrite(db: Db, scope: StudentSetScope, ctx: WriteContext, write: (tx: Tx, set: SetRow) => Promise<Written>): Promise<void> {
   try {
     await writeSet(db, scope, ctx, async (tx, set) => {
-      if (set.openUntil === null || !(ctx.now < set.openUntil)) throw new GroupError("set_closed", "This group set is closed to its students");
-      if (await setHasRepo(tx, set.id)) throw frozen();
+      // The set as every read sees it (`openSet`, `setFrozen`), re-read under the lock this write holds.
+      const [row] = await setRows(tx, eq(groupSets.id, set.id), ctx.now);
+      if (!row?.open) throw new GroupError("set_closed", "This group set is closed to its students");
+      if (row.frozen) throw frozen();
       const written = await write(tx, set);
       return written && { action: written.action, payload: { ...written.payload, enrollmentId: scope.seat.id, self: true } };
     });
@@ -668,7 +670,7 @@ export function hasStudentGroupSets(db: Db, classroomId: string, now: Date): Pro
 
 /**
  * The sets OPEN to `userId`'s self-formation in the classrooms where they
- * hold a claimed seat (one classroom: the classroom page), the soonest
+ * hold a claimed STUDENT seat (one classroom: the classroom page), the soonest
  * closing first: the "Form your group until …" rows of their Activities
  * (S3). A frozen set invites nobody: it has no row.
  */
@@ -684,6 +686,8 @@ export async function studentGroupSetCards(db: Db, userId: string, now: Date, cl
     .where(
       and(
         eq(enrollments.userId, userId),
+        // A student seat: a staff seat (a teacher in the student view, ADR-018) forms no group, so it is not invited.
+        eq(enrollments.staff, false),
         classroomId === undefined ? undefined : eq(enrollments.classroomId, classroomId),
         openSet(now),
         not(setFrozen(db, groupSets.id)),

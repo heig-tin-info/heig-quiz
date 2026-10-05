@@ -580,6 +580,9 @@ describe("the Activities row and the Groups tab (S1, S3)", () => {
     expect(await page()).toMatchObject({ hasGroups: true, activities: { groupSets: [card] } });
     const home = StudentHome.parse((await asStudent(await call("GET", "/app/api/student/home", ana.headers))).json());
     expect(home.groupSets).toEqual([expect.objectContaining(card)]);
+    // A teacher in the student view, on their staff seat (ADR-018), forms no group: no row.
+    const asTeacher = StudentClassroomPage.parse((await asStudent(await call("GET", `/app/api/student/classrooms/${room.id}`, teacher.headers))).json());
+    expect(asTeacher).toMatchObject({ hasGroups: true, activities: { groupSets: [] } });
 
     // A confined session's home lists no set (its exam leads nowhere else).
     const caller = { id: ana.id, role: "student" as const, reach: "seats" as const };

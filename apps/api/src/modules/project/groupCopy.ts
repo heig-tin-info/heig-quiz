@@ -149,12 +149,6 @@ export function setFrozen(db: Db | Tx, setId: AnyColumn | string): SQL {
   );
 }
 
-/** {@link setFrozen} for one set, read now (under the set's lock in a write). */
-export async function setHasRepo(db: Db | Tx, setId: string): Promise<boolean> {
-  const [row] = await db.select({ id: groupSets.id }).from(groupSets).where(and(eq(groupSets.id, setId), setFrozen(db, groupSets.id)));
-  return row !== undefined;
-}
-
 type Copy = CopyState & { staffSeats: Set<string> };
 
 /** The copy: each group's slug fixed once it has a repository ({@link HAS_REPO}), its stop; and the staff seats in it. */
