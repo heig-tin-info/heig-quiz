@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "rpn_calculator" boolean;

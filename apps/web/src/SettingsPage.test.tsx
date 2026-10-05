@@ -61,3 +61,23 @@ describe("SettingsPage — multiple-answer scoring", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("SettingsPage — RPN calculator", () => {
+  it("is off by default, and saves the switch on the account", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch({ "PATCH /app/api/me": ok({}) });
+    renderWithProviders(<SettingsPage me={makeMe({ rpnCalculator: null })} />);
+    const toggle = screen.getByRole("switch", { name: "RPN calculator" });
+    expect(toggle).not.toBeChecked();
+    await user.click(toggle);
+    await waitFor(() => {
+      expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ rpnCalculator: true });
+    });
+  });
+
+  it("shows it on when the account has it", () => {
+    mockFetch({});
+    renderWithProviders(<SettingsPage me={makeMe({ rpnCalculator: true })} />);
+    expect(screen.getByRole("switch", { name: "RPN calculator" })).toBeChecked();
+  });
+});

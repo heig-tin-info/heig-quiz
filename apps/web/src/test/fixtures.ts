@@ -38,6 +38,7 @@ export function makeMe(overrides: Partial<Me> = {}): Me {
     mcqPolicy: null,
     // Off: a bubble popping over a component under test is noise.
     coach: { enabled: false, seen: [] },
+    rpnCalculator: null,
     ...overrides,
   };
 }

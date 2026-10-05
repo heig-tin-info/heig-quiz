@@ -2650,6 +2650,12 @@ export const fr: Record<keyof Dict, string> = {
   "calc.standard": "Standard",
   "calc.scientific": "Scientifique",
   "calc.keys": "Touches de la calculatrice",
+  "calc.rpn": "NPI",
+  "calc.stack": "Pile",
+  "calc.error.operands": "Pas assez de valeurs dans la pile",
+  "calc.key.roll": "Faire descendre la pile",
+  "calc.key.swap": "Échanger les deux valeurs du dessus",
+  "calc.key.enter": "Entrée : mettre le nombre dans la pile",
   "calc.error.divideByZero": "Division par zéro impossible",
   "calc.error.invalid": "Entrée non valide",
   "calc.error.overflow": "Dépassement de capacité",
@@ -3911,6 +3917,8 @@ export const fr: Record<keyof Dict, string> = {
   "settings.coach": "Bulles de découverte",
   "settings.coachHint": "Des bulles qui présentent chaque écran la première fois que vous l'ouvrez, et qui aident quand vous semblez chercher.",
   "settings.coachReplay": "Les revoir",
+  "settings.rpnCalculator": "Calculatrice NPI",
+  "settings.rpnCalculatorHint": "La calculatrice fournie en examen fonctionne en notation polonaise inverse : 3 Entrée 4 + donne 7, sans touche égale ni parenthèses.",
   "settings.coachReplayed": "Les bulles réapparaîtront sur chaque écran.",
 
   // The Activities section (#190): every activity across classrooms.

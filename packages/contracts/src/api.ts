@@ -71,6 +71,8 @@ export interface Me {
    * again on the classroom's PC.
    */
   coach: { enabled: boolean | null; seen: string[] };
+  /** The on-screen calculator works in RPN (ADR-069); null means no, the infix one. */
+  rpnCalculator: boolean | null;
   /**
    * The session this request rode on; `evaluationId` is set on a confined
    * one only (`seb` or `kiosk`, the evaluation it is confined to), and `readOnly` says the server refuses its writes (an
@@ -140,6 +142,7 @@ export const MePatch = z
     dateFormat: z.enum(DATE_FORMATS).nullable().optional(),
     mcqPolicy: McqPolicy.nullable().optional(),
     coachEnabled: z.boolean().nullable().optional(),
+    rpnCalculator: z.boolean().nullable().optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: "Nothing to update" });
 export type MePatch = z.infer<typeof MePatch>;

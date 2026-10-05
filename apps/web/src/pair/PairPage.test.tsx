@@ -20,6 +20,7 @@ const me: Me = {
   dateFormat: null,
   mcqPolicy: null,
   coach: { enabled: false, seen: [] },
+  rpnCalculator: null,
 };
 
 const E1 = "11111111-1111-4111-8111-111111111111";

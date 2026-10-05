@@ -302,3 +302,11 @@ describe("errors", () => {
     expect(s.second).toBe(true);
   });
 });
+
+describe("the RPN-only keys", () => {
+  it("do nothing on the infix calculator", () => {
+    const before = press(initialCalculator, { kind: "digit", digit: 5 });
+    for (const kind of ["enter", "swap", "roll"] as const) expect(press(before, { kind })).toEqual(before);
+  });
+});
+

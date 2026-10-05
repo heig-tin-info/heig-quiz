@@ -9,6 +9,18 @@ engine in `packages/domain/src/calculator.ts`, `settings.calculator` in
 `packages/contracts/src/evaluation.ts`, and the keypad and its dock in
 `apps/web/src/calculator/`. Requirement F-EVAL-32.
 
+## Amendment — reverse Polish notation (2026-10-05)
+
+A user may switch the calculator to RPN in their settings (`users.rpn_calculator`,
+`PATCH /app/api/me`, a row "RPN calculator"). The teacher's choice of mode
+(none, standard, scientific) is untouched: the setting only changes how the
+same keypad reads its keys, so it is the student's, never the evaluation's, and
+it changes nothing in grading. It lives on the account, not in the browser, so
+it follows a student to the exam station. Engine: `packages/domain/src/rpn.ts`
+(a stack; `3 Enter 4 +` gives 7; `Enter` with nothing typed duplicates the top;
+`CE` clears x). On the keypad `=` becomes Enter, and the keys only an
+expression needs (`%`, parentheses) give way to swap (`x⇄y`) and roll (`R↓`).
+
 ## Context
 
 Some exams and exercises need a calculator. Letting students bring any

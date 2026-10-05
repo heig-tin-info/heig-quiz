@@ -115,6 +115,22 @@ function CoachRow({ me }: { me: Me }) {
   );
 }
 
+/** The calculator an evaluation provides, in reverse Polish notation (ADR-069). */
+function RpnCalculatorRow({ me }: { me: Me }) {
+  const t = useT();
+  const save = useMePatch();
+  return (
+    <SettingRow title={t("settings.rpnCalculator")} desc={t("settings.rpnCalculatorHint")}>
+      <Switch
+        checked={me.rpnCalculator === true}
+        disabled={save.isPending}
+        onChange={(next) => save.mutate({ rpnCalculator: next })}
+        label={t("settings.rpnCalculator")}
+      />
+    </SettingRow>
+  );
+}
+
 /** Language, appearance, date format — and, for a teacher, MCQ scoring. */
 function PreferencesCard({ me }: { me: Me }) {
   const { t, choice, setLocale } = useI18n();
@@ -171,6 +187,7 @@ function PreferencesCard({ me }: { me: Me }) {
           </Select>
         </SettingRow>
         {me.role === "student" ? null : <McqPolicyRow me={me} />}
+        <RpnCalculatorRow me={me} />
         <CoachRow me={me} />
       </Card>
       <FormError error={saveDate.error} fallback={t("error.save")} />

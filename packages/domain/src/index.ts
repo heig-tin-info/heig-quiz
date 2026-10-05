@@ -7,7 +7,23 @@
 export * from "./activity.js";
 export * from "./batchable.js";
 export * from "./brainstorm.js";
-export * from "./calculator.js";
+// The calculator engines' own helpers (`binary`, `settle`, `CONSTANTS`…) stay
+// inside the package: the barrel publishes the keypad's API only.
+export {
+  display,
+  expression,
+  formatNumber,
+  initialCalculator,
+  press,
+  type AngleUnit,
+  type BinaryOp,
+  type CalculatorError,
+  type CalculatorKey,
+  type CalculatorState,
+  type TrigFn,
+  type UnaryFn,
+} from "./calculator.js";
+export { displayRpn, initialRpn, levelsRpn, pressRpn, type RpnState } from "./rpn.js";
 export * from "./categorizeScore.js";
 export { extractScore, SCORE_ANNOTATION_TITLE, type AnnotationLike, type ScoreParse } from "./ciScore.js";
 export * from "./cloze.js";
