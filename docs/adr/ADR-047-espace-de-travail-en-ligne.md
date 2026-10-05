@@ -30,6 +30,8 @@ heig-classroom's specification; `docs/spec/02-exigences-fonctionnelles.md`
 receives their Quiz form (M0-04), and until then they are read in
 heig-classroom's `docs/`.
 
+**Extended (2026-10-05, ADR-075, proposed)**: supervised evaluations may open the workspace through the `workspace` question type, without a git channel; the project rules below are unchanged.
+
 Status in heig-classroom: Accepted (2026-09-17, portal milestone 2).
 
 ## Context

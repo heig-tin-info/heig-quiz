@@ -80,7 +80,7 @@ intended behaviour; their presence alone does not certify implementation.
   netlists are the same graph. Pick-and-place is graded by LLM or manually.
 - Management of study plans, credits, absences. The platform exports grades, it does not administer them.
 - Institutional multi-tenancy: a single admin, a single instance.
-- Code editor with a full language server. Monaco with highlighting and shortcuts is enough. (This is about the question editors; the online workspace of the merge, ADR-035, is specified with it.)
+- Code editor with a full language server. Monaco with highlighting and shortcuts is enough. (This is about the question editors; the online workspace of the merge, ADR-035, is specified with it. *Amended 2026-10-05, product owner, ADR-075*: a supervised exam may open that workspace for one advanced question (`workspace`, 04 §4.15) under the rules of ADR-075 — never an exercise, no git channel, the file collected by the server at the deadline; this is the only place the workspace appears in an evaluation.)
 - A general-purpose GitHub client: the platform touches GitHub only for what a feature needs (the journal, projects). It never deletes a repository: not when a journal is removed (F-JRN-04), not when a project or a classroom is deleted (F-PROJ-16).
 - Grading a project's repository in `apps/runner`, and a platform LLM review of projects: a project is graded by its own CI on the CI runners, and reviewed by the LLM there (D17); both may move into the platform later (phase L of the merge).
 - Hot installation of plugins from a remote repository.

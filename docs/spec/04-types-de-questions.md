@@ -478,3 +478,32 @@ config:
 
 **Dashboard and more**: the live cell shows the number of elements and links, figures only. Not pollable, no drill rating, no `aggregate`.
 
+## 4.15 Workspace `workspace`
+
+Shown as **Workspace** / « Espace de travail » in the interface. An advanced question for a **supervised** evaluation: the student works in the online workspace (VS Code with a compiler, `apps/codespace`, ADR-047) and the server collects a file at the end. Decided by the product owner on 2026-10-05, [ADR-075](../adr/ADR-075-question-espace-de-travail.md) (proposed). Planned: M6-08 and M6-09; nothing is implemented. Package `packages/qt-workspace`, registered through both registry entry points.
+
+**Configuration** (sketch; M6-09 fixes the schema):
+
+```yaml
+config:
+  prompt: markdown
+  language: c            # the languages of the workspace image
+  template: |            # locked regions with @@lock / @@endlock, as `code`
+    ...
+  files: []              # extra files seeded in the volume, as `code`
+  collect: [main.c]      # the declared path(s) the server collects; names, never request paths
+  compileArgs: "-Wall"
+  limits: { timeMs: 2000, memoryMb: 128, outputKb: 64 }   # the runner's, at grading
+  tests: { mode: io, cases: [...], compare: {...} }       # as `code`
+  referenceSolution: |   # as `code`; teacher-only
+    ...
+```
+
+- **Supervised evaluations only**: publication refuses it in an exercise, a poll, a drill and an exam that requires neither SEB nor kiosk (`workspace.requires_supervision`). On a kiosk-only evaluation it is refused until proof B (M6-07).
+- **Behaviour**: opening the question mints a launch token and leads to the portal; the workspace is created for the **attempt** (a fresh volume for each) with a closed network and no git channel. At the attempt's deadline + 3 s (accommodations included) Quiz orders freeze and collection; the portal never decides the end. The volume is destroyed once the file is stored. The student keeps no copy.
+- **Seed and `toStudent`** (invariant 4): the volume is seeded from the student view alone: template, extra files, **visible** cases. Hidden cases and the reference solution never enter it; `toStudent` strips them as for `code`, and a test searches the seed payload and file tree for their values (05 §5.7). The student payload also carries no hash, blob id, token or portal path.
+- **Answer**: a blob reference to the collected file (or tar), with a SHA-256 stamped by the server on the bytes it received and the server's receipt time. Never uploaded by the browser. No file: an empty answer; a failed collection: empty and flagged (`details.reason: collect_failed`), the volume kept for the teacher.
+- **Grading**: the two-phase runner pattern of `code`. The server rebuilds the program from the stored template and the collected file (invariant 14) and runs **all** cases in `apps/runner`; points come from the cases, as `code`. The result is `state: proposed`; the teacher validates or corrects it in the grading panel, which shows the collected file beside the case verdicts. Compile failure proposes zero; no file, a validated zero (`reason: empty`).
+- **Points**: `defaultPoints` follows the cases, as `code`. Not pollable, no drill, no `showKey` workspace. The class debrief shows the distribution of case success.
+- **Fallback**: when the portal is down at opening, the teacher swaps in a `code` question (§4.7); the type never runs outside the portal.
+- **Capacity**: at most 30 workspaces per evaluation until M6-05 measures the engine VM (`workspace.capacity`).

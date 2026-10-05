@@ -68,6 +68,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-015 — The browser executes, the server grades: a `runtime` per code question, a command line per case](ADR-015-execution-navigateur-correction-serveur.md)
 - [ADR-017 — Moving a question to another pool](ADR-017-deplacement-de-question.md)
 - [ADR-019 — Grading a schematic by simulation, not by topology](ADR-019-simulation-de-circuit.md)
+- [ADR-075 — The workspace question: an advanced exam question worked in the online workspace, collected by the server](ADR-075-question-espace-de-travail.md)
 - [ADR-021 — Code image: a variant of `code`, a target in the config, stdout graded whatever the exit](ADR-021-codeimage-variante-de-code.md)
 - [ADR-024 — One locked editor, three student tools, a visible cooldown](ADR-024-editeur-verrouille-et-outils-etudiant.md)
 - [ADR-036 — Categorize: a new question type, sorting cards into columns](ADR-036-type-classement.md)

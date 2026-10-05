@@ -139,6 +139,8 @@ In the critical path only if D09 finds online assignments in production.
 | M6-05 | Engine VM capacity, hygiene, seccomp | todo | D09 | | | |
 | M6-06 | Quiz `codespace` module | todo | M6-03, M3-02 | | | |
 | M6-07 | SEB for projects, proof B | todo | M6-02, M6-06 | | | |
+| M6-08 | Freeze and collect contract on the portal (ADR-075) | todo | M6-03, M6-05 | | | |
+| M6-09 | `qt-workspace` type and Quiz side (ADR-075) | todo | M6-06, M6-08 | | | Kiosk use waits for proof B (M6-07) |
 
 ## M7 — Finishing
 

@@ -3912,6 +3912,36 @@ serves now (16a), and what waits for the group repositories (16b).
   exam mode without a valid header; `simulated` impossible in production;
   **proof B recorded** before the first SEB project.
 
+### M6-08 — Freeze and collect contract on the portal (ADR-075)
+- **Depends on**: M6-03, M6-05. ‖ M6-06.
+- **Goal**: an exam mode of `apps/codespace` (no git channel, `--network none`,
+  work volume only, per attempt); a `workspace.freeze` HS256 service message
+  and a single-use signed collect endpoint (one file or a capped tar of
+  declared names); destruction of the volume after Quiz acknowledges the
+  hash; a safety cap; the `apps/codespace` `CLAUDE.md` records that this mode
+  drops the git-channel divergence; contracts in `packages/contracts`
+  (M6-01).
+- **Acceptance**: a frozen workspace refuses any write; collect is single use
+  and refused without a valid token; no container of this mode has a network
+  or a credential (closed list asserted); a destroyed volume is gone;
+  integration against a stub Quiz.
+
+### M6-09 — `qt-workspace` type and Quiz side (ADR-075)
+- **Depends on**: M6-06, M6-08; D21's `.seb` filter (M6-07) for SEB.
+  Kiosk use waits for proof B.
+- **Goal**: `packages/qt-workspace` through both registry entry points
+  (04 §4.15); publication checks (`workspace.requires_supervision`,
+  `workspace.capacity`); seed builder from `toStudent`'s output; the
+  deadline + 3 s freeze-and-collect job (singleton per attempt, the
+  attempt's deadline with accommodations); blob answer with server-stamped
+  hash; two-phase grading on the runner, `proposed` state; grading panel
+  shows the file; audit events; en/fr; the `code` fallback swap.
+- **Acceptance**: a fully configured question through the seed builder, the
+  serialized payload and file tree searched for hidden cases and the
+  reference; a late write is impossible after the freeze; an exercise
+  refuses the type; portal-down opening is refused with the fallback
+  offered; `invariant-reviewer` finds no second exit of question content.
+
 ## M7 — Finishing
 
 ### M7-01 — Palette, help, tours
