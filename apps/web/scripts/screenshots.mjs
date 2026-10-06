@@ -71,6 +71,7 @@ const JOURNAL_EDIT = "/classrooms/r1/journal/10-semaine-1/10-pointeurs.md";
 const SPROJ = {
   open: "77777777-7777-4777-8777-777777777701",
   past: "77777777-7777-4777-8777-777777777703",
+  frozen: "77777777-7777-4777-8777-777777777708",
   accept: "77777777-7777-4777-8777-777777777704",
   invited: "77777777-7777-4777-8777-777777777705",
   deleted: "77777777-7777-4777-8777-777777777707",
@@ -742,6 +743,7 @@ const scenes = [
   { name: "student-project-invited", role: "student", path: `/projects/${SPROJ.invited}?projects=1` },
   { name: "student-project-deleted", role: "student", path: `/projects/${SPROJ.deleted}?projects=1` },
   { name: "student-project-released", role: "student", path: `/projects/${SPROJ.past}?projects=1` },
+  { name: "student-project-frozen", role: "student", path: `/projects/${SPROJ.frozen}?projects=1` },
   // ADR-077: a teacher on a staff seat tests the project: the real actions, their own repository.
   { name: "student-project-staff-seat", role: "student", path: `/projects/${SPROJ.accept}?projects=1&staffseat=1` },
   { name: "student-project-staff-seat-repo", role: "student", path: `/projects/${SPROJ.open}?projects=1&staffseat=1` },

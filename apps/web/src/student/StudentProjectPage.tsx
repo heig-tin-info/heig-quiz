@@ -13,13 +13,20 @@
  * clock is the server's (invariant 5): the payload's `serverNow` is sampled
  * into `useServerClock`, and every countdown and gate reads its offset.
  *
+ * It is the shell's width, like the classroom page it hangs from, and the
+ * rhythm of an evaluation's results page (M3-14l). The header is the card's:
+ * the status badge and the card's timing and commit items, in one line under
+ * the title (one definition for both), the action with the GitHub mark; the
+ * CI run and the score have their own sections below, not the header.
+ *
  * The four decisions:
  *   - Type: the project's title at the page-title step; the score at the
  *     Stat's 22 px; everything else 13–14 px.
  *   - Color: ONE accent, the header's action while the student has a step to
  *     take (Link, Accept, Open the invitation); a ready repository is a
  *     secondary link, and the page then has no primary at all.
- *   - Space: 32 between the sections, 12 inside a card.
+ *   - Space: 24 between the header and the sections, 32 between sections,
+ *     12 inside a card.
  *   - Finish: cards on the canvas, hairlines, no shadow.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -34,27 +41,28 @@ import { useNoticeToasts } from "../notifications/notices";
 import { useToast } from "../notify";
 import { studentProjectKey, studentRootKey } from "../queryKeys";
 import { useServerNow } from "../realtime/useServerClock";
-import type { Navigate } from "../router";
+import { routeToPath, type Navigate, type Route } from "../router";
+import { CiBadge } from "../project/parts";
 import {
-  Badge,
+  Breadcrumb,
   Button,
   Card,
   EmptyState,
   GithubIcon,
   isoDateTime,
+  MetaLine,
   NotePanel,
   PageError,
   PageHeader,
   PageSkeleton,
-  ParentLink,
   SectionHeading,
   Stat,
 } from "../ui";
-import { leftLine, RowActionControl, startsLine } from "./ActivityRow";
-import { CommitFacts, useProjectAction, useStudentReadOnly } from "./ProjectRow";
+import { RowActionControl, StatusBadge } from "./ActivityRow";
+import { notStarted, ProjectCommitMeta, ProjectTimingMeta, projectStatus, useProjectAction, useStudentReadOnly } from "./ProjectRow";
 import {
   factsOfProject,
-  PROJECT_STATUS_KEY,
+  hasState,
   projectActionKind,
   REREAD_REFUSALS,
   scorePoints,
@@ -115,38 +123,38 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
   const facts = factsOfProject(project);
   const kind = projectActionKind(facts, now);
   const action = useProjectAction(facts, { now, primary: true, readOnly });
-  // The start while it is ahead; "Due …" with the time left beside it while
-  // some remains (`leftLine` says "Due …" by itself once it has passed).
-  const timing =
-    Date.parse(project.startAt) > now
-      ? startsLine(project.startAt, now, t)
-      : Date.parse(project.deadlineAt) > now
-        ? `${t("shome.dueAt", { when: isoDateTime(project.deadlineAt) })} · ${leftLine(project.deadlineAt, now, t)}`
-        : leftLine(project.deadlineAt, now, t);
+  const live = project.repo && !project.repo.deleted ? project.repo : null;
+  const go = (route: Route) => ({ href: routeToPath(route), onNavigate: () => navigate(route) });
 
   return (
-    <div className="mx-auto max-w-180 space-y-8">
+    <div className="space-y-6">
       <PageHeader
         eyebrow={
-          <ParentLink onClick={() => navigate({ view: "classroom", id: project.classroomId })}>
-            {project.classroomName}
-          </ParentLink>
+          <Breadcrumb
+            label={t("breadcrumb.label")}
+            items={[
+              { label: t("nav.courses"), ...go({ view: "studentCourses" }) },
+              { label: project.classroomName, ...go({ view: "classroom", id: project.classroomId }) },
+              { label: project.title },
+            ]}
+          />
         }
-        title={
-          <span className="flex flex-wrap items-baseline gap-3">
-            {project.title}
-            <Badge tone="zinc">{t(PROJECT_STATUS_KEY[project.status])}</Badge>
-          </span>
-        }
+        title={project.title}
         description={
           <>
-            <p data-coach="sproj.deadline">
-              {project.courseCode} · {timing}
-            </p>
+            <div data-coach="sproj.deadline">
+              <MetaLine>
+                <StatusBadge status={projectStatus(project.status, t)} />
+                <ProjectTimingMeta project={project} now={now} />
+                {live && !notStarted(project, now) ? (
+                  <ProjectCommitMeta work={live} evaluated={Date.parse(project.deadlineAt) <= now || live.locked} named />
+                ) : null}
+              </MetaLine>
+            </div>
             {readOnly ? (
-              <p className="mt-0.5 text-[13px]">{t(project.seat === null ? "sproj.readOnly.noSeat" : "sproj.readOnly")}</p>
+              <p className="mt-1.5 text-[13px]">{t(project.seat === null ? "sproj.readOnly.noSeat" : "sproj.readOnly")}</p>
             ) : null}
-            {project.seat === "staff" && !readOnly ? <p className="mt-0.5 text-[13px]">{t("sproj.staffTest")}</p> : null}
+            {project.seat === "staff" && !readOnly ? <p className="mt-1.5 text-[13px]">{t("sproj.staffTest")}</p> : null}
           </>
         }
         actions={
@@ -160,46 +168,45 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
 
       <section className="space-y-3">
         <SectionHeading title={t("sproj.repo")} help="student-project" />
-        {project.repo && !project.repo.deleted ? (
-          <RepoCard project={project} repo={project.repo} readOnly={readOnly} now={now} />
+        {live ? (
+          <RepoCard project={project} repo={live} readOnly={readOnly} />
         ) : (
           <Card className="px-5 py-4 text-sm text-fg-muted">
             {kind === "accept"
               ? t("sproj.repo.toAccept")
               : kind === "notStarted"
                 ? t("sproj.repo.notStarted", { when: isoDateTime(project.startAt) })
-                : t(STATE_KEY[kind] ?? "sproj.repo.toAccept")}
+                : t(hasState(kind) ? STATE_KEY[kind] : "sproj.repo.toAccept")}
           </Card>
         )}
       </section>
 
+      {live?.run ? <RunSection repo={live} run={live.run} /> : null}
+
       {project.release ? (
         <ReleaseSection release={project.release} />
-      ) : project.gradingMode !== "none" && project.repo && !project.repo.deleted ? (
-        <ScoreSection repo={project.repo} />
+      ) : project.gradingMode !== "none" && live ? (
+        <ScoreSection repo={live} />
       ) : null}
     </div>
   );
 }
 
 /**
- * The student's live repository: its name on GitHub, their invitation (and
- * the Resend while it waits), its lock, the commit the view stands on — the
- * evaluated one once the deadline is applied or passed — and its CI status.
+ * The student's live repository: its name on GitHub, their invitation while
+ * it waits (with the Resend) and its lock. The commit it stands on is the
+ * header's; the run and the score have their own sections.
  */
 function RepoCard({
   project,
   repo,
   readOnly,
-  now,
 }: {
   project: StudentProject;
   repo: StudentProjectRepo;
   readOnly: boolean;
-  now: number;
 }) {
   const t = useT();
-  const afterDeadline = Date.parse(project.deadlineAt) <= now || repo.locked;
   return (
     <Card className="space-y-2 p-5 text-sm">
       <a
@@ -212,15 +219,13 @@ function RepoCard({
         <span className="truncate">{repo.fullName}</span>
         <ExternalLink className="size-3.5 shrink-0 text-fg-faint" aria-hidden />
       </a>
-      <p className="flex flex-wrap items-center gap-3">
-        <span>{t(repo.invitation === "pending" ? "sproj.invitation.pending" : "sproj.invitation.accepted")}</span>
-        {repo.invitation === "pending" && !readOnly ? <ResendButton projectId={project.id} /> : null}
-      </p>
-      {repo.locked ? <p>{t("sproj.locked")}</p> : null}
-      <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="text-fg-muted">{t(afterDeadline ? "sproj.commit.evaluated" : "sproj.commit.last")}</span>
-        <CommitFacts work={repo} />
-      </p>
+      {repo.invitation === "pending" ? (
+        <p className="flex flex-wrap items-center gap-3">
+          <span>{t("sproj.invitation.pending")}</span>
+          {!readOnly ? <ResendButton projectId={project.id} /> : null}
+        </p>
+      ) : null}
+      {repo.locked ? <p className="text-fg-muted">{t("sproj.locked")}</p> : null}
     </Card>
   );
 }
@@ -252,6 +257,28 @@ function ResendButton({ projectId }: { projectId: string }) {
 }
 
 /**
+ * The CI run the score comes from, when one exists: its status as a badge,
+ * the run on GitHub (a new tab) and when it finished.
+ */
+function RunSection({ repo, run }: { repo: StudentProjectRepo; run: NonNullable<StudentProjectRepo["run"]> }) {
+  const t = useT();
+  return (
+    <section className="space-y-3">
+      <SectionHeading title={t("sproj.ci")} />
+      <Card className="flex flex-wrap items-center gap-x-4 gap-y-2 p-5 text-sm">
+        <CiBadge status={repo.ciStatus} />
+        <a href={run.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 hover:underline">
+          <GithubIcon className="size-4 shrink-0 text-fg-faint" />
+          {t("sproj.run.open")}
+          <ExternalLink className="size-3.5 shrink-0 text-fg-faint" aria-hidden />
+        </a>
+        <span className="text-fg-faint">{isoDateTime(run.completedAt)}</span>
+      </Card>
+    </section>
+  );
+}
+
+/**
  * The score before the release (N-SEC-21): the CI's, INDICATIVE — current
  * while the project runs, frozen once the deadline is applied — with the run
  * it comes from. Nothing of the review's or the teacher's.
@@ -275,15 +302,6 @@ function ScoreSection({ repo }: { repo: StudentProjectRepo }) {
       ) : (
         <Card className="px-5 py-4 text-sm text-fg-muted">{t("sproj.score.none")}</Card>
       )}
-      {repo.run ? (
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-muted">
-          <a href={repo.run.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline">
-            {t("sproj.run.open")}
-            <ExternalLink className="size-3.5" aria-hidden />
-          </a>
-          <span className="text-fg-faint">{isoDateTime(repo.run.completedAt)}</span>
-        </p>
-      ) : null}
     </section>
   );
 }
@@ -299,11 +317,9 @@ function ReleaseSection({ release }: { release: NonNullable<StudentProject["rele
         {release.grade ? <Stat label={t("results.col.grade")} value={<Grade value={release.grade.grade} />} /> : null}
       </div>
       {release.comment ? (
-        <Card className="p-5">
-          <NotePanel eyebrow={t("feedback.comment")} tone="outlined">
-            <p className="whitespace-pre-wrap text-sm">{release.comment}</p>
-          </NotePanel>
-        </Card>
+        <NotePanel eyebrow={t("feedback.comment")} tone="outlined">
+          <p className="whitespace-pre-wrap text-sm">{release.comment}</p>
+        </NotePanel>
       ) : null}
     </section>
   );

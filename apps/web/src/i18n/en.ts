@@ -2446,6 +2446,9 @@ export const en = {
   "shome.state.notStarted": "not started",
   "shome.state.submitted": "handed in",
   "shome.state.expired": "time was up",
+  "shome.poll.status": "live",
+  "shome.status.inProgress": "in progress",
+  "shome.status.open": "open",
   // F-PROJ-04 (M3-09a): the status word of a project card.
   "sproj.status.to_accept": "to accept",
   "sproj.status.in_progress": "in progress",
@@ -2470,7 +2473,6 @@ export const en = {
   "sproj.staffTest": "Your teacher test repository: it counts nowhere and no student sees it",
   "sproj.readOnly.noSeat": "Read-only view: you hold no seat in this classroom. Use \u201cJoin as student\u201d on the classroom page to test this project",
   "sproj.invitation.pending": "Invitation pending on GitHub",
-  "sproj.invitation.accepted": "Invitation accepted",
   "sproj.locked": "Read-only since the deadline",
   // F-PROJ-21 (M3-09c): the page's notices, from the re-read of the student's own repository.
   "sproj.notice.accepted": "Invitation accepted: the repository is yours.",
@@ -2498,6 +2500,8 @@ export const en = {
   "sproj.commit.none": "no commit yet",
   "sproj.commits.one": "1 commit",
   "sproj.commits": "{n} commits",
+  "sproj.closed": "Closed {when}",
+  "sproj.score.frozenShort": "at the deadline",
   "sproj.score": "Score",
   "sproj.score.current": "Indicative score",
   "sproj.score.frozen": "Score at the deadline",
@@ -2506,6 +2510,7 @@ export const en = {
   "sproj.score.none": "No score yet: the CI has not graded a commit of yours.",
   "sproj.score.final": "Final score",
   "sproj.run.open": "See the run on GitHub",
+  "sproj.ci": "Latest CI run",
   "sproj.result": "Result",
   "sproj.result.publishedAt": "Published on {when}",
   "shome.empty.title": "Nothing to do right now",
@@ -4066,6 +4071,7 @@ export const en = {
   "drill.today.one": "One question · up to {min} min",
   "drill.start": "Start",
   "drill.badge": "available",
+  "drill.kind": "Drill",
   "drill.practise": "Practise",
   "drill.empty.title": "Nothing to review today",
   "drill.empty.next": "Your next review is on {date}.",
@@ -4662,6 +4668,7 @@ export const en = {
   // The journal reader (F-JRN-07, M4-04, `journal/`). A warning or a sync
   // error is a code of `@quiz/contracts`, worded here (fix J5).
   "journal.breadcrumb": "Where you are",
+  "breadcrumb.label": "Breadcrumb",
   "journal.nav": "Pages of the journal",
   "journal.folderPages": "Pages in {name}",
   "journal.home": "Home",

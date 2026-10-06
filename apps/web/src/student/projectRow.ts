@@ -14,8 +14,11 @@ import type {
 } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
 
+import { Lock } from "lucide-react";
+
 import { refusalCodeOf, wordedRefusal } from "../api";
 import type { Dict, TFunction } from "../i18n";
+import type { IconType, Tone } from "../ui";
 
 /**
  * What the row and the page both know of a project: the card's facts, and
@@ -98,10 +101,26 @@ export const PROJECT_STATUS_KEY = {
 } as const satisfies Record<StudentProjectStatus, keyof Dict>;
 
 /**
- * The ONE wording of a state, on the row's line after the status and in the
- * page's repository card alike; none for the states whose button says it all.
+ * The status badge's tone, from the one rule of the student's cards: green is
+ * under way or done, amber waits on the student, zinc is closed or neutral.
  */
-export const STATE_KEY: Partial<Record<ProjectActionKind, keyof Dict>> = {
+export const PROJECT_STATUS_TONE: Record<StudentProjectStatus, { tone: Tone; icon?: IconType }> = {
+  to_accept: { tone: "amber" },
+  in_progress: { tone: "green" },
+  locked: { tone: "zinc", icon: Lock },
+  released: { tone: "green" },
+};
+
+/** The states that say something beside the deadline; the others' button says it all. */
+export type StateKind = "link" | "invitation" | "deleted" | "notAccepted";
+
+export const hasState = (kind: ProjectActionKind): kind is StateKind => Object.hasOwn(STATE_KEY, kind);
+
+/**
+ * The ONE wording of a state, on the row's line after the status and in the
+ * page's repository card alike.
+ */
+export const STATE_KEY: Record<StateKind, keyof Dict> = {
   link: "sproj.state.link",
   invitation: "sproj.invitation.pending",
   deleted: "sproj.state.deleted",

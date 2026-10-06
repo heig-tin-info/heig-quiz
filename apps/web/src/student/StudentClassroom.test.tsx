@@ -396,8 +396,12 @@ describe("the classroom page's Past group (issue #203, F-EVAL-15)", () => {
       // Closed under `none`: nothing will ever be published, so no "yet".
       card({ id: "e7", title: "Quiz 6", state: "closed", attemptId: "a7", attemptState: "submitted", results: "none" }),
     ]);
-    expect((await cardOf("Quiz 4")).getByText("rendue · résultats pas encore publiés")).toBeInTheDocument();
-    expect((await cardOf("Quiz 5")).getByText("temps écoulé · résultats pas encore publiés")).toBeInTheDocument();
+    const quiz4 = await cardOf("Quiz 4");
+    expect(quiz4.getByText("rendue")).toBeInTheDocument();
+    expect(quiz4.getByText("résultats pas encore publiés")).toBeInTheDocument();
+    const quiz5 = await cardOf("Quiz 5");
+    expect(quiz5.getByText("temps écoulé")).toBeInTheDocument();
+    expect(quiz5.getByText("résultats pas encore publiés")).toBeInTheDocument();
     expect((await cardOf("Quiz 6")).getByText("rendue")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Voir mes résultats" })).toBeNull();
   });
@@ -409,7 +413,8 @@ describe("the classroom page's Past group (issue #203, F-EVAL-15)", () => {
       retaking({ attemptCount: 3, keep: "last" }),
       { ...retaking({ attemptCount: 3 }), id: "e10", title: "Série 2 — Tableaux", state: "closed", results: "available" },
     ]);
-    expect(await screen.findByText("Dernier score 7.5 / 10 · tentatives : 3 sur 3")).toBeInTheDocument();
+    expect(await screen.findByText("Dernier score 7.5 / 10")).toBeInTheDocument();
+    expect(screen.getAllByText("tentatives : 3 sur 3").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "Recommencer" })).toBeNull();
     expect((await cardOf("Série 3 — Entraînement")).queryByRole("button")).toBeNull();
     await userEvent.click((await cardOf("Série 2 — Tableaux")).getByRole("button", { name: "Voir mes résultats" }));
@@ -424,7 +429,8 @@ describe("the classroom page's Past group (issue #203, F-EVAL-15)", () => {
         results: "pending",
       },
     ]);
-    expect(await screen.findByText("tentatives : 2 sur 3 · résultats pas encore publiés")).toBeInTheDocument();
+    expect(await screen.findByText("tentatives : 2 sur 3")).toBeInTheDocument();
+    expect(screen.getByText("résultats pas encore publiés")).toBeInTheDocument();
     expect(screen.queryByText(/score/)).toBeNull();
   });
 });

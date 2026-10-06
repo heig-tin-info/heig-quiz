@@ -516,7 +516,9 @@ live in `ui/state.ts`, each written once.
   time left: minutes, then in the last five a bold countdown by the second
   behind a warning sign; the pill's ring and hairline follow the ink.
 - Badge: pill, soft background, 12 px, tones green / amber / red / zinc /
-  accent. Status is a badge; a count is plain text. A badge that is also the door to
+  accent. Status is a badge; a count is plain text. The accent tone is
+  rarely right: on the student's activity cards it is never used (the button
+  alone carries it, see "The student's activity card"). A badge that is also the door to
   its own fix — "template rev. 1 → 3" on a classroom's evaluation row
   (F-EVAL-26) — is the same badge wrapped in a `button` with an accessible
   name that says the action; it stops the row's click, and it is shown only
@@ -596,6 +598,22 @@ live in `ui/state.ts`, each written once.
   the same pair. A name that does not say where it leads takes a `Tip`
   (`tip`), never a native `title`. It exists because six pages wrote that
   button with two different class lists.
+- MetaItem / MetaLine (`ui/meta.tsx`): the small facts under a title — a
+  deadline, a commit, a score. An item is an icon (lucide, `size-3.5`,
+  `fg-faint`, decoration) and its text at 13 px `fg-muted`; an icon never
+  carries a meaning the text lacks (a frozen score says "at the deadline" in
+  words). A `MetaLine` wraps its items (16 px between, 4 px between wrapped
+  rows). A badge may sit among them (the CI status). `IconTip` is the other
+  icon of this family: an icon that stands for a word (a card's kind), an
+  image named for a screen reader and by a `Tip` on hover, not a tab stop.
+- Breadcrumb (`ui/breadcrumb.tsx`): the trail of ancestors of a page in the
+  `PageHeader` eyebrow, `Courses › Classroom › Page`. A `nav` named by the
+  caller, an ordered list; ancestors are real links (`href`, routed in the
+  app on a plain click), the last item is the page, `aria-current="page"`,
+  in `fg`. The `ChevronRight` separator is decorative (`aria-hidden`). On a
+  phone the trail keeps one line: ancestors truncate first, the page last.
+  Only the student's project page wears it today; it will replace
+  `ParentLink` app-wide in a follow-up change (product owner, 2026-10-06).
 - EditableTitle: a page title renamed where it is written — the evaluation,
   the template, the classroom, the course. A real button at the `h1`'s own
   type, a `PenLine` in `fg-faint` fading in on hover and focus, swapped on a
@@ -1772,9 +1790,57 @@ sub-heading INSIDE the section, never a second `SectionHeading`: an `h3` at
 schedule's week heading (`activities/views.tsx`), where this week is the
 one in `fg`. 8 px from the heading to its cards, 12 between the cards as
 everywhere on the page, 20 between two days, 32 between sections. The cards
-are unchanged and carry no button, so the accent rule of the page
-(`mostUrgent`, one red fill) is untouched. No calendar or week grid until
+are the activity cards below and carry no button, so the accent rule of
+the page (`mostUrgent`, one red fill) is untouched; their kind is an icon
+and a project's status badge is not drawn until it starts. No calendar or week grid until
 the projects bring deadlines (D07).
+
+## The student's activity card
+
+One grammar for every card of the student's home and classroom page — an
+evaluation, a poll, a project, a group set, the drill (merge task M3-14l,
+product owner 2026-10-06; `ActivityRow` in `student/ActivityRow.tsx`):
+
+- A **kind icon** (lucide, `size-4`, `fg-faint`) before the title: exam
+  `FileCheck2`, exercise `PencilLine`, poll `ChartNoAxesColumn`, project
+  `FolderGit2`, groups `Users`, drill `Repeat`. It replaces the old kind
+  badge. It is an `IconTip`: named by a `Tip` on hover and by its accessible
+  name (`role="img"`), so the kind word stays in the card's accessible text.
+- The **title** (17 px bold; a link for a project and a group set) and the
+  **status badge** beside it, wrapping under it on a phone. Tones: amber when
+  a step waits on the student (to accept, open, no group yet, a live poll to
+  answer), green when it is under way or done (in progress, handed in,
+  scores published, drill available), zinc when it is over or neutral
+  (locked, time was up, not started). One table per kind
+  (`PROJECT_STATUS_TONE` for projects); a locked project wears `Lock` in
+  its badge. Never the accent. A count is not
+  a status: it stays plain text among the items.
+- The **meta line** (`MetaLine` of `MetaItem`s), never one string joined by
+  " · ". A project's card has two deliberate lines: first the timing
+  (`CalendarClock`: the date and the time left, or "Closed … ago", then what
+  the state adds), then, once a repository is ready, the work: the commit
+  (`GitCommitHorizontal`: short hash in mono, date, number of commits), the
+  CI badge ONLY when a run exists (never a dash in prose), the indicative
+  score (`Gauge`, or `Lock` once frozen, with "indicative" and "at the
+  deadline" as visible text; none after the release). The timing and the
+  commit are one definition shared with the project page's header.
+- **One button**, right. Its label may wear the GitHub mark (`GithubIcon`,
+  `RowAction.icon`) when it leads to GitHub or to linking the account;
+  never the accent for the mark. The accent is the button's alone, and
+  the page decides which button has it (the home lights every open card,
+  the classroom page its most urgent one); a ready repository never does.
+- On a phone (390 px) the card is one column: icon, title and badge on the
+  first lines, the items wrapping under them, the button on its own row.
+
+The student's project page (`/projects/:id`) is the same card grown to a
+page: the shell's width, a `Breadcrumb` in the eyebrow, the title alone in
+the `h1`, then one line with the same status badge, the same timing and
+commit (named "Last commit" or "Evaluated commit" in words), and the same
+button; below, the repository (the invitation only while pending), the
+latest CI run, and the score (or the result after the release) as stat
+cards and a teacher's comment in one frame, at the rhythm of an
+evaluation's results page. The CI and the score are not repeated in the
+header.
 
 ## The participant's poll page (`/p/:CODE`)
 

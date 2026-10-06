@@ -99,21 +99,34 @@ describe("a project in progress", () => {
   it("names the project, its classroom once, its deadline, the repository and the last commit", async () => {
     mockFetch({ [URL]: ok(project()) });
     const { navigate } = render();
-    expect(await screen.findByRole("heading", { level: 1, name: /Labo 1 — Pointeurs/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Labo 1 — Pointeurs" })).toBeInTheDocument();
     expect(screen.getByText("in progress")).toBeInTheDocument();
-    expect(screen.getByText(/^PRG1 · Due .* · .* left$/)).toBeInTheDocument();
+    expect(screen.getByText(/^Due [^·]+ · .* left$/)).toBeInTheDocument();
     expect(screen.getAllByText("PRG1-2026")).toHaveLength(1);
+    // The header keeps the deadline, the status and the commit, named; the CI and the score have their sections.
+    expect(screen.getByText("Last commit")).toBeInTheDocument();
+    expect(screen.getByText("3 commits")).toBeInTheDocument();
 
     const repo = screen.getByRole("link", { name: /heig\/labo-1-lea/ });
     expect(repo).toHaveAttribute("href", "https://github.com/heig/labo-1-lea");
     expect(repo).toHaveAttribute("target", "_blank");
-    expect(screen.getByText("Last commit")).toBeInTheDocument();
     expect(screen.getAllByText("9a3f1c7")).toHaveLength(1);
-    expect(screen.getByText("pass")).toBeInTheDocument();
-    expect(screen.getByText("Invitation accepted")).toBeInTheDocument();
+    // The CI badge is the run's section, not the header's.
+    expect(screen.getAllByText("pass")).toHaveLength(1);
+    expect(screen.queryByText("PRG1")).toBeNull();
+    expect(screen.queryByText(/Invitation/)).toBeNull();
     expect(screen.queryByRole("button", { name: "Resend the invitation" })).toBeNull();
 
-    await userEvent.click(screen.getByRole("button", { name: "PRG1-2026" }));
+    // The breadcrumb: Courses > the classroom > the project, real addresses.
+    const trail = screen.getByRole("navigation", { name: "Breadcrumb" });
+    const courses = within(trail).getByRole("link", { name: "Courses" });
+    expect(courses).toHaveAttribute("href", "/courses");
+    const room = within(trail).getByRole("link", { name: "PRG1-2026" });
+    expect(room).toHaveAttribute("href", "/classrooms/r1");
+    expect(within(trail).getByText("Labo 1 — Pointeurs")).toHaveAttribute("aria-current", "page");
+    await userEvent.click(courses);
+    expect(navigate).toHaveBeenCalledWith({ view: "studentCourses" });
+    await userEvent.click(room);
     expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r1" });
   });
 
@@ -121,11 +134,11 @@ describe("a project in progress", () => {
     mockFetch({ [URL]: ok(project()) });
     render();
     expect(await screen.findByText("Indicative score")).toBeInTheDocument();
-    expect(screen.getByText("34 / 40")).toBeInTheDocument();
+    expect(screen.getAllByText("34 / 40")).toHaveLength(1);
     expect(screen.getByText(/From the latest graded commit\. Indicative until your teacher publishes the scores\./)).toBeInTheDocument();
     expect(screen.getByText("Grade")).toBeInTheDocument();
     expect(screen.getByText("5.3")).toBeInTheDocument();
-    expect(screen.getByText("indicative")).toBeInTheDocument();
+    expect(screen.getAllByText(/indicative/).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /See the run on GitHub/ })).toHaveAttribute(
       "href",
       "https://github.com/heig/labo-1-lea/actions/runs/42",
@@ -146,12 +159,13 @@ describe("a project in progress", () => {
     mockFetch({ [URL]: ok(p) });
     render();
     expect(await screen.findByText("Score at the deadline")).toBeInTheDocument();
-    expect(screen.getByText("30 / 40")).toBeInTheDocument();
+    expect(screen.getAllByText("30 / 40")).toHaveLength(1);
     expect(screen.getByText(/Frozen at the deadline\. Indicative until/)).toBeInTheDocument();
     expect(screen.getByText("Evaluated commit")).toBeInTheDocument();
+    expect(screen.getByText("locked")).toBeInTheDocument();
     expect(screen.getByText("Read-only since the deadline")).toBeInTheDocument();
     // A passed deadline is said once, with no countdown.
-    expect(screen.getByText(/^PRG1 · Due [^·]+$/)).toBeInTheDocument();
+    expect(screen.getByText(/^Closed /)).toBeInTheDocument();
     expect(screen.queryByText("Grade")).toBeNull();
   });
 
@@ -162,7 +176,7 @@ describe("a project in progress", () => {
     const p = project({ deadlineAt: new Date(Date.parse(serverNow) + 2 * 3_600_000).toISOString(), serverNow });
     mockFetch({ [URL]: ok(p) });
     render();
-    expect(await screen.findByText(/^PRG1 · Due .* · .* left$/)).toBeInTheDocument();
+    expect(await screen.findByText(/^Due [^·]+ · .* left$/)).toBeInTheDocument();
     expect(screen.getByText("Last commit")).toBeInTheDocument();
   });
 
@@ -176,7 +190,6 @@ describe("a project in progress", () => {
     mockFetch({ [URL]: ok(project({ repo: { ...project().repo!, score: null, run: null, ciStatus: "pending" } })) });
     render();
     expect(await screen.findByText("No score yet: the CI has not graded a commit of yours.")).toBeInTheDocument();
-    expect(screen.getByText("running")).toBeInTheDocument();
   });
 });
 
@@ -232,7 +245,7 @@ describe("without a repository", () => {
       "href",
       "/app/auth/github/link?return=%2Fprojects%2Fp1",
     );
-    expect(screen.getByText(/· Starts in /)).toBeInTheDocument();
+    expect(screen.getByText(/^Starts in /)).toBeInTheDocument();
     expect(screen.getByText("Link your GitHub account to accept it")).toBeInTheDocument();
   });
 
@@ -274,7 +287,7 @@ describe("the release", () => {
     const note = screen.getByText("Your teacher's comment").parentElement!;
     expect(within(note).getByText(/Bon travail,\s*attention aux fuites\./)).toBeInTheDocument();
     expect(screen.queryByText("Score at the deadline")).toBeNull();
-    expect(screen.queryByText("indicative")).toBeNull();
+    expect(screen.queryByText(/indicative/)).toBeNull();
     expect(screen.getByText("scores published")).toBeInTheDocument();
   });
 
@@ -350,6 +363,7 @@ describe("in French", () => {
     expect(await screen.findByText("Score indicatif")).toBeInTheDocument();
     expect(screen.getByText("Mon dépôt")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ouvrir le dépôt" })).toBeInTheDocument();
-    expect(screen.getByText("réussie")).toBeInTheDocument();
+    expect(screen.getAllByText("réussie").length).toBeGreaterThan(0);
+    expect(screen.getByRole("navigation", { name: "Fil d'Ariane" })).toBeInTheDocument();
   });
 });
