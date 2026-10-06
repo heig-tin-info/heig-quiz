@@ -125,8 +125,9 @@ webhook secret has at least 32 characters (N-SEC-16).
 `pnpm github:app` registers an App through GitHub's
 [App Manifest flow](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest):
 every setting above, in one confirmation on GitHub. Run it on a workstation
-with a browser, from a checkout of this repository (built or not: it runs
-with `tsx`).
+with a browser, from a checkout of this repository whose dependencies are
+installed (`pnpm install --frozen-lockfile`; no build needed: it runs with
+`tsx`).
 
 ```bash
 pnpm github:app --url https://<host> --name <App name> \
@@ -185,8 +186,12 @@ pnpm github:app --url https://quiz.dev.chevallier.io --name heig-quiz-staging \
 ```
 
 Owned by `heig-tin-info` like the production App, so it must be public to
-be installed on the test organization `heig-quiz-staging`. Then install it
-there; the staging rule below says why nowhere else.
+be installed on the test organization `heig-quiz-staging`. Put the key and
+the `GITHUB_*` lines on the server and restart staging first (without them
+staging has no GitHub routes, and GitHub's setup return would land on a
+404); then install it from a staging classroom's Settings › GitHub, choosing
+`heig-quiz-staging` and *All repositories*. The staging rule below says why
+nowhere else.
 
 ## The same settings by hand
 
