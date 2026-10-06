@@ -70,6 +70,7 @@ const en = {
   // never a score nor a student's name.
   "project_published.subject": "New project: {projectTitle}",
   "project_published.body": "The project “{projectTitle}” is published in your classroom. Accept it to get your repository.",
+  "project_published.unlinked.body": "The project “{projectTitle}” is published in your classroom. Link your GitHub account, then accept it to get your repository.",
   "project_published.action": "Open the project",
   "project_deadline_reminder.subject": "Deadline within 24 hours: {projectTitle}",
   "project_deadline_reminder.body": "The deadline of the project “{projectTitle}” is in less than 24 hours. Push what you want graded before it.",
@@ -234,6 +235,7 @@ const fr: Record<Key, string> = {
   "pool_question_added.action": "Ouvrir la banque",
   "project_published.subject": "Nouveau projet : {projectTitle}",
   "project_published.body": "Le projet « {projectTitle} » est publié dans votre classe. Acceptez-le pour obtenir votre dépôt.",
+  "project_published.unlinked.body": "Le projet « {projectTitle} » est publié dans votre classe. Liez votre compte GitHub, puis acceptez-le pour obtenir votre dépôt.",
   "project_published.action": "Ouvrir le projet",
   "project_deadline_reminder.subject": "Échéance dans les 24 heures : {projectTitle}",
   "project_deadline_reminder.body": "L'échéance du projet « {projectTitle} » tombe dans moins de 24 heures. Poussez ce que vous voulez voir évalué avant.",
@@ -430,7 +432,8 @@ const UNCOUNTED_KINDS: ReadonlySet<NotificationKind> = new Set(["results_updated
  */
 function sentenceKey(payload: NotificationPayload, part: "subject" | "body"): Key {
   // A kind with a state (`system_alert`) has one sentence per state.
-  const state = "state" in payload ? `.${payload.state}` : "";
+  // A payload that says the recipient has no linked GitHub account has another body (M3-14d).
+  const state = "state" in payload ? `.${payload.state}` : part === "body" && "githubLinked" in payload ? ".unlinked" : "";
   const one =
     "count" in payload && payload.count === 1 && !UNCOUNTED_KINDS.has(payload.kind) ? ".one" : "";
   return `${payload.kind}${state}.${part}${one}` as Key;

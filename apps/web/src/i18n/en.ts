@@ -3726,6 +3726,7 @@ export const en = {
   "notif.systemAlert.recovered": "Back to OK: {checks}.",
   "notif.empty.title": "Nothing new",
   "notif.projectPublished": "The project “{projectTitle}” is published. Accept it to get your repository.",
+  "notif.projectPublished.unlinked": "The project “{projectTitle}” is published. Link your GitHub account, then accept it to get your repository.",
   "notif.projectDeadlineReminder": "The deadline of “{projectTitle}” is in less than 24 hours.",
   "notif.projectRepoInvited": "Your repository for “{projectTitle}” is ready: accept the invitation on GitHub.",
   "notif.projectGradeFinal": "The scores of “{projectTitle}” are released.",

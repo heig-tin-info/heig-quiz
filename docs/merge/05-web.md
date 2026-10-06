@@ -116,6 +116,12 @@ project, is staff of a classroom connected to GitHub, or holds a claimed
 seat in one (product owner, 2026-10-01: a student may link before any
 project, discreetly — no banner, no nudge).
 
+*Amended 2026-10-06 (product owner, M3-14 pilot finding 4): besides the
+project's own "Link GitHub" action, only the text of the `project_published`
+notification addressed to a recipient without a linked account mentions the
+link (link the account, then accept the project). Still no redirect and no
+banner; a stale link counts as linked.*
+
 **Teacher — per classroom, from Settings** (D24). GitHub is optional: a
 classroom without it is a plain Quiz classroom. The Settings tab's
 **GitHub** section:

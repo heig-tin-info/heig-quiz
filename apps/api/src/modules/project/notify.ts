@@ -46,7 +46,7 @@ import type { NotificationPayload } from "@quiz/contracts";
 import { DEADLINE_REMINDER_MS } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { classrooms, enrollments, projectGroupMembers, projectRepos, projects } from "../../db/schema.js";
+import { classrooms, enrollments, githubAccounts, projectGroupMembers, projectRepos, projects } from "../../db/schema.js";
 import { notifyUsers, type NotifyLog } from "../notifications/service.js";
 import { classroomStaffIds } from "../org/service.js";
 import { LIVE, ts } from "./deadline.js";
@@ -55,22 +55,31 @@ import { repoMembers } from "./groupRepos.js";
 /** What the audiences need of a project. */
 type ProjectRef = { id: string; name: string; classroomId: string };
 
-/** The claimed STUDENT seats of a classroom (ADR-018): who a student kind of a project reaches. */
-export async function classroomStudentIds(db: Db, classroomId: string): Promise<string[]> {
+/**
+ * The claimed STUDENT seats of a classroom (ADR-018): who a student kind of a
+ * project reaches, each with whether a GitHub account is linked (a stale link
+ * still counts: the project page offers "Relink"). One read.
+ */
+export async function classroomStudents(db: Db, classroomId: string): Promise<{ userId: string; linked: boolean }[]> {
   const rows = await db
-    .select({ userId: enrollments.userId })
+    .select({ userId: enrollments.userId, account: githubAccounts.userId })
     .from(enrollments)
+    .leftJoin(githubAccounts, eq(githubAccounts.userId, enrollments.userId))
     .where(and(eq(enrollments.classroomId, classroomId), eq(enrollments.staff, false), isNotNull(enrollments.userId)));
-  return rows.map((r) => r.userId!);
+  return rows.map((r) => ({ userId: r.userId!, linked: r.account !== null }));
 }
 
-/** `project_published`: the classroom's students, once per project (`publishProject` runs once). */
+/**
+ * `project_published`: the classroom's students, once per project
+ * (`publishProject` runs once). Those without a linked GitHub account read
+ * another text, frozen at sending (M3-14d).
+ */
 export async function announcePublished(db: Db, project: ProjectRef): Promise<void> {
-  await notifyUsers(db, await classroomStudentIds(db, project.classroomId), {
-    kind: "project_published",
-    projectId: project.id,
-    projectTitle: project.name,
-  });
+  const students = await classroomStudents(db, project.classroomId);
+  const payload = { kind: "project_published", projectId: project.id, projectTitle: project.name } as const;
+  const ids = (linked: boolean) => students.filter((s) => s.linked === linked).map((s) => s.userId);
+  await notifyUsers(db, ids(true), payload);
+  await notifyUsers(db, ids(false), { ...payload, githubLinked: false });
 }
 
 /** A staff kind about `project`, to the course's staff seats. */

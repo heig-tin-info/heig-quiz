@@ -158,6 +158,13 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
     /** A project of the recipient's classroom was published (once per project). */
     kind: z.literal("project_published"),
     ...projectRef,
+    /**
+     * Present, and false, only when the recipient had no linked GitHub account
+     * when it was sent: the text then asks to link it before accepting (M3-14d,
+     * F-GH-05). Absent means linked. A boolean and nothing else (N-SEC-20);
+     * frozen at sending.
+     */
+    githubLinked: z.literal(false).optional(),
   }),
   z.object({
     /**

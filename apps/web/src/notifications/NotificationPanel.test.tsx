@@ -76,6 +76,29 @@ describe("the inbox in the account menu", () => {
     ).toBeVisible();
   });
 
+  it("tells a student without a linked GitHub account to link it, and the others as before", async () => {
+    const PROJECT = "11111111-1111-4111-8111-111111111111";
+    const row = (id: string, extra: object): Notification => ({
+      id,
+      payload: { kind: "project_published", projectId: PROJECT, projectTitle: "Lab 1", ...extra },
+      createdAt: new Date(Date.now() - 3_600_000).toISOString(),
+      readAt: null,
+    });
+    mockFetch({
+      [`GET ${LIST}`]: ok({ items: [row("u1", { githubLinked: false }), row("l1", {})], unread: 2 }),
+    });
+    renderMenu();
+
+    await openInbox("User menu (2 unread notifications)");
+    const panel = screen.getByRole("dialog", { name: "Notifications" });
+    expect(
+      within(panel).getByText(/Link your GitHub account, then accept it to get your repository\./),
+    ).toBeVisible();
+    expect(
+      within(panel).getByText("The project “Lab 1” is published. Accept it to get your repository."),
+    ).toBeVisible();
+  });
+
   it("puts the count on the avatar, capped at 9+, and on the menu item", async () => {
     mockFetch({ [`GET ${LIST}`]: ok({ items: [SHARED], unread: 23 }) });
     renderMenu();

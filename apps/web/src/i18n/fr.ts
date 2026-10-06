@@ -3727,6 +3727,7 @@ export const fr: Record<keyof Dict, string> = {
   "notif.systemAlert.recovered": "De nouveau OK : {checks}.",
   "notif.empty.title": "Rien de neuf",
   "notif.projectPublished": "Le projet « {projectTitle} » est publié. Acceptez-le pour obtenir votre dépôt.",
+  "notif.projectPublished.unlinked": "Le projet « {projectTitle} » est publié. Liez votre compte GitHub, puis acceptez-le pour obtenir votre dépôt.",
   "notif.projectDeadlineReminder": "L'échéance de « {projectTitle} » tombe dans moins de 24 heures.",
   "notif.projectRepoInvited": "Votre dépôt pour « {projectTitle} » est prêt : acceptez l'invitation sur GitHub.",
   "notif.projectGradeFinal": "Les notes de « {projectTitle} » sont publiées.",

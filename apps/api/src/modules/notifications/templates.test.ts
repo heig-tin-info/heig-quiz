@@ -92,6 +92,7 @@ describe("renderNotification", () => {
       { kind: "activity_available", activityKind: "evaluation", activityId: EVAL, activityTitle: "Série 3" },
       { kind: "deadline_approaching", evaluationId: EVAL, evaluationTitle: "Série 4" },
       { kind: "project_published", ...project },
+      { kind: "project_published", ...project, githubLinked: false },
       { kind: "project_deadline_reminder", ...project },
       { kind: "project_repo_invited", ...project },
       { kind: "project_grade_final", ...project },
@@ -109,6 +110,18 @@ describe("renderNotification", () => {
         }
       }
     }
+  });
+
+  it("gives a project published to an unlinked student the sentence that asks to link GitHub", () => {
+    const linked = { kind: "project_published", ...project } as const;
+    const unlinked = { ...linked, githubLinked: false } as const;
+    const url = "https://quiz.test";
+    expect(renderNotification(linked, "en", url).text).toContain("Accept it to get your repository.");
+    expect(renderNotification(unlinked, "en", url).text).toContain("Link your GitHub account, then accept it");
+    expect(renderNotification(unlinked, "en", url).preview).toContain("Link your GitHub account");
+    expect(renderNotification(linked, "fr", url).text).toContain("Acceptez-le pour obtenir votre dépôt.");
+    expect(renderNotification(unlinked, "fr", url).text).toContain("Liez votre compte GitHub, puis acceptez-le");
+    expect(renderNotification(unlinked, "fr", url).subject).toBe(renderNotification(linked, "fr", url).subject);
   });
 
   it("counts a folded kind, with a singular sentence of its own, and names no student", () => {

@@ -156,6 +156,10 @@ describe("the project kinds (F-NOTIF-13, D18)", () => {
   it("carry ids, a title and counts, never a score nor a student", () => {
     const project = { projectId: "11111111-1111-4111-8111-111111111111", projectTitle: "Lab 1" };
     expect(NotificationPayload.parse({ kind: "project_published", ...project })).toEqual({ kind: "project_published", ...project });
+    // The unlinked variant carries a boolean and nothing else (M3-14d, N-SEC-20).
+    const unlinked = { kind: "project_published", ...project, githubLinked: false };
+    expect(NotificationPayload.parse(unlinked)).toEqual(unlinked);
+    expect(NotificationPayload.safeParse({ ...unlinked, githubLinked: true }).success).toBe(false);
     const failed = { kind: "project_provision_failed", ...project, count: 2, reason: "repo_name_taken" };
     expect(NotificationPayload.parse(failed)).toEqual(failed);
     expect(NotificationPayload.safeParse({ kind: "project_provision_failed", ...project, count: 1, reason: "invitation_refused" }).success).toBe(false);

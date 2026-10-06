@@ -231,6 +231,18 @@ describe("project_published", () => {
     expect(await bells(w.students[0]!.id, "project_published")).toHaveLength(1);
   });
 
+  it("tells a student without a linked GitHub account to link it, the others as before", async () => {
+    const w = await project({ students: 2, publish: false });
+    const [linked, unlinked] = w.students;
+    await server.app.db.delete(githubAccounts).where(eq(githubAccounts.userId, unlinked!.id));
+    expect((await call("POST", `/app/api/projects/${w.id}/publish`, teacher.headers)).statusCode).toBe(200);
+    expect(await bells(linked!.id, "project_published")).toEqual([{ kind: "project_published", projectId: w.id, projectTitle: "Lab 1" }]);
+    // The boolean and nothing else: no login, no repository (N-SEC-20).
+    expect(await bells(unlinked!.id, "project_published")).toEqual([
+      { kind: "project_published", projectId: w.id, projectTitle: "Lab 1", githubLinked: false },
+    ]);
+  });
+
   it("tells them at the ticker's scheduled publication too", async () => {
     const w = await project({ publish: false, body: { publishMode: "scheduled", startAt: "2026-10-03T08:00:00Z", deadlineAt: DEADLINE } });
     await tick();
