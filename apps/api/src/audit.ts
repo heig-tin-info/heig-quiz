@@ -404,6 +404,12 @@ export type AuditAction =
   | "project_repo.protection_reenabled"
   | "project_repo.invite_resent"
   /**
+   * The daily reconciliation applied the `hgc-protect` ruleset a plan
+   * without rulesets had left out (M3-14k), subject the `project_repos`
+   * row — `payload.projectId`, `rulesetId`, `via` (`reconcile`).
+   */
+  | "project_repo.protected"
+  /**
    * A GitHub account let into, or out of, a project repository for a roster
    * line (ADR-048 lot 2, ADR-070 §4–§5; merge task M3-15b), subject the
    * `project_repos` row — a group's, or (a revocation) a student's own.

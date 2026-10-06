@@ -37,6 +37,35 @@ export function isPlanRestriction(err: unknown): boolean {
 
 
 /**
+ * The `hgc-protect` ruleset on a student repository's default branch
+ * (non-fast-forward and deletion, GH-21..23): its id, or null where the
+ * organization's plan serves no ruleset on a private repository
+ * ({@link isPlanRestriction}). Idempotent — a ruleset of that name already
+ * there is adopted, never created twice — so provisioning and the daily
+ * reconciliation (M3-14k) share it. Any other failure throws.
+ */
+export async function protectStudentRepo(octokit: Octokit, org: string, repo: string): Promise<number | null> {
+  try {
+    const { data: rulesets } = await octokit.request("GET /repos/{owner}/{repo}/rulesets", { owner: org, repo });
+    const existing = rulesets.find((r: { name: string; id: number }) => r.name === PROTECT_RULESET);
+    if (existing) return existing.id;
+    const { data } = await octokit.request("POST /repos/{owner}/{repo}/rulesets", {
+      owner: org,
+      repo,
+      name: PROTECT_RULESET,
+      target: "branch",
+      enforcement: "active",
+      conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
+      rules: [{ type: "non_fast_forward" }, { type: "deletion" }],
+    });
+    return data.id;
+  } catch (err) {
+    if (!isPlanRestriction(err)) throw err;
+    return null;
+  }
+}
+
+/**
  * The target name is held by a repository the caller may not adopt: nothing
  * was pushed to it, changed on it, nor anyone invited on it.
  */
@@ -163,31 +192,9 @@ export async function provisionStudentRepo(opts: {
   // 3. Ruleset against force-push / deletion (GH-21..23). On a plan without
   // rulesets the repository stays unprotected rather than being denied to the
   // student: same degraded mode as the deadline (fallback H8), which archives
-  // when it cannot lock. The teacher is warned on the classroom page.
-  let rulesetId: number | null = null;
-  try {
-    const { data: rulesets } = await octokit.request("GET /repos/{owner}/{repo}/rulesets", {
-      owner: org,
-      repo: targetRepo,
-    });
-    rulesetId =
-      rulesets.find((r: { name: string; id: number }) => r.name === PROTECT_RULESET)?.id ?? null;
-    if (rulesetId === null) {
-      const { data } = await octokit.request("POST /repos/{owner}/{repo}/rulesets", {
-        owner: org,
-        repo: targetRepo,
-        name: PROTECT_RULESET,
-        target: "branch",
-        enforcement: "active",
-        conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
-        rules: [{ type: "non_fast_forward" }, { type: "deletion" }],
-      });
-      rulesetId = data.id;
-    }
-  } catch (err) {
-    if (!isPlanRestriction(err)) throw err;
-    rulesetId = null;
-  }
+  // when it cannot lock. The daily reconciliation applies it once the plan
+  // allows it (M3-14k); the teacher is warned on the project page meanwhile.
+  const rulesetId = await protectStudentRepo(octokit, org, targetRepo);
 
   // 4. Invite the student (idempotent: 204 = already a collaborator), with
   //    the `push` permission and never more (N-SEC-21). Quiz has no work

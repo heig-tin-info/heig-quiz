@@ -450,6 +450,21 @@ describe("the strategies (F-PROJ-09)", () => {
     expect(await repoRow(repo!.id)).toMatchObject({ lockedAt: null, archivedAt: null });
   });
 
+  it("locks by ruleset, not by archive, once the daily reconciliation protected a repository provisioned without one (M3-14k)", async () => {
+    const p = await project({ freePlan: true });
+    const [repo] = p.repos;
+    expect(repo!.rulesetId).toBeNull();
+    const reconcile = RECONCILE_TASKS.find((t) => t.key === "reconcile.repos")!;
+    await reconcile.run(server.app, config); // the plan now serves rulesets
+    expect((await repoRow(repo!.id)).rulesetId).not.toBeNull();
+    server.clock.set(at(DEADLINE, 1000));
+    await tick();
+    await runJobs(p.id);
+    expect(lockRuleset(repo!.fullName!)).toBe(true);
+    expect(world.archived.has(repo!.fullName!)).toBe(false);
+    expect(await repoRow(repo!.id)).toMatchObject({ lockedAt: at(DEADLINE, 1000), archivedAt: null });
+  });
+
   it("archives when GitHub refuses the ruleset for the plan", async () => {
     const p = await project();
     server.clock.set(at(DEADLINE, 1000));
