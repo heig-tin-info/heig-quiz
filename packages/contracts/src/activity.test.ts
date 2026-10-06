@@ -49,8 +49,25 @@ describe("ActivitySummary (ADR-035 §2)", () => {
       classroom: { id: ID, name: "PRG1-2026", courseCode: "PRG1" },
       startAt: "2026-10-01T08:00:00.000Z",
       deadlineAt: "2026-10-15T22:00:00.000Z",
+      source: { fullName: "heig-tin-info/lab-2" },
+      distribution: { fullName: "heig-tin-info/lab-2-prg1-2026" },
     } as const;
     expect(ActivitySummary.parse(project)).toEqual(project);
+  });
+
+  it("reads a manual draft's project row without provisional dates (M3-14a)", () => {
+    const draft = {
+      kind: "project",
+      id: ID,
+      title: "Lab 3",
+      state: "draft",
+      classroom: { id: ID, name: "PRG1-2026", courseCode: "PRG1" },
+      startAt: null,
+      deadlineAt: null,
+      source: { fullName: "heig-tin-info/lab-3" },
+      distribution: null,
+    } as const;
+    expect(ActivitySummary.parse(draft)).toEqual(draft);
   });
 });
 
