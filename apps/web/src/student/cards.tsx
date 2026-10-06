@@ -12,7 +12,23 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState, type ReactNode } from "react";
-import { CalendarClock, GraduationCap, School } from "lucide-react";
+import {
+  Award,
+  CalendarClock,
+  ChartNoAxesColumn,
+  Clock,
+  FileCheck2,
+  GraduationCap,
+  History,
+  Hourglass,
+  Monitor,
+  PencilLine,
+  Presentation,
+  Repeat,
+  School,
+  Timer,
+  Users,
+} from "lucide-react";
 
 import { formatPoints, groupByDay, type DayBucket, type StudentActivityGroup } from "@quiz/domain";
 import type {
@@ -36,16 +52,39 @@ import {
   isoDateParts,
   isoDateTime,
   localTimeZone,
+  MetaItem,
   pressable,
   QueryError,
   Skeleton,
+  type IconType,
 } from "../ui";
-import { ActivityRow, leftLine, startsLine, type RowAction } from "./ActivityRow";
+import { ActivityRow, leftLine, startsLine, type RowAction, type RowStatus } from "./ActivityRow";
 import { ProjectRow } from "./ProjectRow";
 import { useRetake } from "./retake";
 import { SebLaunchModal } from "./SebLaunchModal";
 
 export { ActivityRow, leftLine, startsLine, type RowAction } from "./ActivityRow";
+
+/** One fact of a card before it is drawn: an icon and its words. */
+export interface Meta {
+  icon: IconType;
+  text: string;
+}
+
+/** The facts of a card as `MetaItem`s, for `ActivityRow`'s `meta`. */
+export const metaItems = (items: readonly Meta[]): ReactNode =>
+  items.map((m, i) => (
+    <MetaItem key={i} icon={m.icon}>
+      {m.text}
+    </MetaItem>
+  ));
+
+/** The icon of a kind of evaluation, the first thing on its card (named by a `Tip`). */
+const MODE_ICON = {
+  exam: FileCheck2,
+  exercise: PencilLine,
+  poll: ChartNoAxesColumn,
+} as const satisfies Record<keyof typeof MODE_KEY, IconType>;
 
 export const MODE_KEY = {
   exam: "shome.mode.exam",
@@ -66,19 +105,18 @@ function primaryAction(card: EvaluationCardData, t: TFunction): string {
  * "Continue" opens. Before the time left: it names the attempt, the time
  * left is about the evaluation.
  */
-function timingLine(card: EvaluationCardData, now: number, t: TFunction): string | null {
-  const left = timeLeftLine(card, now, t);
+function timingMeta(card: EvaluationCardData, now: number, t: TFunction): Meta[] {
+  const left = timeLeftMeta(card, now, t);
   if (card.attemptState !== "in_progress" || card.attemptStartedAt === null) return left;
-  const started = t("shome.startedAt", isoDateParts(card.attemptStartedAt));
-  return left === null ? started : `${started} · ${left}`;
+  return [{ icon: History, text: t("shome.startedAt", isoDateParts(card.attemptStartedAt)) }, ...left];
 }
 
-function timeLeftLine(card: EvaluationCardData, now: number, t: TFunction): string | null {
+function timeLeftMeta(card: EvaluationCardData, now: number, t: TFunction): Meta[] {
   // The attempt's own deadline while it is ahead; the evaluation's closing otherwise.
-  if (card.deadlineAt !== null && Date.parse(card.deadlineAt) > now) return leftLine(card.deadlineAt, now, t);
-  if (card.closesAt !== null) return leftLine(card.closesAt, now, t);
-  if (card.durationS !== null) return t("shome.duration", { n: Math.round(card.durationS / 60) });
-  return null;
+  if (card.deadlineAt !== null && Date.parse(card.deadlineAt) > now) return [{ icon: Clock, text: leftLine(card.deadlineAt, now, t) }];
+  if (card.closesAt !== null) return [{ icon: Clock, text: leftLine(card.closesAt, now, t) }];
+  if (card.durationS !== null) return [{ icon: Timer, text: t("shome.duration", { n: Math.round(card.durationS / 60) }) }];
+  return [];
 }
 
 /** A finished attempt: handed in, or closed by time or by the teacher. */
@@ -101,31 +139,34 @@ export function PendingLine({ count, className }: { count: number; className?: s
 }
 
 /**
- * F-EVAL-15: the line of an exercise with retakes once an attempt is done —
+ * F-EVAL-15: the facts of an exercise with retakes once an attempt is done —
  * the score that counts (best or last) and how many attempts were taken.
  * The score is all the student reads between two attempts (ADR-025).
  */
-function retakeLine(card: EvaluationCardData, t: TFunction): string | null {
+function retakeMeta(card: EvaluationCardData, t: TFunction): Meta[] {
   const r = card.retakes;
-  if (r === null) return null;
-  const parts: string[] = [];
+  if (r === null) return [];
+  const items: Meta[] = [];
   // `score` is null once the exercise is closed and the feedback policy
   // hides it (on release, none): the card says no more than the feedback page.
   if (r.kept !== null && r.kept.score !== null) {
-    parts.push(
-      t(r.keep === "best" ? "shome.kept.best" : "shome.kept.last", {
+    items.push({
+      icon: Award,
+      text: t(r.keep === "best" ? "shome.kept.best" : "shome.kept.last", {
         points: formatPoints(r.kept.score.points),
         total: formatPoints(r.kept.score.totalPoints),
       }),
-    );
+    });
   }
-  parts.push(
-    r.maxAttempts === null
-      ? t("shome.attempts", { n: r.attemptCount })
-      : t("shome.attemptsOf", { n: r.attemptCount, max: r.maxAttempts }),
-  );
-  if (r.kept?.score?.pendingCount) parts.push(pendingLabel(r.kept.score.pendingCount, t));
-  return parts.join(" · ");
+  items.push({
+    icon: Repeat,
+    text:
+      r.maxAttempts === null
+        ? t("shome.attempts", { n: r.attemptCount })
+        : t("shome.attemptsOf", { n: r.attemptCount, max: r.maxAttempts }),
+  });
+  if (r.kept?.score?.pendingCount) items.push({ icon: Hourglass, text: pendingLabel(r.kept.score.pendingCount, t) });
+  return items;
 }
 
 /** ADR-051 §2: an exam sat on a kiosk station and nowhere else. */
@@ -133,36 +174,44 @@ const kioskOnly = (card: EvaluationCardData): boolean =>
   card.trustedClients.includes("kiosk") && !card.trustedClients.includes("seb");
 
 /**
- * The line of an open card: where to sit it for a kiosk-only exam, the
+ * The facts of an open card: where to sit it for a kiosk-only exam, the
  * retake count once done, the time left otherwise.
  */
-export function openLine(card: EvaluationCardData, now: number, t: TFunction): string | null {
-  if (kioskOnly(card)) return t("shome.kiosk");
-  return card.retakes !== null && finished(card) ? retakeLine(card, t) : timingLine(card, now, t);
+export function openMeta(card: EvaluationCardData, now: number, t: TFunction): Meta[] {
+  if (kioskOnly(card)) return [{ icon: Monitor, text: t("shome.kiosk") }];
+  return card.retakes !== null && finished(card) ? retakeMeta(card, t) : timingMeta(card, now, t);
 }
 
 /**
- * The line of a past card: how the attempt ended (or the retake count), and,
- * issue #203, that the results are still to come when the server says so
- * (`results: "pending"`) — the card has no button for them then, so the
- * student reads it here instead of on an empty page. A score already on the
- * line (between two attempts) needs no such note.
+ * The facts of a past card: the retake count, and, issue #203, that the
+ * results are still to come when the server says so (`results: "pending"`)
+ * — the card has no button for them then, so the student reads it here
+ * instead of on an empty page. A score already shown (between two attempts)
+ * needs no such note. How the attempt ended is the status badge's.
  */
-export function pastLine(card: EvaluationCardData, t: TFunction): string {
-  const base =
-    card.retakes !== null && card.attemptId !== null
-      ? retakeLine(card, t)!
-      : card.attemptState === "submitted"
-        ? t("shome.state.submitted")
-        : card.attemptState === "expired"
-          ? t("shome.state.expired")
-          : t("shome.state.notStarted");
+export function pastMeta(card: EvaluationCardData, t: TFunction): Meta[] {
+  const items = card.retakes !== null && card.attemptId !== null ? retakeMeta(card, t) : [];
   const waiting = finished(card) && card.results === "pending" && !card.retakes?.kept?.score;
-  return waiting ? `${base} · ${t("shome.resultsPending")}` : base;
+  return waiting ? [...items, { icon: Hourglass, text: t("shome.resultsPending") }] : items;
 }
 
-export function upcomingLine(card: EvaluationCardData, now: number, t: TFunction): string {
-  return card.opensAt === null ? t("shome.upcoming.empty") : startsLine(card.opensAt, now, t);
+export function upcomingMeta(card: EvaluationCardData, now: number, t: TFunction): Meta[] {
+  return [{ icon: CalendarClock, text: card.opensAt === null ? t("shome.upcoming.empty") : startsLine(card.opensAt, now, t) }];
+}
+
+/**
+ * Where an evaluation stands, as its badge (amber waits on the student,
+ * green is under way or done, zinc is over without a result to read); none
+ * while it is only coming up.
+ */
+export function evaluationStatus(card: EvaluationCardData, group: StudentActivityGroup, t: TFunction): RowStatus | undefined {
+  if (group === "upcoming") return undefined;
+  if (card.attemptState === "submitted") return { label: t("shome.state.submitted"), tone: "green" };
+  if (card.attemptState === "expired") return { label: t("shome.state.expired"), tone: "zinc" };
+  if (group === "past") return { label: t("shome.state.notStarted"), tone: "zinc" };
+  return card.attemptState === "in_progress"
+    ? { label: t("shome.status.inProgress"), tone: "green" }
+    : { label: t("shome.status.open"), tone: "amber" };
 }
 
 /** The instant a card's "coming up" line counts down to: an evaluation opens, a project starts. */
@@ -196,12 +245,12 @@ export function ActivityCard({
     return <ProjectRow card={card} group={group} now={now} navigate={navigate} primary={primary} showWhere={showWhere} />;
   }
   if (group === "open") {
-    return <EvaluationRow card={card} showWhere={showWhere} line={openLine(card, now, t)} action={actions?.open(card, primary)} />;
+    return <EvaluationRow card={card} group={group} meta={openMeta(card, now, t)} showWhere={showWhere} action={actions?.open(card, primary)} />;
   }
   if (group === "past") {
-    return <EvaluationRow card={card} showWhere={showWhere} line={pastLine(card, t)} action={actions?.review(card)} />;
+    return <EvaluationRow card={card} group={group} meta={pastMeta(card, t)} showWhere={showWhere} action={actions?.review(card)} />;
   }
-  return <EvaluationRow card={card} showWhere={showWhere} line={upcomingLine(card, now, t)} />;
+  return <EvaluationRow card={card} group={group} meta={upcomingMeta(card, now, t)} showWhere={showWhere} />;
 }
 
 const DAY_KEY = {
@@ -276,22 +325,25 @@ function DayGroup({
 /** `showWhere` is false on the classroom's own page, where every row is of that classroom. */
 export function EvaluationRow({
   card,
-  line,
+  group,
+  meta,
   action,
   showWhere = true,
 }: {
   card: EvaluationCardData;
-  line: string | null;
+  group: StudentActivityGroup;
+  meta: readonly Meta[];
   action?: RowAction | undefined;
   showWhere?: boolean;
 }) {
   const t = useT();
   return (
     <ActivityRow
+      kind={{ label: t(MODE_KEY[card.mode]), icon: MODE_ICON[card.mode] }}
       title={card.title}
       where={showWhere ? `${card.courseCode} · ${card.classroomName}` : undefined}
-      line={line}
-      badge={{ label: t(MODE_KEY[card.mode]), accent: card.mode === "exam" }}
+      status={evaluationStatus(card, group, t)}
+      meta={metaItems(meta)}
       action={action}
     />
   );
@@ -317,10 +369,11 @@ export function PollRow({
   const t = useT();
   return (
     <ActivityRow
+      kind={{ label: t(MODE_KEY.poll), icon: MODE_ICON.poll }}
       title={t("shome.poll.title")}
       where={showWhere ? `${poll.courseCode} · ${poll.classroomName}` : undefined}
-      line={t("shome.poll.line")}
-      badge={{ label: t(MODE_KEY.poll), accent: false }}
+      status={{ label: t("shome.poll.status"), tone: "amber" }}
+      meta={metaItems([{ icon: Presentation, text: t("shome.poll.line") }])}
       action={{
         label: t("shome.poll.answer"),
         primary,
@@ -350,11 +403,15 @@ export function GroupSetRow({
   const go = () => navigate(route);
   return (
     <ActivityRow
+      kind={{ label: t("sgroups.row.badge"), icon: Users }}
       title={t("sgroups.row.title", { when: isoDateTime(card.openUntil) })}
       link={{ href: routeToPath(route), onNavigate: go }}
       where={showWhere ? `${card.courseCode} · ${card.classroomName} · ${card.name}` : card.name}
-      line={card.myGroup === null ? t("sgroups.row.none") : t("sgroups.row.in", { group: card.myGroup })}
-      badge={{ label: t("sgroups.row.badge"), accent: false }}
+      status={
+        card.myGroup === null
+          ? { label: t("sgroups.row.none"), tone: "amber" }
+          : { label: t("sgroups.row.in", { group: card.myGroup }), tone: "green" }
+      }
       action={{ label: t(card.myGroup === null ? "sgroups.row.choose" : "sgroups.row.see"), onClick: go }}
     />
   );

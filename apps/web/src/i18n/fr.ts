@@ -2445,6 +2445,9 @@ export const fr: Record<keyof Dict, string> = {
   "shome.state.notStarted": "pas commencée",
   "shome.state.submitted": "rendue",
   "shome.state.expired": "temps écoulé",
+  "shome.poll.status": "en direct",
+  "shome.status.inProgress": "en cours",
+  "shome.status.open": "ouvert",
   // F-PROJ-04 (M3-09a): the status word of a project card.
   "sproj.status.to_accept": "à accepter",
   "sproj.status.in_progress": "en cours",
@@ -2496,6 +2499,7 @@ export const fr: Record<keyof Dict, string> = {
   "sproj.commit.none": "aucun commit encore",
   "sproj.commits.one": "1 commit",
   "sproj.commits": "{n} commits",
+  "sproj.closed": "Terminé {when}",
   "sproj.score": "Score",
   "sproj.score.current": "Score indicatif",
   "sproj.score.frozen": "Score à l'échéance",
@@ -2504,6 +2508,7 @@ export const fr: Record<keyof Dict, string> = {
   "sproj.score.none": "Pas encore de score : la CI n'a évalué aucun de vos commits.",
   "sproj.score.final": "Score final",
   "sproj.run.open": "Voir l'exécution sur GitHub",
+  "sproj.ci": "Dernière exécution de la CI",
   "sproj.result": "Résultat",
   "sproj.result.publishedAt": "Publié le {when}",
   "shome.empty.title": "Rien à faire pour l'instant",
@@ -4062,6 +4067,7 @@ export const fr: Record<keyof Dict, string> = {
   "drill.today.one": "Une question · jusqu'à {min} min",
   "drill.start": "Commencer",
   "drill.badge": "disponible",
+  "drill.kind": "Entraînement",
   "drill.practise": "Réviser",
   "drill.empty.title": "Rien à réviser aujourd'hui",
   "drill.empty.next": "Votre prochaine révision a lieu le {date}.",
@@ -4650,6 +4656,7 @@ export const fr: Record<keyof Dict, string> = {
   // The journal reader (F-JRN-07, M4-04, `journal/`). A warning or a sync
   // error is a code of `@quiz/contracts`, worded here (fix J5).
   "journal.breadcrumb": "Où vous êtes",
+  "breadcrumb.label": "Fil d'Ariane",
   "journal.nav": "Pages du journal",
   "journal.folderPages": "Pages de {name}",
   "journal.home": "Accueil",

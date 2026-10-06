@@ -101,6 +101,34 @@ describe("the state of the work (M3-14i)", () => {
     expect(screen.getByText(/indicative/)).toBeInTheDocument();
   });
 
+  it("names the kind by an icon and the status by a badge, never a kind badge", async () => {
+    mockFetch({});
+    render(card({ status: "in_progress", invitation: "accepted", ...REPO, work }));
+    expect(await screen.findByRole("img", { name: "Project" })).toBeInTheDocument();
+    expect(screen.getByText("in progress")).toHaveClass("rounded-full");
+    expect(screen.queryByText("Project")).toBeNull();
+    expect(screen.getByRole("link", { name: "Open repository" }).querySelector("svg")).not.toBeNull();
+  });
+
+  it("draws the CI badge only when a run exists, and never a dash", async () => {
+    mockFetch({});
+    const none = { ...work, ciStatus: "none" as const };
+    render(card({ status: "in_progress", invitation: "accepted", ...REPO, work: none }));
+    expect(await screen.findByText("9a3f1c7")).toBeInTheDocument();
+    expect(screen.queryByText("—")).toBeNull();
+    expect(screen.queryByText("fail")).toBeNull();
+  });
+
+  it("marks a score frozen at the deadline with a lock, and keeps the word indicative", async () => {
+    mockFetch({});
+    const frozen = { ...work, score: { points: 4, max: 6, grade: null, frozen: true } };
+    render(card({ status: "locked", invitation: "accepted", ...REPO, work: frozen, deadlineAt: at(-1) }), { group: "past" });
+    expect(await screen.findByRole("img", { name: "Score at the deadline" })).toBeInTheDocument();
+    expect(screen.getByText("4 / 6")).toBeInTheDocument();
+    expect(screen.getByText(/indicative/)).toBeInTheDocument();
+    expect(screen.getByText(/^Closed /)).toBeInTheDocument();
+  });
+
   it("says no commit yet before the first push", async () => {
     mockFetch({});
     const empty = { ...work, lastCommit: null, commits: 0, ciStatus: "none" as const, score: null };
@@ -117,7 +145,10 @@ describe("the one action by state", () => {
     expect(link).toHaveAttribute("href", "/app/auth/github/link?return=%2Fclassrooms%2Fr1");
     expect(link).not.toHaveAttribute("target");
     expect(link).toHaveClass("bg-accent");
-    expect(screen.getByText(/to accept · .* · Link your GitHub account to accept it$/)).toBeInTheDocument();
+    expect(screen.getByText("to accept")).toBeInTheDocument();
+    expect(screen.getByText("Link your GitHub account to accept it")).toBeInTheDocument();
+    // The GitHub mark is in the button, the accent is the button's alone.
+    expect(link.querySelector("svg")).not.toBeNull();
   });
 
   it("offers Accept to a linked student of an open project", async () => {
@@ -152,13 +183,15 @@ describe("the one action by state", () => {
     unmount();
 
     const r2 = render(card({ status: "locked", deadlineAt: at(-1) }), { group: "past" });
-    expect(await screen.findByText("locked · Not accepted before the deadline")).toBeInTheDocument();
+    expect(await screen.findByText("Not accepted before the deadline")).toBeInTheDocument();
+    expect(screen.getByText("locked")).toBeInTheDocument();
     expect(screen.queryByRole("button")).toBeNull();
     expect(actionLink(/GitHub|repository|invitation/)).toBeNull();
     r2.unmount();
 
     render(card({ status: "in_progress" }));
-    expect(await screen.findByText(/in progress · .* · Repository deleted on GitHub: ask your teacher$/)).toBeInTheDocument();
+    expect(await screen.findByText("Repository deleted on GitHub: ask your teacher")).toBeInTheDocument();
+    expect(screen.getByText("in progress")).toBeInTheDocument();
     expect(screen.queryByRole("button")).toBeNull();
   });
 
@@ -179,7 +212,9 @@ describe("the one action by state", () => {
     mockFetch({});
     render(card(), { locale: "fr" });
     expect(await screen.findByRole("button", { name: "Accepter" })).toBeInTheDocument();
-    expect(screen.getByText("Projet")).toBeInTheDocument();
+    // The kind is an icon, named for a screen reader and a Tip.
+    expect(screen.getByRole("img", { name: "Projet" })).toBeInTheDocument();
+    expect(screen.getByText("à accepter")).toBeInTheDocument();
   });
 });
 

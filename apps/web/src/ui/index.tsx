@@ -17,6 +17,8 @@
 //   page      surfaces and page structure: Card, PageHeader, Tabs…
 //             The six above are on layers and import no other sibling,
 //             except page, which reads rovingIndex from menu.
+//   meta      the small facts under a title (MetaItem, MetaLine), on layers.
+//   breadcrumb the trail of ancestors of a page (Breadcrumb), on controls.
 //   actions   the actions of one record: icon buttons or a menu, decided
 //             by their number (Actions), on layers and menu.
 //   popover   the small floating card anchored on a trigger (Popover), on
@@ -44,6 +46,8 @@ export * from "./identity";
 export * from "./dates";
 export * from "./feedback";
 export * from "./page";
+export * from "./meta";
+export * from "./breadcrumb";
 export * from "./actions";
 export * from "./popover";
 export * from "./people";

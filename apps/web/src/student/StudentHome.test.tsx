@@ -219,7 +219,8 @@ describe("the student home", () => {
     });
     const { navigate } = render();
     const row = (await screen.findByText("Sondage en direct")).closest("div.rounded-card")!;
-    expect(within(row as HTMLElement).getByText("Sondage")).toBeInTheDocument();
+    expect(within(row as HTMLElement).getByRole("img", { name: "Sondage" })).toBeInTheDocument();
+    expect(within(row as HTMLElement).getByText("en direct")).toBeInTheDocument();
     expect(within(row as HTMLElement).getByText("PRG1 · PRG1-2026")).toBeInTheDocument();
     await userEvent.click(within(row as HTMLElement).getByRole("button", { name: "Répondre" }));
     expect(navigate).toHaveBeenCalledWith({ view: "join", code: "NM2X9A" });
@@ -252,8 +253,8 @@ describe("the student home", () => {
     });
     const { navigate } = render();
     const row = (await screen.findByText("Labo 1 — Pointeurs")).closest("div.rounded-card") as HTMLElement;
-    expect(within(row).getByText("Projet")).toBeInTheDocument();
-    expect(within(row).getByText(/en cours · /)).toBeInTheDocument();
+    expect(within(row).getByRole("img", { name: "Projet" })).toBeInTheDocument();
+    expect(within(row).getByText("en cours")).toBeInTheDocument();
     expect(within(row).queryByRole("button")).toBeNull();
     // The title is the door to the project's page.
     const title = within(row).getByRole("link", { name: "Labo 1 — Pointeurs" });
@@ -338,9 +339,8 @@ describe("the student home", () => {
         "POST /app/api/evaluations/e9/retake": ok({ kind: "attempt", view: { attempt: { id: "a10" } } }),
       });
       const { navigate } = render();
-      expect(
-        await screen.findByText("Meilleur score 7.5 / 10 · tentatives : 2 sur 3"),
-      ).toBeInTheDocument();
+      expect(await screen.findByText("Meilleur score 7.5 / 10")).toBeInTheDocument();
+      expect(screen.getByText("tentatives : 2 sur 3")).toBeInTheDocument();
       const row = screen.getByText("Série 3 — Entraînement").closest("div.rounded-card")!;
       const buttons = within(row as HTMLElement).getAllByRole("button");
       expect(buttons).toHaveLength(1);

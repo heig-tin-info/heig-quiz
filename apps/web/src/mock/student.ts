@@ -642,6 +642,8 @@ export const STUDENT_PROJECT_ACCEPT = "77777777-7777-4777-8777-777777777704";
 export const STUDENT_PROJECT_INVITED = "77777777-7777-4777-8777-777777777705";
 export const STUDENT_PROJECT_LOCKED = "77777777-7777-4777-8777-777777777706";
 export const STUDENT_PROJECT_DELETED = "77777777-7777-4777-8777-777777777707";
+/** Locked at the deadline with a repository: its score is frozen, still indicative (M3-14l). */
+export const STUDENT_PROJECT_FROZEN = "77777777-7777-4777-8777-777777777708";
 export const STUDENT_PROJECT_IDS = [
   STUDENT_PROJECT_OPEN,
   STUDENT_PROJECT_SOON,
@@ -650,6 +652,7 @@ export const STUDENT_PROJECT_IDS = [
   STUDENT_PROJECT_INVITED,
   STUDENT_PROJECT_LOCKED,
   STUDENT_PROJECT_DELETED,
+  STUDENT_PROJECT_FROZEN,
 ] as const;
 /** The student's repository of a project, `<slug>-<login>` in the classroom's organization, the slug from the title's head ("Labo 1 — …" ⇒ `labo-1`). */
 const studentRepoName = (title: string) =>
@@ -694,6 +697,7 @@ const cardFacts = (): CardFacts[] => {
     { ...base, id: STUDENT_PROJECT_DELETED, title: "Labo 1b — Révision des pointeurs", startAt: iso(-5 * D), deadlineAt: iso(2 * D), status: "in_progress", ...none },
     { ...base, id: STUDENT_PROJECT_SOON, title: "Labo 3 — Arbres binaires", startAt: iso(3 * D), deadlineAt: iso(17 * D), ...toAccept(STUDENT_PROJECT_SOON, "Labo 3") },
     { ...base, id: STUDENT_PROJECT_LOCKED, title: "Exercice préliminaire — Compilation", startAt: iso(-30 * D), deadlineAt: iso(-14 * D), status: "locked", ...none },
+    { ...base, id: STUDENT_PROJECT_FROZEN, title: "Labo 0b — Débogage", startAt: iso(-25 * D), deadlineAt: iso(-2 * D), status: "locked", ...repo("Labo 0b", "accepted") },
     { ...base, id: STUDENT_PROJECT_PAST, title: "Labo 0 — Prise en main", startAt: iso(-21 * D), deadlineAt: iso(-7 * D), status: "released", ...repo("Labo 0", "accepted") },
   ];
 };
@@ -722,7 +726,7 @@ const studentProjectView = (card: CardFacts): StudentProject => {
           url,
           invitation: invitation ?? "accepted",
           deleted,
-          locked: released,
+          locked: released || card.status === "locked",
           lastCommit: graded || deleted ? { sha: sha(`${card.id.slice(-2)}${pushes}`), at } : null,
           commits: graded ? (released ? 23 : 11 + pushes) : 0,
           ciStatus: graded ? "pass" : "none",
@@ -733,7 +737,7 @@ const studentProjectView = (card: CardFacts): StudentProject => {
             ? null
             : released
               ? { points: 18, max: 20, grade: { grade: 5.5, fellBack: false }, frozen: true }
-              : { points: Math.min(40, 34 + 2 * pushes), max: 40, grade: { grade: 5.3, fellBack: false }, frozen: false },
+              : { points: Math.min(40, 34 + 2 * pushes), max: 40, grade: { grade: 5.3, fellBack: false }, frozen: card.status === "locked" },
         };
   return {
     ...facts,

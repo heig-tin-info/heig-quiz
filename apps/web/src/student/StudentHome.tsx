@@ -22,7 +22,7 @@
  * The cards are the ones every student page shares (`cards.tsx`).
  */
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Repeat, Timer } from "lucide-react";
 
 import type { DrillSession, Me, StudentHome as StudentHomeData } from "@quiz/contracts";
 
@@ -32,7 +32,7 @@ import { sessionCourses, sessionLine } from "../drill/format";
 import { useT } from "../i18n";
 import { useServerNow } from "../realtime/useServerClock";
 import type { Route } from "../router";
-import { Card, EmptyState, PageHeader, QueryError, SectionHeading, Skeleton } from "../ui";
+import { Card, EmptyState, MetaItem, PageHeader, QueryError, SectionHeading, Skeleton } from "../ui";
 import { studentHomeKey } from "../queryKeys";
 import {
   ActivityCard,
@@ -53,10 +53,11 @@ function DrillRow({ session, navigate }: { session: DrillSession; navigate: (r: 
   const t = useT();
   return (
     <ActivityRow
+      kind={{ label: t("drill.kind"), icon: Repeat }}
       title={t("drill.today.title")}
       where={sessionCourses(session.cards)}
-      line={sessionLine(session, t)}
-      badge={{ label: t("drill.badge"), accent: true }}
+      status={{ label: t("drill.badge"), tone: "green" }}
+      meta={<MetaItem icon={Timer}>{sessionLine(session, t)}</MetaItem>}
       action={{ label: t("drill.practise"), onClick: () => navigate({ view: "drill" }) }}
     />
   );

@@ -1,16 +1,29 @@
 /**
- * One card of a student's activity list: what it is, where it comes from, one
- * line, one button. The evaluation, poll and project rows of `cards.tsx` and
+ * One card of a student's activity list (DESIGN.md, "The student's activity
+ * card"): a kind icon, the title, a status badge, the meta items (icon + text)
+ * and one button. The evaluation, poll and project rows of `cards.tsx` and
  * `ProjectRow.tsx` all wear it; it is a file of its own so that a row may
  * import it without importing the list that draws every row. The two lines
  * every row counts down with live here for the same reason.
  *
  * A row decides nothing about emphasis: the page says which button is the
  * primary, since the home lights every open card and the classroom page only
- * its most urgent one.
+ * its most urgent one. The accent is the button's alone: neither the kind
+ * icon nor the status badge ever takes it.
  */
 import { formatDuration, type TFunction } from "../i18n";
-import { Badge, Button, Card, isoDateTime, isPlainClick, LinkButton } from "../ui";
+import {
+  Badge,
+  Button,
+  Card,
+  isoDateTime,
+  isPlainClick,
+  LinkButton,
+  MetaLine,
+  Tip,
+  type IconType,
+  type Tone,
+} from "../ui";
 
 /**
  * The one action of a row: a button (`onClick`), or a link (`href`) — to a
@@ -20,6 +33,8 @@ import { Badge, Button, Card, isoDateTime, isPlainClick, LinkButton } from "../u
  */
 export type RowAction = {
   label: string;
+  /** A mark before the label: the GitHub mark on what leads to GitHub (never the accent). */
+  icon?: IconType;
   primary?: boolean;
   loading?: boolean;
 } & (
@@ -49,51 +64,80 @@ export const startsLine = (opensAt: string, now: number, t: TFunction): string =
   return wait > 0 ? t("shome.opensIn", { time: formatDuration(wait, t) }) : t("shome.opensAt", { when: isoDateTime(opensAt) });
 };
 
+/** What a card is: a small icon before the title, named by a `Tip` and by its accessible name. */
+export interface RowKind {
+  label: string;
+  icon: IconType;
+}
+
+/** Where the activity stands: a badge beside the title (green done or open, amber to do or running, zinc neutral). */
+export interface RowStatus {
+  label: string;
+  tone: Tone;
+  icon?: IconType;
+}
+
+/** The status as a badge: beside a card's title, and beside the project page's. */
+export function StatusBadge({ status }: { status: RowStatus }) {
+  return (
+    <Badge tone={status.tone} {...(status.icon ? { icon: status.icon } : {})}>
+      {status.label}
+    </Badge>
+  );
+}
+
 export function ActivityRow({
+  kind,
   title,
   link,
   where,
-  line,
-  detail,
-  badge,
+  status,
+  meta,
   action,
 }: {
+  kind: RowKind;
   title: string;
   /** The activity's own page, when it has one the student may open. */
   link?: RowLink | undefined;
   /** Absent on a page that is already the classroom's. */
   where?: string | undefined;
-  line: string | null;
-  /** What the kind adds under the line: a project's state of the work (M3-14i). */
-  detail?: React.ReactNode;
-  badge: { label: string; accent: boolean };
+  status?: RowStatus | undefined;
+  /** The card's facts: `MetaItem`s, drawn in one wrapping line. */
+  meta?: React.ReactNode;
   action?: RowAction | undefined;
 }) {
+  const KindIcon = kind.icon;
   return (
     <Card className="flex flex-wrap items-center gap-x-5 gap-y-3 p-5">
       <div className="min-w-0 flex-1 basis-60">
-        <p className="text-[17px] font-bold leading-snug tracking-tight">
-          {link ? (
-            <a
-              href={link.href}
-              className="hover:underline"
-              onClick={(e) => {
-                if (!isPlainClick(e)) return;
-                e.preventDefault();
-                link.onNavigate();
-              }}
-            >
-              {title}
-            </a>
-          ) : (
-            title
-          )}
-        </p>
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+          <Tip label={kind.label}>
+            <span role="img" aria-label={kind.label} tabIndex={0} className="inline-flex rounded-sm">
+              <KindIcon className="size-4 shrink-0 text-fg-faint" />
+            </span>
+          </Tip>
+          <p className="min-w-0 text-[17px] font-bold leading-snug tracking-tight">
+            {link ? (
+              <a
+                href={link.href}
+                className="hover:underline"
+                onClick={(e) => {
+                  if (!isPlainClick(e)) return;
+                  e.preventDefault();
+                  link.onNavigate();
+                }}
+              >
+                {title}
+              </a>
+            ) : (
+              title
+            )}
+          </p>
+          {status ? <StatusBadge status={status} /> : null}
+        </div>
         {where ? <p className="mt-0.5 text-sm text-fg-muted">{where}</p> : null}
-        {line ? <p className="mt-1 text-[13px] text-fg-faint">{line}</p> : null}
-        {detail}
+        {meta ? <MetaLine className="mt-1.5">{meta}</MetaLine> : null}
       </div>
-      <Badge tone={badge.accent ? "accent" : "zinc"}>{badge.label}</Badge>
       {action ? <RowActionControl action={action} /> : null}
     </Card>
   );
@@ -102,6 +146,7 @@ export function ActivityRow({
 /** The row's button, or its link to a page on GitHub (a new tab, never the app's frame). */
 export function RowActionControl({ action, className }: { action: RowAction; className?: string }) {
   const variant = action.primary ? "primary" : "secondary";
+  const Icon = action.icon;
   if (action.href !== undefined) {
     return (
       <LinkButton
@@ -110,12 +155,14 @@ export function RowActionControl({ action, className }: { action: RowAction; cla
         variant={variant}
         className={className}
       >
+        {Icon ? <Icon className="size-4" /> : null}
         {action.label}
       </LinkButton>
     );
   }
   return (
     <Button variant={variant} onClick={() => void action.onClick()} loading={action.loading ?? false} className={className}>
+      {Icon && !action.loading ? <Icon className="size-4" /> : null}
       {action.label}
     </Button>
   );
