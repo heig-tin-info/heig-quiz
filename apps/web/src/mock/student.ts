@@ -667,7 +667,10 @@ export function arriveStudentProjectActivity(): void {
   pushedHere += 1;
 }
 
-const studentProjectCards = (): StudentProjectCard[] => {
+/** A card before the state of its work, which the view below reads (M3-14i). */
+type CardFacts = Omit<StudentProjectCard, "work">;
+
+const cardFacts = (): CardFacts[] => {
   if (!flags.projects || flags.empty) return [];
   const base = {
     kind: "project" as const,
@@ -701,7 +704,7 @@ const studentProjectCards = (): StudentProjectCard[] => {
  * frozen score and the release on the past one, nothing yet on a pending
  * invitation.
  */
-const studentProjectView = (card: StudentProjectCard): StudentProject => {
+const studentProjectView = (card: CardFacts): StudentProject => {
   const { invitation, repoFullName, repoUrl, ...facts } = card;
   const sha = (seed: string) => seed.repeat(40).slice(0, 40);
   const released = card.status === "released";
@@ -721,6 +724,7 @@ const studentProjectView = (card: StudentProjectCard): StudentProject => {
           deleted,
           locked: released,
           lastCommit: graded || deleted ? { sha: sha(`${card.id.slice(-2)}${pushes}`), at } : null,
+          commits: graded ? (released ? 23 : 11 + pushes) : 0,
           ciStatus: graded ? "pass" : "none",
           run: graded
             ? { sha: sha(`${card.id.slice(-2)}${pushes}`), url: `${url}/actions/runs/${card.id.slice(-4)}`, conclusion: "success", completedAt: at }
@@ -742,6 +746,19 @@ const studentProjectView = (card: StudentProjectCard): StudentProject => {
     serverNow: new Date().toISOString(),
   };
 };
+
+/**
+ * The cards with the state of their work (M3-14i), read off their view as
+ * the server reads both: while the repository is live, the indicative
+ * score left out once released.
+ */
+const studentProjectCards = (): StudentProjectCard[] =>
+  cardFacts().map((card) => {
+    const repo = card.repoFullName === null ? null : studentProjectView(card).repo;
+    if (repo === null) return { ...card, work: null };
+    const { lastCommit, commits, ciStatus, score } = repo;
+    return { ...card, work: { lastCommit, commits, ciStatus, score: card.status === "released" ? null : score } };
+  });
 
 /** The home as the `activity` module serves it: every kind, tagged, the projects grouped by the domain's rule (M3-09a). */
 const studentHome = (): StudentHomeData => {

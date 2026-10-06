@@ -54,6 +54,7 @@ export function ActivityRow({
   link,
   where,
   line,
+  detail,
   badge,
   action,
 }: {
@@ -63,6 +64,8 @@ export function ActivityRow({
   /** Absent on a page that is already the classroom's. */
   where?: string | undefined;
   line: string | null;
+  /** What the kind adds under the line: a project's state of the work (M3-14i). */
+  detail?: React.ReactNode;
   badge: { label: string; accent: boolean };
   action?: RowAction | undefined;
 }) {
@@ -88,6 +91,7 @@ export function ActivityRow({
         </p>
         {where ? <p className="mt-0.5 text-sm text-fg-muted">{where}</p> : null}
         {line ? <p className="mt-1 text-[13px] text-fg-faint">{line}</p> : null}
+        {detail}
       </div>
       <Badge tone={badge.accent ? "accent" : "zinc"}>{badge.label}</Badge>
       {action ? <RowActionControl action={action} /> : null}

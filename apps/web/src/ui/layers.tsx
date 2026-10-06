@@ -576,6 +576,47 @@ export function PageHelpButton({ topic }: { topic: string }) {
   );
 }
 
+/** The round ghost disc of an icon button and an icon link. */
+const iconDisc = (size: "sm" | "md") =>
+  cx(
+    "inline-flex shrink-0 items-center justify-center rounded-full transition-colors duration-150",
+    size === "sm" ? "size-7 [&_svg]:size-3.5" : "size-8 [&_svg]:size-4",
+  );
+
+/**
+ * {@link IconButton}'s disc as a link to a page OUTSIDE the app, in a new
+ * tab (a repository on GitHub, M3-14h): an address one may also copy or
+ * open with a modified click, which a button is not. The label is its
+ * tooltip and its accessible name; a click on it never opens the row or
+ * the card it sits in.
+ */
+export function IconLink({
+  label,
+  href,
+  size = "md",
+  children,
+}: {
+  label: string;
+  href: string;
+  size?: "sm" | "md";
+  children: React.ReactNode;
+}) {
+  return (
+    <Tip label={label}>
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={label}
+        onClick={(e) => e.stopPropagation()}
+        className={cx(iconDisc(size), "text-fg-faint hover:bg-surface-2 hover:text-fg")}
+      >
+        {children}
+      </a>
+    </Tip>
+  );
+}
+
 /** Icon-only round button on the shared Tip tooltip (label = accessible name too). */
 export function IconButton({
   label,
@@ -613,8 +654,8 @@ export function IconButton({
         aria-keyshortcuts={shortcut}
         aria-pressed={active ?? props["aria-pressed"]}
         className={cx(
-          "inline-flex shrink-0 items-center justify-center rounded-full transition-colors duration-150 disabled:pointer-events-none disabled:opacity-40",
-          size === "sm" ? "size-7 [&_svg]:size-3.5" : "size-8 [&_svg]:size-4",
+          iconDisc(size),
+          "disabled:pointer-events-none disabled:opacity-40",
           active
             ? "bg-accent-soft text-accent"
             : danger

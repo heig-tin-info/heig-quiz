@@ -105,6 +105,9 @@ const PushEvent = z.object({
   forced: z.boolean().optional(),
   repository: z.object({ id: z.number().int() }),
   sender: z.object({ login: z.string() }).optional(),
+  commits: z
+    .array(z.object({ distinct: z.boolean().optional(), author: z.object({ username: z.string().optional() }).optional() }))
+    .optional(),
 });
 
 /** The workflows' own token (GR-16): the grader's commits, never a student's. */
@@ -141,6 +144,10 @@ async function writeReceipt(tx: Tx, config: AppConfig, delivery: WebhookDelivery
       receivedAt: delivery.receivedAt,
       isBot: pushedBy(config, push.data.sender?.login) !== "person",
       forced: push.data.forced ?? false,
+      // The commits this push brought that no bot authored (M3-14i): a commit already
+      // pushed (`distinct` false: a sync branch merged, a branch copied) is no new work.
+      commits:
+        push.data.commits?.filter((c) => c.distinct !== false && pushedBy(config, c.author?.username) === "person").length ?? null,
     })
     // The FIRST receipt of a head stands: a redelivery never moves it later.
     .onConflictDoNothing();

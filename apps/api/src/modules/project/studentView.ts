@@ -12,7 +12,9 @@
  * URL, their invitation, the commit the view stands on and its CI status,
  * the run their score comes from and that score, indicative until the
  * release (`studentScoreRun` of `@quiz/domain`: the current CI score, the
- * frozen one once their deadline is applied) — and, once released, the
+ * frozen one once their deadline is applied), the number of commits their
+ * own pushes brought by their deadline (M3-14i; the card carries these
+ * too, as the state of their work) — and, once released, the
  * final score's snapshot, its grade and the teacher's comment as the
  * release wrote it.
  *
@@ -33,7 +35,7 @@
  * copy group's (`seatRepo`, `groupRepos.ts`), never the repository its
  * creator moved out of (N-SEC-20, M3-15b).
  */
-import { and, eq, isNull, ne, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, type SQL } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
 
 import type {
@@ -43,14 +45,17 @@ import type {
   StudentProjectCard,
   StudentProjectRepo,
   StudentProjectScore,
+  StudentProjectWork,
 } from "@quiz/contracts";
 import {
   effectiveDeadline,
   scoreGrade,
   studentCiReading,
+  studentCommitCount,
   studentProjectGroup,
   studentProjectStatus,
   studentScoreRun,
+  type CountedReceipt,
   type StudentActivityGroup,
 } from "@quiz/domain";
 
@@ -58,7 +63,7 @@ import type { AuditActor } from "../../audit.js";
 import { iso, isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { classrooms, courses, enrollments, githubAccounts, projectGradeRuns, projects } from "../../db/schema.js";
+import { classrooms, courses, enrollments, githubAccounts, projectGradeRuns, projects, pushReceipts } from "../../db/schema.js";
 import { htmlUrl } from "../../github/git.js";
 import type { StudentProjectScope } from "../guards.js";
 import { isLive } from "./deadline.js";
@@ -85,6 +90,33 @@ async function githubLinked(db: Db, userId: string): Promise<boolean> {
   return row !== undefined;
 }
 
+/** What a reading of live repositories needs beside the rows: their slots' runs, and their receipts of no bot's push. */
+interface Readings {
+  runs: Map<string, RunRow>;
+  receipts: Map<number, CountedReceipt[]>;
+}
+
+/**
+ * The runs and the push receipts of `repos` (M3-14i): the receipts no bot
+ * pushed (`is_bot` false), by GitHub repository id — the student's own
+ * pushes, never the App's nor a workflow's. Two reads, whatever the count.
+ */
+async function readings(db: Db, repos: readonly ProvisionedRepo[]): Promise<Readings> {
+  const ids = repos.flatMap((r) => (r.githubRepoId === null ? [] : [r.githubRepoId]));
+  const [runs, rows] = await Promise.all([
+    slotRuns(db, repos),
+    ids.length === 0
+      ? []
+      : db
+          .select({ githubRepoId: pushReceipts.githubRepoId, receivedAt: pushReceipts.receivedAt, commits: pushReceipts.commits })
+          .from(pushReceipts)
+          .where(and(inArray(pushReceipts.githubRepoId, ids), eq(pushReceipts.isBot, false))),
+  ]);
+  const receipts = new Map<number, CountedReceipt[]>();
+  for (const { githubRepoId, ...r } of rows) receipts.set(githubRepoId, [...(receipts.get(githubRepoId) ?? []), r]);
+  return { runs, receipts };
+}
+
 interface CardRow {
   project: ProjectRow;
   classroomName: string;
@@ -93,8 +125,8 @@ interface CardRow {
   repo: RepoRow | null;
 }
 
-/** The card's facts, without the repository's three fields: what the card and the view share. */
-type CardFacts = Omit<StudentProjectCard, "invitation" | "repoFullName" | "repoUrl">;
+/** The card's facts, without the repository's fields: what the card and the view share. */
+type CardFacts = Omit<StudentProjectCard, "invitation" | "repoFullName" | "repoUrl" | "work">;
 
 /** The facts of `row` at `now`, judged by `@quiz/domain`, and the group of the Activities they fall in. */
 function cardFacts(row: CardRow, linked: boolean, now: Date): { facts: CardFacts; group: StudentActivityGroup } {
@@ -122,11 +154,25 @@ function cardFacts(row: CardRow, linked: boolean, now: Date): { facts: CardFacts
   };
 }
 
-/** One card (F-PROJ-04): the facts, and the repository's name and URL once it exists and is not deleted. */
-function card(row: CardRow, linked: boolean, now: Date): { card: StudentProjectCard; group: StudentActivityGroup } {
-  const { facts, group } = cardFacts(row, linked, now);
+/** The repository of `row` while it is live: provisioned, not deleted, its project not archived. */
+const liveRepo = (row: CardRow): ProvisionedRepo | null => {
   const repo = provisioned(row.repo);
-  const live = repo !== null && isLive(repo, row.project) ? repo : null;
+  return repo !== null && isLive(repo, row.project) ? repo : null;
+};
+
+/**
+ * One card (F-PROJ-04): the facts, the repository's name and URL once it
+ * exists and is not deleted, and the state of the work on it (M3-14i) —
+ * the view's reading, its indicative score left out once released.
+ */
+function card(row: CardRow, linked: boolean, now: Date, read: Readings): { card: StudentProjectCard; group: StudentActivityGroup } {
+  const { facts, group } = cardFacts(row, linked, now);
+  const live = liveRepo(row);
+  let work: StudentProjectWork | null = null;
+  if (live !== null) {
+    const { lastCommit, commits, ciStatus, score } = reading(row.project, live, read, now);
+    work = { lastCommit, commits, ciStatus, score: row.project.releasedAt === null ? score : null };
+  }
   return {
     group,
     card: {
@@ -134,6 +180,7 @@ function card(row: CardRow, linked: boolean, now: Date): { card: StudentProjectC
       invitation: live === null || live.invitationStatus === "none" ? null : live.invitationStatus,
       repoFullName: live?.fullName ?? null,
       repoUrl: live === null ? null : htmlUrl(live.fullName),
+      work,
     },
   };
 }
@@ -171,35 +218,41 @@ export async function studentProjectCards(db: Db, userId: string, now: Date, cla
   const cards = rows.map(({ seat, ...row }) => ({ ...row, repo: seats.of(row.project.id, seat.id) }));
   const deadline = (row: CardRow) => effectiveDeadline(row.repo ?? { deadlineAt: null }, row.project).getTime();
   cards.sort((a, b) => deadline(a) - deadline(b) || (a.project.name < b.project.name ? -1 : a.project.name > b.project.name ? 1 : 0));
-  const linked = rows.length > 0 && (await githubLinked(db, userId));
+  const [linked, read] = await Promise.all([
+    rows.length > 0 && githubLinked(db, userId),
+    readings(db, cards.flatMap((row) => liveRepo(row) ?? [])),
+  ]);
   const groups: StudentProjectCards = { open: [], upcoming: [], past: [] };
   for (const row of cards) {
-    const placed = card(row, linked, now);
+    const placed = card(row, linked, now, read);
     groups[placed.group].push(placed.card);
   }
   return groups;
 }
 
-/** What the view shows of a repository's commits and runs: the commit it stands on, its CI state, the selected run and its score. */
-type RepoReading = Pick<StudentProjectRepo, "lastCommit" | "ciStatus" | "run" | "score">;
+/** What the view shows of a repository's commits and runs: the commit it stands on, its CI state, the commit count, the selected run and its score. */
+type RepoReading = Pick<StudentProjectRepo, "lastCommit" | "commits" | "ciStatus" | "run" | "score">;
 
 /**
  * The repository as the student reads it (F-PROJ-15, N-SEC-20): the run
  * and the commit by `studentScoreRun` and `studentCiReading` of
  * `@quiz/domain` — the stored head before the deadline, the SELECTED run
- * alone once it is over — and the run's score, indicative; no score under
- * grading `none`.
+ * alone once it is over — the run's score, indicative (no score under
+ * grading `none`), and the commits of the student's pushes received by
+ * their effective deadline (`studentCommitCount`, M3-14i).
  */
-function reading(project: ProjectRow, repo: ProvisionedRepo, runs: Map<string, RunRow>, now: Date): RepoReading {
+function reading(project: ProjectRow, repo: ProvisionedRepo, { runs, receipts }: Readings, now: Date): RepoReading {
   const slot = (id: string | null) => (id === null ? null : (runs.get(id) ?? null));
   const chosen = studentScoreRun({
     deadlineAppliedAt: repo.deadlineAppliedAt,
     current: slot(repo.currentGradeRunId),
     frozen: slot(repo.frozenGradeRunId),
   });
-  const ci = studentCiReading(repo, chosen?.run ?? null, effectiveDeadline(repo, project), now);
-  const stored: Pick<RepoReading, "lastCommit" | "ciStatus"> = {
+  const deadlineAt = effectiveDeadline(repo, project);
+  const ci = studentCiReading(repo, chosen?.run ?? null, deadlineAt, now);
+  const stored: Pick<RepoReading, "lastCommit" | "commits" | "ciStatus"> = {
     lastCommit: ci.lastCommit === null ? null : { sha: ci.lastCommit.sha, at: isoOrNull(ci.lastCommit.at) },
+    commits: studentCommitCount(receipts.get(repo.githubRepoId!) ?? [], deadlineAt),
     ciStatus: ci.ciStatus,
   };
   if (chosen === null) return { ...stored, run: null, score: null };
@@ -228,10 +281,7 @@ export async function studentProject(db: Db, scope: StudentProjectScope, userId:
   const seat = scope.seat === null ? null : scope.seat.staff ? ("staff" as const) : ("student" as const);
   const repo = provisioned(row);
   const live = repo !== null && isLive(repo, project) ? repo : null;
-  const [linked, runs] = await Promise.all([
-    githubLinked(db, userId),
-    live === null ? new Map<string, RunRow>() : slotRuns(db, [live]),
-  ]);
+  const [linked, read] = await Promise.all([githubLinked(db, userId), readings(db, live === null ? [] : [live])]);
   const { facts } = cardFacts({ project, classroomName: scope.room.name, courseCode: scope.course.code, repo: row }, linked, now);
   return {
     ...facts,
@@ -246,7 +296,9 @@ export async function studentProject(db: Db, scope: StudentProjectScope, userId:
             invitation: repo.invitationStatus === "accepted" ? "accepted" : "pending",
             deleted: repo.deletedAt !== null,
             locked: repo.lockedAt !== null,
-            ...(live === null ? { lastCommit: null, ciStatus: "none" as const, run: null, score: null } : reading(project, live, runs, now)),
+            ...(live === null
+              ? { lastCommit: null, commits: 0, ciStatus: "none" as const, run: null, score: null }
+              : reading(project, live, read, now)),
           },
     release:
       project.releasedAt === null

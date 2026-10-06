@@ -1,0 +1,1 @@
+ALTER TABLE "push_receipts" ADD COLUMN "commits" integer;

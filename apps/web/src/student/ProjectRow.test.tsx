@@ -37,6 +37,7 @@ const card = (over: Partial<StudentProjectCard> = {}): StudentProjectCard => ({
   githubLinked: true,
   repoFullName: null,
   repoUrl: null,
+  work: null,
   ...over,
 });
 const REPO = { repoFullName: "heig/labo-1-lea", repoUrl: "https://github.com/heig/labo-1-lea" };
@@ -79,6 +80,36 @@ describe("the title", () => {
     expect(title).toHaveAttribute("href", "/projects/p1");
     await userEvent.click(title);
     expect(navigate).toHaveBeenCalledWith({ view: "project", id: "p1" });
+  });
+});
+
+describe("the state of the work (M3-14i)", () => {
+  const work = {
+    lastCommit: { sha: "9a3f1c7e2b4d6f8a0c1e3b5d7f9a1c3e5b7d9f1a", at: at(-0.1) },
+    commits: 12,
+    ciStatus: "fail" as const,
+    score: { points: 1, max: 6, grade: null, frozen: false },
+  };
+
+  it("says the last commit, the commit count, the CI and the indicative score of a ready repository", async () => {
+    mockFetch({});
+    render(card({ status: "in_progress", invitation: "accepted", ...REPO, work }));
+    expect(await screen.findByText("9a3f1c7")).toBeInTheDocument();
+    expect(screen.getByText("12 commits")).toBeInTheDocument();
+    expect(screen.getByText("fail")).toBeInTheDocument();
+    expect(screen.getByText("1 / 6")).toBeInTheDocument();
+    expect(screen.getByText(/indicative/)).toBeInTheDocument();
+  });
+
+  it("says no commit yet, and nothing of the work while the invitation waits", async () => {
+    mockFetch({});
+    const empty = { ...work, lastCommit: null, commits: 0, ciStatus: "none" as const, score: null };
+    const { unmount } = render(card({ status: "in_progress", invitation: "accepted", ...REPO, work: empty }));
+    expect(await screen.findByText("no commit yet")).toBeInTheDocument();
+    unmount();
+    render(card({ status: "in_progress", invitation: "pending", ...REPO, work }));
+    await screen.findByRole("link", { name: "Open the invitation" });
+    expect(screen.queryByText("9a3f1c7")).toBeNull();
   });
 });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { studentCiReading, studentProjectGroup, studentProjectStatus, studentScoreRun } from "./projectStudent.js";
+import { studentCiReading, studentCommitCount, studentProjectGroup, studentProjectStatus, studentScoreRun } from "./projectStudent.js";
 
 const at = (iso: string) => new Date(iso);
 const base = {
@@ -79,5 +79,19 @@ describe("studentCiReading (F-PROJ-15, N-SEC-20)", () => {
       expect(studentCiReading(stored, { ...run, conclusion }, deadline, deadline).ciStatus).toBe("fail");
     }
     expect(studentCiReading(stored, null, deadline, deadline)).toEqual({ lastCommit: null, ciStatus: "none" });
+  });
+});
+
+describe("studentCommitCount (M3-14i, N-SEC-20)", () => {
+  it("sums the commits of the pushes received by the deadline, an old receipt counting one", () => {
+    const receipts = [
+      { receivedAt: at("2026-10-02T10:00:00Z"), commits: 3 },
+      { receivedAt: at("2026-10-03T10:00:00Z"), commits: null },
+      { receivedAt: at("2026-10-04T10:00:00Z"), commits: 0 },
+      { receivedAt: base.deadlineAt, commits: 2 },
+      { receivedAt: at("2026-10-09T22:00:01Z"), commits: 5 },
+    ];
+    expect(studentCommitCount(receipts, base.deadlineAt)).toBe(6);
+    expect(studentCommitCount([], base.deadlineAt)).toBe(0);
   });
 });

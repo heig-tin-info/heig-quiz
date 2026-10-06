@@ -40,6 +40,7 @@ const card = (over: Partial<StudentProjectCard> = {}): StudentProjectCard => ({
   githubLinked: true,
   repoFullName: null,
   repoUrl: null,
+  work: null,
   ...over,
 });
 
@@ -109,6 +110,7 @@ describe("projectActionKind", () => {
         deleted: true,
         locked: false,
         lastCommit: null,
+        commits: 3,
         ciStatus: "none",
         run: null,
         score: null,

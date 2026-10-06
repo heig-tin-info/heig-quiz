@@ -24,6 +24,7 @@ import {
   bigint,
   boolean,
   index,
+  integer,
   jsonb,
   pgTable,
   text,
@@ -174,6 +175,13 @@ export const pushReceipts = pgTable(
     /** Pushed by the App's bot (heig-classroom's or Quiz's, D23). */
     isBot: boolean("is_bot").notNull().default(false),
     forced: boolean("forced").notNull().default(false),
+    /**
+     * The push's own commits as the payload lists them (M3-14i): the
+     * DISTINCT ones (never pushed to the repository before) that no bot
+     * authored — neither Quiz's App nor a workflow (`pushedBy`). What the
+     * student's commit count sums. Null on a receipt written before.
+     */
+    commits: integer("commits"),
   },
   (t) => [uniqueIndex("push_receipts_repo_sha_uq").on(t.githubRepoId, t.headSha)],
 );

@@ -313,8 +313,9 @@ describe("ActivitiesPage", () => {
       const table = screen.getByRole("table");
       const row = within(table).getByText("Labo 2 — pointeurs").closest("tr")!;
       expect(within(row).getByText("published")).toBeInTheDocument();
-      // The overflow menu leads to its repositories (M3-14a).
-      expect(within(row).getByRole("button", { name: /Actions/ })).toBeInTheDocument();
+      // Its repositories are links on the row (M3-14a, M3-14h), no menu.
+      expect(within(row).getByRole("link", { name: "Source repository" })).toBeInTheDocument();
+      expect(within(row).queryByRole("button", { name: /Actions/ })).toBeNull();
       await user.click(within(table).getByText("Labo 2 — pointeurs"));
       expect(navigate).toHaveBeenLastCalledWith({ view: "project", id: LAB.id });
     });

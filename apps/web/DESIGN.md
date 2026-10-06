@@ -485,7 +485,10 @@ live in `ui/state.ts`, each written once.
   Sizes `sm` 28 px, `md` 34 px, `lg` 40 px.
   Pressed to 0.97. The class list is `buttonClass` in `@quiz/ui`, which the
   app's `Button` and `LinkButton` and the question types all wear.
-- Icon button: round, ghost; `danger` turns red on hover only.
+- Icon button: round, ghost; `danger` turns red on hover only. Its disc as
+  a link to a page outside the app, in a new tab, is `IconLink` — a
+  project's two repositories on GitHub on its row (M3-14h); its label is
+  its tooltip and accessible name, as an icon button's.
 - Mode banner (`ModeBanner` in `Shell.tsx`, #200): a mode of the whole
   application — the student view, acting as someone else, the teacher's
   preview of an evaluation (ADR-018, seventh addendum) — is stated above

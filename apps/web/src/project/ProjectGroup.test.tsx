@@ -85,7 +85,7 @@ describe("the classroom's Projects group", () => {
     expect(titles().at(-1)).toBe("Undated");
   });
 
-  it("links the repositories from the row's menu without opening the project (M3-14a)", async () => {
+  it("links the repositories in sight on the row, without opening the project (M3-14a, M3-14h)", async () => {
     mockFetch({
       [`GET ${PROJECTS}`]: ok([
         project(1, { title: "Built" }),
@@ -94,20 +94,21 @@ describe("the classroom's Projects group", () => {
     });
     const navigate = renderGroup();
     const region = await screen.findByRole("region", { name: "Projects" });
-    await userEvent.click(within(region).getByRole("button", { name: "Actions for Built" }));
-    const source = screen.getByRole("menuitem", { name: /Source repository/ });
+    const [built, building] = within(region).getAllByRole("row").slice(1);
+    // No menu: the two links are on the row.
+    expect(within(region).queryByRole("button", { name: /Actions for/ })).toBeNull();
+    const source = within(built!).getByRole("link", { name: "Source repository" });
     expect(source).toHaveAttribute("href", "https://github.com/heig/lab-source");
     expect(source).toHaveAttribute("target", "_blank");
-    expect(screen.getByRole("menuitem", { name: /Distribution repository/ })).toHaveAttribute(
+    expect(within(built!).getByRole("link", { name: "Distribution repository" })).toHaveAttribute(
       "href",
       "https://github.com/heig/lab-squashed",
     );
+    await userEvent.click(source);
     expect(navigate).not.toHaveBeenCalled();
-    await userEvent.keyboard("{Escape}");
-    await userEvent.click(within(region).getByRole("button", { name: "Actions for Building" }));
-    expect(screen.getByRole("menuitem", { name: /Source repository/ })).toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: /Distribution repository/ })).toBeNull();
-    expect(navigate).not.toHaveBeenCalled();
+    // While the distribution is being built, its link is not there yet.
+    expect(within(building!).getByRole("link", { name: "Source repository" })).toBeInTheDocument();
+    expect(within(building!).queryByRole("link", { name: "Distribution repository" })).toBeNull();
   });
 
   it("draws nothing for a classroom without a project", async () => {

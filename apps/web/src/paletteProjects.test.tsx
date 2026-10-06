@@ -26,6 +26,7 @@ const card = (id: string, title: string, classroomName: string): StudentProjectC
   githubLinked: true,
   repoFullName: null,
   repoUrl: null,
+  work: null,
 });
 
 const home = (over: Partial<StudentHome> = {}): StudentHome => ({

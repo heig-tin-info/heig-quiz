@@ -12,6 +12,7 @@ import type {
   StudentProjectCard,
   StudentProjectStatus,
 } from "@quiz/contracts";
+import { formatPoints } from "@quiz/domain";
 
 import { refusalCodeOf, wordedRefusal } from "../api";
 import type { Dict, TFunction } from "../i18n";
@@ -80,6 +81,10 @@ export const ACCENT_KINDS: ReadonlySet<ProjectActionKind> = new Set(["link", "ac
 /** Whether the project still needs something from the student: what `mostUrgent` ranks a project by. */
 export const needsStudentAction = (card: StudentProjectCard, now: number): boolean =>
   ACCENT_KINDS.has(projectActionKind(factsOfCard(card), now));
+
+/** A score as the card and the page write it: "7.5 / 10", or the points alone without a maximum. */
+export const scorePoints = (points: number, max: number | null): string =>
+  max === null ? formatPoints(points) : `${formatPoints(points)} / ${formatPoints(max)}`;
 
 /** The page on GitHub where a pending invitation is accepted. */
 export const invitationHref = (repoUrl: string): string => `${repoUrl}/invitations`;

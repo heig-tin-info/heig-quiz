@@ -268,6 +268,16 @@ describe("the push receipt (ADR-012)", () => {
     expect(rows.find((r) => r.headSha === sha("c"))).toMatchObject({ isBot: true });
   });
 
+  it("counts the push's new commits that no bot authored (M3-14i), none known without the list", async () => {
+    const commit = (distinct: boolean, username?: string) => ({ distinct, author: { name: "x", email: "x@y", ...(username ? { username } : {}) } });
+    const commits = [commit(true, "alice"), commit(true), commit(false, "alice"), commit(true, "quiz-test[bot]"), commit(true, "github-actions[bot]")];
+    await deliver("push", push(TRACKED, sha("e"), { commits }));
+    await deliver("push", push(TRACKED, sha("f")));
+    const rows = await receipts(TRACKED);
+    expect(rows.find((r) => r.headSha === sha("e"))).toMatchObject({ commits: 2 });
+    expect(rows.find((r) => r.headSha === sha("f"))).toMatchObject({ commits: null });
+  });
+
   it("is not written for an untracked repository, nor a deleted branch", async () => {
     await deliver("push", push(9002, sha("d")));
     await deliver("push", push(TRACKED, "0".repeat(40)));

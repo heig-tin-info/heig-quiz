@@ -24,14 +24,17 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import type { StudentActivityGroup } from "@quiz/domain";
-import type { ProjectAcceptance, StudentProjectCard } from "@quiz/contracts";
+import type { ProjectAcceptance, StudentProjectCard, StudentProjectWork } from "@quiz/contracts";
 
 import { api, useMe } from "../api";
 import { githubLinkHref } from "../github/api";
 import { useT, type TFunction } from "../i18n";
 import { useToast } from "../notify";
+import { CiBadge } from "../project/parts";
+import { shortSha } from "../project/projectPage";
 import { studentRootKey } from "../queryKeys";
 import { routeToPath, type Navigate } from "../router";
+import { isoDateTime } from "../ui";
 import { ActivityRow, leftLine, startsLine, type RowAction } from "./ActivityRow";
 import {
   ACCENT_KINDS,
@@ -40,6 +43,7 @@ import {
   PROJECT_STATUS_KEY,
   projectActionKind,
   REREAD_REFUSALS,
+  scorePoints,
   STATE_KEY,
   studentRefusalCode,
   studentRefusalMessage,
@@ -135,6 +139,52 @@ export function projectLine(
 }
 
 /**
+ * The commit a student's work stands on — its short sha and date, the
+ * number of their commits, its CI status — or that there is none yet
+ * (M3-14i). The card and the project page's repository card draw the same.
+ */
+export function CommitFacts({ work }: { work: Pick<StudentProjectWork, "lastCommit" | "commits" | "ciStatus"> }) {
+  const t = useT();
+  const commit = work.lastCommit;
+  return (
+    <>
+      {commit ? (
+        <>
+          <span className="font-mono text-[13px] text-fg">{shortSha(commit.sha)}</span>
+          {commit.at ? <span className="text-fg-faint">{isoDateTime(commit.at)}</span> : null}
+        </>
+      ) : (
+        <span className="text-fg-faint">{t("sproj.commit.none")}</span>
+      )}
+      {work.commits > 0 ? (
+        <span className="text-fg-faint">{work.commits === 1 ? t("sproj.commits.one") : t("sproj.commits", { n: work.commits })}</span>
+      ) : null}
+      {commit ? <CiBadge status={work.ciStatus} /> : null}
+    </>
+  );
+}
+
+/**
+ * The state of the work on a ready repository (M3-14i, heig-classroom's
+ * row): the commit facts, then the indicative score — current, or frozen at
+ * the deadline — which the server leaves out once the scores are released.
+ */
+function WorkLine({ work }: { work: StudentProjectWork }) {
+  const t = useT();
+  return (
+    <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
+      <CommitFacts work={work} />
+      {work.score ? (
+        <span className="text-fg-muted">
+          <span className="font-semibold tabular-nums text-fg">{scorePoints(work.score.points, work.score.max)}</span>{" "}
+          {t("sgrades.indicative")}
+        </span>
+      ) : null}
+    </p>
+  );
+}
+
+/**
  * The row. `primary` is the page's word on the accent: the home lights every
  * open card, the classroom page its most urgent one; a ready project never
  * takes it, whatever the page says. Upcoming carries no button, as every
@@ -158,14 +208,18 @@ export function ProjectRow({
 }) {
   const t = useT();
   const readOnly = useStudentReadOnly(true);
-  const action = useProjectAction(factsOfCard(card), { now, primary, readOnly });
+  const facts = factsOfCard(card);
+  const action = useProjectAction(facts, { now, primary, readOnly });
   const route = { view: "project", id: card.id } as const;
+  // The work is said once the repository is theirs; before, the line says the step to take.
+  const work = card.work !== null && projectActionKind(facts, now) === "open" ? card.work : null;
   return (
     <ActivityRow
       title={card.title}
       link={{ href: routeToPath(route), onNavigate: () => navigate(route) }}
       where={showWhere ? `${card.courseCode} · ${card.classroomName}` : undefined}
       line={projectLine(card, group, now, readOnly, t)}
+      detail={work ? <WorkLine work={work} /> : undefined}
       badge={{ label: t("activities.kind.project"), accent: false }}
       action={group === "upcoming" ? undefined : (action ?? undefined)}
     />

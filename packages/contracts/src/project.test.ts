@@ -44,6 +44,8 @@ describe("the student's project card (F-PROJ-04)", () => {
     githubLinked: true,
     repoFullName: "heig-prg1/lab2-alice",
     repoUrl: "https://github.com/heig-prg1/lab2-alice",
+    // M3-14i: the state of the work, as the view reads it.
+    work: { lastCommit: { sha: "a".repeat(40), at: START }, commits: 4, ciStatus: "pass", score: null },
   } as const;
 
   it("is a member of StudentActivityCard", () => {
@@ -57,8 +59,9 @@ describe("the student's project card (F-PROJ-04)", () => {
   });
 
   it("is the base of the student's project view, which carries the repository and the release instead (M3-09a)", () => {
-    const { invitation, repoFullName, repoUrl, ...facts } = card;
+    const { invitation, repoFullName, repoUrl, work, ...facts } = card;
     void invitation;
+    void work;
     const view = {
       ...facts,
       seat: "student",
@@ -70,6 +73,7 @@ describe("the student's project card (F-PROJ-04)", () => {
         deleted: false,
         locked: false,
         lastCommit: { sha: "a".repeat(40), at: START },
+        commits: 4,
         ciStatus: "pass",
         run: { sha: "a".repeat(40), url: `${repoUrl}/actions/runs/7`, conclusion: "success", completedAt: START },
         score: { points: 7, max: 10, grade: { grade: 4.5, fellBack: false }, frozen: false },

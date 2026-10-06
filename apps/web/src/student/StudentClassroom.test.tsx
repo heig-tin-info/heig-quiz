@@ -290,6 +290,7 @@ describe("mostUrgent", () => {
       invitation: "accepted",
       repoFullName: "heig/labo-1-lea",
       repoUrl: "https://github.com/heig/labo-1-lea",
+      work: null,
       deadlineAt: inMinutes(5),
     });
     const quiz = card({ id: "e", closesAt: inMinutes(60) });
@@ -314,6 +315,7 @@ const project = (over: Partial<StudentProjectCard>): StudentProjectCard => ({
   githubLinked: true,
   repoFullName: null,
   repoUrl: null,
+  work: null,
   ...over,
 });
 

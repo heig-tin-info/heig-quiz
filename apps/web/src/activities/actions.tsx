@@ -21,7 +21,7 @@ import { useErrorToast } from "../notify";
 import { repoHref } from "../project/projectPage";
 import { activitiesKey, pollKey } from "../queryKeys";
 import type { Route } from "../router";
-import { Menu, type MenuItem } from "../ui";
+import { IconLink, Menu, type MenuItem } from "../ui";
 import { typeOf } from "./model";
 
 /**
@@ -67,8 +67,10 @@ export const endable = (row: ActivitySummary) => typeOf(row) === "poll" && row.s
  * leads (the click on the row goes to its kind's `home`), and End for a
  * running poll. Always a menu, never icon buttons: its length follows the
  * state, and a row that flickers between shapes under the pointer is worse
- * than one more click (`Actions` › `menu`). A project's leads to its
- * repositories on GitHub (M3-14a); its one place is its page (M3-12).
+ * than one more click (`Actions` › `menu`). A project has no menu: its
+ * one place is its page (M3-12), and its two repositories on GitHub are
+ * links in sight on the row (M3-14h, product owner: the menu of M3-14a hid
+ * them), always the same two, so nothing flickers.
  */
 export function ActivityMenu({
   row,
@@ -81,7 +83,8 @@ export function ActivityMenu({
   onEnd?: (row: ActivitySummary) => void;
 }) {
   const t = useT();
-  const items: MenuItem[] = row.kind === "project" ? projectItems(row, t) : evaluationItems(row, t, navigate, onEnd);
+  if (row.kind === "project") return <ProjectRepoLinks row={row} />;
+  const items = evaluationItems(row, t, navigate, onEnd);
   return (
     // A click in the menu must not also open the row under it.
     <span onClick={(e) => e.stopPropagation()} className="inline-flex">
@@ -90,10 +93,29 @@ export function ActivityMenu({
   );
 }
 
-const projectItems = (row: ProjectActivitySummary, t: ReturnType<typeof useT>): MenuItem[] => [
-  { label: t("project.source"), icon: GitBranch, href: repoHref(row.source.fullName) },
-  ...(row.distribution ? [{ label: t("project.distribution"), icon: Users, href: repoHref(row.distribution.fullName) }] : []),
-];
+/**
+ * A project's source and distribution repositories on GitHub (F-PROJ-02,
+ * staff only: the staff's lists alone carry them), as two icon links named
+ * by their tooltip. While the distribution is being built its place stays
+ * empty, so the rows keep their links in one column.
+ */
+function ProjectRepoLinks({ row }: { row: ProjectActivitySummary }) {
+  const t = useT();
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      <IconLink label={t("project.source")} href={repoHref(row.source.fullName)}>
+        <GitBranch />
+      </IconLink>
+      {row.distribution ? (
+        <IconLink label={t("project.distribution")} href={repoHref(row.distribution.fullName)}>
+          <Users />
+        </IconLink>
+      ) : (
+        <span className="size-8" aria-hidden />
+      )}
+    </span>
+  );
+}
 
 function evaluationItems(
   row: EvaluationActivitySummary,
