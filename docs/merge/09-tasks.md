@@ -2669,6 +2669,26 @@ release. The original card's notes stay here; each part has its card below.
   end to end; 100 repositories at a deadline applied in < 5 min; tick
   duration measured with 100 due projects.
 - **Output**: a short report in the PR; findings as tasks.
+- **As run** (2026-10-06): the product owner runs the pilot alone in
+  PRODUCTION on the test organization `heig-quiz-classroom`, classroom
+  `TestCourse-A` — the staging App is deferred. First walk: connect the
+  organization, link and unlink the journal, link one's own GitHub account
+  from Settings, create a draft project "Labo PGCD". The load test (100
+  repositories at a deadline, the tick with 100 due projects) is still to
+  do.
+
+#### Findings as tasks (first walk, 2026-10-06)
+
+| # | Finding | Task | Outcome |
+| --- | --- | --- | --- |
+| 1 | "Install the App on GitHub" opens a new tab; GitHub's setup return then loads a SECOND Quiz in it while the first still waits | M3-14b | The install is a same-tab round trip, like the account link: the setup return lands on `/classrooms/<state>/settings?connect=1&installed=<orgId>`, the sheet reopens with the new organization picked; the wait-for-refetch machinery goes. The App's settings: Setup URL `https://<host>/setup/github/installed`, "Redirect on update" ticked |
+| 2 | The Free-plan check should lead to where an organization becomes an Education one | M3-14b | A link to `https://education.github.com/globalcampus/teacher` (GitHub's Education FAQ: "Upgrade your academic organizations"; an unverified teacher is offered to apply there) |
+| 3 | The `ANTHROPIC_API_KEY` organization-secret check | M3-14f | NOT NOW (product owner): removed progressively once Quiz's own LLM does the final review |
+| 4 | A student should be led to link GitHub when a project is published or opened | M3-14d | Blocked on the product owner: F-GH-05 and `05-web.md` §5.3 say no banner, no nudge (product owner, 2026-10-01). Link GitHub is already the one primary action of an unlinked student's open project card and page (`projectActionKind`), with the return to the page; the pilot saw the READ-ONLY student view (finding 8), where no button shows. At most: a `project_published` notification worded for an unlinked recipient |
+| 5 | "New evaluation" is a dialog, "New project" a page: one scrollable modal for both? | M3-14e | Blocked on the product owner: M3-11 decided one page (product owner and orchestrator, 2026-10-02); DESIGN.md keeps a centered dialog to three fields and a scrolling dialog to READING. The project needs everything before Create (the source, its branches and strategy are fixed; the build takes seconds). If an overlay is wanted, the conforming one is a `Sheet`, the route `projectNew` removed |
+| 6 | The Projects table should link the GitHub repositories, and say the time left | M3-14a | A row menu with the source and the students' (distribution) repository, staff only (F-PROJ-02); the deadline cell of a published project says the time left (no live countdown) |
+| 7 | A draft shows a start date although nothing is fixed before Publish | M3-14a | The server sends no start for a manual draft (its stored start is its creation) and no deadline for a manual draft counted in a duration; the table shows "—", the Activities timeline treats it as undated |
+| 8 | A teacher cannot test a project as a student (heig-classroom let a teacher's seat accept) | M3-14c | ADR-077 PROPOSED: the staff seat of "Join as student" (ADR-018) accepts an individual project; its repository is badged and counted nowhere. Draft PR, blocked on the product owner's answers (ADR-077). Today, without code: a second personal account with the student role on the roster, its GitHub account not a member of the organization |
 
 ### M3-15 — Groups (API)
 Redesigned by [ADR-070](../adr/ADR-070-repartitions-de-groupes.md)
