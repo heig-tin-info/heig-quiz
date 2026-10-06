@@ -25,7 +25,7 @@ const PROJECT = "0190d3c4-0000-7000-8000-0000000000b4";
 function routes(set: GroupSetDetail | RouteHandler, extra: Record<string, RouteHandler> = {}) {
   return mockFetch({
     [`GET ${SET_BASE}`]: typeof set === "function" || "status" in set ? (set as RouteHandler) : ok(set),
-    [`GET /app/api/classrooms/${ROOM_ID}`]: ok({ id: ROOM_ID, name: "PRG1-2026", roster: [] }),
+    [`GET /app/api/classrooms/${ROOM_ID}`]: ok({ id: ROOM_ID, name: "PRG1-2026", course: { id: "co-1", code: "PRG1", name: "Programmation 1" }, roster: [] }),
     ...extra,
   });
 }
@@ -88,8 +88,23 @@ describe("the page's states", () => {
   it("leads back to the project it was opened from (?fromProject=<id>)", async () => {
     routes(makeSet({ usedBy: [{ id: "p-1", name: "Labo 4", archived: false, follows: true }] }));
     const { navigate } = renderPage("en", "/classrooms/x/groups/y?fromProject=p-1");
-    await userEvent.click(await screen.findByRole("button", { name: "Labo 4" }));
+    const trail = await screen.findByRole("navigation", { name: "Breadcrumb" });
+    const link = within(trail).getByRole("link", { name: "Labo 4" });
+    expect(link).toHaveAttribute("href", "/projects/p-1");
+    await userEvent.click(link);
     expect(navigate).toHaveBeenCalledWith({ view: "project", id: "p-1" });
+  });
+
+  it("wears the classroom's trail: Courses, course, classroom, Groups, the set", async () => {
+    routes(makeSet());
+    const { navigate } = renderPage();
+    const trail = await screen.findByRole("navigation", { name: "Breadcrumb" });
+    const names = within(trail).getAllByRole("listitem").filter((li) => li.textContent).map((li) => li.textContent);
+    expect(names.slice(0, 4)).toEqual(["Courses", "PRG1", "PRG1-2026", "Groups"]);
+    expect(within(trail).getByRole("link", { name: "PRG1" })).toHaveAttribute("href", "/courses/co-1");
+    expect(within(trail).getByText(/./, { selector: '[aria-current="page"]' })).toBeInTheDocument();
+    await userEvent.click(within(trail).getByRole("link", { name: "Groups" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "classroomGroups", id: ROOM_ID });
   });
 });
 

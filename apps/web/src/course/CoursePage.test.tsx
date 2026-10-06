@@ -80,8 +80,10 @@ describe("CoursePage", () => {
     await userEvent.click(within(tabs).getByRole("tab", { name: /Members/ }));
     expect(navigate).toHaveBeenCalledWith({ view: "course", id: "c1", tab: "members" });
 
-    // The way back up is the Courses home.
-    await userEvent.click(screen.getByRole("button", { name: "Courses" }));
+    // The trail: the Courses home, then the course as the current page.
+    const trail = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(within(trail).getByText("PRG1")).toHaveAttribute("aria-current", "page");
+    await userEvent.click(within(trail).getByRole("link", { name: "Courses" }));
     expect(navigate).toHaveBeenCalledWith({ view: "home" });
   });
 

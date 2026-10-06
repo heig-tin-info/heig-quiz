@@ -17,6 +17,7 @@ import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import { presence } from "../realtime/grid";
 import type { Route } from "../router";
+import { Trail, useClassroomCrumbs } from "../Trail";
 import { useShortcuts } from "../shortcuts";
 import {
   Card,
@@ -26,7 +27,6 @@ import {
   Kbd,
   PageError,
   PageSkeleton,
-  ParentLink,
   Switch,
   useFullscreen,
 } from "../ui";
@@ -116,6 +116,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
    * the dashboard forwards rather than refusing, and it forwards as a
    * `navigate`, which replaces the address bar with the one that is right.
    */
+  const crumbs = useClassroomCrumbs(detail.data?.evaluation.classroomId ?? null);
   const isPoll = detail.data?.evaluation.mode === "poll";
   useEffect(() => {
     if (isPoll) navigate({ view: "poll", id });
@@ -358,9 +359,14 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
       <LiveHeader
         title={detail.data?.evaluation.title ?? t("live.title")}
         eyebrow={
-          <ParentLink onClick={() => navigate({ view: "evaluation", id })}>
-            {t("eval.configure")}
-          </ParentLink>
+          <Trail
+            navigate={navigate}
+            items={[
+              ...crumbs,
+              { label: detail.data?.evaluation.title ?? t("live.title"), route: { view: "evaluation", id } },
+              { label: t("live.title") },
+            ]}
+          />
         }
         state={evaluationState}
         deadlineAt={deadline}

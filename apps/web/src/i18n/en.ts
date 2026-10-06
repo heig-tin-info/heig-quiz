@@ -1102,8 +1102,6 @@ export const en = {
   "question.published": "published v{n}",
   "question.unpublished": "unpublished changes",
   "question.readOnly": "Read-only — shared with you as reader",
-  "question.backToEvaluation": "Back to {title}",
-  "question.backToGrading": "Back to grading",
   "question.publish": "Publish",
   "question.publishTitle": "Publish this question",
   "question.publishAction": "Publish",
@@ -3487,7 +3485,6 @@ export const en = {
   "results.empty.title": "No grade yet",
   "results.empty.body": "Close the evaluation and run the grading to see the grades here.",
   "results.grading": "Grading panel",
-  "results.classroom": "Back to the classroom",
   "results.byQuestion.successRate": "Success rate",
   "results.byQuestion.answered": "{n} answers",
   "results.byQuestion.noAnswers": "Nobody answered this question.",
@@ -4667,7 +4664,6 @@ export const en = {
 
   // The journal reader (F-JRN-07, M4-04, `journal/`). A warning or a sync
   // error is a code of `@quiz/contracts`, worded here (fix J5).
-  "journal.breadcrumb": "Where you are",
   "breadcrumb.label": "Breadcrumb",
   "journal.nav": "Pages of the journal",
   "journal.folderPages": "Pages in {name}",

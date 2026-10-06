@@ -22,7 +22,6 @@ import {
   NotePanel,
   PageHeader,
   PageSkeleton,
-  ParentLink,
   PersonAvatar,
   pressable,
   ProgressList,
@@ -1059,37 +1058,6 @@ describe("NotePanel", () => {
     const panel = screen.getByText("Comment").parentElement!;
     expect(panel).toHaveClass("border");
     expect(panel).not.toHaveClass("bg-surface-2");
-  });
-});
-
-describe("ParentLink", () => {
-  it("is a plain button in the eyebrow that goes back up", async () => {
-    const onClick = vi.fn();
-    renderWithProviders(
-      <PageHeader
-        title="PRG1-2026"
-        eyebrow={<ParentLink onClick={onClick}>PRG1 — Programmation 1</ParentLink>}
-      />,
-    );
-    const link = screen.getByRole("button", { name: "PRG1 — Programmation 1" });
-    expect(link).not.toHaveAttribute("title");
-    await userEvent.click(link);
-    expect(onClick).toHaveBeenCalledOnce();
-  });
-
-  it("explains itself with a Tip, not a native title", () => {
-    vi.useFakeTimers();
-    renderWithProviders(
-      <ParentLink onClick={() => {}} tip="Open the classroom">
-        Quiz 3
-      </ParentLink>,
-    );
-    fireEvent.mouseEnter(screen.getByRole("button", { name: "Quiz 3" }).parentElement!);
-    act(() => {
-      vi.advanceTimersByTime(150);
-    });
-    expect(screen.getByText("Open the classroom")).toBeInTheDocument();
-    vi.useRealTimers();
   });
 });
 

@@ -23,6 +23,7 @@ import {
   projectSourcesKey,
 } from "../queryKeys";
 import type { Navigate } from "../router";
+import { classroomCrumbs, Trail, useCoursesCrumb } from "../Trail";
 import {
   Alert,
   Button,
@@ -33,7 +34,6 @@ import {
   fieldErrorProps,
   GithubIcon,
   PageHeader,
-  ParentLink,
   QueryError,
   RelativeTime,
   Select,
@@ -85,6 +85,7 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
   const [advanced, setAdvanced] = useState(false);
   const [reading, setReading] = useState(false);
 
+  const coursesRoot = useCoursesCrumb();
   const room = useQuery<ClassroomDetail>({
     queryKey: classroomKey(classroomId),
     queryFn: () => api(`/app/api/classrooms/${classroomId}`),
@@ -142,9 +143,7 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
   const back = () => navigate({ view: "classroom", id: classroomId });
   const header = (
     <PageHeader
-      eyebrow={
-        room.data ? <ParentLink onClick={back}>{room.data.name}</ParentLink> : <Skeleton className="h-4 w-24" />
-      }
+      eyebrow={<Trail navigate={navigate} items={[...classroomCrumbs(coursesRoot, room.data), { label: t("project.new") }]} />}
       title={t("project.new")}
       help="project-new"
       description={t("project.new.desc")}

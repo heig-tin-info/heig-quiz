@@ -1,12 +1,13 @@
-import { ArrowLeft, Copy, Eye, Save, ScanSearch, Trash2 } from "lucide-react";
+import { Copy, Eye, Save, ScanSearch, Trash2 } from "lucide-react";
 
 import type { QuestionDetail } from "@quiz/contracts";
 import { reviewPill } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import { typeIcon, typeLabel } from "../questionTypes";
-import { routeToPath } from "../router";
-import { Badge, Button, LinkButton, Menu, PageHeader, ParentLink, SyncBadge } from "../ui";
+import { routeToPath, type Route } from "../router";
+import { Trail, usePoolsCrumb } from "../Trail";
+import { Badge, Button, LinkButton, Menu, PageHeader, SyncBadge } from "../ui";
 import { ParameterizedBadge } from "../pool/ParameterizedBadge";
 import { ReviewBadge } from "../pool/ReviewBadge";
 import type { Autosave } from "./autosave";
@@ -24,7 +25,7 @@ export function QuestionHeader({
   origin,
   readOnly,
   autosave,
-  onBack,
+  navigate,
   onPublish,
   onDuplicate,
   onDelete,
@@ -35,14 +36,14 @@ export function QuestionHeader({
   /** `undefined` while the pool is loading. */
   poolName: string | undefined;
   /**
-   * The words of the way back to the page the editor was opened from — an
-   * evaluation (issue #127), a template, the grading screen — which then
-   * leads there instead of to the pool.
+   * The page the editor was opened from — an evaluation (issue #127), a
+   * template, the grading screen — named and routed: it stands in the trail
+   * instead of the pool, so the way back leads there.
    */
-  origin?: string | undefined;
+  origin?: { label: string; back: Route } | undefined;
   readOnly: boolean;
   autosave: Autosave;
-  onBack: () => void;
+  navigate: (r: Route) => void;
   onPublish: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -50,6 +51,7 @@ export function QuestionHeader({
   onReviewNow?: (() => void) | undefined;
 }) {
   const t = useT();
+  const poolsRoot = usePoolsCrumb();
   const latest = data.latestPublished;
   // "Unpublished changes" is about the STORED draft, not about the request in
   // flight: a draft saved yesterday and never published is still ahead.
@@ -62,16 +64,20 @@ export function QuestionHeader({
     <PageHeader
       help="question-editor"
       eyebrow={
-        origin !== undefined ? (
-          <ParentLink onClick={onBack}>
-            <span className="inline-flex items-center gap-1">
-              <ArrowLeft aria-hidden className="size-3.5" />
-              {origin}
-            </span>
-          </ParentLink>
-        ) : (
-          <ParentLink onClick={onBack}>{poolName ?? t("pools.title")}</ParentLink>
-        )
+        <Trail
+          navigate={navigate}
+          items={
+            origin
+              ? // Opened from an evaluation, a template or the grading screen: the way
+                // back to it is the ancestor (publishing from grading returns there).
+                [{ label: origin.label, route: origin.back }, { label: data.meta.internalName }]
+              : [
+                  poolsRoot,
+                  poolName === undefined ? null : { label: poolName, route: { view: "pool", id: data.meta.poolId } },
+                  { label: data.meta.internalName },
+                ]
+          }
+        />
       }
       title={<span className="font-mono">{data.meta.internalName}</span>}
       description={

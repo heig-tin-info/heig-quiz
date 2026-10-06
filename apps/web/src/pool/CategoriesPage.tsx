@@ -11,6 +11,7 @@ import { useErrorToast } from "../notify";
 import { PageError, QueryError } from "../queryError";
 import { poolCategoriesKey, poolKey } from "../queryKeys";
 import { useSearchParam, type Route } from "../router";
+import { Trail, usePoolsCrumb } from "../Trail";
 import {
   Badge,
   Button,
@@ -19,7 +20,6 @@ import {
   EmptyState,
   PageHeader,
   PageSkeleton,
-  ParentLink,
   Skeleton,
 } from "../ui";
 import {
@@ -167,6 +167,7 @@ export function CategoriesPage({ id, navigate }: { id: string; navigate: (r: Rou
   const [drop, setDrop] = useState<{ id: string; where: DropWhere } | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
 
+  const poolsRoot = usePoolsCrumb();
   const pool = useQuery<PoolDetail>({
     queryKey: poolKey(id),
     queryFn: () => api(`/app/api/pools/${id}`),
@@ -269,7 +270,14 @@ export function CategoriesPage({ id, navigate }: { id: string; navigate: (r: Rou
       <PageHeader
         help="categories"
         eyebrow={
-          <ParentLink onClick={() => navigate({ view: "pool", id })}>{detail.pool.name}</ParentLink>
+          <Trail
+            navigate={navigate}
+            items={[
+              poolsRoot,
+              { label: detail.pool.name, route: { view: "pool", id } },
+              { label: t("pool.categories") },
+            ]}
+          />
         }
         title={t("pool.categories")}
         description={

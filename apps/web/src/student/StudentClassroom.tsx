@@ -26,7 +26,7 @@
  *   - Finish: cards on the canvas, hairlines, no shadow.
  */
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, ChevronRight, School } from "lucide-react";
+import { CheckCircle2, School } from "lucide-react";
 import { useEffect } from "react";
 
 import type { StudentActivities, StudentActivityCard, StudentClassroomPage } from "@quiz/contracts";
@@ -39,6 +39,7 @@ import { JournalReader } from "../journal/JournalReader";
 import { studentClassroomKey } from "../queryKeys";
 import { useServerNow } from "../realtime/useServerClock";
 import type { Navigate, Route } from "../router";
+import { Trail, useStudentCoursesCrumb } from "../Trail";
 import {
   Badge,
   Button,
@@ -46,7 +47,6 @@ import {
   EmptyState,
   PageError,
   PageHeader,
-  ParentLink,
   SectionHeading,
   Skeleton,
   Tabs,
@@ -193,7 +193,9 @@ export function StudentClassroom({
         studentView
         header={
           <div className="space-y-4">
-            {data ? <Breadcrumb room={data.classroom} onCourses={toCourses} /> : <Skeleton className="h-4 w-40" />}
+            <div className="text-[13px] text-fg-muted">
+              {data ? <StudentTrail room={data.classroom} navigate={navigate} /> : <Skeleton className="h-4 w-40" />}
+            </div>
             {tabs}
           </div>
         }
@@ -217,7 +219,7 @@ export function StudentClassroom({
 
   return (
     <div className="space-y-6">
-      <ClassroomHeader room={data.classroom} onCourses={toCourses} />
+      <ClassroomHeader room={data.classroom} navigate={navigate} />
       {tabs}
       {tab === "groups" ? (
         <StudentGroups classroomId={id} />
@@ -230,12 +232,12 @@ export function StudentClassroom({
   );
 }
 
-/** The page's header: the way back to Courses, the classroom, its course, period and teachers. */
-function ClassroomHeader({ room, onCourses }: { room: Header; onCourses: () => void }) {
+/** The page's header: the trail (Courses, the classroom), the classroom, its course, period and teachers. */
+function ClassroomHeader({ room, navigate }: { room: Header; navigate: Navigate }) {
   const t = useT();
   return (
     <PageHeader
-      eyebrow={<ParentLink onClick={onCourses}>{t("nav.courses")}</ParentLink>}
+      eyebrow={<StudentTrail room={room} navigate={navigate} />}
       title={
         <span className="flex flex-wrap items-baseline gap-3">
           {room.name}
@@ -261,15 +263,9 @@ function ClassroomHeader({ room, onCourses }: { room: Header; onCourses: () => v
 }
 
 /** The Journal tab's compact header: the document below owns the page's title. */
-function Breadcrumb({ room, onCourses }: { room: Header; onCourses: () => void }) {
-  const t = useT();
-  return (
-    <nav aria-label={t("journal.breadcrumb")} className="flex items-center gap-1.5 text-[13px] text-fg-muted">
-      <ParentLink onClick={onCourses}>{t("nav.courses")}</ParentLink>
-      <ChevronRight className="size-3.5 text-fg-faint" aria-hidden />
-      <span className="text-fg">{room.name}</span>
-    </nav>
-  );
+function StudentTrail({ room, navigate }: { room: Header; navigate: Navigate }) {
+  const root = useStudentCoursesCrumb();
+  return <Trail navigate={navigate} items={[root, { label: room.name }]} />;
 }
 
 /**

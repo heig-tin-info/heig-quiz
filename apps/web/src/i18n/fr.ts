@@ -1097,8 +1097,6 @@ export const fr: Record<keyof Dict, string> = {
   "question.published": "publiée v{n}",
   "question.unpublished": "modifications non publiées",
   "question.readOnly": "Lecture seule — partagée avec vous en lecture",
-  "question.backToEvaluation": "Retour à {title}",
-  "question.backToGrading": "Retour à la correction",
   "question.publish": "Publier",
   "question.publishTitle": "Publier cette question",
   "question.publishAction": "Publier",
@@ -3486,7 +3484,6 @@ export const fr: Record<keyof Dict, string> = {
   "results.empty.body":
     "Clôturez l'évaluation et lancez la correction pour voir les notes ici.",
   "results.grading": "Panneau de correction",
-  "results.classroom": "Retour à la classe",
   "results.byQuestion.successRate": "Taux de réussite",
   "results.byQuestion.answered": "{n} réponses",
   "results.byQuestion.noAnswers": "Personne n'a répondu à cette question.",
@@ -4655,7 +4652,6 @@ export const fr: Record<keyof Dict, string> = {
 
   // The journal reader (F-JRN-07, M4-04, `journal/`). A warning or a sync
   // error is a code of `@quiz/contracts`, worded here (fix J5).
-  "journal.breadcrumb": "Où vous êtes",
   "breadcrumb.label": "Fil d'Ariane",
   "journal.nav": "Pages du journal",
   "journal.folderPages": "Pages de {name}",

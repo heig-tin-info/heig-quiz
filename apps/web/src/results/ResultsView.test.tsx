@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { makeCourseSummary } from "../test/fixtures";
+import { makeClassroomDetail, makeCourseSummary } from "../test/fixtures";
 import { makeEvaluationDetail, makeResultsView } from "../test/grading-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 import { ResultsView } from "./ResultsView";
@@ -25,6 +25,31 @@ const names = () =>
     .map((r) => within(r).getAllByRole("cell")[0]?.textContent);
 
 describe("ResultsView", () => {
+  it("wears the evaluation's trail: Courses, course, classroom, evaluation, Results", async () => {
+    mockFetch({
+      [`GET ${VIEW}`]: ok(makeResultsView()),
+      "GET /app/api/evaluations/e1": ok(makeEvaluationDetail()),
+      "GET /app/api/classrooms/r1": ok(makeClassroomDetail()),
+    });
+    const navigate = vi.fn();
+    renderWithProviders(<ResultsView evaluationId="e1" navigate={navigate} />);
+
+    const trail = await screen.findByRole("navigation", { name: "Breadcrumb" });
+    await waitFor(() =>
+      expect(within(trail).getAllByRole("listitem").map((li) => li.textContent).filter(Boolean)).toEqual([
+        "Courses",
+        "PRG1",
+        "PRG1-2026",
+        "Quiz 3",
+        "Results",
+      ]),
+    );
+    expect(within(trail).getByText("Results")).toHaveAttribute("aria-current", "page");
+    expect(within(trail).getByRole("link", { name: "Quiz 3" })).toHaveAttribute("href", "/evaluations/e1");
+    await userEvent.click(within(trail).getByRole("link", { name: "PRG1-2026" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r1" });
+  });
+
   it("shows the statistics, the histogram and one row per student", async () => {
     mockFetch({ [`GET ${VIEW}`]: ok(makeResultsView()) });
     renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);

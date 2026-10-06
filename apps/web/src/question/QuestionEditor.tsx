@@ -52,7 +52,7 @@ const ORIGINS: readonly OriginSpec[] = [
   {
     param: "fromGrading",
     back: (id, item) => ({ view: "grading", evaluationId: id, ...(item ? { item } : {}) }),
-    label: (t) => t("question.backToGrading"),
+    label: (t) => t("grading.title"),
     evaluation: true,
     returnOnPublish: true,
   },
@@ -64,7 +64,7 @@ const ORIGINS: readonly OriginSpec[] = [
       url: (id) => `/app/api/templates/${id}`,
       title: (d) => (d as TemplateDetail).template.title,
     },
-    label: (t, title) => t("question.backToEvaluation", { title }),
+    label: (_t, title) => title,
     evaluation: false,
     returnOnPublish: false,
   },
@@ -76,7 +76,7 @@ const ORIGINS: readonly OriginSpec[] = [
       url: (id) => `/app/api/evaluations/${id}`,
       title: (d) => (d as EvaluationDetail).evaluation.title,
     },
-    label: (t, title) => t("question.backToEvaluation", { title }),
+    label: (_t, title) => title,
     evaluation: true,
     returnOnPublish: false,
   },
@@ -254,12 +254,8 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
         poolName={pool.data?.pool.name}
         readOnly={readOnly}
         autosave={autosave}
-        origin={origin?.label}
-        onBack={() =>
-          navigate(
-            origin ? origin.back : { view: "pool", id: data.meta.poolId },
-          )
-        }
+        origin={origin ?? undefined}
+        navigate={navigate}
         onPublish={startPublish}
         onDuplicate={() => duplicate(data.meta)}
         onDelete={() => void askDelete(data.meta)}

@@ -23,6 +23,7 @@ import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
 import { routeToPath, useSearchParam } from "../router";
+import { classroomCrumbs, Trail, useCoursesCrumb } from "../Trail";
 import {
   Badge,
   Button,
@@ -33,7 +34,6 @@ import {
   PageError,
   PageHeader,
   PageSkeleton,
-  ParentLink,
   TabPanel,
   Tabs,
 } from "../ui";
@@ -100,6 +100,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
     queryFn: () => api(`/app/api/evaluations/${id}`),
   });
   const patch = useConfigPatch(evaluationTarget(id));
+  const coursesRoot = useCoursesCrumb();
   const classroomId = detail.data?.evaluation.classroomId ?? null;
   const classroom = useQuery<ClassroomDetail>({
     queryKey: classroomKey(classroomId),
@@ -224,11 +225,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
       <PageHeader
         eyebrow={
           classroomId ? (
-            <ParentLink onClick={() => navigate({ view: "classroom", id: classroomId })}>
-              {classroom.data
-                ? `${classroom.data.course.code} — ${classroom.data.name}`
-                : t("eval.title")}
-            </ParentLink>
+            <Trail navigate={navigate} items={[...classroomCrumbs(coursesRoot, classroom.data), { label: evaluation.title }]} />
           ) : null
         }
         title={

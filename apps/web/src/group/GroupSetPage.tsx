@@ -17,6 +17,7 @@ import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { classroomGroupSetsKey, classroomKey, groupSetKey } from "../queryKeys";
 import { useSearchParam, type Navigate } from "../router";
+import { classroomCrumbs, Trail, useCoursesCrumb } from "../Trail";
 import {
   Alert,
   Button,
@@ -32,7 +33,6 @@ import {
   PageError,
   PageHeader,
   PageSkeleton,
-  ParentLink,
   QueryError,
   Skeleton,
   textLink,
@@ -103,6 +103,7 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
   const [blocked, setBlocked] = useState<ProjectsRefusal | null>(null);
 
   const set = useGroupSet(id);
+  const coursesRoot = useCoursesCrumb();
   const room = useQuery<ClassroomDetail>({
     queryKey: classroomKey(classroomId),
     queryFn: () => api(`/app/api/classrooms/${classroomId}`),
@@ -284,15 +285,17 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
     <div className="space-y-6">
       <PageHeader
         eyebrow={
-          project ? (
-            <ParentLink onClick={() => navigate({ view: "project", id: project })} tip={t("groups.backToProject")}>
-              {projectName ?? t("groups.backToProject")}
-            </ParentLink>
-          ) : room.data ? (
-            <ParentLink onClick={() => navigate({ view: "classroomGroups", id: classroomId })}>{room.data.name}</ParentLink>
-          ) : (
-            <Skeleton className="h-4 w-24" />
-          )
+          <Trail
+            navigate={navigate}
+            items={[
+              ...classroomCrumbs(coursesRoot, room.data),
+              // Opened from a project: the project is the ancestor it came for (W9).
+              project
+                ? { label: projectName ?? t("groups.backToProject"), route: { view: "project", id: project } }
+                : { label: t("groups.tab"), route: { view: "classroomGroups", id: classroomId } },
+              { label: detail.set.name },
+            ]}
+          />
         }
         title={
           readOnly ? (
