@@ -99,3 +99,24 @@ export function studentCiReading(
   if (run === null) return { lastCommit: null, ciStatus: "none" };
   return { lastCommit: { sha: run.headSha, at: null }, ciStatus: run.conclusion === "success" ? "pass" : "fail" };
 }
+
+/** A push receipt as the student's commit count reads it: when the server received it, and the commits it brought. */
+export interface CountedReceipt {
+  receivedAt: Date;
+  /** The push's distinct commits no bot authored; null on a receipt written before they were counted (M3-14i). */
+  commits: number | null;
+}
+
+/**
+ * The number of commits a student pushed (M3-14i): the commits their own
+ * pushes brought — the caller passes the receipts no bot pushed — summed
+ * over the receipts received by their effective deadline, the freeze's
+ * rule (`receivedLate`): a push after the deadline is never shown
+ * (N-SEC-20). A receipt from before the count existed counts one, the
+ * least a push carries.
+ */
+export function studentCommitCount(receipts: readonly CountedReceipt[], deadlineAt: Date): number {
+  let n = 0;
+  for (const r of receipts) if (r.receivedAt.getTime() <= deadlineAt.getTime()) n += r.commits ?? 1;
+  return n;
+}

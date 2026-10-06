@@ -244,6 +244,7 @@ describe("the student home", () => {
       githubLinked: true,
       repoFullName: "heig/labo-1-lea",
       repoUrl: "https://github.com/heig/labo-1-lea",
+      work: null,
     };
     mockFetch({
       "GET /app/api/student/home": ok({ ...home, open: [card({}), project] }),

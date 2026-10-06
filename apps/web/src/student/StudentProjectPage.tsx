@@ -25,7 +25,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, FolderGit2 } from "lucide-react";
 
-import { formatPoints } from "@quiz/domain";
 import type { ProjectInvitationResent, StudentProject, StudentProjectRepo } from "@quiz/contracts";
 
 import { api, ApiError } from "../api";
@@ -33,7 +32,6 @@ import { Grade } from "../Grade";
 import { useT } from "../i18n";
 import { useNoticeToasts } from "../notifications/notices";
 import { useToast } from "../notify";
-import { CiBadge } from "../project/parts";
 import { studentProjectKey, studentRootKey } from "../queryKeys";
 import { useServerNow } from "../realtime/useServerClock";
 import type { Navigate } from "../router";
@@ -53,12 +51,13 @@ import {
   Stat,
 } from "../ui";
 import { leftLine, RowActionControl, startsLine } from "./ActivityRow";
-import { useProjectAction, useStudentReadOnly } from "./ProjectRow";
+import { CommitFacts, useProjectAction, useStudentReadOnly } from "./ProjectRow";
 import {
   factsOfProject,
   PROJECT_STATUS_KEY,
   projectActionKind,
   REREAD_REFUSALS,
+  scorePoints,
   STATE_KEY,
   studentRefusalCode,
   studentRefusalMessage,
@@ -200,7 +199,6 @@ function RepoCard({
   now: number;
 }) {
   const t = useT();
-  const commit = repo.lastCommit;
   const afterDeadline = Date.parse(project.deadlineAt) <= now || repo.locked;
   return (
     <Card className="space-y-2 p-5 text-sm">
@@ -221,15 +219,7 @@ function RepoCard({
       {repo.locked ? <p>{t("sproj.locked")}</p> : null}
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-fg-muted">{t(afterDeadline ? "sproj.commit.evaluated" : "sproj.commit.last")}</span>
-        {commit ? (
-          <>
-            <span className="font-mono text-[13px]">{commit.sha.slice(0, 7)}</span>
-            {commit.at ? <span className="text-fg-faint">{isoDateTime(commit.at)}</span> : null}
-            <CiBadge status={repo.ciStatus} />
-          </>
-        ) : (
-          <span className="text-fg-faint">{t("sproj.commit.none")}</span>
-        )}
+        <CommitFacts work={repo} />
       </p>
     </Card>
   );
@@ -261,8 +251,6 @@ function ResendButton({ projectId }: { projectId: string }) {
   );
 }
 
-const points = (p: number, max: number | null): string => (max === null ? formatPoints(p) : `${formatPoints(p)} / ${formatPoints(max)}`);
-
 /**
  * The score before the release (N-SEC-21): the CI's, INDICATIVE — current
  * while the project runs, frozen once the deadline is applied — with the run
@@ -277,7 +265,7 @@ function ScoreSection({ repo }: { repo: StudentProjectRepo }) {
         <div className="grid gap-3 sm:grid-cols-2">
           <Stat
             label={t(repo.score.frozen ? "sproj.score.frozen" : "sproj.score.current")}
-            value={points(repo.score.points, repo.score.max)}
+            value={scorePoints(repo.score.points, repo.score.max)}
             hint={t(repo.score.frozen ? "sproj.score.frozenHint" : "sproj.score.indicativeHint")}
           />
           {repo.score.grade ? (
@@ -307,7 +295,7 @@ function ReleaseSection({ release }: { release: NonNullable<StudentProject["rele
     <section className="space-y-3" data-coach="sproj.score">
       <SectionHeading title={t("sproj.result")} description={t("sproj.result.publishedAt", { when: isoDateTime(release.at) })} />
       <div className="grid gap-3 sm:grid-cols-2">
-        <Stat label={t("sproj.score.final")} value={release.points === null ? "—" : points(release.points, release.max)} />
+        <Stat label={t("sproj.score.final")} value={release.points === null ? "—" : scorePoints(release.points, release.max)} />
         {release.grade ? <Stat label={t("results.col.grade")} value={<Grade value={release.grade.grade} />} /> : null}
       </div>
       {release.comment ? (

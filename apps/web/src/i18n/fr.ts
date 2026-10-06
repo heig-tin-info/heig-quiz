@@ -2494,6 +2494,8 @@ export const fr: Record<keyof Dict, string> = {
   "sproj.commit.last": "Dernier commit",
   "sproj.commit.evaluated": "Commit évalué",
   "sproj.commit.none": "aucun commit encore",
+  "sproj.commits.one": "1 commit",
+  "sproj.commits": "{n} commits",
   "sproj.score": "Score",
   "sproj.score.current": "Score indicatif",
   "sproj.score.frozen": "Score à l'échéance",

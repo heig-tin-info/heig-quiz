@@ -2,7 +2,7 @@
 // one lives inside `ui/` is invisible to the app.
 //
 //   layers    the base: cx, Z, the layer stack (useLayer), Tip, IconButton,
-//             HelpIcon, Modal, Sheet, useNow. Imports no sibling.
+//             IconLink, HelpIcon, Modal, Sheet, useNow. Imports no sibling.
 //   menu      the overflow menu (Menu) and the list and strip keyboard
 //             arithmetic (listboxIndex, rovingIndex), on layers (and
 //             isPlainClick from controls, for its link items).

@@ -105,6 +105,9 @@ const PushEvent = z.object({
   forced: z.boolean().optional(),
   repository: z.object({ id: z.number().int() }),
   sender: z.object({ login: z.string() }).optional(),
+  commits: z
+    .array(z.object({ distinct: z.boolean().optional(), author: z.object({ username: z.string().optional() }).optional() }))
+    .optional(),
 });
 
 /** The workflows' own token (GR-16): the grader's commits, never a student's. */
@@ -121,6 +124,16 @@ export function pushedBy(config: AppConfig, login: string | undefined): "app" | 
   if (login === GITHUB_ACTIONS_BOT) return "workflow";
   if (config.GITHUB_APP_SLUG !== "" && login === `${config.GITHUB_APP_SLUG}[bot]`) return "app";
   return "person";
+}
+
+/**
+ * The commits a push brought that no bot authored (M3-14i), null without
+ * the list: a commit already pushed (`distinct` false: a sync branch
+ * merged, a branch copied) is no new work, nor one of the App's or a
+ * workflow's.
+ */
+function pushedCommits(config: AppConfig, commits: z.infer<typeof PushEvent>["commits"]): number | null {
+  return commits?.filter((c) => c.distinct !== false && pushedBy(config, c.author?.username) === "person").length ?? null;
 }
 
 async function writeReceipt(tx: Tx, config: AppConfig, delivery: WebhookDelivery): Promise<void> {
@@ -141,6 +154,7 @@ async function writeReceipt(tx: Tx, config: AppConfig, delivery: WebhookDelivery
       receivedAt: delivery.receivedAt,
       isBot: pushedBy(config, push.data.sender?.login) !== "person",
       forced: push.data.forced ?? false,
+      commits: pushedCommits(config, push.data.commits),
     })
     // The FIRST receipt of a head stands: a redelivery never moves it later.
     .onConflictDoNothing();

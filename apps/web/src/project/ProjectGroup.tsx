@@ -43,8 +43,8 @@ type SortKey = "title" | "start" | "deadline";
  * project where its page parses (`KIND`'s `home`, M3-12); elsewhere it is
  * not clickable. Its counts come with M3-08. A date that is not fixed yet (a
  * draft published by hand) is a dash and sorts last; a published project's
- * deadline says how far it is. The row's menu leads to the repositories on
- * GitHub (M3-14a).
+ * deadline says how far it is. The row ends with its two repositories on
+ * GitHub, as links in sight (M3-14a, M3-14h).
  */
 const DASH = <span className="text-fg-faint">—</span>;
 export function ProjectGroup({

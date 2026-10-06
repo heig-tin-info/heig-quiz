@@ -2496,6 +2496,8 @@ export const en = {
   "sproj.commit.last": "Last commit",
   "sproj.commit.evaluated": "Evaluated commit",
   "sproj.commit.none": "no commit yet",
+  "sproj.commits.one": "1 commit",
+  "sproj.commits": "{n} commits",
   "sproj.score": "Score",
   "sproj.score.current": "Indicative score",
   "sproj.score.frozen": "Score at the deadline",

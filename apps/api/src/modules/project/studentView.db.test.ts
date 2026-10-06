@@ -49,6 +49,7 @@ import {
   projectRepos,
   projects,
   projectSyncPrs,
+  pushReceipts,
 } from "../../db/schema.js";
 import { subscribe, type BusMessage } from "../../events.js";
 import { setRemoteBaseForTests } from "../../github/git.js";
@@ -212,6 +213,18 @@ const resend = async (projectId: string, headers: Headers) => {
 const staffResend = (projectId: string, repoId: string) =>
   call("POST", `/app/api/projects/${projectId}/repos/${repoId}/invite`, teacher.headers);
 
+/** A push receipt of the GitHub repository `githubRepoId`, as the intake writes it: a person's unless `isBot`. */
+const receipt = (githubRepoId: number, receivedAt: Date, commits: number | null, isBot = false) =>
+  server.app.db.insert(pushReceipts).values({
+    id: randomUUID(),
+    githubRepoId,
+    branch: "main",
+    headSha: randomUUID().replace(/-/g, "").padEnd(40, "0"),
+    receivedAt,
+    isBot,
+    commits,
+  });
+
 const projectCards = (cards: StudentActivityCard[]) => cards.filter((c) => c.kind === "project");
 const titles = (cards: StudentActivityCard[]) => projectCards(cards).map((c) => c.title);
 
@@ -274,6 +287,7 @@ describe("the student's cards (F-PROJ-04, F-ORG-14, F-ORG-15)", () => {
       githubLinked: true,
       repoFullName: null,
       repoUrl: null,
+      work: null,
     });
     const page = await classroomPage(room.classroomId, student.headers);
     expect(projectCards(page.activities.open)).toEqual(projectCards(h.open));
@@ -325,6 +339,38 @@ describe("the student's cards (F-PROJ-04, F-ORG-14, F-ORG-15)", () => {
     // A staff seat holds no repository (ADR-018): the teacher's home lists nothing of it.
     expect(projectCards((await home(teacher.headers)).open)).toEqual([]);
   });
+
+  it("says the state of the work (M3-14i): the last commit, the student's own commits by the deadline, the CI and the indicative score", async () => {
+    const student = await newStudent();
+    const room = await connectedClassroom([student]);
+    const lab = await project(room, "Lab 5");
+    await accept(lab.id, student);
+    const repo = await repoOf(lab.id, student.id);
+    const sha = "9".repeat(40);
+    await setRepo(repo.id, {
+      invitationStatus: "accepted",
+      currentGradeRunId: await run(repo.id, { headSha: sha, points: 1, max: 6 }),
+      lastCommitSha: sha,
+      lastCommitAt: at(NOW),
+      ciStatus: "fail",
+    });
+    const gid = repo.githubRepoId!;
+    await receipt(gid, at(NOW, -DAY), 3);
+    await receipt(gid, at(NOW, -MINUTE), null); // written before the count: one
+    await receipt(gid, at(NOW), 40, true); // the App's or a workflow's: never the student's work
+    await receipt(gid, at(DEADLINE, MINUTE), 7); // after the deadline: never shown
+
+    const work = { lastCommit: { sha, at: NOW }, commits: 4, ciStatus: "fail", score: { points: 1, max: 6, frozen: false } };
+    const card = projectCards((await home(student.headers)).open)[0]!;
+    expect(card).toMatchObject({ status: "in_progress", work });
+    expect(projectCards((await classroomPage(room.classroomId, student.headers)).activities.open)[0]).toEqual(card);
+    // The page reads the same.
+    expect((await view(lab.id, student.headers)).repo).toMatchObject(work);
+
+    // Released: the card drops the indicative score, which the release's final one replaces.
+    await setProject(lab.id, { releasedAt: at(NOW) });
+    expect(projectCards((await home(student.headers)).past)[0]).toMatchObject({ status: "released", work: { commits: 4, score: null } });
+  });
 });
 
 // ---------------------------------------------------------------- the view
@@ -366,6 +412,7 @@ describe("the student's project (F-PROJ-15)", () => {
       deleted: false,
       locked: false,
       lastCommit: null,
+      commits: 0,
       ciStatus: "none",
       run: null,
       score: null,
@@ -603,6 +650,10 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
         teacherComment: "Hidden-note-two",
         lastCommitSha: "d".repeat(40),
       });
+      // The second student's pushes, and the first's own after the deadline (M3-14i): never in a count of theirs.
+      await receipt(theirs.githubRepoId!, at(NOW), 8642);
+      await receipt(mine.githubRepoId!, at(NOW), 2);
+      await receipt(mine.githubRepoId!, at(DEADLINE, MINUTE), 5317);
       // The first student's own: a flagged run, an unreleased review score, the teacher's score and comment.
       await setRepo(mine.id, {
         currentGradeRunId: await run(mine.id, { points: 7, max: 10, toVerify: true, headSha: "e".repeat(40) }),
@@ -670,6 +721,10 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
         "Hidden-note-two",
         lateSha, // the first student's own push after the deadline
         "77.75", // and its run's score
+        "8642", // the second student's commits
+        "8644",
+        "5317", // the first student's own commits after the deadline
+        "5319",
         "21.5", // the first student's own review score, never released as such
         "Rewritten-after-release",
         "starter",

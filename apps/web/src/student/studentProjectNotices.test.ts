@@ -24,6 +24,7 @@ const repo = (over: Partial<StudentProjectRepo> = {}): StudentProjectRepo => ({
   deleted: false,
   locked: false,
   lastCommit: { sha: SHA, at: at(-0.1) },
+  commits: 3,
   ciStatus: "pass",
   run: { sha: SHA, url: "https://github.com/heig/labo-1-lea/actions/runs/42", conclusion: "success", completedAt: at(-0.1) },
   score: { points: 34, max: 40, grade: { grade: 5.3, fellBack: false }, frozen: false },

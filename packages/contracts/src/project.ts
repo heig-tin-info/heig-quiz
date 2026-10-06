@@ -170,40 +170,6 @@ export type StudentProjectStatus = z.infer<typeof StudentProjectStatus>;
 export const ProjectSeatKind = z.enum(["student", "staff"]);
 export type ProjectSeatKind = z.infer<typeof ProjectSeatKind>;
 
-/**
- * A published project on the student's Activities — the home and the
- * classroom page (F-PROJ-04, F-ORG-14; the `project` member of
- * `StudentActivityCard`; merge task M3-09a). The student payload: never a
- * draft nor an archived project, never the source or distribution
- * repository, nothing of another student (N-SEC-20). `status`: to accept
- * (or not yet open, which `startAt` tells), in progress once the repository
- * exists, locked after the student's deadline, released once the scores
- * are out. `deadlineAt` is the student's EFFECTIVE deadline: their own
- * extension, else the project's. `githubLinked`, `repoUrl` and
- * `invitation` are the four states of the row's button
- * (`docs/merge/05-web.md` §5.3, drawn by M3-13): not linked, linked
- * without a repository, invitation pending, ready — `repoFullName` and
- * `repoUrl` name the student's own repository once it exists and is not
- * deleted, `invitation` their invitation on it (F-PROJ-07). The scores are
- * the project's student view's ({@link StudentProject}), not the card's.
- */
-export const StudentProjectCard = z.object({
-  kind: z.literal("project"),
-  id: z.uuid(),
-  title: z.string(),
-  classroomId: z.uuid(),
-  classroomName: z.string(),
-  courseCode: z.string(),
-  startAt: z.iso.datetime(),
-  deadlineAt: z.iso.datetime(),
-  status: StudentProjectStatus,
-  invitation: z.enum(["pending", "accepted"]).nullable(),
-  githubLinked: z.boolean(),
-  repoFullName: z.string().nullable(),
-  repoUrl: z.url().nullable(),
-});
-export type StudentProjectCard = z.infer<typeof StudentProjectCard>;
-
 // ---------------------------------------------------------- the lifecycle (M3-02)
 
 /**
@@ -1205,10 +1171,27 @@ export const StudentProjectScore = z.object({
 export type StudentProjectScore = z.infer<typeof StudentProjectScore>;
 
 /**
+ * The state of a student's work on their repository (M3-14i), as the
+ * project's student view reads it (F-PROJ-15, N-SEC-20): the commit it
+ * stands on and its CI status ({@link StudentProjectRepo}), the number of
+ * commits pushed to the repository by no bot by their effective deadline
+ * (`studentCommitCount` of `@quiz/domain`, from the server's push
+ * receipts: never the App's nor a workflow's commits, never a push after
+ * the deadline), and the indicative score.
+ */
+export const StudentProjectWork = z.object({
+  lastCommit: z.object({ sha: z.string(), at: z.iso.datetime().nullable() }).nullable(),
+  commits: z.number().int().nonnegative(),
+  ciStatus: CiStatus,
+  score: StudentProjectScore.nullable(),
+});
+export type StudentProjectWork = z.infer<typeof StudentProjectWork>;
+
+/**
  * The student's own repository (F-PROJ-15): its name and URL, their
  * invitation (F-PROJ-07), whether GitHub lost it (`deleted`) or holds it
- * locked, the commit the view stands on and its CI status, the run their
- * score comes from and that score. Before the deadline, `lastCommit` and
+ * locked, its {@link StudentProjectWork}, and the run their score comes
+ * from. Before the deadline, `lastCommit` and
  * `ciStatus` are the last push of theirs and its checks as the webhooks
  * stored them; once their deadline is applied (or passed), they are the
  * SELECTED run's commit and its conclusion read as pass or fail — `success`
@@ -1219,18 +1202,55 @@ export type StudentProjectScore = z.infer<typeof StudentProjectScore>;
  * under grading `none`, without a parsed run, and after the deadline when
  * no run in time scored; `run` is null when no run is selected.
  */
-export const StudentProjectRepo = z.object({
+export const StudentProjectRepo = StudentProjectWork.extend({
   fullName: z.string(),
   url: z.url(),
   invitation: z.enum(["pending", "accepted"]),
   deleted: z.boolean(),
   locked: z.boolean(),
-  lastCommit: z.object({ sha: z.string(), at: z.iso.datetime().nullable() }).nullable(),
-  ciStatus: CiStatus,
   run: StudentProjectRun.nullable(),
-  score: StudentProjectScore.nullable(),
 });
 export type StudentProjectRepo = z.infer<typeof StudentProjectRepo>;
+
+/**
+ * A published project on the student's Activities — the home and the
+ * classroom page (F-PROJ-04, F-ORG-14; the `project` member of
+ * `StudentActivityCard`; merge task M3-09a). The student payload: never a
+ * draft nor an archived project, never the source or distribution
+ * repository, nothing of another student (N-SEC-20). `status`: to accept
+ * (or not yet open, which `startAt` tells), in progress once the repository
+ * exists, locked after the student's deadline, released once the scores
+ * are out. `deadlineAt` is the student's EFFECTIVE deadline: their own
+ * extension, else the project's. `githubLinked`, `repoUrl` and
+ * `invitation` are the four states of the row's button
+ * (`docs/merge/05-web.md` §5.3, drawn by M3-13): not linked, linked
+ * without a repository, invitation pending, ready — `repoFullName` and
+ * `repoUrl` name the student's own repository once it exists and is not
+ * deleted, `invitation` their invitation on it (F-PROJ-07). The scores are
+ * the project's student view's ({@link StudentProject}); the card carries
+ * their `work` (M3-14i, heig-classroom's row): the commit it stands on, the
+ * number of their commits, the CI status and the indicative score, read as
+ * the view reads them — the score never once the scores are released, when
+ * the view's final score replaces the indicative one.
+ */
+export const StudentProjectCard = z.object({
+  kind: z.literal("project"),
+  id: z.uuid(),
+  title: z.string(),
+  classroomId: z.uuid(),
+  classroomName: z.string(),
+  courseCode: z.string(),
+  startAt: z.iso.datetime(),
+  deadlineAt: z.iso.datetime(),
+  status: StudentProjectStatus,
+  invitation: z.enum(["pending", "accepted"]).nullable(),
+  githubLinked: z.boolean(),
+  repoFullName: z.string().nullable(),
+  repoUrl: z.url().nullable(),
+  /** The state of their work while the repository is live (M3-14i); null otherwise. */
+  work: StudentProjectWork.nullable(),
+});
+export type StudentProjectCard = z.infer<typeof StudentProjectCard>;
 
 /**
  * What the release gave the student (F-PROJ-14): the final score's
@@ -1259,7 +1279,7 @@ export type StudentProjectRelease = z.infer<typeof StudentProjectRelease>;
  * deadline, the review or the teacher's score before the release, nor the
  * staff's flags.
  */
-export const StudentProject = StudentProjectCard.omit({ invitation: true, repoFullName: true, repoUrl: true }).extend({
+export const StudentProject = StudentProjectCard.omit({ invitation: true, repoFullName: true, repoUrl: true, work: true }).extend({
   /** The caller's own seat; null for a teacher in the student view who holds none (read-only, ADR-077). */
   seat: ProjectSeatKind.nullable(),
   gradingMode: ProjectGradingMode,
