@@ -351,12 +351,11 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
     selected === null ? null : (view.rows.find((r) => r.seatId === selected.seatId) ?? null);
   const lobby = evaluationState === "lobby" || evaluationState === "scheduled";
   // The one clock of the screen, for the header and for every row that
-  // compares its own deadline against it.
-  const deadline = commonDeadline(
-    view.evaluation.closesAt,
-    view.rows,
-    detail.data?.evaluation.settings.timing,
-  );
+  // compares its own deadline against it. No clock while the evaluation's
+  // timing is unknown: without it a `duration` quiz would show its leftover
+  // close for a moment (#574).
+  const timing = detail.data?.evaluation.settings.timing;
+  const deadline = timing === undefined ? null : commonDeadline(view.evaluation.closesAt, view.rows, timing);
 
   const body = (
     <div className="space-y-5">
