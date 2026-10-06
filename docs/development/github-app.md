@@ -15,7 +15,7 @@ OAuth client and slug (03 §3.4, N-SEC-18):
 | Environment | App | Installed on | Where it can be installed |
 | --- | --- | --- | --- |
 | production, `quiz.chevallier.io` | Quiz's production App, registered by hand by the product owner | the teachers' organizations | any account (public) |
-| staging, `quiz.dev.chevallier.io` | `heig-quiz-staging`, created with the script below | ONE test organization | only the account that owns it (private), recommended |
+| staging, `quiz.dev.chevallier.io` | `heig-quiz-staging`, created with the script below | ONE test organization, on which production's App is NOT installed | only the account that owns it (private) |
 | development (optional) | a personal App | a test organization | only its owner |
 
 Without any `GITHUB_*` variable the GitHub features are off and everything
@@ -26,10 +26,11 @@ else runs: classrooms, evaluations, journals in Quiz mode.
 The App's settings live in one place,
 [`apps/api/src/github/manifest.ts`](https://github.com/heig-tin-info/heig-quiz/blob/main/apps/api/src/github/manifest.ts):
 the script builds its manifest from it and the API takes its routes' paths
-from it. The two tables below are kept in step with that module **by hand**,
-and `manifest.test.ts` fails when they differ (a row missing, an access
-changed, a row the module does not hold), or when the events differ from
-the ones the API registers a handler for (`onEvent` in `apps/api/src/`).
+from it. The reasons below live only here; the tables are kept in step with
+that module **by hand**, and `manifest.test.ts` fails when they differ (a
+row missing, a scope or an access changed, a row the module does not hold),
+or when the events differ from the ones the API registers a handler for
+(`onEvent` in `apps/api/src/`).
 
 A permission added after the App is installed makes every organization
 owner approve the installation again: decide it in the module first, then
@@ -134,9 +135,10 @@ pnpm github:app --url https://<host> --name <App name> \
 4. GitHub sends the browser back to `127.0.0.1` with a one-time code; the
    script exchanges it (`POST /app-manifests/{code}/conversions`), writes
    the key and the lines, and prints the App's id, slug and links. It
-   checks the webhook secret GitHub generated: under 32 characters, it
-   replaces it on the App with a fresh 64-character one
-   (`PATCH /app/hook/config`) and says so. The page waits 15 minutes.
+   checks the length of the webhook secret GitHub generated (never the
+   secret): under the 32 characters `config.ts` asks for, it says so; then
+   set a new one on the App (*Webhook secret*, `openssl rand -hex 32`) and
+   in `GITHUB_WEBHOOK_SECRET`. The page waits 15 minutes.
 5. **Install the secrets** on the server (next section), then **install the
    App** on the organization (`https://github.com/apps/<slug>/installations/new`,
    *All repositories*), from a classroom's Settings (*Connect GitHub*) so
@@ -147,13 +149,21 @@ browser that reaches the workstation through a forwarded port.
 
 ### Staging: `heig-quiz-staging`
 
-The recommended owner of the staging App is the **test organization
-itself**, private: GitHub then lets nobody install it anywhere else, so
-N-SEC-18 holds by construction, not by discipline. The M2-06 card first
-planned it under the account that owns heig-classroom's App
-(`heig-tin-info`); that works too (`--org heig-tin-info --public`), with
-the test organization as its only installation by discipline. The product
-owner chooses.
+The staging App is owned by **its test organization**, and private:
+GitHub then lets nobody install it anywhere else, so N-SEC-18 holds by
+construction, not by discipline. Two rules, both hard:
+
+- **Production's App is not installed on that organization**, and
+  staging's App on no organization production uses. Staging holds
+  production's data: its healing finds an installation by the
+  organization's login, so a staging App on an organization production
+  drives (the pilot's `heig-quiz-classroom` included) would be re-attached
+  to that organization's copied row and act on production's repositories.
+  Use a test organization of its own.
+- **Never public.** A public staging App could be installed by any
+  teacher's organization, with the same effect. (The M2-06 card first
+  planned both Apps under heig-classroom's owner, `heig-tin-info`; a
+  private App there could only be installed on `heig-tin-info` itself.)
 
 ```bash
 pnpm github:app --url https://quiz.dev.chevallier.io --name heig-quiz-staging \
@@ -163,9 +173,8 @@ pnpm github:app --url https://quiz.dev.chevallier.io --name heig-quiz-staging \
 
 A private App can be installed only by its owner. If a tester's GitHub
 account cannot link to it (the account link is the App's own OAuth), make
-that account a member of the test organization, or make the App public
-(*Settings → Advanced → Make public*) and keep installing it on the test
-organization only.
+that account a member of the test organization; do not make the App
+public.
 
 ### Production
 
@@ -202,9 +211,9 @@ changed), create the App at
 ## Installing the secrets on the server
 
 The key and the two secrets never enter a repository, an image or the
-database, and an encrypted copy of each goes into the vault
-([ADR-010](../adr/ADR-010-stockage-secrets.md): age, the institutional
-Vaultwarden), as for `.env.prod` and `secrets/`.
+database, and an age-encrypted copy of each goes into the institutional
+vault ([ADR-010](../adr/ADR-010-stockage-secrets.md): HEIG Vaultwarden or
+equivalent), as for `.env.prod` and `secrets/`.
 
 **Staging** (`srvstg`, which an administrator reaches with
 `sudo machinectl shell srvstg@`; see
@@ -239,15 +248,16 @@ GitHub App row (it turns OK after the first call to GitHub); the App's
 - **Production**: on the teachers' organizations, from a classroom's
   Settings, *All repositories* (F-GH-03), and on the product owner's pilot
   organization (`heig-quiz-classroom`, M3-14).
-- **Staging**: on its test organization only, preferably not the
-  production pilot's: a project copied from production and unarchived on
-  staging would otherwise be driven by both Apps, on the same repositories.
-  Staging restores production's
-  data ([ADR-028](../adr/ADR-028-recette-sur-la-meme-vm.md)), so every
-  refresh forgets production's installations and archives every project
-  (`scripts/staging-scrub.sql`, run by `scripts/staging-refresh.sh`):
-  staging's App re-attaches its test organization at the next setup return
-  or classroom open, and a tester unarchives the project under test.
+- **Staging**: on its own test organization only, never one production's
+  App is installed on (see [the staging App](#staging-heig-quiz-staging)).
+  Staging restores production's data
+  ([ADR-028](../adr/ADR-028-recette-sur-la-meme-vm.md)), so every refresh
+  (`scripts/staging-scrub.sql`, run by `scripts/staging-refresh.sh`)
+  forgets production's installations, archives every project and stops its
+  group moves, closes the copied webhook deliveries and drops the queued
+  jobs: staging's App re-attaches its test organization at the next setup
+  return or classroom open, and a tester unarchives the project under
+  test.
 - **Never** the production App on staging, nor its key, its webhook secret
   or its client secret in `.env.staging` (N-SEC-18): with them, staging's
   ticker would lock, commit, revert and dispatch on real students'

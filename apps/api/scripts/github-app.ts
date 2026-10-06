@@ -20,29 +20,28 @@
  * Exit status: 0 created; 1 refused or failed.
  */
 import { randomBytes } from "node:crypto";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, realpathSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
-import { App } from "octokit";
+import { Octokit } from "octokit";
 
 import { GITHUB_WEBHOOK_SECRET_MIN } from "../src/config.js";
-import { appManifest, envLines, type ManifestConversion } from "../src/github/manifest.js";
+import { appManifest, envLines } from "../src/github/manifest.js";
+import { escapeHtml } from "../src/modules/notifications/templates.js";
 
 const USAGE =
   "usage: github-app --url <https://host> --name <App name> (--org <login> | --personal) " +
   "--key-out <file> --env-out <file | -> [--public] [--port <n>]";
-/** GitHub's limit on an App's name. */
-const NAME_MAX = 34;
 /** The code GitHub hands back is valid for an hour; the page waits less. */
 const WAIT_MS = 15 * 60_000;
 
-/** Inside a git working tree (a `.git` directory or file above it): a secret must never land there. */
+/** Inside a git working tree (a `.git` directory or file above it, links followed): a secret must never land there. */
 export function insideGitTree(path: string): boolean {
-  for (let dir = dirname(resolve(path)); ; dir = dirname(dir)) {
+  for (let dir = realpathSync(dirname(resolve(path))); ; dir = dirname(dir)) {
     if (existsSync(join(dir, ".git"))) return true;
     if (dirname(dir) === dir) return false;
   }
@@ -76,7 +75,7 @@ function options() {
     throw new Error(`--url must be an https origin, such as https://quiz.dev.chevallier.io\n${USAGE}`);
   }
   const name = values.name?.trim() ?? "";
-  if (name === "" || name.length > NAME_MAX) throw new Error(`--name: 1 to ${NAME_MAX} characters\n${USAGE}`);
+  if (name === "") throw new Error(`--name is required\n${USAGE}`);
   if (Boolean(values.org) === Boolean(values.personal)) throw new Error(`one of --org <login> or --personal\n${USAGE}`);
   if (values.org && !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(values.org)) throw new Error("--org: not a GitHub login");
   const envOut = values["env-out"] === "-" ? "-" : secretPath("--env-out", values["env-out"]);
@@ -91,40 +90,23 @@ function options() {
   };
 }
 
-const escapeHtml = (text: string) =>
-  text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-
 const page = (body: string) =>
   `<!doctype html><meta charset="utf-8"><title>Quiz GitHub App</title><body style="font-family:sans-serif;max-width:40em;margin:3em auto">${body}</body>`;
 
-/** GitHub's conversion of the code: the App, its secrets and its key. */
-async function convert(code: string): Promise<ManifestConversion & { pem: string; html_url: string; owner: { login: string } }> {
-  const res = await fetch(`https://api.github.com/app-manifests/${encodeURIComponent(code)}/conversions`, {
-    method: "POST",
-    headers: { accept: "application/vnd.github+json", "user-agent": "heig-quiz", "x-github-api-version": "2022-11-28" },
-  });
-  if (res.status !== 201) throw new Error(`GitHub refused the conversion: HTTP ${res.status}`);
-  return (await res.json()) as ManifestConversion & { pem: string; html_url: string; owner: { login: string } };
-}
-
 /**
- * The webhook secret config.ts accepts (at least GITHUB_WEBHOOK_SECRET_MIN
- * characters): GitHub's when it is long enough, otherwise a fresh one set
- * on the App with its own JWT (`PATCH /app/hook/config`).
+ * GitHub's generated webhook secret, checked against config.ts: a shorter
+ * one would make the process refuse to start. Never printed, only its length.
  */
-async function webhookSecret(app: ManifestConversion & { pem: string }): Promise<string> {
-  const given = app.webhook_secret ?? "";
-  if (given.length >= GITHUB_WEBHOOK_SECRET_MIN) {
-    console.log(`webhook secret: GitHub's, ${given.length} characters (at least ${GITHUB_WEBHOOK_SECRET_MIN}: accepted)`);
-    return given;
+function checkWebhookSecret(secret: string | null): void {
+  const length = secret?.length ?? 0;
+  if (length >= GITHUB_WEBHOOK_SECRET_MIN) {
+    console.log(`webhook secret: ${length} characters (config.ts asks for at least ${GITHUB_WEBHOOK_SECRET_MIN})`);
+    return;
   }
-  const secret = randomBytes(32).toString("hex");
-  const jwt = new App({ appId: app.id, privateKey: app.pem });
-  await jwt.octokit.request("PATCH /app/hook/config", { secret });
-  console.log(
-    `webhook secret: GitHub's had ${given.length} characters, under ${GITHUB_WEBHOOK_SECRET_MIN}: replaced on the App by a new one of ${secret.length}`,
+  console.error(
+    `webhook secret: GitHub's has ${length} characters, under the ${GITHUB_WEBHOOK_SECRET_MIN} config.ts asks for: ` +
+      "set a new one on the App (openssl rand -hex 32) and in GITHUB_WEBHOOK_SECRET (docs/development/github-app.md)",
   );
-  return secret;
 }
 
 async function main() {
@@ -143,6 +125,12 @@ async function main() {
     server.on("request", (req, res) => {
       const url = new URL(req.url ?? "/", local);
       res.setHeader("content-type", "text/html; charset=utf-8");
+      // Only this machine's browser, by this address: no page rebinding a name onto it.
+      if (req.headers.host !== new URL(local).host) {
+        res.statusCode = 421;
+        res.end(page("<p>Open the address the terminal printed.</p>"));
+        return;
+      }
       if (url.pathname === "/") {
         res.end(
           page(
@@ -168,19 +156,26 @@ async function main() {
 
   console.log(`Open ${local}/ in a browser signed in to GitHub as ${opts.org ? `an owner of ${opts.org}` : "yourself"}.`);
   try {
-    const app = await convert(await created);
+    const code = await created;
+    const { data: app } = await new Octokit().request("POST /app-manifests/{code}/conversions", { code });
+    // The App asked for, not another one a code was obtained for.
+    const owner = app.owner && "login" in app.owner ? app.owner.login : "";
+    if (opts.org && owner.toLowerCase() !== opts.org.toLowerCase()) {
+      throw new Error(`GitHub created an App owned by '${owner}', not ${opts.org}: nothing written`);
+    }
     // The key first: whatever fails next, it is not lost (GitHub shows it once).
     writeFileSync(opts.keyOut, app.pem, { mode: 0o600, flag: "wx" });
-    const secret = await webhookSecret(app);
-    const lines = Object.entries(envLines(app, `secrets/${app.slug}.private-key.pem`, secret))
+    checkWebhookSecret(app.webhook_secret);
+    const serverKey = `secrets/${app.slug}.private-key.pem`;
+    const lines = Object.entries(envLines(app, serverKey))
       .map(([key, value]) => `${key}=${value}\n`)
       .join("");
     if (opts.envOut === "-") process.stdout.write(lines);
     else writeFileSync(opts.envOut, lines, { mode: 0o600, flag: "wx" });
     console.log(
       [
-        `created ${app.slug} (App id ${app.id}) owned by ${app.owner.login}: ${app.html_url}`,
-        `private key: ${opts.keyOut} (0600); on the server: secrets/${app.slug}.private-key.pem`,
+        `created ${app.slug} (App id ${app.id}): ${app.html_url}`,
+        `private key: ${opts.keyOut} (0600); on the server: ${serverKey}`,
         opts.envOut === "-" ? "GITHUB_* lines: above" : `GITHUB_* lines: ${opts.envOut} (0600)`,
         `install it: https://github.com/apps/${app.slug}/installations/new`,
       ].join("\n"),

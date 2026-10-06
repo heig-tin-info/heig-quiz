@@ -838,9 +838,11 @@ The copy travels one way, from production into `/srv/staging-inbox`, which
 Never on deploy: a refresh wipes whatever a test had prepared. It restores
 the dump into a recreated database, empties sessions, launch tickets, API
 tokens and OAuth grants (nothing production issued works here), forgets
-every GitHub installation and archives every project
-(`scripts/staging-scrub.sql`: staging's own App never acts on a production
-organization, N-SEC-18; a tester unarchives the project under test), unpacks the
+every GitHub installation, archives every project and stops its group
+moves, closes the copied webhook deliveries and drops production's queued
+jobs (`scripts/staging-scrub.sql`: staging's own App never acts on a
+production organization, N-SEC-18; a tester unarchives the project under
+test), unpacks the
 question images, and starts the app, which migrates the copy forward: the
 very migration production will run next. It doubles as the restore test of
 §6. The inbox keeps only the latest copy; each export overwrites it.
@@ -907,7 +909,7 @@ configuration.
 | `METRICS_TOKEN` | a bearer token for Prometheus | empty leaves `/metrics` to an admin session; the endpoint is never public |
 | `SCW_SECRET_KEY`, `SCW_DEFAULT_PROJECT_ID` | the classroom's Scaleway project | empty: e-mails are logged, never sent |
 | `TEAMS_CLIENT_ID`, `TEAMS_CLIENT_SECRET`, `TEAMS_ALLOWED_TENANTS` | see [Microsoft Teams setup](teams.md) | empty: the Teams channel is off |
-| `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_PATH`, `GITHUB_APP_SLUG`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET` | the production App's, see [Quiz's GitHub App](github-app.md) | empty: the GitHub features are off; with an App id, an unreadable key, a missing slug or OAuth client, or a webhook secret under 32 characters is refused: the process does not start |
+| `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_PATH`, `GITHUB_APP_SLUG`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET` | the production App's | empty: the GitHub features are off; with an App id, the refusals of [Quiz's GitHub App](github-app.md#the-environments-variables) apply |
 | `RUNNER_MODE`, `RUNNER_URL` | `http`, `https://code.chevallier.io:8443` | `http` without a URL is refused; `stub` disables the runner, see below |
 | `RUNNER_TOKEN` | `openssl rand -hex 32`, the same value as `/etc/quiz-runner/env` on the runner VM | sent as `Authorization: Bearer` on every call; required when `RUNNER_MODE=http`, the process does not start without it |
 | `RUNNER_TIMEOUT_MS` | default `30000` | wall-clock budget of one runner call |

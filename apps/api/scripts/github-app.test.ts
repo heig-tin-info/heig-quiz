@@ -18,13 +18,15 @@ describe("insideGitTree", () => {
 
   it("refuses this repository, at any depth", () => {
     expect(insideGitTree(fileURLToPath(new URL("./app.pem", import.meta.url)))).toBe(true);
-    expect(insideGitTree(fileURLToPath(new URL("../../../secrets/app.pem", import.meta.url)))).toBe(true);
+    expect(insideGitTree(fileURLToPath(new URL("../../../app.pem", import.meta.url)))).toBe(true);
   });
 
   it("refuses a worktree, whose .git is a file, and any other repository", () => {
     mkdirSync(join(dir, "worktree", "deep"), { recursive: true });
     writeFileSync(join(dir, "worktree", ".git"), "gitdir: /elsewhere\n");
     expect(insideGitTree(join(dir, "worktree", "deep", "app.pem"))).toBe(true);
+    mkdirSync(join(dir, "other", ".git"), { recursive: true });
+    expect(insideGitTree(join(dir, "other", "app.pem"))).toBe(true);
   });
 
   it("accepts a directory no repository holds", () => {

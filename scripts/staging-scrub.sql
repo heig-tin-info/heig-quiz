@@ -23,11 +23,24 @@ BEGIN
     WHERE installation_id IS NOT NULL OR suspended_at IS NOT NULL;
   END IF;
   -- Every project archived (F-PROJ-16): the ticker's deadlines, freezes and
-  -- reviews, the sync and the reconciliation skip an archived project, and
-  -- without an installation nothing else reaches GitHub. Done in SQL, it
-  -- leaves the groups following (the screen's archive stops them). A tester
-  -- unarchives the project under test, on the test organization.
+  -- reviews, the sync and the reconciliation skip an archived project. Its
+  -- groups stopped too, at the project's level as the screen's archive
+  -- stops them (`stopProjects`), and no group move left for the ticker to
+  -- claim (its claim does not look at the archive). A tester unarchives the
+  -- project under test, on the test organization.
   IF to_regclass('projects') IS NOT NULL THEN
-    UPDATE projects SET archived_at = now() WHERE archived_at IS NULL;
+    UPDATE projects
+    SET archived_at = coalesce(archived_at, now()),
+        groups_stopped_at = coalesce(groups_stopped_at, now()),
+        group_sync_due_at = NULL
+    WHERE archived_at IS NULL OR groups_stopped_at IS NULL OR group_sync_due_at IS NOT NULL;
+  END IF;
+  -- Production's deliveries are not replayed here (`reconcile.deliveries`).
+  IF to_regclass('webhook_deliveries') IS NOT NULL THEN
+    UPDATE webhook_deliveries SET processed_at = now() WHERE processed_at IS NULL;
   END IF;
 END $$;
+
+-- Production's queued jobs neither: pg-boss recreates its schema, empty, when
+-- the app starts.
+DROP SCHEMA IF EXISTS pgboss CASCADE;

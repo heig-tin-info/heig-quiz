@@ -11,13 +11,18 @@ import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { loadConfig } from "../config.js";
-import { ALWAYS_DELIVERED, APP_EVENTS, APP_PERMISSIONS, appManifest, envLines } from "./manifest.js";
+import { GITHUB_CALLBACK_PATH } from "../auth/paths.js";
+import { ALWAYS_DELIVERED, APP_EVENTS, APP_PERMISSIONS, SETUP_PATH, WEBHOOK_PATH, appManifest, envLines } from "./manifest.js";
 import { appKey } from "./testing.js";
 
 const SRC = fileURLToPath(new URL("..", import.meta.url));
 const DOC = readFileSync(new URL("../../../../docs/development/github-app.md", import.meta.url), "utf8");
 
-/** Every `onEvent("<event>", …)` of the API's sources: whatever module registers it. */
+/**
+ * Every `onEvent("<event>", …)` of the API's sources, whatever module
+ * registers it (the registry is private, and the journal's handlers exist
+ * only with an App). An event named by a variable would escape: none is.
+ */
 function registeredEvents(): Set<string> {
   const events = new Set<string>();
   for (const entry of readdirSync(SRC, { recursive: true, withFileTypes: true })) {
@@ -35,21 +40,20 @@ describe("the App's manifest", () => {
   it("subscribes to exactly the events a handler is registered for", () => {
     const handled = registeredEvents();
     expect(handled.size).toBeGreaterThan(0);
-    expect([...handled].sort()).toEqual([...Object.keys(APP_EVENTS), ...Object.keys(ALWAYS_DELIVERED)].sort());
+    expect([...handled].sort()).toEqual([...APP_EVENTS, ...ALWAYS_DELIVERED].sort());
   });
 
-  it("is the documented one: every permission with its access, every event", () => {
-    for (const [name, p] of Object.entries(APP_PERMISSIONS)) {
-      expect(DOC, name).toMatch(new RegExp(`^\\| \`${name}\` \\| ${p.on} \\| ${p.access} \\|`, "m"));
-    }
-    for (const event of [...Object.keys(APP_EVENTS), ...Object.keys(ALWAYS_DELIVERED)]) {
-      expect(DOC, event).toMatch(new RegExp(`^\\| \`${event}\` \\|`, "m"));
-    }
-    // And nothing the manifest does not ask for.
-    const rows = [...DOC.matchAll(/^\| `([a-z_]+)` \|/gm)].map((m) => m[1]);
-    expect(rows.sort()).toEqual(
-      [...Object.keys(APP_PERMISSIONS), ...Object.keys(APP_EVENTS), ...Object.keys(ALWAYS_DELIVERED)].sort(),
+  it("is the documented one: every permission with its scope and access, every event, the paths", () => {
+    // A row `| \`name\` | on | access |` (a permission) or `| \`name\` |` (an event), in the doc's order.
+    const rows = [...DOC.matchAll(/^\| `([a-z_]+)` \|(?: (repository|organization) \| (read|write) \|)?/gm)].map((m) =>
+      [m[1], m[2], m[3]].filter(Boolean).join(" "),
     );
+    expect(rows).toEqual([
+      ...Object.entries(APP_PERMISSIONS).map(([name, p]) => `${name} ${p.on} ${p.access}`),
+      ...APP_EVENTS,
+      ...ALWAYS_DELIVERED,
+    ]);
+    for (const path of [WEBHOOK_PATH, SETUP_PATH, GITHUB_CALLBACK_PATH]) expect(DOC).toContain(`https://<host>${path}`);
   });
 
   it("points GitHub at the environment's routes", () => {
@@ -74,9 +78,8 @@ describe("the App's manifest", () => {
 
   it("writes the GITHUB_* lines a production configuration boots with", () => {
     const lines = envLines(
-      { id: 123456, slug: "heig-quiz-staging", client_id: "Iv23li", client_secret: "c".repeat(40), webhook_secret: null },
+      { id: 123456, slug: "heig-quiz-staging", client_id: "Iv23li", client_secret: "c".repeat(40), webhook_secret: "w".repeat(40) },
       key.pem,
-      "w".repeat(64),
     );
     const config = loadConfig({
       NODE_ENV: "production",

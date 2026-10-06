@@ -506,16 +506,23 @@ files it ports; writes en + fr for every string.
   - The refresh's SQL moved to `scripts/staging-scrub.sql`, tested on the
     real migrations (`stagingScrub.db.test.ts`). Schema note amended:
     since M3-09b `suspended_at` sits beside `installation_id` ("null when
-    there is none"), so the scrub nulls both; and every project not
-    archived gets `archived_at` (in SQL: its groups keep following).
+    there is none"), so the scrub nulls both. It also archives every
+    project and stops its groups at the project's level
+    (`groups_stopped_at`, `group_sync_due_at` null: the group-sync claim
+    ignores the archive), marks the copied webhook deliveries processed
+    (no replay by `reconcile.deliveries`) and drops the `pgboss` schema
+    (production's queued jobs; pg-boss recreates it at start).
   - The no-App test: `deadline.db.test.ts` — a due project, no claim, no
     job and no GitHub call from the ticker nor from `GITHUB_TASKS` and
     `RECONCILE_TASKS` (`reconcile.db.test.ts` already pinned the two
     reconciliations).
-  - Open point for the product owner: the docs recommend the staging App
-    be owned by the test organization, private (N-SEC-18 by construction),
-    instead of "both owned by the account that owns classroom's App"; the
-    script does either.
+  - The staging App is owned by its test organization and private, and
+    that organization never has production's App (the healing resolves an
+    installation by login, so a staging App on an organization production
+    drives would act on production's repositories). This replaces "both
+    owned by the account that owns classroom's App" for staging. Open
+    point for the product owner: a test organization of staging's own
+    (the pilot's `heig-quiz-classroom` holds production's App).
   - Also: `docs/development/new-server.md` (a new instance from a fresh
     Ubuntu server, its TODO questions listed at its end), the `GITHUB_*`
     blocks of `.env.prod.example` and `.env.staging.example`, ADR-028's
