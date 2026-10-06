@@ -120,7 +120,9 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
       });
     // The project kinds (F-NOTIF-13): the project's name, counts, never a score.
     case "project_published":
-      return t(payload.githubLinked === false ? "notif.projectPublished.unlinked" : "notif.projectPublished", { projectTitle: payload.projectTitle });
+      return t(payload.githubLinked === false ? "notif.projectPublished.unlinked" : "notif.projectPublished", {
+        projectTitle: payload.projectTitle,
+      });
     case "project_deadline_reminder":
       return t("notif.projectDeadlineReminder", { projectTitle: payload.projectTitle });
     case "project_repo_invited":

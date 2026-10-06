@@ -432,9 +432,8 @@ const UNCOUNTED_KINDS: ReadonlySet<NotificationKind> = new Set(["results_updated
  */
 function sentenceKey(payload: NotificationPayload, part: "subject" | "body"): Key {
   // A kind with a state (`system_alert`) has one sentence per state.
-  let state = "state" in payload ? `.${payload.state}` : "";
-  // `project_published` to a recipient without a linked GitHub account (M3-14d): another body.
-  if (part === "body" && payload.kind === "project_published" && payload.githubLinked === false) state = ".unlinked";
+  // A payload that says the recipient has no linked GitHub account has another body (M3-14d).
+  const state = "state" in payload ? `.${payload.state}` : part === "body" && "githubLinked" in payload ? ".unlinked" : "";
   const one =
     "count" in payload && payload.count === 1 && !UNCOUNTED_KINDS.has(payload.kind) ? ".one" : "";
   return `${payload.kind}${state}.${part}${one}` as Key;

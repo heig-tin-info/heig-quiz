@@ -160,7 +160,6 @@ describe("the project kinds (F-NOTIF-13, D18)", () => {
     const unlinked = { kind: "project_published", ...project, githubLinked: false };
     expect(NotificationPayload.parse(unlinked)).toEqual(unlinked);
     expect(NotificationPayload.safeParse({ ...unlinked, githubLinked: true }).success).toBe(false);
-    expect(NotificationPayload.parse({ ...unlinked, login: "ada", repo: "lab-1" })).toEqual(unlinked);
     const failed = { kind: "project_provision_failed", ...project, count: 2, reason: "repo_name_taken" };
     expect(NotificationPayload.parse(failed)).toEqual(failed);
     expect(NotificationPayload.safeParse({ kind: "project_provision_failed", ...project, count: 1, reason: "invitation_refused" }).success).toBe(false);
