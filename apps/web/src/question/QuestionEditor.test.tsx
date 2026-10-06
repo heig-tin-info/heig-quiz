@@ -798,9 +798,23 @@ describe("QuestionEditor — opened from an evaluation (#127)", () => {
    * Publish itself — lead to that screen, on the question it was on.
    */
   const ITEM = "0f0e0d0c-0b0a-4908-8706-0504030201aa";
-  // Its words name no title: nothing but the question and its pool is fetched.
+  // The trail is the grading screen's own: the evaluation and its classroom are read.
   const fromGrading = () => {
-    const { calls } = mockFetch(routes(mcqDetail()));
+    const base = makeEvaluationDetail();
+    const { calls } = mockFetch(
+      routes(mcqDetail(), {
+        [`GET /app/api/evaluations/${EVAL}`]: ok({
+          ...base,
+          evaluation: { ...base.evaluation, id: EVAL, title: "Test 0", classroomId: "r1" },
+        }),
+        "GET /app/api/classrooms/r1": ok({
+          id: "r1",
+          name: "PRG1-2026",
+          course: { id: "c1", code: "PRG1", name: "Programmation C" },
+          roster: [],
+        }),
+      }),
+    );
     const navigate = vi.fn();
     renderWithProviders(<QuestionEditor id="q1" navigate={navigate} />, {
       route: `/questions/q1?fromGrading=${EVAL}&item=${ITEM}`,
@@ -810,10 +824,21 @@ describe("QuestionEditor — opened from an evaluation (#127)", () => {
 
   it("leads back to the grading screen, on the question it was opened from", async () => {
     const user = userEvent.setup();
-    const { navigate, calls } = fromGrading();
-    await user.click(await screen.findByRole("link", { name: "Grading" }));
+    const { navigate } = fromGrading();
+    // The trail is the grading screen's own, then the question.
+    const trail = await screen.findByRole("navigation", { name: "Breadcrumb" });
+    await waitFor(() =>
+      expect(within(trail).getAllByRole("listitem").map((li) => li.textContent).filter(Boolean)).toEqual([
+        "Courses",
+        "PRG1",
+        "PRG1-2026",
+        "Test 0",
+        "Grading",
+        "ptr-null-check",
+      ]),
+    );
+    await user.click(within(trail).getByRole("link", { name: "Grading" }));
     expect(navigate).toHaveBeenCalledWith({ view: "grading", evaluationId: EVAL, item: ITEM });
-    expect(calls.some((c) => c.url.startsWith("/app/api/evaluations/"))).toBe(false);
   });
 
   it("goes back to the grading screen once published: the fix was made to re-grade", async () => {

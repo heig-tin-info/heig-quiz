@@ -605,29 +605,39 @@ live in `ui/state.ts`, each written once.
   named by the caller (`breadcrumb.label`, translated), an ordered list;
   ancestors are real links (`href` from `routeToPath`, routed in the app on a
   plain click), the last item is the page, `aria-current="page"`, in `fg`. The
-  `ChevronRight` separator is decorative (`aria-hidden`). On a phone the
-  trail keeps one line: ancestors truncate first, the page last. The rule:
+  `ChevronRight` separator is decorative (`aria-hidden`). From `sm` up the
+  trail keeps one line: ancestors truncate first, the page last. Below `sm`
+  (a phone) a full trail is unreadable, so the SAME `nav` shows only the way
+  back, `‹ Parent`, one link to the immediate parent (`ChevronLeft`, its real
+  `href`, named "Back to <parent>"); the list is hidden there, the page's own
+  heading being right below. The rule:
   1. A page below a top-level section wears a trail; a top-level page (a
      sidebar destination: Activities, Courses, Question pools, Poll,
      Administration; the student's Courses, Grades, Drill) wears none.
   2. The trail is STRUCTURAL, not the browsing history: its root is the
-     sidebar section the page belongs to (Courses for course, classroom,
+     sidebar section the page belongs to (`SECTION_ROOTS` in `Trail.tsx`, the
+     list the sidebar reads its labels from: Courses for course, classroom,
      evaluation, project, results and group pages; Question pools for pools,
      categories and questions), then each ancestor down to the page itself.
      Staff: `Courses › PRG1 › PRG1-2026 › Quiz 3 › Results`, `Question pools
      › Pointeurs › Categories`. Student: `Courses › PRG1-2026 › Project`.
      Two pages bend it because the way back they offered is a flow, not a
      place: the question editor opened from an evaluation, a template or the
-     grading screen puts that page in the pool's stead, and a group set
-     opened from a project puts the project in place of Groups.
+     grading screen wears THAT page's own trail then the question (`Courses ›
+     PRG1 › PRG1-2026 › Quiz 3 › Grading › question`), and a group set opened
+     from a project puts the project in place of Groups.
   3. Names are what the page already loads (the classroom query is shared by
-     every classroom screen, `classroomKey`); a course is its code, a
-     classroom its name. An ancestor not yet loaded is left out, never
-     fetched crumb by crumb.
+     every classroom screen, `classroomKey`). A course is its CODE (short:
+     `PRG1`), a classroom its name, an evaluation its title. An ancestor not
+     yet loaded is left out, never fetched crumb by crumb; the hooks of
+     `Trail.tsx` (`useClassroomCrumbs`, `useEvaluationCrumbs`,
+     `useTemplateCrumbs`) return what is known, a page appends its own.
   4. No crumb leads to a page the reader may not open: a student's trail
      holds student routes only, and a teacher in the student view gets it.
-  The journal reader keeps its compact header: the same trail, drawn at the
-  eyebrow's 13 px `fg-muted` above the tabs.
+  The journal reader keeps its compact header: the same trail, in a wrapper
+  of the eyebrow's own 13 px `fg-muted`, above the tabs. The evaluation
+  preview pages keep their "Back to the evaluation" button: a preview is not
+  a page of the app's tree.
 - EditableTitle: a page title renamed where it is written — the evaluation,
   the template, the classroom, the course. A real button at the `h1`'s own
   type, a `PenLine` in `fg-faint` fading in on hover and focus, swapped on a

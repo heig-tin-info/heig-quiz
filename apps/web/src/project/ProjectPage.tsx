@@ -19,7 +19,7 @@ import { useNoticeToasts } from "../notifications/notices";
 import { useToast } from "../notify";
 import { activitiesKey, classroomGroupSetsKey, classroomKey, classroomProjectsKey, projectKey } from "../queryKeys";
 import type { Navigate } from "../router";
-import { classroomCrumbs, Trail, useCoursesCrumb } from "../Trail";
+import { Trail, useClassroomCrumbs } from "../Trail";
 import {
   Alert,
   Badge,
@@ -100,8 +100,8 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
     queryFn: () => api(`/app/api/projects/${id}`),
     refetchInterval: (q) => projectRefetchInterval(q.state.data),
   });
-  const coursesRoot = useCoursesCrumb();
   const classroomId = detail.data?.classroomId ?? null;
+  const crumbs = useClassroomCrumbs(classroomId);
   const room = useQuery<ClassroomDetail>({
     queryKey: classroomKey(classroomId),
     enabled: classroomId !== null,
@@ -296,10 +296,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
     <div className="space-y-8">
       <PageHeader
         eyebrow={
-          <Trail
-            navigate={navigate}
-            items={[...classroomCrumbs(coursesRoot, room.data), { label: project.name }]}
-          />
+          <Trail navigate={navigate} items={[...crumbs, { label: project.name }]} />
         }
         title={
           <span className="flex flex-wrap items-baseline gap-3">

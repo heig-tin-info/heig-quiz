@@ -9,7 +9,7 @@ import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import { templateKey } from "../queryKeys";
 import type { CourseTab, Route } from "../router";
-import { Trail, useCoursesCrumb } from "../Trail";
+import { Trail, useTemplateCrumbs } from "../Trail";
 import { useSearchParam } from "../router";
 import {
   Actions,
@@ -108,7 +108,7 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
   const [rawTab, setTab] = useSearchParam("tab", "questions");
   const tab: Tab = isTab(rawTab) ? rawTab : "questions";
 
-  const coursesRoot = useCoursesCrumb();
+  const crumbs = useTemplateCrumbs(template.courseId, template.id, template.title);
   const course = useCourses().data?.find((c) => c.id === template.courseId) ?? null;
   const classrooms = course?.classrooms ?? [];
   const target = templateTarget(template.id, template.courseId);
@@ -140,14 +140,7 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
       <PageHeader
         help="courses"
         eyebrow={
-          <Trail
-            navigate={navigate}
-            items={[
-              coursesRoot,
-              course && { label: course.code, route: { view: "course", id: course.id, tab: "templates" } },
-              { label: template.title },
-            ]}
-          />
+          <Trail navigate={navigate} items={crumbs} />
         }
         title={
           <span className="flex flex-wrap items-baseline gap-3">

@@ -39,7 +39,7 @@ import { JournalReader } from "../journal/JournalReader";
 import { studentClassroomKey } from "../queryKeys";
 import { useServerNow } from "../realtime/useServerClock";
 import type { Navigate, Route } from "../router";
-import { Trail, useStudentCoursesCrumb } from "../Trail";
+import { Trail, useRootCrumb } from "../Trail";
 import {
   Badge,
   Button,
@@ -264,7 +264,7 @@ function ClassroomHeader({ room, navigate }: { room: Header; navigate: Navigate 
 
 /** The Journal tab's compact header: the document below owns the page's title. */
 function StudentTrail({ room, navigate }: { room: Header; navigate: Navigate }) {
-  const root = useStudentCoursesCrumb();
+  const root = useRootCrumb("studentCourses");
   return <Trail navigate={navigate} items={[root, { label: room.name }]} />;
 }
 

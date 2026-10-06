@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import { useT } from "../i18n";
 import { useSearchParam, type Route } from "../router";
-import { Trail, useClassroomCrumbs } from "../Trail";
+import { Trail, useEvaluationCrumbs } from "../Trail";
 import {
   Alert,
   ASIDE_MIN_WIDTH,
@@ -96,7 +96,11 @@ export function GradingPanel({
 
   const data = useGradingData(evaluationId, itemParam || null, !anonymise);
   const { items, item, index, entries, parameters } = data;
-  const crumbs = useClassroomCrumbs(data.evaluation.data?.evaluation.classroomId ?? null);
+  const crumbs = useEvaluationCrumbs(
+    data.evaluation.data?.evaluation.classroomId,
+    evaluationId,
+    data.evaluation.data?.evaluation.title,
+  );
   const actions = useGradingActions({
     evaluationId,
     navigate,
@@ -224,17 +228,7 @@ export function GradingPanel({
   const header = (
     <PageHeader
       eyebrow={
-        <Trail
-          navigate={navigate}
-          items={[
-            ...crumbs,
-            data.evaluation.data && {
-              label: data.evaluation.data.evaluation.title,
-              route: { view: "evaluation", id: evaluationId },
-            },
-            { label: t("grading.title") },
-          ]}
-        />
+        <Trail navigate={navigate} items={[...crumbs, { label: t("grading.title") }]} />
       }
       title={t("grading.title")}
       help="grading"

@@ -34,6 +34,7 @@ import type { NavCycle } from "./navTree";
 import { PoolNavTree, usePoolNavState } from "./pool/PoolNav";
 import { shortcutCaps, useActiveShortcuts, useGlobalShortcuts } from "./shortcuts";
 import { setThemeChoice, useResolvedTheme, useThemeChoice } from "./theme";
+import { SECTION_ROOTS } from "./Trail";
 import {
   Button,
   cx,
@@ -280,7 +281,7 @@ function Nav({
             />
             <NavItem
               icon={Library}
-              label={t("nav.courses")}
+              label={t(SECTION_ROOTS.courses.label)}
               active={section === "home"}
               coach="nav.home"
               expanded={courseNav.state === "all"}
@@ -294,7 +295,7 @@ function Nav({
             )}
             <NavItem
               icon={FolderTree}
-              label={t("pools.title")}
+              label={t(SECTION_ROOTS.pools.label)}
               // The three pool routes are one place as far as navigation goes:
               // a question is read inside its pool, not beside it.
               active={section === "pools"}
@@ -347,7 +348,7 @@ function Nav({
         {me.role === "admin" && teacherUi ? (
           <NavItem
             icon={ShieldCheck}
-            label={t("nav.admin")}
+            label={t(SECTION_ROOTS.admin.label)}
             active={section === "admin"}
             onClick={() => go({ view: "admin" })}
             folded={folded}

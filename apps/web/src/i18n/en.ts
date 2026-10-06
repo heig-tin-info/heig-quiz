@@ -4190,7 +4190,6 @@ export const en = {
   "groups.set.notFound": "This group set does not exist, or it is not open to you.",
   "groups.set.name": "Name",
   "groups.set.rename": "Rename group set “{name}”",
-  "groups.backToProject": "Back to the project",
   "groups.usedBy": "Used by",
   "groups.count.groups": "{n} groups",
   "groups.count.groups.one": "1 group",
@@ -4664,6 +4663,7 @@ export const en = {
 
   // The journal reader (F-JRN-07, M4-04, `journal/`). A warning or a sync
   // error is a code of `@quiz/contracts`, worded here (fix J5).
+  "breadcrumb.back": "Back to {name}",
   "breadcrumb.label": "Breadcrumb",
   "journal.nav": "Pages of the journal",
   "journal.folderPages": "Pages in {name}",

@@ -51,7 +51,7 @@ import {
   Tabs,
 } from "./ui";
 import { classroomKey, evaluationsKey } from "./queryKeys";
-import { courseCrumb, Trail, useCoursesCrumb } from "./Trail";
+import { Trail, useClassroomCrumbs } from "./Trail";
 import { invalidateHint } from "./realtime/hints";
 
 /**
@@ -202,7 +202,7 @@ export function ClassroomView({
   const hasJournal = journal.data?.mode != null;
   const noJournal = journal.data?.mode === null || githubAbsent(journal.error);
 
-  const coursesRoot = useCoursesCrumb();
+  const crumbs = useClassroomCrumbs(id);
   const room = useQuery<ClassroomDetail>({
     queryKey: classroomKey(id),
     queryFn: () => api(`/app/api/classrooms/${id}`),
@@ -299,7 +299,7 @@ export function ClassroomView({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={<Trail navigate={navigate} items={[coursesRoot, courseCrumb(data.course), { label: data.name }]} />}
+        eyebrow={<Trail navigate={navigate} items={crumbs} />}
         title={
           <span className="flex flex-wrap items-baseline gap-3">
             {data.name}

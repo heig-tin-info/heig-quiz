@@ -4183,7 +4183,6 @@ export const fr: Record<keyof Dict, string> = {
   "groups.set.notFound": "Cette répartition n'existe pas, ou elle ne vous est pas ouverte.",
   "groups.set.name": "Nom",
   "groups.set.rename": "Renommer la répartition « {name} »",
-  "groups.backToProject": "Retour au projet",
   "groups.usedBy": "Utilisée par",
   "groups.count.groups": "{n} groupes",
   "groups.count.groups.one": "1 groupe",
@@ -4652,6 +4651,7 @@ export const fr: Record<keyof Dict, string> = {
 
   // The journal reader (F-JRN-07, M4-04, `journal/`). A warning or a sync
   // error is a code of `@quiz/contracts`, worded here (fix J5).
+  "breadcrumb.back": "Retour à {name}",
   "breadcrumb.label": "Fil d'Ariane",
   "journal.nav": "Pages du journal",
   "journal.folderPages": "Pages de {name}",

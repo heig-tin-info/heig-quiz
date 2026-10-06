@@ -6,7 +6,7 @@ import { reviewPill } from "@quiz/domain";
 import { useT } from "../i18n";
 import { typeIcon, typeLabel } from "../questionTypes";
 import { routeToPath, type Route } from "../router";
-import { Trail, usePoolsCrumb } from "../Trail";
+import { Trail, type Crumb } from "../Trail";
 import { Badge, Button, LinkButton, Menu, PageHeader, SyncBadge } from "../ui";
 import { ParameterizedBadge } from "../pool/ParameterizedBadge";
 import { ReviewBadge } from "../pool/ReviewBadge";
@@ -21,8 +21,7 @@ import type { Autosave } from "./autosave";
 export function QuestionHeader({
   id,
   data,
-  poolName,
-  origin,
+  crumbs,
   readOnly,
   autosave,
   navigate,
@@ -33,14 +32,8 @@ export function QuestionHeader({
 }: {
   id: string;
   data: QuestionDetail;
-  /** `undefined` while the pool is loading. */
-  poolName: string | undefined;
-  /**
-   * The page the editor was opened from — an evaluation (issue #127), a
-   * template, the grading screen — named and routed: it stands in the trail
-   * instead of the pool, so the way back leads there.
-   */
-  origin?: { label: string; back: Route } | undefined;
+  /** The question's ancestors: its pool's trail, or the page it was opened from (an evaluation, a template, grading). */
+  crumbs: readonly Crumb[];
   readOnly: boolean;
   autosave: Autosave;
   navigate: (r: Route) => void;
@@ -51,7 +44,6 @@ export function QuestionHeader({
   onReviewNow?: (() => void) | undefined;
 }) {
   const t = useT();
-  const poolsRoot = usePoolsCrumb();
   const latest = data.latestPublished;
   // "Unpublished changes" is about the STORED draft, not about the request in
   // flight: a draft saved yesterday and never published is still ahead.
@@ -63,22 +55,7 @@ export function QuestionHeader({
   return (
     <PageHeader
       help="question-editor"
-      eyebrow={
-        <Trail
-          navigate={navigate}
-          items={
-            origin
-              ? // Opened from an evaluation, a template or the grading screen: the way
-                // back to it is the ancestor (publishing from grading returns there).
-                [{ label: origin.label, route: origin.back }, { label: data.meta.internalName }]
-              : [
-                  poolsRoot,
-                  poolName === undefined ? null : { label: poolName, route: { view: "pool", id: data.meta.poolId } },
-                  { label: data.meta.internalName },
-                ]
-          }
-        />
-      }
+      eyebrow={<Trail navigate={navigate} items={[...crumbs, { label: data.meta.internalName }]} />}
       title={<span className="font-mono">{data.meta.internalName}</span>}
       description={
         <span className="flex flex-wrap items-center gap-2">

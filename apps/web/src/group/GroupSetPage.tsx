@@ -17,7 +17,7 @@ import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { classroomGroupSetsKey, classroomKey, groupSetKey } from "../queryKeys";
 import { useSearchParam, type Navigate } from "../router";
-import { classroomCrumbs, Trail, useCoursesCrumb } from "../Trail";
+import { Trail, useClassroomCrumbs } from "../Trail";
 import {
   Alert,
   Button,
@@ -103,7 +103,7 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
   const [blocked, setBlocked] = useState<ProjectsRefusal | null>(null);
 
   const set = useGroupSet(id);
-  const coursesRoot = useCoursesCrumb();
+  const crumbs = useClassroomCrumbs(classroomId);
   const room = useQuery<ClassroomDetail>({
     queryKey: classroomKey(classroomId),
     queryFn: () => api(`/app/api/classrooms/${classroomId}`),
@@ -288,11 +288,14 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
           <Trail
             navigate={navigate}
             items={[
-              ...classroomCrumbs(coursesRoot, room.data),
-              // Opened from a project: the project is the ancestor it came for (W9).
-              project
-                ? { label: projectName ?? t("groups.backToProject"), route: { view: "project", id: project } }
-                : { label: t("groups.tab"), route: { view: "classroomGroups", id: classroomId } },
+              ...crumbs,
+              // Opened from a project: the project is the ancestor it came for (W9),
+              // once its name is known; otherwise the classroom's Groups.
+              ...(project
+                ? projectName
+                  ? [{ label: projectName, route: { view: "project", id: project } as const }]
+                  : []
+                : [{ label: t("groups.tab"), route: { view: "classroomGroups", id: classroomId } as const }]),
               { label: detail.set.name },
             ]}
           />

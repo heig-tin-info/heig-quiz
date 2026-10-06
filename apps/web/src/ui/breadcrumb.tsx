@@ -3,10 +3,13 @@
  * `PageHeader` eyebrow. Ancestors are real links (a long press or a modified
  * click opens the address) that the app routes itself on a plain click; the
  * last item is the page, `aria-current="page"`. The separator is decoration.
- * On a phone the trail keeps one line: ancestors shrink and truncate, the
- * current page keeps the most room. Imports the base layer and `controls`.
+ * From `sm` up the trail keeps one line: ancestors shrink and truncate, the
+ * current page keeps the most room. Below `sm` it is just the way back, one
+ * link to the immediate parent (`‹ Parent`, named by `backLabel`): a full
+ * trail is unreadable at 390 px, and the page's own heading sits right
+ * below. Imports the base layer and `controls`.
  */
-import { ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Fragment } from "react";
 import { isPlainClick } from "./controls";
 
@@ -17,10 +20,36 @@ export interface BreadcrumbItem {
   onNavigate?: () => void;
 }
 
-export function Breadcrumb({ label, items }: { label: string; items: readonly BreadcrumbItem[] }) {
+export function Breadcrumb({
+  label,
+  backLabel,
+  items,
+}: {
+  label: string;
+  /** The accessible name of the phone's back link, from the parent's name ("Back to PRG1"). */
+  backLabel: (parent: string) => string;
+  items: readonly BreadcrumbItem[];
+}) {
+  const parent = items.length > 1 ? items[items.length - 2] : undefined;
+  const compact = parent?.href !== undefined;
   return (
     <nav aria-label={label}>
-      <ol className="flex min-w-0 items-center gap-1.5">
+      {compact ? (
+        <a
+          href={parent.href}
+          aria-label={backLabel(parent.label)}
+          className="flex min-w-0 items-center gap-1 transition-colors hover:text-fg hover:underline sm:hidden"
+          onClick={(e) => {
+            if (!parent.onNavigate || !isPlainClick(e)) return;
+            e.preventDefault();
+            parent.onNavigate();
+          }}
+        >
+          <ChevronLeft aria-hidden className="size-3.5 shrink-0 text-fg-faint" />
+          <span className="truncate">{parent.label}</span>
+        </a>
+      ) : null}
+      <ol className={compact ? "flex min-w-0 items-center gap-1.5 max-sm:hidden" : "flex min-w-0 items-center gap-1.5"}>
         {items.map((item, i) => {
           const last = i === items.length - 1;
           return (

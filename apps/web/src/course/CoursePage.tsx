@@ -6,7 +6,7 @@ import type { CourseSummary } from "@quiz/contracts";
 import { CourseTemplates, useCourseTemplates } from "../evaluation/templates";
 import { useT } from "../i18n";
 import type { CourseTab, Route } from "../router";
-import { Trail, useCoursesCrumb } from "../Trail";
+import { Trail, useRootCrumb } from "../Trail";
 import {
   Badge,
   Button,
@@ -105,7 +105,7 @@ function Course({
   navigate: (r: Route) => void;
 }) {
   const t = useT();
-  const coursesRoot = useCoursesCrumb();
+  const coursesRoot = useRootCrumb("courses");
   const actions = useCourseActions(course, { onGone: () => navigate({ view: "home" }) });
   const { isOwner } = actions;
   const [creatingTemplate, setCreatingTemplate] = useState(false);

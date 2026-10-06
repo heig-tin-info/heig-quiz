@@ -11,7 +11,7 @@ import { useErrorToast } from "../notify";
 import { PageError, QueryError } from "../queryError";
 import { poolCategoriesKey, poolKey } from "../queryKeys";
 import { useSearchParam, type Route } from "../router";
-import { Trail, usePoolsCrumb } from "../Trail";
+import { Trail, useRootCrumb } from "../Trail";
 import {
   Badge,
   Button,
@@ -167,7 +167,7 @@ export function CategoriesPage({ id, navigate }: { id: string; navigate: (r: Rou
   const [drop, setDrop] = useState<{ id: string; where: DropWhere } | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
 
-  const poolsRoot = usePoolsCrumb();
+  const poolsRoot = useRootCrumb("pools");
   const pool = useQuery<PoolDetail>({
     queryKey: poolKey(id),
     queryFn: () => api(`/app/api/pools/${id}`),

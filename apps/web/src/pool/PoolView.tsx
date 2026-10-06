@@ -17,7 +17,7 @@ import { useT } from "../i18n";
 import { QUESTION_TYPE_IDS, typeIcon, typeLabel } from "../questionTypes";
 import type { Route } from "../router";
 import { useSearchParam } from "../router";
-import { Trail, usePoolsCrumb } from "../Trail";
+import { Trail, useRootCrumb } from "../Trail";
 import { useScreenCommands } from "../screenCommands";
 import { useShortcuts } from "../shortcuts";
 import {
@@ -198,7 +198,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const [tabParam, setTab] = useSearchParam("tab", "questions");
   const tab: PoolTab = tabParam === "review" ? "review" : "questions";
   const llm = useLlmAvailability();
-  const poolsRoot = usePoolsCrumb();
+  const poolsRoot = useRootCrumb("pools");
   const reviewTab = llm.data?.available === true;
   const categoryId = categoryParam === "" ? null : categoryParam;
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());

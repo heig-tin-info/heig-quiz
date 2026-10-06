@@ -102,7 +102,8 @@ describe("a project in progress", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Labo 1 — Pointeurs" })).toBeInTheDocument();
     expect(screen.getByText("in progress")).toBeInTheDocument();
     expect(screen.getByText(/^Due [^·]+ · .* left$/)).toBeInTheDocument();
-    expect(screen.getAllByText("PRG1-2026")).toHaveLength(1);
+    // Once in the page, plus the phone's way back in the trail (hidden from `sm` up).
+    expect(screen.getAllByText("PRG1-2026")).toHaveLength(2);
     // The header keeps the deadline, the status and the commit, named; the CI and the score have their sections.
     expect(screen.getByText("Last commit")).toBeInTheDocument();
     expect(screen.getByText("3 commits")).toBeInTheDocument();

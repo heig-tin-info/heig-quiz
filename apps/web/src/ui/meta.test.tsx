@@ -16,6 +16,7 @@ describe("Breadcrumb", () => {
   const trail = (onNavigate = vi.fn()) => (
     <Breadcrumb
       label="Breadcrumb"
+      backLabel={(parent) => `Back to ${parent}`}
       items={[
         { label: "Courses", href: "/courses", onNavigate },
         { label: "PRG1-2026", href: "/classrooms/r1", onNavigate },
@@ -34,6 +35,17 @@ describe("Breadcrumb", () => {
     expect(screen.getByText("Labo 1")).toHaveAttribute("aria-current", "page");
     // The separators are decoration.
     expect(nav.querySelectorAll("li[aria-hidden]")).toHaveLength(2);
+  });
+
+  it("offers the phone just the way back: a link named for the immediate parent", () => {
+    const onNavigate = vi.fn();
+    render(trail(onNavigate));
+    const back = screen.getByRole("link", { name: "Back to PRG1-2026" });
+    expect(back).toHaveAttribute("href", "/classrooms/r1");
+    expect(back).toHaveClass("sm:hidden");
+    expect(screen.getByRole("list")).toHaveClass("max-sm:hidden");
+    expect(fireEvent.click(back)).toBe(false);
+    expect(onNavigate).toHaveBeenCalledTimes(1);
   });
 
   it("routes a plain click in the app and leaves a modified click to the browser", () => {
