@@ -120,3 +120,19 @@ pure rule is `reconciles` and `isQuiet` of `@quiz/domain`):
    is done twice. Waiting it out inside the task would outlive the 30
    minutes after which a scheduled run is taken for dead and claimed again
    (`RUNNING_STALE_MINUTES`), doubling the pass.
+
+## Addendum (2026-10-06, merge task M3-14k): the daily pass applies a missing protection
+
+Decided by the product owner (M3-14, finding 17) after a pilot organization
+moved from GitHub Free to Team once its students had accepted: provisioning
+had tolerated the plan's 403 and nothing ever applied the `hgc-protect`
+ruleset afterwards. A sixth step of `reconcile.repos`, scoped to a repository
+that is live, not archived (read-only), with `ruleset_id` null and its
+effective deadline still ahead on the server's clock, calls the very function
+provisioning uses (`protectStudentRepo`, idempotent: an existing ruleset of
+that name is adopted). Success stores `ruleset_id` (a conditional write) and
+audits `project_repo.protected`; a plan restriction leaves it null silently
+for the next day; a rate limit stops the pass (point 5); any other failure is
+logged, the repository's other steps go on, and so does the pass. Up to a day of delay is accepted, and no staff
+action nor migration is involved. The deadline's lock then uses its ruleset
+instead of the archive (H8). The Decision and points 1 to 5 stand.

@@ -21,7 +21,13 @@
  *   with its CI state. It writes no push receipt (the intake's alone,
  *   ADR-012) and restores nothing (the push webhook's). A group's
  *   invitations wait for ADR-070's per-member follow-up (M3-15b); its head
- *   and runs are reconciled like any row's.
+ *   and runs are reconciled like any row's. Before them, a repository left
+ *   WITHOUT its `hgc-protect` ruleset (`ruleset_id` null: provisioned on a
+ *   plan that served none) gets it applied once the plan allows it — live,
+ *   not archived, its effective deadline still ahead on the server's clock —
+ *   through `protectStudentRepo`, provisioning's own idempotent step, audited
+ *   `project_repo.protected` (M3-14k, ADR-011's addendum of 2026-10-06); a
+ *   plan that still refuses leaves it null, tried again the next day.
  *
  * Both locate each repository by its immutable id first: a 404 there, once
  * the installation's token was obtained, is the repository gone
@@ -44,7 +50,7 @@ import type { FastifyInstance } from "fastify";
 import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
-import { isQuiet, reconciles } from "@quiz/domain";
+import { effectiveDeadline, isQuiet, reconciles } from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
@@ -52,6 +58,7 @@ import type { Db } from "../../db/client.js";
 import { botCommits, classrooms, gradeDispatches, projectGradeRuns, projectRepoAccess, projectRepos, projects, pushReceipts } from "../../db/schema.js";
 import { failFast, githubApp, githubStatus, ownerRepo, rateLimitReset } from "../../github/app.js";
 import { forgetRepoLiveState } from "../../github/metrics.js";
+import { protectStudentRepo } from "../../github/provision.js";
 import type { ScheduledTask } from "../../ticker.js";
 import { pushedBy } from "../github/service.js";
 import { followInvitation, installationClients, inviteAccount, notRecorded } from "./access.js";
@@ -76,6 +83,7 @@ interface Counts {
   heads: number;
   renamed: number;
   deleted: number;
+  protected: number;
 }
 
 /** A repository in scope, as the pass read it. */
@@ -198,7 +206,7 @@ async function pass(
     config,
     rows.map((r) => r.project.orgId),
   );
-  const counts: Counts = { runsIngested: 0, reinvited: 0, accepted: 0, heads: 0, renamed: 0, deleted: 0 };
+  const counts: Counts = { runsIngested: 0, reinvited: 0, accepted: 0, heads: 0, renamed: 0, deleted: 0, protected: 0 };
   let repos = 0;
   let stopped = false;
   for (const ctx of rows) {
@@ -398,8 +406,51 @@ async function refreshHead({ app, config, octokit, ctx, located, counts, now }: 
   await hintRepo(db, ctx);
 }
 
-/** A repository's daily refresh: its invitation, then its head. */
+/**
+ * The `hgc-protect` ruleset of a repository provisioned without it (M3-14k):
+ * for a live repository, not archived (read-only), still before its effective
+ * deadline on the server's clock. The id is stored by a write that holds only
+ * while the row is still unprotected and unarchived, and audited with it; a
+ * plan that still serves no ruleset leaves the row for tomorrow.
+ */
+async function protectRepo({ app, octokit, ctx, located, counts }: Step): Promise<void> {
+  const { repo, project } = ctx;
+  if (repo.rulesetId !== null || repo.archivedAt !== null || effectiveDeadline(repo, project) <= app.clock.now()) return;
+  const { owner, repo: name } = ownerRepo(located.fullName);
+  const rulesetId = await protectStudentRepo(octokit, owner, name);
+  if (rulesetId === null) return;
+  // A ruleset created on a row that changed meanwhile stays on GitHub with no stored id: harmless, the next provisioning or lock adopts it by name.
+  const stored = await app.db.transaction(async (tx) => {
+    const updated = await tx
+      .update(projectRepos)
+      .set({ rulesetId })
+      .where(and(eq(projectRepos.id, repo.id), isNull(projectRepos.rulesetId), isNull(projectRepos.archivedAt)))
+      .returning({ id: projectRepos.id });
+    if (updated.length === 0) return false;
+    await audit(tx, {
+      ...SYSTEM_ACTOR,
+      action: "project_repo.protected",
+      subjectType: "project_repo",
+      subjectId: repo.id,
+      payload: { projectId: project.id, rulesetId, via: "reconcile" },
+    });
+    return true;
+  });
+  if (!stored) return;
+  counts.protected += 1;
+  ctx.repo = { ...repo, rulesetId };
+  await hintRepo(app.db, ctx);
+}
+
+/** A repository's daily refresh: its protection, its invitation, then its head. */
 async function refreshRepo(step: Step): Promise<void> {
+  try {
+    await protectRepo(step);
+  } catch (err) {
+    // A rate limit stops the pass; any other failure costs the repository only this step today.
+    if (rateLimited(err)) throw err;
+    step.app.log.warn({ err, repo: step.located.fullName }, "reconciliation: the protection ruleset could not be applied");
+  }
   if (step.ctx.repo.groupId === null && step.ctx.repo.invitationStatus === "pending") await reconcileInvitation(step);
   await refreshHead(step);
 }
@@ -413,7 +464,7 @@ export function reconcileRepos(app: FastifyInstance, config: AppConfig): Promise
     candidates,
     refreshRepo,
     (repos, c) =>
-      `${repos} repositories checked, ${c.reinvited} re-invited, ${c.accepted} invitations accepted, ${c.heads} heads moved, ${c.renamed} renamed, ${c.deleted} deleted`,
+      `${repos} repositories checked, ${c.reinvited} re-invited, ${c.accepted} invitations accepted, ${c.heads} heads moved, ${c.renamed} renamed, ${c.deleted} deleted, ${c.protected} protected`,
   );
 }
 

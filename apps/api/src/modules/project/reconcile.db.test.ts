@@ -192,7 +192,7 @@ const call = (method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", url: string, 
 type Repo = typeof projectRepos.$inferSelect;
 
 /** A published project of a connected classroom, and the accepted repositories of `students` students (invitations pending). */
-async function project(opts: { students?: number } = {}) {
+async function project(opts: { students?: number; freePlan?: boolean } = {}) {
   const db = server.app.db;
   const students = await Promise.all(Array.from({ length: opts.students ?? 1 }, () => newStudent()));
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 0 });
@@ -211,9 +211,14 @@ async function project(opts: { students?: number } = {}) {
   expect(created.statusCode, created.body).toBe(201);
   const summary = ProjectSummary.parse(created.json());
   expect((await call("POST", `/app/api/projects/${summary.id}/publish`, teacher.headers)).statusCode).toBe(200);
-  for (const s of students) {
-    const accepted = await call("POST", `/app/api/student/projects/${summary.id}/accept`, s.headers);
-    expect(accepted.statusCode, accepted.body).toBe(200);
+  world.freePlan = opts.freePlan ?? false;
+  try {
+    for (const s of students) {
+      const accepted = await call("POST", `/app/api/student/projects/${summary.id}/accept`, s.headers);
+      expect(accepted.statusCode, accepted.body).toBe(200);
+    }
+  } finally {
+    world.freePlan = false;
   }
   // In the order a pass reads them (by row id), the students paired with their repository.
   const repos = await db.select().from(projectRepos).where(eq(projectRepos.projectId, summary.id)).orderBy(projectRepos.id);
@@ -469,7 +474,7 @@ describe("reconcile.repos: the invitations", () => {
     expect(repo!.invitationStatus).toBe("pending");
     expired(repo!, students[0]!.login);
 
-    expect(await reconcileRepos(server.app, config)).toBe("1 repositories checked, 1 re-invited, 0 invitations accepted, 0 heads moved, 0 renamed, 0 deleted");
+    expect(await reconcileRepos(server.app, config)).toBe("1 repositories checked, 1 re-invited, 0 invitations accepted, 0 heads moved, 0 renamed, 0 deleted, 0 protected");
     expect(invites()).toHaveLength(1);
     let row = await repoRow(repo!.id);
     expect(row.invitationReinvitedAt?.toISOString()).toBe(NOW);
@@ -594,6 +599,127 @@ describe("reconcile.repos: the head", () => {
   });
 });
 
+describe("reconcile.repos: the protection ruleset (M3-14k)", () => {
+  const rulesetsOf = (repo: Repo) => (world.rulesets.get(repo.fullName!) ?? []).filter((r) => r.name === "hgc-protect");
+
+  it("applies the missing ruleset to a live repository once the plan allows it, stores its id and audits it", async () => {
+    const { repos, id } = await project({ freePlan: true });
+    const [repo] = repos;
+    expect(repo!.rulesetId).toBeNull();
+
+    expect(await reconcileRepos(server.app, config)).toContain("1 protected");
+    const [ruleset] = rulesetsOf(repo!);
+    expect(ruleset).toBeDefined();
+    expect((await repoRow(repo!.id)).rulesetId).toBe(ruleset!.id);
+    const entries = await auditOf(repo!.id, "project_repo.protected");
+    expect(entries.map((e) => e.payload)).toEqual([{ projectId: id, rulesetId: ruleset!.id, via: "reconcile" }]);
+    expect(await lastPass("reconcile.repos")).toMatchObject({ protected: 1 });
+
+    // Settled: the next pass neither asks GitHub nor audits again.
+    gh.calls.length = 0;
+    expect(await reconcileRepos(server.app, config)).toContain("0 protected");
+    expect(callsTo(/\/rulesets$/)).toHaveLength(0);
+    expect(await auditOf(repo!.id, "project_repo.protected")).toHaveLength(1);
+  });
+
+  it("leaves the id null, silently, while the plan still refuses; tomorrow's pass retries", async () => {
+    const { repos } = await project({ freePlan: true });
+    const [repo] = repos;
+    world.freePlan = true;
+    try {
+      expect(await reconcileRepos(server.app, config)).toContain("0 protected");
+    } finally {
+      world.freePlan = false;
+    }
+    expect((await repoRow(repo!.id)).rulesetId).toBeNull();
+    expect(await auditOf(repo!.id, "project_repo.protected")).toEqual([]);
+
+    expect(await reconcileRepos(server.app, config)).toContain("1 protected");
+    expect((await repoRow(repo!.id)).rulesetId).not.toBeNull();
+  });
+
+  it("adopts a ruleset GitHub already holds, creating none", async () => {
+    const { repos } = await project({ freePlan: true });
+    const [repo] = repos;
+    world.rulesets.set(repo!.fullName!, [{ id: 777, name: "hgc-protect" }]);
+    expect(await reconcileRepos(server.app, config)).toContain("1 protected");
+    expect((await repoRow(repo!.id)).rulesetId).toBe(777);
+    expect(rulesetsOf(repo!)).toHaveLength(1);
+    expect(callsTo(/POST .*\/rulesets/)).toHaveLength(0);
+  });
+
+  it("skips an archived repository, a deleted one, an archived project and a repository past its deadline", async () => {
+    const { repos, id } = await project({ students: 4, freePlan: true });
+    const [archived, deleted, pastDeadline, other] = repos;
+    const db = server.app.db;
+    await db.update(projectRepos).set({ archivedAt: new Date(NOW) }).where(eq(projectRepos.id, archived!.id));
+    await db.update(projectRepos).set({ deletedAt: new Date(NOW) }).where(eq(projectRepos.id, deleted!.id));
+    await db.update(projectRepos).set({ deadlineAt: at(NOW, -HOUR) }).where(eq(projectRepos.id, pastDeadline!.id));
+
+    // Only the fourth is protected: the others are out of the rule.
+    expect(await reconcileRepos(server.app, config)).toContain("1 protected");
+    for (const r of [archived!, deleted!, pastDeadline!]) {
+      expect((await repoRow(r.id)).rulesetId).toBeNull();
+      expect(rulesetsOf(r)).toEqual([]);
+    }
+    expect((await repoRow(other!.id)).rulesetId).not.toBeNull();
+
+    // An archived project leaves the scope altogether.
+    await db.update(projectRepos).set({ rulesetId: null }).where(eq(projectRepos.id, other!.id));
+    await db.update(projects).set({ archivedAt: new Date(NOW) }).where(eq(projects.id, id));
+    gh.calls.length = 0;
+    expect(await reconcileRepos(server.app, config)).toContain("0 protected");
+    expect((await repoRow(other!.id)).rulesetId).toBeNull();
+    expect(callsTo(/\/rulesets$/)).toHaveLength(0);
+  });
+
+  it("never touches a repository that is already protected", async () => {
+    const { repos } = await project();
+    const [repo] = repos;
+    const stored = (await repoRow(repo!.id)).rulesetId;
+    expect(stored).not.toBeNull();
+    gh.calls.length = 0;
+    expect(await reconcileRepos(server.app, config)).toContain("0 protected");
+    expect(callsTo(/\/rulesets$/)).toHaveLength(0);
+    expect((await repoRow(repo!.id)).rulesetId).toBe(stored);
+    expect(await auditOf(repo!.id, "project_repo.protected")).toEqual([]);
+  });
+
+  it("logs any other failure and still re-invites and refreshes the head of that repository, then goes on to the next", async () => {
+    const { repos, students } = await project({ students: 2, freePlan: true });
+    const [first, second] = repos;
+    const sha = world.commit(first!.fullName!, "main", { "src/main.c": "int main(){return 1;}" });
+    authors.set(sha, students[0]!.login);
+    list(first!, sha, { conclusion: "success" });
+    gh.routes.unshift((url, req) =>
+      req.method === "GET" && url.pathname === `/repos/${first!.fullName}/rulesets` ? json({ message: "boom" }, 500) : undefined,
+    );
+    try {
+      expect(await reconcileRepos(server.app, config)).toContain("1 protected");
+    } finally {
+      gh.routes.shift();
+    }
+    const row = await repoRow(first!.id);
+    expect(row.rulesetId).toBeNull();
+    expect(row.lastCommitSha).toBe(sha); // the head step still ran
+    expect(row.invitationReinvitedAt?.toISOString()).toBe(NOW); // and the invitation's
+    expect((await repoRow(second!.id)).rulesetId).not.toBeNull();
+  });
+
+  it("stops the pass on GitHub's rate limit, nothing more asked", async () => {
+    const { repos } = await project({ students: 2, freePlan: true });
+    const [first, second] = repos;
+    gh.routes.unshift((url, req) => (req.method === "GET" && url.pathname === `/repos/${first!.fullName}/rulesets` ? rateLimit() : undefined));
+    try {
+      expect(await reconcileRepos(server.app, config)).toContain("stopped on GitHub's rate limit");
+    } finally {
+      gh.routes.shift();
+    }
+    expect((await repoRow(first!.id)).rulesetId).toBeNull();
+    expect((await repoRow(second!.id)).rulesetId).toBeNull();
+  });
+});
+
 describe("reconcile.repos: the repository itself", () => {
   it("follows a rename GitHub made, through the webhook's path", async () => {
     const { repos, org } = await project();
@@ -625,7 +751,7 @@ describe("reconcile.repos: the repository itself", () => {
     expect(entry?.payload).toEqual({ via: "reconcile" });
 
     // Deleted rows are out of scope: nothing more happens to them.
-    expect(await reconcileRepos(server.app, config)).toBe("1 repositories checked, 0 re-invited, 0 invitations accepted, 0 heads moved, 0 renamed, 0 deleted");
+    expect(await reconcileRepos(server.app, config)).toBe("1 repositories checked, 0 re-invited, 0 invitations accepted, 0 heads moved, 0 renamed, 0 deleted, 0 protected");
     expect(await auditOf(gone!.id, "project_repo.deleted")).toHaveLength(1);
   });
 

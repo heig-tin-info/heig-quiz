@@ -86,7 +86,7 @@ layers:
   unless the default branch exists (never list refs of an empty repo;
   `pushWithRetry`) → align the default branch (2109972) → ruleset
   `hgc-protect` (the free-plan 403 "Upgrade to GitHub Pro" is tolerated,
-  #15; any other 403 fails) → invite: push (free), pull (online), none
+  #15; any other 403 fails; Quiz retries it daily, M3-14k) → invite: push (free), pull (online), none
   (online_seb).
 - `redactTokens` (a1e59e0). Teacher e-mail on provision error once per repo;
   invitation e-mail to every invited member.
@@ -114,7 +114,12 @@ layers:
   atomic claim (`deadline_applied_at`, `state=locked`, teacher e-mail once);
   provisional freeze (`frozen_grade_run_id = selectGradeRun`); per live repo:
   - **lock**: ruleset `hgc-deadline-lock` on `~ALL`, else archive (H8,
-    `repo.deadline_archived`);
+    `repo.deadline_archived`) — where the repository has no `hgc-protect`
+    ruleset (`ruleset_id` null). *Quiz, M3-14k (product owner, 2026-10-06):
+    `reconcile.repos` applies the missing `hgc-protect` daily to a live,
+    unarchived repository before its deadline once the plan allows it
+    (`project_repo.protected`), after which the deadline locks by ruleset,
+    not by archive;*
   - **commit**: an empty bot commit per branch, non-forced, in
     `bot_commits(deadline)`.
 - 404 ⇒ `markRepoDeleted` (terminal, d7c8a72); other failures rethrow;
