@@ -347,7 +347,11 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   const lobby = evaluationState === "lobby" || evaluationState === "scheduled";
   // The one clock of the screen, for the header and for every row that
   // compares its own deadline against it.
-  const deadline = commonDeadline(view.evaluation.closesAt, view.rows);
+  const deadline = commonDeadline(
+    view.evaluation.closesAt,
+    view.rows,
+    detail.data?.evaluation.settings.timing,
+  );
 
   const body = (
     <div className="space-y-5">

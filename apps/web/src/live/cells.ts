@@ -18,7 +18,7 @@
  *   - "names off" shows a NUMBER, not the animal pseudonym, and the number
  *     must not leak the roster's alphabetical order (below).
  */
-import type { DashboardCell, DashboardRow } from "@quiz/contracts";
+import type { DashboardCell, DashboardRow, Timing } from "@quiz/contracts";
 import { countsAsCompleted } from "@quiz/domain";
 
 import type { VerdictState } from "../ui";
@@ -50,7 +50,8 @@ export function cellState(cell: DashboardCell, showResults: boolean): VerdictSta
  * none.
  *
  * In `deadline` timing it is the common close. In `duration` timing there is
- * no common close, but a quiz the teacher STARTED begins every waiting
+ * no common close — a `closesAt` left on the evaluation is only the ticker's
+ * latest close, which "+N min" never moves (#574), so it is not the clock — but a quiz the teacher STARTED begins every waiting
  * attempt at the same instant (`beginWaitingAttempts`), and pauses and
  * "+N min for all" move those deadlines together: the running rows share one
  * deadline, and that deadline is the class's clock. So it is the deadline
@@ -61,8 +62,9 @@ export function cellState(cell: DashboardCell, showResults: boolean): VerdictSta
 export function commonDeadline(
   closesAt: string | null,
   rows: readonly DashboardRow[],
+  timing?: Timing,
 ): string | null {
-  if (closesAt !== null) return closesAt;
+  if (closesAt !== null && timing !== "duration") return closesAt;
   const shared = new Map<number, { at: string; n: number }>();
   for (const row of rows) {
     if (row.state !== "in_progress" || row.deadlineAt === null) continue;

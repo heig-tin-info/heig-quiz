@@ -179,9 +179,15 @@ describe("LiveDashboard — the clock", () => {
     vi.useRealTimers();
   });
 
+  const deadlineTiming = () => {
+    const detail = makeEvaluationDetail();
+    detail.evaluation.settings.timing = "deadline";
+    return { [`GET /app/api/evaluations/${EVALUATION_ID}`]: ok(detail) };
+  };
+
   it("ticks the header and the rows once a second, and leaves the cells alone", async () => {
     fakeClock(LIVE_NOW.getTime());
-    setup(makeDashboard(3, 4));
+    setup(makeDashboard(3, 4), deadlineTiming());
     await screen.findByRole("table");
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
@@ -196,6 +202,20 @@ describe("LiveDashboard — the clock", () => {
     for (let tick = 0; tick < 3; tick++) act(() => void vi.advanceTimersByTime(1_000));
     expect(timers()).toEqual(["19:57", "9:57", "9:57", "9:57"]);
     expect(cellRenders.count).toBe(before);
+  });
+
+  it("does not take a leftover close for the clock in duration timing (#574)", async () => {
+    fakeClock(LIVE_NOW.getTime());
+    // The fixture's close is 20 minutes away; "+N min" only moves the
+    // attempts' deadlines (10 minutes), so the header must not show the close.
+    setup(makeDashboard(3, 4));
+    await screen.findByRole("table");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const timers = screen.getAllByRole("timer").map((el) => el.textContent);
+    expect(timers).not.toContain("20:00");
+    expect(timers[0]).toBe("10:00");
   });
 });
 
