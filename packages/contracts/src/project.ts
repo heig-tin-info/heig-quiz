@@ -148,8 +148,17 @@ export const ProjectActivitySummary = z.object({
   title: z.string(),
   state: ProjectState,
   classroom: z.object({ id: z.uuid(), name: z.string(), courseCode: z.string() }),
-  startAt: z.iso.datetime(),
-  deadlineAt: z.iso.datetime(),
+  /**
+   * Null while nothing is fixed: a draft published by hand has no start, and
+   * none either when its deadline is a duration (`projectListDates` of
+   * `@quiz/domain`, M3-14a).
+   */
+  startAt: z.iso.datetime().nullable(),
+  deadlineAt: z.iso.datetime().nullable(),
+  /** The repositories, for the staff only (F-PROJ-02, N-SEC-20): never on a student's card. */
+  source: z.object({ fullName: z.string() }),
+  /** Null while the students' repository is being built. */
+  distribution: z.object({ fullName: z.string() }).nullable(),
 });
 export type ProjectActivitySummary = z.infer<typeof ProjectActivitySummary>;
 

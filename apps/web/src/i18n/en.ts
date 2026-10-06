@@ -4337,6 +4337,7 @@ export const en = {
   "project.name": "Name",
   "project.duration": "Duration in days",
   "project.source": "Source repository",
+  "project.studentsRepo": "Students' repository",
   "project.source.pick": "Choose a repository",
   "project.source.none": "This organization has no repository yet",
   "project.source.noneBody": "Create the repository to hand out on GitHub, in the classroom's organization, then reload this page.",

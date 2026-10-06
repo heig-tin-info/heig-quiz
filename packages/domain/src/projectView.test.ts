@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   changedAfterRelease,
+  projectListDates,
   projectPrimaryAction,
   reviewState,
   scoreGrade,
@@ -123,5 +124,24 @@ describe("reviewState (F-PROJ-11, M3-08b)", () => {
     });
     // The ledger wins over the row's state: a suspension after the dispatch changes nothing.
     expect(reviewState({ ...frozen, dispatch: sent, protectionSuspendedAt: at }).status).toBe("asked");
+  });
+});
+
+describe("projectListDates", () => {
+  const stored = { startAt: "s", deadlineAt: "d" };
+  const base = { state: "draft" as const, publishMode: "manual" as const, durationMinutes: null, ...stored };
+
+  it("hides the provisional start of a manual draft, and keeps an absolute deadline", () => {
+    expect(projectListDates(base)).toEqual({ startAt: null, deadlineAt: "d" });
+  });
+
+  it("hides the deadline of a manual draft too when it is a duration", () => {
+    expect(projectListDates({ ...base, durationMinutes: 120 })).toEqual({ startAt: null, deadlineAt: null });
+  });
+
+  it("keeps a scheduled draft's dates, and a published or locked project's", () => {
+    expect(projectListDates({ ...base, publishMode: "scheduled" })).toEqual(stored);
+    expect(projectListDates({ ...base, state: "published", durationMinutes: 120 })).toEqual(stored);
+    expect(projectListDates({ ...base, state: "locked" })).toEqual(stored);
   });
 });

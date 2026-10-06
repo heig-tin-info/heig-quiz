@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { FolderGit2 } from "lucide-react";
+import { FolderGit2, GitBranch, Users } from "lucide-react";
 
 import type { ProjectActivitySummary } from "@quiz/contracts";
 
@@ -10,10 +10,13 @@ import { githubAbsent } from "../github/api";
 import { useT } from "../i18n";
 import { classroomProjectsKey } from "../queryKeys";
 import type { Route } from "../router";
+import { repoHref } from "./projectPage";
 import {
   Card,
   isoDateTime,
+  Menu,
   QueryError,
+  RelativeTime,
   SectionHeading,
   T,
   TableHead,
@@ -21,7 +24,7 @@ import {
   type Column,
 } from "../ui";
 
-type SortKey = "title" | "start" | "deadline";
+type SortKey = "title" | "start" | "deadline" | "actions";
 
 /**
  * The classroom's projects (F-PROJ-01, M3-10), a group under its evaluations
@@ -39,8 +42,12 @@ type SortKey = "title" | "start" | "deadline";
  * No button: "New ▾ › Project" is in the page header, the tab's one primary.
  * A row is a title, its state, its start and its deadline, and opens the
  * project where its page parses (`KIND`'s `home`, M3-12); elsewhere it is
- * not clickable. Its counts come with M3-08.
+ * not clickable. Its counts come with M3-08. A date that is not fixed yet (a
+ * draft published by hand) is a dash and sorts last; a published project's
+ * deadline says how far it is. The row's menu leads to the repositories on
+ * GitHub (M3-14a).
  */
+const DASH = <span className="text-fg-faint">—</span>;
 export function ProjectGroup({
   classroomId,
   navigate,
@@ -57,9 +64,13 @@ export function ProjectGroup({
   const rows = list.data ?? [];
   const { sorted, sort, toggle } = useSortableTable<ProjectActivitySummary, SortKey>(
     rows,
-    (row, key) => (key === "start" ? row.startAt : key === "deadline" ? row.deadlineAt : row.title),
+    (row, key) => (key === "start" ? row.startAt : key === "deadline" ? row.deadlineAt : row.title) ?? "",
     null,
   );
+  // An empty date sorts last, whichever way the column goes.
+  const dateOf = (row: ProjectActivitySummary) =>
+    sort?.key === "start" ? row.startAt : sort?.key === "deadline" ? row.deadlineAt : "";
+  const ordered = [...sorted.filter((r) => dateOf(r) !== null), ...sorted.filter((r) => dateOf(r) === null)];
 
   if (list.isError && !githubAbsent(list.error)) {
     return (
@@ -78,6 +89,7 @@ export function ProjectGroup({
     { key: "title", label: t("eval.titleLabel") },
     { key: "start", label: t("project.start"), className: T.colHigh },
     { key: "deadline", label: t("project.deadline") },
+    { key: "actions", label: t("common.actions"), sortable: false, srOnly: true, className: "w-10" },
   ];
   return (
     <section aria-labelledby="classroom-projects" className="space-y-3">
@@ -90,7 +102,7 @@ export function ProjectGroup({
         <table className={T.table}>
           <TableHead columns={columns} sort={sort} onToggle={toggle} />
           <tbody>
-            {sorted.map((row) => {
+            {ordered.map((row) => {
               const opens = kindOf(row).home(row) !== null;
               return (
                 <tr
@@ -104,8 +116,30 @@ export function ProjectGroup({
                       <StateBadge row={row} />
                     </span>
                   </td>
-                  <td className={`${T.td} ${T.colHigh} tabular-nums text-fg-muted`}>{isoDateTime(row.startAt)}</td>
-                  <td className={`${T.td} tabular-nums text-fg-muted`}>{isoDateTime(row.deadlineAt)}</td>
+                  <td className={`${T.td} ${T.colHigh} tabular-nums text-fg-muted`}>
+                    {row.startAt === null ? DASH : isoDateTime(row.startAt)}
+                  </td>
+                  <td className={`${T.td} tabular-nums text-fg-muted`}>
+                    {row.deadlineAt === null ? (
+                      DASH
+                    ) : (
+                      <span className="flex flex-wrap items-baseline gap-x-2">
+                        {isoDateTime(row.deadlineAt)}
+                        {row.state === "published" ? <RelativeTime iso={row.deadlineAt} className="text-fg-faint" /> : null}
+                      </span>
+                    )}
+                  </td>
+                  <td className={`${T.td} text-right`} onClick={(e) => e.stopPropagation()}>
+                    <Menu
+                      label={t("live.row.actions", { name: row.title })}
+                      items={[
+                        { label: t("project.source"), icon: GitBranch, href: repoHref(row.source.fullName) },
+                        ...(row.distribution
+                          ? [{ label: t("project.studentsRepo"), icon: Users, href: repoHref(row.distribution.fullName) }]
+                          : []),
+                      ]}
+                    />
+                  </td>
                 </tr>
               );
             })}

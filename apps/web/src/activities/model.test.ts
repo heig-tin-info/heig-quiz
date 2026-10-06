@@ -49,6 +49,8 @@ function project(over: Partial<ProjectActivitySummary> = {}): ProjectActivitySum
     classroom: { id: "00000000-0000-4000-8000-0000000000aa", name: "PRG1-2026", courseCode: "PRG1" },
     startAt: "2026-09-21T08:00:00.000Z",
     deadlineAt: "2026-10-05T22:00:00.000Z",
+    source: { fullName: "heig/lab-source" },
+    distribution: { fullName: "heig/lab-squashed" },
     ...over,
   };
 }
@@ -95,6 +97,16 @@ describe("a project among the activities (M3-10)", () => {
     expect(bucketOf("draft")).toBe("upcoming");
     expect(bucketOf("published")).toBe("open");
     expect(bucketOf("locked")).toBe("ended");
+  });
+
+  it("is undated, ordered last and in no week, while it has no start (M3-14a)", () => {
+    const now = new Date(2026, 8, 30, 12).getTime();
+    const undated = project({ title: "undated", state: "draft", startAt: null, deadlineAt: null });
+    const dated = project({ title: "dated", state: "draft", startAt: new Date(2026, 9, 7, 8).toISOString() });
+    expect(anchorOf(undated)).toBeNull();
+    expect(closesOf(undated)).toBeNull();
+    expect(activityOrder([undated, dated]).map((a) => a.title)).toEqual(["dated", "undated"]);
+    expect(weeksOf([undated, dated], now).at(-1)).toMatchObject({ start: null, rows: [undated] });
   });
 
   it("is never live, even published and in its span", () => {
