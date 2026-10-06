@@ -64,16 +64,19 @@ export function ClassroomGithub({
 }) {
   const t = useT();
   const github = useClassroomGithub(room.id);
-  // A connected classroom has no sheet: a stale `?connect=1&installed=` (a
-  // setup return after a re-configuration) is dropped, or a later disconnect
-  // would open the sheet with an old preselection.
+  // `installed` is the setup return's: the organization Quiz just recorded. It
+  // is kept once and taken out of the address (a reload must not pick again;
+  // a later disconnect must not open the sheet with an old preselection).
   const [installedParam, setInstalledParam] = useSearchParam("installed", "");
+  const [installedId] = useState(() => installedParam || null);
+  useEffect(() => {
+    if (installedParam !== "") setInstalledParam("");
+  }, [installedParam, setInstalledParam]);
+  // A connected classroom has no sheet: a stale `?connect=1` is dropped.
   const connected = github.data != null && github.data.link !== null;
   useEffect(() => {
-    if (!connected) return;
-    if (installedParam !== "") setInstalledParam("");
-    if (connecting) onConnecting(false);
-  }, [connected, installedParam, connecting, setInstalledParam, onConnecting]);
+    if (connected && connecting) onConnecting(false);
+  }, [connected, connecting, onConnecting]);
 
   if (github.isLoading || githubAbsent(github.error)) return null;
   let body;
@@ -106,7 +109,7 @@ export function ClassroomGithub({
       <SectionHeading icon={GithubIcon} title={t("github.section")} />
       {body}
       {connecting && github.data && github.data.link === null ? (
-        <ConnectSheet room={room} github={github.data} onClose={() => onConnecting(false)} />
+        <ConnectSheet room={room} github={github.data} installedId={installedId} onClose={() => onConnecting(false)} />
       ) : null}
     </section>
   );
@@ -196,24 +199,19 @@ const selectable = (org: GithubOrg) => org.installed && org.status === "active";
 function ConnectSheet({
   room,
   github,
+  installedId,
   onClose,
 }: {
   room: ClassroomDetail;
   github: GithubClassroom;
+  installedId: string | null;
   onClose: () => void;
 }) {
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
   const orgs = useGithubOrgs();
-  // `installed` is the setup return's: the organization Quiz just recorded.
-  // It only preselects an organization of the list that can be picked, once,
-  // and is taken out of the address (a reload must not pick again).
-  const [installedParam, setInstalledParam] = useSearchParam("installed", "");
-  const [installedId] = useState(() => installedParam || null);
-  useEffect(() => {
-    if (installedParam !== "") setInstalledParam("");
-  }, [installedParam, setInstalledParam]);
+  // `installedId` only preselects an organization of the list that can be picked.
   const [picked, setPicked] = useState<string | null>(null);
   const list = orgs.data ?? [];
   const installed = list.find((o) => o.id === installedId && selectable(o));
