@@ -830,6 +830,8 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
     acceptedAt: r.acceptedAt,
     lastCommit: r.lastCommit,
     ciStatus: r.ciStatus,
+    // The student's count: GitHub's total less the App's initial commit (the mock keeps no receipts).
+    commits: r.live ? Math.max(0, r.live.commitCount - 1) : 0,
     live: p.read ? r.live : null,
     scores: {
       current: graded(slot(r, r.currentRunId)),

@@ -51,7 +51,6 @@ import {
   effectiveDeadline,
   scoreGrade,
   studentCiReading,
-  studentCommitCount,
   studentProjectGroup,
   studentProjectStatus,
   studentScoreRun,
@@ -63,9 +62,10 @@ import type { AuditActor } from "../../audit.js";
 import { iso, isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { classrooms, courses, enrollments, githubAccounts, projectGradeRuns, projects, pushReceipts } from "../../db/schema.js";
+import { classrooms, courses, enrollments, githubAccounts, projectGradeRuns, projects } from "../../db/schema.js";
 import { htmlUrl } from "../../github/git.js";
 import type { StudentProjectScope } from "../guards.js";
+import { countedReceipts, repoCommitCount } from "./commits.js";
 import { isLive } from "./deadline.js";
 import { slotRuns } from "./detail.js";
 import { ProjectError } from "./errors.js";
@@ -103,21 +103,7 @@ interface Readings {
  */
 async function readings(db: Db, repos: readonly ProvisionedRepo[]): Promise<Readings> {
   const ids = repos.flatMap((r) => (r.githubRepoId === null ? [] : [r.githubRepoId]));
-  const [runs, rows] = await Promise.all([
-    slotRuns(db, repos),
-    ids.length === 0
-      ? []
-      : db
-          .select({ githubRepoId: pushReceipts.githubRepoId, receivedAt: pushReceipts.receivedAt, commits: pushReceipts.commits })
-          .from(pushReceipts)
-          .where(and(inArray(pushReceipts.githubRepoId, ids), eq(pushReceipts.isBot, false))),
-  ]);
-  const receipts = new Map<number, CountedReceipt[]>();
-  for (const { githubRepoId, ...r } of rows) {
-    const list = receipts.get(githubRepoId) ?? [];
-    list.push(r);
-    receipts.set(githubRepoId, list);
-  }
+  const [runs, receipts] = await Promise.all([slotRuns(db, repos), countedReceipts(db, ids)]);
   return { runs, receipts };
 }
 
@@ -257,7 +243,7 @@ function reading(project: ProjectRow, repo: ProvisionedRepo, { runs, receipts }:
   const ci = studentCiReading(repo, chosen?.run ?? null, deadlineAt, now);
   const stored: Pick<RepoReading, "lastCommit" | "commits" | "ciStatus"> = {
     lastCommit: ci.lastCommit === null ? null : { sha: ci.lastCommit.sha, at: isoOrNull(ci.lastCommit.at) },
-    commits: studentCommitCount(receipts.get(repo.githubRepoId!) ?? [], deadlineAt),
+    commits: repoCommitCount(project, repo, receipts),
     ciStatus: ci.ciStatus,
   };
   if (chosen === null) return { ...stored, run: null, score: null };

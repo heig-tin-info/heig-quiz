@@ -51,6 +51,7 @@ import { enrollments, githubAccounts, gradeDispatches, projectGradeRuns, project
 import { installationClient } from "../../github/app.js";
 import { isRateLimited, readRepoLiveState, type LiveRead } from "../../github/metrics.js";
 import { projectInstallation } from "../github/service.js";
+import { countedReceipts, repoCommitCount } from "./commits.js";
 import { isLive, releaseCounts, repoDeadlineState } from "./deadline.js";
 import { reposWithAccessToRevoke } from "./groupCopy.js";
 import { groupsDrifted, groupSyncOwed } from "./groupResync.js";
@@ -274,6 +275,7 @@ function repoView(
   dispatch: DispatchRow | undefined,
   sync: ProjectRepoSync,
   read: LiveRead | undefined,
+  commits: number,
   toRevoke: ReadonlySet<string>,
 ): ProjectRepoView {
   const { scores, released, changedAfterRelease: changed } = repoScores(project, repo, runs);
@@ -285,6 +287,7 @@ function repoView(
     acceptedAt: iso(repo.acceptedAt),
     lastCommit: repo.lastCommitSha === null ? null : { sha: repo.lastCommitSha, at: isoOrNull(repo.lastCommitAt) },
     ciStatus: repo.ciStatus,
+    commits,
     live: liveView(read),
     scores,
     review: reviewView(project, repo, dispatch),
@@ -365,11 +368,13 @@ export async function projectDetail(
   const tests = roster.flatMap((s) => (s.staff ? [seats.of(project.id, s.enrollmentId)] : [])).filter((r) => r !== null);
   const shownRepos = [...repos, ...tests];
   const repoIds = shownRepos.map((repo) => repo.id);
-  const [runs, facts, dispatches, syncs] = await Promise.all([
+  const [runs, facts, dispatches, syncs, receipts] = await Promise.all([
     slotRuns(db, shownRepos),
     runFacts(db, repoIds),
     finalDispatches(db, repoIds),
     repoSyncViews(db, project, shownRepos),
+    // The student's own count (M3-14m): the same receipts and rule as their card.
+    countedReceipts(db, shownRepos.flatMap((repo) => (repo.githubRepoId === null ? [] : [repo.githubRepoId]))),
   ]);
   const liveRepos = repos.filter((repo) => isLive(repo, project));
   const shownLive = shownRepos.filter((repo) => isLive(repo, project));
@@ -379,7 +384,7 @@ export async function projectDetail(
   const views = new Map(
     shownRepos.map((repo) => [
       repo.id,
-      repoView(project, repo, runs, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), toRevoke),
+      repoView(project, repo, runs, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), repoCommitCount(project, repo, receipts), toRevoke),
     ]),
   );
   const groupOf = (groupId: string | null) => (groupId === null ? null : (copy.get(groupId) ?? null));

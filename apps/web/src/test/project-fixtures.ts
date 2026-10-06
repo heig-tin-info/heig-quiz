@@ -55,6 +55,7 @@ export function makeRepo(n: number, over: Partial<ProjectRepoView> = {}): Projec
     acceptedAt: PAST,
     lastCommit: { sha: "9a3f1c7e2b4d6f8a0c1e3b5d7f9a1c3e5b7d9f1a", at: PAST },
     ciStatus: "pass",
+    commits: 11,
     live: { commitCount: 12, checksPassed: 1, checksTotal: 1, stale: false },
     scores: {
       current: { runId: "run-2", points: 8, max: 10, grade: { grade: 5, fellBack: false } },

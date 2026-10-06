@@ -11,9 +11,9 @@ import { describe, expect, it } from "vitest";
 
 import { GroupConsequences, ProjectDetail } from "@quiz/contracts";
 
-import { projectRepos } from "../../db/schema.js";
+import { projectRepos, pushReceipts } from "../../db/schema.js";
 import { claimGroupSyncWork, runGroupSyncJob } from "./groupSync.js";
-import { accept, config, freshOrgId, groupOf, groupProject, moveTo, newStudent, NOW, server, setOk, staff, useGroupWorld } from "./groupTesting.js";
+import { accept, call, config, freshOrgId, groupOf, groupProject, moveTo, newStudent, NOW, repoRows, server, setOk, staff, useGroupWorld } from "./groupTesting.js";
 import { projectTick } from "./jobs.js";
 
 useGroupWorld();
@@ -78,6 +78,33 @@ describe("the project page of a group project (M3-16b)", () => {
       [dan!.login]: [null, null],
     });
     expect(after.counts.groups).toBe(3);
+  });
+
+  it("counts a group repository's commits over its own receipts, as each member's view does (M3-14m)", async () => {
+    const [ana, ben] = [await newStudent(), await newStudent()];
+    const { project } = await groupProject([ana!, ben!], [[0, 1]]);
+    expect((await accept(project.id, ana!)).statusCode).toBe(200);
+    const repo = (await repoRows(project.id))[0]!;
+    const receipt = (commits: number, isBot = false) =>
+      server.app.db.insert(pushReceipts).values({
+        id: randomUUID(),
+        githubRepoId: repo.githubRepoId!,
+        branch: "main",
+        headSha: randomUUID().replace(/-/g, "").padEnd(40, "0"),
+        receivedAt: new Date(NOW),
+        isBot,
+        commits,
+      });
+    await receipt(2);
+    await receipt(5);
+    await receipt(30, true);
+
+    const rows = (await detail(project.id)).rows.filter((r) => r.repo !== null);
+    expect(rows.map((r) => r.repo!.commits)).toEqual([7, 7]);
+    for (const member of [ana!, ben!]) {
+      const res = await call("GET", `/app/api/student/projects/${project.id}`, member.headers);
+      expect(res.json().repo.commits).toBe(7);
+    }
   });
 
   it("gives a lot-1 individual repository's row no group, and keeps a departing member in their group's row (seat())", async () => {
