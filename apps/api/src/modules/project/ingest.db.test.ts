@@ -928,6 +928,17 @@ describe("a completed run (F-PROJ-10, ADR-011)", () => {
     expect((await repoRow(f.projectId)).currentGradeRunId).toBe(okRun!.id);
   });
 
+  it("scores a negative CI score 0 and keeps what it printed, so the staff see the clamp (M3-14n)", async () => {
+    const f = await acceptedRepo({ protectedFiles: [] });
+    const { after } = await push(f, { "a.c": "1" });
+    scored(after, { title: "GRADE", message: "-2/6" });
+    const payload = runPayload(f, after);
+    await handled("workflow_run", payload);
+    const run = await runOf(f, payload.workflow_run.id);
+    expect(run).toMatchObject({ parseStatus: "ok", points: 0, max: 6, parseDetail: "-2/6", clamped: true });
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBe(run!.id);
+  });
+
   it("counts a pass / fail run only while the repository has no grading.yml run (2026-10-02)", async () => {
     const f = await acceptedRepo({ protectedFiles: [] });
     const { after } = await push(f, { "b.c": "1" });

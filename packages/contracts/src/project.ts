@@ -647,6 +647,8 @@ export const GradeRunView = z.object({
   testsTotal: z.number().int().nullable(),
   parseStatus: GradeRunParseStatus,
   parseDetail: z.string().nullable(),
+  /** The CI printed a negative score, counted 0 (M3-14n): `parseDetail` keeps what it printed. Staff only. */
+  clamped: z.boolean(),
   afterDeadline: z.boolean(),
   toVerify: z.boolean(),
   completedAt: z.iso.datetime(),
@@ -784,6 +786,8 @@ export type ProjectRepoSync = z.infer<typeof ProjectRepoSync>;
  *     alert: a student's code could print one; F-PROJ-10);
  *   - `malformed` — its latest run's score did not parse: the reason, else
  *     null;
+ *   - `clamped` — the run of one of its three slots printed a negative
+ *     score, counted 0 (M3-14n);
  *   - `deleted` — gone from GitHub (stored, or GitHub's 404 just now);
  *   - `changedAfterRelease` — the final score differs from the release's
  *     snapshot (only once the project was released).
@@ -827,6 +831,7 @@ export const ProjectRepoView = ProjectRepoDeadlineState.extend({
     toVerify: z.boolean(),
     multiple: z.boolean(),
     malformed: z.string().nullable(),
+    clamped: z.boolean(),
     deleted: z.boolean(),
     changedAfterRelease: z.boolean(),
   }),

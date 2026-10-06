@@ -9,7 +9,11 @@
  * - exactly ONE `GRADE` annotation must be present (several, even identical,
  *   invalidate the score; anti-tampering mitigation H5);
  * - the message must follow `points/max`, dot decimals, `max > 0`,
- *   `points <= max`.
+ *   `points <= max`;
+ * - a negative `points` (a leading minus, on the points only) counts 0 and
+ *   the parse says `clamped` so the staff can see it (M3-14n, product owner
+ *   2026-10-06): `-2/6` is 0/6 clamped, `-0/6` is 0/6 unclamped (nothing
+ *   was lost). A negative or null `max`, or a `+` sign, stays malformed.
  *
  * The annotation title stays `GRADE`: it is written by the workflows already
  * living in the student repositories, so it is a wire name, not our word.
@@ -17,10 +21,12 @@
 
 export const SCORE_ANNOTATION_TITLE = "GRADE";
 
-const SCORE_MESSAGE_RE = /^\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*$/;
+const SCORE_MESSAGE_RE = /^\s*(-?\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*$/;
 
 export type ScoreParse =
-  | { status: "ok"; points: number; max: number }
+  | { status: "ok"; points: number; max: number; clamped: false }
+  /** A negative score counted 0; `message` is what the run printed. */
+  | { status: "ok"; points: 0; max: number; clamped: true; message: string }
   | { status: "no_annotation" }
   | { status: "malformed"; message: string }
   | { status: "multiple"; count: number };
@@ -34,10 +40,12 @@ export interface AnnotationLike {
 function parseScoreMessage(message: string): ScoreParse {
   const m = SCORE_MESSAGE_RE.exec(message);
   if (!m) return { status: "malformed", message };
-  const points = Number(m[1]);
+  const raw = Number(m[1]);
   const max = Number(m[2]);
-  if (!(max > 0) || points > max) return { status: "malformed", message };
-  return { status: "ok", points, max };
+  if (!(max > 0) || raw > max) return { status: "malformed", message };
+  // `-0` is 0: only a value below zero loses something.
+  if (raw < 0) return { status: "ok", points: 0, max, clamped: true, message };
+  return { status: "ok", points: raw || 0, max, clamped: false };
 }
 
 /** Applies these rules to the full set of annotations of a run. */

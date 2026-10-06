@@ -635,10 +635,14 @@ export const projectGradeRuns = pgTable(
     testsTotal: integer("tests_total"),
     parseStatus: text("parse_status", { enum: GRADE_RUN_PARSE_STATUSES }).notNull(),
     /**
-     * Why a `malformed` run has no score: the GRADE annotation's message as
-     * the run printed it (F-PROJ-10), at most 500 characters. Null otherwise.
+     * The GRADE annotation's message as the run printed it, for a run whose
+     * annotation was not taken as is (F-PROJ-10): why a `malformed` run has no
+     * score, or what a `clamped` run printed. At most 500 characters. Null
+     * otherwise.
      */
     parseDetail: text("parse_detail"),
+    /** The CI printed a negative score, counted 0 (M3-14n); `parseDetail` keeps what it printed. */
+    clamped: boolean("clamped").notNull().default(false),
     /** `ci` — a push; `review` — the final review (heig-classroom's `llm`). */
     kind: text("kind", { enum: GRADE_RUN_KINDS }).notNull().default("ci"),
     /** Its commit was received after the deadline (ADR-012): never changes the frozen score. */

@@ -149,7 +149,9 @@ layers:
   from classroom under the same number).
 - Eligible: selected branch, head not a bot commit; idempotent on (repo,
   run, attempt); GRADE and TESTS annotations only from
-  `.github/workflows/grading.yml`'s check suite.
+  `.github/workflows/grading.yml`'s check suite. A negative points value
+  (`-2/6`) counts 0 and the run is flagged clamped to the staff (M3-14n, F-PROJ-10);
+  a maximum of 0 or below stays malformed.
 - `after_deadline` from `push_receipts`; an unknown receipt after the
   deadline counts as after (GR-14.3).
 - LLM review runs (`repository_dispatch` of grading.yml) fill the LLM slot

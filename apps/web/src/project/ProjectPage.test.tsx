@@ -462,7 +462,7 @@ describe("the repositories", () => {
       row(3, makeRepo(3, { sync: { pr: null, outcome: "failed", at: PAST }, flags: { ...makeRepo(3).flags, multiple: true } })),
       row(4, makeRepo(4, { flags: { ...makeRepo(4).flags, malformed: "::notice title=GRADE::huit/10" } })),
       row(5, makeRepo(5, { degraded: true, archived: true, locked: true })),
-      row(6, makeRepo(6, { flags: { ...makeRepo(6).flags, changedAfterRelease: true } })),
+      row(6, makeRepo(6, { flags: { ...makeRepo(6).flags, changedAfterRelease: true, clamped: true } })),
       row(7, makeRepo(7, { flags: { ...makeRepo(7).flags, deleted: true } })),
       row(8, makeRepo(8, { deadlineAt: AHEAD, invitationStatus: "pending", lastCommit: null, ciStatus: "none" })),
       row(9, null),
@@ -484,6 +484,8 @@ describe("the repositories", () => {
     expect(text(3)).toMatch(/malformed score/);
     expect(text(4)).toMatch(/locked by archiving/);
     expect(text(5)).toMatch(/modified after publication/);
+    expect(text(5)).toMatch(/negative CI score counted 0/);
+    expect(text(4)).not.toMatch(/negative CI score/);
     expect(text(6)).toMatch(/deleted on GitHub/);
     expect(rows[6]!.className).toMatch(/text-fg-faint/);
     expect(text(7)).toMatch(/own deadline/);
@@ -523,7 +525,7 @@ describe("the repositories", () => {
       [`GET ${BASE}/repos/${repo.id}/runs`]: ok(
         makeRunList({
           runs: [
-            { ...makeRunList().runs[0]!, afterDeadline: true, id: "run-3", completedAt: AHEAD },
+            { ...makeRunList().runs[0]!, afterDeadline: true, id: "run-3", completedAt: AHEAD, points: 0, clamped: true, parseDetail: "-2/10" },
             ...makeRunList().runs,
           ],
           currentGradeRunId: "run-2",
@@ -542,6 +544,10 @@ describe("the repositories", () => {
     const runRows = (await within(sheet).findAllByRole("row")).slice(1);
     expect(runRows).toHaveLength(3);
     expect(runRows[0]!.textContent).toMatch(/after the deadline/);
+    // A negative CI score counted 0 (M3-14n): the staff see the clamp and what the CI printed.
+    expect(runRows[0]!.textContent).toMatch(/negative score, counted 0/);
+    expect(runRows[0]!.textContent).toMatch(/-2\/10/);
+    expect(runRows[1]!.textContent).not.toMatch(/negative score/);
     expect(runRows[1]!.textContent).toMatch(/current/);
     expect(runRows[2]!.textContent).not.toMatch(/current/);
     expect(runRows[2]!.textContent).toMatch(/4\/10/);

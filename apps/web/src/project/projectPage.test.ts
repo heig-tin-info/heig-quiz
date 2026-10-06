@@ -108,6 +108,7 @@ describe("a repository's flags", () => {
           toVerify: true,
           multiple: true,
           malformed: "no annotation parsed",
+          clamped: true,
           deleted: true,
           changedAfterRelease: true,
         },
@@ -119,6 +120,7 @@ describe("a repository's flags", () => {
       { key: "project.flag.conflict", tone: "amber" },
       { key: "project.flag.toVerify", tone: "amber" },
       { key: "project.flag.changed", tone: "amber" },
+      { key: "project.flag.clamped", tone: "amber" },
       { key: "project.flag.malformed", tone: "zinc" },
       { key: "project.flag.degraded", tone: "zinc" },
     ]);
