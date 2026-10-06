@@ -676,22 +676,24 @@ export async function disconnectClassroom(db: Db, classroomId: string): Promise<
  * only once the App's JWT confirms it; anything else stores nothing. It
  * links no classroom — the `PUT`, under `staffAccess`, does — and only
  * hints the staff of the organization's classrooms and of `state`'s.
+ * Returns Quiz's id of the organization it recorded, or null when nothing
+ * was (no installation, or one GitHub does not confirm).
  */
 export async function completeSetup(
   db: Db,
   config: AppConfig,
   query: GithubSetupQuery,
   log: FastifyBaseLogger,
-): Promise<void> {
-  if (query.installation_id === undefined) return;
+): Promise<string | null> {
+  if (query.installation_id === undefined) return null;
   let inst: AppInstallation | null;
   try {
     inst = await fetchInstallation(config, query.installation_id, HTTP_READ);
   } catch (err) {
     log.warn({ err, installationId: query.installation_id }, "verifying an installation failed");
-    return;
+    return null;
   }
-  if (!inst) return;
+  if (!inst) return null;
   let org = await recordInstallation(db, inst, "setup_url");
   try {
     // Read while the installation is fresh: the `free` warning shows at once.
@@ -700,6 +702,7 @@ export async function completeSetup(
     log.warn({ err, org: org.login }, "reading an organization's plan failed");
   }
   await orgChanged(db, org.id, query.state);
+  return org.id;
 }
 
 // ---------------------------------------------------------------- avatar

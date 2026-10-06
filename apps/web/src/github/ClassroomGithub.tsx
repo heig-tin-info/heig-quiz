@@ -5,9 +5,9 @@
  * Not connected: one row and "Connect to GitHub", the one accent of the
  * Settings tab (F-ORG-13), which opens the connect sheet — the organizations
  * the App is installed on, the course's own suggested first, and the way to
- * install it on another one. GitHub's setup return raises a `classrooms`
- * hint (M2-02), which refetches both the picker and the link: the sheet
- * turns green without a reload.
+ * install it on another one. The install link leaves in the same tab and
+ * GitHub's setup return comes back to this sheet with `?installed=<org>`,
+ * which preselects the organization just recorded.
  *
  * Connected: the organization, its checks (`checks.ts`), and Disconnect —
  * refused `409 journal_attached` while the classroom has a journal (D28),
@@ -21,7 +21,8 @@
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { z } from "zod";
 
 import type { ClassroomDetail, GithubClassroom, GithubConnectBody, GithubOrg } from "@quiz/contracts";
 
@@ -30,6 +31,7 @@ import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { classroomGithubKey } from "../queryKeys";
+import { useSearchParam } from "../router";
 import {
   Badge,
   Button,
@@ -41,7 +43,6 @@ import {
   LevelIcon,
   LinkButton,
   OrgAvatar,
-  Progress,
   QueryError,
   RadioRow,
   SectionHeading,
@@ -148,8 +149,8 @@ function Connected({ room, github }: { room: ClassroomDetail; github: GithubClas
           </Button>
         </div>
         <ul aria-label={t("github.checks")} className="px-5 py-2">
-          {githubChecks(link).map((line) => (
-            <CheckRow key={line.id} line={line} installUrl={github.installUrl} />
+          {githubChecks(link, github.installUrl).map((line) => (
+            <CheckRow key={line.id} line={line} />
           ))}
         </ul>
       </Card>
@@ -159,20 +160,20 @@ function Connected({ room, github }: { room: ClassroomDetail; github: GithubClas
   );
 }
 
-function CheckRow({ line, installUrl }: { line: CheckLine; installUrl: string }) {
+function CheckRow({ line }: { line: CheckLine }) {
   const t = useT();
   return (
     <li className="flex items-start gap-3 py-2 text-sm" data-level={line.level}>
       <LevelIcon level={line.level} label={t(`github.level.${line.level}`)} className="mt-0.5" />
       <span className="min-w-0 flex-1 text-fg">{t(line.text, line.vars)}</span>
-      {line.fixOnGithub ? (
+      {line.action ? (
         <a
-          href={installUrl}
+          href={line.action.href}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex shrink-0 items-center gap-1 text-[13px] font-medium text-accent hover:underline"
         >
-          {t("github.check.fix")} <ExternalLink className="size-3.5" />
+          {t(line.action.label)} <ExternalLink className="size-3.5" />
         </a>
       ) : null}
     </li>
@@ -197,18 +198,18 @@ function ConnectSheet({
   const qc = useQueryClient();
   const toast = useToast();
   const orgs = useGithubOrgs();
-  const [picked, setPicked] = useState<string | null>(github.suggestedOrgId);
-  // What the list held when "Install" was clicked, and when it was read. The
-  // `classrooms` hint of the setup return refetches it (M2-02); the first
-  // installed organization that was not there is the new installation,
-  // picked for the teacher. Once the list has been read again the wait is
-  // over, new organization or not: a reinstall on one already listed must
-  // not spin forever.
-  const [before, setBefore] = useState<{ ids: ReadonlySet<string>; at: number } | null>(null);
+  // `installed` is the setup return's: the organization Quiz just recorded.
+  // It only preselects an organization of the list that can be picked, once,
+  // and is taken out of the address (a reload must not pick again).
+  const [installedParam, setInstalledParam] = useSearchParam("installed", "");
+  const [installedId] = useState(() => (z.uuid().safeParse(installedParam).success ? installedParam : null));
+  useEffect(() => {
+    if (installedParam !== "") setInstalledParam("");
+  }, [installedParam, setInstalledParam]);
+  const [picked, setPicked] = useState<string | null>(null);
   const list = orgs.data ?? [];
-  const refetched = before !== null && orgs.dataUpdatedAt > before.at;
-  const fresh = refetched ? list.find((o) => selectable(o) && !before.ids.has(o.id)) : undefined;
-  const effectivePick = picked ?? fresh?.id ?? null;
+  const installed = list.find((o) => o.id === installedId && selectable(o));
+  const effectivePick = picked ?? installed?.id ?? github.suggestedOrgId;
 
   const connect = useMutation({
     mutationFn: (orgId: string) =>
@@ -286,27 +287,15 @@ function ConnectSheet({
         <div className="space-y-2 border-t border-line pt-5">
           <p className="text-sm font-semibold">{t("github.installTitle")}</p>
           <p className="text-[13px] text-fg-muted">{t("github.installHint")}</p>
-          <LinkButton
-            href={github.installUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => {
-              setBefore({ ids: new Set(list.filter(selectable).map((o) => o.id)), at: orgs.dataUpdatedAt });
-              // The new organization is the one to pick, once it appears.
-              setPicked(null);
-            }}
-          >
-            <GithubIcon /> {t("github.install")} <ExternalLink />
+          {/* The same tab: GitHub's setup return lands back on this sheet. */}
+          <LinkButton href={github.installUrl}>
+            <GithubIcon /> {t("github.install")}
           </LinkButton>
-          {/* The live status: the `classrooms` hint of the setup return
-              refetches the list, and the new organization is picked. */}
           <div aria-live="polite">
-            {fresh ? (
+            {installed ? (
               <p className="flex items-center gap-2 text-[13px] text-success">
-                <LevelIcon level="ok" /> {t("github.installedOn", { login: fresh.login })}
+                <LevelIcon level="ok" /> {t("github.installedOn", { login: installed.login })}
               </p>
-            ) : before && !refetched ? (
-              <Progress label={t("github.waiting")} className="pt-1" />
             ) : null}
           </div>
         </div>

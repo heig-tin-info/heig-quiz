@@ -10,9 +10,9 @@ Projects, and a journal kept in a repository, live in your GitHub organization. 
 You need to be an **owner** of the GitHub organization. Quiz offers the installation from the classroom itself, so there is nothing to look for on GitHub:
 
 1. Open the classroom's **Settings** tab, **GitHub** section, and click **Connect to GitHub**.
-2. If your organization is not in the list, click **Install the App on GitHub** under *Not in the list?*. GitHub opens in a new tab.
+2. If your organization is not in the list, click **Install the App on GitHub** under *Not in the list?*. GitHub opens in the same tab.
 3. Install the App on the organization and give it access to **all repositories**. Quiz needs to see every repository to hand out sources, create the students' repositories and read their results; a partial access is reported as blocking.
-4. Back in Quiz, the list updates by itself and the organization is chosen. Click **Connect**.
+4. When you finish, GitHub brings you back to the same panel in Quiz, with the organization chosen and *Installed on* shown. Click **Connect**. (If you are not an owner, GitHub only sends a request to the owners and you come back with nothing chosen.)
 
 <figure markdown="span">
   ![The Connect to GitHub panel listing the organizations where the App is installed](../assets/screenshots/mock-classroom-settings-github-connect-light.png#only-light)
@@ -29,7 +29,7 @@ Once connected, the **GitHub** section shows the organization and three checks, 
 | Check | Meaning |
 | --- | --- |
 | **App installed, with access to all repositories** | The only **blocking** one. Without it no project can be created or accepted. |
-| **Plan** | On GitHub's *Free* plan an organization has no rulesets and no organization secrets for private repositories. Projects still work, but the deadline lock falls back to archiving the repository, and the LLM review cannot be configured. An Education organization has both. |
+| **Plan** | On GitHub's *Free* plan an organization has no rulesets and no organization secrets for private repositories. Projects still work, but the deadline lock falls back to archiving the repository, and the LLM review cannot be configured. An Education organization has both. The line links to **GitHub Education**, where a verified teacher upgrades an academic organization (a teacher not yet verified is offered to apply there). |
 | **`ANTHROPIC_API_KEY` secret** | The organization secret the LLM review of projects reads. If it is missing, the review does not run; everything else does. It shows *unknown* when the App cannot read secrets. |
 
 <figure markdown="span">

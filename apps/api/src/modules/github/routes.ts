@@ -130,6 +130,8 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
    * with no session. The installation is verified with the App's JWT before
    * anything is stored (service), and `state` is read as a classroom id
    * only, so the redirect is always an in-app path: never an open redirect.
+   * It is the same tab's round trip (the install link opens in place): the
+   * redirect lands on the connect sheet, `installed` naming the organization.
    */
   app.get("/setup/github/installed", async (req, reply) => {
     // Public, and each call reaches GitHub: counted per address.
@@ -138,14 +140,19 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
       return reply.code(429).header("retry-after", String(wait)).send({ error: "rate_limited" });
     }
     const query = GithubSetupQuery.parse(req.query ?? {});
+    let installed: string | null = null;
     try {
-      await service.completeSetup(app.db, config, query, req.log);
+      installed = await service.completeSetup(app.db, config, query, req.log);
     } catch (err) {
       // The teacher still lands back; the healing resolves it on the next open.
       req.log.error({ err }, "recording an installation failed");
     }
+    // Back in the tab the teacher left, on the connect sheet; `installed`
+    // only preselects an organization the sheet's own list must contain.
     return reply.redirect(
-      query.state === undefined ? "/" : `/classrooms/${query.state}/settings`,
+      query.state === undefined
+        ? "/"
+        : `/classrooms/${query.state}/settings?connect=1${installed === null ? "" : `&installed=${installed}`}`,
       303,
     );
   });

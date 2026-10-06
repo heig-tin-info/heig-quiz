@@ -184,7 +184,7 @@ describe("the setup return", () => {
     const room = await classroom("setup-refused");
     const res = await setup(`installation_id=9999&state=${room}`);
     expect(res.statusCode).toBe(303);
-    expect(res.headers.location).toBe(`/classrooms/${room}/settings`);
+    expect(res.headers.location).toBe(`/classrooms/${room}/settings?connect=1`);
     expect(gh.calls).toContain("GET api.github.com/app/installations/9999");
     const rows = await server.app.db
       .select()
@@ -205,6 +205,20 @@ describe("the setup return", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ login: "heig-setup", installationId: 81, status: "active", plan: "free" });
     expect(await audits("github_org.installation_resolved", rows[0]!.id)).toHaveLength(1);
+  });
+
+  it("lands on the connect sheet, naming the organization it recorded", async () => {
+    const room = await classroom("setup-return");
+    orgs = [installedOrg(611, "heig-return", 191)];
+    const res = await setup(`installation_id=191&setup_action=install&state=${room}`);
+    expect(res.statusCode).toBe(303);
+    const [row] = await server.app.db.select().from(githubOrganizations).where(eq(githubOrganizations.githubOrgId, 611));
+    expect(res.headers.location).toBe(`/classrooms/${room}/settings?connect=1&installed=${row!.id}`);
+    // Nothing recorded (a non-owner's request): the sheet alone.
+    const asked = await setup(`setup_action=request&state=${room}`);
+    expect(asked.headers.location).toBe(`/classrooms/${room}/settings?connect=1`);
+    // No state: home, installation or not.
+    expect((await setup("installation_id=191")).headers.location).toBe("/");
   });
 
   it("never redirects outside the application, whatever `state` says", async () => {
