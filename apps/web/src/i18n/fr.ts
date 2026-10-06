@@ -4493,6 +4493,7 @@ export const fr: Record<keyof Dict, string> = {
   "project.flag.conflict": "fichiers protégés en conflit",
   "project.flag.toVerify": "à vérifier",
   "project.flag.multiple": "plusieurs annotations GRADE",
+  "project.flag.clamped": "score CI négatif compté 0",
   "project.flag.malformed": "score mal formé",
   "project.flag.degraded": "verrouillé par archivage",
   "project.flag.noRuleset": "sans règle de protection",

@@ -409,7 +409,7 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
         latest.conclusion = "failure";
         latest.points = 3;
         latest.testsPassed = 3;
-        scored(3, seed.start + (i + 2) * 6 * H, { points: 0, max: 10, clamped: true, parseDetail: "-2/10" });
+        base.currentRunId = scored(3, seed.start + (i + 2) * 6 * H, { points: 0, max: 10, clamped: true, parseDetail: "-2/10" }).id;
         break;
       case 4:
         base.protectionSuspended = !locked;
@@ -851,6 +851,7 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
       toVerify: [r.currentRunId, r.frozenRunId, r.reviewRunId].some((id) => r.runs.find((x) => x.id === id)?.toVerify),
       multiple: r.runs.some((x) => x.parseStatus === "multiple"),
       malformed: latest?.parseStatus === "malformed" ? latest.parseDetail : null,
+      clamped: [r.currentRunId, r.frozenRunId, r.reviewRunId].some((id) => r.runs.find((x) => x.id === id)?.clamped),
       deleted: r.deleted,
       changedAfterRelease: r.released !== null && changedAfterRelease(true, final, r.released),
     },

@@ -136,6 +136,7 @@ export function repoFlags(repo: ProjectRepoView): RepoFlag[] {
   if (repo.flags.changedAfterRelease) flags.push({ key: "project.flag.changed", tone: "amber" });
   // ADR-070 §4 (M3-16b): an access GitHub has not revoked yet — the job retries it; never red.
   if (repo.accessToRevoke) flags.push({ key: "project.flag.accessToRevoke", tone: "amber" });
+  if (repo.flags.clamped) flags.push({ key: "project.flag.clamped", tone: "amber" });
   if (repo.flags.malformed !== null) flags.push({ key: "project.flag.malformed", tone: "zinc" });
   if (repo.degraded) flags.push({ key: repo.archived ? "project.flag.degraded" : "project.flag.noRuleset", tone: "zinc" });
   return flags;

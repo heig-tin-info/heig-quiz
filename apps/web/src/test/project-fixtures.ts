@@ -73,6 +73,7 @@ export function makeRepo(n: number, over: Partial<ProjectRepoView> = {}): Projec
       toVerify: false,
       multiple: false,
       malformed: null,
+      clamped: false,
       deleted: false,
       changedAfterRelease: false,
     },

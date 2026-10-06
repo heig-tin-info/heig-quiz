@@ -665,7 +665,8 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
       });
       await run(mine.id, { parseStatus: "multiple", points: null, max: null });
       // A negative CI score counted 0 (M3-14n): the student sees 0, never the flag nor what the CI printed.
-      await run(mine.id, { points: 0, max: 10, parseDetail: "-3.75/10" });
+      const clamped = await run(mine.id, { points: 0, max: 10, parseDetail: "-3.75/10", clamped: true });
+      const flagged = (await repoOf(lab.id, first.id)).currentGradeRunId;
 
       const admin = await server.signIn("admin");
       const impersonation = await sessionOf(first.id, { kind: "impersonation", actorUserId: admin.id });
@@ -681,6 +682,10 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
         await resend(lab.id, first.headers);
       };
       const from = studentBodies.length;
+      // The clamped run is the one shown: the student reads a plain 0 (M3-14n).
+      await setRepo(mine.id, { currentGradeRunId: clamped });
+      expect((await view(lab.id, first.headers)).repo!.score).toMatchObject({ points: 0, max: 10 });
+      await setRepo(mine.id, { currentGradeRunId: flagged });
       await read();
       // Locked, frozen, then released: the own comment and score come out, nothing else.
       // Past the deadline: the first student pushed again (the row's head moved) and a late run scored it.

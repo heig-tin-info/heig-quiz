@@ -1,0 +1,1 @@
+ALTER TABLE "project_grade_runs" ADD COLUMN "clamped" boolean DEFAULT false NOT NULL;

@@ -49,7 +49,8 @@ const PARSE_DETAIL_MAX = 500;
 
 /** The raw GRADE message a run keeps: a malformed one's reason, a clamped one's negative score. */
 function parseDetailOf(score: ScoreParse | null): string | null {
-  if (score?.status === "malformed" || (score?.status === "ok" && score.clamped)) return score.message.slice(0, PARSE_DETAIL_MAX);
+  if (score?.status === "malformed") return score.message.slice(0, PARSE_DETAIL_MAX);
+  if (score?.status === "ok" && score.clamped) return score.message.slice(0, PARSE_DETAIL_MAX);
   return null;
 }
 
@@ -419,6 +420,7 @@ export async function ingestCompletedRun(
         testsTotal: tests?.total ?? null,
         // Another workflow than grading.yml: a pass / fail run, no score.
         parseStatus: score?.status ?? "fallback",
+        clamped: score?.status === "ok" && score.clamped,
         // Kept for a malformed score, and for a clamped one (M3-14n): the raw message.
         parseDetail: parseDetailOf(score),
         kind,

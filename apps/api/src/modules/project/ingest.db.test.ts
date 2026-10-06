@@ -935,7 +935,7 @@ describe("a completed run (F-PROJ-10, ADR-011)", () => {
     const payload = runPayload(f, after);
     await handled("workflow_run", payload);
     const run = await runOf(f, payload.workflow_run.id);
-    expect(run).toMatchObject({ parseStatus: "ok", points: 0, max: 6, parseDetail: "-2/6" });
+    expect(run).toMatchObject({ parseStatus: "ok", points: 0, max: 6, parseDetail: "-2/6", clamped: true });
     expect((await repoRow(f.projectId)).currentGradeRunId).toBe(run!.id);
   });
 

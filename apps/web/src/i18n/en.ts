@@ -4504,6 +4504,7 @@ export const en = {
   "project.flag.conflict": "protected files in conflict",
   "project.flag.toVerify": "to verify",
   "project.flag.multiple": "several GRADE annotations",
+  "project.flag.clamped": "negative CI score counted 0",
   "project.flag.malformed": "malformed score",
   "project.flag.degraded": "locked by archiving",
   "project.flag.noRuleset": "no protection ruleset",
