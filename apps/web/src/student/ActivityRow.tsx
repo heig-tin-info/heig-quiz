@@ -18,9 +18,9 @@ import {
   Card,
   isoDateTime,
   isPlainClick,
+  IconTip,
   LinkButton,
   MetaLine,
-  Tip,
   type IconType,
   type Tone,
 } from "../ui";
@@ -70,7 +70,11 @@ export interface RowKind {
   icon: IconType;
 }
 
-/** Where the activity stands: a badge beside the title (green done or open, amber to do or running, zinc neutral). */
+/**
+ * Where the activity stands: a badge beside the title. One rule for every
+ * kind: green is under way or done, amber waits on the student, zinc is
+ * closed or neutral.
+ */
 export interface RowStatus {
   label: string;
   tone: Tone;
@@ -93,6 +97,7 @@ export function ActivityRow({
   where,
   status,
   meta,
+  workMeta,
   action,
 }: {
   kind: RowKind;
@@ -104,18 +109,15 @@ export function ActivityRow({
   status?: RowStatus | undefined;
   /** The card's facts: `MetaItem`s, drawn in one wrapping line. */
   meta?: React.ReactNode;
+  /** A second line of facts, under `meta`: a project's work on its repository. */
+  workMeta?: React.ReactNode;
   action?: RowAction | undefined;
 }) {
-  const KindIcon = kind.icon;
   return (
     <Card className="flex flex-wrap items-center gap-x-5 gap-y-3 p-5">
       <div className="min-w-0 flex-1 basis-60">
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-          <Tip label={kind.label}>
-            <span role="img" aria-label={kind.label} tabIndex={0} className="inline-flex rounded-sm">
-              <KindIcon className="size-4 shrink-0 text-fg-faint" />
-            </span>
-          </Tip>
+          <IconTip icon={kind.icon} label={kind.label} />
           <p className="min-w-0 text-[17px] font-bold leading-snug tracking-tight">
             {link ? (
               <a
@@ -137,6 +139,7 @@ export function ActivityRow({
         </div>
         {where ? <p className="mt-0.5 text-sm text-fg-muted">{where}</p> : null}
         {meta ? <MetaLine className="mt-1.5">{meta}</MetaLine> : null}
+        {workMeta ? <MetaLine className="mt-1">{workMeta}</MetaLine> : null}
       </div>
       {action ? <RowActionControl action={action} /> : null}
     </Card>

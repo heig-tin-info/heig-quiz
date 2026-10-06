@@ -600,10 +600,12 @@ live in `ui/state.ts`, each written once.
   button with two different class lists.
 - MetaItem / MetaLine (`ui/meta.tsx`): the small facts under a title — a
   deadline, a commit, a score. An item is an icon (lucide, `size-3.5`,
-  `fg-faint`, decoration) and its text at 13 px `fg-muted`; `label` names an
-  icon that says what the text does not (a lock on a frozen score) in a `Tip`
-  and for a screen reader. A `MetaLine` wraps its items (16 px between, 4 px
-  between wrapped rows). A badge may sit among them (the CI status).
+  `fg-faint`, decoration) and its text at 13 px `fg-muted`; an icon never
+  carries a meaning the text lacks (a frozen score says "at the deadline" in
+  words). A `MetaLine` wraps its items (16 px between, 4 px between wrapped
+  rows). A badge may sit among them (the CI status). `IconTip` is the other
+  icon of this family: an icon that stands for a word (a card's kind), an
+  image named for a screen reader and by a `Tip` on hover, not a tab stop.
 - Breadcrumb (`ui/breadcrumb.tsx`): the trail of ancestors of a page in the
   `PageHeader` eyebrow, `Courses › Classroom › Page`. A `nav` named by the
   caller, an ordered list; ancestors are real links (`href`, routed in the
@@ -1802,24 +1804,26 @@ product owner 2026-10-06; `ActivityRow` in `student/ActivityRow.tsx`):
 - A **kind icon** (lucide, `size-4`, `fg-faint`) before the title: exam
   `FileCheck2`, exercise `PencilLine`, poll `ChartNoAxesColumn`, project
   `FolderGit2`, groups `Users`, drill `Repeat`. It replaces the old kind
-  badge. It is named by a `Tip` and by its accessible name (`role="img"`,
-  focusable so a tap on a phone shows the tip): the kind word stays in the
-  card's accessible text.
+  badge. It is an `IconTip`: named by a `Tip` on hover and by its accessible
+  name (`role="img"`), so the kind word stays in the card's accessible text.
 - The **title** (17 px bold; a link for a project and a group set) and the
   **status badge** beside it, wrapping under it on a phone. Tones: amber when
-  a step waits on the student (to accept, open, no group yet), green when it
-  is under way or done (in progress, handed in, scores published), zinc when
-  it is over or neutral (locked, time was up, not started). A locked or
-  closed project wears `Lock` in its badge. Never the accent. A count is not
+  a step waits on the student (to accept, open, no group yet, a live poll to
+  answer), green when it is under way or done (in progress, handed in,
+  scores published, drill available), zinc when it is over or neutral
+  (locked, time was up, not started). One table per kind
+  (`PROJECT_STATUS_TONE` for projects); a locked project wears `Lock` in
+  its badge. Never the accent. A count is not
   a status: it stays plain text among the items.
 - The **meta line** (`MetaLine` of `MetaItem`s), never one string joined by
-  " · ". A project: the deadline (`CalendarClock`: the date and the time left,
-  or "Closed … ago"), the commit (`GitCommitHorizontal`: short hash in mono,
-  date, number of commits), the CI badge ONLY when a run exists (never a
-  dash in prose), the indicative score (`Gauge`, or `Lock` once frozen at the
-  deadline; the word "indicative" is visible text; none after the release),
-  and the state the work is in. `ProjectMeta` is the one definition, drawn
-  by the card and by the project page's header.
+  " · ". A project's card has two deliberate lines: first the timing
+  (`CalendarClock`: the date and the time left, or "Closed … ago", then what
+  the state adds), then, once a repository is ready, the work: the commit
+  (`GitCommitHorizontal`: short hash in mono, date, number of commits), the
+  CI badge ONLY when a run exists (never a dash in prose), the indicative
+  score (`Gauge`, or `Lock` once frozen, with "indicative" and "at the
+  deadline" as visible text; none after the release). The timing and the
+  commit are one definition shared with the project page's header.
 - **One button**, right. Its label may wear the GitHub mark (`GithubIcon`,
   `RowAction.icon`) when it leads to GitHub or to linking the account;
   never the accent for the mark. The accent is the button's alone, and
@@ -1829,10 +1833,14 @@ product owner 2026-10-06; `ActivityRow` in `student/ActivityRow.tsx`):
   first lines, the items wrapping under them, the button on its own row.
 
 The student's project page (`/projects/:id`) is the same card grown to a
-page: the shell's width, a `Breadcrumb` in the eyebrow, the title with the
-same status badge, the same meta items, the same button, then the
-repository, the latest CI run, and the score (or the result after the
-release) as stat cards, at the rhythm of an evaluation's results page.
+page: the shell's width, a `Breadcrumb` in the eyebrow, the title alone in
+the `h1`, then one line with the same status badge, the same timing and
+commit (named "Last commit" or "Evaluated commit" in words), and the same
+button; below, the repository (the invitation only while pending), the
+latest CI run, and the score (or the result after the release) as stat
+cards and a teacher's comment in one frame, at the rhythm of an
+evaluation's results page. The CI and the score are not repeated in the
+header.
 
 ## The participant's poll page (`/p/:CODE`)
 

@@ -3,23 +3,12 @@ import { Lock } from "lucide-react";
 import { describe, expect, it, vi } from "vitest";
 
 import { Breadcrumb } from "./breadcrumb";
-import { MetaItem, MetaLine } from "./meta";
+import { IconTip } from "./meta";
 
-describe("MetaItem", () => {
-  it("draws a decorative icon beside its text", () => {
-    const { container } = render(
-      <MetaLine>
-        <MetaItem icon={Lock}>indicative</MetaItem>
-      </MetaLine>,
-    );
-    expect(screen.getByText("indicative")).toBeInTheDocument();
-    expect(screen.queryByRole("img")).toBeNull();
-    expect(container.querySelector("svg")).toHaveClass("size-3.5", "text-fg-faint");
-  });
-
-  it("names an icon that carries a meaning the text does not", () => {
-    render(<MetaItem icon={Lock} label="Score at the deadline">7 / 10</MetaItem>);
-    expect(screen.getByRole("img", { name: "Score at the deadline" })).toBeInTheDocument();
+describe("IconTip", () => {
+  it("names its icon for a screen reader", () => {
+    render(<IconTip icon={Lock} label="Project" />);
+    expect(screen.getByRole("img", { name: "Project" })).toBeInTheDocument();
   });
 });
 

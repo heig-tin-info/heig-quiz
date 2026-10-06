@@ -2473,7 +2473,6 @@ export const en = {
   "sproj.staffTest": "Your teacher test repository: it counts nowhere and no student sees it",
   "sproj.readOnly.noSeat": "Read-only view: you hold no seat in this classroom. Use \u201cJoin as student\u201d on the classroom page to test this project",
   "sproj.invitation.pending": "Invitation pending on GitHub",
-  "sproj.invitation.accepted": "Invitation accepted",
   "sproj.locked": "Read-only since the deadline",
   // F-PROJ-21 (M3-09c): the page's notices, from the re-read of the student's own repository.
   "sproj.notice.accepted": "Invitation accepted: the repository is yours.",
@@ -2502,6 +2501,7 @@ export const en = {
   "sproj.commits.one": "1 commit",
   "sproj.commits": "{n} commits",
   "sproj.closed": "Closed {when}",
+  "sproj.score.frozenShort": "at the deadline",
   "sproj.score": "Score",
   "sproj.score.current": "Indicative score",
   "sproj.score.frozen": "Score at the deadline",

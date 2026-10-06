@@ -15,8 +15,9 @@
  *
  * It is the shell's width, like the classroom page it hangs from, and the
  * rhythm of an evaluation's results page (M3-14l). The header is the card's:
- * the status badge beside the title and the card's meta items (`ProjectMeta`,
- * one definition for both), the action with the GitHub mark.
+ * the status badge and the card's timing and commit items, in one line under
+ * the title (one definition for both), the action with the GitHub mark; the
+ * CI run and the score have their own sections below, not the header.
  *
  * The four decisions:
  *   - Type: the project's title at the page-title step; the score at the
@@ -58,9 +59,10 @@ import {
   Stat,
 } from "../ui";
 import { RowActionControl, StatusBadge } from "./ActivityRow";
-import { ProjectMeta, projectStatus, useProjectAction, useStudentReadOnly } from "./ProjectRow";
+import { notStarted, ProjectCommitMeta, ProjectTimingMeta, projectStatus, useProjectAction, useStudentReadOnly } from "./ProjectRow";
 import {
   factsOfProject,
+  hasState,
   projectActionKind,
   REREAD_REFUSALS,
   scorePoints,
@@ -122,8 +124,6 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
   const kind = projectActionKind(facts, now);
   const action = useProjectAction(facts, { now, primary: true, readOnly });
   const live = project.repo && !project.repo.deleted ? project.repo : null;
-  // After the release the final score replaces the indicative one (N-SEC-21).
-  const work = live && project.release ? { ...live, score: null } : live;
   const go = (route: Route) => ({ href: routeToPath(route), onNavigate: () => navigate(route) });
 
   return (
@@ -139,18 +139,16 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
             ]}
           />
         }
-        title={
-          <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            {project.title}
-            <StatusBadge status={projectStatus(project.status, t)} />
-          </span>
-        }
+        title={project.title}
         description={
           <>
-            <p>{project.courseCode}</p>
-            <div data-coach="sproj.deadline" className="mt-1.5">
+            <div data-coach="sproj.deadline">
               <MetaLine>
-                <ProjectMeta project={project} facts={facts} work={work} now={now} />
+                <StatusBadge status={projectStatus(project.status, t)} />
+                <ProjectTimingMeta project={project} now={now} />
+                {live && !notStarted(project, now) ? (
+                  <ProjectCommitMeta work={live} evaluated={Date.parse(project.deadlineAt) <= now || live.locked} named />
+                ) : null}
               </MetaLine>
             </div>
             {readOnly ? (
@@ -178,7 +176,7 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
               ? t("sproj.repo.toAccept")
               : kind === "notStarted"
                 ? t("sproj.repo.notStarted", { when: isoDateTime(project.startAt) })
-                : t(STATE_KEY[kind] ?? "sproj.repo.toAccept")}
+                : t(hasState(kind) ? STATE_KEY[kind] : "sproj.repo.toAccept")}
           </Card>
         )}
       </section>
@@ -195,9 +193,9 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
 }
 
 /**
- * The student's live repository: its name on GitHub, their invitation (and
- * the Resend while it waits) and its lock. The commit it stands on and the
- * score are the header's items; the run is {@link RunSection}.
+ * The student's live repository: its name on GitHub, their invitation while
+ * it waits (with the Resend) and its lock. The commit it stands on is the
+ * header's; the run and the score have their own sections.
  */
 function RepoCard({
   project,
@@ -221,10 +219,12 @@ function RepoCard({
         <span className="truncate">{repo.fullName}</span>
         <ExternalLink className="size-3.5 shrink-0 text-fg-faint" aria-hidden />
       </a>
-      <p className="flex flex-wrap items-center gap-3">
-        <span>{t(repo.invitation === "pending" ? "sproj.invitation.pending" : "sproj.invitation.accepted")}</span>
-        {repo.invitation === "pending" && !readOnly ? <ResendButton projectId={project.id} /> : null}
-      </p>
+      {repo.invitation === "pending" ? (
+        <p className="flex flex-wrap items-center gap-3">
+          <span>{t("sproj.invitation.pending")}</span>
+          {!readOnly ? <ResendButton projectId={project.id} /> : null}
+        </p>
+      ) : null}
       {repo.locked ? <p className="text-fg-muted">{t("sproj.locked")}</p> : null}
     </Card>
   );
@@ -289,7 +289,7 @@ function ScoreSection({ repo }: { repo: StudentProjectRepo }) {
     <section className="space-y-3" data-coach="sproj.score">
       <SectionHeading title={t("sproj.score")} />
       {repo.score ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Stat
             label={t(repo.score.frozen ? "sproj.score.frozen" : "sproj.score.current")}
             value={scorePoints(repo.score.points, repo.score.max)}
@@ -312,16 +312,14 @@ function ReleaseSection({ release }: { release: NonNullable<StudentProject["rele
   return (
     <section className="space-y-3" data-coach="sproj.score">
       <SectionHeading title={t("sproj.result")} description={t("sproj.result.publishedAt", { when: isoDateTime(release.at) })} />
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Stat label={t("sproj.score.final")} value={release.points === null ? "—" : scorePoints(release.points, release.max)} />
         {release.grade ? <Stat label={t("results.col.grade")} value={<Grade value={release.grade.grade} />} /> : null}
       </div>
       {release.comment ? (
-        <Card className="p-5">
-          <NotePanel eyebrow={t("feedback.comment")} tone="outlined">
-            <p className="whitespace-pre-wrap text-sm">{release.comment}</p>
-          </NotePanel>
-        </Card>
+        <NotePanel eyebrow={t("feedback.comment")} tone="outlined">
+          <p className="whitespace-pre-wrap text-sm">{release.comment}</p>
+        </NotePanel>
       ) : null}
     </section>
   );

@@ -65,20 +65,6 @@ import { SebLaunchModal } from "./SebLaunchModal";
 
 export { ActivityRow, leftLine, startsLine, type RowAction } from "./ActivityRow";
 
-/** One fact of a card before it is drawn: an icon and its words. */
-export interface Meta {
-  icon: IconType;
-  text: string;
-}
-
-/** The facts of a card as `MetaItem`s, for `ActivityRow`'s `meta`. */
-export const metaItems = (items: readonly Meta[]): ReactNode =>
-  items.map((m, i) => (
-    <MetaItem key={i} icon={m.icon}>
-      {m.text}
-    </MetaItem>
-  ));
-
 /** The icon of a kind of evaluation, the first thing on its card (named by a `Tip`). */
 const MODE_ICON = {
   exam: FileCheck2,
@@ -105,18 +91,23 @@ function primaryAction(card: EvaluationCardData, t: TFunction): string {
  * "Continue" opens. Before the time left: it names the attempt, the time
  * left is about the evaluation.
  */
-function timingMeta(card: EvaluationCardData, now: number, t: TFunction): Meta[] {
-  const left = timeLeftMeta(card, now, t);
-  if (card.attemptState !== "in_progress" || card.attemptStartedAt === null) return left;
-  return [{ icon: History, text: t("shome.startedAt", isoDateParts(card.attemptStartedAt)) }, ...left];
+function timingMeta(card: EvaluationCardData, now: number, t: TFunction): ReactNode {
+  return (
+    <>
+      {card.attemptState === "in_progress" && card.attemptStartedAt !== null ? (
+        <MetaItem icon={History}>{t("shome.startedAt", isoDateParts(card.attemptStartedAt))}</MetaItem>
+      ) : null}
+      {timeLeftMeta(card, now, t)}
+    </>
+  );
 }
 
-function timeLeftMeta(card: EvaluationCardData, now: number, t: TFunction): Meta[] {
+function timeLeftMeta(card: EvaluationCardData, now: number, t: TFunction): ReactNode {
   // The attempt's own deadline while it is ahead; the evaluation's closing otherwise.
-  if (card.deadlineAt !== null && Date.parse(card.deadlineAt) > now) return [{ icon: Clock, text: leftLine(card.deadlineAt, now, t) }];
-  if (card.closesAt !== null) return [{ icon: Clock, text: leftLine(card.closesAt, now, t) }];
-  if (card.durationS !== null) return [{ icon: Timer, text: t("shome.duration", { n: Math.round(card.durationS / 60) }) }];
-  return [];
+  if (card.deadlineAt !== null && Date.parse(card.deadlineAt) > now) return <MetaItem icon={Clock}>{leftLine(card.deadlineAt, now, t)}</MetaItem>;
+  if (card.closesAt !== null) return <MetaItem icon={Clock}>{leftLine(card.closesAt, now, t)}</MetaItem>;
+  if (card.durationS !== null) return <MetaItem icon={Timer}>{t("shome.duration", { n: Math.round(card.durationS / 60) })}</MetaItem>;
+  return null;
 }
 
 /** A finished attempt: handed in, or closed by time or by the teacher. */
@@ -143,30 +134,30 @@ export function PendingLine({ count, className }: { count: number; className?: s
  * the score that counts (best or last) and how many attempts were taken.
  * The score is all the student reads between two attempts (ADR-025).
  */
-function retakeMeta(card: EvaluationCardData, t: TFunction): Meta[] {
+function retakeMeta(card: EvaluationCardData, t: TFunction): ReactNode {
   const r = card.retakes;
-  if (r === null) return [];
-  const items: Meta[] = [];
-  // `score` is null once the exercise is closed and the feedback policy
-  // hides it (on release, none): the card says no more than the feedback page.
-  if (r.kept !== null && r.kept.score !== null) {
-    items.push({
-      icon: Award,
-      text: t(r.keep === "best" ? "shome.kept.best" : "shome.kept.last", {
-        points: formatPoints(r.kept.score.points),
-        total: formatPoints(r.kept.score.totalPoints),
-      }),
-    });
-  }
-  items.push({
-    icon: Repeat,
-    text:
-      r.maxAttempts === null
-        ? t("shome.attempts", { n: r.attemptCount })
-        : t("shome.attemptsOf", { n: r.attemptCount, max: r.maxAttempts }),
-  });
-  if (r.kept?.score?.pendingCount) items.push({ icon: Hourglass, text: pendingLabel(r.kept.score.pendingCount, t) });
-  return items;
+  if (r === null) return null;
+  const score = r.kept?.score ?? null;
+  return (
+    <>
+      {/* `score` is null once the exercise is closed and the feedback policy
+          hides it (on release, none): the card says no more than the feedback page. */}
+      {score !== null ? (
+        <MetaItem icon={Award}>
+          {t(r.keep === "best" ? "shome.kept.best" : "shome.kept.last", {
+            points: formatPoints(score.points),
+            total: formatPoints(score.totalPoints),
+          })}
+        </MetaItem>
+      ) : null}
+      <MetaItem icon={Repeat}>
+        {r.maxAttempts === null
+          ? t("shome.attempts", { n: r.attemptCount })
+          : t("shome.attemptsOf", { n: r.attemptCount, max: r.maxAttempts })}
+      </MetaItem>
+      {score?.pendingCount ? <MetaItem icon={Hourglass}>{pendingLabel(score.pendingCount, t)}</MetaItem> : null}
+    </>
+  );
 }
 
 /** ADR-051 §2: an exam sat on a kiosk station and nowhere else. */
@@ -177,8 +168,8 @@ const kioskOnly = (card: EvaluationCardData): boolean =>
  * The facts of an open card: where to sit it for a kiosk-only exam, the
  * retake count once done, the time left otherwise.
  */
-export function openMeta(card: EvaluationCardData, now: number, t: TFunction): Meta[] {
-  if (kioskOnly(card)) return [{ icon: Monitor, text: t("shome.kiosk") }];
+export function openMeta(card: EvaluationCardData, now: number, t: TFunction): ReactNode {
+  if (kioskOnly(card)) return <MetaItem icon={Monitor}>{t("shome.kiosk")}</MetaItem>;
   return card.retakes !== null && finished(card) ? retakeMeta(card, t) : timingMeta(card, now, t);
 }
 
@@ -189,20 +180,27 @@ export function openMeta(card: EvaluationCardData, now: number, t: TFunction): M
  * instead of on an empty page. A score already shown (between two attempts)
  * needs no such note. How the attempt ended is the status badge's.
  */
-export function pastMeta(card: EvaluationCardData, t: TFunction): Meta[] {
-  const items = card.retakes !== null && card.attemptId !== null ? retakeMeta(card, t) : [];
+export function pastMeta(card: EvaluationCardData, t: TFunction): ReactNode {
   const waiting = finished(card) && card.results === "pending" && !card.retakes?.kept?.score;
-  return waiting ? [...items, { icon: Hourglass, text: t("shome.resultsPending") }] : items;
+  return (
+    <>
+      {card.retakes !== null && card.attemptId !== null ? retakeMeta(card, t) : null}
+      {waiting ? <MetaItem icon={Hourglass}>{t("shome.resultsPending")}</MetaItem> : null}
+    </>
+  );
 }
 
-export function upcomingMeta(card: EvaluationCardData, now: number, t: TFunction): Meta[] {
-  return [{ icon: CalendarClock, text: card.opensAt === null ? t("shome.upcoming.empty") : startsLine(card.opensAt, now, t) }];
+export function upcomingMeta(card: EvaluationCardData, now: number, t: TFunction): ReactNode {
+  return (
+    <MetaItem icon={CalendarClock}>
+      {card.opensAt === null ? t("shome.upcoming.empty") : startsLine(card.opensAt, now, t)}
+    </MetaItem>
+  );
 }
 
 /**
- * Where an evaluation stands, as its badge (amber waits on the student,
- * green is under way or done, zinc is over without a result to read); none
- * while it is only coming up.
+ * Where an evaluation stands, as its badge (the cards' one tone rule, see
+ * `RowStatus`); none while it is only coming up.
  */
 export function evaluationStatus(card: EvaluationCardData, group: StudentActivityGroup, t: TFunction): RowStatus | undefined {
   if (group === "upcoming") return undefined;
@@ -332,7 +330,7 @@ export function EvaluationRow({
 }: {
   card: EvaluationCardData;
   group: StudentActivityGroup;
-  meta: readonly Meta[];
+  meta: ReactNode;
   action?: RowAction | undefined;
   showWhere?: boolean;
 }) {
@@ -343,7 +341,7 @@ export function EvaluationRow({
       title={card.title}
       where={showWhere ? `${card.courseCode} · ${card.classroomName}` : undefined}
       status={evaluationStatus(card, group, t)}
-      meta={metaItems(meta)}
+      meta={meta}
       action={action}
     />
   );
@@ -373,7 +371,7 @@ export function PollRow({
       title={t("shome.poll.title")}
       where={showWhere ? `${poll.courseCode} · ${poll.classroomName}` : undefined}
       status={{ label: t("shome.poll.status"), tone: "amber" }}
-      meta={metaItems([{ icon: Presentation, text: t("shome.poll.line") }])}
+      meta={<MetaItem icon={Presentation}>{t("shome.poll.line")}</MetaItem>}
       action={{
         label: t("shome.poll.answer"),
         primary,

@@ -123,9 +123,8 @@ describe("the state of the work (M3-14i)", () => {
     mockFetch({});
     const frozen = { ...work, score: { points: 4, max: 6, grade: null, frozen: true } };
     render(card({ status: "locked", invitation: "accepted", ...REPO, work: frozen, deadlineAt: at(-1) }), { group: "past" });
-    expect(await screen.findByRole("img", { name: "Score at the deadline" })).toBeInTheDocument();
-    expect(screen.getByText("4 / 6")).toBeInTheDocument();
-    expect(screen.getByText(/indicative/)).toBeInTheDocument();
+    expect(await screen.findByText("4 / 6")).toBeInTheDocument();
+    expect(screen.getByText(/indicative · at the deadline/)).toBeInTheDocument();
     expect(screen.getByText(/^Closed /)).toBeInTheDocument();
   });
 

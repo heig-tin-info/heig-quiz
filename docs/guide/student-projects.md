@@ -66,8 +66,8 @@ Clone your repository on your computer as you would any GitHub repository (`git 
 Under **Score**, the page shows the score of the latest commit that was graded: points out of a maximum, with the run it comes from (**See the run on GitHub**). It is marked **indicative**. It moves with every push, and it is not your grade.
 
 <figure markdown="span">
-  ![The project page: the repository with its last commit and a passing badge, then the indicative score 34 / 40 and an indicative grade](../assets/screenshots/student-project-score-light.png#only-light)
-  ![The project page: the repository with its last commit and a passing badge, then the indicative score 34 / 40 and an indicative grade](../assets/screenshots/student-project-score-dark.png#only-dark)
+  ![The project page: the status and the last commit under the title, the repository, the latest CI run with a passing badge, then the indicative score 34 / 40 and an indicative grade](../assets/screenshots/student-project-light.png#only-light)
+  ![The project page: the status and the last commit under the title, the repository, the latest CI run with a passing badge, then the indicative score 34 / 40 and an indicative grade](../assets/screenshots/student-project-dark.png#only-dark)
   <figcaption>The indicative score, from the latest graded commit.</figcaption>
 </figure>
 

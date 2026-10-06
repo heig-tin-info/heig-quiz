@@ -43,14 +43,16 @@ import {
   factsOfCard,
   invitationHref,
   PROJECT_STATUS_KEY,
+  hasState,
   projectActionKind,
-  type ProjectActionKind,
+  PROJECT_STATUS_TONE,
   REREAD_REFUSALS,
   scorePoints,
   STATE_KEY,
   studentRefusalCode,
   studentRefusalMessage,
   type ProjectFacts,
+  type StateKind,
 } from "./projectRow";
 
 /**
@@ -116,23 +118,14 @@ export function useProjectAction(
   return null;
 }
 
-/** The status badge of a project (F-PROJ-04): amber waits on the student, green is under way or done, zinc is closed. */
-export function projectStatus(status: StudentProjectStatus, t: TFunction): RowStatus {
-  const label = t(PROJECT_STATUS_KEY[status]);
-  switch (status) {
-    case "to_accept":
-      return { label, tone: "amber" };
-    case "in_progress":
-      return { label, tone: "green" };
-    case "locked":
-      return { label, tone: "zinc", icon: Lock };
-    case "released":
-      return { label, tone: "green" };
-  }
-}
+/** The status badge of a project (F-PROJ-04), toned by `PROJECT_STATUS_TONE`. */
+export const projectStatus = (status: StudentProjectStatus, t: TFunction): RowStatus => ({
+  label: t(PROJECT_STATUS_KEY[status]),
+  ...PROJECT_STATUS_TONE[status],
+});
 
-/** What a state says beside the deadline, with the icon that marks it (`STATE_KEY` holds the words). */
-const STATE_ICON: Partial<Record<ProjectActionKind, IconType>> = {
+/** What a state says beside the deadline, with the icon that marks it. */
+const STATE_ICON: Record<StateKind, IconType> = {
   link: GithubIcon,
   invitation: MailCheck,
   deleted: TriangleAlert,
@@ -145,71 +138,87 @@ function deadlineText(deadlineAt: string, now: number, locale: "en" | "fr", t: T
   return t("sproj.closed", { when: relativeTime(deadlineAt, now, locale, t) });
 }
 
+/** Whether the project is still to start: the card's group and the page's header read the same clock. */
+export const notStarted = (project: Pick<StudentProjectCard, "startAt">, now: number): boolean => Date.parse(project.startAt) > now;
+
 /**
- * The facts of a project, as `MetaItem`s (merge task M3-14l), ONE definition
- * for the card and the project page's header: the start while it waits, else
- * the deadline (with the time left, or how long ago it closed); on the card
- * (`withState`), what the state adds — an invitation to accept, a repository
- * GitHub lost, a project never accepted — and, to a read-only reader, why
- * there is no button; then, once the repository is ready, the commit the
- * work stands on, its CI badge ONLY when a run exists, and the indicative
- * score (a lock when frozen at the deadline; none once released, N-SEC-21).
+ * The card's and the page's shared facts (merge task M3-14l): the start while
+ * it waits, else the deadline (with the time left, or how long ago it closed).
  */
-export function ProjectMeta({
-  project,
-  facts,
-  work,
-  now,
-  group,
-  readOnly = false,
-  withState = false,
-}: {
-  project: Pick<StudentProjectCard, "startAt" | "deadlineAt">;
-  facts: ProjectFacts;
-  work: StudentProjectWork | null;
-  now: number;
-  group?: StudentActivityGroup;
-  readOnly?: boolean;
-  withState?: boolean;
-}) {
+export function ProjectTimingMeta({ project, now }: { project: Pick<StudentProjectCard, "startAt" | "deadlineAt">; now: number }) {
   const t = useT();
   const { locale } = useI18n();
-  const upcoming = group === "upcoming" || Date.parse(project.startAt) > now;
+  return (
+    <MetaItem icon={CalendarClock}>
+      {notStarted(project, now) ? startsLine(project.startAt, now, t) : deadlineText(project.deadlineAt, now, locale, t)}
+    </MetaItem>
+  );
+}
+
+/**
+ * The commit the work stands on — short hash, date, number of commits — or
+ * that there is none yet; shared by the card and the page's header. `named`
+ * writes which commit it is ("Last commit", "Evaluated commit") in front.
+ */
+export function ProjectCommitMeta({
+  work,
+  evaluated,
+  named = false,
+}: {
+  work: Pick<StudentProjectWork, "lastCommit" | "commits">;
+  evaluated: boolean;
+  named?: boolean;
+}) {
+  const t = useT();
+  const commit = work.lastCommit;
+  return (
+    <MetaItem icon={GitCommitHorizontal}>
+      {named ? <span className="mr-2">{t(evaluated ? "sproj.commit.evaluated" : "sproj.commit.last")}</span> : null}
+      {commit ? (
+        <span className="inline-flex flex-wrap items-baseline gap-x-2">
+          <span className="font-mono text-fg">{shortSha(commit.sha)}</span>
+          {commit.at ? <span>{isoDateTime(commit.at)}</span> : null}
+          {work.commits > 0 ? <span>{work.commits === 1 ? t("sproj.commits.one") : t("sproj.commits", { n: work.commits })}</span> : null}
+        </span>
+      ) : (
+        t("sproj.commit.none")
+      )}
+    </MetaItem>
+  );
+}
+
+/** The card's own addition to the timing line: what the state says, and why a read-only reader has no button. */
+function ProjectStateMeta({ facts, now, readOnly }: { facts: ProjectFacts; now: number; readOnly: boolean }) {
+  const t = useT();
   const kind = projectActionKind(facts, now);
-  const stateKey = withState && !upcoming ? STATE_KEY[kind] : undefined;
-  const StateIcon = STATE_ICON[kind] ?? CircleSlash;
-  const commit = work?.lastCommit ?? null;
-  const frozen = work?.score?.frozen ?? false;
-  const afterDeadline = Date.parse(project.deadlineAt) <= now || frozen;
   return (
     <>
-      {upcoming ? (
-        <MetaItem icon={CalendarClock}>{startsLine(project.startAt, now, t)}</MetaItem>
-      ) : (
-        <MetaItem icon={CalendarClock}>{deadlineText(project.deadlineAt, now, locale, t)}</MetaItem>
-      )}
-      {stateKey ? <MetaItem icon={StateIcon}>{t(stateKey)}</MetaItem> : null}
-      {work && !upcoming ? (
-        <MetaItem icon={GitCommitHorizontal} label={t(afterDeadline ? "sproj.commit.evaluated" : "sproj.commit.last")}>
-          {commit ? (
-            <span className="inline-flex flex-wrap items-baseline gap-x-2">
-              <span className="font-mono text-fg">{shortSha(commit.sha)}</span>
-              {commit.at ? <span>{isoDateTime(commit.at)}</span> : null}
-              {work.commits > 0 ? <span>{work.commits === 1 ? t("sproj.commits.one") : t("sproj.commits", { n: work.commits })}</span> : null}
-            </span>
-          ) : (
-            t("sproj.commit.none")
-          )}
-        </MetaItem>
-      ) : null}
-      {work && !upcoming && work.ciStatus !== "none" ? <CiBadge status={work.ciStatus} /> : null}
-      {work?.score ? (
-        <MetaItem icon={frozen ? Lock : Gauge} {...(frozen ? { label: t("sproj.score.frozen") } : {})}>
+      {hasState(kind) ? <MetaItem icon={STATE_ICON[kind]}>{t(STATE_KEY[kind])}</MetaItem> : null}
+      {readOnly ? <MetaItem icon={Eye}>{t("sproj.readOnly")}</MetaItem> : null}
+    </>
+  );
+}
+
+/**
+ * The card's second line, the work on a ready repository: the commit, the CI
+ * badge ONLY when a run exists, and the indicative score (a lock once frozen
+ * at the deadline; none once released, N-SEC-21). The page has its own
+ * sections for the last two.
+ */
+function ProjectWorkMeta({ work, deadlineAt, now }: { work: StudentProjectWork; deadlineAt: string; now: number }) {
+  const t = useT();
+  const frozen = work.score?.frozen ?? false;
+  return (
+    <>
+      <ProjectCommitMeta work={work} evaluated={Date.parse(deadlineAt) <= now || frozen} />
+      {work.ciStatus !== "none" ? <CiBadge status={work.ciStatus} /> : null}
+      {work.score ? (
+        <MetaItem icon={frozen ? Lock : Gauge}>
           <span className="font-semibold tabular-nums text-fg">{scorePoints(work.score.points, work.score.max)}</span>{" "}
           {t("sgrades.indicative")}
+          {frozen ? ` · ${t("sproj.score.frozenShort")}` : ""}
         </MetaItem>
       ) : null}
-      {withState && readOnly ? <MetaItem icon={Eye}>{t("sproj.readOnly")}</MetaItem> : null}
     </>
   );
 }
@@ -239,6 +248,7 @@ export function ProjectRow({
   const t = useT();
   const readOnly = useStudentReadOnly(true);
   const facts = factsOfCard(card);
+  const upcoming = group === "upcoming" || notStarted(card, now);
   const action = useProjectAction(facts, { now, primary, readOnly });
   const route = { view: "project", id: card.id } as const;
   return (
@@ -247,8 +257,14 @@ export function ProjectRow({
       title={card.title}
       link={{ href: routeToPath(route), onNavigate: () => navigate(route) }}
       where={showWhere ? `${card.courseCode} · ${card.classroomName}` : undefined}
-      status={group === "upcoming" ? undefined : projectStatus(card.status, t)}
-      meta={<ProjectMeta project={card} facts={facts} work={card.work} now={now} group={group} readOnly={readOnly} withState />}
+      status={upcoming ? undefined : projectStatus(card.status, t)}
+      meta={
+        <>
+          <ProjectTimingMeta project={card} now={now} />
+          {upcoming ? null : <ProjectStateMeta facts={facts} now={now} readOnly={readOnly} />}
+        </>
+      }
+      workMeta={card.work && !upcoming ? <ProjectWorkMeta work={card.work} deadlineAt={card.deadlineAt} now={now} /> : undefined}
       action={group === "upcoming" ? undefined : (action ?? undefined)}
     />
   );

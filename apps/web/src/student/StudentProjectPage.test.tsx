@@ -99,21 +99,22 @@ describe("a project in progress", () => {
   it("names the project, its classroom once, its deadline, the repository and the last commit", async () => {
     mockFetch({ [URL]: ok(project()) });
     const { navigate } = render();
-    expect(await screen.findByRole("heading", { level: 1, name: /Labo 1 — Pointeurs/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Labo 1 — Pointeurs" })).toBeInTheDocument();
     expect(screen.getByText("in progress")).toBeInTheDocument();
     expect(screen.getByText(/^Due [^·]+ · .* left$/)).toBeInTheDocument();
     expect(screen.getAllByText("PRG1-2026")).toHaveLength(1);
-    // The same facts as the card: the commit (named by its icon), the CI badge, the indicative score.
-    expect(screen.getByRole("img", { name: "Last commit" })).toBeInTheDocument();
+    // The header keeps the deadline, the status and the commit, named; the CI and the score have their sections.
+    expect(screen.getByText("Last commit")).toBeInTheDocument();
     expect(screen.getByText("3 commits")).toBeInTheDocument();
 
     const repo = screen.getByRole("link", { name: /heig\/labo-1-lea/ });
     expect(repo).toHaveAttribute("href", "https://github.com/heig/labo-1-lea");
     expect(repo).toHaveAttribute("target", "_blank");
     expect(screen.getAllByText("9a3f1c7")).toHaveLength(1);
-    // The CI badge: the card's one, and the run's section.
-    expect(screen.getAllByText("pass")).toHaveLength(2);
-    expect(screen.getByText("Invitation accepted")).toBeInTheDocument();
+    // The CI badge is the run's section, not the header's.
+    expect(screen.getAllByText("pass")).toHaveLength(1);
+    expect(screen.queryByText("PRG1")).toBeNull();
+    expect(screen.queryByText(/Invitation/)).toBeNull();
     expect(screen.queryByRole("button", { name: "Resend the invitation" })).toBeNull();
 
     // The breadcrumb: Courses > the classroom > the project, real addresses.
@@ -133,8 +134,7 @@ describe("a project in progress", () => {
     mockFetch({ [URL]: ok(project()) });
     render();
     expect(await screen.findByText("Indicative score")).toBeInTheDocument();
-    // Once in the header's facts, once in the Stat.
-    expect(screen.getAllByText("34 / 40")).toHaveLength(2);
+    expect(screen.getAllByText("34 / 40")).toHaveLength(1);
     expect(screen.getByText(/From the latest graded commit\. Indicative until your teacher publishes the scores\./)).toBeInTheDocument();
     expect(screen.getByText("Grade")).toBeInTheDocument();
     expect(screen.getByText("5.3")).toBeInTheDocument();
@@ -159,9 +159,9 @@ describe("a project in progress", () => {
     mockFetch({ [URL]: ok(p) });
     render();
     expect(await screen.findByText("Score at the deadline")).toBeInTheDocument();
-    expect(screen.getAllByText("30 / 40")).toHaveLength(2);
+    expect(screen.getAllByText("30 / 40")).toHaveLength(1);
     expect(screen.getByText(/Frozen at the deadline\. Indicative until/)).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Evaluated commit" })).toBeInTheDocument();
+    expect(screen.getByText("Evaluated commit")).toBeInTheDocument();
     expect(screen.getByText("locked")).toBeInTheDocument();
     expect(screen.getByText("Read-only since the deadline")).toBeInTheDocument();
     // A passed deadline is said once, with no countdown.
@@ -177,7 +177,7 @@ describe("a project in progress", () => {
     mockFetch({ [URL]: ok(p) });
     render();
     expect(await screen.findByText(/^Due [^·]+ · .* left$/)).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Last commit" })).toBeInTheDocument();
+    expect(screen.getByText("Last commit")).toBeInTheDocument();
   });
 
   it("shows no score section at all under grading none, and 'no score yet' without a graded run", async () => {
@@ -190,7 +190,6 @@ describe("a project in progress", () => {
     mockFetch({ [URL]: ok(project({ repo: { ...project().repo!, score: null, run: null, ciStatus: "pending" } })) });
     render();
     expect(await screen.findByText("No score yet: the CI has not graded a commit of yours.")).toBeInTheDocument();
-    expect(screen.getByText("running")).toBeInTheDocument();
   });
 });
 
