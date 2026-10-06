@@ -47,6 +47,12 @@ const TESTS_ANNOTATION_TITLE = "TESTS";
 /** How much of a malformed annotation is kept as the reason (F-PROJ-10). */
 const PARSE_DETAIL_MAX = 500;
 
+/** The raw GRADE message a run keeps: a malformed one's reason, a clamped one's negative score. */
+function parseDetailOf(score: ScoreParse | null): string | null {
+  if (score?.status === "malformed" || (score?.status === "ok" && score.clamped)) return score.message.slice(0, PARSE_DETAIL_MAX);
+  return null;
+}
+
 /** A completed run of a workflow, as the webhook or GitHub's run listing (M3-06) describes it. */
 export interface CompletedRun {
   workflowRunId: number;
@@ -413,7 +419,8 @@ export async function ingestCompletedRun(
         testsTotal: tests?.total ?? null,
         // Another workflow than grading.yml: a pass / fail run, no score.
         parseStatus: score?.status ?? "fallback",
-        parseDetail: score?.status === "malformed" ? score.message.slice(0, PARSE_DETAIL_MAX) : null,
+        // Kept for a malformed score, and for a clamped one (M3-14n): the raw message.
+        parseDetail: parseDetailOf(score),
         kind,
         // The repository's own deadline when its staff extended it (D13 amended).
         afterDeadline: receivedLate(receivedAt, effectiveDeadline(repo, project), app.clock.now()),

@@ -636,7 +636,9 @@ export const projectGradeRuns = pgTable(
     parseStatus: text("parse_status", { enum: GRADE_RUN_PARSE_STATUSES }).notNull(),
     /**
      * Why a `malformed` run has no score: the GRADE annotation's message as
-     * the run printed it (F-PROJ-10), at most 500 characters. Null otherwise.
+     * the run printed it (F-PROJ-10), at most 500 characters. Also set on an
+     * `ok` run whose negative points were counted 0 (M3-14n: the staff's
+     * "clamped" flag; the message is what it printed). Null otherwise.
      */
     parseDetail: text("parse_detail"),
     /** `ci` — a push; `review` — the final review (heig-classroom's `llm`). */

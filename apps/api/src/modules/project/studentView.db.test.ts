@@ -664,6 +664,8 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
         protectionSuspendedAt: at(NOW),
       });
       await run(mine.id, { parseStatus: "multiple", points: null, max: null });
+      // A negative CI score counted 0 (M3-14n): the student sees 0, never the flag nor what the CI printed.
+      await run(mine.id, { points: 0, max: 10, parseDetail: "-3.75/10" });
 
       const admin = await server.signIn("admin");
       const impersonation = await sessionOf(first.id, { kind: "impersonation", actorUserId: admin.id });
@@ -734,6 +736,8 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
         "to_verify",
         "multiple",
         "malformed",
+        "-3.75", // a negative CI score, as printed
+        "clamped",
         "protectionSuspended",
         "sourceFullName",
         "distribution",

@@ -181,6 +181,7 @@ export function makeRun(n: number, over: Partial<GradeRunView> = {}): GradeRunVi
     testsTotal: 10,
     parseStatus: "ok",
     parseDetail: null,
+    clamped: false,
     afterDeadline: false,
     toVerify: false,
     completedAt: PAST,

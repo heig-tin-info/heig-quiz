@@ -4542,6 +4542,7 @@ export const en = {
   "project.runs.emptyBody": "The runs of grading.yml appear here as GitHub completes them.",
   "project.runs.failed": "Could not load the runs",
   "project.run.slot.current": "current",
+  "project.run.clamped": "negative score, counted 0",
   "project.run.afterDeadline": "after the deadline",
   "project.run.conclusion.success": "success",
   "project.run.conclusion.failure": "failure",

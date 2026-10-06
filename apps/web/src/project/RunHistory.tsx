@@ -124,6 +124,7 @@ export function RunHistory({ projectId, repoId }: { projectId: string; repoId: s
                     {run.parseStatus !== "ok" ? (
                       <span className="text-xs text-fg-muted">{t(PARSE_KEY[run.parseStatus])}</span>
                     ) : null}
+                    {run.clamped ? <Badge tone="amber">{t("project.run.clamped")}</Badge> : null}
                     {run.parseDetail ? (
                       <span className="max-w-60 truncate font-mono text-xs text-fg-faint" title={run.parseDetail}>
                         {run.parseDetail}

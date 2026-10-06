@@ -488,6 +488,7 @@ function runView(r: RunRow): GradeRunView {
     testsTotal: r.testsTotal,
     parseStatus: r.parseStatus,
     parseDetail: r.parseDetail,
+    clamped: r.parseStatus === "ok" && r.parseDetail !== null,
     afterDeadline: r.afterDeadline,
     toVerify: r.toVerify,
     completedAt: iso(r.completedAt),

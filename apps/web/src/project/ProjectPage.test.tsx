@@ -523,7 +523,7 @@ describe("the repositories", () => {
       [`GET ${BASE}/repos/${repo.id}/runs`]: ok(
         makeRunList({
           runs: [
-            { ...makeRunList().runs[0]!, afterDeadline: true, id: "run-3", completedAt: AHEAD },
+            { ...makeRunList().runs[0]!, afterDeadline: true, id: "run-3", completedAt: AHEAD, points: 0, clamped: true, parseDetail: "-2/10" },
             ...makeRunList().runs,
           ],
           currentGradeRunId: "run-2",
@@ -542,6 +542,10 @@ describe("the repositories", () => {
     const runRows = (await within(sheet).findAllByRole("row")).slice(1);
     expect(runRows).toHaveLength(3);
     expect(runRows[0]!.textContent).toMatch(/after the deadline/);
+    // A negative CI score counted 0 (M3-14n): the staff see the clamp and what the CI printed.
+    expect(runRows[0]!.textContent).toMatch(/negative score, counted 0/);
+    expect(runRows[0]!.textContent).toMatch(/-2\/10/);
+    expect(runRows[1]!.textContent).not.toMatch(/negative score/);
     expect(runRows[1]!.textContent).toMatch(/current/);
     expect(runRows[2]!.textContent).not.toMatch(/current/);
     expect(runRows[2]!.textContent).toMatch(/4\/10/);

@@ -647,6 +647,8 @@ export const GradeRunView = z.object({
   testsTotal: z.number().int().nullable(),
   parseStatus: GradeRunParseStatus,
   parseDetail: z.string().nullable(),
+  /** The CI printed a negative score, counted 0 (M3-14n): `parseDetail` keeps what it printed. Staff only. */
+  clamped: z.boolean(),
   afterDeadline: z.boolean(),
   toVerify: z.boolean(),
   completedAt: z.iso.datetime(),

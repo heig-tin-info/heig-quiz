@@ -4531,6 +4531,7 @@ export const fr: Record<keyof Dict, string> = {
   "project.runs.emptyBody": "Les exécutions de grading.yml apparaissent ici au fil de leur achèvement sur GitHub.",
   "project.runs.failed": "Impossible de charger les exécutions",
   "project.run.slot.current": "courant",
+  "project.run.clamped": "score négatif, compté 0",
   "project.run.afterDeadline": "après l'échéance",
   "project.run.conclusion.success": "réussie",
   "project.run.conclusion.failure": "échouée",

@@ -228,6 +228,7 @@ function run(
     testsTotal: 10,
     parseStatus: "ok",
     parseDetail: null,
+    clamped: false,
     afterDeadline: false,
     toVerify: false,
     completedAt: iso(at),
@@ -408,6 +409,7 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
         latest.conclusion = "failure";
         latest.points = 3;
         latest.testsPassed = 3;
+        scored(3, seed.start + (i + 2) * 6 * H, { points: 0, max: 10, clamped: true, parseDetail: "-2/10" });
         break;
       case 4:
         base.protectionSuspended = !locked;
