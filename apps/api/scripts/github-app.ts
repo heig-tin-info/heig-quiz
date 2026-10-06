@@ -177,7 +177,7 @@ async function main() {
         `created ${app.slug} (App id ${app.id}): ${app.html_url}`,
         `private key: ${opts.keyOut} (0600); on the server: ${serverKey}`,
         opts.envOut === "-" ? "GITHUB_* lines: above" : `GITHUB_* lines: ${opts.envOut} (0600)`,
-        `install it: https://github.com/apps/${app.slug}/installations/new`,
+        "next: put the key and the GITHUB_* lines on the server, restart it, then install the App from a classroom's Settings › GitHub on the platform",
       ].join("\n"),
     );
   } finally {
