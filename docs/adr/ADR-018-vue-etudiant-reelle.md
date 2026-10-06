@@ -65,7 +65,7 @@ live row-deletion protocol. Entry remains idempotent; reset is explicit.
 
 ### Staff repositories
 
-*Proposed 2026-10-06, [ADR-077](ADR-077-depots-de-test-du-personnel.md).* A
+*Accepted 2026-10-06 (product owner), [ADR-077](ADR-077-depots-de-test-du-personnel.md).* A
 staff seat may accept an individual project to test it. Its repository is
 visible and badged on the staff page and counted nowhere: no count, no release,
 no gradebook, no notification. A group project is not testable from a staff

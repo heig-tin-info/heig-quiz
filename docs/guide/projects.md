@@ -61,7 +61,7 @@ The single primary action follows the state: **Publish** for a draft, **Sync** w
 
 ## Test a project as a student
 
-To test a project before your students do, open the classroom and press **Join as student**: you hold a staff seat, kept out of every count. Switch to the student view, link a GitHub account that is **not** a member or owner of the organization (an owner's admin rights bypass the rulesets and the protected files; a Quiz account holds one GitHub link, so linking a test account replaces your own), then **Accept** and push. Your test repository is badged on the project page and counts nowhere: not in the counts, the release, the gradebook or the CSV. Group projects cannot be tested this way, staff seats are not placed in groups. *(Proposed, ADR-077.)*
+To test a project before your students do, open the classroom and press **Join as student**: you hold a staff seat, kept out of every count. Switch to the student view, link a GitHub account that is **not** a member or owner of the organization (a test with an organization owner's GitHub account does not reproduce the rulesets and the protected files: an owner's admin rights bypass them; a Quiz account holds one GitHub link, so linking a test account replaces your own), then **Accept** and push. Your test repository is badged on the project page and counts nowhere: not in the counts, the release, the gradebook or the CSV. Group projects cannot be tested this way, staff seats are not placed in groups. *(ADR-077.)*
 
 ## The deadline
 

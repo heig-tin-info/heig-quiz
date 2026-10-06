@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (2026-10-06, M3-14 pilot finding 8; awaiting the product owner).
+Accepted (2026-10-06, product owner; M3-14 pilot finding 8).
 
 Scope: who may accept an individual project, and what a teacher's own
 repository is on the staff page, the student view and the release.
@@ -80,7 +80,16 @@ staff flag of teachers' classroom repositories.
   GitHub account that is not a member of the organization.** The most faithful
   test, available today.
 
-## Open questions
+## Product owner's decisions (2026-10-06)
 
-The product owner's questions Q1–Q8 are listed once, in
-[open question 53](../spec/06-questions-ouvertes.md).
+- **Q1 accepted.** F-PROJ-05, ADR-018 and ADR-070 §2 are amended. The product
+  owner chose to merge this rather than rely on option D alone.
+- **Q3 documented only.** A test with an organization OWNER's GitHub account
+  does not reproduce the rulesets and the protected files; there is no
+  refusal in code. The guides say to use an account that is not a member.
+- **Q4–Q6 accepted as v1 limits.** The test repository is visible and badged
+  "Teacher" on the staff page; no group projects for staff seats; no reset.
+- **Q7 kept as is.** Removing someone from the course staff does not remove
+  their staff seat; a follow-up task, not part of this decision's code.
+- **Q8 no code.** The M8-01 dry run counts the imported staff-seat
+  repositories, and the decision is taken then.
