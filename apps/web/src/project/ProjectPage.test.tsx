@@ -111,6 +111,36 @@ describe("the page's states", () => {
   });
 });
 
+// M3-14m (pilot finding 16): the staff cell counts as the student's card does; GitHub's total is the tooltip.
+describe("the last commit's count", () => {
+  const withRepo = (over: Partial<ProjectRepoView>) => routes(makeProject({ rows: [row(1, makeRepo(1, over))] }));
+  const countCell = async (text: string) => {
+    renderPage();
+    return await screen.findByText(text);
+  };
+
+  it("shows the student's count, and GitHub's total, the App's included, in its tooltip", async () => {
+    withRepo({ commits: 3, live: { commitCount: 4, checksPassed: 1, checksTotal: 1, stale: false } });
+    const cell = await countCell("3 commits");
+    await userEvent.hover(cell);
+    expect(await screen.findByText("4 on GitHub, the App's included")).toBeInTheDocument();
+  });
+
+  it("says one commit in the singular and hints that GitHub's total may be out of date", async () => {
+    withRepo({ commits: 1, live: { commitCount: 2, checksPassed: null, checksTotal: null, stale: true } });
+    const cell = await countCell("1 commit");
+    await userEvent.hover(cell);
+    expect(await screen.findByText("2 on GitHub, the App's included (may be out of date)")).toBeInTheDocument();
+  });
+
+  it("keeps the count, with no word about GitHub, when the live cache holds no value", async () => {
+    withRepo({ commits: 5, live: null });
+    const cell = await countCell("5 commits");
+    await userEvent.hover(cell);
+    expect(screen.queryByText(/on GitHub/)).toBeNull();
+  });
+});
+
 describe("the one primary action", () => {
   it("is Publish, as a button, for a draft — and the header says the students see nothing yet", async () => {
     routes(makeDraft());

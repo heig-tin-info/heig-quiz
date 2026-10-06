@@ -91,6 +91,22 @@ function RepoCell({ repo }: { repo: ProjectRepoView | null }) {
  * flags fold into one count. The review tag (M3-12b) says nothing while it
  * is trivially pending.
  */
+/**
+ * The student's commit count of a repository, as their own card shows it
+ * (M3-14m), and GitHub's total, the App's commit included, in the tooltip:
+ * nothing about GitHub when its cache holds no value, a hint when it is stale.
+ */
+function CommitCount({ repo }: { repo: ProjectRepoView }) {
+  const t = useT();
+  const { live } = repo;
+  const tip = live ? t(live.stale ? "project.repo.commitsTipStale" : "project.repo.commitsTip", { n: live.commitCount }) : null;
+  return (
+    <Tip label={tip}>
+      <span className="text-xs text-fg-faint">{repo.commits === 1 ? t("sproj.commits.one") : t("sproj.commits", { n: repo.commits })}</span>
+    </Tip>
+  );
+}
+
 function StateCell({ repo }: { repo: ProjectRepoView }) {
   const t = useT();
   const flags = repoFlags(repo);
@@ -261,11 +277,7 @@ export function ProjectRepos({
                       <span className="inline-flex flex-wrap items-baseline gap-x-2">
                         <span className="font-mono text-xs">{shortSha(repo.lastCommit.sha)}</span>
                         {repo.lastCommit.at ? <RelativeTime iso={repo.lastCommit.at} className="text-xs" /> : null}
-                        {repo.live ? (
-                          <span className="text-xs text-fg-faint">
-                            {t("project.repo.commits", { n: repo.live.commitCount })}
-                          </span>
-                        ) : null}
+                        <CommitCount repo={repo} />
                       </span>
                     ) : (
                       "—"

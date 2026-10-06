@@ -26,7 +26,7 @@ import { GradeRunList, ProjectDetail, type ProjectGradingScale } from "@quiz/con
 import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
 import { loadConfig } from "../../config.js";
-import { enrollments, githubAccounts, githubOrganizations, gradeDispatches, projectGradeRuns, projectRepos, projects } from "../../db/schema.js";
+import { enrollments, githubAccounts, githubOrganizations, gradeDispatches, projectGradeRuns, projectRepos, projects, pushReceipts } from "../../db/schema.js";
 import { resetLiveStateCache } from "../../github/metrics.js";
 import { appKey, fakeGithub, json, orgsRoute, type Route } from "../../github/testing.js";
 import { testServer, type TestServer } from "../../test/http.js";
@@ -260,6 +260,54 @@ describe("the project page (F-PROJ-13)", () => {
     ]);
     expect(d.rows.find((r) => r.repo?.id === promotedRepo)?.staff).toBe(true);
     expect(d.counts).toMatchObject({ students: 1, accepted: 1, live: 1, frozen: 1 });
+  });
+
+  it("counts the student's commits as their own card does (M3-14m): bots and late pushes out, no GitHub call needed", async () => {
+    const w = await world({ students: 1 });
+    const student = w.students[0]!;
+    const repo = await repoOf(w, student.id);
+    // A staff seat's test repository counts over its own receipts.
+    const promoted = await server.signIn("student");
+    const test = await repoOf(w, promoted.id);
+    await server.app.db.insert(enrollments).values({
+      id: randomUUID(),
+      classroomId: w.classroomId,
+      nom: "Assistant",
+      prenom: "Now",
+      email: `assistant-${randomUUID()}@heig.test`,
+      userId: promoted.id,
+      staff: true,
+    });
+    const gid = async (id: string) => (await server.app.db.select().from(projectRepos).where(eq(projectRepos.id, id)))[0]!.githubRepoId!;
+    const receipt = async (githubRepoId: number, receivedAt: string, commits: number | null, isBot = false) =>
+      server.app.db.insert(pushReceipts).values({
+        id: randomUUID(),
+        githubRepoId,
+        branch: "main",
+        headSha: randomUUID().replace(/-/g, "").padEnd(40, "0"),
+        receivedAt: at(receivedAt),
+        isBot,
+        commits,
+      });
+    const g = await gid(repo);
+    await receipt(g, "2026-10-01T10:00:00Z", 3);
+    await receipt(g, "2026-10-02T07:00:00Z", null); // before the count existed: one
+    await receipt(g, NOW, 40, true); // the App's or a workflow's
+    await receipt(g, "2026-10-10T00:00:00Z", 7); // after the deadline
+    await receipt(await gid(test), "2026-10-01T10:00:00Z", 2);
+
+    const studentView = await call(`/app/api/student/projects/${w.projectId}`, student.headers);
+    expect(studentView.statusCode, studentView.body).toBe(200);
+    const d = await detail(w.projectId);
+    expect(rowOf(d, student.id).repo!.commits).toBe(4);
+    expect(studentView.json().repo.commits).toBe(rowOf(d, student.id).repo!.commits);
+    expect(rowOf(d, promoted.id).repo).toMatchObject({ commits: 2 });
+
+    // The count needs no live state: a rate-limited GitHub changes nothing.
+    limitedOrgs.add(w.org);
+    resetLiveStateCache();
+    const limited = rowOf(await detail(w.projectId), student.id).repo!;
+    expect([limited.live, limited.commits]).toEqual([null, 4]);
   });
 
   it("raises each flag of a repository", async () => {

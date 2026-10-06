@@ -773,9 +773,14 @@ export type ProjectRepoSync = z.infer<typeof ProjectRepoSync>;
  * A repository on the staff's project page: its deadline and lock
  * ({@link ProjectRepoDeadlineState}), its provisioning and invitation, the
  * last STUDENT commit and its CI status (as the webhooks stored them), the
- * live counters, the scores (the teacher's with the maximum it was written
+ * student's commit count (`commits`), the live counters, the scores (the teacher's with the maximum it was written
  * with, M3-08b), the final review's state (`review`), the release's
- * snapshot, and the flags:
+ * snapshot, and the flags. `commits` is the number the student's card
+ * shows, by the same rule and the same receipts (F-PROJ-04 amended,
+ * N-SEC-20; M3-14m): the distinct non-bot commits received by the
+ * effective deadline, from the push receipts alone, so it stands even when
+ * `live` is null; `live.commitCount` is GitHub's total, the App's commit
+ * included, which the page only offers as a tooltip:
  *   - `protectionSuspended` — "protected files in conflict" (F-PROJ-08);
  *   - `toVerify` — the run of one of its three slots is to verify;
  *   - `multiple` — one of its runs printed several `GRADE` annotations (an
@@ -793,6 +798,7 @@ export const ProjectRepoView = ProjectRepoDeadlineState.extend({
   acceptedAt: z.iso.datetime(),
   lastCommit: z.object({ sha: z.string(), at: z.iso.datetime().nullable() }).nullable(),
   ciStatus: CiStatus,
+  commits: z.number().int().nonnegative(),
   live: ProjectRepoLive.nullable(),
   scores: z.object({
     current: ProjectSlotScore.nullable(),
