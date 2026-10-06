@@ -10,7 +10,8 @@ Note (2026-10-06, M2-06, [ADR-035](ADR-035-fusion-de-classroom.md)): the
 refresh of §3 also forgets every GitHub installation, archives every
 project, closes the copied webhook deliveries and drops the queued jobs
 (`scripts/staging-scrub.sql`), and staging holds its own GitHub App, on a
-test organization production's App is not on, never production's (N-SEC-18;
+test organization, never on an organization where production holds real
+work, and never production's credentials (N-SEC-18;
 [Quiz's GitHub App](../development/github-app.md)).
 
 ## Context

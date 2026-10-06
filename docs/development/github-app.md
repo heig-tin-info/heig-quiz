@@ -1,25 +1,41 @@
 # Quiz's GitHub App
 
-Quiz talks to GitHub through **its own GitHub App** (decision D23 of the
-merge, [ADR-035](../adr/ADR-035-fusion-de-classroom.md)), never through
-heig-classroom's. The App creates the students' repositories, protects their
-files, reads their CI results, locks them at the deadline, keeps the
-journals in step, and carries the user-to-server OAuth that links a
-person's GitHub account (no separate OAuth App, no scope). Teachers never
-create an App: they install it on their organization in one click from a
-classroom's Settings.
+Quiz talks to GitHub through **its own GitHub App**
+([ADR-035](../adr/ADR-035-fusion-de-classroom.md)). The App creates the
+students' repositories, protects their files, reads their CI results, locks
+them at the deadline and keeps the journals in step. It also carries the
+user-to-server OAuth that links a person's GitHub account, so no separate
+OAuth App and no scope are needed. Teachers never create an App: they
+install it on their organization from a classroom's Settings, in one click.
 
 Each environment has its own App, with its own id, key, webhook secret,
-OAuth client and slug (03 §3.4, N-SEC-18):
-
-| Environment | App | Installed on | Where it can be installed |
-| --- | --- | --- | --- |
-| production, `quiz.chevallier.io` | Quiz's production App, registered by hand by the product owner | the teachers' organizations | any account (public) |
-| staging, `quiz.dev.chevallier.io` | `heig-quiz-staging`, created with the script below | ONE test organization, on which production's App is NOT installed | only the account that owns it (private) |
-| development (optional) | a personal App | a test organization | only its owner |
+OAuth client and slug. A staging environment never holds the production
+App's credentials (N-SEC-18).
 
 Without any `GITHUB_*` variable the GitHub features are off and everything
 else runs: classrooms, evaluations, journals in Quiz mode.
+
+## Owner and installations
+
+An App has one **owner** (an organization or a personal account), which
+never changes, and any number of **installations**, one per organization it
+may act on. The two are independent:
+
+- *Where can this GitHub App be installed?* is **only on the owner's
+  account** (a private App) or **on any account** (`--public` in the
+  script). "Any account" means installable elsewhere; it does not list the
+  App on the Marketplace. A Quiz App installed on other organizations (the
+  teachers' course organizations, a test organization) must be set to any
+  account.
+- An installation on an organization Quiz does not know is inert: Quiz acts
+  on an organization only once a staff member connects a classroom to it.
+- Several Apps may be installed on the same organization: production's and
+  staging's both on a test organization is fine.
+
+For example, this project's two Apps are both owned by the organization
+`heig-tin-info`: production's `heig-quiz`, installed on the course
+organizations, and staging's `heig-quiz-staging`, installed on a test
+organization.
 
 ## Permissions and events
 
@@ -47,13 +63,12 @@ on GitHub (*Settings → Permissions & events*), never the other way round.
 | `workflows` | repository | write | pushing `.github/workflows/*` (the grading workflow) into the distribution, the students' repositories and the sync branches |
 | `members` | organization | read | the `member` and `organization` events (an invitation accepted, an organization renamed or deleted) |
 | `organization_plan` | organization | read | the Free-plan check (`plan` of `GET /orgs/{org}`): no organization secrets for private repositories, no rulesets |
-| `organization_secrets` | organization | read | the presence of the `ANTHROPIC_API_KEY` organization secret (the review tier's probe; until M3-14f drops it) |
+| `organization_secrets` | organization | read | the presence of the `ANTHROPIC_API_KEY` organization secret (the review tier's probe) |
 
-These are heig-classroom's App's permissions plus the organization's
-*Secrets: read* (03 §3.4). On GitHub's settings page the names read
-*Actions*, *Administration*, *Checks*, *Contents*, *Metadata*,
-*Pull requests*, *Workflows* (repository) and *Members*, *Plan*, *Secrets*
-(organization); *read* is "Read-only", *write* is "Read and write".
+On GitHub's settings page the names read *Actions*, *Administration*,
+*Checks*, *Contents*, *Metadata*, *Pull requests*, *Workflows* (repository)
+and *Members*, *Plan*, *Secrets* (organization); *read* is "Read-only",
+*write* is "Read and write".
 
 The App subscribes to these events:
 
@@ -76,8 +91,9 @@ App and refuses them in a manifest):
 
 ## URLs
 
-Every App points at its own environment, `<host>` being
-`quiz.chevallier.io` or `quiz.dev.chevallier.io`:
+Every App points at its own environment, `<host>` being the environment's
+public host name (for example `quiz.dev.chevallier.io` for this project's
+staging):
 
 | Setting | Value |
 | --- | --- |
@@ -86,15 +102,14 @@ Every App points at its own environment, `<host>` being
 | Callback URL | `https://<host>/app/auth/github/callback` (the account link) |
 | Request user authorization (OAuth) during installation | unticked: linking stays a separate act |
 | Setup URL | `https://<host>/setup/github/installed` |
-| Redirect on update | ticked: a re-configured installation also returns to Quiz (M3-14b) |
+| Redirect on update | ticked: a re-configured installation also returns to Quiz |
 
 ## The environment's variables
 
 `apps/api/src/config.ts` reads six variables. With `GITHUB_APP_ID` set and
-`NODE_ENV=production` (production and staging), the process **refuses to
-start** unless the key file is readable, the slug, the client id and the
-client secret are set, and the webhook secret has at least 32 characters
-(N-SEC-16).
+`NODE_ENV=production`, the process **refuses to start** unless the key file
+is readable, the slug, the client id and the client secret are set, and the
+webhook secret has at least 32 characters (N-SEC-16).
 
 | Variable | Value | Secret |
 | --- | --- | --- |
@@ -115,77 +130,63 @@ with `tsx`).
 
 ```bash
 pnpm github:app --url https://<host> --name <App name> \
-  (--org <organization login> | --personal) [--public] \
+  (--org <owner organization> | --personal) [--public] \
   --key-out <file> --env-out <file | ->
 ```
 
-1. **Choose the owner.** An App never changes owners. `--org <login>`
-   creates it under that organization (you must be one of its owners);
-   `--personal` under your own account. `--public` lets any account install
-   it; without it, only the owner can.
-2. **Choose where the secrets go**, both outside any git working tree (the
-   script refuses a path inside one, and an existing file): `--key-out` the
-   private key (mode 0600), `--env-out` the six `GITHUB_*` lines (mode 0600),
-   or `--env-out -` to print the lines on the terminal instead. The key is
-   never printed. Relative paths are taken from where you ran `pnpm`.
-3. **Run it.** It prints `Open http://127.0.0.1:<port>/ …`. Open that page
-   in a browser signed in to GitHub as the owner: it posts the manifest to
-   GitHub, which shows the App's name (editable) and settings. Click
-   *Create GitHub App*.
-4. GitHub sends the browser back to `127.0.0.1` with a one-time code; the
-   script exchanges it (`POST /app-manifests/{code}/conversions`), writes
-   the key and the lines, and prints the App's id, slug and links. It
-   checks the length of the webhook secret GitHub generated (never the
-   secret): under the 32 characters `config.ts` asks for, it says so; then
-   set a new one on the App (*Webhook secret*, `openssl rand -hex 32`) and
-   in `GITHUB_WEBHOOK_SECRET`. The page waits 15 minutes.
-5. **Install the secrets** on the server (next section), then **install the
-   App** on the organization (`https://github.com/apps/<slug>/installations/new`,
-   *All repositories*), from a classroom's Settings (*Connect GitHub*) so
-   that the setup return lands on it.
+- `--org <login>` makes that organization the owner (you must be one of
+  its owners); `--personal`, your own account.
+- `--public` makes the App installable on any account (see
+  [Owner and installations](#owner-and-installations)); without it, only on
+  the owner's.
+- `--key-out` and `--env-out` say where the private key and the six
+  `GITHUB_*` lines go: new files, outside any git working tree (the script
+  refuses a path inside one, and an existing file). `--env-out -` prints
+  the lines on the terminal instead. Relative paths are taken from where
+  you ran `pnpm`.
+- `--port <n>` fixes the local port (the default is any free one), for a
+  browser that reaches the workstation through a forwarded port.
 
-`--port <n>` fixes the local port (the default is any free one), for a
-browser that reaches the workstation through a forwarded port.
+What happens, step by step:
 
-### Staging: `heig-quiz-staging`
+1. The script builds the App's manifest from `manifest.ts`: the name, the
+   URLs of `--url`, the permissions and the events.
+2. It opens a page on your own machine, `http://127.0.0.1:<port>/`, and
+   prints its address. Open it in a browser signed in to GitHub as an owner
+   of the owner account. The page sends the manifest to GitHub.
+3. GitHub shows the App's name and settings. Click *Create GitHub App*.
+4. GitHub sends the browser back to the local page with a one-time code.
+5. The script exchanges that code with GitHub for the App's id, slug, OAuth
+   client id and secret, webhook secret and private key.
+6. It writes the key to `--key-out` and the six lines to `--env-out`, each
+   readable by you only (mode 0600), and prints only what is public: the
+   id, the slug, the App's page and its install link. It checks the length
+   of the webhook secret GitHub generated, never printing it: under the 32
+   characters `config.ts` asks for, it says so; then set a new one on the
+   App (*Webhook secret*, `openssl rand -hex 32`) and in
+   `GITHUB_WEBHOOK_SECRET`. The local page waits 15 minutes for GitHub.
 
-The staging App is owned by **its test organization**, and private:
-GitHub then lets nobody install it anywhere else, so N-SEC-18 holds by
-construction, not by discipline. Two rules, both hard:
+What stays manual:
 
-- **Production's App is not installed on that organization**, and
-  staging's App on no organization production uses. Staging holds
-  production's data: its healing finds an installation by the
-  organization's login, so a staging App on an organization production
-  drives (the pilot's `heig-quiz-classroom` included) would be re-attached
-  to that organization's copied row and act on production's repositories.
-  Use a test organization of its own.
-- **Never public.** A public staging App could be installed by any
-  teacher's organization, with the same effect. (The M2-06 card first
-  planned both Apps under heig-classroom's owner, `heig-tin-info`; a
-  private App there could only be installed on `heig-tin-info` itself.)
+- **Copy the key and the lines to the server**
+  ([next section](#installing-the-secrets-on-the-server)) and restart the
+  application.
+- **Install the App** on the organizations it serves:
+  `https://github.com/apps/<slug>/installations/new`, *All repositories*,
+  best from a classroom's Settings (*Connect GitHub*), so that GitHub's
+  setup return lands on that classroom.
+
+### Example: this project's staging App
 
 ```bash
 pnpm github:app --url https://quiz.dev.chevallier.io --name heig-quiz-staging \
-  --org <test organization> \
+  --org heig-tin-info --public \
   --key-out ~/heig-quiz-staging.private-key.pem --env-out ~/heig-quiz-staging.env
 ```
 
-A private App can be installed only by its owner. If a tester's GitHub
-account cannot link to it (the account link is the App's own OAuth), make
-that account a member of the test organization; do not make the App
-public.
-
-### Production
-
-Production's App exists (registered by hand by the product owner). A new
-production App, for a new instance, is created the same way, public, under
-the organization that will own it forever:
-
-```bash
-pnpm github:app --url https://<host> --name <App name> --org <owner organization> --public \
-  --key-out ~/<App name>.private-key.pem --env-out ~/<App name>.env
-```
+Owned by `heig-tin-info` like the production App, so it must be public to
+be installed on the test organization `heig-quiz-staging`. Then install it
+there; the staging rule below says why nowhere else.
 
 ## The same settings by hand
 
@@ -202,8 +203,8 @@ changed), create the App at
 2. *Webhook secret*: `openssl rand -hex 32`.
 3. *Permissions*: every row of [the table](#permissions-and-events), nothing
    more. *Subscribe to events*: the six of the second table.
-4. *Where can this GitHub App be installed?*: *Any account* for production,
-   *Only on this account* for staging.
+4. *Where can this GitHub App be installed?*: *Any account* when it will be
+   installed on organizations other than its owner.
 5. Create it, then: note the *App ID* and the *Client ID*; *Generate a new
    client secret*; *Generate a private key* (a `.pem` downloads). Write the
    six lines of [the variables](#the-environments-variables) yourself.
@@ -211,57 +212,60 @@ changed), create the App at
 ## Installing the secrets on the server
 
 The key and the two secrets never enter a repository, an image or the
-database, and an age-encrypted copy of each goes into the institutional
-vault ([ADR-010](../adr/ADR-010-stockage-secrets.md): HEIG Vaultwarden or
-equivalent), as for `.env.prod` and `secrets/`.
+database ([ADR-010](../adr/ADR-010-stockage-secrets.md)); keep an encrypted
+copy in your secret vault, beside the environment file.
 
-**Staging** (`srvstg`, which an administrator reaches with
-`sudo machinectl shell srvstg@`; see
-[deployment §8](deployment.md#8-staging-quizdevchevallierio-adr-028)):
+On the server, in the checkout the application runs from:
 
-```bash
-# From the workstation, to your account on the application VM.
-scp ~/heig-quiz-staging.private-key.pem ~/heig-quiz-staging.env <you>@portal.heig.chevallier.io:
-# On the VM, as root: hand both to srvstg (it cannot read your home).
-sudo install -o srvstg -g srvstg -m 600 ~/heig-quiz-staging.private-key.pem /home/srvstg/quiz-staging/secrets/
-sudo install -o srvstg -g srvstg -m 600 ~/heig-quiz-staging.env /home/srvstg/
-shred -u ~/heig-quiz-staging.private-key.pem ~/heig-quiz-staging.env
-# As srvstg: the key to the container's `node` (a sub-uid), the lines into .env.staging.
-cd ~/quiz-staging
-docker run --rm -v "$PWD/secrets":/s alpine sh -c 'chown 1000:1000 /s/heig-quiz-staging.private-key.pem && chmod 600 /s/heig-quiz-staging.private-key.pem'
-cat ~/heig-quiz-staging.env >> .env.staging && shred -u ~/heig-quiz-staging.env
-docker compose -f compose.staging.yml --env-file .env.staging --env-file .env.image up -d app
-curl -s https://quiz.dev.chevallier.io/healthz | jq .   # 200: the configuration was accepted
-```
+1. Put the key in `secrets/<slug>.private-key.pem`, mode 0600, readable by
+   the container's user (`node`, uid 1000 inside the image; with rootless
+   Docker, set the owner through a container, as
+   [deployment §2](deployment.md#setting-up-the-application-vm) does for
+   the OIDC key).
+2. Append the six `GITHUB_*` lines to the environment file (`.env.prod`, or
+   the staging one), then delete the copy you transferred.
+3. Restart the application (`docker compose … up -d app`) and check
+   `https://<host>/healthz`: a 200 means the configuration was accepted.
 
-**Production** is the same as `srv` in `/srv/quiz`, with `.env.prod` and
-`compose.prod.yml`
-([deployment §2](deployment.md#2-the-application-vm-srvquiz)).
+Then, as an administrator: *Administration → System status*, the GitHub
+App row (it turns OK after the first call to GitHub). The App's *Advanced*
+tab on GitHub lists the webhook deliveries and their answers (200
+expected; 401 means the webhook secrets differ).
 
-Then check, as an administrator: *Administration → System status*, the
-GitHub App row (it turns OK after the first call to GitHub); the App's
-*Advanced* tab on GitHub lists the webhook deliveries and their answers
-(200 expected; 401 means the webhook secret differs).
+This project's own environments follow
+[deployment §2 and §8](deployment.md#8-staging-quizdevchevallierio-adr-028)
+(the `srv` and `srvstg` accounts).
 
-## Installing on the right organization only
+## The staging rule
 
-- **Production**: on the teachers' organizations, from a classroom's
-  Settings, *All repositories* (F-GH-03), and on the product owner's pilot
-  organization (`heig-quiz-classroom`, M3-14).
-- **Staging**: on its own test organization only, never one production's
-  App is installed on (see [the staging App](#staging-heig-quiz-staging)).
-  Staging restores production's data
-  ([ADR-028](../adr/ADR-028-recette-sur-la-meme-vm.md)), so every refresh
-  (`scripts/staging-scrub.sql`, run by `scripts/staging-refresh.sh`)
-  forgets production's installations, archives every project and stops its
-  group moves, closes the copied webhook deliveries and drops the queued
-  jobs: staging's App re-attaches its test organization at the next setup
-  return or classroom open, and a tester unarchives the project under
-  test.
-- **Never** the production App on staging, nor its key, its webhook secret
-  or its client secret in `.env.staging` (N-SEC-18): with them, staging's
-  ticker would lock, commit, revert and dispatch on real students'
-  repositories.
+A staging environment restored from production's data
+([ADR-028](../adr/ADR-028-recette-sur-la-meme-vm.md),
+`scripts/staging-refresh.sh`) holds production's organizations, classroom
+links, projects and repositories, keyed by GitHub's organization id. When
+staging's App is installed on an organization, Quiz records the
+installation on the row with that organization's id
+(`recordInstallation`), the copied row included.
+
+**Never install the staging App on an organization where production holds
+real work** (for example a course organization). Staging would re-attach to
+that organization's copied rows and act on real students' repositories:
+their webhooks would come to staging, and its tasks could lock them,
+restore files or invite on them. Every refresh
+(`scripts/staging-scrub.sql`) forgets production's installations, archives
+every project and stops its group moves, closes the copied webhook
+deliveries and drops the queued jobs; that reduces the risk, it does not
+remove it.
+
+A **dedicated test organization** is fine, even when the production App is
+installed there too. And **never** the production App's key, webhook secret
+or client secret in staging's environment (N-SEC-18).
+
+To test projects on staging, the project's **source repository must be in
+the test organization**: a project's sources are listed and read in the
+classroom's own organization (`classroomClient`,
+`apps/api/src/modules/project/sources.ts`). Connect a staging classroom to
+the test organization, put the source repository there, and unarchive a
+copied project only if it belongs to that organization.
 
 ## Rotating
 

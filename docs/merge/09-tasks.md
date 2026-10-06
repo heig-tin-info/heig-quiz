@@ -516,15 +516,20 @@ files it ports; writes en + fr for every string.
     job and no GitHub call from the ticker nor from `GITHUB_TASKS` and
     `RECONCILE_TASKS` (`reconcile.db.test.ts` already pinned the two
     reconciliations).
-  - The staging App is owned by its test organization and private, and
-    that organization never has production's App (the healing resolves an
-    installation by login, so a staging App on an organization production
-    drives would act on production's repositories). This replaces "both
-    owned by the account that owns classroom's App" for staging. Open
-    point for the product owner: a test organization of staging's own
-    (the pilot's `heig-quiz-classroom` holds production's App).
-  - Also: `docs/development/new-server.md` (a new instance from a fresh
-    Ubuntu server, its TODO questions listed at its end), the `GITHUB_*`
+  - Owner and installations are separate (product owner, 2026-10-06):
+    both Apps are owned by `heig-tin-info` and set to "Any account"
+    (`--public`); production's `heig-quiz` is installed on the course
+    organizations and the pilot's `heig-quiz-classroom`, staging's
+    `heig-quiz-staging` on the test organization `heig-quiz-staging`. Both
+    Apps on one test organization is allowed. The rule: never install the
+    staging App on an organization where production holds real work —
+    staging's copied rows are matched by GitHub org id
+    (`recordInstallation`), so it would act on real students' repositories;
+    the scrub reduces this, it does not remove it. A project's source
+    repository must be in the classroom's organization (`classroomClient`),
+    so staging tests need it inside the test organization.
+  - Also: `docs/development/new-server.md` (a generic, public guide to a
+    new instance on a fresh Ubuntu server), the `GITHUB_*`
     blocks of `.env.prod.example` and `.env.staging.example`, ADR-028's
     note.
 
