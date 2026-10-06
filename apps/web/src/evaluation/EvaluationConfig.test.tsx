@@ -752,7 +752,10 @@ describe("EvaluationConfig — the questions step", () => {
       });
     });
     // The list shows the new order before the server has answered.
-    const names = screen.getAllByRole("listitem").map((li) => li.textContent ?? "");
+    const names = screen
+      .getAllByRole("listitem")
+      .filter((li) => !li.closest("nav"))
+      .map((li) => li.textContent ?? "");
     expect(names[0]).toContain("Question 2");
     expect(names[1]).toContain("Question 1");
   });
@@ -771,7 +774,9 @@ describe("EvaluationConfig — the questions step", () => {
 
     expect(await screen.findByText(/new order could not be saved/i)).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getAllByRole("listitem")[0]?.textContent).toContain("Question 1");
+      expect(
+        screen.getAllByRole("listitem").find((li) => !li.closest("nav"))?.textContent,
+      ).toContain("Question 1");
     });
   });
 

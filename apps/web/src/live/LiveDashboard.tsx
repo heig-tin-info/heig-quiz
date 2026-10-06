@@ -17,6 +17,7 @@ import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import { presence } from "../realtime/grid";
 import type { Route } from "../router";
+import { Trail, useEvaluationCrumbs } from "../Trail";
 import { useShortcuts } from "../shortcuts";
 import {
   Card,
@@ -26,7 +27,6 @@ import {
   Kbd,
   PageError,
   PageSkeleton,
-  ParentLink,
   Switch,
   useFullscreen,
 } from "../ui";
@@ -116,6 +116,11 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
    * the dashboard forwards rather than refusing, and it forwards as a
    * `navigate`, which replaces the address bar with the one that is right.
    */
+  const crumbs = useEvaluationCrumbs(
+    detail.data?.evaluation.classroomId,
+    id,
+    detail.data?.evaluation.title,
+  );
   const isPoll = detail.data?.evaluation.mode === "poll";
   useEffect(() => {
     if (isPoll) navigate({ view: "poll", id });
@@ -346,21 +351,18 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
     selected === null ? null : (view.rows.find((r) => r.seatId === selected.seatId) ?? null);
   const lobby = evaluationState === "lobby" || evaluationState === "scheduled";
   // The one clock of the screen, for the header and for every row that
-  // compares its own deadline against it.
-  const deadline = commonDeadline(
-    view.evaluation.closesAt,
-    view.rows,
-    detail.data?.evaluation.settings.timing,
-  );
+  // compares its own deadline against it. No clock while the evaluation's
+  // timing is unknown: without it a `duration` quiz would show its leftover
+  // close for a moment (#574).
+  const timing = detail.data?.evaluation.settings.timing;
+  const deadline = timing === undefined ? null : commonDeadline(view.evaluation.closesAt, view.rows, timing);
 
   const body = (
     <div className="space-y-5">
       <LiveHeader
         title={detail.data?.evaluation.title ?? t("live.title")}
         eyebrow={
-          <ParentLink onClick={() => navigate({ view: "evaluation", id })}>
-            {t("eval.configure")}
-          </ParentLink>
+          <Trail navigate={navigate} items={[...crumbs, { label: t("live.title") }]} />
         }
         state={evaluationState}
         deadlineAt={deadline}

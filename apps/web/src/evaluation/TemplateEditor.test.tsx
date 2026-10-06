@@ -90,7 +90,8 @@ describe("TemplateEditor", () => {
     // The fix of the unlinked pool is the course's pools; the way back up, its templates.
     await userEvent.click(screen.getByRole("button", { name: "Open the course" }));
     expect(navigate).toHaveBeenCalledWith({ view: "course", id: "c1", tab: "pools" });
-    await userEvent.click(screen.getByRole("button", { name: "PRG1 — Programmation C" }));
+    const trail = screen.getByRole("navigation", { name: "Breadcrumb" });
+    await userEvent.click(within(trail).getByRole("link", { name: "PRG1" }));
     expect(navigate).toHaveBeenLastCalledWith({ view: "course", id: "c1", tab: "templates" });
 
     // Nothing of a run: no launch step, no dates.

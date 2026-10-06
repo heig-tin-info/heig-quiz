@@ -133,6 +133,16 @@ const previews = (over: Record<string, ReturnType<typeof ok>> = {}) =>
   });
 
 describe("PoolView", () => {
+  it("wears the pool's trail: Question pools, then the pool as the current page", async () => {
+    mockFetch(routes());
+    const navigate = vi.fn();
+    renderWithProviders(<PoolView id="p1" navigate={navigate} />);
+    const trail = await screen.findByRole("navigation", { name: "Breadcrumb" });
+    expect(within(trail).getByText("Programmation C")).toHaveAttribute("aria-current", "page");
+    await userEvent.click(within(trail).getByRole("link", { name: "Question pools" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "pools" });
+  });
+
   it("lists the questions across the full width, without a category tree", async () => {
     mockFetch(routes());
     renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);

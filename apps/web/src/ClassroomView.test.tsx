@@ -61,7 +61,11 @@ describe("ClassroomView", () => {
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
 
     expect(await screen.findByRole("heading", { name: /PRG1-2026/ })).toBeVisible();
-    expect(screen.getByRole("button", { name: /PRG1 — Programmation C/ })).toBeVisible();
+    // The trail: Courses, the course by its code, the classroom as the current page.
+    const trail = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(within(trail).getByRole("link", { name: "Courses" })).toHaveAttribute("href", "/");
+    expect(within(trail).getByRole("link", { name: "PRG1" })).toHaveAttribute("href", "/courses/c1");
+    expect(within(trail).getByText("PRG1-2026")).toHaveAttribute("aria-current", "page");
     expect(screen.getByText("Rochat")).toBeVisible();
     // The accommodation is a number on the row; its absence is an em dash,
     // never a "0 %" that would read as data.

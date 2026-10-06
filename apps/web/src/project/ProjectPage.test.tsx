@@ -72,7 +72,7 @@ describe("the page's states", () => {
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     expect(await screen.findByRole("heading", { level: 1, name: /Labo 2 — pointeurs/ })).toBeInTheDocument();
     expect(screen.getByText("published")).toBeInTheDocument();
-    expect(await screen.findByText("PRG1-2026")).toBeInTheDocument();
+    expect((await screen.findAllByText("PRG1-2026"))[0]).toBeInTheDocument();
   });
 
   it("says a 404 is a project that does not exist, or is not the caller's, as the classroom does", async () => {

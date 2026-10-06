@@ -12,6 +12,7 @@ import { PageError, PageSkeleton, TabPanel, Tabs } from "../ui";
 import { PublishDialog } from "./PublishDialog";
 import { EditorExpandChrome } from "./EditorExpandLayer";
 import { QuestionEditTab } from "./QuestionEditTab";
+import { useEvaluationCrumbs, useRootCrumb, useTemplateCrumbs, type Crumb } from "../Trail";
 import { QuestionHeader } from "./QuestionHeader";
 import { useReviewNow } from "./reviewNow";
 import { TryPanel } from "./TryPanel";
@@ -27,23 +28,19 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * The pages the editor may have been opened from, in the order they win,
  * each keyed by the query parameter that names it (`QUESTION_ORIGIN_PARAMS`):
  *
- * - `fromGrading` (+ `item`): the grading screen of an evaluation, on one of
- *   its questions (ADR-044, addendum). Its words need nothing fetched, and
- *   publishing leads back there at once — the fix was made to re-grade.
- * - `fromTemplate`: a template (F-EVAL-25), by its title.
- * - `from`: an evaluation (issue #127), by its title.
+ * - `fromGrading` (+ `item`): the grading screen of an evaluation (ADR-044,
+ *   addendum). Publishing leads back there at once — the fix was made to
+ *   re-grade.
+ * - `fromTemplate`: a template (F-EVAL-25).
+ * - `from`: an evaluation (issue #127).
  *
- * A title is read from that page's own query, under its key and read whole,
- * so coming from there costs no request; after a reload it costs one.
+ * The origin's page is the question's parent in the trail: the trail is that
+ * page's own, then the question; without an origin it is the pool's.
  */
 interface OriginSpec {
   param: Exclude<(typeof QUESTION_ORIGIN_PARAMS)[number], "item">;
+  kind: "grading" | "template" | "evaluation";
   back: (id: string, item: string | null) => Route;
-  /** The page whose title the way back names; absent: fixed words. */
-  titled?: { key: (id: string) => readonly unknown[]; url: (id: string) => string; title: (d: unknown) => string };
-  label: (t: ReturnType<typeof useT>, title: string) => string;
-  /** The evaluation a publication makes stale, when the origin is one. */
-  evaluation: boolean;
   /** Publishing is the way back (only from the grading screen). */
   returnOnPublish: boolean;
 }
@@ -51,52 +48,26 @@ interface OriginSpec {
 const ORIGINS: readonly OriginSpec[] = [
   {
     param: "fromGrading",
+    kind: "grading",
     back: (id, item) => ({ view: "grading", evaluationId: id, ...(item ? { item } : {}) }),
-    label: (t) => t("question.backToGrading"),
-    evaluation: true,
     returnOnPublish: true,
   },
-  {
-    param: "fromTemplate",
-    back: (id) => ({ view: "template", id }),
-    titled: {
-      key: templateKey,
-      url: (id) => `/app/api/templates/${id}`,
-      title: (d) => (d as TemplateDetail).template.title,
-    },
-    label: (t, title) => t("question.backToEvaluation", { title }),
-    evaluation: false,
-    returnOnPublish: false,
-  },
-  {
-    param: "from",
-    back: (id) => ({ view: "evaluation", id }),
-    titled: {
-      key: evaluationKey,
-      url: (id) => `/app/api/evaluations/${id}`,
-      title: (d) => (d as EvaluationDetail).evaluation.title,
-    },
-    label: (t, title) => t("question.backToEvaluation", { title }),
-    evaluation: true,
-    returnOnPublish: false,
-  },
+  { param: "fromTemplate", kind: "template", back: (id) => ({ view: "template", id }), returnOnPublish: false },
+  { param: "from", kind: "evaluation", back: (id) => ({ view: "evaluation", id }), returnOnPublish: false },
 ];
 
 interface Origin {
-  label: string;
+  kind: OriginSpec["kind"];
+  /** The evaluation or template the page is about. */
+  id: string;
   back: Route;
-  /** The evaluation to refresh after a publication, or null. */
+  /** The evaluation to refresh after a publication, or null: any origin but a template. */
   evaluationId: string | null;
   returnOnPublish: boolean;
 }
 
-/**
- * The origin the query string names, or `null`: anything that is not an id
- * (or, for a titled page, not one this reader reaches) is ignored, and the
- * header falls back to the pool.
- */
+/** The origin the query string names, or `null`: anything that is not an id is ignored. */
 function useOrigin(): Origin | null {
-  const t = useT();
   // One hook per param, spelled out: a hook in a loop is the rules of hooks
   // broken, however constant the list.
   const [from] = useSearchParam("from", "");
@@ -110,22 +81,51 @@ function useOrigin(): Origin | null {
     item,
   };
   const spec = ORIGINS.find((o) => UUID.test(params[o.param]));
-  const id = spec ? params[spec.param] : "";
-  const titled = spec?.titled;
-  const page = useQuery<unknown>({
-    queryKey: titled ? titled.key(id) : evaluationKey(""),
-    enabled: titled !== undefined,
-    queryFn: () => api(titled!.url(id)),
-    retry: false,
-  });
   if (!spec) return null;
-  if (titled && !page.data) return null;
+  const id = params[spec.param];
   return {
-    label: spec.label(t, titled ? titled.title(page.data) : ""),
+    kind: spec.kind,
+    id,
     back: spec.back(id, UUID.test(params.item) ? params.item : null),
-    evaluationId: spec.evaluation ? id : null,
+    evaluationId: spec.kind === "template" ? null : id,
     returnOnPublish: spec.returnOnPublish,
   };
+}
+
+/**
+ * The question's ancestors: the origin page's own trail (the pages read the
+ * evaluation or template from the cache the origin page filled; after a
+ * reload, one request), else the pool's.
+ */
+function useQuestionCrumbs(origin: Origin | null, poolId: string | undefined, poolName: string | undefined): Crumb[] {
+  const t = useT();
+  const pools = useRootCrumb("pools");
+  const evaluation = useQuery<EvaluationDetail>({
+    queryKey: evaluationKey(origin?.evaluationId ?? ""),
+    enabled: origin?.evaluationId != null,
+    queryFn: () => api(`/app/api/evaluations/${origin!.evaluationId}`),
+    retry: false,
+  });
+  const template = useQuery<TemplateDetail>({
+    queryKey: templateKey(origin?.id ?? ""),
+    enabled: origin?.kind === "template",
+    queryFn: () => api(`/app/api/templates/${origin!.id}`),
+    retry: false,
+  });
+  const evaluationCrumbs = useEvaluationCrumbs(
+    evaluation.data?.evaluation.classroomId,
+    origin?.id ?? "",
+    evaluation.data?.evaluation.title,
+  );
+  const templateCrumbs = useTemplateCrumbs(
+    template.data?.template.courseId,
+    origin?.id ?? "",
+    template.data?.template.title,
+  );
+  if (origin?.kind === "template") return templateCrumbs;
+  if (origin?.kind === "evaluation") return evaluationCrumbs;
+  if (origin?.kind === "grading") return [...evaluationCrumbs, { label: t("grading.title"), route: origin.back }];
+  return [pools, ...(poolName === undefined || poolId === undefined ? [] : [{ label: poolName, route: { view: "pool", id: poolId } as Route }])];
 }
 
 /**
@@ -161,6 +161,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
     useQuestionDraft(id);
   const [publishing, setPublishing] = useState(false);
   const origin = useOrigin();
+  const crumbs = useQuestionCrumbs(origin, poolId, pool.data?.pool.name);
   // The tab panel, so `Ctrl+Enter` can put the reader inside what it opened.
   const panelRef = useRef<HTMLDivElement>(null);
   const followToPanel = useRef(false);
@@ -251,15 +252,10 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
       <QuestionHeader
         id={id}
         data={data}
-        poolName={pool.data?.pool.name}
+        crumbs={crumbs}
         readOnly={readOnly}
         autosave={autosave}
-        origin={origin?.label}
-        onBack={() =>
-          navigate(
-            origin ? origin.back : { view: "pool", id: data.meta.poolId },
-          )
-        }
+        navigate={navigate}
         onPublish={startPublish}
         onDuplicate={() => duplicate(data.meta)}
         onDelete={() => void askDelete(data.meta)}

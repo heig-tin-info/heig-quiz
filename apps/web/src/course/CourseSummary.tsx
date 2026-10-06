@@ -18,7 +18,7 @@ import { useCourseActions } from "./useCourseActions";
  * The course's name, as the way into its page: the card and the table row
  * are summaries, the page is where the whole course is read. The name keeps
  * the weight of the heading it sits in and underlines on hover, like a
- * `ParentLink`: the grey of a link at rest is not a signal on its own.
+ * breadcrumb link: the grey of a link at rest is not a signal on its own.
  */
 function CourseLink({ course, navigate }: { course: CourseSummary; navigate: (r: Route) => void }) {
   return (

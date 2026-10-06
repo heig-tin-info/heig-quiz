@@ -46,12 +46,12 @@ import {
   GithubIcon,
   LinkButton,
   PageHeader,
-  ParentLink,
   QueryError,
   Skeleton,
   Tabs,
 } from "./ui";
 import { classroomKey, evaluationsKey } from "./queryKeys";
+import { Trail, useClassroomCrumbs } from "./Trail";
 import { invalidateHint } from "./realtime/hints";
 
 /**
@@ -147,7 +147,7 @@ function PeriodModal({ room, onClose }: { room: ClassroomDetail; onClose: () => 
  * The period beside the title, as the door to its dialog (#295): the label —
  * or the months, for a dated period left without one — in the title's quiet
  * 16 px grey, with no pencil, since it is a detail of the name and not a
- * second title. Same hover as ParentLink. Without a period it reads "Set
+ * second title. Same hover as the breadcrumb. Without a period it reads "Set
  * period", so there is always something to click.
  */
 function PeriodLink({ room, onOpen }: { room: ClassroomDetail; onOpen: () => void }) {
@@ -202,6 +202,7 @@ export function ClassroomView({
   const hasJournal = journal.data?.mode != null;
   const noJournal = journal.data?.mode === null || githubAbsent(journal.error);
 
+  const crumbs = useClassroomCrumbs(id);
   const room = useQuery<ClassroomDetail>({
     queryKey: classroomKey(id),
     queryFn: () => api(`/app/api/classrooms/${id}`),
@@ -298,11 +299,7 @@ export function ClassroomView({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={
-          <ParentLink onClick={() => navigate({ view: "course", id: data.course.id })}>
-            {data.course.code} — {data.course.name}
-          </ParentLink>
-        }
+        eyebrow={<Trail navigate={navigate} items={crumbs} />}
         title={
           <span className="flex flex-wrap items-baseline gap-3">
             {data.name}

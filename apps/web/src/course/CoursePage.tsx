@@ -6,6 +6,7 @@ import type { CourseSummary } from "@quiz/contracts";
 import { CourseTemplates, useCourseTemplates } from "../evaluation/templates";
 import { useT } from "../i18n";
 import type { CourseTab, Route } from "../router";
+import { Trail, useRootCrumb } from "../Trail";
 import {
   Badge,
   Button,
@@ -14,7 +15,6 @@ import {
   type MenuItem,
   PageError,
   PageHeader,
-  ParentLink,
   type Person,
   PersonCard,
   Skeleton,
@@ -105,6 +105,7 @@ function Course({
   navigate: (r: Route) => void;
 }) {
   const t = useT();
+  const coursesRoot = useRootCrumb("courses");
   const actions = useCourseActions(course, { onGone: () => navigate({ view: "home" }) });
   const { isOwner } = actions;
   const [creatingTemplate, setCreatingTemplate] = useState(false);
@@ -139,7 +140,7 @@ function Course({
       <PageHeader
         help="courses"
         eyebrow={
-          <ParentLink onClick={() => navigate({ view: "home" })}>{t("courses.title")}</ParentLink>
+          <Trail navigate={navigate} items={[coursesRoot, { label: course.code }]} />
         }
         title={
           <span className="flex flex-wrap items-baseline gap-x-3 gap-y-2">

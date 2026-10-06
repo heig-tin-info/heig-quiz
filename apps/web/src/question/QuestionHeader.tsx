@@ -1,12 +1,13 @@
-import { ArrowLeft, Copy, Eye, Save, ScanSearch, Trash2 } from "lucide-react";
+import { Copy, Eye, Save, ScanSearch, Trash2 } from "lucide-react";
 
 import type { QuestionDetail } from "@quiz/contracts";
 import { reviewPill } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import { typeIcon, typeLabel } from "../questionTypes";
-import { routeToPath } from "../router";
-import { Badge, Button, LinkButton, Menu, PageHeader, ParentLink, SyncBadge } from "../ui";
+import { routeToPath, type Route } from "../router";
+import { Trail, type Crumb } from "../Trail";
+import { Badge, Button, LinkButton, Menu, PageHeader, SyncBadge } from "../ui";
 import { ParameterizedBadge } from "../pool/ParameterizedBadge";
 import { ReviewBadge } from "../pool/ReviewBadge";
 import type { Autosave } from "./autosave";
@@ -20,11 +21,10 @@ import type { Autosave } from "./autosave";
 export function QuestionHeader({
   id,
   data,
-  poolName,
-  origin,
+  crumbs,
   readOnly,
   autosave,
-  onBack,
+  navigate,
   onPublish,
   onDuplicate,
   onDelete,
@@ -32,17 +32,11 @@ export function QuestionHeader({
 }: {
   id: string;
   data: QuestionDetail;
-  /** `undefined` while the pool is loading. */
-  poolName: string | undefined;
-  /**
-   * The words of the way back to the page the editor was opened from — an
-   * evaluation (issue #127), a template, the grading screen — which then
-   * leads there instead of to the pool.
-   */
-  origin?: string | undefined;
+  /** The question's ancestors: its pool's trail, or the page it was opened from (an evaluation, a template, grading). */
+  crumbs: readonly Crumb[];
   readOnly: boolean;
   autosave: Autosave;
-  onBack: () => void;
+  navigate: (r: Route) => void;
   onPublish: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -61,18 +55,7 @@ export function QuestionHeader({
   return (
     <PageHeader
       help="question-editor"
-      eyebrow={
-        origin !== undefined ? (
-          <ParentLink onClick={onBack}>
-            <span className="inline-flex items-center gap-1">
-              <ArrowLeft aria-hidden className="size-3.5" />
-              {origin}
-            </span>
-          </ParentLink>
-        ) : (
-          <ParentLink onClick={onBack}>{poolName ?? t("pools.title")}</ParentLink>
-        )
-      }
+      eyebrow={<Trail navigate={navigate} items={[...crumbs, { label: data.meta.internalName }]} />}
       title={<span className="font-mono">{data.meta.internalName}</span>}
       description={
         <span className="flex flex-wrap items-center gap-2">

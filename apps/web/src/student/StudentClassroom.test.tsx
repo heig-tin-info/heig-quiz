@@ -97,7 +97,12 @@ describe("the student classroom page", () => {
     expect(screen.getByText("Extra time: +25%")).toBeVisible();
     expect(screen.queryByText("archived")).toBeNull();
 
-    await userEvent.click(screen.getByRole("button", { name: "Courses" }));
+    // The student's trail: their Courses, then the classroom as the current page; never a staff link.
+    const trail = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(within(trail).getByText("PRG1-2026")).toHaveAttribute("aria-current", "page");
+    // The full trail and the phone's way back: both lead to the student's Courses.
+    expect(within(trail).getAllByRole("link")).toHaveLength(2);
+    await userEvent.click(within(trail).getByRole("link", { name: "Courses" }));
     expect(navigate).toHaveBeenCalledWith({ view: "studentCourses" });
   });
 

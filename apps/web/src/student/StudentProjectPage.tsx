@@ -41,10 +41,10 @@ import { useNoticeToasts } from "../notifications/notices";
 import { useToast } from "../notify";
 import { studentProjectKey, studentRootKey } from "../queryKeys";
 import { useServerNow } from "../realtime/useServerClock";
-import { routeToPath, type Navigate, type Route } from "../router";
+import type { Navigate } from "../router";
+import { Trail, useRootCrumb } from "../Trail";
 import { CiBadge } from "../project/parts";
 import {
-  Breadcrumb,
   Button,
   Card,
   EmptyState,
@@ -124,17 +124,17 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
   const kind = projectActionKind(facts, now);
   const action = useProjectAction(facts, { now, primary: true, readOnly });
   const live = project.repo && !project.repo.deleted ? project.repo : null;
-  const go = (route: Route) => ({ href: routeToPath(route), onNavigate: () => navigate(route) });
+  const coursesRoot = useRootCrumb("studentCourses");
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow={
-          <Breadcrumb
-            label={t("breadcrumb.label")}
+          <Trail
+            navigate={navigate}
             items={[
-              { label: t("nav.courses"), ...go({ view: "studentCourses" }) },
-              { label: project.classroomName, ...go({ view: "classroom", id: project.classroomId }) },
+              coursesRoot,
+              { label: project.classroomName, route: { view: "classroom", id: project.classroomId } },
               { label: project.title },
             ]}
           />

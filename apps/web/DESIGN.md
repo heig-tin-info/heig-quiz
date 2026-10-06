@@ -249,7 +249,8 @@ question's prose never carries it, so the question scenes do not move.
   small "On this page" disclosure above the page. The page is a sheet
   (`surface`, hairline, card radius) on the canvas; the strip and the
   table of contents are bare. The reader is a tab of the classroom page
-  (both roles), under its header and tabs, with no breadcrumb of its own;
+  (both roles), under its header and tabs, with no breadcrumb of its own (the
+  student's compact header above the tabs wears the page's trail);
   the staff get one bar under the strip, right-aligned, drawn by the
   journal's mode (ADR-057). In Quiz mode: the Pages menu (`Actions`
   forced to a menu: add a page, History, Deleted pages, then delete this
@@ -589,15 +590,6 @@ live in `ui/state.ts`, each written once.
   hairline-separated strip under the classrooms with the word STAFF over three
   discs, and "remove Pierre Roulet from the staff" was an item in the course's
   own menu — an action about a person, filed under the thing they are on.
-- ParentLink: the way back up, as the `PageHeader` eyebrow — the parent's
-  name (a course, a pool, a classroom) as a plain button. The eyebrow sets
-  the 13 px `fg-muted`; the link adds `fg` AND an underline on hover, with
-  the colour transition every hover has. The underline stays because the
-  resting link is the same grey as the caption it replaced, and colour alone
-  is a weak signal of "this goes somewhere" — the roster's mailto links wear
-  the same pair. A name that does not say where it leads takes a `Tip`
-  (`tip`), never a native `title`. It exists because six pages wrote that
-  button with two different class lists.
 - MetaItem / MetaLine (`ui/meta.tsx`): the small facts under a title — a
   deadline, a commit, a score. An item is an icon (lucide, `size-3.5`,
   `fg-faint`, decoration) and its text at 13 px `fg-muted`; an icon never
@@ -606,14 +598,46 @@ live in `ui/state.ts`, each written once.
   rows). A badge may sit among them (the CI status). `IconTip` is the other
   icon of this family: an icon that stands for a word (a card's kind), an
   image named for a screen reader and by a `Tip` on hover, not a tab stop.
-- Breadcrumb (`ui/breadcrumb.tsx`): the trail of ancestors of a page in the
-  `PageHeader` eyebrow, `Courses › Classroom › Page`. A `nav` named by the
-  caller, an ordered list; ancestors are real links (`href`, routed in the
-  app on a plain click), the last item is the page, `aria-current="page"`,
-  in `fg`. The `ChevronRight` separator is decorative (`aria-hidden`). On a
-  phone the trail keeps one line: ancestors truncate first, the page last.
-  Only the student's project page wears it today; it will replace
-  `ParentLink` app-wide in a follow-up change (product owner, 2026-10-06).
+- Breadcrumb (`ui/breadcrumb.tsx`, drawn through `src/Trail.tsx`): the trail
+  of a page, in the `PageHeader` eyebrow, `Courses › PRG1 › PRG1-2026 › Quiz 3
+  › Results`. It replaced `ParentLink` (the single "one level up" button) in
+  the whole app, staff pages included (product owner, 2026-10-06). A `nav`
+  named by the caller (`breadcrumb.label`, translated), an ordered list;
+  ancestors are real links (`href` from `routeToPath`, routed in the app on a
+  plain click), the last item is the page, `aria-current="page"`, in `fg`. The
+  `ChevronRight` separator is decorative (`aria-hidden`). From `sm` up the
+  trail keeps one line: ancestors truncate first, the page last. Below `sm`
+  (a phone) a full trail is unreadable, so the SAME `nav` shows only the way
+  back, `‹ Parent`, one link to the immediate parent (`ChevronLeft`, its real
+  `href`, named "Back to <parent>"); the list is hidden there, the page's own
+  heading being right below. The rule:
+  1. A page below a top-level section wears a trail; a top-level page (a
+     sidebar destination: Activities, Courses, Question pools, Poll,
+     Administration; the student's Courses, Grades, Drill) wears none.
+  2. The trail is STRUCTURAL, not the browsing history: its root is the
+     sidebar section the page belongs to (`SECTION_ROOTS` in `Trail.tsx`, the
+     list the sidebar reads its labels from: Courses for course, classroom,
+     evaluation, project, results and group pages; Question pools for pools,
+     categories and questions), then each ancestor down to the page itself.
+     Staff: `Courses › PRG1 › PRG1-2026 › Quiz 3 › Results`, `Question pools
+     › Pointeurs › Categories`. Student: `Courses › PRG1-2026 › Project`.
+     Two pages bend it because the way back they offered is a flow, not a
+     place: the question editor opened from an evaluation, a template or the
+     grading screen wears THAT page's own trail then the question (`Courses ›
+     PRG1 › PRG1-2026 › Quiz 3 › Grading › question`), and a group set opened
+     from a project puts the project in place of Groups.
+  3. Names are what the page already loads (the classroom query is shared by
+     every classroom screen, `classroomKey`). A course is its CODE (short:
+     `PRG1`), a classroom its name, an evaluation its title. An ancestor not
+     yet loaded is left out, never fetched crumb by crumb; the hooks of
+     `Trail.tsx` (`useClassroomCrumbs`, `useEvaluationCrumbs`,
+     `useTemplateCrumbs`) return what is known, a page appends its own.
+  4. No crumb leads to a page the reader may not open: a student's trail
+     holds student routes only, and a teacher in the student view gets it.
+  The journal reader keeps its compact header: the same trail, in a wrapper
+  of the eyebrow's own 13 px `fg-muted`, above the tabs. The evaluation
+  preview pages keep their "Back to the evaluation" button: a preview is not
+  a page of the app's tree.
 - EditableTitle: a page title renamed where it is written — the evaluation,
   the template, the classroom, the course. A real button at the `h1`'s own
   type, a `PenLine` in `fg-faint` fading in on hover and focus, swapped on a

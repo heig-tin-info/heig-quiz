@@ -1099,6 +1099,8 @@ const scenes = [
     } },
 
   { name: "editor-mcq", role: "teacher", path: "/questions/q2" },
+  // Opened from the grading screen: the trail is that page's own, then the question.
+  { name: "editor-from-grading", role: "teacher", path: "/questions/q2?fromGrading=11111111-1111-4111-8111-111111111111" },
   // A choice emptied: the autosave's issue, on the field and named under the list.
   { name: "editor-mcq-issues", role: "teacher", path: "/questions/q2", settle: 3000, act: async (p) => { await p.getByRole("textbox", { name: "Text of choice B" }).fill(""); await p.waitForTimeout(2500); } },
   // "Generate answers" (ADR-059): the proposal merged, with its Undo; and the

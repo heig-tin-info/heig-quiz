@@ -25,6 +25,7 @@ import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
 import { useSearchParam } from "../router";
+import { Trail, useEvaluationCrumbs } from "../Trail";
 import { useScreenCommands } from "../screenCommands";
 import {
   Actions,
@@ -35,7 +36,6 @@ import {
   PageError,
   PageHeader,
   PageSkeleton,
-  ParentLink,
   QueryError,
   RelativeTime,
   SectionHeading,
@@ -130,6 +130,7 @@ export function ResultsView({
     retry: false,
   });
   const classroomId = evaluation.data?.evaluation.classroomId ?? null;
+  const crumbs = useEvaluationCrumbs(classroomId, evaluationId, evaluation.data?.evaluation.title);
   // The correction exists once the evaluation is over, or once an exercise's
   // correction is published (ADR-050): `hasCorrection` is the server's own
   // `not_over` rule (`isDebriefOpen`, @quiz/domain), and the evaluation is
@@ -182,16 +183,7 @@ export function ResultsView({
     <div className="space-y-6">
       <PageHeader
         eyebrow={
-          classroomId ? (
-            <ParentLink
-              onClick={() => navigate({ view: "classroom", id: classroomId })}
-              tip={t("results.classroom")}
-            >
-              {view.title}
-            </ParentLink>
-          ) : (
-            view.title
-          )
+          <Trail navigate={navigate} items={[...crumbs, { label: t("results.title") }]} />
         }
         title={t("results.title")}
         help="results"

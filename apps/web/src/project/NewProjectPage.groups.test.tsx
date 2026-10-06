@@ -30,7 +30,7 @@ const NEW_SET = "0190d3c4-0000-7000-8000-00000000f002";
 
 function routes(post: RouteHandler = ok({ id: "11111111-1111-4111-8111-111111111111" } as ProjectSummary)) {
   return mockFetch({
-    [`GET ${BASE}`]: ok({ id: ROOM, name: "PRG1-2026", roster: [] }),
+    [`GET ${BASE}`]: ok({ id: ROOM, name: "PRG1-2026", course: { id: "co-1", code: "PRG1", name: "Programmation 1" }, roster: [] }),
     [`GET ${BASE}/projects/sources`]: ok(SOURCES),
     [`GET ${BASE}/projects/sources/prg1-labo-04`]: ok(DETAIL),
     [`GET ${BASE}/group-sets`]: ok([makeSummary()]),
