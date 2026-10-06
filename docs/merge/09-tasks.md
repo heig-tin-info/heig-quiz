@@ -2685,11 +2685,12 @@ release. The original card's notes stay here; each part has its card below.
 | 1 | "Install the App on GitHub" opens a new tab; GitHub's setup return then loads a SECOND Quiz in it while the first still waits | M3-14b | The install is a same-tab round trip, like the account link: the setup return lands on `/classrooms/<state>/settings?connect=1&installed=<orgId>`, the sheet reopens with the new organization picked; the wait-for-refetch machinery goes. The App's settings: Setup URL `https://<host>/setup/github/installed`, "Redirect on update" ticked |
 | 2 | The Free-plan check should lead to where an organization becomes an Education one | M3-14b | A link to `https://education.github.com/globalcampus/teacher` (GitHub's Education FAQ: "Upgrade your academic organizations"; an unverified teacher is offered to apply there) |
 | 3 | The `ANTHROPIC_API_KEY` organization-secret check | M3-14f | NOT NOW (product owner): removed progressively once Quiz's own LLM does the final review |
-| 4 | A student should be led to link GitHub when a project is published or opened | M3-14d | Blocked on the product owner: F-GH-05 and `05-web.md` §5.3 say no banner, no nudge (product owner, 2026-10-01). Link GitHub is already the one primary action of an unlinked student's open project card and page (`projectActionKind`), with the return to the page; the pilot saw the READ-ONLY student view (finding 8), where no button shows. At most: a `project_published` notification worded for an unlinked recipient |
-| 5 | "New evaluation" is a dialog, "New project" a page: one scrollable modal for both? | M3-14e | Blocked on the product owner: M3-11 decided one page (product owner and orchestrator, 2026-10-02); DESIGN.md keeps a centered dialog to three fields and a scrolling dialog to READING. The project needs everything before Create (the source, its branches and strategy are fixed; the build takes seconds). If an overlay is wanted, the conforming one is a `Sheet`, the route `projectNew` removed |
+| 4 | A student should be led to link GitHub when a project is published or opened | M3-14d | **Decided (product owner, 2026-10-06): the `project_published` notification's text only**, for a recipient with no linked GitHub account; no redirect, no banner. Before the decision: F-GH-05 and `05-web.md` §5.3 say no banner, no nudge (product owner, 2026-10-01). Link GitHub is already the one primary action of an unlinked student's open project card and page (`projectActionKind`), with the return to the page; the pilot saw the READ-ONLY student view (finding 8), where no button shows. At most: a `project_published` notification worded for an unlinked recipient |
+| 5 | "New evaluation" is a dialog, "New project" a page: one scrollable modal for both? | M3-14e | **Won't do (product owner, 2026-10-06): New project stays a page.** The reasons: M3-11 decided one page (product owner and orchestrator, 2026-10-02); DESIGN.md keeps a centered dialog to three fields and a scrolling dialog to READING. The project needs everything before Create (the source, its branches and strategy are fixed; the build takes seconds). If an overlay is wanted, the conforming one is a `Sheet`, the route `projectNew` removed |
 | 6 | The Projects table should link the GitHub repositories, and say the time left | M3-14a | A row menu with the source and the students' (distribution) repository, staff only (F-PROJ-02); the deadline cell of a published project says the time left (no live countdown) |
 | 7 | A draft shows a start date although nothing is fixed before Publish | M3-14a | The server sends no start for a manual draft (its stored start is its creation) and no deadline for a manual draft counted in a duration; the table shows "—", the Activities timeline treats it as undated |
-| 8 | A teacher cannot test a project as a student (heig-classroom let a teacher's seat accept) | M3-14c | ADR-077 PROPOSED: the staff seat of "Join as student" (ADR-018) accepts an individual project; its repository is badged and counted nowhere. Draft PR, blocked on the product owner's answers (ADR-077). Today, without code: a second personal account with the student role on the roster, its GitHub account not a member of the organization |
+| 8 | A teacher cannot test a project as a student (heig-classroom let a teacher's seat accept) | M3-14c | ADR-077 PROPOSED: the staff seat of "Join as student" (ADR-018) accepts an individual project; its repository is badged and counted nowhere. **ADR-077 accepted (product owner, 2026-10-06)**: v1 without group projects nor reset; an owner's GitHub account documented as not reproducing the rulesets. Q7 → M3-14g; Q8 → the M8-01 dry run counts imported staff-seat repositories. Today, without code: a second personal account with the student role on the roster, its GitHub account not a member of the organization |
+| — | ADR-077 Q7: leaving the course staff keeps one's staff seats | M3-14g | Follow-up (product owner, 2026-10-06: keep as is for now) |
 
 ### M3-15 — Groups (API)
 Redesigned by [ADR-070](../adr/ADR-070-repartitions-de-groupes.md)
@@ -4092,6 +4093,14 @@ serves now (16a), and what waits for the group repositories (16b).
   extend the fixture; the parity checks that need GitHub register as
   `githubBound`. The M8-01 acceptance (dry-run on the fixture and on a
   staging copy of a dump, parity report clean) belongs to the last of them.
+- **Staff-seat repositories (ADR-077, product owner 2026-10-06, its Q8)**:
+  with M3-14c a repository held by a user who holds a STAFF seat of the
+  classroom is that teacher's test repository: visible to them, badged
+  "Teacher" on the staff page, counted nowhere. The teachers' repositories
+  heig-classroom let them accept are imported with the staff flag kept, so
+  they would appear so. The dry run on the production dump must COUNT them
+  (per classroom) and report the number; the product owner decides then
+  whether they are imported. No code before that decision.
 - **As delivered (a)** (branch `merge/M8-01a-import-frame`; migration
   `0076_legacy_classroom_audit`):
   - `Q:apps/api/scripts/import-classroom/`: `ctx.ts` (the context, the
