@@ -10,20 +10,15 @@ import {
   Users,
 } from "lucide-react";
 
-import type {
-  ActivitySummary,
-  EvaluationActivitySummary,
-  PollTeacherView,
-  ProjectActivitySummary,
-} from "@quiz/contracts";
+import type { ActivitySummary, EvaluationActivitySummary, PollTeacherView, ProjectActivitySummary } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { hasDashboard, isGraded } from "../evaluation/common";
 import { gradingLinks } from "../grading";
-import { repoHref } from "../project/projectPage";
 import { useT } from "../i18n";
 import { useErrorToast } from "../notify";
+import { repoHref } from "../project/projectPage";
 import { activitiesKey, pollKey } from "../queryKeys";
 import type { Route } from "../router";
 import { Menu, type MenuItem } from "../ui";
@@ -35,20 +30,14 @@ import { typeOf } from "./model";
  * list: closing an exam expires every attempt and starts the grading, and
  * that stays on its dashboard, behind its own confirmation.
  */
-export function useEndPoll(): {
-  end: (row: ActivitySummary) => void;
-  pending: string | null;
-} {
+export function useEndPoll(): { end: (row: ActivitySummary) => void; pending: string | null } {
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
   const failed = useErrorToast();
   const mutation = useMutation({
     mutationFn: (id: string) =>
-      api<PollTeacherView>(`/app/api/evaluations/${id}/poll/end`, {
-        method: "POST",
-        body: "{}",
-      }),
+      api<PollTeacherView>(`/app/api/evaluations/${id}/poll/end`, { method: "POST", body: "{}" }),
     onSuccess: (data, id) => {
       qc.setQueryData(pollKey(id), data);
       void qc.invalidateQueries({ queryKey: activitiesKey });
@@ -71,8 +60,7 @@ export function useEndPoll(): {
 }
 
 /** A running poll: the one activity a list may end. */
-export const endable = (row: ActivitySummary) =>
-  typeOf(row) === "poll" && row.state === "running";
+export const endable = (row: ActivitySummary) => typeOf(row) === "poll" && row.state === "running";
 
 /**
  * The overflow menu of one row, on every view: where else the activity
@@ -93,10 +81,7 @@ export function ActivityMenu({
   onEnd?: (row: ActivitySummary) => void;
 }) {
   const t = useT();
-  const items: MenuItem[] =
-    row.kind === "project"
-      ? projectItems(row, t)
-      : evaluationItems(row, t, navigate, onEnd);
+  const items: MenuItem[] = row.kind === "project" ? projectItems(row, t) : evaluationItems(row, t, navigate, onEnd);
   return (
     // A click in the menu must not also open the row under it.
     <span onClick={(e) => e.stopPropagation()} className="inline-flex">
@@ -105,24 +90,9 @@ export function ActivityMenu({
   );
 }
 
-const projectItems = (
-  row: ProjectActivitySummary,
-  t: ReturnType<typeof useT>,
-): MenuItem[] => [
-  {
-    label: t("project.source"),
-    icon: GitBranch,
-    href: repoHref(row.source.fullName),
-  },
-  ...(row.distribution
-    ? [
-        {
-          label: t("project.distribution"),
-          icon: Users,
-          href: repoHref(row.distribution.fullName),
-        },
-      ]
-    : []),
+const projectItems = (row: ProjectActivitySummary, t: ReturnType<typeof useT>): MenuItem[] => [
+  { label: t("project.source"), icon: GitBranch, href: repoHref(row.source.fullName) },
+  ...(row.distribution ? [{ label: t("project.distribution"), icon: Users, href: repoHref(row.distribution.fullName) }] : []),
 ];
 
 function evaluationItems(
@@ -132,52 +102,44 @@ function evaluationItems(
   onEnd: ((row: ActivitySummary) => void) | undefined,
 ): MenuItem[] {
   return row.mode === "poll"
-    ? [
-        {
-          label: t("poll.openProjection"),
-          icon: Presentation,
-          onSelect: () => navigate({ view: "poll", id: row.id }),
-        },
-        ...(endable(row)
-          ? [
-              {
-                label: t("poll.end"),
-                icon: Square,
-                danger: true,
-                separator: true,
-                onSelect: () => onEnd?.(row),
-              },
-            ]
-          : []),
-      ]
-    : [
-        ...(isGraded(row.state)
-          ? [
-              {
-                label: t("eval.grading"),
-                icon: ClipboardCheck,
-                onSelect: () => navigate(gradingLinks(row.id).grading),
-              },
-              {
-                label: t("eval.results"),
-                icon: BarChart3,
-                onSelect: () => navigate(gradingLinks(row.id).results),
-              },
-            ]
-          : []),
-        ...(hasDashboard(row)
-          ? [
-              {
-                label: t("eval.dashboard"),
-                icon: MonitorPlay,
-                onSelect: () => navigate({ view: "live", id: row.id }),
-              },
-            ]
-          : []),
-        {
-          label: t("eval.configure"),
-          icon: ClipboardList,
-          onSelect: () => navigate({ view: "evaluation", id: row.id }),
-        },
-      ];
+      ? [
+          {
+            label: t("poll.openProjection"),
+            icon: Presentation,
+            onSelect: () => navigate({ view: "poll", id: row.id }),
+          },
+          ...(endable(row)
+            ? [{ label: t("poll.end"), icon: Square, danger: true, separator: true, onSelect: () => onEnd?.(row) }]
+            : []),
+        ]
+      : [
+          ...(isGraded(row.state)
+            ? [
+                {
+                  label: t("eval.grading"),
+                  icon: ClipboardCheck,
+                  onSelect: () => navigate(gradingLinks(row.id).grading),
+                },
+                {
+                  label: t("eval.results"),
+                  icon: BarChart3,
+                  onSelect: () => navigate(gradingLinks(row.id).results),
+                },
+              ]
+            : []),
+          ...(hasDashboard(row)
+            ? [
+                {
+                  label: t("eval.dashboard"),
+                  icon: MonitorPlay,
+                  onSelect: () => navigate({ view: "live", id: row.id }),
+                },
+              ]
+            : []),
+          {
+            label: t("eval.configure"),
+            icon: ClipboardList,
+            onSelect: () => navigate({ view: "evaluation", id: row.id }),
+          },
+        ];
 }

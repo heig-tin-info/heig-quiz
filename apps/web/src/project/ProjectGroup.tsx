@@ -3,8 +3,8 @@ import { FolderGit2 } from "lucide-react";
 
 import type { ProjectActivitySummary } from "@quiz/contracts";
 
-import { kindOf } from "../activities/model";
 import { ActivityMenu } from "../activities/actions";
+import { kindOf } from "../activities/model";
 import { openProps, StateBadge } from "../activities/views";
 import { api } from "../api";
 import { githubAbsent } from "../github/api";
@@ -61,30 +61,14 @@ export function ProjectGroup({
     queryFn: () => api(`/app/api/classrooms/${classroomId}/projects`),
   });
   const rows = list.data ?? [];
-  const { sorted, sort, toggle } = useSortableTable<
-    ProjectActivitySummary,
-    SortKey
-  >(
+  const { sorted, sort, toggle } = useSortableTable<ProjectActivitySummary, SortKey>(
     rows,
-    (row, key) =>
-      (key === "start"
-        ? row.startAt
-        : key === "deadline"
-          ? row.deadlineAt
-          : row.title) ?? "",
+    (row, key) => (key === "start" ? row.startAt : key === "deadline" ? row.deadlineAt : row.title) ?? "",
     null,
   );
   // An empty date sorts last, whichever way the column goes.
-  const dateOf = (row: ProjectActivitySummary) =>
-    sort?.key === "start"
-      ? row.startAt
-      : sort?.key === "deadline"
-        ? row.deadlineAt
-        : "";
-  const ordered = [
-    ...sorted.filter((r) => dateOf(r) !== null),
-    ...sorted.filter((r) => dateOf(r) === null),
-  ];
+  const dateOf = (row: ProjectActivitySummary) => (sort?.key === "start" ? row.startAt : sort?.key === "deadline" ? row.deadlineAt : "");
+  const ordered = [...sorted.filter((r) => dateOf(r) !== null), ...sorted.filter((r) => dateOf(r) === null)];
 
   if (list.isError && !githubAbsent(list.error)) {
     return (
@@ -103,13 +87,7 @@ export function ProjectGroup({
     { key: "title", label: t("eval.titleLabel") },
     { key: "start", label: t("project.start"), className: T.colHigh },
     { key: "deadline", label: t("project.deadline") },
-    {
-      key: "actions",
-      label: t("common.actions"),
-      sortable: false,
-      srOnly: true,
-      className: "w-10",
-    },
+    { key: "actions", label: t("common.actions"), sortable: false, srOnly: true, className: "w-10" },
   ];
   return (
     <section aria-labelledby="classroom-projects" className="space-y-3">
@@ -127,9 +105,7 @@ export function ProjectGroup({
               return (
                 <tr
                   key={row.id}
-                  className={
-                    opens ? `${T.row} ${T.rowHover} cursor-pointer` : T.row
-                  }
+                  className={opens ? `${T.row} ${T.rowHover} cursor-pointer` : T.row}
                   {...openProps(row, navigate, "row")}
                 >
                   <td className={T.td}>
@@ -138,30 +114,18 @@ export function ProjectGroup({
                       <StateBadge row={row} />
                     </span>
                   </td>
-                  <td
-                    className={`${T.td} ${T.colHigh} tabular-nums text-fg-muted`}
-                  >
-                    {row.startAt === null ? DASH : isoDateTime(row.startAt)}
-                  </td>
+                  <td className={`${T.td} ${T.colHigh} tabular-nums text-fg-muted`}>{row.startAt === null ? DASH : isoDateTime(row.startAt)}</td>
                   <td className={`${T.td} tabular-nums text-fg-muted`}>
                     {row.deadlineAt === null ? (
                       DASH
                     ) : (
                       <span className="flex flex-wrap items-baseline gap-x-2">
                         {isoDateTime(row.deadlineAt)}
-                        {row.state === "published" ? (
-                          <RelativeTime
-                            iso={row.deadlineAt}
-                            className="text-fg-faint"
-                          />
-                        ) : null}
+                        {row.state === "published" ? <RelativeTime iso={row.deadlineAt} className="text-fg-faint" /> : null}
                       </span>
                     )}
                   </td>
-                  <td
-                    className={`${T.td} text-right`}
-                    onClick={(e) => e.stopPropagation()}
-                  >
+                  <td className={`${T.td} text-right`} onClick={(e) => e.stopPropagation()}>
                     <ActivityMenu row={row} navigate={navigate} />
                   </td>
                 </tr>

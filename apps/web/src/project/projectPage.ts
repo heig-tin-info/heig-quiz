@@ -20,7 +20,7 @@ import {
   type ProjectSummary,
   type ReviewCheckpoint,
 } from "@quiz/contracts";
-import { isVoidCheckpoint, projectListDates, reopens } from "@quiz/domain";
+import { isVoidCheckpoint, reopens } from "@quiz/domain";
 
 import { ApiError, refusalCodeOf, wordedRefusal } from "../api";
 import { studentName } from "../group/groupRules";
@@ -75,8 +75,7 @@ export type StatusKey =
   | "project.status.lockedFreezing"
   | "project.status.locked";
 
-/** The status line's key and the date it names; null when none is fixed (a manual draft counted as a duration). */
-export function projectStatus(p: ProjectDetail): { key: StatusKey; date: string | null } {
+export function projectStatus(p: ProjectDetail): { key: StatusKey; date: string } {
   const key = ((): StatusKey => {
     if (p.archivedAt) return "project.status.archived";
     if (p.state === "draft") return p.publishMode === "scheduled" ? "project.status.scheduled" : "project.status.draft";
@@ -91,7 +90,7 @@ export function projectStatus(p: ProjectDetail): { key: StatusKey; date: string 
       ? p.startAt
       : key === "project.status.released" || key === "project.status.rerelease"
         ? p.releasedAt!
-        : projectListDates(p).deadlineAt;
+        : p.deadlineAt;
   return { key, date };
 }
 
