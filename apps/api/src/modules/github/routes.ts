@@ -20,6 +20,7 @@ import {
 
 import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
+import { SETUP_PATH, WEBHOOK_PATH } from "../../github/manifest.js";
 import { verifySignature } from "../../github/signature.js";
 import { redactTokens } from "../../redact.js";
 import { FixedWindowLimiter } from "../../limiter.js";
@@ -133,7 +134,7 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
    * It is the same tab's round trip (the install link opens in place): the
    * redirect lands on the connect sheet, `installed` naming the organization.
    */
-  app.get("/setup/github/installed", async (req, reply) => {
+  app.get(SETUP_PATH, async (req, reply) => {
     // Public, and each call reaches GitHub: counted per address.
     const wait = setups.hit(req.ip, app.clock.now().getTime());
     if (wait !== null) {
@@ -175,7 +176,7 @@ async function webhookIntake(app: FastifyInstance, opts: { config: AppConfig }) 
   app.removeAllContentTypeParsers();
   app.addContentTypeParser("*", { parseAs: "buffer" }, (_req, body, done) => done(null, body));
 
-  app.post("/webhooks/github", { config: { sessions: [] } }, async (req, reply) => {
+  app.post(WEBHOOK_PATH, { config: { sessions: [] } }, async (req, reply) => {
     const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
     const signature = req.headers["x-hub-signature-256"];
     if (

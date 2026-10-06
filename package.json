@@ -15,6 +15,7 @@
     "dev": "pnpm -r --parallel --filter @quiz/api --filter @quiz/web --filter @quiz/runner dev",
     "dev:mock": "pnpm --filter @quiz/web dev:mock",
     "seed": "pnpm --filter @quiz/api seed",
+    "github:app": "pnpm --filter @quiz/api github:app",
     "smoke": "bash scripts/smoke.sh",
     "db:generate": "pnpm --filter @quiz/api db:generate",
     "docs:build": "zensical build",

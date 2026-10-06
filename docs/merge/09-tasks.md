@@ -486,6 +486,52 @@ files it ports; writes en + fr for every string.
   leaves no reachable production installation; the production App
   installed on one test organization answers the setup URL of
   `quiz.chevallier.io`.
+- **As delivered** (`merge/M2-06-github-apps`): the production App was
+  registered by hand by the product owner before this task (2026-10-06);
+  this task ships the means to create the others and the staging safety.
+  - `Q:github/manifest.ts` holds the App's settings once: the permissions
+    (§3.4: classroom's plus organization `Secrets: read`), the subscribed
+    events (`push`, `workflow_run`, `pull_request`, `member`, `repository`,
+    `organization`) and the always-delivered ones (`installation`,
+    `installation_repositories`), the webhook and setup paths (the routes
+    import them), the manifest and the six `GITHUB_*` lines.
+    `manifest.test.ts` fails when the events differ from every
+    `onEvent("…")` of `apps/api/src/`, when `docs/development/github-app.md`
+    differs from the module, or when the lines would not boot production.
+  - `pnpm github:app` (`apps/api/scripts/github-app.ts`): GitHub's App
+    Manifest flow from a one-shot page on 127.0.0.1; the key and the lines
+    go to new 0600 files outside any git working tree (or the lines to
+    stdout), the key is never printed; a webhook secret under 32
+    characters is replaced through `PATCH /app/hook/config`.
+  - The refresh's SQL moved to `scripts/staging-scrub.sql`, tested on the
+    real migrations (`stagingScrub.db.test.ts`). Schema note amended:
+    since M3-09b `suspended_at` sits beside `installation_id` ("null when
+    there is none"), so the scrub nulls both. It also archives every
+    project and stops its groups at the project's level
+    (`groups_stopped_at`, `group_sync_due_at` null: the group-sync claim
+    ignores the archive), marks the copied webhook deliveries processed
+    (no replay by `reconcile.deliveries`) and drops the `pgboss` schema
+    (production's queued jobs; pg-boss recreates it at start).
+  - The no-App test: `deadline.db.test.ts` — a due project, no claim, no
+    job and no GitHub call from the ticker nor from `GITHUB_TASKS` and
+    `RECONCILE_TASKS` (`reconcile.db.test.ts` already pinned the two
+    reconciliations).
+  - Owner and installations are separate (product owner, 2026-10-06):
+    both Apps are owned by `heig-tin-info` and set to "Any account"
+    (`--public`); production's `heig-quiz` is installed on the course
+    organizations and the pilot's `heig-quiz-classroom`, staging's
+    `heig-quiz-staging` on the test organization `heig-quiz-staging`. Both
+    Apps on one test organization is allowed. The rule: never install the
+    staging App on an organization where production holds real work —
+    staging's copied rows are matched by GitHub org id
+    (`recordInstallation`), so it would act on real students' repositories;
+    the scrub reduces this, it does not remove it. A project's source
+    repository must be in the classroom's organization (`classroomClient`),
+    so staging tests need it inside the test organization.
+  - Also: `docs/development/new-server.md` (a generic, public guide to a
+    new instance on a fresh Ubuntu server), the `GITHUB_*`
+    blocks of `.env.prod.example` and `.env.staging.example`, ADR-028's
+    note.
 
 ### M2-07 — Web: the classroom's Settings tab, GitHub section, link card
 - **Depends on**: M2-02, M2-03 (contracts), M1-04, M1-05, D24.

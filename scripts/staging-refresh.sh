@@ -13,7 +13,9 @@
 # The data is NOT anonymized (a decision of ADR-028): staging is closed by
 # LOGIN_ALLOWLIST instead. What IS removed is every credential production
 # issued -- sessions, launch tickets, API tokens, OAuth grants -- so that
-# nothing minted for production opens a door here.
+# nothing minted for production opens a door here; and every GitHub
+# installation and live project, so that staging's own App never acts on a
+# production organization (N-SEC-18).
 #
 # Each refresh is also a restore test of the production dump (deploy.md §6):
 # a dump that does not restore here would not restore there either.
@@ -38,19 +40,10 @@ echo "staging-refresh: restoring $dump"
   -c 'DROP DATABASE IF EXISTS quiz WITH (FORCE)' -c 'CREATE DATABASE quiz OWNER quiz'
 "${STAGING[@]}" exec -T postgres pg_restore -U quiz -d quiz --no-owner --role=quiz \
   --exit-on-error < "$dump"
-# Only the tables the dump has: a dump older than the staging code lacks the
-# newest ones (launch_tickets, on 2026-09-26), which its migration will
-# create empty anyway.
-"${STAGING[@]}" exec -T postgres psql -U quiz -d quiz -v ON_ERROR_STOP=1 <<'SQL'
-DO $$
-DECLARE present text;
-BEGIN
-  SELECT string_agg(quote_ident(t), ', ') INTO present
-  FROM unnest(ARRAY['sessions', 'launch_tickets', 'api_tokens', 'oauth_requests', 'oauth_grants']) AS t
-  WHERE to_regclass(t) IS NOT NULL;
-  IF present IS NOT NULL THEN EXECUTE 'TRUNCATE ' || present; END IF;
-END $$;
-SQL
+# Production's credentials emptied, its GitHub installations forgotten and
+# its projects archived (N-SEC-18): scripts/staging-scrub.sql, tested against
+# the real migrations by apps/api/src/stagingScrub.db.test.ts.
+"${STAGING[@]}" exec -T postgres psql -U quiz -d quiz -v ON_ERROR_STOP=1 < scripts/staging-scrub.sql
 
 # The question images, content-addressed. The staging directory belongs to
 # the container's `node` (a sub-uid on the host): unpacked through a container.
