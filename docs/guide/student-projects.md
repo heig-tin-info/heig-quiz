@@ -97,7 +97,7 @@ The final score can differ from the indicative one: your teacher may have adjust
 
 You receive a notification, and an e-mail for the ones you must not miss, when:
 
-- a project of your classroom is published (notification only);
+- a project of your classroom is published (notification only; if you have not linked your GitHub account yet, it reminds you to link it before accepting);
 - your repository is ready and its invitation waits for you;
 - your deadline is within 24 hours;
 - the scores are released.

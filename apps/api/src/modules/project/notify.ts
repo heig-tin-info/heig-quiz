@@ -46,8 +46,8 @@ import type { NotificationPayload } from "@quiz/contracts";
 import { DEADLINE_REMINDER_MS } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { classrooms, enrollments, projectGroupMembers, projectRepos, projects } from "../../db/schema.js";
-import { notifyUsers, type NotifyLog } from "../notifications/service.js";
+import { classrooms, enrollments, githubAccounts, projectGroupMembers, projectRepos, projects } from "../../db/schema.js";
+import { notifyMany, notifyUsers, type NotifyLog } from "../notifications/service.js";
 import { classroomStaffIds } from "../org/service.js";
 import { LIVE, ts } from "./deadline.js";
 import { repoMembers } from "./groupRepos.js";
@@ -66,11 +66,24 @@ export async function classroomStudentIds(db: Db, classroomId: string): Promise<
 
 /** `project_published`: the classroom's students, once per project (`publishProject` runs once). */
 export async function announcePublished(db: Db, project: ProjectRef): Promise<void> {
-  await notifyUsers(db, await classroomStudentIds(db, project.classroomId), {
-    kind: "project_published",
-    projectId: project.id,
-    projectTitle: project.name,
-  });
+  const ids = [...new Set(await classroomStudentIds(db, project.classroomId))];
+  if (ids.length === 0) return;
+  // One read for the whole audience. A stale link still counts as linked
+  // (the project page offers "Relink"). The text is frozen at sending (M3-14d).
+  const linked = new Set(
+    (await db.select({ userId: githubAccounts.userId }).from(githubAccounts).where(inArray(githubAccounts.userId, ids))).map(
+      (r) => r.userId,
+    ),
+  );
+  const base = { kind: "project_published", projectId: project.id, projectTitle: project.name } as const;
+  try {
+    await notifyMany(
+      db,
+      ids.map((userId) => ({ userId, payload: linked.has(userId) ? base : { ...base, githubLinked: false as const } })),
+    );
+  } catch (err) {
+    console.error("notifications: telling an audience failed", { err, kind: base.kind });
+  }
 }
 
 /** A staff kind about `project`, to the course's staff seats. */
