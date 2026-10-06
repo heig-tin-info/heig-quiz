@@ -74,6 +74,7 @@ import {
   checkpointDueAt,
   checkpointRefusal,
   editableProjectFields,
+  projectListDates,
   projectPrimaryAction,
   resolveFinalScore,
   reviewState,
@@ -179,8 +180,10 @@ const PJ_GROUP = "0190d3c4-0000-7000-8000-0000000000b4";
 const PJ_GROUP_LIVE = "0190d3c4-0000-7000-8000-0000000000b5";
 const PJ_GROUP_STOPPED = "0190d3c4-0000-7000-8000-0000000000b6";
 
-const SEEDS: { id: string; title: string; state: ProjectSummary["state"]; start: number; deadline: number; groupSet?: string }[] = [
+const SEEDS: { id: string; title: string; state: ProjectSummary["state"]; start: number; deadline: number; groupSet?: string; durationMinutes?: number }[] = [
   { id: "pj-draft", title: "Labo 3 — listes chaînées", state: "draft", start: 7 * D, deadline: 21 * D },
+  // A draft published by hand, its deadline a duration: the list shows no date at all (M3-14a).
+  { id: "pj-draft-manual", title: "Labo 5 — arbres", state: "draft", start: 0, deadline: 14 * D, durationMinutes: 14 * 24 * 60 },
   { id: "pj-published", title: "Labo 2 — pointeurs", state: "published", start: -7 * D, deadline: 7 * D },
   { id: "pj-locked", title: "Labo 1 — premiers pas en C", state: "locked", start: -35 * D, deadline: -7 * D },
   // `?groups=1`: group projects following PRG1-2026's pairs — a draft, a published one, one stopped.
@@ -562,7 +565,7 @@ function seeded(): MockProject[] {
       publishMode: seed.id === "pj-draft" ? "scheduled" : "manual",
       startAt: iso(seed.start),
       deadlineAt: iso(seed.deadline),
-      durationMinutes: null,
+      durationMinutes: seed.durationMinutes ?? null,
       graceMinutes: PROJECT_DEFAULTS.graceMinutes,
       sourceStrategy: "squash",
       deadlineStrategy: "lock",
@@ -768,8 +771,9 @@ const activityOf = (p: MockProject): ProjectActivitySummary => ({
   title: p.summary.name,
   state: p.summary.state,
   classroom: p.classroom,
-  startAt: p.summary.startAt,
-  deadlineAt: p.summary.deadlineAt,
+  ...projectListDates(p.summary),
+  source: p.summary.source,
+  distribution: p.summary.distribution,
 });
 
 /** Every project the staff persona's lists show: none without `?projects=1`, but those created; the archive aside. */

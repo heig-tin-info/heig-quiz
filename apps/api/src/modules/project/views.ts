@@ -6,7 +6,7 @@
 import { and, desc, eq, isNotNull, isNull, type SQL } from "drizzle-orm";
 
 import type { ProjectActivitySummary, ProjectSummary } from "@quiz/contracts";
-import { editableProjectFields } from "@quiz/domain";
+import { editableProjectFields, projectListDates } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -60,6 +60,10 @@ async function activityRows(db: Db, where: SQL | undefined): Promise<ProjectActi
       state: projects.state,
       startAt: projects.startAt,
       deadlineAt: projects.deadlineAt,
+      publishMode: projects.publishMode,
+      durationMinutes: projects.durationMinutes,
+      source: projects.sourceFullName,
+      distribution: projects.distributionFullName,
       classroomId: classrooms.id,
       classroomName: classrooms.name,
       courseCode: courses.code,
@@ -69,15 +73,20 @@ async function activityRows(db: Db, where: SQL | undefined): Promise<ProjectActi
     .innerJoin(courses, eq(courses.id, classrooms.courseId))
     .where(where)
     .orderBy(desc(projects.createdAt));
-  return rows.map((r) => ({
-    kind: "project" as const,
-    id: r.id,
-    title: r.title,
-    state: r.state,
-    classroom: { id: r.classroomId, name: r.classroomName, courseCode: r.courseCode },
-    startAt: iso(r.startAt),
-    deadlineAt: iso(r.deadlineAt),
-  }));
+  return rows.map((r) => {
+    const dates = projectListDates(r);
+    return {
+      kind: "project" as const,
+      id: r.id,
+      title: r.title,
+      state: r.state,
+      classroom: { id: r.classroomId, name: r.classroomName, courseCode: r.courseCode },
+      startAt: isoOrNull(dates.startAt),
+      deadlineAt: isoOrNull(dates.deadlineAt),
+      source: { fullName: r.source },
+      distribution: r.distribution === null ? null : { fullName: r.distribution },
+    };
+  });
 }
 
 /**

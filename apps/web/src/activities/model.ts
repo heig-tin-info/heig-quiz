@@ -150,9 +150,11 @@ export const KIND: { [K in ActivitySummary["kind"]]: ActivityKindSpec<Extract<Ac
     closedByHand: () => false,
     live: () => false,
     inRoom: () => false,
+    // A project with no start (a draft published by hand) is undated, like a draft evaluation.
     span: (a) => {
+      if (a.startAt === null) return null;
       const s = new Date(a.startAt).getTime();
-      return { s, d: Math.max(s, new Date(a.deadlineAt).getTime()) };
+      return { s, d: Math.max(s, a.deadlineAt === null ? s : new Date(a.deadlineAt).getTime()) };
     },
     // The project page (M3-12), in every build.
     home: (a) => ({ view: "project", id: a.id }),

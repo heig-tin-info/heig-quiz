@@ -23,6 +23,8 @@ const project = (n: number, over: Partial<ProjectActivitySummary> = {}): Project
   classroom: ROOM,
   startAt: "2026-09-21T08:00:00.000Z",
   deadlineAt: "2026-10-05T22:00:00.000Z",
+  source: { fullName: "heig/lab-source" },
+  distribution: { fullName: "heig/lab-squashed" },
   ...over,
 });
 
@@ -51,10 +53,61 @@ describe("the classroom's Projects group", () => {
     expect(within(rows[2]!).getByText("draft")).toBeInTheDocument();
     expect(within(region).getByRole("columnheader", { name: /Deadline/ })).toBeInTheDocument();
     // No count of repositories or scores: those come with M3-08.
-    expect(within(region).getAllByRole("columnheader")).toHaveLength(3);
+    expect(within(region).getAllByRole("columnheader")).toHaveLength(4);
     await userEvent.click(within(region).getByText("Labo 2"));
     expect(navigate).toHaveBeenCalledWith({ view: "project", id: project(2).id });
     expect(calls.every((c) => c.method === "GET")).toBe(true);
+  });
+
+  it("shows a dash for a date not fixed yet, sorted last, and the time left of a published project only (M3-14a)", async () => {
+    const inThreeDays = new Date(Date.now() + 3 * 86_400_000).toISOString();
+    mockFetch({
+      [`GET ${PROJECTS}`]: ok([
+        project(1, { title: "Undated", state: "draft", startAt: null, deadlineAt: null }),
+        project(2, { title: "Planned", state: "draft" }),
+        project(3, { title: "Running", deadlineAt: inThreeDays }),
+        project(4, { title: "Done", state: "locked", deadlineAt: "2026-10-05T22:00:00.000Z" }),
+      ]),
+    });
+    renderGroup();
+    const region = await screen.findByRole("region", { name: "Projects" });
+    const row = (title: string) => within(region).getByText(title).closest("tr")!;
+    expect(within(row("Undated")).getAllByText("—")).toHaveLength(2);
+    expect(within(row("Planned")).queryByText("—")).toBeNull();
+    expect(within(row("Running")).getByText("in 3 days")).toBeInTheDocument();
+    expect(within(row("Planned")).queryByText(/^in /)).toBeNull();
+    expect(within(row("Done")).queryByText(/ago|^in /)).toBeNull();
+    // Sorted by start, the undated one goes last in both directions.
+    const titles = () => within(region).getAllByRole("row").slice(1).map((r) => r.querySelector(".font-semibold")?.textContent);
+    await userEvent.click(within(region).getByRole("button", { name: /Start/ }));
+    expect(titles().at(-1)).toBe("Undated");
+    await userEvent.click(within(region).getByRole("button", { name: /Start/ }));
+    expect(titles().at(-1)).toBe("Undated");
+  });
+
+  it("links the repositories from the row's menu without opening the project (M3-14a)", async () => {
+    mockFetch({
+      [`GET ${PROJECTS}`]: ok([
+        project(1, { title: "Built" }),
+        project(2, { title: "Building", distribution: null }),
+      ]),
+    });
+    const navigate = renderGroup();
+    const region = await screen.findByRole("region", { name: "Projects" });
+    await userEvent.click(within(region).getByRole("button", { name: "Actions for Built" }));
+    const source = screen.getByRole("menuitem", { name: /Source repository/ });
+    expect(source).toHaveAttribute("href", "https://github.com/heig/lab-source");
+    expect(source).toHaveAttribute("target", "_blank");
+    expect(screen.getByRole("menuitem", { name: /Distribution repository/ })).toHaveAttribute(
+      "href",
+      "https://github.com/heig/lab-squashed",
+    );
+    expect(navigate).not.toHaveBeenCalled();
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(within(region).getByRole("button", { name: "Actions for Building" }));
+    expect(screen.getByRole("menuitem", { name: /Source repository/ })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /Distribution repository/ })).toBeNull();
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it("draws nothing for a classroom without a project", async () => {

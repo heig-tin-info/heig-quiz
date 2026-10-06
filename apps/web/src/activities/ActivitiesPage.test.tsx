@@ -70,6 +70,8 @@ const LAB: ProjectActivitySummary = {
   classroom: ROOM,
   startAt: liveAt(-7 * 24 * 60 * MIN),
   deadlineAt: liveAt(7 * 24 * 60 * MIN),
+  source: { fullName: "heig/lab-source" },
+  distribution: { fullName: "heig/lab-squashed" },
 };
 const LAB3: ProjectActivitySummary = { ...LAB, id: id("project", 2), title: "Labo 3", state: "draft" };
 
@@ -311,8 +313,8 @@ describe("ActivitiesPage", () => {
       const table = screen.getByRole("table");
       const row = within(table).getByText("Labo 2 — pointeurs").closest("tr")!;
       expect(within(row).getByText("published")).toBeInTheDocument();
-      // No overflow menu: its actions live on its page (M3-12).
-      expect(within(row).queryByRole("button", { name: /Actions/ })).not.toBeInTheDocument();
+      // The overflow menu leads to its repositories (M3-14a).
+      expect(within(row).getByRole("button", { name: /Actions/ })).toBeInTheDocument();
       await user.click(within(table).getByText("Labo 2 — pointeurs"));
       expect(navigate).toHaveBeenLastCalledWith({ view: "project", id: LAB.id });
     });

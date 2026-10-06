@@ -126,3 +126,23 @@ export function reviewState(repo: ReviewStateInput): ProjectReviewState {
   if (repo.protectionSuspendedAt !== null) return { ...base, status: "skipped", reason: "protection_suspended" };
   return { ...base, status: "pending" };
 }
+
+/**
+ * The dates the staff's project lists show (M3-14a). A draft in manual
+ * publish mode has no start yet: its stored one is its creation, provisional
+ * until it is published (`draftDates` of the project module), and a deadline
+ * given as a duration does not exist either (creation plus the duration
+ * never happens). A scheduled draft keeps what its author set, a manual
+ * draft with an absolute deadline keeps the deadline, and a published or
+ * locked project is what it is stored as.
+ */
+export function projectListDates<D>(p: {
+  state: "draft" | "published" | "locked";
+  publishMode: "manual" | "scheduled";
+  durationMinutes: number | null;
+  startAt: D;
+  deadlineAt: D;
+}): { startAt: D | null; deadlineAt: D | null } {
+  if (p.state !== "draft" || p.publishMode !== "manual") return { startAt: p.startAt, deadlineAt: p.deadlineAt };
+  return { startAt: null, deadlineAt: p.durationMinutes === null ? p.deadlineAt : null };
+}

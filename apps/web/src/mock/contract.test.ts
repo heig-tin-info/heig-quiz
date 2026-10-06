@@ -609,9 +609,9 @@ describe("the mock's projects (?projects=1)", () => {
   it("serves one project per state, on PRG1-2026 and in the Activities", async () => {
     const own = (await get(`/app/api/classrooms/${classroomId}/projects`)) as { state: string }[];
     // `?groups=1` adds a draft group project (M3-16a), a published and a stopped one (M3-16b).
-    expect(own.map((p) => p.state).sort()).toEqual(["draft", "draft", "locked", "locked", "published", "published"]);
+    expect(own.map((p) => p.state).sort()).toEqual(["draft", "draft", "draft", "locked", "locked", "published", "published"]);
     const all = (await get("/app/api/activities")) as { kind: string }[];
-    expect(all.filter((a) => a.kind === "project")).toHaveLength(6);
+    expect(all.filter((a) => a.kind === "project")).toHaveLength(7);
   });
 });
 
