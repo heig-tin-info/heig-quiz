@@ -159,6 +159,12 @@ describe("commonDeadline", () => {
     expect(commonDeadline(at, [running("2026-09-28T10:05:00.000Z", 0)])).toBe(at);
   });
 
+  it("ignores a leftover close in duration timing, which +N min never moves (#574)", () => {
+    const rows = [running("2026-09-28T10:05:00.000Z", 0), running("2026-09-28T10:05:00.000Z", 1)];
+    expect(commonDeadline(at, rows, "duration")).toBe("2026-09-28T10:05:00.000Z");
+    expect(commonDeadline(at, rows, "deadline")).toBe(at);
+  });
+
   it("is the deadline most running rows share, compared as instants", () => {
     const rows = [
       running(at, 0),
