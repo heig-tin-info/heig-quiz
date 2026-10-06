@@ -81,8 +81,8 @@ async function activityRows(db: Db, where: SQL | undefined): Promise<ProjectActi
       title: r.title,
       state: r.state,
       classroom: { id: r.classroomId, name: r.classroomName, courseCode: r.courseCode },
-      startAt: dates.startAt && iso(dates.startAt),
-      deadlineAt: dates.deadlineAt && iso(dates.deadlineAt),
+      startAt: isoOrNull(dates.startAt),
+      deadlineAt: isoOrNull(dates.deadlineAt),
       source: { fullName: r.source },
       distribution: r.distribution === null ? null : { fullName: r.distribution },
     };

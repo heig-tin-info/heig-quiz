@@ -323,7 +323,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
         help="project"
         description={
           <>
-            <p data-testid="project-status">{t(status.key, { date: isoDateTime(status.date) })}</p>
+            <p data-testid="project-status">{t(status.key, { date: status.date === null ? "" : isoDateTime(status.date) })}</p>
             <p className="mt-0.5 tabular-nums text-fg-faint">{counts.join(" · ")}</p>
             {/* ADR-070's R2 (M3-16b): the release waits for a confirmed resync of the groups. */}
             {releaseWaits ? (

@@ -98,7 +98,7 @@ describe("the classroom's Projects group", () => {
     const source = screen.getByRole("menuitem", { name: /Source repository/ });
     expect(source).toHaveAttribute("href", "https://github.com/heig/lab-source");
     expect(source).toHaveAttribute("target", "_blank");
-    expect(screen.getByRole("menuitem", { name: /Students' repository/ })).toHaveAttribute(
+    expect(screen.getByRole("menuitem", { name: /Distribution repository/ })).toHaveAttribute(
       "href",
       "https://github.com/heig/lab-squashed",
     );
@@ -106,7 +106,7 @@ describe("the classroom's Projects group", () => {
     await userEvent.keyboard("{Escape}");
     await userEvent.click(within(region).getByRole("button", { name: "Actions for Building" }));
     expect(screen.getByRole("menuitem", { name: /Source repository/ })).toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: /Students' repository/ })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: /Distribution repository/ })).toBeNull();
     expect(navigate).not.toHaveBeenCalled();
   });
 

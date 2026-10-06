@@ -70,6 +70,8 @@ describe("the header's sentence", () => {
     expect(projectStatus(makeProject({ state: "draft", publishMode: "scheduled", startAt: start })).date).toBe(start);
     expect(projectStatus(makeProject({ state: "locked", releasedAt: PAST, gradingMode: "none" })).date).toBe(PAST);
     expect(projectStatus(makeProject()).date).toBe(AHEAD);
+    // A manual draft counted as a duration has no deadline to name yet.
+    expect(projectStatus(makeProject({ state: "draft", publishMode: "manual", durationMinutes: 60 })).date).toBeNull();
   });
 });
 

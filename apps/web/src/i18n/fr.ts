@@ -4327,7 +4327,6 @@ export const fr: Record<keyof Dict, string> = {
   "project.name": "Nom",
   "project.duration": "Durée en jours",
   "project.source": "Dépôt source",
-  "project.studentsRepo": "Dépôt des étudiants",
   "project.source.pick": "Choisissez un dépôt",
   "project.source.none": "Cette organisation n'a encore aucun dépôt",
   "project.source.noneBody": "Créez sur GitHub le dépôt à distribuer, dans l'organisation de la classe, puis rechargez cette page.",

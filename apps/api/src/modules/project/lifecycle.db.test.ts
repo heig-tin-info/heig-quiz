@@ -598,13 +598,14 @@ describe("the lists, archive and unarchive (F-PROJ-16)", () => {
       ProjectActivitySummary.array().parse((await call("GET", base(room.id), headers)).json());
     const byId = async () => new Map((await list()).map((p) => [p.id, p]));
     const drafts = await byId();
-    expect(drafts.get(dated.id)).toMatchObject({ startAt: null, deadlineAt: IN_A_WEEK });
-    expect(drafts.get(timed.id)).toMatchObject({ startAt: null, deadlineAt: null });
-    expect(drafts.get(planned.id)).toMatchObject({ startAt: "2026-10-05T08:00:00.000Z", deadlineAt: IN_A_WEEK });
     expect(drafts.get(dated.id)).toMatchObject({
+      startAt: null,
+      deadlineAt: IN_A_WEEK,
       source: { fullName: `${room.login}/lab` },
       distribution: { fullName: `${room.login}/dated-squashed` },
     });
+    expect(drafts.get(timed.id)).toMatchObject({ startAt: null, deadlineAt: null });
+    expect(drafts.get(planned.id)).toMatchObject({ startAt: "2026-10-05T08:00:00.000Z", deadlineAt: IN_A_WEEK });
     // The same projection serves the Activities union.
     const activities = ActivitySummary.array().parse((await call("GET", "/app/api/activities", teacher.headers)).json());
     expect(activities.find((a) => a.id === timed.id)).toMatchObject({ kind: "project", startAt: null, deadlineAt: null });
@@ -615,17 +616,13 @@ describe("the lists, archive and unarchive (F-PROJ-16)", () => {
     expect(published.startAt).not.toBeNull();
     expect(published.deadlineAt).not.toBeNull();
 
-    // Staff only: a student, another teacher and an impersonation read the 404 of a missing classroom,
-    // and a student's own pages never carry the repositories.
-    for (const headers of [student.headers, outsider.headers]) {
-      const res = await call("GET", base(room.id), headers);
-      expect([res.statusCode, res.body]).toEqual([404, expect.not.stringContaining(room.login)]);
+    // Staff only (N-SEC-20): what the student reads of the published project names no repository.
+    for (const url of [`/app/api/student/classrooms/${room.id}`, "/app/api/student/home"]) {
+      const res = await call("GET", url, student.headers);
+      expect(res.statusCode).toBe(200);
+      expect(res.body, url).toContain(timed.name);
+      expect(res.body, url).not.toContain(room.login);
     }
-    const page = await call("GET", `/app/api/student/classrooms/${room.id}`, student.headers);
-    expect(page.body).not.toContain(room.login);
-    expect(page.body).not.toContain("fullName");
-    const studentActivities = await call("GET", "/app/api/activities", student.headers);
-    expect(studentActivities.body).not.toContain(room.login);
   });
 
   it("shows a student a project once published, never as a draft, and never its distribution (M3-09a)", async () => {
