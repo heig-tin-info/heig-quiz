@@ -733,6 +733,7 @@ const studentProjectView = (card: StudentProjectCard): StudentProject => {
         };
   return {
     ...facts,
+    seat: flags.staffseat ? ("staff" as const) : ("student" as const),
     gradingMode: "auto",
     repo,
     release: released

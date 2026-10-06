@@ -59,6 +59,10 @@ One row per student (or group): the repository, the invitation state, the last c
 
 The single primary action follows the state: **Publish** for a draft, **Sync** when the source is ahead, **Release scores** once everything is final.
 
+## Test a project as a student
+
+To test a project before your students do, open the classroom and press **Join as student**: you hold a staff seat, kept out of every count. Switch to the student view, link a GitHub account that is **not** a member or owner of the organization (a test with an organization owner's GitHub account does not reproduce the rulesets and the protected files: an owner's admin rights bypass them; a Quiz account holds one GitHub link, so linking a test account replaces your own), then **Accept** and push. Your test repository is badged on the project page and counts nowhere: not in the counts, the release, the gradebook or the CSV. Group projects cannot be tested this way, staff seats are not placed in groups. *(ADR-077.)*
+
 ## The deadline
 
 At the deadline, on the server's clock, Quiz applies the strategy within a minute, for every repository. The time that counts for a push is the time Quiz **received** it, never the commit's date.

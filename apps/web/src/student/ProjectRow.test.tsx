@@ -157,13 +157,12 @@ describe("the one action by state", () => {
 });
 
 describe("a reader who is not the student", () => {
-  it("gives a teacher in the student view no button, one muted line instead", async () => {
+  it("gives a teacher in the student view the real actions: a row exists only for a seat (ADR-077)", async () => {
     sessionStorage.setItem("quiz-view-as", "student");
     mockFetch({});
     render(card({ githubLinked: false }), { me: makeMe({ role: "teacher" }) });
-    expect(await screen.findByText(/Read-only view: the student's actions are not available$/)).toBeInTheDocument();
-    expect(screen.queryByRole("button")).toBeNull();
-    expect(actionLink("Link GitHub")).toBeNull();
+    expect(await screen.findByRole("link", { name: "Link GitHub" })).toBeInTheDocument();
+    expect(screen.queryByText(/Read-only view/)).toBeNull();
   });
 
   it("gives an impersonation session no button either, whatever the state", async () => {

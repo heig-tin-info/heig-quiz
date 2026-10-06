@@ -91,6 +91,7 @@ describe("projectActionKind", () => {
   it("reads the page's payload the same way, the repository's own flags included", () => {
     const base: StudentProject = {
       kind: "project",
+      seat: "student",
       id: "p1",
       title: "Labo 1",
       classroomId: "r1",

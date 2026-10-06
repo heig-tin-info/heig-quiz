@@ -56,8 +56,10 @@ export interface SeatRepos {
 /**
  * The repositories the student seats of `projects` read, in three reads:
  * a seat's own individual repository, or, in a group project, its copy
- * group's — `pickStudentRepo`: a live individual one wins. Staff seats read
- * none (ADR-018). `enrollmentIds` narrows the seats read.
+ * group's — `pickStudentRepo`: a live individual one wins. A staff seat
+ * reads its own individual (test) repository only (ADR-077), whatever copy
+ * membership it kept from before it became one. `enrollmentIds` narrows the
+ * seats read.
  */
 export async function seatRepos(db: Db | Tx, projects: readonly SeatProject[], enrollmentIds?: readonly string[]): Promise<SeatRepos> {
   if (projects.length === 0 || enrollmentIds?.length === 0) return { of: () => null, seat: () => ({ repo: null, groupId: null }) };
@@ -66,12 +68,11 @@ export async function seatRepos(db: Db | Tx, projects: readonly SeatProject[], e
   const [repos, seats, places] = await Promise.all([
     db.select().from(projectRepos).where(inArray(projectRepos.projectId, projectIds)),
     db
-      .select({ id: enrollments.id, userId: enrollments.userId })
+      .select({ id: enrollments.id, userId: enrollments.userId, staff: enrollments.staff })
       .from(enrollments)
       .where(
         and(
           inArray(enrollments.classroomId, [...new Set(projects.map((p) => p.classroomId))]),
-          eq(enrollments.staff, false),
           lines === undefined ? undefined : inArray(enrollments.id, lines),
         ),
       ),
@@ -83,13 +84,14 @@ export async function seatRepos(db: Db | Tx, projects: readonly SeatProject[], e
   const own = new Map(repos.filter((r) => r.groupId === null).map((r) => [`${r.projectId}:${r.userId}`, r]));
   const ofGroup = new Map(repos.filter((r) => r.groupId !== null).map((r) => [r.groupId!, r]));
   const userOf = new Map(seats.map((s) => [s.id, s.userId]));
+  const staffLines = new Set(seats.filter((s) => s.staff).map((s) => s.id));
   const groupOf = new Map(places.map((p) => [`${p.projectId}:${p.enrollmentId}`, p.groupId]));
   const grouped = new Set(projects.filter((p) => p.groupMode).map((p) => p.id));
   const seat = (projectId: string, enrollmentId: string) => {
     if (!userOf.has(enrollmentId)) return { repo: null, groupId: null };
     const userId = userOf.get(enrollmentId);
     const mine = userId ? own.get(`${projectId}:${userId}`) : undefined;
-    const group = grouped.has(projectId) ? groupOf.get(`${projectId}:${enrollmentId}`) : undefined;
+    const group = grouped.has(projectId) && !staffLines.has(enrollmentId) ? groupOf.get(`${projectId}:${enrollmentId}`) : undefined;
     const repo = pickStudentRepo(mine, group === undefined ? undefined : ofGroup.get(group)) ?? null;
     // Through its group unless the seat reads its own repository.
     return { repo, groupId: repo !== null && repo.groupId === null ? null : (group ?? null) };
@@ -104,6 +106,8 @@ export async function seatRepo(db: Db | Tx, project: SeatProject, enrollmentId: 
 
 /** A reader of a repository: their roster line, its account, that account's GitHub link (null: none). */
 export interface RepoMember {
+  /** The line is a staff seat (ADR-077): a test repository's one reader. */
+  staff: boolean;
   enrollmentId: string;
   userId: string;
   account: AccountRow | null;
@@ -118,13 +122,13 @@ export interface RepoMember {
  * group repository's creator for having created it (N-SEC-20).
  */
 export async function repoMembers(db: Db | Tx, repo: RepoRow, classroomId: string): Promise<RepoMember[]> {
-  const columns = { enrollmentId: enrollments.id, userId: enrollments.userId, account: githubAccounts };
+  const columns = { enrollmentId: enrollments.id, userId: enrollments.userId, staff: enrollments.staff, account: githubAccounts };
   if (repo.groupId === null) {
     const rows = await db
       .select(columns)
       .from(enrollments)
       .leftJoin(githubAccounts, eq(githubAccounts.userId, enrollments.userId))
-      .where(and(eq(enrollments.classroomId, classroomId), eq(enrollments.userId, repo.userId), eq(enrollments.staff, false)));
+      .where(and(eq(enrollments.classroomId, classroomId), eq(enrollments.userId, repo.userId)));
     return rows.map((r) => ({ ...r, userId: r.userId! }));
   }
   const rows = await db

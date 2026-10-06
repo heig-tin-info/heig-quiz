@@ -206,7 +206,8 @@ export async function remindDeadlines(db: Db, now: Date, log?: NotifyLog): Promi
   for (const repo of claimedRepos) {
     const project = refs.get(repo.projectId)!;
     // Its readers (`repoMembers`, the one rule: a group's members, never its creator for having created it).
-    const userIds = (await repoMembers(db, repo, project.classroomId)).map((m) => m.userId);
+    // A staff seat's test repository reminds nobody: notifications go to student seats (ADR-077).
+    const userIds = (await repoMembers(db, repo, project.classroomId)).filter((m) => !m.staff).map((m) => m.userId);
     await notifyUsers(db, userIds, { kind: "project_deadline_reminder", projectId: project.id, projectTitle: project.name }, log);
     told += userIds.length;
   }

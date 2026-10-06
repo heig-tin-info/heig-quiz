@@ -326,10 +326,11 @@ export interface DetailOptions {
  * group they are in (M3-16b: the page draws one row per group from them),
  * then the repositories no student of the roster reads any more, a group's
  * with its group (R1's group kept with no member). A
- * repository of a user who now holds a STAFF seat of the classroom is left
- * out altogether — rows, counts and the release's readiness
- * (`studentRepos`, `releaseCounts`: the release reads the same): a staff
- * seat is never a student's (ADR-018).
+ * repository of a user who holds a STAFF seat of the classroom is a TEST
+ * repository (ADR-077): a row of its own, `staff`, after the students' —
+ * and in no count nor in the release's readiness (`studentRepos`,
+ * `releaseCounts`: the release reads the same): a staff seat is never a
+ * student's (ADR-018).
  * The project was loaded under `staffAccess` by the route (invariant 6).
  */
 export async function projectDetail(
@@ -347,53 +348,64 @@ export async function projectDetail(
       prenom: enrollments.prenom,
       email: enrollments.email,
       claimedAt: enrollments.claimedAt,
+      staff: enrollments.staff,
       githubLogin: githubAccounts.login,
     })
     .from(enrollments)
     .leftJoin(githubAccounts, eq(githubAccounts.userId, enrollments.userId))
-    .where(and(eq(enrollments.classroomId, project.classroomId), eq(enrollments.staff, false)))
-    .orderBy(enrollments.nom, enrollments.prenom, enrollments.id);
+    .where(eq(enrollments.classroomId, project.classroomId))
+    .orderBy(enrollments.staff, enrollments.nom, enrollments.prenom, enrollments.id);
+  // Whose repository: a student's own, or their copy group's (`seatRepos`,
+  // N-SEC-20: never the group repository's creator for having created it);
+  // one row per student, each member reading the group's. A staff seat reads
+  // its own individual repository only: a teacher's TEST repository (ADR-077).
+  const [seats, copy] = await Promise.all([seatRepos(db, [project]), copyGroups(db, project)]);
+  // "Counted" is `studentRepos`; "shown" adds the staff seats' test repositories.
   const repos = await studentRepos(db, project);
-  const repoIds = repos.map((repo) => repo.id);
+  const tests = roster.flatMap((s) => (s.staff ? [seats.of(project.id, s.enrollmentId)] : [])).filter((r) => r !== null);
+  const shownRepos = [...repos, ...tests];
+  const repoIds = shownRepos.map((repo) => repo.id);
   const [runs, facts, dispatches, syncs] = await Promise.all([
-    slotRuns(db, repos),
+    slotRuns(db, shownRepos),
     runFacts(db, repoIds),
     finalDispatches(db, repoIds),
-    repoSyncViews(db, project, repos),
+    repoSyncViews(db, project, shownRepos),
   ]);
   const liveRepos = repos.filter((repo) => isLive(repo, project));
-  const { live, complete } = await liveStates(db, config, project, liveRepos, opts.log, opts.budgetMs ?? LIVE_BUDGET_MS);
+  const shownLive = shownRepos.filter((repo) => isLive(repo, project));
+  const { live, complete } = await liveStates(db, config, project, shownLive, opts.log, opts.budgetMs ?? LIVE_BUDGET_MS);
   const toRevoke = await reposWithAccessToRevoke(db, project.id);
 
   const views = new Map(
-    repos.map((repo) => [
+    shownRepos.map((repo) => [
       repo.id,
       repoView(project, repo, runs, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), toRevoke),
     ]),
   );
-  // Whose repository: a student's own, or their copy group's (`seatRepos`,
-  // N-SEC-20: never the group repository's creator for having created it);
-  // one row per student, each member reading the group's.
-  const [seats, copy] = await Promise.all([seatRepos(db, [project]), copyGroups(db, project)]);
   const groupOf = (groupId: string | null) => (groupId === null ? null : (copy.get(groupId) ?? null));
   const shown = new Set<string>();
-  const rows: ProjectDetailRow[] = roster.map((s) => {
+  const rows: ProjectDetailRow[] = roster.flatMap((s) => {
     const { repo, groupId } = seats.seat(project.id, s.enrollmentId);
     const view = repo === null ? undefined : views.get(repo.id);
+    // A staff seat is a row only once it holds a test repository.
+    if (s.staff && !view) return [];
     if (view) shown.add(repo!.id);
-    return {
-      group: groupOf(groupId),
-      student: {
-        enrollmentId: s.enrollmentId,
-        userId: s.userId,
-        nom: s.nom,
-        prenom: s.prenom,
-        email: s.email,
-        claimed: s.claimedAt !== null && s.userId !== null,
-        githubLogin: s.githubLogin,
+    return [
+      {
+        group: groupOf(groupId),
+        student: {
+          enrollmentId: s.enrollmentId,
+          userId: s.userId,
+          nom: s.nom,
+          prenom: s.prenom,
+          email: s.email,
+          claimed: s.claimedAt !== null && s.userId !== null,
+          githubLogin: s.githubLogin,
+        },
+        repo: view ?? null,
+        staff: s.staff,
       },
-      repo: view ?? null,
-    };
+    ];
   });
   // The repositories no student of the roster reads any more — their
   // student left it, or every member left their group —, by the account
@@ -417,11 +429,12 @@ export async function projectDetail(
         claimed: false,
         githubLogin,
       };
-      rows.push({ student, repo: views.get(repo.id)!, group: groupOf(repo.groupId) });
+      rows.push({ student, repo: views.get(repo.id)!, group: groupOf(repo.groupId), staff: false });
     }
   }
 
-  const accepted = [...views.values()];
+  // Counted over the students' repositories only: a test repository is no acceptance (ADR-077).
+  const accepted = repos.map((repo) => views.get(repo.id)!);
   const counts = releaseCounts(project, repos);
   // ONE predicate for the primary action and the page's Sync button: the sync's own `ahead` (M3-07).
   const sync = projectSyncState(project, repos, now);
@@ -443,7 +456,7 @@ export async function projectDetail(
     }),
     sync,
     counts: {
-      students: roster.length,
+      students: roster.filter((s) => !s.staff).length,
       accepted: accepted.length,
       groups: copy.size,
       ...counts,

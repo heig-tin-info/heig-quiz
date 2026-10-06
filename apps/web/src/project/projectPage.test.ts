@@ -423,6 +423,11 @@ describe("one row per group (ADR-070 §4, M3-16b)", () => {
     ]);
   });
 
+  it("carries a teacher's test repository as a staff entry (ADR-077)", () => {
+    const entries = repoEntries(makeProject({ rows: [row(1, repoA), { ...row(2, repoA), staff: true }] }));
+    expect(entries.map((e) => e.kind === "student" && e.staff)).toEqual([false, true]);
+  });
+
   it("keeps one row per student in an individual project, whatever a row says", () => {
     const entries = repoEntries(makeProject({ rows: [row(1, repoA), row(2, null, {}, g1)] }));
     expect(entries.map((e) => [e.kind, e.label])).toEqual([

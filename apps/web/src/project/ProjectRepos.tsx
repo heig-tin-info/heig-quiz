@@ -1,4 +1,4 @@
-import { FolderGit2, Loader2, Lock, LockOpen, Snowflake, Users } from "lucide-react";
+import { FolderGit2, GraduationCap, Loader2, Lock, LockOpen, Snowflake, Users } from "lucide-react";
 
 import type { ProjectDetail, ProjectRepoView } from "@quiz/contracts";
 
@@ -47,6 +47,13 @@ function IdentityCell({ entry, groupMode }: { entry: RepoEntry; groupMode: boole
   return (
     <span className="flex flex-wrap items-center gap-x-2">
       <span className={cx("font-semibold", deleted && "font-medium")}>{entry.label}</span>
+      {entry.staff ? (
+        <Tip label={t("project.repo.staffTest")}>
+          <Badge tone="zinc" icon={GraduationCap}>
+            {t("grading.staff")}
+          </Badge>
+        </Tip>
+      ) : null}
       {student.enrollmentId === null ? (
         <Badge tone="zinc">{t("project.repo.leftRoster")}</Badge>
       ) : groupMode && entry.repo === null ? (

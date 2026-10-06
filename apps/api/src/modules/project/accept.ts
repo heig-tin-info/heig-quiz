@@ -51,7 +51,7 @@ import { audit, type AuditActor } from "../../audit.js";
 import { linkedLogin } from "../../auth/githubLink.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { githubAccounts, projectRepoAccess, projectRepos, projects } from "../../db/schema.js";
+import { enrollments, githubAccounts, projectRepoAccess, projectRepos, projects } from "../../db/schema.js";
 import { installationClient, ownerRepo, type InstallationClient } from "../../github/app.js";
 import { isInvitationRefused } from "../../github/collaborators.js";
 import { provisionStudentRepo, RepoNameTaken } from "../../github/provision.js";
@@ -215,6 +215,9 @@ export async function acceptProject(db: Db, config: AppConfig, input: AcceptInpu
  */
 async function acceptGroup(db: Db, config: AppConfig, input: AcceptInput, seat: RepoRow | null): Promise<ProjectAcceptance> {
   const { project, userId, now } = input;
+  // A staff seat is never placed in a group, whatever membership it kept (ADR-070 §2, ADR-077).
+  const [line] = await db.select({ staff: enrollments.staff }).from(enrollments).where(eq(enrollments.id, input.enrollmentId));
+  if (line?.staff) throw noGroup();
   if (joinable(seat)) return joinRepo(db, config, input, seat!);
   if (seat?.groupId != null && settled(seat)) return acceptance(seat);
   if (seat === null && (await copyGroupOf(db, project.id, input.enrollmentId)) === null) throw noGroup();

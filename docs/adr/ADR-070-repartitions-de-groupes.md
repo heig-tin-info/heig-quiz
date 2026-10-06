@@ -39,6 +39,9 @@ the unplaced students (S1–S4); see *Third amendment of 2026-10-05*. Amended a 
 time the same day (product owner, merge task M3-15b-2b): decisions 4 and 6
 — what *Resync* does with a deleted set group, the release, and an arrival
 without a repository; see *Fourth amendment of 2026-10-05*.
+Amended a fifth time on 2026-10-06 (product owner, ADR-077): decision 2 — staff
+seats stay unplaced and answer `409 no_group` on a group project; see *Fifth
+amendment of 2026-10-06*.
 
 ## Context
 
@@ -410,6 +413,15 @@ How it is built (orchestrator, M3-17):
   A draft has nothing to resync (its copy follows). Refused: an archived
   project (`project_archived`, the sync's own refusal), a released one (`released`), an archived classroom
   (`classroom_archived`).
+
+### Fifth amendment of 2026-10-06 (product owner, ADR-077)
+
+- **§2 — staff seats stay unplaced.** A teacher's staff seat (ADR-018) may
+  now accept an individual project to test it
+  ([ADR-077](ADR-077-depots-de-test-du-personnel.md)), but it is never placed
+  in a group: on a group project it answers `409 no_group`, whatever group
+  membership it kept from before it became a staff seat, and it is never
+  invited on a group's repository.
 
 ## Consequences
 

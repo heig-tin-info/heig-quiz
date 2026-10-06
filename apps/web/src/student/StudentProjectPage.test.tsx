@@ -28,6 +28,7 @@ const INVITE = "POST /app/api/student/projects/p1/invite";
 
 const project = (over: Partial<StudentProject> = {}): StudentProject => ({
   kind: "project",
+  seat: "student",
   id: "p1",
   title: "Labo 1 — Pointeurs",
   classroomId: "r1",
@@ -288,14 +289,36 @@ describe("the release", () => {
 });
 
 describe("a reader who is not the student", () => {
-  it("gives a teacher in the student view no action and no Resend, one muted line", async () => {
+  it("gives a teacher in the student view WITHOUT a seat no action and no Resend, pointing to Join as student", async () => {
     sessionStorage.setItem("quiz-view-as", "student");
-    const pending = project({ repo: { ...project().repo!, invitation: "pending" } });
+    const pending = project({ seat: null, repo: { ...project().repo!, invitation: "pending" } });
     mockFetch({ [URL]: ok(pending) });
     render({ me: makeMe({ role: "teacher" }) });
-    expect(await screen.findByText("Read-only view: the student's actions are not available")).toBeInTheDocument();
+    expect(await screen.findByText(/Read-only view: you hold no seat in this classroom.*Join as student/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open the invitation" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Resend the invitation" })).toBeNull();
+  });
+
+  it("gives a teacher WITH a staff seat the real actions, and says the repository counts nowhere (ADR-077)", async () => {
+    sessionStorage.setItem("quiz-view-as", "student");
+    const pending = project({ seat: "staff", repo: { ...project().repo!, invitation: "pending" } });
+    mockFetch({ [URL]: ok(pending) });
+    render({ me: makeMe({ role: "teacher" }) });
+    expect(await screen.findByRole("link", { name: "Open the invitation" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resend the invitation" })).toBeInTheDocument();
+    expect(screen.getByText(/counts nowhere/)).toBeInTheDocument();
+    expect(screen.queryByText(/Read-only view/)).toBeNull();
+  });
+
+  it("keeps an impersonation of a student read-only", async () => {
+    const me = makeMe({
+      role: "student",
+      session: { kind: "impersonation", evaluationId: null, readOnly: true, superPowersUntil: null, superPowersAvailable: false },
+    });
+    mockFetch({ [URL]: ok(project({ repo: { ...project().repo!, invitation: "pending" } })) });
+    render({ me });
+    expect(await screen.findByText(/Read-only view: the student's actions are not available/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open the invitation" })).toBeNull();
   });
 });
 

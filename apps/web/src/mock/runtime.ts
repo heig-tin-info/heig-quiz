@@ -56,6 +56,9 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  * `provisioning`: the student's Accept of a project takes twenty seconds
  *   (`mock/student.ts`, M3-13); `refused`: it is refused `409
  *   repo_name_taken`; `stale`: `409 github_account_stale` (Relink GitHub).
+ * `staffseat`: the student persona is a teacher on a STAFF seat (ADR-077): their
+ *   project page offers the real actions; `staffrepo`: the staff project page
+ *   shows that teacher's test repository, badged (`mock/project.ts`).
  */
 export const FLAG_NAMES = [
   "empty",
@@ -91,6 +94,8 @@ export const FLAG_NAMES = [
   "provisioning",
   "refused",
   "stale",
+  "staffseat",
+  "staffrepo",
 ] as const;
 type FlagName = (typeof FLAG_NAMES)[number];
 export const flags = {} as Record<FlagName, boolean>;

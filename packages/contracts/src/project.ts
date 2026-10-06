@@ -166,6 +166,10 @@ export type ProjectActivitySummary = z.infer<typeof ProjectActivitySummary>;
 export const StudentProjectStatus = z.enum(STUDENT_PROJECT_STATUSES);
 export type StudentProjectStatus = z.infer<typeof StudentProjectStatus>;
 
+/** Which roster seat reads a project: a student's, or a teacher's staff seat (ADR-018, ADR-077). */
+export const ProjectSeatKind = z.enum(["student", "staff"]);
+export type ProjectSeatKind = z.infer<typeof ProjectSeatKind>;
+
 /**
  * A published project on the student's Activities — the home and the
  * classroom page (F-PROJ-04, F-ORG-14; the `project` member of
@@ -902,7 +906,16 @@ export type ProjectDetailGroup = z.infer<typeof ProjectDetailGroup>;
  * (its members left the roster, or R1's group kept with no member) is a row
  * of its creator's account (`enrollmentId` null) carrying its group.
  */
-export const ProjectDetailRow = z.object({ student: ProjectStudent, repo: ProjectRepoView.nullable(), group: ProjectDetailGroup.nullable() });
+export const ProjectDetailRow = z.object({
+  student: ProjectStudent,
+  repo: ProjectRepoView.nullable(),
+  group: ProjectDetailGroup.nullable(),
+  /**
+   * A teacher's TEST repository (ADR-077): a staff seat accepted the
+   * project. Shown badged, counted nowhere, never graded nor released.
+   */
+  staff: z.boolean(),
+});
 export type ProjectDetailRow = z.infer<typeof ProjectDetailRow>;
 
 export const ProjectPrimaryAction = z.enum(PROJECT_PRIMARY_ACTIONS);
@@ -1240,13 +1253,15 @@ export type StudentProjectRelease = z.infer<typeof StudentProjectRelease>;
  * a project towards a student, loaded through the classroom's student
  * branch (`studentProjectView`, `guards.ts`): the card's facts, the
  * project's grading mode, the caller's own repository (null until they
- * accept — and always null for a teacher in the student view, whose staff
- * seat holds none), and the release once it happened. Never the source nor
+ * accept — a teacher's staff seat holds its own test repository, ADR-077;
+ * a teacher with no seat holds none), and the release once it happened. Never the source nor
  * the distribution repository, another student's anything, a run after the
  * deadline, the review or the teacher's score before the release, nor the
  * staff's flags.
  */
 export const StudentProject = StudentProjectCard.omit({ invitation: true, repoFullName: true, repoUrl: true }).extend({
+  /** The caller's own seat; null for a teacher in the student view who holds none (read-only, ADR-077). */
+  seat: ProjectSeatKind.nullable(),
   gradingMode: ProjectGradingMode,
   repo: StudentProjectRepo.nullable(),
   release: StudentProjectRelease.nullable(),

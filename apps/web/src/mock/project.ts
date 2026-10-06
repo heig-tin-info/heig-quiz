@@ -874,6 +874,26 @@ function settleSync(p: MockProject): void {
   Object.assign(p.sync, { aheadAt: null, aheadCommits: null, syncedAt: at });
 }
 
+/** A teacher's test repository (ADR-077): the staff seat's row, modelled on `repo`'s state, badged by the page. */
+function staffTestRow(p: MockProject, repo: MockRepo): ProjectDetailRow {
+  const view = repoView(p, repo);
+  const fullName = `${repo.fullName.split("/")[0]}/${p.summary.slug}-claire-martin-test`;
+  return {
+    group: null,
+    staff: true,
+    student: {
+      enrollmentId: "11111111-1111-4111-8111-1111111111aa",
+      userId: "11111111-1111-4111-8111-1111111111bb",
+      nom: "Martin",
+      prenom: "Claire",
+      email: "claire.martin@heig-vd.ch",
+      claimed: true,
+      githubLogin: "claire-martin-test",
+    },
+    repo: { ...view, id: `${view.id}-staff`, fullName },
+  };
+}
+
 function detailOf(p: MockProject): ProjectDetail {
   settleSync(p);
   const roster = classroomRoster(p.summary.classroomId);
@@ -901,6 +921,7 @@ function detailOf(p: MockProject): ProjectDetail {
             githubLogin: s.githubLogin,
           },
           repo: repo ? repoView(p, repo) : null,
+          staff: false,
         };
       }),
     // The repositories no roster student reads: a student who left, or a group no one is in any more.
@@ -918,6 +939,7 @@ function detailOf(p: MockProject): ProjectDetail {
           githubLogin: r.student.githubLogin,
         },
         repo: repoView(p, r),
+        staff: false,
       })),
   ];
   const drifted = p.copy !== null && p.summary.groupSetId !== null && copyKey(p.copy) !== copyKey(setGroupsOf(p.summary.groupSetId));
@@ -969,7 +991,8 @@ function detailOf(p: MockProject): ProjectDetail {
     // A stopped copy the set moved away from since (M3-16b); a confirmed resync owed for two reads (R2).
     groupsDrifted: drifted && p.summary.state !== "draft",
     groupSyncPending: pending,
-    rows,
+    // `?staffrepo=1`: the teacher's own test repository (ADR-077), after the students', counted nowhere above.
+    rows: flags.staffrepo && !p.summary.groupMode && p.repos[0] ? [...rows, staffTestRow(p, p.repos[0])] : rows,
   };
   p.read = true;
   return detail;

@@ -69,7 +69,6 @@ const isNotFound = (error: unknown) => error instanceof ApiError && error.status
 
 export function StudentProjectPage({ id, navigate }: { id: string; navigate: Navigate }) {
   const t = useT();
-  const readOnly = useStudentReadOnly();
   const project = useQuery<StudentProject>({
     queryKey: studentProjectKey(id),
     queryFn: () => api(`/app/api/student/projects/${id}`),
@@ -105,11 +104,12 @@ export function StudentProjectPage({ id, navigate }: { id: string; navigate: Nav
   }
   if (!project.data) return <PageSkeleton body="summary-and-block" />;
 
-  return <ProjectBody project={project.data} readOnly={readOnly} navigate={navigate} />;
+  return <ProjectBody project={project.data} navigate={navigate} />;
 }
 
-function ProjectBody({ project, readOnly, navigate }: { project: StudentProject; readOnly: boolean; navigate: Navigate }) {
+function ProjectBody({ project, navigate }: { project: StudentProject; navigate: Navigate }) {
   const t = useT();
+  const readOnly = useStudentReadOnly(project.seat !== null);
   // The server's clock, from the payload (invariant 5).
   const now = useServerNow(project.serverNow);
 
@@ -144,7 +144,10 @@ function ProjectBody({ project, readOnly, navigate }: { project: StudentProject;
             <p data-coach="sproj.deadline">
               {project.courseCode} · {timing}
             </p>
-            {readOnly ? <p className="mt-0.5 text-[13px]">{t("sproj.readOnly")}</p> : null}
+            {readOnly ? (
+              <p className="mt-0.5 text-[13px]">{t(project.seat === null ? "sproj.readOnly.noSeat" : "sproj.readOnly")}</p>
+            ) : null}
+            {project.seat === "staff" && !readOnly ? <p className="mt-0.5 text-[13px]">{t("sproj.staffTest")}</p> : null}
           </>
         }
         actions={

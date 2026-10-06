@@ -44,7 +44,8 @@
  * the project due; its consequences on GitHub must have been confirmed
  * ({@link ConfirmationNeeded}, `409 needs_confirmation`). A staff seat
  * leaving it is no GitHub change: the seat's accounts were revoked when it
- * became one (`selfEnroll`, `access.ts`). A draft holds no repository
+ * became one (`selfEnroll`, `access.ts`), and it is never granted on a
+ * group's repository since (`recordGrant`, ADR-077). A draft holds no repository
  * (`replaceGroupCopy`).
  *
  * **A confirmed resync** (M3-15b-2b) stores its consequences' keys on the

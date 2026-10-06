@@ -7,9 +7,9 @@
  * student may have changed since.
  *
  * - `recordGrant` — the account written BEFORE GitHub is asked, the line
- *   locked FOR SHARE and still its user's student seat: a line removed,
- *   unclaimed, moved to another address or turned staff seat meanwhile is
- *   never invited;
+ *   locked FOR SHARE and still its user's seat (a student's, or a staff
+ *   seat on its own individual repository, ADR-077): a line removed,
+ *   unclaimed or moved to another address meanwhile is never invited;
  * - `releaseLine` — the other side of that lock: a roster write that takes
  *   a line or its account away, in its transaction, refuses while an
  *   account recorded for it is still live (`RevokeFailed`);
@@ -89,9 +89,10 @@ export const notRecorded = (answer: object | NotRecorded): answer is NotRecorded
 /**
  * The account let into `repo`, written BEFORE GitHub is asked, in one short
  * transaction that locks the line FOR SHARE: only while the line is still
- * claimed by `account.userId` as a STUDENT seat — otherwise nobody is
- * invited. A roster write that takes the line or its account away waits
- * for this lock and then finds the row (`releaseLine`). A group's
+ * claimed by `account.userId` (a student's seat or, for its own test
+ * repository only, a staff seat, ADR-077) — otherwise nobody is invited. A
+ * roster write that takes the line or its account away waits for this lock
+ * and then finds the row (`releaseLine`). A group's
  * repository also locks the line's member row of the copy FOR SHARE
  * (M3-15b-2): only a member of that group whose departure is not pending is
  * let in — a set's write marking it waits for this lock, and the
@@ -105,7 +106,9 @@ export async function recordGrant(db: Db, repo: RepoRow, account: InvitedAccount
       .from(enrollments)
       .where(eq(enrollments.id, account.enrollmentId))
       .for("share");
-    if (!line || line.userId !== account.userId || line.staff) return "gone";
+    if (!line || line.userId !== account.userId) return "gone";
+    // A staff seat reads its own individual repository only, never a group's (ADR-077).
+    if (line.staff && repo.groupId !== null) return "gone";
     if (repo.groupId !== null) {
       const [member] = await tx
         .select({ groupId: projectGroupMembers.groupId, departingAt: projectGroupMembers.departingAt })
@@ -214,7 +217,7 @@ export async function inviteAccount(
   db: Db,
   octokit: Octokit,
   repo: RepoRow,
-  member: RepoMember & { account: NonNullable<RepoMember["account"]> },
+  member: Omit<RepoMember, "staff"> & { account: NonNullable<RepoMember["account"]> },
   ctx: InviteContext,
 ): Promise<{ login: string; invitation: "pending" | "accepted"; fresh: boolean } | NotRecorded> {
   const login = await linkedLogin(db, octokit, member.userId, member.account).catch((err: unknown) => {

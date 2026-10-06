@@ -338,6 +338,7 @@ describe("the student's project (F-PROJ-15)", () => {
     const before = await view(lab.id, student.headers);
     expect(before).toEqual({
       kind: "project",
+      seat: "student",
       id: lab.id,
       title: "Lab 4",
       classroomId: room.classroomId,
