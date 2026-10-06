@@ -22,7 +22,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
-import { z } from "zod";
 
 import type { ClassroomDetail, GithubClassroom, GithubConnectBody, GithubOrg } from "@quiz/contracts";
 
@@ -65,6 +64,16 @@ export function ClassroomGithub({
 }) {
   const t = useT();
   const github = useClassroomGithub(room.id);
+  // A connected classroom has no sheet: a stale `?connect=1&installed=` (a
+  // setup return after a re-configuration) is dropped, or a later disconnect
+  // would open the sheet with an old preselection.
+  const [installedParam, setInstalledParam] = useSearchParam("installed", "");
+  const connected = github.data != null && github.data.link !== null;
+  useEffect(() => {
+    if (!connected) return;
+    if (installedParam !== "") setInstalledParam("");
+    if (connecting) onConnecting(false);
+  }, [connected, installedParam, connecting, setInstalledParam, onConnecting]);
 
   if (github.isLoading || githubAbsent(github.error)) return null;
   let body;
@@ -169,11 +178,10 @@ function CheckRow({ line }: { line: CheckLine }) {
       {line.action ? (
         <a
           href={line.action.href}
-          target="_blank"
-          rel="noopener noreferrer"
+          {...(line.action.newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
           className="inline-flex shrink-0 items-center gap-1 text-[13px] font-medium text-accent hover:underline"
         >
-          {t(line.action.label)} <ExternalLink className="size-3.5" />
+          {t(line.action.label)} {line.action.newTab ? <ExternalLink className="size-3.5" /> : null}
         </a>
       ) : null}
     </li>
@@ -202,7 +210,7 @@ function ConnectSheet({
   // It only preselects an organization of the list that can be picked, once,
   // and is taken out of the address (a reload must not pick again).
   const [installedParam, setInstalledParam] = useSearchParam("installed", "");
-  const [installedId] = useState(() => (z.uuid().safeParse(installedParam).success ? installedParam : null));
+  const [installedId] = useState(() => installedParam || null);
   useEffect(() => {
     if (installedParam !== "") setInstalledParam("");
   }, [installedParam, setInstalledParam]);

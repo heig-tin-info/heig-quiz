@@ -341,8 +341,9 @@ The first plan reused classroom's App at the cutover; D23 replaced it.
   `https://quiz.chevallier.io/webhooks/github`, setup URL and callback on
   Quiz: the Setup URL is `https://<host>/setup/github/installed`, with
   "Redirect on update" ticked so that a re-configuration of the
-  installation also returns to Quiz, on the classroom's connect sheet), and a staging App on a test organization. Each has its own id,
-  key, webhook secret, client id and secret, slug.
+  installation also returns to Quiz, on the classroom's connect sheet), and
+  a staging App on a test organization. Each has its own id, key, webhook
+  secret, client id and secret, slug.
 - **Coexistence.** An organization may install classroom's App and Quiz's
   side by side; each receives its own deliveries. A repository used by
   both (a journal read by classroom and by Quiz) is harmless: both mirror

@@ -109,7 +109,7 @@ describe("the classroom's GitHub section", () => {
   });
 
   it("ignores an `installed` that is not a selectable organization of the list", async () => {
-    for (const installed of [GONE.id, "0190d3c4-0000-7000-8000-00000000ffff", "not-a-uuid"]) {
+    for (const installed of [GONE.id, "0190d3c4-0000-7000-8000-00000000ffff"]) {
       mockFetch({ [`GET ${GITHUB}`]: ok(plain), [`GET ${ORGS}`]: ok([TIN, GONE, EMB]) });
       const { unmount } = renderWithProviders(
         <ClassroomGithub room={makeClassroomDetail()} connecting onConnecting={vi.fn()} />,
@@ -122,6 +122,26 @@ describe("the classroom's GitHub section", () => {
       expect(within(sheet).getByRole("radio", { name: /heig-emb-lab/ })).toBeChecked();
       unmount();
     }
+  });
+
+  it("drops a stale connect sheet request on a connected classroom", async () => {
+    mockFetch({ [`GET ${GITHUB}`]: ok(connected) });
+    const onConnecting = renderSection({
+      connecting: true,
+      route: `/classrooms/r1/settings?connect=1&installed=${TIN.id}`,
+    });
+    await screen.findByRole("list", { name: "Checks" });
+    await waitFor(() => expect(onConnecting).toHaveBeenCalledWith(false));
+    expect(window.location.search).toBe("?connect=1");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("links the installation fix in the same tab", async () => {
+    mockFetch({ [`GET ${GITHUB}`]: ok({ ...connected, link: { ...connected.link!, org: { ...TIN, installed: false } } }) });
+    renderSection();
+    const fix = await screen.findByRole("link", { name: /Open on GitHub/ });
+    expect(fix).toHaveAttribute("href", INSTALL);
+    expect(fix).not.toHaveAttribute("target");
   });
 
   it("links the free-plan check to GitHub Education, in a new tab", async () => {

@@ -148,7 +148,8 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
       req.log.error({ err }, "recording an installation failed");
     }
     // Back in the tab the teacher left, on the connect sheet; `installed`
-    // only preselects an organization the sheet's own list must contain.
+    // only preselects an organization the sheet's own list must contain. The
+    // id in Location is no secret: it grants nothing without a staff session.
     return reply.redirect(
       query.state === undefined
         ? "/"

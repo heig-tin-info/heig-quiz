@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { GithubClassroomLink } from "@quiz/contracts";
 
 import { en } from "../i18n/en";
-import { EDUCATION_UPGRADE_URL, githubChecks } from "./checks";
+import { githubChecks } from "./checks";
 
 /*
  * The checks of a connected classroom (F-GH-03): each fact the API sends
@@ -56,10 +56,10 @@ describe("githubChecks", () => {
 
   it("links the free plan to GitHub Education, and no other plan", () => {
     expect(githubChecks(link({ org: { plan: "free" } }), INSTALL)[1]!.action).toEqual({
-      href: EDUCATION_UPGRADE_URL,
+      href: "https://education.github.com/globalcampus/teacher",
       label: "github.check.upgrade",
+      newTab: true,
     });
-    expect(EDUCATION_UPGRADE_URL).toBe("https://education.github.com/globalcampus/teacher");
     expect(githubChecks(link({}), INSTALL)[1]!.action).toBeUndefined();
   });
 

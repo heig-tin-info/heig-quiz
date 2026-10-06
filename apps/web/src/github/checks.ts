@@ -22,12 +22,12 @@ export interface CheckLine {
   level: CheckLevel;
   text: keyof Dict;
   vars?: Record<string, string>;
-  /** The line's way out, on GitHub: opened in a new tab. */
-  action?: { href: string; label: keyof Dict };
+  /** The line's way out, on GitHub. Same tab unless `newTab`, so a setup return lands back here. */
+  action?: { href: string; label: keyof Dict; newTab?: boolean };
 }
 
 /** Where a verified teacher upgrades an organization (GitHub Education's dashboard). */
-export const EDUCATION_UPGRADE_URL = "https://education.github.com/globalcampus/teacher";
+const EDUCATION_UPGRADE_URL = "https://education.github.com/globalcampus/teacher";
 
 function installationLine({ org, checks }: GithubClassroomLink, installUrl: string): CheckLine {
   const id = "installation";
@@ -49,7 +49,7 @@ function planLine({ org }: GithubClassroomLink): CheckLine {
       id,
       level: "warning",
       text: "github.check.planFree",
-      action: { href: EDUCATION_UPGRADE_URL, label: "github.check.upgrade" },
+      action: { href: EDUCATION_UPGRADE_URL, label: "github.check.upgrade", newTab: true },
     };
   }
   return { id, level: "ok", text: "github.check.plan", vars: { plan: org.plan } };
