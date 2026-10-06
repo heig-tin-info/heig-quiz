@@ -87,7 +87,7 @@ export function ProjectGroup({
     { key: "title", label: t("eval.titleLabel") },
     { key: "start", label: t("project.start"), className: T.colHigh },
     { key: "deadline", label: t("project.deadline") },
-    { key: "actions", label: t("common.actions"), sortable: false, srOnly: true, className: "w-20" },
+    { key: "actions", label: t("common.actions"), sortable: false, srOnly: true, className: "w-10" },
   ];
   return (
     <section aria-labelledby="classroom-projects" className="space-y-3">

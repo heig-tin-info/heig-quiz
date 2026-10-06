@@ -749,12 +749,12 @@ const studentProjectView = (card: CardFacts): StudentProject => {
 
 /**
  * The cards with the state of their work (M3-14i), read off their view as
- * the server reads both: while the repository is live, the indicative
+ * the server reads both: once the invitation is accepted, the indicative
  * score left out once released.
  */
 const studentProjectCards = (): StudentProjectCard[] =>
   cardFacts().map((card) => {
-    const repo = card.repoFullName === null ? null : studentProjectView(card).repo;
+    const repo = card.invitation === "accepted" ? studentProjectView(card).repo : null;
     if (repo === null) return { ...card, work: null };
     const { lastCommit, commits, ciStatus, score } = repo;
     return { ...card, work: { lastCommit, commits, ciStatus, score: card.status === "released" ? null : score } };

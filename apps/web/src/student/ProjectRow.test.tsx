@@ -101,15 +101,11 @@ describe("the state of the work (M3-14i)", () => {
     expect(screen.getByText(/indicative/)).toBeInTheDocument();
   });
 
-  it("says no commit yet, and nothing of the work while the invitation waits", async () => {
+  it("says no commit yet before the first push", async () => {
     mockFetch({});
     const empty = { ...work, lastCommit: null, commits: 0, ciStatus: "none" as const, score: null };
-    const { unmount } = render(card({ status: "in_progress", invitation: "accepted", ...REPO, work: empty }));
+    render(card({ status: "in_progress", invitation: "accepted", ...REPO, work: empty }));
     expect(await screen.findByText("no commit yet")).toBeInTheDocument();
-    unmount();
-    render(card({ status: "in_progress", invitation: "pending", ...REPO, work }));
-    await screen.findByRole("link", { name: "Open the invitation" });
-    expect(screen.queryByText("9a3f1c7")).toBeNull();
   });
 });
 

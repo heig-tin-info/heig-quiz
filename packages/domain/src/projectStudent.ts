@@ -5,7 +5,6 @@
  * repository's runs they read before the release. The `project` module
  * reads the rows; these decide.
  */
-import { receivedLate } from "./projectRuns.js";
 
 /**
  * The spec's words (F-PROJ-04), plus `released` once the scores are out
@@ -118,6 +117,6 @@ export interface CountedReceipt {
  */
 export function studentCommitCount(receipts: readonly CountedReceipt[], deadlineAt: Date): number {
   let n = 0;
-  for (const r of receipts) if (!receivedLate(r.receivedAt, deadlineAt, r.receivedAt)) n += r.commits ?? 1;
+  for (const r of receipts) if (r.receivedAt.getTime() <= deadlineAt.getTime()) n += r.commits ?? 1;
   return n;
 }

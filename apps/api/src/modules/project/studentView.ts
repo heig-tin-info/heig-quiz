@@ -13,7 +13,7 @@
  * the run their score comes from and that score, indicative until the
  * release (`studentScoreRun` of `@quiz/domain`: the current CI score, the
  * frozen one once their deadline is applied), the number of commits their
- * own pushes brought by their deadline (M3-14i; the card carries these
+ * repository received from no bot by their deadline (M3-14i; the card carries these
  * too, as the state of their work) — and, once released, the
  * final score's snapshot, its grade and the teacher's comment as the
  * release wrote it.
@@ -113,7 +113,11 @@ async function readings(db: Db, repos: readonly ProvisionedRepo[]): Promise<Read
           .where(and(inArray(pushReceipts.githubRepoId, ids), eq(pushReceipts.isBot, false))),
   ]);
   const receipts = new Map<number, CountedReceipt[]>();
-  for (const { githubRepoId, ...r } of rows) receipts.set(githubRepoId, [...(receipts.get(githubRepoId) ?? []), r]);
+  for (const { githubRepoId, ...r } of rows) {
+    const list = receipts.get(githubRepoId) ?? [];
+    list.push(r);
+    receipts.set(githubRepoId, list);
+  }
   return { runs, receipts };
 }
 
@@ -154,22 +158,23 @@ function cardFacts(row: CardRow, linked: boolean, now: Date): { facts: CardFacts
   };
 }
 
-/** The repository of `row` while it is live: provisioned, not deleted, its project not archived. */
-const liveRepo = (row: CardRow): ProvisionedRepo | null => {
-  const repo = provisioned(row.repo);
-  return repo !== null && isLive(repo, row.project) ? repo : null;
+/** The seat's repository while it is live: provisioned, not deleted, its project not archived. */
+const liveRepo = (row: RepoRow | null, project: ProjectRow): ProvisionedRepo | null => {
+  const repo = provisioned(row);
+  return repo !== null && isLive(repo, project) ? repo : null;
 };
 
 /**
  * One card (F-PROJ-04): the facts, the repository's name and URL once it
- * exists and is not deleted, and the state of the work on it (M3-14i) —
- * the view's reading, its indicative score left out once released.
+ * exists and is not deleted, and the state of the work on it once it is
+ * theirs, the invitation accepted (M3-14i) — the view's reading, its
+ * indicative score left out once released.
  */
 function card(row: CardRow, linked: boolean, now: Date, read: Readings): { card: StudentProjectCard; group: StudentActivityGroup } {
   const { facts, group } = cardFacts(row, linked, now);
-  const live = liveRepo(row);
+  const live = liveRepo(row.repo, row.project);
   let work: StudentProjectWork | null = null;
-  if (live !== null) {
+  if (live?.invitationStatus === "accepted") {
     const { lastCommit, commits, ciStatus, score } = reading(row.project, live, read, now);
     work = { lastCommit, commits, ciStatus, score: row.project.releasedAt === null ? score : null };
   }
@@ -220,7 +225,7 @@ export async function studentProjectCards(db: Db, userId: string, now: Date, cla
   cards.sort((a, b) => deadline(a) - deadline(b) || (a.project.name < b.project.name ? -1 : a.project.name > b.project.name ? 1 : 0));
   const [linked, read] = await Promise.all([
     rows.length > 0 && githubLinked(db, userId),
-    readings(db, cards.flatMap((row) => liveRepo(row) ?? [])),
+    readings(db, cards.flatMap((row) => liveRepo(row.repo, row.project) ?? [])),
   ]);
   const groups: StudentProjectCards = { open: [], upcoming: [], past: [] };
   for (const row of cards) {
@@ -280,7 +285,7 @@ export async function studentProject(db: Db, scope: StudentProjectScope, userId:
   const row = scope.seat !== null ? await seatRepo(db, project, scope.seat.id) : null;
   const seat = scope.seat === null ? null : scope.seat.staff ? ("staff" as const) : ("student" as const);
   const repo = provisioned(row);
-  const live = repo !== null && isLive(repo, project) ? repo : null;
+  const live = liveRepo(row, project);
   const [linked, read] = await Promise.all([githubLinked(db, userId), readings(db, live === null ? [] : [live])]);
   const { facts } = cardFacts({ project, classroomName: scope.room.name, courseCode: scope.course.code, repo: row }, linked, now);
   return {

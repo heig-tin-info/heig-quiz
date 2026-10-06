@@ -1174,14 +1174,14 @@ export type StudentProjectScore = z.infer<typeof StudentProjectScore>;
  * The state of a student's work on their repository (M3-14i), as the
  * project's student view reads it (F-PROJ-15, N-SEC-20): the commit it
  * stands on and its CI status ({@link StudentProjectRepo}), the number of
- * commits their own pushes brought by their effective deadline
+ * commits pushed to the repository by no bot by their effective deadline
  * (`studentCommitCount` of `@quiz/domain`, from the server's push
  * receipts: never the App's nor a workflow's commits, never a push after
  * the deadline), and the indicative score.
  */
 export const StudentProjectWork = z.object({
   lastCommit: z.object({ sha: z.string(), at: z.iso.datetime().nullable() }).nullable(),
-  commits: z.number().int(),
+  commits: z.number().int().nonnegative(),
   ciStatus: CiStatus,
   score: StudentProjectScore.nullable(),
 });

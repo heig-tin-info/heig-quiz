@@ -590,17 +590,7 @@ const iconDisc = (size: "sm" | "md") =>
  * tooltip and its accessible name; a click on it never opens the row or
  * the card it sits in.
  */
-export function IconLink({
-  label,
-  href,
-  size = "md",
-  children,
-}: {
-  label: string;
-  href: string;
-  size?: "sm" | "md";
-  children: React.ReactNode;
-}) {
+export function IconLink({ label, href, children }: { label: string; href: string; children: React.ReactNode }) {
   return (
     <Tip label={label}>
       <a
@@ -609,7 +599,7 @@ export function IconLink({
         rel="noreferrer"
         aria-label={label}
         onClick={(e) => e.stopPropagation()}
-        className={cx(iconDisc(size), "text-fg-faint hover:bg-surface-2 hover:text-fg")}
+        className={cx(iconDisc("md"), "text-fg-faint hover:bg-surface-2 hover:text-fg")}
       >
         {children}
       </a>

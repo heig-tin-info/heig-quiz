@@ -126,6 +126,16 @@ export function pushedBy(config: AppConfig, login: string | undefined): "app" | 
   return "person";
 }
 
+/**
+ * The commits a push brought that no bot authored (M3-14i), null without
+ * the list: a commit already pushed (`distinct` false: a sync branch
+ * merged, a branch copied) is no new work, nor one of the App's or a
+ * workflow's.
+ */
+function pushedCommits(config: AppConfig, commits: z.infer<typeof PushEvent>["commits"]): number | null {
+  return commits?.filter((c) => c.distinct !== false && pushedBy(config, c.author?.username) === "person").length ?? null;
+}
+
 async function writeReceipt(tx: Tx, config: AppConfig, delivery: WebhookDelivery): Promise<void> {
   if (trackers.size === 0) return;
   const push = PushEvent.safeParse(delivery.payload);
@@ -144,10 +154,7 @@ async function writeReceipt(tx: Tx, config: AppConfig, delivery: WebhookDelivery
       receivedAt: delivery.receivedAt,
       isBot: pushedBy(config, push.data.sender?.login) !== "person",
       forced: push.data.forced ?? false,
-      // The commits this push brought that no bot authored (M3-14i): a commit already
-      // pushed (`distinct` false: a sync branch merged, a branch copied) is no new work.
-      commits:
-        push.data.commits?.filter((c) => c.distinct !== false && pushedBy(config, c.author?.username) === "person").length ?? null,
+      commits: pushedCommits(config, push.data.commits),
     })
     // The FIRST receipt of a head stands: a redelivery never moves it later.
     .onConflictDoNothing();

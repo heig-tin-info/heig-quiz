@@ -208,18 +208,15 @@ export function ProjectRow({
 }) {
   const t = useT();
   const readOnly = useStudentReadOnly(true);
-  const facts = factsOfCard(card);
-  const action = useProjectAction(facts, { now, primary, readOnly });
+  const action = useProjectAction(factsOfCard(card), { now, primary, readOnly });
   const route = { view: "project", id: card.id } as const;
-  // The work is said once the repository is theirs; before, the line says the step to take.
-  const work = card.work !== null && projectActionKind(facts, now) === "open" ? card.work : null;
   return (
     <ActivityRow
       title={card.title}
       link={{ href: routeToPath(route), onNavigate: () => navigate(route) }}
       where={showWhere ? `${card.courseCode} · ${card.classroomName}` : undefined}
       line={projectLine(card, group, now, readOnly, t)}
-      detail={work ? <WorkLine work={work} /> : undefined}
+      detail={card.work ? <WorkLine work={card.work} /> : undefined}
       badge={{ label: t("activities.kind.project"), accent: false }}
       action={group === "upcoming" ? undefined : (action ?? undefined)}
     />
