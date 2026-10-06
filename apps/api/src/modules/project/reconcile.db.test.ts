@@ -685,9 +685,12 @@ describe("reconcile.repos: the protection ruleset (M3-14k)", () => {
     expect(await auditOf(repo!.id, "project_repo.protected")).toEqual([]);
   });
 
-  it("logs any other failure and goes on to the next repository", async () => {
-    const { repos } = await project({ students: 2, freePlan: true });
+  it("logs any other failure and still re-invites and refreshes the head of that repository, then goes on to the next", async () => {
+    const { repos, students } = await project({ students: 2, freePlan: true });
     const [first, second] = repos;
+    const sha = world.commit(first!.fullName!, "main", { "src/main.c": "int main(){return 1;}" });
+    authors.set(sha, students[0]!.login);
+    list(first!, sha, { conclusion: "success" });
     gh.routes.unshift((url, req) =>
       req.method === "GET" && url.pathname === `/repos/${first!.fullName}/rulesets` ? json({ message: "boom" }, 500) : undefined,
     );
@@ -696,7 +699,10 @@ describe("reconcile.repos: the protection ruleset (M3-14k)", () => {
     } finally {
       gh.routes.shift();
     }
-    expect((await repoRow(first!.id)).rulesetId).toBeNull();
+    const row = await repoRow(first!.id);
+    expect(row.rulesetId).toBeNull();
+    expect(row.lastCommitSha).toBe(sha); // the head step still ran
+    expect(row.invitationReinvitedAt?.toISOString()).toBe(NOW); // and the invitation's
     expect((await repoRow(second!.id)).rulesetId).not.toBeNull();
   });
 

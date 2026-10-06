@@ -413,12 +413,13 @@ async function refreshHead({ app, config, octokit, ctx, located, counts, now }: 
  * while the row is still unprotected and unarchived, and audited with it; a
  * plan that still serves no ruleset leaves the row for tomorrow.
  */
-async function protectRepo({ app, octokit, ctx, located, counts, now }: Step): Promise<void> {
+async function protectRepo({ app, octokit, ctx, located, counts }: Step): Promise<void> {
   const { repo, project } = ctx;
-  if (repo.rulesetId !== null || repo.archivedAt !== null || effectiveDeadline(repo, project) <= now) return;
+  if (repo.rulesetId !== null || repo.archivedAt !== null || effectiveDeadline(repo, project) <= app.clock.now()) return;
   const { owner, repo: name } = ownerRepo(located.fullName);
   const rulesetId = await protectStudentRepo(octokit, owner, name);
   if (rulesetId === null) return;
+  // A ruleset created on a row that changed meanwhile stays on GitHub with no stored id: harmless, the next provisioning or lock adopts it by name.
   const stored = await app.db.transaction(async (tx) => {
     const updated = await tx
       .update(projectRepos)
@@ -443,7 +444,13 @@ async function protectRepo({ app, octokit, ctx, located, counts, now }: Step): P
 
 /** A repository's daily refresh: its protection, its invitation, then its head. */
 async function refreshRepo(step: Step): Promise<void> {
-  await protectRepo(step);
+  try {
+    await protectRepo(step);
+  } catch (err) {
+    // A rate limit stops the pass; any other failure costs the repository only this step today.
+    if (rateLimited(err)) throw err;
+    step.app.log.warn({ err, repo: step.located.fullName }, "reconciliation: the protection ruleset could not be applied");
+  }
   if (step.ctx.repo.groupId === null && step.ctx.repo.invitationStatus === "pending") await reconcileInvitation(step);
   await refreshHead(step);
 }

@@ -133,6 +133,6 @@ provisioning uses (`protectStudentRepo`, idempotent: an existing ruleset of
 that name is adopted). Success stores `ruleset_id` (a conditional write) and
 audits `project_repo.protected`; a plan restriction leaves it null silently
 for the next day; a rate limit stops the pass (point 5); any other failure is
-logged and the pass goes on. Up to a day of delay is accepted, and no staff
+logged, the repository's other steps go on, and so does the pass. Up to a day of delay is accepted, and no staff
 action nor migration is involved. The deadline's lock then uses its ruleset
 instead of the archive (H8). The Decision and points 1 to 5 stand.
