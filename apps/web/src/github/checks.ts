@@ -22,16 +22,20 @@ export interface CheckLine {
   level: CheckLevel;
   text: keyof Dict;
   vars?: Record<string, string>;
-  /** The line's way out is on GitHub (the App's installation page). */
-  fixOnGithub?: boolean;
+  /** The line's way out, on GitHub. Same tab unless `newTab`, so a setup return lands back here. */
+  action?: { href: string; label: keyof Dict; newTab?: boolean };
 }
 
-function installationLine({ org, checks }: GithubClassroomLink): CheckLine {
+/** Where a verified teacher upgrades an organization (GitHub Education's dashboard). */
+const EDUCATION_UPGRADE_URL = "https://education.github.com/globalcampus/teacher";
+
+function installationLine({ org, checks }: GithubClassroomLink, installUrl: string): CheckLine {
   const id = "installation";
+  const action = { href: installUrl, label: "github.check.fix" } as const;
   if (org.status === "deleted") return { id, level: "blocker", text: "github.check.orgDeleted" };
-  if (!org.installed) return { id, level: "blocker", text: "github.check.notInstalled", fixOnGithub: true };
+  if (!org.installed) return { id, level: "blocker", text: "github.check.notInstalled", action };
   if (checks.allRepositories === false) {
-    return { id, level: "blocker", text: "github.check.partialAccess", fixOnGithub: true };
+    return { id, level: "blocker", text: "github.check.partialAccess", action };
   }
   if (checks.allRepositories === null) return { id, level: "unknown", text: "github.check.accessUnknown" };
   return { id, level: "ok", text: "github.check.installed" };
@@ -40,7 +44,14 @@ function installationLine({ org, checks }: GithubClassroomLink): CheckLine {
 function planLine({ org }: GithubClassroomLink): CheckLine {
   const id = "plan";
   if (org.plan === null) return { id, level: "unknown", text: "github.check.planUnknown" };
-  if (org.plan === "free") return { id, level: "warning", text: "github.check.planFree" };
+  if (org.plan === "free") {
+    return {
+      id,
+      level: "warning",
+      text: "github.check.planFree",
+      action: { href: EDUCATION_UPGRADE_URL, label: "github.check.upgrade", newTab: true },
+    };
+  }
   return { id, level: "ok", text: "github.check.plan", vars: { plan: org.plan } };
 }
 
@@ -51,6 +62,6 @@ const LLM_SECRET: Record<GithubClassroomLink["checks"]["llmSecret"], CheckLine> 
 };
 
 /** The three lines, in the order of the spec: installation, plan, LLM secret. */
-export function githubChecks(link: GithubClassroomLink): CheckLine[] {
-  return [installationLine(link), planLine(link), LLM_SECRET[link.checks.llmSecret]];
+export function githubChecks(link: GithubClassroomLink, installUrl: string): CheckLine[] {
+  return [installationLine(link, installUrl), planLine(link), LLM_SECRET[link.checks.llmSecret]];
 }

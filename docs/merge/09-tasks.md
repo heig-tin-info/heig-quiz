@@ -314,7 +314,8 @@ files it ports; writes en + fr for every string.
     `GithubClassroom`, DELETE 204; 409 `journal_attached` (D28) or
     `app_not_installed`, `GITHUB_CONNECT_REFUSALS`, worded in `api.ts`);
     `GET /setup/github/installed` (`GithubSetupQuery`; 303 to
-    `/classrooms/<state>/settings` when `state` is a uuid, `/` otherwise;
+    `/classrooms/<state>/settings?connect=1[&installed=<orgId>]` when `state`
+    is a uuid (amended 2026-10-06, M3-14b), `/` otherwise;
     20 per 10 min per address, then 429).
   - The healing is cached in memory `HEAL_TTL_MS` (60 s) per organization;
     the setup return drops it. The listing is not cached and is

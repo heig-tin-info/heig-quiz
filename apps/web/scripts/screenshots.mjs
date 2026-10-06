@@ -477,6 +477,7 @@ const scenes = [
   // with its organization gone from GitHub; the rename dialog.
   { name: "classroom-settings", role: "teacher", path: "/classrooms/r2/settings" },
   { name: "classroom-settings-github-connect", role: "teacher", path: "/classrooms/r2/settings?connect=1", fold: true },
+  { name: "classroom-settings-github-connect-installed", role: "teacher", path: "/classrooms/r2/settings?connect=1&installed=0190d3c4-0000-7000-8000-00000000a002", fold: true },
   // ADR-068: an assistant of the course keeps Archive and has no Delete.
   { name: "classroom-settings-assistant", role: "teacher", path: "/classrooms/r1/settings?assistant=1" },
   { name: "classroom-settings-github-installed", role: "teacher", path: "/classrooms/r1/settings" },

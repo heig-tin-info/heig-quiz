@@ -123,8 +123,10 @@ classroom without it is a plain Quiz classroom. The Settings tab's
 1. pick an organization where Quiz's App (D23) is installed
    (`GET /app/api/github/orgs`) or install it
    (`installations/new?state=<classroomId>`; needs org-owner rights and "All
-   repositories"); the status turns green by SSE; suggested default: the
-   org of the course's other classrooms;
+   repositories"); the status turns green by SSE (*amended 2026-10-06, M3-14
+   pilot finding 1: the install is a same-tab round trip; the setup return
+   reopens the sheet with the new organization picked*); suggested default:
+   the org of the course's other classrooms;
 2. the section then shows the checks, each a line with its state, never
    blocking except the first: the App installed with access to every
    repository; the organization's plan (`free` ⇒ no rulesets and no
