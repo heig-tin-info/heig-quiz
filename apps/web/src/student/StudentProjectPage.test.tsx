@@ -29,7 +29,6 @@ const INVITE = "POST /app/api/student/projects/p1/invite";
 const project = (over: Partial<StudentProject> = {}): StudentProject => ({
   kind: "project",
   seat: "student",
-  groupMode: false,
   id: "p1",
   title: "Labo 1 — Pointeurs",
   classroomId: "r1",

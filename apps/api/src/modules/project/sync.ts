@@ -439,12 +439,16 @@ export async function runSyncJob(app: FastifyInstance, config: AppConfig, job: P
     const { owner, repo: squashedRepo } = ownerRepo(project.distributionFullName!);
     const tally: Record<SyncOutcome, number> = { opened: 0, updated: 0, up_to_date: 0, failed: 0, skipped: 0 };
     const repos = await studentRepos(db, project);
+    // The teachers' test repositories follow the source too (ADR-077), outside the tallies and never failing the pass.
+    const counted = new Set(repos.map((r) => r.id));
+    const tests = (await db.select().from(projectRepos).where(eq(projectRepos.projectId, project.id))).filter((r) => !counted.has(r.id));
     const ws = await openSyncWorkspace({ token, org: owner, squashedRepo });
     let failedRepos: string[];
     try {
       failedRepos = await each(repos, async (repo) => {
         tally[await syncRepo(app, octokit, ws, repo.id)] += 1;
       });
+      await each(tests, (repo) => syncRepo(app, octokit, ws, repo.id).then(() => undefined));
     } finally {
       ws.dispose();
     }

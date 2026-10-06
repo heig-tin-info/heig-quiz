@@ -28,32 +28,28 @@ export interface ProjectFacts {
   status: StudentProjectStatus;
   startAt: string;
   githubLinked: boolean;
-  /** A staff seat on a group project: staff seats are never placed in a group, so there is nothing to accept (ADR-077). */
-  unplaced: boolean;
   repo: { state: "live"; url: string; invitation: "pending" | "accepted" } | { state: "deleted" } | null;
 }
 
 export function factsOfCard(card: StudentProjectCard): ProjectFacts {
   const { id, status, startAt, githubLinked } = card;
-  const unplaced = card.seat === "staff" && card.groupMode;
   const repo: ProjectFacts["repo"] =
     card.repoUrl !== null && card.invitation !== null
       ? { state: "live", url: card.repoUrl, invitation: card.invitation }
       : status === "in_progress"
         ? { state: "deleted" }
         : null;
-  return { id, status, startAt, githubLinked, unplaced, repo };
+  return { id, status, startAt, githubLinked, repo };
 }
 
 export function factsOfProject(p: StudentProject): ProjectFacts {
   const { id, status, startAt, githubLinked } = p;
-  const unplaced = p.seat === "staff" && p.groupMode;
   const repo: ProjectFacts["repo"] = p.repo
     ? p.repo.deleted
       ? { state: "deleted" }
       : { state: "live", url: p.repo.url, invitation: p.repo.invitation }
     : null;
-  return { id, status, startAt, githubLinked, unplaced, repo };
+  return { id, status, startAt, githubLinked, repo };
 }
 
 /**
@@ -66,16 +62,13 @@ export function factsOfProject(p: StudentProject): ProjectFacts {
  *   - `notAccepted`: the project closed before they accepted it;
  *   - `link`: no linked GitHub account — linking is the step before Accept;
  *   - `notStarted`: linked, nothing to accept until the start;
- *   - `accept`: linked, the project open, no repository yet;
- *   - `unplaced`: a teacher's staff seat on a group project, placed in no
- *     group (ADR-077): nothing to accept, the line says why.
+ *   - `accept`: linked, the project open, no repository yet.
  */
-export type ProjectActionKind = "link" | "accept" | "notStarted" | "invitation" | "open" | "notAccepted" | "deleted" | "unplaced";
+export type ProjectActionKind = "link" | "accept" | "notStarted" | "invitation" | "open" | "notAccepted" | "deleted";
 
 export function projectActionKind(facts: ProjectFacts, now: number): ProjectActionKind {
   if (facts.repo?.state === "deleted") return "deleted";
   if (facts.repo) return facts.repo.invitation === "pending" ? "invitation" : "open";
-  if (facts.unplaced) return "unplaced";
   if (facts.status === "locked" || facts.status === "released") return "notAccepted";
   if (!facts.githubLinked) return "link";
   return Date.parse(facts.startAt) > now ? "notStarted" : "accept";
@@ -108,7 +101,6 @@ export const STATE_KEY: Partial<Record<ProjectActionKind, keyof Dict>> = {
   invitation: "sproj.invitation.pending",
   deleted: "sproj.state.deleted",
   notAccepted: "sproj.state.notAccepted",
-  unplaced: "sproj.state.unplaced",
 };
 
 /**

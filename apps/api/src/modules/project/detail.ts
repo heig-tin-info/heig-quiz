@@ -56,7 +56,7 @@ import { reposWithAccessToRevoke } from "./groupCopy.js";
 import { groupsDrifted, groupSyncOwed } from "./groupResync.js";
 import { seatRepos } from "./groupRepos.js";
 import { forEachLimit } from "./lease.js";
-import { staffRepos, studentRepos, type RepoRow } from "./repos.js";
+import { studentRepos, type RepoRow } from "./repos.js";
 import { projectSyncState, repoSyncViews } from "./sync.js";
 import { projectSummary, type ProjectRow } from "./views.js";
 
@@ -348,15 +348,21 @@ export async function projectDetail(
       prenom: enrollments.prenom,
       email: enrollments.email,
       claimedAt: enrollments.claimedAt,
+      staff: enrollments.staff,
       githubLogin: githubAccounts.login,
     })
     .from(enrollments)
     .leftJoin(githubAccounts, eq(githubAccounts.userId, enrollments.userId))
-    .where(and(eq(enrollments.classroomId, project.classroomId), eq(enrollments.staff, false)))
-    .orderBy(enrollments.nom, enrollments.prenom, enrollments.id);
+    .where(eq(enrollments.classroomId, project.classroomId))
+    .orderBy(enrollments.staff, enrollments.nom, enrollments.prenom, enrollments.id);
+  // Whose repository: a student's own, or their copy group's (`seatRepos`,
+  // N-SEC-20: never the group repository's creator for having created it);
+  // one row per student, each member reading the group's. A staff seat reads
+  // its own individual repository only: a teacher's TEST repository (ADR-077).
+  const [seats, copy] = await Promise.all([seatRepos(db, [project]), copyGroups(db, project)]);
+  // "Counted" is `studentRepos`; "shown" adds the staff seats' test repositories.
   const repos = await studentRepos(db, project);
-  // The teachers' test repositories (ADR-077): read like the others, drawn badged, counted nowhere.
-  const tests = await staffRepos(db, project);
+  const tests = roster.flatMap((s) => (s.staff ? [seats.of(project.id, s.enrollmentId)] : [])).filter((r) => r !== null);
   const shownRepos = [...repos, ...tests];
   const repoIds = shownRepos.map((repo) => repo.id);
   const [runs, facts, dispatches, syncs] = await Promise.all([
@@ -366,7 +372,8 @@ export async function projectDetail(
     repoSyncViews(db, project, shownRepos),
   ]);
   const liveRepos = repos.filter((repo) => isLive(repo, project));
-  const { live, complete } = await liveStates(db, config, project, shownRepos.filter((repo) => isLive(repo, project)), opts.log, opts.budgetMs ?? LIVE_BUDGET_MS);
+  const shownLive = shownRepos.filter((repo) => isLive(repo, project));
+  const { live, complete } = await liveStates(db, config, project, shownLive, opts.log, opts.budgetMs ?? LIVE_BUDGET_MS);
   const toRevoke = await reposWithAccessToRevoke(db, project.id);
 
   const views = new Map(
@@ -375,30 +382,30 @@ export async function projectDetail(
       repoView(project, repo, runs, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), toRevoke),
     ]),
   );
-  // Whose repository: a student's own, or their copy group's (`seatRepos`,
-  // N-SEC-20: never the group repository's creator for having created it);
-  // one row per student, each member reading the group's.
-  const [seats, copy] = await Promise.all([seatRepos(db, [project]), copyGroups(db, project)]);
   const groupOf = (groupId: string | null) => (groupId === null ? null : (copy.get(groupId) ?? null));
   const shown = new Set<string>();
-  const rows: ProjectDetailRow[] = roster.map((s) => {
+  const rows: ProjectDetailRow[] = roster.flatMap((s) => {
     const { repo, groupId } = seats.seat(project.id, s.enrollmentId);
     const view = repo === null ? undefined : views.get(repo.id);
+    // A staff seat is a row only once it holds a test repository.
+    if (s.staff && !view) return [];
     if (view) shown.add(repo!.id);
-    return {
-      group: groupOf(groupId),
-      student: {
-        enrollmentId: s.enrollmentId,
-        userId: s.userId,
-        nom: s.nom,
-        prenom: s.prenom,
-        email: s.email,
-        claimed: s.claimedAt !== null && s.userId !== null,
-        githubLogin: s.githubLogin,
+    return [
+      {
+        group: groupOf(groupId),
+        student: {
+          enrollmentId: s.enrollmentId,
+          userId: s.userId,
+          nom: s.nom,
+          prenom: s.prenom,
+          email: s.email,
+          claimed: s.claimedAt !== null && s.userId !== null,
+          githubLogin: s.githubLogin,
+        },
+        repo: view ?? null,
+        staff: s.staff,
       },
-      repo: view ?? null,
-      staff: false,
-    };
+    ];
   });
   // The repositories no student of the roster reads any more — their
   // student left it, or every member left their group —, by the account
@@ -425,30 +432,6 @@ export async function projectDetail(
       rows.push({ student, repo: views.get(repo.id)!, group: groupOf(repo.groupId), staff: false });
     }
   }
-  // The test repositories, after the students' rows: the teacher's staff seat names the row.
-  if (tests.length > 0) {
-    const seats = await db
-      .select({ userId: enrollments.userId, nom: enrollments.nom, prenom: enrollments.prenom, email: enrollments.email, claimedAt: enrollments.claimedAt, githubLogin: githubAccounts.login, enrollmentId: enrollments.id })
-      .from(enrollments)
-      .leftJoin(githubAccounts, eq(githubAccounts.userId, enrollments.userId))
-      .where(and(eq(enrollments.classroomId, project.classroomId), eq(enrollments.staff, true), inArray(enrollments.userId, tests.map((repo) => repo.userId))))
-      .orderBy(enrollments.nom, enrollments.prenom, enrollments.id);
-    const seatOf = new Map(seats.map((s) => [s.userId, s]));
-    for (const repo of tests) {
-      const s = seatOf.get(repo.userId);
-      if (!s) continue;
-      const student: ProjectStudent = {
-        enrollmentId: s.enrollmentId,
-        userId: s.userId,
-        nom: s.nom,
-        prenom: s.prenom,
-        email: s.email,
-        claimed: s.claimedAt !== null && s.userId !== null,
-        githubLogin: s.githubLogin,
-      };
-      rows.push({ student, repo: views.get(repo.id)!, group: null, staff: true });
-    }
-  }
 
   // Counted over the students' repositories only: a test repository is no acceptance (ADR-077).
   const accepted = repos.map((repo) => views.get(repo.id)!);
@@ -473,7 +456,7 @@ export async function projectDetail(
     }),
     sync,
     counts: {
-      students: roster.length,
+      students: roster.filter((s) => !s.staff).length,
       accepted: accepted.length,
       groups: copy.size,
       ...counts,

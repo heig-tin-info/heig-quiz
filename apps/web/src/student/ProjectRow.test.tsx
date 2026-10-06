@@ -25,8 +25,6 @@ const at = (days: number) => new Date(NOW + days * DAY).toISOString();
 
 const card = (over: Partial<StudentProjectCard> = {}): StudentProjectCard => ({
   kind: "project",
-  seat: "student",
-  groupMode: false,
   id: "p1",
   title: "Labo 1 — Pointeurs",
   classroomId: "r1",
@@ -159,20 +157,12 @@ describe("the one action by state", () => {
 });
 
 describe("a reader who is not the student", () => {
-  it("gives a teacher in the student view WITH a staff seat the real actions (ADR-077)", async () => {
+  it("gives a teacher in the student view the real actions: a row exists only for a seat (ADR-077)", async () => {
     sessionStorage.setItem("quiz-view-as", "student");
     mockFetch({});
-    render(card({ seat: "staff", githubLinked: false }), { me: makeMe({ role: "teacher" }) });
+    render(card({ githubLinked: false }), { me: makeMe({ role: "teacher" }) });
     expect(await screen.findByRole("link", { name: "Link GitHub" })).toBeInTheDocument();
     expect(screen.queryByText(/Read-only view/)).toBeNull();
-  });
-
-  it("offers a staff seat nothing on a group project, and says why", async () => {
-    sessionStorage.setItem("quiz-view-as", "student");
-    mockFetch({});
-    render(card({ seat: "staff", groupMode: true }), { me: makeMe({ role: "teacher" }) });
-    expect(await screen.findByText(/Staff seats are not placed in groups/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Accept" })).toBeNull();
   });
 
   it("gives an impersonation session no button either, whatever the state", async () => {

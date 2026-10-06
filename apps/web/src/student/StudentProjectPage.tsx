@@ -109,7 +109,7 @@ export function StudentProjectPage({ id, navigate }: { id: string; navigate: Nav
 
 function ProjectBody({ project, navigate }: { project: StudentProject; navigate: Navigate }) {
   const t = useT();
-  const readOnly = useStudentReadOnly(project.seat);
+  const readOnly = useStudentReadOnly(project.seat !== null);
   // The server's clock, from the payload (invariant 5).
   const now = useServerNow(project.serverNow);
 

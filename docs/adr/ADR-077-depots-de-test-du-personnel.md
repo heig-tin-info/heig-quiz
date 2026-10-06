@@ -26,8 +26,8 @@ The test seat already exists: `enrollments.staff = true`, created by "Join as
 student" (`POST /classrooms/:id/self-enroll`, UNIQUE (classroom, user)) and
 already excluded from the headcount, gradebook, groups, notifications, polls,
 drill, statistics and exports. Repositories held by staff seats are already
-filtered out of the staff rows, counts and release (`studentRepos`), because
-the M8-01 import keeps the staff flag of teachers' classroom repositories.
+kept out of the counts and the release, because the M8-01 import keeps the
+staff flag of teachers' classroom repositories.
 
 ## Decision
 
@@ -35,20 +35,22 @@ the M8-01 import keeps the staff flag of teachers' classroom repositories.
    individual project.** Never an impersonation (ADR-034 stays read-only),
    a `seb` or `kiosk` session or a token. A teacher without a seat gets the
    404 of a missing project, and the page points to "Join as student". A
-   **group project** still answers the staff seat `409 no_group`: staff seats
-   are never placed in a group (ADR-070 §2), and the page says so.
+   **group project** answers the staff seat `409 no_group`, which the page
+   words like a student's: staff seats are never placed in a group (ADR-070
+   §2), and a staff seat reads only its own individual repository, whatever
+   copy membership it kept from before it became one. It is never invited on
+   a group's repository.
 2. **Staff repositories** (new section of ADR-018, mirroring "Staff
    attempts"). The staff seat's repository is the holder's own: the student
-   view shows it, with its runs and indicative score, to its holder only.
-   On the staff page it is a row of its own, badged "Teacher", after the
-   students'. It is **counted nowhere** (`counts`, acceptances, the release's
+   view shows it, with its runs and indicative score, to its holder only. On
+   the staff page it is a row of its own, badged "Teacher", after the
+   students'. It is **counted nowhere** (counts, acceptances, the release's
    readiness `scoresFinal` / `not_frozen` / `to_verify`), **never in the
-   release snapshot**, never notified (`project_grade_final`), never in the
-   gradebook or the CSV. The deadline, the freeze, the protection, the
-   checkpoints and the final review **apply to it exactly as to a student's**,
-   so that the teacher tests the real thing. Hints go to the holder's own
-   `user:` topic and the course's staff topic, never a `classroom:` payload a
-   student reads (N-SEC-20).
+   release snapshot**, never notified (`project_grade_final`, deadline
+   reminders: notifications go to student seats), never in the gradebook or
+   the CSV. The deadline, the freeze, the protection, the checkpoints, the
+   final review and the source sync **apply to it exactly as to a
+   student's**, so that the teacher tests the real thing.
 3. **Revocations** (F-PROJ-17) are the student's: removing the staff seat, and
    the conversion of a student row into a staff seat by `selfEnroll`, revoke
    the recorded accesses first.
@@ -56,12 +58,10 @@ the M8-01 import keeps the staff flag of teachers' classroom repositories.
 
 ## Consequences
 
-- `findStudentProject` no longer filters the staff seat; `recordGrant` and
-  `seatRepos` accept it; `staffRepos` feeds the staff page; the contracts gain
-  `seat` and `groupMode` on the student card and project, and `staff` on a
-  staff page row. No migration.
-- The client rule becomes: read-only for an impersonation and for a teacher in
-  the student view without a seat; a staff seat gets Link GitHub, Accept, Open
+- No migration. The contracts gain a nullable `seat` on the student's project
+  and a `staff` flag on a staff page row.
+- The client is read-only for an impersonation and for a teacher in the
+  student view without a seat; a staff seat gets Link GitHub, Accept and Open
   repository.
 - The teacher's GitHub account must not be a member of the organization for a
   faithful test: an owner's rights bypass the rulesets and the protected
@@ -78,21 +78,9 @@ the M8-01 import keeps the staff flag of teachers' classroom repositories.
   `unassigned_students`.
 - **D. No code: a second personal edu-ID account with the student role and a
   GitHub account that is not a member of the organization.** The most faithful
-  test, available today. See Q2.
+  test, available today.
 
-## Open questions for the product owner
+## Open questions
 
-- **Q1** Accept the amendment of F-PROJ-05, ADR-018 and ADR-070 §2?
-- **Q2** Is option D enough for the pilot, making this ADR post-pilot?
-- **Q3** The teacher's GitHub account as organization owner bypasses the
-  protections: document only (default), or refuse an organization member's
-  account for a staff seat?
-- **Q4** Staff repository visible and badged on the staff page (default), or
-  hidden?
-- **Q5** Group projects for staff seats (default: not in v1)?
-- **Q6** No reset of a staff test repository in v1 (a dead row stays dead:
-  test again on another project)?
-- **Q7** Removing someone from the course staff does not remove their staff
-  seat today (existing behaviour); keep it?
-- **Q8** Imported staff repositories (M8-01) become visible to their teacher,
-  badged: count them in production before the cutover.
+The product owner's questions Q1–Q8 are listed once, in
+[open question 53](../spec/06-questions-ouvertes.md).

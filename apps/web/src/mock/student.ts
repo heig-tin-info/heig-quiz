@@ -671,8 +671,6 @@ const studentProjectCards = (): StudentProjectCard[] => {
   if (!flags.projects || flags.empty) return [];
   const base = {
     kind: "project" as const,
-    seat: flags.staffseat ? ("staff" as const) : ("student" as const),
-    groupMode: false,
     classroomId: "r1",
     classroomName: "PRG1-2026",
     courseCode: "PRG1",
@@ -735,6 +733,7 @@ const studentProjectView = (card: StudentProjectCard): StudentProject => {
         };
   return {
     ...facts,
+    seat: flags.staffseat ? ("staff" as const) : ("student" as const),
     gradingMode: "auto",
     repo,
     release: released

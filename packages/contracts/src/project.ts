@@ -189,10 +189,6 @@ export type ProjectSeatKind = z.infer<typeof ProjectSeatKind>;
  */
 export const StudentProjectCard = z.object({
   kind: z.literal("project"),
-  /** The seat the card is read through: a teacher's staff seat (ADR-018) may accept too (ADR-077). */
-  seat: ProjectSeatKind,
-  /** A group project (ADR-070): a staff seat is never placed in a group, so it cannot accept one (ADR-077). */
-  groupMode: z.boolean(),
   id: z.uuid(),
   title: z.string(),
   classroomId: z.uuid(),

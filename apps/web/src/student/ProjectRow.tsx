@@ -24,7 +24,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import type { StudentActivityGroup } from "@quiz/domain";
-import type { ProjectAcceptance, ProjectSeatKind, StudentProjectCard } from "@quiz/contracts";
+import type { ProjectAcceptance, StudentProjectCard } from "@quiz/contracts";
 
 import { api, useMe } from "../api";
 import { githubLinkHref } from "../github/api";
@@ -49,13 +49,13 @@ import {
 /**
  * Whether the student screens are read by someone who cannot act as the
  * student: an admin acting as them (ADR-034), or a teacher in the student
- * view who holds no seat in the classroom (`seat` null). A teacher WITH a
+ * view who holds no seat in the classroom (`seated` false). A teacher WITH a
  * staff seat acts on their own test repository (ADR-077); the project's
  * writes are the seat holder's alone (F-PROJ-05, F-GH-05).
  */
-export function useStudentReadOnly(seat: ProjectSeatKind | null): boolean {
+export function useStudentReadOnly(seated: boolean): boolean {
   const me = useMe();
-  return seat === null || me.data?.session?.kind === "impersonation";
+  return !seated || me.data?.session?.kind === "impersonation";
 }
 
 /**
@@ -157,7 +157,7 @@ export function ProjectRow({
   showWhere?: boolean;
 }) {
   const t = useT();
-  const readOnly = useStudentReadOnly(card.seat);
+  const readOnly = useStudentReadOnly(true);
   const action = useProjectAction(factsOfCard(card), { now, primary, readOnly });
   const route = { view: "project", id: card.id } as const;
   return (

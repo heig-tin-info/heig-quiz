@@ -28,8 +28,6 @@ const at = (days: number) => new Date(NOW + days * DAY).toISOString();
 
 const card = (over: Partial<StudentProjectCard> = {}): StudentProjectCard => ({
   kind: "project",
-  seat: "student",
-  groupMode: false,
   id: "p1",
   title: "Labo 1",
   classroomId: "r1",
@@ -94,7 +92,6 @@ describe("projectActionKind", () => {
     const base: StudentProject = {
       kind: "project",
       seat: "student",
-      groupMode: false,
       id: "p1",
       title: "Labo 1",
       classroomId: "r1",

@@ -61,6 +61,7 @@ describe("the student's project card (F-PROJ-04)", () => {
     void invitation;
     const view = {
       ...facts,
+      seat: "student",
       gradingMode: "auto",
       repo: {
         fullName: repoFullName,

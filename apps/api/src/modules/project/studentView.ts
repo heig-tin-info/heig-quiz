@@ -91,8 +91,6 @@ interface CardRow {
   courseCode: string;
   /** The seat's row (their own, or their group's); null without one. */
   repo: RepoRow | null;
-  /** The seat the card is read through: a student's, or a teacher's staff seat (ADR-077). */
-  seat: ProjectSeatKind;
 }
 
 /** The card's facts, without the repository's three fields: what the card and the view share. */
@@ -111,8 +109,6 @@ function cardFacts(row: CardRow, linked: boolean, now: Date): { facts: CardFacts
     group: studentProjectGroup(judged, now),
     facts: {
       kind: "project",
-      seat: row.seat,
-      groupMode: row.project.groupMode,
       id: row.project.id,
       title: row.project.name,
       classroomId: row.project.classroomId,
@@ -172,7 +168,7 @@ export async function studentProjectCards(db: Db, userId: string, now: Date, cla
     rows.map((r) => r.project),
     rows.map((r) => r.seat.id),
   );
-  const cards = rows.map(({ seat, ...row }) => ({ ...row, seat: seat.staff ? ("staff" as const) : ("student" as const), repo: seats.of(row.project.id, seat.id) }));
+  const cards = rows.map(({ seat, ...row }) => ({ ...row, repo: seats.of(row.project.id, seat.id) }));
   const deadline = (row: CardRow) => effectiveDeadline(row.repo ?? { deadlineAt: null }, row.project).getTime();
   cards.sort((a, b) => deadline(a) - deadline(b) || (a.project.name < b.project.name ? -1 : a.project.name > b.project.name ? 1 : 0));
   const linked = rows.length > 0 && (await githubLinked(db, userId));
@@ -236,7 +232,7 @@ export async function studentProject(db: Db, scope: StudentProjectScope, userId:
     githubLinked(db, userId),
     live === null ? new Map<string, RunRow>() : slotRuns(db, [live]),
   ]);
-  const { facts } = cardFacts({ project, classroomName: scope.room.name, courseCode: scope.course.code, repo: row, seat: seat ?? "student" }, linked, now);
+  const { facts } = cardFacts({ project, classroomName: scope.room.name, courseCode: scope.course.code, repo: row }, linked, now);
   return {
     ...facts,
     seat,

@@ -2467,7 +2467,6 @@ export const en = {
   "sproj.state.link": "Link your GitHub account to accept it",
   "sproj.state.deleted": "Repository deleted on GitHub: ask your teacher",
   "sproj.state.notAccepted": "Not accepted before the deadline",
-  "sproj.state.unplaced": "Staff seats are not placed in groups: a group project cannot be tested from a teacher seat",
   "sproj.staffTest": "Your teacher test repository: it counts nowhere and no student sees it",
   "sproj.readOnly.noSeat": "Read-only view: you hold no seat in this classroom. Use \u201cJoin as student\u201d on the classroom page to test this project",
   "sproj.invitation.pending": "Invitation pending on GitHub",
