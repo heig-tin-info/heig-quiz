@@ -1,6 +1,6 @@
 {
   "generatedBy": "apps/web/scripts/docs-screenshots.mjs",
-  "base": "http://localhost:3317",
+  "base": "http://localhost:3100",
   "viewports": {
     "desktop": {
       "width": 1440,
@@ -72,7 +72,7 @@
       "name": "classroom-evaluations",
       "caption": "A classroom, on its evaluations tab.",
       "persona": "teacher",
-      "path": "/classrooms/95c36730-afe8-49c0-8275-ff5eff2b1aa3",
+      "path": "/classrooms/0df3b5ef-4264-42ea-8f93-3dbbe9ead93e",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -87,15 +87,15 @@
         "light": "classroom-evaluations-light.png",
         "dark": "classroom-evaluations-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "classroom-roster",
       "caption": "The same classroom, on its roster tab.",
       "persona": "teacher",
-      "path": "/classrooms/54ec9983-d122-46b6-9f64-a0b38725b535?tab=roster",
+      "path": "/classrooms/0df3b5ef-4264-42ea-8f93-3dbbe9ead93e?tab=roster",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -110,8 +110,8 @@
         "light": "classroom-roster-light.png",
         "dark": "classroom-roster-dark.png"
       },
-      "takenAt": "2026-09-29T13:30:51.372Z",
-      "commit": "a6a2f17",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
@@ -179,15 +179,15 @@
         "light": "pools-light.png",
         "dark": "pools-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "pool",
       "caption": "A pool: its categories in the sidebar, its questions in the table.",
       "persona": "teacher",
-      "path": "/pools/014cc676-210c-4231-8342-00a0009f060c",
+      "path": "/pools/991bb8ed-6c6e-4beb-8988-405e5a750e2d",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -202,15 +202,15 @@
         "light": "pool-light.png",
         "dark": "pool-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "pool-filters",
       "caption": "The filters of a pool: type, difficulty, tags, state.",
       "persona": "teacher",
-      "path": "/pools/014cc676-210c-4231-8342-00a0009f060c",
+      "path": "/pools/991bb8ed-6c6e-4beb-8988-405e5a750e2d",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -225,8 +225,8 @@
         "light": "pool-filters-light.png",
         "dark": "pool-filters-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
@@ -248,15 +248,15 @@
         "light": "pool-share-light.png",
         "dark": "pool-share-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "editor-mcq",
       "caption": "The editor of a multiple-choice question.",
       "persona": "teacher",
-      "path": "/questions/10eb3127-c30a-4cde-b8be-05197fa76a8c",
+      "path": "/questions/bb4360eb-be58-45e5-8dab-9544e0e13be7",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -271,15 +271,15 @@
         "light": "editor-mcq-light.png",
         "dark": "editor-mcq-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "editor-short",
       "caption": "The editor of a short-answer question, with its matchers.",
       "persona": "teacher",
-      "path": "/questions/dcaaf3e6-7023-4f27-9dac-38d8212b4177",
+      "path": "/questions/897e0687-f25b-4e7b-a80b-2d8f76228ebd",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -294,15 +294,15 @@
         "light": "editor-short-light.png",
         "dark": "editor-short-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "editor-cloze",
       "caption": "The editor of a fill-in-the-blanks question.",
       "persona": "teacher",
-      "path": "/questions/557c0ffa-9fc0-46aa-b524-dc89ae4af138",
+      "path": "/questions/bed7bd1a-e3c6-4c91-a082-7461f528b737",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -317,15 +317,15 @@
         "light": "editor-cloze-light.png",
         "dark": "editor-cloze-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "editor-code",
       "caption": "The editor of a code question: template, editable regions, test cases.",
       "persona": "teacher",
-      "path": "/questions/637aca79-7782-4acc-ab32-907876fedddb",
+      "path": "/questions/b73b2f13-d73b-4f2f-a81e-2e066d5b3851",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -340,15 +340,15 @@
         "light": "editor-code-light.png",
         "dark": "editor-code-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "editor-preview",
       "caption": "The student preview of a question, exactly what a student will see.",
       "persona": "teacher",
-      "path": "/questions/10eb3127-c30a-4cde-b8be-05197fa76a8c",
+      "path": "/questions/bb4360eb-be58-45e5-8dab-9544e0e13be7",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -363,15 +363,15 @@
         "light": "editor-preview-light.png",
         "dark": "editor-preview-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "editor-versions",
       "caption": "The versions of a question: every publication, with its note.",
       "persona": "teacher",
-      "path": "/questions/637aca79-7782-4acc-ab32-907876fedddb?tab=versions",
+      "path": "/questions/b73b2f13-d73b-4f2f-a81e-2e066d5b3851?tab=versions",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -386,15 +386,15 @@
         "light": "editor-versions-light.png",
         "dark": "editor-versions-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "editor-publish",
       "caption": "Publishing a question: a version number and a change note.",
       "persona": "teacher",
-      "path": "/questions/10eb3127-c30a-4cde-b8be-05197fa76a8c",
+      "path": "/questions/bb4360eb-be58-45e5-8dab-9544e0e13be7",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -409,8 +409,8 @@
         "light": "editor-publish-light.png",
         "dark": "editor-publish-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
@@ -463,7 +463,7 @@
       "name": "eval-questions",
       "caption": "Configuring an evaluation, step 1: the questions.",
       "persona": "teacher",
-      "path": "/evaluations/ec1186d0-1d86-49e2-9d65-989a6a002dc7?step=questions",
+      "path": "/evaluations/dbfb181f-1d28-4474-9bcd-1730cf6c37c2?step=questions",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -478,15 +478,15 @@
         "light": "eval-questions-light.png",
         "dark": "eval-questions-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "eval-timing",
       "caption": "Step 2: time and mode.",
       "persona": "teacher",
-      "path": "/evaluations/ec1186d0-1d86-49e2-9d65-989a6a002dc7?step=timing",
+      "path": "/evaluations/dbfb181f-1d28-4474-9bcd-1730cf6c37c2?step=timing",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -501,15 +501,15 @@
         "light": "eval-timing-light.png",
         "dark": "eval-timing-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "eval-launch",
       "caption": "Step 3: launch.",
       "persona": "teacher",
-      "path": "/evaluations/ec1186d0-1d86-49e2-9d65-989a6a002dc7?step=launch",
+      "path": "/evaluations/dbfb181f-1d28-4474-9bcd-1730cf6c37c2?step=launch",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -524,15 +524,38 @@
         "light": "eval-launch-light.png",
         "dark": "eval-launch-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "eval-rename",
+      "caption": "The title of an evaluation, renamed from the heading itself.",
+      "persona": "teacher",
+      "path": "/evaluations/dbfb181f-1d28-4474-9bcd-1730cf6c37c2?step=questions",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Clicked the title, which turns the heading into a field.",
+      "state": "As seeded: the draft “Test 1 — pointeurs”.",
+      "phase": "seeded",
+      "files": {
+        "light": "eval-rename-light.png",
+        "dark": "eval-rename-dark.png"
+      },
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "eval-scheduled",
       "caption": "A scheduled evaluation: it opens by itself at the announced time.",
       "persona": "teacher",
-      "path": "/evaluations/f259b01d-cdb0-4bc5-9484-4e74c186745a",
+      "path": "/evaluations/e9132281-48d6-4aa8-8f44-d7a5702b3c47",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -547,15 +570,15 @@
         "light": "eval-scheduled-light.png",
         "dark": "eval-scheduled-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "live-lobby",
       "caption": "The dashboard of an evaluation in its lobby: the class is gathering.",
       "persona": "teacher",
-      "path": "/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live",
+      "path": "/evaluations/a0c6f239-0c92-4e7b-8001-a518c3d8a826/live",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -570,15 +593,15 @@
         "light": "live-lobby-light.png",
         "dark": "live-lobby-dark.png"
       },
-      "takenAt": "2026-09-28T14:45:46.796Z",
-      "commit": "9bd6b57",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "live-running",
       "caption": "The dashboard during the evaluation: one row per student, one cell per question.",
       "persona": "teacher",
-      "path": "/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live",
+      "path": "/evaluations/a0c6f239-0c92-4e7b-8001-a518c3d8a826/live",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -593,15 +616,15 @@
         "light": "live-running-light.png",
         "dark": "live-running-dark.png"
       },
-      "takenAt": "2026-09-28T14:45:46.796Z",
-      "commit": "9bd6b57",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "live-inspect",
       "caption": "A cell opened: what the student wrote, live.",
       "persona": "teacher",
-      "path": "/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live",
+      "path": "/evaluations/a0c6f239-0c92-4e7b-8001-a518c3d8a826/live",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -616,15 +639,15 @@
         "light": "live-inspect-light.png",
         "dark": "live-inspect-dark.png"
       },
-      "takenAt": "2026-09-28T14:45:46.796Z",
-      "commit": "9bd6b57",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "live-extend",
       "caption": "Giving more time: to the whole class or to one student.",
       "persona": "teacher",
-      "path": "/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live",
+      "path": "/evaluations/a0c6f239-0c92-4e7b-8001-a518c3d8a826/live",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -639,15 +662,15 @@
         "light": "live-extend-light.png",
         "dark": "live-extend-dark.png"
       },
-      "takenAt": "2026-09-28T14:45:46.796Z",
-      "commit": "9bd6b57",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "live-closed",
       "caption": "The dashboard of a closed evaluation: verdicts and scores.",
       "persona": "teacher",
-      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/live",
+      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/live",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -662,15 +685,15 @@
         "light": "live-closed-light.png",
         "dark": "live-closed-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "grading",
       "caption": "The grading table, one question at a time: the automatic gradings, validated or waiting for the teacher.",
       "persona": "teacher",
-      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
+      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -685,15 +708,15 @@
         "light": "grading-light.png",
         "dark": "grading-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "grading-short",
       "caption": "Grading a short-answer question.",
       "persona": "teacher",
-      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
+      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -708,15 +731,15 @@
         "light": "grading-short-light.png",
         "dark": "grading-short-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "grading-cloze",
       "caption": "Grading a fill-in-the-blanks question.",
       "persona": "teacher",
-      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
+      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -731,15 +754,15 @@
         "light": "grading-cloze-light.png",
         "dark": "grading-cloze-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "grading-code",
       "caption": "Grading a code question: each program in one wide column, folded after five lines, beside the tests it passed.",
       "persona": "teacher",
-      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
+      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -754,15 +777,15 @@
         "light": "grading-code-light.png",
         "dark": "grading-code-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "grading-categorize",
       "caption": "Grading a categorize question: one column per card, naming the column the student chose.",
       "persona": "teacher",
-      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
+      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -777,15 +800,15 @@
         "light": "grading-categorize-light.png",
         "dark": "grading-categorize-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "grading-codeimage",
       "caption": "Grading a code-to-picture question: the program, and the picture once the runner has drawn it.",
       "persona": "teacher",
-      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
+      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -800,15 +823,15 @@
         "light": "grading-codeimage-light.png",
         "dark": "grading-codeimage-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "grading-circuit",
       "caption": "Grading a circuit: what each schematic holds, and the stimuli it passed once simulated.",
       "persona": "teacher",
-      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
+      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -823,15 +846,15 @@
         "light": "grading-circuit-light.png",
         "dark": "grading-circuit-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "grading-essay",
       "caption": "Grading an essay: the first lines of each answer, and the AI's proposal with its confidence.",
       "persona": "teacher",
-      "path": "/evaluations/c78511b3-f11c-4113-884a-34bd5b270a61/grading",
+      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -846,15 +869,15 @@
         "light": "grading-essay-light.png",
         "dark": "grading-essay-dark.png"
       },
-      "takenAt": "2026-10-02T06:54:40.961Z",
-      "commit": "54a727b0",
-      "base": "http://localhost:3317"
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
+      "base": "http://localhost:3100"
     },
     {
       "name": "grading-ai-justification",
       "caption": "An AI proposal opened: the model's justification, for the teacher only.",
       "persona": "teacher",
-      "path": "/evaluations/c78511b3-f11c-4113-884a-34bd5b270a61/grading",
+      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -869,38 +892,15 @@
         "light": "grading-ai-justification-light.png",
         "dark": "grading-ai-justification-dark.png"
       },
-      "takenAt": "2026-10-02T07:02:53.613Z",
-      "commit": "54a727b0",
-      "base": "http://localhost:3317"
-    },
-    {
-      "name": "grading-override",
-      "caption": "Adjusting a grading by hand: points and a comment the student will read.",
-      "persona": "teacher",
-      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
-      "width": 1440,
-      "height": 900,
-      "fullPage": false,
-      "theme": [
-        "light",
-        "dark"
-      ],
-      "action": "Opened the first answer and clicked “Adjust” in its panel.",
-      "state": "“Test 0” graded (code, picture and circuit answers waiting for a runner unless one is up; essays proposed by the stub LLM), unreleased.",
-      "phase": "graded",
-      "files": {
-        "light": "grading-override-light.png",
-        "dark": "grading-override-dark.png"
-      },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "grading-batch",
       "caption": "Validating the AI's proposals of an essay in one click: the primary button counts them.",
       "persona": "teacher",
-      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
+      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -909,21 +909,21 @@
         "dark"
       ],
       "action": "Moved to the essay and hovered the primary button, which offers to validate its four proposals.",
-      "state": "As seeded with LLM_PROVIDER=stub: the four written essays of “Test 0” are AI proposals with a confidence (high, medium, low), Chloé's empty one is a validated zero.",
+      "state": "As seeded with LLM_PROVIDER=stub: the four written essays of “Test 0” are AI proposals with a confidence, Chloé's empty one is a validated zero.",
       "phase": "seeded",
       "files": {
         "light": "grading-batch-light.png",
         "dark": "grading-batch-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "results",
       "caption": "The results of an evaluation, by student, before they are published.",
       "persona": "teacher",
-      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/results",
+      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/results",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -938,15 +938,15 @@
         "light": "results-light.png",
         "dark": "results-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "results-questions",
       "caption": "The results by question: success rate and discrimination.",
       "persona": "teacher",
-      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/results?tab=questions",
+      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/results?tab=questions",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -961,15 +961,15 @@
         "light": "results-questions-light.png",
         "dark": "results-questions-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
       "name": "results-release-confirm",
       "caption": "Publishing the results: the students see their feedback from then on.",
       "persona": "teacher",
-      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/results",
+      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/results",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -984,8 +984,8 @@
         "light": "results-release-confirm-light.png",
         "dark": "results-release-confirm-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
@@ -1567,7 +1567,7 @@
       "name": "results-released",
       "caption": "The results after publication.",
       "persona": "teacher",
-      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/results",
+      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/results",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -1582,8 +1582,8 @@
         "light": "results-released-light.png",
         "dark": "results-released-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
+      "takenAt": "2026-10-06T19:49:27.864Z",
+      "commit": "12081e6f",
       "base": "http://localhost:3100"
     },
     {
