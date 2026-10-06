@@ -55,9 +55,11 @@ import { appKey, fakeGithub, json, orgsRoute, type Route } from "../../github/te
 import { PROJECT_DEADLINE_QUEUE, type JobQueue } from "../../jobs.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
+import { GITHUB_TASKS } from "../github/jobs.js";
 import { accessibleProjectRepo } from "../guards.js";
 import { refreshScoreSelection, ingestCompletedRun } from "./grading.js";
 import { projectTick, runDeadlineJob } from "./jobs.js";
+import { RECONCILE_TASKS } from "./reconcile.js";
 import { FAILED_RETRY_MS, LEASE_MS, type ProjectJob } from "./lease.js";
 import { repoContext } from "./repos.js";
 import { repoWorld } from "./testing.js";
@@ -163,7 +165,7 @@ const auditOf = (subjectId: string, action: string) =>
 /** The jobs the ticker sent, as a queue would have carried them. */
 const sent: ProjectJob[] = [];
 /** One pass of the ticker, a queue in place; true when it made no request to GitHub. */
-async function tick(): Promise<boolean> {
+async function tick(withConfig = config): Promise<boolean> {
   const queue: JobQueue = {
     createQueue: async () => {},
     // The deadline's jobs only: the review dispatches are dispatch.db.test's.
@@ -175,7 +177,7 @@ async function tick(): Promise<boolean> {
   const before = gh.calls.length;
   app.boss = queue;
   try {
-    await projectTick(server.app, config);
+    await projectTick(server.app, withConfig);
   } finally {
     delete app.boss;
   }
@@ -289,6 +291,21 @@ describe("the ticker (ADR-006, ADR-064)", () => {
     server.clock.advance(20_000);
     await tick();
     expect(jobsOf(p.id)).toEqual([]);
+  });
+
+  it("takes no work and calls nothing without Quiz's App, nor does a scheduled GitHub task (staging, M2-06)", async () => {
+    const p = await project();
+    const off = loadConfig({ NODE_ENV: "test" });
+    server.clock.set(at(DEADLINE, 1000));
+    const before = gh.calls.length;
+    expect(await tick(off)).toBe(true);
+    for (const task of [...GITHUB_TASKS, ...RECONCILE_TASKS]) await task.run(server.app, off);
+    expect(gh.calls.length).toBe(before);
+    expect(jobsOf(p.id)).toEqual([]);
+    expect(await projectRow(p.id)).toMatchObject({ state: "published", deadlineAppliedAt: null, deadlineJobAt: null });
+    // The project was due: with the App, the same pass applies its deadline.
+    await tick();
+    expect(jobsOf(p.id)).toHaveLength(1);
   });
 
   it("follows a deadline moved between the sweep and the job: the job finds nothing to lock", async () => {

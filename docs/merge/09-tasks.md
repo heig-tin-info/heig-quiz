@@ -486,6 +486,40 @@ files it ports; writes en + fr for every string.
   leaves no reachable production installation; the production App
   installed on one test organization answers the setup URL of
   `quiz.chevallier.io`.
+- **As delivered** (`merge/M2-06-github-apps`): the production App was
+  registered by hand by the product owner before this task (2026-10-06);
+  this task ships the means to create the others and the staging safety.
+  - `Q:github/manifest.ts` holds the App's settings once: the permissions
+    (§3.4: classroom's plus organization `Secrets: read`), the subscribed
+    events (`push`, `workflow_run`, `pull_request`, `member`, `repository`,
+    `organization`) and the always-delivered ones (`installation`,
+    `installation_repositories`), the webhook and setup paths (the routes
+    import them), the manifest and the six `GITHUB_*` lines.
+    `manifest.test.ts` fails when the events differ from every
+    `onEvent("…")` of `apps/api/src/`, when `docs/development/github-app.md`
+    differs from the module, or when the lines would not boot production.
+  - `pnpm github:app` (`apps/api/scripts/github-app.ts`): GitHub's App
+    Manifest flow from a one-shot page on 127.0.0.1; the key and the lines
+    go to new 0600 files outside any git working tree (or the lines to
+    stdout), the key is never printed; a webhook secret under 32
+    characters is replaced through `PATCH /app/hook/config`.
+  - The refresh's SQL moved to `scripts/staging-scrub.sql`, tested on the
+    real migrations (`stagingScrub.db.test.ts`). Schema note amended:
+    since M3-09b `suspended_at` sits beside `installation_id` ("null when
+    there is none"), so the scrub nulls both; and every project not
+    archived gets `archived_at` (in SQL: its groups keep following).
+  - The no-App test: `deadline.db.test.ts` — a due project, no claim, no
+    job and no GitHub call from the ticker nor from `GITHUB_TASKS` and
+    `RECONCILE_TASKS` (`reconcile.db.test.ts` already pinned the two
+    reconciliations).
+  - Open point for the product owner: the docs recommend the staging App
+    be owned by the test organization, private (N-SEC-18 by construction),
+    instead of "both owned by the account that owns classroom's App"; the
+    script does either.
+  - Also: `docs/development/new-server.md` (a new instance from a fresh
+    Ubuntu server, its TODO questions listed at its end), the `GITHUB_*`
+    blocks of `.env.prod.example` and `.env.staging.example`, ADR-028's
+    note.
 
 ### M2-07 — Web: the classroom's Settings tab, GitHub section, link card
 - **Depends on**: M2-02, M2-03 (contracts), M1-04, M1-05, D24.

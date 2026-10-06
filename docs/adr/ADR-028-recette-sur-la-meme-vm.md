@@ -6,6 +6,12 @@ Accepted (2026-09-26, asked for by the product owner after the move to
 Hetzner). Amended 2026-09-28: staging runs as its own account (see *Update
 2026-09-28*).
 
+Note (2026-10-06, M2-06, [ADR-035](ADR-035-fusion-de-classroom.md)): the
+refresh of §3 also forgets every GitHub installation and archives every
+project (`scripts/staging-scrub.sql`), and staging holds its own GitHub App,
+on a test organization, never production's (N-SEC-18;
+[Quiz's GitHub App](../development/github-app.md)).
+
 ## Context
 
 Every push to `main` deployed straight to production. Several agents merge to
