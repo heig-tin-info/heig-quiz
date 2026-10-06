@@ -775,12 +775,9 @@ export type ProjectRepoSync = z.infer<typeof ProjectRepoSync>;
  * last STUDENT commit and its CI status (as the webhooks stored them), the
  * student's commit count (`commits`), the live counters, the scores (the teacher's with the maximum it was written
  * with, M3-08b), the final review's state (`review`), the release's
- * snapshot, and the flags. `commits` is the number the student's card
- * shows, by the same rule and the same receipts (F-PROJ-04 amended,
- * N-SEC-20; M3-14m): the distinct non-bot commits received by the
- * effective deadline, from the push receipts alone, so it stands even when
- * `live` is null; `live.commitCount` is GitHub's total, the App's commit
- * included, which the page only offers as a tooltip:
+ * snapshot, and the flags. `commits` is the student's own count, as their
+ * card shows it, from the push receipts alone (`project/commits.ts` of the
+ * API); `live.commitCount` is GitHub's total, only the tooltip's source:
  *   - `protectionSuspended` — "protected files in conflict" (F-PROJ-08);
  *   - `toVerify` — the run of one of its three slots is to verify;
  *   - `multiple` — one of its runs printed several `GRADE` annotations (an

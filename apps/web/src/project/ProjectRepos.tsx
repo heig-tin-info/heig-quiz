@@ -86,12 +86,6 @@ function RepoCell({ repo }: { repo: ProjectRepoView | null }) {
 }
 
 /**
- * The lock, the freeze, the final review's state, the sync's pull request
- * (M3-07) and the flags of a repository, as tags; on a narrow table the
- * flags fold into one count. The review tag (M3-12b) says nothing while it
- * is trivially pending.
- */
-/**
  * The student's commit count of a repository, as their own card shows it
  * (M3-14m), and GitHub's total, the App's commit included, in the tooltip:
  * nothing about GitHub when its cache holds no value, a hint when it is stale.
@@ -107,6 +101,12 @@ function CommitCount({ repo }: { repo: ProjectRepoView }) {
   );
 }
 
+/**
+ * The lock, the freeze, the final review's state, the sync's pull request
+ * (M3-07) and the flags of a repository, as tags; on a narrow table the
+ * flags fold into one count. The review tag (M3-12b) says nothing while it
+ * is trivially pending.
+ */
 function StateCell({ repo }: { repo: ProjectRepoView }) {
   const t = useT();
   const flags = repoFlags(repo);

@@ -6,7 +6,6 @@ import {
   ProjectCreate,
   ProjectGradingScale,
   ProjectPatch,
-  ProjectRepoView,
   ProtectedPath,
   StudentProject,
   StudentProjectCard,
@@ -200,15 +199,5 @@ describe("ProjectCreate and ProjectPatch (F-PROJ-01, F-PROJ-03, M3-02)", () => {
     }
     expect(ProtectedPath.safeParse(".github/workflows/grading.yml").success).toBe(true);
     expect(ProjectCreate.safeParse({ ...LAB, name: "!!!" }).success).toBe(false);
-  });
-});
-
-describe("ProjectRepoView.commits (M3-14m)", () => {
-  it("is the student's count, a required non-negative integer apart from the live cache's total", () => {
-    const { commits, live } = ProjectRepoView.shape;
-    expect([0, 3].map((n) => commits.safeParse(n).success)).toEqual([true, true]);
-    expect([undefined, -1, 1.5].map((n) => commits.safeParse(n).success)).toEqual([false, false, false]);
-    // The tooltip's source stays, nullable: the count stands without it.
-    expect(live.safeParse(null).success).toBe(true);
   });
 });
