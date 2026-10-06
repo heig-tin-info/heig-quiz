@@ -39,6 +39,7 @@ import type { FastifyBaseLogger } from "fastify";
 import type {
   ProjectInvitationResent,
   StudentProject,
+  ProjectSeatKind,
   StudentProjectCard,
   StudentProjectRepo,
   StudentProjectScore,
@@ -88,8 +89,10 @@ interface CardRow {
   project: ProjectRow;
   classroomName: string;
   courseCode: string;
-  /** The student's row (their own, or their group's), through a student seat; null without one. */
+  /** The seat's row (their own, or their group's); null without one. */
   repo: RepoRow | null;
+  /** The seat the card is read through: a student's, or a teacher's staff seat (ADR-077). */
+  seat: ProjectSeatKind;
 }
 
 /** The card's facts, without the repository's three fields: what the card and the view share. */
@@ -108,6 +111,8 @@ function cardFacts(row: CardRow, linked: boolean, now: Date): { facts: CardFacts
     group: studentProjectGroup(judged, now),
     facts: {
       kind: "project",
+      seat: row.seat,
+      groupMode: row.project.groupMode,
       id: row.project.id,
       title: row.project.name,
       classroomId: row.project.classroomId,
@@ -161,13 +166,13 @@ export async function studentProjectCards(db: Db, userId: string, now: Date, cla
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
     .innerJoin(projects, and(eq(projects.classroomId, classrooms.id), ne(projects.state, "draft"), isNull(projects.archivedAt)))
     .where(and(...scope));
-  // The repository each seat reads (`seatRepos`): its own, or its copy group's; a staff seat none (ADR-018).
+  // The repository each seat reads (`seatRepos`): its own, or its copy group's; a staff seat its own test repository (ADR-077).
   const seats = await seatRepos(
     db,
     rows.map((r) => r.project),
     rows.map((r) => r.seat.id),
   );
-  const cards = rows.map(({ seat, ...row }) => ({ ...row, repo: seats.of(row.project.id, seat.id) }));
+  const cards = rows.map(({ seat, ...row }) => ({ ...row, seat: seat.staff ? ("staff" as const) : ("student" as const), repo: seats.of(row.project.id, seat.id) }));
   const deadline = (row: CardRow) => effectiveDeadline(row.repo ?? { deadlineAt: null }, row.project).getTime();
   cards.sort((a, b) => deadline(a) - deadline(b) || (a.project.name < b.project.name ? -1 : a.project.name > b.project.name ? 1 : 0));
   const linked = rows.length > 0 && (await githubLinked(db, userId));
@@ -223,16 +228,18 @@ function reading(project: ProjectRow, repo: ProvisionedRepo, runs: Map<string, R
  */
 export async function studentProject(db: Db, scope: StudentProjectScope, userId: string, now: Date): Promise<StudentProject> {
   const { project } = scope;
-  const row = scope.seat !== null && !scope.seat.staff ? await seatRepo(db, project, scope.seat.id) : null;
+  const row = scope.seat !== null ? await seatRepo(db, project, scope.seat.id) : null;
+  const seat = scope.seat === null ? null : scope.seat.staff ? ("staff" as const) : ("student" as const);
   const repo = provisioned(row);
   const live = repo !== null && isLive(repo, project) ? repo : null;
   const [linked, runs] = await Promise.all([
     githubLinked(db, userId),
     live === null ? new Map<string, RunRow>() : slotRuns(db, [live]),
   ]);
-  const { facts } = cardFacts({ project, classroomName: scope.room.name, courseCode: scope.course.code, repo: row }, linked, now);
+  const { facts } = cardFacts({ project, classroomName: scope.room.name, courseCode: scope.course.code, repo: row, seat: seat ?? "student" }, linked, now);
   return {
     ...facts,
+    seat,
     gradingMode: project.gradingMode,
     repo:
       repo === null

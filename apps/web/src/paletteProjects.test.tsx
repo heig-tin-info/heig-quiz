@@ -14,6 +14,8 @@ import { mockFetch, ok, renderWithProviders } from "./test/render";
 const NOW = "2026-10-05T08:00:00.000Z";
 const card = (id: string, title: string, classroomName: string): StudentProjectCard => ({
   kind: "project",
+  seat: "student",
+  groupMode: false,
   id,
   title,
   classroomId: `room-${id}`,

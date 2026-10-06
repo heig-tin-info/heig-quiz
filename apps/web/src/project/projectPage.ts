@@ -382,7 +382,7 @@ export const groupSetPageOf = (p: Pick<ProjectSummary, "id" | "classroomId" | "g
  */
 export type RepoEntry =
   | { kind: "group"; key: string; label: string; group: ProjectDetailGroup; members: ProjectStudent[]; repo: ProjectRepoView | null }
-  | { kind: "student"; key: string; label: string; student: ProjectStudent; repo: ProjectRepoView | null };
+  | { kind: "student"; key: string; label: string; student: ProjectStudent; repo: ProjectRepoView | null; staff: boolean };
 
 /**
  * The page's rows as the table draws them. Rows stay per student on the
@@ -396,9 +396,9 @@ export type RepoEntry =
 export function repoEntries(p: Pick<ProjectDetail, "groupMode" | "rows">): RepoEntry[] {
   const students: RepoEntry[] = [];
   const groups = new Map<string, Extract<RepoEntry, { kind: "group" }>>();
-  for (const { student, repo, group } of p.rows) {
+  for (const { student, repo, group, staff } of p.rows) {
     if (!p.groupMode || group === null) {
-      students.push({ kind: "student", key: repo?.id ?? student.enrollmentId ?? student.email, label: studentName(student), student, repo });
+      students.push({ kind: "student", key: repo?.id ?? student.enrollmentId ?? student.email, label: studentName(student), student, repo, staff });
       continue;
     }
     let entry = groups.get(group.id);

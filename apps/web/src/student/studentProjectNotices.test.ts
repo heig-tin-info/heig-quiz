@@ -32,6 +32,8 @@ const repo = (over: Partial<StudentProjectRepo> = {}): StudentProjectRepo => ({
 
 const project = (over: Partial<StudentProject> = {}): StudentProject => ({
   kind: "project",
+  seat: "student",
+  groupMode: false,
   id: "p1",
   title: "Labo 1 — Pointeurs",
   classroomId: "r1",

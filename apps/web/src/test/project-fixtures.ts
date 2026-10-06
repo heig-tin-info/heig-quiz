@@ -89,6 +89,7 @@ export const row = (
   student: makeStudent(n, student),
   repo,
   group,
+  staff: false,
 });
 
 /** A copy group of a group project's page (M3-16b), following its set unless `stopped`. */

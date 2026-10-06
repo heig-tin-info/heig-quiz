@@ -424,7 +424,7 @@ describe("the repositories", () => {
       row(8, makeRepo(8, { deadlineAt: AHEAD, invitationStatus: "pending", lastCommit: null, ciStatus: "none" })),
       row(9, null),
       row(10, null, { claimed: false }),
-      { student: { ...makeProject().rows[0]!.student, enrollmentId: null, nom: "Ancien", prenom: "Élève" }, repo: makeRepo(11), group: null },
+      { student: { ...makeProject().rows[0]!.student, enrollmentId: null, nom: "Ancien", prenom: "Élève" }, repo: makeRepo(11), group: null, staff: false },
     ],
   });
 

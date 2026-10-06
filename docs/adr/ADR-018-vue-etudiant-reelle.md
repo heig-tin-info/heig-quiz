@@ -63,6 +63,14 @@ write gate does not prohibit deleting one's own rehearsal. Audit:
 `attempt.staff_reset`; dashboards receive a refresh hint rather than a synthetic
 live row-deletion protocol. Entry remains idempotent; reset is explicit.
 
+### Staff repositories
+
+*Proposed 2026-10-06, [ADR-077](ADR-077-depots-de-test-du-personnel.md).* A
+staff seat may accept an individual project to test it. Its repository is
+visible and badged on the staff page and counted nowhere: no count, no release,
+no gradebook, no notification. A group project is not testable from a staff
+seat (ADR-070 §2).
+
 ### Stateless evaluation preview
 
 The secondary Preview action opens a new full-screen tab in every evaluation state,

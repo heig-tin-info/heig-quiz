@@ -302,6 +302,8 @@ describe("mostUrgent", () => {
 
 const project = (over: Partial<StudentProjectCard>): StudentProjectCard => ({
   kind: "project",
+  seat: "student",
+  groupMode: false,
   id: "pj",
   title: "Labo 1 — Pointeurs",
   classroomId: "r1",

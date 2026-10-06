@@ -274,6 +274,7 @@ const scenes = [
   // with one score changed since (Release said in the header), the scale's
   // warning. `--width=390` gives the phone layout of each.
   { name: "project", role: "teacher", path: "/projects/pj-published?projects=1", settle: 2500 },
+  { name: "project-staff-repo", role: "teacher", path: "/projects/pj-published?projects=1&staffrepo=1", settle: 2500 },
   {
     name: "project-sheet",
     role: "teacher",
@@ -741,6 +742,9 @@ const scenes = [
   { name: "student-project-invited", role: "student", path: `/projects/${SPROJ.invited}?projects=1` },
   { name: "student-project-deleted", role: "student", path: `/projects/${SPROJ.deleted}?projects=1` },
   { name: "student-project-released", role: "student", path: `/projects/${SPROJ.past}?projects=1` },
+  // ADR-077: a teacher on a staff seat tests the project: the real actions, their own repository.
+  { name: "student-project-staff-seat", role: "student", path: `/projects/${SPROJ.accept}?projects=1&staffseat=1` },
+  { name: "student-project-staff-seat-repo", role: "student", path: `/projects/${SPROJ.open}?projects=1&staffseat=1` },
   { name: "student-project-provisioning", role: "student", path: `/projects/${SPROJ.accept}?projects=1&provisioning=1`, act: async (p) => { await p.getByRole("button", { name: /^(accept|accepter)$/i }).click(); await p.getByRole("button", { name: /up to a minute|jusqu'à une minute/i }).waitFor(); } },
   { name: "student-project-relink", role: "student", path: `/projects/${SPROJ.accept}?projects=1&stale=1`, fold: true, act: async (p) => { await p.getByRole("button", { name: /^(accept|accepter)$/i }).click(); await p.getByRole("link", { name: /relink github|relier github/i }).waitFor(); } },
   // F-PROJ-21 (M3-09c): a push and its score noticed on the open project (`?notices=1`, the stream's `projects` hint 2.5 s in).

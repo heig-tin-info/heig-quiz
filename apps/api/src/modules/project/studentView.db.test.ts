@@ -262,6 +262,8 @@ describe("the student's cards (F-PROJ-04, F-ORG-14, F-ORG-15)", () => {
     expect([...h.upcoming, ...h.past].filter((c) => c.kind === "project")).toEqual([]);
     expect(projectCards(h.open)[0]).toEqual({
       kind: "project",
+      seat: "student",
+      groupMode: false,
       id: lab.id,
       title: "Lab 1",
       classroomId: room.classroomId,
@@ -338,6 +340,8 @@ describe("the student's project (F-PROJ-15)", () => {
     const before = await view(lab.id, student.headers);
     expect(before).toEqual({
       kind: "project",
+      seat: "student",
+      groupMode: false,
       id: lab.id,
       title: "Lab 4",
       classroomId: room.classroomId,

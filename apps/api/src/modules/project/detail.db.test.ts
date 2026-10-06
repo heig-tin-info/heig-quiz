@@ -237,7 +237,7 @@ describe("the project page (F-PROJ-13)", () => {
     expect(d.rows.at(-1)!.student).toMatchObject({ enrollmentId: null, userId: leaver.id, claimed: false });
   });
 
-  it("leaves out the repository of a user who now holds a staff seat", async () => {
+  it("draws the repository of a user who holds a staff seat as a badged test row, counted nowhere (ADR-077)", async () => {
     const w = await world({ students: 1 });
     const student = w.students[0]!;
     await repoOf(w, student.id, { frozenAt: at(NOW), deadlineAppliedAt: at(NOW) });
@@ -254,8 +254,11 @@ describe("the project page (F-PROJ-13)", () => {
     });
 
     const d = await detail(w.projectId);
-    expect(d.rows.map((r) => r.student.userId)).toEqual([student.id]);
-    expect(d.rows.some((r) => r.repo?.id === promotedRepo)).toBe(false);
+    expect(d.rows.map((r) => [r.student.userId, r.staff])).toEqual([
+      [student.id, false],
+      [promoted.id, true],
+    ]);
+    expect(d.rows.find((r) => r.repo?.id === promotedRepo)?.staff).toBe(true);
     expect(d.counts).toMatchObject({ students: 1, accepted: 1, live: 1, frozen: 1 });
   });
 

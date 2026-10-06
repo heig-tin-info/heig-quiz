@@ -12,7 +12,7 @@
  * - the GitHub account: not linked, deleted, renamed (followed), GitHub
  *   unreachable (the stored login), an invitation refused;
  * - the refusals: not started, deadline passed, no group (M3-15b), the App
- *   gone; a draft, an archived project, a staff seat, another classroom, an
+ *   gone; a draft, an archived project, another classroom, an
  *   impersonation, a Bearer token, a `seb` session get the 404 (or 401);
  * - dead stays dead;
  * - N-SEC-20: no response names the source or the distribution repository.
@@ -464,7 +464,6 @@ describe("what Accept refuses", () => {
     const callers: [string, string, { headers: Headers }][] = [
       ["a draft", draft.project.id, student],
       ["a student of another classroom", project.id, stranger],
-      ["a staff seat of the classroom", project.id, colleague],
       ["the course's teacher", project.id, teacher],
       ["a random id", randomUUID(), student],
       ["a Bearer token", project.id, { headers: { authorization: `Bearer ${token}` } }],
@@ -493,6 +492,81 @@ describe("what Accept refuses", () => {
 
     await server.app.db.update(projects).set({ archivedAt: new Date(NOW) }).where(eq(projects.id, project.id));
     expect((await accept(project.id, student)).statusCode).toBe(404);
+    expect(await repoRows(project.id)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------- a staff seat tests (ADR-077)
+
+describe("a teacher's staff seat accepts an individual project (ADR-077)", () => {
+  /** A teacher with a claimed STAFF seat of `roomId` and a linked GitHub account of their own. */
+  async function staffSeat(roomId: string): Promise<Student> {
+    const signed = await server.signIn("teacher");
+    const githubUserId = nextAccount++;
+    const login = `teacher${githubUserId}`;
+    await server.app.db.insert(enrollments).values({
+      id: randomUUID(),
+      classroomId: roomId,
+      nom: "Test",
+      prenom: "Teacher",
+      email: `t-${randomUUID().slice(0, 6)}@heig.test`,
+      userId: signed.id,
+      claimedAt: new Date(),
+      staff: true,
+    });
+    await server.app.db.insert(githubAccounts).values({ userId: signed.id, githubUserId, login });
+    accounts.set(githubUserId, login);
+    return { ...signed, githubUserId, login };
+  }
+
+  it("gets its own repository, counted nowhere, badged on the staff page, never read by a student", async () => {
+    const { project, room, student } = await publishedProject();
+    const other = await newStudent();
+    const tester = await staffSeat(room.id);
+    const res = await accept(project.id, tester);
+    expect(res.statusCode, res.body).toBe(200);
+    const fullName = `${room.login}/lab-1-${tester.login}`;
+    expect(res.json()).toMatchObject({ status: "ok", fullName });
+
+    // The holder reads it, as a staff seat.
+    const own = await call("GET", `/app/api/student/projects/${project.id}`, tester.headers);
+    expect(own.json()).toMatchObject({ seat: "staff", repo: { fullName } });
+
+    // The staff page: a badged row, in no count.
+    const detail = await call("GET", `/app/api/projects/${project.id}`, teacher.headers);
+    const body = detail.json();
+    expect(body.counts).toMatchObject({ students: 1, accepted: 0, live: 0, frozen: 0 });
+    expect(body.rows.filter((r: { staff: boolean }) => r.staff)).toHaveLength(1);
+    expect(body.rows.find((r: { staff: boolean }) => r.staff).repo.fullName).toBe(fullName);
+    expect(body.rows.filter((r: { staff: boolean }) => !r.staff).every((r: { repo: unknown }) => r.repo === null)).toBe(true);
+
+    // N-SEC-20: nothing a student receives names it.
+    await accept(project.id, student);
+    for (const who of [student, other]) {
+      const view = await call("GET", `/app/api/student/projects/${project.id}`, who.headers);
+      const home = await call("GET", "/app/api/student/home", who.headers);
+      expect(view.body).not.toContain(tester.login);
+      expect(home.body).not.toContain(tester.login);
+    }
+  });
+
+  it("answers a group project 409 no_group: staff seats are never placed", async () => {
+    const { project, room } = await publishedProject();
+    await server.app.db.update(projects).set({ groupMode: true }).where(eq(projects.id, project.id));
+    const tester = await staffSeat(room.id);
+    expect(refusal(await accept(project.id, tester))).toEqual([409, "no_group"]);
+    expect(await repoRows(project.id)).toEqual([]);
+  });
+
+  it("is refused to a teacher without a seat, and to an impersonation of the staff seat", async () => {
+    const { project, room } = await publishedProject();
+    const tester = await staffSeat(room.id);
+    const seatless = await server.signIn("teacher");
+    expect((await accept(project.id, seatless)).statusCode).toBe(404);
+    const admin = await server.signIn("admin");
+    const s = await createSession(server.app.db, tester.id, 8, { kind: "impersonation", actorUserId: admin.id, evaluationId: null });
+    const headers = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
+    expect((await accept(project.id, { headers })).statusCode).toBe(403);
     expect(await repoRows(project.id)).toEqual([]);
   });
 });

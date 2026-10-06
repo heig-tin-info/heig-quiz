@@ -89,8 +89,8 @@ export const notRecorded = (answer: object | NotRecorded): answer is NotRecorded
 /**
  * The account let into `repo`, written BEFORE GitHub is asked, in one short
  * transaction that locks the line FOR SHARE: only while the line is still
- * claimed by `account.userId` as a STUDENT seat — otherwise nobody is
- * invited. A roster write that takes the line or its account away waits
+ * claimed by `account.userId` (a student's seat or, for its test
+ * repository, a staff seat, ADR-077) — otherwise nobody is invited. A roster write that takes the line or its account away waits
  * for this lock and then finds the row (`releaseLine`). A group's
  * repository also locks the line's member row of the copy FOR SHARE
  * (M3-15b-2): only a member of that group whose departure is not pending is
@@ -105,7 +105,7 @@ export async function recordGrant(db: Db, repo: RepoRow, account: InvitedAccount
       .from(enrollments)
       .where(eq(enrollments.id, account.enrollmentId))
       .for("share");
-    if (!line || line.userId !== account.userId || line.staff) return "gone";
+    if (!line || line.userId !== account.userId) return "gone";
     if (repo.groupId !== null) {
       const [member] = await tx
         .select({ groupId: projectGroupMembers.groupId, departingAt: projectGroupMembers.departingAt })

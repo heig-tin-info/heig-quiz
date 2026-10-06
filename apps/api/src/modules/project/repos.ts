@@ -71,6 +71,23 @@ export async function studentRepos(db: Db | Tx, project: Pick<ProjectRow, "id" |
     .where(and(eq(projectRepos.projectId, project.id), or(isNotNull(projectRepos.groupId), notInArray(projectRepos.userId, staff))));
 }
 
+/**
+ * The TEST repositories of `project` (ADR-077): the individual ones of users
+ * who hold a staff seat of the classroom — what `studentRepos` leaves out.
+ * The staff page draws them, badged; no count, no release, no grade reads
+ * them.
+ */
+export async function staffRepos(db: Db | Tx, project: Pick<ProjectRow, "id" | "classroomId">): Promise<RepoRow[]> {
+  const staff = db
+    .select({ userId: enrollments.userId })
+    .from(enrollments)
+    .where(and(eq(enrollments.classroomId, project.classroomId), eq(enrollments.staff, true), isNotNull(enrollments.userId)));
+  return db
+    .select()
+    .from(projectRepos)
+    .where(and(eq(projectRepos.projectId, project.id), isNull(projectRepos.groupId), inArray(projectRepos.userId, staff)));
+}
+
 /** A project repository with what its events need: its project and the course of its staff. */
 export interface RepoContext {
   repo: RepoRow;

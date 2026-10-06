@@ -37,6 +37,9 @@ You can accept from the start date until the deadline. A project you did not acc
 
 If something goes wrong, the page tells you what to do: try again in a moment, or ask your teacher (for instance when the classroom is not fully set up). Nothing is lost.
 
+!!! note "Teachers"
+    A teacher with a staff seat (**Join as student**) can Accept too, to test a project: the repository is theirs, counts nowhere, and group projects are not covered. Link a GitHub account that is not a member of the organization. *(Proposed, ADR-077.)*
+
 ## 3. Open the invitation on GitHub
 
 Your repository is yours, but GitHub wants you to accept its invitation once. The button becomes **Open the invitation**: it opens GitHub in a new tab, where you press **Accept invitation**. You also get a notification and an e-mail.

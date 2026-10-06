@@ -232,6 +232,8 @@ describe("the student home", () => {
   it("lists a project among what is open, with its status and its repository", async () => {
     const project: StudentProjectCard = {
       kind: "project",
+      seat: "student",
+      groupMode: false,
       id: "p1",
       title: "Labo 1 — Pointeurs",
       classroomId: "r1",

@@ -12,9 +12,11 @@
  * is worded (`studentRefusalMessage`). Every write ends by invalidating the
  * `student` root: the home, the classroom page and the project page re-read.
  *
- * A teacher in the student view (ADR-018) and an impersonation session
- * (ADR-034) get no button: linking is refused to them (F-GH-05) and Accept
- * answers them the 404 of a missing project. One muted line says so.
+ * An impersonation session (ADR-034) and a teacher in the student view
+ * without a seat get no button: linking is refused to them (F-GH-05) and
+ * Accept answers them the 404 of a missing project. One muted line says so.
+ * A teacher's staff seat (ADR-018) gets the real actions, on a test
+ * repository counted nowhere (ADR-077).
  *
  * `now` is the page's, read off the server's clock (invariant 5): the start
  * and the deadline are judged against it, never against the browser's.
@@ -22,7 +24,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import type { StudentActivityGroup } from "@quiz/domain";
-import type { ProjectAcceptance, StudentProjectCard } from "@quiz/contracts";
+import type { ProjectAcceptance, ProjectSeatKind, StudentProjectCard } from "@quiz/contracts";
 
 import { api, useMe } from "../api";
 import { githubLinkHref } from "../github/api";
@@ -30,7 +32,6 @@ import { useT, type TFunction } from "../i18n";
 import { useToast } from "../notify";
 import { studentRootKey } from "../queryKeys";
 import { routeToPath, type Navigate } from "../router";
-import { useStudentView } from "../studentView";
 import { ActivityRow, leftLine, startsLine, type RowAction } from "./ActivityRow";
 import {
   ACCENT_KINDS,
@@ -46,14 +47,15 @@ import {
 } from "./projectRow";
 
 /**
- * Whether the student screens are read by someone who is not the student:
- * a teacher in the student view, or an admin acting as them (ADR-034). The
- * project's writes are theirs alone (F-PROJ-05, F-GH-05).
+ * Whether the student screens are read by someone who cannot act as the
+ * student: an admin acting as them (ADR-034), or a teacher in the student
+ * view who holds no seat in the classroom (`seat` null). A teacher WITH a
+ * staff seat acts on their own test repository (ADR-077); the project's
+ * writes are the seat holder's alone (F-PROJ-05, F-GH-05).
  */
-export function useStudentReadOnly(): boolean {
-  const studentView = useStudentView();
+export function useStudentReadOnly(seat: ProjectSeatKind | null): boolean {
   const me = useMe();
-  return studentView || me.data?.session?.kind === "impersonation";
+  return seat === null || me.data?.session?.kind === "impersonation";
 }
 
 /**
@@ -155,7 +157,7 @@ export function ProjectRow({
   showWhere?: boolean;
 }) {
   const t = useT();
-  const readOnly = useStudentReadOnly();
+  const readOnly = useStudentReadOnly(card.seat);
   const action = useProjectAction(factsOfCard(card), { now, primary, readOnly });
   const route = { view: "project", id: card.id } as const;
   return (

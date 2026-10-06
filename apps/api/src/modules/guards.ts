@@ -666,8 +666,10 @@ export async function studentGroupSet(
 /**
  * The student's side of a project (F-PROJ-05, N-SEC-20; merge task M3-03):
  * a project that is not a draft nor archived, of a classroom where the
- * caller holds a claimed STUDENT seat — a staff seat (ADR-018) never
- * accepts. Null otherwise: a draft never shows.
+ * caller holds a claimed seat — a student's, or a teacher's staff seat
+ * (ADR-018), which accepts an INDIVIDUAL project to test it (ADR-077; a
+ * group project answers it `409 no_group`, staff seats are never placed).
+ * Null otherwise: a draft never shows.
  */
 export async function findStudentProject(db: Db, userId: string, projectId: string) {
   const [row] = await db
@@ -675,7 +677,7 @@ export async function findStudentProject(db: Db, userId: string, projectId: stri
     .from(projects)
     .innerJoin(
       enrollments,
-      and(eq(enrollments.classroomId, projects.classroomId), eq(enrollments.userId, userId), eq(enrollments.staff, false)),
+      and(eq(enrollments.classroomId, projects.classroomId), eq(enrollments.userId, userId)),
     )
     // An archived classroom takes no new work (product owner, 2026-10-02).
     .innerJoin(classrooms, and(eq(classrooms.id, projects.classroomId), isNull(classrooms.archivedAt)))
@@ -712,8 +714,8 @@ export interface StudentProjectScope extends ReadableClassroom {
  * course's staff (a teacher in the student view, ADR-018), a claimed seat,
  * an impersonation session through the seat alone (ADR-034); a confined
  * session, a stranger get null, the 404 of a missing project. The
- * repository the view shows is the seat's, read by the `project` module
- * through a STUDENT seat only (`seat.staff`): a staff seat holds none.
+ * repository the view shows is the seat's own, read by the `project`
+ * module: a staff seat's is its holder's test repository (ADR-077).
  */
 export async function findStudentProjectView(
   db: Db,

@@ -56,8 +56,9 @@ export interface SeatRepos {
 /**
  * The repositories the student seats of `projects` read, in three reads:
  * a seat's own individual repository, or, in a group project, its copy
- * group's — `pickStudentRepo`: a live individual one wins. Staff seats read
- * none (ADR-018). `enrollmentIds` narrows the seats read.
+ * group's — `pickStudentRepo`: a live individual one wins. A staff seat
+ * reads its own test repository (ADR-077), never a group's: it is not
+ * placed. `enrollmentIds` narrows the seats read.
  */
 export async function seatRepos(db: Db | Tx, projects: readonly SeatProject[], enrollmentIds?: readonly string[]): Promise<SeatRepos> {
   if (projects.length === 0 || enrollmentIds?.length === 0) return { of: () => null, seat: () => ({ repo: null, groupId: null }) };
@@ -71,7 +72,6 @@ export async function seatRepos(db: Db | Tx, projects: readonly SeatProject[], e
       .where(
         and(
           inArray(enrollments.classroomId, [...new Set(projects.map((p) => p.classroomId))]),
-          eq(enrollments.staff, false),
           lines === undefined ? undefined : inArray(enrollments.id, lines),
         ),
       ),

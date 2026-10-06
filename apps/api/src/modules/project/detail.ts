@@ -56,7 +56,7 @@ import { reposWithAccessToRevoke } from "./groupCopy.js";
 import { groupsDrifted, groupSyncOwed } from "./groupResync.js";
 import { seatRepos } from "./groupRepos.js";
 import { forEachLimit } from "./lease.js";
-import { studentRepos, type RepoRow } from "./repos.js";
+import { staffRepos, studentRepos, type RepoRow } from "./repos.js";
 import { projectSyncState, repoSyncViews } from "./sync.js";
 import { projectSummary, type ProjectRow } from "./views.js";
 
@@ -326,10 +326,11 @@ export interface DetailOptions {
  * group they are in (M3-16b: the page draws one row per group from them),
  * then the repositories no student of the roster reads any more, a group's
  * with its group (R1's group kept with no member). A
- * repository of a user who now holds a STAFF seat of the classroom is left
- * out altogether — rows, counts and the release's readiness
- * (`studentRepos`, `releaseCounts`: the release reads the same): a staff
- * seat is never a student's (ADR-018).
+ * repository of a user who holds a STAFF seat of the classroom is a TEST
+ * repository (ADR-077): a row of its own, `staff`, after the students' —
+ * and in no count nor in the release's readiness (`studentRepos`,
+ * `releaseCounts`: the release reads the same): a staff seat is never a
+ * student's (ADR-018).
  * The project was loaded under `staffAccess` by the route (invariant 6).
  */
 export async function projectDetail(
@@ -354,19 +355,22 @@ export async function projectDetail(
     .where(and(eq(enrollments.classroomId, project.classroomId), eq(enrollments.staff, false)))
     .orderBy(enrollments.nom, enrollments.prenom, enrollments.id);
   const repos = await studentRepos(db, project);
-  const repoIds = repos.map((repo) => repo.id);
+  // The teachers' test repositories (ADR-077): read like the others, drawn badged, counted nowhere.
+  const tests = await staffRepos(db, project);
+  const shownRepos = [...repos, ...tests];
+  const repoIds = shownRepos.map((repo) => repo.id);
   const [runs, facts, dispatches, syncs] = await Promise.all([
-    slotRuns(db, repos),
+    slotRuns(db, shownRepos),
     runFacts(db, repoIds),
     finalDispatches(db, repoIds),
-    repoSyncViews(db, project, repos),
+    repoSyncViews(db, project, shownRepos),
   ]);
   const liveRepos = repos.filter((repo) => isLive(repo, project));
-  const { live, complete } = await liveStates(db, config, project, liveRepos, opts.log, opts.budgetMs ?? LIVE_BUDGET_MS);
+  const { live, complete } = await liveStates(db, config, project, shownRepos.filter((repo) => isLive(repo, project)), opts.log, opts.budgetMs ?? LIVE_BUDGET_MS);
   const toRevoke = await reposWithAccessToRevoke(db, project.id);
 
   const views = new Map(
-    repos.map((repo) => [
+    shownRepos.map((repo) => [
       repo.id,
       repoView(project, repo, runs, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), toRevoke),
     ]),
@@ -393,6 +397,7 @@ export async function projectDetail(
         githubLogin: s.githubLogin,
       },
       repo: view ?? null,
+      staff: false,
     };
   });
   // The repositories no student of the roster reads any more — their
@@ -417,11 +422,36 @@ export async function projectDetail(
         claimed: false,
         githubLogin,
       };
-      rows.push({ student, repo: views.get(repo.id)!, group: groupOf(repo.groupId) });
+      rows.push({ student, repo: views.get(repo.id)!, group: groupOf(repo.groupId), staff: false });
+    }
+  }
+  // The test repositories, after the students' rows: the teacher's staff seat names the row.
+  if (tests.length > 0) {
+    const seats = await db
+      .select({ userId: enrollments.userId, nom: enrollments.nom, prenom: enrollments.prenom, email: enrollments.email, claimedAt: enrollments.claimedAt, githubLogin: githubAccounts.login, enrollmentId: enrollments.id })
+      .from(enrollments)
+      .leftJoin(githubAccounts, eq(githubAccounts.userId, enrollments.userId))
+      .where(and(eq(enrollments.classroomId, project.classroomId), eq(enrollments.staff, true), inArray(enrollments.userId, tests.map((repo) => repo.userId))))
+      .orderBy(enrollments.nom, enrollments.prenom, enrollments.id);
+    const seatOf = new Map(seats.map((s) => [s.userId, s]));
+    for (const repo of tests) {
+      const s = seatOf.get(repo.userId);
+      if (!s) continue;
+      const student: ProjectStudent = {
+        enrollmentId: s.enrollmentId,
+        userId: s.userId,
+        nom: s.nom,
+        prenom: s.prenom,
+        email: s.email,
+        claimed: s.claimedAt !== null && s.userId !== null,
+        githubLogin: s.githubLogin,
+      };
+      rows.push({ student, repo: views.get(repo.id)!, group: null, staff: true });
     }
   }
 
-  const accepted = [...views.values()];
+  // Counted over the students' repositories only: a test repository is no acceptance (ADR-077).
+  const accepted = repos.map((repo) => views.get(repo.id)!);
   const counts = releaseCounts(project, repos);
   // ONE predicate for the primary action and the page's Sync button: the sync's own `ahead` (M3-07).
   const sync = projectSyncState(project, repos, now);
