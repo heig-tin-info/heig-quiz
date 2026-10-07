@@ -50,16 +50,10 @@ Start button, its teacher dashboard and its YAML seed (all removed, below).
   classroom's App key) and its end-to-end script (it drove the removed
   login and seed). Comments that cite "classroom's `deploy/`" or
   "classroom's `docs/deploy.md`" point to `~/heig-classroom/apps/codespace`.
-- **Deployed since M6-04** (`deploy/`, [deploy/RUNBOOK.md](deploy/RUNBOOK.md),
-  ADR-016's M6-04 amendment): the CI builds `Dockerfile` into
-  `ghcr.io/heig-tin-info/quiz-codespace:<sha>`; the engine VM runs it as
-  two quadlet instances, `prod` and `staging`, deployed through the shared
-  dispatcher `infra/engine/deploy.sh` (repository root). `CODESPACE_INSTANCE`
-  names an instance: its session containers are `cs-<instance>-<id>` with
-  the label `heig-codespace.instance=<instance>`, and the engine lists,
-  stops and removes **only its own instance's** (`engine/instance.test.ts`).
-  Each instance has its own network (`infra/net/common.sh`: `codespace`/`cs0`
-  for `default` and `prod`, `codespace-staging`/`cs1` for `staging`).
+- **Deployed since M6-04**: two instances, `prod` and `staging`, on the
+  engine VM (ADR-016's M6-04 amendment, [deploy/RUNBOOK.md](deploy/RUNBOOK.md)).
+  `CODESPACE_INSTANCE` names an instance; its session containers carry its
+  name and label, and an engine lists only its own (`engine/instance.test.ts`).
   `images/` is built on the VM by hand (`images/build.sh`), never in CI.
 - **Pages in English and French** (`src/web/i18n.ts`, the language from
   `Accept-Language`, French by default): `en` is the dictionary, `fr` is

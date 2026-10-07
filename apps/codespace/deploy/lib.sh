@@ -1,22 +1,26 @@
 # Shared by install.sh (every deploy) and bootstrap.sh (once per instance):
 # the closed table of the portal instances on the engine VM, and the two
-# installation steps. Sourced, not executed; runs as root from the checkout
-# (/opt/quiz-runner), at the commit being deployed. RUNBOOK.md says when.
+# installation steps. Sourced, not executed; runs as root from a checkout
+# (production's /opt/quiz-runner, or staging's /opt/quiz-engine-staging),
+# at the commit being deployed. RUNBOOK.md says when.
 #
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # the values are read by the scripts that source this file
 
 CS_APP="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# Host-level copies: what systemd runs at boot must not depend on where a
-# later deploy (staging's, which runs unapproved commits) left the checkout.
+# Host-level copies: what systemd runs at boot does not depend on where a
+# later deploy left a checkout.
 CS_LIB=/usr/local/lib/quiz-codespace
 CS_IMAGE_REPO=ghcr.io/heig-tin-info/quiz-codespace
 
-# The instances. Everything that differs between them is here and nowhere
-# else, except the network values, which come from infra/net/common.sh (the
-# same file the network unit runs). Ports: 3100 was heig-classroom's portal;
-# Quiz's instances take their own, so the two can run side by side during
-# the switch and a rollback is a restart, not an edit.
+# pd(), pull_retag, drop_old_sha_tags
+# shellcheck source=../../../infra/engine/lib.sh
+. "$CS_APP/../../infra/engine/lib.sh"
+
+# The instances. What differs between them is here, except the network
+# values, which come from infra/net/common.sh (the file the network unit
+# runs). Ports: 3100 was heig-classroom's portal; Quiz's take their own, so
+# the two can run side by side during the switch.
 cs_instance() {
 	case "${1:-}" in
 		prod)
@@ -35,16 +39,17 @@ cs_instance() {
 	CS_DATA="/srv/quiz-codespace/$1"
 	CS_ETC="/etc/quiz-codespace/$1"
 	CS_UNIT="quiz-codespace-$1"
-	# CS_NET, CS_GATEWAY, CS_GIT_PORT, CS_IFACE, CS_ANCHOR, pd(), for CS_INSTANCE
+	# CS_NET, CS_GATEWAY, CS_GIT_PORT, CS_IFACE, CS_ANCHOR, for CS_INSTANCE
 	# shellcheck source=../infra/net/common.sh
 	. "$CS_APP/infra/net/common.sh"
 }
 
 # Host-level pieces, shared by both instances: the network scripts and the
 # nftables table, the AppArmor profile, the shadow snapshot script and the
-# systemd templates. Installed by bootstrap.sh and by a PRODUCTION deploy
-# only: a staging deploy never changes what production's containers run
-# under.
+# systemd templates. Written by bootstrap.sh and by a PRODUCTION deploy
+# only, so that an ordinary staging deploy cannot change what production's
+# containers run under by accident. Not a security boundary: the staging
+# key is root on this VM (ADR-016, M6-04 amendment).
 cs_install_host() {
 	install -d -m 0755 "$CS_LIB/infra/net" "$CS_LIB/infra/nft"
 	install -m 0755 "$CS_APP"/infra/net/{common,setup,teardown,test}.sh "$CS_LIB/infra/net/"

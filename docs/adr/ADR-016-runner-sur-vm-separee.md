@@ -21,26 +21,38 @@ after the cutover (D09, settled 2026-10-01).
 **Amended (2026-10-07, M6-04): how the portal is deployed beside the
 runner.** Scope: point 4 below and the addendum above; the runner's own
 deploy steps are unchanged.
-(a) *One dispatcher.* `infra/engine/deploy.sh` is the engine VM's forced
-command for both components, with a scope fixed by the `authorized_keys`
-line (`production`: the runner and the portal's `prod`; `staging`: the
-portal's `staging` only). It parses `[force] <component> <instance> <sha>
-<token>` strictly, still accepts the runner's `<sha> <token>`, serialises
-the VM's deploys with a lock, moves the checkout and runs the component's
-steps (`apps/runner/deploy/install.sh`, the former script's steps verbatim;
-`apps/codespace/deploy/install.sh <instance>`). The former path forwards
-to it, so the existing key line keeps deploying.
+(a) *One dispatcher, two checkouts.* `infra/engine/deploy.sh` is the
+engine VM's forced command for both components, with a scope fixed by the
+`authorized_keys` line: the production key runs the dispatcher of
+`/opt/quiz-runner` (the runner and the portal's `prod`), the staging key
+the dispatcher of its own clone `/opt/quiz-engine-staging` (the portal's
+`staging` only), so the production checkout only ever moves to approved
+commits. It parses `[force] <component> <instance> <sha> <token>`
+strictly, serialises the VM's deploys with one lock, refuses a sha that
+predates it, moves its checkout and runs the component's steps
+(`apps/runner/deploy/install.sh`, `apps/codespace/deploy/install.sh
+<instance>`), which share `infra/engine/lib.sh` (pull and retag by sha,
+then untag the older sha tags; no global prune on an engine other services
+share). *Transition:* it also accepts the runner's pre-M6-04 `<sha>
+<token>`, which the CI keeps sending, and the former
+`apps/runner/deploy/deploy.sh` forwards to it, so the existing key line
+keeps deploying and the first deploy hands over from the old script. Once
+`authorized_keys` names the dispatcher, the CI sends `runner prod <sha>
+<token>` and both go (a TODO in the dispatcher).
 (b) *Two portal instances on the VM*, `prod` (`code.chevallier.io`, for
 production) and `staging` (`code-dev.chevallier.io`, for
 `quiz.dev.chevallier.io`), with separate environment files and secrets,
 ports, data directories, SQLite and volumes. Because a portal removes the
 session containers its database does not know, every session container
-carries `heig-codespace.instance=<CODESPACE_INSTANCE>` and an instance
-lists, stops and removes only its own. Each instance has its own Podman
-network and bridge (`cs0`, `cs1`), the nftables table pinning each bridge
-to its own gateway, rather than one shared bridge: the git channel
-authenticates a push by source address against its own database, so a
-staging container must not reach production's channel at all.
+carries `heig-codespace.instance=<CODESPACE_INSTANCE>` and a name
+prefixed with it, and an instance lists only its own (both labels in the
+`ps` filter). Each instance has its own Podman network and bridge (`cs0`,
+`cs1`), the nftables table pinning each bridge to its own gateway, rather
+than one shared bridge: the git channel authenticates a push by source
+address against its own database, so a staging container must not reach
+production's channel at all. For the same reason the channel has no
+`0.0.0.0` fallback in production or for a named instance: no gateway, no
+start (the deploy replays the network setup first).
 (c) *An image per sha.* The portal is built by the CI
 (`ghcr.io/heig-tin-info/quiz-codespace:<sha>`, `apps/codespace/Dockerfile`,
 no secret inside) and runs as a quadlet like the runner — host network,
@@ -57,14 +69,17 @@ application's live-evaluation guard; `staging` is not guarded.
 (e) *Host-level pieces* (the nftables table, the AppArmor profile, the
 network and shadow units, under `/usr/local/lib/quiz-codespace`) are
 written by the bootstrap and by a `prod` deploy only, never by a staging
-deploy. The switch from heig-classroom's portal and the operations are
+deploy. Like the separate checkout, this prevents accidents (a staging
+commit changing what production runs under), not attacks. The switch from
+heig-classroom's portal and the operations are
 `apps/codespace/deploy/RUNBOOK.md`. The portal holds no GitHub App key
 (`FORGE_KIND=none`, root invariant 15).
-**Accepted risk, open for the owner:** the staging key deploys every
-commit of `main` before approval, as root, onto the VM that hosts the
-production runner and portal; the staging portal mounts the rootful Podman
-socket, which is root-equivalent. The app VM separates staging by account;
-this VM cannot, short of a staging engine of its own.
+(f) *Risk accepted by the owner (2026-10-07):* the staging key deploys
+every commit of `main` before approval and runs that commit's scripts as
+root on the VM that hosts the production runner and portal, and the
+staging portal mounts the rootful Podman socket, which is root-equivalent.
+The app VM separates staging by account; this VM cannot, short of a
+staging engine of its own.
 
 ## Context
 

@@ -53,8 +53,6 @@ import {
 export interface ManagerOptions {
   db: Db;
   engine: Engine;
-  /** `CODESPACE_INSTANCE`, part of the container names; `default` when absent. */
-  instance?: string;
   volumesRoot: string;
   /** Grace period after the last heartbeat before the container is destroyed. */
   graceMs: number;
@@ -126,16 +124,6 @@ export interface SessionManager {
    * (it carries the token's repository); the assignment is only a fallback.
    */
   repoOfEvent(row: { sessionId?: string; student: string; assignment: string }): RepoRef | undefined;
-}
-
-/**
- * Deterministic container name: reconciliation finds it on its own. The
- * instance is part of it (M6-04): two portals on one engine never compete
- * for a name, so `engine.run`'s clean-up of a leftover never meets another
- * instance's container.
- */
-export function containerNameFor(sessionId: string, instance = "default"): string {
-  return `cs-${instance}-${sessionId}`;
 }
 
 /**
@@ -333,7 +321,6 @@ export function shortCauseOf(err: unknown, repo: RepoRef | undefined): Bootstrap
 
 export function createSessionManager(opts: ManagerDeps): SessionManager {
   const { db, engine, log } = opts;
-  const nameOf = (sessionId: string): string => containerNameFor(sessionId, opts.instance);
   let gcTimer: NodeJS.Timeout | null = null;
   let shadowTimer: NodeJS.Timeout | null = null;
   /** One session at a time: two concurrent `start` calls launch only one container. */
@@ -456,7 +443,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
     workspace: EnsureWorkspaceResult,
   ): Promise<void> {
     if (!workspace.needsContainer || !workspace.branch) return;
-    const name = session.containerName ?? nameOf(session.id);
+    const name = session.containerName ?? engine.containerName(session.id);
     try {
       const out = await engine.exec(name, ["sh", "-lc", completionScript(workspace.branch)]);
       log.info(
@@ -489,7 +476,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
     identity: GitIdentity | null,
   ): Promise<void> {
     if (!identity) return;
-    const name = session.containerName ?? nameOf(session.id);
+    const name = session.containerName ?? engine.containerName(session.id);
     try {
       await engine.exec(name, ["sh", "-lc", identityScript(identity)]);
     } catch (err) {
@@ -519,7 +506,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
       ...(identity ? { identity } : {}),
       log: opts.log,
     });
-    const name = nameOf(session.id);
+    const name = engine.containerName(session.id);
     const info = await engine.run({
       sessionId: session.id,
       name,
@@ -742,7 +729,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
       if (session.state === "closed" || session.state === "failed") {
         throw new Error(`session ${sessionId} closed`);
       }
-      const name = session.containerName ?? nameOf(session.id);
+      const name = session.containerName ?? engine.containerName(session.id);
       const info = await engine.inspect(name);
       if (info?.state === "running" && info.ip) {
         if (info.ip !== session.containerIp || session.state !== "running") {
@@ -775,7 +762,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         );
         return null;
       });
-      const name = session.containerName ?? nameOf(session.id);
+      const name = session.containerName ?? engine.containerName(session.id);
       await engine.stop(name);
       await engine.rm(name);
       updateSession(db, sessionId, {

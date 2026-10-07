@@ -16,7 +16,6 @@ import type { ContainerInfo, Engine, RunRequest } from "../engine/index.js";
 import { gitBare } from "../git/index.js";
 
 import {
-  containerNameFor,
   createSessionManager,
   stagingSourceFor,
   type ManagerDeps,
@@ -31,6 +30,9 @@ class FakeEngine implements Engine {
   runs = 0;
   private next = 10;
 
+  containerName(sessionId: string): string {
+    return `cs-test-${sessionId}`;
+  }
   runArgs(): string[] {
     return [];
   }
@@ -230,7 +232,7 @@ describe("creation and resumption (analyse.md D5)", () => {
     const manager = makeManager();
     const { session } = await manager.start(user, assignment);
     await writeFile(join(session.volumeDir, "work", "note.txt"), "work", "utf8");
-    engine.kill(containerNameFor(session.id));
+    engine.kill(engine.containerName(session.id));
 
     const again = await manager.ensureRunning(session.id);
     expect(engine.runs).toBe(2);
@@ -279,7 +281,7 @@ describe("the proxy cookie token rotates (audit L3)", () => {
     const assignment = await insertAssignment();
     const manager = makeManager();
     const first = await manager.start(user, assignment);
-    engine.kill(containerNameFor(first.session.id));
+    engine.kill(engine.containerName(first.session.id));
 
     const second = await manager.start(user, assignment);
     expect(second.launched).toBe(true);
@@ -338,7 +340,7 @@ describe("garbage collection", () => {
 
     const result = await manager.collect();
     expect(result.closed).toBe(1);
-    expect(await engine.inspect(containerNameFor(session.id))).toBeNull();
+    expect(await engine.inspect(engine.containerName(session.id))).toBeNull();
     // The volume stays: that is the whole point of the decision.
     expect(findAnySession(db, "student", "tp")?.volumeDir).toBe(session.volumeDir);
   });
@@ -349,7 +351,7 @@ describe("garbage collection", () => {
     const { session } = await manager.start(user, assignment);
     manager.touch(session.id);
     expect((await manager.collect()).closed).toBe(0);
-    expect((await engine.inspect(containerNameFor(session.id)))?.state).toBe("running");
+    expect((await engine.inspect(engine.containerName(session.id)))?.state).toBe("running");
   });
 });
 
@@ -369,7 +371,7 @@ describe("reconciliation at portal start-up", () => {
     const assignment = await insertAssignment();
     const manager = makeManager();
     const { session } = await manager.start(user, assignment);
-    engine.kill(containerNameFor(session.id));
+    engine.kill(engine.containerName(session.id));
     const result = await manager.reconcile();
     expect(result).toMatchObject({ resumed: 0, stopped: 1 });
     expect(findAnySession(db, "student", "tp")?.state).toBe("stopped");

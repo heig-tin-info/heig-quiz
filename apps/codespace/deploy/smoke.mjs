@@ -19,26 +19,29 @@
  *    garbage collector (SESSION_GRACE_MS) and counts against the smoke
  *    teacher's quota of 1, nobody else's.
  *
- * Tokens are printed nowhere. Ports: deploy/lib.sh.
+ * The port is the env file's PORT, or `--port <n>`. Tokens are printed
+ * nowhere.
  */
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
-const PORTS = { prod: 3110, staging: 3120 };
 const instance = process.argv[2];
 const launch = process.argv.includes("--launch");
-if (!(instance in PORTS)) {
-  console.error("usage: smoke.mjs <prod|staging> [--launch]");
+const portArg = process.argv[process.argv.indexOf("--port") + 1];
+if (!/^[a-z][a-z0-9]{0,15}$/.test(instance ?? "")) {
+  console.error("usage: smoke.mjs <prod|staging> [--launch] [--port <n>]");
   process.exit(2);
 }
-// The two overrides serve a run against a portal elsewhere (a workstation).
-const base = process.env.SMOKE_URL ?? `http://127.0.0.1:${PORTS[instance]}`;
+// SMOKE_ENV_FILE serves a run against a portal elsewhere (a workstation).
 const env = Object.fromEntries(
   readFileSync(process.env.SMOKE_ENV_FILE ?? `/etc/quiz-codespace/${instance}/env`, "utf8")
     .split("\n")
     .filter((l) => /^[A-Z_]+=/.test(l))
     .map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]),
 );
+const port = process.argv.includes("--port") ? portArg : env.PORT;
+if (!/^\d+$/.test(port ?? "")) fail("no port: PORT in the env file, or --port <n>");
+const base = `http://127.0.0.1:${port}`;
 const secret = env.CODESPACE_LAUNCH_SECRET ?? "";
 if (secret.length < 32) fail(`CODESPACE_LAUNCH_SECRET of ${instance} missing or short`);
 

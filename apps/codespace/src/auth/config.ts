@@ -61,8 +61,8 @@ const EnvSchema = z.object({
   /**
    * Which portal this is, when several share one Podman engine (`prod` and
    * `staging` on the engine VM, M6-04). It names and labels the session
-   * containers, and the engine lists, stops and removes only its own: two
-   * instances never reap each other's sessions. Closed charset
+   * containers, and the engine lists only its own: two instances never reap
+   * each other's sessions. Closed charset
    * (`INSTANCE_PATTERN` of `engine/`): lower-case letters and digits.
    */
   CODESPACE_INSTANCE: z

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # Brings one portal instance into shape on the engine VM, as root, from the
-# checkout (/opt/quiz-runner), IDEMPOTENT:
+# PRODUCTION checkout (/opt/quiz-runner, an approved commit) for both
+# instances, IDEMPOTENT:
 #   apps/codespace/deploy/bootstrap.sh <prod | staging>
 #
 # Once per instance, before its first deploy (RUNBOOK.md says when). It never
@@ -63,6 +64,7 @@ else
 	cookie="$(openssl rand -hex 32)"
 	umask 077
 	sed -e "s|@PUBLIC_URL@|https://$CS_HOST|g" \
+		-e "s|@PORT@|$CS_PORT|g" \
 		-e "s|@PLATFORM_URL@|$CS_PLATFORM|g" \
 		-e "s|@LAUNCH_SECRET@|$launch|g" \
 		-e "s|@EXAM_COOKIE_SECRET@|$cookie|g" \

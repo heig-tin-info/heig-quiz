@@ -2,15 +2,15 @@
 #
 # Deploys one instance of the portal on the engine VM, at the checkout's
 # commit. Run by the dispatcher infra/engine/deploy.sh (as root, after the
-# registry login and the checkout of the deployed sha), never by hand
-# outside RUNBOOK.md:
+# registry login and the checkout of the deployed sha):
 #   apps/codespace/deploy/install.sh <prod | staging>
 #
 # 1. the live-session guard (prod only), 2. pull the CI's image of this sha
 # and tag it :<instance>, the tag the quadlet runs, 3. install the host-level
-# files (prod only) and the instance's files, 4. restart the instance and
-# wait for its /healthz, 5. untag older sha tags. The student image is NOT
-# touched: it is built on the VM on purpose (images/build.sh).
+# files (prod only) and the instance's files, 4. replay the instance's
+# network setup, restart the portal and wait for its /healthz, 5. untag
+# older sha tags. The student image is NOT touched: it is built on the VM on
+# purpose (images/build.sh).
 set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")/../../.."
@@ -27,18 +27,13 @@ if [ ! -f "$CS_ETC/env" ]; then
 fi
 tag="$(git rev-parse HEAD)"
 
-# The guard (ADR-016, M6-04 amendment): production is never restarted under
-# a running session. A restart leaves the student containers running and
-# the reconciliation resumes them, but every open editor loses its
-# connection for the few seconds of the restart, and an exam must not.
-# Running = a container of THIS instance in the `running` state; Podman is
-# asked, not the portal, so a portal that is down does not block its own
-# repair. Fail closed: a `ps` that fails refuses like a live session.
-# Staging is not guarded, like the application's staging (deploy.md §5):
-# nobody sits an exam there and a refusal would hold back every promotion.
-# "force" (the dispatcher's QUIZ_DEPLOY_FORCE) overrides it.
+# The live-session guard (RUNBOOK.md, The live-session guard): a prod
+# restart keeps the student containers, but every open editor loses its
+# connection for a few seconds, and an exam must not. Podman is asked, not
+# the portal, so a portal that is down does not block its own repair; a
+# `ps` that fails refuses like a live session. Staging is not guarded.
 if [ "$CS_INSTANCE" = prod ]; then
-	live=$(podman ps --filter label=heig-codespace.session \
+	live=$(pd ps --filter label=heig-codespace.session \
 		--filter "label=heig-codespace.instance=$CS_INSTANCE" \
 		--filter status=running --format '{{.Names}}') \
 		|| live="(podman ps failed: see the error above)"
@@ -55,24 +50,26 @@ if [ "$CS_INSTANCE" = prod ]; then
 	fi
 fi
 
-podman pull "$CS_IMAGE_REPO:$tag"
-podman tag "$CS_IMAGE_REPO:$tag" "$CS_IMAGE_REPO:$CS_INSTANCE"
+pull_retag "$CS_IMAGE_REPO" "$tag" "$CS_INSTANCE"
 
-# Production's sha governs what both instances' containers run under (the
-# nftables table, the AppArmor profile, the network and shadow units); a
-# staging deploy, which runs commits nobody approved yet, does not touch them.
+# Host-level pieces from production's commits only (lib.sh says why, and
+# what this does not protect against).
 if [ "$CS_INSTANCE" = prod ]; then
 	cs_install_host
 fi
 cs_install_instance
 systemctl daemon-reload
-systemctl start "quiz-codespace-net@$CS_INSTANCE.service"
+# The git channel binds the bridge gateway and refuses to start without it
+# (no 0.0.0.0 fallback for a named instance): replay the network setup,
+# idempotent, so the bridge and its anchor exist before the portal starts.
+systemctl restart "quiz-codespace-net@$CS_INSTANCE.service"
 systemctl restart "$CS_UNIT.service"
 systemctl reload caddy
 
 # The exit code the CI receives is the instance's health.
+port="$(sed -n 's/^PORT=//p' "$CS_ETC/env" | tail -n 1)"
 for i in $(seq 1 60); do
-	if curl -fsS -m 2 "http://127.0.0.1:$CS_PORT/healthz" >/dev/null 2>&1; then
+	if curl -fsS -m 2 "http://127.0.0.1:${port:-$CS_PORT}/healthz" >/dev/null 2>&1; then
 		break
 	fi
 	if [ "$i" = 60 ]; then
@@ -84,16 +81,9 @@ for i in $(seq 1 60); do
 done
 
 student="$(cs_student_image)"
-if ! podman image exists "$student"; then
+if ! pd image exists "$student"; then
 	echo "deploy: warning: the student image $student is missing: no session can start (apps/codespace/images/build.sh)" >&2
 fi
 
-# Older sha tags go; an image still tagged :prod or :staging (the other
-# instance's) keeps that tag and stays. Never a global prune here: other
-# images on this engine are not ours to judge.
-old_tags=$(podman images --format '{{.Tag}}' --filter "reference=$CS_IMAGE_REPO" \
-	| grep -E '^[0-9a-f]{40}$' | grep -vx "$tag" | sort -u || true)
-for old in $old_tags; do
-	podman rmi "$CS_IMAGE_REPO:$old" >/dev/null 2>&1 || true
-done
+drop_old_sha_tags "$CS_IMAGE_REPO" "$tag"
 echo "deploy: codespace $CS_INSTANCE at ${tag:0:7}"

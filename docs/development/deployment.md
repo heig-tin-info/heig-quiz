@@ -315,18 +315,16 @@ command="/srv/quiz/deploy.sh production",restrict ssh-ed25519 AAAA… ci-deploy@
 command="/home/srvstg/quiz-staging/deploy.sh staging",restrict ssh-ed25519 AAAA… ci-deploy-staging@quiz
 # /root/.ssh/authorized_keys on the runner VM
 command="/opt/quiz-runner/infra/engine/deploy.sh production",restrict ssh-ed25519 AAAA… ci-deploy@quiz
-command="/opt/quiz-runner/infra/engine/deploy.sh staging",restrict ssh-ed25519 AAAA… ci-deploy-staging@quiz
+command="/opt/quiz-engine-staging/infra/engine/deploy.sh staging",restrict ssh-ed25519 AAAA… ci-deploy-staging@quiz
 ```
 
 On the runner VM one dispatcher, `infra/engine/deploy.sh`, deploys both of
-its components since M6-04, and the scope of the line bounds what a key may
-deploy: the production key the runner and the codespace portal's `prod`
-instance, the staging key the portal's `staging` instance only. The runner's
-request keeps its form, `<sha> <token>`; the portal's is
-`[force] codespace <instance> <sha> <token>`. A line still naming the former
-`apps/runner/deploy/deploy.sh` keeps working: that path forwards to the
-dispatcher with the production scope. The switch and the portal's
-operations are
+its components since M6-04, each key from its own checkout, and the scope of
+the line bounds what a key may deploy: the production key the runner and the
+codespace portal's `prod` instance, the staging key the portal's `staging`
+instance only. The staging key is still root on that VM (ADR-016, M6-04
+amendment). The request forms are in the dispatcher's header; the switch
+and the portal's operations are
 [`apps/codespace/deploy/RUNBOOK.md`](https://github.com/heig-tin-info/heig-quiz/blob/main/apps/codespace/deploy/RUNBOOK.md).
 
 Whatever command the client asks for, the server runs the pinned script
@@ -351,8 +349,8 @@ reboot.
 ### What the two scripts do
 
 Both move their checkout to the deployed sha with
-`git checkout --detach <sha>` (a token alone, a manual deploy, deploys the
-head of `origin/main`, still by its sha). That rewrites the script while bash
+`git checkout --detach <sha>` (on the application VM a token alone, a
+manual deploy, deploys the head of `origin/main`, still by its sha). That rewrites the script while bash
 is still reading the old copy, so a deploy that changes the deploy steps
 would run the previous ones: each script compares `HEAD` before and after
 and, when it moved, hands over to the new copy exactly once (`exec "$0"` with
@@ -371,13 +369,13 @@ done). Then they diverge:
   live-evaluation guard*).
 - **runner VM** (`infra/engine/deploy.sh`, which serialises the VM's deploys
   through a `flock`, checks the key's scope, then runs the component's
-  steps; the runner's are `apps/runner/deploy/install.sh`, unchanged from
-  the script it replaced): `podman pull` of the
-  sha-tagged runner image and retag it `:latest` (the tag the quadlet runs),
-  install the seccomp profile, the quadlet and the Caddy fragment from the
-  checkout, `caddy validate`, `systemctl daemon-reload`, restart
-  `quiz-runner.service`, reload Caddy, remove the older images, print the
-  deployed commit.
+  steps; the runner's are `apps/runner/deploy/install.sh`): `podman pull` of
+  the sha-tagged runner image and retag it `:latest` (the tag the quadlet
+  runs), install the seccomp profile, the quadlet and the Caddy fragment
+  from the checkout, `caddy validate`, `systemctl daemon-reload`, restart
+  `quiz-runner.service`, reload Caddy, untag the older sha-tagged runner
+  images (no global prune: the portal's sessions share the engine), print
+  the deployed commit.
 
 `.github/workflows/image-artifact.yml` is a keyless fallback for the
 application image only: run by hand, it builds the image and publishes it as
@@ -480,9 +478,9 @@ shared vCPU: on an exam day, stop it (§8, *Exam days*).
 # the restart. "<sha> <PAT>" deploys that commit; "<PAT>" alone, origin/main.
 cd /srv/quiz && SSH_ORIGINAL_COMMAND="<sha> <PAT read:packages>" ./deploy.sh production
 # runner VM, as root: the runner, then the codespace portal's instances
-cd /opt/quiz-runner && SSH_ORIGINAL_COMMAND="<sha> <PAT read:packages>" ./infra/engine/deploy.sh production
-SSH_ORIGINAL_COMMAND="codespace prod <sha> <PAT read:packages>" ./infra/engine/deploy.sh production
-SSH_ORIGINAL_COMMAND="codespace staging <sha> <PAT read:packages>" ./infra/engine/deploy.sh staging
+SSH_ORIGINAL_COMMAND="runner prod <sha> <PAT read:packages>" /opt/quiz-runner/infra/engine/deploy.sh production
+SSH_ORIGINAL_COMMAND="codespace prod <sha> <PAT read:packages>" /opt/quiz-runner/infra/engine/deploy.sh production
+SSH_ORIGINAL_COMMAND="codespace staging <sha> <PAT read:packages>" /opt/quiz-engine-staging/infra/engine/deploy.sh staging
 ```
 
 The checkouts are DETACHED at the deployed commit, and `.env.image` holds its

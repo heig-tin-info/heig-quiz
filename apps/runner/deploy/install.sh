@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# The runner's deploy steps on the engine VM (ADR-016): what
-# apps/runner/deploy/deploy.sh did after its checkout until M6-04, moved
-# here unchanged. Run by the dispatcher infra/engine/deploy.sh, as root, once
-# the registry login is done and the checkout is at the deployed sha.
+# The runner's deploy steps on the engine VM (ADR-016). Run by the dispatcher
+# infra/engine/deploy.sh, as root, once the registry login is done and the
+# checkout is at the deployed sha.
 #
 # The checkout's commit is the runner image tagged with it, which becomes
 # :latest, the tag the quadlet runs. The language images are NOT touched by
@@ -11,12 +10,12 @@
 set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")/../../.."
+# shellcheck source=../../../infra/engine/lib.sh
+. infra/engine/lib.sh
 
-# The quadlet runs :latest with Pull=never; :latest is made to be the
-# deployed sha here, never by the registry's moving tag.
+image=ghcr.io/heig-tin-info/quiz-runner
 tag="$(git rev-parse HEAD)"
-podman pull "ghcr.io/heig-tin-info/quiz-runner:$tag"
-podman tag "ghcr.io/heig-tin-info/quiz-runner:$tag" ghcr.io/heig-tin-info/quiz-runner:latest
+pull_retag "$image" "$tag" latest
 # The profile the sandbox containers run under: a HOST path, because the
 # Podman server is what opens it (quiz-runner.container mounts the same path
 # into the service so that its startup check sees the same file).
@@ -27,9 +26,5 @@ caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
 systemctl daemon-reload
 systemctl restart quiz-runner.service
 systemctl reload caddy
-# Older sha-tagged images are not dangling: drop them explicitly.
-podman images -q --filter "reference=ghcr.io/heig-tin-info/quiz-runner" \
-  --filter "before=ghcr.io/heig-tin-info/quiz-runner:$tag" \
-  | sort -u | xargs -r podman rmi >/dev/null 2>&1 || true
-podman image prune -f >/dev/null
+drop_old_sha_tags "$image" "$tag"
 echo "deploy: runner at ${tag:0:7}"
