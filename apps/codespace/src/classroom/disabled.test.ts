@@ -15,6 +15,7 @@ import { buildPortal, type Portal } from "../server.js";
 
 const fakeEngine: Engine = {
   runArgs: () => [],
+  containerName: (sessionId) => `cs-test-${sessionId}`,
   run: async (req) => ({
     id: "ctr",
     name: req.name,

@@ -25,7 +25,6 @@ import { FIXTURE_ENV, makeSourceRepo } from "../git/fixtures.js";
 import { causeText } from "../web/i18n.js";
 
 import {
-  containerNameFor,
   createSessionManager,
   defaultBranchOf,
   repoRefFromUrl,
@@ -43,6 +42,9 @@ class FakeEngine implements Engine {
   runs = 0;
   private next = 10;
 
+  containerName(sessionId: string): string {
+    return `cs-test-${sessionId}`;
+  }
   runArgs(): string[] {
     return [];
   }
@@ -254,7 +256,7 @@ describe("resumption: empty staging repository, workspace to be completed", () =
   it("re-seeds, sets the default branch and its tracking, and keeps the student's files", async () => {
     const { assignment, volumeDir } = await sessionWithoutRepo();
     await fillTheForge("master");
-    engine.kill(containerNameFor(findAnySession(db, "student", "tp")!.id));
+    engine.kill(engine.containerName(findAnySession(db, "student", "tp")!.id));
 
     const manager = makeManager({ forgeUrlOf: localForgeUrl });
     await manager.start(user, assignment);
@@ -298,7 +300,7 @@ describe("resumption: empty staging repository, workspace to be completed", () =
     // What `:U` does: `work/` no longer belongs to the portal.
     await chmod(work, 0o555);
     try {
-      engine.kill(containerNameFor(findAnySession(db, "student", "tp")!.id));
+      engine.kill(engine.containerName(findAnySession(db, "student", "tp")!.id));
       const manager = makeManager({ forgeUrlOf: localForgeUrl });
       await manager.start(user, assignment);
     } finally {
@@ -323,7 +325,7 @@ describe("resumption: empty staging repository, workspace to be completed", () =
     const sha = (await git(["-C", work, "rev-parse", "HEAD"])).trim();
 
     await fillTheForge("master");
-    engine.kill(containerNameFor(findAnySession(db, "student", "tp")!.id));
+    engine.kill(engine.containerName(findAnySession(db, "student", "tp")!.id));
     const manager = makeManager({ forgeUrlOf: localForgeUrl });
     await manager.start(user, assignment);
 
@@ -354,7 +356,7 @@ describe("the student's git identity in work/.git/config", () => {
     const { session } = await manager.start(user, assignment);
     const work = join(session.volumeDir, "work");
     await git(["-C", work, "config", "--local", "user.name", "Pseudonym"]);
-    engine.kill(containerNameFor(session.id));
+    engine.kill(engine.containerName(session.id));
     await makeManager().start(user, assignment);
     expect(await config(work, "user.name")).toBe("Pseudonym");
   });
@@ -367,7 +369,7 @@ describe("the student's git identity in work/.git/config", () => {
     const work = join(session.volumeDir, "work");
     await chmod(work, 0o555);
     try {
-      engine.kill(containerNameFor(session.id));
+      engine.kill(engine.containerName(session.id));
       await makeManager().start(user, assignment);
     } finally {
       await chmod(work, 0o755);

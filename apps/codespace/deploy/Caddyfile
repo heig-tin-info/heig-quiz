@@ -1,0 +1,55 @@
+# The portal's front door, instance @INSTANCE@ (M6-04). A TEMPLATE: lib.sh
+# (cs_install_instance) fills @HOST@, @PORT@ and @INSTANCE@ and installs it
+# as /etc/caddy/conf.d/quiz-codespace-@INSTANCE@.caddy, which the engine VM's
+# /etc/caddy/Caddyfile imports (`import /etc/caddy/conf.d/*.caddy`, the line
+# the runner's fragment already needs). prod is code.chevallier.io, staging
+# code-dev.chevallier.io; the runner keeps code.chevallier.io:8443.
+#
+# The certificate comes from Let's Encrypt, obtained by Caddy (HTTP-01 on
+# port 80). WebSocket upgrades pass natively (code-server depends on them).
+# The portal listens on 127.0.0.1:@PORT@ only; its git channel is bound on
+# the bridge gateway and never proxied.
+@HOST@ {
+	encode gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "SAMEORIGIN"
+		-Server
+	}
+
+	# The access log never holds a launch token. `GET /launch?token=<JWT>` is
+	# how every student arrives (a live, single-use credential until its jti
+	# is consumed, 5 minutes at most), so the `token` parameter is replaced
+	# in the logged URI, and the Referer is dropped in case a page ever links
+	# from that URL. Caddy already redacts Cookie and Authorization unless
+	# `log_credentials` is set, which this VM never does. (M6-05's item,
+	# done here with the fragment; the portal's own log masks it too,
+	# src/logging.ts.)
+	log {
+		output file /var/log/caddy/quiz-codespace-@INSTANCE@.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+		format filter {
+			wrap json
+			fields {
+				request>uri query {
+					replace token REDACTED
+				}
+				request>headers>Referer delete
+			}
+		}
+	}
+
+	reverse_proxy 127.0.0.1:@PORT@ {
+		# code-server sends long frames; no buffering on the stream.
+		flush_interval -1
+		# X-Forwarded-For is appended by reverse_proxy itself; the portal
+		# trusts this hop through TRUSTED_PROXY_IPS=127.0.0.1, which is what
+		# binds the exam cookie to the student's address. Never add a
+		# `header_up X-Forwarded-*` here: it would replace the default.
+	}
+}

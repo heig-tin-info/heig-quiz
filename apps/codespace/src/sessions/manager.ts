@@ -126,11 +126,6 @@ export interface SessionManager {
   repoOfEvent(row: { sessionId?: string; student: string; assignment: string }): RepoRef | undefined;
 }
 
-/** Deterministic container name: reconciliation finds it on its own. */
-export function containerNameFor(sessionId: string): string {
-  return `cs-${sessionId}`;
-}
-
 /**
  * Invariant 6. The assignment's mode alone decides the source, and exam mode
  * has only one possible branch.
@@ -448,7 +443,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
     workspace: EnsureWorkspaceResult,
   ): Promise<void> {
     if (!workspace.needsContainer || !workspace.branch) return;
-    const name = session.containerName ?? containerNameFor(session.id);
+    const name = session.containerName ?? engine.containerName(session.id);
     try {
       const out = await engine.exec(name, ["sh", "-lc", completionScript(workspace.branch)]);
       log.info(
@@ -481,7 +476,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
     identity: GitIdentity | null,
   ): Promise<void> {
     if (!identity) return;
-    const name = session.containerName ?? containerNameFor(session.id);
+    const name = session.containerName ?? engine.containerName(session.id);
     try {
       await engine.exec(name, ["sh", "-lc", identityScript(identity)]);
     } catch (err) {
@@ -511,7 +506,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
       ...(identity ? { identity } : {}),
       log: opts.log,
     });
-    const name = containerNameFor(session.id);
+    const name = engine.containerName(session.id);
     const info = await engine.run({
       sessionId: session.id,
       name,
@@ -734,7 +729,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
       if (session.state === "closed" || session.state === "failed") {
         throw new Error(`session ${sessionId} closed`);
       }
-      const name = session.containerName ?? containerNameFor(session.id);
+      const name = session.containerName ?? engine.containerName(session.id);
       const info = await engine.inspect(name);
       if (info?.state === "running" && info.ip) {
         if (info.ip !== session.containerIp || session.state !== "running") {
@@ -767,7 +762,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         );
         return null;
       });
-      const name = session.containerName ?? containerNameFor(session.id);
+      const name = session.containerName ?? engine.containerName(session.id);
       await engine.stop(name);
       await engine.rm(name);
       updateSession(db, sessionId, {

@@ -1,0 +1,12 @@
+# One shadow repository snapshot of every volume of instance %i, as the
+# host's root (shadow-snapshot.sh says why root). Started by
+# quiz-codespace-shadow@%i.timer.
+[Unit]
+Description=quiz — shadow repository snapshot of codespace instance %i
+
+[Service]
+Type=oneshot
+Environment=CODESPACE_VOLUMES=/srv/quiz-codespace/%i/volumes
+ExecStart=/usr/local/lib/quiz-codespace/shadow-snapshot.sh
+Nice=10
+IOSchedulingClass=idle

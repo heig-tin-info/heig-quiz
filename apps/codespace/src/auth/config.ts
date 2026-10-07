@@ -15,6 +15,8 @@ import { fileURLToPath } from "node:url";
 
 import { z } from "zod";
 
+import { INSTANCE_PATTERN } from "../engine/index.js";
+
 /**
  * Repository root: the first ancestor of this module that carries the
  * application's `package.json`. The relative paths of the configuration are
@@ -56,6 +58,17 @@ const EnvSchema = z.object({
   DATABASE_PATH: z.string().default("./var/codespace.sqlite"),
 
   // --- Container engine (engine/) -----------------------------------------
+  /**
+   * Which portal this is, when several share one Podman engine (`prod` and
+   * `staging` on the engine VM, M6-04). It names and labels the session
+   * containers, and the engine lists only its own: two instances never reap
+   * each other's sessions. Closed charset
+   * (`INSTANCE_PATTERN` of `engine/`): lower-case letters and digits.
+   */
+  CODESPACE_INSTANCE: z
+    .string()
+    .regex(INSTANCE_PATTERN, "lower-case letters and digits, starting with a letter, at most 16")
+    .default("default"),
   /** Always through the rootful socket, always `--remote` (setup-workstation.md). */
   PODMAN_URL: z.string().default("unix:///run/podman/podman.sock"),
   CODESPACE_NETWORK: z.string().default("codespace"),

@@ -385,6 +385,13 @@ export interface GitServerOptions extends GitBackendOptions {
   host?: string;
   port?: number;
   logger?: boolean | object;
+  /**
+   * No `0.0.0.0` fallback: an absent gateway fails the start. Set in
+   * production and for every named instance (M6-04): there the network unit
+   * brings the bridge up first, and a channel on every interface would be
+   * reachable from the other instance's bridge.
+   */
+  strictBind?: boolean;
 }
 
 /** Gateway of the `codespace` bridge (CLAUDE.md invariant 2). */
@@ -401,7 +408,8 @@ export function createGitServer(opts: GitServerOptions): FastifyInstance {
 /**
  * Builds the listener and binds it, preferring the bridge gateway and
  * falling back to `0.0.0.0` when that address is not on the machine
- * (`EADDRNOTAVAIL`: the bridge exists only while a container is attached).
+ * (`EADDRNOTAVAIL`: the bridge exists only while a container is attached),
+ * unless `strictBind`, which refuses to start instead.
  * Returns the address actually served, which the caller should log.
  */
 export async function startGitServer(
@@ -415,7 +423,7 @@ export async function startGitServer(
     return { app, host: preferred, port };
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
-    if (code !== "EADDRNOTAVAIL" && code !== "EINVAL") {
+    if (opts.strictBind || (code !== "EADDRNOTAVAIL" && code !== "EINVAL")) {
       await app.close();
       throw err;
     }

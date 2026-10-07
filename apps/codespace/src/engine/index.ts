@@ -18,6 +18,15 @@
  * container without that label is ignored by the engine — first and foremost
  * the anchor container `codespace-anchor` (label `heig-codespace.role=anchor`),
  * which keeps the `cs0` bridge up and must never be touched.
+ *
+ * Since M6-04 two portals share one engine (`prod` and `staging` on the
+ * engine VM), and the reconciliation removes every session container its own
+ * database does not know. So a session carries a second label,
+ * `heig-codespace.instance=<CODESPACE_INSTANCE>` and a name prefixed with
+ * the instance (`containerName`): the listing filters on both labels, so the
+ * reconciliation sees (and reaps) only its own instance's containers, and
+ * `stop`/`rm` only ever receive names of its own. A container of another
+ * instance, or one started before M6-04 (no instance label), is invisible.
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -27,8 +36,34 @@ const execFileAsync = promisify(execFile);
 /** Label that marks a session container, and nothing else. */
 export const SESSION_LABEL = "heig-codespace.session";
 
+/** Label naming the portal instance a session container belongs to (M6-04). */
+export const INSTANCE_LABEL = "heig-codespace.instance";
+
+/**
+ * `CODESPACE_INSTANCE`: a closed charset, because the value enters container
+ * names, labels and a `podman ps --filter`. Lower-case letters and digits,
+ * starting with a letter, at most 16 characters.
+ */
+export const INSTANCE_PATTERN = /^[a-z][a-z0-9]{0,15}$/;
+
+/** The `podman ps` arguments that list one instance's session containers. */
+export function sessionListArgs(instance: string): string[] {
+  return [
+    "ps",
+    "--all",
+    "--filter",
+    `label=${SESSION_LABEL}`,
+    "--filter",
+    `label=${INSTANCE_LABEL}=${instance}`,
+    "--format",
+    "json",
+  ];
+}
+
 export interface EngineOptions {
   podmanUrl: string;
+  /** `CODESPACE_INSTANCE` (`INSTANCE_PATTERN`): whose containers this engine sees. */
+  instance: string;
   network: string;
   gateway: string;
   seccompProfile: string;
@@ -100,7 +135,7 @@ export interface Engine {
   inspect(idOrName: string): Promise<ContainerInfo | null>;
   stop(idOrName: string, timeoutSeconds?: number): Promise<void>;
   rm(idOrName: string): Promise<void>;
-  /** Only the containers carrying the session label. */
+  /** Only the containers carrying the session label and this instance's label. */
   listSessions(): Promise<ContainerInfo[]>;
   /** Waits for `GET http://<ip>:8080/healthz`. Returns the delay in ms. */
   waitHealthy(ip: string, timeoutMs: number): Promise<number>;
@@ -108,6 +143,16 @@ export interface Engine {
   exec(idOrName: string, argv: string[]): Promise<string>;
   /** The exact arguments of the `run`, so that a test can assert them. */
   runArgs(req: RunRequest): string[];
+  /**
+   * The deterministic name of a session's container, prefixed with the
+   * instance: reconciliation finds it on its own, and two instances never
+   * compete for a name.
+   */
+  containerName(sessionId: string): string;
+}
+
+export function containerNameFor(instance: string, sessionId: string): string {
+  return `cs-${instance}-${sessionId}`;
 }
 
 /** Minimal shape of what `podman inspect --format json` gives us back. */
@@ -122,6 +167,9 @@ interface PodmanInspect {
 }
 
 export function createEngine(opts: EngineOptions): Engine {
+  if (!INSTANCE_PATTERN.test(opts.instance)) {
+    throw new Error(`invalid engine instance "${opts.instance}" (${INSTANCE_PATTERN.source})`);
+  }
   const base = ["--remote", "--url", opts.podmanUrl];
 
   async function podman(args: string[], timeoutMs = 120_000): Promise<string> {
@@ -163,6 +211,9 @@ export function createEngine(opts: EngineOptions): Engine {
       // at nothing else, so the anchor is invisible to them.
       "--label",
       `${SESSION_LABEL}=${req.sessionId}`,
+      // Whose session: two portals share the engine VM (M6-04).
+      "--label",
+      `${INSTANCE_LABEL}=${opts.instance}`,
       "--label",
       "codespace.role=student",
       // --- hardening, copied from images/c-dev/run-hardened.sh -------------
@@ -215,9 +266,12 @@ export function createEngine(opts: EngineOptions): Engine {
   return {
     runArgs,
 
+    containerName: (sessionId) => containerNameFor(opts.instance, sessionId),
+
     async run(req) {
       // A same-named container left over from an earlier start would prevent
-      // the `run`; reconciliation has normally removed it already.
+      // the `run`; reconciliation has normally removed it already. The name
+      // carries the instance, so this never meets another instance's.
       await podman(["rm", "-f", req.name], 30_000).catch(() => "");
       await podman(runArgs(req), 180_000);
       const info = await this.inspect(req.name);
@@ -254,14 +308,8 @@ export function createEngine(opts: EngineOptions): Engine {
     },
 
     async listSessions() {
-      const out = await podman([
-        "ps",
-        "--all",
-        "--filter",
-        `label=${SESSION_LABEL}`,
-        "--format",
-        "json",
-      ]);
+      // Podman ANDs two `label=` filters: this instance's sessions only.
+      const out = await podman(sessionListArgs(opts.instance));
       if (out.trim() === "") return [];
       const rows = JSON.parse(out) as Array<{
         Id?: string;

@@ -1,0 +1,15 @@
+# Every three minutes, the shadow snapshots of instance %i (analyse.md 3.3).
+# The portal's own snapshot timer is pushed back to 24 h in its env
+# (SHADOW_INTERVAL_MS), so that this is the single periodic writer; the
+# session-close snapshot stays the portal's.
+[Unit]
+Description=quiz — shadow repository snapshots of codespace instance %i, every 3 min
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=3min
+AccuracySec=15s
+Unit=quiz-codespace-shadow@%i.service
+
+[Install]
+WantedBy=timers.target

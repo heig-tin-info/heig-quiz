@@ -7,6 +7,11 @@
 # The two rules of invariant 2 (CLAUDE.md):
 #   1. no container <-> container traffic on the cs0 bridge        -> chain forward
 #   2. only the Git port (9418) is reachable on the host from cs0  -> chain input
+# Since M6-04 the same two rules cover cs1, the bridge of the engine VM's
+# staging portal (infra/net/common.sh), and pin each bridge to its own
+# gateway: a staging container reaches neither production's containers nor
+# production's git channel. Loaded by the setup of either instance; the
+# table is the same for both.
 #
 # ----------------------------------------------------------------------------
 # Why the `inet` family and not the `bridge` family
@@ -67,7 +72,16 @@ table inet codespace {
 		# bridge-nf-call-ip6tables=1 brings that traffic here as well.
 		# Host <-> container traffic does NOT go through forward (the address
 		# 10.77.0.254 is carried by cs0, so it is local input/output).
-		iifname "cs0" oifname "cs0" drop comment "ICC: no container<->container"
+		#
+		# Two bridges since M6-04: cs0 (`codespace`, the prod instance and a
+		# workstation's) and cs1 (`codespace-staging`, infra/net/common.sh).
+		# Nothing is ever forwarded from or to either: the networks are
+		# `--internal`, so a forwarded packet is necessarily container to
+		# container, on one bridge (ICC) or from one bridge to the other
+		# (staging to production). On a host with cs0 only, the cs1 half
+		# matches nothing.
+		iifname { "cs0", "cs1" } drop comment "ICC: no container<->container, no bridge<->bridge"
+		oifname { "cs0", "cs1" } drop comment "nothing is forwarded into a codespace bridge"
 	}
 	# ICC>>>
 
@@ -75,8 +89,8 @@ table inet codespace {
 	chain input {
 		type filter hook input priority filter - 10; policy accept;
 
-		# Anything not arriving through the codespace bridge is none of our business.
-		iifname != "cs0" return
+		# Anything not arriving through a codespace bridge is none of our business.
+		iifname != { "cs0", "cs1" } return
 
 		# Replies to connections opened by the HOST towards a container
 		# (the portal proxy to code-server on 8080). Without this rule,
@@ -88,7 +102,12 @@ table inet codespace {
 
 		# Rule 2: the only host surface exposed to the container, the Git proxy
 		# (apps/codespace/src/git, bound to 10.77.0.254:9418 and to nothing else).
-		tcp dport 9418 accept comment "Git channel, auth by source IP"
+		# Each bridge reaches ITS portal's channel only: the destination is
+		# pinned to the bridge's own gateway, because Linux would otherwise
+		# accept a packet from cs1 addressed to 10.77.0.254 (an address of the
+		# host) and a staging container would reach production's channel.
+		iifname "cs0" ip daddr 10.77.0.254 tcp dport 9418 accept comment "Git channel of prod (cs0), auth by source IP"
+		iifname "cs1" ip daddr 10.77.1.254 tcp dport 9418 accept comment "Git channel of staging (cs1), auth by source IP"
 
 		# No ICMP echo exception: a ping to the gateway brings the student no
 		# functionality (diagnosis is done from the host) and gives a presence
@@ -96,7 +115,7 @@ table inet codespace {
 		# covered by `related` above.
 		# ARP is not concerned: the inet family does not see ARP, host <->
 		# container resolution on the bridge keeps working.
-		drop comment "everything else from cs0 is dropped"
+		drop comment "everything else from a codespace bridge is dropped"
 	}
 	# INPUT>>>
 }

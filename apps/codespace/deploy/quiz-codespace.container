@@ -1,0 +1,79 @@
+# Podman quadlet of the online workspace portal, instance @INSTANCE@ (M6-04).
+# A TEMPLATE: lib.sh (cs_install_instance) fills the @…@ values from its
+# closed instance table and installs it as
+# /etc/containers/systemd/quiz-codespace-@INSTANCE@.container; systemd
+# generates quiz-codespace-@INSTANCE@.service from it at daemon-reload.
+#
+# From the systemd unit of heig-classroom's portal to this quadlet:
+#   User=codespace + SupplementaryGroups=podman
+#                          -> root in the container, every capability dropped
+#                             (the socket is root-equivalent either way; see
+#                             apps/codespace/Dockerfile)
+#   NoNewPrivileges        -> NoNewPrivileges=true
+#   ProtectSystem=strict + ReadWritePaths=volumes var
+#                          -> ReadOnly=true + the instance's data directory,
+#                             the only writable bind
+#   ProtectHome, PrivateTmp -> nothing of /home mounted; Tmpfs=/tmp
+#   ProtectKernel{Tunables,Modules,Logs}, ProtectControlGroups, ProtectClock,
+#   ProtectHostname, RestrictNamespaces, RestrictRealtime, RestrictSUIDSGID,
+#   LockPersonality, SystemCallFilter=@system-service
+#                          -> the container defaults: read-only /proc/sys and
+#                             /sys, a cgroup namespace, no capability at all,
+#                             Podman's default seccomp filter and AppArmor
+#                             profile (containers-default)
+#   RestrictAddressFamilies -> not mapped one to one: the default seccomp
+#                             filter allows AF_NETLINK; the portal opens none
+#   UMask=0022             -> the container's default umask, 0022 (work/ must
+#                             stay traversable after Podman's :U chown)
+# What the systemd unit had and the container does not: nothing else. What
+# the container adds: its own mount namespace, so the host's /etc, /srv and
+# /home are not even visible.
+[Unit]
+Description=quiz — online workspace portal, instance @INSTANCE@
+Documentation=https://github.com/heig-tin-info/heig-quiz/blob/main/apps/codespace/deploy/RUNBOOK.md
+Requires=podman.socket quiz-codespace-net@@INSTANCE@.service
+After=podman.socket quiz-codespace-net@@INSTANCE@.service network-online.target
+
+[Container]
+# The deployed sha, tagged :@INSTANCE@ by install.sh; never pulled at boot.
+Image=ghcr.io/heig-tin-info/quiz-codespace:@INSTANCE@
+ContainerName=quiz-codespace-@INSTANCE@
+Pull=never
+# The secrets and the tunables: /etc/quiz-codespace/@INSTANCE@/env, 0600 root
+# (deploy/env.example). The keys below are this file's, and must NOT appear
+# there as well.
+EnvironmentFile=/etc/quiz-codespace/@INSTANCE@/env
+Environment=NODE_ENV=production
+Environment=CODESPACE_INSTANCE=@INSTANCE@
+# Host networking: the portal listens on the loopback (Caddy is the way in),
+# binds its git channel on the bridge gateway @GATEWAY@ (an address of the
+# host) and proxies to the containers' addresses on that bridge.
+Network=host
+Environment=HOST=127.0.0.1
+Environment=PORT=@PORT@
+Environment=PODMAN_URL=unix:///run/podman/podman.sock
+Environment=CODESPACE_NETWORK=@NETWORK@
+Environment=CODESPACE_GATEWAY=@GATEWAY@
+Environment=CODESPACE_GIT_PORT=@GIT_PORT@
+# Host paths, mounted at the SAME path: the portal hands `-v <workDir>:/work:U`
+# and `seccomp=<path>` to the Podman SERVER, which resolves them on the host.
+Environment=DATABASE_PATH=/srv/quiz-codespace/@INSTANCE@/var/codespace.sqlite
+Environment=VOLUMES_ROOT=/srv/quiz-codespace/@INSTANCE@/volumes
+Environment=SECCOMP_PROFILE=/etc/quiz-codespace/@INSTANCE@/seccomp.json
+Volume=/run/podman/podman.sock:/run/podman/podman.sock
+Volume=/srv/quiz-codespace/@INSTANCE@:/srv/quiz-codespace/@INSTANCE@
+ReadOnly=true
+Tmpfs=/tmp
+NoNewPrivileges=true
+DropCapability=ALL
+PodmanArgs=--memory=512m
+
+[Service]
+Restart=always
+RestartSec=3
+TimeoutStartSec=120
+# The portal closes its timers and its git channel on SIGTERM.
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

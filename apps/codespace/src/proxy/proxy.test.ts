@@ -23,6 +23,7 @@ const TOKEN = "test-session-token";
 
 const fakeEngine: Engine = {
   runArgs: () => [],
+  containerName: (sessionId) => `cs-test-${sessionId}`,
   run: async (req) => ({
     id: "ctr",
     name: req.name,

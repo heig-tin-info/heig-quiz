@@ -11,6 +11,7 @@ const RUN_HARDENED = readFileSync(`${REPO_ROOT}images/c-dev/run-hardened.sh`, "u
 
 const engine = createEngine({
   podmanUrl: "unix:///run/podman/podman.sock",
+  instance: "prod",
   network: "codespace",
   gateway: "10.77.0.254",
   seccompProfile: "/repo/infra/seccomp/codespace.json",
@@ -90,6 +91,7 @@ describe("engine.runArgs — invariant 3, the hardening comes from run-hardened.
     for (const apparmorProfile of ["", undefined]) {
       const bare = createEngine({
         podmanUrl: "unix:///run/podman/podman.sock",
+        instance: "prod",
         network: "codespace",
         gateway: "10.77.0.254",
         seccompProfile: "/repo/infra/seccomp/codespace.json",

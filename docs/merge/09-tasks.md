@@ -4189,6 +4189,44 @@ serves now (16a), and what waits for the group repositories (16b).
 - **Goal**: artifact per sha, engine-VM dispatcher shared with the runner,
   production deploy guarded by live sessions, `push.sh` for bootstrap only;
   the image supply-chain rule settled.
+- **As delivered** (branch `merge/M6-04-codespace-deploy`; the repository
+  side only, the VM steps are the owner's, from the runbook). Decisions in
+  ADR-016's M6-04 amendment.
+  - **Artifact**: `ghcr.io/heig-tin-info/quiz-codespace:<sha>`
+    (`apps/codespace/Dockerfile`, a third entry of the CI's `image` matrix),
+    run as the quadlet `deploy/quiz-codespace.container`; the student image
+    stays built on the VM by hand (`images/build.sh`).
+  - **Two instances**, `prod` and `staging` (`deploy/lib.sh`), each with its
+    env file (secrets and `PORT` written by `bootstrap.sh`), data, network
+    (`infra/net/common.sh`) and Caddy site. `CODESPACE_INSTANCE` (the one new
+    key) names and labels the session containers; an engine lists only its
+    own (`engine/instance.test.ts`). The git channel has no `0.0.0.0`
+    fallback in production or for a named instance (`git/bind.test.ts`);
+    the deploy replays the network setup first.
+  - **Dispatcher** `infra/engine/deploy.sh`, one per checkout (production
+    `/opt/quiz-runner`, staging `/opt/quiz-engine-staging`), scoped per key;
+    `infra/engine/lib.sh` shared by both install steps (pull and retag by
+    sha, untag older sha tags, no global prune); a sha from before M6-04 is
+    refused. CI: `deploy-staging` deploys `codespace staging`,
+    `deploy-codespace-prod` (its own job after `deploy-production`)
+    `codespace prod`, behind `CODESPACE_DEPLOY=1`.
+  - **Guard**: a `prod` deploy exits 3 while a session container of that
+    instance runs, unless forced (`CODESPACE_FORCE_SHA`).
+  - **Logs**: the Caddy site masks `token=` and drops the Referer (M6-05's
+    item); the RUNBOOK sets the same filter on Caddy's default logger
+    (`reverse_proxy` errors), measured with Caddy 2.10.
+  - Verified locally: the image run against the rootful socket, `smoke.mjs`
+    against it, the Caddy fragment and default logger with Caddy 2.10, the
+    quadlet through Podman's generator, the nftables table in a user
+    namespace, the dispatcher with stubs, shellcheck.
+  - The staging key's risk (root on the VM hosting production): accepted by
+    the owner, 2026-10-07 (ADR-016's M6-04 amendment).
+  - Open: once root's `authorized_keys` names the dispatcher, the CI sends
+    `runner prod <sha> <token>`, and the dispatcher's `<sha> <token>` branch
+    and the forwarder `apps/runner/deploy/deploy.sh` go (a TODO in the
+    dispatcher); after the switch, drop the `CODESPACE_DEPLOY` gate from
+    `ci.yml`; `test:integration` runs in no workflow; capacity, slices and
+    the off-VM backup are M6-05's.
 
 ### M6-05 — Engine VM capacity, hygiene, seccomp
 - **Depends on**: D09. ‖ M6-01…04.

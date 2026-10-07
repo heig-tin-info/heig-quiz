@@ -48,11 +48,13 @@ Start button, its teacher dashboard and its YAML seed (all removed, below).
 - **Not imported**: heig-classroom's `deploy/` and `docs/deploy.md` (its VM
   recipe, which wrote a configuration this portal refuses and copied
   classroom's App key) and its end-to-end script (it drove the removed
-  login and seed). M6-04 writes Quiz's deploy and end-to-end run from
-  `~/heig-classroom/apps/codespace`; comments that cite "classroom's
-  `deploy/`" or "classroom's `docs/deploy.md`" point there.
-- **Inert until M6-04/M6-05**: `images/` (built on the engine VM, never in
-  CI) and `infra/` (nftables, AppArmor, seccomp, network scripts).
+  login and seed). Comments that cite "classroom's `deploy/`" or
+  "classroom's `docs/deploy.md`" point to `~/heig-classroom/apps/codespace`.
+- **Deployed since M6-04**: two instances, `prod` and `staging`, on the
+  engine VM (ADR-016's M6-04 amendment, [deploy/RUNBOOK.md](deploy/RUNBOOK.md)).
+  `CODESPACE_INSTANCE` names an instance; its session containers carry its
+  name and label, and an engine lists only its own (`engine/instance.test.ts`).
+  `images/` is built on the VM by hand (`images/build.sh`), never in CI.
 - **Pages in English and French** (`src/web/i18n.ts`, the language from
   `Accept-Language`, French by default): `en` is the dictionary, `fr` is
   typed `Record<keyof typeof en, string>`, so a missing translation is a

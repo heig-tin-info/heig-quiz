@@ -5,8 +5,10 @@
 Quiz implementation status (verified 2026-10-07): `apps/codespace` is
 present (imported by M6-03) and Quiz's `codespace` module talks to it
 (M6-06: the work mode, the grants, the sync, the start route, the sessions
-summary); it is not deployed (M6-04/M6-05), and `online_seb` cannot be
-launched before M6-07. See [merge progress](../merge/PROGRESS.md).
+summary); M6-04 makes it deployable (two instances on the engine VM,
+`prod` and `staging`, by the CI: ADR-016's M6-04 amendment, the switch from
+heig-classroom's portal in `apps/codespace/deploy/RUNBOOK.md`), M6-05
+sizes the VM, and `online_seb` cannot be launched before M6-07. See [merge progress](../merge/PROGRESS.md).
 
 **Amended (2026-10-07, M6-03, product owner): the portal's GitHub relay and
 its own login.** Scope: the portal side of points 2 and 6 below, nothing

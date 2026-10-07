@@ -31,7 +31,7 @@ environment's GitHub App is [Quiz's GitHub App](github-app.md).
 | Gets | `/srv/quiz`: the compose stack `app`, `postgres`, `backup`, on the `srv` account's rootless Docker; and staging, `/home/srvstg/quiz-staging` on the `srvstg` account's own rootless Docker (§8) | `/opt/quiz-runner`: the runner as a Podman quadlet |
 | Listens on | `app` on `127.0.0.1:3002` (staging `127.0.0.1:3003`) | the runner on `127.0.0.1:3200` |
 | Vhost | `/etc/caddy/conf.d/quiz.caddy` → `quiz.chevallier.io` | `/etc/caddy/conf.d/quiz-runner.caddy` → `code.chevallier.io:8443` |
-| Deploys through | `/srv/quiz/deploy.sh production` (user `srv`) and `/home/srvstg/quiz-staging/deploy.sh staging` (user `srvstg`), forced commands | `/opt/quiz-runner/apps/runner/deploy/deploy.sh`, forced command |
+| Deploys through | `/srv/quiz/deploy.sh production` (user `srv`) and `/home/srvstg/quiz-staging/deploy.sh staging` (user `srvstg`), forced commands | `/opt/quiz-runner/infra/engine/deploy.sh production` and `… staging` (root), forced commands of the dispatcher shared by the runner and the codespace portal (M6-04) |
 
 Until 2026-09-25 the application VM was a DigitalOcean droplet
 (`165.245.246.213`, root, rootful Docker, everything under `/opt`); the three
@@ -201,6 +201,21 @@ environment, nothing mounted) is documented once, in
 `--userns=auto` is always available on a rootful engine, hence
 `RUNNER_USERNS_AUTO=true` in the environment file.
 
+### The codespace portal on the same VM
+
+Since M6-04 the VM also runs Quiz's online workspace portal
+(`apps/codespace`, ADR-047), replacing heig-classroom's: two instances,
+`prod` on `code.chevallier.io` (for `quiz.chevallier.io`) and `staging` on
+`code-dev.chevallier.io` (for `quiz.dev.chevallier.io`), each a Podman
+quadlet of the CI's `ghcr.io/heig-tin-info/quiz-codespace:<sha>` image with
+its own environment, data directory, SQLite, Podman network and Caddy site.
+The two never touch each other's session containers (an instance label).
+The layout, the switch from classroom's portal, the live-session guard of
+a prod deploy and the smoke checks are
+[`apps/codespace/deploy/RUNBOOK.md`](https://github.com/heig-tin-info/heig-quiz/blob/main/apps/codespace/deploy/RUNBOOK.md);
+the application side is two variables per environment, `CODESPACE_URL` and
+`CODESPACE_LAUNCH_SECRET` (`.env.prod`, `.env.staging`).
+
 ### Setting up the runner VM
 
 ```bash
@@ -299,8 +314,18 @@ command="/srv/quiz/deploy.sh production",restrict ssh-ed25519 AAAA… ci-deploy@
 # /home/srvstg/.ssh/authorized_keys on the application VM
 command="/home/srvstg/quiz-staging/deploy.sh staging",restrict ssh-ed25519 AAAA… ci-deploy-staging@quiz
 # /root/.ssh/authorized_keys on the runner VM
-command="/opt/quiz-runner/apps/runner/deploy/deploy.sh",restrict ssh-ed25519 AAAA… ci-deploy@quiz
+command="/opt/quiz-runner/infra/engine/deploy.sh production",restrict ssh-ed25519 AAAA… ci-deploy@quiz
+command="/opt/quiz-engine-staging/infra/engine/deploy.sh staging",restrict ssh-ed25519 AAAA… ci-deploy-staging@quiz
 ```
+
+On the runner VM one dispatcher, `infra/engine/deploy.sh`, deploys both of
+its components since M6-04, each key from its own checkout, and the scope of
+the line bounds what a key may deploy: the production key the runner and the
+codespace portal's `prod` instance, the staging key the portal's `staging`
+instance only. The staging key is still root on that VM (ADR-016, M6-04
+amendment). The request forms are in the dispatcher's header; the switch
+and the portal's operations are
+[`apps/codespace/deploy/RUNBOOK.md`](https://github.com/heig-tin-info/heig-quiz/blob/main/apps/codespace/deploy/RUNBOOK.md).
 
 Whatever command the client asks for, the server runs the pinned script
 instead, so a key can only deploy and never open a shell, even if it leaks,
@@ -324,8 +349,8 @@ reboot.
 ### What the two scripts do
 
 Both move their checkout to the deployed sha with
-`git checkout --detach <sha>` (a token alone, a manual deploy, deploys the
-head of `origin/main`, still by its sha). That rewrites the script while bash
+`git checkout --detach <sha>` (on the application VM a token alone, a
+manual deploy, deploys the head of `origin/main`, still by its sha). That rewrites the script while bash
 is still reading the old copy, so a deploy that changes the deploy steps
 would run the previous ones: each script compares `HEAD` before and after
 and, when it moved, hands over to the new copy exactly once (`exec "$0"` with
@@ -342,12 +367,15 @@ done). Then they diverge:
   defaults `DOCKER_HOST` to the rootless socket. In production, before the
   pull, it refuses to restart under a live evaluation (§5, *The
   live-evaluation guard*).
-- **runner VM** (`apps/runner/deploy/deploy.sh`): `podman pull` of the
-  sha-tagged runner image and retag it `:latest` (the tag the quadlet runs),
-  install the seccomp profile, the quadlet and the Caddy fragment from the
-  checkout, `caddy validate`, `systemctl daemon-reload`, restart
-  `quiz-runner.service`, reload Caddy, remove the older images, print the
-  deployed commit.
+- **runner VM** (`infra/engine/deploy.sh`, which serialises the VM's deploys
+  through a `flock`, checks the key's scope, then runs the component's
+  steps; the runner's are `apps/runner/deploy/install.sh`): `podman pull` of
+  the sha-tagged runner image and retag it `:latest` (the tag the quadlet
+  runs), install the seccomp profile, the quadlet and the Caddy fragment
+  from the checkout, `caddy validate`, `systemctl daemon-reload`, restart
+  `quiz-runner.service`, reload Caddy, untag the older sha-tagged runner
+  images (no global prune: the portal's sessions share the engine), print
+  the deployed commit.
 
 `.github/workflows/image-artifact.yml` is a keyless fallback for the
 application image only: run by hand, it builds the image and publishes it as
@@ -366,7 +394,7 @@ gh variable set DEPLOY_RUNNER_HOST_KEY --repo heig-tin-info/heig-quiz --body "$(
 # on the application VM, as srv
 printf 'command="/srv/quiz/deploy.sh production",restrict %s\n' "$(cat ci_deploy.pub)" >> /home/srv/.ssh/authorized_keys
 # on the runner VM
-printf 'command="/opt/quiz-runner/apps/runner/deploy/deploy.sh",restrict %s\n' "$(cat ci_deploy.pub)" >> /root/.ssh/authorized_keys
+printf 'command="/opt/quiz-runner/infra/engine/deploy.sh production",restrict %s\n' "$(cat ci_deploy.pub)" >> /root/.ssh/authorized_keys
 shred -u ci_deploy
 ```
 
@@ -449,8 +477,10 @@ shared vCPU: on an exam day, stop it (§8, *Exam days*).
 # application VM, as srv: deploy.sh does the checkout, the login, the pull and
 # the restart. "<sha> <PAT>" deploys that commit; "<PAT>" alone, origin/main.
 cd /srv/quiz && SSH_ORIGINAL_COMMAND="<sha> <PAT read:packages>" ./deploy.sh production
-# runner VM
-cd /opt/quiz-runner && SSH_ORIGINAL_COMMAND="<sha> <PAT read:packages>" ./apps/runner/deploy/deploy.sh
+# runner VM, as root: the runner, then the codespace portal's instances
+SSH_ORIGINAL_COMMAND="runner prod <sha> <PAT read:packages>" /opt/quiz-runner/infra/engine/deploy.sh production
+SSH_ORIGINAL_COMMAND="codespace prod <sha> <PAT read:packages>" /opt/quiz-runner/infra/engine/deploy.sh production
+SSH_ORIGINAL_COMMAND="codespace staging <sha> <PAT read:packages>" /opt/quiz-engine-staging/infra/engine/deploy.sh staging
 ```
 
 The checkouts are DETACHED at the deployed commit, and `.env.image` holds its

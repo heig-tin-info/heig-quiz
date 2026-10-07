@@ -73,6 +73,17 @@ export function createForge(config: AppConfig): Forge | null {
   return createForgejoForge({ baseUrl: config.FORGE_URL, token: config.FORGE_TOKEN });
 }
 
+/**
+ * Whether the git channel must bind the gateway or not start at all (no
+ * `0.0.0.0` fallback): in production, and for any instance other than a
+ * workstation's unnamed one, where two bridges share the host (M6-04).
+ */
+export function strictGitBind(
+  config: Pick<AppConfig, "NODE_ENV" | "CODESPACE_INSTANCE">,
+): boolean {
+  return config.NODE_ENV === "production" || config.CODESPACE_INSTANCE !== "default";
+}
+
 export interface BuildOptions {
   config?: AppConfig;
   /** Database already open (tests); otherwise `DATABASE_PATH`. */
@@ -109,6 +120,7 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
     options.engine ??
     createEngine({
       podmanUrl: config.PODMAN_URL,
+      instance: config.CODESPACE_INSTANCE,
       network: config.CODESPACE_NETWORK,
       gateway: config.CODESPACE_GATEWAY,
       seccompProfile: config.seccompProfile,
@@ -244,6 +256,7 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
       volumesRoot: config.volumesRoot,
       host: config.CODESPACE_GATEWAY,
       port: config.CODESPACE_GIT_PORT,
+      strictBind: strictGitBind(config),
       ...(relay ? { relay } : {}),
     });
     gitApp = started.app;
