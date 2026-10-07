@@ -167,6 +167,7 @@ In the critical path only if D09 finds online assignments in production.
 | M6-07 | SEB for projects, proof B | todo | M6-02, M6-06 | | | |
 | M6-08 | Freeze and collect contract on the portal (ADR-075) | todo | M6-03, M6-05 | | | |
 | M6-09 | `qt-workspace` type and Quiz side (ADR-075) | todo | M6-06, M6-08 | | | Kiosk use waits for proof B (M6-07) |
+| M6-10 | Git relay through Quiz-issued scoped tokens (ADR-078) | todo | M6-04, M6-06 | | | No App key on the engine VM: the portal's forge `quiz` asks `POST /app/codespace/git-token` for a one-repository installation token, declares each head before a non-forced push; §7 (deadline + grace) awaits the owner; lifts M6-06's "private distribution cannot seed" |
 
 ## M7 — Finishing
 
