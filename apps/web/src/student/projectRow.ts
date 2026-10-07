@@ -39,7 +39,9 @@ export interface ProjectFacts {
 export function factsOfCard(card: StudentProjectCard): ProjectFacts {
   const { id, status, startAt, githubLinked } = card;
   const repo: ProjectFacts["repo"] =
-    card.repoUrl !== null && card.invitation !== null
+    // A live repository names its URL; its invitation is null when nobody is
+    // invited (an `online_seb` project, ADR-047 §2), never a sign it was lost.
+    card.repoUrl !== null
       ? { state: "live", url: card.repoUrl, invitation: card.invitation }
       : status === "in_progress"
         ? { state: "deleted" }
