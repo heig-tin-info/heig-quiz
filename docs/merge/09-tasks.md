@@ -4329,34 +4329,57 @@ serves now (16a), and what waits for the group repositories (16b).
 - **Goal**: the portal seeds from private repositories and relays pushes
   to GitHub without holding an App credential (ADR-078, option B).
   Quiz: contracts `GitTokenRequestClaims` / `GitTokenGrant` (audience
-  `heig-quiz-git-token`); pure `gitTokenRefusal` in `@quiz/domain`, built
-  on `workspaceStartRefusal`; `codespace_launches` (per project and user,
-  written by the start route); `POST /app/codespace/git-token` minting a
-  token on one repository id (`contents: write` for the user's own live
-  repository, `read` for the distribution repository), `useUntil`,
-  `Cache-Control: no-store`; audit `codespace.git_token_issued` (no
-  token); `pushedBy` reads a push of the App on an online project's
-  repository that is not a recorded bot commit as the student's; the Caddy
-  fragment restricts the path to the engine VM. Portal: `FORGE_KIND=quiz`
-  (the default with `PLATFORM_URL` and the secret; `forgejo` and `github`
-  refused in production), the per-repository in-memory cache (refresh
-  10 min before `useUntil`, single flight, dropped on 401/403), revocation
-  at `useUntil`, Quiz's refusals on the slow backoff, the URL-scoped
-  `extraheader`; the relay state in the staff's workspace list. Docs:
-  root `CLAUDE.md` invariant 15 gains ADR-078's sentence;
+  `heig-quiz-git-token`) and `RelayHeadsClaims` (audience
+  `heig-quiz-relay-heads`); pure `gitTokenRefusal` in `@quiz/domain`,
+  built on `workspaceStartRefusal`, open until the effective deadline plus
+  the project's grace; `codespace_launches` (per project and user, written
+  by the start route) and `codespace_relays` (one row per declared
+  (repository, sha)); `POST /app/codespace/git-token` minting a token on
+  one repository id (`contents: write` for the user's own live repository,
+  `read` for the distribution repository of an `online_seb` project only),
+  `useUntil`, `Cache-Control: no-store`, audit `codespace.git_token_issued`
+  (no token); `POST /app/codespace/relay-heads` (204, records the
+  declared heads); `pushedBy` reads an App push as the student's only when
+  its head matches a declared relay of that repository; the Caddy fragment
+  restricts both paths to the engine VM. Portal: `FORGE_KIND=quiz` (the
+  default with `PLATFORM_URL` and the secret; `forgejo` and `github`
+  refused in production); the per-repository in-memory cache (refresh
+  10 min before `expiresAt`, hard stop at `useUntil` with no new request,
+  single flight, dropped on 401/403), revocation at `useUntil`; declare
+  the heads, then push; **`refspecFor` without force** (`<sha>:<ref>`, no
+  deletion relayed), and on a non-fast-forward rejection a fetch of
+  GitHub's head into `staging.git` and a terminal `rejected` `PushEvent`
+  shown to the student (status bar) and the staff (workspace list); Quiz's
+  refusals on the slow backoff; the URL-scoped `extraheader`. Docs: root
+  `CLAUDE.md` invariant 15 gains ADR-078's sentence;
   `apps/codespace/CLAUDE.md` and `src/git/README.md` name the `quiz` forge.
-- **Acceptance**: a token is refused (and none minted) for another user's
-  repository, a repository of another project, a project never launched by
-  that user, after the repository's effective deadline, on a staff-locked
-  repository, in an archived classroom, with another audience or an
-  expired request; a write grant's `useUntil` never passes the effective
-  deadline; the minted token is found in no Quiz log line, audit row or
-  portal log, `last_error`, SQLite row, argv or student container
-  environment (searched); a relayed push is the student's last commit and
-  its grading run counts, while the App's deadline commit and reverts do
-  not; a relay pending at the deadline resumes after the repository's
-  deadline is extended; integration against a stub Quiz and a GitHub test
-  organization of the staging App.
+- **Known race, out of scope**: the App inserts its `bot_commits` row
+  after it moves the ref in `modules/project/protection.ts` (line 246, the
+  revert) and `modules/project/jobs.ts` (line 438, the deadline commit), so
+  a webhook can arrive before the row. ADR-078's attribution no longer
+  depends on that order; the existing paths keep the race until a fix of
+  their own.
+- **Open, for the product owner**: confirm ADR-078 §7 (tokens until the
+  effective deadline plus the grace; the orchestrator's decision).
+- **Acceptance**: a token or a declaration is refused (and no token
+  minted) for another user's repository, a repository of another project,
+  a distribution repository of an `online` project, a project never
+  launched by that user, after the effective deadline plus the grace, on a
+  staff-locked repository, in an archived classroom, with another audience
+  or an expired request; a write grant's `useUntil` never passes the
+  effective deadline plus the grace, and the portal never uses a token past
+  it; the minted token is found in no Quiz log line, audit row or portal
+  log, `last_error`, SQLite row, argv or student container environment
+  (searched); a declared relayed push is the student's last commit and its
+  grading run counts, while an undeclared App push (a revert, a deadline
+  commit, a sync) does not; the relay never force-pushes (a test with a
+  commit of the App ahead on GitHub: the push is rejected, nothing is
+  erased, `staging.git` gets GitHub's head, the `PushEvent` is
+  `rejected`); the `hgc-protect` ruleset refuses a forced push made with an
+  App installation token (staging App); a push in the last seconds before
+  the deadline is relayed and received; a relay pending after the grace
+  resumes once the repository's deadline is extended; integration against
+  a stub Quiz and a GitHub test organization of the staging App.
 
 ## M7 — Finishing
 

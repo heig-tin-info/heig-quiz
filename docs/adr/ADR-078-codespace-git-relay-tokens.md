@@ -2,7 +2,10 @@
 
 ## Status
 
-Accepted (2026-10-07, product owner: option B below). Implementation is
+Accepted (2026-10-07, product owner: option B below). Revised the same
+day after a spec challenge (orchestrator): no forced relay, attribution by
+declared heads, tokens until the deadline plus the grace — that last point
+(§7) awaits the product owner's confirmation. Implementation is
 merge task M6-10 ([task cards](../merge/09-tasks.md),
 [progress](../merge/PROGRESS.md)); until it ships the portal runs with its
 relay off, as the M6-03 amendment of ADR-047 left it.
@@ -55,7 +58,7 @@ plan and secrets ([its permissions](../development/github-app.md)). Its key is t
 stays out of the repository and the database, with installation tokens in
 memory only.
 
-Two facts of the projects port bear on what Quiz must check:
+Three facts of the code as it stands bear on what Quiz must check:
 
 1. **The App bypasses the deadline lock** (F-PROJ-09: the `lock` ruleset
    "blocks pushes on every branch, which the App and the organization's
@@ -71,6 +74,11 @@ Two facts of the projects port bear on what Quiz must check:
    online student's work would never be graded — contrary to ADR-047's
    consequence "the grading CI … triggers on the relay's pushes exactly as
    on a student's".
+3. **The relay force-pushes.** `refspecFor` (`apps/codespace/src/git/relay.ts`)
+   writes `+<sha>:<ref>`. Quiz's App also commits to a student's
+   repository — the restore of a protected file (`modules/project/protection.ts`),
+   the source sync (`sync.ts`), the deadline commit (`jobs.ts`) — and a
+   forced relay would erase those commits on GitHub.
 
 ## Decision
 
@@ -125,21 +133,24 @@ disagree:
 3. `repository` is either **the user's own live repository of the
    project** (`isLiveIndividualRepo`: provisioned, not deleted; a staff
    seat's test repository of ADR-077 included) — the grant is then
-   `contents: write` — or **the project's distribution repository** — the
-   grant is then `contents: read`, for seeding an `online_seb` workspace
-   from the teacher's template (the portal's invariant 11). Any other
-   repository: `404 not_found`. The match is on Quiz's stored name; the
+   `contents: write` — or, **for an `online_seb` project only, the
+   project's distribution repository** — the grant is then
+   `contents: read`, for seeding the exam workspace from the teacher's
+   template (the portal's invariant 11; an `online` workspace mirrors the
+   student's own repository and never needs it). Any other repository:
+   `404 not_found`. The match is on Quiz's stored name; the
    token is minted on the stored GitHub repository **id**.
 4. The project is in an online mode (`online` or `online_seb`; the mode is
    frozen once a workspace was launched, so this only guards a corrupted
    row); otherwise `409 not_online`.
 5. **The repository is open**: its effective deadline (its own, else the
-   project's, F-PROJ-09) is still ahead on the server's clock, the
-   classroom is not archived, and the staff have not locked it by hand
+   project's, F-PROJ-09) **plus the project's grace** (F-PROJ-01, 30
+   minutes by default) is still ahead on the server's clock, the classroom
+   is not archived, and the staff have not locked it by hand
    (`project_repos.staff_lock` is not true); otherwise `409 closed`. A
    staff *unlock* after the deadline does not reopen the workspace, as it
    does not reopen the start route: extending the repository's deadline
-   does (point 8).
+   does (point 8). Why the grace, §7.
 6. The organization's installation is known, not suspended, and GitHub
    answers; otherwise `503 github_unavailable`.
 
@@ -165,8 +176,24 @@ the only place this token is minted.
 
 `expiresAt` is GitHub's (one hour after minting, which GitHub does not let
 shorten). `useUntil` is `min(expiresAt, the repository's effective
-deadline)` for a write grant, `expiresAt` for a read grant: the portal
-must not use the token past it (§3).
+deadline + the project's grace)` for a write grant, `expiresAt` for a read
+grant: the portal never uses the token past it (§3).
+
+**The relay declaration.** Before each relay push, the portal declares
+the heads it is about to push on a second, tiny route of the same kind:
+`POST /app/codespace/relay-heads`, HS256 over the same secret, audience
+`heig-quiz-relay-heads` (refused by the token route, and the token route's
+by it), the same `iss`, lifetime, `jti`, `projectId`, `userId` and
+`repository` claims, plus `heads: [{ ref, sha }]` (at most 50; a `sha` is
+40 or 64 hex digits). Quiz applies the same checks (`gitTokenRefusal`,
+write case) and answers `204`; it records one row per (repository, sha) in
+`codespace_relays` (the `codespace` module's table: `github_repo_id`,
+`sha`, `ref`, `user_id`, `declared_at`; idempotent on (repository, sha)).
+The portal pushes only after the `204`; a refusal is handled as a token
+refusal (§3). The declaration is a separate call rather than a claim of the
+token request because a token is cached for up to 50 minutes while a
+declaration is needed for every push: carrying it on the token request
+would mean minting a token per push. How Quiz reads the rows: §6.
 
 **Audit**: each issuance writes `codespace.git_token_issued` (the closed
 union of `audit.ts`), subject the project, payload `{ userId, repository,
@@ -190,10 +217,14 @@ development forge whose token would sit on the engine VM) and `github`
   free; `ensureRepo` does nothing (Quiz provisions, `analyse.md` D3).
 - **Cache**: in memory only, one entry per (project, user, repository),
   holding the grant. `authorization(repo)` is still called **per relay
-  attempt** and per seeding fetch, as the `Forge` contract says; it returns
-  the cached token while `now < useUntil - 10 min` (a long push must not
-  run out mid-pack), otherwise asks Quiz again. One request in flight per
-  entry (single flight). An entry is dropped at its `useUntil`, when GitHub
+  attempt** and per seeding fetch, as the `Forge` contract says. It returns
+  the cached token while `now < expiresAt - 10 min` (the refresh margin,
+  so that a long push never runs out mid-pack) and `now < useUntil`; past
+  the margin it asks Quiz for a new one. **`useUntil` is a hard stop, not a
+  refresh point**: the token is used up to `useUntil` and never after it,
+  and reaching `useUntil` triggers no new request (when it is the deadline
+  plus the grace, Quiz would answer `409 closed` anyway). One request in
+  flight per entry (single flight). An entry is dropped at its `useUntil`, when GitHub
   answers `401`/`403` on a push or fetch with it (the next attempt asks
   again, once), and when its session's container is destroyed and no
   `PushEvent` of it is pending. A restart empties the cache; nothing is
@@ -210,6 +241,7 @@ development forge whose token would sit on the engine VM) and `github`
   backoff, then `failed` once the attempt budget is spent. At seeding, any
   refusal refuses the session with a named cause (`sessions/manager.ts`
   already refuses a session whose repository could not be fetched).
+- **Declare, then push without force**: §6.
 - **The token never reaches git's argv, a URL or a file**: it goes to git
   through `gitAuthEnv` only (`GIT_CONFIG_COUNT`/`KEY_0`/`VALUE_0`, as
   Quiz's `gitRunner({ token })` does), as
@@ -248,26 +280,47 @@ reaches production organizations only; staging keeps its own App on its
 test organization and never the production one (N-SEC-18), and never one
 `CODESPACE_LAUNCH_SECRET` for both platforms (M6-03's open point, M6-04).
 
-### 6. What Quiz records, and how a relayed push is read
+### 6. What Quiz records, how the relay pushes, and how a relayed push is read
 
 - **Launches**: the `codespace` module records, per (project, user), the
   first and last launch token issued (`codespace_launches`, its own table,
   written in the start route's transaction beside `markLaunched`); a staff
   seat's launch is recorded too (it still freezes nothing, ADR-077).
   Check 2 reads it. Nothing in it is a secret.
-- **A relayed push is the student's.** `pushedBy` gains the case of the
-  relay: a push whose sender is Quiz's App, on a repository of a project
-  in an online mode, whose `after` is not a bot commit Quiz recorded
-  (`bot_commits`: the App records its restore, deadline and sync commits
-  before it moves the branch), is a **person's** push — `is_bot` false, the
-  student's last commit, the protected-file check (the App restores a
-  protected file the workspace changed, as in `free` mode), runs on it
-  eligible for the score. Only Quiz's own bot commits stay the App's.
-- **Receipt time** is unchanged: F-PROJ-11's time of the webhook's arrival.
-  A relayed push is received a few seconds after the student pushed into
-  `staging.git`; at the deadline that delay is the student's, as a home
-  network's is in `free` mode. The `PushEvent` row stays the portal's proof
-  for a dispute; Quiz does not read it.
+- **The relay never forces.** `refspecFor` becomes `<sha>:<ref>`, without
+  `+`: a relay push is a fast-forward or nothing, so it can never erase a
+  commit of Quiz's App (a restore, a sync, a deadline commit) nor anything
+  else on GitHub. A branch deletion is not relayed (the `hgc-protect`
+  ruleset refuses it anyway). On a **non-fast-forward rejection** the
+  portal fetches GitHub's head of that branch into `staging.git` (with the
+  same token, which reads), so that the student's next `git pull` in the
+  workspace brings Quiz's commit in and their next push fast-forwards. The
+  rejected `PushEvent` rows take a terminal state, `rejected`, with GitHub's
+  reason: the student sees it in the workspace (the status bar extension
+  that already reads the session's state) and the staff in the project's
+  workspace list. The student's commit is not lost: it stays in their
+  workspace clone and its `PushEvent`. This changes the relay's current
+  behaviour, and M6-10 carries it with its tests.
+- **Attribution by an explicit expected-relay record.** A webhook push
+  whose sender is Quiz's App is the **student's** only when its `after`
+  matches a row of `codespace_relays` for that repository — a head the
+  portal declared before pushing it (§2). It is then read as a person's
+  push: `is_bot` false, the student's last commit, the protected-file
+  check (the App restores a protected file the workspace changed, as in
+  `free` mode), runs on it eligible for the score. Any other push by the
+  App stays the App's, as today. The rule does not depend on when the App
+  inserts its own `bot_commits` rows relative to moving the ref (that
+  ordering has a known race in the existing code, out of this record's
+  scope: M6-10 notes it). The intake reads `codespace_relays` by join (a
+  read of another module's table, allowed); it stays one indexed lookup
+  within N-SEC-17's 100 ms.
+- **Receipt time is Quiz's, not `staging.git`'s.** `staging.git` is not
+  "the server" of invariant 5: a push landing there is not received by
+  Quiz. The receipt time stays F-PROJ-11's, the moment Quiz receives the
+  push webhook from GitHub. The relay's delay — seconds in the ordinary
+  case — counts exactly as a home network's delay counts in `free` mode.
+  The `PushEvent` row stays the portal's evidence for a dispute; Quiz does
+  not read it.
 
 ### 7. Why Quiz checks the deadline itself
 
@@ -275,38 +328,53 @@ GitHub's lock is not a guard here: the token is the App's, and the App
 bypasses the lock (fact 1 of the context); under `commit` nothing is
 locked; the lock lands up to minutes after the deadline; and only Quiz
 knows a repository's own, later deadline (the sync sends the project's).
-So Quiz refuses a write token once the repository's effective deadline has
-passed (check 5), and bounds an earlier token by `useUntil`.
+**Until the deadline plus the grace** (decided by the orchestrator on
+2026-10-07, **to be confirmed by the product owner**). Quiz grants write
+tokens, and accepts relay declarations, until the repository's effective
+deadline plus the project's grace; after that, `409 closed`. This mirrors
+`free` mode, where a push after the deadline is still received and marked
+late (F-PROJ-11), never counted in the frozen score. It also keeps the
+routine end of a session from leaving pushes stuck: a student who pushes in
+the last seconds, or whose relay waits out a short GitHub hiccup, is
+relayed within the grace, received late if it is late, and judged by the
+receipt time like any other push. A token minted before that limit is
+bounded by `useUntil` (§2).
 
-What remains: a token minted before the deadline is valid at GitHub until
-its `expiresAt`, up to an hour past the deadline, and only the portal's
-discipline (`useUntil`, then revocation) stops its use. A push made with it
-after the deadline is **received late** (F-PROJ-11): it never moves the
-frozen score and the staff see it marked after the deadline. That is the
-residual exposure accepted with option B.
+What remains: GitHub keeps a token valid until its `expiresAt`, up to an
+hour past `useUntil`, and only the portal's discipline (`useUntil`, then
+revocation) stops its use. A push made with it then is **received late**
+(F-PROJ-11): it never moves the frozen score and the staff see it marked
+after the deadline; without a declaration it is not even the student's
+(§6). That is the residual exposure accepted with option B.
 
-### 8. Pushes still pending at the deadline
+### 8. Pushes still pending after the grace
 
-A push recorded in `staging.git` before the deadline but not yet relayed
-(GitHub down, Quiz down) cannot be relayed after it: Quiz answers
-`409 closed`. Its rows stay `pending` (point 3), its `PushEvent` is the
-proof of submission, and the staff decide: extending the repository's own
-deadline (F-PROJ-09 (1)) makes Quiz issue again, and the relay resumes by
-itself within its backoff, received in time against the new deadline.
+A push recorded in `staging.git` but not relayed by the end of the grace
+(GitHub or Quiz down for that long) cannot be relayed afterwards: Quiz
+answers `409 closed`. Its rows stay `pending` (point 3), its `PushEvent` is
+the evidence, and the staff decide: extending the repository's own
+deadline (F-PROJ-09 (1)) makes Quiz grant again, and the relay resumes by
+itself within its backoff, received against the new deadline.
 
 ### 9. Blast radius
 
 If the engine VM is compromised — a container escape, the portal's process
 — the attacker holds `CODESPACE_LAUNCH_SECRET` and the tokens in memory.
-With them they can push to and read **the repositories of projects that
-are online, launched and before their effective deadline**, contents only,
-until `CODESPACE_LAUNCH_SECRET` is rotated, and with the tokens already
-minted for at most an hour after that; and read
-the distribution repositories of those projects. They cannot touch any
+With them they can push to and read **the repository of every student who
+launched a workspace on a project still open** (before its effective
+deadline plus the grace), contents only, until
+`CODESPACE_LAUNCH_SECRET` is rotated, and with the tokens already minted
+for at most an hour after that; and read the distribution repositories of
+the open `online_seb` projects among them. They cannot touch any
 other repository, change settings, rulesets, collaborators, secrets or
 workflows (no `workflows` permission: a push that changes
 `.github/workflows/` is refused by GitHub), nor reach another organization;
-every token they obtain is audited by Quiz. Under classroom's design
+every token they obtain is audited by Quiz, and a push of theirs that the
+portal did not declare is never counted as a student's (§6). The portal's
+no-force rule binds the portal, not an attacker holding a token: against a
+forced push or a deletion, the `hgc-protect` ruleset is the guard (ADR-047
+§2: "it also protects against the relay"); M6-10 verifies on the staging
+App that it refuses a forced push made with an App installation token. Under classroom's design
 (option A) the same compromise yields the App's private key: every
 permission of the App on every repository of every organization that
 installed it, until the key is rotated.
@@ -323,8 +391,9 @@ installed it, until the key is rotated.
   (`contents` only), valid at most an hour, which it keeps in memory only
   and hands to git through the environment, never in a URL, argv or file;
   Quiz issues one only for a repository of an online project the student
-  launched, before its effective deadline, and audits each issuance without
-  the token." `apps/codespace/CLAUDE.md` replaces its "Whether Quiz's own
+  launched, before its effective deadline plus the grace, and audits each
+  issuance without the token; an App push counts as the student's only
+  when the portal declared its head beforehand." `apps/codespace/CLAUDE.md` replaces its "Whether Quiz's own
   App key goes on the engine VM is **open**" with this ADR and names the
   `quiz` forge.
 - Submission now depends on two services: Quiz must be up for a relay to
@@ -335,16 +404,22 @@ installed it, until the key is rotated.
 - Without `workflows`, a student who edits a file under
   `.github/workflows/` in the workspace cannot have any later push relayed
   (GitHub refuses the whole atomic push) until they revert it. That is the
-  intended protection of the grading workflow; M6-10 makes the relay's
-  `failed` state visible to the staff in the project's workspace list.
+  intended protection of the grading workflow; the refusal surfaces as a
+  `rejected` `PushEvent` with GitHub's reason, like a non-fast-forward
+  (§6), to the student and to the staff.
+- A student whose push is rejected because Quiz's App committed meanwhile
+  (a restore, a sync, rarely the deadline commit) must pull before pushing
+  again — the ordinary git workflow, now visible in the workspace.
 - GitHub's limits: one token per repository and hour at most in steady
   state, minted with the App's JWT; negligible beside the 5 000 requests an
   hour per installation (N-PERF-07).
-- No new secret (ADR-010 unchanged); one new audit action; one new table of
-  the `codespace` module; contracts `GitTokenRequestClaims` and
-  `GitTokenGrant`; one pure rule `gitTokenRefusal`; a change of `pushedBy`
-  in the `github` module, with tests that a relayed push is graded and that
-  the App's own bot commits are still not.
+- No new secret (ADR-010 unchanged); one new audit action; two new tables
+  of the `codespace` module (`codespace_launches`, `codespace_relays`);
+  contracts `GitTokenRequestClaims`, `GitTokenGrant` and
+  `RelayHeadsClaims`; one pure rule `gitTokenRefusal`; a change of
+  `pushedBy` in the `github` module, with tests that a declared relayed
+  push is graded and that any other App push still is not; the relay's
+  `refspecFor` without force and its `rejected` state, with tests.
 
 ## Alternatives considered
 
