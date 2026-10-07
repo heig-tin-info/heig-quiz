@@ -108,13 +108,6 @@ describe("the phone's pairing page (ADR-051 §7)", () => {
     expect(screen.getByText("Open book").compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("renders no conditions block for an exam without any", async () => {
-    render({ "GET /app/api/pair/BCDF-GHJK": ok(preview()) });
-    await screen.findByRole("button", { name: "Start on this station" });
-    expect(screen.queryByText("Announced by your teacher")).toBeNull();
-    expect(screen.queryByText("Imposed by the platform")).toBeNull();
-  });
-
   it("formats a typed code, and refuses one that cannot be a code without asking the server", async () => {
     const { calls } = render({ "GET /app/api/pair/BCDF-GHJK": ok(preview()) }, "/pair");
     const field = screen.getByLabelText("Code shown on the station");

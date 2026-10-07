@@ -543,8 +543,9 @@ export const EvaluationCard = z.object({
   /**
    * ADR-079 §7: the conditions of an exam sat through a trusted client, read
    * before leaving the portal (the SEB launch dialog), since that client may
-   * begin the attempt directly (ADR-076 §4). `null` without a trusted client:
-   * the portal's own waiting room states them.
+   * begin the attempt directly (ADR-076 §4). Set on an open card only;
+   * `null` on an upcoming or past one, and without a trusted client (the
+   * portal's own waiting room states them).
    */
   conditions: EvaluationConditions.nullable(),
 });

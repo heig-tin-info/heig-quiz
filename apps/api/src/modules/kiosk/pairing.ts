@@ -42,12 +42,18 @@ export async function pairableEvaluations(
   now: Date,
 ): Promise<PairableEvaluation[]> {
   const home = await studentHome(db, userId, now);
-  // A kiosk card always carries its conditions (ADR-079 §7): the station begins the attempt directly.
-  return home.open.flatMap(({ id, title, classroomName, courseCode, trustedClients, conditions }) =>
-    trustedClients.includes("kiosk") && conditions !== null
-      ? [{ id, title, classroomName, courseCode, conditions }]
-      : [],
-  );
+  return home.open
+    .filter((c) => c.trustedClients.includes("kiosk"))
+    .map(({ id, title, classroomName, courseCode, conditions }) => ({
+      id,
+      title,
+      classroomName,
+      courseCode,
+      // Holds by construction (ADR-079 §7): kiosk ⇒ a trusted client ⇒ an open
+      // card carries its conditions. A regression throws on the contract, never
+      // drops the exam silently.
+      conditions: conditions!,
+    }));
 }
 
 // --- The station -------------------------------------------------------------

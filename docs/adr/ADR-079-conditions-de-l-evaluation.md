@@ -82,9 +82,10 @@ a text that changes after the exam leaves no record of what was announced.
    Browser or on a kiosk enters past the portal's waiting room; the
    conditions are therefore also shown before the SEB launch and on the
    phone's `/pair` page.
-   *As built (2026-10-07, PR 3 of #584):* the student's evaluation card
-   carries `conditions` when the exam has a trusted client (`null`
-   otherwise: the portal's waiting room states them), and `/pair`'s
+   *As built (2026-10-07, PR 3 of #584):* the student's open evaluation
+   card carries `conditions` when the exam has a trusted client (`null`
+   otherwise, and on upcoming and past cards: the portal's waiting room
+   states them), and `/pair`'s
    `PairableEvaluation` always does; both are built by
    `evaluationConditionsOf` with the seat's extra time, inside the existing
    loaders (the student home's seats, `pairableEvaluations`), and carry no

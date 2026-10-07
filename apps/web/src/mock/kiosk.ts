@@ -175,7 +175,7 @@ const pairable = (): PairPreview["evaluations"] =>
           title: "Quiz 3 — Pointeurs et lois fondamentales",
           classroomName: "PRG1-2026",
           courseCode: "PRG1",
-          conditions: studentConditions({ kiosk: true }),
+          conditions: studentConditions(true),
         },
       ];
 

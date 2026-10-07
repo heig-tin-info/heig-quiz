@@ -1537,7 +1537,6 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
   };
 
   const card = (row: (typeof rows)[number], counted: string | null): EvaluationCard => {
-    const clients = trustedClients(row.evaluation);
     return {
       id: row.evaluation.id,
       title: row.evaluation.title,
@@ -1561,12 +1560,17 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
       // Issue #203: what "See my results" would lead to, for the attempt
       // that counts — the results service's own rule.
       results: resultsState(row.evaluation, counted),
-      trustedClients: clients,
-      // ADR-079 §7: a trusted client may begin the attempt directly, past the
-      // waiting room, so the card carries what that room would have said.
-      conditions: clients.length > 0 ? conditionsFor(row.evaluation, row.timeBonusPercent) : null,
+      trustedClients: trustedClients(row.evaluation),
+      // Set on an open card only, below (`withConditions`).
+      conditions: null,
     };
   };
+
+  // ADR-079 §7: a trusted client may begin the attempt directly, past the
+  // waiting room, so an OPEN card carries what that room would have said.
+  // Upcoming and past cards carry none, as a plain exam's.
+  const withConditions = (row: (typeof rows)[number], c: EvaluationCard): EvaluationCard =>
+    c.trustedClients.length > 0 ? { ...c, conditions: conditionsFor(row.evaluation, row.timeBonusPercent) } : c;
 
   const open: EvaluationCard[] = [];
   const upcoming: EvaluationCard[] = [];
@@ -1596,7 +1600,7 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
     // again, and comes back here on its own.
     else if (c.attemptState !== null && isFinishedAttempt(c.attemptState) && !c.retakes?.canRetake) {
       past.push(ended);
-    } else open.push(c);
+    } else open.push(withConditions(row, c));
   }
   return { polls, open, upcoming, past };
 }

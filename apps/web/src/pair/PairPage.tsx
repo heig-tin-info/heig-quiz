@@ -192,7 +192,7 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
 
             {exams.length > 0 ? (
               // A sticky dock on a phone (DESIGN.md, the launch step's): the conditions above may run past the fold.
-              <div className="sticky bottom-0 z-10 -mx-5 mt-5 border-t border-line bg-surface px-5 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:p-0">
+              <div data-bottom-dock="" className="sticky bottom-0 z-10 -mx-5 mt-5 border-t border-line bg-surface px-5 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:p-0">
                 <Button
                   variant="primary"
                   size="lg"

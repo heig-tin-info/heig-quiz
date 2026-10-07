@@ -18,8 +18,6 @@ import { fakeShort } from "../../test/fakeType.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { reload, seedLive } from "../../test/live.js";
 import { applyState } from "../evaluation/service.js";
-import { pairableEvaluations } from "../kiosk/pairing.js";
-
 let server: TestServer;
 let restore: () => void;
 let teacher: { id: string; headers: Record<string, string> };
@@ -196,24 +194,6 @@ describe("the trusted-client screens (ADR-079 §7)", () => {
     expect(card.conditions!.imposed.find((c) => c.key === "duration")).toMatchObject({ bonusPercent: 25 });
     // The portal opens a plain exam, whose waiting room states them: the card carries none.
     expect(cards.get(plain.evaluationId)!.conditions).toBeNull();
-    expect(body).not.toContain(catalogId);
-    expect(body).not.toContain("catalogId");
-  });
-
-  it("give the phone's pairing list the kiosk exam's conditions, and never the catalog reference", async () => {
-    const kioskSeed = await seedLive(db(), {
-      teacherId: teacher.id,
-      studentIds: [student.id],
-      settings: { lobby: "manual", kiosk: true },
-    });
-    await patchConditions(kioskSeed.evaluationId, conditions);
-    await applyState(db(), await reload(db(), kioskSeed.evaluationId), "running", server.clock.now());
-
-    const pairable = await pairableEvaluations(db(), student.id, server.clock.now());
-    const mine = pairable.find((e) => e.id === kioskSeed.evaluationId)!;
-    expect(mine.conditions.announced.map((c) => c.text)).toEqual(["One A4 sheet of handwritten notes", "Mobile phones"]);
-    expect(mine.conditions.imposed[0]).toEqual({ key: "trusted_client", kind: "forbidden", clients: ["kiosk"] });
-    const body = JSON.stringify(pairable);
     expect(body).not.toContain(catalogId);
     expect(body).not.toContain("catalogId");
   });

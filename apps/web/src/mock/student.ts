@@ -369,13 +369,12 @@ const studentSettings = (): AttemptView["evaluation"]["settings"] => ({
 
 /**
  * ADR-079: what the server builds for this student — 20 minutes, a third
- * more. `trusted` adds a trusted client the flags do not (the `/pair` mock's
- * exam is a kiosk one whatever `?kiosk=`).
+ * more. `kiosk`: the `/pair` mock's exam is a kiosk one whatever `?kiosk=`.
  */
-export const studentConditions = (trusted: { kiosk?: true } = {}) =>
+export const studentConditions = (kiosk = false) =>
   evaluationConditionsOf({
     mode: scene === "exercise" ? "exercise" : "exam",
-    settings: { ...studentSettings(), ...trusted, conditions: flags.empty ? [] : MOCK_CONDITIONS },
+    settings: { ...studentSettings(), ...(kiosk ? { kiosk } : {}), conditions: flags.empty ? [] : MOCK_CONDITIONS },
     durationS: 20 * 60,
     closesAt: null,
     timeBonusPercent: 33,

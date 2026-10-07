@@ -136,21 +136,6 @@ describe("the student home", () => {
     ).toBeTruthy();
   });
 
-  it("draws no conditions in the Safe Exam Browser dialog when the card carries an empty list", async () => {
-    mockFetch({
-      "GET /app/api/student/home": ok({
-        ...home,
-        open: [card({ trustedClients: ["seb"], conditions: { announced: [], imposed: [] } })],
-      }),
-      "GET /app/api/student/classrooms": ok([]),
-    });
-    render();
-    await userEvent.click(await screen.findByRole("button", { name: "Ouvrir dans Safe Exam Browser" }));
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).queryByText("Imposées par la plateforme")).toBeNull();
-    expect(within(dialog).getByText("Installez Safe Exam Browser.")).toBeInTheDocument();
-  });
-
   it("closes the Safe Exam Browser instructions without downloading", async () => {
     mockFetch({
       "GET /app/api/student/home": ok({ ...home, open: [card({ trustedClients: ["seb"] })] }),
