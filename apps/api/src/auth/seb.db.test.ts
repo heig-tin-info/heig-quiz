@@ -7,13 +7,13 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { and, eq } from "drizzle-orm";
 import { registerForTests } from "@quiz/registry/server";
+import { CONFIG_KEY_HEADER } from "@quiz/seb";
 
 import { auditLog, launchTickets, sessions } from "../db/schema.js";
 import { fakeShort } from "../test/fakeType.js";
 import { routesOf, testServer, type Method, type TestServer } from "../test/http.js";
 import { seedLive } from "../test/live.js";
 import { consumeLaunchTicket, issueLaunchTicket } from "./launch.js";
-import { CONFIG_KEY_HEADER } from "./seb.js";
 import { launchSeb, openSebSession, sebStartUrl, SITTING_ROUTES } from "./testing.js";
 import { kioskStation } from "../test/kiosk.js";
 import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "./session.js";

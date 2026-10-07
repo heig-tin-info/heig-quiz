@@ -9,13 +9,13 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { and, eq } from "drizzle-orm";
 import { registerForTests } from "@quiz/registry/server";
+import { CONFIG_KEY_HEADER, absoluteRequestUrl, expectedHash } from "@quiz/seb";
 
 import { auditLog, kioskDevices, sessions } from "../db/schema.js";
 import { subscribe, type BusMessage } from "../events.js";
 import { fakeShort } from "../test/fakeType.js";
 import { testServer, type TestServer } from "../test/http.js";
 import { seedLive } from "../test/live.js";
-import { CONFIG_KEY_HEADER, configKeyHash, requestUrl } from "./seb.js";
 import { CSRF_COOKIE, SESSION_COOKIE, createSession, deleteSession } from "./session.js";
 
 /** A Config Key as a launch stores it. */
@@ -72,7 +72,7 @@ const get = (url: string, headers: Record<string, string>) =>
 describe("the Config Key of every request, audit-only (ADR-051 §3)", () => {
   it("serves a matching request and writes nothing", async () => {
     const url = "/app/api/me";
-    const header = configKeyHash(requestUrl("http://localhost:3000", url), KEY);
+    const header = expectedHash(absoluteRequestUrl("http://localhost:3000", url), KEY);
     expect((await get(url, { ...cookies, [CONFIG_KEY_HEADER]: header })).statusCode).toBe(200);
     expect(await mismatches()).toHaveLength(0);
   });

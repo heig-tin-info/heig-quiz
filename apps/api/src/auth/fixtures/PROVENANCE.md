@@ -1,9 +1,13 @@
-# Provenance of `seb-json-mac-001.txt`
+# Provenance of `launch.seb`
 
-Copied as is from the test suite of Moodle's `quizaccess_seb`
-(`MOODLE_405_STABLE`, `mod/quiz/accessrule/seb/tests/fixtures/JSON_unencrypted_mac_001.txt`),
-through `heig-classroom/apps/codespace/src/seb/fixtures/`. It is the SEB-JSON
-string of a configuration saved by SEB macOS 2.1.4; its SHA-256,
-`4fa9af8ec8759eb7c680752ef4ee5eaf1a860628608fccae2715d519849f9292`, is the
-Config Key `config_key_test::real_ck_hash_provider()` asserts. Moodle is GPL v3
-or later, and so is this file; it is a test vector only.
+The `.seb` Quiz served for the start URL
+`https://quiz.example.org/app/auth/seb/s3cret-ticket_0`, written by
+`apps/api/src/auth/seb.ts` as it stood before it moved onto `@quiz/seb`
+(M6-02), and never regenerated since. `seb.snapshot.test.ts` pins its bytes
+(SHA-256 `2a4c6f820bf00ed9e092e9467f1fac59727ee982be29b0309dcfd1b8272a464d`)
+and its Config Key: a change to either is a change every SEB holding a file
+would see.
+
+The Moodle vectors that used to sit here (`seb-json-mac-001.txt`, the
+201-key SEB-JSON string) moved to `packages/seb/src/fixtures/`, with their
+provenance.

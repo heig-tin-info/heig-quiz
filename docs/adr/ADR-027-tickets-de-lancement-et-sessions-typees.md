@@ -36,6 +36,15 @@ session's cookie is `SameSite=Strict`, and a new confined session
 supersedes the previous one of the same student and exam. There is still
 no Browser Exam Key.
 
+**Addendum (2026-10-07, M6-02, D21 point 1):** the plist, the Config Key
+and the hashes left `auth/seb.ts` for the pure `packages/seb` (`@quiz/seb`),
+the full port of classroom's (every Moodle rule: `originatorVersion`
+stripped, empty dictionaries pruned, `<data>`, `<real>`, `<date>`), checked
+against all of Moodle's vectors, the 201-key one included. The file Quiz
+serves is unchanged byte for byte, and so is its Config Key
+(`auth/seb.snapshot.test.ts`); `auth/seb.ts` keeps the routes and the
+evaluation's configuration (Quiz's host only).
+
 ## Context
 
 An exam sat in Safe Exam Browser (SEB) is a separate browser: the portal's

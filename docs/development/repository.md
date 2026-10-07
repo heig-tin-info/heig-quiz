@@ -19,6 +19,7 @@ packages/
   contracts/  zod schemas and payload types shared api <-> web
   domain/     pure business rules: grade scale, deadlines, policies, cloze, roster
   docrender/  the server-side journal renderer
+  seb/        Safe Exam Browser, pure: typed plist, Config Key, request hashes
   ui/         the shared primitives of the question-type surfaces (@quiz/ui)
   qt-mcq/     question type: multiple choice
   qt-short/   question type: short answer
@@ -98,6 +99,7 @@ the flags of every container, the request lifecycle, the images under
 | `@quiz/registry` | `./server`, `./client` | the two static maps from a question-type id to its implementation |
 | `@quiz/contracts` | `.` | one zod schema per route and per SSE event, and the payload types both sides import |
 | `@quiz/domain` | `.`, `./<file>` | pure functions with unit tests: the Swiss grade scale, deadlines and time bonus, the MCQ and categorize scoring policies, the cloze parser, the roster import, output comparison, stats, pseudonyms |
+| `@quiz/seb` | `.` | Safe Exam Browser, pure and server-side (`node:crypto`): the typed plist of a `.seb` (render and parse), the SEB-JSON rules and the Config Key, `buildSebConfig`, `absoluteRequestUrl`, `expectedHash`, `hashesEqual` (constant time); the Moodle vectors and the 201-key vector (D21, M6-02). The routes stay in `apps/api/src/auth/seb.ts` |
 | `@quiz/ui` | `.` | the shared primitives of the question-type surfaces (React as a peer, `@quiz/core` its only dependency; it never imports a `qt-*` package nor `apps/web`) |
 | `@quiz/qt-mcq`, `qt-short`, `qt-cloze` | `./server`, `./client` | one question type each: config schema, canonical form, grading on the server; Editor, Player and Review components on the client |
 | `@quiz/qt-code` | `./server`, `./client` | two types sharing one program half: `code`, graded by the runner's test cases, and `codeimage`, judged by the picture its stdout draws ([ADR-021](../adr/ADR-021-codeimage-variante-de-code.md)) |
