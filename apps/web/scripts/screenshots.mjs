@@ -826,6 +826,8 @@ const scenes = [
   // The diagram item (docs/04 §4.14): the canvas inline under the prompt, then
   // expanded over the page, under the bar with the clock and the way back.
   { name: "player-diagram", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 9) },
+  // The focused canvas lends its keys to the side column, under Alt + ← → (issue #549).
+  { name: "player-circuit-shortcuts", role: "student", path: `${TAKE}?scene=running`, fold: true, act: async (p) => { await openQuestion(p, 5); await focusCanvas(p); } },
   { name: "player-diagram-expanded", role: "student", path: `${TAKE}?scene=running`, fold: true, act: async (p) => { await openQuestion(p, 9); await p.getByRole("button", { name: /^(Expand|Agrandir)$/ }).click(); await p.waitForTimeout(400); } },
   { name: "player-codeimage-run", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 6); await p.getByRole("button", { name: /^(run|exécuter)$/i }).click(); await p.getByText(/pixels (correct|corrects)/).waitFor(); } },
   { name: "player-codeimage-diff", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 6); await p.getByRole("button", { name: /^(run|exécuter)$/i }).click(); await p.getByText(/pixels (correct|corrects)/).waitFor(); await p.getByRole("radio", { name: /^(difference|différence)$/i }).check({ force: true }); } },
@@ -1176,6 +1178,8 @@ const scenes = [
   // through the mock's `POST /try`, whose details carry the reference image.
   { name: "editor-codeimage", role: "teacher", path: "/questions/q16", settle: 5000 },
   { name: "editor-circuit", role: "teacher", path: "/questions/q8" },
+  // The focused reference circuit adds its keys to the sidebar strip (issue #549).
+  { name: "editor-circuit-shortcuts", role: "teacher", path: "/questions/q8", fold: true, settle: 2000, act: focusCanvas },
   // The teacher's expand layer over the reference circuit: its title, the save state, "Close".
   { name: "editor-circuit-expanded", role: "teacher", path: "/questions/q8", fold: true, settle: 2000, act: async (p) => { await p.getByRole("button", { name: /^(Expand|Agrandir)$/ }).first().click(); await p.waitForTimeout(400); } },
   { name: "editor-rich", role: "teacher", path: "/questions/q17", settle: 3000 },
@@ -1483,6 +1487,14 @@ async function openQuestion(page, n) {
  * row is brought into view first so the trigger is clickable; the menu itself
  * ignores the scroll its own opening causes, so no extra settling is needed.
  */
+/** Focuses the first canvas editor of the page, the way a click into it does. */
+async function focusCanvas(page) {
+  const canvas = page.locator('[role="group"][tabindex]').filter({ has: page.locator('[role="application"], svg') }).first();
+  await canvas.scrollIntoViewIfNeeded();
+  await canvas.focus();
+  await page.waitForTimeout(300);
+}
+
 async function openRowMenu(page, triggerName, item) {
   const trigger = page.getByRole("button", { name: triggerName }).first();
   await trigger.scrollIntoViewIfNeeded();

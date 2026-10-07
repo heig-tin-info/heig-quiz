@@ -88,3 +88,23 @@ shows the draft exactly as a student receives it — no key, no explanation.
 `Ctrl+S` saves, `Ctrl+Enter` tries the question, `Ctrl+Shift+P` publishes,
 `Ctrl+Shift+M` toggles the student preview. `Ctrl+K` opens the command
 palette, which carries the same three actions.
+
+## Drawing a circuit or a diagram
+
+Click in a canvas (the reference, the starter) and its keys join the
+shortcut strip of the sidebar; they leave it when the canvas loses the focus
+or the caret is in one of its fields.
+
+| Keys | Circuit | Diagram |
+|---|---|---|
+| `Ctrl+Z` / `Ctrl+Y` | Undo / redo | Undo / redo |
+| `R` (or `Space`), `H`, `V` | Rotate, mirror horizontally, vertically | — |
+| `W` | Wire tool | — |
+| `I` | — | Reverse the selected link |
+| `1`–`9` | Pick the part at that place in the palette | Pick the tool at that place in the toolbar |
+| `Del` (or `Backspace`) | Delete the selection | Delete the selection |
+| `Ctrl+D`, `Ctrl+A` | Duplicate, select all | Duplicate, select all |
+| `Esc` | Drop the wire, then the tool, then the selection | Drop the link, then the tool, then the selection |
+
+A student gets the same keys, listed under the question list while the
+canvas has the focus.

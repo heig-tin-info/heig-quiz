@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-30), with the two addenda below. Proposed 2026-09-29.
+Accepted (2026-09-30), with the three addenda below. Proposed 2026-09-29.
 Decided with the product owner: v1 graded by hand,
 all eight kinds in v1, the text form shown to the teacher only, `diagram`
 replaces the drawing type of docs/spec/04 §4.10, and a starter diagram may
@@ -283,6 +283,42 @@ included, and the teacher's as well as the student's. What it settled:
    pane, the picker, an evaluation item's preview). The grading panel,
    which shows a read-only statement, lends none, and there the players
    still show no Expand button.
+
+## Addendum (2026-10-07): the canvases teach their keys
+
+Issue #549: both canvases have a real keyboard and nothing taught it. What
+was settled with the product owner:
+
+1. **A lent listener, not a moved registry.** `@quiz/core` gains, as types
+   only, `CanvasShortcut` (`keys`: the alternatives of one action, `Mod`
+   for Ctrl/⌘; `label`) and an optional `onCanvasShortcuts(list | null)` on
+   both `EditorProps` and `PlayerProps`, beside `Expand`. The shortcut
+   registry (`apps/web/src/shortcuts.tsx`), `modKey()` and the Ctrl/⌘
+   spelling stay in `apps/web`; `@quiz/ui` holds only the focus rule
+   (`useCanvasShortcuts`). `qt-circuit` and `qt-diagram` pass the listener
+   to `SchematicEditor` and `DiagramEditor` (`onShortcuts`). Absent —
+   grading, review, tests, the gallery — nothing is shown.
+2. **When.** An editable canvas calls it while the focus is inside it and
+   not in one of its text fields (the inspectors, the text pane), and with
+   `null` when the focus leaves, the canvas turns read-only or unmounts. A
+   read-only canvas never calls it. No key handler changed.
+3. **What: grouped lines, five at most**, so they fit the strip's ten
+   beside the page's keys. Circuit: Undo / Redo, R H V, W, 1–9, Del.
+   Diagram: Undo / Redo, I, 1–9, Del. `1–9` is one line, never the part
+   names (the palette order is the question's). The aliases (Space,
+   Backspace, Ctrl+Shift+Z) and Ctrl+D, Ctrl+A, Esc are bound but not
+   listed. Each list is a static descriptor next to its handler table,
+   tested against the handlers both ways; the palette buttons carry their
+   digit in `aria-keyshortcuts`.
+4. **Where.** The teacher's question editor registers the lines in the
+   sidebar strip on top of the page's keys (last registration wins, as for a
+   rich-text field). The student player shows them in its left column only,
+   under `Alt + ← →`, and only what the canvas lent — the column is no live
+   strip of the page's keys. Without the column (narrow screen, a single
+   question, the expand layer, a phone) nothing is shown anywhere: no
+   popover, no "?" button, nothing in the layer's bar.
+5. **Out of scope:** a key for "Simulate the reference" of `circuit`, a
+   separate issue.
 
 ## Alternatives considered
 

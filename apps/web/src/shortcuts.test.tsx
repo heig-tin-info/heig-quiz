@@ -1,7 +1,9 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { modKey } from "./ui";
 import {
+  canvasShortcutLines,
   resetShortcuts,
   shortcutCaps,
   useActiveShortcuts,
@@ -124,5 +126,19 @@ describe("shortcutCaps", () => {
     expect(shortcutCaps("Ctrl+Shift+P")).toEqual(["Ctrl", "Shift", "P"]);
     expect(shortcutCaps("Alt+←")).toEqual(["Alt", "←"]);
     expect(shortcutCaps("Space")).toEqual(["Space"]);
+  });
+});
+
+describe("canvasShortcutLines", () => {
+  it("spells Mod as the platform's key and joins the alternatives", () => {
+    expect(
+      canvasShortcutLines([
+        { keys: ["Mod+Z", "Mod+Y"], label: "Undo / Redo" },
+        { keys: ["1–9"], label: "Pick a part" },
+      ]),
+    ).toEqual([
+      { keys: `${modKey()}+Z / ${modKey()}+Y`, label: "Undo / Redo" },
+      { keys: "1–9", label: "Pick a part" },
+    ]);
   });
 });

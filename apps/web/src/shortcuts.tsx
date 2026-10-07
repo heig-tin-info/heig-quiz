@@ -1,4 +1,8 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { Fragment, useEffect, useState, useSyncExternalStore } from "react";
+
+import type { CanvasShortcut, CanvasShortcutsListener } from "@quiz/core/client";
+
+import { Kbd, modKey } from "./ui";
 
 /**
  * The keyboard shortcuts that are LIVE right now, for the strip the sidebar
@@ -15,7 +19,11 @@ import { useEffect, useSyncExternalStore } from "react";
  * in the palette) and a command rarely has a key.
  */
 export interface Shortcut {
-  /** As shown: "Ctrl+S", "Ctrl+Shift+P", "Tab", "Esc". `modKey()` in ui/feedback.tsx spells Ctrl/⌘. */
+  /**
+   * As shown: "Ctrl+S", "Ctrl+Shift+P", "Tab", "Esc". `modKey()` in
+   * ui/feedback.tsx spells Ctrl/⌘. Alternatives for one action are joined by
+   * " / ": "Ctrl+Z / Ctrl+Y" (a canvas's grouped lines).
+   */
   keys: string;
   /** Translated, short: "Save", "Try the question". */
   label: string;
@@ -87,6 +95,43 @@ export function useGlobalShortcuts(shortcuts: Shortcut[], enabled = true): void 
 /** The live union, for the sidebar strip. Re-renders on every change. */
 export function useActiveShortcuts(): Shortcut[] {
   return useSyncExternalStore(subscribe, () => snapshot, () => snapshot);
+}
+
+/**
+ * The lines a focused canvas lends (`CanvasShortcut`, issue #549) in the
+ * strip's spelling: `Mod` becomes Ctrl or ⌘, alternatives are joined by " / ".
+ */
+export function canvasShortcutLines(list: readonly CanvasShortcut[]): Shortcut[] {
+  return list.map((line) => ({
+    keys: line.keys.map((k) => k.replace(/^Mod\+/, `${modKey()}+`)).join(" / "),
+    label: line.label,
+  }));
+}
+
+/**
+ * The listener a host lends a canvas editor (`EditorProps.onCanvasShortcuts`)
+ * and the lines it last received: `null` while no canvas has the focus.
+ * The listener is stable, so a memoised question does not re-render for it.
+ */
+export function useLentCanvasShortcuts(): [Shortcut[] | null, CanvasShortcutsListener] {
+  const [list, setList] = useState<readonly CanvasShortcut[] | null>(null);
+  return [list === null ? null : canvasShortcutLines(list), setList];
+}
+
+/** The keys of one line as caps, its alternatives apart: Ctrl Z / Ctrl Y. */
+export function ShortcutKeys({ keys }: { keys: string }) {
+  return (
+    <span className="flex shrink-0 items-center gap-0.5">
+      {keys.split(" / ").map((alternative, i) => (
+        <Fragment key={`${alternative}-${i}`}>
+          {i > 0 ? <span className="px-0.5 text-[11px] text-fg-faint">/</span> : null}
+          {shortcutCaps(alternative).map((cap, j) => (
+            <Kbd key={`${cap}-${j}`}>{cap}</Kbd>
+          ))}
+        </Fragment>
+      ))}
+    </span>
+  );
 }
 
 /** "Ctrl+Shift+P" -> ["Ctrl", "Shift", "P"]: one `Kbd` cap per key. */

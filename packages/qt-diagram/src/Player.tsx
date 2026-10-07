@@ -51,6 +51,7 @@ export function DiagramPlayer({
   canvasStrings,
   renderMarkdown,
   Expand,
+  onCanvasShortcuts,
 }: DiagramPlayerProps) {
   const s = resolveStrings(diagramPlayerStrings, strings);
   const locked = isLocked(readOnly, disabled);
@@ -75,6 +76,7 @@ export function DiagramPlayer({
             readOnly={locked}
             strings={canvasStrings}
             aria-label={s.label}
+            onShortcuts={onCanvasShortcuts}
             {...(expanded ? {} : { height: INLINE_HEIGHT })}
           />
         )}

@@ -44,6 +44,7 @@ import { useEffect, useLayoutEffect, useState, type CSSProperties, type ReactNod
 import { CommandPalette } from "../CommandPalette";
 import type { Command } from "../commands";
 import { useT } from "../i18n";
+import { ShortcutKeys, type Shortcut } from "../shortcuts";
 import { setThemeChoice, useResolvedTheme } from "../theme";
 import {
   ClockCountdown,
@@ -93,6 +94,7 @@ export function PlayerShell({
   banner,
   footer,
   aside,
+  asideShortcuts = [],
   wide = false,
   children,
 }: {
@@ -144,6 +146,13 @@ export function PlayerShell({
    * adds the move keys under it, visible.
    */
   aside?: ReactNode;
+  /**
+   * The keys a focused canvas lends (issue #549), under the move keys of the
+   * side column — and nowhere else: without the column (a narrow screen, one
+   * question) they are not shown at all, and the column is no live strip of
+   * the page's keys, only of what the canvas lent.
+   */
+  asideShortcuts?: readonly Shortcut[];
   /**
    * The question on screen asks for the room (`isWide`): its column grows
    * from 760 to 1600 px — beside the side column, the room right of it;
@@ -280,6 +289,18 @@ export function PlayerShell({
             <p className="text-[12px] leading-relaxed text-fg-faint">
               <Kbd>Alt</Kbd> + <Kbd>←</Kbd> <Kbd>→</Kbd> {t("player.shortcuts")}
             </p>
+            {asideShortcuts.length === 0 ? null : (
+              <ul className="-mt-2 space-y-1" aria-label={t("shortcuts.title")}>
+                {asideShortcuts.map((shortcut) => (
+                  // The column is narrow: a label that does not fit beside its
+                  // keys goes under them rather than being cut.
+                  <li key={shortcut.keys} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <ShortcutKeys keys={shortcut.keys} />
+                    <span className="text-[12px] leading-relaxed text-fg-faint">{shortcut.label}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </aside>
         ) : null}
         {/* Beside the side column, the question is centered in the room

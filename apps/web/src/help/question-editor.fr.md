@@ -96,3 +96,23 @@ clé, sans explication.
 `Ctrl+S` enregistre, `Ctrl+Entrée` essaie la question, `Ctrl+Shift+P`
 publie, `Ctrl+Shift+M` affiche l'aperçu étudiant. `Ctrl+K` ouvre la palette
 de commandes, qui porte les trois mêmes actions.
+
+## Dessiner un circuit ou un diagramme
+
+Cliquez dans un canevas (la référence, le départ) : ses touches rejoignent
+la bande des raccourcis de la barre latérale, et la quittent quand le
+canevas perd le focus ou que le curseur est dans l'un de ses champs.
+
+| Touches | Circuit | Diagramme |
+|---|---|---|
+| `Ctrl+Z` / `Ctrl+Y` | Annuler / rétablir | Annuler / rétablir |
+| `R` (ou `Espace`), `H`, `V` | Pivoter, miroir horizontal, vertical | — |
+| `W` | Outil fil | — |
+| `I` | — | Inverser le lien sélectionné |
+| `1`–`9` | Choisir le composant à cette place de la palette | Choisir l'outil à cette place de la barre d'outils |
+| `Suppr` (ou `Retour arrière`) | Supprimer la sélection | Supprimer la sélection |
+| `Ctrl+D`, `Ctrl+A` | Dupliquer, tout sélectionner | Dupliquer, tout sélectionner |
+| `Échap` | Lâcher le fil, puis l'outil, puis la sélection | Lâcher le lien, puis l'outil, puis la sélection |
+
+Un étudiant dispose des mêmes touches, listées sous la liste des questions
+tant que le canevas a le focus.

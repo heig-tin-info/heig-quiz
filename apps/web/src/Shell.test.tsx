@@ -4,7 +4,10 @@ import { useState, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { CourseSummary, PoolDetail, PoolSummary } from "@quiz/contracts";
+import { circuitServer } from "@quiz/qt-circuit/server";
 
+import { useT } from "./i18n";
+import { QuestionEditorHost } from "./questionTypes";
 import { ModeBanner, Shell } from "./Shell";
 import { resetShortcuts, useShortcuts } from "./shortcuts";
 import { modKey, PAGE_COLUMN } from "./ui";
@@ -835,6 +838,46 @@ describe("Shell shortcut strip", () => {
       "KBD",
       "KBD",
     ]);
+  });
+
+  /** The question editor's own four keys, and a circuit editor under them. */
+  function CircuitEditorPage() {
+    const t = useT();
+    useShortcuts([
+      { keys: `${modKey()}+S`, label: "Save" },
+      { keys: `${modKey()}+Enter`, label: "Try the question" },
+      { keys: `${modKey()}+Shift+P`, label: "Publish" },
+      { keys: `${modKey()}+Shift+M`, label: "Preview" },
+    ]);
+    return <QuestionEditorHost t={t} type="circuit" config={circuitServer.emptyDraft()} onChange={vi.fn()} />;
+  }
+
+  it("adds a focused canvas's lines on top of the page's, and every one of them fits", async () => {
+    renderShell({ children: <CircuitEditorPage /> });
+    const [canvas] = (await screen.findAllByRole("group", { name: "Reference circuit" })).filter(
+      (el) => el.getAttribute("tabindex") === "0",
+    );
+    const lines = () =>
+      within(strip())
+        .getAllByRole("listitem")
+        .map((el) => el.textContent);
+    expect(lines()).toHaveLength(5);
+    act(() => canvas!.focus());
+    const mod = modKey();
+    expect(lines()).toEqual([
+      `${mod}KCommand palette`,
+      `${mod}SSave`,
+      `${mod}EnterTry the question`,
+      `${mod}ShiftPPublish`,
+      `${mod}ShiftMPreview`,
+      `${mod}Z/${mod}YUndo / Redo`,
+      "R/H/VRotate / Mirror",
+      "WWire",
+      "1–9Pick a part",
+      "DelDelete",
+    ]);
+    act(() => canvas!.blur());
+    expect(lines()).toHaveLength(5);
   });
 
   it("keeps the strip out of the mobile drawer", async () => {

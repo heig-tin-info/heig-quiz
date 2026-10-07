@@ -100,6 +100,7 @@ export function QuestionHost({
   onSimulate,
   onUnsent,
   Expand,
+  onCanvasShortcuts,
 }: {
   type: string;
   student: unknown;
@@ -121,6 +122,8 @@ export function QuestionHost({
   onUnsent?: (unsent: boolean) => void;
   /** The attempt's expand layer (`PlayerProps.Expand`); a player that needs no room ignores it. */
   Expand?: PlayerProps<unknown, unknown>["Expand"];
+  /** Where a focused canvas lends its keys (`PlayerProps.onCanvasShortcuts`): the side column. */
+  onCanvasShortcuts?: PlayerProps<unknown, unknown>["onCanvasShortcuts"];
 }) {
   const t = useT();
   let Player: ComponentType<HostPlayerProps>;
@@ -155,6 +158,7 @@ export function QuestionHost({
           {...(onSimulate ? { onSimulate } : {})}
           {...(onUnsent ? { onUnsent } : {})}
           {...(Expand ? { Expand } : {})}
+          {...(onCanvasShortcuts ? { onCanvasShortcuts } : {})}
         />
       </Suspense>
     </ScrollableCode>

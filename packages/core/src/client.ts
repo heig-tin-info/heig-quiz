@@ -82,6 +82,19 @@ export interface EditorProps<TConfig> {
    */
   Expand?: ComponentType<ExpandProps>;
   /**
+   * The host's shortcut zone, lent to a canvas editor (`circuit`, `diagram`)
+   * for the reason `RichText` is: the app's registry of live keys
+   * (`apps/web/src/shortcuts.tsx`) and its Ctrl/⌘ spelling are the app's
+   * chrome, which a package cannot import (issue #549, ADR-046 addendum
+   * 2026-10-07).
+   *
+   * An EDITABLE canvas calls it with its few grouped lines while the focus
+   * is in it — and not in one of its text fields — and with `null` when the
+   * focus leaves. A read-only canvas never calls it. Absent (grading, review,
+   * a test), nothing is shown anywhere. Every other type ignores it.
+   */
+  onCanvasShortcuts?: CanvasShortcutsListener;
+  /**
    * The wand of ONE element of the type's list ("Generate answers",
    * ADR-059): the host asks the model for the element at `index`, which must
    * be empty, and hands the result back through `onChange`. It resolves once
@@ -103,6 +116,25 @@ export interface RichTextShortcut {
   /** Translated and short. */
   label: string;
 }
+
+/**
+ * One line a focused canvas contributes to the host's shortcut zone
+ * (`EditorProps.onCanvasShortcuts`). Structural, like `RichTextShortcut`: the
+ * host owns the registry and draws the keys.
+ */
+export interface CanvasShortcut {
+  /**
+   * The keys of ONE action, as alternatives, each written as caps joined by
+   * "+": `["Mod+Z", "Mod+Y"]`, `["R", "H", "V"]`, `["1–9"]`. `Mod` is the
+   * platform's command key, which the host spells Ctrl or ⌘.
+   */
+  keys: readonly string[];
+  /** Translated and short: "Undo / Redo". */
+  label: string;
+}
+
+/** The canvas's lines while it has the focus, `null` once it has not. */
+export type CanvasShortcutsListener = (list: readonly CanvasShortcut[] | null) => void;
 
 /** Where the rich editor puts its toolbar (`RichTextProps.toolbar`). */
 export type RichTextToolbar = "always" | "focus" | "never";
@@ -219,6 +251,8 @@ export interface PlayerProps<TStudent, TAnswer> {
    * no Expand button at all. Every other type ignores it.
    */
   Expand?: ComponentType<ExpandProps>;
+  /** The host's shortcut zone (`EditorProps.onCanvasShortcuts`): the student's side column. */
+  onCanvasShortcuts?: CanvasShortcutsListener;
 }
 
 /** The props of the host's expand layer (`PlayerProps.Expand`, `EditorProps.Expand`). */

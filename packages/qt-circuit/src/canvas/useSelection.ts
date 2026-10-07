@@ -14,6 +14,9 @@ import { useCallback, useState, type Dispatch, type SetStateAction } from "react
 
 import { BOX, GRID, LIBRARY, type ComponentKind } from "../library.js";
 import type { Orientation, Schematic, SchematicComponent, Wire, WireEnd } from "../schema.js";
+import type { CanvasShortcut } from "@quiz/core/client";
+
+import type { CanvasStrings } from "./canvasStrings.js";
 
 import {
   MIRROR_X,
@@ -418,8 +421,38 @@ const DIGIT = bind((a, key) => a.arm(Number(key) - 1), false, true);
 const bindingOf = (key: string): KeyBinding | undefined =>
   LETTERS.get(key.toLowerCase()) ?? NAMED.get(key) ?? (/^[1-9]$/.test(key) ? DIGIT : undefined);
 
+/**
+ * What the host's shortcut zone shows for this keyboard (issue #549), in
+ * the canvas's own words: the tables above, grouped into at most five
+ * lines so they fit beside the page's keys. `keys` are alternatives in the
+ * `CanvasShortcut` spelling (`Mod` is Ctrl or ⌘). `1–9` is one line: the
+ * palette's order is the question's, not the editor's.
+ *
+ * `useSelection.test.ts` holds it against the tables, both ways: a key bound
+ * and not shown must be in `UNLISTED_KEYS`.
+ */
+export const SHORTCUT_LINES = [
+  { keys: ["Mod+Z", "Mod+Y"], label: "shortcutUndoRedo" },
+  { keys: ["R", "H", "V"], label: "shortcutTransform" },
+  { keys: ["W"], label: "toolWire" },
+  { keys: ["1–9"], label: "shortcutPart" },
+  { keys: ["Del"], label: "remove" },
+] as const satisfies ReadonlyArray<{ keys: readonly string[]; label: keyof CanvasStrings }>;
+
+/**
+ * Bound but not shown: the aliases of a shown key (Space rotates like R,
+ * Backspace deletes like Del, Ctrl+Shift+Z redoes like Ctrl+Y), and three
+ * the toolbar or the status line already teach (duplicate, select all,
+ * Escape) — five lines is all the zone has room for.
+ */
+export const UNLISTED_KEYS = ["Space", "Backspace", "Mod+Shift+Z", "Mod+D", "Mod+A", "Esc"] as const;
+
+/** The lines, in the canvas's language. */
+export const canvasShortcuts = (s: CanvasStrings): CanvasShortcut[] =>
+  SHORTCUT_LINES.map((line) => ({ keys: line.keys, label: s[line.label] }));
+
 /** A key pressed while typing in the inspector belongs to the field, not the editor. */
-const isTextField = (target: EventTarget | null): boolean => {
+export const isTextField = (target: EventTarget | null): boolean => {
   const el = target as HTMLElement | null;
   return el !== null && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
 };

@@ -65,6 +65,7 @@ export function DiagramQuestionEditor({
   uploadAsset,
   aside,
   Expand,
+  onCanvasShortcuts,
 }: DiagramEditorProps) {
   const s = resolveStrings(diagramEditorStrings, strings);
   const id = useId();
@@ -99,6 +100,7 @@ export function DiagramQuestionEditor({
       {...(expanded ? {} : { height: CANVAS_HEIGHT })}
       strings={canvasStrings}
       aria-label={name}
+      onShortcuts={onCanvasShortcuts}
     />
   );
 

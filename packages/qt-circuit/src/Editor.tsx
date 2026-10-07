@@ -200,6 +200,7 @@ export function CircuitEditor({
   uploadAsset,
   aside,
   Expand,
+  onCanvasShortcuts,
 }: CircuitEditorProps) {
   const s = resolveStrings(EDITOR_STRINGS, strings);
   const kinds = resolveStrings(KIND_LABELS, kindLabels);
@@ -391,6 +392,7 @@ export function CircuitEditor({
               readOnly={disabled === true}
               {...(expanded ? { height: "fill" as const } : {})}
               {...canvasProps(canvasStrings)}
+              onShortcuts={onCanvasShortcuts}
             />
           )}
         </ExpandableCanvas>

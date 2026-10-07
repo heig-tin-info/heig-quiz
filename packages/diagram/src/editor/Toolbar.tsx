@@ -31,6 +31,9 @@ export interface ToolbarProps {
   strings: DiagramStrings;
 }
 
+/** The digit that arms the tool at `index` from the keyboard: the order of the editor's `tools`, tools then links. */
+const digit = (index: number): string | undefined => (index < 9 ? String(index + 1) : undefined);
+
 export function Toolbar(p: ToolbarProps): JSX.Element {
   const { mode, strings: s } = p;
   const spec = KINDS[p.kind];
@@ -44,19 +47,19 @@ export function Toolbar(p: ToolbarProps): JSX.Element {
             </svg>
           </button>
           <span className={separator} />
-          {spec.tools.map((tool) => {
+          {spec.tools.map((tool, i) => {
             const on = mode.kind === "place" && mode.tool === tool;
             return (
-              <button key={tool} type="button" className={iconButton(on)} aria-label={s[toolKey(tool)]} aria-pressed={on} onClick={() => p.onMode(on ? { kind: "select" } : { kind: "place", tool })}>
+              <button key={tool} type="button" className={iconButton(on)} aria-label={s[toolKey(tool)]} aria-keyshortcuts={digit(i)} aria-pressed={on} onClick={() => p.onMode(on ? { kind: "select" } : { kind: "place", tool })}>
                 <ToolIcon tool={tool} />
               </button>
             );
           })}
           {spec.links.length > 0 && <span className={separator} />}
-          {spec.links.map((type) => {
+          {spec.links.map((type, i) => {
             const on = mode.kind === "link" && mode.type === type;
             return (
-              <button key={type} type="button" className={lineButton(on)} aria-label={s[linkKey(type)]} aria-pressed={on} onClick={() => p.onMode(on ? { kind: "select" } : { kind: "link", type })}>
+              <button key={type} type="button" className={lineButton(on)} aria-label={s[linkKey(type)]} aria-keyshortcuts={digit(spec.tools.length + i)} aria-pressed={on} onClick={() => p.onMode(on ? { kind: "select" } : { kind: "link", type })}>
                 <LinkIcon type={type} />
               </button>
             );

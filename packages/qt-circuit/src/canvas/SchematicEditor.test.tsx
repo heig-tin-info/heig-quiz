@@ -2,6 +2,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { CanvasShortcutsListener } from "@quiz/core/client";
+
 import { Schematic, type Palette, type Supplies } from "../schema.js";
 
 import { SchematicEditor } from "./SchematicEditor.js";
@@ -60,12 +62,14 @@ function Harness({
   supplies = SUPPLIES,
   readOnly = false,
   onChange,
+  onShortcuts,
 }: {
   initial?: Schematic;
   palette?: Palette;
   supplies?: Supplies;
   readOnly?: boolean;
   onChange?: (next: Schematic) => void;
+  onShortcuts?: CanvasShortcutsListener;
 }) {
   const [value, setValue] = useState(initial);
   return (
@@ -78,6 +82,7 @@ function Harness({
       palette={palette}
       supplies={supplies}
       readOnly={readOnly}
+      onShortcuts={onShortcuts}
     />
   );
 }
@@ -468,5 +473,73 @@ describe("the strings", () => {
     );
     expect(screen.getByRole("button", { name: "Fil" })).toBeInTheDocument();
     expect(screen.getByText("Composants")).toBeInTheDocument();
+  });
+});
+
+describe("the shortcut zone (issue #549)", () => {
+  const LINES = [
+    { keys: ["Mod+Z", "Mod+Y"], label: "Undo / Redo" },
+    { keys: ["R", "H", "V"], label: "Rotate / Mirror" },
+    { keys: ["W"], label: "Wire" },
+    { keys: ["1–9"], label: "Pick a part" },
+    { keys: ["Del"], label: "Delete" },
+  ];
+
+  it("lends its lines while it has the focus, and takes them back on blur", () => {
+    const publish = vi.fn();
+    render(<Harness onShortcuts={publish} />);
+    const root = screen.getByRole("group", { name: "Schematic editor" });
+    fireEvent.focus(root);
+    expect(publish).toHaveBeenLastCalledWith(LINES);
+    fireEvent.blur(root, { relatedTarget: document.body });
+    expect(publish).toHaveBeenLastCalledWith(null);
+    expect(publish).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps them while the focus moves to a toolbar button of its own", () => {
+    const publish = vi.fn();
+    render(<Harness onShortcuts={publish} />);
+    const root = screen.getByRole("group", { name: "Schematic editor" });
+    const undo = screen.getByRole("button", { name: "Undo" });
+    fireEvent.focus(root);
+    fireEvent.blur(root, { relatedTarget: undo });
+    fireEvent.focus(undo);
+    expect(publish).toHaveBeenLastCalledWith(LINES);
+    expect(publish).not.toHaveBeenCalledWith(null);
+  });
+
+  it("takes them back while the caret is in a field of the inspector", () => {
+    const publish = vi.fn();
+    render(<Harness initial={ONE_R} onShortcuts={publish} />);
+    const root = screen.getByRole("group", { name: "Schematic editor" });
+    fireEvent.focus(root);
+    fireEvent.pointerDown(canvas(), { button: 0, shiftKey: true, ...client(200, 160) });
+    const name = screen.getByDisplayValue("R1");
+    fireEvent.blur(root, { relatedTarget: name });
+    fireEvent.focus(name);
+    expect(publish).toHaveBeenLastCalledWith(null);
+    fireEvent.focus(root);
+    expect(publish).toHaveBeenLastCalledWith(LINES);
+  });
+
+  it("takes them back when it unmounts with the focus", () => {
+    const publish = vi.fn();
+    const { unmount } = render(<Harness onShortcuts={publish} />);
+    fireEvent.focus(screen.getByRole("group", { name: "Schematic editor" }));
+    unmount();
+    expect(publish).toHaveBeenLastCalledWith(null);
+  });
+
+  it("lends nothing when it is read-only", () => {
+    const publish = vi.fn();
+    render(<Harness readOnly onShortcuts={publish} />);
+    fireEvent.focus(screen.getByRole("group", { name: "Schematic editor" }));
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it("says which digit arms each part of the palette", () => {
+    render(<Harness />);
+    expect(screen.getByRole("button", { name: "Resistor" })).toHaveAttribute("aria-keyshortcuts", "1");
+    expect(screen.getByRole("button", { name: "Ground" })).toHaveAttribute("aria-keyshortcuts", "3");
   });
 });
