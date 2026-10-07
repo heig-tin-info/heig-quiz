@@ -119,6 +119,8 @@ heig-classroom's specification; `docs/spec/02-exigences-fonctionnelles.md`
 receives their Quiz form (M0-04), and until then they are read in
 heig-classroom's `docs/`.
 
+**Amended (2026-10-07, [ADR-078](ADR-078-codespace-git-relay-tokens.md), product owner)**: the open question of the M6-03 amendment (a) and of the seeding note above is settled — no App key on the engine VM; the portal seeds and relays with installation tokens Quiz issues for one repository (forge `quiz`, merge task M6-10).
+
 **Extended (2026-10-05, ADR-075, proposed)**: supervised evaluations may open the workspace through the `workspace` question type, without a git channel; the project rules below are unchanged.
 
 Status in heig-classroom: Accepted (2026-09-17, portal milestone 2).
