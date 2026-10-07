@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  // Server side only (the API, later the workspace portal): the hashes are
+  // `node:crypto`, synchronous, so the ambient declaration is named here.
+  "compilerOptions": { "types": ["node"] }
+}

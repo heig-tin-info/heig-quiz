@@ -7,12 +7,13 @@
 import type { FastifyRequest } from "fastify";
 
 import { kioskAttestationState, kioskCheckFresh, kioskSuspends, type TrustedClient } from "@quiz/domain";
+import { CONFIG_KEY_HEADER, absoluteRequestUrl } from "@quiz/seb";
 
 import { audit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import type { Db } from "../db/client.js";
 import { KIOSK_COOKIE, deviceByCredential, type KioskDeviceRow } from "../modules/kiosk/service.js";
-import { CONFIG_KEY_HEADER, configKeyHashMatches, requestUrl } from "./seb.js";
+import { configKeyHashMatches } from "./seb.js";
 import type { SessionAuth } from "./session.js";
 
 /**
@@ -39,7 +40,7 @@ export interface TrustedSession {
 
 /** The request as SEB (or the station) sent it. */
 export interface TrustRequest {
-  /** The absolute URL, path and query as received (`requestUrl`). */
+  /** The absolute URL, path and query as received (`absoluteRequestUrl`). */
   url: string;
   headers: FastifyRequest["headers"];
   /** The station the request's `quiz_kiosk` cookie names (`deviceByCredential`); null without one. */
@@ -132,7 +133,7 @@ export async function trustRefused(
   const station =
     session.auth.kind === "kiosk" ? await deviceByCredential(db, req.cookies[KIOSK_COOKIE]) : null;
   const refusal = trustRefusal(session, {
-    url: requestUrl(config.PUBLIC_URL, req.raw.url ?? req.url),
+    url: absoluteRequestUrl(config.PUBLIC_URL, req.raw.url ?? req.url),
     headers: req.headers,
     station,
     fresh: req.routeOptions.config.freshAttestation === true,

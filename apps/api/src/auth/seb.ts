@@ -3,19 +3,24 @@
  * downloads from the portal, and the route it starts on, which trades the
  * one-time ticket in its URL for a `seb` session confined to one evaluation.
  *
- * The file format and the Config Key are ported from
- * `heig-classroom/apps/codespace/src/seb/` (itself a port of Moodle's
- * `quizaccess_seb`), cut down to the plist subset this file uses: strings,
- * booleans, integers, arrays, dictionaries. No `<data>`, `<real>`, `<date>`,
- * no `originatorVersion`, no empty dictionary — so none of the rules the
- * sibling carries for them.
+ * The file format, the Config Key and the hashes are `@quiz/seb` (D21,
+ * M6-02); this module adds what is Quiz's own: an evaluation's launch file
+ * allows Quiz's host only, and the start route trades the ticket.
  */
-import { createHash, timingSafeEqual } from "node:crypto";
-
 import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 import { IdParam } from "@quiz/contracts";
+import {
+  CONFIG_KEY_HEADER,
+  absoluteRequestUrl,
+  buildSebConfig,
+  configKey,
+  expectedHash,
+  hashesEqual,
+  toPlistXml,
+  type SebValue,
+} from "@quiz/seb";
 
 import { audit, tracer } from "../audit.js";
 import type { AppConfig } from "../config.js";
@@ -27,136 +32,26 @@ import { delegated } from "./session.js";
 // request log masks (`redact.ts`).
 import { LAUNCH_PATH } from "./paths.js";
 
+// The renderer the routes use, re-exported for the snapshot that pins its bytes.
+export { toPlistXml };
+
 // --- The file --------------------------------------------------------------
 
-type Plist = string | boolean | number | readonly Plist[] | { readonly [key: string]: Plist };
-
-/**
- * The configuration of one launch. Every key comes from a real SEB
- * configuration (see the sibling's `sebFile.ts`); `sendBrowserExamKey` is
- * what makes SEB send the Config Key header the start route checks.
- */
-export function sebConfig(startUrl: string): Plist {
-  const host = new URL(startUrl).host;
-  return {
-    startURL: startUrl,
-    allowQuit: true,
-    URLFilterEnable: true,
-    URLFilterEnableContentFilter: true,
-    URLFilterRulesAsRegex: false,
-    URLFilterRules: [{ action: 1, active: true, expression: host, regex: false }],
-    allowDownUploads: false,
-    downloadAndOpenSebConfig: false,
-    downloadPDFFiles: false,
-    enablePrivateClipboard: true,
-    browserViewMode: 1,
-    enableBrowserWindowToolbar: false,
-    hideBrowserWindowToolbar: true,
-    showMenuBar: false,
-    showTaskBar: false,
-    allowBrowsingBackForward: false,
-    allowPreferencesWindow: false,
-    allowSwitchToApplications: false,
-    allowVirtualMachine: false,
-    allowSpellCheck: false,
-    blockPopUpWindows: true,
-    createNewDesktop: true,
-    killExplorerShell: false,
-    sendBrowserExamKey: true,
-  };
-}
-
-const escapeXml = (text: string) =>
-  text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-function plistValue(value: Plist, pad: string): string {
-  if (typeof value === "string") return `${pad}<string>${escapeXml(value)}</string>`;
-  if (typeof value === "boolean") return `${pad}<${value}/>`;
-  if (typeof value === "number") return `${pad}<integer>${value}</integer>`;
-  const inner = `${pad}  `;
-  if (Array.isArray(value)) {
-    const items: readonly Plist[] = value;
-    return `${pad}<array>\n${items.map((v) => plistValue(v, inner)).join("\n")}\n${pad}</array>`;
-  }
-  const entries = Object.entries(value).map(
-    ([key, v]) => `${inner}<key>${escapeXml(key)}</key>\n${plistValue(v, inner)}`,
-  );
-  return `${pad}<dict>\n${entries.join("\n")}\n${pad}</dict>`;
-}
-
-/** An unencrypted `.seb`: a bare XML plist, as `quizaccess_seb` serves it. */
-export function toPlistXml(root: Plist): string {
-  return [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
-    '<plist version="1.0">',
-    plistValue(root, ""),
-    "</plist>",
-    "",
-  ].join("\n");
-}
-
-// --- The Config Key ----------------------------------------------------------
-
-/** Unicode collation, root order: `allowWlan` before `allowWLAN` (not ASCII). */
-const COLLATOR = new Intl.Collator("en", { sensitivity: "variant", caseFirst: "false" });
-
-/** A JSON string; a VALUE keeps its backslashes raw, as the reference does. */
-const quote = (text: string, raw: boolean) =>
-  raw ? JSON.stringify(text).replace(/\\\\/g, "\\") : JSON.stringify(text);
-
-/**
- * The "SEB-JSON" of a configuration: no whitespace, keys sorted by the
- * collator at every level, an empty dictionary written `[]` (PHP's
- * `json_encode` of an empty array). Not valid JSON once a value holds a
- * backslash — which is what the specification wants.
- */
-export function sebJson(value: Plist): string {
-  if (typeof value === "string") return quote(value, true);
-  if (typeof value !== "object") return String(value);
-  if (Array.isArray(value)) return `[${(value as readonly Plist[]).map(sebJson).join(",")}]`;
-  const dict = value as { readonly [key: string]: Plist };
-  const keys = Object.keys(dict).sort(COLLATOR.compare);
-  if (keys.length === 0) return "[]";
-  return `{${keys.map((k) => `${quote(k, false)}:${sebJson(dict[k]!)}`).join(",")}}`;
-}
-
-const sha256 = (text: string) => createHash("sha256").update(text, "utf8").digest("hex");
-
-export const configKey = (config: Plist): string => sha256(sebJson(config));
-
-/** The header SEB sends on every request: `sha256(absolute URL + Config Key)`. */
-export const CONFIG_KEY_HEADER = "x-safeexambrowser-configkeyhash";
-
-/**
- * The absolute URL SEB hashed for a request: the origin of `PUBLIC_URL`
- * followed by the path and query AS RECEIVED (`req.raw.url`). Never
- * re-encoded through `URL`: SEB hashes the URL it requested, byte for byte,
- * and `new URL` would normalise a percent-encoding it did not send.
- */
-export const requestUrl = (publicUrl: string, rawUrl: string): string =>
-  new URL(publicUrl).origin + rawUrl;
-
-/** THE hash of SEB's header, for the launch and for every later request. */
-export const configKeyHash = (absoluteUrl: string, configKeyHex: string): string =>
-  sha256(absoluteUrl + configKeyHex);
+/** The configuration of one evaluation's launch: Quiz's host, nothing else. */
+export const sebConfig = (startUrl: string): SebValue => buildSebConfig({ startUrl, allowedHosts: [] });
 
 /**
  * Whether `header` is the Config Key hash of `absoluteUrl` under the key
- * `configKeyHex`. Timing-safe: digests of both sides have equal lengths, so
- * the comparison never short-circuits.
+ * `configKeyHex` (constant time, `hashesEqual`).
  */
-export function configKeyHashMatches(absoluteUrl: string, configKeyHex: string, header: unknown): boolean {
-  if (typeof header !== "string") return false;
-  const digest = (text: string) => createHash("sha256").update(text).digest();
-  return timingSafeEqual(digest(configKeyHash(absoluteUrl, configKeyHex)), digest(header.toLowerCase()));
-}
+export const configKeyHashMatches = (absoluteUrl: string, configKeyHex: string, header: unknown): boolean =>
+  typeof header === "string" && hashesEqual(expectedHash(absoluteUrl, configKeyHex), header);
 
 /** The Config Key of the launch that starts at `url`: what a `seb` session stores. */
 export const launchConfigKey = (url: string): string => configKey(sebConfig(url));
 
 /** What SEB sends on the launch that starts at `url` (the tests send it too). */
-export const configKeyHeaderFor = (url: string): string => configKeyHash(url, launchConfigKey(url));
+export const configKeyHeaderFor = (url: string): string => expectedHash(url, launchConfigKey(url));
 
 // --- The routes ----------------------------------------------------------------
 
@@ -214,7 +109,7 @@ export async function sebRoutes(app: FastifyInstance, config: AppConfig) {
     const now = app.clock.now();
     // The start URL of the `.seb` IS this request's URL; its Config Key is
     // kept on the session, to check every later request (ADR-051 §3).
-    const url = requestUrl(config.PUBLIC_URL, req.raw.url ?? req.url);
+    const url = absoluteRequestUrl(config.PUBLIC_URL, req.raw.url ?? req.url);
     const sebConfigKey = launchConfigKey(url);
     if (!configKeyHashMatches(url, sebConfigKey, req.headers[CONFIG_KEY_HEADER])) return refuse("config_key");
     const ticket = await consumeLaunchTicket(app.db, "seb", req.params.secret, now);

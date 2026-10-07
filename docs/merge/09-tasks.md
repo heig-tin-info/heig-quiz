@@ -4079,6 +4079,40 @@ serves now (16a), and what waits for the group repositories (16b).
 - **Acceptance**: Moodle vectors and the 201-key vector pass; the Quiz
   `.seb` bytes and Config Key identical before/after (snapshot);
   `seb.db.test` route sweep unchanged.
+- **As delivered** (branch `merge/M6-02-packages-seb`): no migration, no
+  route; no behaviour change but one: `absoluteRequestUrl` drops a
+  `#fragment` from the target (SEB's spec hashes the URL "without Fragment
+  part"), which a browser never sends but a hand-made request could.
+  `packages/seb` (`@quiz/seb`, one entry `.`, exporting the card's list:
+  the plist constructors and types, `toPlistXml`, `configKey`,
+  `buildSebConfig`, `absoluteRequestUrl`, `expectedHash`, `hashesEqual`,
+  `CONFIG_KEY_HEADER`):
+  `plist.ts` (classroom's typed `SebValue` tree, render and parse; the
+  parser serves the vectors and reading a file back), `configKey.ts`
+  (classroom's full port of Moodle's rules: `originatorVersion` stripped at
+  every depth, empty dictionaries pruned, `<data>`/`<real>`/`<date>`),
+  `request.ts` (`CONFIG_KEY_HEADER`,
+  `absoluteRequestUrl(publicUrl, target)`, `expectedHash`, `hashesEqual`),
+  `sebConfig.ts` (`buildSebConfig({startUrl, allowedHosts, examKeySalt?})`:
+  Quiz's keys in Quiz's order; the start URL's host always first,
+  `allowedHosts` appended without duplicates; `examKeySalt` as `<data>` only
+  when given, never a BEK). Hashing is `node:crypto` (synchronous, as
+  `qt-code`'s server half), not Web Crypto: the per-request trust check and
+  the start route stay synchronous; the package is server-side only.
+  `absoluteRequestUrl` keeps Quiz's rule (ADR-051), not classroom's: the
+  public origin plus the target as received, never re-encoded through
+  `URL`, no `Host`/`X-Forwarded-*` branch; `hashesEqual` trims and
+  lower-cases both sides (classroom's), where Quiz lower-cased the header
+  only. Vectors in `packages/seb/src/fixtures/` (Moodle's five files,
+  provenance); `apps/api`'s copy of the 201-key vector moved there.
+  `apps/api/src/auth/seb.ts` keeps the routes, `sebConfig(startUrl)`
+  (`allowedHosts: []`), `configKeyHashMatches`, `launchConfigKey`,
+  `configKeyHeaderFor`; `trust.ts` and the test helpers import the header
+  and the hashes from `@quiz/seb`. `auth/seb.snapshot.test.ts` +
+  `auth/fixtures/launch.seb`, committed before the move, pin the file's
+  bytes and its Config Key; `seb.db.test.ts` changed one import only. Not
+  done (M6-07): the BEK header (`x-safeexambrowser-requesthash`), project hosts, `SEB_EXTRA_ALLOWED_HOSTS`, BEK checks, the
+  verifier, the codespace portal's adoption of the package.
 
 ### M6-03 — Import `apps/codespace`
 - **Depends on**: M6-01.

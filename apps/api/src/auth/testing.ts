@@ -11,14 +11,10 @@
 import type { LightMyRequestResponse } from "fastify";
 import { expect } from "vitest";
 
+import { CONFIG_KEY_HEADER, absoluteRequestUrl, expectedHash } from "@quiz/seb";
+
 import { routesOf, type Method, type TestServer } from "../test/http.js";
-import {
-  CONFIG_KEY_HEADER,
-  configKeyHash,
-  configKeyHeaderFor,
-  launchConfigKey,
-  requestUrl,
-} from "./seb.js";
+import { configKeyHeaderFor, launchConfigKey } from "./seb.js";
 import { CSRF_COOKIE, SESSION_COOKIE } from "./session.js";
 
 /** The routes that declare `SITTING` (ADR-027), and no others. */
@@ -96,7 +92,7 @@ export function sebSessionOf(
 ): (url: string) => Record<string, string> {
   const cookies = sessionCookies(res);
   const key = launchConfigKey(startUrl);
-  return (url) => ({ ...cookies, [CONFIG_KEY_HEADER]: configKeyHash(requestUrl(startUrl, url), key) });
+  return (url) => ({ ...cookies, [CONFIG_KEY_HEADER]: expectedHash(absoluteRequestUrl(startUrl, url), key) });
 }
 
 /** Downloads a `.seb` as the seated student and opens it as SEB would. */

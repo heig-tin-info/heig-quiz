@@ -89,6 +89,11 @@
     "branches": 0,
     "functions": 24
   },
+  "packages/seb": {
+    "lines": 92,
+    "branches": 65,
+    "functions": 93
+  },
   "packages/ui": {
     "lines": 79,
     "branches": 89,
