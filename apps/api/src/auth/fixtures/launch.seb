@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>startURL</key>
+  <string>https://quiz.example.org/app/auth/seb/s3cret-ticket_0</string>
+  <key>allowQuit</key>
+  <true/>
+  <key>URLFilterEnable</key>
+  <true/>
+  <key>URLFilterEnableContentFilter</key>
+  <true/>
+  <key>URLFilterRulesAsRegex</key>
+  <false/>
+  <key>URLFilterRules</key>
+  <array>
+    <dict>
+      <key>action</key>
+      <integer>1</integer>
+      <key>active</key>
+      <true/>
+      <key>expression</key>
+      <string>quiz.example.org</string>
+      <key>regex</key>
+      <false/>
+    </dict>
+  </array>
+  <key>allowDownUploads</key>
+  <false/>
+  <key>downloadAndOpenSebConfig</key>
+  <false/>
+  <key>downloadPDFFiles</key>
+  <false/>
+  <key>enablePrivateClipboard</key>
+  <true/>
+  <key>browserViewMode</key>
+  <integer>1</integer>
+  <key>enableBrowserWindowToolbar</key>
+  <false/>
+  <key>hideBrowserWindowToolbar</key>
+  <true/>
+  <key>showMenuBar</key>
+  <false/>
+  <key>showTaskBar</key>
+  <false/>
+  <key>allowBrowsingBackForward</key>
+  <false/>
+  <key>allowPreferencesWindow</key>
+  <false/>
+  <key>allowSwitchToApplications</key>
+  <false/>
+  <key>allowVirtualMachine</key>
+  <false/>
+  <key>allowSpellCheck</key>
+  <false/>
+  <key>blockPopUpWindows</key>
+  <true/>
+  <key>createNewDesktop</key>
+  <true/>
+  <key>killExplorerShell</key>
+  <false/>
+  <key>sendBrowserExamKey</key>
+  <true/>
+</dict>
+</plist>

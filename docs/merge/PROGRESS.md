@@ -159,7 +159,7 @@ In the critical path only if D09 finds online assignments in production.
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
 | M6-01 | HS256, codespace contracts | done | D09 | `merge/M6-01-codespace-contracts` | #527 | `signHs256`/`verifyHs256` in `packages/domain` (Web Crypto, pure), zod schemas in `packages/contracts/src/codespace.ts`, `CODESPACE_URL` / `CODESPACE_LAUNCH_SECRET` in `config.ts`; fixture signed by classroom's code: card M6-01, "As delivered" |
-| M6-02 | `packages/seb` | todo | D21 | | | |
+| M6-02 | `packages/seb` | in progress | D21 | `merge/M6-02-packages-seb` | | |
 | M6-03 | Import `apps/codespace` | todo | M6-01 | | | |
 | M6-04 | Codespace CI/CD | todo | M6-03 | | | |
 | M6-05 | Engine VM capacity, hygiene, seccomp | todo | D09 | | | |
