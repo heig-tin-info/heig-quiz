@@ -64,7 +64,6 @@ else
 	cookie="$(openssl rand -hex 32)"
 	umask 077
 	sed -e "s|@PUBLIC_URL@|https://$CS_HOST|g" \
-		-e "s|@PORT@|$CS_PORT|g" \
 		-e "s|@PLATFORM_URL@|$CS_PLATFORM|g" \
 		-e "s|@LAUNCH_SECRET@|$launch|g" \
 		-e "s|@EXAM_COOKIE_SECRET@|$cookie|g" \

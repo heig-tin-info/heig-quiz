@@ -4,8 +4,8 @@
  * instance's env file for the launch secret). Node's standard library only:
  * the checkout has no node_modules.
  *
- *   node apps/codespace/deploy/smoke.mjs <prod|staging>            # health, secret, sync
- *   node apps/codespace/deploy/smoke.mjs <prod|staging> --launch   # + a real session
+ *   node apps/codespace/deploy/smoke.mjs <prod|staging> --port <n>            # health, secret, sync
+ *   node apps/codespace/deploy/smoke.mjs <prod|staging> --port <n> --launch   # + a real session
  *
  * 1. GET /healthz on the loopback port;
  * 2. a service token signed here with the instance's CODESPACE_LAUNCH_SECRET:
@@ -19,7 +19,7 @@
  *    garbage collector (SESSION_GRACE_MS) and counts against the smoke
  *    teacher's quota of 1, nobody else's.
  *
- * The port is the env file's PORT, or `--port <n>`. Tokens are printed
+ * The port is `--port <n>` (the instance's, deploy/lib.sh). Tokens are printed
  * nowhere.
  */
 import { createHmac, randomUUID } from "node:crypto";
@@ -29,7 +29,7 @@ const instance = process.argv[2];
 const launch = process.argv.includes("--launch");
 const portArg = process.argv[process.argv.indexOf("--port") + 1];
 if (!/^[a-z][a-z0-9]{0,15}$/.test(instance ?? "")) {
-  console.error("usage: smoke.mjs <prod|staging> [--launch] [--port <n>]");
+  console.error("usage: smoke.mjs <prod|staging> --port <n> [--launch]");
   process.exit(2);
 }
 // SMOKE_ENV_FILE serves a run against a portal elsewhere (a workstation).
@@ -39,8 +39,8 @@ const env = Object.fromEntries(
     .filter((l) => /^[A-Z_]+=/.test(l))
     .map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]),
 );
-const port = process.argv.includes("--port") ? portArg : env.PORT;
-if (!/^\d+$/.test(port ?? "")) fail("no port: PORT in the env file, or --port <n>");
+const port = process.argv.includes("--port") ? portArg : undefined;
+if (!/^\d+$/.test(port ?? "")) fail("--port <n> is required (the instance's PORT, deploy/lib.sh)");
 const base = `http://127.0.0.1:${port}`;
 const secret = env.CODESPACE_LAUNCH_SECRET ?? "";
 if (secret.length < 32) fail(`CODESPACE_LAUNCH_SECRET of ${instance} missing or short`);

@@ -40,6 +40,7 @@ cs_instance() {
 	CS_ETC="/etc/quiz-codespace/$1"
 	CS_UNIT="quiz-codespace-$1"
 	# CS_NET, CS_GATEWAY, CS_GIT_PORT, CS_IFACE, CS_ANCHOR, for CS_INSTANCE
+	# (pd() stays infra/engine/lib.sh's, which common.sh sources too)
 	# shellcheck source=../infra/net/common.sh
 	. "$CS_APP/infra/net/common.sh"
 }

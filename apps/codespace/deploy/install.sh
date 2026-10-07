@@ -67,9 +67,8 @@ systemctl restart "$CS_UNIT.service"
 systemctl reload caddy
 
 # The exit code the CI receives is the instance's health.
-port="$(sed -n 's/^PORT=//p' "$CS_ETC/env" | tail -n 1)"
 for i in $(seq 1 60); do
-	if curl -fsS -m 2 "http://127.0.0.1:${port:-$CS_PORT}/healthz" >/dev/null 2>&1; then
+	if curl -fsS -m 2 "http://127.0.0.1:$CS_PORT/healthz" >/dev/null 2>&1; then
 		break
 	fi
 	if [ "$i" = 60 ]; then

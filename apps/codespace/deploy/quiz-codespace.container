@@ -50,8 +50,7 @@ Environment=CODESPACE_INSTANCE=@INSTANCE@
 # host) and proxies to the containers' addresses on that bridge.
 Network=host
 Environment=HOST=127.0.0.1
-# PORT is in the env file (bootstrap.sh writes it from lib.sh's table), so
-# smoke.mjs and the operator read it in one place.
+Environment=PORT=@PORT@
 Environment=PODMAN_URL=unix:///run/podman/podman.sock
 Environment=CODESPACE_NETWORK=@NETWORK@
 Environment=CODESPACE_GATEWAY=@GATEWAY@

@@ -18,7 +18,7 @@ The values (names, ports, platform URLs) are in `deploy/lib.sh`
 | Checkout the deploy runs from | prod: `/opt/quiz-runner` (approved commits only); staging: `/opt/quiz-engine-staging` |
 | Portal (quadlet) | `/etc/containers/systemd/quiz-codespace-<i>.container` → `quiz-codespace-<i>.service` |
 | Image the quadlet runs | `ghcr.io/heig-tin-info/quiz-codespace:<i>` (the deployed sha, retagged) |
-| Environment, secrets, `PORT` | `/etc/quiz-codespace/<i>/env` (0600) |
+| Environment, secrets | `/etc/quiz-codespace/<i>/env` (0600) |
 | Seccomp profile (host path) | `/etc/quiz-codespace/<i>/seccomp.json` |
 | SQLite, volumes | `/srv/quiz-codespace/<i>/var`, `/srv/quiz-codespace/<i>/volumes` |
 | Network, anchor, nftables | `quiz-codespace-net@<i>.service` |
@@ -133,7 +133,7 @@ From production's checkout, for both (they install the host-level pieces):
 
 Each run checks the socket, the `containers` range and Caddy's import; makes
 `br_netfilter` persistent; creates the instance's directories; writes
-`/etc/quiz-codespace/<i>/env` from `env.example` (its `PORT`, a fresh
+`/etc/quiz-codespace/<i>/env` from `env.example` (a fresh
 `CODESPACE_LAUNCH_SECRET` and `EXAM_COOKIE_SECRET`) **only if absent**;
 installs the host-level files, the quadlet and the Caddy site; starts the
 network unit and the shadow timer; reloads Caddy. No portal starts before
@@ -200,8 +200,9 @@ vault (ADR-010).
 ### 10. Turn the CI deploys on, and the first deploy
 
 ```bash
-gh variable set CODESPACE_DEPLOY --env staging --repo heig-tin-info/heig-quiz --body 1
-gh variable set CODESPACE_DEPLOY --env production --repo heig-tin-info/heig-quiz --body 1
+# One REPOSITORY variable for both instances: deploy-codespace-prod reads it in a job-level
+# `if`, where an environment variable is not available, and skips without asking an approval.
+gh variable set CODESPACE_DEPLOY --repo heig-tin-info/heig-quiz --body 1
 ```
 
 The next push to `main` deploys staging, and production after its
@@ -214,20 +215,20 @@ SSH_ORIGINAL_COMMAND="codespace staging $SHA <token>" /opt/quiz-engine-staging/i
 ```
 
 Once both instances run, the `CODESPACE_DEPLOY` gate can go: remove the
-condition from `.github/workflows/ci.yml` and the two variables.
+condition from `.github/workflows/ci.yml` and the variable.
 
 ### 11. Smoke checks
 
 ```bash
 curl -fsS https://code.chevallier.io/healthz; curl -fsS https://code-dev.chevallier.io/healthz
-node /opt/quiz-runner/apps/codespace/deploy/smoke.mjs prod              # health, secret, a sync
-node /opt/quiz-runner/apps/codespace/deploy/smoke.mjs staging --launch  # + a real session
+node /opt/quiz-runner/apps/codespace/deploy/smoke.mjs prod --port 3110              # health, secret, a sync
+node /opt/quiz-runner/apps/codespace/deploy/smoke.mjs staging --port 3120 --launch  # + a real session
 podman ps --filter label=heig-codespace.session --format '{{.Names}} {{.Labels}}'
 grep -c 'token=ey' /var/log/caddy/quiz-codespace-staging.log            # 0
 CS_INSTANCE=staging /usr/local/lib/quiz-codespace/infra/net/test.sh     # the network assertions on cs1
 ```
 
-`smoke.mjs` reads the port and the launch secret from the instance's env
+`smoke.mjs` takes the instance's port (`lib.sh`), reads the launch secret from its env
 file and signs its tokens locally: `/healthz`, a service token (401 = a
 wrong secret), a sync of the assignment `m6-04-smoke` on the public
 `octocat/Hello-World`, and with `--launch` a `/launch` that must answer 303
@@ -255,7 +256,7 @@ schema.
 **Back to classroom's portal** (the switch fails):
 
 ```bash
-gh variable set CODESPACE_DEPLOY --env production --repo heig-tin-info/heig-quiz --body 0   # workstation
+gh variable set CODESPACE_DEPLOY --repo heig-tin-info/heig-quiz --body 0   # workstation (staging too)
 systemctl stop quiz-codespace-prod.service
 rm /etc/containers/systemd/quiz-codespace-prod.container /etc/caddy/conf.d/quiz-codespace-prod.caddy
 systemctl daemon-reload

@@ -34,7 +34,6 @@ esac
 CS_GIT_PORT=9418
 CS_CLOSED_PORT=9999            # control port: must stay unreachable
 CS_ANCHOR_IMAGE=docker.io/library/alpine:3.20
-CS_PODMAN_URL=unix:///run/podman/podman.sock
 
 CS_NET_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CS_NFT_DIR="$(cd "$CS_NET_DIR/../nft" && pwd)"
@@ -42,7 +41,18 @@ CS_NFT_DIR="$(cd "$CS_NET_DIR/../nft" && pwd)"
 # Rootful Podman through the socket, ALWAYS. Without --remote the binary falls
 # back to rootless local and everything below measures another network
 # (setup-workstation.md). A function, not a variable: the author's shell is zsh.
-pd() { podman --remote --url "$CS_PODMAN_URL" "$@"; }
+# pd() and its socket are infra/engine/lib.sh's, from a checkout; the host
+# copy under /usr/local/lib/quiz-codespace (the network unit's) has no such
+# file and keeps this local copy, with the same constant.
+CS_ENGINE_LIB="$CS_NET_DIR/../../../../infra/engine/lib.sh"
+if [ -f "$CS_ENGINE_LIB" ]; then
+	# shellcheck source=../../../../infra/engine/lib.sh
+	. "$CS_ENGINE_LIB"
+else
+	ENGINE_PODMAN_URL=unix:///run/podman/podman.sock
+	pd() { podman --remote --url "$ENGINE_PODMAN_URL" "$@"; }
+fi
+CS_PODMAN_URL="$ENGINE_PODMAN_URL"
 
 cs_is_root() { [ "$(id -u)" -eq 0 ]; }
 

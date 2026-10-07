@@ -219,7 +219,7 @@ jobs:
   # The SSH command carries the commit and a pull credential stored nowhere
   # (→ $SSH_ORIGINAL_COMMAND; the code VM's forms: infra/engine/deploy.sh).
   # Without its key a job no-ops, so the pipeline stays green until keys are
-  # provisioned; the codespace steps also wait for the environment variable
+  # provisioned; the codespace steps also wait for the REPOSITORY variable
   # CODESPACE_DEPLOY=1, set at the switch (apps/codespace/deploy/RUNBOOK.md),
   # a gate to drop from this file once the switch has run.
   deploy-staging:
@@ -354,9 +354,13 @@ jobs:
   # (exit 3 while a session of the prod instance runs) is re-run alone.
   # Setting CODESPACE_FORCE_SHA to THIS run's sha, then re-running it,
   # forces it (apps/codespace/deploy/RUNBOOK.md, The live-session guard). Its
-  # `production` environment asks for its own approval.
+  # `production` environment asks for its own approval, so the job-level `if`
+  # (a REPOSITORY variable: an environment's is not readable before the job
+  # enters it) skips it outright, with no approval asked, while the portal
+  # deploy is off.
   deploy-codespace-prod:
     needs: deploy-production
+    if: vars.CODESPACE_DEPLOY == '1'
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -371,13 +375,12 @@ jobs:
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       DEPLOY_RUNNER_HOST: ${{ vars.DEPLOY_RUNNER_HOST }}
       DEPLOY_RUNNER_HOST_KEY: ${{ vars.DEPLOY_RUNNER_HOST_KEY }}
-      CODESPACE_DEPLOY: ${{ vars.CODESPACE_DEPLOY }}
     steps:
-      - name: Skip when the codespace deploy is not configured
-        if: env.DEPLOY_SSH_KEY == '' || env.DEPLOY_RUNNER_HOST == '' || env.CODESPACE_DEPLOY != '1'
-        run: echo "::notice::DEPLOY_SSH_KEY/DEPLOY_RUNNER_HOST/CODESPACE_DEPLOY not set — codespace deploy skipped."
+      - name: Skip when the deploy key is not configured
+        if: env.DEPLOY_SSH_KEY == '' || env.DEPLOY_RUNNER_HOST == ''
+        run: echo "::notice::DEPLOY_SSH_KEY/DEPLOY_RUNNER_HOST not set — codespace deploy skipped."
       - name: Deploy the codespace portal, prod instance (forced command runs infra/engine/deploy.sh production on the code VM)
-        if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_RUNNER_HOST != '' && env.CODESPACE_DEPLOY == '1'
+        if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_RUNNER_HOST != ''
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CODESPACE_FORCE_SHA: ${{ vars.CODESPACE_FORCE_SHA }}
