@@ -123,6 +123,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["resultsKey", keys.resultsKey("e1"), ["results", "e1"]],
     ["resultsViewKey", keys.resultsViewKey("e1"), ["results", "e1", "view"]],
     ["resultsByQuestionKey", keys.resultsByQuestionKey("e1"), ["results", "e1", "by-question"]],
+    ["resultsCopyKey", keys.resultsCopyKey("e1", "a1"), ["results", "e1", "copy", "a1"]],
     ["studentRootKey", keys.studentRootKey, ["student"]],
     ["studentHomeKey", keys.studentHomeKey, ["student", "home"]],
     ["studentProjectKey", keys.studentProjectKey("p1"), ["student", "project", "p1"]],
@@ -233,6 +234,7 @@ describe("queryKeys — the prefixes invalidations rely on", () => {
     ["gradingKey ⊂ gradingProgressKey", keys.gradingKey("e1"), keys.gradingProgressKey("e1")],
     ["resultsKey ⊂ resultsViewKey", keys.resultsKey("e1"), keys.resultsViewKey("e1")],
     ["resultsKey ⊂ resultsByQuestionKey", keys.resultsKey("e1"), keys.resultsByQuestionKey("e1")],
+    ["resultsKey ⊂ resultsCopyKey", keys.resultsKey("e1"), keys.resultsCopyKey("e1", "a1")],
     ["attemptKey ⊂ attemptFeedbackKey", keys.attemptKey("a1"), keys.attemptFeedbackKey("a1")],
   ] as const)("%s", (_name, prefix, key) => {
     expect(isPrefix(prefix, key)).toBe(true);

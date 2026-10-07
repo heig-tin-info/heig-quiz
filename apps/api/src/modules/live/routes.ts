@@ -42,6 +42,7 @@ import { SITTING, confined, delegated } from "../../auth/session.js";
 import { iso } from "../../clock.js";
 import {
   loadEvaluation,
+  loadEvaluationAttempt,
   ownAttempt,
   reachableEvaluation,
   sitRefusal,
@@ -123,16 +124,7 @@ export async function livePlugin(app: FastifyInstance) {
   const sit = { preHandler: requireSession, config: SITTING };
   const staffEvaluation = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
     loadEvaluation(app, req, reply, p.id);
-  const staffEvaluationAttempt = async (
-    req: FastifyRequest,
-    reply: FastifyReply,
-    p: { id: string; attemptId: string },
-  ) => {
-    const scope = await loadEvaluation(app, req, reply, p.id);
-    if (!scope) return null;
-    const attempt = await staffAttempt(app, req, reply, p.id, p.attemptId);
-    return attempt && { evaluation: scope.evaluation, attempt };
-  };
+  const staffEvaluationAttempt = loadEvaluationAttempt(app);
 
   // =========================================================================
   // Student side

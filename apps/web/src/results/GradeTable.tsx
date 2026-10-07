@@ -5,7 +5,7 @@ import { formatPoints } from "@quiz/domain";
 
 import { Grade } from "../Grade";
 import { formatDuration, useT, type Dict, type TFunction } from "../i18n";
-import { Badge, cx, T, TableHead, useSortableTable, type Column, type Tone } from "../ui";
+import { Badge, cx, pressable, T, TableHead, useSortableTable, type Column, type Tone } from "../ui";
 
 type Key = "name" | "email" | "points" | "grade" | "duration" | "state";
 
@@ -27,19 +27,10 @@ const STATE_TONES: Record<ResultRowState, Tone> = {
 
 const resultStateLabel = (t: TFunction, s: ResultRowState) => t(STATE_KEYS[s]);
 
-/**
- * One student per row (F-RES-02), absent students included: they are a 1.0
- * that belongs in the export and in the statistics, and a table that hides
- * them is not the class. A teacher's own test walk is a row too, badged
- * `staff`, and it is in none of the two (ADR-018).
- *
- * Six columns, under the seven DESIGN.md allows. The name is the identity
- * column and carries the weight; the numbers are tabular and right-aligned;
- * the state is a badge and never a colour alone.
- */
-export function GradeTable({ rows }: { rows: ResultRow[] }) {
+/** The grade table's sort, by last name first: the way a class list is read. */
+export function useGradeSort(rows: ResultRow[]) {
   const t = useT();
-  const { sorted, sort, toggle } = useSortableTable<ResultRow, Key>(
+  return useSortableTable<ResultRow, Key>(
     rows,
     (row, key) =>
       key === "name"
@@ -55,6 +46,34 @@ export function GradeTable({ rows }: { rows: ResultRow[] }) {
                 : resultStateLabel(t, row.state),
     { key: "name", dir: 1 },
   );
+}
+export type GradeSort = ReturnType<typeof useGradeSort>;
+
+/**
+ * One student per row (F-RES-02), absent students included: they are a 1.0
+ * that belongs in the export and in the statistics, and a table that hides
+ * them is not the class. A teacher's own test walk is a row too, badged
+ * `staff`, and it is in none of the two (ADR-018).
+ *
+ * Six columns, under the seven DESIGN.md allows. The name is the identity
+ * column and carries the weight; the numbers are tabular and right-aligned;
+ * the state is a badge and never a colour alone.
+ *
+ * A row with an attempt opens that student's copy (`onOpen`); an absent
+ * student has no copy, and no pointer. The sort is the caller's
+ * (`useGradeSort`), so the copy walks the very order on screen.
+ */
+export function GradeTable({
+  table: { sorted, sort, toggle },
+  openId,
+  onOpen,
+}: {
+  table: GradeSort;
+  /** The attempt whose copy is open, marked in the table. */
+  openId?: string | null;
+  onOpen?: (attemptId: string) => void;
+}) {
+  const t = useT();
 
   const columns: Column<Key>[] = [
     { key: "name", label: t("results.col.student") },
@@ -76,8 +95,16 @@ export function GradeTable({ rows }: { rows: ResultRow[] }) {
       <table className={T.table}>
         <TableHead columns={columns} sort={sort} onToggle={toggle} />
         <tbody>
-          {sorted.map((row) => (
-            <tr key={row.userId} className={T.row}>
+          {sorted.map((row) => {
+            const attemptId = row.attemptId;
+            const open = onOpen && attemptId !== null ? () => onOpen(attemptId) : null;
+            return (
+            <tr
+              key={row.userId}
+              {...(open ? { ...pressable(open, "row"), onClick: open } : {})}
+              aria-current={attemptId !== null && attemptId === openId ? "true" : undefined}
+              className={cx(T.row, open && cx(T.rowHover, "cursor-pointer"), "aria-[current]:bg-surface-2")}
+            >
               <td className={cx(T.td, "font-semibold")}>
                 <span className="inline-flex items-center gap-1.5">
                   {row.displayName}
@@ -104,7 +131,8 @@ export function GradeTable({ rows }: { rows: ResultRow[] }) {
                 <Badge tone={STATE_TONES[row.state]}>{resultStateLabel(t, row.state)}</Badge>
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

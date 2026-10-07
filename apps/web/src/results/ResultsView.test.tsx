@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { makeClassroomDetail, makeCourseSummary } from "../test/fixtures";
-import { makeEvaluationDetail, makeResultsView } from "../test/grading-fixtures";
+import { makeEvaluationDetail, makeFeedback, makeResultsView } from "../test/grading-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 import { ResultsView } from "./ResultsView";
 
@@ -72,6 +72,37 @@ describe("ResultsView", () => {
     expect(names()).toEqual(["Noah Currat", "Adam Perret", "Marie Rochat", "Zoe Blanc"]);
     await userEvent.click(screen.getByRole("button", { name: "Grade" }));
     expect(names()).toEqual(["Zoe Blanc", "Marie Rochat", "Adam Perret", "Noah Currat"]);
+  });
+
+  it("opens a student's copy from their row and walks the table's order", async () => {
+    const { evaluation: _e, available: _a, ...copy } = makeFeedback();
+    mockFetch({
+      [`GET ${VIEW}`]: ok(makeResultsView()),
+      [`GET ${VIEW}/attempts/a1`]: ok({ ...copy, attemptId: "a1", grade: 5 }),
+      [`GET ${VIEW}/attempts/a2`]: ok({ ...copy, attemptId: "a2", grade: 2 }),
+    });
+    const navigate = vi.fn();
+    renderWithProviders(<ResultsView evaluationId="e1" navigate={navigate} />);
+    await screen.findByRole("heading", { name: "Results" });
+
+    // An absent student has no copy, so no way into one.
+    expect(screen.getByText("Noah Currat").closest("tr")).not.toHaveAttribute("tabindex");
+    await userEvent.click(screen.getByText("Zoe Blanc"));
+    const sheet = await screen.findByRole("dialog", { name: "Zoe Blanc" });
+    // The whole copy, the teacher's comment included, whatever the policy.
+    expect(await within(sheet).findByText("Clean answer.")).toBeVisible();
+    expect(within(sheet).getByText("sizeof-ptr")).toBeVisible();
+    expect(screen.getByText("Zoe Blanc", { selector: "td *" }).closest("tr")).toHaveAttribute("aria-current", "true");
+
+    // ↓ skips the absent row: by name, Currat has no attempt.
+    expect(within(sheet).getByRole("button", { name: "Previous student" })).toBeDisabled();
+    await userEvent.click(within(sheet).getByRole("button", { name: "Next student" }));
+    expect(await screen.findByRole("dialog", { name: "Adam Perret" })).toBeVisible();
+
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Open this question in the grading panel" }),
+    );
+    expect(navigate).toHaveBeenCalledWith({ view: "grading", evaluationId: "e1", item: "i1" });
   });
 
   it("exports through a real navigation to the CSV endpoint", async () => {

@@ -19,14 +19,18 @@ export function bucketLabel(bucket: number, step: number): string {
 export function Histogram({
   buckets,
   step = 0.5,
+  className,
 }: {
   buckets: ResultsStats["histogram"];
   step?: number;
+  /** The height of the plot (`Bars`). */
+  className?: string;
 }) {
   const t = useT();
   return (
     <Bars
       showValues
+      {...(className ? { className } : {})}
       caption={t("results.histogram.title")}
       labelHeader={t("results.histogram.col.range")}
       valueHeader={t("results.histogram.col.count")}

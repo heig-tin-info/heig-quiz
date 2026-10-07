@@ -317,6 +317,23 @@ export const StudentFeedback = z.discriminatedUnion("available", [
 export type StudentFeedback = z.infer<typeof StudentFeedback>;
 
 /**
+ * `GET /evaluations/:id/results/attempts/:attemptId`: one student's copy as
+ * the TEACHER reads it from the results — every item with the answer, the
+ * key, the explanation and the comment, whatever the feedback policy and
+ * before any release. Never served to a student.
+ */
+export const StaffCopy = z.object({
+  attemptId: z.uuid(),
+  points: z.number(),
+  totalPoints: z.number(),
+  grade: z.number(),
+  /** Items still waiting for a validated grading: counted nowhere. */
+  pendingCount: z.number().int().nonnegative(),
+  items: z.array(StudentResultItem),
+});
+export type StaffCopy = z.infer<typeof StaffCopy>;
+
+/**
  * Where a row of the student's Grades page stands (F-RES-04, F-ORG-14):
  * `released` — the results are released; `withheld` — released, under the
  * feedback policy `none`: the grade is not shared; `available` — not

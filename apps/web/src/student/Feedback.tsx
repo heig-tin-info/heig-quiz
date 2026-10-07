@@ -8,13 +8,9 @@ import { api } from "../api";
 import { Grade } from "../Grade";
 import { useT, type Dict } from "../i18n";
 import type { Route } from "../router";
-import { MarkdownView } from "../markdown/MarkdownView";
-import { QuestionReviewHost } from "../questionTypes";
 import {
-  Badge,
   Card,
   EmptyState,
-  NotePanel,
   PageSkeleton,
   QueryError,
   Button,
@@ -22,7 +18,7 @@ import {
   Stat,
 } from "../ui";
 import { attemptFeedbackKey } from "../queryKeys";
-import { BonusLabel } from "../BonusLabel";
+import { CopyItem } from "../CopyItem";
 import { PendingLine } from "./cards";
 import { useRetake } from "./retake";
 
@@ -260,47 +256,7 @@ export function Feedback({
       ) : (
         <div className="space-y-5">
           {data.items.map((item) => (
-            <Card key={item.itemId} className="space-y-4 p-5 sm:p-6">
-              <div className="flex items-center gap-3">
-                <h2 className="text-base font-bold tracking-tight">
-                  {/* 0-based on the wire; the player and the panel both count from 1. */}
-                  {t("feedback.question", { n: item.position + 1 })}
-                </h2>
-                {item.bonus ? <BonusLabel /> : null}
-                <span className="flex-1" />
-                {item.points === null ? (
-                  <Badge tone="zinc">{t("feedback.notGraded")}</Badge>
-                ) : (
-                  <span className="text-[15px] font-semibold tabular-nums">
-                    {formatPoints(item.points)} / {item.maxPoints}
-                  </span>
-                )}
-              </div>
-
-              <QuestionReviewHost
-                t={t}
-                type={item.type}
-                student={item.student}
-                answer={item.answer}
-                solution={item.solution}
-                details={item.details}
-                points={item.points}
-                maxPoints={item.maxPoints}
-                audience="student"
-              />
-
-              {item.explanation ? (
-                <NotePanel eyebrow={t("feedback.explanation")}>
-                  <MarkdownView size="sm" source={item.explanation} />
-                </NotePanel>
-              ) : null}
-
-              {item.comment ? (
-                <NotePanel eyebrow={t("feedback.comment")} tone="outlined">
-                  <p className="text-sm">{item.comment}</p>
-                </NotePanel>
-              ) : null}
-            </Card>
+            <CopyItem key={item.itemId} item={item} audience="student" />
           ))}
         </div>
       )}

@@ -9,7 +9,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { StudentGrades } from "@quiz/contracts";
+import { StaffCopy, StudentGrades } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import { evaluations } from "../../db/schema.js";
@@ -149,6 +149,27 @@ describe("results and the export (§4.6)", () => {
     expect(csv.headers["content-disposition"]).toContain("attachment");
     expect(csv.rawPayload.subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]));
     expect(csv.payload).toContain(";");
+  });
+
+  it("opens one student's copy to the staff, whole and before the release", async () => {
+    const url = `/app/api/evaluations/${built.evaluationId}/results/attempts/${built.attemptId}`;
+    const copy = await get(url, teacher.headers);
+    expect(copy.statusCode).toBe(200);
+    const body = StaffCopy.parse(copy.json());
+    expect(body).toMatchObject({ attemptId: built.attemptId, points: 1, grade: 6, pendingCount: 0 });
+    // Everything shown, whatever the feedback policy: the answer AND the key.
+    expect(body.items[0]).toMatchObject({ answer: "answer-q0", points: 1, verdict: "correct" });
+    expect(body.items[0]!.solution).not.toBeNull();
+
+    // Invariant 6: anyone off the course's staff meets a 404, the student a 403 (the role).
+    expect((await get(url, other.headers)).statusCode).toBe(404);
+    expect((await get(url, student.headers)).statusCode).toBe(403);
+    // An attempt of another evaluation is not reached through this one.
+    const elsewhere = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [], questions: 1 });
+    expect(
+      (await get(`/app/api/evaluations/${elsewhere.evaluationId}/results/attempts/${built.attemptId}`, teacher.headers))
+        .statusCode,
+    ).toBe(404);
   });
 
   it("gates the student's feedback on the release", async () => {
