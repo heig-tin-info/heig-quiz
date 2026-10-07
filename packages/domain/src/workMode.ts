@@ -1,0 +1,86 @@
+/**
+ * A project's work mode (ADR-047, amended 2026-10-07 for M6-06) — pure
+ * rules (invariant 8): who may choose it, when it freezes, what it does to
+ * the student's access, and whose workspace quota it consumes.
+ *
+ * The union is spelled out here rather than imported from `@quiz/contracts`
+ * (the domain depends on nothing but `@quiz/core`); it is structurally
+ * `WorkMode` there (`WORK_MODES`).
+ */
+export type WorkModeName = "free" | "online" | "online_seb";
+
+/** A mode that runs inside the online workspace portal. */
+export function isOnlineMode(mode: WorkModeName): mode is Exclude<WorkModeName, "free"> {
+  return mode !== "free";
+}
+
+/**
+ * The GitHub permission a student's invitation carries (ADR-047 §2):
+ * `push` in their own tools (unchanged), `pull` in the online workspace —
+ * only the portal writes —, and no invitation at all under Safe Exam
+ * Browser (null): no access before grading.
+ */
+export function collaboratorPermission(mode: WorkModeName): "push" | "pull" | null {
+  if (mode === "free") return "push";
+  return mode === "online" ? "pull" : null;
+}
+
+/** Why the caller may not set a project's mode: the code of the refusal. */
+export type WorkModeRefusal = "owner_required" | "codespace_not_granted" | "work_mode_frozen" | "work_mode_group";
+
+/** The facts {@link workModeRefusal} decides on. */
+export interface WorkModeFacts {
+  /** The caller is an owner of the project's course (ADR-068, Super Powers included). */
+  owner: boolean;
+  /** The caller's `teacher_grants` row has `codespace_enabled`. */
+  granted: boolean;
+  /** A workspace was launched for the project (a launch token issued). */
+  launched: boolean;
+  /** The project is a group project (F-PROJ-06: their own tools only). */
+  groupMode: boolean;
+}
+
+/**
+ * THE rule of the mode's write, in the order a refusal is answered:
+ *
+ *   1. only an owner of the course sets it (`403 owner_required`);
+ *   2. a mode that runs in the portal needs the owner's grant
+ *      (`403 codespace_not_granted`); going back to `free` needs none;
+ *   3. once a workspace was launched, the mode is frozen for good
+ *      (`409 work_mode_frozen`, ADR-047 §3 as amended): a student's
+ *      repository was handed out under it;
+ *   4. a group project stays in the students' own tools (`409
+ *      work_mode_group`, F-PROJ-06).
+ *
+ * `to` equal to `from` is never refused: the form may send the mode it
+ * shows. `null` when the change may proceed.
+ */
+export function workModeRefusal(facts: WorkModeFacts, from: WorkModeName, to: WorkModeName): WorkModeRefusal | null {
+  if (from === to) return null;
+  if (!facts.owner) return "owner_required";
+  if (isOnlineMode(to) && !facts.granted) return "codespace_not_granted";
+  if (facts.launched) return "work_mode_frozen";
+  if (isOnlineMode(to) && facts.groupMode) return "work_mode_group";
+  return null;
+}
+
+/** An owner seat of a course, as `course_staff` holds it. */
+export interface OwnerSeat {
+  userId: string;
+  createdAt: Date;
+}
+
+/**
+ * Who carries a project's workspace quota (ADR-047 as amended 2026-10-07,
+ * decision C): its creator while they still hold an owner seat on the
+ * course, otherwise the OLDEST owner seat (ties by user id, so the answer
+ * never depends on the order rows come in). Null for a course without an
+ * owner, which ADR-068's last-owner rule never leaves.
+ */
+export function quotaHolder(creatorId: string, owners: readonly OwnerSeat[]): string | null {
+  if (owners.some((o) => o.userId === creatorId)) return creatorId;
+  const oldest = [...owners].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0),
+  )[0];
+  return oldest?.userId ?? null;
+}

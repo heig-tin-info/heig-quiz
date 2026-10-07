@@ -7,6 +7,7 @@ import {
   SystemStatusQuery,
   TASK_INTERVAL_MAX_MINUTES,
   TASK_INTERVAL_MIN_MINUTES,
+  TeacherCodespaceGrantPatch,
   TeacherGrantCreate,
   TeacherGrantParams,
   type TestMailResult,
@@ -19,7 +20,9 @@ import { avatars, courseStaff, teacherGrants, users } from "../../db/schema.js";
 import { publish } from "../../events.js";
 import { syncUserRole } from "../../roles.js";
 import { shownAvatar } from "../avatar.js";
+import { codespaceOn } from "../codespace/service.js";
 import { adminGuard } from "../guards.js";
+import { invalid } from "../http.js";
 import { sendTestMail } from "../notifications/service.js";
 import {
   claimTaskNow,
@@ -63,15 +66,20 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
         pictureUrl: users.pictureUrl,
         avatarAt: avatars.updatedAt,
         signedUp: sql<boolean>`${users.id} IS NOT NULL`,
+        codespaceEnabled: teacherGrants.codespaceEnabled,
+        codespaceMaxActiveSessions: teacherGrants.codespaceMaxActiveSessions,
         courses: sql<number>`coalesce((SELECT count(*) FROM ${courseStaff} cs WHERE cs.user_id = ${users.id}), 0)::int`,
       })
       .from(teacherGrants)
       .leftJoin(users, sql`lower(${users.email}) = ${teacherGrants.email}`)
       .leftJoin(avatars, eq(avatars.userId, users.id))
       .orderBy(teacherGrants.createdAt);
-    return rows.map(({ userId, pictureUrl, avatarAt, ...r }) => ({
+    const workspace = codespaceOn(config);
+    return rows.map(({ userId, pictureUrl, avatarAt, codespaceEnabled, codespaceMaxActiveSessions, ...r }) => ({
       ...r,
       avatarUrl: shownAvatar(userId, avatarAt, pictureUrl),
+      // ADR-047 §5: without the portal, no grant column at all.
+      codespace: workspace ? { enabled: codespaceEnabled, maxActiveSessions: codespaceMaxActiveSessions } : null,
       grantedAt: r.grantedAt.toISOString(),
       lastLoginAt: r.lastLoginAt?.toISOString() ?? null,
     }));
@@ -134,6 +142,31 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
     publish("admin", ["admin"]);
     return reply.code(204).send();
   });
+
+  // --- The online workspace grant (ADR-047 §4, amended 2026-10-07): may a
+  // teacher put a project in the portal, and their quota of live workspaces.
+  // Only with a portal (`CODESPACE_URL`): otherwise the route does not exist.
+  if (codespaceOn(config)) {
+    app.patch("/app/api/admin/teachers/:gid/codespace", { preHandler: requireAdmin }, async (req, reply) => {
+      const params = TeacherGrantParams.safeParse(req.params);
+      if (!params.success) return reply.code(404).send({ error: "not_found" });
+      const body = TeacherCodespaceGrantPatch.safeParse(req.body);
+      if (!body.success) return invalid(reply, body.error);
+      const [grant] = await app.db
+        .update(teacherGrants)
+        .set({
+          ...(body.data.enabled !== undefined ? { codespaceEnabled: body.data.enabled } : {}),
+          ...(body.data.maxActiveSessions !== undefined ? { codespaceMaxActiveSessions: body.data.maxActiveSessions } : {}),
+        })
+        .where(eq(teacherGrants.id, params.data.gid))
+        .returning();
+      if (!grant) return reply.code(404).send({ error: "not_found" });
+      await trace(req, "teacher.codespace_grant", "teacher_grant", grant.id, { email: grant.email, ...body.data });
+      publish("admin", ["admin"]);
+      // The quota travels with each project's sync: the next one carries it (ADR-047 §6).
+      return { enabled: grant.codespaceEnabled, maxActiveSessions: grant.codespaceMaxActiveSessions };
+    });
+  }
 
   // --- System status (N-OPS-03, ADR-055): every check of the registry,
   // behind a short cache; `?fresh=1` is the screen's Refresh.

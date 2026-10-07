@@ -42,6 +42,7 @@ import { ProjectGroupSet } from "./ProjectGroupSet";
 import { projectNotices, projectNoticeToast } from "./projectNotices";
 import { ProjectRepos } from "./ProjectRepos";
 import { ProjectSettings } from "./ProjectSettings";
+import { ProjectWorkspace } from "./ProjectWorkspace";
 import {
   hasFellBack,
   offersSync,
@@ -417,6 +418,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
 
       {project.groupMode ? <ProjectGroupSet project={project} patch={patch} navigate={navigate} /> : null}
       <ProjectSettings project={project} patch={patch} />
+      <ProjectWorkspace projectId={project.id} archived={archived} />
       <ProjectRepos project={project} onOpen={setOpenRepo} navigate={navigate} />
       {project.gradingMode === "auto" ? <ProjectCheckpoints project={project} /> : null}
 

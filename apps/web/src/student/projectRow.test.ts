@@ -93,6 +93,7 @@ describe("projectActionKind", () => {
     const base: StudentProject = {
       kind: "project",
       seat: "student",
+      workspace: null,
       id: "p1",
       title: "Labo 1",
       classroomId: "r1",

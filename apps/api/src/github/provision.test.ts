@@ -37,8 +37,9 @@ function baseRoutes() {
   } as Record<string, (opts: never) => unknown>;
 }
 
-function provision(octokit: Octokit) {
+function provision(octokit: Octokit, permission?: "push" | "pull" | null) {
   return provisionStudentRepo({
+    ...(permission === undefined ? {} : { permission }),
     octokit,
     token: "t",
     org: "Prog-D-2026",
@@ -131,5 +132,21 @@ describe("provisionStudentRepo", () => {
     expect(claim).toHaveBeenCalledWith(REPO.id, false);
     // The creation's 422 and the read of the existing repository, nothing else.
     expect(request.mock.calls.map(([route]) => route)).toEqual(["POST /orgs/{org}/repos", "GET /repos/{owner}/{repo}"]);
+  });
+
+  it("invites with the work mode's permission: pull online, nobody under SEB (ADR-047 §2)", async () => {
+    const routes = { ...baseRoutes(), "GET /repos/{owner}/{repo}/rulesets": () => ({ data: [{ name: "hgc-protect", id: 9 }] }) };
+    const online = fakeOctokit(routes);
+    expect((await provision(online.octokit, "pull")).invitationStatus).toBe("pending");
+    expect(online.request).toHaveBeenCalledWith(
+      "PUT /repos/{owner}/{repo}/collaborators/{username}",
+      expect.objectContaining({ username: "student", permission: "pull" }),
+    );
+
+    const seb = fakeOctokit(routes);
+    const result = await provision(seb.octokit, null);
+    expect(result.invitationStatus).toBe("none");
+    expect(result.rulesetId).toBe(9);
+    expect(seb.request).not.toHaveBeenCalledWith("PUT /repos/{owner}/{repo}/collaborators/{username}", expect.anything());
   });
 });

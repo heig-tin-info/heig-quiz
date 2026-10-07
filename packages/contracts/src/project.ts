@@ -31,6 +31,7 @@ import {
   slugify,
 } from "@quiz/domain";
 
+import { StudentProjectWorkspace } from "./codespace.js";
 import { Rounding } from "./evaluation.js";
 import { GroupConfirm } from "./group.js";
 
@@ -461,6 +462,10 @@ export const PROJECT_REFUSALS = [
   "classroom_archived",
   "needs_confirmation",
   "group_sync_pending",
+  // M6-06: an invitation asked of a project whose work mode invites nobody
+  // (`online_seb`, ADR-047 §2); the work mode's own refusals are
+  // `WORK_MODE_REFUSALS` (`codespace.ts`).
+  "not_invitable",
 ] as const;
 export const ProjectErrorCode = z.enum(PROJECT_REFUSALS);
 export type ProjectErrorCode = z.infer<typeof ProjectErrorCode>;
@@ -1293,6 +1298,8 @@ export const StudentProject = StudentProjectCard.omit({ invitation: true, repoFu
   gradingMode: ProjectGradingMode,
   repo: StudentProjectRepo.nullable(),
   release: StudentProjectRelease.nullable(),
+  /** The online workspace (ADR-047, M6-06): the mode when the project runs in the portal and the feature is on; null otherwise. */
+  workspace: StudentProjectWorkspace.nullable(),
   serverNow: z.iso.datetime(),
 });
 export type StudentProject = z.infer<typeof StudentProject>;

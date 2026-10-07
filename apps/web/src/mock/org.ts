@@ -2,7 +2,7 @@
  * Section 1b — courses, classrooms, roster and administration: the world a
  * teacher organises before there is a single question in it.
  */
-import { LlmSettingsPatch, ScheduledTaskPatch } from "@quiz/contracts";
+import { DEFAULT_MAX_ACTIVE_SESSIONS, LlmSettingsPatch, ScheduledTaskPatch, TeacherCodespaceGrantPatch } from "@quiz/contracts";
 import type {
   AdminScheduledTask,
   AdminTeacher,
@@ -20,6 +20,7 @@ import type {
   LlmUsage,
   SystemCheck,
   SystemStatus,
+  TeacherCodespaceGrant,
   TestMailResult,
 } from "@quiz/contracts";
 import { addMonths, currentOrNextSemester, semesterMonths } from "@quiz/domain";
@@ -249,7 +250,7 @@ export const rooms: Room[] = [
   },
 ];
 
-export const teachers: AdminTeacher[] = [
+export const teachers: Omit<AdminTeacher, "codespace">[] = [
   {
     id: "t1",
     email: "ada.lovelace@heig-vd.ch",
@@ -740,7 +741,26 @@ on("GET", "/app/api/student/classrooms", () => studentRooms());
 
 // --- Admin ---
 
-on("GET", "/app/api/admin/teachers", () => teachers);
+/**
+ * The online workspace grants (ADR-047 §4, `?codespace=1`): Ada has it, for
+ * three workspaces at once; every other grant is off, the default quota.
+ * Without the flag the platform has no portal, and no row carries a grant.
+ */
+const codespaceGrants = new Map<string, TeacherCodespaceGrant>([["t1", { enabled: true, maxActiveSessions: 3 }]]);
+on("GET", "/app/api/admin/teachers", (): AdminTeacher[] =>
+  teachers.map((x) => ({
+    ...x,
+    codespace: flags.codespace ? (codespaceGrants.get(x.id) ?? { enabled: false, maxActiveSessions: DEFAULT_MAX_ACTIVE_SESSIONS }) : null,
+  })),
+);
+on("PATCH", "/app/api/admin/teachers/:gid/codespace", (m, raw) => {
+  const body = TeacherCodespaceGrantPatch.safeParse(raw);
+  if (!flags.codespace || !teachers.some((x) => x.id === m.groups!.gid)) throw new MockError(404, "Not found");
+  if (!body.success) throw new MockPayload(400, { error: "validation", message: body.error.message });
+  const grant = { ...(codespaceGrants.get(m.groups!.gid!) ?? { enabled: false, maxActiveSessions: DEFAULT_MAX_ACTIVE_SESSIONS }), ...body.data };
+  codespaceGrants.set(m.groups!.gid!, grant);
+  return grant;
+});
 on("GET", "/app/api/admin/users", () => adminUsers);
 on("POST", "/app/api/admin/teachers", (_m, body) => {
   teachers.push({

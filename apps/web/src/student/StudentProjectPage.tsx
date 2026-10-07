@@ -30,9 +30,15 @@
  *   - Finish: cards on the canvas, hairlines, no shadow.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, FolderGit2 } from "lucide-react";
+import { AlertTriangle, ExternalLink, FolderGit2, Laptop } from "lucide-react";
 
-import type { ProjectInvitationResent, StudentProject, StudentProjectRepo } from "@quiz/contracts";
+import {
+  workspaceStartPath,
+  WorkspaceStartRefusal,
+  type ProjectInvitationResent,
+  type StudentProject,
+  type StudentProjectRepo,
+} from "@quiz/contracts";
 
 import { api, ApiError } from "../api";
 import { Grade } from "../Grade";
@@ -41,11 +47,13 @@ import { useNoticeToasts } from "../notifications/notices";
 import { useToast } from "../notify";
 import { studentProjectKey, studentRootKey } from "../queryKeys";
 import { useServerNow } from "../realtime/useServerClock";
-import type { Navigate } from "../router";
+import { useSearchParam, type Navigate } from "../router";
 import { Trail, useRootCrumb } from "../Trail";
 import { CiBadge } from "../project/parts";
 import {
+  Alert,
   Button,
+  buttonClass,
   Card,
   EmptyState,
   GithubIcon,
@@ -128,6 +136,7 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
 
   return (
     <div className="space-y-6">
+      <WorkspaceRefusal />
       <PageHeader
         eyebrow={
           <Trail
@@ -181,6 +190,10 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
         )}
       </section>
 
+      {project.workspace ? (
+        <WorkspaceSection project={project} live={live !== null} primary={kind === "open" && !readOnly} />
+      ) : null}
+
       {live?.run ? <RunSection repo={live} run={live.run} /> : null}
 
       {project.release ? (
@@ -189,6 +202,48 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
         <ScoreSection repo={live} />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Why the workspace did not open (ADR-047, M6-06): the start route sends
+ * the student back here with `?workspace=<code>` (`WorkspaceStartRefusal`);
+ * any other value is ignored.
+ */
+function WorkspaceRefusal() {
+  const t = useT();
+  const [code] = useSearchParam("workspace", "");
+  const refusal = WorkspaceStartRefusal.safeParse(code);
+  if (!refusal.success) return null;
+  return (
+    <Alert tone="warning" icon={AlertTriangle} title={t("sproj.workspace.refused")}>
+      {t(`sproj.workspace.refusal.${refusal.data}`)}
+    </Alert>
+  );
+}
+
+/**
+ * The online workspace (ADR-047, M6-06): *Open workspace*, a plain link to
+ * the start route — a navigation, never a fetch: the server answers with a
+ * redirect to the portal —, once the student's repository exists; the
+ * page's accent when the repository is ready and nothing else is asked of
+ * the student. Under Safe Exam Browser, a line says where it opens.
+ */
+function WorkspaceSection({ project, live, primary }: { project: StudentProject; live: boolean; primary: boolean }) {
+  const t = useT();
+  const online = project.workspace?.mode === "online";
+  return (
+    <section className="space-y-3" data-testid="sproj-workspace">
+      <SectionHeading title={t("sproj.workspace")} />
+      <Card className="flex flex-wrap items-center justify-between gap-3 p-5 text-sm">
+        <p className="text-fg-muted">{t(online ? "sproj.workspace.online" : "sproj.workspace.seb")}</p>
+        {online && live ? (
+          <a href={workspaceStartPath(project.id)} className={buttonClass(primary ? "primary" : "secondary")}>
+            <Laptop /> {t("sproj.workspace.open")}
+          </a>
+        ) : null}
+      </Card>
+    </section>
   );
 }
 

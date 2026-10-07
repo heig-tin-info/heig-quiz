@@ -114,6 +114,9 @@ export const projectSourceKey = (id: string, repo: string) => [...projectSources
 export const projectKey = (id: string) => ["project", id] as const;
 export const projectRunsKey = (id: string, rid: string) => [...projectKey(id), "repos", rid, "runs"] as const;
 export const projectCheckpointsKey = (id: string) => [...projectKey(id), "checkpoints"] as const;
+/** The online workspace of a project (ADR-047, M6-06): its mode and sync, and its open workspaces live from the portal. */
+export const projectWorkspaceKey = (id: string) => [...projectKey(id), "workspace"] as const;
+export const projectWorkspaceSessionsKey = (id: string) => [...projectWorkspaceKey(id), "sessions"] as const;
 /**
  * A classroom's group sets (`GET /classrooms/:id/group-sets`, ADR-070) and
  * one set (`GET /group-sets/:id`, the answer of every write on it), under

@@ -52,6 +52,8 @@ import {
   GithubClassroom,
   GithubOrg,
   GradeRunList,
+  ProjectWorkspace,
+  ProjectWorkspaceSessions,
   GradingProgress,
   GradingQueue,
   GradingSteps,
@@ -136,6 +138,7 @@ localStorage.setItem("quiz-mock-journal", "1");
 // `?projects=1` (M3-10): PRG1-2026 has a project in each state, so the
 // classroom's list and the Activities' project rows are served and checked.
 localStorage.setItem("quiz-mock-projects", "1");
+localStorage.setItem("quiz-mock-codespace", "1");
 // `?groups=1` (M3-16a): PRG1-2026 and PRG1-2024 have group sets, and two of
 // PRG1-2026's drafts are group projects.
 localStorage.setItem("quiz-mock-groups", "1");
@@ -524,6 +527,11 @@ const CHECKED: Case[] = [
   ),
   ...projectIds.map((id) =>
     each("/app/api/projects/:id/checkpoints", `/app/api/projects/${id}/checkpoints`, ReviewCheckpoint),
+  ),
+  // The online workspace (M6-06, `?codespace=1`): each project's, and its open workspaces.
+  ...projectIds.map((id) => one("/app/api/projects/:id/workspace", `/app/api/projects/${id}/workspace`, ProjectWorkspace)),
+  ...projectIds.map((id) =>
+    one("/app/api/projects/:id/workspace/sessions", `/app/api/projects/${id}/workspace/sessions`, ProjectWorkspaceSessions),
   ),
   // The group sets (M3-16a): every classroom's list, and every set.
   ...courses

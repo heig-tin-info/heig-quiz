@@ -71,6 +71,7 @@ import { lockStudentRepo, setRepoArchived, unlockStudentRepo } from "../../githu
 import { isPlanRestriction } from "../../github/provision.js";
 import { PROJECT_DEADLINE_QUEUE, PROJECT_DISPATCH_QUEUE, PROJECT_GROUP_SYNC_QUEUE, PROJECT_SYNC_QUEUE, type JobQueue } from "../../jobs.js";
 import type { TickTask } from "../../ticker.js";
+import { requestCodespaceSync } from "../codespace/service.js";
 import { DomainError } from "../http.js";
 import { COMMIT_DUE, EFFECTIVE_DEADLINE, LIVE, NEEDS_WORK, ts } from "./deadline.js";
 import { stopGroups, stopProjects } from "./groupCopy.js";
@@ -296,14 +297,17 @@ export async function projectTick(app: FastifyInstance, config: AppConfig): Prom
   // Without Quiz's App there is no project to drive: the task skips, no retry loop.
   if (!githubApp(config)) return;
   const now = app.clock.now();
+  const published = await publishScheduled(app.db, now);
   const changed = [
-    ...(await publishScheduled(app.db, now)),
+    ...published,
     ...(await applyDeadlines(app.db, now)),
     ...(await freezeDue(app.db, now)),
   ];
   await hintProjectStaff(app.db, changed);
   await remindDeadlines(app.db, now, app.log);
   if (!app.boss) return;
+  // An online project published by the schedule goes to the portal (ADR-047 §6, M6-06): a job, never a call here.
+  for (const id of published) await requestCodespaceSync(app, config, id);
   await sendDeadlineJobs(app, config, await claimDeadlineWork(app.db, now));
   // The final reviews and the checkpoints due (M3-05b): their own lease, their own queue.
   for (const job of await claimReviewWork(app.db, now)) await app.boss.send(PROJECT_DISPATCH_QUEUE, job);

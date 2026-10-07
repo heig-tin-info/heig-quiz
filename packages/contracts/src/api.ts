@@ -9,6 +9,7 @@ import { z } from "zod";
 import { TRUSTED_CLIENTS } from "@quiz/domain";
 
 import { McqPolicy } from "./evaluation.js";
+import type { TeacherCodespaceGrant } from "./codespace.js";
 import type { CourseRole } from "./org.js";
 
 /** Display format for date-times; null falls back to ISO (`2026-09-01 08:00`). */
@@ -242,4 +243,6 @@ export interface AdminTeacher {
   avatarUrl: string | null;
   signedUp: boolean;
   courses: number;
+  /** The online workspace grant (ADR-047 §4); null when the feature is off (`CODESPACE_URL` empty). */
+  codespace: TeacherCodespaceGrant | null;
 }

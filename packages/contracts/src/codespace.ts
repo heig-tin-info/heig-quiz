@@ -145,3 +145,113 @@ export const ServiceTokenClaims = z.object({
   exp: z.number(),
 });
 export type ServiceTokenClaims = z.infer<typeof ServiceTokenClaims>;
+
+// ---------------------------------------------------------- Quiz's own routes (M6-06)
+
+/**
+ * The student's start route, `GET /app/codespace/start/:projectId` (ADR-047
+ * §6, as amended 2026-10-07): a navigable GET, because it is also the
+ * `startURL` of Safe Exam Browser (M6-07). Its refusals other than the 404
+ * come back to the student's project page as `?workspace=<code>`:
+ *   - `not_online` — the project is worked in the student's own tools;
+ *   - `seb_required` — an `online_seb` project opens from Safe Exam
+ *     Browser only (M6-07: until then, never);
+ *   - `not_accepted` — no live repository of theirs yet: accept first;
+ *   - `closed` — their deadline has passed.
+ */
+export const WORKSPACE_START_REFUSALS = ["not_online", "seb_required", "not_accepted", "closed"] as const;
+export const WorkspaceStartRefusal = z.enum(WORKSPACE_START_REFUSALS);
+export type WorkspaceStartRefusal = z.infer<typeof WorkspaceStartRefusal>;
+
+/** The path of the start route of a project: what the student's button and SEB's `startURL` open. */
+export const workspaceStartPath = (projectId: string): string => `/app/codespace/start/${encodeURIComponent(projectId)}`;
+
+/**
+ * Why the caller may not set a project's work mode now (ADR-047 as amended
+ * 2026-10-07; the pure rule is `workModeRefusal` of `@quiz/domain`):
+ * `owner_required` (403, an assistant), `codespace_not_granted` (403, an
+ * owner without the administrator's grant), `work_mode_frozen` (409, a
+ * workspace was launched), `work_mode_group` (409, a group project).
+ */
+export const WORK_MODE_REFUSALS = ["owner_required", "codespace_not_granted", "work_mode_frozen", "work_mode_group"] as const;
+export const WorkModeRefusal = z.enum(WORK_MODE_REFUSALS);
+export type WorkModeRefusal = z.infer<typeof WorkModeRefusal>;
+
+/** `PUT /app/api/projects/:id/workspace/mode`: the project's work mode. */
+export const ProjectWorkModeBody = z.strictObject({ mode: z.enum(WORK_MODES) });
+export type ProjectWorkModeBody = z.infer<typeof ProjectWorkModeBody>;
+
+/**
+ * `GET /app/api/projects/:id/workspace` (staff): the project's work mode,
+ * which modes the CALLER may set now and why not the others (the screen
+ * offers only what the server would accept), and the state of the last
+ * synchronization with the portal — when it went through, and the error of
+ * the last attempt (null once one went through). `online_seb` is synced
+ * from M6-07, with its Browser Exam Keys. The whole route is a 404 when the
+ * online workspace is off (`CODESPACE_URL` empty).
+ */
+export const ProjectWorkspace = z.object({
+  mode: z.enum(WORK_MODES),
+  /** The modes the caller may set now, the current one included. */
+  allowed: z.array(z.enum(WORK_MODES)),
+  /** Why another mode is refused to the caller (the first refusal met); null when every mode is open. */
+  refusal: WorkModeRefusal.nullable(),
+  syncedAt: z.iso.datetime().nullable(),
+  syncError: z.string().nullable(),
+});
+export type ProjectWorkspace = z.infer<typeof ProjectWorkspace>;
+
+/**
+ * One workspace of the project as the staff read it
+ * (`GET /app/api/projects/:id/workspace/sessions`): the portal's
+ * {@link CodespaceSessionSummary}, its `userId` matched to a Quiz account
+ * (`user`, null when the portal names nobody Quiz knows).
+ */
+export const ProjectWorkspaceSession = CodespaceSessionSummary.omit({ userId: true }).extend({
+  user: z.object({ id: z.uuid(), name: z.string() }).nullable(),
+});
+export type ProjectWorkspaceSession = z.infer<typeof ProjectWorkspaceSession>;
+
+/** The project's workspaces, live from the portal; `reachable: false` when it could not be asked (never an error page). */
+export const ProjectWorkspaceSessions = z.object({
+  reachable: z.boolean(),
+  sessions: z.array(ProjectWorkspaceSession),
+});
+export type ProjectWorkspaceSessions = z.infer<typeof ProjectWorkspaceSessions>;
+
+/** The resync's answer (`POST /app/api/projects/:id/workspace/sync`, 202): when it was asked. */
+export const ProjectWorkspaceSyncAccepted = z.object({ requestedAt: z.iso.datetime() });
+export type ProjectWorkspaceSyncAccepted = z.infer<typeof ProjectWorkspaceSyncAccepted>;
+
+/** The default quota of a grant: the portal's capacity is a handful of sessions (ADR-047 §4). */
+export const DEFAULT_MAX_ACTIVE_SESSIONS = 2;
+/** The largest quota an administrator may grant. */
+export const MAX_ACTIVE_SESSIONS_LIMIT = 200;
+
+/**
+ * A teacher's workspace grant (ADR-047 §4): may they put a project in the
+ * portal, and how many of their workspaces may run at once. On each row of
+ * `GET /app/api/admin/teachers`; null there when the feature is off.
+ */
+export const TeacherCodespaceGrant = z.object({
+  enabled: z.boolean(),
+  maxActiveSessions: z.number().int().min(0).max(MAX_ACTIVE_SESSIONS_LIMIT),
+});
+export type TeacherCodespaceGrant = z.infer<typeof TeacherCodespaceGrant>;
+
+/** `PATCH /app/api/admin/teachers/:gid/codespace` (admin): either field, at least one. */
+export const TeacherCodespaceGrantPatch = z
+  .strictObject({
+    enabled: z.boolean().optional(),
+    maxActiveSessions: z.number().int().min(0).max(MAX_ACTIVE_SESSIONS_LIMIT).optional(),
+  })
+  .refine((b) => b.enabled !== undefined || b.maxActiveSessions !== undefined, { message: "Nothing to update" });
+export type TeacherCodespaceGrantPatch = z.infer<typeof TeacherCodespaceGrantPatch>;
+
+/**
+ * The project's workspace as its STUDENT reads it (`StudentProject.workspace`):
+ * its mode, when it runs in the portal and the feature is on; null
+ * otherwise. Nothing of the portal's state, the quota or another student.
+ */
+export const StudentProjectWorkspace = z.object({ mode: z.enum(["online", "online_seb"]) });
+export type StudentProjectWorkspace = z.infer<typeof StudentProjectWorkspace>;

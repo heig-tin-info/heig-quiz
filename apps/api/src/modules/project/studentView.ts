@@ -264,9 +264,16 @@ function reading(project: ProjectRow, repo: ProvisionedRepo, { runs, receipts }:
  * the project `scope` loaded through `studentProjectView` (invariant 6),
  * for `userId` — the caller, or the impersonated student (ADR-034). A
  * repository deleted on GitHub is still theirs to read, said `deleted`,
- * with nothing of its runs.
+ * with nothing of its runs. `codespace`: the online workspace is on
+ * (`CODESPACE_URL` set), so the project's mode is said (ADR-047, M6-06).
  */
-export async function studentProject(db: Db, scope: StudentProjectScope, userId: string, now: Date): Promise<StudentProject> {
+export async function studentProject(
+  db: Db,
+  scope: StudentProjectScope,
+  userId: string,
+  now: Date,
+  { codespace }: { codespace: boolean },
+): Promise<StudentProject> {
   const { project } = scope;
   const row = scope.seat !== null ? await seatRepo(db, project, scope.seat.id) : null;
   const seat = scope.seat === null ? null : scope.seat.staff ? ("staff" as const) : ("student" as const);
@@ -301,6 +308,8 @@ export async function studentProject(db: Db, scope: StudentProjectScope, userId:
             grade: scoreGrade(repo?.releasedPoints ?? null, repo?.releasedMax ?? null, project.gradingScale),
             comment: repo?.releasedComment ?? null,
           },
+    // ADR-047 (M6-06): the mode alone, when the project runs in the portal and the feature is on.
+    workspace: codespace && project.workMode !== "free" ? { mode: project.workMode } : null,
     serverNow: iso(now),
   };
 }

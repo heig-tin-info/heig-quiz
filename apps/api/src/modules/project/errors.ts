@@ -5,11 +5,11 @@
  * class, its status by code. (A revocation's `revoke_failed` is a roster
  * refusal, `rosterRefusal` of the `org` module.)
  */
-import type { ProjectAcceptErrorCode, ProjectCheckpointErrorCode, ProjectErrorCode } from "@quiz/contracts";
+import type { ProjectAcceptErrorCode, ProjectCheckpointErrorCode, ProjectErrorCode, WorkModeRefusal } from "@quiz/contracts";
 
 import { DomainError } from "../http.js";
 
-type Code = ProjectErrorCode | ProjectAcceptErrorCode | ProjectCheckpointErrorCode;
+type Code = ProjectErrorCode | ProjectAcceptErrorCode | ProjectCheckpointErrorCode | WorkModeRefusal;
 
 /** The state of things is a 409; what the clock or GitHub's contents refuse a 422; too soon a 429; GitHub failing a 502. */
 const STATUS: Record<Code, number> = {
@@ -62,6 +62,12 @@ const STATUS: Record<Code, number> = {
   classroom_archived: 409,
   needs_confirmation: 409,
   group_sync_pending: 409,
+  // The work mode (ADR-047 as amended 2026-10-07, M6-06): a role or a grant the caller lacks is a 403.
+  not_invitable: 409,
+  owner_required: 403,
+  codespace_not_granted: 403,
+  work_mode_frozen: 409,
+  work_mode_group: 409,
 };
 
 /** A refusal: `{ error: code, message, ...details }`. */

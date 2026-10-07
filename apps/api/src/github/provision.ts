@@ -81,8 +81,11 @@ export interface ProvisionResult {
   fullName: string;
   defaultBranch: string;
   rulesetId: number | null;
-  /** `pending` if an invitation was created, `accepted` if already a collaborator. */
-  invitationStatus: "pending" | "accepted";
+  /**
+   * `pending` if an invitation was created, `accepted` if already a
+   * collaborator, `none` when the work mode invites nobody (ADR-047 §2).
+   */
+  invitationStatus: "pending" | "accepted" | "none";
 }
 
 export async function provisionStudentRepo(opts: {
@@ -94,6 +97,13 @@ export async function provisionStudentRepo(opts: {
   branches: string[];
   defaultBranch: string;
   studentLogin: string;
+  /**
+   * The invitation's permission, by the project's work mode
+   * (`collaboratorPermission`, ADR-047 §2): `push` (the default, the
+   * student's own tools), `pull` (the online workspace: only the portal
+   * writes), or null — no invitation at all (under Safe Exam Browser).
+   */
+  permission?: "push" | "pull" | null;
   /**
    * The allow-list of the repository (M3-03 review): called with its id and
    * whether this call created it, BEFORE anything is pushed to it, changed
@@ -197,9 +207,11 @@ export async function provisionStudentRepo(opts: {
   const rulesetId = await protectStudentRepo(octokit, org, targetRepo);
 
   // 4. Invite the student (idempotent: 204 = already a collaborator), with
-  //    the `push` permission and never more (N-SEC-21). Quiz has no work
-  //    mode (D09): heig-classroom's `pull` and no-invitation modes are gone.
-  const invitationStatus = await inviteCollaborator(octokit, org, targetRepo, studentLogin, "push");
+  //    the permission of the project's work mode and never more than `push`
+  //    (N-SEC-21): `pull` online, no invitation under SEB (ADR-047 §2).
+  const permission = opts.permission === undefined ? "push" : opts.permission;
+  const invitationStatus =
+    permission === null ? "none" : await inviteCollaborator(octokit, org, targetRepo, studentLogin, permission);
 
   return {
     repoId,

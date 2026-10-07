@@ -8,8 +8,11 @@
  * assignment ⇒ project, `assignment_milestones` ⇒ `project_checkpoints`,
  * `student_repos` ⇒ `project_repos`, `grade_runs` ⇒ `project_grade_runs`,
  * the `llm` slot ⇒ the `review` slot, "validate the grades" ⇒ release.
- * heig-classroom's online workspace columns and `work_mode` are left out: a
- * project is worked in the student's own tools (D09, F-PROJ-19).
+ * heig-classroom's online workspace columns are left out; `work_mode` came
+ * back with M6-06 (ADR-047 as amended 2026-10-07), `free` by default: a
+ * project is worked in the student's own tools unless an owner with the
+ * grant puts it in the portal. The portal's state of a project (its sync,
+ * its first launch) is the `codespace` module's (`db/codespace.ts`).
  *
  * **The rows of heig-classroom are imported as they are** (M8-01, ids kept):
  * every fact the import carries — when a repository was accepted, when a run
@@ -61,6 +64,7 @@ import {
   SOURCE_STRATEGIES,
   SYNC_OUTCOMES,
   SYNC_PR_STATES,
+  WORK_MODES,
   type ProjectGradingScale,
 } from "@quiz/contracts";
 
@@ -127,6 +131,14 @@ export const projects = pgTable(
     groupsStoppedAt: timestamp("groups_stopped_at", { withTimezone: true }),
     branches: text("branches").array().notNull(),
     protectedFiles: text("protected_files").array().notNull(),
+    /**
+     * Where the students work (ADR-047, F-PROJ-19 as amended 2026-10-07):
+     * `free` in their own tools, `online` in the portal's workspace,
+     * `online_seb` there under Safe Exam Browser (M6-07). Set by an owner
+     * with the grant (`setWorkMode`); frozen once a workspace was launched.
+     * It decides the invitation's permission (`collaboratorPermission`).
+     */
+    workMode: text("work_mode", { enum: WORK_MODES }).notNull().default("free"),
     /**
      * The source's head when it is ahead of the distribution repository
      * (F-PROJ-12, M3-07): the `after` of the last push to a handed-out

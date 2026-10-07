@@ -8,7 +8,11 @@ import {
   LAUNCH_AUDIENCE,
   LaunchTokenClaims,
   SERVICE_AUDIENCE,
+  ProjectWorkModeBody,
   ServiceTokenClaims,
+  TeacherCodespaceGrantPatch,
+  workspaceStartPath,
+  WorkspaceStartRefusal,
 } from "./codespace.js";
 
 /**
@@ -123,5 +127,26 @@ describe("signing", () => {
   it("a token signed here round-trips", async () => {
     const t = await signHs256({ iss: "heig-quiz", aud: LAUNCH_AUDIENCE, iat: 1, exp: 301, jti: "j" }, FIXTURE.secret);
     expect(await verifyHs256(t, FIXTURE.secret, { audience: LAUNCH_AUDIENCE, issuer: CODESPACE_ISSUERS, now: () => 10 })).toMatchObject({ ok: true });
+  });
+});
+
+describe("Quiz's own workspace routes (M6-06)", () => {
+  it("takes one of the three modes, and nothing else", () => {
+    expect(ProjectWorkModeBody.safeParse({ mode: "online" }).success).toBe(true);
+    expect(ProjectWorkModeBody.safeParse({ mode: "exam" }).success).toBe(false);
+    expect(ProjectWorkModeBody.safeParse({ mode: "free", extra: 1 }).success).toBe(false);
+  });
+
+  it("edits a grant by either field, at least one, a quota within bounds", () => {
+    expect(TeacherCodespaceGrantPatch.safeParse({ enabled: true }).success).toBe(true);
+    expect(TeacherCodespaceGrantPatch.safeParse({ maxActiveSessions: 0 }).success).toBe(true);
+    expect(TeacherCodespaceGrantPatch.safeParse({}).success).toBe(false);
+    expect(TeacherCodespaceGrantPatch.safeParse({ maxActiveSessions: -1 }).success).toBe(false);
+    expect(TeacherCodespaceGrantPatch.safeParse({ maxActiveSessions: 1.5 }).success).toBe(false);
+  });
+
+  it("names the start route and its refusals", () => {
+    expect(workspaceStartPath("p/1")).toBe("/app/codespace/start/p%2F1");
+    expect(WorkspaceStartRefusal.options).toEqual(["not_online", "seb_required", "not_accepted", "closed"]);
   });
 });
