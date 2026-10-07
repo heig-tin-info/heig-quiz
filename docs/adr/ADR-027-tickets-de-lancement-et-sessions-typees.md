@@ -47,6 +47,23 @@ header is checked against drops a `#fragment` (the SEB specification
 hashes the URL "without Fragment part"; a browser never sends one); `auth/seb.ts` keeps the routes and the
 evaluation's configuration (Quiz's host only).
 
+**Addendum (2026-10-07, M6-07, D21 points 2–5): a `seb` session per
+activity.** The ticket and the session carry `project_id` instead of
+`evaluation_id` for an `online_seb` project (never both, a check
+constraint); `SessionAuth.projectId`. §3's default deny gains a second
+axis: a route declares the **activities** a confined session it serves may
+be confined to (`activities`, absent: an evaluation), so an evaluation's
+session is anonymous on a project's routes and the reverse; a project's
+session reaches `GET /me`, its project's student page and *Open workspace*
+(`PROJECT_SEB`), each loaded for that project only. The platform builds
+every `.seb` (`sendLaunchFile`): a project's file allows the workspace
+portal's host too, and both add `SEB_EXTRA_ALLOWED_HOSTS` (empty by
+default: the evaluation's file is unchanged). §2's start route checks the
+header against either activity's file before consuming the ticket, then
+against the ticket's own. One session per (user, activity) (ADR-051 §4).
+Browser Exam Keys stay out of Quiz's own check: a project's are the
+portal's (ADR-047 amendment "M6-07").
+
 ## Context
 
 An exam sat in Safe Exam Browser (SEB) is a separate browser: the portal's

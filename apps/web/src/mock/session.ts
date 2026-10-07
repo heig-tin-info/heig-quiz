@@ -43,16 +43,31 @@ export let me: Me | null = {
         session: {
           kind: "impersonation",
           evaluationId: null,
+          projectId: null,
           readOnly: true,
           superPowersUntil: null,
           superPowersAvailable: false,
         },
       }
-    : role === "admin"
+    : flags.sebproject && role === "student"
+      ? {
+          // D21 (M6-07): inside SEB, confined to the student's `online_seb`
+          // project (`STUDENT_PROJECT_INVITED` of `mock/student.ts`).
+          session: {
+            kind: "seb",
+            evaluationId: null,
+            projectId: "77777777-7777-4777-8777-777777777705",
+            readOnly: false,
+            superPowersUntil: null,
+            superPowersAvailable: false,
+          },
+        }
+      : role === "admin"
       ? {
           session: {
             kind: "portal",
             evaluationId: null,
+            projectId: null,
             readOnly: false,
             superPowersUntil:
               flags.superpowers || flags.lastminutes
@@ -73,6 +88,7 @@ const setSuperPowers = (until: string | null): SuperPowersState => {
     session: {
       kind: "portal",
       evaluationId: null,
+      projectId: null,
       readOnly: false,
       superPowersUntil: until,
       superPowersAvailable: true,

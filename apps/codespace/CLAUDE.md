@@ -3,7 +3,7 @@
 `@quiz/codespace`: VS Code in the browser (code-server) inside hardened
 rootful Podman containers, one per (student, assignment), with an SEB exam
 mode. A separate deployable on the engine VM, beside `apps/runner`: it
-imports only `packages/*` (`@quiz/domain` for HS256, `@quiz/contracts` for
+imports only `packages/*` (`@quiz/domain` for HS256, `@quiz/seb` for the SEB hashes, `@quiz/contracts` for
 the codespace schemas) and talks to the platform through two HS256-signed
 HTTP messages (ADR-047). Imported from heig-classroom's `apps/codespace` at
 classroom `a676c8c` (merge task M6-03).
@@ -18,7 +18,7 @@ and its M6-03 amendment, then [docs/merge/06-codespace-seb-infra.md](../../docs/
 
 | Kind | Documents |
 | --- | --- |
-| Reference | [docs/analyse.md](docs/analyse.md) (decisions D1–D8), [docs/integration-classroom.md](docs/integration-classroom.md) (the platform boundary, written for heig-classroom), [docs/setup-workstation.md](docs/setup-workstation.md), [images/c-dev/README.md](images/c-dev/README.md) (the student image), [src/git/README.md](src/git/README.md) (the Git channel), [src/seb/README.md](src/seb/README.md) (the SEB verification), [infra/net/README.md](infra/net/README.md) (the closed network) |
+| Reference | [docs/analyse.md](docs/analyse.md) (decisions D1–D8), [docs/integration-classroom.md](docs/integration-classroom.md) (the platform boundary, written for heig-classroom), [docs/setup-workstation.md](docs/setup-workstation.md), [images/c-dev/README.md](images/c-dev/README.md) (the student image), [src/git/README.md](src/git/README.md) (the Git channel), [src/seb/README.md](src/seb/README.md) (the SEB verification; its `.seb` and Config Key sections are history since M6-07), [infra/net/README.md](infra/net/README.md) (the closed network) |
 | History, superseded in places | [project.md](project.md), [docs/milestone-0.md](docs/milestone-0.md), [docs/v1.md](docs/v1.md), [docs/leads.md](docs/leads.md), [docs/proof-b-manual.md](docs/proof-b-manual.md) |
 
 These documents describe heig-classroom's portal: read *classroom* as the
@@ -44,7 +44,10 @@ Start button, its teacher dashboard and its YAML seed (all removed, below).
 - `PLATFORM_URL` replaces `CLASSROOM_URL` (still read as an alias); launch
   and service tokens are accepted from both issuers, `heig-classroom` and
   `heig-quiz`.
-- `src/seb/` is kept as is until M6-07 moves it onto `packages/seb`.
+- `src/seb/` moved onto `packages/seb` at M6-07 (D21): the platform builds
+  every `.seb`; the portal keeps the `/launch` check (`verify.ts`, the
+  Config Key from the token's `seb` claim, Browser Exam Keys optional) and
+  the proxy's cookie check (`check.ts`). No `/exam/:id.seb` any more.
 - **Not imported**: heig-classroom's `deploy/` and `docs/deploy.md` (its VM
   recipe, which wrote a configuration this portal refuses and copied
   classroom's App key) and its end-to-end script (it drove the removed
@@ -129,9 +132,12 @@ channel divergence for its containers.
     submission.
 11. **The exam staging repository is seeded from the teacher's template**,
     never from the student's repository.
-12. **The platform owns the `.seb` `startURL`**: the platform authenticates
-    the student, then redirects to `/launch`. SEB's URL filter allows the
-    platform, the portal and `SEB_EXTRA_ALLOWED_HOSTS`.
+12. **The platform owns the `.seb`** (D21, M6-07): it builds the file,
+    whose `startURL` is the platform's one-time ticket and whose URL filter
+    allows the platform, the portal and the platform's
+    `SEB_EXTRA_ALLOWED_HOSTS`; the student's Config Key reaches `/launch`
+    signed in the launch token (`seb` claim). An exam token without it is
+    refused.
 
 ## Commands
 

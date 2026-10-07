@@ -45,7 +45,7 @@ import {
   type ServiceTokenClaims,
   type TeacherCodespaceGrant,
 } from "@quiz/contracts";
-import { quotaHolder, signHs256, syncsToPortal, workModeRefusal, workspaceStartRefusal } from "@quiz/domain";
+import { isOnlineMode, quotaHolder, signHs256, workModeRefusal, workspaceStartRefusal } from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
@@ -53,6 +53,7 @@ import type { Db, Tx } from "../../db/client.js";
 import { classrooms, codespaceProjects, courseStaff, enrollments, githubAccounts, projectRepos, projects, teacherGrants, users } from "../../db/schema.js";
 import { knownEmails, normalizeEmail } from "../../identity.js";
 import { CODESPACE_SYNC_QUEUE } from "../../jobs.js";
+import { publishedProject } from "../guards.js";
 
 /** The portal is wired up at all: an empty `CODESPACE_URL` means the feature does not exist (ADR-047 §5). */
 export function codespaceOn(config: Pick<AppConfig, "CODESPACE_URL">): boolean {
@@ -94,7 +95,7 @@ export async function grantOf(db: Db | Tx, userId: string): Promise<TeacherCodes
 /** The `codespace_projects` row of a project, or the empty one it would be. */
 async function portalState(db: Db, projectId: string) {
   const [row] = await db.select().from(codespaceProjects).where(eq(codespaceProjects.projectId, projectId));
-  return row ?? { syncedAt: null, syncError: null, firstLaunchAt: null };
+  return row ?? { syncedAt: null, syncError: null, firstLaunchAt: null, browserExamKeys: [] };
 }
 
 /**
@@ -118,7 +119,21 @@ export async function projectWorkspace(
     refusal: judged.find((j) => j.refusal !== null)?.refusal ?? null,
     syncedAt: state.syncedAt?.toISOString() ?? null,
     syncError: state.syncError,
+    browserExamKeys: state.browserExamKeys,
   };
+}
+
+/**
+ * `PUT /app/api/projects/:id/workspace/keys`: the Browser Exam Keys the
+ * portal accepts for the project (D21 point 5), the whole list replaced;
+ * audited by their count, never a key (ADR-047 §7). The caller syncs.
+ */
+export async function setBrowserExamKeys(db: Db, projectId: string, keys: string[], actor: AuditActor): Promise<void> {
+  await db
+    .insert(codespaceProjects)
+    .values({ projectId, browserExamKeys: keys })
+    .onConflictDoUpdate({ target: codespaceProjects.projectId, set: { browserExamKeys: keys } });
+  await audit(db, { ...actor, action: "codespace.browser_exam_keys", subjectType: "project", subjectId: projectId, payload: { count: keys.length } });
 }
 
 // ---------------------------------------------------------------- tokens
@@ -171,13 +186,13 @@ async function quotaHolderOf(db: Db, courseId: string, createdBy: string): Promi
 /**
  * The body the portal expects for `projectId`, or null when there is
  * nothing to send: no such project, a project in the students' own tools,
- * one whose distribution repository is not built yet (the publication
- * sends it again), or an `online_seb` one — the portal refuses an exam
- * without Browser Exam Keys, which come with M6-07 (`syncsToPortal`). The
- * workspace is seeded from the distribution repository, never the source
- * (N-SEC-20). With the portal's forge off (ADR-047, M6-03 amendment (a))
- * it can clone only a PUBLIC repository: a private distribution syncs, but
- * cannot seed a workspace until Quiz's App is on the engine VM (M6-04/05).
+ * or one whose distribution repository is not built yet (the publication
+ * sends it again). An `online_seb` project carries its Browser Exam Keys,
+ * none meaning the Config Key alone (D21, M6-07). The workspace is seeded
+ * from the distribution repository, never the source (N-SEC-20). With the
+ * portal's forge off (ADR-047, M6-03 amendment (a)) it can clone only a
+ * PUBLIC repository: a private distribution syncs, but cannot seed a
+ * workspace until Quiz's App is on the engine VM (M6-04/05).
  */
 export async function syncPayload(db: Db, projectId: string): Promise<CodespaceAssignmentSync | null> {
   const [row] = await db
@@ -185,8 +200,9 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
     .from(projects)
     .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
     .where(eq(projects.id, projectId));
-  if (!row || !syncsToPortal(row.project.workMode) || row.project.distributionFullName === null) return null;
+  if (!row || !isOnlineMode(row.project.workMode) || row.project.distributionFullName === null) return null;
   const { project } = row;
+  const { browserExamKeys } = await portalState(db, project.id);
   const holder = await quotaHolderOf(db, row.courseId, project.createdBy);
   if (holder === null) return null;
   const grant = await grantOf(db, holder.id);
@@ -196,10 +212,10 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
     name: project.name,
     classroomId: project.classroomId,
     classroomName: row.classroomName,
-    mode: "online",
+    mode: project.workMode,
     image: null,
     sourceRepo: { fullName: project.distributionFullName, defaultBranch: project.branches[0] ?? "main" },
-    browserExamKeys: [],
+    browserExamKeys: project.workMode === "online_seb" ? browserExamKeys : [],
     teacher: { id: holder.id, email: holder.email || holder.id },
     quota: { maxActiveSessions: grant?.maxActiveSessions ?? DEFAULT_MAX_ACTIVE_SESSIONS },
     startAt: project.startAt.toISOString(),
@@ -253,7 +269,7 @@ export async function runCodespaceSync(
     await recordSync(db, projectId, { error });
     throw new Error(error);
   }
-  // The answer's Config Key is the `.seb`'s (M6-07): nothing to keep for an `online` project.
+  // The answer's Config Key and link were the portal's own `.seb`'s: Quiz builds every `.seb` now (D21), nothing to keep.
   const result = CodespaceAssignmentSyncResult.safeParse(await response.json().catch(() => null));
   if (!result.success) log.warn({ projectId }, "codespace.sync: the portal's answer is not a CodespaceAssignmentSyncResult");
   await recordSync(db, projectId, { at: now });
@@ -342,6 +358,27 @@ export async function projectSessions(
   };
 }
 
+// ---------------------------------------------------------------- Safe Exam Browser (D21, M6-07)
+
+/**
+ * The project a `seb` session may be opened for, the twin of `sebSeat`:
+ * published (not archived), in `online_seb`, of a classroom not archived,
+ * where `userId` holds a claimed seat (a staff seat testing it included,
+ * ADR-077) — checked when the `.seb` is downloaded and again when SEB
+ * trades its ticket. Null otherwise, and when the feature is off (the
+ * module's routes do not exist then).
+ */
+export async function sebProjectSeat(db: Db, userId: string, projectId: string): Promise<{ id: string } | null> {
+  const [row] = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .innerJoin(classrooms, and(eq(classrooms.id, projects.classroomId), isNull(classrooms.archivedAt)))
+    .innerJoin(enrollments, and(eq(enrollments.classroomId, projects.classroomId), eq(enrollments.userId, userId)))
+    .where(and(eq(projects.id, projectId), eq(projects.workMode, "online_seb"), publishedProject()))
+    .limit(1);
+  return row ?? null;
+}
+
 // ---------------------------------------------------------------- the start (student → portal)
 
 /** Who launches, as the start route loaded them. */
@@ -351,6 +388,12 @@ export interface Launcher {
   staffSeat: boolean;
   classroomArchived: boolean;
   actor: AuditActor;
+  /**
+   * The Config Key of the `seb` session confined to this project the launch
+   * comes from (D21 point 4), null from a portal session. It travels in the
+   * token's `seb` claim: the portal checks SEB's header against it.
+   */
+  sebConfigKey: string | null;
 }
 
 /**
@@ -359,7 +402,8 @@ export interface Launcher {
  * finds it frozen —, the student's own repository (online modes are
  * individual), the decision of `workspaceStartRefusal`; then the first
  * launch marked (never by a staff seat: a teacher testing the project does
- * not freeze its mode), a launch token minted and its `jti` audited
+ * not freeze its mode), a launch token minted — with this student's Config
+ * Key from a `seb` session — and its `jti` audited
  * (`codespace.launch_issued`; the token never). Null: no such project.
  */
 export async function startWorkspace(
@@ -376,7 +420,8 @@ export async function startWorkspace(
       .select()
       .from(projectRepos)
       .where(and(eq(projectRepos.projectId, project.id), eq(projectRepos.userId, who.user.id), isNull(projectRepos.groupId)));
-    const refusal = workspaceStartRefusal({ project, repo: repo ?? null, classroomArchived: who.classroomArchived }, now);
+    const fromSeb = who.sebConfigKey !== null;
+    const refusal = workspaceStartRefusal({ project, repo: repo ?? null, classroomArchived: who.classroomArchived, fromSeb }, now);
     if (refusal) return refusal;
     const [account] = await tx.select({ login: githubAccounts.login }).from(githubAccounts).where(eq(githubAccounts.userId, who.user.id));
     if (!who.staffSeat) await markLaunched(tx, project.id, now);
@@ -390,6 +435,7 @@ export async function startWorkspace(
         githubLogin: account?.login ?? null,
         assignmentId: project.id,
         repo: { fullName: repo!.fullName!, defaultBranch: repo!.defaultBranch ?? project.branches[0] ?? "main" },
+        ...(fromSeb && { seb: { configKey: who.sebConfigKey! } }),
       },
       now,
     );
@@ -399,7 +445,7 @@ export async function startWorkspace(
       action: "codespace.launch_issued",
       subjectType: "project",
       subjectId: project.id,
-      payload: { jti: issued.jti, mode: project.workMode },
+      payload: { jti: issued.jti, mode: project.workMode, ...(fromSeb && { seb: true }) },
     });
     return issued;
   });

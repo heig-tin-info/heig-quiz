@@ -530,8 +530,14 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
   // stream (`attempt:`/`evaluation:`), which delivers the start, the deadline,
   // the pause and the closure as typed frames, so the attempt route needs no
   // hints at all.
-  // ADR-027: a `seb` session has one evaluation, and no other page.
-  const confinedTo = me.data?.session?.evaluationId ?? null;
+  // ADR-027: a `seb` session has one activity, and no other page — its
+  // evaluation's attempt, or (D21) its project's student page.
+  const session = me.data?.session;
+  const confinedTo: Route | null = session?.evaluationId
+    ? { view: "attempt", evaluationId: session.evaluationId }
+    : session?.projectId
+      ? { view: "project", id: session.projectId }
+      : null;
   // ADR-051 §7: a station's session ends with the attempt, or with the
   // evaluation — sometimes while the page only waits (a lobby the teacher
   // closed). Its stream dropping is how the page learns it.
@@ -571,15 +577,20 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
   if (me.isLoading) return null;
   if (!me.data) return <SignedOut route={route} navigate={navigate} />;
   if (confinedTo !== null) {
-    return route.view === "attempt" ? (
+    const page = (
       <Suspense fallback={<Spinner className="py-24" />}>
-        {renderPage({ view: "attempt", evaluationId: confinedTo }, { me: me.data, navigate, teacherUi: false })}
+        {renderPage(confinedTo, { me: me.data, navigate, teacherUi: false })}
       </Suspense>
+    );
+    // The attempt is full screen; a project's page, without the shell's frame, keeps its gutters.
+    return route.view === confinedTo.view ? (
+      confinedTo.view === "project" ? (
+        <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">{page}</main>
+      ) : (
+        page
+      )
     ) : (
-      <ConfinedElsewhere
-        kiosk={onStation}
-        onBack={() => navigate({ view: "attempt", evaluationId: confinedTo })}
-      />
+      <ConfinedElsewhere kiosk={onStation} onBack={() => navigate(confinedTo)} />
     );
   }
   const shown: Route = onTeacherRoute ? { view: "home" } : route;

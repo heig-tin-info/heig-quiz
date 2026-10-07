@@ -1,10 +1,20 @@
 /**
- * Verification of the SEB provenance, on the exam start route and nowhere else.
+ * Verification of the SEB provenance, on `/launch` in exam mode and nowhere
+ * else.
  *
- * Two implementations behind one interface: `real`, which checks the two
- * headers SEB adds when the "Use Browser & Config Keys" option is on, and
- * `simulated`, which accepts a development header and which
- * `createSebVerifier` refuses to build in production (invariant 8).
+ * The hashes and the header names are `@quiz/seb`'s (D21, merge task M6-07):
+ * the platform builds every `.seb`, and this portal keeps only the check it
+ * still needs. Two implementations behind one interface: `real`, which
+ * checks the headers SEB adds, and `simulated`, which accepts a development
+ * header and which `createSebVerifier` refuses to build in production
+ * (invariant 5 of this portal's `CLAUDE.md`).
+ *
+ * - The Config Key is the one of the student's own `.seb`, which the platform
+ *   signs into the launch token's `seb` claim (the file carries the
+ *   student's one-time ticket, so every student's key differs).
+ * - The Browser Exam Keys are optional per assignment (D21 point 5): an
+ *   empty list means the Config Key alone, the platform's default; a
+ *   non-empty one demands `X-SafeExamBrowser-RequestHash` for one of them.
  *
  * References:
  *   [SPEC-CK] https://safeexambrowser.org/developer/seb-config-key.html
@@ -13,31 +23,36 @@
  *   [SPEC-IN] https://safeexambrowser.org/developer/seb-integration.html
  *             (Browser Exam Key, one BEK per platform and per version)
  *   [AM]      mod/quiz/accessrule/seb/classes/seb_access_manager.php
- *             `check_key()`: `hash('sha256', $url . $validkey) === $key`
- *             `check_browser_exam_keys()`: loops over the list of BEKs
- *             https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/mod/quiz/accessrule/seb/classes/seb_access_manager.php
+ *             `check_key()`, `check_browser_exam_keys()`
  *
- * Invariant 5 of CLAUDE.md: nothing but this route ever reads a SEB header.
- * The proxy to code-server only knows the cookie of examSession.ts.
+ * Invariant 6 of this portal's `CLAUDE.md`: nothing but `/launch` ever reads
+ * a SEB header. The proxy to code-server only knows the cookie of
+ * examSession.ts.
  */
-import { createHash, timingSafeEqual } from "node:crypto";
+import {
+  CONFIG_KEY_HEADER,
+  REQUEST_HASH_HEADER,
+  anyKeyMatches,
+  expectedHash,
+  hashesEqual,
+} from "@quiz/seb";
 
-export const CONFIG_KEY_HEADER = "x-safeexambrowser-configkeyhash";
-export const REQUEST_HASH_HEADER = "x-safeexambrowser-requesthash";
+export { CONFIG_KEY_HEADER, REQUEST_HASH_HEADER, expectedHash, hashesEqual };
 export const DEV_HEADER = "x-dev-seb";
 
 /** What the verifier needs to know about an HTTP request. */
 export interface SebRequestFacts {
-  /** Path and query as received, for instance `/exam/a1/start?x=1`. */
+  /** Path and query as received, for instance `/launch?token=…`. */
   readonly url: string;
   /** Headers in lower case, the way Fastify and Node expose them. */
   readonly headers: Readonly<Record<string, string | string[] | undefined>>;
 }
 
-/** The keys of an assignment. `beks` is a list: see analyse.md § 4.4. */
+/** The keys a launch is checked against. */
 export interface AssignmentSebKeys {
+  /** The Config Key of the student's `.seb` (the launch token's `seb` claim). */
   readonly configKey: string;
-  /** One Browser Exam Key per (platform, version) pair in the fleet. */
+  /** One Browser Exam Key per (platform, version) pair; empty: the Config Key alone. */
   readonly beks: readonly string[];
 }
 
@@ -47,7 +62,6 @@ export type SebRefusal =
   | "missing-request-hash-header"
   | "config-key-mismatch"
   | "browser-exam-key-mismatch"
-  | "no-browser-exam-key-configured"
   | "missing-dev-header";
 
 export type SebVerdict =
@@ -130,25 +144,6 @@ export function absoluteRequestUrl(
   }
 }
 
-// --- Comparisons -----------------------------------------------------------
-
-/** Constant-time comparison of two hexadecimal hashes. */
-export function hashesEqual(a: string, b: string): boolean {
-  const left = Buffer.from(a.trim().toLowerCase(), "utf8");
-  const right = Buffer.from(b.trim().toLowerCase(), "utf8");
-  // `timingSafeEqual` demands equal lengths, and comparing the lengths first
-  // would short-circuit. The digests are compared instead, always 32 bytes
-  // long: constant duration, and equal digests mean equal strings.
-  const la = createHash("sha256").update(left).digest();
-  const lb = createHash("sha256").update(right).digest();
-  return timingSafeEqual(la, lb);
-}
-
-/** `sha256(url + key)`, the formula of [AM:check_key]. */
-export function expectedHash(url: string, key: string): string {
-  return createHash("sha256").update(`${url}${key}`, "utf8").digest("hex");
-}
-
 // --- Implementations -------------------------------------------------------
 
 class RealSebVerifier implements SebVerifier {
@@ -163,27 +158,20 @@ class RealSebVerifier implements SebVerifier {
     if (configKeyHash === undefined) {
       return { ok: false, reason: "missing-config-key-header", url };
     }
+    if (!hashesEqual(expectedHash(url, keys.configKey), configKeyHash)) {
+      return { ok: false, reason: "config-key-mismatch", url };
+    }
+    // D21 point 5: no Browser Exam Key recorded is the Config Key alone.
+    if (keys.beks.length === 0) return { ok: true, url };
     const requestHash = firstHeader(req.headers, REQUEST_HASH_HEADER);
     if (requestHash === undefined) {
       return { ok: false, reason: "missing-request-hash-header", url };
     }
-    if (!hashesEqual(expectedHash(url, keys.configKey), configKeyHash)) {
-      return { ok: false, reason: "config-key-mismatch", url };
+    // [AM:check_browser_exam_keys]: at least one of the accepted BEKs, every
+    // one compared (`anyKeyMatches`), so the duration does not tell which.
+    if (!anyKeyMatches(url, keys.beks, requestHash)) {
+      return { ok: false, reason: "browser-exam-key-mismatch", url };
     }
-    if (keys.beks.length === 0) {
-      // Unlike Moodle, which lets the request through when no BEK is
-      // configured, an exam-mode assignment without a BEK is a configuration
-      // error here: refusing is the safe behaviour.
-      return { ok: false, reason: "no-browser-exam-key-configured", url };
-    }
-    // [AM:check_browser_exam_keys]: at least one of the accepted BEKs. The
-    // loop does not break on the first success, so that the duration does not
-    // depend on the position of the BEK that matched.
-    let matched = false;
-    for (const bek of keys.beks) {
-      if (hashesEqual(expectedHash(url, bek), requestHash)) matched = true;
-    }
-    if (!matched) return { ok: false, reason: "browser-exam-key-mismatch", url };
     return { ok: true, url };
   }
 }
@@ -217,9 +205,10 @@ export class SebConfigurationError extends Error {
 }
 
 /**
- * Invariant 8 of CLAUDE.md: the `simulated` mode is impossible under
- * `NODE_ENV=production`. The refusal is an exception at startup, not a silent
- * fallback to `real`: a misconfigured production must fail to start.
+ * Invariant 5 of this portal's `CLAUDE.md`: the `simulated` mode is
+ * impossible under `NODE_ENV=production`. The refusal is an exception at
+ * startup, not a silent fallback to `real`: a misconfigured production must
+ * fail to start.
  */
 export function createSebVerifier(config: SebVerifierConfig): SebVerifier {
   if (config.mode === "simulated" && config.nodeEnv === "production") {

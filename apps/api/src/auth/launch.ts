@@ -25,6 +25,8 @@ interface LaunchTicket {
   kind: LaunchKind;
   /** The evaluation a `seb` session is confined to; null for any other kind. */
   evaluationId: string | null;
+  /** The project a `seb` session is confined to instead (D21); absent or null otherwise. */
+  projectId?: string | null;
 }
 
 type LaunchKind = Exclude<SessionKind, "portal">;
@@ -50,6 +52,7 @@ export async function issueLaunchTicket(db: Db, ticket: LaunchTicket, now: Date)
           same(launchTickets.actorUserId, ticket.actorUserId),
           eq(launchTickets.kind, ticket.kind),
           same(launchTickets.evaluationId, ticket.evaluationId),
+          same(launchTickets.projectId, ticket.projectId ?? null),
           isNull(launchTickets.consumedAt),
           isNull(launchTickets.revokedAt),
         ),
@@ -61,6 +64,7 @@ export async function issueLaunchTicket(db: Db, ticket: LaunchTicket, now: Date)
       userId: ticket.userId,
       actorUserId: ticket.actorUserId,
       evaluationId: ticket.evaluationId,
+      projectId: ticket.projectId ?? null,
       createdAt: now,
       expiresAt: new Date(now.getTime() + LAUNCH_TICKET_TTL_MS),
     });
@@ -102,6 +106,7 @@ export async function consumeLaunchTicket(
       kind: row.kind,
       actorUserId: row.actorUserId,
       evaluationId: row.evaluationId,
+      projectId: row.projectId,
     },
   };
 }

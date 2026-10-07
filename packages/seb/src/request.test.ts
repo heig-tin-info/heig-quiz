@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
 
-import { absoluteRequestUrl, expectedHash, hashesEqual } from "./request.js";
+import { absoluteRequestUrl, anyKeyMatches, expectedHash, hashesEqual } from "./request.js";
 
 // A Config Key as a session stores it: 64 hex characters (here sha256("quiz")).
 const KEY = "9d98ce221dd52eccf27cad6a01bcd49b14d3d718a9eeeb3be94f0e231a5787ae";
@@ -42,5 +42,23 @@ describe("the hashes", () => {
     expect(hashesEqual(hash, ` ${hash} `)).toBe(true);
     expect(hashesEqual(hash, hash.slice(0, -1))).toBe(false);
     expect(hashesEqual(hash, "")).toBe(false);
+  });
+});
+
+describe("a Browser Exam Key list", () => {
+  const url = "https://portal.example.org/launch?token=abc";
+  const windows = "a".repeat(64);
+  const mac = "b".repeat(64);
+
+  it("matches the header of any key of the list, in any case", () => {
+    expect(anyKeyMatches(url, [windows, mac], expectedHash(url, mac))).toBe(true);
+    expect(anyKeyMatches(url, [windows, mac], expectedHash(url, windows).toUpperCase())).toBe(true);
+  });
+
+  it("refuses another key's header, another URL's, a missing header and an empty list", () => {
+    expect(anyKeyMatches(url, [windows], expectedHash(url, mac))).toBe(false);
+    expect(anyKeyMatches(url, [windows], expectedHash(`${url}x`, windows))).toBe(false);
+    expect(anyKeyMatches(url, [windows], undefined)).toBe(false);
+    expect(anyKeyMatches(url, [], expectedHash(url, windows))).toBe(false);
   });
 });

@@ -157,9 +157,19 @@ describe("real verifier: refusal cases", () => {
     expect(verdict).toMatchObject({ ok: false, reason: "config-key-mismatch" });
   });
 
-  it("assignment with no BEK recorded at all", () => {
-    const verdict = real.verifyStart(sebRequest(PATH), { configKey: KEYS.configKey, beks: [] });
-    expect(verdict).toMatchObject({ ok: false, reason: "no-browser-exam-key-configured" });
+  it("no BEK recorded: the Config Key alone decides, the request hash is not asked (D21)", () => {
+    const noBek = { configKey: KEYS.configKey, beks: [] };
+    const configKeyOnly = {
+      url: PATH,
+      headers: { [CONFIG_KEY_HEADER]: expectedHash(ABSOLUTE, KEYS.configKey) },
+    };
+    expect(real.verifyStart(configKeyOnly, noBek)).toEqual({ ok: true, url: ABSOLUTE });
+    const forged = { url: PATH, headers: { [CONFIG_KEY_HEADER]: "00".repeat(32) } };
+    expect(real.verifyStart(forged, noBek)).toMatchObject({ ok: false, reason: "config-key-mismatch" });
+    expect(real.verifyStart({ url: PATH, headers: {} }, noBek)).toMatchObject({
+      ok: false,
+      reason: "missing-config-key-header",
+    });
   });
 
   it("the development header is not enough for the real verifier", () => {

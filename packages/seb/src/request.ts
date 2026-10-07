@@ -19,6 +19,13 @@ import { createHash, timingSafeEqual } from "node:crypto";
 export const CONFIG_KEY_HEADER = "x-safeexambrowser-configkeyhash";
 
 /**
+ * The Browser Exam Key hash SEB sends beside it, `sha256(URL + BEK)`: the
+ * BEK is SEB's own, one per platform and version
+ * (https://safeexambrowser.org/developer/seb-integration.html).
+ */
+export const REQUEST_HASH_HEADER = "x-safeexambrowser-requesthash";
+
+/**
  * The absolute URL SEB hashed for a request: the origin of the public URL
  * followed by the path and query AS RECEIVED, without a fragment. Nothing the
  * client sends (`Host`, `X-Forwarded-*`) enters it. Never re-encoded through
@@ -44,4 +51,17 @@ export function expectedHash(url: string, key: string): string {
 export function hashesEqual(a: string, b: string): boolean {
   const digest = (text: string) => createHash("sha256").update(text.trim().toLowerCase(), "utf8").digest();
   return timingSafeEqual(digest(a), digest(b));
+}
+
+/**
+ * Whether `header` is the hash of `url` under at least one of `keys` (the
+ * Browser Exam Keys an activity accepts, `check_browser_exam_keys` of [AM]).
+ * Every key is compared, never stopping at the first match, so the duration
+ * does not tell which one matched. False for an empty list or no header.
+ */
+export function anyKeyMatches(url: string, keys: readonly string[], header: unknown): boolean {
+  if (typeof header !== "string") return false;
+  let matched = false;
+  for (const key of keys) if (hashesEqual(expectedHash(url, key), header)) matched = true;
+  return matched;
 }

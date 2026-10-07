@@ -56,17 +56,21 @@ export type AuditAction =
   /**
    * The online workspace (ADR-047, M6-06). `launch_issued`: a student's
    * launch token minted by the start route (subject the project;
-   * `payload.jti` and `payload.mode` — NEVER the token, a bearer
-   * credential). `work_mode`: an owner set a project's work mode
-   * (`payload.from`, `payload.to`). `sync_requested`: the staff's *Resync*.
-   * `synced`: the portal accepted the project (a system action;
-   * `payload.mode`, `payload.quotaHolder`). Nothing else of a token, a
-   * secret or a Browser Exam Key is ever written here.
+   * `payload.jti`, `payload.mode` and, from a `seb` session, `payload.seb:
+   * true` — NEVER the token, a bearer credential). `work_mode`: an owner set
+   * a project's work mode (`payload.from`, `payload.to`). `sync_requested`:
+   * the staff's *Resync*. `synced`: the portal accepted the project (a
+   * system action; `payload.mode`, `payload.quotaHolder`).
+   * `browser_exam_keys`: an owner replaced the Browser Exam Keys of an
+   * `online_seb` project (D21, M6-07; `payload.count`, never a key).
+   * Nothing else of a token, a secret or a Browser Exam Key is ever written
+   * here.
    */
   | "codespace.launch_issued"
   | "codespace.work_mode"
   | "codespace.sync_requested"
   | "codespace.synced"
+  | "codespace.browser_exam_keys"
   /** The teacher enabled the drill for a classroom (ADR-041 §6). */
   | "drill.enable"
   /** …and disabled it: its cards leave the sessions, their data is kept. */

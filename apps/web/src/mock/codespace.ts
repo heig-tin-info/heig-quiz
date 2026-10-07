@@ -8,11 +8,15 @@
  * with four workspaces — one of an account the classroom does not hold;
  * "Labo 3 — listes chaînées" is a draft in the students' own tools whose
  * mode the persona may set (an owner with the grant; `?assistant=1` makes
- * them an assistant, refused). The student persona's open project runs in
- * the workspace, and the invited one under Safe Exam Browser
- * (`mock/student.ts`). The administration's teachers carry a grant.
+ * them an assistant, refused); "Labo 5 — arbres" runs under Safe Exam
+ * Browser with two Browser Exam Keys (D21, M6-07). The student persona's
+ * open project runs in the workspace, and the invited one under Safe Exam
+ * Browser (`mock/student.ts`; `?sebproject=1` puts the student inside SEB,
+ * on that project's `seb` session). The administration's teachers carry a
+ * grant.
  */
 import {
+  ProjectBrowserExamKeysBody,
   ProjectWorkModeBody,
   WORK_MODES,
   type ProjectWorkspace,
@@ -30,18 +34,32 @@ interface MockWorkspace {
   launched: boolean;
   syncedAt: string | null;
   syncError: string | null;
+  browserExamKeys: string[];
 }
 
 const WORKSPACES = new Map<string, MockWorkspace>([
-  ["pj-published", { mode: "online", launched: true, syncedAt: iso(-2 * H), syncError: null }],
+  ["pj-published", { mode: "online", launched: true, syncedAt: iso(-2 * H), syncError: null, browserExamKeys: [] }],
+  // D21 (M6-07): a draft under Safe Exam Browser, with the keys of the room's two SEB versions.
+  [
+    "pj-draft-manual",
+    {
+      mode: "online_seb",
+      launched: false,
+      syncedAt: iso(-30 * 60_000),
+      syncError: null,
+      browserExamKeys: [
+        "4e3c9a1f2b7d8e6a5c0f1b2d3e4a5c6b7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a",
+        "9b8a7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b",
+      ],
+    },
+  ],
 ]);
-
 
 function workspaceOr404(id: string): MockWorkspace {
   if (!flags.codespace) throw new MockError(404, "Not found");
   let ws = WORKSPACES.get(id);
   if (!ws) {
-    ws = { mode: "free", launched: false, syncedAt: null, syncError: null };
+    ws = { mode: "free", launched: false, syncedAt: null, syncError: null, browserExamKeys: [] };
     WORKSPACES.set(id, ws);
   }
   return ws;
@@ -57,6 +75,7 @@ function view(ws: MockWorkspace): ProjectWorkspace {
     refusal: judged.find((j) => j.refusal !== null)?.refusal ?? null,
     syncedAt: ws.syncedAt,
     syncError: ws.syncError,
+    browserExamKeys: ws.browserExamKeys,
   };
 }
 
@@ -70,15 +89,24 @@ on("PUT", "/app/api/projects/:id/workspace/mode", (m, raw) => {
   const refusal = workModeRefusal({ owner: true, granted: true, launched: ws.launched, groupMode: false }, ws.mode, body.data.mode);
   if (refusal) throw refuse(refusal === "work_mode_frozen" || refusal === "work_mode_group" ? 409 : 403, refusal, refusal);
   ws.mode = body.data.mode;
-  // The portal takes an online project at once; an exam waits for M6-07.
-  if (ws.mode === "online") ws.syncedAt = iso(0);
+  // The portal takes an online project at once, under Safe Exam Browser too (M6-07).
+  if (ws.mode !== "free") ws.syncedAt = iso(0);
+  return view(ws);
+});
+
+on("PUT", "/app/api/projects/:id/workspace/keys", (m, raw) => {
+  const ws = workspaceOr404(m.groups!.id!);
+  if (flags.assistant) throw refuse(403, "owner_required", "Only an owner of this course may do that");
+  const body = ProjectBrowserExamKeysBody.safeParse(raw);
+  if (!body.success) throw new MockPayload(400, { error: "validation", message: body.error.message });
+  ws.browserExamKeys = body.data.keys;
+  if (ws.mode !== "free") ws.syncedAt = iso(0);
   return view(ws);
 });
 
 on("POST", "/app/api/projects/:id/workspace/sync", (m) => {
   const ws = workspaceOr404(m.groups!.id!);
   if (ws.mode === "free") throw refuse(409, "not_online", "This project does not use the online workspace");
-  if (ws.mode === "online_seb") throw refuse(409, "seb_required", "A Safe Exam Browser project is synced from M6-07 on");
   ws.syncedAt = iso(0);
   ws.syncError = null;
   const answer: ProjectWorkspaceSyncAccepted = { requestedAt: iso(0) };

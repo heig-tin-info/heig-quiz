@@ -79,7 +79,6 @@ describe("migrations", () => {
         image: "img",
         uploadPack: true,
         beks: ["a", "b"],
-        sebConfig: { examKeySalt: "salt", startUrl: "http://x/start", quitUrl: "http://x/" },
         createdAt: now,
       })
       .run();
@@ -115,7 +114,6 @@ describe("migrations", () => {
     // The JSON comes back typed, not as a string.
     const assignment = handle.db.select().from(assignments).get();
     expect(assignment?.beks).toEqual(["a", "b"]);
-    expect(assignment?.sebConfig?.examKeySalt).toBe("salt");
     // The timestamps come back as Date, not as numbers.
     expect(handle.db.select().from(sessions).get()?.lastSeen).toBeInstanceOf(Date);
 

@@ -165,6 +165,25 @@ const EnvSchema = z.object({
     .string()
     .default("")
     .transform((v) => v === "1" || v === "true"),
+  /**
+   * Hosts every `.seb` Quiz builds lets SEB's URL filter reach beside Quiz's
+   * own (and, for a project, the workspace portal's): a comma-separated list
+   * of host names, `*` wildcards allowed (`*.eduid.ch`), never a scheme or a
+   * path (D21, M6-07). Empty by default; an evaluation's file is then the
+   * one ADR-027 pinned, byte for byte.
+   */
+  SEB_EXTRA_ALLOWED_HOSTS: z
+    .string()
+    .default("")
+    .transform((v) =>
+      v
+        .split(",")
+        .map((h) => h.trim().toLowerCase())
+        .filter((h) => h !== ""),
+    )
+    .refine((hosts) => hosts.every((h) => /^[a-z0-9*]([a-z0-9*.-]*[a-z0-9*])?(:\d{1,5})?$/.test(h)), {
+      message: "host names only, comma-separated (no scheme, no path)",
+    }),
 
   /** Signs the login state cookies (not the sessions, which live in the database). */
   COOKIE_SECRET: z.string().min(16).default("dev-cookie-secret-change-me"),

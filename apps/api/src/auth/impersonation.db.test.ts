@@ -179,6 +179,7 @@ describe("in production (no development login)", () => {
       expect(me.json().session).toEqual({
         kind: "impersonation",
         evaluationId: null,
+        projectId: null,
         readOnly: true,
         superPowersUntil: null,
         superPowersAvailable: false,

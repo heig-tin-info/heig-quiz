@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadConfig, type AppConfig } from "../auth/config.js";
 import { openDb, type Db, type DbHandle } from "../db/client.js";
 import { sessions, users, type AssignmentRow, type SessionRow, type UserRow } from "../db/schema.js";
-import { createSebVerifier, renderSebFile } from "../seb/index.js";
+import { CONFIG_KEY_HEADER, REQUEST_HASH_HEADER, createSebVerifier, expectedHash } from "../seb/index.js";
 import type { SessionManager, StartOptions, StartResult } from "../sessions/manager.js";
 import { findAssignment } from "../sessions/store.js";
 
@@ -34,7 +34,6 @@ function testConfig(over: Record<string, string> = {}): AppConfig {
     PUBLIC_URL: PORTAL,
     PLATFORM_URL: CLASSROOM,
     CODESPACE_LAUNCH_SECRET: SECRET,
-    SEB_EXTRA_ALLOWED_HOSTS: "idp.test, ",
     SEB_VERIFIER: "simulated",
     DATABASE_PATH: ":memory:",
     ...over,
@@ -152,17 +151,19 @@ function fakeManager(db: Db, starts: Harness["starts"]): SessionManager {
   } as unknown as SessionManager;
 }
 
-async function harness(over: Record<string, string> = {}): Promise<Harness> {
+async function harness(over: Record<string, string> = {}, logLines?: string[]): Promise<Harness> {
   const config = testConfig(over);
   const handle = openDb(":memory:");
   const starts: Harness["starts"] = [];
-  const app = Fastify({ logger: false });
+  const app = Fastify({
+    logger: logLines ? { level: "trace", stream: { write: (line: string) => void logLines.push(line) } } : false,
+  });
   await app.register(cookie);
   await app.register(classroomRoutes, {
     config,
     db: handle.db,
     manager: fakeManager(handle.db, starts),
-    verifier: createSebVerifier({ mode: config.SEB_VERIFIER, nodeEnv: config.NODE_ENV }),
+    verifier: createSebVerifier({ mode: config.SEB_VERIFIER, nodeEnv: config.NODE_ENV, url: { publicOrigin: PORTAL } }),
     repoUrl: (repo) => `http://forge.test/${repo.owner}/${repo.name}.git`,
   });
   await app.ready();
@@ -246,13 +247,6 @@ describe("PUT /api/assignments/:id", () => {
     expect(reply.statusCode).toBe(400);
   });
 
-  it("400 for an exam-mode assignment without a Browser Exam Key", async () => {
-    const token = await serviceToken();
-    const reply = await put(syncBody({ mode: "online_seb", browserExamKeys: [] }), token);
-    expect(reply.statusCode).toBe(400);
-    expect((reply.json() as { error: string }).error).toBe("missing_browser_exam_keys");
-  });
-
   it("creates the assignment, translates the mode and sets the platform's fields", async () => {
     const token = await serviceToken();
     const reply = await put(syncBody(), token);
@@ -283,7 +277,7 @@ describe("PUT /api/assignments/:id", () => {
     expect(findAssignment(h.db, "a-lab")?.image).toBe("codespace/python:1");
   });
 
-  it("is idempotent: two identical PUTs, one row and the same Config Key", async () => {
+  it("is idempotent: two identical PUTs, one row and the same answer", async () => {
     const token = await serviceToken();
     const body = syncBody({ mode: "online_seb", browserExamKeys: ["bek-windows"] });
     const first = await put(body, token);
@@ -294,8 +288,6 @@ describe("PUT /api/assignments/:id", () => {
 
     const rows = h.db.all<{ n: number }>("SELECT count(*) AS n FROM assignments");
     expect(rows[0]?.n).toBe(1);
-    // The BEK salt does not move: changing it would invalidate the `.seb`
-    // files already distributed, and the idempotence of the PUT depends on it.
     const created = findAssignment(h.db, "a-lab")?.createdAt;
     await put(syncBody({ mode: "online_seb", browserExamKeys: ["bek-windows", "bek-mac"] }), token);
     const after = findAssignment(h.db, "a-lab");
@@ -303,47 +295,25 @@ describe("PUT /api/assignments/:id", () => {
     expect(after?.createdAt).toEqual(created);
   });
 
-  it("exam mode: SEB configuration regenerated on the platform's startURL", async () => {
+  it("exam mode: Browser Exam Keys optional, no `.seb` of the portal's own (D21)", async () => {
     const token = await serviceToken();
-    const reply = await put(
-      syncBody({ mode: "online_seb", browserExamKeys: ["bek-windows"] }),
-      token,
-    );
-    const body = reply.json() as { id: string; configKey: string; sebLink: string };
+    // No key: the Config Key alone, the platform's default.
+    const reply = await put(syncBody({ mode: "online_seb", browserExamKeys: [] }), token);
+    expect(reply.statusCode).toBe(200);
+    // The platform builds the `.seb`: the portal has no Config Key nor link to announce.
+    expect(reply.json()).toEqual({ id: "a-lab", configKey: null, sebLink: null });
     const row = findAssignment(h.db, "a-lab");
-
     expect(row?.mode).toBe("exam");
-    // It is the platform that authenticates the student, then redirects to /launch.
-    expect(row?.sebConfig?.startUrl).toBe("http://classroom.test/app/codespace/start/a-lab");
-    // The URL filter must let the portal and the identity provider through in
-    // addition to the platform (docs/leads.md).
-    expect(row?.sebConfig?.extraAllowedHosts).toEqual(["portal.test", "idp.test"]);
-    expect(row?.configKey).toBe(body.configKey);
-
-    // The announced Config Key is indeed the one of that very configuration.
-    const rendered = renderSebFile({
-      startUrl: "http://classroom.test/app/codespace/start/a-lab",
-      quitUrl: "http://classroom.test/",
-      examKeySalt: row?.sebConfig?.examKeySalt as string,
-      extraAllowedHosts: ["portal.test", "idp.test"],
-    });
-    expect(rendered.configKey).toBe(body.configKey);
-    expect(rendered.xml).toContain("classroom.test");
-    expect(rendered.xml).toContain("portal.test");
-    expect(rendered.xml).toContain("idp.test");
-    // The `.seb` file itself is still served by the portal.
-    expect(body.sebLink).toBe("seb://portal.test/exam/a-lab.seb");
+    expect(row?.beks).toEqual([]);
   });
 
-  it("switching an exam assignment back to online mode clears its SEB configuration", async () => {
+  it("switching an exam assignment back to online mode drops its Browser Exam Keys", async () => {
     const token = await serviceToken();
     await put(syncBody({ mode: "online_seb", browserExamKeys: ["bek"] }), token);
-    const reply = await put(syncBody(), token);
-    expect((reply.json() as { configKey: string | null }).configKey).toBeNull();
+    await put(syncBody({ browserExamKeys: ["bek"] }), token);
     const row = findAssignment(h.db, "a-lab");
     expect(row?.mode).toBe("lab");
-    expect(row?.configKey).toBeNull();
-    expect(row?.sebConfig).toBeNull();
+    expect(row?.beks).toEqual([]);
   });
 });
 
@@ -606,27 +576,50 @@ describe("GET /launch", () => {
   });
 
   describe("exam mode", () => {
-    async function syncedExam(): Promise<void> {
+    /** The Config Key of the student's `.seb`, as the platform signs it into the token (D21). */
+    const CONFIG_KEY = "c".repeat(64);
+    const SEB = { seb: { configKey: CONFIG_KEY } };
+    const BEK_WIN = "a".repeat(64);
+    const BEK_MAC = "b".repeat(64);
+    const BEK_OTHER_VERSION = "e".repeat(64);
+
+    async function syncedExam(browserExamKeys: string[] = [BEK_WIN]): Promise<void> {
       const token = await serviceToken();
-      const reply = await put(
-        syncBody({ mode: "online_seb", browserExamKeys: ["bek-windows"] }),
-        token,
-      );
+      const reply = await put(syncBody({ mode: "online_seb", browserExamKeys }), token);
       expect(reply.statusCode).toBe(200);
+    }
+
+    /** The headers SEB sends on `url`, hashed over the portal's absolute URL. */
+    function sebHeaders(url: string, bek: string | null = BEK_MAC, configKey = CONFIG_KEY): Record<string, string> {
+      const absolute = `${PORTAL}${url}`;
+      return {
+        [CONFIG_KEY_HEADER]: expectedHash(absolute, configKey),
+        ...(bek === null ? {} : { [REQUEST_HASH_HEADER]: expectedHash(absolute, bek) }),
+      };
     }
 
     it("refuses without an SEB verification header", async () => {
       await syncedExam();
-      const reply = await h.app.inject({ url: `/launch?token=${await launchToken()}` });
+      const reply = await h.app.inject({ url: `/launch?token=${await launchToken(SEB)}` });
       expect(reply.statusCode).toBe(403);
       expect(reply.body).toContain("Safe Exam Browser");
+      expect(h.starts).toHaveLength(0);
+    });
+
+    it("refuses a token without the `seb` claim, even with the header: it did not come from SEB", async () => {
+      await syncedExam();
+      const reply = await h.app.inject({
+        url: `/launch?token=${await launchToken()}`,
+        headers: { "x-dev-seb": "ok" },
+      });
+      expect(reply.statusCode).toBe(403);
       expect(h.starts).toHaveLength(0);
     });
 
     it("accepts with the header and sets both cookies", async () => {
       await syncedExam();
       const reply = await h.app.inject({
-        url: `/launch?token=${await launchToken()}`,
+        url: `/launch?token=${await launchToken(SEB)}`,
         headers: { "x-dev-seb": "ok" },
       });
       expect(reply.statusCode).toBe(303);
@@ -636,6 +629,67 @@ describe("GET /launch", () => {
       expect(cookies.find((c) => c.name === "cs_session")).toBeDefined();
       // The session is marked verified: that is what the proxy will require.
       expect(h.starts[0]?.opts.sebVerified).toBe(true);
+    });
+
+    describe("with the real verifier", () => {
+      let lines: string[];
+      beforeEach(async () => {
+        await h.app.close();
+        h.handle.close();
+        lines = [];
+        h = await harness({ SEB_VERIFIER: "real" }, lines);
+      });
+
+      /** A launch as SEB sends it: a fresh token carrying the student's Config Key. */
+      async function launch(headers: (url: string) => Record<string, string>, over: Record<string, unknown> = SEB) {
+        const url = `/launch?token=${await launchToken(over)}`;
+        return h.app.inject({ url, headers: headers(url) });
+      }
+
+      it("accepts the Config Key alone when the project has no Browser Exam Key (D21)", async () => {
+        await syncedExam([]);
+        const reply = await launch((url) => sebHeaders(url, null));
+        expect(reply.statusCode).toBe(303);
+        expect(h.starts[0]?.opts.sebVerified).toBe(true);
+      });
+
+      it("accepts the Config Key and any of the project's Browser Exam Keys", async () => {
+        await syncedExam([BEK_WIN, BEK_MAC]);
+        expect((await launch((url) => sebHeaders(url, BEK_WIN))).statusCode).toBe(303);
+        expect((await launch((url) => sebHeaders(url, BEK_MAC))).statusCode).toBe(303);
+      });
+
+      const refusals: Array<[string, string[], (url: string) => Record<string, string>, Record<string, unknown>?]> = [
+        ["no header at all", [], () => ({})],
+        ["another student's Config Key", [], (url) => sebHeaders(url, null, "d".repeat(64))],
+        ["a header hashed over another URL", [], () => sebHeaders("/launch?token=other", null)],
+        ["the development header alone", [], () => ({ "x-dev-seb": "ok" })],
+        ["no `seb` claim, the header right", [], (url) => sebHeaders(url, null), {}],
+        ["a Browser Exam Key of another SEB version", [BEK_WIN, BEK_MAC], (url) => sebHeaders(url, BEK_OTHER_VERSION)],
+        ["no request hash where Browser Exam Keys are set", [BEK_WIN], (url) => sebHeaders(url, null)],
+      ];
+      for (const [name, beks, headers, claims] of refusals) {
+        it(`refuses (403): ${name}`, async () => {
+          await syncedExam(beks);
+          const reply = await launch(headers, claims ?? SEB);
+          expect(reply.statusCode).toBe(403);
+          expect(reply.headers["content-type"]).toContain("text/html");
+          expect(reply.headers["set-cookie"]).toBeUndefined();
+          expect(h.starts).toHaveLength(0);
+        });
+      }
+
+      it("never logs a Browser Exam Key nor a hash it received", async () => {
+        await syncedExam([BEK_WIN, BEK_MAC]);
+        const url = `/launch?token=${await launchToken(SEB)}`;
+        const sent = sebHeaders(url, BEK_OTHER_VERSION);
+        expect((await h.app.inject({ url, headers: sent })).statusCode).toBe(403);
+        const log = lines.join("");
+        expect(log).toContain("browser-exam-key-mismatch");
+        for (const secret of [BEK_WIN, BEK_MAC, BEK_OTHER_VERSION, ...Object.values(sent)]) {
+          expect(log).not.toContain(secret);
+        }
+      });
     });
   });
 });

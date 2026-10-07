@@ -7,7 +7,7 @@ import type { AttemptOrLobby, LobbyView } from "@quiz/contracts";
 import App from "./App";
 import { resetEventStream } from "./realtime/useEventStream";
 import { makeMe } from "./test/fixtures";
-import { mockFetch, ok, renderWithProviders } from "./test/render";
+import { fail, mockFetch, ok, renderWithProviders } from "./test/render";
 
 /*
  * Where the frame's view switch LANDS (ADR-018 addendum).
@@ -141,7 +141,7 @@ describe("a Safe Exam Browser session (ADR-027)", () => {
   it("shows its own evaluation and nothing else of the portal", async () => {
     vi.stubGlobal("EventSource", FakeStream);
     const { calls } = mockFetch({
-      "GET /app/api/me": ok(makeMe({ session: { kind: "seb", evaluationId: EVAL, readOnly: false, superPowersUntil: null, superPowersAvailable: false } })),
+      "GET /app/api/me": ok(makeMe({ session: { kind: "seb", evaluationId: EVAL, projectId: null, readOnly: false, superPowersUntil: null, superPowersAvailable: false } })),
       [`POST /app/api/evaluations/${EVAL}/attempt`]: ok(lobby),
     });
     // Another evaluation's address still opens the one the session is for.
@@ -155,6 +155,19 @@ describe("a Safe Exam Browser session (ADR-027)", () => {
     expect(await screen.findByText("You have left the exam")).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Back to the exam" }));
     expect(await screen.findByText("Quiz 3 — Pointers")).toBeVisible();
+  });
+
+  it("of a project (D21): its project page only, whatever the address", async () => {
+    vi.stubGlobal("EventSource", FakeStream);
+    const PROJECT = "33333333-3333-4333-8333-333333333333";
+    const { calls } = mockFetch({
+      "GET /app/api/me": ok(makeMe({ session: { kind: "seb", evaluationId: null, projectId: PROJECT, readOnly: false, superPowersUntil: null, superPowersAvailable: false } })),
+      [`GET /app/api/student/projects/${PROJECT}`]: fail(404, { error: "not_found" }),
+    });
+    renderWithProviders(<App />, { route: "/projects/44444444-4444-4444-8444-444444444444" });
+    await waitFor(() => expect(calls.some((c) => c.url === `/app/api/student/projects/${PROJECT}`)).toBe(true));
+    expect(calls.every((c) => !c.url.includes("4444"))).toBe(true);
+    expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
   });
 });
 
@@ -170,6 +183,7 @@ describe("an impersonation session (ADR-034)", () => {
           session: {
             kind: "impersonation",
             evaluationId: null,
+            projectId: null,
             readOnly: true,
             superPowersUntil: null,
             superPowersAvailable: false,

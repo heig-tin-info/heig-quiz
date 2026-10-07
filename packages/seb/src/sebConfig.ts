@@ -22,7 +22,7 @@ export interface SebConfigInput {
   readonly startUrl: string;
   /**
    * Hosts the URL filter allows beside the start URL's (a project's
-   * workspace host, later). Duplicates of it are dropped.
+   * workspace host, Quiz's `SEB_EXTRA_ALLOWED_HOSTS`). Duplicates are dropped.
    */
   readonly allowedHosts: readonly string[];
   /**

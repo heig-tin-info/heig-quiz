@@ -4331,6 +4331,75 @@ serves now (16a), and what waits for the group repositories (16b).
 - **Acceptance**: route sweep covers project routes; `/launch` refused in
   exam mode without a valid header; `simulated` impossible in production;
   **proof B recorded** before the first SEB project.
+- **As delivered** (branch `merge/M6-07-seb-projects`). Migrations
+  `0080_seb_projects` (Quiz) and the portal's `0002_platform_seb`.
+  **Proof B is pending**: the manual procedure is 06 §6.3, "Proof B, by
+  hand", for the product owner; nothing opens SEB projects to students
+  before it is recorded here.
+  - Point 2, the platform builds every `.seb`: `auth/seb.ts`
+    `sendLaunchFile` (ticket, `auth.seb_launch`, file) serves both the
+    evaluation's and the project's (`GET /app/api/projects/:id/seb`, the
+    `codespace` module: own portal session, a claimed seat in the
+    classroom of a published `online_seb` project, `sebProjectSeat`). The
+    start URL is the ticket route for both; `sebAllowedHosts(config,
+    activity)` adds the portal's host for a project, then
+    `SEB_EXTRA_ALLOWED_HOSTS` (new Quiz setting, host names, `*`
+    wildcards, empty by default) for both — empty, the evaluation's bytes
+    and Config Key are unchanged (`seb.snapshot.test.ts` untouched). The
+    ticket route checks the header against either file before consuming
+    the ticket, then against the ticket's own; a project's session lands
+    on `/projects/:id`.
+  - Point 3, one activity: `sessions.project_id` and
+    `launch_tickets.project_id` (cascade, a check: never both with
+    `evaluation_id`); `SessionAuth.projectId`; the route config gains
+    `activities` (absent: evaluation): `serves()` refuses a confined
+    session whose activity the route does not list, so `SITTING` stays
+    the evaluation's and `PROJECT_SEB` (`GET /app/api/student/projects/:id`,
+    `GET /app/codespace/start/:id`) the project's; `GET /me` lists both
+    and says `projectId`. `findStudentProjectView` reads THIS project for
+    its `seb` session, through its seat, as a portal session would
+    (`sebProjectSession`); any other confined session stays the 404.
+    Supersession and the mismatch audit are per activity (subject
+    `project`). `seb.db.test.ts` now runs with the App and the portal
+    configured: its sweeps walk every project route, and a project's
+    session has its own sweep (`PROJECT_SEB_ROUTES`).
+  - Point 4: from that session the start route mints the launch token
+    with `seb: {configKey}` (the session's stored key) — `workspaceStartRefusal`
+    gained `fromSeb`; `seb_required` is now "from the portal" only; the
+    audit adds `seb: true`, never the key. The portal's `/launch` in exam
+    mode refuses a token without the claim, then verifies the header
+    against the claim's key (`@quiz/seb`), then the BEKs if any, then sets
+    its IP-bound `exam_session`.
+  - Point 5: BEKs optional, `codespace_projects.browser_exam_keys`
+    (staff-only, in `ProjectWorkspace`), `PUT
+    /app/api/projects/:id/workspace/keys` (owner, `ProjectBrowserExamKeysBody`:
+    64 hex, lower-cased, ≤ 20, deduplicated; audit
+    `codespace.browser_exam_keys` with the count); `online_seb` is synced
+    (`isOnlineMode`; `syncsToPortal` removed) with its keys, the resync's
+    `seb_required` lifted; the portal accepts an exam without BEKs. **Not
+    for evaluations**: their settings travel in payloads a student reads,
+    the check would have to run on every request, and the next point makes
+    a list doubtful anyway.
+  - **Found**: SEB's BEK covers the configuration, and Quiz's file is per
+    student (the ticket in its start URL): a staff-typed BEK list is
+    expected to match nobody. Kept optional and empty by default; proof B
+    step 7 settles it.
+  - Portal: `src/seb/` keeps `verify.ts` (on `@quiz/seb`'s hashes, BEKs
+    optional) and `check.ts` (the proxy's cookie check, the outside-SEB
+    page); its plist, Config Key, `.seb` file, `/exam/:id.seb` route and
+    vectors are deleted (the vectors live in `packages/seb`); its
+    `SEB_EXTRA_ALLOWED_HOSTS`, `config_key` and `seb_config` are gone. The
+    PUT answers `configKey: null, sebLink: null`.
+  - Web: the student's *Open in Safe Exam Browser* (`SebLaunchModal`,
+    workspace copy) on an `online_seb` project; inside SEB the app renders
+    that project page only (*Open workspace* its one action, no GitHub
+    action); the staff's Browser Exam Keys row (owner edits, assistant
+    reads) and Resync under SEB. en/fr; mock `?sebproject=1` and the
+    `pj-draft-manual` SEB project; scenes `project-workspace-seb*`,
+    `student-project-workspace-seb-launch`, `student-project-in-seb`.
+  - Plan B (an auto-submitted POST to the portal) not built: Quiz's CSP
+    forbids inline scripts, and the portal would need a `POST /launch`;
+    it waits for proof B's evidence (06 §6.3).
 
 ### M6-08 — Freeze and collect contract on the portal (ADR-075)
 - **Depends on**: M6-03, M6-05. ‖ M6-06.

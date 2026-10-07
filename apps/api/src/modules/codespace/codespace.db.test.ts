@@ -213,11 +213,16 @@ const start = (projectId: string, headers: Headers = {}) => call("GET", `/app/co
 const repoOf = async (projectId: string, userId: string) =>
   (await server.app.db.select().from(projectRepos).where(and(eq(projectRepos.projectId, projectId), eq(projectRepos.userId, userId))))[0]!;
 
-async function sessionOf(userId: string, auth: { kind: SessionKind; actorUserId?: string; evaluationId?: string }): Promise<Headers> {
+async function sessionOf(
+  userId: string,
+  auth: { kind: SessionKind; actorUserId?: string; evaluationId?: string; projectId?: string; sebConfigKey?: string },
+): Promise<Headers> {
   const s = await createSession(server.app.db, userId, 8, {
     kind: auth.kind,
     actorUserId: auth.actorUserId ?? null,
     evaluationId: auth.evaluationId ?? null,
+    projectId: auth.projectId ?? null,
+    sebConfigKey: auth.sebConfigKey ?? null,
   });
   return { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
 }
@@ -404,10 +409,105 @@ describe("the sync (codespace.sync)", () => {
     const free = await project(room, "Free lab");
     const refused = await call("POST", `/app/api/projects/${free.id}/workspace/sync`, owner.headers);
     expect([refused.statusCode, refused.json().error]).toEqual([409, "not_online"]);
-    // An exam waits for its Browser Exam Keys (M6-07): nothing is sent.
+  });
+});
+
+// ---------------------------------------------------------------- Safe Exam Browser (D21, M6-07)
+
+describe("an online_seb project (D21)", () => {
+  const BEK_WIN = "A".repeat(64);
+  const BEK_MAC = "b".repeat(64);
+  const setKeys = (projectId: string, keys: string[], who: Person = owner) =>
+    call("PUT", `/app/api/projects/${projectId}/workspace/keys`, who.headers, { keys });
+
+  it("is synced with its Browser Exam Keys, none meaning the Config Key alone", async () => {
+    const room = await connectedClassroom([]);
+    const exam = await project(room, "Synced exam");
     portal.calls.length = 0;
-    await setMode(free.id, "online_seb");
-    expect(portal.calls).toEqual([]);
+    expect((await setMode(exam.id, "online_seb")).statusCode).toBe(200);
+    expect(CodespaceAssignmentSync.parse(portal.calls.at(-1)!.body)).toMatchObject({ mode: "online_seb", browserExamKeys: [] });
+
+    const set = await setKeys(exam.id, [BEK_WIN, BEK_MAC, BEK_WIN.toLowerCase()]);
+    expect(set.statusCode, set.body).toBe(200);
+    // Lower-cased, duplicates dropped; the staff read them back.
+    expect(ProjectWorkspace.parse(set.json()).browserExamKeys).toEqual(["a".repeat(64), BEK_MAC]);
+    expect(CodespaceAssignmentSync.parse(portal.calls.at(-1)!.body).browserExamKeys).toEqual(["a".repeat(64), BEK_MAC]);
+    const resync = await call("POST", `/app/api/projects/${exam.id}/workspace/sync`, owner.headers);
+    expect(resync.statusCode, resync.body).toBe(202);
+
+    // Audited by their count, never a key (ADR-047 §7).
+    const audits = await server.app.db.select().from(auditLog).where(and(eq(auditLog.action, "codespace.browser_exam_keys"), eq(auditLog.subjectId, exam.id)));
+    expect(audits.map((a) => a.payload)).toEqual([{ count: 2 }]);
+    expect(JSON.stringify(await server.app.db.select().from(auditLog))).not.toContain(BEK_MAC);
+
+    // An online project sends none, whatever is stored.
+    await setMode(exam.id, "online");
+    expect(CodespaceAssignmentSync.parse(portal.calls.at(-1)!.body)).toMatchObject({ mode: "online", browserExamKeys: [] });
+  });
+
+  it("takes its keys from an owner only, and well-formed", async () => {
+    const room = await connectedClassroom([]);
+    const exam = await project(room, "Keyed exam");
+    await setMode(exam.id, "online_seb");
+    const assistant = await grantedTeacher(true);
+    await seat(room, assistant.id, "assistant");
+    const byAssistant = await setKeys(exam.id, [BEK_MAC], assistant);
+    expect([byAssistant.statusCode, byAssistant.json().error]).toEqual([403, "owner_required"]);
+    expect((await setKeys(exam.id, ["not-a-key"])).statusCode).toBe(400);
+    expect((await setKeys(exam.id, Array.from({ length: 21 }, (_, i) => i.toString(16).padStart(64, "0")))).statusCode).toBe(400);
+    expect((await call("PUT", `/app/api/projects/${exam.id}/workspace/keys`, owner.headers, { keys: [], extra: 1 })).statusCode).toBe(400);
+    // The assistant reads them, as staff; a student never does.
+    expect((await setKeys(exam.id, [BEK_MAC])).statusCode).toBe(200);
+    const read = ProjectWorkspace.parse((await call("GET", `/app/api/projects/${exam.id}/workspace`, assistant.headers)).json());
+    expect(read.browserExamKeys).toEqual([BEK_MAC]);
+  });
+
+  it("launches from its seb session only: the token carries the session's Config Key", async () => {
+    const student = await newStudent();
+    const room = await connectedClassroom([student]);
+    const exam = await project(room, "SEB launch");
+    await setMode(exam.id, "online_seb");
+    await setKeys(exam.id, [BEK_MAC]);
+    await accept(exam.id, student);
+    const configKey = "c".repeat(64);
+    const sebHeaders = await sessionOf(student.id, { kind: "seb", projectId: exam.id, sebConfigKey: configKey });
+
+    // From the portal: Safe Exam Browser is required, nothing is issued.
+    expect((await start(exam.id, student.headers)).headers.location).toBe(`/projects/${exam.id}?workspace=seb_required`);
+
+    const res = await start(exam.id, sebHeaders);
+    expect(res.statusCode).toBe(303);
+    const token = new URL(res.headers.location as string).searchParams.get("token")!;
+    const verdict = await verifyHs256<Record<string, unknown>>(token, SECRET, { audience: LAUNCH_AUDIENCE, issuer: "heig-quiz", now: AT_NOW });
+    const claims = LaunchTokenClaims.parse(verdict.ok ? verdict.claims : null);
+    expect(claims).toMatchObject({ sub: student.id, assignmentId: exam.id, seb: { configKey } });
+    const [issued] = await server.app.db.select().from(auditLog).where(and(eq(auditLog.action, "codespace.launch_issued"), eq(auditLog.subjectId, exam.id)));
+    expect(issued!.payload).toEqual({ jti: claims.jti, mode: "online_seb", seb: true });
+
+    // Neither the keys nor the token reach the student, from either session.
+    for (const headers of [student.headers, sebHeaders]) {
+      const body = (await call("GET", `/app/api/student/projects/${exam.id}`, headers)).body;
+      expect(body).not.toContain(BEK_MAC);
+      expect(body).not.toContain(token.split(".")[2]!);
+    }
+    const frozen = await setMode(exam.id, "online");
+    expect([frozen.statusCode, frozen.json().error]).toEqual([409, "work_mode_frozen"]);
+  });
+
+  it("a seb session of another project, or of an evaluation, launches nothing", async () => {
+    const student = await newStudent();
+    const room = await connectedClassroom([student]);
+    const exam = await project(room, "SEB other");
+    await setMode(exam.id, "online_seb");
+    await accept(exam.id, student);
+    const elsewhere = await project(room, "SEB elsewhere");
+    await setMode(elsewhere.id, "online_seb");
+    const otherProject = await sessionOf(student.id, { kind: "seb", projectId: elsewhere.id, sebConfigKey: "c".repeat(64) });
+    expect((await start(exam.id, otherProject)).statusCode).toBe(404);
+    const evaluation = await sessionOf(student.id, { kind: "seb", evaluationId: room.evaluationId, sebConfigKey: "c".repeat(64) });
+    expect((await start(exam.id, evaluation)).headers.location).toMatch(/^\/app\/auth\/login\?/);
+    const issued = await server.app.db.select().from(auditLog).where(and(eq(auditLog.action, "codespace.launch_issued"), eq(auditLog.subjectId, exam.id)));
+    expect(issued).toEqual([]);
   });
 });
 

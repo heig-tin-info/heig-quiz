@@ -129,6 +129,9 @@ importers:
       '@quiz/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@quiz/seb':
+        specifier: workspace:*
+        version: link:../../packages/seb
       better-sqlite3:
         specifier: ^12.4.1
         version: 12.11.1

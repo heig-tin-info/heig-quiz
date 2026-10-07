@@ -126,6 +126,61 @@ CI.
    versions). If SEB drops its headers on the cross-host hop: an
    auto-submitted POST form to the portal.
 
+Points 2–5 are implemented by M6-07 (card M6-07, "As delivered"). Two
+limits it found, both for the product owner:
+
+- **BEKs and a per-student file.** SEB computes a Browser Exam Key from its
+  binary AND the configuration (the sibling's `analyse.md` §4.4). Quiz's
+  `.seb` is per student (its start URL carries the one-time ticket), so a
+  BEK is expected to differ from one student to the next, and a list typed
+  by the staff to match nobody. The list is optional and empty by default
+  (Config Key only); step 7 of proof B settles whether a non-empty one can
+  work at all. Evaluations keep the Config Key alone (no BEK list).
+- **Plan B is not built.** The auto-submitted POST form needs an inline
+  script page on Quiz's side (its CSP forbids inline scripts) and a
+  `POST /launch` on the portal whose hashed URL no longer carries the
+  token: not cheap, and not safe to improvise without proof B's evidence.
+
+### Proof B, by hand (pending, the product owner)
+
+On a real Safe Exam Browser — each version and platform of the fleet
+(Windows 3.x, macOS 3.x) — against staging (`quiz.dev.chevallier.io`) and
+the staging portal, with `SEB_CONFIG_KEY_ENFORCE=0` (audit-only) on Quiz and
+`SEB_VERIFIER=real` on the portal.
+
+1. As a teacher with the workspace grant, create a project whose
+   distribution repository is public, set *Where students work* to *Online,
+   in Safe Exam Browser*, leave the Browser Exam Keys empty, publish it;
+   the workspace section says *Workspace updated*.
+2. As a student of the classroom, accept the project; the project page
+   shows *Open in Safe Exam Browser*. Download the file; open it with SEB's
+   configuration tool and note its Config Key; check its URL filter lists
+   Quiz's host and the portal's (and `SEB_EXTRA_ALLOWED_HOSTS`, if set).
+3. Open the file in SEB within 5 minutes. **Expected**: the project page,
+   no sign-in, nothing else of Quiz reachable (try the breadcrumb: *You
+   have left the exam*). The audit log has `auth.seb_login` on the project;
+   no `auth.seb_refused`.
+4. In Quiz's audit, look for `auth.seb_config_key_mismatch` on the project:
+   none means SEB sends the header on `fetch` (the page's API calls).
+5. Click *Open workspace*. **Expected**: the editor opens on the portal.
+   This is the cross-host 303 (Quiz `/app/codespace/start/:id` ⇒
+   `portal/launch?token=…`): the portal log has `session opened from a
+   platform launch token`, mode `exam`. A 403 *Session outside Safe Exam
+   Browser* with `reason: missing-config-key-header` in the portal log
+   means SEB dropped its header on the hop: plan B is needed. A
+   `config-key-mismatch` means SEB hashed another URL (note the exact URL
+   in the log).
+6. Open the file's start URL, or the start route, in an ordinary browser:
+   both refused.
+7. Browser Exam Keys: read the BEK the configuration tool shows for this
+   file; download a second file (another student, or the same later) and
+   compare. Different keys confirm the limit above (leave the list empty);
+   equal keys mean a list can work: enter it, resync, and repeat step 5,
+   then with a SEB of another version (refused, `browser-exam-key-mismatch`).
+8. Record the versions, the outcome of each step and the logs in the card
+   M6-07; only then turn `SEB_CONFIG_KEY_ENFORCE` on and open SEB projects
+   to students.
+
 ## 6.4 Environment and secrets Quiz gains
 
 These are Quiz's own App's (D23), set in M2-06, not at the cutover; its

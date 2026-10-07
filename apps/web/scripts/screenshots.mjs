@@ -305,6 +305,9 @@ const scenes = [
   { name: "project-workspace", role: "teacher", path: "/projects/pj-published?projects=1&codespace=1", settle: 2500 },
   { name: "project-workspace-draft", role: "teacher", path: "/projects/pj-draft?projects=1&codespace=1" },
   { name: "project-workspace-assistant", role: "teacher", path: "/projects/pj-draft?projects=1&codespace=1&assistant=1" },
+  // D21 (M6-07): a project under Safe Exam Browser, its Browser Exam Keys editable by the owner, read by an assistant.
+  { name: "project-workspace-seb", role: "teacher", path: "/projects/pj-draft-manual?projects=1&codespace=1" },
+  { name: "project-workspace-seb-assistant", role: "teacher", path: "/projects/pj-draft-manual?projects=1&codespace=1&assistant=1" },
   // M3-12b: the sheet of the repository whose score is the teacher's (its
   // form filled, the final review received); M3-12c: the locked project not
   // yet released (`?unreleased=1`), Release its one action and its
@@ -748,6 +751,15 @@ const scenes = [
   { name: "student-project-workspace", role: "student", path: `/projects/${SPROJ.open}?projects=1&codespace=1` },
   { name: "student-project-workspace-seb", role: "student", path: `/projects/${SPROJ.invited}?projects=1&codespace=1` },
   { name: "student-project-workspace-refused", role: "student", path: `/projects/${SPROJ.open}?projects=1&codespace=1&workspace=closed` },
+  // D21 (M6-07): the project's `.seb`, through its steps; inside SEB, the project page and its Open workspace.
+  {
+    name: "student-project-workspace-seb-launch",
+    role: "student",
+    path: `/projects/${SPROJ.invited}?projects=1&codespace=1`,
+    fold: true,
+    act: (p) => p.getByRole("button", { name: /open in safe exam browser|ouvrir dans safe exam browser/i }).first().click(),
+  },
+  { name: "student-project-in-seb", role: "student", path: `/projects/${SPROJ.invited}?projects=1&codespace=1&sebproject=1` },
   { name: "student-project-accept", role: "student", path: `/projects/${SPROJ.accept}?projects=1` },
   { name: "student-project-unlinked", role: "student", path: `/projects/${SPROJ.accept}?projects=1&unlinked=1` },
   { name: "student-project-invited", role: "student", path: `/projects/${SPROJ.invited}?projects=1` },

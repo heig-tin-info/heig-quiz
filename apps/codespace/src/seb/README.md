@@ -4,15 +4,16 @@ Task P4 of [docs/milestone-0.md](../../../../docs/milestone-0.md). This module d
 on nothing else in `src/`: the assignments, the verifier and the session
 creation are injected into it.
 
+> **Since M6-07 (D21)** the platform builds every `.seb` and owns the plist
+> and Config Key code (`packages/seb`, with the Moodle vectors). This
+> directory keeps two files; the sections below on the file, the Config Key
+> algorithm and `/exam/:id/start` are history.
+
 | File | Role |
 | --- | --- |
-| `plist.ts` | reading and writing the plist subset a `.seb` uses, keeping the **declared type** of every leaf |
-| `configKey.ts` | "SEB-JSON" normalisation then SHA-256: the Config Key |
-| `verify.ts` | `SebVerifier`, the `real` and `simulated` implementations, `createSebVerifier` |
+| `verify.ts` | `SebVerifier` for `/launch` in exam mode: `real` (Config Key from the token's `seb` claim, then the Browser Exam Keys when the assignment has any) and `simulated` (refused in production), on `@quiz/seb`'s hashes |
 | `examSession.ts` | the signed (HMAC) `exam_session` cookie and its verification |
-| `sebFile.ts` | generation of the `.seb` of an assignment, its Config Key, the `sebs://` link |
-| `routes.ts` | the `sebRoutes` Fastify plugin: `GET /exam/:a.seb` and `GET /exam/:a/start` |
-| `fixtures/` | test vectors copied from the Moodle plugin, see `fixtures/PROVENANCE.md` |
+| `check.ts` | the proxy's cookie check and the outside-SEB page |
 
 ## Sources
 

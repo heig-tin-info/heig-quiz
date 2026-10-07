@@ -1,5 +1,7 @@
-/** Exam side: SEB verification, session cookie, generation of the `.seb` file. */
-export { configKey, configKeyFromPlistXml, sebJson, EXEMPT_KEY } from "./configKey.js";
+/**
+ * Exam side: the SEB verification of `/launch` and the exam cookie the proxy
+ * checks. The `.seb` files are the platform's (D21, merge task M6-07).
+ */
 export {
   EXAM_COOKIE,
   EXAM_COOKIE_DEFAULT_MAX_AGE_MS,
@@ -10,38 +12,7 @@ export {
   type ExamCookieRefusal,
   type ExamCookieVerdict,
 } from "./examSession.js";
-export {
-  isValidSebConfig,
-  parsePlist,
-  toPlistXml,
-  PlistParseError,
-  type SebDict,
-  type SebValue,
-} from "./plist.js";
-export {
-  checkExamRequest,
-  mapLookup,
-  outsideSebPage,
-  replyOutsideSeb,
-  sebRoutes,
-  type AssignmentLookup,
-  type SebAssignment,
-  type SebRoutesOptions,
-  type StartContext,
-  type StartOutcome,
-} from "./routes.js";
-export {
-  buildSebConfig,
-  configKeyOfSebFile,
-  newExamKeySalt,
-  renderSebFile,
-  sebFilePath,
-  sebLink,
-  sebStartPath,
-  SEB_CONTENT_TYPE,
-  type GeneratedSebFile,
-  type SebConfigInput,
-} from "./sebFile.js";
+export { checkExamRequest, outsideSebPage, replyOutsideSeb } from "./check.js";
 export {
   absoluteRequestUrl,
   createSebVerifier,

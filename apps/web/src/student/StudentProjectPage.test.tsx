@@ -329,7 +329,7 @@ describe("a reader who is not the student", () => {
   it("keeps an impersonation of a student read-only", async () => {
     const me = makeMe({
       role: "student",
-      session: { kind: "impersonation", evaluationId: null, readOnly: true, superPowersUntil: null, superPowersAvailable: false },
+      session: { kind: "impersonation", evaluationId: null, projectId: null, readOnly: true, superPowersUntil: null, superPowersAvailable: false },
     });
     mockFetch({ [URL]: ok(project({ repo: { ...project().repo!, invitation: "pending" } })) });
     render({ me });
@@ -379,11 +379,33 @@ describe("the online workspace (ADR-047, M6-06)", () => {
     expect(open).not.toHaveAttribute("target");
   });
 
-  it("says where a Safe Exam Browser workspace opens, with no link", async () => {
+  it("hands a Safe Exam Browser workspace over to SEB: the project's `.seb`, through its steps (D21)", async () => {
     mockFetch({ [URL]: ok(project({ workspace: { mode: "online_seb" } })) });
     render();
     expect(await screen.findByText("This workspace opens only in Safe Exam Browser.")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open workspace" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Open in Safe Exam Browser" }));
+    const dialog = await screen.findByRole("dialog", { name: "Open this workspace in Safe Exam Browser" });
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Download the workspace file" }));
+    expect(assign).toHaveBeenCalledWith("/app/api/projects/p1/seb");
+    vi.unstubAllGlobals();
+  });
+
+  it("inside SEB, on the project's own session, opens the workspace as the page's one action", async () => {
+    const me = makeMe({
+      role: "student",
+      session: { kind: "seb", evaluationId: null, projectId: "p1", readOnly: false, superPowersUntil: null, superPowersAvailable: false },
+    });
+    mockFetch({ [URL]: ok(project({ workspace: { mode: "online_seb" } })) });
+    render({ me });
+    const open = await screen.findByRole("link", { name: "Open workspace" });
+    expect(open).toHaveAttribute("href", "/app/codespace/start/p1");
+    expect(open.className).toMatch(/bg-accent/);
+    // GitHub is out of SEB's reach: no repository action in the header.
+    expect(screen.queryByRole("link", { name: "Open repository" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open in Safe Exam Browser" })).toBeNull();
   });
 
   it("shows nothing of a workspace on a project worked in the student's own tools", async () => {

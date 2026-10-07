@@ -31,13 +31,23 @@ export function newToken(): string {
  * What a session is, as the rest of the API sees it (ADR-027); modules read
  * this, never the columns. `actorUserId` is null when the user acts for
  * themself (set on an `impersonation` session, ADR-034); `evaluationId` is
- * set on a confined session only (`seb`, `kiosk`: ADR-027, ADR-051).
+ * set on a confined session only (`seb`, `kiosk`: ADR-027, ADR-051) — or,
+ * on a `seb` session of an `online_seb` project, `projectId` instead (D21,
+ * M6-07: one activity per confined session). Absent `projectId` reads null.
  */
 export interface SessionAuth {
   kind: SessionKind;
   actorUserId: string | null;
   evaluationId: string | null;
+  projectId?: string | null;
 }
+
+/** What a confined session is confined to (D21): ONE evaluation, or ONE project. */
+export type Activity = "evaluation" | "project";
+
+/** The activity of a confined session: a project when it names one, an evaluation otherwise. */
+export const activityOf = (auth: Pick<SessionAuth, "projectId">): Activity =>
+  (auth.projectId ?? null) !== null ? "project" : "evaluation";
 
 export const PORTAL: SessionAuth = { kind: "portal", actorUserId: null, evaluationId: null };
 
@@ -50,6 +60,12 @@ export const PORTAL: SessionAuth = { kind: "portal", actorUserId: null, evaluati
  */
 export interface SessionState extends SessionAuth {
   superPowersUntil: Date | null;
+  /**
+   * The Config Key a `seb` session was launched with (ADR-051 §3); null on
+   * every other kind. A project's workspace launch carries it to the portal
+   * (D21 point 4): a hash of the student's own `.seb`, not a secret.
+   */
+  sebConfigKey: string | null;
 }
 
 /** How long Super Powers last once switched on: one fixed hour, never extended (ADR-054). */
@@ -105,8 +121,9 @@ export const delegated = (auth: Pick<SessionAuth, "actorUserId"> | null): boolea
 
 /**
  * A confined session (ADR-027, ADR-051): one of a trusted client's kinds
- * (`TRUSTED_CLIENTS`: `seb`, `kiosk`), opened to sit ONE evaluation,
- * `evaluationId`, and nothing else.
+ * (`TRUSTED_CLIENTS`: `seb`, `kiosk`), opened for ONE activity — to sit one
+ * evaluation, `evaluationId`, or (a `seb` one, D21) to work in one
+ * project's workspace, `projectId` — and nothing else.
  */
 export const confined = <A extends Pick<SessionAuth, "kind">>(
   auth: A | null | undefined,
@@ -143,13 +160,32 @@ const FIXED_HOURS: Record<SessionKind, number | null> = {
 export const SITTING = { sessions: ["portal", "seb", "kiosk"] } as const;
 
 /**
- * Whether a route declaring `routeKinds` (absent: `portal` only) serves a
- * session of `kind`. An `impersonation` session is the student's portal, seen
- * by somebody else (ADR-034): it reaches the `portal` routes, and whether it
- * may WRITE through them is the read-only rule of `plugin.ts`, not this.
+ * The route config of the routes a `seb` session of a project may call (D21,
+ * M6-07): its project's student page and *Open workspace*. An evaluation's
+ * confined session is not there on them, as a project's is not on `SITTING`.
  */
-export function serves(routeKinds: readonly SessionKind[] | undefined, kind: SessionKind): boolean {
-  return (routeKinds ?? ["portal"]).includes(kind === "impersonation" ? "portal" : kind);
+export const PROJECT_SEB = { sessions: ["portal", "seb"], activities: ["project"] } as const;
+
+/** What a route declares of the sessions it serves (`FastifyContextConfig`). */
+export interface RouteSessions {
+  /** The kinds it serves; absent, `portal` only. */
+  sessions?: readonly SessionKind[];
+  /** The activities a confined session it serves may be confined to; absent, an evaluation only. */
+  activities?: readonly Activity[];
+}
+
+/**
+ * Whether a route declaring `route` serves the session `auth`: its kind
+ * (absent: `portal` only) and, for a confined one, its activity (absent: an
+ * evaluation only, ADR-027 — a project's `seb` session reaches only the
+ * routes that say `project`, D21). An `impersonation` session is the
+ * student's portal, seen by somebody else (ADR-034): it reaches the
+ * `portal` routes, and whether it may WRITE through them is the read-only
+ * rule of `plugin.ts`, not this.
+ */
+export function serves(route: RouteSessions, auth: Pick<SessionAuth, "kind" | "projectId">): boolean {
+  if (!(route.sessions ?? ["portal"]).includes(auth.kind === "impersonation" ? "portal" : auth.kind)) return false;
+  return !confined(auth) || (route.activities ?? ["evaluation"]).includes(activityOf(auth));
 }
 
 export async function createSession(
@@ -171,6 +207,7 @@ export async function createSession(
     kind: auth.kind,
     actorUserId: auth.actorUserId,
     evaluationId: auth.evaluationId,
+    projectId: auth.projectId ?? null,
     sebConfigKey: auth.sebConfigKey ?? null,
     deviceId: auth.deviceId ?? null,
   };
@@ -184,10 +221,12 @@ export async function createSession(
     return gone;
   });
   // After the commit: a stream closed earlier could reconnect on a session
-  // the rollback kept.
+  // the rollback kept. The dashboard is an evaluation's.
   bus.sessionsEnded(superseded.map((s) => s.sidHash));
   for (const pair of pairsOf(superseded)) {
-    bus.dashboardAlert({ ...pair, kind: "session_superseded", at: now });
+    if (pair.subjectType === "evaluation") {
+      bus.dashboardAlert({ userId: pair.userId, evaluationId: pair.subjectId, kind: "session_superseded", at: now });
+    }
   }
   return { token, csrf, expiresAt };
 }
@@ -195,13 +234,14 @@ export async function createSession(
 /** A removed session, as {@link dropSessions} returns it. */
 type Dropped = Awaited<ReturnType<typeof dropSessions>>[number];
 
-/** The distinct (user, evaluation) pairs of removed confined sessions, with their kinds. */
+/** The distinct (user, activity) pairs of removed confined sessions, with their kinds. */
 function pairsOf(gone: readonly Dropped[]) {
-  const pairs = new Map<string, { userId: string; evaluationId: string; kinds: SessionKind[] }>();
+  const pairs = new Map<string, { userId: string; subjectType: Activity; subjectId: string; kinds: SessionKind[] }>();
   for (const s of gone) {
-    if (s.evaluationId === null) continue;
-    const key = `${s.userId} ${s.evaluationId}`;
-    const pair = pairs.get(key) ?? { userId: s.userId, evaluationId: s.evaluationId, kinds: [] };
+    const subjectId = s.evaluationId ?? s.projectId;
+    if (subjectId === null) continue;
+    const key = `${s.userId} ${subjectId}`;
+    const pair = pairs.get(key) ?? { userId: s.userId, subjectType: activityOf(s), subjectId, kinds: [] };
     pair.kinds.push(s.kind);
     pairs.set(key, pair);
   }
@@ -210,26 +250,27 @@ function pairsOf(gone: readonly Dropped[]) {
 
 /**
  * One confined session at a time (ADR-051 §4): opening one for (user,
- * evaluation) deletes every other confined session of that pair, and every
+ * activity) deletes every other confined session of that pair, and every
  * session still holding its station, expired rows included — before the
  * insert, in its transaction, so the partial unique index on `device_id`
  * holds. Portal and impersonation sessions are never touched: the phone that
  * approves a pairing is one, and so is a teacher's portal beside a SEB
- * rehearsal. One audit entry per removed (user, evaluation), naming that
+ * rehearsal. One audit entry per removed (user, activity), naming that
  * pair — a station may have carried another student — with the kinds and
  * the station's label; never a token.
  */
 async function supersede(tx: Tx, userId: string, auth: NewSession & { kind: TrustedClient }) {
+  const projectId = auth.projectId ?? null;
   // Two launches of the same pair at once would each delete the other's
   // (not yet committed) row and both insert: the second waits here for the
   // first to commit, then sees and removes its session. Namespaced, so it
   // never shares a key with the access-code lock of the same pair.
   await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtextextended(${`confined-session:${userId}:${auth.evaluationId}`}, 0))`,
+    sql`select pg_advisory_xact_lock(hashtextextended(${`confined-session:${userId}:${projectId ?? auth.evaluationId}`}, 0))`,
   );
   const pair = and(
     eq(sessions.userId, userId),
-    eq(sessions.evaluationId, auth.evaluationId!),
+    projectId !== null ? eq(sessions.projectId, projectId) : eq(sessions.evaluationId, auth.evaluationId!),
     inArray(sessions.kind, TRUSTED_CLIENTS),
   )!;
   const gone = await dropSessions(
@@ -245,8 +286,8 @@ async function supersede(tx: Tx, userId: string, auth: NewSession & { kind: Trus
       actorUserId: userId,
       actorType: "user",
       action: "auth.session_superseded",
-      subjectType: "evaluation",
-      subjectId: removed.evaluationId,
+      subjectType: removed.subjectType,
+      subjectId: removed.subjectId,
       payload: {
         userId: removed.userId,
         kinds: removed.kinds,
@@ -272,9 +313,10 @@ export async function findSessionUser(
         kind: sessions.kind,
         actorUserId: sessions.actorUserId,
         evaluationId: sessions.evaluationId,
+        projectId: sessions.projectId,
         superPowersUntil: sessions.superPowersUntil,
+        sebConfigKey: sessions.sebConfigKey,
       },
-      sebConfigKey: sessions.sebConfigKey,
       deviceId: sessions.deviceId,
     })
     .from(sessions)
@@ -331,7 +373,7 @@ export async function findSessionUser(
     renewedTo,
     /** The session's id as the server knows it: how its streams are found (`bus.sessionsEnded`). */
     sidHash: row.sidHash,
-    sebConfigKey: row.sebConfigKey,
+    sebConfigKey: row.auth.sebConfigKey,
     deviceId: row.deviceId,
   };
 }
@@ -362,6 +404,7 @@ async function dropSessions(
     actorUserId: sessions.actorUserId,
     kind: sessions.kind,
     evaluationId: sessions.evaluationId,
+    projectId: sessions.projectId,
     deviceId: sessions.deviceId,
     superPowersUntil: sessions.superPowersUntil,
   });

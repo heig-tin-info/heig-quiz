@@ -230,7 +230,7 @@ describe("a reader who is not the student", () => {
     mockFetch({});
     const me = makeMe({
       role: "student",
-      session: { kind: "impersonation", evaluationId: null, readOnly: true, superPowersUntil: null, superPowersAvailable: false },
+      session: { kind: "impersonation", evaluationId: null, projectId: null, readOnly: true, superPowersUntil: null, superPowersAvailable: false },
     });
     render(card({ status: "in_progress", invitation: "pending", ...REPO }), { me });
     expect(await screen.findByText(/Read-only view/)).toBeInTheDocument();

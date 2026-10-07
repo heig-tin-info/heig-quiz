@@ -7,10 +7,12 @@
  *
  * One row per project the portal has heard of, or that a workspace was
  * launched for, written lazily (an upsert): a project in `free` mode that
- * never went online has none. Deleted with its project. Nothing here is a
- * secret: the launch token is never stored (its `jti` is in the audit log).
+ * never went online has none. Deleted with its project. The launch token is
+ * never stored (its `jti` is in the audit log); the Browser Exam Keys are
+ * teacher-side secrets (ADR-047 §7): read by the staff and sent to the
+ * portal, never a student payload nor the audit.
  */
-import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 import { projects } from "./project.js";
 
@@ -28,4 +30,10 @@ export const codespaceProjects = pgTable("codespace_projects", {
    * §3 as amended 2026-10-07). Never cleared.
    */
   firstLaunchAt: timestamp("first_launch_at", { withTimezone: true }),
+  /**
+   * The Browser Exam Keys the portal accepts for an `online_seb` project
+   * (D21, M6-07): lower-case hex, one per SEB version and platform. Empty,
+   * the default: the Config Key alone.
+   */
+  browserExamKeys: jsonb("browser_exam_keys").$type<string[]>().notNull().default([]),
 });

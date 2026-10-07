@@ -9,6 +9,7 @@ import {
   bigserial,
   boolean,
   char,
+  check,
   index,
   integer,
   jsonb,
@@ -25,6 +26,7 @@ import { DEFAULT_MAX_ACTIVE_SESSIONS, SESSION_KINDS } from "@quiz/contracts";
 import { bytea } from "./columns.js";
 import { evaluations } from "./evaluation.js";
 import { kioskDevices } from "./kiosk.js";
+import { projects } from "./project.js";
 
 /**
  * The stored roles that make an account staff: the ones that may reach a
@@ -104,6 +106,12 @@ export const sessions = pgTable(
      */
     evaluationId: uuid("evaluation_id").references(() => evaluations.id, { onDelete: "cascade" }),
     /**
+     * The one project a `seb` session is confined to instead (D21, M6-07):
+     * its student page and *Open workspace*, nothing else. Never set with
+     * `evaluation_id`: a confined session has one activity.
+     */
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }),
+    /**
      * The end of this session's Super Powers (ADR-054): an admin's portal
      * session reaches everyone's content until then, by the server's clock.
      * Null when they are off. Only the enable route sets it; the sliding
@@ -124,6 +132,7 @@ export const sessions = pgTable(
   (t) => [
     index("sessions_expires_idx").on(t.expiresAt),
     uniqueIndex("sessions_device_idx").on(t.deviceId).where(sql`${t.deviceId} IS NOT NULL`),
+    check("sessions_one_activity", sql`${t.evaluationId} IS NULL OR ${t.projectId} IS NULL`),
   ],
 );
 
@@ -145,12 +154,17 @@ export const launchTickets = pgTable(
     /** Who will act through the session, when not the user themself (as on `sessions`). */
     actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "cascade" }),
     evaluationId: uuid("evaluation_id").references(() => evaluations.id, { onDelete: "cascade" }),
+    /** The project the session will be confined to instead (as on `sessions`, D21). */
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     consumedAt: timestamp("consumed_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
   },
-  (t) => [index("launch_tickets_user_idx").on(t.userId, t.evaluationId)],
+  (t) => [
+    index("launch_tickets_user_idx").on(t.userId, t.evaluationId),
+    check("launch_tickets_one_activity", sql`${t.evaluationId} IS NULL OR ${t.projectId} IS NULL`),
+  ],
 );
 
 /**

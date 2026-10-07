@@ -24,7 +24,7 @@ import {
   poolRoleAllows,
 } from "@quiz/domain";
 
-import { confined, delegated, type SessionAuth, type SessionState } from "../auth/session.js";
+import { PORTAL, confined, delegated, type SessionAuth, type SessionState } from "../auth/session.js";
 import type { Db } from "../db/client.js";
 import {
   answers,
@@ -712,15 +712,17 @@ export interface StudentProjectScope extends ReadableClassroom {
  * project neither draft nor archived, through its classroom's student
  * branch ({@link findReadableClassroom}, the student payload FORCED) — the
  * course's staff (a teacher in the student view, ADR-018), a claimed seat,
- * an impersonation session through the seat alone (ADR-034); a confined
- * session, a stranger get null, the 404 of a missing project. The
- * repository the view shows is the seat's own, read by the `project`
- * module: a staff seat's is its holder's test repository (ADR-077).
+ * an impersonation session through the seat alone (ADR-034); a stranger,
+ * and a confined session gets null, the 404 of a missing project — except
+ * a `seb` session confined to THIS project (D21, M6-07), which reads it
+ * through its own claimed seat, as its portal would: the session only ever
+ * narrows. The repository the view shows is the seat's own, read by the
+ * `project` module: a staff seat's is its holder's test repository (ADR-077).
  */
 export async function findStudentProjectView(
   db: Db,
   user: Caller,
-  auth: Pick<SessionAuth, "kind" | "actorUserId"> | null,
+  auth: Pick<SessionAuth, "kind" | "actorUserId" | "projectId"> | null,
   projectId: string,
 ): Promise<StudentProjectScope | null> {
   const [project] = await db
@@ -729,8 +731,18 @@ export async function findStudentProjectView(
     .where(and(eq(projects.id, projectId), publishedProject()))
     .limit(1);
   if (!project) return null;
-  const room = await findReadableClassroom(db, user, auth, project.classroomId, { studentView: true });
-  return room === null ? null : { ...room, project };
+  const here = sebProjectSession(auth, projectId);
+  const room = await findReadableClassroom(db, user, here ? PORTAL : auth, project.classroomId, { studentView: true });
+  if (room === null || (here && room.seat === null)) return null;
+  return { ...room, project };
+}
+
+/**
+ * The request rides on a `seb` session confined to `projectId` (D21): the
+ * one confined session that reads a project, its own, never another.
+ */
+export function sebProjectSession(auth: Pick<SessionAuth, "kind" | "actorUserId" | "projectId"> | null, projectId: string): boolean {
+  return auth !== null && auth.kind === "seb" && !delegated(auth) && (auth.projectId ?? null) === projectId;
 }
 
 /** {@link findStudentProjectView} for the request's own session, answering the 404 (invariant 6). */

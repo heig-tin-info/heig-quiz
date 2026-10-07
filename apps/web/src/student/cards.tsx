@@ -477,7 +477,7 @@ export function useCardActions(navigate: (r: Route) => void): {
       : undefined;
 
   const modal = sebFor ? (
-    <SebLaunchModal evaluationId={sebFor.id} title={sebFor.title} onClose={() => setSebFor(null)} />
+    <SebLaunchModal href={`/app/api/evaluations/${sebFor.id}/seb`} title={sebFor.title} onClose={() => setSebFor(null)} />
   ) : null;
 
   return { open, review, modal };
