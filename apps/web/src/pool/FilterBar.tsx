@@ -2,7 +2,7 @@ import { LayoutGrid, List } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { useT } from "../i18n";
-import { Segmented } from "../ui";
+import { iconOption, Segmented } from "../ui";
 import type { QuestionFilters } from "./filters";
 import { GROUP_BY, type GroupBy } from "./QuestionGroups";
 import { QuestionSearchBar } from "./QuestionSearchBar";
@@ -67,19 +67,6 @@ export function FilterBar({
 }) {
   const t = useT();
 
-  /**
-   * Two icons and no words: the choice is between two pictures of the same
-   * list, and a pair of labels beside them would weigh more than the switch.
-   */
-  const viewOption = (value: ListView, icon: ReactNode, label: string) => ({
-    value,
-    label: (
-      <span title={label} className="flex items-center">
-        {icon}
-        <span className="sr-only">{label}</span>
-      </span>
-    ),
-  });
 
   return (
     <QuestionSearchBar
@@ -117,8 +104,8 @@ export function FilterBar({
             value={view}
             onChange={onView}
             options={[
-              viewOption("cards", <LayoutGrid className="size-4" />, t("view.cards")),
-              viewOption("list", <List className="size-4" />, t("view.list")),
+              iconOption("cards", <LayoutGrid className="size-4" />, t("view.cards")),
+              iconOption("list", <List className="size-4" />, t("view.list")),
             ]}
           />
         </div>

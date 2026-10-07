@@ -209,7 +209,11 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const qc = useQueryClient();
   // Everything but the category is local to the screen; the category is the
   // sidebar's selection, and "" means "all questions".
-  // `?tag=` seeds the tag chip, and follows it while it is the only one.
+  // `?tag=` seeds the tag chip, and the chip writes it back while it is the
+  // only one. `seenTag` exists for a `?tag=` that changes while this page
+  // stays mounted — an in-app link to `/pools/:id?tag=…` from this very pool
+  // (the router's `SEARCH_PARAM_EVENT`) — where the `useState` seed above
+  // would not run again: the chip follows the new value.
   const [tagParam, setTagParam] = useSearchParam("tag", "");
   const [filters, setFilters] = useState<QuestionFilters>(() => withTag(EMPTY_FILTERS, tagParam));
   const [seenTag, setSeenTag] = useState(tagParam);

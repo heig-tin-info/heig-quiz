@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { LayoutDashboard, List, SearchX, Tags } from "lucide-react";
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 
 import type { PoolTagUsage } from "@quiz/contracts";
 
@@ -13,6 +13,7 @@ import {
   type Column,
   cx,
   EmptyState,
+  iconOption,
   QueryError,
   SearchInput,
   Segmented,
@@ -29,8 +30,8 @@ import { squarify } from "./treemap";
  * questions wear it and how many courses use one of them — a bare count
  * over every course, never a name (`PoolTagUsage`).
  *
- * The ONE thing it is for: find a tag and go to its questions. A row (or a
- * cell of the heat) opens the Questions tab filtered on that tag
+ * The ONE thing it is for: find a tag and go to its questions. A row's tag
+ * chip (or a cell of the heat) opens the Questions tab filtered on that tag
  * (`onOpenTag`). The filter field matches the name and the description, and
  * applies to both readings.
  *
@@ -70,15 +71,6 @@ export function TagsTab({ poolId, onOpenTag }: { poolId: string; onOpenTag: (tag
         );
   }, [usage.data, q]);
 
-  const viewOption = (value: TagsView, icon: ReactNode, label: string) => ({
-    value,
-    label: (
-      <span title={label} className="flex items-center gap-1.5">
-        {icon}
-        <span>{label}</span>
-      </span>
-    ),
-  });
 
   let body: ReactNode;
   if (usage.isLoading) {
@@ -152,8 +144,8 @@ export function TagsTab({ poolId, onOpenTag }: { poolId: string; onOpenTag: (tag
             value={view}
             onChange={setView}
             options={[
-              viewOption("list", <List className="size-4" />, t("view.list")),
-              viewOption("heat", <LayoutDashboard className="size-4" />, t("pool.tags.view.heat")),
+              iconOption("list", <List className="size-4" />, t("view.list")),
+              iconOption("heat", <LayoutDashboard className="size-4" />, t("pool.tags.view.heat")),
             ]}
           />
         </div>
@@ -165,7 +157,7 @@ export function TagsTab({ poolId, onOpenTag }: { poolId: string; onOpenTag: (tag
 
 type TagKey = "tag" | "questions" | "courses";
 
-/** The table: tag, description, questions, courses; a row opens the tag's questions. */
+/** The table: tag, description, questions, courses; the tag chip opens its questions. */
 function TagTable({ rows, onOpenTag }: { rows: PoolTagUsage[]; onOpenTag: (tag: string) => void }) {
   const t = useT();
   // `null`: the rows stand most-used first (`byUse`) until a header is clicked.
@@ -188,18 +180,14 @@ function TagTable({ rows, onOpenTag }: { rows: PoolTagUsage[]; onOpenTag: (tag: 
           {sorted.map((row) => (
             <tr
               key={row.tag}
-              className={cx(T.row, T.rowHover, "cursor-pointer")}
-              onClick={() => onOpenTag(row.tag)}
+              className={cx(T.row, T.rowHover)}
             >
               <td className={T.td}>
                 <button
                   type="button"
                   title={t("pool.tags.open", { tag: row.tag })}
                   className="inline-flex h-6 max-w-[16rem] items-center rounded-full border border-line bg-surface-2 px-2.5 text-xs font-semibold text-fg transition-colors hover:border-line-strong"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenTag(row.tag);
-                  }}
+                  onClick={() => onOpenTag(row.tag)}
                 >
                   <span className="truncate">#{row.tag}</span>
                 </button>
@@ -230,10 +218,11 @@ const HEAT_BOX = { w: 1000, h: 416 };
  */
 function TagHeat({ rows, onOpenTag }: { rows: PoolTagUsage[]; onOpenTag: (tag: string) => void }) {
   const t = useT();
-  const boxRef = useRef<HTMLDivElement>(null);
+  // A callback ref: the box is not drawn while the filter leaves no cell,
+  // so it must be observed whenever it (re)appears, not on the first mount.
+  const [el, setEl] = useState<HTMLDivElement | null>(null);
   const [box, setBox] = useState(HEAT_BOX);
   useLayoutEffect(() => {
-    const el = boxRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(([entry]) => {
       const { width, height } = entry!.contentRect;
@@ -241,7 +230,7 @@ function TagHeat({ rows, onOpenTag }: { rows: PoolTagUsage[]; onOpenTag: (tag: s
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [el]);
   const cells = useMemo(() => squarify(rows, (r) => r.questions, box.w, box.h), [rows, box]);
   if (cells.length === 0) {
     return (
@@ -256,7 +245,7 @@ function TagHeat({ rows, onOpenTag }: { rows: PoolTagUsage[]; onOpenTag: (tag: s
           1 px gap; the layer is 1 px wider and taller than the box, so the
           last row and column end on its border instead of doubling it. */}
       <div
-        ref={boxRef}
+        ref={setEl}
         className="relative h-72 w-full overflow-hidden rounded-card border border-line bg-line sm:h-104"
       >
         <div className="absolute inset-0 -right-px -bottom-px">

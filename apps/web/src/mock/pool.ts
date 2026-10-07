@@ -1547,11 +1547,18 @@ const poolTagDetails = (poolId: string) =>
     count: liveQuestions(poolId).filter((q) => q.tags.includes(tag)).length,
   }));
 
+/** The made-up course counts of the Tags tab: the mock has no course walk. */
+const tagCourses = new Map<string, number>([
+  ["p1\u0000pointeurs", 2],
+  ["p1\u0000tableaux", 2],
+  ["p1\u0000memoire", 1],
+  ["p1\u0000boucles", 1],
+  ["p1\u0000fichiers", 1],
+]);
+
 /**
  * `GET /pools/:id/tags/usage`: the vocabulary (the tags worn and the ones
- * only documented) with the questions and a made-up but stable course count
- * — the mock has no course walk worth the code, and a count that changed on
- * every reload would make the screenshots flicker.
+ * only documented) with the questions and a course count from `tagCourses`.
  */
 const poolTagUsage = (poolId: string) => {
   const documented = flags.empty
@@ -1560,13 +1567,12 @@ const poolTagUsage = (poolId: string) => {
         .filter((key) => key.startsWith(`${poolId}\u0000`))
         .map((key) => key.slice(poolId.length + 1));
   return [...new Set([...poolTags(poolId), ...documented])].sort().map((tag) => {
-    const questions = liveQuestions(poolId).filter((q) => q.tags.includes(tag)).length;
-    const spread = [...tag].reduce((sum, c) => sum + c.charCodeAt(0), 0) % 4;
+    const key = `${poolId}\u0000${tag}`;
     return {
       tag,
-      description: tagDescriptions.get(`${poolId}\u0000${tag}`) ?? "",
-      questions,
-      courses: questions === 0 ? 0 : Math.min(questions, spread),
+      description: tagDescriptions.get(key) ?? "",
+      questions: liveQuestions(poolId).filter((q) => q.tags.includes(tag)).length,
+      courses: tagCourses.get(key) ?? 0,
     };
   });
 };

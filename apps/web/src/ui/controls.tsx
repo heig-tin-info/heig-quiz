@@ -454,6 +454,24 @@ export function Switch({
  * beside the app's `size` and `label`.
  */
 export { Segmented };
+
+/**
+ * One option of a `Segmented` that switches between pictures of the same
+ * list (table, cards, heat…): the icon alone, its name for the pointer
+ * (`title`) and the reader (`sr-only`). A pair of words beside the icons
+ * would weigh more than the switch.
+ */
+export function iconOption<T extends string>(value: T, icon: ReactNode, label: string) {
+  return {
+    value,
+    label: (
+      <span title={label} className="flex items-center">
+        {icon}
+        <span className="sr-only">{label}</span>
+      </span>
+    ),
+  };
+}
 export { ErrorText } from "@quiz/ui";
 
 /**

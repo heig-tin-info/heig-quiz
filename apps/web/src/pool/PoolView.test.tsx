@@ -857,6 +857,35 @@ describe("PoolView", () => {
       expect(screen.queryByRole("button", { name: /^#structures/ })).toBeNull();
     });
 
+    it("measures the heat's box when it appears after an empty heat", async () => {
+      const observed: Element[] = [];
+      vi.stubGlobal(
+        "ResizeObserver",
+        class {
+          observe(el: Element) {
+            observed.push(el);
+          }
+          disconnect() {}
+        },
+      );
+      try {
+        const user = userEvent.setup();
+        mockFetch(tagRoutes());
+        renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tab=tags" });
+        await screen.findByRole("table");
+        // Only #structures matches, and no question wears it: no box is drawn.
+        await user.type(screen.getByRole("searchbox", { name: "Filter tags" }), "union");
+        await user.click(screen.getByRole("radio", { name: "Heat" }));
+        expect(screen.getByText("None of these tags is on a question yet")).toBeInTheDocument();
+        await user.clear(screen.getByRole("searchbox", { name: "Filter tags" }));
+        const cell = await screen.findByRole("button", { name: /^#pointeurs:/ });
+        // Other parts of the page observe their own size: the box is the one holding a cell.
+        expect(observed.some((el) => el.contains(cell))).toBe(true);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
     it("says so when the pool has no tag", async () => {
       mockFetch(tagRoutes({ "GET /app/api/pools/p1/tags/usage": ok([]) }));
       renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tab=tags" });
