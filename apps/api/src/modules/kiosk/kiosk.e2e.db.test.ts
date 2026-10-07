@@ -253,6 +253,12 @@ describe("a sitting on a kiosk station, from its first attestation to the next s
     const preview = PairPreview.parse(looked.json());
     expect(preview.station).toEqual({ label: "Poste de secours n° 7" });
     expect(preview.evaluations).toEqual([expect.objectContaining({ id: e.evaluationId, title: "Test évaluation" })]);
+    // ADR-079 §7: the conditions, read on the phone, since the station begins the attempt directly.
+    expect(preview.evaluations[0]!.conditions.imposed[0]).toEqual({
+      key: "trusted_client",
+      kind: "forbidden",
+      clients: ["kiosk"],
+    });
     const approved = await e.student.post("/app/api/pair", { code: auth.user_code, evaluationId: e.evaluationId });
     expect(approved.json()).toEqual({ station: { label: "Poste de secours n° 7" } });
 

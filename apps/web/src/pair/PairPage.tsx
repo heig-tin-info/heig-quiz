@@ -10,6 +10,7 @@ import { useT } from "../i18n";
 import { pairPreviewKey } from "../queryKeys";
 import type { Navigate } from "../router";
 import { SignInGate } from "../SignInGate";
+import { ConditionsList } from "../student/ConditionsList";
 import { Alert, Button, Card, EmptyState, Field, GateFrame, QueryError, RadioRow, Skeleton, cx } from "../ui";
 
 /**
@@ -100,6 +101,7 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
   const found = preview.data;
   const exams = found?.evaluations ?? [];
   const chosen = exams.length === 1 ? exams[0]!.id : picked;
+  const chosenExam = exams.find((exam) => exam.id === chosen);
   const approveError = errorOf(approve.error);
 
   return (
@@ -171,6 +173,9 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
               <ExamPicker exams={exams} chosen={chosen} onPick={setPicked} />
             )}
 
+            {/* ADR-079 §7: the station begins the attempt directly, so the chosen exam's conditions are read here, before confirming. */}
+            {chosenExam ? <ConditionsList conditions={chosenExam.conditions} className="mt-5" /> : null}
+
             {approveError ? (
               <div className="mt-4">
                 <Alert tone="danger">
@@ -186,16 +191,19 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
             ) : null}
 
             {exams.length > 0 ? (
-              <Button
-                variant="primary"
-                size="lg"
-                className="mt-5 w-full"
-                disabled={chosen === null}
-                loading={approve.isPending}
-                onClick={() => chosen && approve.mutate(chosen)}
-              >
-                {t("pair.start")}
-              </Button>
+              // A sticky dock on a phone (DESIGN.md, the launch step's): the conditions above may run past the fold.
+              <div className="sticky bottom-0 z-10 -mx-5 mt-5 border-t border-line bg-surface px-5 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:p-0">
+                <Button
+                  variant="primary"
+                  size="lg"
+                  className="w-full"
+                  disabled={chosen === null}
+                  loading={approve.isPending}
+                  onClick={() => chosen && approve.mutate(chosen)}
+                >
+                  {t("pair.start")}
+                </Button>
+              </div>
             ) : null}
             <Button variant="ghost" className="mt-2 w-full" onClick={changeCode}>
               {t("pair.code.change")}

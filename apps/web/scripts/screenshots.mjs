@@ -790,8 +790,9 @@ const scenes = [
   // WP9: student player. `TAKE` is the mock's evaluation; `?scene=` picks the
   // state the fake backend serves (see the WP9 block of src/mock/student.ts).
   { name: "student-home-eval", role: "student", path: "/" },
-  // Issue #270: an exam sat in Safe Exam Browser — its card opens the steps.
-  { name: "student-seb", role: "student", path: "/?seb=1", act: (p) => p.getByRole("button", { name: /^(open in safe exam browser|ouvrir dans safe exam browser)$/i }).first().click() },
+  // Issue #270: an exam sat in Safe Exam Browser — its card opens the steps,
+  // under the exam's conditions (ADR-079 §7); the dialog is fixed, so the fold.
+  { name: "student-seb", role: "student", path: "/?seb=1", fold: true, act: (p) => p.getByRole("button", { name: /^(open in safe exam browser|ouvrir dans safe exam browser)$/i }).first().click() },
   { name: "student-lobby", role: "student", path: `${TAKE}?scene=lobby` },
   // ADR-076: a running evaluation not yet started: one Start, the clock said before it.
   { name: "student-ready", role: "student", path: `${TAKE}?scene=ready` },

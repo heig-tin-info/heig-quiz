@@ -42,9 +42,12 @@ export async function pairableEvaluations(
   now: Date,
 ): Promise<PairableEvaluation[]> {
   const home = await studentHome(db, userId, now);
-  return home.open
-    .filter((c) => c.trustedClients.includes("kiosk"))
-    .map((c) => ({ id: c.id, title: c.title, classroomName: c.classroomName, courseCode: c.courseCode }));
+  // A kiosk card always carries its conditions (ADR-079 §7): the station begins the attempt directly.
+  return home.open.flatMap(({ id, title, classroomName, courseCode, trustedClients, conditions }) =>
+    trustedClients.includes("kiosk") && conditions !== null
+      ? [{ id, title, classroomName, courseCode, conditions }]
+      : [],
+  );
 }
 
 // --- The station -------------------------------------------------------------

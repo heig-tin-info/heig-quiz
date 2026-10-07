@@ -4,9 +4,17 @@
  * evaluation's, or an `online_seb` project's workspace (D21, M6-07), whose
  * file opens the project's page in SEB, without a second sign-in.
  * "5 minutes" in its strings is `LAUNCH_TICKET_TTL_MS` (`auth/launch.ts`).
+ *
+ * An exam's conditions come first (ADR-079 §7): SEB may begin the attempt
+ * directly (ADR-076 §4), so this dialog is the last place to read them before
+ * the clock. The body scrolls under them; the footer, and its one primary
+ * action, stays in view, a phone included.
  */
+import type { EvaluationConditions } from "@quiz/contracts";
+
 import { useT } from "../i18n";
 import { Button, Modal } from "../ui";
+import { ConditionsList } from "./ConditionsList";
 
 /** SEB's official download page (Windows, macOS, iOS). */
 export const SEB_DOWNLOAD_URL = "https://safeexambrowser.org/download_en.html";
@@ -26,12 +34,15 @@ export function SebLaunchModal({
   href,
   title,
   kind = "exam",
+  conditions = null,
   onClose,
 }: {
   /** The `.seb` download: `/app/api/evaluations/:id/seb` or `projectSebPath(id)`. */
   href: string;
   title: string;
   kind?: keyof typeof COPY;
+  /** The exam's conditions, from its card; `null` (a workspace) shows none. */
+  conditions?: EvaluationConditions | null;
   onClose: () => void;
 }) {
   const t = useT();
@@ -44,6 +55,7 @@ export function SebLaunchModal({
     <Modal
       title={t(copy.title)}
       subtitle={title}
+      scroll
       onClose={onClose}
       footer={
         <>
@@ -54,6 +66,7 @@ export function SebLaunchModal({
         </>
       }
     >
+      {conditions ? <ConditionsList conditions={conditions} className="mb-5" /> : null}
       <ol className="list-decimal space-y-3 pl-5 text-sm text-fg-muted marker:font-semibold marker:text-fg">
         <li>
           <span className="font-medium text-fg">{t("seb.launch.install")}</span>{" "}

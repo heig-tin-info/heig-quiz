@@ -40,6 +40,7 @@ const card = (over: Partial<EvaluationCard>): EvaluationCard & { kind: "evaluati
   retakes: null,
   results: "none",
   trustedClients: [],
+  conditions: null,
   ...over,
 });
 
@@ -111,6 +112,43 @@ describe("the student home", () => {
     expect(navigate).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).toBeNull();
     vi.unstubAllGlobals();
+  });
+
+  it("states the exam's conditions in the Safe Exam Browser dialog, above the download (ADR-079 §7)", async () => {
+    const conditions: EvaluationCard["conditions"] = {
+      announced: [{ kind: "allowed", text: "Une feuille A4 recto-verso" }],
+      imposed: [{ key: "trusted_client", kind: "forbidden", clients: ["seb"] }],
+    };
+    mockFetch({
+      "GET /app/api/student/home": ok({ ...home, open: [card({ trustedClients: ["seb"], conditions })] }),
+      "GET /app/api/student/classrooms": ok([]),
+    });
+    render();
+    await userEvent.click(await screen.findByRole("button", { name: "Ouvrir dans Safe Exam Browser" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Annoncées par votre enseignant")).toBeInTheDocument();
+    expect(within(dialog).getByText("Une feuille A4 recto-verso")).toBeInTheDocument();
+    expect(within(dialog).getByText("Passée dans Safe Exam Browser")).toBeInTheDocument();
+    const download = within(dialog).getByRole("button", { name: "Télécharger le fichier d'examen" });
+    expect(
+      within(dialog).getByText("Une feuille A4 recto-verso").compareDocumentPosition(download) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("draws no conditions in the Safe Exam Browser dialog when the card carries an empty list", async () => {
+    mockFetch({
+      "GET /app/api/student/home": ok({
+        ...home,
+        open: [card({ trustedClients: ["seb"], conditions: { announced: [], imposed: [] } })],
+      }),
+      "GET /app/api/student/classrooms": ok([]),
+    });
+    render();
+    await userEvent.click(await screen.findByRole("button", { name: "Ouvrir dans Safe Exam Browser" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByText("Imposées par la plateforme")).toBeNull();
+    expect(within(dialog).getByText("Installez Safe Exam Browser.")).toBeInTheDocument();
   });
 
   it("closes the Safe Exam Browser instructions without downloading", async () => {

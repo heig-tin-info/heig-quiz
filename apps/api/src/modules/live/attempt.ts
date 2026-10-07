@@ -1537,6 +1537,7 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
   };
 
   const card = (row: (typeof rows)[number], counted: string | null): EvaluationCard => {
+    const clients = trustedClients(row.evaluation);
     return {
       id: row.evaluation.id,
       title: row.evaluation.title,
@@ -1560,7 +1561,10 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
       // Issue #203: what "See my results" would lead to, for the attempt
       // that counts — the results service's own rule.
       results: resultsState(row.evaluation, counted),
-      trustedClients: trustedClients(row.evaluation),
+      trustedClients: clients,
+      // ADR-079 §7: a trusted client may begin the attempt directly, past the
+      // waiting room, so the card carries what that room would have said.
+      conditions: clients.length > 0 ? conditionsFor(row.evaluation, row.timeBonusPercent) : null,
     };
   };
 

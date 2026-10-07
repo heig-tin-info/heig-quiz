@@ -143,7 +143,8 @@ void _imposedSame;
  * The conditions a student reads (ADR-079, F-EVAL-33): what the teacher
  * announces — kind and text only, never the catalog reference — then what
  * the platform imposes. Built by the server for the waiting room, the ready
- * screen and the attempt; drawn by one component (`ConditionsList`).
+ * screen and the attempt, and for a trusted client's card and `/pair` (§7);
+ * drawn by one component (`ConditionsList`).
  */
 export const EvaluationConditions = z.object({
   announced: z.array(z.object({ kind: ConditionKind, text: z.string() })),
@@ -539,6 +540,13 @@ export const EvaluationCard = z.object({
    * to sit it on a kiosk station.
    */
   trustedClients: z.array(TrustedClient),
+  /**
+   * ADR-079 §7: the conditions of an exam sat through a trusted client, read
+   * before leaving the portal (the SEB launch dialog), since that client may
+   * begin the attempt directly (ADR-076 §4). `null` without a trusted client:
+   * the portal's own waiting room states them.
+   */
+  conditions: EvaluationConditions.nullable(),
 });
 export type EvaluationCard = z.infer<typeof EvaluationCard>;
 

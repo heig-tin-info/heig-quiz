@@ -303,6 +303,8 @@ export function studentEvaluationRows(db: Db, userId: string, classroomId?: stri
       period: classrooms.period,
       archivedAt: classrooms.archivedAt,
       staff: enrollments.staff,
+      // The seat's extra time, in the conditions of a trusted-client card (ADR-079 §7).
+      timeBonusPercent: enrollments.timeBonusPercent,
       attempt: attempts,
     })
     .from(enrollments)

@@ -150,6 +150,7 @@ function card(canRetake: boolean, keep: Keep = "best"): EvaluationCard {
     },
     results: "pending",
     trustedClients: [],
+    conditions: null,
   };
 }
 

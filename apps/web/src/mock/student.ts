@@ -361,14 +361,21 @@ const studentSettings = (): AttemptView["evaluation"]["settings"] => ({
   logVisibility: true,
   requireFullscreen: false,
   ...(flags.negative ? { negativeMarking: true } : {}),
+  // Issue #270, ADR-051: `?seb=1`, `?kiosk=1` — the trusted clients of the exam.
+  ...(flags.seb ? { safeExamBrowser: true } : {}),
+  ...(flags.kiosk ? { kiosk: true } : {}),
   ...mockCalculator(),
 });
 
-/** ADR-079: what the server builds for this student — 20 minutes, a third more. */
-const studentConditions = () =>
+/**
+ * ADR-079: what the server builds for this student — 20 minutes, a third
+ * more. `trusted` adds a trusted client the flags do not (the `/pair` mock's
+ * exam is a kiosk one whatever `?kiosk=`).
+ */
+export const studentConditions = (trusted: { kiosk?: true } = {}) =>
   evaluationConditionsOf({
     mode: scene === "exercise" ? "exercise" : "exam",
-    settings: { ...studentSettings(), conditions: flags.empty ? [] : MOCK_CONDITIONS },
+    settings: { ...studentSettings(), ...trusted, conditions: flags.empty ? [] : MOCK_CONDITIONS },
     durationS: 20 * 60,
     closesAt: null,
     timeBonusPercent: 33,
@@ -499,6 +506,7 @@ const upcomingCard = (
   retakes: null,
   results: "none",
   trustedClients: [],
+  conditions: null,
 });
 
 /** The evaluations' half of the home, as the `live` module answers it: the cards before they are tagged. */
@@ -549,6 +557,8 @@ const evaluationHome = (): EvaluationHome => {
         // Issue #270: `?seb=1` makes this exam a Safe Exam Browser one;
         // ADR-051: `?kiosk=1` a kiosk-station one (both: either).
         trustedClients: [...(flags.seb ? ["seb" as const] : []), ...(flags.kiosk ? ["kiosk" as const] : [])],
+        // ADR-079 §7: a trusted-client card carries the conditions the SEB dialog states.
+        conditions: flags.seb || flags.kiosk ? studentConditions() : null,
       },
       {
         id: STUDENT_EVAL_RETAKE,
@@ -578,6 +588,7 @@ const evaluationHome = (): EvaluationHome => {
         // Between two attempts the page is score only (ADR-025).
         results: "pending",
         trustedClients: [],
+        conditions: null,
       },
     ],
     // Grouped by day on the page (Today, Tomorrow, This week, Later): one
@@ -609,6 +620,7 @@ const evaluationHome = (): EvaluationHome => {
         retakes: null,
         results: "pending",
         trustedClients: [],
+        conditions: null,
       },
       {
         id: STUDENT_EVAL_PAST,
@@ -627,6 +639,7 @@ const evaluationHome = (): EvaluationHome => {
         retakes: null,
         results: "available",
         trustedClients: [],
+        conditions: null,
       },
     ],
   };
