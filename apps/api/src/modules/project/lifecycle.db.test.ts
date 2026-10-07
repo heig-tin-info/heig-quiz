@@ -745,10 +745,10 @@ describe("who reaches a project (invariant 6)", () => {
       ["a student of the classroom", student.headers],
       ["a teacher of another course", outsider.headers],
       ["an admin without Super Powers", admin.headers],
-      ["an impersonation session", await sessionOf(student.id, { kind: "impersonation", actorUserId: admin.id, evaluationId: null })],
-      ["a teacher's impersonation", await sessionOf(teacher.id, { kind: "impersonation", actorUserId: admin.id, evaluationId: null })],
+      ["an impersonation session", await sessionOf(student.id, { kind: "impersonation", actorUserId: admin.id, projectId: null, evaluationId: null })],
+      ["a teacher's impersonation", await sessionOf(teacher.id, { kind: "impersonation", actorUserId: admin.id, projectId: null, evaluationId: null })],
     ];
-    const seb = await sessionOf(teacher.id, { kind: "seb", actorUserId: null, evaluationId: seeded.evaluationId });
+    const seb = await sessionOf(teacher.id, { kind: "seb", actorUserId: null, projectId: null, evaluationId: seeded.evaluationId });
     for (const url of [`/app/api/projects/${project.id}`, base(room.id), `${base(room.id)}/sources`]) {
       for (const [who, headers] of callers) {
         const res = await call("GET", url, headers);

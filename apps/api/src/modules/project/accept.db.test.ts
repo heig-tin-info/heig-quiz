@@ -465,7 +465,7 @@ describe("what Accept refuses", () => {
     }
     // An impersonation: read-only outside development (ADR-034 §4), and the
     // loader's 404 in development too, where it may write.
-    const impersonation = await session({ kind: "impersonation", actorUserId: admin.id, evaluationId: null });
+    const impersonation = await session({ kind: "impersonation", actorUserId: admin.id, projectId: null, evaluationId: null });
     const refused = await accept(project.id, { headers: impersonation });
     expect([refused.statusCode, refused.json().error]).toEqual([403, "impersonation_read_only"]);
     const sent: unknown[] = [];
@@ -474,7 +474,7 @@ describe("what Accept refuses", () => {
     expect(await studentProject(server.app, req as unknown as FastifyRequest, reply, { id: project.id })).toBeNull();
     expect(sent).toEqual([[404, { error: "not_found" }]]);
     const seeded = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [student.id], questions: 0 });
-    const seb = await session({ kind: "seb", actorUserId: null, evaluationId: seeded.evaluationId });
+    const seb = await session({ kind: "seb", actorUserId: null, projectId: null, evaluationId: seeded.evaluationId });
     expect((await accept(project.id, { headers: seb })).statusCode).toBe(401);
 
     await server.app.db.update(classrooms).set({ archivedAt: new Date(NOW) }).where(eq(classrooms.id, room.id));
@@ -607,7 +607,7 @@ describe("a teacher's staff seat accepts an individual project (ADR-077)", () =>
     const seatless = await server.signIn("teacher");
     expect((await accept(project.id, seatless)).statusCode).toBe(404);
     const admin = await server.signIn("admin");
-    const s = await createSession(server.app.db, tester.id, 8, { kind: "impersonation", actorUserId: admin.id, evaluationId: null });
+    const s = await createSession(server.app.db, tester.id, 8, { kind: "impersonation", actorUserId: admin.id, projectId: null, evaluationId: null });
     const headers = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
     expect((await accept(project.id, { headers })).statusCode).toBe(403);
     expect(await repoRows(project.id)).toEqual([]);

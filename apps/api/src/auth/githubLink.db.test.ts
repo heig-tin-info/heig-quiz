@@ -352,7 +352,7 @@ describe("sessions that may not link (ADR-027, ADR-034)", () => {
 
   it("refuses an impersonation session: 403 session_required, on the link, the callback and the unlink", async () => {
     await server.app.db.insert(githubAccounts).values({ userId: student.id, githubUserId: 9_000_001, login: "kept" });
-    const headers = await sessionOf(student.id, { kind: "impersonation", actorUserId: admin.id, evaluationId: null });
+    const headers = await sessionOf(student.id, { kind: "impersonation", actorUserId: admin.id, projectId: null, evaluationId: null });
     for (const [method, url] of [
       ["GET", "/app/auth/github/link?return=/courses"],
       ["GET", "/app/auth/github/callback?code=c&state=s"],
@@ -368,7 +368,7 @@ describe("sessions that may not link (ADR-027, ADR-034)", () => {
   });
 
   it.each(["seb", "kiosk"] as const)("does not serve a %s session: it is nobody here (401)", async (kind) => {
-    const headers = await sessionOf(student.id, { kind, actorUserId: null, evaluationId });
+    const headers = await sessionOf(student.id, { kind, actorUserId: null, projectId: null, evaluationId });
     for (const [method, url] of [
       ["GET", "/app/auth/github/link?return=/courses"],
       ["GET", "/app/auth/github/callback?code=c&state=s"],

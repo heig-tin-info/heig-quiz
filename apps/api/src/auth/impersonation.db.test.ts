@@ -105,7 +105,7 @@ describe("in production (no development login)", () => {
     it("is not opened by the secret of another kind of ticket", async () => {
       const secret = await issueLaunchTicket(
         w.server.app.db,
-        { kind: "seb", userId: w.student.id, actorUserId: null, evaluationId: w.seed.evaluationId },
+        { kind: "seb", userId: w.student.id, actorUserId: null, projectId: null, evaluationId: w.seed.evaluationId },
         w.server.clock.now(),
       );
       expect(await open(w, `${IMPERSONATION_PATH}${secret}`)).toBeNull();

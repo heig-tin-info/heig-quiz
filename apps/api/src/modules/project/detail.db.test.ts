@@ -521,6 +521,7 @@ describe("staff only (N-SEC-20, invariant 6)", () => {
       kind: "impersonation",
       actorUserId: (await server.signIn("admin")).id,
       evaluationId: null,
+      projectId: null,
     });
     const impersonation = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
     const callers: [string, Headers][] = [

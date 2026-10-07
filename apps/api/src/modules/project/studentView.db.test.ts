@@ -234,6 +234,7 @@ async function sessionOf(userId: string, auth: { kind: SessionKind; actorUserId?
     kind: auth.kind,
     actorUserId: auth.actorUserId ?? null,
     evaluationId: auth.evaluationId ?? null,
+    projectId: null,
   });
   return { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
 }
@@ -560,9 +561,9 @@ describe("who reads the view (invariant 6, ADR-018, ADR-034)", () => {
     // The loader's confined branch, directly: a `seb` or `kiosk` session reaches no project (the route's 401 comes first over HTTP).
     const caller = { id: student.id, role: "student" as const, reach: "seats" as const };
     for (const kind of ["seb", "kiosk"] as const) {
-      expect(await findStudentProjectView(server.app.db, caller, { kind, actorUserId: null }, lab.id)).toBeNull();
+      expect(await findStudentProjectView(server.app.db, caller, { kind, actorUserId: null, projectId: null }, lab.id)).toBeNull();
     }
-    expect(await findStudentProjectView(server.app.db, caller, { kind: "portal", actorUserId: null }, lab.id)).toMatchObject({
+    expect(await findStudentProjectView(server.app.db, caller, { kind: "portal", actorUserId: null, projectId: null }, lab.id)).toMatchObject({
       project: { id: lab.id },
       seat: { staff: false },
     });
@@ -573,11 +574,11 @@ describe("who reads the view (invariant 6, ADR-018, ADR-034)", () => {
     for (const [kind, headers] of [["seb", seb], ["kiosk", kiosk]] as const) {
       expect((await call("GET", "/app/api/student/home", headers)).statusCode, kind).toBe(401);
     }
-    const confinedHome = await activityHome(server.app.db, caller, { kind: "seb", actorUserId: null, evaluationId: room.evaluationId }, server.clock.now());
+    const confinedHome = await activityHome(server.app.db, caller, { kind: "seb", actorUserId: null, projectId: null, evaluationId: room.evaluationId }, server.clock.now());
     studentBodies.push(JSON.stringify(confinedHome));
     expect([...confinedHome.open, ...confinedHome.upcoming, ...confinedHome.past].filter((c) => c.kind === "project")).toEqual([]);
     expect(JSON.stringify(confinedHome)).not.toContain(lab.id);
-    const portalHome = await activityHome(server.app.db, caller, { kind: "portal", actorUserId: null, evaluationId: null }, server.clock.now());
+    const portalHome = await activityHome(server.app.db, caller, { kind: "portal", actorUserId: null, projectId: null, evaluationId: null }, server.clock.now());
     expect(portalHome.open.filter((c) => c.kind === "project").map((c) => c.id)).toEqual([lab.id]);
   });
 });

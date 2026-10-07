@@ -1,5 +1,5 @@
 {
-  "id": "7680d5e6-2998-4293-897b-27aa354e5a2f",
+  "id": "cac9031c-0159-482f-bb5f-8a73e2e4d332",
   "prevId": "9e31d1fa-fbeb-4918-8fb1-3dc2d56ecbf2",
   "version": "7",
   "dialect": "postgresql",
@@ -9390,13 +9390,6 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
-        },
-        "browser_exam_keys": {
-          "name": "browser_exam_keys",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
         }
       },
       "indexes": {},

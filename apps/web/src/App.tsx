@@ -577,18 +577,10 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
   if (me.isLoading) return null;
   if (!me.data) return <SignedOut route={route} navigate={navigate} />;
   if (confinedTo !== null) {
-    const page = (
+    return route.view === confinedTo.view ? (
       <Suspense fallback={<Spinner className="py-24" />}>
         {renderPage(confinedTo, { me: me.data, navigate, teacherUi: false })}
       </Suspense>
-    );
-    // The attempt is full screen; a project's page, without the shell's frame, keeps its gutters.
-    return route.view === confinedTo.view ? (
-      confinedTo.view === "project" ? (
-        <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">{page}</main>
-      ) : (
-        page
-      )
     ) : (
       <ConfinedElsewhere kiosk={onStation} onBack={() => navigate(confinedTo)} />
     );

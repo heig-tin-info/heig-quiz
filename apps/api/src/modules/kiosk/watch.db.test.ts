@@ -306,6 +306,7 @@ describe("the dashboard says how each student sits (ADR-051 §8)", () => {
       kind: "seb",
       actorUserId: null,
       evaluationId: exam.evaluationId,
+      projectId: null,
       sebConfigKey: "k",
     });
     expect(await dashboard()).toEqual({ kind: "seb", station: null, alert: null });

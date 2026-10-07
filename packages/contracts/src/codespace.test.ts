@@ -7,9 +7,7 @@ import {
   CodespaceAssignmentSyncResult,
   LAUNCH_AUDIENCE,
   LaunchTokenClaims,
-  MAX_BROWSER_EXAM_KEYS,
   SERVICE_AUDIENCE,
-  ProjectBrowserExamKeysBody,
   projectSebPath,
   ProjectWorkModeBody,
   ServiceTokenClaims,
@@ -155,23 +153,7 @@ describe("Quiz's own workspace routes (M6-06)", () => {
 });
 
 describe("Safe Exam Browser for projects (D21, M6-07)", () => {
-  const key = "AbCd".repeat(16);
-
   it("names a project's `.seb`", () => {
     expect(projectSebPath("p/1")).toBe("/app/api/projects/p%2F1/seb");
-  });
-
-  it("takes the Browser Exam Keys as SHA-256 hex, lower-cased, duplicates dropped", () => {
-    const parsed = ProjectBrowserExamKeysBody.parse({ keys: [` ${key} `, key.toLowerCase()] });
-    expect(parsed.keys).toEqual([key.toLowerCase()]);
-    expect(ProjectBrowserExamKeysBody.parse({ keys: [] }).keys).toEqual([]);
-  });
-
-  it("refuses a key that is not one, too many keys, and any other field", () => {
-    expect(ProjectBrowserExamKeysBody.safeParse({ keys: ["bek-windows"] }).success).toBe(false);
-    expect(ProjectBrowserExamKeysBody.safeParse({ keys: [key.slice(1)] }).success).toBe(false);
-    const many = Array.from({ length: MAX_BROWSER_EXAM_KEYS + 1 }, (_, i) => i.toString(16).padStart(64, "0"));
-    expect(ProjectBrowserExamKeysBody.safeParse({ keys: many }).success).toBe(false);
-    expect(ProjectBrowserExamKeysBody.safeParse({ keys: [], mode: "online" }).success).toBe(false);
   });
 });

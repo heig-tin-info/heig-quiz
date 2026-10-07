@@ -50,6 +50,7 @@ beforeAll(async () => {
     kind: "seb",
     actorUserId: null,
     evaluationId,
+    projectId: null,
     sebConfigKey: KEY,
   });
   cookies = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
@@ -109,7 +110,7 @@ describe("a new kiosk session supersedes by station too (ADR-051 §4)", () => {
       .insert(kioskDevices)
       .values({ id: deviceId, googleDeviceId: `mock-${deviceId}`, status: "active", label: "Poste n° 7" });
     const other = await server.signIn("student");
-    const kiosk = { kind: "kiosk", actorUserId: null, evaluationId, deviceId } as const;
+    const kiosk = { kind: "kiosk", actorUserId: null, evaluationId, projectId: null, deviceId } as const;
     await createSession(server.app.db, other.id, 12, kiosk);
     await server.app.db.update(sessions).set({ expiresAt: new Date(0) }).where(eq(sessions.deviceId, deviceId));
     const heard: BusMessage[] = [];
@@ -144,7 +145,7 @@ describe("a new kiosk session supersedes by station too (ADR-051 §4)", () => {
 
 describe("the end of a session ends its event streams, and only its own", () => {
   it("closes the stream of a signed-out session, never another session's", async () => {
-    const auth = { kind: "seb", actorUserId: null, evaluationId, sebConfigKey: KEY } as const;
+    const auth = { kind: "seb", actorUserId: null, evaluationId, projectId: null, sebConfigKey: KEY } as const;
     const open = async (token: string, url = `/app/api/events?watch=lobby:${evaluationId}`) => {
       const hangUp = new AbortController();
       const res = await server.app.inject({

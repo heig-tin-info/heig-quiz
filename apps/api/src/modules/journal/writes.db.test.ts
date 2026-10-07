@@ -464,10 +464,10 @@ describe("who may write", () => {
     room = (await withJournal()).room.id;
     const seeded = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [student.id], questions: 0 });
     const admin = await server.signIn("admin");
-    impersonation = await sessionOf(student.id, { kind: "impersonation", actorUserId: admin.id, evaluationId: null });
-    seb = await sessionOf(student.id, { kind: "seb", actorUserId: null, evaluationId: seeded.evaluationId });
+    impersonation = await sessionOf(student.id, { kind: "impersonation", actorUserId: admin.id, projectId: null, evaluationId: null });
+    seb = await sessionOf(student.id, { kind: "seb", actorUserId: null, projectId: null, evaluationId: seeded.evaluationId });
     const station = await kioskStation(server.app);
-    const k = await sessionOf(student.id, { kind: "kiosk", actorUserId: null, evaluationId: seeded.evaluationId, deviceId: station.deviceId });
+    const k = await sessionOf(student.id, { kind: "kiosk", actorUserId: null, projectId: null, evaluationId: seeded.evaluationId, deviceId: station.deviceId });
     kiosk = { ...k, cookie: `${k.cookie}; ${station.cookie}` };
   });
 

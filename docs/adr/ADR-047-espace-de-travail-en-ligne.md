@@ -24,14 +24,12 @@ Config Key (`seb_required` otherwise). The portal's `/launch` in exam mode
 refuses a token without the claim and checks SEB's header against it,
 then the Browser Exam Keys when the project has some, then sets its
 IP-bound `exam_session`. Point 7 as amended: the Browser Exam Keys are
-**optional** (empty, the default, is the Config Key alone), stored on
-`codespace_projects.browser_exam_keys`, set by an owner
-(`PUT …/workspace/keys`), read by the staff, sent with the sync, audited
-by their count only, never in a student payload. `online_seb` is synced
-like `online`. The portal builds no `.seb` any more (its `/exam/:id.seb`,
-Config Key and salt are gone). Open: SEB's BEK covers the configuration,
-which is per student here, so a BEK list may never match (proof B, 06
-§6.3).
+**optional** on the portal (an empty list is the Config Key alone), and
+Quiz sends none: **BEK list: after proof B step 7 (per-student `.seb`
+likely gives per-student BEKs)** — SEB's BEK covers the configuration,
+which is per student here (06 §6.3). `online_seb` is synced like
+`online`. The portal builds no `.seb` any more (its `/exam/:id.seb`,
+Config Key and salt are gone).
 
 **Amended (2026-10-07, M6-03, product owner): the portal's GitHub relay and
 its own login.** Scope: the portal side of points 2 and 6 below, nothing

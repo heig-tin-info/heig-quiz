@@ -37,7 +37,6 @@ import {
   hashesEqual,
 } from "@quiz/seb";
 
-export { CONFIG_KEY_HEADER, REQUEST_HASH_HEADER, expectedHash, hashesEqual };
 export const DEV_HEADER = "x-dev-seb";
 
 /** What the verifier needs to know about an HTTP request. */

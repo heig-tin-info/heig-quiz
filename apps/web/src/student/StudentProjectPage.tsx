@@ -130,10 +130,10 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
   const readOnly = useStudentReadOnly(project.seat !== null);
   // The server's clock, from the payload (invariant 5).
   const now = useServerNow(project.serverNow);
-  // D21: inside Safe Exam Browser, on this project's own `seb` session, the
-  // page's one action is *Open workspace*; GitHub is out of SEB's reach.
-  const me = useMe();
-  const inSeb = me.data?.session?.kind === "seb" && me.data.session.projectId === project.id;
+  // D21: the session confined to this project (a `seb` one, the only kind
+  // with a `projectId`): the page's one action is *Open workspace*, GitHub is
+  // out of SEB's reach, and the page frames itself (no shell around it).
+  const inSeb = useMe().data?.session?.projectId === project.id;
 
   const facts = factsOfProject(project);
   const kind = projectActionKind(facts, now);
@@ -143,7 +143,7 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
   const coursesRoot = useRootCrumb("studentCourses");
 
   return (
-    <div className="space-y-6">
+    <div className={inSeb ? "mx-auto w-full max-w-5xl space-y-6 px-4 py-8 sm:px-6" : "space-y-6"}>
       <WorkspaceRefusal />
       <PageHeader
         eyebrow={

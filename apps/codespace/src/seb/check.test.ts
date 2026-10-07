@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { checkExamRequest, replyOutsideSeb } from "./check.js";
 import { EXAM_COOKIE, issueExamCookie } from "./examSession.js";
-import { CONFIG_KEY_HEADER, REQUEST_HASH_HEADER, expectedHash } from "./verify.js";
+import { CONFIG_KEY_HEADER, REQUEST_HASH_HEADER, expectedHash } from "@quiz/seb";
 
 const COOKIE_SECRET = "long-enough-test-secret";
 

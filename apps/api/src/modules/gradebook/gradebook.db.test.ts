@@ -108,6 +108,7 @@ async function sessionOf(userId: string, auth: { kind: "impersonation" | "seb" |
     kind: auth.kind,
     actorUserId: auth.actorUserId ?? null,
     evaluationId: auth.evaluationId ?? null,
+    projectId: null,
     deviceId: auth.deviceId ?? null,
   });
   return { cookie: `${SESSION_COOKIE}=${session.token}; ${CSRF_COOKIE}=${session.csrf}`, "x-csrf-token": session.csrf };

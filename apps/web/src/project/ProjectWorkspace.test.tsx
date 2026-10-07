@@ -20,7 +20,6 @@ const workspace = (over: Partial<Workspace> = {}): Workspace => ({
   refusal: null,
   syncedAt: null,
   syncError: null,
-  browserExamKeys: [],
   ...over,
 });
 const sessions: ProjectWorkspaceSessions = {
@@ -102,40 +101,12 @@ describe("the project's workspace section", () => {
     await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url === "/app/api/projects/p1/workspace/sync")).toBe(true));
   });
 
-  describe("under Safe Exam Browser (D21, M6-07)", () => {
-    const KEY = "ab".repeat(32);
-    const seb = workspace({ mode: "online_seb", syncedAt: new Date().toISOString() });
-
-    it("saves the owner's Browser Exam Keys, one per line, and says a malformed one without asking", async () => {
-      const { calls } = mockFetch({
-        [WS]: ok(seb),
-        [SESSIONS]: ok({ reachable: true, sessions: [] }),
-        "PUT /app/api/projects/p1/workspace/keys": ok({ ...seb, browserExamKeys: [KEY] }),
-      });
-      render();
-      const field = await screen.findByLabelText("Browser Exam Keys");
-      // Synced like an online project: the Resync is there.
-      expect(screen.getByRole("button", { name: "Resync" })).toBeInTheDocument();
-      await userEvent.type(field, "not-a-key");
-      await userEvent.click(screen.getByRole("button", { name: "Save keys" }));
-      expect(await screen.findByText(/64 hexadecimal characters/)).toBeInTheDocument();
-      expect(calls.some((c) => c.method === "PUT")).toBe(false);
-
-      await userEvent.clear(field);
-      await userEvent.type(field, `${KEY.toUpperCase()}\n`);
-      await userEvent.click(screen.getByRole("button", { name: "Save keys" }));
-      await waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ keys: [KEY.toUpperCase()] }));
-      expect(await screen.findByText("Browser Exam Keys saved")).toBeInTheDocument();
+  it("syncs a Safe Exam Browser project like an online one: the Resync is there (D21)", async () => {
+    mockFetch({
+      [WS]: ok(workspace({ mode: "online_seb", syncedAt: new Date().toISOString() })),
+      [SESSIONS]: ok({ reachable: true, sessions: [] }),
     });
-
-    it("shows an assistant the keys, without the editor", async () => {
-      mockFetch({
-        [WS]: ok({ ...seb, allowed: ["online_seb"], refusal: "owner_required", browserExamKeys: [KEY] }),
-        [SESSIONS]: ok({ reachable: true, sessions: [] }),
-      });
-      render();
-      expect(await screen.findByText(KEY)).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: "Save keys" })).toBeNull();
-    });
+    render();
+    expect(await screen.findByRole("button", { name: "Resync" })).toBeInTheDocument();
   });
 });

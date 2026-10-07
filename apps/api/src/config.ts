@@ -183,6 +183,10 @@ const EnvSchema = z.object({
     )
     .refine((hosts) => hosts.every((h) => /^[a-z0-9*]([a-z0-9*.-]*[a-z0-9*])?(:\d{1,5})?$/.test(h)), {
       message: "host names only, comma-separated (no scheme, no path)",
+    })
+    // `*` or `*.*` would open SEB's URL filter to the whole web.
+    .refine((hosts) => hosts.every((h) => /[a-z0-9]/.test(h.split(":")[0]!)), {
+      message: "a host made of wildcards only opens every site",
     }),
 
   /** Signs the login state cookies (not the sessions, which live in the database). */

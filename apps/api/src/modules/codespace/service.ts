@@ -53,7 +53,8 @@ import type { Db, Tx } from "../../db/client.js";
 import { classrooms, codespaceProjects, courseStaff, enrollments, githubAccounts, projectRepos, projects, teacherGrants, users } from "../../db/schema.js";
 import { knownEmails, normalizeEmail } from "../../identity.js";
 import { CODESPACE_SYNC_QUEUE } from "../../jobs.js";
-import { publishedProject } from "../guards.js";
+import { PORTAL } from "../../auth/session.js";
+import { findStudentProjectView, type Caller } from "../guards.js";
 
 /** The portal is wired up at all: an empty `CODESPACE_URL` means the feature does not exist (ADR-047 §5). */
 export function codespaceOn(config: Pick<AppConfig, "CODESPACE_URL">): boolean {
@@ -95,7 +96,7 @@ export async function grantOf(db: Db | Tx, userId: string): Promise<TeacherCodes
 /** The `codespace_projects` row of a project, or the empty one it would be. */
 async function portalState(db: Db, projectId: string) {
   const [row] = await db.select().from(codespaceProjects).where(eq(codespaceProjects.projectId, projectId));
-  return row ?? { syncedAt: null, syncError: null, firstLaunchAt: null, browserExamKeys: [] };
+  return row ?? { syncedAt: null, syncError: null, firstLaunchAt: null };
 }
 
 /**
@@ -119,21 +120,7 @@ export async function projectWorkspace(
     refusal: judged.find((j) => j.refusal !== null)?.refusal ?? null,
     syncedAt: state.syncedAt?.toISOString() ?? null,
     syncError: state.syncError,
-    browserExamKeys: state.browserExamKeys,
   };
-}
-
-/**
- * `PUT /app/api/projects/:id/workspace/keys`: the Browser Exam Keys the
- * portal accepts for the project (D21 point 5), the whole list replaced;
- * audited by their count, never a key (ADR-047 §7). The caller syncs.
- */
-export async function setBrowserExamKeys(db: Db, projectId: string, keys: string[], actor: AuditActor): Promise<void> {
-  await db
-    .insert(codespaceProjects)
-    .values({ projectId, browserExamKeys: keys })
-    .onConflictDoUpdate({ target: codespaceProjects.projectId, set: { browserExamKeys: keys } });
-  await audit(db, { ...actor, action: "codespace.browser_exam_keys", subjectType: "project", subjectId: projectId, payload: { count: keys.length } });
 }
 
 // ---------------------------------------------------------------- tokens
@@ -187,8 +174,9 @@ async function quotaHolderOf(db: Db, courseId: string, createdBy: string): Promi
  * The body the portal expects for `projectId`, or null when there is
  * nothing to send: no such project, a project in the students' own tools,
  * or one whose distribution repository is not built yet (the publication
- * sends it again). An `online_seb` project carries its Browser Exam Keys,
- * none meaning the Config Key alone (D21, M6-07). The workspace is seeded
+ * sends it again). `online_seb` is sent like `online`, with no Browser
+ * Exam Key: the Config Key alone (D21, M6-07; a BEK list waits for proof B
+ * step 7, 06 §6.3). The workspace is seeded
  * from the distribution repository, never the source (N-SEC-20). With the
  * portal's forge off (ADR-047, M6-03 amendment (a)) it can clone only a
  * PUBLIC repository: a private distribution syncs, but cannot seed a
@@ -202,7 +190,6 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
     .where(eq(projects.id, projectId));
   if (!row || !isOnlineMode(row.project.workMode) || row.project.distributionFullName === null) return null;
   const { project } = row;
-  const { browserExamKeys } = await portalState(db, project.id);
   const holder = await quotaHolderOf(db, row.courseId, project.createdBy);
   if (holder === null) return null;
   const grant = await grantOf(db, holder.id);
@@ -215,7 +202,7 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
     mode: project.workMode,
     image: null,
     sourceRepo: { fullName: project.distributionFullName, defaultBranch: project.branches[0] ?? "main" },
-    browserExamKeys: project.workMode === "online_seb" ? browserExamKeys : [],
+    browserExamKeys: [],
     teacher: { id: holder.id, email: holder.email || holder.id },
     quota: { maxActiveSessions: grant?.maxActiveSessions ?? DEFAULT_MAX_ACTIVE_SESSIONS },
     startAt: project.startAt.toISOString(),
@@ -362,21 +349,17 @@ export async function projectSessions(
 
 /**
  * The project a `seb` session may be opened for, the twin of `sebSeat`:
- * published (not archived), in `online_seb`, of a classroom not archived,
- * where `userId` holds a claimed seat (a staff seat testing it included,
- * ADR-077) — checked when the `.seb` is downloaded and again when SEB
- * trades its ticket. Null otherwise, and when the feature is off (the
- * module's routes do not exist then).
+ * the project's student view (`findStudentProjectView`, read as the
+ * caller's own portal would: published, not archived) with a claimed seat
+ * of the caller's (a staff seat testing it included, ADR-077), in
+ * `online_seb`, of a classroom not archived — checked when the `.seb` is
+ * downloaded and again when SEB trades its ticket, where the caller is the
+ * ticket's user (`callerFor(user, null)`: no Super Powers). Null otherwise.
  */
-export async function sebProjectSeat(db: Db, userId: string, projectId: string): Promise<{ id: string } | null> {
-  const [row] = await db
-    .select({ id: projects.id })
-    .from(projects)
-    .innerJoin(classrooms, and(eq(classrooms.id, projects.classroomId), isNull(classrooms.archivedAt)))
-    .innerJoin(enrollments, and(eq(enrollments.classroomId, projects.classroomId), eq(enrollments.userId, userId)))
-    .where(and(eq(projects.id, projectId), eq(projects.workMode, "online_seb"), publishedProject()))
-    .limit(1);
-  return row ?? null;
+export async function sebProjectSeat(db: Db, caller: Caller, projectId: string): Promise<{ id: string } | null> {
+  const scope = await findStudentProjectView(db, caller, PORTAL, projectId);
+  const ok = scope !== null && scope.seat !== null && scope.project.workMode === "online_seb" && scope.room.archivedAt === null;
+  return ok ? { id: scope.project.id } : null;
 }
 
 // ---------------------------------------------------------------- the start (student → portal)

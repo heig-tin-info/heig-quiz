@@ -58,11 +58,11 @@ session reaches `GET /me`, its project's student page and *Open workspace*
 (`PROJECT_SEB`), each loaded for that project only. The platform builds
 every `.seb` (`sendLaunchFile`): a project's file allows the workspace
 portal's host too, and both add `SEB_EXTRA_ALLOWED_HOSTS` (empty by
-default: the evaluation's file is unchanged). §2's start route checks the
-header against either activity's file before consuming the ticket, then
-against the ticket's own. One session per (user, activity) (ADR-051 §4).
-Browser Exam Keys stay out of Quiz's own check: a project's are the
-portal's (ADR-047 amendment "M6-07").
+default: the evaluation's file is unchanged). §2's start route reads the
+ticket's activity without consuming it, then checks the header against
+that activity's file, then consumes: a refused header never burns the
+ticket. One session per (user, activity) (ADR-051 §4). Still no Browser
+Exam Key in Quiz (ADR-047 amendment "M6-07").
 
 ## Context
 

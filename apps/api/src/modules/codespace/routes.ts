@@ -9,13 +9,11 @@
  * The staff's, on a project they reach (`accessibleProject`: the course's
  * `staffAccess`, their own portal session; anyone else the 404):
  *   - `GET  /app/api/projects/:id/workspace` — the mode, what the caller may
- *     set, the last sync, the Browser Exam Keys;
+ *     set, the last sync;
  *   - `PUT  /app/api/projects/:id/workspace/mode` — the mode, an owner's
  *     (`403 owner_required` in the loader, before the body, ADR-068), with
  *     the grant to go online (`403 codespace_not_granted`), until a
  *     workspace was launched (`409 work_mode_frozen`);
- *   - `PUT  /app/api/projects/:id/workspace/keys` — the Browser Exam Keys of
- *     an `online_seb` project, an owner's (D21 point 5);
  *   - `POST /app/api/projects/:id/workspace/sync` — *Resync*: the job sent
  *     again (202);
  *   - `GET  /app/api/projects/:id/workspace/sessions` — the project's
@@ -27,13 +25,7 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import {
-  IdParam,
-  ProjectBrowserExamKeysBody,
-  ProjectWorkModeBody,
-  ProjectWorkspaceSyncAccepted,
-  workspaceStartPath,
-} from "@quiz/contracts";
+import { IdParam, ProjectWorkModeBody, ProjectWorkspaceSyncAccepted, workspaceStartPath } from "@quiz/contracts";
 import { isOnlineMode } from "@quiz/domain";
 
 import { actorOf, audit } from "../../audit.js";
@@ -57,7 +49,6 @@ import {
   projectWorkspace,
   requestCodespaceSync,
   sebProjectSeat,
-  setBrowserExamKeys,
   startWorkspace,
 } from "./service.js";
 
@@ -96,23 +87,6 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
     }),
   );
 
-  /**
-   * The Browser Exam Keys (D21 point 5): optional, the whole list replaced,
-   * an owner's like the mode (`403 owner_required` in the loader). Kept in
-   * any mode, sent to the portal under `online_seb` only; empty means the
-   * Config Key alone. Teacher-side secrets (ADR-047 §7): the audit keeps
-   * their count.
-   */
-  app.put(
-    "/app/api/projects/:id/workspace/keys",
-    session,
-    teacher({ ...onOwnedProject, body: ProjectBrowserExamKeysBody }, async ({ req, body, scope }) => {
-      await setBrowserExamKeys(app.db, scope.project.id, body.keys, actorOf(req));
-      await requestCodespaceSync(app, config, scope.project.id);
-      return projectWorkspace(app.db, scope.project, { userId: req.user!.id, owner: true });
-    }),
-  );
-
   app.post(
     "/app/api/projects/:id/workspace/sync",
     session,
@@ -144,7 +118,7 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
    */
   app.get("/app/api/projects/:id/seb", session, async (req, reply) => {
     const params = IdParam.safeParse(req.params);
-    const seat = params.success && ownPortalSession(req.auth) && (await sebProjectSeat(app.db, req.user!.id, params.data.id));
+    const seat = params.success && ownPortalSession(req.auth) && (await sebProjectSeat(app.db, callerOf(req), params.data.id));
     if (!seat) return notFound(reply);
     return sendLaunchFile(app, config, req, reply, { evaluationId: null, projectId: seat.id });
   });

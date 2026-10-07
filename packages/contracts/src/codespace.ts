@@ -126,8 +126,10 @@ export type CodespaceSessionSummary = z.infer<typeof CodespaceSessionSummary>;
 /**
  * Launch token (5 min, single use): minted when a student clicks Start,
  * verified by the portal on `GET /launch?token=`. `seb` is present when the
- * launch comes from a `seb` session: this student's Config Key, which the
- * portal checks against the `.seb` it served (docs/merge/06 §6.3 point 4).
+ * launch comes from a `seb` session (D21, M6-07): the Config Key of this
+ * student's own `.seb`, built by the platform. The portal checks SEB's
+ * `X-SafeExamBrowser-ConfigKeyHash` against this claim, and refuses an exam
+ * launch without it (docs/merge/06 §6.3 point 4).
  */
 export const LaunchTokenClaims = z.object({
   iss: z.enum(CODESPACE_ISSUERS),
@@ -202,8 +204,7 @@ export type ProjectWorkModeBody = z.infer<typeof ProjectWorkModeBody>;
  * which modes the CALLER may set now and why not the others (the screen
  * offers only what the server would accept), and the state of the last
  * synchronization with the portal — when it went through, and the error of
- * the last attempt (null once one went through) —, and the Browser Exam
- * Keys the portal accepts under Safe Exam Browser. The whole route is a 404
+ * the last attempt (null once one went through). The whole route is a 404
  * when the online workspace is off (`CODESPACE_URL` empty).
  */
 export const ProjectWorkspace = z.object({
@@ -214,39 +215,8 @@ export const ProjectWorkspace = z.object({
   refusal: WorkModeRefusal.nullable(),
   syncedAt: z.iso.datetime().nullable(),
   syncError: z.string().nullable(),
-  /**
-   * The Browser Exam Keys of an `online_seb` project: staff only, never a
-   * student payload nor the audit (ADR-047 §7). Empty: the Config Key alone.
-   */
-  browserExamKeys: z.array(z.string()),
 });
 export type ProjectWorkspace = z.infer<typeof ProjectWorkspace>;
-
-/**
- * A Browser Exam Key as the SEB configuration tool shows it: a SHA-256, 64
- * hexadecimal characters, stored lower-cased (D21, ADR-047 §7).
- */
-export const BrowserExamKey = z
-  .string()
-  .trim()
-  .regex(/^[0-9a-fA-F]{64}$/, "64 hexadecimal characters expected")
-  .transform((key) => key.toLowerCase());
-
-/** The most keys an activity accepts: one per SEB version and platform of a room. */
-export const MAX_BROWSER_EXAM_KEYS = 20;
-
-/**
- * `PUT /app/api/projects/:id/workspace/keys` (an owner): the Browser Exam
- * Keys the portal accepts for an `online_seb` project, the whole list,
- * duplicates dropped. Empty means the Config Key alone.
- */
-export const ProjectBrowserExamKeysBody = z.strictObject({
-  keys: z
-    .array(BrowserExamKey)
-    .max(MAX_BROWSER_EXAM_KEYS)
-    .transform((keys) => [...new Set(keys)]),
-});
-export type ProjectBrowserExamKeysBody = z.input<typeof ProjectBrowserExamKeysBody>;
 
 /**
  * One workspace of the project as the staff read it

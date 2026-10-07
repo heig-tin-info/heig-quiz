@@ -2,15 +2,13 @@ import { createHash } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
 
+import { CONFIG_KEY_HEADER, REQUEST_HASH_HEADER, expectedHash, hashesEqual } from "@quiz/seb";
+
 import {
-  CONFIG_KEY_HEADER,
   DEV_HEADER,
-  REQUEST_HASH_HEADER,
   SebConfigurationError,
   absoluteRequestUrl,
   createSebVerifier,
-  expectedHash,
-  hashesEqual,
   type AssignmentSebKeys,
   type SebRequestFacts,
 } from "./verify.js";

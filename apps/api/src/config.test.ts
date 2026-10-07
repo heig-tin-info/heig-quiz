@@ -346,4 +346,10 @@ describe("SEB_EXTRA_ALLOWED_HOSTS (D21, M6-07)", () => {
     expect(() => loadConfig({ SEB_EXTRA_ALLOWED_HOSTS: "https://login.eduid.ch" })).toThrow(/SEB_EXTRA_ALLOWED_HOSTS/);
     expect(() => loadConfig({ SEB_EXTRA_ALLOWED_HOSTS: "login.eduid.ch/path" })).toThrow(/SEB_EXTRA_ALLOWED_HOSTS/);
   });
+
+  it("refuses an entry made of wildcards only: it would open every site", () => {
+    for (const hosts of ["*", "*.*", "login.eduid.ch,*", "*.*:443"]) {
+      expect(() => loadConfig({ SEB_EXTRA_ALLOWED_HOSTS: hosts }), hosts).toThrow(/SEB_EXTRA_ALLOWED_HOSTS/);
+    }
+  });
 });

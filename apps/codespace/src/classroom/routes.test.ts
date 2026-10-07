@@ -17,7 +17,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadConfig, type AppConfig } from "../auth/config.js";
 import { openDb, type Db, type DbHandle } from "../db/client.js";
 import { sessions, users, type AssignmentRow, type SessionRow, type UserRow } from "../db/schema.js";
-import { CONFIG_KEY_HEADER, REQUEST_HASH_HEADER, createSebVerifier, expectedHash } from "../seb/index.js";
+import { CONFIG_KEY_HEADER, REQUEST_HASH_HEADER, expectedHash } from "@quiz/seb";
+
+import { createSebVerifier } from "../seb/index.js";
 import type { SessionManager, StartOptions, StartResult } from "../sessions/manager.js";
 import { findAssignment } from "../sessions/store.js";
 

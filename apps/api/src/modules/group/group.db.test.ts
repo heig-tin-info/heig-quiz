@@ -376,6 +376,7 @@ describe("staff only (invariant 6)", () => {
       kind: "impersonation",
       actorUserId: (await server.signIn("admin")).id,
       evaluationId: null,
+      projectId: null,
     });
     const callers: [string, Headers][] = [
       ["student", { cookie: `${SESSION_COOKIE}=${studentSession.token}; ${CSRF_COOKIE}=${studentSession.csrf}`, "x-csrf-token": studentSession.csrf }],

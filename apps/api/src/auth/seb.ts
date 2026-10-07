@@ -7,7 +7,8 @@
  * The file format, the Config Key and the hashes are `@quiz/seb` (D21,
  * M6-02); this module adds what is Quiz's own: the platform builds every
  * `.seb` (D21 point 2) — Quiz's host, the workspace portal's for a project,
- * `SEB_EXTRA_ALLOWED_HOSTS` — and the start route trades the ticket.
+ * `SEB_EXTRA_ALLOWED_HOSTS` — and the start route trades the ticket. What
+ * differs between the two activities is one table, {@link SEB_ACTIVITY}.
  */
 import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
@@ -26,17 +27,53 @@ import {
 
 import { audit, tracer } from "../audit.js";
 import type { AppConfig } from "../config.js";
+import type { Db } from "../db/client.js";
 import { users } from "../db/schema.js";
 import { sebProjectSeat } from "../modules/codespace/service.js";
+import { callerFor } from "../modules/guards.js";
 import { sebSeat } from "../modules/live/service.js";
-import { consumeLaunchTicket, issueLaunchTicket } from "./launch.js";
-import { activityOf, delegated, type Activity } from "./session.js";
+import { consumeLaunchTicket, issueLaunchTicket, pendingLaunchTicket } from "./launch.js";
+import { activityOf, delegated, type Activity, type SessionAuth } from "./session.js";
 // Where the `.seb` starts; the ticket secret is the last segment, which the
 // request log masks (`redact.ts`).
 import { LAUNCH_PATH } from "./paths.js";
 
 // The renderer the routes use, re-exported for the snapshot that pins its bytes.
 export { toPlistXml };
+
+/**
+ * What differs between an evaluation's launch and a project's (D21): the
+ * activity's id on a ticket, the seat checked again when SEB trades it, the
+ * page the session lands on, the file's name, and whether the URL filter
+ * adds the workspace portal.
+ */
+const SEB_ACTIVITY: Record<
+  Activity,
+  {
+    idOf: (auth: Pick<SessionAuth, "evaluationId" | "projectId">) => string | null;
+    seat: (db: Db, user: typeof users.$inferSelect, id: string, now: Date) => Promise<{ id: string } | null>;
+    landing: (id: string) => string;
+    fileName: string;
+    portal: boolean;
+  }
+> = {
+  evaluation: {
+    idOf: (auth) => auth.evaluationId,
+    seat: (db, user, id) => sebSeat(db, user.id, id),
+    landing: (id) => `/take/${id}`,
+    fileName: "exam.seb",
+    portal: false,
+  },
+  project: {
+    idOf: (auth) => auth.projectId,
+    // The ticket's user, as their own portal would read the project: no Super Powers.
+    seat: (db, user, id, now) => sebProjectSeat(db, callerFor(user, null, now), id),
+    // Its student page, whose *Open workspace* goes on to the portal (D21 point 4).
+    landing: (id) => `/projects/${id}`,
+    fileName: "workspace.seb",
+    portal: true,
+  },
+};
 
 // --- The file --------------------------------------------------------------
 
@@ -50,7 +87,7 @@ export function sebAllowedHosts(
   config: Pick<AppConfig, "CODESPACE_URL" | "SEB_EXTRA_ALLOWED_HOSTS">,
   activity: Activity,
 ): string[] {
-  const portal = activity === "project" && config.CODESPACE_URL !== "" ? [new URL(config.CODESPACE_URL).host] : [];
+  const portal = SEB_ACTIVITY[activity].portal && config.CODESPACE_URL !== "" ? [new URL(config.CODESPACE_URL).host] : [];
   return [...portal, ...config.SEB_EXTRA_ALLOWED_HOSTS];
 }
 
@@ -87,27 +124,24 @@ export async function sendLaunchFile(
   config: AppConfig,
   req: FastifyRequest,
   reply: FastifyReply,
-  activity: SebActivity,
+  target: SebActivity,
 ): Promise<FastifyReply> {
   const secret = await issueLaunchTicket(
     app.db,
-    { kind: "seb", userId: req.user!.id, actorUserId: null, ...activity },
+    { kind: "seb", userId: req.user!.id, actorUserId: null, ...target },
     app.clock.now(),
   );
-  const subject = activityOf(activity);
-  await tracer(app)(req, "auth.seb_launch", subject, (activity.projectId ?? activity.evaluationId)!);
+  const activity = activityOf(target);
+  await tracer(app)(req, "auth.seb_launch", activity, SEB_ACTIVITY[activity].idOf(target)!);
   const startUrl = new URL(`${LAUNCH_PATH}${secret}`, config.PUBLIC_URL).href;
   return reply
     .header("content-type", "application/seb")
-    .header("content-disposition", `attachment; filename="${subject === "project" ? "workspace" : "exam"}.seb"`)
+    .header("content-disposition", `attachment; filename="${SEB_ACTIVITY[activity].fileName}"`)
     .header("cache-control", "no-store")
-    .send(toPlistXml(sebConfig(startUrl, sebAllowedHosts(config, subject))));
+    .send(toPlistXml(sebConfig(startUrl, sebAllowedHosts(config, activity))));
 }
 
 // --- The routes ----------------------------------------------------------------
-
-/** The two activities a `.seb` may be for, in the order the start route tries their files. */
-const ACTIVITIES: readonly Activity[] = ["evaluation", "project"];
 
 export async function sebRoutes(app: FastifyInstance, config: AppConfig) {
   /**
@@ -133,12 +167,12 @@ export async function sebRoutes(app: FastifyInstance, config: AppConfig) {
   );
 
   /**
-   * The start URL of the `.seb`. The Config Key header is checked BEFORE the
-   * ticket is consumed: a copied file opened in an ordinary browser is
-   * refused and leaves the ticket for SEB. The file is a function of its
-   * start URL and of its activity's hosts, so the header is checked against
-   * either file first, then against the ticket's own once it is consumed.
-   * Every refusal looks the same to the client; the audit log keeps the
+   * The start URL of the `.seb`. The ticket's activity is READ first,
+   * without consuming it, because the file — hence the Config Key — is a
+   * function of its start URL and of that activity's hosts; then the header
+   * is checked against that file, BEFORE the ticket is consumed: a copied
+   * file opened in an ordinary browser is refused and leaves the ticket for
+   * SEB. Every refusal looks the same to the client; the audit log keeps the
    * reason.
    */
   app.get<{ Params: { secret: string } }>(`${LAUNCH_PATH}:secret`, async (req, reply) => {
@@ -153,23 +187,20 @@ export async function sebRoutes(app: FastifyInstance, config: AppConfig) {
       return reply.redirect("/?seb=invalid", 303);
     };
     const now = app.clock.now();
+    const pending = await pendingLaunchTicket(app.db, "seb", req.params.secret, now);
+    if (!pending) return refuse("ticket");
+    const activity = activityOf(pending.auth);
     // The start URL of the `.seb` IS this request's URL; its Config Key is
     // kept on the session, to check every later request (ADR-051 §3).
     const url = absoluteRequestUrl(config.PUBLIC_URL, req.raw.url ?? req.url);
-    const header = req.headers[CONFIG_KEY_HEADER];
-    const keyOf = (activity: Activity) => launchConfigKey(url, sebAllowedHosts(config, activity));
-    if (!ACTIVITIES.some((activity) => configKeyHashMatches(url, keyOf(activity), header))) return refuse("config_key");
+    const sebConfigKey = launchConfigKey(url, sebAllowedHosts(config, activity));
+    if (!configKeyHashMatches(url, sebConfigKey, req.headers[CONFIG_KEY_HEADER])) return refuse("config_key", pending.id);
     const ticket = await consumeLaunchTicket(app.db, "seb", req.params.secret, now);
-    if (!ticket) return refuse("ticket");
-    const activity = activityOf(ticket.auth);
-    const sebConfigKey = keyOf(activity);
-    if (!configKeyHashMatches(url, sebConfigKey, header)) return refuse("config_key", ticket.id);
+    if (!ticket) return refuse("ticket", pending.id);
     // The ticket is a few minutes old: the seat, and the requirement, are checked again now.
-    const seat =
-      activity === "project"
-        ? await sebProjectSeat(app.db, ticket.userId, ticket.auth.projectId!)
-        : await sebSeat(app.db, ticket.userId, ticket.auth.evaluationId!);
     const [user] = await app.db.select().from(users).where(eq(users.id, ticket.userId));
+    const { idOf, seat: seatOf, landing } = SEB_ACTIVITY[activity];
+    const seat = user ? await seatOf(app.db, user, idOf(ticket.auth)!, now) : null;
     if (!seat || !user) return refuse("seat", ticket.id);
     await app.openSession(reply, user, { ...ticket.auth, sebConfigKey });
     await audit(app.db, {
@@ -180,8 +211,6 @@ export async function sebRoutes(app: FastifyInstance, config: AppConfig) {
       subjectId: seat.id,
       payload: { ticketId: ticket.id },
     });
-    // A project's session lands on its student page, whose *Open workspace*
-    // goes on to the portal (D21 point 4).
-    return reply.redirect(activity === "project" ? `/projects/${seat.id}` : `/take/${seat.id}`, 303);
+    return reply.redirect(landing(seat.id), 303);
   });
 }

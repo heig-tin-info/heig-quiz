@@ -33,13 +33,13 @@ export function newToken(): string {
  * themself (set on an `impersonation` session, ADR-034); `evaluationId` is
  * set on a confined session only (`seb`, `kiosk`: ADR-027, ADR-051) — or,
  * on a `seb` session of an `online_seb` project, `projectId` instead (D21,
- * M6-07: one activity per confined session). Absent `projectId` reads null.
+ * M6-07: one activity per confined session).
  */
 export interface SessionAuth {
   kind: SessionKind;
   actorUserId: string | null;
   evaluationId: string | null;
-  projectId?: string | null;
+  projectId: string | null;
 }
 
 /** What a confined session is confined to (D21): ONE evaluation, or ONE project. */
@@ -47,9 +47,9 @@ export type Activity = "evaluation" | "project";
 
 /** The activity of a confined session: a project when it names one, an evaluation otherwise. */
 export const activityOf = (auth: Pick<SessionAuth, "projectId">): Activity =>
-  (auth.projectId ?? null) !== null ? "project" : "evaluation";
+  auth.projectId !== null ? "project" : "evaluation";
 
-export const PORTAL: SessionAuth = { kind: "portal", actorUserId: null, evaluationId: null };
+export const PORTAL: SessionAuth = { kind: "portal", actorUserId: null, evaluationId: null, projectId: null };
 
 /**
  * A session as a request found it: what it is, plus the end of its Super
@@ -207,7 +207,7 @@ export async function createSession(
     kind: auth.kind,
     actorUserId: auth.actorUserId,
     evaluationId: auth.evaluationId,
-    projectId: auth.projectId ?? null,
+    projectId: auth.projectId,
     sebConfigKey: auth.sebConfigKey ?? null,
     deviceId: auth.deviceId ?? null,
   };
@@ -260,7 +260,7 @@ function pairsOf(gone: readonly Dropped[]) {
  * the station's label; never a token.
  */
 async function supersede(tx: Tx, userId: string, auth: NewSession & { kind: TrustedClient }) {
-  const projectId = auth.projectId ?? null;
+  const { projectId } = auth;
   // Two launches of the same pair at once would each delete the other's
   // (not yet committed) row and both insert: the second waits here for the
   // first to commit, then sees and removes its session. Namespaced, so it

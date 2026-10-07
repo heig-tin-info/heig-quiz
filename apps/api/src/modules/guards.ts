@@ -742,7 +742,7 @@ export async function findStudentProjectView(
  * one confined session that reads a project, its own, never another.
  */
 export function sebProjectSession(auth: Pick<SessionAuth, "kind" | "actorUserId" | "projectId"> | null, projectId: string): boolean {
-  return auth !== null && auth.kind === "seb" && !delegated(auth) && (auth.projectId ?? null) === projectId;
+  return auth !== null && auth.kind === "seb" && !delegated(auth) && auth.projectId === projectId;
 }
 
 /** {@link findStudentProjectView} for the request's own session, answering the 404 (invariant 6). */

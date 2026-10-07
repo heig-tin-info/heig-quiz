@@ -16,11 +16,7 @@ export { checkExamRequest, outsideSebPage, replyOutsideSeb } from "./check.js";
 export {
   absoluteRequestUrl,
   createSebVerifier,
-  expectedHash,
-  hashesEqual,
-  CONFIG_KEY_HEADER,
   DEV_HEADER,
-  REQUEST_HASH_HEADER,
   SebConfigurationError,
   type AssignmentSebKeys,
   type RequestUrlOptions,

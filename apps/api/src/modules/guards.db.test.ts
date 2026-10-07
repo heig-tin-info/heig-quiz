@@ -54,6 +54,7 @@ async function headersOf(userId: string, kind: SessionKind, evaluationId: string
     kind,
     actorUserId: null,
     evaluationId,
+    projectId: null,
     deviceId: station?.deviceId ?? null,
   });
   const cookie = `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`;

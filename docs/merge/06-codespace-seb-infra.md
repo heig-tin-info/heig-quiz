@@ -133,9 +133,10 @@ limits it found, both for the product owner:
   binary AND the configuration (the sibling's `analyse.md` §4.4). Quiz's
   `.seb` is per student (its start URL carries the one-time ticket), so a
   BEK is expected to differ from one student to the next, and a list typed
-  by the staff to match nobody. The list is optional and empty by default
-  (Config Key only); step 7 of proof B settles whether a non-empty one can
-  work at all. Evaluations keep the Config Key alone (no BEK list).
+  by the staff to match nobody. Quiz therefore sends no BEK (Config Key
+  only); the portal still accepts a list. **BEK list: after proof B step 7
+  (per-student `.seb` likely gives per-student BEKs).** Evaluations keep
+  the Config Key alone too.
 - **Plan B is not built.** The auto-submitted POST form needs an inline
   script page on Quiz's side (its CSP forbids inline scripts) and a
   `POST /launch` on the portal whose hashed URL no longer carries the
@@ -175,8 +176,8 @@ the staging portal, with `SEB_CONFIG_KEY_ENFORCE=0` (audit-only) on Quiz and
 7. Browser Exam Keys: read the BEK the configuration tool shows for this
    file; download a second file (another student, or the same later) and
    compare. Different keys confirm the limit above (leave the list empty);
-   equal keys mean a list can work: enter it, resync, and repeat step 5,
-   then with a SEB of another version (refused, `browser-exam-key-mismatch`).
+   equal keys mean a list can work, and Quiz then gains a staff field for
+   it (removed from M6-07 until this step).
 8. Record the versions, the outcome of each step and the logs in the card
    M6-07; only then turn `SEB_CONFIG_KEY_ENFORCE` on and open SEB projects
    to students.

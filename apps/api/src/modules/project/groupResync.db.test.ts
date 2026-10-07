@@ -372,7 +372,7 @@ describe("Resync with the set on a following project, and its refusals", () => {
     await setOk(await moveTo(set, line(ben), groupOf(set, "Group 2").id));
     const stranger = await server.signIn("teacher");
     const { token } = await createApiToken(db(), teacher.id, { name: "t", expiresInDays: null });
-    const s = await createSession(db(), teacher.id, 8, { kind: "impersonation", actorUserId: (await server.signIn("admin")).id, evaluationId: null });
+    const s = await createSession(db(), teacher.id, 8, { kind: "impersonation", actorUserId: (await server.signIn("admin")).id, projectId: null, evaluationId: null });
     const impersonation = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
     const callers: [string, Record<string, string>, [number, string]][] = [
       ["student", ana.headers, [404, "not_found"]],

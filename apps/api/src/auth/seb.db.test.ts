@@ -119,7 +119,7 @@ describe("the launch ticket", () => {
     const now = server.clock.now();
     const secret = await issueLaunchTicket(
       server.app.db,
-      { kind: "seb", userId: student.id, actorUserId: student.id, evaluationId: exam.evaluationId },
+      { kind: "seb", userId: student.id, actorUserId: student.id, projectId: null, evaluationId: exam.evaluationId },
       now,
     );
     const both = await Promise.all([
@@ -240,6 +240,7 @@ describe("the kiosk session (ADR-051)", () => {
       kind: "kiosk",
       actorUserId: null,
       evaluationId: kioskExam.evaluationId,
+      projectId: null,
       deviceId: station.deviceId,
     });
     session = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };

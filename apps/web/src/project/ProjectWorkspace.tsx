@@ -1,9 +1,7 @@
-import { useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Laptop, RefreshCw } from "lucide-react";
 
 import {
-  ProjectBrowserExamKeysBody,
   WORK_MODES,
   type CodespaceSessionState,
   type ProjectWorkModeBody,
@@ -23,8 +21,6 @@ import {
   Button,
   Card,
   cx,
-  FieldError,
-  fieldErrorProps,
   isoDateTime,
   QueryError,
   RelativeTime,
@@ -32,7 +28,6 @@ import {
   Segmented,
   Skeleton,
   T,
-  Textarea,
   type Tone,
 } from "../ui";
 import { refusalMessage } from "./projectPage";
@@ -139,14 +134,6 @@ export function ProjectWorkspace({ projectId, archived }: { projectId: string; a
                 options={options}
               />
             </div>
-            {ws.mode === "online_seb" ? (
-              <BrowserExamKeys
-                projectId={projectId}
-                keys={ws.browserExamKeys}
-                // The owner's (ADR-068), like the mode: an assistant is told `owner_required` for any other mode.
-                editable={!archived && ws.refusal !== "owner_required"}
-              />
-            ) : null}
             {ws.mode !== "free" ? (
               <div className="flex flex-wrap items-center justify-between gap-3 py-3 text-[13px]">
                 <span className="text-fg-muted" data-testid="workspace-sync">
@@ -172,81 +159,6 @@ export function ProjectWorkspace({ projectId, archived }: { projectId: string; a
         </>
       )}
     </section>
-  );
-}
-
-/**
- * The Browser Exam Keys of an `online_seb` project (D21 point 5): optional,
- * one per line, the whole list saved at once; empty means the Safe Exam
- * Browser configuration alone (the Config Key). Staff-only: they never reach
- * a student. A row of the workspace card, its save a secondary action.
- */
-function BrowserExamKeys({ projectId, keys, editable }: { projectId: string; keys: string[]; editable: boolean }) {
-  const t = useT();
-  const qc = useQueryClient();
-  const toast = useToast();
-  const id = useId();
-  const saved = keys.join("\n");
-  const [draft, setDraft] = useState(saved);
-  const [error, setError] = useState<string | null>(null);
-  const save = useMutation({
-    mutationFn: (body: ProjectBrowserExamKeysBody) =>
-      api<Workspace>(`/app/api/projects/${projectId}/workspace/keys`, { method: "PUT", body: JSON.stringify(body) }),
-    onSuccess: (next) => {
-      qc.setQueryData(projectWorkspaceKey(projectId), next);
-      setDraft(next.browserExamKeys.join("\n"));
-      toast(t("project.workspace.keys.saved"), "success");
-    },
-    onError: (err) => toast(refusalMessage(err, t), "error"),
-  });
-  // The contract's own schema (invariant 7): a malformed key is said here, before any request.
-  const submit = () => {
-    const body = { keys: draft.split(/\s+/).filter((k) => k !== "") };
-    const parsed = ProjectBrowserExamKeysBody.safeParse(body);
-    setError(parsed.success ? null : t("project.workspace.keys.invalid"));
-    if (parsed.success) save.mutate(body);
-  };
-  return (
-    <div className="space-y-2.5 py-3" data-testid="workspace-keys">
-      <div>
-        <label htmlFor={id} className="text-sm font-medium text-fg">
-          {t("project.workspace.keys")}
-        </label>
-        <p id={`${id}-description`} className="mt-0.5 text-[13px] text-fg-muted">
-          {t("project.workspace.keys.desc")}
-        </p>
-      </div>
-      {editable ? (
-        <>
-          <Textarea
-            id={id}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            spellCheck={false}
-            rows={3}
-            className="font-mono text-[13px]"
-            aria-describedby={`${id}-description`}
-            {...fieldErrorProps(id, error)}
-          />
-          <FieldError id={id}>{error}</FieldError>
-          <div className="flex justify-end">
-            <Button variant="secondary" size="sm" onClick={submit} loading={save.isPending} disabled={draft.trim() === saved}>
-              {t("project.workspace.keys.save")}
-            </Button>
-          </div>
-        </>
-      ) : keys.length === 0 ? (
-        <p className="text-[13px] text-fg-faint">{t("project.workspace.keys.none")}</p>
-      ) : (
-        <ul id={id} className="space-y-1 font-mono text-[13px] text-fg-muted">
-          {keys.map((k) => (
-            <li key={k} className="truncate">
-              {k}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
   );
 }
 

@@ -305,9 +305,8 @@ const scenes = [
   { name: "project-workspace", role: "teacher", path: "/projects/pj-published?projects=1&codespace=1", settle: 2500 },
   { name: "project-workspace-draft", role: "teacher", path: "/projects/pj-draft?projects=1&codespace=1" },
   { name: "project-workspace-assistant", role: "teacher", path: "/projects/pj-draft?projects=1&codespace=1&assistant=1" },
-  // D21 (M6-07): a project under Safe Exam Browser, its Browser Exam Keys editable by the owner, read by an assistant.
+  // D21 (M6-07): a project under Safe Exam Browser, synced like an online one.
   { name: "project-workspace-seb", role: "teacher", path: "/projects/pj-draft-manual?projects=1&codespace=1" },
-  { name: "project-workspace-seb-assistant", role: "teacher", path: "/projects/pj-draft-manual?projects=1&codespace=1&assistant=1" },
   // M3-12b: the sheet of the repository whose score is the teacher's (its
   // form filled, the final review received); M3-12c: the locked project not
   // yet released (`?unreleased=1`), Release its one action and its
