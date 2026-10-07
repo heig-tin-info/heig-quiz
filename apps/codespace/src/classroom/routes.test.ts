@@ -19,6 +19,7 @@ import { openDb, type Db, type DbHandle } from "../db/client.js";
 import { sessions, users, type AssignmentRow, type SessionRow, type UserRow } from "../db/schema.js";
 import { CONFIG_KEY_HEADER, REQUEST_HASH_HEADER, expectedHash } from "@quiz/seb";
 
+import { createPushEventStore } from "../git/index.js";
 import { createSebVerifier } from "../seb/index.js";
 import type { SessionManager, StartOptions, StartResult } from "../sessions/manager.js";
 import { findAssignment } from "../sessions/store.js";
@@ -351,7 +352,23 @@ describe("GET /api/assignments/:id/sessions", () => {
     expect(list[0]?.["email"]).toBe("sacha@heig-vd.ch");
     expect(list[0]?.["state"]).toBe("running");
     expect(list[0]?.["lastPushAt"]).toBeNull();
+    expect(list[0]?.["rejectedPush"]).toBeNull();
     expect(typeof list[0]?.["createdAt"]).toBe("string");
+
+    // A push GitHub refused (ADR-078 §6) reaches the staff's list, until a later push of the branch.
+    const sessionId = list[0]?.["sessionId"] as string;
+    const store = createPushEventStore(h.db);
+    const at = new Date("2026-10-07T09:00:00Z");
+    const event = { sessionId, student: "u-sacha", assignment: "a-lab", ref: "refs/heads/main", oldSha: null, state: "pending" as const, attempts: 0 };
+    await store.insert([{ ...event, id: "p1", sha: "a".repeat(40), receivedAt: at }]);
+    await store.markRejected(["p1"], "fetch first");
+    const read = async () =>
+      CodespaceSessionSummary.array().parse(
+        (await h.app.inject({ url: "/api/assignments/a-lab/sessions", headers: { authorization: `Bearer ${token}` } })).json(),
+      )[0];
+    expect((await read())?.rejectedPush).toEqual({ ref: "refs/heads/main", at: at.toISOString(), reason: "fetch first" });
+    await store.insert([{ ...event, id: "p2", sha: "b".repeat(40), receivedAt: new Date(at.getTime() + 60_000) }]);
+    expect((await read())?.rejectedPush).toBeNull();
   });
 });
 

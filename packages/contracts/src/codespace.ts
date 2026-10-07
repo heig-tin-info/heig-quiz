@@ -9,13 +9,13 @@
  */
 import { z } from "zod";
 
-import { WORK_MODE_REFUSALS, WORK_MODES, WORKSPACE_START_REFUSALS } from "@quiz/domain";
+import { GIT_TOKEN_REFUSALS, WORK_MODE_REFUSALS, WORK_MODES, WORKSPACE_START_REFUSALS } from "@quiz/domain";
 
 /**
  * Work mode of a project; `online_seb` opens only from Safe Exam Browser.
  * The lists are `@quiz/domain`'s (`workMode.ts`), re-exported here.
  */
-export { WORK_MODE_REFUSALS, WORK_MODES, WORKSPACE_START_REFUSALS };
+export { GIT_TOKEN_REFUSALS, WORK_MODE_REFUSALS, WORK_MODES, WORKSPACE_START_REFUSALS };
 export const WorkMode = z.enum(WORK_MODES);
 export type WorkMode = z.infer<typeof WorkMode>;
 
@@ -27,6 +27,9 @@ export type WorkMode = z.infer<typeof WorkMode>;
 export const CODESPACE_ISSUERS = ["heig-classroom", "heig-quiz"] as const;
 export type CodespaceIssuer = (typeof CODESPACE_ISSUERS)[number];
 export const QUIZ_CODESPACE_ISSUER: CodespaceIssuer = "heig-quiz";
+
+/** The portal's own issuer: its service calls, and the two git relay routes it calls on Quiz (ADR-078). */
+export const PORTAL_ISSUER = "heig-codespace";
 
 /** The portal's two audiences: a student launch, and server-to-server calls. */
 export const LAUNCH_AUDIENCE = "heig-codespace";
@@ -120,6 +123,17 @@ export const CodespaceSessionSummary = z.object({
   /** The last heartbeat of the proxy; set when the session is created. */
   lastSeenAt: IsoDate,
   lastPushAt: IsoDate.nullable(),
+  /**
+   * The session's last push GitHub refused (ADR-078 §6): a non-fast-forward
+   * — the App committed meanwhile, the student must pull — or a change
+   * GitHub forbids the relay (a workflow file), with GitHub's reason. Null
+   * when none, or when a later push of the same branch went through.
+   * Absent from an older portal: null.
+   */
+  rejectedPush: z
+    .object({ ref: z.string().min(1), at: IsoDate, reason: z.string() })
+    .nullable()
+    .default(null),
 });
 export type CodespaceSessionSummary = z.infer<typeof CodespaceSessionSummary>;
 
@@ -151,12 +165,90 @@ export type LaunchTokenClaims = z.infer<typeof LaunchTokenClaims>;
 
 /** Service token (2 min) for server-to-server calls, either direction. */
 export const ServiceTokenClaims = z.object({
-  iss: z.enum([...CODESPACE_ISSUERS, "heig-codespace"]),
+  iss: z.enum([...CODESPACE_ISSUERS, PORTAL_ISSUER]),
   aud: z.enum([SERVICE_AUDIENCE, PLATFORM_SERVICE_AUDIENCE]),
   iat: z.number(),
   exp: z.number(),
 });
 export type ServiceTokenClaims = z.infer<typeof ServiceTokenClaims>;
+
+// ---------------------------------------------------------- the git relay's tokens (ADR-078)
+
+/** `POST /app/codespace/git-token`'s audience: refused anywhere else, and anything else refused there. */
+export const GIT_TOKEN_AUDIENCE = "heig-quiz-git-token";
+/** `POST /app/codespace/relay-heads`'s audience. */
+export const RELAY_HEADS_AUDIENCE = "heig-quiz-relay-heads";
+export const GIT_TOKEN_PATH = "/app/codespace/git-token";
+export const RELAY_HEADS_PATH = "/app/codespace/relay-heads";
+/** A request token lives one minute at most (`exp - iat`). */
+export const GIT_REQUEST_TTL_SECONDS = 60;
+/** At most this many heads per declaration. */
+export const RELAY_HEADS_MAX = 50;
+
+/** `owner/name`, as GitHub names a repository. */
+const RepositoryFullName = z.string().regex(/^[^/\s]+\/[^/\s]+$/, "repository expected in the form owner/name");
+
+/**
+ * The claims both routes share (ADR-078 §2): the request IS the signed
+ * token, so a token seen in transit cannot be re-aimed at another
+ * repository, and it expires within a minute.
+ */
+const gitRequestClaims = <A extends string>(aud: A) =>
+  z.object({
+    iss: z.literal(PORTAL_ISSUER),
+    aud: z.literal(aud),
+    iat: z.number().int(),
+    exp: z.number().int(),
+    jti: z.string().min(1).max(200),
+    /** The project (the portal's `assignmentId`). */
+    projectId: z.uuid(),
+    /** The Quiz user the workspace belongs to (the launch token's `sub`). */
+    userId: z.uuid(),
+    repository: RepositoryFullName,
+  });
+const shortLived = (c: { iat: number; exp: number }) => c.exp - c.iat <= GIT_REQUEST_TTL_SECONDS && c.exp > c.iat;
+
+/** `POST /app/codespace/git-token`: an installation token on ONE repository. */
+export const GitTokenRequestClaims = gitRequestClaims(GIT_TOKEN_AUDIENCE).refine(shortLived, "a request lives one minute at most");
+export type GitTokenRequestClaims = z.infer<typeof GitTokenRequestClaims>;
+
+/** A head the portal is about to push: a ref and a full sha (SHA-1 or SHA-256). */
+export const RelayHead = z.object({
+  ref: z.string().regex(/^refs\/[^\s\0]+$/).max(255),
+  sha: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
+});
+export type RelayHead = z.infer<typeof RelayHead>;
+
+/** `POST /app/codespace/relay-heads`: the heads of the next relay push, declared before it (204). */
+export const RelayHeadsClaims = gitRequestClaims(RELAY_HEADS_AUDIENCE)
+  .extend({ heads: z.array(RelayHead).min(1).max(RELAY_HEADS_MAX) })
+  .refine(shortLived, "a request lives one minute at most");
+export type RelayHeadsClaims = z.infer<typeof RelayHeadsClaims>;
+
+/**
+ * Quiz's answer to the token route, sent with `Cache-Control: no-store`.
+ * `expiresAt` is GitHub's; `useUntil` the last instant the portal may use
+ * it: for a write grant `min(expiresAt, effective deadline + grace)`, for
+ * a read grant `expiresAt`.
+ */
+export const GitTokenGrant = z.object({
+  token: z.string().min(1),
+  expiresAt: IsoDate,
+  useUntil: IsoDate,
+  repository: z.object({ fullName: RepositoryFullName, githubRepoId: z.number().int().positive() }),
+  permission: z.enum(["write", "read"]),
+});
+export type GitTokenGrant = z.infer<typeof GitTokenGrant>;
+
+/**
+ * Why the two routes refuse: `unauthorized` (401, the signature, audience,
+ * lifetime or `jti`), `not_found` (404), `not_online` and `closed` (409),
+ * `github_unavailable` (503). The first four are not outages: the portal
+ * waits on its slow backoff (ADR-078 §3).
+ */
+export const GIT_TOKEN_ERRORS = [...GIT_TOKEN_REFUSALS, "unauthorized", "github_unavailable"] as const;
+export const GitTokenError = z.object({ error: z.enum(GIT_TOKEN_ERRORS) });
+export type GitTokenError = z.infer<typeof GitTokenError>;
 
 // ---------------------------------------------------------- Quiz's own routes (M6-06)
 

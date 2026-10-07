@@ -37,10 +37,15 @@ export function redactSecrets(text: string): string {
  * workspace empty on the first real attempt in production: the student's
  * repository is private.
  */
-export function gitAuthEnv(authorization: string): NodeJS.ProcessEnv {
+export function gitAuthEnv(authorization: string, url: string): NodeJS.ProcessEnv {
+  // Only HTTP carries the header: a local path or another transport gets none.
+  if (!/^https?:\/\//i.test(url)) return {};
   return {
     GIT_CONFIG_COUNT: "1",
-    GIT_CONFIG_KEY_0: "http.extraHeader",
+    // Always scoped to the remote's origin (`http.https://github.com/.extraHeader`,
+    // as Quiz's `credentialEnv`): the header goes to that host only, never to a
+    // redirect or another remote (ADR-078 §3).
+    GIT_CONFIG_KEY_0: `http.${new URL(url).origin}/.extraHeader`,
     GIT_CONFIG_VALUE_0: `Authorization: ${authorization}`,
   };
 }
@@ -55,6 +60,8 @@ export class GitError extends Error {
   constructor(
     message: string,
     readonly args: readonly string[],
+    /** What git wrote on stdout before failing (`push --porcelain`'s per-ref verdicts), redacted. */
+    readonly stdout: string = "",
   ) {
     super(message);
     this.name = "GitError";
@@ -82,8 +89,8 @@ export async function git(args: string[], opts: GitRunOptions = {}): Promise<str
     });
     return stdout;
   } catch (err) {
-    const e = err as { stderr?: string; message?: string };
-    throw new GitError(redactSecrets(String(e.stderr || e.message || err)), args);
+    const e = err as { stderr?: string; stdout?: string; message?: string };
+    throw new GitError(redactSecrets(String(e.stderr || e.message || err)), args, redactSecrets(String(e.stdout ?? "")));
   }
 }
 

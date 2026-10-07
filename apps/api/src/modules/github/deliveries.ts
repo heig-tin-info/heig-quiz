@@ -31,14 +31,14 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
-import { and, asc, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, lt, notExists } from "drizzle-orm";
 import { z } from "zod";
 
 import type { GithubWebhookBody } from "@quiz/contracts";
 
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
-import { pushReceipts, webhookDeliveries } from "../../db/schema.js";
+import { botCommits, codespaceRelays, projectRepos, pushReceipts, webhookDeliveries } from "../../db/schema.js";
 import { githubApp, isZeroSha, rateLimitReset, recentHookDeliveries, redeliverHookDelivery } from "../../github/app.js";
 import { GITHUB_WEBHOOK_QUEUE } from "../../jobs.js";
 import { redactTokens } from "../../redact.js";
@@ -127,6 +127,36 @@ export function pushedBy(config: AppConfig, login: string | undefined): "app" | 
 }
 
 /**
+ * Who pushed a PUSH (ADR-078 §6): {@link pushedBy} of its sender, except
+ * that a push of Quiz's App is the student's — a person's — when the online
+ * workspace portal declared its head before relaying it (a row of
+ * `codespace_relays` for that repository and `after`), and that head is
+ * none of the App's own commits (`bot_commits`): a restore, a sync or a
+ * deadline commit is never the student's, declared or not. Any other push
+ * of the App stays the App's. One primary-key lookup (N-SEC-17), reading
+ * the `codespace` and `project` modules' tables by join.
+ */
+export async function pushAuthor(
+  db: Db | Tx,
+  config: AppConfig,
+  push: { senderLogin: string | undefined; githubRepoId: number; after: string },
+): Promise<"app" | "workflow" | "person"> {
+  const by = pushedBy(config, push.senderLogin);
+  if (by !== "app") return by;
+  const ownCommit = db
+    .select({ sha: botCommits.sha })
+    .from(botCommits)
+    .innerJoin(projectRepos, eq(projectRepos.id, botCommits.repoId))
+    .where(and(eq(projectRepos.githubRepoId, push.githubRepoId), eq(botCommits.sha, push.after)));
+  const [declared] = await db
+    .select({ sha: codespaceRelays.sha })
+    .from(codespaceRelays)
+    .where(and(eq(codespaceRelays.githubRepoId, push.githubRepoId), eq(codespaceRelays.sha, push.after), notExists(ownCommit)))
+    .limit(1);
+  return declared ? "person" : "app";
+}
+
+/**
  * The commits a push brought that no bot authored (M3-14i), null without
  * the list: a commit already pushed (`distinct` false: a sync branch
  * merged, a branch copied) is no new work, nor one of the App's or a
@@ -152,7 +182,7 @@ async function writeReceipt(tx: Tx, config: AppConfig, delivery: WebhookDelivery
       branch: push.data.ref.replace(/^refs\/heads\//, ""),
       headSha: push.data.after,
       receivedAt: delivery.receivedAt,
-      isBot: pushedBy(config, push.data.sender?.login) !== "person",
+      isBot: (await pushAuthor(tx, config, { senderLogin: push.data.sender?.login, githubRepoId: repoId, after: push.data.after })) !== "person",
       forced: push.data.forced ?? false,
       commits: pushedCommits(config, push.data.commits),
     })

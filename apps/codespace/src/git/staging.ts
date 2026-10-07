@@ -154,7 +154,7 @@ export async function ensureStagingRepo(opts: StagingOptions): Promise<StagingRe
       ["fetch", "--prune", "--no-tags", from, ...REFSPECS],
       // The authorization touches neither argv (`ps`, `/proc/<pid>/cmdline`)
       // nor the disk; `gitRunner.redactSecrets` strips it from error messages.
-      opts.authorization ? { env: gitAuthEnv(opts.authorization) } : {},
+      opts.authorization ? { env: gitAuthEnv(opts.authorization, from) } : {},
     );
     fetched = true;
   }

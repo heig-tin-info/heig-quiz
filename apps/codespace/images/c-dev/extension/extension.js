@@ -1,11 +1,14 @@
 /**
  * heig.codespace-statusbar — status bar of the heig-codespace portal.
  *
- * Two items at the right of the status bar:
+ * Three items at the right of the status bar:
  *   1. the time left until the assignment deadline, refreshed every 30 s;
- *   2. a « Fermer » button that opens the return URL (classroom or portal).
+ *   2. a « Fermer » button that opens the return URL (classroom or portal);
+ *   3. a warning when GitHub refused the student's last push (ADR-078 §6):
+ *      the relay never forces, so a push behind a commit of the platform's
+ *      App is not relayed until the student pulls.
  *
- * Everything comes from the container environment, set by the portal's
+ * Items 1 and 2 come from the container environment, set by the portal's
  * `podman run` (`src/engine/index.ts`):
  *   CODESPACE_DEADLINE         ISO 8601 deadline  (optional: without it, no countdown)
  *   CODESPACE_RETURN_URL       return URL         (optional: without it, no button)
@@ -15,12 +18,17 @@
  * `ExtensionHostConnection#buildUserEnvironment` builds `{...process.env, ...}`
  * (checked in the bundled package, see ../README.md).
  *
- * No network access, no telemetry, no dependency: the student container has
- * neither a resolver nor a way out (invariants 1 and 2).
+ * Item 3 reads `GET <origin>/push-status` on the portal's git channel, the
+ * `origin` remote the portal wrote in the workspace
+ * (`http://portal.internal:9418/git/<session>`): the one surface the
+ * container already reaches, authenticated by its address. No other
+ * network access, no telemetry, no dependency, no credential (invariants 1
+ * and 2).
  */
 "use strict";
 
 const fs = require("node:fs");
+const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
 const vscode = require("vscode");
@@ -46,6 +54,10 @@ const STRINGS = {
     deadline: "Échéance",
     assignment: "Devoir",
     noReturnUrl: "Aucune URL de retour n'a été transmise à cette session.",
+    pushRejected: "Push refusé par GitHub",
+    pushRejectedTooltip: (branch, reason) =>
+      `Votre dernier push sur ${branch} n'a pas été transmis à GitHub (${reason}). ` +
+      "Votre commit est toujours dans votre espace : faites un pull, corrigez si nécessaire, puis poussez à nouveau.",
     remaining: (h, m) =>
       h > 0
         ? `${h} h ${m} min restantes`
@@ -61,6 +73,10 @@ const STRINGS = {
     deadline: "Deadline",
     assignment: "Assignment",
     noReturnUrl: "No return URL was given to this session.",
+    pushRejected: "Push refused by GitHub",
+    pushRejectedTooltip: (branch, reason) =>
+      `Your last push of ${branch} was not relayed to GitHub (${reason}). ` +
+      "Your commit is still in your workspace: pull, fix if needed, then push again.",
     remaining: (h, m) => (h > 0 ? `${h} h ${m} min left` : `${m} min left`),
   },
 };
@@ -94,6 +110,41 @@ function formatDeadline(deadline, fr) {
 function readEnv(name) {
   const value = process.env[name];
   return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+}
+
+/** The portal's git channel of this session, from the workspace's `origin` remote; undefined without one. */
+function portalRemote() {
+  const folder = vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders[0];
+  if (!folder) return undefined;
+  try {
+    const config = fs.readFileSync(path.join(folder.uri.fsPath, ".git", "config"), "utf8");
+    const m = /^\s*url\s*=\s*(http:\/\/portal\.internal:\d+\/git\/[A-Za-z0-9._-]+)\/?\s*$/m.exec(config);
+    return m ? m[1] : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** `GET <remote>/push-status`: `{ rejected: { ref, at, reason } | null }`, or null when it cannot be read. */
+function readPushStatus(remote) {
+  return new Promise((resolve) => {
+    const req = http.get(`${remote}/push-status`, { timeout: 5000 }, (res) => {
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => {
+        if (body.length < 16_384) body += chunk;
+      });
+      res.on("end", () => {
+        try {
+          resolve(res.statusCode === 200 ? JSON.parse(body) : null);
+        } catch {
+          resolve(null);
+        }
+      });
+    });
+    req.on("timeout", () => req.destroy());
+    req.on("error", () => resolve(null));
+  });
 }
 
 function writeWitness(payload) {
@@ -168,6 +219,28 @@ function activate(context) {
     close.command = "codespace.close";
     close.show();
     context.subscriptions.push(close);
+  }
+
+  // --- 3. a push GitHub refused (ADR-078 §6) --------------------------------
+  const remote = portalRemote();
+  if (remote) {
+    const refused = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 95);
+    refused.text = `$(warning) ${t.pushRejected}`;
+    refused.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
+    const poll = async () => {
+      const status = await readPushStatus(remote);
+      const rejected = status && status.rejected;
+      if (rejected && typeof rejected.ref === "string") {
+        const branch = rejected.ref.replace(/^refs\/heads\//, "");
+        refused.tooltip = t.pushRejectedTooltip(branch, String(rejected.reason || "?"));
+        refused.show();
+      } else {
+        refused.hide();
+      }
+    };
+    void poll();
+    const timer = setInterval(() => void poll(), TICK_MS);
+    context.subscriptions.push(refused, { dispose: () => clearInterval(timer) });
   }
 }
 

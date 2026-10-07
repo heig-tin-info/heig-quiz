@@ -33,14 +33,23 @@ Start button, its teacher dashboard and its YAML seed (all removed, below).
   a teacher sees sessions in Quiz, which calls
   `GET /api/assignments/:id/sessions` with a service token. Without
   `CODESPACE_LAUNCH_SECRET` the portal opens no session at all.
-- **GitHub relay off.** `FORGE_KIND=none` by default: a push lands in
-  `staging.git` with its `PushEvent`, nothing is relayed. `GITHUB_APP_ID`
-  and `GITHUB_APP_PRIVATE_KEY_PATH` are refused at startup in every
-  environment (root invariant 15: never heig-classroom's App), and
-  classroom's App-backed GitHub forge was not imported: `FORGE_KIND=github`
-  is the unconfigured forge (public clone URLs, no relay), `forgejo` the
-  development one. Whether Quiz's own App key goes on the engine VM is
-  **open**: an ADR at M6-04/M6-05.
+- **The GitHub relay goes through Quiz** ([ADR-078](../../docs/adr/ADR-078-codespace-git-relay-tokens.md),
+  M6-10). The portal holds no GitHub App credential: `GITHUB_APP_ID` and
+  `GITHUB_APP_PRIVATE_KEY_PATH` are refused at startup in every
+  environment (root invariant 15), and classroom's App-backed GitHub forge
+  was not imported. The `quiz` forge (`src/git/quizForge.ts`) — the
+  default once `PLATFORM_URL` and `CODESPACE_LAUNCH_SECRET` are set —
+  asks Quiz (`POST /app/codespace/git-token`) for an installation token
+  scoped to one repository, `contents` only, kept in memory until 10
+  minutes before it expires and never past its `useUntil` (the deadline
+  plus the grace), handed to git through the environment only; it
+  declares each head (`POST /app/codespace/relay-heads`) before a relay
+  push that is never forced (`<sha>:<ref>`, no deletion relayed). A
+  non-fast-forward is a terminal `rejected` `PushEvent`, shown in the
+  status bar (`GET /git/<session>/push-status` on the git channel) and in
+  Quiz's workspace list. `none` (also the default without the platform)
+  relays nothing; `github` is the unconfigured forge (public clone URLs,
+  no relay) and `forgejo` the development one, both refused in production.
 - `PLATFORM_URL` replaces `CLASSROOM_URL` (still read as an alias); launch
   and service tokens are accepted from both issuers, `heig-classroom` and
   `heig-quiz`.
@@ -129,7 +138,9 @@ channel divergence for its containers.
    token as a student; nothing writes `users.role` any more.
 10. **`PushEvent` before relay.** A push's `PushEvent` row is written before
     any relay attempt (none while the relay is off): it is the proof of
-    submission.
+    submission. The relay never forces and never deletes a branch
+    (ADR-078 §6); a GitHub token never reaches argv, a URL, a file, SQLite,
+    a log line or a container.
 11. **The exam staging repository is seeded from the teacher's template**,
     never from the student's repository.
 12. **The platform owns the `.seb`** (D21, M6-07): it builds the file,

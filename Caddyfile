@@ -25,6 +25,19 @@ quiz.chevallier.io {
 		}
 	}
 
+	# The workspace portal's git relay routes (ADR-078 §5): answered only from
+	# the engine VM (code.chevallier.io, 2.29.38.213), a 404 to anyone else.
+	# Defence in depth: the HS256 signature stays the authority. When the
+	# engine VM moves (or gains an IPv6 route to this VM), add its address here
+	# AND in Caddyfile.staging before the switch.
+	@codespace_git {
+		path /app/codespace/git-token /app/codespace/relay-heads
+		not remote_ip 2.29.38.213
+	}
+	handle @codespace_git {
+		respond 404
+	}
+
 	# 3000 is heig-classroom, 3001 is tb: quiz listens on 3002 (loopback).
 	handle {
 		reverse_proxy localhost:3002

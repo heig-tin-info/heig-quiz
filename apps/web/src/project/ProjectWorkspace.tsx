@@ -221,6 +221,18 @@ function WorkspaceSessions({ projectId }: { projectId: string }) {
                 </td>
                 <td className={`${T.td} whitespace-nowrap text-fg-muted`}>
                   {s.lastPushAt ? <RelativeTime iso={s.lastPushAt} /> : "—"}
+                  {s.rejectedPush && (
+                    // The relay never forces (ADR-078 §6): a push behind a commit of Quiz's App waits for the student's pull.
+                    <div className="mt-1 space-y-0.5" data-testid="workspace-push-rejected">
+                      <Badge tone="amber" icon={AlertTriangle}>
+                        {t("project.workspace.pushRejected", { branch: s.rejectedPush.ref.replace(/^refs\/heads\//, "") })}
+                      </Badge>
+                      {/* Our sentence; GitHub's words only as the technical detail on hover. */}
+                      <p className="max-w-72 whitespace-normal text-[12px]" title={s.rejectedPush.reason}>
+                        {t("project.workspace.pushRejected.hint")}
+                      </p>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}

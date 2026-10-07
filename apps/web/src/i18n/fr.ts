@@ -4551,6 +4551,8 @@ export const fr: Record<keyof Dict, string> = {
   "project.workspace.col.state": "État",
   "project.workspace.col.lastSeen": "Dernière activité",
   "project.workspace.col.lastPush": "Dernier push",
+  "project.workspace.pushRejected": "Refusé par GitHub ({branch})",
+  "project.workspace.pushRejected.hint": "Non transmis à GitHub : l'étudiant doit faire un pull, puis pousser à nouveau.",
   "project.workspace.state.starting": "Démarrage",
   "project.workspace.state.running": "Actif",
   "project.workspace.state.stopped": "Arrêté",

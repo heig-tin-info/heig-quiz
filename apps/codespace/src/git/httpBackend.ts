@@ -26,7 +26,7 @@ import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest 
 import Fastify from "fastify";
 
 import { CgiHeadScanner, type CgiHead } from "./cgi.js";
-import { diffRefs, recordPush, type PushEventStore, type RelayScheduler } from "./pushEvents.js";
+import { diffRefs, lastRejectedPush, recordPush, type PushEventStore, type RelayScheduler } from "./pushEvents.js";
 import { refSnapshot, stagingPaths } from "./staging.js";
 import type { GitService, SessionLookup, StagingSession } from "./types.js";
 
@@ -211,6 +211,25 @@ export const gitBackendPlugin: FastifyPluginAsync<GitBackendOptions> = async (ap
   // gzipped body reaches `git http-backend` still compressed, which is what
   // HTTP_CONTENT_ENCODING tells it to expect.
   app.addContentTypeParser("*", (_req, payload, done) => done(null, payload));
+
+  /**
+   * What the workspace's status bar reads (ADR-078 §6): the session's last
+   * push GitHub refused and nothing replaced, with the forge's reason —
+   * JSON, `no-store`. Same door as the Git services: the session's own
+   * container address, nothing else; no credential, nothing of another
+   * session.
+   */
+  app.get<{ Params: { sessionId: string } }>("/git/:sessionId/push-status", async (request, reply) => {
+    const session = await opts.sessions.bySessionId(request.params.sessionId);
+    if (!session) return deny(reply, 404, "unknown session");
+    if (!authorizeSource(normalizeIp(request.ip), session, cidr).ok) {
+      return deny(reply, 403, "source address not allowed for this session");
+    }
+    const rejected = lastRejectedPush(await opts.store.bySession(session.sessionId));
+    return reply
+      .header("cache-control", "no-store")
+      .send({ rejected: rejected ? { ref: rejected.ref, at: rejected.at.toISOString(), reason: rejected.reason } : null });
+  });
 
   app.all<{ Params: { sessionId: string; "*": string } }>(
     "/git/:sessionId/*",

@@ -241,6 +241,28 @@ describe("Git channel end to end (loopback)", () => {
     h.close();
   });
 
+  it("tells the session's container its last push GitHub refused, and nobody else (ADR-078 §6)", async () => {
+    const h = await harness();
+    const status = async () => {
+      const res = await fetch(`${h.remote}/push-status`);
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      return res.json();
+    };
+    expect(await status()).toEqual({ rejected: null });
+    const at = new Date("2026-10-07T09:00:00Z");
+    const [row] = await h.store.insert([
+      { id: "e1", sessionId: h.session.sessionId, student: h.session.student, assignment: h.session.assignment, ref: "refs/heads/main", sha: "a".repeat(40), oldSha: null, receivedAt: at, state: "pending", attempts: 0 },
+    ]);
+    await h.store.markRejected([row!.id], "fetch first");
+    expect(await status()).toEqual({ rejected: { ref: "refs/heads/main", at: at.toISOString(), reason: "fetch first" } });
+
+    const other = await harness({ sessionId: "s-other", containerIp: "10.77.0.9" });
+    expect((await fetch(`${other.remote}/push-status`)).status).toBe(403);
+    expect((await fetch(`http://127.0.0.1:${h.port}/git/s-none/push-status`)).status).toBe(404);
+    h.close();
+    other.close();
+  });
+
   it("an unknown session gets a 404", async () => {
     const h = await harness();
     const response = await fetch(

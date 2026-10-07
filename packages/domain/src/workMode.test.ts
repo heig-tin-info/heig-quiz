@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   collaboratorPermission,
+  gitTokenRefusal,
   isOnlineMode,
   quotaHolder,
+  relayClosesAt,
   workModeRefusal,
+  workspaceClosed,
   workspaceStartRefusal,
+  type GitTokenFacts,
   type WorkModeFacts,
   type WorkspaceStartFacts,
 } from "./workMode.js";
@@ -109,5 +113,76 @@ describe("workspaceStartRefusal (ADR-047 §6)", () => {
   it("reads the student's own deadline, an extension included", () => {
     const later = new Date("2026-10-21T22:00:00Z");
     expect(workspaceStartRefusal(facts({ repo: { ...repo, deadlineAt: later } }), DEADLINE)).toBeNull();
+  });
+});
+
+describe("gitTokenRefusal (ADR-078 §2)", () => {
+  const DEADLINE = new Date("2026-10-14T22:00:00Z");
+  const GRACE_END = new Date("2026-10-14T22:30:00Z");
+  const NOW = new Date("2026-10-07T08:00:00Z");
+  const repo = {
+    groupId: null,
+    provisionStatus: "ok",
+    fullName: "org/lab-kid",
+    deletedAt: null,
+    deadlineAt: null,
+    staffLock: null,
+    githubRepoId: 101,
+  };
+  const facts = (over: Partial<GitTokenFacts> = {}): GitTokenFacts => ({
+    project: { workMode: "online", deadlineAt: DEADLINE, graceMinutes: 30, distributionRepoId: 202, distributionFullName: "org/lab-squashed" },
+    launched: true,
+    repo,
+    classroomArchived: false,
+    repository: "org/lab-kid",
+    ...over,
+  });
+  const exam = (over: Partial<GitTokenFacts> = {}) => facts({ project: { ...facts().project, workMode: "online_seb" }, ...over });
+
+  it("grants write on the user's own repository until the effective deadline plus the grace", () => {
+    expect(gitTokenRefusal(facts(), NOW)).toEqual({ permission: "write", githubRepoId: 101, useUntil: GRACE_END });
+    // GitHub's names are case-insensitive.
+    expect(gitTokenRefusal(facts({ repository: "Org/Lab-Kid" }), NOW)).toMatchObject({ permission: "write" });
+    expect(relayClosesAt({ deadlineAt: null }, { deadlineAt: DEADLINE, graceMinutes: 30 })).toEqual(GRACE_END);
+  });
+
+  it("grants read on the distribution repository of an online_seb project only", () => {
+    const seed = { repository: "org/lab-squashed" };
+    expect(gitTokenRefusal(exam(seed), NOW)).toEqual({ permission: "read", githubRepoId: 202, useUntil: null });
+    expect(gitTokenRefusal(facts(seed), NOW)).toBe("not_found");
+  });
+
+  it("refuses without a launch, another repository, or no live repository of the user's", () => {
+    expect(gitTokenRefusal(facts({ launched: false }), NOW)).toBe("not_found");
+    expect(gitTokenRefusal(facts({ repository: "org/lab-other" }), NOW)).toBe("not_found");
+    expect(gitTokenRefusal(facts({ repo: null }), NOW)).toBe("not_found");
+    expect(gitTokenRefusal(facts({ repo: { ...repo, deletedAt: NOW } }), NOW)).toBe("not_found");
+    expect(gitTokenRefusal(facts({ repo: { ...repo, githubRepoId: null } }), NOW)).toBe("not_found");
+  });
+
+  it("shares the start route's closing rule (workspaceClosed)", () => {
+    expect(workspaceClosed({ classroomArchived: false }, GRACE_END, NOW)).toBe(false);
+    expect(workspaceClosed({ classroomArchived: true }, GRACE_END, NOW)).toBe(true);
+    expect(workspaceClosed({ classroomArchived: false }, GRACE_END, GRACE_END)).toBe(true);
+  });
+
+  it("refuses a project back in the students' own tools", () => {
+    expect(gitTokenRefusal(facts({ project: { ...facts().project, workMode: "free" } }), NOW)).toBe("not_online");
+  });
+
+  it("stays open through the grace, closes at its end, on archive and on a staff lock", () => {
+    expect(gitTokenRefusal(facts(), new Date(DEADLINE.getTime() + 60_000))).toMatchObject({ permission: "write" });
+    expect(gitTokenRefusal(facts(), GRACE_END)).toBe("closed");
+    expect(gitTokenRefusal(exam({ repository: "org/lab-squashed" }), GRACE_END)).toBe("closed");
+    expect(gitTokenRefusal(facts({ classroomArchived: true }), NOW)).toBe("closed");
+    expect(gitTokenRefusal(facts({ repo: { ...repo, staffLock: true } }), NOW)).toBe("closed");
+    // A staff unlock reopens nothing past the deadline; an extension does.
+    expect(gitTokenRefusal(facts({ repo: { ...repo, staffLock: false } }), GRACE_END)).toBe("closed");
+    const later = new Date("2026-10-21T22:00:00Z");
+    expect(gitTokenRefusal(facts({ repo: { ...repo, deadlineAt: later } }), GRACE_END)).toEqual({
+      permission: "write",
+      githubRepoId: 101,
+      useUntil: new Date("2026-10-21T22:30:00Z"),
+    });
   });
 });

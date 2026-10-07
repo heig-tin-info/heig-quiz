@@ -22,10 +22,20 @@
  * The student's: `GET /app/api/projects/:id/seb`, the `.seb` of an
  * `online_seb` project (D21 point 2), and `GET /app/codespace/start/:id`, a
  * navigable GET, both described on the route.
+ *
+ * The portal's (ADR-078, M6-10): `POST /app/codespace/git-token` and
+ * `POST /app/codespace/relay-heads`, signed service calls (`relay.ts`).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { IdParam, ProjectWorkModeBody, ProjectWorkspaceSyncAccepted, workspaceStartPath } from "@quiz/contracts";
+import {
+  GIT_TOKEN_PATH,
+  IdParam,
+  ProjectWorkModeBody,
+  ProjectWorkspaceSyncAccepted,
+  RELAY_HEADS_PATH,
+  workspaceStartPath,
+} from "@quiz/contracts";
 import { isOnlineMode } from "@quiz/domain";
 
 import { actorOf, audit } from "../../audit.js";
@@ -43,6 +53,7 @@ import {
 } from "../guards.js";
 import { DomainError, notFound, teacherRoute } from "../http.js";
 import * as project from "../project/service.js";
+import { declareRelayHeads, issueGitToken } from "./relay.js";
 import {
   grantOf,
   projectSessions,
@@ -183,5 +194,29 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
       return reply.redirect(`/projects/${encodeURIComponent(params.data.id)}?workspace=${launch}`, 303);
     }
     return reply.redirect(`${config.CODESPACE_URL}/launch?token=${encodeURIComponent(launch.token)}`, 303);
+  });
+
+  // ------------------------------------------------------------ the portal's (ADR-078)
+
+  /**
+   * The git relay's two service routes, called by the portal and by nobody
+   * else: no session, no personal API token (they are not under
+   * `/app/api/`); the request IS the HS256 token of `Authorization`, over
+   * `CODESPACE_LAUNCH_SECRET`, each with its own audience. The body is
+   * empty. Every answer is `no-store`: a grant is a live credential, and
+   * the request log never sees a response body.
+   */
+  app.post(GIT_TOKEN_PATH, async (req, reply) => {
+    const outcome = await issueGitToken(app, config, req.headers.authorization, req.log);
+    reply.header("cache-control", "no-store");
+    if ("status" in outcome) return reply.code(outcome.status).send({ error: outcome.error });
+    return reply.send(outcome);
+  });
+
+  app.post(RELAY_HEADS_PATH, async (req, reply) => {
+    const refusal = await declareRelayHeads(app, config, req.headers.authorization, req.log);
+    reply.header("cache-control", "no-store");
+    if (refusal) return reply.code(refusal.status).send({ error: refusal.error });
+    return reply.code(204).send();
   });
 }

@@ -24,6 +24,16 @@ quiz.dev.chevallier.io {
 		}
 	}
 
+	# The workspace portal's git relay routes (ADR-078 §5): from the engine VM
+	# only (its staging instance), as in production's fragment (Caddyfile).
+	@codespace_git {
+		path /app/codespace/git-token /app/codespace/relay-heads
+		not remote_ip 2.29.38.213
+	}
+	handle @codespace_git {
+		respond 404
+	}
+
 	# 3002 is production quiz: staging listens on 3003 (loopback).
 	handle {
 		reverse_proxy localhost:3003

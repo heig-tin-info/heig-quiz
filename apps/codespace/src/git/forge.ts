@@ -1,8 +1,10 @@
 /**
- * The forge the staging repository is relayed to: Forgejo with a personal
- * access token (development), or GitHub without credentials (public clone
- * URLs only, no relay). heig-classroom's App-backed GitHub forge was not
- * imported (ADR-047, M6-03 amendment).
+ * The forge the staging repository is relayed to: Quiz's (`quiz`, ADR-078:
+ * GitHub through tokens Quiz grants per repository, `quizForge.ts`),
+ * Forgejo with a personal access token (development), or GitHub without
+ * credentials (public clone URLs only, no relay). heig-classroom's
+ * App-backed GitHub forge was not imported (ADR-047, M6-03 amendment), and
+ * the portal holds no App credential of any kind.
  *
  * A `Forge` never hands out a URL with a credential in it. The token leaves
  * this module only as an `Authorization` header value, which relay.ts passes
@@ -11,18 +13,42 @@
  */
 import type { RepoRef } from "./types.js";
 
+/** Whose workspace a repository is reached for: the project (`assignment`) and the platform's user (`student`). */
+export interface ForgeOwner {
+  assignment: string;
+  student: string;
+}
+
 export interface Forge {
-  readonly kind: "forgejo" | "github";
+  readonly kind: "forgejo" | "github" | "quiz";
   /** Credential-free HTTPS remote. */
   pushUrl(repo: RepoRef): string;
   /**
-   * Fresh `Authorization` header value. GitHub installation tokens expire
-   * after an hour, so this is called per relay attempt, not cached by the
-   * caller.
+   * Fresh `Authorization` header value, for `owner`'s workspace and the
+   * remote `url` git will send it to (a forge may refuse an origin it does
+   * not trust: the `quiz` forge serves `https://github.com` only). Called per
+   * relay attempt and per seeding fetch, never cached by the caller: the
+   * forge decides what it keeps (the `quiz` forge caches until shortly
+   * before the token expires).
    */
-  authorization(repo: RepoRef): Promise<string>;
+  authorization(repo: RepoRef, owner: ForgeOwner, url: string): Promise<string>;
+  /**
+   * The git command that used `authorization` is over: a credential the
+   * forge does not keep is revoked now (ADR-078 §3). Absent: nothing to do.
+   */
+  settle?(authorization: string): void;
   /** Creates the repository if it does not exist yet. */
   ensureRepo(repo: RepoRef): Promise<void>;
+  /**
+   * Declares the heads a relay push is about to send (ADR-078 §2), before
+   * the push; it throws when the platform refuses. Absent: nothing to
+   * declare.
+   */
+  declareHeads?(repo: RepoRef, owner: ForgeOwner, heads: { ref: string; sha: string }[]): Promise<void>;
+  /** The forge refused the credential (401/403): forget it, the next attempt asks again. */
+  invalidate?(repo: RepoRef, owner: ForgeOwner): void;
+  /** `owner`'s workspace is gone and nothing of it waits: forget every credential it held. */
+  forget?(owner: ForgeOwner): void;
 }
 
 export interface ForgejoOptions {
@@ -83,6 +109,33 @@ export class ForgeUnconfiguredError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ForgeUnconfiguredError";
+  }
+}
+
+/**
+ * The platform refused a credential or a declaration (ADR-078 §3): `401`,
+ * `404`, `409` from Quiz, or a token past its `useUntil`. Not an outage: the
+ * relay treats it as an unconfigured forge — the rows stay `pending` on the
+ * slow backoff, one `warn` per change of cause — and resumes by itself
+ * when Quiz grants again (a deadline extended, §8).
+ */
+export class ForgeRefusedError extends ForgeUnconfiguredError {
+  constructor(readonly code: string) {
+    super(`Quiz refused the relay: ${code}`);
+    this.name = "ForgeRefusedError";
+  }
+}
+
+/**
+ * A forge asked for a credential to send to a host it does not serve (the
+ * `quiz` forge: anything but `https://github.com`). Fail closed: no token
+ * is requested nor handed out; the rows wait on the slow backoff, as for an
+ * unconfigured forge, until the configuration is fixed.
+ */
+export class ForgeOriginError extends ForgeUnconfiguredError {
+  constructor(readonly origin: string) {
+    super(`The quiz forge sends its token to https://github.com only, not to ${origin}`);
+    this.name = "ForgeOriginError";
   }
 }
 

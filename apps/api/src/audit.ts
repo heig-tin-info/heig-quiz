@@ -73,11 +73,15 @@ export type AuditAction =
    * the staff's *Resync*. `synced`: the portal accepted the project (a
    * system action; `payload.mode`, `payload.quotaHolder`). Nothing else of
    * a token, a secret or a Browser Exam Key is ever written here.
+   * `git_token_issued` (ADR-078 §2): Quiz minted the portal an installation
+   * token on one repository (`payload.userId`, `repository`, `githubRepoId`,
+   * `permission`, `expiresAt`, the request's `jti`) — never the token.
    */
   | "codespace.launch_issued"
   | "codespace.work_mode"
   | "codespace.sync_requested"
   | "codespace.synced"
+  | "codespace.git_token_issued"
   /** The teacher enabled the drill for a classroom (ADR-041 §6). */
   | "drill.enable"
   /** …and disabled it: its cards leave the sessions, their data is kept. */

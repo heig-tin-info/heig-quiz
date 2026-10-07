@@ -24,6 +24,7 @@ import { openDb, type Db, type DbHandle } from "./db/client.js";
 import { createEngine, type Engine } from "./engine/index.js";
 import {
   createForgejoForge,
+  createQuizForge,
   createUnconfiguredGithubForge,
   createPushEventStore,
   createRelayWorker,
@@ -31,6 +32,7 @@ import {
   startGitServer,
   type Forge,
   type PushEventStore,
+  type QuizForgeOptions,
   type RelayWorker,
 } from "./git/index.js";
 import { proxyPlugin } from "./proxy/index.js";
@@ -57,17 +59,24 @@ export interface Portal {
 
 /**
  * Destination forge of the relay **and** source of the authorization that seeds
- * the staging repository. `none` (the default) = everything stays in the
- * staging repository, with its `PushEvent`.
+ * the staging repository. `none` = everything stays in the staging
+ * repository, with its `PushEvent`.
  *
- * GitHub is the **unconfigured** forge only: `loadConfig` refuses any GitHub
- * App credential (root invariant 15: never heig-classroom's App), so the forge
- * serves what needs no token — the clone URL of a public repository — and the
- * relay and the seeding of a private repository refuse explicitly and by name.
- * Whether Quiz's own App reaches the engine VM is an ADR of M6-04/M6-05.
+ * `quiz` (ADR-078, the default once the platform is configured) reaches
+ * GitHub with tokens Quiz grants per repository: the portal holds no App
+ * credential (`loadConfig` refuses one, root invariant 15). `github` is the
+ * **unconfigured** forge — the clone URL of a public repository, no relay —
+ * and `forgejo` the development one; production refuses both.
  */
-export function createForge(config: AppConfig): Forge | null {
+export function createForge(config: AppConfig, log?: QuizForgeOptions["log"]): Forge | null {
   if (config.FORGE_KIND === "none") return null;
+  if (config.FORGE_KIND === "quiz") {
+    return createQuizForge({
+      platformUrl: config.PLATFORM_URL,
+      secret: config.CODESPACE_LAUNCH_SECRET,
+      ...(log ? { log } : {}),
+    });
+  }
   if (config.FORGE_KIND === "github") return createUnconfiguredGithubForge();
   if (!config.FORGE_TOKEN) return null;
   return createForgejoForge({ baseUrl: config.FORGE_URL, token: config.FORGE_TOKEN });
@@ -132,7 +141,8 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
       log: app.log,
     });
 
-  const forge = createForge(config);
+  const forge = createForge(config, app.log);
+  const store = createPushEventStore(db);
   const manager = createSessionManager({
     db,
     engine,
@@ -157,12 +167,16 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
           // A student's repository is private: the seeding of the staging
           // repository carries the same authorization as the relay, through the
           // environment.
-          forgeAuthorization: (repo) => forge.authorization(repo),
+          forgeAuthorization: (repo, owner, url) => forge.authorization(repo, owner, url),
+          forgeSettle: (authorization) => forge.settle?.(authorization),
+          // A closed workspace with nothing pending keeps no credential (ADR-078 §3).
+          onSessionClosed: async (owner) => {
+            if (forge.forget && !(await store.hasPending(owner.student, owner.assignment))) forge.forget(owner);
+          },
         }
       : {}),
   });
 
-  const store = createPushEventStore(db);
   const relay = forge
     ? createRelayWorker({
         store,

@@ -19,8 +19,9 @@ container ──push──▶ portal 10.77.0.254:9418/git/<session>  (auth = sou
 | `cgi.ts`          | reading the CGI headers (`Status:` included) without buffering the body |
 | `staging.ts`      | creation and seeding of the bare staging repository (lab, exam, empty modes) |
 | `pushEvents.ts`   | `diffRefs`, `recordPush` (invariant 7), Drizzle store |
-| `relay.ts`        | background job, retry on error, token out of argv and off the disk |
+| `relay.ts`        | background job, retry on error, never forced, `rejected` refs, token out of argv and off the disk |
 | `forge.ts`        | the `Forge` interface, the `forgejo` forge and the unconfigured `github` one |
+| `quizForge.ts`    | the `quiz` forge: tokens Quiz grants per repository, cached in memory (ADR-078) |
 | `fixtures.ts`     | shared test repositories (not a `*.test.ts`, therefore type-checked) |
 
 The `push_events` table: [`src/db/schema.ts`](../db/schema.ts).
@@ -175,7 +176,7 @@ It serves both directions of the channel:
 
 | direction | caller | token |
 | --- | --- | --- |
-| `push` to the forge | `relay.ts` (`buildPushEnv`) | `Forge.authorization(repo)` |
+| `push` to the forge | `relay.ts` (`buildPushEnv`) | `Forge.authorization(repo, owner)` |
 | seeding `fetch` | `staging.ts` (`ensureStagingRepo({ authorization })`) | the same |
 
 The second one was missing until 2026-09-17: a student repository provisioned
@@ -185,10 +186,58 @@ now refuses to start a session whose repository could not be retrieved.
 
 heig-classroom's App-backed GitHub forge (`createGithubForge`, an
 installation token per organisation) was not imported into Quiz: the portal
-refuses any GitHub App credential and relays nothing (ADR-047, M6-03
-amendment). Whether Quiz's own App reaches the engine VM is an ADR of
-M6-04/M6-05.
+refuses any GitHub App credential.
+
+## The `quiz` forge (ADR-078, M6-10)
+
+`quizForge.ts`, `FORGE_KIND=quiz` (the default once `PLATFORM_URL` and
+`CODESPACE_LAUNCH_SECRET` are set). GitHub is reached with installation
+tokens **Quiz** mints with its own App on the app VM, one repository at a
+time, `contents` only:
+
+| call | when | answer |
+| --- | --- | --- |
+| `POST <PLATFORM_URL>/app/codespace/git-token` | per relay attempt and seeding fetch, unless cached | `GitTokenGrant`: `token`, `expiresAt`, `useUntil`, `permission` |
+| `POST <PLATFORM_URL>/app/codespace/relay-heads` | before every relay push | `204`: the heads declared, so Quiz reads the App's push of them as the student's |
+
+Each request **is** an HS256 token over `CODESPACE_LAUNCH_SECRET` (audience
+`heig-quiz-git-token` or `heig-quiz-relay-heads`, a minute, a `jti`, the
+project, the user and the repository in its claims); the body is empty.
+
+- **Cache**: in memory, one entry per (project, user, repository); reused
+  while `now < expiresAt - 10 min` and `now < useUntil`; one request in
+  flight per entry. `useUntil` (the deadline plus the grace) is a hard
+  stop: the entry is dropped and revoked, no request is made then; the next
+  attempt asks again, which only an extended deadline answers. Dropped too
+  when GitHub refuses it (401/403: `invalidate`) and when its session closes
+  with nothing pending (`forget`, revoked). A token that lands after
+  `forget` serves its one waiting attempt, is not kept, and is revoked when
+  that attempt settles (`Forge.settle`, called by the relay and the seeding).
+- **Refusals**: Quiz's `401`/`404`/`409` are `ForgeRefusedError` (a
+  `ForgeUnconfiguredError`): the rows stay `pending` on the slow backoff.
+  A `503` or a network failure is an outage (ordinary backoff, then
+  `failed`). At seeding, any refusal refuses the session with a named cause.
+- **The token**: `Authorization: basic base64(x-access-token:<token>)`
+  through `gitAuthEnv(authorization, url)`, always scoped to the remote's
+  origin (`http.https://github.com/.extraHeader`): never sent to another
+  host, and not set at all for a non-HTTP remote. The forge itself fails
+  closed on any origin but `https://github.com` (`ForgeOriginError`): it asks
+  Quiz nothing and hands out nothing.
+- **No force, no deletion** (`relay.ts`): `refspecFor` is `<sha>:<ref>`. On
+  a non-fast-forward (`[rejected] (fetch first|non-fast-forward)` in the
+  porcelain output) the forge's head of that branch is fetched into
+  `staging.git` (the branch there moves to it), and the ref's rows take the
+  terminal state `rejected` with git's reason; so does a ref GitHub refuses
+  itself (`[remote rejected]`, a workflow file without `workflows`). The
+  other refs of the atomic push are retried at once. A branch deletion is
+  `rejected` (`DELETION_NOT_RELAYED`), never pushed.
+- **Who sees a rejection**: the student, in the status bar
+  (`GET /git/<session>/push-status`, `httpBackend.ts`, same source-address
+  door as the Git services); the staff, in Quiz's workspace list
+  (`CodespaceSessionSummary.rejectedPush`). Both read `lastRejectedPush`: a
+  later push of the same branch replaces it.
 
 ## What is left to do after V1
 
-- The GitHub relay, once that ADR settles it.
+- Nothing of the relay itself; the staging checks of ADR-078 §9 (forced
+  push against `hgc-protect`) are the M6-10 card's manual acceptance.

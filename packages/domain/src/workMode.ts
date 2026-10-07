@@ -103,11 +103,20 @@ export interface WorkspaceStartFacts {
  */
 export function workspaceStartRefusal(facts: WorkspaceStartFacts, now: Date): WorkspaceStartRefusalCode | null {
   const { project, repo } = facts;
-  if (project.workMode === "free") return "not_online";
+  if (!isOnlineMode(project.workMode)) return "not_online";
   if (project.workMode === "online_seb" && !facts.fromSeb) return "seb_required";
   if (repo === null || !isLiveIndividualRepo(repo)) return "not_accepted";
-  if (facts.classroomArchived || effectiveDeadline(repo, project).getTime() <= now.getTime()) return "closed";
+  if (workspaceClosed(facts, effectiveDeadline(repo, project), now)) return "closed";
   return null;
+}
+
+/**
+ * THE closing rule the start route and the git relay share: the classroom
+ * archived, or `closesAt` reached on the server's clock — the effective
+ * deadline for the start route, the deadline plus the grace for the relay.
+ */
+export function workspaceClosed(facts: { classroomArchived: boolean }, closesAt: Date, now: Date): boolean {
+  return facts.classroomArchived || closesAt.getTime() <= now.getTime();
 }
 
 /** An owner seat of a course, as `course_staff` holds it. */
@@ -129,4 +138,95 @@ export function quotaHolder(creatorId: string, owners: readonly OwnerSeat[]): st
     (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0),
   )[0];
   return oldest?.userId ?? null;
+}
+
+// ---------------------------------------------------------------- the git relay's tokens (ADR-078)
+
+/**
+ * Why Quiz refuses the portal a GitHub token or a relay declaration
+ * (ADR-078 §2): `not_found` (404: no launch of that user on that project,
+ * or a repository the grant never covers), `not_online` (409), `closed`
+ * (409: past the effective deadline plus the grace, archived, staff-locked).
+ */
+export const GIT_TOKEN_REFUSALS = ["not_found", "not_online", "closed"] as const;
+export type GitTokenRefusalCode = (typeof GIT_TOKEN_REFUSALS)[number];
+
+/** The facts {@link gitTokenRefusal} decides on, read in one transaction. */
+export interface GitTokenFacts {
+  project: {
+    workMode: WorkModeName;
+    deadlineAt: Date;
+    /** F-PROJ-01: the grace after the deadline, in minutes. */
+    graceMinutes: number;
+    distributionRepoId: number | null;
+    distributionFullName: string | null;
+  };
+  /** A launch token was issued to the user for the project (`codespace_launches`). */
+  launched: boolean;
+  /** The user's own repository of the project (no group); null without one. */
+  repo: (RepoLifeLike & { deadlineAt: Date | null; staffLock: boolean | null; githubRepoId: number | null }) | null;
+  /** The classroom of the project is archived. */
+  classroomArchived: boolean;
+  /** `owner/name`, as the portal asks for it. */
+  repository: string;
+}
+
+/**
+ * What Quiz grants: the permission, the repository's GitHub id, and the
+ * last instant a write grant may be used (null: the token's own expiry).
+ */
+export interface GitTokenGrantDecision {
+  permission: "write" | "read";
+  githubRepoId: number;
+  useUntil: Date | null;
+}
+
+/** The repository's effective deadline plus the project's grace (ADR-078 §7): when its write tokens stop. */
+export function relayClosesAt(repo: { deadlineAt: Date | null }, project: { deadlineAt: Date; graceMinutes: number }): Date {
+  return new Date(effectiveDeadline(repo, project).getTime() + project.graceMinutes * 60_000);
+}
+
+const sameRepository = (stored: string | null, asked: string): boolean =>
+  stored !== null && stored.toLowerCase() === asked.toLowerCase();
+
+/**
+ * THE rule of `POST /app/codespace/git-token` and `POST
+ * /app/codespace/relay-heads` (ADR-078 §2), in the record's order:
+ *
+ *   2. a launch of that user on that project (`not_found`);
+ *   3. the repository is the user's own live repository (a `write` grant)
+ *      or, for an `online_seb` project only, its distribution repository
+ *      (a `read` grant, to seed the exam workspace); anything else
+ *      `not_found`;
+ *   4. an online mode (`not_online`);
+ *   5. the user's repository open: the start route's closing rule
+ *      ({@link workspaceClosed}) read at the effective deadline PLUS the
+ *      grace (§7, confirmed by the product owner on 2026-10-07), and no
+ *      staff lock (`closed`). The start route does not read the staff lock
+ *      (ADR-047): a locked repository still opens a workspace, whose
+ *      pushes stay pending.
+ *
+ * Checks 1 (the signature) and 6 (GitHub) are the route's. Returns the
+ * grant, or the refusal's code.
+ */
+export function gitTokenRefusal(facts: GitTokenFacts, now: Date): GitTokenRefusalCode | GitTokenGrantDecision {
+  const { project, repo } = facts;
+  if (!facts.launched || repo === null || !isLiveIndividualRepo(repo) || repo.githubRepoId === null) return "not_found";
+  const closesAt = relayClosesAt(repo, project);
+  let grant: GitTokenGrantDecision;
+  if (sameRepository(repo.fullName, facts.repository)) {
+    grant = { permission: "write", githubRepoId: repo.githubRepoId, useUntil: closesAt };
+  } else if (
+    project.workMode === "online_seb" &&
+    project.distributionRepoId !== null &&
+    sameRepository(project.distributionFullName, facts.repository)
+  ) {
+    grant = { permission: "read", githubRepoId: project.distributionRepoId, useUntil: null };
+  } else {
+    return "not_found";
+  }
+  if (!isOnlineMode(project.workMode)) return "not_online";
+  // Safe Exam Browser is the start route's to check: the portal's request is not a browser's.
+  if (workspaceClosed(facts, closesAt, now) || repo.staffLock === true) return "closed";
+  return grant;
 }
