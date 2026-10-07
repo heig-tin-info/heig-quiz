@@ -4231,14 +4231,16 @@ serves now (16a), and what waits for the group repositories (16b).
     `classroomStartUrl` already builds that path: only its comment
     changed). Admin: `PATCH /app/api/admin/teachers/:gid/codespace` and a
     `codespace` field on `AdminTeacher` (null when off).
-  - Start route: anonymous (and a `seb`/`kiosk` session, anonymous there by
-    ADR-027's default deny) → 303 to the sign-in with `next`; impersonation
-    or Bearer → 404; `findStudentProjectView` with a claimed seat (a staff
+  - Start route: a request with an `Authorization` header → 404; anonymous
+    (and a `seb`/`kiosk` session, anonymous there by ADR-027's default
+    deny) → 303 to the sign-in with `next`; impersonation → 404; `findStudentProjectView` with a claimed seat (a staff
     seat's test repository included, ADR-077) else 404; then, under a share
-    lock on the project, refusals sent back as
+    lock on the project (`startWorkspace`, the decision the pure
+    `workspaceStartRefusal` of `@quiz/domain`), refusals sent back as
     `/projects/:id?workspace=not_online|seb_required|not_accepted|closed`
     (closed: the effective deadline passed or the classroom archived);
-    then `first_launch_at` set, a launch token (`iss heig-quiz`, 5 min,
+    then `first_launch_at` set — never by a staff seat (ADR-077: a
+    teacher testing the project freezes nothing) —, a launch token (`iss heig-quiz`, 5 min,
     random `jti`, no `seb` claim), audit `codespace.launch_issued` with
     `{jti, mode}`, 303 to `${CODESPACE_URL}/launch?token=`. The quota is
     the portal's 429 (Quiz cannot count live workspaces).
@@ -4259,8 +4261,14 @@ serves now (16a), and what waits for the group repositories (16b).
     already sent keeps its permission when the mode changes before the
     first launch. Group mode and an online mode exclude each other
     (`409 work_mode_group`, both ways).
-  - Grant lookup: every verified address plus the sign-in address, the
-    most permissive row; the administrator holds no row and is not granted.
+  - Grant lookup: the verified addresses only (`knownEmails`, plus the
+    sign-in address when verified), the most permissive row; the
+    administrator holds no row and is not granted.
+  - Single sources: `WORK_MODES`, `WORK_MODE_REFUSALS`,
+    `WORKSPACE_START_REFUSALS` and `syncsToPortal` live in `@quiz/domain`
+    (`workMode.ts`), re-exported by the contracts. The staff's sessions
+    carry no address from the portal: an unmatched workspace is "not in
+    this classroom".
   - Web: `project/ProjectWorkspace.tsx` on the staff's project page (absent
     on the 404), the student's *Open workspace* (a plain link to the start
     route) and the refusal alert (`?workspace=`), the admin's switch and
@@ -4272,7 +4280,10 @@ serves now (16a), and what waits for the group repositories (16b).
     holds. A launch against a stub portal is not reachable over HTTP alone
     (a project needs GitHub to provision its repository, and no seed makes
     one): `codespace.db.test.ts` launches against a stub portal instead.
-  - Open: the portal's shared `classroom:` subject namespace for both
+  - Open: **with the portal's forge off, a workspace can only be seeded
+    from a PUBLIC distribution repository**; a private one (the default)
+    syncs but cannot seed, until the decision on Quiz's App on the engine
+    VM (M6-04/M6-05). The portal's shared `classroom:` subject namespace for both
     issuers (one issuer per portal in production, M6-04); the BEKs, the
     `.seb`, `online_seb`'s sync and launch (M6-07).
 

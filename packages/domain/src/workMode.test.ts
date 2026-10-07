@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { collaboratorPermission, isOnlineMode, quotaHolder, workModeRefusal, type WorkModeFacts } from "./workMode.js";
+import {
+  collaboratorPermission,
+  isOnlineMode,
+  quotaHolder,
+  syncsToPortal,
+  workModeRefusal,
+  workspaceStartRefusal,
+  type WorkModeFacts,
+  type WorkspaceStartFacts,
+} from "./workMode.js";
 
 const OWNER: WorkModeFacts = { owner: true, granted: true, launched: false, groupMode: false };
 
@@ -61,5 +70,42 @@ describe("quotaHolder (decision C)", () => {
 
   it("is nobody on a course without an owner", () => {
     expect(quotaHolder("c", [])).toBeNull();
+  });
+});
+
+describe("syncsToPortal", () => {
+  it("sends an online project only: an exam waits for its Browser Exam Keys (M6-07)", () => {
+    expect([syncsToPortal("free"), syncsToPortal("online"), syncsToPortal("online_seb")]).toEqual([false, true, false]);
+  });
+});
+
+describe("workspaceStartRefusal (ADR-047 §6)", () => {
+  const NOW = new Date("2026-10-07T08:00:00Z");
+  const DEADLINE = new Date("2026-10-14T22:00:00Z");
+  const repo = { groupId: null, provisionStatus: "ok", fullName: "org/lab-kid", deletedAt: null, deadlineAt: null };
+  const facts = (over: Partial<WorkspaceStartFacts> = {}): WorkspaceStartFacts => ({
+    project: { workMode: "online", deadlineAt: DEADLINE },
+    repo,
+    classroomArchived: false,
+    ...over,
+  });
+
+  it("opens an online project's workspace on the student's live repository", () => {
+    expect(workspaceStartRefusal(facts(), NOW)).toBeNull();
+  });
+
+  it("refuses, in order: not online, SEB only, not accepted, closed", () => {
+    expect(workspaceStartRefusal(facts({ project: { workMode: "free", deadlineAt: DEADLINE }, repo: null }), NOW)).toBe("not_online");
+    expect(workspaceStartRefusal(facts({ project: { workMode: "online_seb", deadlineAt: DEADLINE } }), NOW)).toBe("seb_required");
+    expect(workspaceStartRefusal(facts({ repo: null }), NOW)).toBe("not_accepted");
+    expect(workspaceStartRefusal(facts({ repo: { ...repo, provisionStatus: "pending" } }), NOW)).toBe("not_accepted");
+    expect(workspaceStartRefusal(facts({ repo: { ...repo, deletedAt: NOW } }), NOW)).toBe("not_accepted");
+    expect(workspaceStartRefusal(facts({ classroomArchived: true }), NOW)).toBe("closed");
+    expect(workspaceStartRefusal(facts(), DEADLINE)).toBe("closed");
+  });
+
+  it("reads the student's own deadline, an extension included", () => {
+    const later = new Date("2026-10-21T22:00:00Z");
+    expect(workspaceStartRefusal(facts({ repo: { ...repo, deadlineAt: later } }), DEADLINE)).toBeNull();
   });
 });

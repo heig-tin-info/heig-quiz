@@ -28,7 +28,6 @@ const sessions: ProjectWorkspaceSessions = {
     {
       sessionId: "s1",
       user: { id: "0190d3c4-0000-7000-8000-000000000001", name: "Léa Perret" },
-      email: "lea@heig.test",
       state: "running",
       createdAt: new Date().toISOString(),
       lastSeenAt: new Date().toISOString(),
@@ -37,7 +36,6 @@ const sessions: ProjectWorkspaceSessions = {
     {
       sessionId: "s2",
       user: null,
-      email: "ancien@heig.test",
       state: "failed",
       createdAt: new Date().toISOString(),
       lastSeenAt: new Date().toISOString(),
@@ -79,9 +77,9 @@ describe("the project's workspace section", () => {
     render();
     expect(await screen.findByText("A workspace was opened: where students work can no longer change.")).toBeInTheDocument();
     for (const radio of screen.getAllByRole("radio")) expect(radio).toBeDisabled();
-    // The open workspaces: a student by name, an account the classroom does not hold by its address.
+    // The open workspaces: a student by name, an account the classroom does not hold by no name nor address.
     expect(await screen.findByText("Léa Perret")).toBeInTheDocument();
-    expect(screen.getByText("ancien@heig.test")).toBeInTheDocument();
+    expect(screen.getByText("Not in this classroom")).toBeInTheDocument();
     expect(screen.getByText("Running")).toBeInTheDocument();
     expect(screen.getByText("Failed")).toBeInTheDocument();
   });
@@ -94,7 +92,10 @@ describe("the project's workspace section", () => {
     });
     render();
     expect(await screen.findByText("The workspace could not be updated")).toBeInTheDocument();
-    expect(screen.getByText("portal answered 503: down")).toBeInTheDocument();
+    // Our sentence; the portal's words only as the technical detail on hover.
+    expect(screen.getByTestId("workspace-sync-error")).toHaveTextContent(/did not reach the workspace/);
+    expect(screen.getByTestId("workspace-sync-error")).toHaveAttribute("title", "portal answered 503: down");
+    expect(screen.queryByText("portal answered 503: down")).toBeNull();
     expect(await screen.findByText(/The workspace portal cannot be reached right now/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Resync" }));
     await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url === "/app/api/projects/p1/workspace/sync")).toBe(true));

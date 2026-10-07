@@ -9,9 +9,15 @@
  */
 import { z } from "zod";
 
-/** Work mode of an assignment; `online_seb` opens only from Safe Exam Browser. */
-export const WORK_MODES = ["free", "online", "online_seb"] as const;
-export type WorkMode = (typeof WORK_MODES)[number];
+import { WORK_MODE_REFUSALS, WORK_MODES, WORKSPACE_START_REFUSALS } from "@quiz/domain";
+
+/**
+ * Work mode of a project; `online_seb` opens only from Safe Exam Browser.
+ * The lists are `@quiz/domain`'s (`workMode.ts`), re-exported here.
+ */
+export { WORK_MODE_REFUSALS, WORK_MODES, WORKSPACE_START_REFUSALS };
+export const WorkMode = z.enum(WORK_MODES);
+export type WorkMode = z.infer<typeof WorkMode>;
 
 /**
  * The two issuers accepted during the transition (docs/merge/06 §6.2):
@@ -63,7 +69,7 @@ export const CodespaceAssignmentSync = z.object({
   name: z.string().min(1),
   classroomId: z.string().min(1),
   classroomName: z.string(),
-  mode: z.enum(["online", "online_seb"]),
+  mode: WorkMode.exclude(["free"]),
   /** Image from the portal catalog; null = default image. */
   image: z.string().min(1).nullable(),
   /** Template repository: what the workspace is seeded from in exam mode. */
@@ -157,9 +163,9 @@ export type ServiceTokenClaims = z.infer<typeof ServiceTokenClaims>;
  *   - `seb_required` — an `online_seb` project opens from Safe Exam
  *     Browser only (M6-07: until then, never);
  *   - `not_accepted` — no live repository of theirs yet: accept first;
- *   - `closed` — their deadline has passed.
+ *   - `closed` — their deadline has passed, or the classroom is archived.
+ * The rule is `workspaceStartRefusal` of `@quiz/domain`.
  */
-export const WORKSPACE_START_REFUSALS = ["not_online", "seb_required", "not_accepted", "closed"] as const;
 export const WorkspaceStartRefusal = z.enum(WORKSPACE_START_REFUSALS);
 export type WorkspaceStartRefusal = z.infer<typeof WorkspaceStartRefusal>;
 
@@ -173,12 +179,11 @@ export const workspaceStartPath = (projectId: string): string => `/app/codespace
  * owner without the administrator's grant), `work_mode_frozen` (409, a
  * workspace was launched), `work_mode_group` (409, a group project).
  */
-export const WORK_MODE_REFUSALS = ["owner_required", "codespace_not_granted", "work_mode_frozen", "work_mode_group"] as const;
 export const WorkModeRefusal = z.enum(WORK_MODE_REFUSALS);
 export type WorkModeRefusal = z.infer<typeof WorkModeRefusal>;
 
 /** `PUT /app/api/projects/:id/workspace/mode`: the project's work mode. */
-export const ProjectWorkModeBody = z.strictObject({ mode: z.enum(WORK_MODES) });
+export const ProjectWorkModeBody = z.strictObject({ mode: WorkMode });
 export type ProjectWorkModeBody = z.infer<typeof ProjectWorkModeBody>;
 
 /**
@@ -191,9 +196,9 @@ export type ProjectWorkModeBody = z.infer<typeof ProjectWorkModeBody>;
  * online workspace is off (`CODESPACE_URL` empty).
  */
 export const ProjectWorkspace = z.object({
-  mode: z.enum(WORK_MODES),
+  mode: WorkMode,
   /** The modes the caller may set now, the current one included. */
-  allowed: z.array(z.enum(WORK_MODES)),
+  allowed: z.array(WorkMode),
   /** Why another mode is refused to the caller (the first refusal met); null when every mode is open. */
   refusal: WorkModeRefusal.nullable(),
   syncedAt: z.iso.datetime().nullable(),
@@ -205,9 +210,10 @@ export type ProjectWorkspace = z.infer<typeof ProjectWorkspace>;
  * One workspace of the project as the staff read it
  * (`GET /app/api/projects/:id/workspace/sessions`): the portal's
  * {@link CodespaceSessionSummary}, its `userId` matched to a Quiz account
- * (`user`, null when the portal names nobody Quiz knows).
+ * (`user`, null when the portal names nobody of the classroom). Never the
+ * portal's address of an account: an unmatched one is not the staff's to read.
  */
-export const ProjectWorkspaceSession = CodespaceSessionSummary.omit({ userId: true }).extend({
+export const ProjectWorkspaceSession = CodespaceSessionSummary.omit({ userId: true, email: true }).extend({
   user: z.object({ id: z.uuid(), name: z.string() }).nullable(),
 });
 export type ProjectWorkspaceSession = z.infer<typeof ProjectWorkspaceSession>;
@@ -239,12 +245,9 @@ export const TeacherCodespaceGrant = z.object({
 });
 export type TeacherCodespaceGrant = z.infer<typeof TeacherCodespaceGrant>;
 
-/** `PATCH /app/api/admin/teachers/:gid/codespace` (admin): either field, at least one. */
-export const TeacherCodespaceGrantPatch = z
-  .strictObject({
-    enabled: z.boolean().optional(),
-    maxActiveSessions: z.number().int().min(0).max(MAX_ACTIVE_SESSIONS_LIMIT).optional(),
-  })
+/** `PATCH /app/api/admin/teachers/:gid/codespace` (admin): either field of {@link TeacherCodespaceGrant}, at least one. */
+export const TeacherCodespaceGrantPatch = TeacherCodespaceGrant.partial()
+  .strict()
   .refine((b) => b.enabled !== undefined || b.maxActiveSessions !== undefined, { message: "Nothing to update" });
 export type TeacherCodespaceGrantPatch = z.infer<typeof TeacherCodespaceGrantPatch>;
 
@@ -253,5 +256,5 @@ export type TeacherCodespaceGrantPatch = z.infer<typeof TeacherCodespaceGrantPat
  * its mode, when it runs in the portal and the feature is on; null
  * otherwise. Nothing of the portal's state, the quota or another student.
  */
-export const StudentProjectWorkspace = z.object({ mode: z.enum(["online", "online_seb"]) });
+export const StudentProjectWorkspace = z.object({ mode: WorkMode.exclude(["free"]) });
 export type StudentProjectWorkspace = z.infer<typeof StudentProjectWorkspace>;

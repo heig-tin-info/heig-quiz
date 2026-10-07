@@ -14,6 +14,7 @@
  */
 import {
   ProjectWorkModeBody,
+  WORK_MODES,
   type ProjectWorkspace,
   type ProjectWorkspaceSessions,
   type ProjectWorkspaceSyncAccepted,
@@ -35,7 +36,6 @@ const WORKSPACES = new Map<string, MockWorkspace>([
   ["pj-published", { mode: "online", launched: true, syncedAt: iso(-2 * H), syncError: null }],
 ]);
 
-const MODES: readonly WorkMode[] = ["free", "online", "online_seb"];
 
 function workspaceOr404(id: string): MockWorkspace {
   if (!flags.codespace) throw new MockError(404, "Not found");
@@ -50,7 +50,7 @@ function workspaceOr404(id: string): MockWorkspace {
 /** The project's workspace for the persona: an owner with the grant, unless `?assistant=1`. */
 function view(ws: MockWorkspace): ProjectWorkspace {
   const facts = { owner: !flags.assistant, granted: true, launched: ws.launched, groupMode: false };
-  const judged = MODES.map((to) => ({ to, refusal: workModeRefusal(facts, ws.mode, to) }));
+  const judged = WORK_MODES.map((to) => ({ to, refusal: workModeRefusal(facts, ws.mode, to) }));
   return {
     mode: ws.mode,
     allowed: judged.filter((j) => j.refusal === null).map((j) => j.to),
@@ -100,14 +100,13 @@ on("GET", "/app/api/projects/:id/workspace/sessions", (m): ProjectWorkspaceSessi
       ...students.map((s, i) => ({
         sessionId: `ws-${i + 1}`,
         user: { id: `0190d3c4-0000-7000-8000-00000000c0${String(i + 1).padStart(2, "0")}`, name: `${s.prenom} ${s.nom}` },
-        email: s.email,
         state: states[i]!,
         createdAt: at(180 - i * 20),
         lastSeenAt: at(i === 2 ? 95 : 2 + i * 3),
         lastPushAt: i === 1 ? null : at(30 + i * 10),
       })),
-      // An account the classroom does not hold: named by its address only.
-      { sessionId: "ws-9", user: null, email: "ancien.etudiant@heig-vd.ch", state: "closed", createdAt: at(3 * 24 * 60), lastSeenAt: at(2 * 24 * 60), lastPushAt: null },
+      // An account the classroom does not hold: named by nobody.
+      { sessionId: "ws-9", user: null, state: "closed", createdAt: at(3 * 24 * 60), lastSeenAt: at(2 * 24 * 60), lastPushAt: null },
     ],
   };
 });

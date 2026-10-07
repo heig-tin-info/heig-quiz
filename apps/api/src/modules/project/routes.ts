@@ -62,6 +62,9 @@ import { notFound, studentRoute, teacherRoute } from "../http.js";
 import * as service from "./service.js";
 import { registerProjectHandlers } from "./webhooks.js";
 
+/** What the portal reads of a project (`CodespaceAssignmentSync`): a patch of any of them is synced. */
+const PORTAL_FIELDS = ["name", "publishMode", "startAt", "deadlineAt", "durationMinutes"] as const;
+
 export async function projectPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
   // GitHub's events on projects (M3-04), on the `github` module's registry.
@@ -142,8 +145,8 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
       const row = await service.patchProject(app.db, scope.project.id, body, actorOf(req), now);
       // A reopen's locks are lifted by the deadline job, never by 100 calls here (M3-05a).
       if (body.deadlineAt !== undefined) await service.requestDeadlineWork(app, config, row.id);
-      // The portal reads the name and the dates of an online project (ADR-047 §6).
-      await requestCodespaceSync(app, config, row.id);
+      // The portal reads the name and the dates of an online project (ADR-047 §6): nothing else moves it.
+      if (PORTAL_FIELDS.some((field) => body[field] !== undefined)) await requestCodespaceSync(app, config, row.id);
       return service.projectSummary(app.db, row, now);
     }),
   );

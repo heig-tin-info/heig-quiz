@@ -23,7 +23,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
-import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -38,17 +38,19 @@ import {
   SERVICE_TOKEN_TTL_SECONDS,
   WORK_MODES,
   type LaunchTokenClaims,
+  type WorkMode,
+  type WorkspaceStartRefusal,
   type ProjectWorkspace,
   type ProjectWorkspaceSessions,
   type ServiceTokenClaims,
   type TeacherCodespaceGrant,
 } from "@quiz/contracts";
-import { quotaHolder, signHs256, workModeRefusal } from "@quiz/domain";
+import { quotaHolder, signHs256, syncsToPortal, workModeRefusal, workspaceStartRefusal } from "@quiz/domain";
 
-import { audit, SYSTEM_ACTOR } from "../../audit.js";
+import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
-import { classrooms, codespaceProjects, courseStaff, enrollments, projects, teacherGrants, users } from "../../db/schema.js";
+import { classrooms, codespaceProjects, courseStaff, enrollments, githubAccounts, projectRepos, projects, teacherGrants, users } from "../../db/schema.js";
 import { knownEmails, normalizeEmail } from "../../identity.js";
 import { CODESPACE_SYNC_QUEUE } from "../../jobs.js";
 
@@ -64,18 +66,17 @@ const PORTAL_TIMEOUT_MS = 10_000;
 
 /**
  * The workspace grant of an account: the `teacher_grants` rows of any of its
- * addresses — its verified ones (`knownEmails`, GH-11) and its sign-in
- * address, the one the administration list joins on — the most permissive
- * winning, as the role rule does. Null without a row: no grant, the
+ * VERIFIED addresses — its verified ones (`knownEmails`, GH-11, as the role
+ * rule reads them) and its sign-in address when the identity provider
+ * verified it — the most permissive winning, as the role rule does. Null without a row: no grant, the
  * default quota. The administrator holds no row (their address cannot be
  * granted), so they are not granted either: an administrator acts on a
  * course as its owner (ADR-054), never past the grant.
  */
 export async function grantOf(db: Db | Tx, userId: string): Promise<TeacherCodespaceGrant | null> {
-  const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId));
-  const emails = [...new Set([...(await knownEmails(db as Db, userId)), user?.email ?? ""].map(normalizeEmail))].filter(
-    (e) => e !== "",
-  );
+  const [user] = await db.select({ email: users.email, verified: users.emailVerified }).from(users).where(eq(users.id, userId));
+  const signIn = user?.verified ? [user.email] : [];
+  const emails = [...new Set([...(await knownEmails(db, userId)), ...signIn].map(normalizeEmail))].filter((e) => e !== "");
   if (emails.length === 0) return null;
   const rows = await db
     .select({ enabled: teacherGrants.codespaceEnabled, maxActiveSessions: teacherGrants.codespaceMaxActiveSessions })
@@ -104,7 +105,7 @@ async function portalState(db: Db, projectId: string) {
  */
 export async function projectWorkspace(
   db: Db,
-  project: { id: string; workMode: "free" | "online" | "online_seb"; groupMode: boolean },
+  project: { id: string; workMode: WorkMode; groupMode: boolean },
   caller: { userId: string; owner: boolean },
 ): Promise<ProjectWorkspace> {
   const state = await portalState(db, project.id);
@@ -172,8 +173,11 @@ async function quotaHolderOf(db: Db, courseId: string, createdBy: string): Promi
  * nothing to send: no such project, a project in the students' own tools,
  * one whose distribution repository is not built yet (the publication
  * sends it again), or an `online_seb` one — the portal refuses an exam
- * without Browser Exam Keys, which come with M6-07. The workspace is
- * seeded from the distribution repository, never the source (N-SEC-20).
+ * without Browser Exam Keys, which come with M6-07 (`syncsToPortal`). The
+ * workspace is seeded from the distribution repository, never the source
+ * (N-SEC-20). With the portal's forge off (ADR-047, M6-03 amendment (a))
+ * it can clone only a PUBLIC repository: a private distribution syncs, but
+ * cannot seed a workspace until Quiz's App is on the engine VM (M6-04/05).
  */
 export async function syncPayload(db: Db, projectId: string): Promise<CodespaceAssignmentSync | null> {
   const [row] = await db
@@ -181,7 +185,7 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
     .from(projects)
     .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
     .where(eq(projects.id, projectId));
-  if (!row || row.project.workMode !== "online" || row.project.distributionFullName === null) return null;
+  if (!row || !syncsToPortal(row.project.workMode) || row.project.distributionFullName === null) return null;
   const { project } = row;
   const holder = await quotaHolderOf(db, row.courseId, project.createdBy);
   if (holder === null) return null;
@@ -266,7 +270,8 @@ export async function runCodespaceSync(
 /**
  * Asks for a project's sync, after anything the portal reads of it
  * changed: its mode, name, dates, publication. Nothing when the feature is
- * off or the project is not `online`. Through the queue when there is one;
+ * off; a project the portal does not take ({@link syncPayload} null) is a
+ * job that does nothing. Through the queue when there is one;
  * inline otherwise (`JOBS_DISABLED`), its failure recorded and swallowed:
  * the portal never fails a teacher's save.
  */
@@ -276,8 +281,6 @@ export async function requestCodespaceSync(
   projectId: string,
 ): Promise<void> {
   if (!codespaceOn(config)) return;
-  const [row] = await app.db.select({ workMode: projects.workMode }).from(projects).where(eq(projects.id, projectId));
-  if (row?.workMode !== "online") return;
   if (app.boss) {
     await app.boss.send(CODESPACE_SYNC_QUEUE, { projectId });
     return;
@@ -326,20 +329,80 @@ export async function projectSessions(
       : await app.db
           .selectDistinct({ id: users.id, givenName: users.givenName, familyName: users.familyName })
           .from(users)
-          .innerJoin(
-            enrollments,
-            and(eq(enrollments.userId, users.id), eq(enrollments.classroomId, project.classroomId), isNotNull(enrollments.userId)),
-          )
-          .where(inArray(users.id, ids))
-          .orderBy(asc(users.familyName));
+          .innerJoin(enrollments, and(eq(enrollments.userId, users.id), eq(enrollments.classroomId, project.classroomId)))
+          .where(inArray(users.id, ids));
   const names = new Map(known.map((u) => [u.id, `${u.givenName} ${u.familyName}`.trim()]));
   return {
     reachable: true,
-    sessions: listed.map(({ userId, ...s }) => ({
+    // The portal's address of an account the classroom does not hold is not the staff's to read.
+    sessions: listed.map(({ userId, email: _email, ...s }) => ({
       ...s,
       user: names.has(userId) ? { id: userId, name: names.get(userId)! } : null,
     })),
   };
+}
+
+// ---------------------------------------------------------------- the start (student → portal)
+
+/** Who launches, as the start route loaded them. */
+export interface Launcher {
+  user: { id: string; email: string; givenName: string; familyName: string };
+  /** A staff seat (ADR-077): a teacher testing their project; their launch does not freeze the mode. */
+  staffSeat: boolean;
+  classroomArchived: boolean;
+  actor: AuditActor;
+}
+
+/**
+ * The start route's work (ADR-047 §6), in one transaction: the project
+ * under a share lock — a change of its mode waits for this launch, then
+ * finds it frozen —, the student's own repository (online modes are
+ * individual), the decision of `workspaceStartRefusal`; then the first
+ * launch marked (never by a staff seat: a teacher testing the project does
+ * not freeze its mode), a launch token minted and its `jti` audited
+ * (`codespace.launch_issued`; the token never). Null: no such project.
+ */
+export async function startWorkspace(
+  db: Db,
+  config: AppConfig,
+  projectId: string,
+  who: Launcher,
+  now: Date,
+): Promise<{ token: string; jti: string } | WorkspaceStartRefusal | null> {
+  return db.transaction(async (tx) => {
+    const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("share");
+    if (!project) return null;
+    const [repo] = await tx
+      .select()
+      .from(projectRepos)
+      .where(and(eq(projectRepos.projectId, project.id), eq(projectRepos.userId, who.user.id), isNull(projectRepos.groupId)));
+    const refusal = workspaceStartRefusal({ project, repo: repo ?? null, classroomArchived: who.classroomArchived }, now);
+    if (refusal) return refusal;
+    const [account] = await tx.select({ login: githubAccounts.login }).from(githubAccounts).where(eq(githubAccounts.userId, who.user.id));
+    if (!who.staffSeat) await markLaunched(tx, project.id, now);
+    const { user } = who;
+    const issued = await launchToken(
+      config,
+      {
+        sub: user.id,
+        email: user.email,
+        displayName: `${user.givenName} ${user.familyName}`.trim() || user.email,
+        githubLogin: account?.login ?? null,
+        assignmentId: project.id,
+        repo: { fullName: repo!.fullName!, defaultBranch: repo!.defaultBranch ?? project.branches[0] ?? "main" },
+      },
+      now,
+    );
+    // The `jti` links Quiz's log to the portal's; the token itself never enters a log (AU-41).
+    await audit(tx, {
+      ...who.actor,
+      action: "codespace.launch_issued",
+      subjectType: "project",
+      subjectId: project.id,
+      payload: { jti: issued.jti, mode: project.workMode },
+    });
+    return issued;
+  });
 }
 
 // ---------------------------------------------------------------- the launch mark

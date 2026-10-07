@@ -4,8 +4,8 @@ import { useState } from "react";
 
 import {
   MAX_ACTIVE_SESSIONS_LIMIT,
+  TeacherCodespaceGrant,
   type AdminTeacher,
-  type TeacherCodespaceGrant,
   type TeacherCodespaceGrantPatch,
   type TeacherGrantCreate,
 } from "@quiz/contracts";
@@ -287,12 +287,13 @@ function WorkspaceGrant({ id, email, grant }: { id: string; email: string; grant
     onSettled: () => qc.invalidateQueries({ queryKey: adminTeachersKey }),
   });
   const commitQuota = () => {
-    const n = Number(quota);
-    if (!Number.isInteger(n) || n < 0 || n > MAX_ACTIVE_SESSIONS_LIMIT) {
+    // The contract's own bounds (`TeacherCodespaceGrant`): anything else goes back to the saved value.
+    const n = TeacherCodespaceGrant.shape.maxActiveSessions.safeParse(quota.trim() === "" ? NaN : Number(quota));
+    if (!n.success) {
       setQuota(String(grant.maxActiveSessions));
       return;
     }
-    if (n !== grant.maxActiveSessions) save.mutate({ maxActiveSessions: n });
+    if (n.data !== grant.maxActiveSessions) save.mutate({ maxActiveSessions: n.data });
   };
   return (
     <span className="flex items-center gap-3">

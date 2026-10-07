@@ -40,8 +40,10 @@ default `free`, migration `0079_codespace_module`). It is set by its own
 route, `PUT /app/api/projects/:id/workspace/mode`, in any state of the
 project, never by the create or the patch. Point 3's one-way door becomes:
 the mode is **frozen once a workspace was launched** for the project — the
-first launch token issued, `codespace_projects.first_launch_at` — and any
-change after that is `409 work_mode_frozen`; before it, every mode may
+first launch token issued to a student seat, `codespace_projects.first_launch_at`
+— and any change after that is `409 work_mode_frozen`; a staff seat's
+launch (ADR-077, a teacher testing the project on their test repository)
+never freezes it; before it, every mode may
 change, `free` included. A group project stays `free` (F-PROJ-06): an
 online mode on a group project, or group mode on an online project, is
 `409 work_mode_group`. Point 2 applies from the next invitation: `push` in
@@ -58,9 +60,9 @@ non-free mode (`403 codespace_not_granted` otherwise; going back to `free`
 needs no grant). The grant is two columns on `teacher_grants`,
 `codespace_enabled` (false) and `codespace_max_active_sessions` (2),
 edited by an administrator (`PATCH /app/api/admin/teachers/:gid/codespace`).
-An account's grant is read on every address it holds (its verified ones
-and its sign-in address), the most permissive row winning, as the role
-rule does; the administrator, whose address cannot hold a grant, is not
+An account's grant is read on its VERIFIED addresses only (its verified
+ones, and its sign-in address when the identity provider verified it), the
+most permissive row winning, as the role rule does; the administrator, whose address cannot hold a grant, is not
 granted (an administrator acts as an owner under Super Powers, ADR-054,
 never past the grant).
 (C) *Whose quota.* The quota an online project consumes is carried by its
@@ -80,10 +82,18 @@ idempotent), its last outcome on `codespace_projects` with the staff's
 `GET /app/codespace/start/:projectId` (the portal's `classroomStartUrl`
 already builds that path), loaded through the classroom's student branch
 with a claimed seat and the caller's own portal session — an
-impersonation, a Bearer token: the 404; a `seb` or `kiosk` session is
+impersonation, a request carrying a Bearer token: the 404; a `seb` or `kiosk` session is
 anonymous there (ADR-027's default deny) until M6-07 —; the token's `jti`
-is audited (`codespace.launch_issued`), the token never. The staff read
-the project's workspaces through `GET …/workspace/sessions`.
+is audited (`codespace.launch_issued`), the token never; the decision is the pure
+`workspaceStartRefusal` (`@quiz/domain`). The staff read the project's
+workspaces through `GET …/workspace/sessions`, named by Quiz for the
+classroom's students and by nobody otherwise (the portal's address of an
+unmatched account is not sent).
+**Seeding, while the portal's forge is off** (M6-03 amendment (a)): the
+workspace is seeded from the project's distribution repository, which the
+portal clones anonymously. A PUBLIC distribution repository seeds it; a
+private one (Quiz's default) syncs, but cannot seed a workspace, until the
+decision on Quiz's App on the engine VM (M6-04/M6-05).
 
 **Imported from heig-classroom** (2026-09-30, merge task M0-03, ADR-035),
 where it is ADR-013 — Quiz's own ADR-013 is pool sharing, so it takes the

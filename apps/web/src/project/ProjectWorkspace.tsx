@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Laptop, RefreshCw } from "lucide-react";
 
-import type {
-  CodespaceSessionState,
-  ProjectWorkModeBody,
-  ProjectWorkspace as Workspace,
-  ProjectWorkspaceSessions,
-  ProjectWorkspaceSyncAccepted,
-  WorkMode,
+import {
+  WORK_MODES,
+  type CodespaceSessionState,
+  type ProjectWorkModeBody,
+  type ProjectWorkspace as Workspace,
+  type ProjectWorkspaceSessions,
+  type ProjectWorkspaceSyncAccepted,
+  type WorkMode,
 } from "@quiz/contracts";
 
 import { api, ApiError } from "../api";
@@ -30,8 +31,6 @@ import {
   type Tone,
 } from "../ui";
 import { refusalMessage } from "./projectPage";
-
-const MODES: readonly WorkMode[] = ["free", "online", "online_seb"];
 
 /** A workspace's state, as a badge: green while it runs, red when it failed, neutral otherwise. */
 const STATE_TONE: Record<CodespaceSessionState, Tone> = {
@@ -89,21 +88,19 @@ export function ProjectWorkspace({ projectId, archived }: { projectId: string; a
   });
 
   if (workspace.error instanceof ApiError && workspace.error.status === 404) return null;
-  const heading = (
-    <SectionHeading icon={Laptop} title={<span id="project-workspace">{t("project.workspace")}</span>} />
-  );
-  if (workspace.isLoading) {
-    return (
-      <section aria-labelledby="project-workspace" className="space-y-3">
-        {heading}
+  const ws = workspace.data;
+  const changeable = ws !== undefined && !archived && ws.allowed.length > 1;
+  const options = WORK_MODES.filter((m) => !changeable || ws!.allowed.includes(m)).map((value) => ({
+    value,
+    label: t(`project.workspace.mode.${value}`),
+  }));
+
+  return (
+    <section aria-labelledby="project-workspace" className="space-y-3" data-testid="project-workspace">
+      <SectionHeading icon={Laptop} title={<span id="project-workspace">{t("project.workspace")}</span>} />
+      {workspace.isLoading ? (
         <Skeleton className="h-24 w-full" />
-      </section>
-    );
-  }
-  if (workspace.isError || !workspace.data) {
-    return (
-      <section aria-labelledby="project-workspace" className="space-y-3">
-        {heading}
+      ) : workspace.isError || !ws ? (
         <QueryError
           title={t("project.workspace")}
           error={workspace.error}
@@ -111,62 +108,56 @@ export function ProjectWorkspace({ projectId, archived }: { projectId: string; a
           retrying={workspace.isFetching}
           fallback={t("error.server")}
         />
-      </section>
-    );
-  }
-  const ws = workspace.data;
-  const changeable = !archived && ws.allowed.length > 1;
-  const options = MODES.filter((m) => !changeable || ws.allowed.includes(m)).map((value) => ({
-    value,
-    label: t(`project.workspace.mode.${value}`),
-  }));
-
-  return (
-    <section aria-labelledby="project-workspace" className="space-y-3" data-testid="project-workspace">
-      {heading}
-      <Card className="divide-y divide-line px-4">
-        {/* Title and description above, the three long options below: they wrap on a phone instead of overflowing. */}
-        <div className="space-y-2.5 py-3">
-          <div>
-            <p id="project-work-mode" className="text-sm font-medium text-fg">
-              {t("project.workspace.mode")}
-            </p>
-            <p className="mt-0.5 text-[13px] text-fg-muted">{t(`project.workspace.mode.desc.${ws.mode}`)}</p>
-            {ws.refusal && !archived ? (
-              <p className="mt-1 text-[13px] text-fg-faint" data-testid="workspace-refusal">
-                {t(`project.workspace.refusal.${ws.refusal}`)}
-              </p>
+      ) : (
+        <>
+          <Card className="divide-y divide-line px-4">
+            {/* Title and description above, the three long options below: they wrap on a phone instead of overflowing. */}
+            <div className="space-y-2.5 py-3">
+              <div>
+                <p id="project-work-mode" className="text-sm font-medium text-fg">
+                  {t("project.workspace.mode")}
+                </p>
+                <p className="mt-0.5 text-[13px] text-fg-muted">{t(`project.workspace.mode.desc.${ws.mode}`)}</p>
+                {ws.refusal && !archived ? (
+                  <p className="mt-1 text-[13px] text-fg-faint" data-testid="workspace-refusal">
+                    {t(`project.workspace.refusal.${ws.refusal}`)}
+                  </p>
+                ) : null}
+              </div>
+              <Segmented
+                name="workMode"
+                labelledBy="project-work-mode"
+                value={setMode.isPending && setMode.variables ? setMode.variables : ws.mode}
+                disabled={!changeable || setMode.isPending}
+                wrap
+                onChange={(mode) => setMode.mutate(mode)}
+                options={options}
+              />
+            </div>
+            {ws.mode === "online" ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 py-3 text-[13px]">
+                <span className="text-fg-muted" data-testid="workspace-sync">
+                  {ws.syncedAt
+                    ? t("project.workspace.synced", { date: isoDateTime(ws.syncedAt) })
+                    : t("project.workspace.notSynced")}
+                </span>
+                <Button variant="secondary" size="sm" onClick={() => resync.mutate()} loading={resync.isPending} disabled={archived}>
+                  <RefreshCw /> {t("project.workspace.resync")}
+                </Button>
+              </div>
             ) : null}
-          </div>
-          <Segmented
-            name="workMode"
-            labelledBy="project-work-mode"
-            value={setMode.isPending && setMode.variables ? setMode.variables : ws.mode}
-            disabled={!changeable || setMode.isPending}
-            wrap
-            onChange={(mode) => setMode.mutate(mode)}
-            options={options}
-          />
-        </div>
-        {ws.mode === "online" ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 py-3 text-[13px]">
-            <span className="text-fg-muted" data-testid="workspace-sync">
-              {ws.syncedAt
-                ? t("project.workspace.synced", { date: isoDateTime(ws.syncedAt) })
-                : t("project.workspace.notSynced")}
-            </span>
-            <Button variant="secondary" size="sm" onClick={() => resync.mutate()} loading={resync.isPending} disabled={archived}>
-              <RefreshCw /> {t("project.workspace.resync")}
-            </Button>
-          </div>
-        ) : null}
-      </Card>
-      {ws.mode === "online" && ws.syncError ? (
-        <Alert tone="warning" icon={AlertTriangle} title={t("project.workspace.syncError")}>
-          <span className="font-mono text-[12px]">{ws.syncError}</span>
-        </Alert>
-      ) : null}
-      {ws.mode !== "free" ? <WorkspaceSessions projectId={projectId} /> : null}
+          </Card>
+          {/* The portal's own words are a technical detail, on hover: the sentence is ours. */}
+          {ws.mode === "online" && ws.syncError ? (
+            <Alert tone="warning" icon={AlertTriangle} title={t("project.workspace.syncError")}>
+              <span title={ws.syncError} data-testid="workspace-sync-error">
+                {t("project.workspace.syncError.body")}
+              </span>
+            </Alert>
+          ) : null}
+          {ws.mode !== "free" ? <WorkspaceSessions projectId={projectId} /> : null}
+        </>
+      )}
     </section>
   );
 }
@@ -220,7 +211,7 @@ function WorkspaceSessions({ projectId }: { projectId: string }) {
             {rows.map((s) => (
               <tr key={s.sessionId} className={T.row}>
                 <td className={`${T.td} font-semibold`}>
-                  {s.user ? s.user.name : <span className="font-normal text-fg-muted">{s.email || t("project.workspace.unknownStudent")}</span>}
+                  {s.user ? s.user.name : <span className="font-normal text-fg-muted">{t("project.workspace.unknownStudent")}</span>}
                 </td>
                 <td className={T.td}>
                   <Badge tone={STATE_TONE[s.state]}>{t(`project.workspace.state.${s.state}`)}</Badge>

@@ -22,20 +22,12 @@
  * also Safe Exam Browser's `startURL`, M6-07), described on the route.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { and, eq, isNull } from "drizzle-orm";
 
-import {
-  IdParam,
-  ProjectWorkModeBody,
-  ProjectWorkspaceSyncAccepted,
-  workspaceStartPath,
-  type WorkspaceStartRefusal,
-} from "@quiz/contracts";
-import { effectiveDeadline } from "@quiz/domain";
+import { IdParam, ProjectWorkModeBody, ProjectWorkspaceSyncAccepted, workspaceStartPath } from "@quiz/contracts";
+import { syncsToPortal } from "@quiz/domain";
 
 import { actorOf, audit } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
-import { githubAccounts, projectRepos, projects } from "../../db/schema.js";
 import {
   accessibleProject,
   callerOf,
@@ -46,7 +38,7 @@ import {
 } from "../guards.js";
 import { DomainError, notFound, teacherRoute } from "../http.js";
 import * as project from "../project/service.js";
-import { grantOf, launchToken, markLaunched, projectSessions, projectWorkspace, requestCodespaceSync } from "./service.js";
+import { grantOf, projectSessions, projectWorkspace, requestCodespaceSync, startWorkspace } from "./service.js";
 
 export async function codespacePlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
@@ -87,12 +79,11 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
     "/app/api/projects/:id/workspace/sync",
     session,
     teacher(onProject, async ({ req, reply, now, scope }) => {
-      if (scope.project.workMode === "free") {
-        throw new DomainError("not_online", 409, "This project does not use the online workspace");
-      }
-      // An exam's sync carries its Browser Exam Keys, which come with M6-07.
-      if (scope.project.workMode === "online_seb") {
-        throw new DomainError("seb_required", 409, "A Safe Exam Browser project is synced from M6-07 on");
+      if (!syncsToPortal(scope.project.workMode)) {
+        // An exam's sync carries its Browser Exam Keys, which come with M6-07.
+        throw scope.project.workMode === "free"
+          ? new DomainError("not_online", 409, "This project does not use the online workspace")
+          : new DomainError("seb_required", 409, "A Safe Exam Browser project is synced from M6-07 on");
       }
       await audit(app.db, { ...actorOf(req), action: "codespace.sync_requested", subjectType: "project", subjectId: scope.project.id });
       await requestCodespaceSync(app, config, scope.project.id);
@@ -118,13 +109,13 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
    *      the 404), and the project through its classroom's student branch
    *      (`findStudentProjectView`: published, not archived) with a claimed
    *      seat of theirs — anyone else, the 404 of a missing project;
-   *   2. the refusals a student can read, sent back to their project page
-   *      as `?workspace=<code>` (`WorkspaceStartRefusal`): the project's
-   *      mode, read under a share lock — `not_online`, `seb_required` (an
-   *      `online_seb` project opens from SEB only, M6-07) —, their live
-   *      repository (`not_accepted`), their deadline or an archived
-   *      classroom (`closed`);
-   *   3. the first launch marked (the mode frozen from then on), a 5-minute
+   *   2. the refusals a student can read (`workspaceStartRefusal` of
+   *      `@quiz/domain`, in `startWorkspace`'s transaction), sent back to
+   *      their project page as `?workspace=<code>`: `not_online`,
+   *      `seb_required` (an `online_seb` project opens from SEB only,
+   *      M6-07), `not_accepted`, `closed`;
+   *   3. the first launch marked (the mode frozen from then on; never by a
+   *      staff seat, ADR-077: a teacher testing it freezes nothing), a 5-minute
    *      launch token with a random `jti`, audited
    *      `codespace.launch_issued` by its `jti` alone, and a 303 to
    *      `${CODESPACE_URL}/launch?token=…`. The token is never logged,
@@ -136,60 +127,26 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
   app.get("/app/codespace/start/:id", async (req, reply) => {
     const params = IdParam.safeParse(req.params);
     if (!params.success) return notFound(reply);
+    // A Bearer token is read on the JSON API only (ADR-022) and never launches: the 404, not the sign-in.
+    if (req.headers.authorization !== undefined) return notFound(reply);
     if (!req.user) {
       const next = workspaceStartPath(params.data.id);
       return reply.redirect(`/app/auth/login?next=${encodeURIComponent(next)}`, 303);
     }
     if (!ownPortalSession(req.auth)) return notFound(reply);
-    const now = app.clock.now();
     const scope = await findStudentProjectView(app.db, callerOf(req), req.auth, params.data.id);
     if (scope === null || scope.seat === null) return notFound(reply);
-    const user = req.user;
-
-    const refuse = (code: WorkspaceStartRefusal) =>
-      reply.redirect(`/projects/${encodeURIComponent(params.data.id)}?workspace=${code}`, 303);
-
-    const launch = await app.db.transaction(async (tx) => {
-      // The mode under a share lock: a change of it waits for this launch, and then finds it frozen.
-      const [row] = await tx.select().from(projects).where(eq(projects.id, params.data.id)).for("share");
-      if (!row) return null;
-      if (row.workMode === "free") return "not_online" as const;
-      if (row.workMode === "online_seb") return "seb_required" as const;
-      // Online modes are individual (F-PROJ-06): the caller's own repository, live.
-      const [repo] = await tx
-        .select()
-        .from(projectRepos)
-        .where(and(eq(projectRepos.projectId, row.id), eq(projectRepos.userId, user.id), isNull(projectRepos.groupId)));
-      if (!repo || repo.provisionStatus !== "ok" || repo.fullName === null || repo.deletedAt !== null) {
-        return "not_accepted" as const;
-      }
-      if (scope.room.archivedAt !== null || effectiveDeadline(repo, row).getTime() <= now.getTime()) return "closed" as const;
-      const [account] = await tx.select({ login: githubAccounts.login }).from(githubAccounts).where(eq(githubAccounts.userId, user.id));
-      await markLaunched(tx, row.id, now);
-      const issued = await launchToken(
-        config,
-        {
-          sub: user.id,
-          email: user.email,
-          displayName: `${user.givenName} ${user.familyName}`.trim() || user.email,
-          githubLogin: account?.login ?? null,
-          assignmentId: row.id,
-          repo: { fullName: repo.fullName, defaultBranch: repo.defaultBranch ?? row.branches[0] ?? "main" },
-        },
-        now,
-      );
-      // The `jti` links Quiz's log to the portal's; the token itself never enters a log (AU-41).
-      await audit(tx, {
-        ...actorOf(req),
-        action: "codespace.launch_issued",
-        subjectType: "project",
-        subjectId: row.id,
-        payload: { jti: issued.jti, mode: row.workMode },
-      });
-      return issued;
-    });
+    const launch = await startWorkspace(
+      app.db,
+      config,
+      params.data.id,
+      { user: req.user, staffSeat: scope.seat.staff, classroomArchived: scope.room.archivedAt !== null, actor: actorOf(req) },
+      app.clock.now(),
+    );
     if (launch === null) return notFound(reply);
-    if (typeof launch === "string") return refuse(launch);
+    if (typeof launch === "string") {
+      return reply.redirect(`/projects/${encodeURIComponent(params.data.id)}?workspace=${launch}`, 303);
+    }
     return reply.redirect(`${config.CODESPACE_URL}/launch?token=${encodeURIComponent(launch.token)}`, 303);
   });
 }

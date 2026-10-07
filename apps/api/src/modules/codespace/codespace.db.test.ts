@@ -37,11 +37,13 @@ import {
 import { verifyHs256 } from "@quiz/domain";
 
 import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { createApiToken } from "../../auth/tokens.js";
 import type { AppConfig } from "../../config.js";
 import {
   auditLog,
   codespaceProjects,
   courseStaff,
+  enrollments,
   githubAccounts,
   githubClassroomLinks,
   githubOrganizations,
@@ -431,6 +433,8 @@ describe("GET /app/codespace/start/:id", () => {
     }
     const impersonation = await start(lab.id, await sessionOf(student.id, { kind: "impersonation", actorUserId: admin.id }));
     expect(impersonation.statusCode).toBe(404);
+    const { token } = await createApiToken(server.app.db, student.id, { name: "t", expiresInDays: null });
+    expect((await start(lab.id, { authorization: `Bearer ${token}` })).statusCode).toBe(404);
     expect((await start(lab.id, stranger.headers)).statusCode).toBe(404);
     expect((await start(lab.id, outsider.headers)).statusCode).toBe(404);
     expect((await start(randomUUID(), student.headers)).statusCode).toBe(404);
@@ -524,6 +528,38 @@ describe("GET /app/codespace/start/:id", () => {
   });
 });
 
+describe("a staff test seat (ADR-077)", () => {
+  it("launches its own test repository's workspace without freezing the mode", async () => {
+    const room = await connectedClassroom([]);
+    const lab = await project(room, "Tester lab");
+    await setMode(lab.id, "online");
+    const tester = await grantedTeacher(null);
+    const githubUserId = nextAccount++;
+    const login = `teacher${githubUserId}`;
+    await server.app.db.insert(enrollments).values({
+      id: randomUUID(),
+      classroomId: room.classroomId,
+      nom: "Test",
+      prenom: "Teacher",
+      email: `s-${randomUUID().slice(0, 6)}@heig.test`,
+      userId: tester.id,
+      claimedAt: new Date(),
+      staff: true,
+    });
+    await server.app.db.insert(githubAccounts).values({ userId: tester.id, githubUserId, login });
+    accounts.set(githubUserId, login);
+    await accept(lab.id, tester);
+
+    const res = await start(lab.id, tester.headers);
+    expect(res.statusCode).toBe(303);
+    expect(res.headers.location).toMatch(new RegExp(`^${PORTAL}/launch\\?token=`));
+    const issued = await server.app.db.select().from(auditLog).where(and(eq(auditLog.action, "codespace.launch_issued"), eq(auditLog.subjectId, lab.id)));
+    expect(issued.map((a) => a.actorUserId)).toEqual([tester.id]);
+    // Not frozen: the owner may still change the mode.
+    expect((await setMode(lab.id, "free")).statusCode).toBe(200);
+  });
+});
+
 // ---------------------------------------------------------------- the staff's sessions
 
 describe("the project's workspaces", () => {
@@ -543,6 +579,7 @@ describe("the project's workspaces", () => {
       lastPushAt: null,
     });
     portal.sessions = [row(student.id, "s1"), row(other.id, "s2"), row("classroom-legacy", "s3")];
+    // `row` gives each the same address: none reaches the staff.
     const read = await call("GET", `/app/api/projects/${lab.id}/workspace/sessions`, owner.headers);
     expect(read.statusCode, read.body).toBe(200);
     const listed = ProjectWorkspaceSessions.parse(read.json());
@@ -552,6 +589,7 @@ describe("the project's workspaces", () => {
       ["s2", null],
       ["s3", null],
     ]);
+    expect(read.body).not.toContain("x@heig.test");
     const verdict = await verifyHs256(portal.calls.at(-1)!.authorization!.replace(/^Bearer /, ""), SECRET, { audience: SERVICE_AUDIENCE, issuer: "heig-quiz", now: AT_NOW });
     expect(verdict.ok).toBe(true);
 

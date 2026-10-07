@@ -4502,6 +4502,7 @@ export const en = {
   "project.workspace.synced": "Workspace updated {date}",
   "project.workspace.notSynced": "The workspace has not received this project yet.",
   "project.workspace.syncError": "The workspace could not be updated",
+  "project.workspace.syncError.body": "The last update did not reach the workspace. Resync to try again; if it keeps failing, tell the administrator.",
   "project.workspace.resync": "Resync",
   "project.workspace.resynced": "The workspace will be updated in a moment",
   "project.workspace.sessions": "Open workspaces",

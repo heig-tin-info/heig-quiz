@@ -1,17 +1,42 @@
 /**
  * A project's work mode (ADR-047, amended 2026-10-07 for M6-06) — pure
  * rules (invariant 8): who may choose it, when it freezes, what it does to
- * the student's access, and whose workspace quota it consumes.
+ * the student's access, whose workspace quota it consumes, what the portal
+ * receives and when a student's workspace opens.
  *
- * The union is spelled out here rather than imported from `@quiz/contracts`
- * (the domain depends on nothing but `@quiz/core`); it is structurally
- * `WorkMode` there (`WORK_MODES`).
+ * The closed lists live HERE, `as const`; `@quiz/contracts` re-exports them
+ * and builds its zod enums from them, so the two never drift.
  */
-export type WorkModeName = "free" | "online" | "online_seb";
+import { isLiveIndividualRepo, type RepoLifeLike } from "./groupRepo.js";
+import { effectiveDeadline } from "./projectRuns.js";
+
+/** Where the students work: their own tools, the portal's workspace, the workspace under Safe Exam Browser. */
+export const WORK_MODES = ["free", "online", "online_seb"] as const;
+export type WorkModeName = (typeof WORK_MODES)[number];
+
+/** Why the caller may not set a project's mode: the code of the refusal. */
+export const WORK_MODE_REFUSALS = ["owner_required", "codespace_not_granted", "work_mode_frozen", "work_mode_group"] as const;
+export type WorkModeRefusalCode = (typeof WORK_MODE_REFUSALS)[number];
+
+/**
+ * Why the start route sends the student back to their project page
+ * (`?workspace=<code>`): {@link workspaceStartRefusal}.
+ */
+export const WORKSPACE_START_REFUSALS = ["not_online", "seb_required", "not_accepted", "closed"] as const;
+export type WorkspaceStartRefusalCode = (typeof WORKSPACE_START_REFUSALS)[number];
 
 /** A mode that runs inside the online workspace portal. */
 export function isOnlineMode(mode: WorkModeName): mode is Exclude<WorkModeName, "free"> {
   return mode !== "free";
+}
+
+/**
+ * Whether a project in `mode` is sent to the portal (`codespace.sync`):
+ * `online` only. `online_seb` waits for its Browser Exam Keys (M6-07) —
+ * the portal refuses an exam without them.
+ */
+export function syncsToPortal(mode: WorkModeName): mode is "online" {
+  return mode === "online";
 }
 
 /**
@@ -25,16 +50,13 @@ export function collaboratorPermission(mode: WorkModeName): "push" | "pull" | nu
   return mode === "online" ? "pull" : null;
 }
 
-/** Why the caller may not set a project's mode: the code of the refusal. */
-export type WorkModeRefusal = "owner_required" | "codespace_not_granted" | "work_mode_frozen" | "work_mode_group";
-
 /** The facts {@link workModeRefusal} decides on. */
 export interface WorkModeFacts {
   /** The caller is an owner of the project's course (ADR-068, Super Powers included). */
   owner: boolean;
   /** The caller's `teacher_grants` row has `codespace_enabled`. */
   granted: boolean;
-  /** A workspace was launched for the project (a launch token issued). */
+  /** A workspace was launched for the project by a student seat (a launch token issued). */
   launched: boolean;
   /** The project is a group project (F-PROJ-06: their own tools only). */
   groupMode: boolean;
@@ -55,12 +77,38 @@ export interface WorkModeFacts {
  * `to` equal to `from` is never refused: the form may send the mode it
  * shows. `null` when the change may proceed.
  */
-export function workModeRefusal(facts: WorkModeFacts, from: WorkModeName, to: WorkModeName): WorkModeRefusal | null {
+export function workModeRefusal(facts: WorkModeFacts, from: WorkModeName, to: WorkModeName): WorkModeRefusalCode | null {
   if (from === to) return null;
   if (!facts.owner) return "owner_required";
   if (isOnlineMode(to) && !facts.granted) return "codespace_not_granted";
   if (facts.launched) return "work_mode_frozen";
   if (isOnlineMode(to) && facts.groupMode) return "work_mode_group";
+  return null;
+}
+
+/** The facts {@link workspaceStartRefusal} decides on. */
+export interface WorkspaceStartFacts {
+  project: { workMode: WorkModeName; deadlineAt: Date };
+  /** The student's own repository of the project (online modes are individual); null without one. */
+  repo: (RepoLifeLike & { deadlineAt: Date | null }) | null;
+  /** The project's classroom is archived: it takes no new work. */
+  classroomArchived: boolean;
+}
+
+/**
+ * THE rule of the start route (ADR-047 §6 as amended 2026-10-07), the
+ * twin of `acceptRefusal`: in order, a project in the students' own tools
+ * (`not_online`), one under Safe Exam Browser — never outside it, and SEB
+ * comes with M6-07 (`seb_required`) —, no live repository of the student's
+ * (`not_accepted`, {@link isLiveIndividualRepo}), their EFFECTIVE deadline
+ * passed or the classroom archived (`closed`). Null: the workspace opens.
+ */
+export function workspaceStartRefusal(facts: WorkspaceStartFacts, now: Date): WorkspaceStartRefusalCode | null {
+  const { project, repo } = facts;
+  if (project.workMode === "free") return "not_online";
+  if (project.workMode === "online_seb") return "seb_required";
+  if (repo === null || !isLiveIndividualRepo(repo)) return "not_accepted";
+  if (facts.classroomArchived || effectiveDeadline(repo, project).getTime() <= now.getTime()) return "closed";
   return null;
 }
 

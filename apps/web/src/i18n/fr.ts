@@ -4491,6 +4491,7 @@ export const fr: Record<keyof Dict, string> = {
   "project.workspace.synced": "Espace de travail mis à jour {date}",
   "project.workspace.notSynced": "L'espace de travail n'a pas encore reçu ce projet.",
   "project.workspace.syncError": "L'espace de travail n'a pas pu être mis à jour",
+  "project.workspace.syncError.body": "La dernière mise à jour n'a pas atteint l'espace de travail. Resynchronisez pour réessayer ; si l'échec persiste, prévenez l'administrateur.",
   "project.workspace.resync": "Resynchroniser",
   "project.workspace.resynced": "L'espace de travail sera mis à jour dans un instant",
   "project.workspace.sessions": "Espaces de travail ouverts",
