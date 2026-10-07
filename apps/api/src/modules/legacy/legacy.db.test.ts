@@ -254,7 +254,7 @@ describe("who reaches a target (invariant 6)", () => {
 
   it("an impersonation is nobody a target is shown to; a token is read only on the JSON API, so it is nobody here", async () => {
     const admin = await server.signIn("admin");
-    const s = await createSession(server.app.db, teacher.id, 8, { kind: "impersonation", actorUserId: admin.id, evaluationId: null });
+    const s = await createSession(server.app.db, teacher.id, 8, { kind: "impersonation", actorUserId: admin.id, projectId: null, evaluationId: null });
     const impersonation = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
     expect((await get(`${L}/classrooms/${old.classroom}`, impersonation)).statusCode).toBe(404);
     const { token } = await createApiToken(server.app.db, teacher.id, { name: "t", expiresInDays: null });
@@ -277,7 +277,7 @@ describe("who reaches a target (invariant 6)", () => {
   it("a seb and a kiosk session are nobody here: the login, like no session", async () => {
     const seeded = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [student.id], questions: 0 });
     for (const kind of ["seb", "kiosk"] as const) {
-      const s = await createSession(server.app.db, student.id, 8, { kind, actorUserId: null, evaluationId: seeded.evaluationId });
+      const s = await createSession(server.app.db, student.id, 8, { kind, actorUserId: null, projectId: null, evaluationId: seeded.evaluationId });
       const headers = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
       const url = `${L}/classrooms/${old.classroom}`;
       const res = await get(url, headers);

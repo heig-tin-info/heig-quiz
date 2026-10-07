@@ -65,6 +65,7 @@ async function sessionOf(userId: string, auth: { kind: SessionKind; actorUserId?
     kind: auth.kind,
     actorUserId: auth.actorUserId ?? null,
     evaluationId: auth.evaluationId ?? null,
+    projectId: null,
   });
   return {
     cookie: `${SESSION_COOKIE}=${session.token}; ${CSRF_COOKIE}=${session.csrf}`,

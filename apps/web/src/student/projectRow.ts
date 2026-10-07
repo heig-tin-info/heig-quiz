@@ -32,13 +32,16 @@ export interface ProjectFacts {
   status: StudentProjectStatus;
   startAt: string;
   githubLinked: boolean;
-  repo: { state: "live"; url: string; invitation: "pending" | "accepted" } | { state: "deleted" } | null;
+  /** `invitation` null: nobody is invited (an `online_seb` project, ADR-047 §2). */
+  repo: { state: "live"; url: string; invitation: "pending" | "accepted" | null } | { state: "deleted" } | null;
 }
 
 export function factsOfCard(card: StudentProjectCard): ProjectFacts {
   const { id, status, startAt, githubLinked } = card;
   const repo: ProjectFacts["repo"] =
-    card.repoUrl !== null && card.invitation !== null
+    // A live repository names its URL; its invitation is null when nobody is
+    // invited (an `online_seb` project, ADR-047 §2), never a sign it was lost.
+    card.repoUrl !== null
       ? { state: "live", url: card.repoUrl, invitation: card.invitation }
       : status === "in_progress"
         ? { state: "deleted" }

@@ -4,9 +4,10 @@
  * Two listening surfaces, and that is deliberate (analyse.md § 4.1):
  *
  *  - the **portal** on `HOST:PORT` (127.0.0.1 in development): the platform
- *    boundary (`/launch`, `/api/assignments/*`), proxy to code-server, SEB
- *    routes. No login of its own: a user exists only through a launch token
- *    (ADR-047, amendment of M6-03);
+ *    boundary (`/launch`, `/api/assignments/*`) and the proxy to
+ *    code-server. No login of its own: a user exists only through a launch
+ *    token (ADR-047, amendment of M6-03), and no `.seb` of its own: the
+ *    platform builds them (D21, M6-07);
  *  - the **Git channel** on `CODESPACE_GATEWAY:9418`, the address of the `cs0`
  *    bridge and nothing else, because that is the only surface a container must
  *    be able to reach. The nftables `input` rule is the second half of it.
@@ -34,9 +35,8 @@ import {
 } from "./git/index.js";
 import { proxyPlugin } from "./proxy/index.js";
 import { portalLogger, type LogStream } from "./logging.js";
-import { createSebVerifier, sebRoutes, type AssignmentLookup } from "./seb/index.js";
+import { createSebVerifier } from "./seb/index.js";
 import { createSessionManager, type SessionManager } from "./sessions/manager.js";
-import { findAssignment } from "./sessions/store.js";
 import { webRoutes } from "./web/routes.js";
 
 export { loadConfig, type AppConfig } from "./auth/config.js";
@@ -176,6 +176,9 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
   await app.register(cookie);
 
   // --- exam side -----------------------------------------------------------
+  // The platform builds every `.seb` (D21, M6-07): the portal serves none and
+  // has no start route of its own; an exam opens through `/launch`, where
+  // this verifier runs once.
   const verifier = createSebVerifier({
     mode: config.SEB_VERIFIER,
     nodeEnv: config.NODE_ENV,
@@ -183,40 +186,6 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
       config.SEB_PUBLIC_ORIGIN !== ""
         ? { publicOrigin: config.SEB_PUBLIC_ORIGIN }
         : { defaultProtocol: "http" as const },
-  });
-  const publicOrigin = config.SEB_PUBLIC_ORIGIN || config.PUBLIC_URL;
-  const lookup: AssignmentLookup = {
-    find(assignmentId) {
-      const row = findAssignment(db, assignmentId);
-      // Only an assignment in exam mode has a `.seb` and a start route.
-      if (!row || row.mode !== "exam" || !row.sebConfig) return undefined;
-      const seb = row.sebConfig;
-      return {
-        id: row.id,
-        configKey: row.configKey ?? "",
-        beks: row.beks,
-        // Every assignment is synchronised from the platform and carries its
-        // own `startURL`: the platform authenticates the student and then
-        // redirects to `/launch`. The Config Key was computed on that URL, so
-        // the `.seb` served here reuses it as it is.
-        startUrl: seb.startUrl,
-        quitUrl: seb.quitUrl ?? new URL("/", publicOrigin).href,
-        examKeySalt: seb.examKeySalt,
-        ...(seb.extraAllowedHosts ? { extraAllowedHosts: seb.extraAllowedHosts } : {}),
-      };
-    },
-  };
-
-  // No `onStart`: the standalone exam start (`/exam/:id/start`) opened a
-  // session for the portal's own logged-in user, and that login is gone. The
-  // route is not registered; an exam opens through `/launch` only, where the
-  // same verifier runs. The `.seb` download stays.
-  await app.register(sebRoutes, {
-    lookup,
-    verifier,
-    cookieSecret: config.EXAM_COOKIE_SECRET,
-    cookieSecure: config.NODE_ENV === "production",
-    cookieMaxAgeMs: config.EXAM_COOKIE_MAX_AGE_MS,
   });
 
   // --- boundary with the platform ------------------------------------------

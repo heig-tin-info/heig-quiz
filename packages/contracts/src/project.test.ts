@@ -86,6 +86,9 @@ describe("the student's project card (F-PROJ-04)", () => {
     // The staff's flags and the other slots have no field to land in.
     expect(StudentProject.safeParse({ ...view, repo: { ...view.repo, toVerify: true } }).success).toBe(true);
     expect(Object.keys(StudentProject.parse({ ...view, repo: { ...view.repo, toVerify: true } }).repo!)).not.toContain("toVerify");
+    // Nobody invited (an `online_seb` project, ADR-047 §2): null, never a made-up "pending".
+    expect(StudentProject.parse({ ...view, repo: { ...view.repo, invitation: null } }).repo!.invitation).toBeNull();
+    expect(StudentProject.safeParse({ ...view, repo: { ...view.repo, invitation: "none" } }).success).toBe(false);
   });
 });
 

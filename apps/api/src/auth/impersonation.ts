@@ -57,7 +57,7 @@ export async function issueImpersonationLink(
   if (!student) return null;
   const secret = await issueLaunchTicket(
     db,
-    { kind: "impersonation", userId: student.id, actorUserId: actorId, evaluationId: null },
+    { kind: "impersonation", userId: student.id, actorUserId: actorId, projectId: null, evaluationId: null },
     now,
   );
   return { url: new URL(`${IMPERSONATION_PATH}${secret}`, config.PUBLIC_URL).href };

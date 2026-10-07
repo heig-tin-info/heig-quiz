@@ -134,7 +134,7 @@ export function ProjectWorkspace({ projectId, archived }: { projectId: string; a
                 options={options}
               />
             </div>
-            {ws.mode === "online" ? (
+            {ws.mode !== "free" ? (
               <div className="flex flex-wrap items-center justify-between gap-3 py-3 text-[13px]">
                 <span className="text-fg-muted" data-testid="workspace-sync">
                   {ws.syncedAt
@@ -148,7 +148,7 @@ export function ProjectWorkspace({ projectId, archived }: { projectId: string; a
             ) : null}
           </Card>
           {/* The portal's own words are a technical detail, on hover: the sentence is ours. */}
-          {ws.mode === "online" && ws.syncError ? (
+          {ws.mode !== "free" && ws.syncError ? (
             <Alert tone="warning" icon={AlertTriangle} title={t("project.workspace.syncError")}>
               <span title={ws.syncError} data-testid="workspace-sync-error">
                 {t("project.workspace.syncError.body")}

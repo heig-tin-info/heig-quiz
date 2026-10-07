@@ -18,6 +18,7 @@
     "@fastify/http-proxy": "^11.3.0",
     "@quiz/contracts": "workspace:*",
     "@quiz/domain": "workspace:*",
+    "@quiz/seb": "workspace:*",
     "better-sqlite3": "^12.4.1",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.12.5",

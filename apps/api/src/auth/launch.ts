@@ -25,6 +25,8 @@ interface LaunchTicket {
   kind: LaunchKind;
   /** The evaluation a `seb` session is confined to; null for any other kind. */
   evaluationId: string | null;
+  /** The project a `seb` session is confined to instead (D21); null otherwise. */
+  projectId: string | null;
 }
 
 type LaunchKind = Exclude<SessionKind, "portal">;
@@ -50,6 +52,7 @@ export async function issueLaunchTicket(db: Db, ticket: LaunchTicket, now: Date)
           same(launchTickets.actorUserId, ticket.actorUserId),
           eq(launchTickets.kind, ticket.kind),
           same(launchTickets.evaluationId, ticket.evaluationId),
+          same(launchTickets.projectId, ticket.projectId),
           isNull(launchTickets.consumedAt),
           isNull(launchTickets.revokedAt),
         ),
@@ -61,11 +64,44 @@ export async function issueLaunchTicket(db: Db, ticket: LaunchTicket, now: Date)
       userId: ticket.userId,
       actorUserId: ticket.actorUserId,
       evaluationId: ticket.evaluationId,
+      projectId: ticket.projectId,
       createdAt: now,
       expiresAt: new Date(now.getTime() + LAUNCH_TICKET_TTL_MS),
     });
   });
   return secret;
+}
+
+/** A ticket of `kind` that may still be consumed: unconsumed, unrevoked, unexpired. */
+const usable = (kind: LaunchKind, secret: string, now: Date) =>
+  and(
+    eq(launchTickets.secretHash, hashToken(secret)),
+    eq(launchTickets.kind, kind),
+    isNull(launchTickets.consumedAt),
+    isNull(launchTickets.revokedAt),
+    gt(launchTickets.expiresAt, now),
+  );
+
+/** A ticket row as the session it opens sees it. */
+const ticketOf = (row: typeof launchTickets.$inferSelect) => ({
+  id: row.id,
+  userId: row.userId,
+  auth: { kind: row.kind, actorUserId: row.actorUserId, evaluationId: row.evaluationId, projectId: row.projectId } satisfies SessionAuth,
+});
+
+/**
+ * Reads a ticket of `kind` that could be consumed now, WITHOUT consuming it:
+ * what it was issued for decides what the start route checks before it
+ * consumes (the `.seb` of its activity, D21). Null as for {@link consumeLaunchTicket}.
+ */
+export async function pendingLaunchTicket(
+  db: Db,
+  kind: LaunchKind,
+  secret: string,
+  now: Date,
+): Promise<{ id: string; userId: string; auth: SessionAuth } | null> {
+  const [row] = await db.select().from(launchTickets).where(usable(kind, secret, now));
+  return row ? ticketOf(row) : null;
 }
 
 /**
@@ -81,27 +117,6 @@ export async function consumeLaunchTicket(
   secret: string,
   now: Date,
 ): Promise<{ id: string; userId: string; auth: SessionAuth } | null> {
-  const [row] = await db
-    .update(launchTickets)
-    .set({ consumedAt: now })
-    .where(
-      and(
-        eq(launchTickets.secretHash, hashToken(secret)),
-        eq(launchTickets.kind, kind),
-        isNull(launchTickets.consumedAt),
-        isNull(launchTickets.revokedAt),
-        gt(launchTickets.expiresAt, now),
-      ),
-    )
-    .returning();
-  if (!row) return null;
-  return {
-    id: row.id,
-    userId: row.userId,
-    auth: {
-      kind: row.kind,
-      actorUserId: row.actorUserId,
-      evaluationId: row.evaluationId,
-    },
-  };
+  const [row] = await db.update(launchTickets).set({ consumedAt: now }).where(usable(kind, secret, now)).returning();
+  return row ? ticketOf(row) : null;
 }

@@ -25,18 +25,13 @@ export type WorkModeRefusalCode = (typeof WORK_MODE_REFUSALS)[number];
 export const WORKSPACE_START_REFUSALS = ["not_online", "seb_required", "not_accepted", "closed"] as const;
 export type WorkspaceStartRefusalCode = (typeof WORKSPACE_START_REFUSALS)[number];
 
-/** A mode that runs inside the online workspace portal. */
+/**
+ * A mode that runs inside the online workspace portal: what is sent to it
+ * (`codespace.sync`), `online_seb` with its Browser Exam Keys — none means
+ * the Config Key alone (D21, M6-07).
+ */
 export function isOnlineMode(mode: WorkModeName): mode is Exclude<WorkModeName, "free"> {
   return mode !== "free";
-}
-
-/**
- * Whether a project in `mode` is sent to the portal (`codespace.sync`):
- * `online` only. `online_seb` waits for its Browser Exam Keys (M6-07) —
- * the portal refuses an exam without them.
- */
-export function syncsToPortal(mode: WorkModeName): mode is "online" {
-  return mode === "online";
 }
 
 /**
@@ -93,20 +88,23 @@ export interface WorkspaceStartFacts {
   repo: (RepoLifeLike & { deadlineAt: Date | null }) | null;
   /** The project's classroom is archived: it takes no new work. */
   classroomArchived: boolean;
+  /** The request rides on a `seb` session confined to this project (D21, M6-07). */
+  fromSeb: boolean;
 }
 
 /**
  * THE rule of the start route (ADR-047 §6 as amended 2026-10-07), the
  * twin of `acceptRefusal`: in order, a project in the students' own tools
- * (`not_online`), one under Safe Exam Browser — never outside it, and SEB
- * comes with M6-07 (`seb_required`) —, no live repository of the student's
- * (`not_accepted`, {@link isLiveIndividualRepo}), their EFFECTIVE deadline
- * passed or the classroom archived (`closed`). Null: the workspace opens.
+ * (`not_online`), one under Safe Exam Browser asked from outside it — a
+ * `seb` session of this project only (`seb_required`, D21) —, no live
+ * repository of the student's (`not_accepted`, {@link isLiveIndividualRepo}),
+ * their EFFECTIVE deadline passed or the classroom archived (`closed`).
+ * Null: the workspace opens.
  */
 export function workspaceStartRefusal(facts: WorkspaceStartFacts, now: Date): WorkspaceStartRefusalCode | null {
   const { project, repo } = facts;
   if (project.workMode === "free") return "not_online";
-  if (project.workMode === "online_seb") return "seb_required";
+  if (project.workMode === "online_seb" && !facts.fromSeb) return "seb_required";
   if (repo === null || !isLiveIndividualRepo(repo)) return "not_accepted";
   if (facts.classroomArchived || effectiveDeadline(repo, project).getTime() <= now.getTime()) return "closed";
   return null;

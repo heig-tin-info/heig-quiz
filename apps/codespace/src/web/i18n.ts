@@ -48,15 +48,8 @@ const en = {
     "This exam can only be opened from Safe Exam Browser, started from the link your teacher gave you.",
   outsideSebHelp:
     "If you think this is a mistake, call the invigilator: do not start again from another browser.",
-  sebUrlUnreconstructible: "The portal could not rebuild the URL of the request.",
-  sebNotFromSeb: "The request does not come from Safe Exam Browser.",
-  sebConfigKeyMismatch: "The Safe Exam Browser configuration is not this activity's.",
-  sebBekMismatch: "This version of Safe Exam Browser is not one of those accepted for this activity.",
-  sebNoBek: "This activity has no exam key registered; tell your teacher.",
   sebOtherMachine: "This session was opened from another computer.",
   sebNoExamSession: "No valid exam session in this browser.",
-  examUnavailableTitle: "Exam unavailable",
-  examWorkspaceDetail: "The workspace could not be prepared: {cause}. Tell the invigilator.",
   // --- the proxy (proxy/index.ts) --------------------------------------------
   sessionUnknownTitle: "Unknown session",
   sessionUnknownDetail: "This session does not exist, or no longer does.",
@@ -110,17 +103,8 @@ const fr: Record<MessageKey, string> = {
     "Cette épreuve ne peut être ouverte que depuis Safe Exam Browser, lancé par le lien fourni par l'enseignant.",
   outsideSebHelp:
     "Si vous pensez que c'est une erreur, appelez le surveillant : ne recommencez pas depuis un autre navigateur.",
-  sebUrlUnreconstructible: "Le portail n'a pas pu reconstruire l'URL de la requête.",
-  sebNotFromSeb: "La requête ne vient pas de Safe Exam Browser.",
-  sebConfigKeyMismatch: "La configuration de Safe Exam Browser n'est pas celle de cette activité.",
-  sebBekMismatch:
-    "La version de Safe Exam Browser utilisée n'est pas une de celles acceptées pour cette activité.",
-  sebNoBek: "Cette activité n'a aucune clé d'examen enregistrée ; prévenez l'enseignant.",
   sebOtherMachine: "Cette session a été ouverte depuis un autre poste.",
   sebNoExamSession: "Aucune session d'examen valide sur ce navigateur.",
-  examUnavailableTitle: "Épreuve indisponible",
-  examWorkspaceDetail:
-    "Espace de travail impossible à préparer : {cause} ; signalez-le au surveillant.",
   sessionUnknownTitle: "Session inconnue",
   sessionUnknownDetail: "Cette session n'existe pas ou plus.",
   sessionDeniedTitle: "Session non autorisée",
@@ -176,11 +160,6 @@ export interface BootstrapCause {
   readonly key: CauseKey;
   /** `<owner>/<name>`, or null when the source repository is unknown. */
   readonly repo: string | null;
-}
-
-export function isBootstrapCause(value: unknown): value is BootstrapCause {
-  const v = value as Partial<BootstrapCause> | null;
-  return typeof v === "object" && v !== null && typeof v.key === "string" && v.key.startsWith("cause");
 }
 
 export function causeText(lang: Lang, cause: BootstrapCause): string {

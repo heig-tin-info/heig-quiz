@@ -31,6 +31,7 @@ import {
   SESSION_COOKIE,
   SITTING,
   confined,
+  type Activity,
   createSession,
   delegated,
   serves,
@@ -78,6 +79,12 @@ declare module "fastify" {
      * An `impersonation` session is served wherever `portal` is (ADR-034).
      */
     sessions?: readonly SessionKind[];
+    /**
+     * The activities a confined session this route serves may be confined
+     * to (D21). Absent means an evaluation only: a `seb` session of a
+     * project reaches only the routes that say `project` (`PROJECT_SEB`).
+     */
+    activities?: readonly Activity[];
     /**
      * A `kiosk` session reaches this route only with an attestation checked
      * less than two minutes ago (ADR-051 §6): the submit. Otherwise `423
@@ -165,7 +172,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     // Default deny (ADR-027): on a route that does not serve its kind, the
     // session is not there at all — anonymous, so a 401 wherever a session
     // is required, and public routes and static files unaffected.
-    if (!serves(req.routeOptions.config.sessions, found.auth.kind)) return;
+    if (!serves(req.routeOptions.config, found.auth)) return;
     // ADR-051 §1: a confined session is worth something only from the client
     // it was opened in, checked on every request; refused, it is not there —
     // except a suspended station's write and a stale submit, a `423` (§6).
@@ -371,7 +378,8 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
 
   app.get(
     "/app/api/me",
-    { preHandler: (req, reply) => app.requireSession(req, reply), config: SITTING },
+    // Every confined session reads who it is, whatever its activity (D21).
+    { preHandler: (req, reply) => app.requireSession(req, reply), config: { ...SITTING, activities: ["evaluation", "project"] } },
     async (req) => {
       const u = req.user!;
       // Uploaded avatar takes priority over the IdP claim; ?v= busts the cache.
@@ -398,6 +406,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
         session: {
           kind: req.auth?.kind ?? "portal",
           evaluationId: req.auth?.evaluationId ?? null,
+          projectId: req.auth?.projectId ?? null,
           readOnly: delegated(req.auth) && !development,
           superPowersUntil: isoOrNull(
             callerOf(req).reach === "all" ? (req.auth?.superPowersUntil ?? null) : null,

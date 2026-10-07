@@ -331,3 +331,25 @@ describe("the online workspace portal (ADR-047, M6-01)", () => {
     expect(message).not.toContain("short-secret-value");
   });
 });
+
+describe("SEB_EXTRA_ALLOWED_HOSTS (D21, M6-07)", () => {
+  it("is empty by default, and a list of host names lower-cased", () => {
+    expect(loadConfig({}).SEB_EXTRA_ALLOWED_HOSTS).toEqual([]);
+    expect(loadConfig({ SEB_EXTRA_ALLOWED_HOSTS: " Login.EduID.ch, *.switch.ch ,localhost:8080," }).SEB_EXTRA_ALLOWED_HOSTS).toEqual([
+      "login.eduid.ch",
+      "*.switch.ch",
+      "localhost:8080",
+    ]);
+  });
+
+  it("refuses a scheme or a path: the URL filter takes hosts", () => {
+    expect(() => loadConfig({ SEB_EXTRA_ALLOWED_HOSTS: "https://login.eduid.ch" })).toThrow(/SEB_EXTRA_ALLOWED_HOSTS/);
+    expect(() => loadConfig({ SEB_EXTRA_ALLOWED_HOSTS: "login.eduid.ch/path" })).toThrow(/SEB_EXTRA_ALLOWED_HOSTS/);
+  });
+
+  it("refuses an entry made of wildcards only: it would open every site", () => {
+    for (const hosts of ["*", "*.*", "login.eduid.ch,*", "*.*:443"]) {
+      expect(() => loadConfig({ SEB_EXTRA_ALLOWED_HOSTS: hosts }), hosts).toThrow(/SEB_EXTRA_ALLOWED_HOSTS/);
+    }
+  });
+});

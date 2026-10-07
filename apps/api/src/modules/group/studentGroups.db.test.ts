@@ -81,6 +81,7 @@ async function sessionOf(userId: string, auth: { kind: SessionKind; actorUserId?
     kind: auth.kind,
     actorUserId: auth.actorUserId ?? null,
     evaluationId: auth.evaluationId ?? null,
+    projectId: null,
   });
   return { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
 }
@@ -455,7 +456,7 @@ describe("an impersonation outside development (ADR-034)", () => {
       const created = await prod.app.inject({ method: "POST", url: `/app/api/classrooms/${seeded.classroomId}/group-sets`, headers: prof.headers, payload: {} });
       const setId = GroupSetDetail.parse(created.json()).set.id;
       await prod.app.inject({ method: "PATCH", url: `/app/api/group-sets/${setId}`, headers: prof.headers, payload: { openUntil: LATER, maxSize: 2 } });
-      const s = await createSession(db, ana.id, 8, { kind: "impersonation", actorUserId: admin.id, evaluationId: null });
+      const s = await createSession(db, ana.id, 8, { kind: "impersonation", actorUserId: admin.id, projectId: null, evaluationId: null });
       const impersonation = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
       const write = await prod.app.inject({ method: "POST", url: `/app/api/group-sets/${setId}/student/groups`, headers: impersonation, payload: {} });
       expect([write.statusCode, (write.json() as { error: string }).error]).toEqual([403, "impersonation_read_only"]);
@@ -586,7 +587,7 @@ describe("the Activities row and the Groups tab (S1, S3)", () => {
 
     // A confined session's home lists no set (its exam leads nowhere else).
     const caller = { id: ana.id, role: "student" as const, reach: "seats" as const };
-    const confined = await studentHome(server.app.db, caller, { kind: "seb", actorUserId: null, evaluationId: room.evaluationId }, server.clock.now());
+    const confined = await studentHome(server.app.db, caller, { kind: "seb", actorUserId: null, projectId: null, evaluationId: room.evaluationId }, server.clock.now());
     expect(confined.groupSets).toEqual([]);
 
     await detailOk(await staff("PATCH", `/app/api/group-sets/${set.set.id}`, { openUntil: null }));

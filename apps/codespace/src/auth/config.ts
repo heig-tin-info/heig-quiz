@@ -157,22 +157,9 @@ const EnvSchema = z.object({
   CODESPACE_DEFAULT_IMAGE: z.string().default("codespace/c-dev:4.137.0"),
 
   // --- SEB (seb/) ----------------------------------------------------------
+  // The `.seb` and its URL filter are the platform's (D21, M6-07): Quiz's
+  // `SEB_EXTRA_ALLOWED_HOSTS` replaces the portal's.
   SEB_VERIFIER: z.enum(["real", "simulated"]).default("simulated"),
-  /**
-   * Hosts allowed by SEB's URL filter **in addition to** the platform's (the
-   * host of the `startURL`) and the portal's: the identity provider, without which
-   * the login page is blocked (docs/leads.md, "Correction to the framing
-   * document raised by the SEB test"). Comma-separated list.
-   */
-  SEB_EXTRA_ALLOWED_HOSTS: z
-    .string()
-    .default("")
-    .transform((v) =>
-      v
-        .split(",")
-        .map((h) => h.trim())
-        .filter((h) => h !== ""),
-    ),
   /**
    * Origin on which SEB computes its hashes. Empty = rebuilt from `Host`,
    * acceptable in development over plain HTTP only (analyse.md 4.6).

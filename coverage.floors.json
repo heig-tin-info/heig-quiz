@@ -5,9 +5,9 @@
     "functions": 90
   },
   "apps/codespace": {
-    "lines": 74,
+    "lines": 71,
     "branches": 64,
-    "functions": 71
+    "functions": 67
   },
   "apps/runner": {
     "lines": 90,

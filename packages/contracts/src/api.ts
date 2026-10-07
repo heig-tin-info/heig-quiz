@@ -37,7 +37,8 @@ export interface PublicConfig {
 /**
  * What a browser session is (ADR-027). `portal`: the ordinary sign-in, the
  * whole application. `seb`: opened by a one-time launch ticket inside Safe
- * Exam Browser, confined to ONE evaluation. `impersonation`: an admin acting
+ * Exam Browser, confined to ONE activity: an evaluation, or an `online_seb`
+ * project's page and workspace (D21, M6-07). `impersonation`: an admin acting
  * as a student (ADR-034), opened by a one-time link, reaching what a
  * `portal` session of that student reaches, read-only in production.
  * `kiosk`: opened on one of the school's attested stations by a pairing
@@ -76,7 +77,9 @@ export interface Me {
   rpnCalculator: boolean | null;
   /**
    * The session this request rode on; `evaluationId` is set on a confined
-   * one only (`seb` or `kiosk`, the evaluation it is confined to), and `readOnly` says the server refuses its writes (an
+   * one only (`seb` or `kiosk`, the evaluation it is confined to), or
+   * `projectId` instead (a `seb` session of an `online_seb` project, D21),
+   * and `readOnly` says the server refuses its writes (an
    * `impersonation` outside development, ADR-034). Absent: `portal`.
    * `superPowersUntil` is the server's end of this session's Super Powers
    * (ADR-054), ISO; null when they are off. The browser only counts down
@@ -85,6 +88,7 @@ export interface Me {
   session?: {
     kind: SessionKind;
     evaluationId: string | null;
+    projectId: string | null;
     readOnly: boolean;
     superPowersUntil: string | null;
     /** This session may switch Super Powers on: an admin's own portal session (ADR-054). */

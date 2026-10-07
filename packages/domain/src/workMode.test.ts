@@ -4,7 +4,6 @@ import {
   collaboratorPermission,
   isOnlineMode,
   quotaHolder,
-  syncsToPortal,
   workModeRefusal,
   workspaceStartRefusal,
   type WorkModeFacts,
@@ -73,12 +72,6 @@ describe("quotaHolder (decision C)", () => {
   });
 });
 
-describe("syncsToPortal", () => {
-  it("sends an online project only: an exam waits for its Browser Exam Keys (M6-07)", () => {
-    expect([syncsToPortal("free"), syncsToPortal("online"), syncsToPortal("online_seb")]).toEqual([false, true, false]);
-  });
-});
-
 describe("workspaceStartRefusal (ADR-047 §6)", () => {
   const NOW = new Date("2026-10-07T08:00:00Z");
   const DEADLINE = new Date("2026-10-14T22:00:00Z");
@@ -87,16 +80,25 @@ describe("workspaceStartRefusal (ADR-047 §6)", () => {
     project: { workMode: "online", deadlineAt: DEADLINE },
     repo,
     classroomArchived: false,
+    fromSeb: false,
     ...over,
   });
+  const exam = { workMode: "online_seb", deadlineAt: DEADLINE } as const;
 
   it("opens an online project's workspace on the student's live repository", () => {
     expect(workspaceStartRefusal(facts(), NOW)).toBeNull();
   });
 
+  it("opens a Safe Exam Browser project's from its seb session only (D21)", () => {
+    expect(workspaceStartRefusal(facts({ project: exam, fromSeb: true }), NOW)).toBeNull();
+    expect(workspaceStartRefusal(facts({ project: exam }), NOW)).toBe("seb_required");
+    // The session's activity is still checked: no repository, no workspace.
+    expect(workspaceStartRefusal(facts({ project: exam, fromSeb: true, repo: null }), NOW)).toBe("not_accepted");
+  });
+
   it("refuses, in order: not online, SEB only, not accepted, closed", () => {
-    expect(workspaceStartRefusal(facts({ project: { workMode: "free", deadlineAt: DEADLINE }, repo: null }), NOW)).toBe("not_online");
-    expect(workspaceStartRefusal(facts({ project: { workMode: "online_seb", deadlineAt: DEADLINE } }), NOW)).toBe("seb_required");
+    expect(workspaceStartRefusal(facts({ project: { workMode: "free", deadlineAt: DEADLINE }, repo: null, fromSeb: true }), NOW)).toBe("not_online");
+    expect(workspaceStartRefusal(facts({ project: exam, repo: null }), NOW)).toBe("seb_required");
     expect(workspaceStartRefusal(facts({ repo: null }), NOW)).toBe("not_accepted");
     expect(workspaceStartRefusal(facts({ repo: { ...repo, provisionStatus: "pending" } }), NOW)).toBe("not_accepted");
     expect(workspaceStartRefusal(facts({ repo: { ...repo, deletedAt: NOW } }), NOW)).toBe("not_accepted");

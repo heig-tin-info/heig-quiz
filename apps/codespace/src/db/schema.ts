@@ -158,33 +158,18 @@ export const assignments = sqliteTable("assignments", {
   /** Opening window. Null = no bound on that side. */
   opensAt: integer("opens_at", { mode: "timestamp_ms" }),
   closesAt: integer("closes_at", { mode: "timestamp_ms" }),
-  /** Config Key of the `.seb` served (seb/sebFile.ts). Null outside exam mode. */
-  configKey: text("config_key"),
-  /** One BEK per (platform, version) pair: a list, not a scalar (analyse.md 4.4). */
+  /**
+   * The Browser Exam Keys of an exam assignment, one per (platform, version)
+   * pair: a list, not a scalar (analyse.md 4.4). Empty: the Config Key alone
+   * (D21). The `.seb`, its Config Key and its salt are the platform's since
+   * M6-07: the Config Key arrives with each launch token.
+   */
   beks: text("beks", { mode: "json" })
     .$type<string[]>()
     .notNull()
     .default([]),
-  /** Settings of the `.seb`: `examKeySalt`, `quitUrl`, `extraAllowedHosts`. */
-  sebConfig: text("seb_config", { mode: "json" }).$type<AssignmentSebConfig>(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
 });
-
-export interface AssignmentSebConfig {
-  /** Browser Exam Key salt, stable for an assignment (seb/sebFile.ts). */
-  examKeySalt: string;
-  /**
-   * `startURL` written into the `.seb`, hence into the Config Key computation:
-   * the platform's page, which authenticates the student before redirecting
-   * to `/launch`. Required since M6-03: the standalone assignments that went
-   * without it (the portal's own `/exam/<id>/start`) are gone. A JSON column,
-   * so no migration; heig-classroom's portal always wrote it for a
-   * synchronised assignment.
-   */
-  startUrl: string;
-  quitUrl?: string;
-  extraAllowedHosts?: string[];
-}
 
 /** Repository on the forge, as classroom names it (`CodespaceRepoRef`). */
 export interface AssignmentRepoRef {

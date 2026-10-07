@@ -14,7 +14,7 @@ import type { AppConfig } from "../config.js";
 import type { Db } from "../db/client.js";
 import { KIOSK_COOKIE, deviceByCredential, type KioskDeviceRow } from "../modules/kiosk/service.js";
 import { configKeyHashMatches } from "./seb.js";
-import type { SessionAuth } from "./session.js";
+import { activityOf, type SessionAuth } from "./session.js";
 
 /**
  * Why a confined session's request is not trusted: SEB's Config Key does not
@@ -158,8 +158,8 @@ export async function trustRefused(
       actorUserId: session.userId,
       actorType: "user",
       action: "auth.seb_config_key_mismatch",
-      subjectType: "evaluation",
-      subjectId: session.auth.evaluationId ?? "unknown",
+      subjectType: activityOf(session.auth),
+      subjectId: session.auth.projectId ?? session.auth.evaluationId ?? "unknown",
       payload: { route },
     });
   }

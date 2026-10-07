@@ -16,6 +16,7 @@ const admin = (ms: number | null): Me =>
     session: {
       kind: "portal",
       evaluationId: null,
+      projectId: null,
       readOnly: false,
       superPowersUntil: ms === null ? null : new Date(Date.now() + ms).toISOString(),
       superPowersAvailable: true,

@@ -34,9 +34,9 @@ const unclaimed = account("student");
 /** A student account that kept a staff seat on the other course (ADR-013 rule 5). */
 const keptSeat = account("student");
 
-const impersonation: SessionAuth = { kind: "impersonation", actorUserId: admin.id, evaluationId: null };
-const seb: SessionAuth = { kind: "seb", actorUserId: null, evaluationId: randomUUID() };
-const kiosk: SessionAuth = { kind: "kiosk", actorUserId: null, evaluationId: randomUUID() };
+const impersonation: SessionAuth = { kind: "impersonation", actorUserId: admin.id, projectId: null, evaluationId: null };
+const seb: SessionAuth = { kind: "seb", actorUserId: null, projectId: null, evaluationId: randomUUID() };
+const kiosk: SessionAuth = { kind: "kiosk", actorUserId: null, projectId: null, evaluationId: randomUUID() };
 
 beforeAll(async () => {
   db = await testDb();

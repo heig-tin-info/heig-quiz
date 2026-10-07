@@ -8,7 +8,28 @@ present (imported by M6-03) and Quiz's `codespace` module talks to it
 summary); M6-04 makes it deployable (two instances on the engine VM,
 `prod` and `staging`, by the CI: ADR-016's M6-04 amendment, the switch from
 heig-classroom's portal in `apps/codespace/deploy/RUNBOOK.md`), M6-05
-sizes the VM, and `online_seb` cannot be launched before M6-07. See [merge progress](../merge/PROGRESS.md).
+sizes the VM, and from M6-07 it launches `online_seb` from a `seb`
+session; no SEB project opens to students before proof B is recorded. See
+[merge progress](../merge/PROGRESS.md).
+
+**Amended (2026-10-07, M6-07, D21 points 2–5): Safe Exam Browser for a
+project.** Scope: amendment "M6-06" (A)'s `online_seb` clauses and point 7.
+Quiz builds the project's `.seb` (`GET /app/api/projects/:id/seb`, a
+claimed seat of a published `online_seb` project); its start URL is Quiz's
+one-time ticket (no second sign-in), its URL filter adds the portal's host
+and `SEB_EXTRA_ALLOWED_HOSTS`. The ticket opens a `seb` session confined to
+the project (ADR-027 addendum "M6-07"); from it, and from it only, the
+start route mints the launch token with the `seb` claim, the session's
+Config Key (`seb_required` otherwise). The portal's `/launch` in exam mode
+refuses a token without the claim and checks SEB's header against it,
+then the Browser Exam Keys when the project has some, then sets its
+IP-bound `exam_session`. Point 7 as amended: the Browser Exam Keys are
+**optional** on the portal (an empty list is the Config Key alone), and
+Quiz sends none: **BEK list: after proof B step 7 (per-student `.seb`
+likely gives per-student BEKs)** — SEB's BEK covers the configuration,
+which is per student here (06 §6.3). `online_seb` is synced like
+`online`. The portal builds no `.seb` any more (its `/exam/:id.seb`,
+Config Key and salt are gone).
 
 **Amended (2026-10-07, M6-03, product owner): the portal's GitHub relay and
 its own login.** Scope: the portal side of points 2 and 6 below, nothing

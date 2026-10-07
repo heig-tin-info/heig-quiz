@@ -99,7 +99,7 @@ beforeAll(async () => {
   server = await testServer();
   [teacher, student] = await Promise.all([server.signIn("teacher"), server.signIn("student")]);
   const admin = await server.signIn("admin");
-  const s = await createSession(server.app.db, student.id, 8, { kind: "impersonation", actorUserId: admin.id, evaluationId: null });
+  const s = await createSession(server.app.db, student.id, 8, { kind: "impersonation", actorUserId: admin.id, projectId: null, evaluationId: null });
   impersonation = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
 });
 

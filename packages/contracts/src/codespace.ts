@@ -74,7 +74,10 @@ export const CodespaceAssignmentSync = z.object({
   image: z.string().min(1).nullable(),
   /** Template repository: what the workspace is seeded from in exam mode. */
   sourceRepo: CodespaceRepoRef,
-  /** Accepted Browser Exam Keys (`online_seb`), one per platform/version pair. */
+  /**
+   * Accepted Browser Exam Keys (`online_seb`), one per platform/version
+   * pair. Empty: the Config Key alone (D21, Quiz's default).
+   */
   browserExamKeys: z.array(z.string().min(1)),
   /** Owning teacher: the holder of the quota. */
   teacher: z.object({ id: z.string().min(1), email: z.string().min(1) }),
@@ -85,8 +88,9 @@ export const CodespaceAssignmentSync = z.object({
 export type CodespaceAssignmentSync = z.infer<typeof CodespaceAssignmentSync>;
 
 /**
- * The portal's answer to the PUT: what the platform cannot compute (it depends
- * on the `.seb` the portal generates). Both are null outside exam mode.
+ * The portal's answer to the PUT, wire-compatible with heig-classroom's: the
+ * Config Key and link of a `.seb` the portal generated. Since D21 (M6-07) the
+ * platform builds every `.seb`, so Quiz's portal answers null for both.
  */
 export const CodespaceAssignmentSyncResult = z.object({
   id: z.string().min(1),
@@ -122,8 +126,10 @@ export type CodespaceSessionSummary = z.infer<typeof CodespaceSessionSummary>;
 /**
  * Launch token (5 min, single use): minted when a student clicks Start,
  * verified by the portal on `GET /launch?token=`. `seb` is present when the
- * launch comes from a `seb` session: this student's Config Key, which the
- * portal checks against the `.seb` it served (docs/merge/06 §6.3 point 4).
+ * launch comes from a `seb` session (D21, M6-07): the Config Key of this
+ * student's own `.seb`, built by the platform. The portal checks SEB's
+ * `X-SafeExamBrowser-ConfigKeyHash` against this claim, and refuses an exam
+ * launch without it (docs/merge/06 §6.3 point 4).
  */
 export const LaunchTokenClaims = z.object({
   iss: z.enum(CODESPACE_ISSUERS),
@@ -156,12 +162,13 @@ export type ServiceTokenClaims = z.infer<typeof ServiceTokenClaims>;
 
 /**
  * The student's start route, `GET /app/codespace/start/:projectId` (ADR-047
- * §6, as amended 2026-10-07): a navigable GET, because it is also the
- * `startURL` of Safe Exam Browser (M6-07). Its refusals other than the 404
- * come back to the student's project page as `?workspace=<code>`:
+ * §6, as amended 2026-10-07): a navigable GET, which Safe Exam Browser
+ * follows too (from the project page its `.seb` opened, D21). Its refusals
+ * other than the 404 come back to the student's project page as
+ * `?workspace=<code>`:
  *   - `not_online` — the project is worked in the student's own tools;
- *   - `seb_required` — an `online_seb` project opens from Safe Exam
- *     Browser only (M6-07: until then, never);
+ *   - `seb_required` — an `online_seb` project opens from its Safe Exam
+ *     Browser session only (M6-07);
  *   - `not_accepted` — no live repository of theirs yet: accept first;
  *   - `closed` — their deadline has passed, or the classroom is archived.
  * The rule is `workspaceStartRefusal` of `@quiz/domain`.
@@ -169,8 +176,14 @@ export type ServiceTokenClaims = z.infer<typeof ServiceTokenClaims>;
 export const WorkspaceStartRefusal = z.enum(WORKSPACE_START_REFUSALS);
 export type WorkspaceStartRefusal = z.infer<typeof WorkspaceStartRefusal>;
 
-/** The path of the start route of a project: what the student's button and SEB's `startURL` open. */
+/** The path of the start route of a project: what the student's *Open workspace* opens. */
 export const workspaceStartPath = (projectId: string): string => `/app/codespace/start/${encodeURIComponent(projectId)}`;
+
+/**
+ * The student's `.seb` of an `online_seb` project (D21, M6-07): a one-time
+ * file whose start URL opens a `seb` session confined to the project.
+ */
+export const projectSebPath = (projectId: string): string => `/app/api/projects/${encodeURIComponent(projectId)}/seb`;
 
 /**
  * Why the caller may not set a project's work mode now (ADR-047 as amended
@@ -191,9 +204,8 @@ export type ProjectWorkModeBody = z.infer<typeof ProjectWorkModeBody>;
  * which modes the CALLER may set now and why not the others (the screen
  * offers only what the server would accept), and the state of the last
  * synchronization with the portal — when it went through, and the error of
- * the last attempt (null once one went through). `online_seb` is synced
- * from M6-07, with its Browser Exam Keys. The whole route is a 404 when the
- * online workspace is off (`CODESPACE_URL` empty).
+ * the last attempt (null once one went through). The whole route is a 404
+ * when the online workspace is off (`CODESPACE_URL` empty).
  */
 export const ProjectWorkspace = z.object({
   mode: WorkMode,

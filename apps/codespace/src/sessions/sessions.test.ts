@@ -111,9 +111,7 @@ async function insertAssignment(patch: Partial<AssignmentRow> = {}): Promise<Ass
     targetRepoPattern: null,
     opensAt: null,
     closesAt: null,
-    configKey: null,
     beks: [],
-    sebConfig: null,
     createdAt: new Date(),
     ...patch,
   };

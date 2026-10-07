@@ -76,6 +76,12 @@ describe("projectActionKind", () => {
     expect(projectActionKind(facts, NOW)).toBe("deleted");
   });
 
+  it("reads an accepted online_seb card, invited to nothing, as live, never as lost (ADR-047 §2)", () => {
+    const facts = factsOfCard(card({ status: "in_progress", invitation: null, ...REPO }));
+    expect(facts.repo).toEqual({ state: "live", url: REPO.repoUrl, invitation: null });
+    expect(projectActionKind(facts, NOW)).toBe("open");
+  });
+
   it("says a closed project without a repository was never accepted", () => {
     expect(projectActionKind(factsOfCard(card({ status: "locked", deadlineAt: at(-1) })), NOW)).toBe("notAccepted");
     expect(projectActionKind(factsOfCard(card({ status: "released", deadlineAt: at(-7) })), NOW)).toBe("notAccepted");

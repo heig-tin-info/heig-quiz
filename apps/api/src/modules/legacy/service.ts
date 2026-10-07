@@ -47,7 +47,7 @@ async function mapped(db: Db, table: "classrooms" | "assignments" | "users", sou
 export async function resolve(
   db: Db,
   caller: Caller,
-  auth: Pick<SessionAuth, "kind" | "actorUserId">,
+  auth: Pick<SessionAuth, "kind" | "actorUserId" | "projectId">,
   rule: LookupRule,
 ): Promise<string | null> {
   switch (rule.kind) {

@@ -144,7 +144,7 @@ localStorage.setItem("quiz-mock-codespace", "1");
 localStorage.setItem("quiz-mock-groups", "1");
 await import("./index");
 const { routes, flags } = await import("./runtime");
-const { STUDENT_ATTEMPT, STUDENT_RETAKE_ATTEMPT, STUDENT_PROJECT_IDS, STUDENT_PROJECT_ACCEPT, STUDENT_PROJECT_INVITED, STUDENT_PROJECT_SOON } =
+const { STUDENT_ATTEMPT, STUDENT_RETAKE_ATTEMPT, STUDENT_PROJECT_IDS, STUDENT_PROJECT_ACCEPT, STUDENT_PROJECT_SOON } =
   await import("./student");
 
 interface Issue {
@@ -699,11 +699,11 @@ describe("the mock's student project writes (M3-13)", () => {
     expect(view.repo).toMatchObject({ invitation: "pending", fullName: (made.body as { fullName: string }).fullName });
   });
 
-  it("answers the student's Resend (ProjectInvitationResent), once a minute", async () => {
-    const sent = await post(`/app/api/student/projects/${STUDENT_PROJECT_INVITED}/invite`);
+  it("answers the student's Resend (ProjectInvitationResent), once a minute — on the project accepted above (the invited one runs under SEB here: nobody is invited)", async () => {
+    const sent = await post(`/app/api/student/projects/${STUDENT_PROJECT_ACCEPT}/invite`);
     expect(sent.status).toBe(200);
     expect(issuesOf(ProjectInvitationResent, sent.body)).toEqual([]);
-    const again = await post(`/app/api/student/projects/${STUDENT_PROJECT_INVITED}/invite`);
+    const again = await post(`/app/api/student/projects/${STUDENT_PROJECT_ACCEPT}/invite`);
     expect(again.status).toBe(429);
     expect(again.body).toMatchObject({ error: "resend_too_soon" });
   });

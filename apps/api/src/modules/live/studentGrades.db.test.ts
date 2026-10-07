@@ -93,6 +93,7 @@ async function sessionOf(
     kind: auth.kind,
     actorUserId: auth.actorUserId ?? null,
     evaluationId: auth.evaluationId ?? null,
+    projectId: null,
     deviceId: auth.deviceId ?? null,
   });
   return {

@@ -54,23 +54,26 @@ export function sessionCookies(res: LightMyRequestResponse): Record<string, stri
 
 // ---------------------------------------------------------------- seb (ADR-027, ADR-051)
 
-/** Downloads a `.seb` as `headers` and returns the start URL written in it. */
+/**
+ * Downloads a `.seb` as `headers` and returns the start URL written in it:
+ * an evaluation's, or the file at `path` (a project's, D21).
+ */
 export async function sebStartUrl(
   server: TestServer,
   evaluationId: string,
   headers: Record<string, string>,
+  path = `/app/api/evaluations/${evaluationId}/seb`,
 ): Promise<string> {
-  const res = await server.app.inject({
-    method: "GET",
-    url: `/app/api/evaluations/${evaluationId}/seb`,
-    headers,
-  });
+  const res = await server.app.inject({ method: "GET", url: path, headers });
   expect(res.statusCode).toBe(200);
   expect(res.headers["content-type"]).toBe("application/seb");
   return /<key>startURL<\/key>\s*<string>([^<]+)<\/string>/.exec(res.body)![1]!;
 }
 
-/** Opens the start URL as SEB would (or without its header), and returns the response. */
+/**
+ * Opens the start URL as SEB would (or without its header), and returns the
+ * response. The default header is an evaluation's file's.
+ */
 export const launchSeb = (
   server: TestServer,
   startUrl: string,
@@ -84,14 +87,16 @@ export const launchSeb = (
 
 /**
  * The headers SEB sends on every request of the session a launch opened: its
- * cookies, and the Config Key hash of that very URL (ADR-051 §3).
+ * cookies, and the Config Key hash of that very URL (ADR-051 §3), under the
+ * Config Key of the file — `allowedHosts` its hosts beside Quiz's.
  */
 export function sebSessionOf(
   res: LightMyRequestResponse,
   startUrl: string,
+  allowedHosts: readonly string[] = [],
 ): (url: string) => Record<string, string> {
   const cookies = sessionCookies(res);
-  const key = launchConfigKey(startUrl);
+  const key = launchConfigKey(startUrl, allowedHosts);
   return (url) => ({ ...cookies, [CONFIG_KEY_HEADER]: expectedHash(absoluteRequestUrl(startUrl, url), key) });
 }
 
@@ -103,6 +108,30 @@ export async function openSebSession(
 ): Promise<(url: string) => Record<string, string>> {
   const startUrl = await sebStartUrl(server, evaluationId, student);
   return sebSessionOf(await launchSeb(server, startUrl), startUrl);
+}
+
+/** The routes that declare `PROJECT_SEB` (D21), and `GET /me`: all a project's `seb` session reaches. */
+export const PROJECT_SEB_ROUTES = new Set([
+  "GET /app/api/me",
+  "GET /app/api/student/projects/:id",
+  "GET /app/codespace/start/:id",
+]);
+
+/**
+ * Downloads an `online_seb` project's `.seb` as the seated student and opens
+ * it as SEB would (D21); `portalHost` is the workspace portal's, in the file's
+ * URL filter.
+ */
+export async function openProjectSebSession(
+  server: TestServer,
+  projectId: string,
+  student: Record<string, string>,
+  portalHost: string,
+): Promise<(url: string) => Record<string, string>> {
+  const startUrl = await sebStartUrl(server, projectId, student, `/app/api/projects/${projectId}/seb`);
+  const launched = await launchSeb(server, startUrl, configKeyHeaderFor(startUrl, [portalHost]));
+  expect(launched.headers.location).toBe(`/projects/${projectId}`);
+  return sebSessionOf(launched, startUrl, [portalHost]);
 }
 
 // ---------------------------------------------------------------- impersonation (ADR-034)

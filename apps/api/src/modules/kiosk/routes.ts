@@ -241,6 +241,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
       kind: "kiosk",
       actorUserId: null,
       evaluationId: outcome.evaluationId,
+      projectId: null,
       deviceId: station.id,
     });
     // The supervisor's row shows the station at once, and its state (§6).

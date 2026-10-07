@@ -1,9 +1,10 @@
 /**
  * HTTP surface of the `codespace` module (ADR-047 as amended 2026-10-07,
- * merge task M6-06). Registered only when the portal is configured
- * (`CODESPACE_URL`) and Quiz's App is (projects need it): otherwise none of
- * these routes exists, a 404 like any missing entity (ADR-047 §5). Every
- * body is a schema of `@quiz/contracts`' `codespace.ts` (invariant 7).
+ * merge tasks M6-06 and M6-07). Registered only when the portal is
+ * configured (`CODESPACE_URL`) and Quiz's App is (projects need it):
+ * otherwise none of these routes exists, a 404 like any missing entity
+ * (ADR-047 §5). Every body is a schema of `@quiz/contracts`' `codespace.ts`
+ * (invariant 7).
  *
  * The staff's, on a project they reach (`accessibleProject`: the course's
  * `staffAccess`, their own portal session; anyone else the 404):
@@ -18,15 +19,18 @@
  *   - `GET  /app/api/projects/:id/workspace/sessions` — the project's
  *     workspaces, live from the portal.
  *
- * The student's: `GET /app/codespace/start/:id`, a navigable GET (it is
- * also Safe Exam Browser's `startURL`, M6-07), described on the route.
+ * The student's: `GET /app/api/projects/:id/seb`, the `.seb` of an
+ * `online_seb` project (D21 point 2), and `GET /app/codespace/start/:id`, a
+ * navigable GET, both described on the route.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { IdParam, ProjectWorkModeBody, ProjectWorkspaceSyncAccepted, workspaceStartPath } from "@quiz/contracts";
-import { syncsToPortal } from "@quiz/domain";
+import { isOnlineMode } from "@quiz/domain";
 
 import { actorOf, audit } from "../../audit.js";
+import { sendLaunchFile } from "../../auth/seb.js";
+import { PROJECT_SEB } from "../../auth/session.js";
 import type { AppConfig } from "../../config.js";
 import {
   accessibleProject,
@@ -34,11 +38,19 @@ import {
   findStudentProjectView,
   isCourseOwner,
   ownPortalSession,
+  sebProjectSession,
   withCourseRole,
 } from "../guards.js";
 import { DomainError, notFound, teacherRoute } from "../http.js";
 import * as project from "../project/service.js";
-import { grantOf, projectSessions, projectWorkspace, requestCodespaceSync, startWorkspace } from "./service.js";
+import {
+  grantOf,
+  projectSessions,
+  projectWorkspace,
+  requestCodespaceSync,
+  sebProjectSeat,
+  startWorkspace,
+} from "./service.js";
 
 export async function codespacePlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
@@ -79,11 +91,8 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
     "/app/api/projects/:id/workspace/sync",
     session,
     teacher(onProject, async ({ req, reply, now, scope }) => {
-      if (!syncsToPortal(scope.project.workMode)) {
-        // An exam's sync carries its Browser Exam Keys, which come with M6-07.
-        throw scope.project.workMode === "free"
-          ? new DomainError("not_online", 409, "This project does not use the online workspace")
-          : new DomainError("seb_required", 409, "A Safe Exam Browser project is synced from M6-07 on");
+      if (!isOnlineMode(scope.project.workMode)) {
+        throw new DomainError("not_online", 409, "This project does not use the online workspace");
       }
       await audit(app.db, { ...actorOf(req), action: "codespace.sync_requested", subjectType: "project", subjectId: scope.project.id });
       await requestCodespaceSync(app, config, scope.project.id);
@@ -97,34 +106,53 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
     teacher(onProject, async ({ scope }) => projectSessions(app, config, scope.project)),
   );
 
-  // ------------------------------------------------------------ the student's start
+  // ------------------------------------------------------------ the student's
+
+  /**
+   * The `.seb` of an `online_seb` project (D21 point 2), the twin of an
+   * evaluation's (`auth/seb.ts`): the student's own portal session (an
+   * impersonation, a confined session, a token: the 404), a claimed seat in
+   * the project's classroom (`sebProjectSeat`), anyone else the 404. Its
+   * start URL is Quiz's ticket route, so SEB needs no second sign-in; its
+   * URL filter adds the portal's host. A GET, a plain download link.
+   */
+  app.get("/app/api/projects/:id/seb", session, async (req, reply) => {
+    const params = IdParam.safeParse(req.params);
+    const seat = params.success && ownPortalSession(req.auth) && (await sebProjectSeat(app.db, callerOf(req), params.data.id));
+    if (!seat) return notFound(reply);
+    return sendLaunchFile(app, config, req, reply, { evaluationId: null, projectId: seat.id });
+  });
 
   /**
    * The student's *Open workspace* (ADR-047 §6). A navigable GET: an
-   * anonymous visitor — or a confined session, which this route does not
-   * serve (ADR-027's default deny), so a `seb` or `kiosk` session until
-   * M6-07 — goes through the sign-in and comes back. Then, in order:
+   * anonymous visitor — or a confined session it does not serve (ADR-027's
+   * default deny: an evaluation's, a kiosk) — goes through the sign-in and
+   * comes back. Then, in order:
    *
-   *   1. the caller's OWN portal session (an impersonation, a Bearer token:
-   *      the 404), and the project through its classroom's student branch
+   *   1. the caller's OWN portal session, or a `seb` session confined to
+   *      THIS project (D21 point 3, `PROJECT_SEB`) — an impersonation, a
+   *      Bearer token, another project's `seb` session: the 404 —, and the
+   *      project through its classroom's student branch
    *      (`findStudentProjectView`: published, not archived) with a claimed
    *      seat of theirs — anyone else, the 404 of a missing project;
    *   2. the refusals a student can read (`workspaceStartRefusal` of
    *      `@quiz/domain`, in `startWorkspace`'s transaction), sent back to
    *      their project page as `?workspace=<code>`: `not_online`,
-   *      `seb_required` (an `online_seb` project opens from SEB only,
-   *      M6-07), `not_accepted`, `closed`;
+   *      `seb_required` (an `online_seb` project opens from its `seb`
+   *      session only), `not_accepted`, `closed`;
    *   3. the first launch marked (the mode frozen from then on; never by a
    *      staff seat, ADR-077: a teacher testing it freezes nothing), a 5-minute
-   *      launch token with a random `jti`, audited
-   *      `codespace.launch_issued` by its `jti` alone, and a 303 to
-   *      `${CODESPACE_URL}/launch?token=…`. The token is never logged,
-   *      stored nor audited; the request log never sees a response header.
+   *      launch token with a random `jti` — and, from a `seb` session, its
+   *      Config Key in the `seb` claim, which the portal checks SEB's header
+   *      against (D21 point 4) —, audited `codespace.launch_issued` by its
+   *      `jti` alone, and a 303 to `${CODESPACE_URL}/launch?token=…`. The
+   *      token is never logged, stored nor audited; the request log never
+   *      sees a response header.
    *
    * A full quota is the portal's to refuse (its 429): Quiz cannot count the
    * live workspaces.
    */
-  app.get("/app/codespace/start/:id", async (req, reply) => {
+  app.get("/app/codespace/start/:id", { config: PROJECT_SEB }, async (req, reply) => {
     const params = IdParam.safeParse(req.params);
     if (!params.success) return notFound(reply);
     // A Bearer token is read on the JSON API only (ADR-022) and never launches: the 404, not the sign-in.
@@ -133,14 +161,21 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
       const next = workspaceStartPath(params.data.id);
       return reply.redirect(`/app/auth/login?next=${encodeURIComponent(next)}`, 303);
     }
-    if (!ownPortalSession(req.auth)) return notFound(reply);
+    const fromSeb = sebProjectSession(req.auth, params.data.id);
+    if (!ownPortalSession(req.auth) && !fromSeb) return notFound(reply);
     const scope = await findStudentProjectView(app.db, callerOf(req), req.auth, params.data.id);
     if (scope === null || scope.seat === null) return notFound(reply);
     const launch = await startWorkspace(
       app.db,
       config,
       params.data.id,
-      { user: req.user, staffSeat: scope.seat.staff, classroomArchived: scope.room.archivedAt !== null, actor: actorOf(req) },
+      {
+        user: req.user,
+        staffSeat: scope.seat.staff,
+        classroomArchived: scope.room.archivedAt !== null,
+        actor: actorOf(req),
+        sebConfigKey: fromSeb ? req.auth!.sebConfigKey : null,
+      },
       app.clock.now(),
     );
     if (launch === null) return notFound(reply);

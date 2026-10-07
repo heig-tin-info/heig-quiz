@@ -328,6 +328,7 @@ describe("what the pairing refuses", () => {
       kind: "impersonation",
       actorUserId: admin.id,
       evaluationId: null,
+      projectId: null,
     });
     const headers = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
     const station = await kioskStation(server.app);
@@ -438,6 +439,7 @@ describe("one station, one session; and the end of the sitting (ADR-051 §7)", (
       kind: "seb",
       actorUserId: null,
       evaluationId: other.evaluationId,
+      projectId: null,
     });
     const sebHeaders = { cookie: `${SESSION_COOKIE}=${seb.token}; ${CSRF_COOKIE}=${seb.csrf}`, "x-csrf-token": seb.csrf };
     const sebAttempt = (await enter(other.evaluationId, sebHeaders)).json().view.attempt.id as string;

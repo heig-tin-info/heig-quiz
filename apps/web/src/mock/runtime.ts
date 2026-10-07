@@ -59,6 +59,9 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  * `codespace`: the platform has the online workspace (ADR-047, M6-06): a
  *   project's workspace section, the student's *Open workspace*, the
  *   administration's grants (`mock/codespace.ts`); off, those routes 404.
+ * `sebproject`: the student persona is in Safe Exam Browser, on the `seb`
+ *   session of its `online_seb` project (D21, M6-07; `mock/session.ts`):
+ *   that project page and nothing else. With `codespace`.
  * `staffseat`: the student persona is a teacher on a STAFF seat (ADR-077): their
  *   project page offers the real actions; `staffrepo`: the staff project page
  *   shows that teacher's test repository, badged (`mock/project.ts`).
@@ -100,6 +103,7 @@ export const FLAG_NAMES = [
   "staffseat",
   "staffrepo",
   "codespace",
+  "sebproject",
 ] as const;
 type FlagName = (typeof FLAG_NAMES)[number];
 export const flags = {} as Record<FlagName, boolean>;

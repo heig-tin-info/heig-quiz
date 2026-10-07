@@ -100,4 +100,13 @@ describe("the project's workspace section", () => {
     await userEvent.click(screen.getByRole("button", { name: "Resync" }));
     await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url === "/app/api/projects/p1/workspace/sync")).toBe(true));
   });
+
+  it("syncs a Safe Exam Browser project like an online one: the Resync is there (D21)", async () => {
+    mockFetch({
+      [WS]: ok(workspace({ mode: "online_seb", syncedAt: new Date().toISOString() })),
+      [SESSIONS]: ok({ reachable: true, sessions: [] }),
+    });
+    render();
+    expect(await screen.findByRole("button", { name: "Resync" })).toBeInTheDocument();
+  });
 });

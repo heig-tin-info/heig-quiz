@@ -692,7 +692,8 @@ const cardFacts = (): CardFacts[] => {
   return [
     { ...base, id: STUDENT_PROJECT_OPEN, title: "Labo 1 — Pointeurs et tableaux", startAt: iso(-3 * D), deadlineAt: iso(6 * D + 4 * H), status: "in_progress", ...repo("Labo 1", "accepted") },
     { ...base, id: STUDENT_PROJECT_ACCEPT, title: "Labo 2 — Listes chaînées", startAt: iso(-D), deadlineAt: iso(13 * D), ...toAccept(STUDENT_PROJECT_ACCEPT, "Labo 2") },
-    { ...base, id: STUDENT_PROJECT_INVITED, title: "Mini-projet — Jeu de la vie", startAt: iso(-2 * D), deadlineAt: iso(27 * D), status: "in_progress", ...repo("Mini-projet", "pending") },
+    { ...base, id: STUDENT_PROJECT_INVITED, title: "Mini-projet — Jeu de la vie", startAt: iso(-2 * D), deadlineAt: iso(27 * D), status: "in_progress", ...repo("Mini-projet", flags.codespace ? "accepted" : "pending") },
+    // ^ With `?codespace=1` it runs under Safe Exam Browser (below), where nobody is invited (ADR-047 §2): its view has no invitation.
     // Provisioned, then deleted on GitHub: the card names no repository (M3-09a).
     { ...base, id: STUDENT_PROJECT_DELETED, title: "Labo 1b — Révision des pointeurs", startAt: iso(-5 * D), deadlineAt: iso(2 * D), status: "in_progress", ...none },
     { ...base, id: STUDENT_PROJECT_SOON, title: "Labo 3 — Arbres binaires", startAt: iso(3 * D), deadlineAt: iso(17 * D), ...toAccept(STUDENT_PROJECT_SOON, "Labo 3") },
@@ -724,7 +725,8 @@ const studentProjectView = (card: CardFacts): StudentProject => {
       : {
           fullName: repoFullName ?? studentRepoName(card.title),
           url,
-          invitation: invitation ?? "accepted",
+          // The SEB project of `?codespace=1` invites nobody (ADR-047 §2): no invitation at all.
+          invitation: flags.codespace && card.id === STUDENT_PROJECT_INVITED ? null : (invitation ?? "accepted"),
           deleted,
           locked: released || card.status === "locked",
           lastCommit: graded || deleted ? { sha: sha(`${card.id.slice(-2)}${pushes}`), at } : null,

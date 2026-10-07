@@ -8,9 +8,12 @@
  * with four workspaces — one of an account the classroom does not hold;
  * "Labo 3 — listes chaînées" is a draft in the students' own tools whose
  * mode the persona may set (an owner with the grant; `?assistant=1` makes
- * them an assistant, refused). The student persona's open project runs in
- * the workspace, and the invited one under Safe Exam Browser
- * (`mock/student.ts`). The administration's teachers carry a grant.
+ * them an assistant, refused); "Labo 5 — arbres" runs under Safe Exam
+ * Browser (D21, M6-07). The student persona's
+ * open project runs in the workspace, and the invited one under Safe Exam
+ * Browser (`mock/student.ts`; `?sebproject=1` puts the student inside SEB,
+ * on that project's `seb` session). The administration's teachers carry a
+ * grant.
  */
 import {
   ProjectWorkModeBody,
@@ -34,8 +37,9 @@ interface MockWorkspace {
 
 const WORKSPACES = new Map<string, MockWorkspace>([
   ["pj-published", { mode: "online", launched: true, syncedAt: iso(-2 * H), syncError: null }],
+  // D21 (M6-07): a draft under Safe Exam Browser, synced like an online project.
+  ["pj-draft-manual", { mode: "online_seb", launched: false, syncedAt: iso(-30 * 60_000), syncError: null }],
 ]);
-
 
 function workspaceOr404(id: string): MockWorkspace {
   if (!flags.codespace) throw new MockError(404, "Not found");
@@ -70,15 +74,14 @@ on("PUT", "/app/api/projects/:id/workspace/mode", (m, raw) => {
   const refusal = workModeRefusal({ owner: true, granted: true, launched: ws.launched, groupMode: false }, ws.mode, body.data.mode);
   if (refusal) throw refuse(refusal === "work_mode_frozen" || refusal === "work_mode_group" ? 409 : 403, refusal, refusal);
   ws.mode = body.data.mode;
-  // The portal takes an online project at once; an exam waits for M6-07.
-  if (ws.mode === "online") ws.syncedAt = iso(0);
+  // The portal takes an online project at once, under Safe Exam Browser too (M6-07).
+  if (ws.mode !== "free") ws.syncedAt = iso(0);
   return view(ws);
 });
 
 on("POST", "/app/api/projects/:id/workspace/sync", (m) => {
   const ws = workspaceOr404(m.groups!.id!);
   if (ws.mode === "free") throw refuse(409, "not_online", "This project does not use the online workspace");
-  if (ws.mode === "online_seb") throw refuse(409, "seb_required", "A Safe Exam Browser project is synced from M6-07 on");
   ws.syncedAt = iso(0);
   ws.syncError = null;
   const answer: ProjectWorkspaceSyncAccepted = { requestedAt: iso(0) };

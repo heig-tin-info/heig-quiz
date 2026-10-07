@@ -17,5 +17,12 @@ export {
   type SebDict,
   type SebValue,
 } from "./plist.js";
-export { CONFIG_KEY_HEADER, absoluteRequestUrl, expectedHash, hashesEqual } from "./request.js";
+export {
+  CONFIG_KEY_HEADER,
+  REQUEST_HASH_HEADER,
+  absoluteRequestUrl,
+  anyKeyMatches,
+  expectedHash,
+  hashesEqual,
+} from "./request.js";
 export { buildSebConfig, type SebConfigInput } from "./sebConfig.js";

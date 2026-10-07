@@ -733,7 +733,7 @@ describe("the reopen (F-PROJ-09)", () => {
     const p = await project();
     const repo = p.repos[0]!;
     const { token } = await createApiToken(server.app.db, teacher.id, { name: "t", expiresInDays: null });
-    const s = await createSession(server.app.db, teacher.id, 8, { kind: "impersonation", actorUserId: (await server.signIn("admin")).id, evaluationId: null });
+    const s = await createSession(server.app.db, teacher.id, 8, { kind: "impersonation", actorUserId: (await server.signIn("admin")).id, projectId: null, evaluationId: null });
     const impersonation = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
     const routes = [
       ["PUT", `/app/api/projects/${p.id}/repos/${repo.id}/deadline`, { deadlineAt: "2026-10-12T22:00:00Z" }],

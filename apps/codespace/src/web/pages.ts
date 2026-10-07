@@ -4,7 +4,7 @@
  * in English or French (`i18n.ts`).
  *
  * The "session outside SEB" refusal page is not here: it is provided by
- * `seb/routes.ts` (`outsideSebPage`), so that the message does not vary with
+ * `seb/check.ts` (`outsideSebPage`), so that the message does not vary with
  * the route that refuses.
  */
 import { causeText, t, type BootstrapCause, type Lang } from "./i18n.js";

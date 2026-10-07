@@ -1202,7 +1202,8 @@ export type StudentProjectWork = z.infer<typeof StudentProjectWork>;
 
 /**
  * The student's own repository (F-PROJ-15): its name and URL, their
- * invitation (F-PROJ-07), whether GitHub lost it (`deleted`) or holds it
+ * invitation (F-PROJ-07) — null when nobody is invited, an `online_seb`
+ * project's (ADR-047 §2) —, whether GitHub lost it (`deleted`) or holds it
  * locked, its {@link StudentProjectWork}, and the run their score comes
  * from. Before the deadline, `lastCommit` and
  * `ciStatus` are the last push of theirs and its checks as the webhooks
@@ -1218,7 +1219,7 @@ export type StudentProjectWork = z.infer<typeof StudentProjectWork>;
 export const StudentProjectRepo = StudentProjectWork.extend({
   fullName: z.string(),
   url: z.url(),
-  invitation: z.enum(["pending", "accepted"]),
+  invitation: z.enum(["pending", "accepted"]).nullable(),
   deleted: z.boolean(),
   locked: z.boolean(),
   run: StudentProjectRun.nullable(),

@@ -29,10 +29,12 @@
  *     12 inside a card.
  *   - Finish: cards on the canvas, hairlines, no shadow.
  */
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ExternalLink, FolderGit2, Laptop } from "lucide-react";
+import { AlertTriangle, ExternalLink, FolderGit2, Laptop, Lock } from "lucide-react";
 
 import {
+  projectSebPath,
   workspaceStartPath,
   WorkspaceStartRefusal,
   type ProjectInvitationResent,
@@ -40,7 +42,7 @@ import {
   type StudentProjectRepo,
 } from "@quiz/contracts";
 
-import { api, ApiError } from "../api";
+import { api, ApiError, useMe } from "../api";
 import { Grade } from "../Grade";
 import { useT } from "../i18n";
 import { useNoticeToasts } from "../notifications/notices";
@@ -78,6 +80,7 @@ import {
   studentRefusalCode,
   studentRefusalMessage,
 } from "./projectRow";
+import { SebLaunchModal } from "./SebLaunchModal";
 import { studentProjectNotices, studentProjectNoticeToast } from "./studentProjectNotices";
 
 const isNotFound = (error: unknown) => error instanceof ApiError && error.status === 404;
@@ -127,15 +130,26 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
   const readOnly = useStudentReadOnly(project.seat !== null);
   // The server's clock, from the payload (invariant 5).
   const now = useServerNow(project.serverNow);
+  // D21: the session confined to this project (a `seb` one, the only kind
+  // with a `projectId`): the page's one action is *Open workspace*, GitHub is
+  // out of SEB's reach, and the page frames itself (no shell around it).
+  const inSeb = useMe().data?.session?.projectId === project.id;
+
+  // ADR-047 §2: under Safe Exam Browser the student is invited to nothing
+  // (`invitation` null) and reaches no repository before grading. Once
+  // accepted, the page's action is the workspace's, never GitHub's.
+  const noGithub = inSeb || project.workspace?.mode === "online_seb";
 
   const facts = factsOfProject(project);
   const kind = projectActionKind(facts, now);
-  const action = useProjectAction(facts, { now, primary: true, readOnly });
+  const accepted = kind === "open";
+  const projectAction = useProjectAction(facts, { now, primary: true, readOnly });
+  const action = noGithub && accepted ? null : projectAction;
   const live = project.repo && !project.repo.deleted ? project.repo : null;
   const coursesRoot = useRootCrumb("studentCourses");
 
   return (
-    <div className="space-y-6">
+    <div className={inSeb ? "mx-auto w-full max-w-5xl space-y-6 px-4 py-8 sm:px-6" : "space-y-6"}>
       <WorkspaceRefusal />
       <PageHeader
         eyebrow={
@@ -175,26 +189,34 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
         }
       />
 
-      <section className="space-y-3">
-        <SectionHeading title={t("sproj.repo")} help="student-project" />
-        {live ? (
-          <RepoCard project={project} repo={live} readOnly={readOnly} />
-        ) : (
-          <Card className="px-5 py-4 text-sm text-fg-muted">
-            {kind === "accept"
-              ? t("sproj.repo.toAccept")
-              : kind === "notStarted"
-                ? t("sproj.repo.notStarted", { when: isoDateTime(project.startAt) })
-                : t(hasState(kind) ? STATE_KEY[kind] : "sproj.repo.toAccept")}
-          </Card>
-        )}
-      </section>
+      {inSeb ? null : (
+        <section className="space-y-3">
+          <SectionHeading title={t("sproj.repo")} help="student-project" />
+          {live ? (
+            <RepoCard project={project} repo={live} readOnly={readOnly} />
+          ) : (
+            <Card className="px-5 py-4 text-sm text-fg-muted">
+              {kind === "accept"
+                ? t("sproj.repo.toAccept")
+                : kind === "notStarted"
+                  ? t("sproj.repo.notStarted", { when: isoDateTime(project.startAt) })
+                  : t(hasState(kind) ? STATE_KEY[kind] : "sproj.repo.toAccept")}
+            </Card>
+          )}
+        </section>
+      )}
 
       {project.workspace ? (
-        <WorkspaceSection project={project} live={live !== null} primary={kind === "open" && !readOnly} />
+        <WorkspaceSection
+          project={project}
+          live={live !== null}
+          primary={(accepted || inSeb) && !readOnly}
+          inSeb={inSeb}
+          readOnly={readOnly}
+        />
       ) : null}
 
-      {live?.run ? <RunSection repo={live} run={live.run} /> : null}
+      {live?.run && !inSeb ? <RunSection repo={live} run={live.run} /> : null}
 
       {project.release ? (
         <ReleaseSection release={project.release} />
@@ -227,22 +249,48 @@ function WorkspaceRefusal() {
  * the start route — a navigation, never a fetch: the server answers with a
  * redirect to the portal —, once the student's repository exists; the
  * page's accent when the repository is ready and nothing else is asked of
- * the student. Under Safe Exam Browser, a line says where it opens.
+ * the student. Under Safe Exam Browser (D21, M6-07), the link opens from
+ * the project's own `seb` session only; from the portal, the action is the
+ * project's `.seb`, through the steps of {@link SebLaunchModal}.
  */
-function WorkspaceSection({ project, live, primary }: { project: StudentProject; live: boolean; primary: boolean }) {
+function WorkspaceSection({
+  project,
+  live,
+  primary,
+  inSeb,
+  readOnly,
+}: {
+  project: StudentProject;
+  live: boolean;
+  primary: boolean;
+  inSeb: boolean;
+  readOnly: boolean;
+}) {
   const t = useT();
+  const [launching, setLaunching] = useState(false);
   const online = project.workspace?.mode === "online";
+  const variant = primary ? "primary" : "secondary";
+  const action = !live ? null : online || inSeb ? (
+    <a href={workspaceStartPath(project.id)} className={buttonClass(variant)}>
+      <Laptop /> {t("sproj.workspace.open")}
+    </a>
+  ) : readOnly ? null : (
+    <Button variant={variant} onClick={() => setLaunching(true)}>
+      <Lock /> {t("sproj.workspace.openInSeb")}
+    </Button>
+  );
   return (
     <section className="space-y-3" data-testid="sproj-workspace">
       <SectionHeading title={t("sproj.workspace")} />
       <Card className="flex flex-wrap items-center justify-between gap-3 p-5 text-sm">
-        <p className="text-fg-muted">{t(online ? "sproj.workspace.online" : "sproj.workspace.seb")}</p>
-        {online && live ? (
-          <a href={workspaceStartPath(project.id)} className={buttonClass(primary ? "primary" : "secondary")}>
-            <Laptop /> {t("sproj.workspace.open")}
-          </a>
-        ) : null}
+        <p className="text-fg-muted">
+          {t(inSeb ? "sproj.workspace.inSeb" : online ? "sproj.workspace.online" : "sproj.workspace.seb")}
+        </p>
+        {action}
       </Card>
+      {launching ? (
+        <SebLaunchModal kind="workspace" href={projectSebPath(project.id)} title={project.title} onClose={() => setLaunching(false)} />
+      ) : null}
     </section>
   );
 }
@@ -250,7 +298,8 @@ function WorkspaceSection({ project, live, primary }: { project: StudentProject;
 /**
  * The student's live repository: its name on GitHub, their invitation while
  * it waits (with the Resend) and its lock. The commit it stands on is the
- * header's; the run and the score have their own sections.
+ * header's; the run and the score have their own sections. No invitation
+ * at all under Safe Exam Browser, where nobody is invited (ADR-047 §2).
  */
 function RepoCard({
   project,

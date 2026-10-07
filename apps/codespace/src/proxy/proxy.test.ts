@@ -83,8 +83,6 @@ beforeEach(async () => {
         image: "codespace/c-dev:4.137.0",
         uploadPack: true,
         beks: ["0".repeat(64)],
-        sebConfig: { examKeySalt: "salt", startUrl: "http://platform.test/start" },
-        configKey: "0".repeat(64),
         createdAt: now,
       })
       .run();
@@ -268,13 +266,9 @@ describe("no login of its own (M6-03)", () => {
     expect(res.cookies.find((c) => c.name === EXAM_COOKIE)).toBeUndefined();
   });
 
-  it("the `.seb` of an exam assignment is still served", async () => {
-    const res = await portal.app.inject({ method: "GET", url: "/exam/ex.seb" });
-    expect(res.statusCode).toBe(200);
-  });
-
-  it("the `.seb` of a lab assignment does not exist", async () => {
-    const res = await portal.app.inject({ method: "GET", url: "/exam/tp.seb" });
-    expect(res.statusCode).toBe(404);
+  it("serves no `.seb` of its own: the platform builds them (D21, M6-07)", async () => {
+    for (const url of ["/exam/ex.seb", "/exam/tp.seb"]) {
+      expect((await portal.app.inject({ method: "GET", url })).statusCode).toBe(404);
+    }
   });
 });

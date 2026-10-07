@@ -8,6 +8,7 @@ import {
   LAUNCH_AUDIENCE,
   LaunchTokenClaims,
   SERVICE_AUDIENCE,
+  projectSebPath,
   ProjectWorkModeBody,
   ServiceTokenClaims,
   TeacherCodespaceGrantPatch,
@@ -148,5 +149,11 @@ describe("Quiz's own workspace routes (M6-06)", () => {
   it("names the start route and its refusals", () => {
     expect(workspaceStartPath("p/1")).toBe("/app/codespace/start/p%2F1");
     expect(WorkspaceStartRefusal.options).toEqual(["not_online", "seb_required", "not_accepted", "closed"]);
+  });
+});
+
+describe("Safe Exam Browser for projects (D21, M6-07)", () => {
+  it("names a project's `.seb`", () => {
+    expect(projectSebPath("p/1")).toBe("/app/api/projects/p%2F1/seb");
   });
 });

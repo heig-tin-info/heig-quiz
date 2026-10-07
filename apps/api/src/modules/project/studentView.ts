@@ -291,7 +291,7 @@ export async function studentProject(
         : {
             fullName: repo.fullName,
             url: htmlUrl(repo.fullName),
-            invitation: repo.invitationStatus === "accepted" ? "accepted" : "pending",
+            invitation: repo.invitationStatus === "none" ? null : repo.invitationStatus,
             deleted: repo.deletedAt !== null,
             locked: repo.lockedAt !== null,
             ...(live === null

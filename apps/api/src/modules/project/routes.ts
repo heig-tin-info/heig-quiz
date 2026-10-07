@@ -47,6 +47,7 @@ import {
 } from "@quiz/contracts";
 
 import { actorOf } from "../../audit.js";
+import { PROJECT_SEB } from "../../auth/session.js";
 import type { AppConfig } from "../../config.js";
 import {
   accessibleProject,
@@ -335,12 +336,13 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
    * F-PROJ-15: the project as its student reads it — the one exit
    * (N-SEC-20). Through the classroom's student branch: a claimed seat, a
    * teacher in the student view (their staff seat's own test repository,
-   * ADR-077; none without a seat), an impersonation session through the seat (ADR-034); anyone
-   * else, a `seb` or `kiosk` session, gets the 404 of a missing project.
+   * ADR-077; none without a seat), an impersonation session through the seat (ADR-034), a `seb`
+   * session confined to THIS project through its seat (D21, `PROJECT_SEB`); anyone else, any
+   * other `seb` or `kiosk` session, gets the 404 of a missing project.
    */
   app.get(
     "/app/api/student/projects/:id",
-    session,
+    { ...session, config: PROJECT_SEB },
     student({ params: IdParam, load: studentProjectView.bind(null, app) }, async ({ req, now, scope }) =>
       service.studentProject(app.db, scope, callerOf(req).id, now, { codespace: codespaceOn(config) }),
     ),
