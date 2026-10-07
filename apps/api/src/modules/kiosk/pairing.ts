@@ -44,7 +44,16 @@ export async function pairableEvaluations(
   const home = await studentHome(db, userId, now);
   return home.open
     .filter((c) => c.trustedClients.includes("kiosk"))
-    .map((c) => ({ id: c.id, title: c.title, classroomName: c.classroomName, courseCode: c.courseCode }));
+    .map(({ id, title, classroomName, courseCode, conditions }) => ({
+      id,
+      title,
+      classroomName,
+      courseCode,
+      // Holds by construction (ADR-079 §7): kiosk ⇒ a trusted client ⇒ an open
+      // card carries its conditions. A regression throws on the contract, never
+      // drops the exam silently.
+      conditions: conditions!,
+    }));
 }
 
 // --- The station -------------------------------------------------------------

@@ -10,8 +10,9 @@ trusted-client gap (§7). Check the code for what has shipped.
 
 Scope: `EvaluationSettings.conditions`, the derivation `imposedConditions`
 (`packages/domain/src/evaluationConditions.ts`), the student views that carry
-`EvaluationConditions` (waiting room, ready screen, attempt) and the
-evaluation's settings editor.
+`EvaluationConditions` (waiting room, ready screen, attempt, and for a
+trusted client the evaluation card and `/pair`) and the evaluation's settings
+editor.
 
 Relations: amends [ADR-076](ADR-076-demarrage-explicite-d-une-tentative.md) §1
 (the ready screen's rules become the conditions) and the waiting room's rules
@@ -77,10 +78,21 @@ a text that changes after the exam leaves no record of what was announced.
    The launch checklist counts the announced conditions on its rules line,
    and never warns about an evaluation without any. There is no "I have
    read" acknowledgment.
-7. **The trusted-client gap (planned).** A student sitting in Safe Exam
+7. **The trusted-client gap.** A student sitting in Safe Exam
    Browser or on a kiosk enters past the portal's waiting room; the
    conditions are therefore also shown before the SEB launch and on the
    phone's `/pair` page.
+   *As built (2026-10-07, PR 3 of #584):* the student's open evaluation
+   card carries `conditions` when the exam has a trusted client (`null`
+   otherwise, and on upcoming and past cards: the portal's waiting room
+   states them), and `/pair`'s
+   `PairableEvaluation` always does; both are built by
+   `evaluationConditionsOf` with the seat's extra time, inside the existing
+   loaders (the student home's seats, `pairableEvaluations`), and carry no
+   `catalogId`. The SEB launch dialog draws them first, its body scrolling
+   under a footer that keeps the download in view; `/pair` draws the chosen
+   exam's list between the exam and "Start on this station", none while
+   several exams await a choice. The direct start (ADR-076 §4) is unchanged.
 
 ## Consequences
 

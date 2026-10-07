@@ -164,6 +164,9 @@ async function namedStation(label = "Poste de secours n° 7") {
   return Object.assign(station, { deviceId: mine.id });
 }
 
+/** A catalog reference (ADR-079 §5), staff data: the phone must never receive it. */
+const CATALOG_ID = randomUUID();
+
 /** An exam that accepts the kiosk, in `state`, with its teacher and one enrolled student. */
 async function exam(state: "running" | "lobby" | "draft" = "running") {
   const student = await person("student");
@@ -171,7 +174,7 @@ async function exam(state: "running" | "lobby" | "draft" = "running") {
   const seeded = await seedLive(server.app.db, {
     teacherId: teacher.id,
     studentIds: [student.id],
-    settings: { kiosk: true },
+    settings: { kiosk: true, conditions: [{ kind: "allowed", text: "One A4 sheet", catalogId: CATALOG_ID }] },
   });
   const base = `/app/api/evaluations/${seeded.evaluationId}`;
   if (state === "lobby") expect((await teacher.post(`${base}/state`, { to: "lobby" })).statusCode).toBe(200);
@@ -253,6 +256,15 @@ describe("a sitting on a kiosk station, from its first attestation to the next s
     const preview = PairPreview.parse(looked.json());
     expect(preview.station).toEqual({ label: "Poste de secours n° 7" });
     expect(preview.evaluations).toEqual([expect.objectContaining({ id: e.evaluationId, title: "Test évaluation" })]);
+    // ADR-079 §7: the conditions, read on the phone, since the station begins the attempt directly.
+    expect(preview.evaluations[0]!.conditions.announced).toEqual([{ kind: "allowed", text: "One A4 sheet" }]);
+    expect(preview.evaluations[0]!.conditions.imposed[0]).toEqual({
+      key: "trusted_client",
+      kind: "forbidden",
+      clients: ["kiosk"],
+    });
+    expect(looked.body).not.toContain(CATALOG_ID);
+    expect(looked.body).not.toContain("catalogId");
     const approved = await e.student.post("/app/api/pair", { code: auth.user_code, evaluationId: e.evaluationId });
     expect(approved.json()).toEqual({ station: { label: "Poste de secours n° 7" } });
 

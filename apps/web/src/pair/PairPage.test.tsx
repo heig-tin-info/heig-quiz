@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { Me, PairPreview } from "@quiz/contracts";
+import type { EvaluationConditions, Me, PairPreview } from "@quiz/contracts";
 
 import { fail, mockFetch, ok, renderWithProviders, type RouteHandler } from "../test/render";
 import { PairPage } from "./PairPage";
@@ -25,11 +25,18 @@ const me: Me = {
 
 const E1 = "11111111-1111-4111-8111-111111111111";
 const E2 = "11111111-1111-4111-8111-111111111112";
-const exam = (id: string, title: string) => ({
+/** ADR-079 §7: what the server derives for a kiosk exam, with one condition of the teacher's. */
+const conditionsOf = (text: string): EvaluationConditions => ({
+  announced: [{ kind: "allowed", text }],
+  imposed: [{ key: "trusted_client", kind: "forbidden", clients: ["kiosk"] }],
+});
+const NONE: EvaluationConditions = { announced: [], imposed: [] };
+const exam = (id: string, title: string, conditions: EvaluationConditions = NONE) => ({
   id,
   title,
   classroomName: "PRG1-2026",
   courseCode: "PRG1",
+  conditions,
 });
 
 const preview = (evaluations: PairPreview["evaluations"] = [exam(E1, "Test 1 — pointeurs")]): PairPreview => ({
@@ -80,6 +87,25 @@ describe("the phone's pairing page (ADR-051 §7)", () => {
     await userEvent.click(screen.getByRole("radio", { name: /Test 2/ }));
     await userEvent.click(start);
     expect(calls.at(-1)!.body).toEqual({ code: "BCDF-GHJK", evaluationId: E2 });
+  });
+
+  it("states the chosen exam's conditions before the student confirms (ADR-079 §7)", async () => {
+    render({
+      "GET /app/api/pair/BCDF-GHJK": ok(
+        preview([exam(E1, "Test 1", conditionsOf("One A4 sheet")), exam(E2, "Test 2", conditionsOf("Open book"))]),
+      ),
+    });
+    await screen.findByRole("button", { name: "Start on this station" });
+    // Nothing chosen yet: no conditions to read.
+    expect(screen.queryByText("Announced by your teacher")).toBeNull();
+    await userEvent.click(screen.getByRole("radio", { name: /Test 2/ }));
+    expect(screen.getByText("Announced by your teacher")).toBeVisible();
+    expect(screen.getByText("Open book")).toBeVisible();
+    expect(screen.queryByText("One A4 sheet")).toBeNull();
+    expect(screen.getByText("Sat on a school station")).toBeVisible();
+    // Read before the action: the list comes first in the page.
+    const start = screen.getByRole("button", { name: "Start on this station" });
+    expect(screen.getByText("Open book").compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("formats a typed code, and refuses one that cannot be a code without asking the server", async () => {

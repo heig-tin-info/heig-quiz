@@ -16,7 +16,7 @@ import type {
 import { generateUserCode, normalizeUserCode } from "@quiz/domain";
 
 import { D, flags, H, iso, MockError, MockPayload, on, rand } from "./runtime";
-import { STUDENT_EVAL } from "./student";
+import { STUDENT_EVAL, studentConditions } from "./student";
 
 const devices: KioskDevice[] = flags.empty
   ? []
@@ -175,6 +175,7 @@ const pairable = (): PairPreview["evaluations"] =>
           title: "Quiz 3 — Pointeurs et lois fondamentales",
           classroomName: "PRG1-2026",
           courseCode: "PRG1",
+          conditions: studentConditions(true),
         },
       ];
 

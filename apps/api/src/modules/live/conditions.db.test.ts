@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import type { AttemptEntry, EvaluationDetail } from "@quiz/contracts";
+import { StudentHome, type AttemptEntry, type EvaluationDetail } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import { evaluations } from "../../db/schema.js";
@@ -18,7 +18,6 @@ import { fakeShort } from "../../test/fakeType.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { reload, seedLive } from "../../test/live.js";
 import { applyState } from "../evaluation/service.js";
-
 let server: TestServer;
 let restore: () => void;
 let teacher: { id: string; headers: Record<string, string> };
@@ -157,5 +156,45 @@ describe("the student views", () => {
       expect(body).not.toContain(catalogId);
       expect(body).not.toContain("catalogId");
     }
+  });
+});
+
+describe("the trusted-client screens (ADR-079 §7)", () => {
+  /** The student's home, its open cards by id: what the SEB launch dialog reads. */
+  const openCards = async () => {
+    const res = await send("GET", "/app/api/student/home", student.headers);
+    expect(res.statusCode).toBe(200);
+    const home = StudentHome.parse(res.json());
+    const evaluationCards = home.open.flatMap((c) => (c.kind === "evaluation" ? [c] : []));
+    return { body: res.body, cards: new Map(evaluationCards.map((c) => [c.id, c])) };
+  };
+
+  it("give a Safe Exam Browser card its conditions, with the seat's extra time, and never the catalog reference", async () => {
+    const sebSeed = await seedLive(db(), {
+      teacherId: teacher.id,
+      studentIds: [student.id],
+      settings: { lobby: "manual", safeExamBrowser: true },
+      timeBonusPercent: 25,
+    });
+    await patchConditions(sebSeed.evaluationId, conditions);
+    const plain = await seed();
+    await patchConditions(plain.evaluationId, conditions);
+    for (const id of [sebSeed.evaluationId, plain.evaluationId]) {
+      await applyState(db(), await reload(db(), id), "running", server.clock.now());
+    }
+
+    const { body, cards } = await openCards();
+    const card = cards.get(sebSeed.evaluationId)!;
+    expect(card.trustedClients).toEqual(["seb"]);
+    expect(card.conditions!.announced).toEqual([
+      { kind: "allowed", text: "One A4 sheet of handwritten notes" },
+      { kind: "forbidden", text: "Mobile phones" },
+    ]);
+    expect(card.conditions!.imposed[0]).toEqual({ key: "trusted_client", kind: "forbidden", clients: ["seb"] });
+    expect(card.conditions!.imposed.find((c) => c.key === "duration")).toMatchObject({ bonusPercent: 25 });
+    // The portal opens a plain exam, whose waiting room states them: the card carries none.
+    expect(cards.get(plain.evaluationId)!.conditions).toBeNull();
+    expect(body).not.toContain(catalogId);
+    expect(body).not.toContain("catalogId");
   });
 });

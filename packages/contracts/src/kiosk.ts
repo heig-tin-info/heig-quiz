@@ -4,6 +4,8 @@
  */
 import { z } from "zod";
 
+import { EvaluationConditions } from "./live.js";
+
 export const KIOSK_DEVICE_STATUSES = ["unnamed", "active", "retired"] as const;
 export type KioskDeviceStatus = (typeof KIOSK_DEVICE_STATUSES)[number];
 
@@ -118,6 +120,8 @@ export const PairableEvaluation = z.object({
   title: z.string(),
   classroomName: z.string(),
   courseCode: z.string(),
+  /** ADR-079 §7: read on the phone before confirming, since the station begins the attempt directly. */
+  conditions: EvaluationConditions,
 });
 export type PairableEvaluation = z.infer<typeof PairableEvaluation>;
 
