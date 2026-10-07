@@ -4467,8 +4467,8 @@ serves now (16a), and what waits for the group repositories (16b).
   a webhook can arrive before the row. ADR-078's attribution no longer
   depends on that order; the existing paths keep the race until a fix of
   their own.
-- **Open, for the product owner**: confirm ADR-078 §7 (tokens until the
-  effective deadline plus the grace; the orchestrator's decision).
+- **Settled (product owner, 2026-10-07)**: ADR-078 §7 confirmed — tokens
+  and declarations until the effective deadline plus the grace.
 - **Acceptance**: a token or a declaration is refused (and no token
   minted) for another user's repository, a repository of another project,
   a distribution repository of an `online` project, a project never
@@ -4491,6 +4491,107 @@ serves now (16a), and what waits for the group repositories (16b).
   the deadline is relayed and received; a relay pending after the grace
   resumes once the repository's deadline is extended; integration against
   a stub Quiz and a GitHub test organization of the staging App.
+- **As delivered** (branch `merge/M6-10-git-relay`; migration
+  `0081_codespace_git_relay`; the portal's schema needs none — `rejected`
+  is a value of a SQLite text enum):
+  - **Contracts** (`codespace.ts`): `GitTokenRequestClaims`,
+    `RelayHeadsClaims` (1–50 heads, a ref and a 40/64-hex sha),
+    `GitTokenGrant`, `GitTokenError`, the audiences, paths and
+    `PORTAL_ISSUER`; `CodespaceSessionSummary.rejectedPush` (default null,
+    wire-compatible). **Domain**: `gitTokenRefusal` and `relayClosesAt`
+    (`workMode.ts`), on `workspaceStartRefusal` read at the deadline plus
+    the grace.
+  - **Quiz**: `codespace_launches` (written by the start route, staff seats
+    included) and `codespace_relays`; `modules/codespace/relay.ts`
+    (`issueGitToken`, `declareRelayHeads`) behind `POST
+    /app/codespace/git-token` and `POST /app/codespace/relay-heads`
+    (`no-store`, refusals logged with code and `jti`, never audited);
+    `mintRepositoryToken` (`github/app.ts`, the one place: one repository
+    id, `contents` only); audit `codespace.git_token_issued`; `pushAuthor`
+    (`modules/github/deliveries.ts`) used by the intake's receipt and the
+    project's push handler; the Caddy fragments (`Caddyfile`,
+    `Caddyfile.staging`) answer both paths with a 404 except from the
+    engine VM (2.29.38.213).
+  - **Portal**: `FORGE_KIND=quiz` (`src/git/quizForge.ts`) and its
+    defaults/refusals (`auth/config.ts`); `Forge.authorization(repo,
+    owner)`, `headerScope`, `declareHeads`, `invalidate`, `forget`;
+    `ForgeRefusedError`; `gitAuthEnv(…, scope)`; the relay without force,
+    `parseRejections`, the fetch-back into `staging.git`, the terminal
+    `rejected` state; `GET /git/<session>/push-status`; the status bar's
+    third item (`images/c-dev/extension`); the sessions summary's
+    `rejectedPush`, shown in Quiz's workspace list (en/fr).
+  - **Decisions beyond the ADR** (for review): (1) a read grant on the
+    distribution also needs the user's own live repository, and is closed
+    with it (one openness rule for both grants); (2) a declared head that
+    is one of the App's `bot_commits` stays the App's — a restore or sync
+    is never the student's, declared or not; (3) a branch deletion's rows
+    take `rejected` (`DELETION_NOT_RELAYED`), so they never sit pending;
+    (4) a `[remote rejected]` ref (a workflow file without `workflows`, a
+    ruleset) is `rejected` without a fetch-back; the refs `--atomic` took
+    down with it are retried at once; (5) a refresh 10 minutes before
+    `expiresAt` replaces the old token without revoking it (a push may still
+    use it; it expires within the margin) — revocation happens at
+    `useUntil` (a timer, and lazily) and on `forget`; (6) the student sees
+    a rejection through the git channel (`push-status`, the workspace's
+    `origin`), so no container environment key is added; (7) `FORGE_KIND`
+    defaults to `quiz` only when `PLATFORM_URL` (or `CLASSROOM_URL`) is
+    given in the environment — its built-in localhost default does not
+    count —, and `quiz` without `CODESPACE_LAUNCH_SECRET` is refused in
+    every environment; (8) `deploy/env.example` now writes
+    `FORGE_KIND=quiz`; an instance's existing env file keeps `none` until
+    edited (bootstrap never rewrites it). Two failures of the
+    integration-only `relay.test.ts` that predate M6-10 (a message renamed
+    at M6-03, a clock in the past) are fixed.
+  - **Tests**: domain `workMode.test.ts` (grant, refusals, grace,
+    extension, staff lock); contracts `codespace.test.ts`; api
+    `modules/codespace/relay.db.test.ts` (12: scope and body of the mint,
+    `useUntil`, every refusal with nothing minted, 401 cases, 503, the
+    declaration, the attribution positive and negative, a declared
+    `bot_commits` head, the protected-file restore, the token in no log or
+    audit row); portal `quizForge.test.ts` (cache, margin, hard stop
+    without a request, single flight, invalidate, forget and revocation,
+    refusals vs outages, signed claims), `relayNoForce.test.ts` (refspec,
+    porcelain, the non-fast-forward on bare-repo fixtures end to end, no
+    deletion, a refused declaration, the token in no argv, file, SQLite,
+    `last_error` or log, scoped to github.com, dropped on 401),
+    `config.test.ts`, `httpBackend.test.ts` (`push-status`),
+    `classroom/routes.test.ts` (`rejectedPush`); web
+    `ProjectWorkspace.test.tsx`.
+  - **Follow-ups**: `codespace_relays` rows are not purged with their
+    project (they cascade with their user only; no secret in them); the
+    daily reconciliation's head refresh (`reconcile.ts`) does not read the
+    relays (the webhook path attributes; the reconciliation still needs a
+    person as author and committer); the `bot_commits` race noted above is
+    unchanged.
+  - **Manual checks on staging, for the orchestrator** (they need the
+    staging App, its test organization and the engine VM):
+    1. `caddy validate` the two fragments; from the app VM itself, `curl
+       -X POST https://quiz.dev.chevallier.io/app/codespace/git-token` →
+       404; from the engine VM → 401 (no token).
+    2. Set `FORGE_KIND=quiz` (or remove the line) in
+       `/etc/quiz-codespace/staging/env`, restart the instance; launch a
+       workspace on an `online` project whose student repository is
+       **private**: the workspace seeds from it; push from it: relayed,
+       received as the student's (last commit, `push_receipts.is_bot`
+       false), its grading run counted; the audit shows
+       `codespace.git_token_issued` without the token.
+    3. An `online_seb` project with a private distribution: the exam
+       workspace seeds (read grant).
+    4. With an App installation token of the staging App scoped to one
+       repository (`contents: write`), try `git push --force` of a rewritten
+       history to the **default branch**: `hgc-protect` must refuse it.
+       Try the same on a **non-default branch** and record the outcome
+       (expected: accepted, the ruleset covers `~DEFAULT_BRANCH` only,
+       ADR-078 §9).
+    5. Commit to the repository with the App (a protected-file restore),
+       then push from the workspace without pulling: the `PushEvent` is
+       `rejected`, the status bar shows *Push refused by GitHub*, the
+       staff's workspace list shows *Rejected by GitHub (main)*; after a
+       pull and a push, both clear and the push is relayed.
+    6. A push in the last seconds before the deadline is relayed and
+       received late or on time by the receipt; after the grace a pending
+       relay stays `pending` (`409 closed`), and resumes once the
+       repository's own deadline is extended.
 
 ## M7 — Finishing
 

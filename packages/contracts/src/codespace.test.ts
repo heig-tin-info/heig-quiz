@@ -5,6 +5,12 @@ import {
   CODESPACE_ISSUERS,
   CodespaceAssignmentSync,
   CodespaceAssignmentSyncResult,
+  GIT_TOKEN_AUDIENCE,
+  GitTokenGrant,
+  GitTokenRequestClaims,
+  PORTAL_ISSUER,
+  RELAY_HEADS_AUDIENCE,
+  RelayHeadsClaims,
   LAUNCH_AUDIENCE,
   LaunchTokenClaims,
   SERVICE_AUDIENCE,
@@ -155,5 +161,52 @@ describe("Quiz's own workspace routes (M6-06)", () => {
 describe("Safe Exam Browser for projects (D21, M6-07)", () => {
   it("names a project's `.seb`", () => {
     expect(projectSebPath("p/1")).toBe("/app/api/projects/p%2F1/seb");
+  });
+});
+
+describe("the relay's token and declaration (ADR-078 §2)", () => {
+  const base = {
+    iss: PORTAL_ISSUER,
+    iat: 1790000000,
+    exp: 1790000060,
+    jti: "j-1",
+    projectId: "p-1",
+    userId: "u-1",
+    repository: "org/lab-kid",
+  };
+  const sha = "a".repeat(40);
+
+  it("binds the request to its audience, its repository and one minute", () => {
+    expect(GitTokenRequestClaims.safeParse({ ...base, aud: GIT_TOKEN_AUDIENCE }).success).toBe(true);
+    expect(GitTokenRequestClaims.safeParse({ ...base, aud: RELAY_HEADS_AUDIENCE }).success).toBe(false);
+    expect(GitTokenRequestClaims.safeParse({ ...base, aud: GIT_TOKEN_AUDIENCE, exp: base.iat + 61 }).success).toBe(false);
+    expect(GitTokenRequestClaims.safeParse({ ...base, aud: GIT_TOKEN_AUDIENCE, jti: "" }).success).toBe(false);
+    expect(GitTokenRequestClaims.safeParse({ ...base, aud: GIT_TOKEN_AUDIENCE, iss: "heig-quiz" }).success).toBe(false);
+    expect(GitTokenRequestClaims.safeParse({ ...base, aud: GIT_TOKEN_AUDIENCE, repository: "lab-kid" }).success).toBe(false);
+  });
+
+  it("declares 1 to 50 heads, each a ref and a full sha", () => {
+    const heads = (n: number) => Array.from({ length: n }, () => ({ ref: "refs/heads/main", sha }));
+    const declared = (h: unknown) => RelayHeadsClaims.safeParse({ ...base, aud: RELAY_HEADS_AUDIENCE, heads: h }).success;
+    expect(declared(heads(1))).toBe(true);
+    expect(declared([{ ref: "refs/heads/main", sha: "b".repeat(64) }])).toBe(true);
+    expect(declared(heads(50))).toBe(true);
+    expect(declared(heads(51))).toBe(false);
+    expect(declared([])).toBe(false);
+    expect(declared([{ ref: "main", sha }])).toBe(false);
+    expect(declared([{ ref: "refs/heads/main", sha: "a".repeat(39) }])).toBe(false);
+    expect(RelayHeadsClaims.safeParse({ ...base, aud: GIT_TOKEN_AUDIENCE, heads: heads(1) }).success).toBe(false);
+  });
+
+  it("answers a grant with GitHub's expiry and the portal's hard stop", () => {
+    const grant = {
+      token: "ghs_x",
+      expiresAt: "2026-10-07T14:03:11Z",
+      useUntil: "2026-10-07T14:03:11Z",
+      repository: { fullName: "org/lab-kid", githubRepoId: 1 },
+      permission: "write",
+    };
+    expect(GitTokenGrant.safeParse(grant).success).toBe(true);
+    expect(GitTokenGrant.safeParse({ ...grant, permission: "admin" }).success).toBe(false);
   });
 });

@@ -575,6 +575,13 @@
       "when": 1791402166780,
       "tag": "0081_course_conditions",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1791408475037,
+      "tag": "0082_codespace_git_relay",
+      "breakpoints": true
     }
   ]
 }

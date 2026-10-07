@@ -28,6 +28,8 @@ import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqli
  * forge outage must never turn into a lost submission — and only moves to
  * `failed` once the attempt budget is exhausted.
  */
+export const PUSH_EVENT_STATES = ["pending", "relayed", "failed", "rejected"] as const;
+
 export const pushEvents = sqliteTable(
   "push_events",
   {
@@ -43,7 +45,14 @@ export const pushEvents = sqliteTable(
     oldSha: text("old_sha"),
     /** Null when the ref was deleted. */
     receivedAt: integer("received_at", { mode: "timestamp_ms" }).notNull(),
-    state: text("state", { enum: ["pending", "relayed", "failed"] })
+    /**
+     * `rejected` (ADR-078 §6): terminal, GitHub refused the ref — a
+     * non-fast-forward (the App committed meanwhile: the student pulls) or a
+     * change the relay may not make (a workflow file) — or a branch deletion,
+     * never relayed. `last_error` carries the reason; the student sees it in
+     * the workspace, the staff in the platform's workspace list.
+     */
+    state: text("state", { enum: PUSH_EVENT_STATES })
       .notNull()
       .default("pending"),
     /** Relay attempts already made; drives the backoff. */

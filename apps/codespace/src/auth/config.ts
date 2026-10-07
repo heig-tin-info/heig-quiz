@@ -107,22 +107,24 @@ const EnvSchema = z.object({
 
   // --- Forge (git/relay.ts) -----------------------------------------------
   /**
-   * `none` by default: a push lands in `staging.git` and its `PushEvent` is
-   * written, nothing is relayed (ADR-047, amendment of M6-03). `forgejo` is
-   * the development forge of `infra/compose.dev.yml`. `github` without an
-   * App is the unconfigured forge: public clone URLs only, the relay leaves
-   * the events pending.
+   * Where pushes are relayed (ADR-078 §3). `quiz` — the default once the
+   * platform integration is configured (`PLATFORM_URL` and
+   * `CODESPACE_LAUNCH_SECRET` both set) — reaches GitHub with tokens Quiz
+   * grants per repository; `none` otherwise (a push lands in `staging.git`
+   * with its `PushEvent`, nothing is relayed), and settable explicitly.
+   * `forgejo` is the development forge of `infra/compose.dev.yml`; `github`
+   * without an App is the unconfigured forge (public clone URLs only).
+   * Production refuses both, and `quiz` without an `https` `PLATFORM_URL`.
    */
-  FORGE_KIND: z.enum(["forgejo", "github", "none"]).default("none"),
+  FORGE_KIND: z.enum(["quiz", "forgejo", "github", "none"]).optional(),
   FORGE_URL: z.string().default("http://localhost:3300"),
   FORGE_TOKEN: z.string().default(""),
   FORGE_USER: z.string().default("codespace"),
   /**
    * GitHub App credentials. **Refused at startup, in every environment**
-   * (`loadConfig`): the only App this portal was ever configured with is
-   * heig-classroom's, and Quiz never uses it (root invariant 15). Whether
-   * Quiz's own App key goes on the engine VM is an open decision (an ADR at
-   * M6-04/M6-05); until then the GitHub relay stays off.
+   * (`loadConfig`): the portal holds no App credential at all (root
+   * invariant 15, ADR-078 §1) — never heig-classroom's App, never Quiz's;
+   * the `quiz` forge asks Quiz for a token per repository instead.
    */
   GITHUB_APP_ID: z.string().default(""),
   GITHUB_APP_PRIVATE_KEY_PATH: z.string().default(""),
@@ -214,12 +216,27 @@ const EnvSchema = z.object({
     ),
 });
 
-export type AppConfig = z.infer<typeof EnvSchema> & {
+export type ForgeKind = "quiz" | "forgejo" | "github" | "none";
+
+export type AppConfig = Omit<z.infer<typeof EnvSchema>, "FORGE_KIND"> & {
+  /** Resolved at load time: the explicit value, else `quiz` with the platform configured, else `none`. */
+  FORGE_KIND: ForgeKind;
   /** Made absolute at load time, relative to the repository root. */
   volumesRoot: string;
   seccompProfile: string;
   databasePath: string;
 };
+
+/**
+ * `FORGE_KIND` left unset (ADR-078 §3): `quiz` once the platform
+ * integration is configured — `PLATFORM_URL` (or its alias) given and the
+ * shared secret set —, `none` otherwise. The URL's built-in default does not
+ * count: a portal that never named its platform relays nothing.
+ */
+export function defaultForgeKind(env: NodeJS.ProcessEnv, secret: string): ForgeKind {
+  const platform = (env["PLATFORM_URL"] ?? "").trim();
+  return platform !== "" && secret !== "" ? "quiz" : "none";
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   // `PLATFORM_URL` replaced `CLASSROOM_URL` (M6-03); the old name is still
@@ -234,18 +251,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new Error(`Invalid configuration: ${issues}`);
   }
   const data = parsed.data;
-  // Root invariant 15: Quiz never uses heig-classroom's GitHub App, and that
-  // App is the only one this portal was ever configured with. Refused in
-  // every environment, development included, so a copied `/etc/codespace/env`
-  // cannot carry it over; Quiz's own App on the engine VM awaits its ADR.
+  // Root invariant 15 and ADR-078 §1: the portal holds no GitHub App
+  // credential, in any environment — never heig-classroom's App, and Quiz's
+  // key stays on the app VM. Refused in development too, so a copied
+  // `/etc/codespace/env` cannot carry one over.
   for (const key of ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY_PATH"] as const) {
     if (data[key] !== "") {
       throw new Error(
         `Invalid configuration: ${key} is set, but the portal holds no GitHub App ` +
-          "(Quiz never uses heig-classroom's App; the relay stays off until an ADR decides)",
+          "(ADR-078: the quiz forge asks Quiz for a token scoped to one repository)",
       );
     }
   }
+  const FORGE_KIND = data.FORGE_KIND ?? defaultForgeKind(aliased, data.CODESPACE_LAUNCH_SECRET);
   if (data.NODE_ENV === "production") {
     // A development secret in production is a deployment mistake, not a
     // setting.
@@ -284,9 +302,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         "Invalid configuration: development CODESPACE_LAUNCH_SECRET forbidden in production",
       );
     }
+    // ADR-078 §3: Forgejo's token would sit on the engine VM, and the
+    // unconfigured GitHub forge relays nothing.
+    if (FORGE_KIND === "forgejo" || FORGE_KIND === "github") {
+      throw new Error(`Invalid configuration: FORGE_KIND=${FORGE_KIND} is a development forge, forbidden in production`);
+    }
+    if (FORGE_KIND === "quiz" && !/^https:\/\//.test(data.PLATFORM_URL)) {
+      throw new Error("Invalid configuration: FORGE_KIND=quiz requires PLATFORM_URL over https in production");
+    }
+  }
+  if (FORGE_KIND === "quiz" && data.CODESPACE_LAUNCH_SECRET === "") {
+    throw new Error("Invalid configuration: FORGE_KIND=quiz requires CODESPACE_LAUNCH_SECRET (it signs the token requests)");
   }
   return {
     ...data,
+    FORGE_KIND,
     volumesRoot: fromRepoRoot(data.VOLUMES_ROOT),
     seccompProfile: fromRepoRoot(data.SECCOMP_PROFILE),
     databasePath: fromRepoRoot(data.DATABASE_PATH),

@@ -8,12 +8,11 @@ import { openGitDb } from "../db/client.js";
 import { FIXTURE_ENV, makeSourceRepo, tempDir } from "./fixtures.js";
 import { createUnconfiguredGithubForge, type Forge } from "./forge.js";
 import { git, gitBare } from "./gitRunner.js";
-import { createPushEventStore, recordPush, NULL_OID, type PushEventRow } from "./pushEvents.js";
+import { createPushEventStore, recordPush, type PushEventRow } from "./pushEvents.js";
 import {
   buildPushArgs,
   buildPushEnv,
   createRelayWorker,
-  refspecFor,
   stagingTargets,
   UNCONFIGURED_BACKOFF,
 } from "./relay.js";
@@ -55,18 +54,6 @@ function fakeForge(urlOf: () => string): Forge & { calls: number } {
   };
 }
 
-describe("refspecs", () => {
-  it("pushes an exact sha, forced (the staging repository is authoritative)", () => {
-    expect(refspecFor({ ref: "refs/heads/main", sha: "a".repeat(40) })).toBe(
-      `+${"a".repeat(40)}:refs/heads/main`,
-    );
-  });
-
-  it("propagates a ref deletion", () => {
-    expect(refspecFor({ ref: "refs/heads/old", sha: NULL_OID })).toBe(":refs/heads/old");
-  });
-});
-
 describe("how the token travels", () => {
   it("is neither in argv nor in a file: only in the environment", () => {
     const args = buildPushArgs("/vol/staging.git", "https://forge/e/tp.git", ["+abc:refs/heads/main"]);
@@ -77,6 +64,8 @@ describe("how the token travels", () => {
     expect(env["GIT_CONFIG_COUNT"]).toBe("1");
     expect(env["GIT_CONFIG_KEY_0"]).toBe("http.extraHeader");
     expect(env["GIT_CONFIG_VALUE_0"]).toBe(`Authorization: token ${TOKEN}`);
+    // The quiz forge scopes it to GitHub (ADR-078 §3): never sent to another host.
+    expect(buildPushEnv(`token ${TOKEN}`, "https://github.com/")["GIT_CONFIG_KEY_0"]).toBe("http.https://github.com/.extraHeader");
     // No `-c`, no `--config-env`, no temporary file: the three ways a token
     // would have become visible in `ps` or on disk.
     expect(Object.keys(env)).toEqual(["GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"]);
@@ -127,7 +116,7 @@ describe("createRelayWorker", () => {
     ]);
     const result = await worker.runOnce();
 
-    expect(result).toEqual({ relayed: 1, retried: 0, failed: 0 });
+    expect(result).toEqual({ relayed: 1, retried: 0, failed: 0, rejected: 0 });
     expect((await gitBare(s.forgeRepo, ["rev-parse", "refs/heads/main"])).trim()).toBe(s.src.sha);
     const rows = await s.store.bySession(SESSION.sessionId);
     expect(rows[0]?.state).toBe("relayed");
@@ -149,7 +138,7 @@ describe("createRelayWorker", () => {
       { ref: "refs/heads/main", oldSha: null, sha: s.src.sha },
     ]);
 
-    expect(await worker.runOnce()).toEqual({ relayed: 0, retried: 1, failed: 0 });
+    expect(await worker.runOnce()).toEqual({ relayed: 0, retried: 1, failed: 0, rejected: 0 });
     let row = (await s.store.bySession(SESSION.sessionId))[0] as PushEventRow;
     // The student's push already succeeded: the submission is not at risk.
     expect(row.state).toBe("pending");
@@ -157,7 +146,7 @@ describe("createRelayWorker", () => {
     expect(row.lastError).toBeTruthy();
 
     target = s.forgeRepo; // the forge comes back
-    expect(await worker.runOnce()).toEqual({ relayed: 1, retried: 0, failed: 0 });
+    expect(await worker.runOnce()).toEqual({ relayed: 1, retried: 0, failed: 0, rejected: 0 });
     row = (await s.store.bySession(SESSION.sessionId))[0] as PushEventRow;
     expect(row.state).toBe("relayed");
     s.close();
@@ -198,12 +187,12 @@ describe("createRelayWorker", () => {
       { ref: "refs/heads/main", oldSha: null, sha: s.src.sha },
     ]);
     for (let i = 0; i < 4; i++) {
-      expect(await worker.runOnce()).toEqual({ relayed: 0, retried: 1, failed: 0 });
+      expect(await worker.runOnce()).toEqual({ relayed: 0, retried: 1, failed: 0, rejected: 0 });
     }
     const row = (await s.store.bySession(SESSION.sessionId))[0] as PushEventRow;
     expect(row.state).toBe("pending");
     expect(row.attempts).toBe(4);
-    expect(row.lastError).toMatch(/GitHub App not configured/);
+    expect(row.lastError).toMatch(/No GitHub App on this portal/);
     s.close();
   });
 
@@ -221,13 +210,14 @@ describe("createRelayWorker", () => {
       now: () => clock,
       log: { info: () => undefined, warn: (_o, m) => warns.push(m) },
     });
-    await recordPush({ store: s.store }, SESSION, [
+    // Received on the worker's clock: a real `now` would land after it and never be due.
+    await recordPush({ store: s.store, now: () => clock }, SESSION, [
       { ref: "refs/heads/main", oldSha: null, sha: s.src.sha },
     ]);
 
     const waits: number[] = [];
     for (let i = 0; i < 12; i++) {
-      expect(await worker.runOnce()).toEqual({ relayed: 0, retried: 1, failed: 0 });
+      expect(await worker.runOnce()).toEqual({ relayed: 0, retried: 1, failed: 0, rejected: 0 });
       const row = (await s.store.bySession(SESSION.sessionId))[0] as PushEventRow;
       waits.push((row.nextAttemptAt as Date).getTime() - clock.getTime());
       clock = row.nextAttemptAt as Date; // jump straight to the due date

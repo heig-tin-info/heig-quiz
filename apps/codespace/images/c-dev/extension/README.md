@@ -5,8 +5,12 @@ project. It adds, at the right of the status bar, the time left until the
 assignment deadline and a « Fermer » button that takes the student back to the
 portal.
 
-Everything comes from the container environment (`CODESPACE_DEADLINE`,
-`CODESPACE_RETURN_URL`, `CODESPACE_ASSIGNMENT_NAME`), set by the portal's
-`podman run`. No network access, no telemetry, no dependency.
+The countdown and the button come from the container environment
+(`CODESPACE_DEADLINE`, `CODESPACE_RETURN_URL`, `CODESPACE_ASSIGNMENT_NAME`),
+set by the portal's `podman run`. A third item warns when GitHub refused the
+student's last push (ADR-078 §6: the relay never forces; pull, then push
+again): it polls `GET <origin>/push-status` on the portal's git channel, the
+workspace's `origin` remote, every 30 s. No other network access, no
+telemetry, no dependency, no credential.
 
 Full documentation: `images/c-dev/README.md` of the heig-classroom repository.

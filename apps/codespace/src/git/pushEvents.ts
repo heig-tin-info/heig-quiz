@@ -28,7 +28,37 @@ export interface PushEventStore {
   /** Stays `pending`: a forge outage must not lose the submission. */
   markRetry(ids: string[], nextAttemptAt: Date, error: string): Promise<void>;
   markFailed(ids: string[], error: string): Promise<void>;
+  /** Terminal (ADR-078 §6): GitHub refused the ref, or it is a deletion; `reason` is what the student and the staff read. */
+  markRejected(ids: string[], reason: string): Promise<void>;
   bySession(sessionId: string): Promise<PushEventRow[]>;
+  /** Rows of (student, assignment) still waiting for the relay. */
+  pendingCount(student: string, assignment: string): Promise<number>;
+}
+
+/** What a session's last refused push says (ADR-078 §6), or null. */
+export interface RejectedPush {
+  ref: string;
+  at: Date;
+  reason: string;
+}
+
+/**
+ * The push of a session GitHub refused and that nothing replaced: the
+ * latest row of each ref (by receipt), when it is `rejected`; of several
+ * such refs, the latest. A later push of the same branch — pending, relayed
+ * or itself refused — replaces it.
+ */
+export function lastRejectedPush(rows: readonly PushEventRow[]): RejectedPush | null {
+  const latest = new Map<string, PushEventRow>();
+  for (const row of rows) {
+    const seen = latest.get(row.ref);
+    if (!seen || row.receivedAt.getTime() >= seen.receivedAt.getTime()) latest.set(row.ref, row);
+  }
+  let found: PushEventRow | null = null;
+  for (const row of latest.values()) {
+    if (row.state === "rejected" && (!found || row.receivedAt.getTime() > found.receivedAt.getTime())) found = row;
+  }
+  return found ? { ref: found.ref, at: found.receivedAt, reason: found.lastError ?? "" } : null;
 }
 
 /** Told about new events once they are durably stored, never before. */
@@ -140,6 +170,20 @@ export function createPushEventStore(db: PushEventDb): PushEventStore {
         .set({ state: "failed", lastError: error.slice(0, 2000), nextAttemptAt: null })
         .where(inArray(pushEvents.id, ids))
         .run();
+    },
+    async markRejected(ids, reason) {
+      if (ids.length === 0) return;
+      db.update(pushEvents)
+        .set({ state: "rejected", lastError: reason.slice(0, 2000), nextAttemptAt: null })
+        .where(inArray(pushEvents.id, ids))
+        .run();
+    },
+    async pendingCount(student, assignment) {
+      return db
+        .select({ id: pushEvents.id })
+        .from(pushEvents)
+        .where(and(eq(pushEvents.student, student), eq(pushEvents.assignment, assignment), eq(pushEvents.state, "pending")))
+        .all().length;
     },
     async bySession(sessionId) {
       return db

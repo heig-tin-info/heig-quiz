@@ -50,7 +50,7 @@ import { isOnlineMode, quotaHolder, signHs256, workModeRefusal, workspaceStartRe
 import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
-import { classrooms, codespaceProjects, courseStaff, enrollments, githubAccounts, projectRepos, projects, teacherGrants, users } from "../../db/schema.js";
+import { classrooms, codespaceLaunches, codespaceProjects, courseStaff, enrollments, githubAccounts, projectRepos, projects, teacherGrants, users } from "../../db/schema.js";
 import { knownEmails, normalizeEmail } from "../../identity.js";
 import { CODESPACE_SYNC_QUEUE } from "../../jobs.js";
 import { PORTAL } from "../../auth/session.js";
@@ -177,10 +177,9 @@ async function quotaHolderOf(db: Db, courseId: string, createdBy: string): Promi
  * sends it again). `online_seb` is sent like `online`, with no Browser
  * Exam Key: the Config Key alone (D21, M6-07; a BEK list waits for proof B
  * step 7, 06 §6.3). The workspace is seeded
- * from the distribution repository, never the source (N-SEC-20). With the
- * portal's forge off (ADR-047, M6-03 amendment (a)) it can clone only a
- * PUBLIC repository: a private distribution syncs, but cannot seed a
- * workspace until Quiz's App is on the engine VM (M6-04/05).
+ * from the distribution repository, never the source (N-SEC-20). A private
+ * one seeds through the portal's `quiz` forge: Quiz grants it a read token
+ * on that repository for an `online_seb` project (ADR-078, M6-10).
  */
 export async function syncPayload(db: Db, projectId: string): Promise<CodespaceAssignmentSync | null> {
   const [row] = await db
@@ -408,6 +407,8 @@ export async function startWorkspace(
     if (refusal) return refusal;
     const [account] = await tx.select({ login: githubAccounts.login }).from(githubAccounts).where(eq(githubAccounts.userId, who.user.id));
     if (!who.staffSeat) await markLaunched(tx, project.id, now);
+    // Every launch, a staff seat's too: the git relay's token route reads it (ADR-078 §6).
+    await recordLaunch(tx, project.id, who.user.id, now);
     const { user } = who;
     const issued = await launchToken(
       config,
@@ -448,4 +449,12 @@ export async function markLaunched(tx: Tx, projectId: string, now: Date): Promis
       target: codespaceProjects.projectId,
       set: { firstLaunchAt: sql`coalesce(${codespaceProjects.firstLaunchAt}, ${now.toISOString()}::timestamptz)` },
     });
+}
+
+/** Records a launch token issued to `userId` on the project (`codespace_launches`, ADR-078 §6): the first kept, the last moved. */
+async function recordLaunch(tx: Tx, projectId: string, userId: string, now: Date): Promise<void> {
+  await tx
+    .insert(codespaceLaunches)
+    .values({ projectId, userId, firstLaunchAt: now, lastLaunchAt: now })
+    .onConflictDoUpdate({ target: [codespaceLaunches.projectId, codespaceLaunches.userId], set: { lastLaunchAt: now } });
 }

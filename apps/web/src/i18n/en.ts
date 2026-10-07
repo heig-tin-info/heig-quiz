@@ -4562,6 +4562,8 @@ export const en = {
   "project.workspace.col.state": "State",
   "project.workspace.col.lastSeen": "Last active",
   "project.workspace.col.lastPush": "Last push",
+  "project.workspace.pushRejected": "Rejected by GitHub ({branch})",
+  "project.workspace.pushRejected.hint": "Not relayed to GitHub: the student must pull, then push again.",
   "project.workspace.state.starting": "Starting",
   "project.workspace.state.running": "Running",
   "project.workspace.state.stopped": "Stopped",

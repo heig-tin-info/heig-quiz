@@ -11,10 +11,11 @@ import {
   sessions,
   users,
   type AssignmentRow,
+  type PushEventRow,
   type SessionRow,
   type UserRow,
 } from "../db/schema.js";
-import type { RepoRef } from "../git/index.js";
+import { lastRejectedPush, type RejectedPush, type RepoRef } from "../git/index.js";
 
 /**
  * States in which a session still counts as "the" session of the (student,
@@ -151,7 +152,7 @@ export function countLiveSessionsForTeacher(db: Db, teacherId: string): number {
 export function assignmentSessionRows(
   db: Db,
   assignmentId: string,
-): Array<{ session: SessionRow; user: UserRow; lastPushAt: Date | null }> {
+): Array<{ session: SessionRow; user: UserRow; lastPushAt: Date | null; rejectedPush: RejectedPush | null }> {
   const rows = db
     .select({ session: sessions, user: users })
     .from(sessions)
@@ -159,17 +160,20 @@ export function assignmentSessionRows(
     .where(eq(sessions.assignmentId, assignmentId))
     .orderBy(desc(sessions.createdAt))
     .all();
-  const lastPush = new Map<string, Date>();
-  for (const p of db
-    .select({ sessionId: pushEvents.sessionId, receivedAt: pushEvents.receivedAt })
-    .from(pushEvents)
-    .all()) {
-    const current = lastPush.get(p.sessionId);
-    if (!current || p.receivedAt > current) lastPush.set(p.sessionId, p.receivedAt);
+  const pushes = new Map<string, PushEventRow[]>();
+  for (const p of db.select().from(pushEvents).where(eq(pushEvents.assignment, assignmentId)).all()) {
+    const list = pushes.get(p.sessionId);
+    if (list) list.push(p);
+    else pushes.set(p.sessionId, [p]);
   }
-  return rows.map((r) => ({
-    session: r.session,
-    user: r.user,
-    lastPushAt: lastPush.get(r.session.id) ?? null,
-  }));
+  return rows.map((r) => {
+    const own = pushes.get(r.session.id) ?? [];
+    const last = own.reduce<Date | null>((at, p) => (at === null || p.receivedAt > at ? p.receivedAt : at), null);
+    return { session: r.session, user: r.user, lastPushAt: last, rejectedPush: lastRejectedPush(own) };
+  });
+}
+
+/** A session's last push GitHub refused and nothing replaced (ADR-078 §6): what the workspace's status bar shows. */
+export function rejectedPushOfSession(db: Db, sessionId: string): RejectedPush | null {
+  return lastRejectedPush(db.select().from(pushEvents).where(eq(pushEvents.sessionId, sessionId)).all());
 }

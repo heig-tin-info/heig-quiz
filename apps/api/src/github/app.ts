@@ -205,6 +205,40 @@ export async function installationClient(
   });
 }
 
+/** An installation token narrowed to one repository, as GitHub minted it. */
+export interface ScopedToken {
+  token: string;
+  expiresAt: Date;
+}
+
+/**
+ * THE one place a token for the online workspace portal is minted (ADR-078
+ * §2): `POST /app/installations/{id}/access_tokens` with the App's JWT,
+ * narrowed to ONE repository id and to `contents` alone (`write` for the
+ * student's repository, `read` for a distribution repository) — never
+ * `workflows`, `administration`, `pull_requests` nor anything else;
+ * `metadata: read` comes implicitly. GitHub's error propagates (the caller
+ * reports its status only); the token is never logged here.
+ */
+export async function mintRepositoryToken(
+  config: AppConfig,
+  installationId: number,
+  githubRepoId: number,
+  contents: "write" | "read",
+): Promise<ScopedToken> {
+  const app = githubApp(config);
+  if (!app) throw new Error("GitHub App is not configured (missing app id or PEM file)");
+  return tracked("github", async () => {
+    const { data } = await app.octokit.request("POST /app/installations/{installation_id}/access_tokens", {
+      installation_id: installationId,
+      repository_ids: [githubRepoId],
+      permissions: { contents },
+      request: HTTP_READ,
+    });
+    return { token: data.token, expiresAt: new Date(data.expires_at) };
+  });
+}
+
 /**
  * Organizations where the App is installed (the connect sheet's picker),
  * every page, sorted by login; users' installations left out. Throws when

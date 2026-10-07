@@ -31,7 +31,8 @@ const sessions: ProjectWorkspaceSessions = {
       state: "running",
       createdAt: new Date().toISOString(),
       lastSeenAt: new Date().toISOString(),
-      lastPushAt: null,
+      lastPushAt: new Date().toISOString(),
+      rejectedPush: { ref: "refs/heads/main", at: new Date().toISOString(), reason: "fetch first" },
     },
     {
       sessionId: "s2",
@@ -40,6 +41,7 @@ const sessions: ProjectWorkspaceSessions = {
       createdAt: new Date().toISOString(),
       lastSeenAt: new Date().toISOString(),
       lastPushAt: null,
+      rejectedPush: null,
     },
   ],
 };
@@ -82,6 +84,11 @@ describe("the project's workspace section", () => {
     expect(screen.getByText("Not in this classroom")).toBeInTheDocument();
     expect(screen.getByText("Running")).toBeInTheDocument();
     expect(screen.getByText("Failed")).toBeInTheDocument();
+    // A push GitHub refused (ADR-078 §6): our sentence, GitHub's reason on hover; on that row only.
+    const rejected = screen.getAllByTestId("workspace-push-rejected");
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]).toHaveTextContent("Rejected by GitHub (main)");
+    expect(within(rejected[0]!).getByText(/the student must pull/)).toHaveAttribute("title", "fetch first");
   });
 
   it("shows the last sync's failure, and resyncs on request", async () => {

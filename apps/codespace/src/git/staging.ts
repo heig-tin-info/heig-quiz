@@ -48,6 +48,8 @@ export interface StagingOptions {
    * relay. Absent = anonymous fetch, which is enough for a public repository.
    */
   authorization?: string;
+  /** The URL prefix the header is scoped to (the forge's `headerScope`); absent: every URL. */
+  authorizationScope?: string;
 }
 
 export interface StagingPaths {
@@ -154,7 +156,7 @@ export async function ensureStagingRepo(opts: StagingOptions): Promise<StagingRe
       ["fetch", "--prune", "--no-tags", from, ...REFSPECS],
       // The authorization touches neither argv (`ps`, `/proc/<pid>/cmdline`)
       // nor the disk; `gitRunner.redactSecrets` strips it from error messages.
-      opts.authorization ? { env: gitAuthEnv(opts.authorization) } : {},
+      opts.authorization ? { env: gitAuthEnv(opts.authorization, opts.authorizationScope) } : {},
     );
     fetched = true;
   }

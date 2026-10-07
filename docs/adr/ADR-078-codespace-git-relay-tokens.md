@@ -5,10 +5,10 @@
 Accepted (2026-10-07, product owner: option B below). Revised the same
 day after a spec challenge (orchestrator): no forced relay, attribution by
 declared heads, tokens until the deadline plus the grace — that last point
-(§7) awaits the product owner's confirmation. Implementation is
-merge task M6-10 ([task cards](../merge/09-tasks.md),
-[progress](../merge/PROGRESS.md)); until it ships the portal runs with its
-relay off, as the M6-03 amendment of ADR-047 left it.
+(§7) confirmed by the product owner on 2026-10-07. Implemented by merge
+task M6-10 ([task cards](../merge/09-tasks.md),
+[progress](../merge/PROGRESS.md)); until it is deployed the portal runs
+with its relay off, as the M6-03 amendment of ADR-047 left it.
 
 Scope: how the online workspace portal (`apps/codespace`, on the engine VM)
 reaches a student's GitHub repository — seeding a workspace from it and
@@ -331,9 +331,9 @@ bypasses the lock (fact 1 of the context); under `commit` nothing is
 locked; the lock lands up to minutes after the deadline; and only Quiz
 knows a repository's own, later deadline (the sync sends the project's).
 **Until the deadline plus the grace** (decided by the orchestrator on
-2026-10-07, **to be confirmed by the product owner**). Quiz grants write
-tokens, and accepts relay declarations, until the repository's effective
-deadline plus the project's grace; after that, `409 closed`. This mirrors
+2026-10-07, confirmed by the product owner the same day). Quiz grants
+write tokens, and accepts relay declarations, until the repository's
+effective deadline plus the project's grace; after that, `409 closed`. This mirrors
 `free` mode, where a push after the deadline is still received and marked
 late (F-PROJ-11), never counted in the frozen score. It also keeps the
 routine end of a session from leaving pushes stuck: a student who pushes in

@@ -278,7 +278,7 @@ async function classroomRoutesImpl(
       const summaries: CodespaceSessionSummary[] = assignmentSessionRows(
         db,
         assignment.id,
-      ).map(({ session, user, lastPushAt }) => ({
+      ).map(({ session, user, lastPushAt, rejectedPush }) => ({
         sessionId: session.id,
         // The platform's id, the one the caller matches with its own users.
         // Every account is born from a launch token (`upsertLaunchUser`), so
@@ -289,6 +289,10 @@ async function classroomRoutesImpl(
         createdAt: session.createdAt.toISOString(),
         lastSeenAt: session.lastSeen.toISOString(),
         lastPushAt: lastPushAt ? lastPushAt.toISOString() : null,
+        // GitHub's refusal of the relay (ADR-078 §6), for the staff's workspace list.
+        rejectedPush: rejectedPush
+          ? { ref: rejectedPush.ref, at: rejectedPush.at.toISOString(), reason: rejectedPush.reason }
+          : null,
       }));
       return reply.code(200).send(summaries);
     },

@@ -25,6 +25,7 @@ import {
   redactSecrets,
   refSnapshot,
   stagingPaths,
+  type ForgeOwner,
   type RepoRef,
   type SessionLookup,
   type StagingResult,
@@ -245,7 +246,14 @@ export interface ManagerDeps extends ManagerOptions {
    * then attempted anonymously, which is enough for a public repository, and
    * the cause is kept for the error page should the fetch fail.
    */
-  forgeAuthorization?: (repo: RepoRef) => Promise<string>;
+  forgeAuthorization?: (repo: RepoRef, owner: ForgeOwner) => Promise<string>;
+  /** The URL prefix the forge's header is scoped to (`Forge.headerScope`). */
+  forgeHeaderScope?: string;
+  /**
+   * A session closed: the forge may forget its credentials when nothing of
+   * the workspace waits for the relay (ADR-078 §3).
+   */
+  onSessionClosed?: (owner: ForgeOwner) => void | Promise<void>;
 }
 
 /**
@@ -373,7 +381,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
     let authError: unknown;
     if (sourceRepo && opts.forgeAuthorization) {
       try {
-        authorization = await opts.forgeAuthorization(sourceRepo);
+        authorization = await opts.forgeAuthorization(sourceRepo, { assignment: assignment.id, student: session.student });
       } catch (err) {
         authError = err;
       }
@@ -388,6 +396,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         uploadPack: assignment.uploadPack,
         defaultBranch: defaultBranchOf(session, assignment),
         ...(authorization ? { authorization } : {}),
+        ...(opts.forgeHeaderScope ? { authorizationScope: opts.forgeHeaderScope } : {}),
       });
       if (result.refs === 0 && wanted.mode === "exam") {
         throw new WorkspaceBootstrapError(
@@ -775,6 +784,9 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         cookieToken: newCookieToken(),
       });
       log.info({ sessionId, reason }, "session closed, volume kept");
+      await Promise.resolve(opts.onSessionClosed?.({ assignment: session.assignmentId, student: session.student })).catch(
+        (err: unknown) => log.warn({ sessionId, err: redactSecrets(String((err as Error).message ?? err)) }, "forgetting the session's credentials failed"),
+      );
     },
 
     touch(sessionId, at = new Date()) {

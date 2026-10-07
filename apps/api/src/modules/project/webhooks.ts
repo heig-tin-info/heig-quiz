@@ -36,7 +36,7 @@ import { z } from "zod";
 import { githubOrganizations, projectRepos, projects, botCommits } from "../../db/schema.js";
 import { installationClient, isZeroSha } from "../../github/app.js";
 import { forgetRepoLiveState } from "../../github/metrics.js";
-import { onEvent, onReceipt, projectInstallation, pushedBy, type WebhookHandler } from "../github/service.js";
+import { onEvent, onReceipt, projectInstallation, pushAuthor, type WebhookHandler } from "../github/service.js";
 import { completedRun, ingestCompletedRun, isEligible, isLastStudentCommit, RawWorkflowRun } from "./grading.js";
 import { protectFiles } from "./protection.js";
 import { BRANCH_REF, followRepoRename, hintRepo, markRepoDeleted, moveLastCommit, PushEvent, repoContext, tracksRepo } from "./repos.js";
@@ -45,7 +45,9 @@ import { pullRequest, sourcePush } from "./sync.js";
 /**
  * A push on a student's repository. A deleted branch changes nothing. Only
  * a person's push is the student's last commit — the commit whose CI state
- * the repository shows (`isLastStudentCommit`). A workflow's commit
+ * the repository shows (`isLastStudentCommit`) —, a relayed push of the
+ * online workspace whose head the portal declared included (`pushAuthor`,
+ * ADR-078 §6). A workflow's commit
  * (`github-actions[bot]`, the review's `GRADING.yml`) is recorded as a bot
  * commit and checked; the App's own push (a restore, a deadline commit, a
  * sync) recorded its bot commit before it moved the branch, and is never
@@ -61,7 +63,8 @@ const push: WebhookHandler = async (app, config, delivery) => {
   if (!ctx || ctx.repo.deletedAt !== null) return;
   forgetRepoLiveState(ctx.repo.fullName);
 
-  const by = pushedBy(config, sender?.login);
+  // A relayed push of the online workspace is the App's sender but the student's work (ADR-078 §6).
+  const by = await pushAuthor(app.db, config, { senderLogin: sender?.login, githubRepoId: repository.id, after });
   if (by === "workflow") {
     await app.db.insert(botCommits).values({ repoId: ctx.repo.id, sha: after, kind: "grader" }).onConflictDoNothing();
   } else if (by === "person") {

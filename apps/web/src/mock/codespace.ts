@@ -107,9 +107,11 @@ on("GET", "/app/api/projects/:id/workspace/sessions", (m): ProjectWorkspaceSessi
         createdAt: at(180 - i * 20),
         lastSeenAt: at(i === 2 ? 95 : 2 + i * 3),
         lastPushAt: i === 1 ? null : at(30 + i * 10),
+        // The first student's last push came after a restore by Quiz's App: GitHub refused it (ADR-078 §6).
+        rejectedPush: i === 0 ? { ref: "refs/heads/main", at: at(30), reason: "fetch first" } : null,
       })),
       // An account the classroom does not hold: named by nobody.
-      { sessionId: "ws-9", user: null, state: "closed", createdAt: at(3 * 24 * 60), lastSeenAt: at(2 * 24 * 60), lastPushAt: null },
+      { sessionId: "ws-9", user: null, state: "closed", createdAt: at(3 * 24 * 60), lastSeenAt: at(2 * 24 * 60), lastPushAt: null, rejectedPush: null },
     ],
   };
 });

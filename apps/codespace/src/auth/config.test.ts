@@ -38,8 +38,36 @@ describe("PLATFORM_URL", () => {
 });
 
 describe("GitHub relay", () => {
+  const SECRET = "x".repeat(40);
+
   it("is off by default: nothing is relayed", () => {
     expect(loadConfig({}).FORGE_KIND).toBe("none");
+  });
+
+  it("defaults to Quiz's forge once the platform is configured (ADR-078 §3)", () => {
+    expect(loadConfig({ PLATFORM_URL: "https://quiz.example", CODESPACE_LAUNCH_SECRET: SECRET }).FORGE_KIND).toBe("quiz");
+    expect(loadConfig({ CLASSROOM_URL: "https://quiz.example", CODESPACE_LAUNCH_SECRET: SECRET }).FORGE_KIND).toBe("quiz");
+    // Either one missing: off. The URL's built-in default does not count.
+    expect(loadConfig({ CODESPACE_LAUNCH_SECRET: SECRET }).FORGE_KIND).toBe("none");
+    expect(loadConfig({ PLATFORM_URL: "https://quiz.example" }).FORGE_KIND).toBe("none");
+    // `none` stays settable explicitly.
+    expect(loadConfig({ PLATFORM_URL: "https://quiz.example", CODESPACE_LAUNCH_SECRET: SECRET, FORGE_KIND: "none" }).FORGE_KIND).toBe("none");
+  });
+
+  it("refuses the quiz forge without the secret that signs its requests", () => {
+    expect(() => loadConfig({ FORGE_KIND: "quiz" })).toThrow(/CODESPACE_LAUNCH_SECRET/);
+  });
+
+  it("refuses forgejo, the unconfigured github forge, and quiz over plain http in production", () => {
+    const platform = { ...production, CODESPACE_LAUNCH_SECRET: SECRET, PLATFORM_URL: "https://quiz.example" };
+    expect(loadConfig(platform).FORGE_KIND).toBe("quiz");
+    expect(() => loadConfig({ ...platform, FORGE_KIND: "forgejo" })).toThrow(/forgejo/);
+    expect(() => loadConfig({ ...platform, FORGE_KIND: "github" })).toThrow(/github/);
+    expect(() => loadConfig({ ...platform, PLATFORM_URL: "http://quiz.example" })).toThrow(/https/);
+    expect(loadConfig({ ...platform, FORGE_KIND: "none" }).FORGE_KIND).toBe("none");
+    // In development, both stay available.
+    expect(loadConfig({ FORGE_KIND: "forgejo" }).FORGE_KIND).toBe("forgejo");
+    expect(loadConfig({ FORGE_KIND: "github" }).FORGE_KIND).toBe("github");
   });
 
   it.each(["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY_PATH"])(
