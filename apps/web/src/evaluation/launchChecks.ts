@@ -19,17 +19,16 @@
  *     class nobody has signed in, and a warning there would be noise.
  */
 import {
-  conditionsOf,
-  negativeMarkingOf,
   retakesOf,
   type EvaluationDetail,
 } from "@quiz/contracts";
 import {
   announcedConditionsOn,
+  imposedConditions,
   lacksGradedPoints,
-  negativeMarkingOn,
   retakesOn,
   templatePullable,
+  type ImposedCondition,
   type TrustedClient,
   trustedClientsOf,
 } from "@quiz/domain";
@@ -37,6 +36,7 @@ import {
 import type { Dict, TFunction } from "../i18n";
 import type { CheckLevel } from "../ui";
 import { typeLabel } from "../questionTypes";
+import { imposedText } from "../student/ConditionsList";
 import { timingFragment } from "./presetSummary";
 import { missingTiming, missingTimingKey } from "./timing";
 
@@ -231,14 +231,19 @@ function timingCheck(
 }
 
 function rulesCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
-  const { settings, mode } = detail.evaluation;
-  const retakes = retakesOf(settings);
-  const announced = announcedConditionsOn(mode, conditionsOf(settings));
-  const attempts = !retakesOn(mode, retakes)
-    ? t("launch.rules.oneAttempt")
-    : retakes.maxAttempts === null
-      ? t(`launch.rules.unlimited.${retakes.keep}` as keyof Dict)
-      : t(`launch.rules.upTo.${retakes.keep}` as keyof Dict, { n: retakes.maxAttempts });
+  const { evaluation } = detail;
+  const { settings, mode } = evaluation;
+  // ADR-079: the attempts and the negative marking as the students read them.
+  const imposed = imposedConditions({ ...evaluation, timeBonusPercent: 0 });
+  const line = <K extends ImposedCondition["key"]>(key: K) => imposed.find((c) => c.key === key);
+  const attemptsLine = line("attempts");
+  const attempts = attemptsLine
+    ? [
+        imposedText(attemptsLine, t).title,
+        ...(retakesOn(mode, retakesOf(settings)) ? [t(`launch.rules.keep.${retakesOf(settings).keep}`)] : []),
+      ].join(", ")
+    : null;
+  const announced = announcedConditionsOn(mode, settings.conditions);
   return {
     id: "rules",
     level: "info",
@@ -249,8 +254,8 @@ function rulesCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
       ].join(", "),
     ),
     detail: [
-      attempts,
-      ...(negativeMarkingOn(mode, negativeMarkingOf(settings)) ? [t("launch.rules.negative")] : []),
+      ...(attempts === null ? [] : [attempts]),
+      ...(line("negative_marking") ? [t("launch.rules.negative")] : []),
       // ADR-079: said, never warned about — an evaluation without any is fine.
       ...(announced.length === 0
         ? []

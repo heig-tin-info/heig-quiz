@@ -127,7 +127,13 @@ describe("POST /evaluations/:id/attempt/start", () => {
 
   it("applies the participant's time bonus", async () => {
     const { student, seed, start, entry } = await running({ durationS: 1000, timeBonusPercent: 50 });
-    expect((await post(entry, student.headers)).json().view.timeBonusPercent).toBe(50);
+    // The ready screen states it in the conditions' duration line (ADR-079).
+    expect((await post(entry, student.headers)).json().view.conditions.imposed).toContainEqual({
+      key: "duration",
+      kind: "info",
+      durationS: 1000,
+      bonusPercent: 50,
+    });
     const res = await post(start, student.headers);
     expect(res.statusCode, res.body).toBe(200);
     const [row] = await rowsOf(seed.evaluationId);

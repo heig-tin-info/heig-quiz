@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   announcedConditionsOn,
   conditionsAllowedFor,
-  IMPOSED_CONDITION_KEYS,
   imposedConditions,
   type ConditionsInput,
 } from "./evaluationConditions.js";
@@ -126,7 +125,15 @@ describe("imposedConditions (ADR-079)", () => {
         },
       ),
     );
-    expect(all).toEqual(IMPOSED_CONDITION_KEYS.filter((k) => all.includes(k)));
-    expect(all).toHaveLength(8);
+    expect(all).toEqual([
+      "trusted_client",
+      "calculator",
+      "duration",
+      "attempts",
+      "navigation",
+      "negative_marking",
+      "visibility_logged",
+      "autosave",
+    ]);
   });
 });

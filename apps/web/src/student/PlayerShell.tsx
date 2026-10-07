@@ -131,7 +131,7 @@ export function PlayerShell({
    * Reopens the evaluation's conditions (ADR-079): a quiet button of the bar,
    * never a second floating one — the calculator holds the bottom right.
    */
-  onConditions?: () => void;
+  onConditions?: (() => void) | undefined;
   /** What `Ctrl+K` offers here. Empty means no palette at all. */
   commands?: Command[];
   /** The offline alert, in the flow under the bar. */

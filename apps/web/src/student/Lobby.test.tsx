@@ -58,7 +58,6 @@ const view: LobbyView = {
   },
   present: 18,
   enrolled: 24,
-  timeBonusPercent: 33,
   serverNow: "2026-09-20T10:00:00.000Z",
 };
 

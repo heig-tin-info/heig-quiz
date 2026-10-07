@@ -14,6 +14,8 @@ import { z } from "zod";
 import {
   announcedConditionsOn,
   imposedConditions,
+  LOCKED_NAVIGATIONS,
+  PROVIDED_CALCULATORS,
   type ConditionsInput,
   type ImposedCondition as DomainImposedCondition,
 } from "@quiz/domain";
@@ -107,7 +109,7 @@ export const ImposedCondition = z.discriminatedUnion("key", [
   z.object({
     key: z.literal("calculator"),
     kind: z.literal("provided"),
-    calculator: z.enum(["standard", "scientific"]),
+    calculator: z.enum(PROVIDED_CALCULATORS),
   }),
   z.object({
     key: z.literal("duration"),
@@ -125,7 +127,7 @@ export const ImposedCondition = z.discriminatedUnion("key", [
   z.object({
     key: z.literal("navigation"),
     kind: z.literal("info"),
-    navigation: z.enum(["forward_only", "milestones"]),
+    navigation: z.enum(LOCKED_NAVIGATIONS),
   }),
   z.object({ key: z.literal("negative_marking"), kind: z.literal("info") }),
   z.object({ key: z.literal("visibility_logged"), kind: z.literal("info") }),
@@ -186,31 +188,28 @@ export const AttemptView = z.object({
     title: z.string(),
     mode: EvaluationMode,
     state: EvaluationState,
-    settings: EvaluationSettings,
+    /** The announced conditions travel in `conditions` only (ADR-079), without their catalog reference. */
+    settings: EvaluationSettings.omit({ conditions: true }),
     feedbackPolicy: FeedbackPolicy,
     pausedAt: z.iso.datetime().nullable(),
     totalPoints: z.number(),
   }),
   items: z.array(AttemptItem),
   /**
-   * ADR-079: the conditions, reopenable from the player's bar. The announced
-   * ones travel here only — `evaluation.settings` carries no `conditions`.
+   * ADR-079: the conditions, reopenable from the player's bar.
    */
   conditions: EvaluationConditions,
 });
 export type AttemptView = z.infer<typeof AttemptView>;
 
-
 /**
  * What an evaluation tells a student BEFORE the clock runs, said by the
  * waiting room and by the ready screen alike (§6.3, ADR-076 §1 as amended by
- * ADR-079): its conditions, and the student's own extra time, which the
- * screens also need beside the duration. Rules of the evaluation, not
- * question content.
+ * ADR-079): its conditions — the student's own extra time is in their
+ * duration or deadline line. Rules of the evaluation, not question content.
  */
 export const EvaluationRules = z.object({
   conditions: EvaluationConditions,
-  timeBonusPercent: z.number().int(),
 });
 export type EvaluationRules = z.infer<typeof EvaluationRules>;
 

@@ -392,7 +392,7 @@ export function PlayerView({
         onSelectSegment={selectSegment}
         progressLabel={progressLabel}
         commands={commands}
-        {...(openConditions ? { onConditions: openConditions } : {})}
+        onConditions={openConditions}
         wide={item !== undefined && isWide(item.type)}
         // Issue #125: an exercise may be left and continued later; an exam
         // may not look like it can. The teacher's preview, exam or not, has

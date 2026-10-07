@@ -30,7 +30,6 @@ const lobbyView: LobbyView = {
   conditions: { announced: [], imposed: [] },
   present: 3,
   enrolled: 6,
-  timeBonusPercent: 0,
   serverNow: "2026-09-20T10:00:00.000Z",
 };
 
@@ -193,8 +192,11 @@ describe("/take/:id on a running evaluation not yet started", () => {
       announcedDurationS: 1200,
       closesAt: null,
     },
-    conditions: { announced: [], imposed: [] },
-    timeBonusPercent: 25,
+    // The time line carries the student's extra time (ADR-079).
+    conditions: {
+      announced: [],
+      imposed: [{ key: "duration", kind: "info", durationS: 1200, bonusPercent: 25 }],
+    },
   };
 
   function renderReady(navigate = vi.fn()) {

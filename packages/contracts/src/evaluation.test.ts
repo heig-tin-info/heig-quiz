@@ -193,14 +193,10 @@ describe("evaluationConditionsOf (ADR-079)", () => {
   });
   const input = { settings, durationS: null, closesAt: null, timeBonusPercent: 0 };
 
-  it("keeps the kind and the text of the announced ones, and derives the imposed ones", () => {
-    expect(evaluationConditionsOf({ ...input, mode: "exam" })).toEqual({
-      announced: [{ kind: "provided", text: "A formula sheet" }],
-      imposed: [
-        { key: "attempts", kind: "info", maxAttempts: 1 },
-        { key: "autosave", kind: "info" },
-      ],
-    });
+  it("strips the catalog reference of the announced ones", () => {
+    expect(evaluationConditionsOf({ ...input, mode: "exam" }).announced).toEqual([
+      { kind: "provided", text: "A formula sheet" },
+    ]);
   });
 
   it("gives a poll none, whatever its row says", () => {

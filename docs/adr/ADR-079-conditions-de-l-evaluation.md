@@ -89,8 +89,10 @@ a text that changes after the exam leaves no record of what was announced.
   so the catalog reference never reaches a student. A database test searches
   every student payload for it.
 - The `EvaluationRules` of the waiting room and the ready screen shrink to
-  the conditions and the extra time; the navigation, negative-marking and
-  calculator fields they carried are imposed lines now.
+  the conditions; the navigation, negative-marking and calculator fields
+  they carried are imposed lines now, and the student's extra time travels
+  in the duration or deadline line, which the ready screen's sentence by
+  Start reads too.
 - A teacher can still write something the platform cannot check ("phones
   forbidden"): it reads as the teacher's word, under their heading, which is
   what it is.

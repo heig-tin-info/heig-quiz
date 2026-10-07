@@ -15,7 +15,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import type { AttemptEntry, ReadyView } from "@quiz/contracts";
-import { TIMING_CONDITION_KEYS } from "@quiz/domain";
+import type { ImposedConditionKey } from "@quiz/domain";
 
 import { ApiError, api } from "../api";
 import { useT, type TFunction } from "../i18n";
@@ -25,17 +25,23 @@ import { Button } from "../ui";
 import { isoDateTime } from "../ui/dates";
 import { ConditionsList, minutesWithBonus } from "./ConditionsList";
 
-/** What Start announces: the clock of N minutes, a closing instant, or no clock. */
+/** The imposed lines the sentence beside Start states instead of the list (ADR-079). */
+const CLOCK_KEYS: readonly ImposedConditionKey[] = ["duration", "deadline"];
+
+/**
+ * What Start announces: the clock of N minutes, a closing instant, or no
+ * clock — read from the conditions' own time line, which carries the
+ * student's extra time.
+ */
 function clockSentence(view: ReadyView, t: TFunction): string {
-  const { timing, announcedDurationS: durationS, closesAt } = view.evaluation;
-  if (timing === "duration" && durationS !== null) {
-    const n = minutesWithBonus(durationS, view.timeBonusPercent);
-    return view.timeBonusPercent > 0
-      ? t("ready.clock.durationBonus", { n, pct: view.timeBonusPercent })
-      : t("ready.clock.duration", { n });
-  }
-  if (timing === "deadline" && closesAt !== null) {
-    return t("ready.clock.deadline", { when: isoDateTime(closesAt) });
+  for (const line of view.conditions.imposed) {
+    if (line.key === "duration") {
+      const n = minutesWithBonus(line.durationS, line.bonusPercent);
+      return line.bonusPercent > 0
+        ? t("ready.clock.durationBonus", { n, pct: line.bonusPercent })
+        : t("ready.clock.duration", { n });
+    }
+    if (line.key === "deadline") return t("ready.clock.deadline", { when: isoDateTime(line.closesAt) });
   }
   return t("ready.clock.manual");
 }
@@ -80,7 +86,7 @@ export function Ready({
 
       {/* ADR-079: the conditions, without the time — the sentence above
           Start says it, in the words of what Start does. */}
-      <ConditionsList conditions={view.conditions} omit={TIMING_CONDITION_KEYS} className="mt-8" />
+      <ConditionsList conditions={view.conditions} omit={CLOCK_KEYS} className="mt-8" />
 
       <p id="ready-clock" className="mt-8 text-base text-fg-muted">
         {clock}

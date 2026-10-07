@@ -1,8 +1,8 @@
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import { ConditionKind, conditionsOf, evaluationConditionsOf, type EvaluationCondition } from "@quiz/contracts";
-import { MAX_CONDITION_LENGTH, MAX_CONDITIONS } from "@quiz/domain";
+import { ConditionKind, conditionsOf, type EvaluationCondition } from "@quiz/contracts";
+import { imposedConditions, MAX_CONDITION_LENGTH, MAX_CONDITIONS } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import { ConditionLine, imposedText } from "../student/ConditionsList";
@@ -46,7 +46,7 @@ export function ConditionsSetting({
     [next[i], next[i + delta]] = [next[i + delta]!, next[i]!];
     save(next);
   };
-  const imposed = evaluationConditionsOf({ ...config, closesAt, timeBonusPercent: 0 }).imposed;
+  const imposed = imposedConditions({ ...config, closesAt, timeBonusPercent: 0 });
 
   return (
     <Card className="divide-y divide-line px-4">

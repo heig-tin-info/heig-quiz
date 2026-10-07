@@ -65,7 +65,7 @@ export function imposedText(line: ImposedCondition, t: TFunction): { title: stri
     case "navigation":
       return line.navigation === "forward_only"
         ? { title: t("conditions.navigation.forward_only"), body: t("conditions.navigation.forward_only.body") }
-        : { title: t("conditions.navigation.milestones"), body: t("lobby.nav.milestones.body") };
+        : { title: t("conditions.navigation.milestones"), body: t("conditions.navigation.milestones.body") };
     case "negative_marking":
       return { title: t("conditions.negative"), body: t("conditions.negative.body") };
     case "visibility_logged":

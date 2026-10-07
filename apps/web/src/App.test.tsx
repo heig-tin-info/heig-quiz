@@ -39,7 +39,6 @@ const lobby: AttemptOrLobby = {
     conditions: { announced: [], imposed: [] },
     present: 3,
     enrolled: 6,
-    timeBonusPercent: 0,
     serverNow: "2026-09-20T10:00:00.000Z",
   } satisfies LobbyView,
 };

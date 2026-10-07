@@ -458,7 +458,6 @@ export const studentLobbyView = (): LobbyView => ({
   conditions: studentConditions(),
   present: 18,
   enrolled: 24,
-  timeBonusPercent: 33,
   serverNow: new Date().toISOString(),
 });
 
@@ -1012,7 +1011,6 @@ export const studentReadyView = (): ReadyView => ({
     closesAt: null,
   },
   conditions: studentConditions(),
-  timeBonusPercent: 33,
 });
 
 on("POST", "/app/api/evaluations/:id/attempt", () =>

@@ -944,21 +944,29 @@ export async function attemptOrLobbyView(
   evaluation: EvaluationRecord,
   attempt: AttemptRecord,
   now: Date,
+  /** Who holds the attempt, when the caller already loaded them; read once here otherwise. */
+  holder?: Participant,
 ): Promise<AttemptOrLobby> {
+  const participant = holder ?? (await participantOfAttempt(db, evaluation, attempt));
   if (!contentVisible(evaluation, attempt)) {
-    const participant = await participantOfAttempt(db, evaluation, attempt);
     return { kind: "lobby", view: await lobbyView(db, evaluation, participant, now) };
   }
-  return { kind: "attempt", view: await attemptView(db, evaluation, attempt, now) };
+  return { kind: "attempt", view: await attemptView(db, evaluation, attempt, now, participant) };
 }
 
+/**
+ * The attempt itself. `holder` is who holds it, whose extra time the
+ * conditions state (ADR-079): passed by a caller that already loaded them,
+ * read here otherwise.
+ */
 export async function attemptView(
   db: Db,
   evaluation: EvaluationRecord,
   attempt: AttemptRecord,
   now: Date,
+  holder?: Participant,
 ): Promise<AttemptView> {
-  const participant = await participantOfAttempt(db, evaluation, attempt);
+  const participant = holder ?? (await participantOfAttempt(db, evaluation, attempt));
   return viewOf(db, evaluation, {
     seed: attempt.seed,
     timeBonusPercent: participant.timeBonusPercent,
@@ -1035,8 +1043,8 @@ async function viewOf(
   const items = input.items ?? (await joinedItems(db, evaluation.id));
   const ordered = orderItems(items, settings, seed, evaluation.id);
   const locked = lockedItemIds(settings, ordered, answered);
-  // The announced conditions travel in `conditions` only, without their
-  // catalog reference (ADR-079): the settings a student holds carry none.
+  // `AttemptView` types the settings without `conditions` (ADR-079); a
+  // variable is not checked for excess keys, so they are taken out here.
   const { conditions: _announced, ...studentSettings } = settings;
   return {
     attempt: input.header,
@@ -1071,10 +1079,7 @@ function conditionsFor(evaluation: EvaluationRecord, timeBonusPercent: number): 
 
 /** What both the waiting room and the ready screen state (`EvaluationRules`). */
 function rulesOf(evaluation: EvaluationRecord, participant: Participant): EvaluationRules {
-  return {
-    conditions: conditionsFor(evaluation, participant.timeBonusPercent),
-    timeBonusPercent: participant.timeBonusPercent,
-  };
+  return { conditions: conditionsFor(evaluation, participant.timeBonusPercent) };
 }
 
 /**
@@ -1173,7 +1178,7 @@ export async function enterEvaluation(
   if (evaluation.state === "running") {
     attempt = await beginAttempt(db, evaluation, attempt, participant, now);
   }
-  const view = await attemptOrLobbyView(db, evaluation, attempt, now);
+  const view = await attemptOrLobbyView(db, evaluation, attempt, now, participant);
   return view.kind === "lobby"
     ? { kind: "lobby", view: view.view, attempt }
     : { kind: "attempt", view: view.view, attempt };
