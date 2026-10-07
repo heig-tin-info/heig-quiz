@@ -136,13 +136,13 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
   const inSeb = useMe().data?.session?.projectId === project.id;
 
   // ADR-047 §2: under Safe Exam Browser the student is invited to nothing
-  // and reaches no repository before grading. Once accepted, the page's
-  // action is the workspace's, never GitHub's (an invitation, the repository).
+  // (`invitation` null) and reaches no repository before grading. Once
+  // accepted, the page's action is the workspace's, never GitHub's.
   const noGithub = inSeb || project.workspace?.mode === "online_seb";
 
   const facts = factsOfProject(project);
   const kind = projectActionKind(facts, now);
-  const accepted = kind === "open" || (noGithub && kind === "invitation");
+  const accepted = kind === "open";
   const projectAction = useProjectAction(facts, { now, primary: true, readOnly });
   const action = noGithub && accepted ? null : projectAction;
   const live = project.repo && !project.repo.deleted ? project.repo : null;
@@ -193,7 +193,7 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
         <section className="space-y-3">
           <SectionHeading title={t("sproj.repo")} help="student-project" />
           {live ? (
-            <RepoCard project={project} repo={live} readOnly={readOnly} invited={!noGithub} />
+            <RepoCard project={project} repo={live} readOnly={readOnly} />
           ) : (
             <Card className="px-5 py-4 text-sm text-fg-muted">
               {kind === "accept"
@@ -298,19 +298,17 @@ function WorkspaceSection({
 /**
  * The student's live repository: its name on GitHub, their invitation while
  * it waits (with the Resend) and its lock. The commit it stands on is the
- * header's; the run and the score have their own sections. `invited`: false
- * under Safe Exam Browser, where nobody is invited (ADR-047 §2).
+ * header's; the run and the score have their own sections. No invitation
+ * at all under Safe Exam Browser, where nobody is invited (ADR-047 §2).
  */
 function RepoCard({
   project,
   repo,
   readOnly,
-  invited,
 }: {
   project: StudentProject;
   repo: StudentProjectRepo;
   readOnly: boolean;
-  invited: boolean;
 }) {
   const t = useT();
   return (
@@ -325,7 +323,7 @@ function RepoCard({
         <span className="truncate">{repo.fullName}</span>
         <ExternalLink className="size-3.5 shrink-0 text-fg-faint" aria-hidden />
       </a>
-      {invited && repo.invitation === "pending" ? (
+      {repo.invitation === "pending" ? (
         <p className="flex flex-wrap items-center gap-3">
           <span>{t("sproj.invitation.pending")}</span>
           {!readOnly ? <ResendButton projectId={project.id} /> : null}

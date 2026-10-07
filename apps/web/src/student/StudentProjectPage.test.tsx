@@ -412,7 +412,7 @@ describe("the online workspace (ADR-047, M6-06)", () => {
   });
 
   it("offers no invitation under Safe Exam Browser, outside SEB either (ADR-047 §2)", async () => {
-    mockFetch({ [URL]: ok(project({ workspace: { mode: "online_seb" }, repo: { ...project().repo!, invitation: "pending" } })) });
+    mockFetch({ [URL]: ok(project({ workspace: { mode: "online_seb" }, repo: { ...project().repo!, invitation: null } })) });
     render();
     expect(await screen.findByRole("button", { name: "Open in Safe Exam Browser" })).toHaveClass("bg-accent");
     expect(screen.getByText("heig/labo-1-lea")).toBeInTheDocument();

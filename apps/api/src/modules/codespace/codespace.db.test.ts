@@ -446,6 +446,8 @@ describe("an online_seb project (D21)", () => {
     const [issued] = await server.app.db.select().from(auditLog).where(and(eq(auditLog.action, "codespace.launch_issued"), eq(auditLog.subjectId, exam.id)));
     expect(issued!.payload).toEqual({ jti: claims.jti, mode: "online_seb", seb: true });
 
+    // Nobody was invited (ADR-047 §2): the student's view says so, never a "pending" invitation.
+    expect((await call("GET", `/app/api/student/projects/${exam.id}`, student.headers)).json().repo.invitation).toBeNull();
     // The token reaches the student from neither session.
     for (const headers of [student.headers, sebHeaders]) {
       const body = (await call("GET", `/app/api/student/projects/${exam.id}`, headers)).body;
