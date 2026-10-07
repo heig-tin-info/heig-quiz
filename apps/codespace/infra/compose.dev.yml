@@ -1,0 +1,24 @@
+# Development environment: local Git forge (Forgejo).
+# The dev OIDC IdP is classroom's Keycloak (docker-compose.dev.yml at the repo
+# root, realm hgc-dev, client codespace-portal): a single Keycloak for both
+# applications; in production, Switch edu-ID for both.
+# Start with: podman compose -f infra/compose.dev.yml up -d
+# Student containers are NOT here: the portal creates them dynamically.
+services:
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:11
+    environment:
+      USER_UID: "1000"
+      USER_GID: "1000"
+      FORGEJO__server__ROOT_URL: http://localhost:3300/
+      FORGEJO__server__HTTP_PORT: "3000"
+      FORGEJO__service__DISABLE_REGISTRATION: "false"
+      FORGEJO__security__INSTALL_LOCK: "true"
+      FORGEJO__database__DB_TYPE: sqlite3
+    ports:
+      - "127.0.0.1:3300:3000"
+    volumes:
+      - forgejo-data:/data
+
+volumes:
+  forgejo-data:

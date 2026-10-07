@@ -1,0 +1,4 @@
+Copyright (c) 2026 HEIG-VD — Yves Chevallier
+
+Internal extension of the heig-codespace project. Baked into the student image
+`codespace/c-dev`, it is neither published nor distributed separately.

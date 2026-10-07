@@ -4121,6 +4121,56 @@ serves now (16a), and what waits for the group repositories (16b).
   imported as ADR-047 (M0-03).
 - **Acceptance**: package build/typecheck/test; the app image contains no
   codespace; `invariant-reviewer` does not flag the sanctioned divergences.
+- **As delivered** (branch `merge/M6-03-import-codespace`): classroom's
+  `apps/codespace` at classroom `a676c8c`, as `@quiz/codespace`. No Quiz
+  module calls it yet (M6-06); nothing deploys it (M6-04).
+  - Package: Node 24 like the other apps (root `@types/node`), the root
+    `tsconfig.base.json` (tests now typechecked), `vitest.shared.ts`;
+    `better-sqlite3` added to the root `onlyBuiltDependencies`; a coverage
+    floor. Dependencies `openid-client`, `yaml` and `@fastify/formbody`
+    dropped with what used them.
+  - On `packages/*` only: `verifyHs256` from `@quiz/domain`; the local zod
+    copies (`classroom/schemas.ts`) deleted for `@quiz/contracts`'
+    `CodespaceAssignmentSync`, `LaunchTokenClaims`, `isSafeId` and the
+    audiences; `CodespaceSessionSummary` added to the contracts (the
+    answer of `GET /api/assignments/:id/sessions`). Launch and service
+    tokens accepted from both issuers, `heig-classroom` and `heig-quiz`.
+  - `PLATFORM_URL` replaces `CLASSROOM_URL`, read as an alias when the new
+    name is absent (`loadConfig`); `classroomUrl` ⇒ `platformUrl` in the
+    session manager.
+  - **Relay off** (ADR-047, M6-03 amendment (a)): `FORGE_KIND` defaults to
+    `none` (push in `staging.git` + `PushEvent`, nothing relayed);
+    `GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY_PATH` refused at startup in
+    every environment (`auth/config.test.ts`); `FORGE_KIND=github` is the
+    unconfigured forge only. `createGithubForge` stays, tested. Quiz's own
+    App on the engine VM: open, an ADR at M6-04/M6-05.
+  - **Portal OIDC login removed** (amendment (b)): `auth/oidc.ts`,
+    `auth/plugin.ts`, `auth/session.ts`, the home page and its Start
+    button, `/teacher/sessions`, `COOKIE_SECRET`, `OIDC_*`,
+    `SESSION_TTL_HOURS`; `/` is a landing page; the standalone
+    `/exam/:id/start` of `seb/routes.ts` answers 404 (an `onRequest` hook
+    in `server.ts`), the `.seb` route stays. `src/seb/` is otherwise
+    untouched until M6-07.
+  - CI: the unit suite runs in `test-rest` (it needs `git`, not Podman);
+    the four integration suites (`CODESPACE_INTEGRATION=1`) run nowhere.
+    The app image installs and deploys `@quiz/api` alone;
+    `.dockerignore` drops `apps/codespace/images`.
+  - Kept but inert until M6-04/M6-05: `deploy/` (classroom's VM recipe; its
+    env file still sets keys this portal refuses or ignores), `images/`,
+    `infra/`, the docs (headed by a Quiz note where they describe the
+    removed login). French-named docs renamed (`setup-workstation`,
+    `milestone-0`, `leads`, `proof-b-manual`).
+  - Dropped: `.env` (secrets) and `var/` (e2e databases and volumes),
+    `seed/` + `db/seed.ts` + `scripts/seed.ts` (classroom's standalone
+    YAML seed, meaningless without the login), `scripts/e2e.ts` /
+    `e2e.sh` (built on the OIDC login and the seed; M6-04 rewrites an
+    end-to-end run against `/launch`).
+  - Open: the portal's pages are French only (no en/fr dictionary reaches
+    this deployable); the users' subject prefix stays `classroom:` for
+    both issuers, so a classroom and a Quiz user with the same id would
+    share an account and a volume (ids are UUIDs on both sides);
+    `classroomStartUrl` still builds classroom's
+    `/app/codespace/start/:id` (M6-06/M6-07 decide Quiz's).
 
 ### M6-04 — Codespace CI/CD
 - **Depends on**: M6-03.

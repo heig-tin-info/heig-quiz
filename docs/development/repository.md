@@ -1,6 +1,6 @@
 # Repository layout
 
-One pnpm workspace, TypeScript end to end. Three applications under `apps/`,
+One pnpm workspace, TypeScript end to end. Four applications under `apps/`,
 the shared code under `packages/`, and everything else at the root. The
 schema, the module boundaries and the real-time design are settled in the
 [architecture chapter](../spec/05-architecture.md) of the specification; this
@@ -13,6 +13,8 @@ apps/
   api/        Fastify: modules, SSE, jobs, ticker, Drizzle schema + migrations
   web/        React SPA (Vite, Tailwind, TanStack Query)
   runner/     code execution in hardened Podman containers (@quiz/runner)
+  codespace/  the online workspace portal: code-server per student, SEB exam
+              mode, SQLite (@quiz/codespace, its own CLAUDE.md)
 packages/
   core/       the QuestionType contract, the seeded RNG, the runner interface
   registry/   the two static question-type registries (./server, ./client)
@@ -45,8 +47,8 @@ scripts/      smoke.sh, the end-to-end HTTP walk; staging-export.sh and
 
 This page owns the repository map; `CLAUDE.md` keeps the mandatory working
 rules and invariants. Workspace manifests are the source for exact packages
-and dependencies. Planned `ui-kit`, `canonical`, `cli` and `apps/codespace`
-are described by their spec/merge tasks, not entries in the current tree.
+and dependencies. Planned `ui-kit`, `canonical` and `cli` are described by
+their spec/merge tasks, not entries in the current tree.
 
 At the root: `Dockerfile` (the application image), `apps/runner/Dockerfile`
 (the runner image), `compose.prod.yml`, `compose.staging.yml`, `Caddyfile`,
@@ -90,6 +92,21 @@ socket. It depends on `@quiz/core` only. `apps/runner/README.md` documents
 the flags of every container, the request lifecycle, the images under
 `images/` and the configuration knobs. Its own image
 (`apps/runner/Dockerfile`) ships no engine, only the `podman-remote` client.
+
+### `apps/codespace`
+
+The online workspace portal ([ADR-047](../adr/ADR-047-espace-de-travail-en-ligne.md)),
+imported from heig-classroom by merge task M6-03: Fastify on :3100, SQLite
+(better-sqlite3, Drizzle, migrations under `drizzle/`), one long-lived
+code-server container per (student, assignment) on the engine VM, an SEB
+exam mode, and a git channel on an internal bridge. A separate deployable
+that imports only `packages/*` (`@quiz/domain` for HS256, `@quiz/contracts`
+for the codespace schemas) and knows the platform through two signed HTTP
+messages. It has no login of its own and its GitHub relay is off (ADR-047,
+M6-03 amendment). Its `CLAUDE.md` records its invariants and its two
+sanctioned divergences from the runner's; `deploy/`, `images/` and `infra/`
+are inert until M6-04/M6-05. No image built from the root context contains
+it.
 
 ## Packages
 
@@ -183,11 +200,12 @@ back by image tag, not by reverse migration (see
 
 | Suffix | Where | Runs on |
 | --- | --- | --- |
-| `*.test.ts` | every package, `apps/runner`, `apps/api` | plain Vitest, no I/O |
+| `*.test.ts` | every package, `apps/runner`, `apps/codespace`, `apps/api` | plain Vitest, no I/O (the portal's git tests run real `git` on temporary repositories) |
 | `*.db.test.ts` | `apps/api` | an in-memory PGlite created by `apps/api/src/test/db.ts`, migrated with the real files under `drizzle/`; `testApp()` returns a Fastify stub carrying that database and a `TestClock`, so a deadline is driven by moving the clock rather than by sleeping |
 | `*.test.tsx` | `apps/web`, the `qt-*` clients | Vitest with jsdom; `apps/web` runs its `.test.ts` files in a plain `node` project and its `.test.tsx` files in a `dom` project |
 | `*.leak.test.ts`, `toStudent.test.ts` | `apps/api/src/modules/live`, every `qt-*` | the content-safety tests of invariant 4 |
 | `*.int.test.ts` | `apps/runner` | real containers, `pnpm --filter @quiz/runner test:integration`, skipped without Podman |
+| listed in `vitest.config.ts` | `apps/codespace` | rootful Podman and a forge, `pnpm --filter @quiz/codespace test:integration` (`CODESPACE_INTEGRATION=1`), never in CI |
 
 On the shared workstation run `VITEST_MAX_WORKERS=4 pnpm -r
 --workspace-concurrency=1 test` (one command), following `AGENTS.md`'s memory
