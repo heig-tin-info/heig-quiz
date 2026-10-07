@@ -30,9 +30,9 @@ function user(
   patch: Partial<UserRow> = {},
 ): Pick<UserRow, "displayName" | "email" | "login"> {
   return {
-    displayName: "Pierre Bressy",
-    email: "pierre.bressy@heig-vd.ch",
-    login: "pierre.bressy",
+    displayName: "Alex Dupuis",
+    email: "alex.dupuis@heig-vd.ch",
+    login: "alex.dupuis",
     ...patch,
   };
 }
@@ -97,14 +97,14 @@ describe("containerEnvFor — these variables, not one more", () => {
 describe("the student's git identity", () => {
   it("sets author and committer from display_name and email", () => {
     const env = containerEnvFor(session(), assignment(), URLS, user());
-    expect(env.GIT_AUTHOR_NAME).toBe("Pierre Bressy");
-    expect(env.GIT_AUTHOR_EMAIL).toBe("pierre.bressy@heig-vd.ch");
-    expect(env.GIT_COMMITTER_NAME).toBe("Pierre Bressy");
-    expect(env.GIT_COMMITTER_EMAIL).toBe("pierre.bressy@heig-vd.ch");
+    expect(env.GIT_AUTHOR_NAME).toBe("Alex Dupuis");
+    expect(env.GIT_AUTHOR_EMAIL).toBe("alex.dupuis@heig-vd.ch");
+    expect(env.GIT_COMMITTER_NAME).toBe("Alex Dupuis");
+    expect(env.GIT_COMMITTER_EMAIL).toBe("alex.dupuis@heig-vd.ch");
   });
 
   it("falls back on the institutional login when display_name is empty", () => {
-    expect(gitIdentityOf(user({ displayName: "  " }))?.name).toBe("pierre.bressy");
+    expect(gitIdentityOf(user({ displayName: "  " }))?.name).toBe("alex.dupuis");
   });
 
   it("all or nothing: without an address, none of the four variables", () => {
@@ -152,8 +152,8 @@ describe("engine.runArgs — the container environment carries only these variab
   it("carries the values decided by the session manager", () => {
     expect(envArgs(args)).toContain("CODESPACE_DEADLINE=2026-10-01T12:00:00.000Z");
     expect(envArgs(args)).toContain("CODESPACE_RETURN_URL=https://classroom.chevallier.io/");
-    expect(envArgs(args)).toContain("GIT_AUTHOR_NAME=Pierre Bressy");
-    expect(envArgs(args)).toContain("GIT_COMMITTER_EMAIL=pierre.bressy@heig-vd.ch");
+    expect(envArgs(args)).toContain("GIT_AUTHOR_NAME=Alex Dupuis");
+    expect(envArgs(args)).toContain("GIT_COMMITTER_EMAIL=alex.dupuis@heig-vd.ch");
   });
 
   it("passes a name with spaces as it is: execFile, no shell", () => {
