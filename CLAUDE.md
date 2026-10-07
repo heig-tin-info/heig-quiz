@@ -177,6 +177,17 @@ internal bridge).
     slug, or no OAuth client id and secret (M2-03); with no `GITHUB_*` set the GitHub features are off and the rest
     starts (M1-02). `/webhooks/github` trusts nothing before its HMAC over the
     raw body is verified in constant time (M2-04).
+    The online workspace portal (`apps/codespace`) never holds an App
+    credential: it obtains from Quiz, through the HS256 service route of
+    ADR-078, an installation token scoped to one repository (`contents`
+    only), valid at most an hour, which it keeps in memory only and hands to
+    git through the environment, never in a URL, argv or file; Quiz issues
+    one only for a repository of an online project the student launched,
+    before its effective deadline plus the grace, and audits each issuance
+    without the token; an App push counts as the student's only when the
+    portal declared its head beforehand — a rule that keeps Quiz's own
+    commits from being misread, not a defence against a compromised portal,
+    which holds the signing secret.
 
 ## Development
 
