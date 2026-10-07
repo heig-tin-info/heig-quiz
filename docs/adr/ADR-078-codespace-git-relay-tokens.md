@@ -290,16 +290,18 @@ test organization and never the production one (N-SEC-18), and never one
 - **The relay never forces.** `refspecFor` becomes `<sha>:<ref>`, without
   `+`: a relay push is a fast-forward or nothing, so it can never erase a
   commit of Quiz's App (a restore, a sync, a deadline commit) nor anything
-  else on GitHub. A branch deletion is not relayed (the `hgc-protect`
-  ruleset refuses it anyway). On a **non-fast-forward rejection** the
-  portal fetches GitHub's head of that branch into `staging.git` (with the
-  same token, which reads), so that the student's next `git pull` in the
-  workspace brings Quiz's commit in and their next push fast-forwards. The
-  rejected `PushEvent` rows take a terminal state, `rejected`, with GitHub's
-  reason: the student sees it in the workspace (the status bar extension
-  that already reads the session's state) and the staff in the project's
-  workspace list. The student's commit is not lost: it stays in their
-  workspace clone and its `PushEvent`. This changes the relay's current
+  else on GitHub. A branch deletion is not relayed. On a
+  **non-fast-forward rejection** the portal fetches GitHub's head of that
+  branch into `staging.git` (with the same token, which reads): **the
+  branch in `staging.git` moves to GitHub's head**, dropping the student's
+  rejected commit from that branch there, so that the student's next
+  `git pull` in the workspace brings Quiz's commit in and their next push
+  fast-forwards. The rejected `PushEvent` rows take a terminal state,
+  `rejected`, with GitHub's reason: the student sees it in the workspace
+  (the status bar extension that already reads the session's state) and
+  the staff in the project's workspace list. The student's commit is not
+  lost: it survives in their workspace clone and in its `PushEvent` (ref
+  and sha). This changes the relay's current
   behaviour, and M6-10 carries it with its tests.
 - **Attribution by an explicit expected-relay record.** A webhook push
   whose sender is Quiz's App is the **student's** only when its `after`
@@ -369,12 +371,29 @@ the open `online_seb` projects among them. They cannot touch any
 other repository, change settings, rulesets, collaborators, secrets or
 workflows (no `workflows` permission: a push that changes
 `.github/workflows/` is refused by GitHub), nor reach another organization;
-every token they obtain is audited by Quiz, and a push of theirs that the
-portal did not declare is never counted as a student's (§6). The portal's
-no-force rule binds the portal, not an attacker holding a token: against a
-forced push or a deletion, the `hgc-protect` ruleset is the guard (ADR-047
-§2: "it also protects against the relay"); M6-10 verifies on the staging
-App that it refuses a forced push made with an App installation token. Under classroom's design
+every token they obtain is audited by Quiz.
+
+**The relay declaration is no defence here.** Holding the secret, the
+attacker can sign `relay-heads` for any sha on any of those repositories,
+and their pushes would then be read as the students' (§6): graded, the
+student's last commit. The declaration exists so that Quiz's own App
+commits are never misread as a student's, and a student's relayed work is
+never misread as the App's; it does not authenticate the portal against
+its own compromise. What bounds the damage is the scope above and the
+deadline plus the grace.
+
+**Force and deletion.** The portal's no-force rule binds the portal, not an
+attacker holding a token. GitHub's guard is the `hgc-protect` ruleset
+(`apps/api/src/github/provision.ts`, ADR-047 §2), with two limits: it
+covers **only the default branch** (`~DEFAULT_BRANCH`), so a forced push
+or a deletion on any other branch is not refused; and it is **absent**
+(`ruleset_id` null) where the organization's plan has no rulesets on
+private repositories. It has no bypass actors, so where it exists it binds
+the App's tokens too. M6-10 verifies on the staging App that it refuses a
+forced push made with an App installation token on the default branch, and
+records that a non-default branch accepts one.
+
+Under classroom's design
 (option A) the same compromise yields the App's private key: every
 permission of the App on every repository of every organization that
 installed it, until the key is rotated.
@@ -393,7 +412,9 @@ installed it, until the key is rotated.
   Quiz issues one only for a repository of an online project the student
   launched, before its effective deadline plus the grace, and audits each
   issuance without the token; an App push counts as the student's only
-  when the portal declared its head beforehand." `apps/codespace/CLAUDE.md` replaces its "Whether Quiz's own
+  when the portal declared its head beforehand — a rule that keeps Quiz's
+  own commits from being misread, not a defence against a compromised
+  portal, which holds the signing secret." `apps/codespace/CLAUDE.md` replaces its "Whether Quiz's own
   App key goes on the engine VM is **open**" with this ADR and names the
   `quiz` forge.
 - Submission now depends on two services: Quiz must be up for a relay to

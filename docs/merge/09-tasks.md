@@ -4375,8 +4375,11 @@ serves now (16a), and what waits for the group repositories (16b).
   commit, a sync) does not; the relay never force-pushes (a test with a
   commit of the App ahead on GitHub: the push is rejected, nothing is
   erased, `staging.git` gets GitHub's head, the `PushEvent` is
-  `rejected`); the `hgc-protect` ruleset refuses a forced push made with an
-  App installation token (staging App); a push in the last seconds before
+  `rejected`, the student's commit still in the workspace clone and the
+  `PushEvent`); on the staging App, a forced push made with an App
+  installation token is refused by `hgc-protect` on the default branch, and
+  the same push on a non-default branch is tried and its outcome recorded
+  (the ruleset covers `~DEFAULT_BRANCH` only, ADR-078 §9); a push in the last seconds before
   the deadline is relayed and received; a relay pending after the grace
   resumes once the repository's deadline is extended; integration against
   a stub Quiz and a GitHub test organization of the staging App.
