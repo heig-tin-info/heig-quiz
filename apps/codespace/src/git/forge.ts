@@ -33,11 +33,6 @@ export interface Forge {
   /** Creates the repository if it does not exist yet. */
   ensureRepo(repo: RepoRef): Promise<void>;
   /**
-   * The URL prefix the `Authorization` header is scoped to
-   * (`http.<scope>.extraHeader`); absent: every URL git reaches.
-   */
-  readonly headerScope?: string;
-  /**
    * Declares the heads a relay push is about to send (ADR-078 §2), before
    * the push; it throws when the platform refuses. Absent: nothing to
    * declare.

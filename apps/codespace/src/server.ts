@@ -168,10 +168,9 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
           // repository carries the same authorization as the relay, through the
           // environment.
           forgeAuthorization: (repo, owner) => forge.authorization(repo, owner),
-          ...(forge.headerScope ? { forgeHeaderScope: forge.headerScope } : {}),
           // A closed workspace with nothing pending keeps no credential (ADR-078 §3).
           onSessionClosed: async (owner) => {
-            if (forge.forget && (await store.pendingCount(owner.student, owner.assignment)) === 0) forge.forget(owner);
+            if (forge.forget && !(await store.hasPending(owner.student, owner.assignment))) forge.forget(owner);
           },
         }
       : {}),

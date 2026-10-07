@@ -94,8 +94,12 @@ declare module "fastify" {
   }
 }
 
-
 const BEARER = /^Bearer\s+(\S+)$/i;
+
+/** The credential of an `Authorization: Bearer …` header, or null: the one parser (the JSON API, the portal's service routes). */
+export function bearerOf(header: string | undefined): string | null {
+  return BEARER.exec(header ?? "")?.[1] ?? null;
+}
 
 /** The methods that change nothing: CSRF lets them through, and so does a read-only session. */
 const SAFE_METHODS: readonly string[] = ["GET", "HEAD", "OPTIONS"];
@@ -142,7 +146,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     // header is there it is the WHOLE credential: a bad token is anonymous,
     // it never falls back to a cookie that happens to ride along.
     const bearer = req.url.startsWith("/app/api/")
-      ? BEARER.exec(req.headers.authorization ?? "")?.[1]
+      ? (bearerOf(req.headers.authorization) ?? undefined)
       : undefined;
     if (bearer !== undefined) {
       if (!isApiToken(bearer)) return;

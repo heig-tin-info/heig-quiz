@@ -37,13 +37,15 @@ export function redactSecrets(text: string): string {
  * workspace empty on the first real attempt in production: the student's
  * repository is private.
  */
-export function gitAuthEnv(authorization: string, scope?: string): NodeJS.ProcessEnv {
+export function gitAuthEnv(authorization: string, url: string): NodeJS.ProcessEnv {
+  // Only HTTP carries the header: a local path or another transport gets none.
+  if (!/^https?:\/\//i.test(url)) return {};
   return {
     GIT_CONFIG_COUNT: "1",
-    // A URL-scoped key (`http.https://github.com/.extraHeader`, as Quiz's
-    // `credentialEnv`) sends the header to that host only, never to a
+    // Always scoped to the remote's origin (`http.https://github.com/.extraHeader`,
+    // as Quiz's `credentialEnv`): the header goes to that host only, never to a
     // redirect or another remote (ADR-078 §3).
-    GIT_CONFIG_KEY_0: scope ? `http.${scope}.extraHeader` : "http.extraHeader",
+    GIT_CONFIG_KEY_0: `http.${new URL(url).origin}/.extraHeader`,
     GIT_CONFIG_VALUE_0: `Authorization: ${authorization}`,
   };
 }

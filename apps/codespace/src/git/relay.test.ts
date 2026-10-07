@@ -60,12 +60,13 @@ describe("how the token travels", () => {
     expect(args.join(" ")).not.toContain(TOKEN);
     expect(args.join(" ")).not.toMatch(/extraHeader/i);
 
-    const env = buildPushEnv(`token ${TOKEN}`);
+    const env = buildPushEnv(`token ${TOKEN}`, "https://forge/e/tp.git");
     expect(env["GIT_CONFIG_COUNT"]).toBe("1");
-    expect(env["GIT_CONFIG_KEY_0"]).toBe("http.extraHeader");
+    // Scoped to the remote's origin (ADR-078 §3): never sent to another host.
+    expect(env["GIT_CONFIG_KEY_0"]).toBe("http.https://forge/.extraHeader");
     expect(env["GIT_CONFIG_VALUE_0"]).toBe(`Authorization: token ${TOKEN}`);
-    // The quiz forge scopes it to GitHub (ADR-078 §3): never sent to another host.
-    expect(buildPushEnv(`token ${TOKEN}`, "https://github.com/")["GIT_CONFIG_KEY_0"]).toBe("http.https://github.com/.extraHeader");
+    // No HTTP, no header at all.
+    expect(buildPushEnv(`token ${TOKEN}`, "/srv/forge.git")).toEqual({});
     // No `-c`, no `--config-env`, no temporary file: the three ways a token
     // would have become visible in `ps` or on disk.
     expect(Object.keys(env)).toEqual(["GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"]);

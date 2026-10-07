@@ -172,8 +172,3 @@ export function assignmentSessionRows(
     return { session: r.session, user: r.user, lastPushAt: last, rejectedPush: lastRejectedPush(own) };
   });
 }
-
-/** A session's last push GitHub refused and nothing replaced (ADR-078 §6): what the workspace's status bar shows. */
-export function rejectedPushOfSession(db: Db, sessionId: string): RejectedPush | null {
-  return lastRejectedPush(db.select().from(pushEvents).where(eq(pushEvents.sessionId, sessionId)).all());
-}

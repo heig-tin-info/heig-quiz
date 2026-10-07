@@ -81,13 +81,7 @@ export function basicAuthorization(token: string): string {
   return `basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`;
 }
 
-export interface QuizForge extends Forge {
-  readonly kind: "quiz";
-  /** The entries held, for the tests: their keys. */
-  readonly cached: () => string[];
-}
-
-export function createQuizForge(opts: QuizForgeOptions): QuizForge {
+export function createQuizForge(opts: QuizForgeOptions): Forge {
   const base = opts.platformUrl.replace(/\/+$/, "");
   const doFetch = opts.fetchImpl ?? fetch;
   const now = opts.now ?? (() => new Date());
@@ -160,7 +154,12 @@ export function createQuizForge(opts: QuizForgeOptions): QuizForge {
     if (withRevoke && now().getTime() < entry.expiresAt) revoke(entry.token);
   }
 
-  async function request(key: string, repo: RepoRef, owner: ForgeOwner): Promise<Entry> {
+  /**
+   * Asks Quiz for a token. `stillWanted` is false when the entry was
+   * forgotten while the request was in flight: the token then serves the
+   * caller that waited for it and is not kept.
+   */
+  async function request(key: string, repo: RepoRef, owner: ForgeOwner, stillWanted: () => boolean): Promise<Entry> {
     const res = await signedRequest(GIT_TOKEN_PATH, GIT_TOKEN_AUDIENCE, repo, owner);
     if (!res.ok) throw await refusalOf(res);
     const grant = GitTokenGrant.parse(await res.json());
@@ -170,6 +169,7 @@ export function createQuizForge(opts: QuizForgeOptions): QuizForge {
       useUntil: Math.min(Date.parse(grant.useUntil), Date.parse(grant.expiresAt)),
       timer: null,
     };
+    if (!stillWanted()) return entry;
     // A refreshed token replaces the old one, not revoked: a push or a fetch
     // may still be using it, and it expires within the refresh margin.
     const old = cache.get(key);
@@ -187,7 +187,6 @@ export function createQuizForge(opts: QuizForgeOptions): QuizForge {
 
   return {
     kind: "quiz",
-    headerScope: `${GITHUB}/`,
     pushUrl: (repo) => `${GITHUB}/${repo.owner}/${repo.name}.git`,
     async ensureRepo() {
       // Quiz provisions the repositories (analyse.md D3).
@@ -204,8 +203,11 @@ export function createQuizForge(opts: QuizForgeOptions): QuizForge {
       if (entry && t < entry.expiresAt - REFRESH_MARGIN_MS) return basicAuthorization(entry.token);
       let pending = inflight.get(key);
       if (!pending) {
-        pending = request(key, repo, owner).finally(() => inflight.delete(key));
-        inflight.set(key, pending);
+        const mine: Promise<Entry> = request(key, repo, owner, () => inflight.get(key) === mine).finally(() => {
+          if (inflight.get(key) === mine) inflight.delete(key);
+        });
+        pending = mine;
+        inflight.set(key, mine);
       }
       return basicAuthorization((await pending).token);
     },
@@ -224,7 +226,8 @@ export function createQuizForge(opts: QuizForgeOptions): QuizForge {
     forget(owner) {
       const prefix = `${owner.assignment}\u0000${owner.student}\u0000`;
       for (const key of [...cache.keys()]) if (key.startsWith(prefix)) drop(key, true);
+      // A request in flight for it keeps nothing when it lands.
+      for (const key of [...inflight.keys()]) if (key.startsWith(prefix)) inflight.delete(key);
     },
-    cached: () => [...cache.keys()],
   };
 }

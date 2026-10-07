@@ -213,7 +213,7 @@ describe("ensureStagingRepo", () => {
 
     const seen = await readFile(trace, "utf8");
     expect(seen).toContain("COUNT=1");
-    expect(seen).toContain("KEY0=http.extraHeader");
+    expect(seen).toContain("KEY0=http.https://github.com/.extraHeader");
     expect(seen).toContain("VALUE0=Authorization: Bearer ghs_installationtoken");
     const argv = /^ARGV=(.*)$/m.exec(seen)?.[1] ?? "";
     expect(argv).toContain("https://github.com/org/private.git");

@@ -368,7 +368,8 @@ describe("POST /app/codespace/git-token (ADR-078 §2)", () => {
     // Somebody who never launched it.
     const stranger = await newStudent();
     expect(refused(await askToken(f, { userId: stranger.id }))).toEqual([404, "not_found"]);
-    expect(refused(await askToken(f, { userId: "not-a-uuid", projectId: "nope" }))).toEqual([404, "not_found"]);
+    // Ids that are no uuid fail the contract: the request itself is refused.
+    expect(refused(await askToken(f, { userId: "not-a-uuid", projectId: "nope" }))).toEqual([401, "unauthorized"]);
     // The staff's hand on the lock.
     await server.app.db.update(projectRepos).set({ staffLock: true }).where(eq(projectRepos.id, f.repo.id));
     expect(refused(await askToken(f))).toEqual([409, "closed"]);

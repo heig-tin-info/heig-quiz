@@ -4492,7 +4492,7 @@ serves now (16a), and what waits for the group repositories (16b).
   resumes once the repository's deadline is extended; integration against
   a stub Quiz and a GitHub test organization of the staging App.
 - **As delivered** (branch `merge/M6-10-git-relay`; migration
-  `0081_codespace_git_relay`; the portal's schema needs none — `rejected`
+  `0082_codespace_git_relay`; the portal's schema needs none — `rejected`
   is a value of a SQLite text enum):
   - **Contracts** (`codespace.ts`): `GitTokenRequestClaims`,
     `RelayHeadsClaims` (1–50 heads, a ref and a 40/64-hex sha),
@@ -4514,8 +4514,8 @@ serves now (16a), and what waits for the group repositories (16b).
     engine VM (2.29.38.213).
   - **Portal**: `FORGE_KIND=quiz` (`src/git/quizForge.ts`) and its
     defaults/refusals (`auth/config.ts`); `Forge.authorization(repo,
-    owner)`, `headerScope`, `declareHeads`, `invalidate`, `forget`;
-    `ForgeRefusedError`; `gitAuthEnv(…, scope)`; the relay without force,
+    owner)`, `declareHeads`, `invalidate`, `forget`;
+    `ForgeRefusedError`; `gitAuthEnv(authorization, url)`, always scoped to the remote's origin (none for a non-HTTP remote); the relay without force,
     `parseRejections`, the fetch-back into `staging.git`, the terminal
     `rejected` state; `GET /git/<session>/push-status`; the status bar's
     third item (`images/c-dev/extension`); the sessions summary's
@@ -4541,7 +4541,17 @@ serves now (16a), and what waits for the group repositories (16b).
     `FORGE_KIND=quiz`; an instance's existing env file keeps `none` until
     edited (bootstrap never rewrites it). Two failures of the
     integration-only `relay.test.ts` that predate M6-10 (a message renamed
-    at M6-03, a clock in the past) are fixed.
+    at M6-03, a clock in the past) are fixed. (9) A **staff-locked**
+    repository still opens a workspace (the start route does not read the
+    staff lock, ADR-047), but Quiz refuses its tokens and declarations
+    (`closed`, ADR-078 §2 check 5): its pushes stay `pending` in
+    `staging.git` until the staff unlock it — chosen by the ADR, recorded
+    here. (10) After review: the closing rule is one pure
+    `workspaceClosed` shared by the start route and `gitTokenRefusal`;
+    request ids are uuids in the contract (a non-uuid is a `401`); one
+    `authorizeCall` prologue serves both routes; one `bearerOf` parser
+    (`auth/plugin.ts`); a request in flight when its workspace is
+    forgotten keeps nothing.
   - **Tests**: domain `workMode.test.ts` (grant, refusals, grace,
     extension, staff lock); contracts `codespace.test.ts`; api
     `modules/codespace/relay.db.test.ts` (12: scope and body of the mint,
@@ -4562,7 +4572,9 @@ serves now (16a), and what waits for the group repositories (16b).
     daily reconciliation's head refresh (`reconcile.ts`) does not read the
     relays (the webhook path attributes; the reconciliation still needs a
     person as author and committer); the `bot_commits` race noted above is
-    unchanged.
+    unchanged; a push of the App costs two lookups of `pushAuthor` (the
+    intake's receipt, then the project's push handler) — one could be
+    carried by the receipt.
   - **Manual checks on staging, for the orchestrator** (they need the
     staging App, its test organization and the engine VM):
     1. `caddy validate` the two fragments; from the app VM itself, `curl

@@ -7,6 +7,7 @@ import {
   quotaHolder,
   relayClosesAt,
   workModeRefusal,
+  workspaceClosed,
   workspaceStartRefusal,
   type GitTokenFacts,
   type WorkModeFacts,
@@ -157,6 +158,12 @@ describe("gitTokenRefusal (ADR-078 §2)", () => {
     expect(gitTokenRefusal(facts({ repo: null }), NOW)).toBe("not_found");
     expect(gitTokenRefusal(facts({ repo: { ...repo, deletedAt: NOW } }), NOW)).toBe("not_found");
     expect(gitTokenRefusal(facts({ repo: { ...repo, githubRepoId: null } }), NOW)).toBe("not_found");
+  });
+
+  it("shares the start route's closing rule (workspaceClosed)", () => {
+    expect(workspaceClosed({ classroomArchived: false }, GRACE_END, NOW)).toBe(false);
+    expect(workspaceClosed({ classroomArchived: true }, GRACE_END, NOW)).toBe(true);
+    expect(workspaceClosed({ classroomArchived: false }, GRACE_END, GRACE_END)).toBe(true);
   });
 
   it("refuses a project back in the students' own tools", () => {

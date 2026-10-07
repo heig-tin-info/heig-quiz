@@ -170,8 +170,8 @@ describe("the relay's token and declaration (ADR-078 §2)", () => {
     iat: 1790000000,
     exp: 1790000060,
     jti: "j-1",
-    projectId: "p-1",
-    userId: "u-1",
+    projectId: "11111111-1111-4111-8111-111111111111",
+    userId: "22222222-2222-4222-8222-222222222222",
     repository: "org/lab-kid",
   };
   const sha = "a".repeat(40);
@@ -183,6 +183,8 @@ describe("the relay's token and declaration (ADR-078 §2)", () => {
     expect(GitTokenRequestClaims.safeParse({ ...base, aud: GIT_TOKEN_AUDIENCE, jti: "" }).success).toBe(false);
     expect(GitTokenRequestClaims.safeParse({ ...base, aud: GIT_TOKEN_AUDIENCE, iss: "heig-quiz" }).success).toBe(false);
     expect(GitTokenRequestClaims.safeParse({ ...base, aud: GIT_TOKEN_AUDIENCE, repository: "lab-kid" }).success).toBe(false);
+    expect(GitTokenRequestClaims.safeParse({ ...base, aud: GIT_TOKEN_AUDIENCE, projectId: "p-1" }).success).toBe(false);
+    expect(GitTokenRequestClaims.safeParse({ ...base, aud: GIT_TOKEN_AUDIENCE, userId: "u-1" }).success).toBe(false);
   });
 
   it("declares 1 to 50 heads, each a ref and a full sha", () => {

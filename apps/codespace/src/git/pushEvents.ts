@@ -31,8 +31,8 @@ export interface PushEventStore {
   /** Terminal (ADR-078 §6): GitHub refused the ref, or it is a deletion; `reason` is what the student and the staff read. */
   markRejected(ids: string[], reason: string): Promise<void>;
   bySession(sessionId: string): Promise<PushEventRow[]>;
-  /** Rows of (student, assignment) still waiting for the relay. */
-  pendingCount(student: string, assignment: string): Promise<number>;
+  /** Whether a row of (student, assignment) still waits for the relay. */
+  hasPending(student: string, assignment: string): Promise<boolean>;
 }
 
 /** What a session's last refused push says (ADR-078 §6), or null. */
@@ -178,12 +178,14 @@ export function createPushEventStore(db: PushEventDb): PushEventStore {
         .where(inArray(pushEvents.id, ids))
         .run();
     },
-    async pendingCount(student, assignment) {
-      return db
+    async hasPending(student, assignment) {
+      const row = db
         .select({ id: pushEvents.id })
         .from(pushEvents)
         .where(and(eq(pushEvents.student, student), eq(pushEvents.assignment, assignment), eq(pushEvents.state, "pending")))
-        .all().length;
+        .limit(1)
+        .get();
+      return row !== undefined;
     },
     async bySession(sessionId) {
       return db

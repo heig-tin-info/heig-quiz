@@ -247,8 +247,6 @@ export interface ManagerDeps extends ManagerOptions {
    * the cause is kept for the error page should the fetch fail.
    */
   forgeAuthorization?: (repo: RepoRef, owner: ForgeOwner) => Promise<string>;
-  /** The URL prefix the forge's header is scoped to (`Forge.headerScope`). */
-  forgeHeaderScope?: string;
   /**
    * A session closed: the forge may forget its credentials when nothing of
    * the workspace waits for the relay (ADR-078 §3).
@@ -396,7 +394,6 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         uploadPack: assignment.uploadPack,
         defaultBranch: defaultBranchOf(session, assignment),
         ...(authorization ? { authorization } : {}),
-        ...(opts.forgeHeaderScope ? { authorizationScope: opts.forgeHeaderScope } : {}),
       });
       if (result.refs === 0 && wanted.mode === "exam") {
         throw new WorkspaceBootstrapError(

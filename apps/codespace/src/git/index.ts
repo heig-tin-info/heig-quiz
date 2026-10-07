@@ -19,7 +19,7 @@ export {
   type ForgejoOptions,
   type ForgeOwner,
 } from "./forge.js";
-export { basicAuthorization, createQuizForge, REFRESH_MARGIN_MS, type QuizForge, type QuizForgeOptions } from "./quizForge.js";
+export { basicAuthorization, createQuizForge, REFRESH_MARGIN_MS, type QuizForgeOptions } from "./quizForge.js";
 export { git, gitAuthEnv, gitBare, redactSecrets, GitError } from "./gitRunner.js";
 export {
   authorizeSource,

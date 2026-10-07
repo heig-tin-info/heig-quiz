@@ -103,7 +103,8 @@ export function parseRejections(porcelain: string): RefRejection[] {
 
 /** GitHub refused the credential itself (an expired or revoked token): the forge forgets it. */
 function credentialRefused(message: string): boolean {
-  return /\b(401|403)\b|Authentication failed|Permission to .* denied/i.test(message);
+  // git's own words: a 403 is reported as such; a 401 after the (empty) askpass as "Authentication failed".
+  return /The requested URL returned error: 40[13]\b|^fatal: Authentication failed for /m.test(message);
 }
 
 export interface RelayOptions {
@@ -199,7 +200,7 @@ export function createRelayWorker(opts: RelayOptions): RelayWorker {
       if (rejection.behind && rejection.ref.startsWith("refs/heads/")) {
         try {
           await git(["--git-dir", gitDir, "fetch", "--no-tags", url, `+${rejection.ref}:${rejection.ref}`], {
-            env: buildPushEnv(authorization, opts.forge.headerScope),
+            env: buildPushEnv(authorization, url),
             ...(opts.pushTimeoutMs === undefined ? {} : { timeoutMs: opts.pushTimeoutMs }),
           });
         } catch (err) {
@@ -270,7 +271,7 @@ export function createRelayWorker(opts: RelayOptions): RelayWorker {
         // event of these heads as the student's (ADR-078 §2, §6).
         await opts.forge.declareHeads?.(target.repo, owner, heads.map(({ ref, sha }) => ({ ref, sha })));
         await git(buildPushArgs(target.gitDir, url, refspecs), {
-          env: buildPushEnv(authorization, opts.forge.headerScope),
+          env: buildPushEnv(authorization, url),
           ...(opts.pushTimeoutMs === undefined ? {} : { timeoutMs: opts.pushTimeoutMs }),
         });
         await opts.store.markRelayed(ids, now());

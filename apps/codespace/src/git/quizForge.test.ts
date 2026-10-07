@@ -104,7 +104,7 @@ describe("the requests it signs (ADR-078 §2)", () => {
     expect(tokenOf(header)).toBe("ghs_tok1");
     expect(w.forge.pushUrl(REPO)).toBe("https://github.com/org/lab-kid.git");
     expect(w.forge.pushUrl(REPO)).not.toContain("ghs_");
-    const env = gitAuthEnv(header, w.forge.headerScope);
+    const env = gitAuthEnv(header, w.forge.pushUrl(REPO));
     expect(env).toEqual({
       GIT_CONFIG_COUNT: "1",
       GIT_CONFIG_KEY_0: "http.https://github.com/.extraHeader",
@@ -156,7 +156,10 @@ describe("the cache (ADR-078 §3)", () => {
     await w.forge.authorization(REPO, { ...OWNER, student: "33333333-3333-4333-8333-333333333333" });
     await w.forge.authorization({ owner: "ORG", name: "Lab-Kid" }, OWNER);
     expect(w.quizCalls()).toHaveLength(3);
-    expect(w.forge.cached()).toHaveLength(3);
+    // Each of the three is served from its own entry.
+    await w.forge.authorization({ owner: "org", name: "lab-squashed" }, OWNER);
+    await w.forge.authorization(REPO, { ...OWNER, student: "33333333-3333-4333-8333-333333333333" });
+    expect(w.quizCalls()).toHaveLength(3);
   });
 
   it("never uses a token past useUntil, asks nothing then, and revokes it", async () => {
@@ -170,7 +173,6 @@ describe("the cache (ADR-078 §3)", () => {
     await expect(stopped).rejects.toBeInstanceOf(ForgeRefusedError);
     await expect(stopped).rejects.toBeInstanceOf(ForgeUnconfiguredError);
     expect(w.quizCalls()).toHaveLength(1);
-    expect(w.forge.cached()).toEqual([]);
     const [revoked] = w.revocations();
     expect(revoked).toMatchObject({ url: "https://api.github.com/installation/token", authorization: "token ghs_tok1" });
     // The next attempt asks again: Quiz answers for itself (an extension grants, else 409).
@@ -193,7 +195,6 @@ describe("the cache (ADR-078 §3)", () => {
     const w = world();
     await w.forge.authorization(REPO, OWNER);
     w.forge.invalidate!(REPO, OWNER);
-    expect(w.forge.cached()).toEqual([]);
     expect(w.revocations()).toHaveLength(0);
     expect(tokenOf(await w.forge.authorization(REPO, OWNER))).toBe("ghs_tok2");
   });
@@ -204,8 +205,26 @@ describe("the cache (ADR-078 §3)", () => {
     await w.forge.authorization(REPO, OWNER);
     await w.forge.authorization(REPO, other);
     w.forge.forget!(OWNER);
-    expect(w.forge.cached()).toHaveLength(1);
     expect(w.revocations().map((c) => c.authorization)).toEqual(["token ghs_tok1"]);
+    // The other workspace's entry is kept; the forgotten one asks again.
+    await w.forge.authorization(REPO, other);
+    expect(w.quizCalls()).toHaveLength(2);
+    await w.forge.authorization(REPO, OWNER);
+    expect(w.quizCalls()).toHaveLength(3);
+  });
+
+  it("keeps nothing of a request in flight when its workspace is forgotten meanwhile", async () => {
+    const w = world();
+    w.holdNext();
+    const waiting = w.forge.authorization(REPO, OWNER);
+    await new Promise((r) => setTimeout(r, 10));
+    w.forge.forget!(OWNER);
+    w.releaseHeld();
+    // The caller that waited gets its token for this one attempt…
+    expect(tokenOf(await waiting)).toBe("ghs_tok1");
+    // …but no credential is kept: the next attempt asks Quiz again.
+    expect(tokenOf(await w.forge.authorization(REPO, OWNER))).toBe("ghs_tok2");
+    expect(w.quizCalls()).toHaveLength(2);
   });
 });
 

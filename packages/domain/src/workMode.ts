@@ -103,11 +103,20 @@ export interface WorkspaceStartFacts {
  */
 export function workspaceStartRefusal(facts: WorkspaceStartFacts, now: Date): WorkspaceStartRefusalCode | null {
   const { project, repo } = facts;
-  if (project.workMode === "free") return "not_online";
+  if (!isOnlineMode(project.workMode)) return "not_online";
   if (project.workMode === "online_seb" && !facts.fromSeb) return "seb_required";
   if (repo === null || !isLiveIndividualRepo(repo)) return "not_accepted";
-  if (facts.classroomArchived || effectiveDeadline(repo, project).getTime() <= now.getTime()) return "closed";
+  if (workspaceClosed(facts, effectiveDeadline(repo, project), now)) return "closed";
   return null;
+}
+
+/**
+ * THE closing rule the start route and the git relay share: the classroom
+ * archived, or `closesAt` reached on the server's clock — the effective
+ * deadline for the start route, the deadline plus the grace for the relay.
+ */
+export function workspaceClosed(facts: { classroomArchived: boolean }, closesAt: Date, now: Date): boolean {
+  return facts.classroomArchived || closesAt.getTime() <= now.getTime();
 }
 
 /** An owner seat of a course, as `course_staff` holds it. */
@@ -190,10 +199,12 @@ const sameRepository = (stored: string | null, asked: string): boolean =>
  *      (a `read` grant, to seed the exam workspace); anything else
  *      `not_found`;
  *   4. an online mode (`not_online`);
- *   5. the user's repository open: the start route's own rule
- *      ({@link workspaceStartRefusal}) read at the effective deadline PLUS
- *      the grace (§7, confirmed by the product owner on 2026-10-07), so the
- *      two never disagree on anything else; and no staff lock (`closed`).
+ *   5. the user's repository open: the start route's closing rule
+ *      ({@link workspaceClosed}) read at the effective deadline PLUS the
+ *      grace (§7, confirmed by the product owner on 2026-10-07), and no
+ *      staff lock (`closed`). The start route does not read the staff lock
+ *      (ADR-047): a locked repository still opens a workspace, whose
+ *      pushes stay pending.
  *
  * Checks 1 (the signature) and 6 (GitHub) are the route's. Returns the
  * grant, or the refusal's code.
@@ -214,17 +225,8 @@ export function gitTokenRefusal(facts: GitTokenFacts, now: Date): GitTokenRefusa
   } else {
     return "not_found";
   }
-  const start = workspaceStartRefusal(
-    {
-      project: { workMode: project.workMode, deadlineAt: closesAt },
-      repo: { ...repo, deadlineAt: closesAt },
-      classroomArchived: facts.classroomArchived,
-      // The portal's request is not a browser's: Safe Exam Browser is the start route's to check.
-      fromSeb: true,
-    },
-    now,
-  );
-  if (start === "not_online") return "not_online";
-  if (start !== null || repo.staffLock === true) return "closed";
+  if (!isOnlineMode(project.workMode)) return "not_online";
+  // Safe Exam Browser is the start route's to check: the portal's request is not a browser's.
+  if (workspaceClosed(facts, closesAt, now) || repo.staffLock === true) return "closed";
   return grant;
 }

@@ -216,8 +216,9 @@ project, the user and the repository in its claims); the body is empty.
   A `503` or a network failure is an outage (ordinary backoff, then
   `failed`). At seeding, any refusal refuses the session with a named cause.
 - **The token**: `Authorization: basic base64(x-access-token:<token>)`
-  through `gitAuthEnv(…, "https://github.com/")`, the URL-scoped
-  `http.https://github.com/.extraHeader`: never sent to another host.
+  through `gitAuthEnv(authorization, url)`, always scoped to the remote's
+  origin (`http.https://github.com/.extraHeader`): never sent to another
+  host, and not set at all for a non-HTTP remote.
 - **No force, no deletion** (`relay.ts`): `refspecFor` is `<sha>:<ref>`. On
   a non-fast-forward (`[rejected] (fetch first|non-fast-forward)` in the
   porcelain output) the forge's head of that branch is fetched into

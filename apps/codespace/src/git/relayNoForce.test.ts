@@ -219,13 +219,15 @@ async function filesContaining(dir: string, needle: string): Promise<string[]> {
 }
 
 describe("the quiz forge's token during a relay (ADR-078 §3)", () => {
-  it("is in no argv, file, SQLite row, last_error nor log line; scoped to GitHub; dropped when refused", async () => {
+  it("is in no argv, file, SQLite row, last_error nor log line; sent to the push URL's origin only; dropped when refused", async () => {
     const SECRET_TOKEN = "ghs_m610leakprobe0123456789";
     const s = await scenario("portal.sqlite");
     // Quiz's answers.
+    let tokenCalls = 0;
     const quizFetch = (async (input: string | URL | Request) => {
       const url = String(input);
       if (url.endsWith("/app/codespace/relay-heads")) return new Response(null, { status: 204 });
+      tokenCalls += 1;
       return Response.json({
         token: SECRET_TOKEN,
         expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
@@ -263,21 +265,26 @@ describe("the quiz forge's token during a relay (ADR-078 §3)", () => {
 
     expect(sawPush).toBe(true);
     expect(argv).toEqual([]);
-    // The header is scoped to https://github.com/: another host never receives it.
+    // The header goes to the push URL's origin only, as git's basic credential.
+    const basic = Buffer.from(`x-access-token:${SECRET_TOKEN}`).toString("base64");
     expect(seen.length).toBeGreaterThan(0);
-    expect(seen.every((h) => h.authorization === undefined)).toBe(true);
-    // Refused by the forge: dropped, the next attempt asks Quiz again.
-    expect(quiz.cached()).toEqual([]);
+    expect(seen.some((h) => h.authorization === `basic ${basic}`)).toBe(true);
     const [row] = await s.store.bySession(SESSION.sessionId);
     expect(row?.state).toBe("pending");
     expect(row?.lastError).toBeTruthy();
     expect(row?.lastError).not.toContain(SECRET_TOKEN);
-    const basic = Buffer.from(`x-access-token:${SECRET_TOKEN}`).toString("base64");
     for (const needle of [SECRET_TOKEN, basic]) {
       expect(logs.join("\n")).not.toContain(needle);
       // The SQLite file, the staging repository's config, any stray file.
       expect(await filesContaining(s.base, needle)).toEqual([]);
     }
+    // Refused by the forge (401): dropped, so the next attempt asks Quiz again.
+    expect(tokenCalls).toBe(1);
+    const again = createRelayWorker({ store: s.store, forge, targets: stagingTargets(s.volumesRoot, s.repoOf), backoffMs: () => 0 });
+    await new Promise<void>((r) => server.listen(port, "127.0.0.1", r));
+    await again.runOnce();
+    server.close();
+    expect(tokenCalls).toBe(2);
     s.close();
   });
 });
