@@ -97,8 +97,8 @@ ENV_RETURN_URL=https://classroom.chevallier.io/
 ENV_ASSIGNMENT_NAME=TP3-pointeurs
 # The student's git identity (users.display_name, users.email). Same no-space
 # constraint: it comes from EXTRA_ARGS, not from the portal.
-ENV_GIT_NAME=Pierre-Bressy
-ENV_GIT_EMAIL=pierre.bressy@heig-vd.ch
+ENV_GIT_NAME=Alex-Dupuis
+ENV_GIT_EMAIL=alex.dupuis@heig-vd.ch
 PORTAL_ENV="-e CODESPACE_DEADLINE=${ENV_DEADLINE} -e CODESPACE_RETURN_URL=${ENV_RETURN_URL} -e CODESPACE_ASSIGNMENT_NAME=${ENV_ASSIGNMENT_NAME}"
 PORTAL_ENV="${PORTAL_ENV} -e GIT_AUTHOR_NAME=${ENV_GIT_NAME} -e GIT_AUTHOR_EMAIL=${ENV_GIT_EMAIL}"
 PORTAL_ENV="${PORTAL_ENV} -e GIT_COMMITTER_NAME=${ENV_GIT_NAME} -e GIT_COMMITTER_EMAIL=${ENV_GIT_EMAIL}"

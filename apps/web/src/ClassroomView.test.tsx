@@ -179,13 +179,13 @@ describe("ClassroomView", () => {
             makeRosterEntry({ id: "e1", nom: "Rochat", prenom: "Léa" }),
             // The teacher's own seat: a row of the table like any other, so
             // it belongs to the number the tab promises.
-            makeRosterEntry({ id: "e2", nom: "Bressy", prenom: "Pierre", staff: true }),
+            makeRosterEntry({ id: "e2", nom: "Dupuis", prenom: "Alex", staff: true }),
           ],
         }),
       ),
     });
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
-    expect(await screen.findByText("Bressy")).toBeVisible();
+    expect(await screen.findByText("Dupuis")).toBeVisible();
     const rows = within(screen.getByRole("table")).getAllByRole("row").length - 1; // header
     expect(rows).toBe(2);
     expect(screen.getByRole("tab", { name: /Roster/ })).toHaveTextContent("2");
