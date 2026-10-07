@@ -299,6 +299,12 @@ const scenes = [
   // the rows' pull requests.
   { name: "project-sync-banner", role: "teacher", path: "/projects/pj-published?projects=1&ahead=1", settle: 2500 },
   { name: "project-locked", role: "teacher", path: "/projects/pj-locked?projects=1", settle: 2500 },
+  // ADR-047 (M6-06, `?codespace=1`): the workspace section — an online project
+  // whose mode a launch froze, with its open workspaces; a draft whose mode the
+  // owner with the grant may set; the same draft for an assistant (refused).
+  { name: "project-workspace", role: "teacher", path: "/projects/pj-published?projects=1&codespace=1", settle: 2500 },
+  { name: "project-workspace-draft", role: "teacher", path: "/projects/pj-draft?projects=1&codespace=1" },
+  { name: "project-workspace-assistant", role: "teacher", path: "/projects/pj-draft?projects=1&codespace=1&assistant=1" },
   // M3-12b: the sheet of the repository whose score is the teacher's (its
   // form filled, the final review received); M3-12c: the locked project not
   // yet released (`?unreleased=1`), Release its one action and its
@@ -738,6 +744,10 @@ const scenes = [
   { name: "student-classroom-projects", role: "student", path: "/classrooms/r1?projects=1" },
   { name: "student-view-classroom-projects", role: "teacher", path: "/classrooms/r1?projects=1", ss: { "quiz-view-as": "student", "quiz-view-as-return": "/classrooms/r1" } },
   { name: "student-project", role: "student", path: `/projects/${SPROJ.open}?projects=1` },
+  // ADR-047 (M6-06): Open workspace; a Safe Exam Browser project; the start route's refusal sent back.
+  { name: "student-project-workspace", role: "student", path: `/projects/${SPROJ.open}?projects=1&codespace=1` },
+  { name: "student-project-workspace-seb", role: "student", path: `/projects/${SPROJ.invited}?projects=1&codespace=1` },
+  { name: "student-project-workspace-refused", role: "student", path: `/projects/${SPROJ.open}?projects=1&codespace=1&workspace=closed` },
   { name: "student-project-accept", role: "student", path: `/projects/${SPROJ.accept}?projects=1` },
   { name: "student-project-unlinked", role: "student", path: `/projects/${SPROJ.accept}?projects=1&unlinked=1` },
   { name: "student-project-invited", role: "student", path: `/projects/${SPROJ.invited}?projects=1` },
@@ -1362,6 +1372,8 @@ const scenes = [
     },
   },
   { name: "admin", role: "admin", path: "/admin" },
+  // ADR-047 §4 (M6-06): the workspace grant beside each teacher grant.
+  { name: "admin-workspace-grants", role: "admin", path: "/admin?codespace=1" },
   { name: "admin-empty", role: "admin", path: "/admin?empty=1" },
   { name: "admin-error", role: "admin", path: "/admin?fail=1", settle: 2500 },
   { name: "admin-loading", role: "admin", path: "/admin?slow=1", settle: 300 },

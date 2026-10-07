@@ -233,4 +233,21 @@ api "$STUDENT" GET "/app/api/attempts/$ATTEMPT_ID/feedback"; expect 200 "GET /at
 jq -e '.points > 0' <"$BODY" >/dev/null || fail "feedback: the correct answer scored nothing"
 printf '   ok  %s / %s points\n' "$(jq -r .points <"$BODY")" "$(jq -r .totalPoints <"$BODY")"
 
+# The online workspace (ADR-047, M6-06). Off (`CODESPACE_URL` empty, or no
+# GitHub App: projects need it), its start route is a 404 for everyone. On,
+# it is SEB's navigable `startURL`: an anonymous visitor is sent through the
+# sign-in, and a project the student does not hold is the 404 of a missing
+# one. A launch itself needs a project whose repository GitHub provisioned,
+# which no seed can make over HTTP: `codespace.db.test.ts` launches against
+# a stub portal instead.
+step "online workspace start route"
+NOBODY_PROJECT="00000000-0000-4000-8000-$(printf '%012d' "$STAMP")"
+STATUS="$(curl -sS -o "$BODY" -w '%{http_code}' "$BASE/app/codespace/start/$NOBODY_PROJECT")"
+if [ "$STATUS" = "303" ]; then
+  printf '   ok  on: an anonymous start goes through the sign-in\n'
+  api "$STUDENT" GET "/app/codespace/start/$NOBODY_PROJECT"; expect 404 "GET /app/codespace/start/:id of a project nobody holds"
+else
+  expect 404 "GET /app/codespace/start/:id with the workspace off"
+fi
+
 printf '\nsmoke: every expectation passed (%s)\n' "$BASE"

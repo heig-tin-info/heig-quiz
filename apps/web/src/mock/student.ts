@@ -747,6 +747,14 @@ const studentProjectView = (card: CardFacts): StudentProject => {
     release: released
       ? { at: iso(-5 * D), points: 18, max: 20, grade: { grade: 5.5, fellBack: false }, comment: "Très bon travail, attention aux fuites mémoire dans la libération de la liste." }
       : null,
+    // `?codespace=1` (ADR-047, M6-06): the open project runs in the workspace, the invited one under Safe Exam Browser.
+    workspace: !flags.codespace
+      ? null
+      : card.id === STUDENT_PROJECT_OPEN
+        ? { mode: "online" }
+        : card.id === STUDENT_PROJECT_INVITED
+          ? { mode: "online_seb" }
+          : null,
     serverNow: new Date().toISOString(),
   };
 };

@@ -19,6 +19,8 @@ import {
   type ProjectStudent,
   type ProjectSummary,
   type ReviewCheckpoint,
+  type WorkModeRefusal,
+  type WorkspaceStartRefusal,
 } from "@quiz/contracts";
 import { isVoidCheckpoint, reopens } from "@quiz/domain";
 
@@ -318,7 +320,12 @@ export const repoShortName = (fullName: string): string => fullName.slice(fullNa
  * checkpoints', the staff's writes, and the resend's `github_account_stale`
  * (a code of Accept's list the resend shares); the rest read the server's message.
  */
-type KnownCode = ProjectErrorCode | ProjectCheckpointErrorCode | Extract<ProjectAcceptErrorCode, "github_account_stale">;
+type KnownCode =
+  | ProjectErrorCode
+  | ProjectCheckpointErrorCode
+  | Extract<ProjectAcceptErrorCode, "github_account_stale">
+  | WorkModeRefusal
+  | Extract<WorkspaceStartRefusal, "not_online" | "seb_required">;
 const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   not_draft: "project.refusal.notDraft",
   distribution_missing: "project.refusal.distributionMissing",
@@ -354,6 +361,14 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   needs_confirmation: "groups.refusal.needsConfirmation",
   released: "project.refusal.released",
   classroom_archived: "project.refusal.classroomArchived",
+  // The online workspace (ADR-047, M6-06): the work mode's refusals and the resync's.
+  not_invitable: "project.refusal.notInvitable",
+  owner_required: "project.workspace.refusal.owner_required",
+  codespace_not_granted: "project.workspace.refusal.codespace_not_granted",
+  work_mode_frozen: "project.workspace.refusal.work_mode_frozen",
+  work_mode_group: "project.workspace.refusal.work_mode_group",
+  not_online: "project.refusal.notOnline",
+  seb_required: "project.refusal.sebRequired",
 };
 
 /** The dictionary key wording a refusal the page knows, or null (the server's message then). */

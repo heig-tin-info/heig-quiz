@@ -113,6 +113,17 @@ export const PROJECT_GROUP_SYNC_QUEUE = "group.sync";
 export const PROJECT_SYNC_QUEUE = "project.sync";
 
 /**
+ * The push of one project to the online workspace portal (ADR-047 §6,
+ * merge task M6-06): `{ projectId }`, sent after anything the portal reads
+ * of an `online` project changed (its mode, name, dates, publication) and
+ * by the staff's *Resync*. A `standard` queue, no dedupe: the portal's PUT
+ * is idempotent and the job reads the row as it is when it runs, so two
+ * jobs of one project send the same thing. Retried five times with
+ * backoff, the last error kept for the staff (`codespace_projects`).
+ */
+export const CODESPACE_SYNC_QUEUE = "codespace.sync";
+
+/**
  * One AI pass over a brainstorm (ADR-072): `{ evaluationId, lease }`, sent a
  * few seconds after the answer that claimed the poll's lease
  * (`poll_ai_runs.lease_at`). A `standard` queue, no dedupe, no retry: the

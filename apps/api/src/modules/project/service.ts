@@ -45,6 +45,9 @@
  * (`groupSync.ts`, its own lease) after their consequences are confirmed
  * (`ConfirmationNeeded`), and *access to revoke* on the project page.
  * From M3-15b-2b: *Resync with the set* and the drift (`groupResync.ts`).
+ * From M6-06: the work mode (`setWorkMode`, ADR-047 as amended
+ * 2026-10-07), which the `codespace` module's route calls, and the
+ * invitation's permission by mode (`collaboratorPermission`).
  */
 export { acceptProject } from "./accept.js";
 export { createCheckpoint, deleteCheckpoint, listCheckpoints } from "./checkpoints.js";
@@ -66,9 +69,11 @@ export {
   patchProject,
   publishProject,
   setProjectArchived,
+  setWorkMode,
   unassignedStudents,
   type CreateInput,
   type Unassigned,
+  type WorkModeCaller,
 } from "./lifecycle.js";
 export { ProjectError } from "./errors.js";
 export { listSources, sourceDetail } from "./sources.js";

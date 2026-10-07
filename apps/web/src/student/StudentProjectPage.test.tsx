@@ -29,6 +29,7 @@ const INVITE = "POST /app/api/student/projects/p1/invite";
 const project = (over: Partial<StudentProject> = {}): StudentProject => ({
   kind: "project",
   seat: "student",
+  workspace: null,
   id: "p1",
   title: "Labo 1 — Pointeurs",
   classroomId: "r1",
@@ -366,5 +367,46 @@ describe("in French", () => {
     expect(screen.getByRole("link", { name: "Ouvrir le dépôt" })).toBeInTheDocument();
     expect(screen.getAllByText("réussie").length).toBeGreaterThan(0);
     expect(screen.getByRole("navigation", { name: "Fil d'Ariane" })).toBeInTheDocument();
+  });
+});
+
+describe("the online workspace (ADR-047, M6-06)", () => {
+  it("opens the workspace through the start route, a plain navigation", async () => {
+    mockFetch({ [URL]: ok(project({ workspace: { mode: "online" } })) });
+    render();
+    const open = await screen.findByRole("link", { name: "Open workspace" });
+    expect(open).toHaveAttribute("href", "/app/codespace/start/p1");
+    expect(open).not.toHaveAttribute("target");
+  });
+
+  it("says where a Safe Exam Browser workspace opens, with no link", async () => {
+    mockFetch({ [URL]: ok(project({ workspace: { mode: "online_seb" } })) });
+    render();
+    expect(await screen.findByText("This workspace opens only in Safe Exam Browser.")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open workspace" })).toBeNull();
+  });
+
+  it("shows nothing of a workspace on a project worked in the student's own tools", async () => {
+    mockFetch({ [URL]: ok(project()) });
+    render();
+    await screen.findByRole("heading", { level: 1, name: "Labo 1 — Pointeurs" });
+    expect(screen.queryByTestId("sproj-workspace")).toBeNull();
+  });
+
+  it("words the start route's refusal it was sent back with, and ignores any other value", async () => {
+    mockFetch({ [URL]: ok(project({ workspace: { mode: "online" } })) });
+    const navigate = vi.fn();
+    const queryClient = makeQueryClient();
+    queryClient.setQueryData(meKey, student);
+    const view = renderWithProviders(<StudentProjectPage id="p1" navigate={navigate} />, {
+      route: "/projects/p1?workspace=closed",
+      queryClient,
+    });
+    expect(await screen.findByText("The deadline has passed: the workspace no longer opens.")).toBeInTheDocument();
+    view.unmount();
+
+    renderWithProviders(<StudentProjectPage id="p1" navigate={navigate} />, { route: "/projects/p1?workspace=bogus", queryClient });
+    await screen.findByRole("link", { name: "Open workspace" });
+    expect(screen.queryByText("The workspace did not open")).toBeNull();
   });
 });

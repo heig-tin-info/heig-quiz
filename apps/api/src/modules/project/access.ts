@@ -45,6 +45,8 @@ import { and, eq, isNotNull, isNull, ne, notExists, sql } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
 import type { Octokit } from "octokit";
 
+import { collaboratorPermission } from "@quiz/domain";
+
 import { audit, type AuditActor } from "../../audit.js";
 import { linkedLogin } from "../../auth/githubLink.js";
 import type { AppConfig } from "../../config.js";
@@ -204,7 +206,9 @@ export interface InviteContext {
 }
 
 /**
- * Invites `member` (who has a link) on `repo` with `push`: the login of
+ * Invites `member` (who has a link) on `repo` with the permission of its
+ * project's work mode (`push`, `pull` online; `409 not_invitable` under
+ * Safe Exam Browser, ADR-047 §2): the login of
  * today for their immutable id (`linkedLogin`: a stored login renamed away
  * may be somebody else's now), the grant recorded first, the invitation
  * (idempotent on GitHub's side: 204 for a collaborator), the grant taken
@@ -226,12 +230,20 @@ export async function inviteAccount(
   });
   if (typeof login !== "string") throw new ProjectError("github_account_stale", "The GitHub account is gone or renamed: relink it");
   const account = { enrollmentId: member.enrollmentId, userId: member.userId, githubUserId: member.account.githubUserId, login };
+  // The permission of the project's work mode (ADR-047 §2): `pull` online;
+  // under Safe Exam Browser nobody is invited — Accept never calls this then.
+  const [{ workMode } = { workMode: "free" as const }] = await db
+    .select({ workMode: projects.workMode })
+    .from(projects)
+    .where(eq(projects.id, repo.projectId));
+  const permission = collaboratorPermission(workMode);
+  if (permission === null) throw new ProjectError("not_invitable", "This project's work mode invites nobody on GitHub");
   const grant = await recordGrant(db, repo, account, ctx.now);
   if (notRecorded(grant)) return grant;
   const { owner, repo: name } = ownerRepo(repo.fullName!);
   let invitation: "pending" | "accepted";
   try {
-    invitation = await inviteCollaborator(octokit, owner, name, login, "push");
+    invitation = await inviteCollaborator(octokit, owner, name, login, permission);
   } catch (err) {
     await grant.undo();
     if (isInvitationRefused(err)) throw new ProjectError("github_account_stale", "GitHub refused to invite the account: relink it");

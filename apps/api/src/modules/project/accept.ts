@@ -45,7 +45,7 @@ import type { FastifyBaseLogger } from "fastify";
 import { and, eq, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 
 import type { ProjectAcceptance } from "@quiz/contracts";
-import { acceptRefusal, groupRepoName, isLiveIndividualRepo, repoName } from "@quiz/domain";
+import { acceptRefusal, collaboratorPermission, groupRepoName, isLiveIndividualRepo, repoName } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
 import { linkedLogin } from "../../auth/githubLink.js";
@@ -189,7 +189,9 @@ export async function acceptProject(db: Db, config: AppConfig, input: AcceptInpu
   const seat = await seatRepo(db, project, input.enrollmentId);
   if (project.groupMode && seat?.groupId === null && isLiveIndividualRepo(seat)) return acceptance(seat);
   if (project.groupMode) return acceptGroup(db, config, input, seat);
-  if (joinable(seat) && seat!.invitationStatus === "none") return joinRepo(db, config, input, seat!);
+  // Under Safe Exam Browser nobody is invited (ADR-047 §2): a provisioned repository is the answer.
+  const invites = collaboratorPermission(project.workMode) !== null;
+  if (joinable(seat) && seat!.invitationStatus === "none" && invites) return joinRepo(db, config, input, seat!);
   if (settled(seat ?? undefined)) return acceptance(seat!);
 
   const refusal = acceptRefusal(project, now);
@@ -313,6 +315,7 @@ async function provision(db: Db, input: AcceptInput, row: RepoRow, github: Githu
       branches: project.branches,
       defaultBranch: project.branches[0]!,
       studentLogin: login,
+      permission: collaboratorPermission(project.workMode),
       claim: async (repoId, created) => {
         if (!created) return repoId === row.githubRepoId;
         await db.update(projectRepos).set({ githubRepoId: repoId }).where(eq(projectRepos.id, row.id));

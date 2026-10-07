@@ -15,7 +15,7 @@
  */
 import { and, eq, inArray, ne, sql, type AnyColumn, type SQL } from "drizzle-orm";
 
-import type { Db } from "./db/client.js";
+import type { Db, Tx } from "./db/client.js";
 import { userEmails } from "./db/schema.js";
 
 /** Trim + lowercase, the normalization the roster import already applies. */
@@ -24,7 +24,7 @@ export function normalizeEmail(email: string): string {
 }
 
 /** Verified addresses of an account, normalized. Empty means "matches nothing". */
-export async function knownEmails(db: Db, userId: string): Promise<string[]> {
+export async function knownEmails(db: Db | Tx, userId: string): Promise<string[]> {
   const rows = await db
     .select({ email: userEmails.email })
     .from(userEmails)

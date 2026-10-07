@@ -28,6 +28,9 @@ import { activityPlugin } from "./modules/activity/routes.js";
 import { adminPlugin } from "./modules/admin/routes.js";
 import { adminGuard } from "./modules/guards.js";
 import { avatarPlugin } from "./modules/avatar.js";
+import { registerCodespaceJobs } from "./modules/codespace/jobs.js";
+import { codespacePlugin } from "./modules/codespace/routes.js";
+import { codespaceOn } from "./modules/codespace/service.js";
 import { drillPlugin } from "./modules/drill/routes.js";
 import { registerDrillHooks } from "./modules/drill/service.js";
 import { evaluationPlugin } from "./modules/evaluation/routes.js";
@@ -208,6 +211,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   if (githubApp(config)) await app.register(githubPlugin, { config });
   // Projects drive GitHub through the App: no App, no project route (M3-02).
   if (githubApp(config)) await app.register(projectPlugin, { config });
+  // The online workspace (ADR-047, M6-06): projects only, and only with a portal; otherwise a 404.
+  if (githubApp(config) && codespaceOn(config)) await app.register(codespacePlugin, { config });
   // A classroom's group sets (ADR-070): always; their moves on GitHub need the App (M3-15b-2).
   await app.register(groupPlugin, { config });
   // A classroom's gradebook (F-GBOOK, ADR-074): reads the activities, needs no GitHub.
@@ -276,6 +281,9 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
       await step("github jobs registration", () => registerGithubJobs(app, started, config));
       await step("journal jobs registration", () => registerJournalJobs(app, started, config));
       await step("project jobs registration", () => registerProjectJobs(app, started, config));
+      if (codespaceOn(config)) {
+        await step("codespace jobs registration", () => registerCodespaceJobs(app, started, config));
+      }
     }
   }
   // The rows of the scheduled catalog (D10), once. A database down at boot

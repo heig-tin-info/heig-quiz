@@ -10,6 +10,7 @@ import {
   boolean,
   char,
   index,
+  integer,
   jsonb,
   pgTable,
   primaryKey,
@@ -19,7 +20,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import { SESSION_KINDS } from "@quiz/contracts";
+import { DEFAULT_MAX_ACTIVE_SESSIONS, SESSION_KINDS } from "@quiz/contracts";
 
 import { bytea } from "./columns.js";
 import { evaluations } from "./evaluation.js";
@@ -337,6 +338,14 @@ export const teacherGrants = pgTable("teacher_grants", {
     .notNull()
     .references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  /**
+   * The online workspace (ADR-047 §4, amended 2026-10-07): may this teacher
+   * put a project of a course they own in the portal, and how many of the
+   * workspaces they carry may run at once (the portal enforces it, from the
+   * sync). Edited by an administrator only.
+   */
+  codespaceEnabled: boolean("codespace_enabled").notNull().default(false),
+  codespaceMaxActiveSessions: integer("codespace_max_active_sessions").notNull().default(DEFAULT_MAX_ACTIVE_SESSIONS),
 });
 
 /**

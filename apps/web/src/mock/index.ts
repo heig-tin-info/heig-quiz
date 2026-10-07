@@ -143,6 +143,7 @@ import { arriveProjectActivity } from "./project";
 import "./drill";
 import "./github";
 import "./projectNew";
+import "./codespace";
 import "./journal";
 import "./kiosk";
 import {

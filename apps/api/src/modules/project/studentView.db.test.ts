@@ -397,6 +397,8 @@ describe("the student's project (F-PROJ-15)", () => {
       gradingMode: "auto",
       repo: null,
       release: null,
+      // No online workspace on this platform (ADR-047 §5): `CODESPACE_URL` is empty.
+      workspace: null,
       serverNow: NOW,
     });
 

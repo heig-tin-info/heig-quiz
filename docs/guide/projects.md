@@ -103,6 +103,12 @@ A score resting on a run **to verify** (protected files in conflict) blocks the 
 
 When the source repository gets new commits, the page says it is ahead and offers **Sync**. Nothing reaches students until you click. Sync updates the distribution repository, then, for every unlocked repository, pushes the update to a `sync/<branch>` branch and opens **one pull request per handed-out branch** (or updates the one already open). The student merges it and resolves conflicts; Quiz never merges. Repositories already identical get none, and repositories past their deadline are skipped. A summary tells how many were opened, updated, up to date, failed or skipped.
 
+## The online workspace
+
+Where the platform has the online workspace, the project page has a **Workspace** section. **Where students work** is **Own tools** by default: students clone their repository and push from their machine. **Online** gives each student a workspace in the browser, set up with their repository; they open it with **Open workspace** on their project page, and only the workspace writes to their repository (they are invited on GitHub to read it). **Online, in Safe Exam Browser** keeps students away from their repository until grading; it cannot be opened yet.
+
+Only an owner of the course whose account the administrator enabled for the workspace can choose a mode other than **Own tools**, and a group project stays in the students' own tools. Once a student has opened a workspace, the mode no longer changes. The section says when the workspace last received the project, with **Resync** if it failed, and lists the workspaces open now. How many may run at once is the administrator's setting for the course's owner who created the project (or its oldest owner).
+
 ## Archive and delete
 
 **Archive** takes a project out of the lists, reversibly. **Delete project** removes its rows in Quiz (repositories, runs, scores, groups) after a confirmation, and **never a repository on GitHub**: the students' repositories, the distribution repository and the source stay where they are.

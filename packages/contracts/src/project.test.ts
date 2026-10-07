@@ -79,6 +79,7 @@ describe("the student's project card (F-PROJ-04)", () => {
         score: { points: 7, max: 10, grade: { grade: 4.5, fellBack: false }, frozen: false },
       },
       release: null,
+      workspace: null,
       serverNow: START,
     };
     expect(StudentProject.parse(view)).toEqual(view);

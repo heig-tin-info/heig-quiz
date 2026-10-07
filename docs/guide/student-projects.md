@@ -61,6 +61,8 @@ Clone your repository on your computer as you would any GitHub repository (`git 
 - Your teacher may send an update of the project while you work. It arrives in your repository as a **pull request** (its branch is named `sync/...`). Open it on GitHub, resolve the conflicts if there are any, and merge it. The platform never merges it for you.
 - Push to the branches you were given. Work on another branch is not graded.
 
+Some projects run in the **online workspace**: once you accepted, **Open workspace** on the project page opens an editor in your browser, set up with your repository. You work and push there, not from your own machine. If it does not open, the page says why (the deadline has passed, or the project was not accepted yet).
+
 ## 5. Read your score
 
 Under **Score**, the page shows the score of the latest commit that was graded: points out of a maximum, with the run it comes from (**See the run on GitHub**). It is marked **indicative**. It moves with every push, and it is not your grade.

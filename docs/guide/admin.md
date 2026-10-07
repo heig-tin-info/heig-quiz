@@ -20,6 +20,8 @@ The table lists each grant with the person's name once known, their address, the
 
 A grant is not the only way to be a teacher. A colleague added to the staff of a course is a teacher for as long as they hold that seat, and edu-ID reports employees as staff, which is enough on its own. Grants are for the cases those two rules miss: an assistant without a staff affiliation, or a teacher who should create their first course before anyone has added them anywhere.
 
+Where the platform has the online workspace, each grant also has a **Workspace** column: its switch lets that teacher put the projects of the courses they own in the workspace, and the number beside it is how many of their students' workspaces may run at once (2 by default).
+
 ## Removing a grant
 
 The bin at the end of a row revokes the grant, after a confirmation naming the address. The role is recomputed, not forced: someone who still sits on the staff of a course, or whom edu-ID reports as staff, stays a teacher. Someone with neither goes back to student at once.

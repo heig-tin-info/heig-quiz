@@ -2,7 +2,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, CalendarClock, Library, ShieldCheck, Sparkles, Trash2, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 
-import type { AdminTeacher, TeacherGrantCreate } from "@quiz/contracts";
+import {
+  MAX_ACTIVE_SESSIONS_LIMIT,
+  TeacherCodespaceGrant,
+  type AdminTeacher,
+  type TeacherCodespaceGrantPatch,
+  type TeacherGrantCreate,
+} from "@quiz/contracts";
 
 import { api, apiErrorMessage } from "./api";
 import { useConfirm } from "./confirm";
@@ -16,12 +22,15 @@ import {
   ErrorText,
   Field,
   IconButton,
+  inputClass,
+  inputSize,
   PageHeader,
   PersonAvatar,
   QueryError,
   RelativeTime,
   SectionHeading,
   Skeleton,
+  Switch,
   T,
   TabPanel,
   TableHead,
@@ -124,6 +133,8 @@ function TeachersSection() {
   });
 
   const rows = teachers.data ?? [];
+  // ADR-047 §5: the grant's column exists only where the platform has the online workspace.
+  const workspace = rows.some((r) => r.codespace !== null);
   const { sorted, sort, toggle } = useSortableTable<AdminTeacher, SortKey>(
     rows,
     (r, k) =>
@@ -141,6 +152,7 @@ function TeachersSection() {
     { key: "courses", label: t("admin.col.courses") },
     { key: "lastLoginAt", label: t("admin.col.lastSignIn") },
     { key: "grantedAt", label: t("admin.col.granted") },
+    ...(workspace ? [{ key: "workspace", label: t("admin.col.workspace"), sortable: false as const }] : []),
     { key: "actions", label: t("common.actions"), sortable: false, srOnly: true },
   ];
 
@@ -224,6 +236,11 @@ function TeachersSection() {
                     <td className={`${T.td} whitespace-nowrap text-fg-muted`}>
                       <RelativeTime iso={r.grantedAt} />
                     </td>
+                    {workspace ? (
+                      <td className={T.td}>
+                        {r.codespace ? <WorkspaceGrant id={r.id} email={r.email} grant={r.codespace} /> : "—"}
+                      </td>
+                    ) : null}
                     <td className={`${T.td} text-right`}>
                       <IconButton
                         label={t("admin.revoke")}
@@ -252,5 +269,56 @@ function TeachersSection() {
           </Card>
         )}
     </section>
+  );
+}
+
+/**
+ * A teacher's online workspace grant (ADR-047 §4, amended 2026-10-07): the
+ * switch, and how many of the workspaces they carry may run at once —
+ * written on change, the number when the field is left.
+ */
+function WorkspaceGrant({ id, email, grant }: { id: string; email: string; grant: TeacherCodespaceGrant }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const [quota, setQuota] = useState(String(grant.maxActiveSessions));
+  const save = useMutation({
+    mutationFn: (body: TeacherCodespaceGrantPatch) =>
+      api<TeacherCodespaceGrant>(`/app/api/admin/teachers/${id}/codespace`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSettled: () => qc.invalidateQueries({ queryKey: adminTeachersKey }),
+  });
+  const commitQuota = () => {
+    // The contract's own bounds (`TeacherCodespaceGrant`): anything else goes back to the saved value.
+    const n = TeacherCodespaceGrant.shape.maxActiveSessions.safeParse(quota.trim() === "" ? NaN : Number(quota));
+    if (!n.success) {
+      setQuota(String(grant.maxActiveSessions));
+      return;
+    }
+    if (n.data !== grant.maxActiveSessions) save.mutate({ maxActiveSessions: n.data });
+  };
+  return (
+    <span className="flex items-center gap-3">
+      <Switch
+        checked={grant.enabled}
+        disabled={save.isPending}
+        label={t("admin.workspace.enable", { email })}
+        onChange={(enabled) => save.mutate({ enabled })}
+      />
+      <input
+        type="number"
+        min={0}
+        max={MAX_ACTIVE_SESSIONS_LIMIT}
+        inputMode="numeric"
+        aria-label={t("admin.workspace.quota", { email })}
+        title={t("admin.workspace.quotaHint")}
+        className={cx(inputClass, inputSize.sm, "w-16 text-right tabular-nums")}
+        value={quota}
+        disabled={save.isPending}
+        onChange={(e) => setQuota(e.target.value)}
+        onBlur={commitQuota}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commitQuota();
+        }}
+      />
+    </span>
   );
 }

@@ -56,6 +56,9 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  * `provisioning`: the student's Accept of a project takes twenty seconds
  *   (`mock/student.ts`, M3-13); `refused`: it is refused `409
  *   repo_name_taken`; `stale`: `409 github_account_stale` (Relink GitHub).
+ * `codespace`: the platform has the online workspace (ADR-047, M6-06): a
+ *   project's workspace section, the student's *Open workspace*, the
+ *   administration's grants (`mock/codespace.ts`); off, those routes 404.
  * `staffseat`: the student persona is a teacher on a STAFF seat (ADR-077): their
  *   project page offers the real actions; `staffrepo`: the staff project page
  *   shows that teacher's test repository, badged (`mock/project.ts`).
@@ -96,6 +99,7 @@ export const FLAG_NAMES = [
   "stale",
   "staffseat",
   "staffrepo",
+  "codespace",
 ] as const;
 type FlagName = (typeof FLAG_NAMES)[number];
 export const flags = {} as Record<FlagName, boolean>;

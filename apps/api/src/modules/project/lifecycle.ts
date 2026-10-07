@@ -25,12 +25,21 @@ import type { FastifyBaseLogger } from "fastify";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
 import { defaultProjectGradingScale, type ProjectCreate, type ProjectPatch } from "@quiz/contracts";
-import { PROJECT_PATCH_FIELDS, projectFieldRefusal, repoName, SLUG_MAX, slugify, type ProjectPatchField } from "@quiz/domain";
+import {
+  PROJECT_PATCH_FIELDS,
+  projectFieldRefusal,
+  repoName,
+  SLUG_MAX,
+  slugify,
+  workModeRefusal,
+  type ProjectPatchField,
+  type WorkModeName,
+} from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { isUniqueViolation, type Db, type Tx } from "../../db/client.js";
-import { enrollments, groupSets, projectGroupMembers, projectGroups, projects } from "../../db/schema.js";
+import { codespaceProjects, enrollments, groupSets, projectGroupMembers, projectGroups, projects } from "../../db/schema.js";
 import { githubStatus, type InstallationClient } from "../../github/app.js";
 import { createSquashedRepo } from "../../github/squash.js";
 import { purgeProjectReceipts, type InstalledOrg } from "../github/service.js";
@@ -320,6 +329,10 @@ export async function patchProject(
       throw new DomainError("validation", 400, "A group set only applies to a group project");
     }
     if (changed.groupSetId && askedSet?.classroomId !== project.classroomId) throw unknownGroupSet();
+    // F-PROJ-06: a group project stays in the students' own tools (ADR-047 as amended 2026-10-07).
+    if (changed.groupMode === true && next.workMode !== "free") {
+      throw new ProjectError("work_mode_group", "A project in the online workspace cannot be a group project");
+    }
     // A duration on a manual draft keeps a provisional deadline, so that the
     // lists stay meaningful; Publish counts it again from the publication.
     if (changed.durationMinutes !== undefined && next.durationMinutes !== null) {
@@ -351,6 +364,60 @@ export async function patchProject(
     if (movedTo !== undefined) row = await projectDeadlineMoved(tx, row, movedTo as Date, actor, now);
     await audit(tx, { ...actor, action: "project.update", subjectType: "project", subjectId: project.id, payload: body });
     return row;
+  });
+}
+
+// ---------------------------------------------------------------- the work mode (ADR-047, M6-06)
+
+/** What the caller is, for {@link setWorkMode}: decided by the route (the course role) and the `codespace` module (the grant). */
+export interface WorkModeCaller {
+  owner: boolean;
+  granted: boolean;
+}
+
+/**
+ * `PUT /app/api/projects/:id/workspace/mode` (ADR-047 as amended
+ * 2026-10-07): the project's work mode, on its row read FOR UPDATE, judged
+ * by `workModeRefusal` of `@quiz/domain` — an owner (`403 owner_required`)
+ * with the grant to go online (`403 codespace_not_granted`), never once a
+ * workspace was launched (`409 work_mode_frozen`, the `codespace` module's
+ * `first_launch_at`, read by join), never a group project (`409
+ * work_mode_group`). Any state of the project: the mode decides the
+ * permission of the invitations still to come; one already sent keeps its
+ * own. Audited `codespace.work_mode` when it changes.
+ */
+export async function setWorkMode(
+  db: Db,
+  projectId: string,
+  to: WorkModeName,
+  caller: WorkModeCaller,
+  actor: AuditActor,
+): Promise<ProjectRow> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ project: projects, launchedAt: codespaceProjects.firstLaunchAt })
+      .from(projects)
+      .leftJoin(codespaceProjects, eq(codespaceProjects.projectId, projects.id))
+      .where(eq(projects.id, projectId))
+      .for("update", { of: projects });
+    if (!row) throw notFound();
+    const { project } = row;
+    const refusal = workModeRefusal(
+      { ...caller, launched: row.launchedAt !== null, groupMode: project.groupMode },
+      project.workMode,
+      to,
+    );
+    if (refusal) throw new ProjectError(refusal, `The work mode cannot become ${to}`);
+    if (project.workMode === to) return project;
+    const [updated] = await tx.update(projects).set({ workMode: to }).where(eq(projects.id, project.id)).returning();
+    await audit(tx, {
+      ...actor,
+      action: "codespace.work_mode",
+      subjectType: "project",
+      subjectId: project.id,
+      payload: { from: project.workMode, to },
+    });
+    return updated!;
   });
 }
 

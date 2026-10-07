@@ -111,7 +111,9 @@ function html(reply: FastifyReply, code: number, page: string): FastifyReply {
 
 /**
  * `startURL` of the `.seb`: the platform's page, not the portal's. The path is
- * heig-classroom's; Quiz's own start route lands with M6-06/M6-07.
+ * heig-classroom's and Quiz's alike: Quiz's start route (M6-06) is
+ * `GET /app/codespace/start/:projectId` (`workspaceStartPath` of
+ * `@quiz/contracts`). Under D21 the platform builds the `.seb` (M6-07).
  */
 export function classroomStartUrl(platformUrl: string, assignmentId: string): string {
   return new URL(`/app/codespace/start/${encodeURIComponent(assignmentId)}`, platformUrl).href;

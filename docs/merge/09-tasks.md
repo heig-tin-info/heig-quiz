@@ -4205,6 +4205,87 @@ serves now (16a), and what waits for the group repositories (16b).
 - **Acceptance**: routes 404 when `CODESPACE_URL` is empty; neither token
   nor BEK in the audit nor any student payload; `pnpm smoke` start step
   against a stub portal.
+- **As delivered** (branch `merge/M6-06-codespace-module`; product owner
+  decisions A–D of 2026-10-07, recorded as the ADR-047 amendment "M6-06"
+  and the F-PROJ-19 amendment). Migration `0079_codespace_module`.
+  - Schema: `projects.work_mode` (`free` default, the `project` module's);
+    `teacher_grants.codespace_enabled` (false) and
+    `codespace_max_active_sessions` (2) — ADR-047's names, not the brief's
+    `max_active_sessions`, so classroom's column maps one to one at M8;
+    `codespace_projects` (the `codespace` module's: `synced_at`,
+    `sync_error`, `first_launch_at`), one row per project the portal heard
+    of, cascade on the project.
+  - Pure rules (`@quiz/domain` `workMode.ts`): `workModeRefusal` (owner →
+    grant → frozen → group, in that order), `collaboratorPermission`
+    (`push`/`pull`/none), `quotaHolder` (creator while owner, else the
+    oldest owner seat, ties by id).
+  - Routes (`modules/codespace/routes.ts`, registered only with the App AND
+    `CODESPACE_URL`): `GET /app/api/projects/:id/workspace` (mode,
+    `allowed`, `refusal`, last sync), `PUT …/workspace/mode`
+    (`withCourseRole` owner in the loader, then the grant, then
+    `setWorkMode` of the `project` module under `FOR UPDATE`),
+    `POST …/workspace/sync` (202; `409 not_online`, `409 seb_required`),
+    `GET …/workspace/sessions` (the portal's list with a service token,
+    `userId` matched to a claimed seat of the classroom; unreachable is
+    `reachable: false`), `GET /app/codespace/start/:id` (the portal's
+    `classroomStartUrl` already builds that path: only its comment
+    changed). Admin: `PATCH /app/api/admin/teachers/:gid/codespace` and a
+    `codespace` field on `AdminTeacher` (null when off).
+  - Start route: a request with an `Authorization` header → 404; anonymous
+    (and a `seb`/`kiosk` session, anonymous there by ADR-027's default
+    deny) → 303 to the sign-in with `next`; impersonation → 404; `findStudentProjectView` with a claimed seat (a staff
+    seat's test repository included, ADR-077) else 404; then, under a share
+    lock on the project (`startWorkspace`, the decision the pure
+    `workspaceStartRefusal` of `@quiz/domain`), refusals sent back as
+    `/projects/:id?workspace=not_online|seb_required|not_accepted|closed`
+    (closed: the effective deadline passed or the classroom archived);
+    then `first_launch_at` set — never by a staff seat (ADR-077: a
+    teacher testing the project freezes nothing) —, a launch token (`iss heig-quiz`, 5 min,
+    random `jti`, no `seb` claim), audit `codespace.launch_issued` with
+    `{jti, mode}`, 303 to `${CODESPACE_URL}/launch?token=`. The quota is
+    the portal's 429 (Quiz cannot count live workspaces).
+  - Sync: `codespace.sync` queue (retry 5, backoff), sent after the mode,
+    a patch, a publication (route and ticker); inline when there is no
+    queue, its failure swallowed. Only `online` projects with a built
+    distribution are sent (seeded from the distribution, never the
+    source); `online_seb` is not sent — the portal refuses an exam without
+    Browser Exam Keys (M6-07). `deadlineAt` is the project's: a
+    repository's own later deadline is not sent (the start route judges
+    the student's effective deadline itself). Audit `codespace.synced`,
+    `codespace.sync_requested`, `codespace.work_mode`,
+    `teacher.codespace_grant`.
+  - Provisioning (ADR-047 §2): `provisionStudentRepo({permission})` —
+    `pull` online, no invitation under `online_seb` (`invitation_status`
+    `none`; a second Accept answers the repository and invites nobody;
+    `inviteAccount` refuses `409 not_invitable` for it). An invitation
+    already sent keeps its permission when the mode changes before the
+    first launch. Group mode and an online mode exclude each other
+    (`409 work_mode_group`, both ways).
+  - Grant lookup: the verified addresses only (`knownEmails`, plus the
+    sign-in address when verified), the most permissive row; the
+    administrator holds no row and is not granted.
+  - Single sources: `WORK_MODES`, `WORK_MODE_REFUSALS`,
+    `WORKSPACE_START_REFUSALS` and `syncsToPortal` live in `@quiz/domain`
+    (`workMode.ts`), re-exported by the contracts. The staff's sessions
+    carry no address from the portal: an unmatched workspace is "not in
+    this classroom".
+  - Web: `project/ProjectWorkspace.tsx` on the staff's project page (absent
+    on the 404), the student's *Open workspace* (a plain link to the start
+    route) and the refusal alert (`?workspace=`), the admin's switch and
+    quota per grant; en/fr; mock `?codespace=1` (`mock/codespace.ts`,
+    checked by `contract.test.ts`); scenes `project-workspace*`,
+    `student-project-workspace*`, `admin-workspace-grants`.
+  - Smoke: `pnpm smoke` gains "online workspace start route" — off, the
+    404; on, the anonymous 303 and a student's 404 on a project nobody
+    holds. A launch against a stub portal is not reachable over HTTP alone
+    (a project needs GitHub to provision its repository, and no seed makes
+    one): `codespace.db.test.ts` launches against a stub portal instead.
+  - Open: **with the portal's forge off, a workspace can only be seeded
+    from a PUBLIC distribution repository**; a private one (the default)
+    syncs but cannot seed, until the decision on Quiz's App on the engine
+    VM (M6-04/M6-05). The portal's shared `classroom:` subject namespace for both
+    issuers (one issuer per portal in production, M6-04); the BEKs, the
+    `.seb`, `online_seb`'s sync and launch (M6-07).
 
 ### M6-07 — SEB for projects
 - **Depends on**: M6-02, M6-06.

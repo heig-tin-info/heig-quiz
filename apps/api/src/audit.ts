@@ -53,6 +53,20 @@ export type AuditAction =
   | "course.staff_remove"
   | "course.staff_role_change"
   | "course.update"
+  /**
+   * The online workspace (ADR-047, M6-06). `launch_issued`: a student's
+   * launch token minted by the start route (subject the project;
+   * `payload.jti` and `payload.mode` — NEVER the token, a bearer
+   * credential). `work_mode`: an owner set a project's work mode
+   * (`payload.from`, `payload.to`). `sync_requested`: the staff's *Resync*.
+   * `synced`: the portal accepted the project (a system action;
+   * `payload.mode`, `payload.quotaHolder`). Nothing else of a token, a
+   * secret or a Browser Exam Key is ever written here.
+   */
+  | "codespace.launch_issued"
+  | "codespace.work_mode"
+  | "codespace.sync_requested"
+  | "codespace.synced"
   /** The teacher enabled the drill for a classroom (ADR-041 §6). */
   | "drill.enable"
   /** …and disabled it: its cards leave the sessions, their data is kept. */
@@ -472,6 +486,8 @@ export type AuditAction =
   | "teams.link"
   | "teams.unlink"
   | "teacher.grant"
+  /** An administrator changed a teacher's workspace grant (ADR-047 §4; `payload`: the fields changed). */
+  | "teacher.codespace_grant"
   | "teacher.revoke";
 
 /**
