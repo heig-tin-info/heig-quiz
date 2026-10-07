@@ -640,7 +640,7 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
       const sourceSha = "5ad0c0de".repeat(5);
       await setProject(lab.id, { sourceAheadSha: sourceSha, sourcePushedAt: at(NOW), sourceAhead: { main: 3 }, sourceHeads: { main: "c0ffee42".repeat(5) }, syncedAt: at(NOW) });
       await setRepo(mine.id, { syncOutcome: "opened", syncOutcomeAt: at(NOW) });
-      await server.app.db.insert(projectSyncPrs).values({ repoId: mine.id, branch: "main", prNumber: 7331, state: "open", updatedAt: at(NOW) });
+      await server.app.db.insert(projectSyncPrs).values({ repoId: mine.id, branch: "main", prNumber: 987654321, state: "open", updatedAt: at(NOW) });
       // The second student's run, review, teacher's score; a flagged run of the first's.
       await setRepo(theirs.id, {
         currentGradeRunId: await run(theirs.id, { points: 42.25, max: 100, headSha: "d".repeat(40) }),
@@ -651,9 +651,9 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
         lastCommitSha: "d".repeat(40),
       });
       // The second student's pushes, and the first's own after the deadline (M3-14i): never in a count of theirs.
-      await receipt(theirs.githubRepoId!, at(NOW), 8642);
+      await receipt(theirs.githubRepoId!, at(NOW), 864200000);
       await receipt(mine.githubRepoId!, at(NOW), 2);
-      await receipt(mine.githubRepoId!, at(DEADLINE, MINUTE), 5317);
+      await receipt(mine.githubRepoId!, at(DEADLINE, MINUTE), 531700000);
       // The first student's own: a flagged run, an unreleased review score, the teacher's score and comment.
       await setRepo(mine.id, {
         currentGradeRunId: await run(mine.id, { points: 7, max: 10, toVerify: true, headSha: "e".repeat(40) }),
@@ -728,10 +728,10 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
         "Hidden-note-two",
         lateSha, // the first student's own push after the deadline
         "77.75", // and its run's score
-        "8642", // the second student's commits
-        "8644",
-        "5317", // the first student's own commits after the deadline
-        "5319",
+        "864200000", // the second student's commits (nine digits: a random UUID or sha in a payload may hold any four)
+        "864200002",
+        "531700000", // the first student's own commits after the deadline
+        "531700002",
         "21.5", // the first student's own review score, never released as such
         "Rewritten-after-release",
         "starter",
@@ -748,7 +748,7 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
         "distribution",
         sourceSha, // the source ahead (M3-07)
         "c0ffee42",
-        "7331", // the sync pull request's number
+        "987654321", // the sync pull request's number
         "syncOutcome",
         "sourceAhead",
       ];
