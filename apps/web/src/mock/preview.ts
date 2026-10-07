@@ -20,6 +20,7 @@ import type {
   PreviewItemStatus,
   PreviewSolution,
 } from "@quiz/contracts";
+import { evaluationConditionsOf } from "@quiz/contracts";
 import { evaluationTotal, gradeFromPoints, round2 } from "@quiz/domain";
 
 import { evaluationOr404, itemQuestion, templateOr404, type MockEvaluation } from "./evaluation";
@@ -62,6 +63,14 @@ function viewOf(e: MockEvaluation, seed: number): AttemptView {
       preview: true,
       readOnly: false,
     },
+    // ADR-079: the server's builder, for a student with no extra time.
+    conditions: evaluationConditionsOf({
+      mode: e.mode,
+      settings: e.settings as AttemptView["evaluation"]["settings"],
+      durationS: e.durationS,
+      closesAt: e.closesAt,
+      timeBonusPercent: 0,
+    }),
     evaluation: {
       id: e.id,
       title: e.title,

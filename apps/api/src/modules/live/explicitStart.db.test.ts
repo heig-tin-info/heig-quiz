@@ -67,7 +67,9 @@ describe("entering a running evaluation", () => {
       expect(res.statusCode, res.body).toBe(200);
       const body = res.json();
       expect(body.kind).toBe("ready");
-      expect(body.view.evaluation).toMatchObject({ id: seed.evaluationId, timing: "duration" });
+      expect(body.view.evaluation).toMatchObject({ id: seed.evaluationId });
+      // What Start announces is the conditions' time line (ADR-079).
+      expect(body.view.conditions.imposed.map((c: { key: string }) => c.key)).toContain("duration");
       // No question content on the ready screen (invariant 4).
       expect(Object.keys(body.view)).not.toContain("items");
       expect(JSON.stringify(body)).not.toContain('"student"');
@@ -127,7 +129,13 @@ describe("POST /evaluations/:id/attempt/start", () => {
 
   it("applies the participant's time bonus", async () => {
     const { student, seed, start, entry } = await running({ durationS: 1000, timeBonusPercent: 50 });
-    expect((await post(entry, student.headers)).json().view.timeBonusPercent).toBe(50);
+    // The ready screen states it in the conditions' duration line (ADR-079).
+    expect((await post(entry, student.headers)).json().view.conditions.imposed).toContainEqual({
+      key: "duration",
+      kind: "info",
+      durationS: 1000,
+      bonusPercent: 50,
+    });
     const res = await post(start, student.headers);
     expect(res.statusCode, res.body).toBe(200);
     const [row] = await rowsOf(seed.evaluationId);

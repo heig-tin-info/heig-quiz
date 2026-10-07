@@ -14,7 +14,9 @@ presence table gains a row: the ready screen counts nobody); leaves
 [ADR-025](ADR-025-plusieurs-tentatives-exercice.md) (a retake starts on its
 own click), [ADR-027](ADR-027-tickets-de-lancement-et-sessions-typees.md) and
 [ADR-051](ADR-051-postes-kiosque-attestes.md) (trusted clients) and
-[ADR-034](ADR-034-agir-en-tant-qu-etudiant.md) §4 as they are.
+[ADR-034](ADR-034-agir-en-tant-qu-etudiant.md) §4 as they are. Amended by
+[ADR-079](ADR-079-conditions-de-l-evaluation.md) §6 (2026-10-07): the rules
+the ready screen carries (§1) are the evaluation's conditions.
 
 ## Context
 

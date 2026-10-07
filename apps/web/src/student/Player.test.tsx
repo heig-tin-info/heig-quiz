@@ -1093,3 +1093,29 @@ describe("the zen player's connection", () => {
     expect(((await screen.findByLabelText("Votre réponse")) as HTMLInputElement).value).toBe("42");
   });
 });
+
+/* ADR-079: the conditions read before the start stay one press away, in the bar. */
+describe("the conditions during the attempt", () => {
+  it("reopen from the bar, in a dialog, teacher first", async () => {
+    const view: AttemptView = {
+      ...attemptView(),
+      conditions: {
+        announced: [{ kind: "allowed", text: "Une feuille A4 de notes" }],
+        imposed: [{ key: "autosave", kind: "info" }],
+      },
+    };
+    stubs(view);
+    render(view);
+    await userEvent.click(await screen.findByRole("button", { name: "Voir les conditions" }));
+    const dialog = await screen.findByRole("dialog", { name: "Conditions" });
+    expect(within(dialog).getByText("Une feuille A4 de notes")).toBeInTheDocument();
+    expect(within(dialog).getByText("Enregistré au fil de la frappe")).toBeInTheDocument();
+  });
+
+  it("are not offered when there are none", async () => {
+    stubs(attemptView());
+    render();
+    await screen.findByText("Question 2");
+    expect(screen.queryByRole("button", { name: "Voir les conditions" })).toBeNull();
+  });
+});

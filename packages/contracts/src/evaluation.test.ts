@@ -7,6 +7,7 @@ import {
   EvaluationSettingsPatch,
   RetakeSettings,
   categorizePolicyOf,
+  conditionsOf,
   negativeMarkingOf,
   retakesOf,
   FeedbackPolicy,
@@ -15,6 +16,7 @@ import {
   defaultGradingScale,
   defaultSettings,
 } from "./evaluation.js";
+import { evaluationConditionsOf } from "./live.js";
 
 describe("defaultSettings", () => {
   it("is what a freshly created evaluation gets", () => {
@@ -159,5 +161,45 @@ describe("the categorize policy (ADR-036)", () => {
     expect(categorizePolicyOf(EvaluationSettings.parse({ categorizePolicy: "all_or_nothing" }))).toBe(
       "all_or_nothing",
     );
+  });
+});
+
+describe("conditions (ADR-079)", () => {
+  it("are absent, and none, on a stored evaluation that never set them", () => {
+    const settings = EvaluationSettings.parse({});
+    expect(settings).not.toHaveProperty("conditions");
+    expect(conditionsOf(settings)).toEqual([]);
+  });
+
+  it("travel whole in a settings patch, trimmed, within their limits", () => {
+    expect(EvaluationSettingsPatch.parse({ conditions: [{ kind: "allowed", text: "  Notes " }] })).toEqual({
+      conditions: [{ kind: "allowed", text: "Notes" }],
+    });
+    const bad = [
+      [{ kind: "allowed", text: "  " }],
+      [{ kind: "allowed", text: "x".repeat(201) }],
+      [{ kind: "maybe", text: "Notes" }],
+      [{ kind: "info", text: "Notes", catalogId: "not-a-uuid" }],
+      Array.from({ length: 21 }, () => ({ kind: "info", text: "Line" })),
+    ];
+    for (const conditions of bad) expect(EvaluationSettingsPatch.safeParse({ conditions }).success).toBe(false);
+  });
+});
+
+describe("evaluationConditionsOf (ADR-079)", () => {
+  const settings = EvaluationSettings.parse({
+    logVisibility: false,
+    conditions: [{ kind: "provided", text: "A formula sheet", catalogId: "5b0c3f2e-8a7d-4c1b-9e6f-2d3a4b5c6d7e" }],
+  });
+  const input = { settings, durationS: null, closesAt: null, timeBonusPercent: 0 };
+
+  it("strips the catalog reference of the announced ones", () => {
+    expect(evaluationConditionsOf({ ...input, mode: "exam" }).announced).toEqual([
+      { kind: "provided", text: "A formula sheet" },
+    ]);
+  });
+
+  it("gives a poll none, whatever its row says", () => {
+    expect(evaluationConditionsOf({ ...input, mode: "poll" })).toEqual({ announced: [], imposed: [] });
   });
 });

@@ -796,6 +796,8 @@ const scenes = [
   // ADR-076: a running evaluation not yet started: one Start, the clock said before it.
   { name: "student-ready", role: "student", path: `${TAKE}?scene=ready` },
   { name: "player-mcq", role: "student", path: `${TAKE}?scene=running` },
+  // ADR-079: the conditions read before the start, reopened from the bar.
+  { name: "player-conditions", role: "student", path: `${TAKE}?scene=running`, fold: true, act: (p) => p.getByRole("button", { name: /^(show the conditions|voir les conditions)$/i }).click() },
   { name: "player-cloze", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 2) },
   { name: "player-short", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 3) },
   { name: "player-code", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 4) },

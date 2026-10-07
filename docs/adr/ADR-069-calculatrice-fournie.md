@@ -7,7 +7,10 @@ conversation the name "provided", the order of operations in both modes
 and where the calculator appears). Implemented by `calculatorOn` and the
 engine in `packages/domain/src/calculator.ts`, `settings.calculator` in
 `packages/contracts/src/evaluation.ts`, and the keypad and its dock in
-`apps/web/src/calculator/`. Requirement F-EVAL-32.
+`apps/web/src/calculator/`. Requirement F-EVAL-32. §2 is generalised and
+§3's announcement amended by [ADR-079](ADR-079-conditions-de-l-evaluation.md)
+(2026-10-07): the platform states only what it enforces, and the waiting
+room announces the calculator among the evaluation's conditions.
 
 ## Amendment — reverse Polish notation (2026-10-05)
 

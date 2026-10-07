@@ -140,7 +140,11 @@ describe("entering an evaluation (F-LIVE-01)", () => {
     const row = await applyState(db, await reload(db, seed.evaluationId), "lobby", clock.now());
     const participant = (await service.participantOf(db, row, seed.studentIds[0]!))!;
     const view = await service.lobbyView(db, row, participant, clock.now());
-    expect(LobbyView.parse(view).navigation).toBe("forward_only");
+    expect(LobbyView.parse(view).conditions.imposed).toContainEqual({
+      key: "navigation",
+      kind: "info",
+      navigation: "forward_only",
+    });
   });
 
   it("gives the accommodation its extra seconds (F-ORG-07, F-EVAL-05)", async () => {

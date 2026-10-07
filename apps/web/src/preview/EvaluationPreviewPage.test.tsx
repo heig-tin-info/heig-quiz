@@ -32,6 +32,7 @@ const I2 = "22222222-2222-4222-8222-222222222222";
 const URL = `/app/api/evaluations/${EVAL}/preview`;
 
 const view = (): AttemptView => ({
+  conditions: { announced: [], imposed: [] },
   attempt: {
     id: "00000000-0000-4000-8000-000000000000",
     state: "in_progress",

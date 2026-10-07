@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Home, School, Send } from "lucide-react";
+import { ChevronLeft, ChevronRight, Home, School, ScrollText, Send } from "lucide-react";
 
 import type { Command } from "../commands";
 import { useT } from "../i18n";
@@ -6,8 +6,9 @@ import { useT } from "../i18n";
 /**
  * What `Ctrl+K` offers during an attempt (W15). Deliberately short: an exam
  * is the one screen the rest of the app must stay out of, so there is no
- * navigation, no theme, no help — only the four moves the footer and the
- * bar already carry, for a student who reaches for the keyboard first.
+ * navigation, no theme, no help — only the moves the footer and the bar
+ * already carry (the conditions among them, ADR-079), for a student who
+ * reaches for the keyboard first.
  * Built beside the player rather than in `commands.ts`, which knows nothing
  * of an attempt and should not learn.
  *
@@ -22,6 +23,7 @@ export function usePlayerCommands({
   onSubmit,
   onHome,
   homeLabel,
+  onConditions,
   onExitStudentView,
 }: {
   next: number | null;
@@ -31,6 +33,8 @@ export function usePlayerCommands({
   onHome: () => void;
   /** What Home is called: the preview's leads back to its evaluation. */
   homeLabel: string;
+  /** Reopens the evaluation's conditions (ADR-079), when it has any. */
+  onConditions?: (() => void) | undefined;
   /** Only for a teacher walking their own test attempt (ADR-018 addendum). */
   onExitStudentView?: (() => void) | undefined;
 }): Command[] {
@@ -62,6 +66,17 @@ export function usePlayerCommands({
             icon: ChevronLeft,
             group: "action" as const,
             run: () => onMove(-1),
+          },
+        ]
+      : []),
+    ...(onConditions
+      ? [
+          {
+            id: "player:conditions",
+            label: t("conditions.show"),
+            icon: ScrollText,
+            group: "action" as const,
+            run: onConditions,
           },
         ]
       : []),

@@ -205,7 +205,7 @@ export async function livePlugin(app: FastifyInstance) {
           evaluationId: scope.evaluation.id,
           attemptNumber: attempt.attemptNumber,
         });
-        return service.attemptOrLobbyView(app.db, scope.evaluation, attempt, now);
+        return service.attemptOrLobbyView(app.db, scope.evaluation, attempt, now, participant);
       },
     ),
   );

@@ -9,12 +9,13 @@
  * `POST /evaluations/:id/attempt/start` and hands its answer to the entry
  * query, so the route renders the player (keyed on the attempt).
  *
- * It holds the evaluation's rules (the lobby's rules card) and no question
+ * It holds the evaluation's conditions (ADR-079) and no question
  * content (invariant 4).
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import type { AttemptEntry, ReadyView } from "@quiz/contracts";
+import type { ImposedConditionKey } from "@quiz/domain";
 
 import { ApiError, api } from "../api";
 import { useT, type TFunction } from "../i18n";
@@ -22,19 +23,25 @@ import { useErrorToast } from "../notify";
 import { attemptEntryKey } from "../queryKeys";
 import { Button } from "../ui";
 import { isoDateTime } from "../ui/dates";
-import { RulesCard, minutesWithBonus } from "./Lobby";
+import { ConditionsList, minutesWithBonus } from "./ConditionsList";
 
-/** What Start announces: the clock of N minutes, a closing instant, or no clock. */
+/** The imposed lines the sentence beside Start states instead of the list (ADR-079). */
+const CLOCK_KEYS: readonly ImposedConditionKey[] = ["duration", "deadline"];
+
+/**
+ * What Start announces: the clock of N minutes, a closing instant, or no
+ * clock — read from the conditions' own time line, which carries the
+ * student's extra time.
+ */
 function clockSentence(view: ReadyView, t: TFunction): string {
-  const { timing, announcedDurationS: durationS, closesAt } = view.evaluation;
-  if (timing === "duration" && durationS !== null) {
-    const n = minutesWithBonus(durationS, view.timeBonusPercent);
-    return view.timeBonusPercent > 0
-      ? t("ready.clock.durationBonus", { n, pct: view.timeBonusPercent })
-      : t("ready.clock.duration", { n });
-  }
-  if (timing === "deadline" && closesAt !== null) {
-    return t("ready.clock.deadline", { when: isoDateTime(closesAt) });
+  for (const line of view.conditions.imposed) {
+    if (line.key === "duration") {
+      const n = minutesWithBonus(line.durationS, line.bonusPercent);
+      return line.bonusPercent > 0
+        ? t("ready.clock.durationBonus", { n, pct: line.bonusPercent })
+        : t("ready.clock.duration", { n });
+    }
+    if (line.key === "deadline") return t("ready.clock.deadline", { when: isoDateTime(line.closesAt) });
   }
   return t("ready.clock.manual");
 }
@@ -77,7 +84,9 @@ export function Ready({
       </p>
       <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-[-0.02em]">{title}</h1>
 
-      <RulesCard view={view} className="mt-8" />
+      {/* ADR-079: the conditions, without the time — the sentence above
+          Start says it, in the words of what Start does. */}
+      <ConditionsList conditions={view.conditions} omit={CLOCK_KEYS} className="mt-8" />
 
       <p id="ready-clock" className="mt-8 text-base text-fg-muted">
         {clock}

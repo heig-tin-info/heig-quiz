@@ -8,8 +8,8 @@
  *   - Color: none. The ring is `fg`, not the accent — it is the only living
  *     element on the page, and a red disc reads as an alarm on a screen whose
  *     message is "relax, it has not started".
- *   - Space: generous (32) between the ring, the rules and the footer line.
- *   - Finish: one card for the rules, hairlines, no shadow.
+ *   - Space: generous (32) between the ring, the conditions and the footer line.
+ *   - Finish: one card for the conditions (ADR-079), hairlines, no shadow.
  *
  * The screen is split in two (#152): `LobbyScreen` draws it from props, and
  * `Lobby` connects it. `Lobby` watches `lobby:<id>` — the same topic as the
@@ -19,20 +19,14 @@
  * state turns `running`, so nobody has to reload to begin.
  */
 import { useState, type ReactNode } from "react";
-import { Calculator as CalculatorIcon, CheckCheck, CircleMinus, Save, ShieldCheck } from "lucide-react";
 
-import { LobbyView, type EvaluationRules } from "@quiz/contracts";
+import { LobbyView } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { useEventStream } from "../realtime/useEventStream";
 import { useServerClock } from "../realtime/useServerClock";
-import { Badge, Button, Card, cx, Ring, useNow } from "../ui";
-
-const NAV_COPY = {
-  free: { title: "lobby.nav.free.title", body: "lobby.nav.free.body" },
-  forward_only: { title: "lobby.nav.forward.title", body: "lobby.nav.forward.body" },
-  milestones: { title: "lobby.nav.milestones.title", body: "lobby.nav.milestones.body" },
-} as const;
+import { Button, cx, Ring, useNow } from "../ui";
+import { ConditionsList } from "./ConditionsList";
 
 /**
  * The two sizes of the waiting room: the student's page, and the miniature
@@ -48,7 +42,6 @@ const SIZES = {
     gap: "mt-8",
     ring: 208,
     percent: "text-[32px]",
-    rule: "px-5 py-4",
   },
   compact: {
     Root: "div",
@@ -58,71 +51,11 @@ const SIZES = {
     gap: "mt-5",
     ring: 148,
     percent: "text-2xl",
-    rule: "px-4 py-3",
   },
 } as const;
 
 /** What the waiting room says, stripped of what only the live room knows. */
-export type LobbyScreenView = Pick<
-  LobbyView,
-  "evaluation" | "navigation" | "negativeMarking" | "calculator" | "timeBonusPercent"
->;
-
-/** The minutes a student has once their extra time (`timeBonusPercent` of the duration) is added. */
-export function minutesWithBonus(durationS: number, timeBonusPercent: number): number {
-  return Math.round((durationS + Math.round((durationS * timeBonusPercent) / 100)) / 60);
-}
-
-/**
- * The rules card of the waiting room and of the ready screen (ADR-076): three
- * fixed lines (§6.3), the navigation rule first — `EvaluationRules` carries the
- * evaluation's `settings.navigation` for exactly this line. A fourth when the
- * evaluation uses negative marking (ADR-026): the student must know that a
- * guess costs points BEFORE the first question, and this is the one screen
- * they read while they have time to. Rules of the evaluation, no content.
- */
-export function RulesCard({
-  view,
-  className,
-  size = "page",
-}: {
-  view: Pick<EvaluationRules, "navigation" | "negativeMarking" | "calculator">;
-  className?: string;
-  size?: keyof typeof SIZES;
-}) {
-  const t = useT();
-  const rules = [
-    { icon: CheckCheck, ...NAV_COPY[view.navigation] } as const,
-    ...(view.negativeMarking === true
-      ? [{ icon: CircleMinus, title: "lobby.negative.title", body: "lobby.negative.body" } as const]
-      : []),
-    // ADR-069: where the calculator is, before the clock runs.
-    ...(view.calculator !== undefined && view.calculator !== "none"
-      ? [
-          {
-            icon: CalculatorIcon,
-            title: "lobby.calculator.title",
-            body: `lobby.calculator.body.${view.calculator}`,
-          } as const,
-        ]
-      : []),
-    { icon: Save, title: "lobby.saving.title", body: "lobby.saving.body" } as const,
-    { icon: ShieldCheck, title: "lobby.attempt.title", body: "lobby.attempt.body" } as const,
-  ];
-  return (
-    <Card className={cx("w-full divide-y divide-line text-left", className)}>
-      {rules.map((rule) => (
-        <div key={rule.title} className={cx("flex items-start gap-3", SIZES[size].rule)}>
-          <rule.icon className="mt-0.5 size-4 shrink-0 text-fg-faint" aria-hidden />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold">{t(rule.title)}</p>
-            <p className="mt-0.5 text-[13px] leading-relaxed text-fg-muted">{t(rule.body)}</p>
-          </div>
-        </div>
-      ))}
-    </Card>
-  );
-}
+export type LobbyScreenView = Pick<LobbyView, "evaluation" | "conditions">;
 
 /**
  * The waiting room as a picture: what the student reads, from props alone —
@@ -130,7 +63,7 @@ export function RulesCard({
  * launch step renders it as a preview (#152, ADR-018 addendum), which is why
  * it must never open the `lobby:` stream itself: a staff seat watching that
  * subject would be counted present (F-LIVE-02). It holds no question
- * content, only the evaluation's rules.
+ * content, only the evaluation's conditions.
  *
  * `status` is the footer line (connection and wall clock) and `onLeave` the
  * way out; the preview has neither. `compact` draws it at the size of a side
@@ -153,7 +86,6 @@ export function LobbyScreen({
 }) {
   const t = useT();
   const percent = enrolled > 0 ? Math.round((present / enrolled) * 100) : 0;
-  const durationS = view.evaluation.announcedDurationS;
   const size = SIZES[compact ? "compact" : "page"];
   const { Root, Title, gap } = size;
 
@@ -170,11 +102,6 @@ export function LobbyScreen({
       <Title className={cx("mt-2 font-bold leading-tight tracking-[-0.02em]", size.title)}>
         {view.evaluation.title}
       </Title>
-      {durationS === null ? null : (
-        <p className="mt-2 text-sm text-fg-muted">
-          {t("lobby.duration", { n: Math.round(durationS / 60) })}
-        </p>
-      )}
 
       <Ring
         value={present}
@@ -193,20 +120,12 @@ export function LobbyScreen({
       </Ring>
 
       <p className={cx(gap, "text-base text-fg-muted")}>{t("lobby.waiting")}</p>
-      {/* Said here, once, while the student has time to read it — the player
-          itself stays bare (the sentence used to sit under every question). */}
-      <p className="mt-2 text-[13px] text-fg-muted">{t("lobby.hint.saving")}</p>
 
-      <RulesCard view={view} className={gap} size={compact ? "compact" : "page"} />
-
-      {view.timeBonusPercent > 0 && durationS !== null ? (
-        <Badge tone="accent" className="mt-5">
-          {t("lobby.bonus", {
-            n: view.timeBonusPercent,
-            time: t("lobby.duration", { n: minutesWithBonus(durationS, view.timeBonusPercent) }),
-          })}
-        </Badge>
-      ) : null}
+      {/* ADR-079 (amending ADR-076 §1): the conditions replace the rules
+          card, and say everything it said — the duration with the student's
+          extra time, the saving, the navigation — once, while the student
+          has time to read it; the player itself stays bare. */}
+      <ConditionsList conditions={view.conditions} compact={compact} className={gap} />
 
       {status ? (
         <p className="mt-8 flex flex-wrap items-center justify-center gap-2 text-[13px] text-fg-faint">

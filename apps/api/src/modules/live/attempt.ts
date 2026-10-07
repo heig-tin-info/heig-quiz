@@ -12,12 +12,14 @@ import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 
 import {
   EvaluationSettings,
+  evaluationConditionsOf,
   type AttemptClosed,
   type AttemptScore,
   type AttemptItem,
   type AttemptOrLobby,
   type AttemptView,
   type EvaluationCard,
+  type EvaluationConditions,
   type EvaluationRules,
   type LobbyView,
   type ReadyView,
@@ -28,7 +30,6 @@ import {
   evaluationTotal,
   attemptDeadline,
   bonusSeconds,
-  calculatorOn,
   isFinishedAttempt,
   isWritable,
   latestAttempt,
@@ -44,7 +45,6 @@ import { DomainError } from "../http.js";
 import {
   feedbackOf,
   gradeDefaults,
-  negativeMarkingEnabled,
   classroomIdOf,
   seatsOf,
   trustedClients,
@@ -944,22 +944,32 @@ export async function attemptOrLobbyView(
   evaluation: EvaluationRecord,
   attempt: AttemptRecord,
   now: Date,
+  /** Who holds the attempt, when the caller already loaded them; read once here otherwise. */
+  holder?: Participant,
 ): Promise<AttemptOrLobby> {
+  const participant = holder ?? (await participantOfAttempt(db, evaluation, attempt));
   if (!contentVisible(evaluation, attempt)) {
-    const participant = await participantOfAttempt(db, evaluation, attempt);
     return { kind: "lobby", view: await lobbyView(db, evaluation, participant, now) };
   }
-  return { kind: "attempt", view: await attemptView(db, evaluation, attempt, now) };
+  return { kind: "attempt", view: await attemptView(db, evaluation, attempt, now, participant) };
 }
 
+/**
+ * The attempt itself. `holder` is who holds it, whose extra time the
+ * conditions state (ADR-079): passed by a caller that already loaded them,
+ * read here otherwise.
+ */
 export async function attemptView(
   db: Db,
   evaluation: EvaluationRecord,
   attempt: AttemptRecord,
   now: Date,
+  holder?: Participant,
 ): Promise<AttemptView> {
+  const participant = holder ?? (await participantOfAttempt(db, evaluation, attempt));
   return viewOf(db, evaluation, {
     seed: attempt.seed,
+    timeBonusPercent: participant.timeBonusPercent,
     instances: attempt.instances,
     answered: await answersOf(db, attempt.id),
     header: {
@@ -991,6 +1001,7 @@ export async function previewView(
 ): Promise<AttemptView> {
   return viewOf(db, evaluation, {
     seed,
+    timeBonusPercent: 0,
     instances: {},
     items,
     answered: new Map(),
@@ -1018,6 +1029,8 @@ async function viewOf(
   evaluation: EvaluationRecord,
   input: {
     seed: number;
+    /** The participant's extra time, for the conditions' duration line (ADR-079); 0 in a preview. */
+    timeBonusPercent: number;
     /** The attempt's stored values (ADR-056); `{}` for a preview, which draws them from `seed`. */
     instances: Readonly<Record<string, StoredInstance>>;
     items?: readonly JoinedItem[] | undefined;
@@ -1030,14 +1043,18 @@ async function viewOf(
   const items = input.items ?? (await joinedItems(db, evaluation.id));
   const ordered = orderItems(items, settings, seed, evaluation.id);
   const locked = lockedItemIds(settings, ordered, answered);
+  // `AttemptView` types the settings without `conditions` (ADR-079); a
+  // variable is not checked for excess keys, so they are taken out here.
+  const { conditions: _announced, ...studentSettings } = settings;
   return {
     attempt: input.header,
+    conditions: conditionsFor(evaluation, input.timeBonusPercent),
     evaluation: {
       id: evaluation.id,
       title: evaluation.title,
       mode: evaluation.mode,
       state: evaluation.state,
-      settings,
+      settings: studentSettings,
       feedbackPolicy: feedbackOf(evaluation),
       pausedAt: isoOrNull(evaluation.pausedAt),
       totalPoints: evaluationTotal(items.map((i) => i.item)),
@@ -1046,15 +1063,23 @@ async function viewOf(
   };
 }
 
-/** The rules both the waiting room and the ready screen state (`EvaluationRules`). */
+/**
+ * The conditions a student reads (ADR-079): the announced ones and the lines
+ * the platform derives from the settings, with this participant's extra time.
+ */
+function conditionsFor(evaluation: EvaluationRecord, timeBonusPercent: number): EvaluationConditions {
+  return evaluationConditionsOf({
+    mode: evaluation.mode,
+    settings: settingsOf(evaluation),
+    durationS: evaluation.durationS,
+    closesAt: isoOrNull(evaluation.closesAt),
+    timeBonusPercent,
+  });
+}
+
+/** What both the waiting room and the ready screen state (`EvaluationRules`). */
 function rulesOf(evaluation: EvaluationRecord, participant: Participant): EvaluationRules {
-  const settings = settingsOf(evaluation);
-  return {
-    navigation: settings.navigation,
-    negativeMarking: negativeMarkingEnabled(evaluation),
-    calculator: calculatorOn(evaluation.mode, settings.calculator),
-    timeBonusPercent: participant.timeBonusPercent,
-  };
+  return { conditions: conditionsFor(evaluation, participant.timeBonusPercent) };
 }
 
 /**
@@ -1075,7 +1100,6 @@ export async function lobbyView(
       id: evaluation.id,
       title: evaluation.title,
       state: evaluation.state,
-      announcedDurationS: evaluation.durationS,
     },
     present: presence.count(evaluation.id),
     enrolled: await enrolledCount(db, evaluation),
@@ -1090,9 +1114,6 @@ function readyView(evaluation: EvaluationRecord, participant: Participant): Read
     evaluation: {
       id: evaluation.id,
       title: evaluation.title,
-      timing: settingsOf(evaluation).timing,
-      announcedDurationS: evaluation.durationS,
-      closesAt: isoOrNull(evaluation.closesAt),
     },
   };
 }
@@ -1153,7 +1174,7 @@ export async function enterEvaluation(
   if (evaluation.state === "running") {
     attempt = await beginAttempt(db, evaluation, attempt, participant, now);
   }
-  const view = await attemptOrLobbyView(db, evaluation, attempt, now);
+  const view = await attemptOrLobbyView(db, evaluation, attempt, now, participant);
   return view.kind === "lobby"
     ? { kind: "lobby", view: view.view, attempt }
     : { kind: "attempt", view: view.view, attempt };

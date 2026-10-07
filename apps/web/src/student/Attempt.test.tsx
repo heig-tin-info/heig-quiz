@@ -26,11 +26,10 @@ const EVAL = "11111111-1111-4111-8111-111111111111";
 const ATTEMPT = "22222222-2222-4222-8222-222222222222";
 
 const lobbyView: LobbyView = {
-  evaluation: { id: EVAL, title: "Quiz 3 — Pointeurs", state: "lobby", announcedDurationS: 1200 },
-    navigation: "free",
+  evaluation: { id: EVAL, title: "Quiz 3 — Pointeurs", state: "lobby" },
+  conditions: { announced: [], imposed: [] },
   present: 3,
   enrolled: 6,
-  timeBonusPercent: 0,
   serverNow: "2026-09-20T10:00:00.000Z",
 };
 
@@ -189,13 +188,12 @@ describe("/take/:id on a running evaluation not yet started", () => {
     evaluation: {
       id: EVAL,
       title: "Quiz 3 — Pointeurs",
-      timing: "duration",
-      announcedDurationS: 1200,
-      closesAt: null,
     },
-    navigation: "free",
-    negativeMarking: false,
-    timeBonusPercent: 25,
+    // The time line carries the student's extra time (ADR-079).
+    conditions: {
+      announced: [],
+      imposed: [{ key: "duration", kind: "info", durationS: 1200, bonusPercent: 25 }],
+    },
   };
 
   function renderReady(navigate = vi.fn()) {

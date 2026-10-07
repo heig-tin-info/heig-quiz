@@ -220,11 +220,11 @@ describe("launchChecks: the rules and access lines", () => {
     const rules = one(checks(detailWith({}, {}, settings)), "rules");
     expect(rules.level).toBe("info");
     expect(rules.title).toBe("Eval.summary.navigation.free, launch.rules.shuffled");
-    expect(rules.detail).toBe("launch.rules.oneAttempt · launch.rules.negative");
+    expect(rules.detail).toBe("conditions.attempts.one · launch.rules.negative");
 
     const plain = one(checks(detailWith({}, {}, { shuffleItems: false })), "rules");
     expect(plain.title).toMatch(/launch\.rules\.fixedOrder$/);
-    expect(plain.detail).toBe("launch.rules.oneAttempt");
+    expect(plain.detail).toBe("conditions.attempts.one");
   });
 
   it("describes the retakes of an exercise, bounded or not; an exam ignores them", () => {
@@ -232,12 +232,24 @@ describe("launchChecks: the rules and access lines", () => {
       retakes: { enabled: true, keep: "last" as const, maxAttempts },
     });
     expect(one(checks(detailWith({ mode: "exercise" }, {}, retakes(null))), "rules").detail).toBe(
-      "launch.rules.unlimited.last",
+      "conditions.attempts.unlimited, launch.rules.keep.last",
     );
     expect(one(checks(detailWith({ mode: "exercise" }, {}, retakes(3))), "rules").detail).toBe(
-      'launch.rules.upTo.last {"n":3}',
+      'conditions.attempts.upTo {"n":3}, launch.rules.keep.last',
     );
-    expect(one(checks(detailWith({ mode: "exam" }, {}, retakes(3))), "rules").detail).toBe("launch.rules.oneAttempt");
+    expect(one(checks(detailWith({ mode: "exam" }, {}, retakes(3))), "rules").detail).toBe("conditions.attempts.one");
+  });
+
+  it("counts the announced conditions on the info line, never as a warning (ADR-079)", () => {
+    const conditions = (n: number) => ({
+      conditions: Array.from({ length: n }, (_, i) => ({ kind: "info" as const, text: `Line ${i}` })),
+    });
+    expect(one(checks(detailWith({}, {}, conditions(1))), "rules").detail).toBe(
+      "conditions.attempts.one · launch.rules.conditions.one",
+    );
+    const many = one(checks(detailWith({}, {}, conditions(3))), "rules");
+    expect(many.level).toBe("info");
+    expect(many.detail).toBe('conditions.attempts.one · launch.rules.conditions.many {"n":3}');
   });
 
   it("lists the access restrictions: the IP allow-list, then SEB, then the kiosk", () => {

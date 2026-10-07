@@ -43,12 +43,20 @@ const view: LobbyView = {
     id: "11111111-1111-4111-8111-111111111111",
     title: "Quiz 3 — Pointeurs",
     state: "lobby",
-    announcedDurationS: 1200,
   },
-  navigation: "free",
+  conditions: {
+    announced: [
+      { kind: "allowed", text: "Une feuille A4 de notes" },
+      { kind: "forbidden", text: "<b>Téléphones</b>" },
+    ],
+    imposed: [
+      { key: "duration", kind: "info", durationS: 1200, bonusPercent: 33 },
+      { key: "attempts", kind: "info", maxAttempts: 1 },
+      { key: "autosave", kind: "info" },
+    ],
+  },
   present: 18,
   enrolled: 24,
-  timeBonusPercent: 33,
   serverNow: "2026-09-20T10:00:00.000Z",
 };
 
@@ -87,17 +95,34 @@ describe("the lobby", () => {
     expect(onLeave).toHaveBeenCalled();
   });
 
-  it("states the three rules, the evaluation's navigation first", () => {
+  it("states the teacher's conditions first, then the platform's (ADR-079)", () => {
     render();
-    expect(screen.getByText("Navigation libre")).toBeInTheDocument();
+    const announced = screen.getByRole("heading", { name: "Annoncées par votre enseignant" });
+    const imposed = screen.getByRole("heading", { name: "Imposées par la plateforme" });
+    expect(announced.compareDocumentPosition(imposed) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("Une feuille A4 de notes")).toBeInTheDocument();
+    // The kind is a word, not a colour.
+    expect(screen.getByText("Autorisé")).toBeInTheDocument();
+    expect(screen.getByText("Interdit")).toBeInTheDocument();
+    // The teacher's text is plain text, never markup.
+    expect(screen.getByText("<b>Téléphones</b>")).toBeInTheDocument();
     expect(screen.getByText("Enregistré au fil de la frappe")).toBeInTheDocument();
     expect(screen.getByText("Une seule tentative")).toBeInTheDocument();
   });
 
-  it("explains the navigation the view carries (F-LIVE-08)", () => {
-    render(undefined, undefined, { ...view, navigation: "forward_only" });
-    expect(screen.queryByText("Navigation libre")).not.toBeInTheDocument();
+  it("states the duration with the student's extra time, once", () => {
+    render();
+    expect(screen.getByText("27 minutes dès que vous commencez")).toBeInTheDocument();
+    expect(screen.getByText("Votre temps supplémentaire de 33 % est compris.")).toBeInTheDocument();
+  });
+
+  it("explains a locked navigation (F-LIVE-08)", () => {
+    render(undefined, undefined, {
+      ...view,
+      conditions: { announced: [], imposed: [{ key: "navigation", kind: "info", navigation: "forward_only" }] },
+    });
     expect(screen.getByText("Sens unique")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Annoncées par votre enseignant" })).toBeNull();
   });
 
   it("follows the live count", () => {
@@ -171,13 +196,16 @@ describe("the lobby", () => {
 
   /* ADR-026: the student is told before the first question. */
   it("says that wrong answers cost points when the evaluation uses negative marking", () => {
-    render(vi.fn(), vi.fn(), { ...view, negativeMarking: true });
+    render(vi.fn(), vi.fn(), {
+      ...view,
+      conditions: { announced: [], imposed: [{ key: "negative_marking", kind: "info" }] },
+    });
     expect(screen.getByText("Les réponses fausses coûtent des points")).toBeInTheDocument();
     expect(screen.getByText(/ne pas répondre ne coûte rien/)).toBeInTheDocument();
   });
 
   it("says nothing of it otherwise", () => {
-    render(vi.fn(), vi.fn(), { ...view, negativeMarking: false });
+    render();
     expect(screen.queryByText("Les réponses fausses coûtent des points")).toBeNull();
   });
 });

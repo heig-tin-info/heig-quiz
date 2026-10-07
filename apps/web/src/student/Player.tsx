@@ -58,7 +58,8 @@ import { CalculatorDock } from "../calculator/CalculatorDock";
 import { currentItem, isLocked, neighbour, segmentsOf } from "../attempt/playerReducer";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
-import { Button, Card, useMinWidth } from "../ui";
+import { Button, Card, Modal, useMinWidth } from "../ui";
+import { ConditionsList } from "./ConditionsList";
 import { ExpandChrome, type ExpandChromeValue } from "./ExpandLayer";
 import { OfflineBanner } from "./OfflineBanner";
 import { PausedOverlay, ScreenOverlay } from "./PausedOverlay";
@@ -276,6 +277,7 @@ export function PlayerView({
   // its limit, issue #267): the autosave has nothing pending, yet the text
   // on screen is not saved. The question keys this, and resets it on leaving.
   const [unsent, setUnsent] = useState(false);
+  const [conditionsOpen, setConditionsOpen] = useState(false);
   const sync =
     unsent && (saverSync === "saved" || saverSync === "saving") ? "unsaved" : saverSync;
   const item = currentItem(state);
@@ -316,6 +318,9 @@ export function PlayerView({
     [session.deadlineAt, session.clock, paused, sync],
   );
   const home = { onClick: onHome, label: homeLabel ?? t("player.command.home"), busy: homeBusy };
+  // ADR-079: the conditions read before the start, reopenable at any time.
+  const hasConditions = initial.conditions.announced.length + initial.conditions.imposed.length > 0;
+  const openConditions = hasConditions ? () => setConditionsOpen(true) : undefined;
   const commands = usePlayerCommands({
     next,
     previous,
@@ -323,6 +328,7 @@ export function PlayerView({
     onSubmit: controls.openSubmit,
     onHome,
     homeLabel: home.label,
+    onConditions: openConditions,
     onExitStudentView,
   });
 
@@ -386,6 +392,7 @@ export function PlayerView({
         onSelectSegment={selectSegment}
         progressLabel={progressLabel}
         commands={commands}
+        onConditions={openConditions}
         wide={item !== undefined && isWide(item.type)}
         // Issue #125: an exercise may be left and continued later; an exam
         // may not look like it can. The teacher's preview, exam or not, has
@@ -483,6 +490,11 @@ export function PlayerView({
         ) : null}
         {calculator === "none" ? null : <CalculatorDock kind={calculator} />}
       </PlayerShell>
+      {conditionsOpen ? (
+        <Modal title={t("conditions.title")} scroll onClose={() => setConditionsOpen(false)}>
+          <ConditionsList conditions={initial.conditions} />
+        </Modal>
+      ) : null}
       <PausedOverlay show={paused} />
       <SubmitDialog
         open={controls.submitting}

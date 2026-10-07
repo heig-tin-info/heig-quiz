@@ -54,6 +54,7 @@ function view(
 ): AttemptView {
   const mode = over.mode ?? "exercise";
   return {
+    conditions: { announced: [], imposed: [] },
     attempt: {
       id: attemptId,
       state,

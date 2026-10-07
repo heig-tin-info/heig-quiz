@@ -9,7 +9,14 @@
  */
 import { z } from "zod";
 
-import { CALCULATOR_MODES, ROUNDINGS, TRUSTED_CLIENTS } from "@quiz/domain";
+import {
+  CALCULATOR_MODES,
+  CONDITION_KINDS,
+  MAX_CONDITION_LENGTH,
+  MAX_CONDITIONS,
+  ROUNDINGS,
+  TRUSTED_CLIENTS,
+} from "@quiz/domain";
 
 /** F-EVAL-01. `poll` is accepted by the column and refused by every route (decision D7). */
 export const EvaluationMode = z.enum(["exam", "exercise", "poll"]);
@@ -138,6 +145,32 @@ export { TRUSTED_CLIENTS };
 export const CalculatorMode = z.enum(CALCULATOR_MODES);
 export type CalculatorMode = z.infer<typeof CalculatorMode>;
 
+/** What a condition says about the thing it names (ADR-079): `@quiz/domain`'s `CONDITION_KINDS`. */
+export const ConditionKind = z.enum(CONDITION_KINDS);
+export type ConditionKind = z.infer<typeof ConditionKind>;
+
+/**
+ * One condition the teacher announces (ADR-079, F-EVAL-33): a SNAPSHOT of
+ * plain text, never translated, never rendered as markdown or HTML.
+ * `catalogId` names the entry of the course's catalog it was copied from
+ * (planned, ADR-079 §5); the text stays the snapshot whatever the catalog
+ * does after. Staff only: the student views carry the kind and the text.
+ */
+export const EvaluationCondition = z.object({
+  kind: ConditionKind,
+  text: z.string().trim().min(1).max(MAX_CONDITION_LENGTH),
+  catalogId: z.uuid().optional(),
+});
+export type EvaluationCondition = z.infer<typeof EvaluationCondition>;
+
+/** At most {@link MAX_CONDITIONS} conditions, in the teacher's order. */
+export const EvaluationConditionList = z.array(EvaluationCondition).max(MAX_CONDITIONS);
+
+/** The announced conditions of an evaluation's settings (ADR-079); absent is none. */
+export const conditionsOf = (settings: {
+  conditions?: EvaluationCondition[] | undefined;
+}): EvaluationCondition[] => settings.conditions ?? [];
+
 /** The kiosk-station switch of an evaluation's settings (ADR-051); absent is off. */
 export const kioskOf = (settings: { kiosk?: boolean | undefined }): boolean => settings.kiosk === true;
 
@@ -209,6 +242,15 @@ export const EvaluationSettings = z.object({
    * through `calculatorOn` (`@quiz/domain`), never raw.
    */
   calculator: CalculatorMode.optional(),
+  /**
+   * ADR-079 (F-EVAL-33): the conditions the teacher announces — allowed,
+   * forbidden, provided, or plain information — in their order. Refused on a
+   * poll, and frozen with the rest of the settings (`configLock`). Absent
+   * means none: read it through {@link conditionsOf}, never raw. The lines
+   * the platform adds are derived (`imposedConditions`, `@quiz/domain`),
+   * never stored.
+   */
+  conditions: EvaluationConditionList.optional(),
   /**
    * ADR-041 §2 (#317): the questions of this evaluation become drill cards —
    * at the release of an exam, at the hand-in of an exercise — when its
@@ -475,6 +517,8 @@ export const EvaluationSettingsPatch = z.object({
   safeExamBrowser: z.boolean().optional(),
   kiosk: z.boolean().optional(),
   calculator: CalculatorMode.optional(),
+  /** Replaced whole, like `retakes`: the list travels in its order. */
+  conditions: EvaluationConditionList.optional(),
   poll: EvaluationSettings.shape.poll,
 });
 export type EvaluationSettingsPatch = z.infer<typeof EvaluationSettingsPatch>;

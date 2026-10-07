@@ -8,6 +8,7 @@
  */
 import type {
   CalculatorMode,
+  EvaluationCondition,
   Me,
 } from "@quiz/contracts";
 
@@ -122,6 +123,17 @@ for (const name of FLAG_NAMES) {
 /** ADR-069: the calculator the mock's evaluations provide, from `?calculator=1` or `?stdcalc=1`. */
 export const mockCalculator = (): { calculator?: CalculatorMode } =>
   flags.calculator ? { calculator: "scientific" } : flags.stdcalc ? { calculator: "standard" } : {};
+
+/**
+ * ADR-079: the conditions a teacher announced on the mock's student
+ * evaluation and on the draft exam — the teacher's own words, as stored.
+ */
+export const MOCK_CONDITIONS: EvaluationCondition[] = [
+  { kind: "allowed", text: "Une feuille A4 recto-verso de notes manuscrites" },
+  { kind: "forbidden", text: "Téléphones et montres connectées, éteints dans le sac" },
+  { kind: "provided", text: "Le formulaire distribué à l'entrée de la salle" },
+  { kind: "info", text: "Vous pouvez répondre en français ou en anglais" },
+];
 
 /**
  * The student player's scene, remembered the same way. It picks what the
