@@ -167,7 +167,8 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
           // A student's repository is private: the seeding of the staging
           // repository carries the same authorization as the relay, through the
           // environment.
-          forgeAuthorization: (repo, owner) => forge.authorization(repo, owner),
+          forgeAuthorization: (repo, owner, url) => forge.authorization(repo, owner, url),
+          forgeSettle: (authorization) => forge.settle?.(authorization),
           // A closed workspace with nothing pending keeps no credential (ADR-078 §3).
           onSessionClosed: async (owner) => {
             if (forge.forget && !(await store.hasPending(owner.student, owner.assignment))) forge.forget(owner);

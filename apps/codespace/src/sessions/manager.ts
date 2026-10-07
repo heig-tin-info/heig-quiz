@@ -246,7 +246,9 @@ export interface ManagerDeps extends ManagerOptions {
    * then attempted anonymously, which is enough for a public repository, and
    * the cause is kept for the error page should the fetch fail.
    */
-  forgeAuthorization?: (repo: RepoRef, owner: ForgeOwner) => Promise<string>;
+  forgeAuthorization?: (repo: RepoRef, owner: ForgeOwner, url: string) => Promise<string>;
+  /** The seeding fetch that used an authorization is over (`Forge.settle`). */
+  forgeSettle?: (authorization: string) => void;
   /**
    * A session closed: the forge may forget its credentials when nothing of
    * the workspace waits for the relay (ADR-078 §3).
@@ -377,9 +379,9 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
     // anonymously (a public repository works), and the cause is kept at hand.
     let authorization: string | undefined;
     let authError: unknown;
-    if (sourceRepo && opts.forgeAuthorization) {
+    if (sourceRepo && from && opts.forgeAuthorization) {
       try {
-        authorization = await opts.forgeAuthorization(sourceRepo, { assignment: assignment.id, student: session.student });
+        authorization = await opts.forgeAuthorization(sourceRepo, { assignment: assignment.id, student: session.student }, from);
       } catch (err) {
         authError = err;
       }
@@ -394,6 +396,8 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         uploadPack: assignment.uploadPack,
         defaultBranch: defaultBranchOf(session, assignment),
         ...(authorization ? { authorization } : {}),
+      }).finally(() => {
+        if (authorization) opts.forgeSettle?.(authorization);
       });
       if (result.refs === 0 && wanted.mode === "exam") {
         throw new WorkspaceBootstrapError(

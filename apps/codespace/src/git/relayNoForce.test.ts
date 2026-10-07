@@ -18,7 +18,7 @@ import { FIXTURE_ENV, makeSourceRepo, tempDir } from "./fixtures.js";
 import { ForgeRefusedError, type Forge } from "./forge.js";
 import { git, gitBare } from "./gitRunner.js";
 import { createPushEventStore, lastRejectedPush, recordPush, NULL_OID } from "./pushEvents.js";
-import { createQuizForge } from "./quizForge.js";
+import { basicAuthorization, createQuizForge } from "./quizForge.js";
 import { createRelayWorker, DELETION_NOT_RELAYED, parseRejections, refspecFor, stagingTargets, UNCONFIGURED_BACKOFF } from "./relay.js";
 import { ensureStagingRepo } from "./staging.js";
 import type { RepoRef, StagingSession } from "./types.js";
@@ -218,28 +218,9 @@ async function filesContaining(dir: string, needle: string): Promise<string[]> {
   return hits;
 }
 
-describe("the quiz forge's token during a relay (ADR-078 §3)", () => {
-  it("is in no argv, file, SQLite row, last_error nor log line; sent to the push URL's origin only; dropped when refused", async () => {
-    const SECRET_TOKEN = "ghs_m610leakprobe0123456789";
-    const s = await scenario("portal.sqlite");
-    // Quiz's answers.
-    let tokenCalls = 0;
-    const quizFetch = (async (input: string | URL | Request) => {
-      const url = String(input);
-      if (url.endsWith("/app/codespace/relay-heads")) return new Response(null, { status: 204 });
-      tokenCalls += 1;
-      return Response.json({
-        token: SECRET_TOKEN,
-        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-        useUntil: new Date(Date.now() + 3_600_000).toISOString(),
-        repository: { fullName: "org/lab-kid", githubRepoId: 7 },
-        permission: "write",
-      });
-    }) as typeof fetch;
-    const logs: string[] = [];
-    const log = { info: (o: object, m: string) => logs.push(`${m} ${JSON.stringify(o)}`), warn: (o: object, m: string) => logs.push(`${m} ${JSON.stringify(o)}`) };
-    const quiz = createQuizForge({ platformUrl: "https://quiz.test", secret: "q".repeat(40), fetchImpl: quizFetch, log });
-    // A local "forge" that refuses every credential, and records what it was sent.
+describe("the token during a relay (ADR-078 §3)", () => {
+  /** A local "forge" that refuses every credential (401), and records the headers it was sent. */
+  async function refusingForge() {
     const seen: IncomingHttpHeaders[] = [];
     const server: Server = createServer((req, res) => {
       seen.push(req.headers);
@@ -247,8 +228,27 @@ describe("the quiz forge's token during a relay (ADR-078 §3)", () => {
     });
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
     const port = (server.address() as { port: number }).port;
-    // The quiz forge, its push URL pointed at the local server (GitHub is never reached in a test).
-    const forge: Forge = { ...quiz, pushUrl: () => `http://127.0.0.1:${port}/org/lab-kid.git` };
+    return { seen, server, port, url: `http://127.0.0.1:${port}/org/lab-kid.git` };
+  }
+
+  it("is in no argv, file, SQLite row, last_error nor log line; sent to the push URL's origin only; dropped when refused", async () => {
+    const SECRET_TOKEN = "ghs_m610leakprobe0123456789";
+    const header = basicAuthorization(SECRET_TOKEN);
+    const s = await scenario("portal.sqlite");
+    const logs: string[] = [];
+    const log = { info: (o: object, m: string) => logs.push(`${m} ${JSON.stringify(o)}`), warn: (o: object, m: string) => logs.push(`${m} ${JSON.stringify(o)}`) };
+    const local = await refusingForge();
+    const invalidated: string[] = [];
+    const settled: string[] = [];
+    // The quiz forge's header shape, on a local forge (GitHub is never reached in a test).
+    const forge: Forge = {
+      kind: "quiz",
+      pushUrl: () => local.url,
+      authorization: async () => header,
+      async ensureRepo() {},
+      invalidate: (_repo, owner) => void invalidated.push(owner.student),
+      settle: (authorization) => void settled.push(authorization),
+    };
 
     await recordPush({ store: s.store }, SESSION, [{ ref: "refs/heads/main", oldSha: null, sha: s.src.sha }]);
     const worker = createRelayWorker({ store: s.store, forge, targets: stagingTargets(s.volumesRoot, s.repoOf), backoffMs: () => 0, log });
@@ -257,34 +257,50 @@ describe("the quiz forge's token during a relay (ADR-078 §3)", () => {
     let sawPush = false;
     for (let i = 0; i < 10; i += 1) {
       await new Promise((r) => setTimeout(r, 50));
-      argv.push(...(await cmdlinesContaining(SECRET_TOKEN)));
-      if ((await cmdlinesContaining(`127.0.0.1:${port}`)).length > 0) sawPush = true;
+      argv.push(...(await cmdlinesContaining(SECRET_TOKEN)), ...(await cmdlinesContaining(header.split(" ")[1]!)));
+      if ((await cmdlinesContaining(`127.0.0.1:${local.port}`)).length > 0) sawPush = true;
     }
     expect((await inFlight).retried).toBe(1);
-    server.close();
+    local.server.close();
 
     expect(sawPush).toBe(true);
     expect(argv).toEqual([]);
-    // The header goes to the push URL's origin only, as git's basic credential.
-    const basic = Buffer.from(`x-access-token:${SECRET_TOKEN}`).toString("base64");
-    expect(seen.length).toBeGreaterThan(0);
-    expect(seen.some((h) => h.authorization === `basic ${basic}`)).toBe(true);
+    // The header reached the push URL's origin, as git's basic credential.
+    expect(local.seen.some((h) => h.authorization === header)).toBe(true);
+    // Refused (401): forgotten by the forge, and the attempt settled.
+    expect(invalidated).toEqual([SESSION.student]);
+    expect(settled).toEqual([header]);
     const [row] = await s.store.bySession(SESSION.sessionId);
     expect(row?.state).toBe("pending");
     expect(row?.lastError).toBeTruthy();
-    expect(row?.lastError).not.toContain(SECRET_TOKEN);
-    for (const needle of [SECRET_TOKEN, basic]) {
+    for (const needle of [SECRET_TOKEN, header.split(" ")[1]!]) {
+      expect(row?.lastError).not.toContain(needle);
       expect(logs.join("\n")).not.toContain(needle);
       // The SQLite file, the staging repository's config, any stray file.
       expect(await filesContaining(s.base, needle)).toEqual([]);
     }
-    // Refused by the forge (401): dropped, so the next attempt asks Quiz again.
-    expect(tokenCalls).toBe(1);
-    const again = createRelayWorker({ store: s.store, forge, targets: stagingTargets(s.volumesRoot, s.repoOf), backoffMs: () => 0 });
-    await new Promise<void>((r) => server.listen(port, "127.0.0.1", r));
-    await again.runOnce();
-    server.close();
-    expect(tokenCalls).toBe(2);
+    s.close();
+  });
+
+  it("the quiz forge never sends a token to an origin other than GitHub: fail closed, Quiz not even asked", async () => {
+    const s = await scenario();
+    let quizCalls = 0;
+    const quizFetch = (async () => {
+      quizCalls += 1;
+      return new Response(null, { status: 500 });
+    }) as typeof fetch;
+    const quiz = createQuizForge({ platformUrl: "https://quiz.test", secret: "q".repeat(40), fetchImpl: quizFetch });
+    const local = await refusingForge();
+    const forge: Forge = { ...quiz, pushUrl: () => local.url };
+    await recordPush({ store: s.store }, SESSION, [{ ref: "refs/heads/main", oldSha: null, sha: s.src.sha }]);
+    const worker = createRelayWorker({ store: s.store, forge, targets: stagingTargets(s.volumesRoot, s.repoOf), backoffMs: () => 0, unconfiguredBackoffMs: () => 0 });
+    expect(await worker.runOnce()).toEqual({ relayed: 0, retried: 1, failed: 0, rejected: 0 });
+    local.server.close();
+    expect(quizCalls).toBe(0);
+    expect(local.seen.every((h) => h.authorization === undefined)).toBe(true);
+    const [row] = await s.store.bySession(SESSION.sessionId);
+    expect(row).toMatchObject({ state: "pending" });
+    expect(row?.lastError).toMatch(/https:\/\/github\.com only/);
     s.close();
   });
 });

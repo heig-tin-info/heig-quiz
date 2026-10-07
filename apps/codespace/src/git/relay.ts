@@ -266,7 +266,7 @@ export function createRelayWorker(opts: RelayOptions): RelayWorker {
 
       try {
         await opts.forge.ensureRepo(target.repo);
-        authorization = await opts.forge.authorization(target.repo, owner);
+        authorization = await opts.forge.authorization(target.repo, owner, url);
         // Declared before the push, so that the platform reads the forge's
         // event of these heads as the student's (ADR-078 §2, §6).
         await opts.forge.declareHeads?.(target.repo, owner, heads.map(({ ref, sha }) => ({ ref, sha })));
@@ -336,6 +336,9 @@ export function createRelayWorker(opts: RelayOptions): RelayWorker {
             "relay waiting: the forge is not configured for this repository",
           );
         }
+      } finally {
+        // The push (and any fetch-back) is over: a credential the forge does not keep is revoked now.
+        if (authorization !== null) opts.forge.settle?.(authorization);
       }
     }
     return result;

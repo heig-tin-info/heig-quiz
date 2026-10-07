@@ -15,7 +15,7 @@ import {
 import { verifyHs256 } from "@quiz/domain";
 import { describe, expect, it } from "vitest";
 
-import { ForgeRefusedError, ForgeUnconfiguredError } from "./forge.js";
+import { ForgeOriginError, ForgeRefusedError, ForgeUnconfiguredError } from "./forge.js";
 import { gitAuthEnv } from "./gitRunner.js";
 import { basicAuthorization, createQuizForge, REFRESH_MARGIN_MS } from "./quizForge.js";
 
@@ -25,6 +25,8 @@ const REPO = { owner: "org", name: "lab-kid" };
 const OWNER = { assignment: "11111111-1111-4111-8111-111111111111", student: "22222222-2222-4222-8222-222222222222" };
 const T0 = Date.parse("2026-10-07T08:00:00Z");
 const MIN = 60_000;
+/** A GitHub remote: the only origin the quiz forge serves. */
+const GH = "https://github.com/org/lab-kid.git";
 
 interface Call {
   url: string;
@@ -82,7 +84,7 @@ const tokenOf = (authorization: string) => Buffer.from(authorization.replace(/^b
 describe("the requests it signs (ADR-078 §2)", () => {
   it("asks for one repository, for one owner, with a one-minute token and no body", async () => {
     const w = world();
-    const header = await w.forge.authorization(REPO, OWNER);
+    const header = await w.forge.authorization(REPO, OWNER, GH);
     expect(header).toBe(basicAuthorization("ghs_tok1"));
     const [call] = w.quizCalls();
     expect(call).toMatchObject({ url: `${PLATFORM}/app/codespace/git-token`, method: "POST", body: null });
@@ -100,7 +102,7 @@ describe("the requests it signs (ADR-078 §2)", () => {
 
   it("presents the token to git as x-access-token, scoped to github.com, through the environment only", async () => {
     const w = world();
-    const header = await w.forge.authorization(REPO, OWNER);
+    const header = await w.forge.authorization(REPO, OWNER, GH);
     expect(tokenOf(header)).toBe("ghs_tok1");
     expect(w.forge.pushUrl(REPO)).toBe("https://github.com/org/lab-kid.git");
     expect(w.forge.pushUrl(REPO)).not.toContain("ghs_");
@@ -138,12 +140,12 @@ describe("the requests it signs (ADR-078 §2)", () => {
 describe("the cache (ADR-078 §3)", () => {
   it("serves the cached token until 10 minutes before GitHub's expiry, then asks once more", async () => {
     const w = world();
-    await w.forge.authorization(REPO, OWNER);
+    await w.forge.authorization(REPO, OWNER, GH);
     w.advance(60 * MIN - REFRESH_MARGIN_MS - 1);
-    expect(tokenOf(await w.forge.authorization(REPO, OWNER))).toBe("ghs_tok1");
+    expect(tokenOf(await w.forge.authorization(REPO, OWNER, GH))).toBe("ghs_tok1");
     expect(w.quizCalls()).toHaveLength(1);
     w.advance(1);
-    expect(tokenOf(await w.forge.authorization(REPO, OWNER))).toBe("ghs_tok2");
+    expect(tokenOf(await w.forge.authorization(REPO, OWNER, GH))).toBe("ghs_tok2");
     expect(w.quizCalls()).toHaveLength(2);
     // A refresh does not revoke the token it replaces: a push may still use it.
     expect(w.revocations()).toHaveLength(0);
@@ -151,39 +153,39 @@ describe("the cache (ADR-078 §3)", () => {
 
   it("keeps one entry per (project, user, repository)", async () => {
     const w = world();
-    await w.forge.authorization(REPO, OWNER);
-    await w.forge.authorization({ owner: "org", name: "lab-squashed" }, OWNER);
-    await w.forge.authorization(REPO, { ...OWNER, student: "33333333-3333-4333-8333-333333333333" });
-    await w.forge.authorization({ owner: "ORG", name: "Lab-Kid" }, OWNER);
+    await w.forge.authorization(REPO, OWNER, GH);
+    await w.forge.authorization({ owner: "org", name: "lab-squashed" }, OWNER, GH);
+    await w.forge.authorization(REPO, { ...OWNER, student: "33333333-3333-4333-8333-333333333333" }, GH);
+    await w.forge.authorization({ owner: "ORG", name: "Lab-Kid" }, OWNER, GH);
     expect(w.quizCalls()).toHaveLength(3);
     // Each of the three is served from its own entry.
-    await w.forge.authorization({ owner: "org", name: "lab-squashed" }, OWNER);
-    await w.forge.authorization(REPO, { ...OWNER, student: "33333333-3333-4333-8333-333333333333" });
+    await w.forge.authorization({ owner: "org", name: "lab-squashed" }, OWNER, GH);
+    await w.forge.authorization(REPO, { ...OWNER, student: "33333333-3333-4333-8333-333333333333" }, GH);
     expect(w.quizCalls()).toHaveLength(3);
   });
 
   it("never uses a token past useUntil, asks nothing then, and revokes it", async () => {
     // The deadline plus the grace falls 20 minutes after the grant.
     const w = world({ useUntil: (now) => now + 20 * MIN });
-    await w.forge.authorization(REPO, OWNER);
+    await w.forge.authorization(REPO, OWNER, GH);
     w.advance(20 * MIN - 1);
-    expect(tokenOf(await w.forge.authorization(REPO, OWNER))).toBe("ghs_tok1");
+    expect(tokenOf(await w.forge.authorization(REPO, OWNER, GH))).toBe("ghs_tok1");
     w.advance(1);
-    const stopped = w.forge.authorization(REPO, OWNER);
+    const stopped = w.forge.authorization(REPO, OWNER, GH);
     await expect(stopped).rejects.toBeInstanceOf(ForgeRefusedError);
     await expect(stopped).rejects.toBeInstanceOf(ForgeUnconfiguredError);
     expect(w.quizCalls()).toHaveLength(1);
     const [revoked] = w.revocations();
     expect(revoked).toMatchObject({ url: "https://api.github.com/installation/token", authorization: "token ghs_tok1" });
     // The next attempt asks again: Quiz answers for itself (an extension grants, else 409).
-    await w.forge.authorization(REPO, OWNER);
+    await w.forge.authorization(REPO, OWNER, GH);
     expect(w.quizCalls()).toHaveLength(2);
   });
 
   it("has one request in flight per entry", async () => {
     const w = world();
     w.holdNext();
-    const many = [w.forge.authorization(REPO, OWNER), w.forge.authorization(REPO, OWNER), w.forge.authorization(REPO, OWNER)];
+    const many = [w.forge.authorization(REPO, OWNER, GH), w.forge.authorization(REPO, OWNER, GH), w.forge.authorization(REPO, OWNER, GH)];
     await new Promise((r) => setTimeout(r, 10));
     w.releaseHeld();
     const headers = await Promise.all(many);
@@ -193,38 +195,65 @@ describe("the cache (ADR-078 §3)", () => {
 
   it("drops a token GitHub refused, without revoking it; the next attempt asks again", async () => {
     const w = world();
-    await w.forge.authorization(REPO, OWNER);
+    await w.forge.authorization(REPO, OWNER, GH);
     w.forge.invalidate!(REPO, OWNER);
     expect(w.revocations()).toHaveLength(0);
-    expect(tokenOf(await w.forge.authorization(REPO, OWNER))).toBe("ghs_tok2");
+    expect(tokenOf(await w.forge.authorization(REPO, OWNER, GH))).toBe("ghs_tok2");
   });
 
   it("forgets and revokes a closed workspace's tokens, and only its own", async () => {
     const w = world();
     const other = { ...OWNER, student: "33333333-3333-4333-8333-333333333333" };
-    await w.forge.authorization(REPO, OWNER);
-    await w.forge.authorization(REPO, other);
+    await w.forge.authorization(REPO, OWNER, GH);
+    await w.forge.authorization(REPO, other, GH);
     w.forge.forget!(OWNER);
     expect(w.revocations().map((c) => c.authorization)).toEqual(["token ghs_tok1"]);
     // The other workspace's entry is kept; the forgotten one asks again.
-    await w.forge.authorization(REPO, other);
+    await w.forge.authorization(REPO, other, GH);
     expect(w.quizCalls()).toHaveLength(2);
-    await w.forge.authorization(REPO, OWNER);
+    await w.forge.authorization(REPO, OWNER, GH);
     expect(w.quizCalls()).toHaveLength(3);
   });
 
   it("keeps nothing of a request in flight when its workspace is forgotten meanwhile", async () => {
     const w = world();
     w.holdNext();
-    const waiting = w.forge.authorization(REPO, OWNER);
+    const waiting = w.forge.authorization(REPO, OWNER, GH);
     await new Promise((r) => setTimeout(r, 10));
     w.forge.forget!(OWNER);
     w.releaseHeld();
     // The caller that waited gets its token for this one attempt…
     expect(tokenOf(await waiting)).toBe("ghs_tok1");
     // …but no credential is kept: the next attempt asks Quiz again.
-    expect(tokenOf(await w.forge.authorization(REPO, OWNER))).toBe("ghs_tok2");
+    expect(tokenOf(await w.forge.authorization(REPO, OWNER, GH))).toBe("ghs_tok2");
     expect(w.quizCalls()).toHaveLength(2);
+  });
+});
+
+describe("fail closed on any other origin (ADR-078 §3)", () => {
+  it("asks Quiz nothing and hands out nothing for a remote that is not https://github.com", async () => {
+    const w = world();
+    for (const url of ["http://github.com/org/lab-kid.git", "https://github.com.evil.test/org/lab-kid.git", "http://127.0.0.1:9/org/lab-kid.git", "/srv/forge.git"]) {
+      await expect(w.forge.authorization(REPO, OWNER, url)).rejects.toBeInstanceOf(ForgeOriginError);
+    }
+    expect(w.calls).toEqual([]);
+  });
+
+  it("revokes a token that landed after forget once its single attempt settles", async () => {
+    const w = world();
+    w.holdNext();
+    const waiting = w.forge.authorization(REPO, OWNER, GH);
+    await new Promise((r) => setTimeout(r, 10));
+    w.forge.forget!(OWNER);
+    w.releaseHeld();
+    const header = await waiting;
+    expect(w.revocations()).toHaveLength(0);
+    w.forge.settle!(header);
+    expect(w.revocations().map((c) => c.authorization)).toEqual(["token ghs_tok1"]);
+    // Once only; a kept token is never revoked by a settle.
+    w.forge.settle!(header);
+    w.forge.settle!(await w.forge.authorization(REPO, OWNER, GH));
+    expect(w.revocations()).toHaveLength(1);
   });
 });
 
@@ -232,13 +261,13 @@ describe("Quiz's answers", () => {
   it("401, 404 and 409 are refusals (the slow backoff), anything else an outage", async () => {
     for (const status of [401, 404, 409]) {
       const w = world({ status: () => status });
-      await expect(w.forge.authorization(REPO, OWNER)).rejects.toBeInstanceOf(ForgeRefusedError);
+      await expect(w.forge.authorization(REPO, OWNER, GH)).rejects.toBeInstanceOf(ForgeRefusedError);
       await expect(w.forge.declareHeads!(REPO, OWNER, [{ ref: "refs/heads/main", sha: "a".repeat(40) }])).rejects.toBeInstanceOf(ForgeRefusedError);
     }
     const closed = world({ status: () => 409 });
-    await expect(closed.forge.authorization(REPO, OWNER)).rejects.toThrow(/closed/);
+    await expect(closed.forge.authorization(REPO, OWNER, GH)).rejects.toThrow(/closed/);
     const down = world({ status: () => 503 });
-    const outage = down.forge.authorization(REPO, OWNER);
+    const outage = down.forge.authorization(REPO, OWNER, GH);
     await expect(outage).rejects.not.toBeInstanceOf(ForgeUnconfiguredError);
     await expect(outage).rejects.toThrow(/Quiz answered 503/);
   });

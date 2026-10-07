@@ -27,7 +27,9 @@
  *     authenticated by itself), best effort; one replaced by a refresh is
  *     not (it may still be in use, and expires within the margin).
  *
- * The token reaches git through the environment only (`gitAuthEnv`, the
+ * The forge refuses, fail closed, a remote whose origin is not
+ * `https://github.com` (`ForgeOriginError`): nothing is requested nor
+ * handed out. The token reaches git through the environment only (`gitAuthEnv`, the
  * header scoped to `https://github.com/`), as
  * `Authorization: basic base64(x-access-token:<token>)`; never a URL, argv,
  * file, log line, SQLite row or student container. Quiz's answers are read,
@@ -48,7 +50,7 @@ import {
 } from "@quiz/contracts";
 import { signHs256 } from "@quiz/domain";
 
-import { ForgeRefusedError, type Forge, type ForgeOwner } from "./forge.js";
+import { ForgeOriginError, ForgeRefusedError, type Forge, type ForgeOwner } from "./forge.js";
 import type { RepoRef } from "./types.js";
 
 /** A token is replaced this long before GitHub's expiry. */
@@ -88,6 +90,8 @@ export function createQuizForge(opts: QuizForgeOptions): Forge {
   const githubApi = (opts.githubApi ?? "https://api.github.com").replace(/\/+$/, "");
   const cache = new Map<string, Entry>();
   const inflight = new Map<string, Promise<Entry>>();
+  /** Tokens handed out for one attempt and never kept (landed after `forget`), by their header. */
+  const orphans = new Map<string, string>();
 
   const fullName = (repo: RepoRef) => `${repo.owner}/${repo.name}`;
   const keyOf = (repo: RepoRef, owner: ForgeOwner) =>
@@ -157,7 +161,8 @@ export function createQuizForge(opts: QuizForgeOptions): Forge {
   /**
    * Asks Quiz for a token. `stillWanted` is false when the entry was
    * forgotten while the request was in flight: the token then serves the
-   * caller that waited for it and is not kept.
+   * caller that waited for it for one attempt, is not kept, and is revoked
+   * when that attempt settles (`settle`).
    */
   async function request(key: string, repo: RepoRef, owner: ForgeOwner, stillWanted: () => boolean): Promise<Entry> {
     const res = await signedRequest(GIT_TOKEN_PATH, GIT_TOKEN_AUDIENCE, repo, owner);
@@ -169,7 +174,10 @@ export function createQuizForge(opts: QuizForgeOptions): Forge {
       useUntil: Math.min(Date.parse(grant.useUntil), Date.parse(grant.expiresAt)),
       timer: null,
     };
-    if (!stillWanted()) return entry;
+    if (!stillWanted()) {
+      orphans.set(basicAuthorization(entry.token), entry.token);
+      return entry;
+    }
     // A refreshed token replaces the old one, not revoked: a push or a fetch
     // may still be using it, and it expires within the refresh margin.
     const old = cache.get(key);
@@ -191,7 +199,10 @@ export function createQuizForge(opts: QuizForgeOptions): Forge {
     async ensureRepo() {
       // Quiz provisions the repositories (analyse.md D3).
     },
-    async authorization(repo, owner) {
+    async authorization(repo, owner, url) {
+      // Fail closed: the token is GitHub's, and goes nowhere else (ADR-078 §3).
+      const origin = /^https?:\/\//i.test(url) ? new URL(url).origin : url;
+      if (origin !== GITHUB) throw new ForgeOriginError(origin);
       const key = keyOf(repo, owner);
       const t = now().getTime();
       const entry = cache.get(key);
@@ -218,6 +229,12 @@ export function createQuizForge(opts: QuizForgeOptions): Forge {
         });
         if (res.status !== 204) throw await refusalOf(res);
       }
+    },
+    settle(authorization) {
+      const token = orphans.get(authorization);
+      if (token === undefined) return;
+      orphans.delete(authorization);
+      revoke(token);
     },
     invalidate(repo, owner) {
       // GitHub refused it already: nothing to revoke.

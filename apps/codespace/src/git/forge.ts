@@ -24,12 +24,19 @@ export interface Forge {
   /** Credential-free HTTPS remote. */
   pushUrl(repo: RepoRef): string;
   /**
-   * Fresh `Authorization` header value, for `owner`'s workspace. Called per
+   * Fresh `Authorization` header value, for `owner`'s workspace and the
+   * remote `url` git will send it to (a forge may refuse an origin it does
+   * not trust: the `quiz` forge serves `https://github.com` only). Called per
    * relay attempt and per seeding fetch, never cached by the caller: the
    * forge decides what it keeps (the `quiz` forge caches until shortly
    * before the token expires).
    */
-  authorization(repo: RepoRef, owner: ForgeOwner): Promise<string>;
+  authorization(repo: RepoRef, owner: ForgeOwner, url: string): Promise<string>;
+  /**
+   * The git command that used `authorization` is over: a credential the
+   * forge does not keep is revoked now (ADR-078 §3). Absent: nothing to do.
+   */
+  settle?(authorization: string): void;
   /** Creates the repository if it does not exist yet. */
   ensureRepo(repo: RepoRef): Promise<void>;
   /**
@@ -116,6 +123,19 @@ export class ForgeRefusedError extends ForgeUnconfiguredError {
   constructor(readonly code: string) {
     super(`Quiz refused the relay: ${code}`);
     this.name = "ForgeRefusedError";
+  }
+}
+
+/**
+ * A forge asked for a credential to send to a host it does not serve (the
+ * `quiz` forge: anything but `https://github.com`). Fail closed: no token
+ * is requested nor handed out; the rows wait on the slow backoff, as for an
+ * unconfigured forge, until the configuration is fixed.
+ */
+export class ForgeOriginError extends ForgeUnconfiguredError {
+  constructor(readonly origin: string) {
+    super(`The quiz forge sends its token to https://github.com only, not to ${origin}`);
+    this.name = "ForgeOriginError";
   }
 }
 

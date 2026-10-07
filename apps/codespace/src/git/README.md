@@ -210,7 +210,9 @@ project, the user and the repository in its claims); the body is empty.
   stop: the entry is dropped and revoked, no request is made then; the next
   attempt asks again, which only an extended deadline answers. Dropped too
   when GitHub refuses it (401/403: `invalidate`) and when its session closes
-  with nothing pending (`forget`, revoked).
+  with nothing pending (`forget`, revoked). A token that lands after
+  `forget` serves its one waiting attempt, is not kept, and is revoked when
+  that attempt settles (`Forge.settle`, called by the relay and the seeding).
 - **Refusals**: Quiz's `401`/`404`/`409` are `ForgeRefusedError` (a
   `ForgeUnconfiguredError`): the rows stay `pending` on the slow backoff.
   A `503` or a network failure is an outage (ordinary backoff, then
@@ -218,7 +220,9 @@ project, the user and the repository in its claims); the body is empty.
 - **The token**: `Authorization: basic base64(x-access-token:<token>)`
   through `gitAuthEnv(authorization, url)`, always scoped to the remote's
   origin (`http.https://github.com/.extraHeader`): never sent to another
-  host, and not set at all for a non-HTTP remote.
+  host, and not set at all for a non-HTTP remote. The forge itself fails
+  closed on any origin but `https://github.com` (`ForgeOriginError`): it asks
+  Quiz nothing and hands out nothing.
 - **No force, no deletion** (`relay.ts`): `refspecFor` is `<sha>:<ref>`. On
   a non-fast-forward (`[rejected] (fetch first|non-fast-forward)` in the
   porcelain output) the forge's head of that branch is fetched into

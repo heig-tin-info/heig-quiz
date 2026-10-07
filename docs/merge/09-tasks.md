@@ -4551,7 +4551,10 @@ serves now (16a), and what waits for the group repositories (16b).
     request ids are uuids in the contract (a non-uuid is a `401`); one
     `authorizeCall` prologue serves both routes; one `bearerOf` parser
     (`auth/plugin.ts`); a request in flight when its workspace is
-    forgotten keeps nothing.
+    forgotten keeps nothing, and its token is revoked once its single
+    attempt settles (`Forge.settle`); the quiz forge fails closed
+    (`ForgeOriginError`) on any remote whose origin is not
+    `https://github.com`.
   - **Tests**: domain `workMode.test.ts` (grant, refusals, grace,
     extension, staff lock); contracts `codespace.test.ts`; api
     `modules/codespace/relay.db.test.ts` (12: scope and body of the mint,
