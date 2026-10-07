@@ -35,7 +35,7 @@ class FakeStream {
 const lobby: AttemptOrLobby = {
   kind: "lobby",
   view: {
-    evaluation: { id: EVAL, title: "Quiz 3 — Pointers", state: "lobby", announcedDurationS: 1200 },
+    evaluation: { id: EVAL, title: "Quiz 3 — Pointers", state: "lobby" },
     conditions: { announced: [], imposed: [] },
     present: 3,
     enrolled: 6,

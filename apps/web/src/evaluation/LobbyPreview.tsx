@@ -25,7 +25,6 @@ export function lobbyPreviewView(detail: EvaluationDetail): LobbyScreenView {
       id: evaluation.id,
       title: evaluation.title,
       state: "lobby",
-      announcedDurationS: evaluation.durationS,
     },
     // ADR-079: the same builder the server uses, for a student with no extra time.
     conditions: evaluationConditionsOf({ ...evaluation, timeBonusPercent: 0 }),

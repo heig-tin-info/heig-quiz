@@ -1100,7 +1100,6 @@ export async function lobbyView(
       id: evaluation.id,
       title: evaluation.title,
       state: evaluation.state,
-      announcedDurationS: evaluation.durationS,
     },
     present: presence.count(evaluation.id),
     enrolled: await enrolledCount(db, evaluation),
@@ -1115,9 +1114,6 @@ function readyView(evaluation: EvaluationRecord, participant: Participant): Read
     evaluation: {
       id: evaluation.id,
       title: evaluation.title,
-      timing: settingsOf(evaluation).timing,
-      announcedDurationS: evaluation.durationS,
-      closesAt: isoOrNull(evaluation.closesAt),
     },
   };
 }

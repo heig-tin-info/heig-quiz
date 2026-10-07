@@ -67,7 +67,9 @@ describe("entering a running evaluation", () => {
       expect(res.statusCode, res.body).toBe(200);
       const body = res.json();
       expect(body.kind).toBe("ready");
-      expect(body.view.evaluation).toMatchObject({ id: seed.evaluationId, timing: "duration" });
+      expect(body.view.evaluation).toMatchObject({ id: seed.evaluationId });
+      // What Start announces is the conditions' time line (ADR-079).
+      expect(body.view.conditions.imposed.map((c: { key: string }) => c.key)).toContain("duration");
       // No question content on the ready screen (invariant 4).
       expect(Object.keys(body.view)).not.toContain("items");
       expect(JSON.stringify(body)).not.toContain('"student"');

@@ -51,7 +51,7 @@ const me: Me = makeMe({
 const lobby: AttemptOrLobby = {
   kind: "lobby",
   view: {
-    evaluation: { id: EVAL, title: "Quiz 3 — Pointeurs", state: "lobby", announcedDurationS: 1200 },
+    evaluation: { id: EVAL, title: "Quiz 3 — Pointeurs", state: "lobby" },
     conditions: { announced: [], imposed: [] },
     present: 3,
     enrolled: 6,

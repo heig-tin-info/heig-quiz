@@ -28,7 +28,6 @@ import {
   FeedbackPolicy,
   Navigation,
   RetakeKeep,
-  Timing,
   TrustedClient,
 } from "./evaluation.js";
 
@@ -218,7 +217,6 @@ export const LobbyView = EvaluationRules.extend({
     id: z.uuid(),
     title: z.string(),
     state: EvaluationState,
-    announcedDurationS: z.number().int().nullable(),
   }),
   present: z.number().int(),
   enrolled: z.number().int(),
@@ -230,16 +228,13 @@ export type LobbyView = z.infer<typeof LobbyView>;
  * The ready screen (ADR-076, issue #525): a `running` evaluation the
  * participant has not started. Nothing was written to reach it — no attempt
  * row, no presence — and the clock has not begun; `POST
- * /evaluations/:id/attempt/start` is the explicit act. It carries the rules
- * and what the Start button announces.
+ * /evaluations/:id/attempt/start` is the explicit act. It carries the
+ * conditions, whose time line is what the Start button announces (ADR-079).
  */
 export const ReadyView = EvaluationRules.extend({
   evaluation: z.object({
     id: z.uuid(),
     title: z.string(),
-    timing: Timing,
-    announcedDurationS: z.number().int().nullable(),
-    closesAt: z.iso.datetime().nullable(),
   }),
 });
 export type ReadyView = z.infer<typeof ReadyView>;

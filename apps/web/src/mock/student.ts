@@ -453,7 +453,6 @@ export const studentLobbyView = (): LobbyView => ({
     id: STUDENT_EVAL,
     title: "Quiz 3 — Pointeurs et lois fondamentales",
     state: "lobby",
-    announcedDurationS: 20 * 60,
   },
   conditions: studentConditions(),
   present: 18,
@@ -1006,9 +1005,6 @@ export const studentReadyView = (): ReadyView => ({
   evaluation: {
     id: STUDENT_EVAL,
     title: "Quiz 3 — Pointeurs et lois fondamentales",
-    timing: "duration",
-    announcedDurationS: 20 * 60,
-    closesAt: null,
   },
   conditions: studentConditions(),
 });

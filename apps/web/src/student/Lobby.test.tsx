@@ -43,7 +43,6 @@ const view: LobbyView = {
     id: "11111111-1111-4111-8111-111111111111",
     title: "Quiz 3 — Pointeurs",
     state: "lobby",
-    announcedDurationS: 1200,
   },
   conditions: {
     announced: [

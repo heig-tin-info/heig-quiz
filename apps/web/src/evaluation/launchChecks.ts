@@ -235,12 +235,14 @@ function rulesCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
   const { settings, mode } = evaluation;
   // ADR-079: the attempts and the negative marking as the students read them.
   const imposed = imposedConditions({ ...evaluation, timeBonusPercent: 0 });
-  const line = <K extends ImposedCondition["key"]>(key: K) => imposed.find((c) => c.key === key);
+  const line = <K extends ImposedCondition["key"]>(key: K) =>
+    imposed.find((c): c is Extract<ImposedCondition, { key: K }> => c.key === key);
   const attemptsLine = line("attempts");
+  const retakes = retakesOf(settings);
   const attempts = attemptsLine
     ? [
         imposedText(attemptsLine, t).title,
-        ...(retakesOn(mode, retakesOf(settings)) ? [t(`launch.rules.keep.${retakesOf(settings).keep}`)] : []),
+        ...(retakesOn(mode, retakes) ? [t(`launch.rules.keep.${retakes.keep}`)] : []),
       ].join(", ")
     : null;
   const announced = announcedConditionsOn(mode, settings.conditions);
