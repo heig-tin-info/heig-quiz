@@ -18,6 +18,7 @@ import type { Engine } from "../engine/index.js";
 import type { Db } from "../db/client.js";
 import type { AssignmentRepoRef, AssignmentRow, SessionRow, UserRow } from "../db/schema.js";
 import { sessions } from "../db/schema.js";
+import type { BootstrapCause } from "../web/i18n.js";
 import {
   ForgeUnconfiguredError,
   ensureStagingRepo,
@@ -259,13 +260,14 @@ export interface ManagerDeps extends ManagerOptions {
  * 2026-09-17, is the worst possible behaviour — nothing signals that the
  * repository is missing and the student works beside their submission.
  *
- * `shortCause` is the sentence shown to the student (kept in French, it is
- * rendered into the student page); `message` carries the detail (already
- * stripped of any token) for the `warn` log.
+ * `shortCause` is what the student is told, as a message key and the
+ * repository it names (`web/i18n.ts` renders it in the reader's language);
+ * `message` carries the detail (already stripped of any token) for the `warn`
+ * log.
  */
 export class WorkspaceBootstrapError extends Error {
   constructor(
-    readonly shortCause: string,
+    readonly shortCause: BootstrapCause,
     message: string,
   ) {
     super(message);
@@ -304,20 +306,22 @@ export function repoRefFromUrl(url: string): RepoRef | undefined {
   return owner && name ? { owner, name } : undefined;
 }
 
-/** What the student reads on the refusal page. Short, and free of git jargon. Kept in French: this text is rendered into the student page. */
-export function shortCauseOf(err: unknown, repo: RepoRef | undefined): string {
-  const where = repo ? `${repo.owner}/${repo.name}` : "le dépôt source";
-  if (err instanceof ForgeUnconfiguredError) {
-    return `le portail n'a pas les accès à ${where}`;
-  }
+/**
+ * What the student reads on the refusal page: short, free of git jargon, and
+ * translated at rendering time (`causeText` of `web/i18n.ts`).
+ */
+export function shortCauseOf(err: unknown, repo: RepoRef | undefined): BootstrapCause {
+  const where = repo ? `${repo.owner}/${repo.name}` : null;
+  if (err instanceof ForgeUnconfiguredError) return { key: "causeNoAccess", repo: where };
   const text = String((err as Error | undefined)?.message ?? err);
+  // `n'existe pas`: git's own message under a French locale on the host.
   if (/not found|n'existe pas|does not exist|\b404\b/i.test(text)) {
-    return `dépôt ${where} introuvable`;
+    return { key: "causeNotFound", repo: where };
   }
   if (/authentication|denied|forbidden|unauthorized|\b401\b|\b403\b/i.test(text)) {
-    return `accès refusé au dépôt ${where}`;
+    return { key: "causeDenied", repo: where };
   }
-  return `récupération de ${where} impossible`;
+  return { key: "causeFetchFailed", repo: where };
 }
 
 export function createSessionManager(opts: ManagerDeps): SessionManager {
@@ -339,7 +343,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
    * exist or a forge without credentials all cause the session to be refused,
    * with a named cause.
    *
-   * Two subtleties, both documented in `docs/deploy.md` § 5:
+   * Two subtleties, both documented in classroom's `docs/deploy.md` § 5:
    *
    *  - a **target repository with no branch at all** in lab mode is legitimate
    *    (classroom has just created it): the `fetch` succeeds, reports zero
@@ -392,7 +396,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
       });
       if (result.refs === 0 && wanted.mode === "exam") {
         throw new WorkspaceBootstrapError(
-          "le modèle de l'enseignant ne contient aucune branche",
+          { key: "causeEmptyTemplate", repo: null },
           `template ${from ?? "?"} without a ref: the exam has no statement to hand out`,
         );
       }

@@ -71,6 +71,7 @@ import {
   isOpen,
   splitRepoRef,
 } from "../sessions/store.js";
+import { requestLang, t, type MessageKey } from "../web/i18n.js";
 import { errorPage, workspaceErrorPage } from "../web/pages.js";
 import { sessionCookieOptions } from "../web/routes.js";
 
@@ -78,6 +79,13 @@ import { sessionCookieOptions } from "../web/routes.js";
  * Prefix of the subject of an account born from a launch token (see
  * `upsertLaunchUser`). The value stays `classroom:` for both issuers, so a
  * portal database carried over keeps its accounts.
+ *
+ * Both issuers share this one namespace, and the volume directory named by
+ * the bare subject. That is safe only because heig-classroom and Quiz both
+ * use random UUID user ids, and only as long
+ * as a production portal does not share its `CODESPACE_LAUNCH_SECRET` with
+ * both platforms at once. Open for M6-04/M6-06: one issuer per portal in
+ * production, or a prefix per issuer.
  */
 export const CLASSROOM_SUB_PREFIX = "classroom:";
 
@@ -319,11 +327,10 @@ async function classroomRoutesImpl(
         assignment.id,
       ).map(({ session, user, lastPushAt }) => ({
         sessionId: session.id,
-        // **Platform** id when the account comes from there: that is the one
-        // the caller knows how to match with its own users.
-        userId: user.oidcSub.startsWith(CLASSROOM_SUB_PREFIX)
-          ? user.oidcSub.slice(CLASSROOM_SUB_PREFIX.length)
-          : user.id,
+        // The platform's id, the one the caller matches with its own users.
+        // Every account is born from a launch token (`upsertLaunchUser`), so
+        // every subject carries the prefix.
+        userId: user.oidcSub.slice(CLASSROOM_SUB_PREFIX.length),
         email: user.email,
         state: session.state,
         createdAt: session.createdAt.toISOString(),
@@ -336,13 +343,14 @@ async function classroomRoutesImpl(
 
   // --- GET /launch?token=… -------------------------------------------------
   app.get<{ Querystring: { token?: string } }>("/launch", async (request, reply) => {
-    const refuse = (detail: string, reason: string, code = 403): FastifyReply => {
+    const lang = requestLang(request);
+    const refuse = (detail: MessageKey, reason: string, code = 403): FastifyReply => {
       request.log.warn({ launch: { reason, clientAddress: request.ip } }, "launch refused");
-      return html(reply, code, errorPage("Lancement refusé", detail));
+      return html(reply, code, errorPage(lang, t(lang, "launchRefused"), t(lang, detail)));
     };
 
     const token = request.query.token ?? "";
-    if (token === "") return refuse("Aucun jeton de lancement.", "missing-token");
+    if (token === "") return refuse("launchMissingToken", "missing-token");
 
     const verdict = await verifyHs256<Record<string, unknown>>(token, secret, {
       audience: LAUNCH_AUDIENCE,
@@ -350,20 +358,18 @@ async function classroomRoutesImpl(
     });
     if (!verdict.ok) {
       return refuse(
-        verdict.reason === "expired"
-          ? "Ce lien de lancement a expiré. Retournez sur la plateforme et cliquez de nouveau sur Démarrer."
-          : "Ce lien de lancement n'est pas valide. Retournez sur la plateforme et cliquez de nouveau sur Démarrer.",
+        verdict.reason === "expired" ? "launchExpired" : "launchInvalid",
         verdict.reason,
       );
     }
     const claimed = LaunchTokenClaims.safeParse(verdict.claims);
-    if (!claimed.success) return refuse("Ce lien de lancement est incomplet.", "bad-claims");
+    if (!claimed.success) return refuse("launchIncomplete", "bad-claims");
     const claims: LaunchTokenClaims = claimed.data;
 
     // Single use, before any side effect: a replay stops here.
     if (!consumeJti(db, claims.jti, claims.exp)) {
       return refuse(
-        "Ce lien de lancement a déjà servi. Retournez sur la plateforme et cliquez de nouveau sur Démarrer.",
+        "launchReplayed",
         "jti-replayed",
       );
     }
@@ -371,23 +377,23 @@ async function classroomRoutesImpl(
     const assignment: AssignmentRow | undefined = findAssignment(db, claims.assignmentId);
     if (!assignment) {
       return refuse(
-        "Activité non synchronisée depuis la plateforme. Prévenez votre enseignant : l'activité doit être enregistrée sur la plateforme avant d'être lancée.",
+        "launchUnknownAssignment",
         "unknown-assignment",
       );
     }
     if (!isOpen(assignment)) {
-      return refuse("La fenêtre d'ouverture de ce devoir est close.", "assignment-closed");
+      return refuse("launchClosed", "assignment-closed");
     }
     if (!claims.repo) {
       return refuse(
-        "Votre dépôt n'est pas encore prêt pour ce devoir. Réessayez dans quelques instants.",
+        "launchRepoMissing",
         "repo-missing",
       );
     }
 
     if (!isSafeId(assignment.id)) {
       return refuse(
-        "Ce devoir porte un identifiant inutilisable par le portail.",
+        "launchBadAssignmentId",
         "bad-assignment-id",
       );
     }
@@ -415,10 +421,7 @@ async function classroomRoutesImpl(
         return html(
           reply,
           429,
-          errorPage(
-            "Quota atteint",
-            "Toutes les places d'environnement de votre enseignant sont occupées. Réessayez plus tard.",
-          ),
+          errorPage(lang, t(lang, "quotaTitle"), t(lang, "quotaDetail")),
         );
       }
     }
@@ -455,7 +458,7 @@ async function classroomRoutesImpl(
         return html(
           reply,
           403,
-          outsideSebPage("Cette épreuve ne s'ouvre que depuis Safe Exam Browser."),
+          outsideSebPage(lang, t(lang, "examOnlyInSeb")),
         );
       }
     }
@@ -487,7 +490,7 @@ async function classroomRoutesImpl(
         },
         "launch refused: the workspace could not be prepared",
       );
-      return html(reply, 503, workspaceErrorPage(err.shortCause));
+      return html(reply, 503, workspaceErrorPage(lang, err.shortCause));
     }
 
     if (assignment.mode === "exam") {

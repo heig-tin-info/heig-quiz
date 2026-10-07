@@ -9,6 +9,7 @@
 import type { FastifyInstance } from "fastify";
 import fp from "fastify-plugin";
 
+import { requestLang } from "./i18n.js";
 import { landingPage } from "./pages.js";
 
 /**
@@ -26,7 +27,9 @@ export function sessionCookieOptions(sessionId: string, secure: boolean) {
 }
 
 async function webRoutesImpl(app: FastifyInstance): Promise<void> {
-  app.get("/", async (_req, reply) => reply.type("text/html; charset=utf-8").send(landingPage()));
+  app.get("/", async (req, reply) =>
+    reply.type("text/html; charset=utf-8").send(landingPage(requestLang(req))),
+  );
 }
 
 export const webRoutes = fp(webRoutesImpl, { fastify: "5.x", name: "web-routes" });

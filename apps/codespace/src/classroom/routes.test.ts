@@ -396,6 +396,18 @@ describe("GET /launch", () => {
     const reply = await h.app.inject({ url: "/launch" });
     expect(reply.statusCode).toBe(403);
     expect(reply.body).toContain("Lancement refusé");
+    expect(reply.body).toContain('<html lang="fr">');
+  });
+
+  it("refuses in English to a browser that asks for it", async () => {
+    const reply = await h.app.inject({
+      url: "/launch",
+      headers: { "accept-language": "en-GB,en;q=0.9" },
+    });
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body).toContain('<html lang="en">');
+    expect(reply.body).toContain("Launch refused");
+    expect(reply.body).toContain("No launch token.");
   });
 
   it("403 on a signature made with another secret", async () => {

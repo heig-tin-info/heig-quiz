@@ -1,5 +1,7 @@
 # Proof B, manual part: a real Safe Exam Browser
 
+> **In Quiz (M6-03).** History from heig-classroom: the portal's own OIDC login, its Start button, its teacher dashboard, its YAML seed and the GitHub relay described here are gone or off (ADR-047, M6-03 amendment); read *classroom* as the platform. The current rules are in `apps/codespace/CLAUDE.md`.
+
 The automated part of proof B is in
 [`src/seb/`](../src/seb/README.md): it proves that the
 portal computes the same Config Key as the reference implementation and that it
@@ -38,7 +40,7 @@ and with an empty `browserExamKey`.
   `request.ip` is the front end's address for everyone and **step 5 cannot
   fail**, which would make the most important part of this proof pass for the
   wrong reason. The portal refuses to start without it in production, so in
-  practice: if the portal is up, it is set (docs/deploy.md § 6).
+  practice: if the portal is up, it is set (classroom's docs/deploy.md § 6).
 
 ## 1. Retrieve the configuration file of the assignment
 
@@ -215,7 +217,7 @@ address (analyse.md D5). It is also the one that silently passed for the wrong
 reason before 2026-09-19 — behind Caddy, `request.ip` was `127.0.0.1` for
 everyone and the comparison was always true. If 5.4 does **not** give a 403,
 do not blame the cookie: check `TRUSTED_PROXY_IPS` on the portal and read
-`clientAddress` in the logs (docs/deploy.md § 6). A run of this procedure
+`clientAddress` in the logs (classroom's docs/deploy.md § 6). A run of this procedure
 whose 5.4 passes with `clientAddress: 127.0.0.1` in the logs proves nothing
 and must be recorded as failed.
 

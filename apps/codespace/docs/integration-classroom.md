@@ -325,7 +325,7 @@ applications.
 - The relay to GitHub goes through `createGithubForge`, and it **has** been
   exercised against the real GitHub App: on 2026-09-17, on the production VM, a
   `git push` from the container reached `staging.git` and the `PushEvent` went
-  `relayed` in 2.2 s onto a private repository (deploy.md § 5, "Measured on the
+  `relayed` in 2.2 s onto a private repository (heig-classroom's deploy.md § 5, "Measured on the
   VM on 2026-09-17"). What remains is operational, not code: the App is not
   installed on the `heig-tin-info` organisation, so the smoke assignment's
   `PushEvent` stays `pending` there.

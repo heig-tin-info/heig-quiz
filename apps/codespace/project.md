@@ -1,5 +1,7 @@
 # Portal for supervised development environments
 
+> **In Quiz (M6-03).** History from heig-classroom: the portal's own OIDC login, its Start button, its teacher dashboard, its YAML seed and the GitHub relay described here are gone or off (ADR-047, M6-03 amendment); read *classroom* as the platform. The current rules are in `apps/codespace/CLAUDE.md`.
+
 Historical framing document (translated). Where it contradicts docs/analyse.md, analyse.md prevails; sections 3 and 4 prevail over everything.
 
 Framing document · 2026-09-17

@@ -1,5 +1,7 @@
 # Critical analysis of the framing document
 
+> **In Quiz (M6-03).** History from heig-classroom: the portal's own OIDC login, its Start button, its teacher dashboard, its YAML seed and the GitHub relay described here are gone or off (ADR-047, M6-03 amendment); read *classroom* as the platform. The current rules are in `apps/codespace/CLAUDE.md`.
+
 Answer to [project.md](../project.md) · 2026-09-17
 
 This document does what section 1 of the framing document asks for: challenge the choices of sections 7, 9 and 10, name the blind spots, and propose a realistic breakdown. Sections 3 and 4 (requirements, non-goals) are taken as a contract and are not reopened. Every trade-off ends in a decision, not in a list of options.

@@ -1,9 +1,9 @@
 /**
  * `TRUSTED_PROXY_IPS` → Fastify's `trustProxy` (audit M1 of 2026-09-18,
- * docs/deploy.md § 6).
+ * classroom's docs/deploy.md § 6).
  *
  * The exam cookie is bound to `request.ip` (analyse.md D5). Behind the Caddy
- * of `deploy/Caddyfile` the portal only ever sees 127.0.0.1, so that binding
+ * of classroom's `deploy/Caddyfile` the portal only ever sees 127.0.0.1, so that binding
  * compares 127.0.0.1 with 127.0.0.1 for everyone and the "same workstation"
  * check can never fire. What is checked here is the whole point of the fix:
  * `request.ip` is the **forwarded** address when the hop is a trusted front

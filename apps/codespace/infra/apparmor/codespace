@@ -1,6 +1,6 @@
 # heig-codespace — AppArmor profile for the student containers.
 #
-# Loaded by deploy/bootstrap.sh and by deploy/push.sh into /etc/apparmor.d/codespace,
+# Loaded by classroom's deploy/bootstrap.sh and by classroom's deploy/push.sh into /etc/apparmor.d/codespace,
 # then selected at `podman run` time with `--security-opt apparmor=codespace`
 # (images/c-dev/run-hardened.sh and src/engine/index.ts, CLAUDE.md invariant 3).
 #
@@ -105,7 +105,7 @@
 #   apparmor_parser -Q /etc/apparmor.d/codespace     # parse only, no load
 #   aa-status | grep codespace                       # check it is loaded
 #
-# deploy/push.sh reloads it on every push, so a change here ships without
+# classroom's deploy/push.sh reloads it on every push, so a change here ships without
 # `--bootstrap`. A container already running keeps the profile it was started
 # with; the next session picks the new one up.
 # ---------------------------------------------------------------------------

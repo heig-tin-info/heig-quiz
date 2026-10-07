@@ -10,8 +10,9 @@ yet (M6-06), and it is not deployed (M6-04/M6-05). See
 **Amended (2026-10-07, M6-03, product owner): the portal's GitHub relay and
 its own login.** Scope: the portal side of points 2 and 6 below, nothing
 on the platform side.
-(a) *Relay off.* The forge and relay code is imported, but the portal runs
-with `FORGE_KIND=none` by default: a push lands in the session's
+(a) *Relay off.* The relay and the development (Forgejo) forge are
+imported, heig-classroom's App-backed GitHub forge is not, and the portal
+runs with `FORGE_KIND=none` by default: a push lands in the session's
 `staging.git` and its `PushEvent` is written (the proof of submission),
 nothing is relayed to GitHub. The portal refuses to start, in every
 environment, when `GITHUB_APP_ID` or `GITHUB_APP_PRIVATE_KEY_PATH` is set:

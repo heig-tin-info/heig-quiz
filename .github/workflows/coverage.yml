@@ -87,6 +87,7 @@ jobs:
           name: coverage-rest
           path: |
             apps/runner/coverage/
+            apps/codespace/coverage/
             packages/*/coverage/
           if-no-files-found: error
           retention-days: 1

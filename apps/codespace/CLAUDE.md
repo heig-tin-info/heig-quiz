@@ -8,8 +8,9 @@ the codespace schemas) and talks to the platform through two HS256-signed
 HTTP messages (ADR-047). Imported from heig-classroom's `apps/codespace` at
 classroom `a676c8c` (merge task M6-03).
 
-The root `CLAUDE.md` and `AGENTS.md` apply here, with exactly the two
-divergences below. Read [ADR-047](../../docs/adr/ADR-047-espace-de-travail-en-ligne.md)
+The root `CLAUDE.md` and `AGENTS.md` apply here. Of the root invariants,
+only 11 and 12 are relaxed, on exactly the two points below; everything else
+(1 included: every page in English and French) binds this app as it is. Read [ADR-047](../../docs/adr/ADR-047-espace-de-travail-en-ligne.md)
 and its M6-03 amendment, then [docs/merge/06-codespace-seb-infra.md](../../docs/merge/06-codespace-seb-infra.md)
 §6.2–§6.4.
 
@@ -17,7 +18,7 @@ and its M6-03 amendment, then [docs/merge/06-codespace-seb-infra.md](../../docs/
 
 | Kind | Documents |
 | --- | --- |
-| Reference | [docs/analyse.md](docs/analyse.md) (decisions D1–D8), [docs/integration-classroom.md](docs/integration-classroom.md) (the platform boundary, written for heig-classroom), [docs/deploy.md](docs/deploy.md) (the VM recipe, heig-classroom's infrastructure), [docs/setup-workstation.md](docs/setup-workstation.md), [images/c-dev/README.md](images/c-dev/README.md) (the student image), [src/git/README.md](src/git/README.md) (the Git channel), [src/seb/README.md](src/seb/README.md) (the SEB verification), [infra/net/README.md](infra/net/README.md) (the closed network) |
+| Reference | [docs/analyse.md](docs/analyse.md) (decisions D1–D8), [docs/integration-classroom.md](docs/integration-classroom.md) (the platform boundary, written for heig-classroom), [docs/setup-workstation.md](docs/setup-workstation.md), [images/c-dev/README.md](images/c-dev/README.md) (the student image), [src/git/README.md](src/git/README.md) (the Git channel), [src/seb/README.md](src/seb/README.md) (the SEB verification), [infra/net/README.md](infra/net/README.md) (the closed network) |
 | History, superseded in places | [project.md](project.md), [docs/milestone-0.md](docs/milestone-0.md), [docs/v1.md](docs/v1.md), [docs/leads.md](docs/leads.md), [docs/proof-b-manual.md](docs/proof-b-manual.md) |
 
 These documents describe heig-classroom's portal: read *classroom* as the
@@ -35,21 +36,29 @@ Start button, its teacher dashboard and its YAML seed (all removed, below).
 - **GitHub relay off.** `FORGE_KIND=none` by default: a push lands in
   `staging.git` with its `PushEvent`, nothing is relayed. `GITHUB_APP_ID`
   and `GITHUB_APP_PRIVATE_KEY_PATH` are refused at startup in every
-  environment (root invariant 15: never heig-classroom's App). Whether
-  Quiz's own App key goes on the engine VM is **open**: an ADR at
-  M6-04/M6-05.
+  environment (root invariant 15: never heig-classroom's App), and
+  classroom's App-backed GitHub forge was not imported: `FORGE_KIND=github`
+  is the unconfigured forge (public clone URLs, no relay), `forgejo` the
+  development one. Whether Quiz's own App key goes on the engine VM is
+  **open**: an ADR at M6-04/M6-05.
 - `PLATFORM_URL` replaces `CLASSROOM_URL` (still read as an alias); launch
   and service tokens are accepted from both issuers, `heig-classroom` and
   `heig-quiz`.
 - `src/seb/` is kept as is until M6-07 moves it onto `packages/seb`.
-- **Inert until M6-04/M6-05**: `deploy/` (heig-classroom's VM, paths and
-  env file: it still writes `FORGE_KIND=github`, a GitHub App key path and
-  OIDC keys, which this portal now refuses or ignores), `images/` (built on
-  the engine VM, never in CI), `infra/` (nftables, AppArmor, seccomp,
-  network scripts). The end-to-end script was not imported: it drove the
-  removed OIDC login and seed; M6-04 rewrites it against `/launch`.
-- The pages are French only (heig-classroom's); the platform's en/fr
-  dictionaries do not reach this deployable (an open point of M6).
+- **Not imported**: heig-classroom's `deploy/` and `docs/deploy.md` (its VM
+  recipe, which wrote a configuration this portal refuses and copied
+  classroom's App key) and its end-to-end script (it drove the removed
+  login and seed). M6-04 writes Quiz's deploy and end-to-end run from
+  `~/heig-classroom/apps/codespace`; comments that cite "classroom's
+  `deploy/`" or "classroom's `docs/deploy.md`" point there.
+- **Inert until M6-04/M6-05**: `images/` (built on the engine VM, never in
+  CI) and `infra/` (nftables, AppArmor, seccomp, network scripts).
+- **Pages in English and French** (`src/web/i18n.ts`, the language from
+  `Accept-Language`, French by default): `en` is the dictionary, `fr` is
+  typed `Record<keyof typeof en, string>`, so a missing translation is a
+  compile error. Every sentence a person reads goes through `t()`.
+- **The request log** writes no header and masks `token=` in URLs
+  (`src/logging.ts`): a launch token is a live credential.
 
 ## Sanctioned divergences from the root invariants
 
@@ -72,8 +81,8 @@ them on exactly two points, and on nothing else:
 
 Everything else of 10–13 holds: the closed environment list
 (`CONTAINER_ENV_KEYS`, tested), the hardening flags from the first run
-(plus `apparmor=codespace`, tmpfs `mode=1777`), `podman --remote` on the
-rootful socket. Exam mode seeds from the teacher's template, in the spirit
+(with two additions, not relaxations: `apparmor=codespace` and a tmpfs in
+`mode=1777`), `podman --remote` on the rootful socket. Exam mode seeds from the teacher's template, in the spirit
 of 14. The freeze-and-collect exam mode of M6-08 (ADR-075) drops the git
 channel divergence for its containers.
 
@@ -96,8 +105,8 @@ channel divergence for its containers.
    comment. `CODESPACE_APPARMOR_PROFILE` empty drops the AppArmor flag (a
    host without AppArmor, the WSL2 workstation).
 4. **`TRUSTED_PROXY_IPS` is required in production.** The exam cookie is
-   bound to `request.ip`; behind Caddy, without the list, every student is
-   127.0.0.1 and the binding never fires. `loadConfig()` refuses to start;
+   bound to `request.ip`; behind a local reverse proxy, without the list,
+   every student is 127.0.0.1 and the binding never fires. `loadConfig()` refuses to start;
    the boolean `TRUST_PROXY` is development only and refused in production.
 5. **`SEB_VERIFIER=simulated` is refused in production**, by `loadConfig()`
    and again by `createSebVerifier`; a test asserts both.

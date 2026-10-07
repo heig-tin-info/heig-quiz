@@ -15,6 +15,7 @@
  * heig-classroom stores `timestamptz`. SQLite has no timestamp type and a
  * text date would sort badly across time zones.
  */
+import { CODESPACE_SESSION_STATES } from "@quiz/contracts";
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 /**
@@ -173,12 +174,14 @@ export interface AssignmentSebConfig {
   /** Browser Exam Key salt, stable for an assignment (seb/sebFile.ts). */
   examKeySalt: string;
   /**
-   * `startURL` written into the `.seb`, hence into the Config Key computation.
-   * Absent for a standalone assignment (the portal then takes its own route
-   * `/exam/<id>/start`); present for a synchronised assignment, where it is
-   * classroom that authenticates the student before redirecting to `/launch`.
+   * `startURL` written into the `.seb`, hence into the Config Key computation:
+   * the platform's page, which authenticates the student before redirecting
+   * to `/launch`. Required since M6-03: the standalone assignments that went
+   * without it (the portal's own `/exam/<id>/start`) are gone. A JSON column,
+   * so no migration; heig-classroom's portal always wrote it for a
+   * synchronised assignment.
    */
-  startUrl?: string;
+  startUrl: string;
   quitUrl?: string;
   extraAllowedHosts?: string[];
 }
@@ -219,7 +222,9 @@ export const sessions = sqliteTable(
     containerIp: text("container_ip"),
     /** `<VOLUMES_ROOT>/<student>/<assignment>`, kept after the container is destroyed. */
     volumeDir: text("volume_dir").notNull(),
-    state: text("state", { enum: ["starting", "running", "stopped", "closed", "failed"] })
+    // The contract's list, so the platform's view of a session and this column
+    // cannot drift apart.
+    state: text("state", { enum: CODESPACE_SESSION_STATES })
       .notNull()
       .default("starting"),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),

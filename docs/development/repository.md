@@ -103,10 +103,11 @@ exam mode, and a git channel on an internal bridge. A separate deployable
 that imports only `packages/*` (`@quiz/domain` for HS256, `@quiz/contracts`
 for the codespace schemas) and knows the platform through two signed HTTP
 messages. It has no login of its own and its GitHub relay is off (ADR-047,
-M6-03 amendment). Its `CLAUDE.md` records its invariants and its two
-sanctioned divergences from the runner's; `deploy/`, `images/` and `infra/`
-are inert until M6-04/M6-05. No image built from the root context contains
-it.
+M6-03 amendment); its pages are in English and French (`src/web/i18n.ts`).
+Its `CLAUDE.md` records its invariants and its two sanctioned divergences
+from the runner's; `images/` and `infra/` are inert until M6-04/M6-05, and
+its deployment (heig-classroom's `deploy/` was not imported) is M6-04's. No
+image built from the root context contains it.
 
 ## Packages
 

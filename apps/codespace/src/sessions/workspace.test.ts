@@ -22,6 +22,7 @@ import { assignments, users, type AssignmentRow, type UserRow } from "../db/sche
 import type { ContainerInfo, Engine, RunRequest } from "../engine/index.js";
 import { ForgeUnconfiguredError, git, gitBare, refSnapshot } from "../git/index.js";
 import { FIXTURE_ENV, makeSourceRepo } from "../git/fixtures.js";
+import { causeText } from "../web/i18n.js";
 
 import {
   containerNameFor,
@@ -188,7 +189,10 @@ describe("loud failure of the seeding", () => {
     });
     const err = await manager.start(user, assignment).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(WorkspaceBootstrapError);
-    expect((err as WorkspaceBootstrapError).shortCause).toMatch(/accès à org\/tp-student/);
+    expect((err as WorkspaceBootstrapError).shortCause).toEqual({
+      key: "causeNoAccess",
+      repo: "org/tp-student",
+    });
     expect(engine.runs).toBe(0);
   });
 
@@ -213,7 +217,7 @@ describe("loud failure of the seeding", () => {
     const manager = makeManager();
     const err = await manager.start(user, assignment).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(WorkspaceBootstrapError);
-    expect((err as WorkspaceBootstrapError).shortCause).toMatch(/aucune branche/);
+    expect((err as WorkspaceBootstrapError).shortCause.key).toBe("causeEmptyTemplate");
     expect(engine.runs).toBe(0);
   });
 });
@@ -384,7 +388,7 @@ describe("the student's git identity in work/.git/config", () => {
   });
 });
 
-describe("repoRefFromUrl et shortCauseOf", () => {
+describe("repoRefFromUrl and shortCauseOf", () => {
   it("splits a clone URL", () => {
     expect(repoRefFromUrl("https://github.com/org/depot.git")).toEqual({
       owner: "org",
@@ -395,19 +399,16 @@ describe("repoRefFromUrl et shortCauseOf", () => {
     expect(repoRefFromUrl("/srv/codespace/volumes/e/d/source.git")).toBeUndefined();
   });
 
-  it("names the cause in French, without git jargon", () => {
+  it("names the cause without git jargon, in both languages", () => {
     const repo = { owner: "org", name: "depot" };
-    expect(shortCauseOf(new ForgeUnconfiguredError("x"), repo)).toBe(
-      "le portail n'a pas les accès à org/depot",
-    );
-    expect(shortCauseOf(new Error("remote: Repository not found"), repo)).toBe(
-      "dépôt org/depot introuvable",
-    );
-    expect(shortCauseOf(new Error("fatal: Authentication failed"), repo)).toBe(
-      "accès refusé au dépôt org/depot",
-    );
-    expect(shortCauseOf(new Error("Connection refused"), repo)).toBe(
-      "récupération de org/depot impossible",
+    const text = (err: Error, lang: "en" | "fr" = "fr") => causeText(lang, shortCauseOf(err, repo));
+    expect(text(new ForgeUnconfiguredError("x"))).toBe("le portail n'a pas les accès à org/depot");
+    expect(text(new Error("remote: Repository not found"))).toBe("dépôt org/depot introuvable");
+    expect(text(new Error("fatal: Authentication failed"))).toBe("accès refusé au dépôt org/depot");
+    expect(text(new Error("Connection refused"))).toBe("récupération de org/depot impossible");
+    expect(text(new Error("remote: Repository not found"), "en")).toBe("repository org/depot not found");
+    expect(causeText("en", shortCauseOf(new Error("x"), undefined))).toBe(
+      "the source repository could not be fetched",
     );
   });
 });

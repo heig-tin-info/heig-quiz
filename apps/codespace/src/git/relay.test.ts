@@ -182,7 +182,7 @@ describe("createRelayWorker", () => {
   });
 
   it("forge not configured: the row stays pending indefinitely, with the named error", async () => {
-    // Deployment without a GitHub App (docs/deploy.md): the submission is
+    // Deployment without a GitHub App (classroom's docs/deploy.md): the submission is
     // recorded, the service does not go down, and the row must **never** turn
     // `failed` — it had no destination, this is not a forge outage.
     const s = await scenario();

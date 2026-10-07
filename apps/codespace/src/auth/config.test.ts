@@ -66,6 +66,21 @@ describe("production refusals", () => {
     );
   });
 
+  it("refuses an empty SEB_PUBLIC_ORIGIN", () => {
+    expect(() => loadConfig({ ...production, SEB_PUBLIC_ORIGIN: "" })).toThrow(
+      /SEB_PUBLIC_ORIGIN/,
+    );
+  });
+
+  it("refuses the development launch secret", () => {
+    expect(() =>
+      loadConfig({
+        ...production,
+        CODESPACE_LAUNCH_SECRET: "dev-launch-secret-change-me-0123456789",
+      }),
+    ).toThrow(/CODESPACE_LAUNCH_SECRET/);
+  });
+
   it("refuses a development exam cookie secret", () => {
     expect(() =>
       loadConfig({ ...production, EXAM_COOKIE_SECRET: "dev-exam-cookie-secret-change-me" }),

@@ -1,8 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   // The build leaves the tests out of dist/; `typecheck` runs on
-  // tsconfig.test.json, which puts them back. `scripts/` and `deploy/` are
-  // run by tsx against a live portal, never built.
+  // tsconfig.test.json, which puts them back.
   "compilerOptions": { "types": ["node"] },
   "exclude": ["${configDir}/src/**/*.test.ts"]
 }

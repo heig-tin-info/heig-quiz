@@ -11,16 +11,11 @@ export { CgiHeadScanner, parseCgiHead, httpMetaVariable, type CgiHead } from "./
 // `db.ts` is gone in V1: the database is the portal's own (`db/client.ts`).
 export {
   createForgejoForge,
-  createGithubForge,
   createUnconfiguredGithubForge,
   ForgeUnconfiguredError,
-  INSTALLATION_TOKEN_TTL_MS,
-  TOKEN_RENEWAL_MARGIN_MS,
   UNCONFIGURED_GITHUB_MESSAGE,
   type Forge,
   type ForgejoOptions,
-  type GithubAppApi,
-  type GithubOptions,
 } from "./forge.js";
 export { git, gitAuthEnv, gitBare, redactSecrets, GitError } from "./gitRunner.js";
 export {

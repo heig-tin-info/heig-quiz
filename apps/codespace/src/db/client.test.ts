@@ -79,7 +79,7 @@ describe("migrations", () => {
         image: "img",
         uploadPack: true,
         beks: ["a", "b"],
-        sebConfig: { examKeySalt: "salt", quitUrl: "http://x/" },
+        sebConfig: { examKeySalt: "salt", startUrl: "http://x/start", quitUrl: "http://x/" },
         createdAt: now,
       })
       .run();

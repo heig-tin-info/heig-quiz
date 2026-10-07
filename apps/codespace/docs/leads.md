@@ -1,5 +1,7 @@
 # Leads and options noted along the way
 
+> **In Quiz (M6-03).** History from heig-classroom: the portal's own OIDC login, its Start button, its teacher dashboard, its YAML seed and the GitHub relay described here are gone or off (ADR-047, M6-03 amendment); read *classroom* as the platform. The current rules are in `apps/codespace/CLAUDE.md`.
+
 Notes from 2026-09-17, to be sorted out milestone after milestone. Nothing here is committed to; these are the trade-offs discussed after milestone 0, written down so as not to lose them.
 
 ## Hosting

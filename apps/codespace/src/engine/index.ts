@@ -35,7 +35,7 @@ export interface EngineOptions {
   /**
    * Name of the AppArmor profile loaded on the host, passed as
    * `--security-opt apparmor=<name>` — `codespace` in production
-   * (`infra/apparmor/codespace`, installed by `deploy/bootstrap.sh`).
+   * (`infra/apparmor/codespace`, installed by classroom's `deploy/bootstrap.sh`).
    *
    * **Empty string or absent = the flag is not passed**, which is what a host
    * without AppArmor needs (the WSL2 development workstation). Podman then

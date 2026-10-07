@@ -24,6 +24,16 @@ import {
 } from "./examSession.js";
 import { SEB_CONTENT_TYPE, renderSebFile } from "./sebFile.js";
 import type { SebRefusal, SebVerifier } from "./verify.js";
+import {
+  causeText,
+  isBootstrapCause,
+  requestLang,
+  t,
+  type BootstrapCause,
+  type Lang,
+  type MessageKey,
+} from "../web/i18n.js";
+import { escapeHtml, layout } from "../web/pages.js";
 
 /** What the portal knows about an assignment in exam mode. */
 export interface SebAssignment {
@@ -74,45 +84,34 @@ export interface SebRoutesOptions {
    * Called after a successful verification: creates or resumes the session and
    * returns where to go. Injected so that this plugin does not have to know
    * about `sessions/` nor `engine/`.
+   *
+   * Optional: without it, `/exam/:assignmentId/start` is not registered at
+   * all. The Quiz portal passes none (M6-03): with no login of its own, an
+   * exam opens through `/launch` only.
    */
-  onStart(ctx: StartContext): Promise<StartOutcome> | StartOutcome;
+  onStart?(ctx: StartContext): Promise<StartOutcome> | StartOutcome;
 }
 
-const REFUSAL_MESSAGES: Record<SebRefusal, string> = {
-  "url-unreconstructible": "Le portail n'a pas pu reconstruire l'URL de la requête.",
-  "missing-config-key-header": "La requête ne vient pas de Safe Exam Browser.",
-  "missing-request-hash-header": "La requête ne vient pas de Safe Exam Browser.",
-  "config-key-mismatch": "La configuration de Safe Exam Browser n'est pas celle de ce devoir.",
-  "browser-exam-key-mismatch":
-    "La version de Safe Exam Browser utilisée n'est pas une de celles acceptées pour ce devoir.",
-  "no-browser-exam-key-configured":
-    "Ce devoir n'a aucune clé d'examen enregistrée ; prévenez l'enseignant.",
-  "missing-dev-header": "La requête ne vient pas de Safe Exam Browser.",
+const REFUSAL_MESSAGES: Record<SebRefusal, MessageKey> = {
+  "url-unreconstructible": "sebUrlUnreconstructible",
+  "missing-config-key-header": "sebNotFromSeb",
+  "missing-request-hash-header": "sebNotFromSeb",
+  "config-key-mismatch": "sebConfigKeyMismatch",
+  "browser-exam-key-mismatch": "sebBekMismatch",
+  "no-browser-exam-key-configured": "sebNoBek",
+  "missing-dev-header": "sebNotFromSeb",
 };
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
 /** The 403 "session outside SEB" page. Deliberately terse on the student side. */
-export function outsideSebPage(detail: string): string {
-  return `<!doctype html>
-<html lang="fr">
-<head><meta charset="utf-8"><title>Session hors Safe Exam Browser</title></head>
-<body>
-<h1>Session hors Safe Exam Browser</h1>
-<p>Cette épreuve ne peut être ouverte que depuis Safe Exam Browser, lancé par le
-lien fourni par l'enseignant.</p>
+export function outsideSebPage(lang: Lang, detail: string): string {
+  return layout(
+    lang,
+    t(lang, "outsideSebTitle"),
+    "",
+    `<p>${escapeHtml(t(lang, "outsideSebIntro"))}</p>
 <p>${escapeHtml(detail)}</p>
-<p>Si vous pensez que c'est une erreur, appelez le surveillant : ne recommencez
-pas depuis un autre navigateur.</p>
-</body>
-</html>
-`;
+<p>${escapeHtml(t(lang, "outsideSebHelp"))}</p>`,
+  );
 }
 
 /**
@@ -120,16 +119,13 @@ pas depuis un autre navigateur.</p>
  * statement could not be placed in the workspace. The student is not
  * redirected to an empty room — the invigilator is called.
  */
-export function workspacePage(detail: string): string {
-  return `<!doctype html>
-<html lang="fr">
-<head><meta charset="utf-8"><title>Épreuve indisponible</title></head>
-<body>
-<h1>Épreuve indisponible</h1>
-<p>${escapeHtml(detail)}</p>
-</body>
-</html>
-`;
+export function workspacePage(lang: Lang, cause: BootstrapCause): string {
+  return layout(
+    lang,
+    t(lang, "examUnavailableTitle"),
+    "",
+    `<p>${escapeHtml(t(lang, "examWorkspaceDetail", { cause: causeText(lang, cause) }))}</p>`,
+  );
 }
 
 function readCookie(header: string | undefined, name: string): string | undefined {
@@ -163,14 +159,17 @@ function serialiseCookie(
 async function sebRoutesPlugin(app: FastifyInstance, options: SebRoutesOptions): Promise<void> {
   const maxAgeMs = options.cookieMaxAgeMs ?? EXAM_COOKIE_DEFAULT_MAX_AGE_MS;
   const secure = options.cookieSecure ?? true;
+  const unknown = (request: FastifyRequest, reply: FastifyReply): FastifyReply =>
+    reply
+      .code(404)
+      .type("text/plain; charset=utf-8")
+      .send(`${t(requestLang(request), "unknownAssignment")}\n`);
 
   app.get<{ Params: { assignmentId: string } }>(
     "/exam/:assignmentId.seb",
     async (request, reply) => {
       const assignment = await options.lookup.find(request.params.assignmentId);
-      if (assignment === undefined) {
-        return reply.code(404).type("text/plain; charset=utf-8").send("Devoir inconnu\n");
-      }
+      if (assignment === undefined) return unknown(request, reply);
       const file = renderSebFile({
         startUrl: assignment.startUrl,
         quitUrl: assignment.quitUrl,
@@ -188,13 +187,15 @@ async function sebRoutesPlugin(app: FastifyInstance, options: SebRoutesOptions):
     },
   );
 
+  const onStart = options.onStart;
+  if (onStart === undefined) return;
+
   app.get<{ Params: { assignmentId: string } }>(
     "/exam/:assignmentId/start",
     async (request, reply) => {
+      const lang = requestLang(request);
       const assignment = await options.lookup.find(request.params.assignmentId);
-      if (assignment === undefined) {
-        return reply.code(404).type("text/plain; charset=utf-8").send("Devoir inconnu\n");
-      }
+      if (assignment === undefined) return unknown(request, reply);
 
       const verdict = options.verifier.verifyStart(
         { url: request.url, headers: request.headers },
@@ -220,12 +221,12 @@ async function sebRoutesPlugin(app: FastifyInstance, options: SebRoutesOptions):
         return reply
           .code(403)
           .type("text/html; charset=utf-8")
-          .send(outsideSebPage(REFUSAL_MESSAGES[verdict.reason]));
+          .send(outsideSebPage(lang, t(lang, REFUSAL_MESSAGES[verdict.reason])));
       }
 
       let outcome: StartOutcome;
       try {
-        outcome = await options.onStart({
+        outcome = await onStart({
           assignment,
           clientAddress: request.ip,
           request,
@@ -237,19 +238,12 @@ async function sebRoutesPlugin(app: FastifyInstance, options: SebRoutesOptions):
         // — the short cause is read structurally, not by type, which keeps the
         // boundary intact.
         const cause = (err as { shortCause?: unknown } | null)?.shortCause;
-        if (typeof cause !== "string") throw err;
+        if (!isBootstrapCause(cause)) throw err;
         request.log.warn(
           { seb: { assignmentId: assignment.id, clientAddress: request.ip }, cause },
           "exam start refused: workspace could not be prepared",
         );
-        return reply
-          .code(503)
-          .type("text/html; charset=utf-8")
-          .send(
-            workspacePage(
-              `Espace de travail impossible à préparer : ${cause} ; signalez-le au surveillant.`,
-            ),
-          );
+        return reply.code(503).type("text/html; charset=utf-8").send(workspacePage(lang, cause));
       }
 
       const cookie = issueExamCookie(
@@ -305,11 +299,14 @@ export function checkExamRequest(
 
 /** The proxy's single 403 response, so that the message does not vary with the route. */
 export function replyOutsideSeb(reply: FastifyReply, verdict: ExamCookieVerdict): FastifyReply {
-  const detail =
+  const lang = requestLang(reply.request);
+  const detail = t(
+    lang,
     verdict.ok === false && verdict.reason === "address-mismatch"
-      ? "Cette session a été ouverte depuis un autre poste."
-      : "Aucune session d'examen valide sur ce navigateur.";
-  return reply.code(403).type("text/html; charset=utf-8").send(outsideSebPage(detail));
+      ? "sebOtherMachine"
+      : "sebNoExamSession",
+  );
+  return reply.code(403).type("text/html; charset=utf-8").send(outsideSebPage(lang, detail));
 }
 
 export { readCookie as readExamCookieFrom };

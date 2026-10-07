@@ -97,13 +97,18 @@ export type CodespaceAssignmentSyncResult = z.infer<typeof CodespaceAssignmentSy
  * `userId` is the platform's id (the launch token's `sub`) when the account
  * came from a launch, so the platform can match it to its own users.
  */
+/** A workspace session's lifecycle on the portal (its `sessions.state`). */
+export const CODESPACE_SESSION_STATES = ["starting", "running", "stopped", "closed", "failed"] as const;
+export type CodespaceSessionState = (typeof CODESPACE_SESSION_STATES)[number];
+
 export const CodespaceSessionSummary = z.object({
   sessionId: z.string().min(1),
   userId: z.string().min(1),
   email: z.string(),
-  state: z.string().min(1),
+  state: z.enum(CODESPACE_SESSION_STATES),
   createdAt: IsoDate,
-  lastSeenAt: IsoDate.nullable(),
+  /** The last heartbeat of the proxy; set when the session is created. */
+  lastSeenAt: IsoDate,
   lastPushAt: IsoDate.nullable(),
 });
 export type CodespaceSessionSummary = z.infer<typeof CodespaceSessionSummary>;

@@ -20,7 +20,7 @@ container ──push──▶ portal 10.77.0.254:9418/git/<session>  (auth = sou
 | `staging.ts`      | creation and seeding of the bare staging repository (lab, exam, empty modes) |
 | `pushEvents.ts`   | `diffRefs`, `recordPush` (invariant 7), Drizzle store |
 | `relay.ts`        | background job, retry on error, token out of argv and off the disk |
-| `forge.ts`        | the `Forge` interface, `forgejo` and `github` implementations |
+| `forge.ts`        | the `Forge` interface, the `forgejo` forge and the unconfigured `github` one |
 | `fixtures.ts`     | shared test repositories (not a `*.test.ts`, therefore type-checked) |
 
 The `push_events` table: [`src/db/schema.ts`](../db/schema.ts).
@@ -183,13 +183,12 @@ by classroom is **private**, the anonymous `fetch` was refused, the failure
 swallowed, and the session opened on an empty workspace. `sessions/manager.ts`
 now refuses to start a session whose repository could not be retrieved.
 
-On the GitHub side, `createGithubForge` resolves the installation **per
-organisation** of the repository `owner` (`GET /orgs/{org}/installation`) and
-caches the one-hour token per installation, renewed one minute before it
-expires. No installation identifier in the configuration: one portal serves
-several classes.
+heig-classroom's App-backed GitHub forge (`createGithubForge`, an
+installation token per organisation) was not imported into Quiz: the portal
+refuses any GitHub App credential and relays nothing (ADR-047, M6-03
+amendment). Whether Quiz's own App reaches the engine VM is an ADR of
+M6-04/M6-05.
 
 ## What is left to do after V1
 
-- Nothing specific to this module. `createGithubForge` was exercised against
-  the real App on 2026-09-17 (docs/deploy.md § 5).
+- The GitHub relay, once that ADR settles it.

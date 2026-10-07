@@ -166,7 +166,7 @@ front end's. Without it the whole `address-mismatch` branch of this module is
 dead code — it compares `127.0.0.1` with `127.0.0.1` for every student. That
 was the state of the deployment until 2026-09-19 (audit M1); `loadConfig()`
 now refuses to start in production without the list. See
-[docs/deploy.md § 6](../../docs/deploy.md).
+heig-classroom's `apps/codespace/classroom's docs/deploy.md` § 6 (not imported; M6-04 writes Quiz's).
 
 ## The `.seb` file
 

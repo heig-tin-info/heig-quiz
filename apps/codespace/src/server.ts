@@ -33,7 +33,8 @@ import {
   type RelayWorker,
 } from "./git/index.js";
 import { proxyPlugin } from "./proxy/index.js";
-import { createSebVerifier, sebRoutes, sebStartPath, type AssignmentLookup } from "./seb/index.js";
+import { portalLogger, type LogStream } from "./logging.js";
+import { createSebVerifier, sebRoutes, type AssignmentLookup } from "./seb/index.js";
 import { createSessionManager, type SessionManager } from "./sessions/manager.js";
 import { findAssignment } from "./sessions/store.js";
 import { webRoutes } from "./web/routes.js";
@@ -41,9 +42,6 @@ import { webRoutes } from "./web/routes.js";
 export { loadConfig, type AppConfig } from "./auth/config.js";
 export { SESSION_COOKIE, cookieValue } from "./proxy/index.js";
 export { sessionCookieOptions } from "./web/routes.js";
-
-/** The route of `seb/routes.ts` this portal no longer serves (see below). */
-const STANDALONE_EXAM_START = "/exam/:assignmentId/start";
 
 export interface Portal {
   app: FastifyInstance;
@@ -66,8 +64,7 @@ export interface Portal {
  * App credential (root invariant 15: never heig-classroom's App), so the forge
  * serves what needs no token — the clone URL of a public repository — and the
  * relay and the seeding of a private repository refuse explicitly and by name.
- * `createGithubForge` stays in `git/forge.ts`, tested, for the day an ADR
- * puts Quiz's own App on the engine VM (M6-04/M6-05).
+ * Whether Quiz's own App reaches the engine VM is an ADR of M6-04/M6-05.
  */
 export function createForge(config: AppConfig): Forge | null {
   if (config.FORGE_KIND === "none") return null;
@@ -86,6 +83,8 @@ export interface BuildOptions {
   withGitServer?: boolean;
   /** Reconcile and start the timers. True by default. */
   withTimers?: boolean;
+  /** Where the log lines go (tests read them back); stdout otherwise. */
+  logStream?: LogStream;
 }
 
 export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
@@ -94,10 +93,10 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
   const db = handle.db;
 
   const app = Fastify({
-    logger: { level: config.LOG_LEVEL },
+    logger: portalLogger(config.LOG_LEVEL, options.logStream),
     // `TRUSTED_PROXY_IPS` is the production setting: a list of front-end
     // addresses, so `request.ip` is the student's address and not Caddy's
-    // (audit M1, docs/deploy.md § 6). It wins over the boolean `TRUST_PROXY`,
+    // (audit M1, classroom's docs/deploy.md § 6). It wins over the boolean `TRUST_PROXY`,
     // which is development only — it makes `request.ip` controllable by
     // anyone through `X-Forwarded-For`, which an end-to-end run (heig-classroom's `scripts/e2e.ts`, not imported: M6-04) needs in order
     // to simulate a second machine, and which `loadConfig` forbids in
@@ -184,11 +183,11 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
         id: row.id,
         configKey: row.configKey ?? "",
         beks: row.beks,
-        // An assignment synchronised from the platform carries its own
-        // `startURL`: it is the platform that authenticates the student and then
+        // Every assignment is synchronised from the platform and carries its
+        // own `startURL`: the platform authenticates the student and then
         // redirects to `/launch`. The Config Key was computed on that URL, so
-        // the `.seb` served here must reuse it as it is.
-        startUrl: seb.startUrl ?? new URL(sebStartPath(row.id), publicOrigin).href,
+        // the `.seb` served here reuses it as it is.
+        startUrl: seb.startUrl,
         quitUrl: seb.quitUrl ?? new URL("/", publicOrigin).href,
         examKeySalt: seb.examKeySalt,
         ...(seb.extraAllowedHosts ? { extraAllowedHosts: seb.extraAllowedHosts } : {}),
@@ -196,25 +195,16 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
     },
   };
 
-  // The standalone exam start (`/exam/:id/start` of `seb/routes.ts`) opened a
-  // session for the portal's own logged-in user; that login is gone, so an
-  // exam opens through `/launch` only, where the same verifier runs. The
-  // route stays in `seb/` (M6-07 moves the SEB code onto `packages/seb`) but
-  // answers 404 here, before any verification, like a route that does not
-  // exist.
-  app.addHook("onRequest", async (request, reply) => {
-    if (request.routeOptions.url === STANDALONE_EXAM_START) return reply.callNotFound();
-  });
-
+  // No `onStart`: the standalone exam start (`/exam/:id/start`) opened a
+  // session for the portal's own logged-in user, and that login is gone. The
+  // route is not registered; an exam opens through `/launch` only, where the
+  // same verifier runs. The `.seb` download stays.
   await app.register(sebRoutes, {
     lookup,
     verifier,
     cookieSecret: config.EXAM_COOKIE_SECRET,
     cookieSecure: config.NODE_ENV === "production",
     cookieMaxAgeMs: config.EXAM_COOKIE_MAX_AGE_MS,
-    onStart() {
-      throw new Error(`unreachable: ${STANDALONE_EXAM_START} answers 404 (no portal login)`);
-    },
   });
 
   // --- boundary with the platform ------------------------------------------
@@ -290,7 +280,7 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
 
 /** The bare portal, without database or engine: smoke test and start-up probe. */
 export function buildServer(): FastifyInstance {
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: portalLogger("info") });
   app.get("/healthz", async () => ({ ok: true }));
   return app;
 }

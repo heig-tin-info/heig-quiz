@@ -23,7 +23,6 @@ apps/web/public/runtimes
 # from the repository root. The language images are built on the runner VM
 # by apps/runner/images/build.sh, never from this context.
 apps/runner/images
-# apps/codespace is in the context only so the lockfile's workspace is whole;
-# no image built from here installs or copies it (the app image deploys
-# @quiz/api alone). Its student image is built on the engine VM (M6-04).
+# apps/codespace stays for pnpm: the frozen install needs every importer of
+# the lockfile. Its student image is not built from here.
 apps/codespace/images

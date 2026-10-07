@@ -82,7 +82,7 @@ beforeEach(async () => {
         image: "codespace/c-dev:4.137.0",
         uploadPack: true,
         beks: ["0".repeat(64)],
-        sebConfig: { examKeySalt: "salt" },
+        sebConfig: { examKeySalt: "salt", startUrl: "http://platform.test/start" },
         configKey: "0".repeat(64),
         createdAt: now,
       })

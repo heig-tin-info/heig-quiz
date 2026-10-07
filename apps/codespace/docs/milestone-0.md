@@ -1,5 +1,7 @@
 # Milestone 0 and portal v0: breakdown for agents
 
+> **In Quiz (M6-03).** History from heig-classroom: the portal's own OIDC login, its Start button, its teacher dashboard, its YAML seed and the GitHub relay described here are gone or off (ADR-047, M6-03 amendment); read *classroom* as the platform. The current rules are in `apps/codespace/CLAUDE.md`.
+
 Follow-up to [analyse.md](analyse.md). Every task has an input, an output and an executable acceptance criterion. Tasks P1 to P4 are independent and can be started in parallel; V1 assembles them. No graphical interface before V1, and V1 only has HTML pages served by Fastify.
 
 Manual prerequisites, done on 2026-09-17 on the development workstation: Podman 5.7 rootful, netavark, `containers` range in `/etc/subuid`, socket accessible to the `podman` group, remote connection by default. Procedure in [setup-workstation.md](setup-workstation.md).

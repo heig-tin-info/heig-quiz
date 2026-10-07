@@ -68,8 +68,8 @@ const EnvSchema = z.object({
    * Name of the AppArmor profile loaded on the host, not a path: Podman
    * resolves a `--security-opt apparmor=<name>` against the profiles the
    * kernel has loaded. `infra/apparmor/codespace` is the source,
-   * `deploy/bootstrap.sh` installs it into `/etc/apparmor.d/` and
-   * `deploy/push.sh` reloads it.
+   * classroom's `deploy/bootstrap.sh` installs it into `/etc/apparmor.d/` and
+   * classroom's `deploy/push.sh` reloads it.
    *
    * **Empty = the flag is not passed at all**, which is what a host without
    * AppArmor needs — the WSL2 development workstation, where `.env.example`
@@ -191,13 +191,13 @@ const EnvSchema = z.object({
    * at the first one that is not, so a client forging the header from the
    * outside gains nothing — its own hop to Caddy is not in the list.
    *
-   * Behind the Caddy of `deploy/Caddyfile`, which reverse-proxies to
+   * Behind the Caddy of classroom's `deploy/Caddyfile`, which reverse-proxies to
    * 127.0.0.1:3100 and appends `X-Forwarded-For` by default, the value is
    * `127.0.0.1`. Empty (no front end), `request.ip` is the socket address, as
    * it should be.
    *
    * Why it is not optional in production: the `exam_session` cookie is bound
-   * to `request.ip` (analyse.md D5, docs/deploy.md § 6). With every request
+   * to `request.ip` (analyse.md D5, classroom's docs/deploy.md § 6). With every request
    * arriving from 127.0.0.1, that binding compares 127.0.0.1 with 127.0.0.1
    * for everyone, and a stolen cookie replayed from another workstation is
    * accepted. `loadConfig` refuses to start rather than run an exam on a check
@@ -257,7 +257,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     if (data.TRUST_PROXY) {
       throw new Error("Invalid configuration: TRUST_PROXY is a development setting");
     }
-    // Audit M1 of 2026-09-18, docs/deploy.md § 6. Behind a front end without
+    // Audit M1 of 2026-09-18, classroom's docs/deploy.md § 6. Behind a front end without
     // this list, `request.ip` is the front end's address for every student and
     // the address binding of the `exam_session` cookie can never fire. It is
     // written as a conjunction with the verifier rather than alone because it
@@ -267,8 +267,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     if (data.TRUSTED_PROXY_IPS.length === 0 && data.SEB_VERIFIER === "real") {
       throw new Error(
         "Invalid configuration: TRUSTED_PROXY_IPS is required in production " +
-          "(set it to 127.0.0.1 behind the Caddy of deploy/Caddyfile); without it " +
-          "the exam cookie's address binding is void — see docs/deploy.md § 6",
+          "(127.0.0.1 behind a local reverse proxy such as Caddy); without it " +
+          "the exam cookie's address binding is void",
       );
     }
     // Invariant 8: the deep guard is in `createSebVerifier`; this one makes

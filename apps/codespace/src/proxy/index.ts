@@ -25,6 +25,8 @@ import type { SessionRow } from "../db/schema.js";
 import { checkExamRequest, replyOutsideSeb } from "../seb/index.js";
 import type { SessionManager } from "../sessions/manager.js";
 import { findAssignment, findSession } from "../sessions/store.js";
+import { requestLang, t, type MessageKey } from "../web/i18n.js";
+import { errorPage } from "../web/pages.js";
 
 /** Name of the codespace session cookie; carried with `Path=/s/<id>`. */
 export const SESSION_COOKIE = "cs_session";
@@ -56,14 +58,13 @@ export function parseCookieValue(
   return { sessionId: raw.slice(0, dot), token: raw.slice(dot + 1) };
 }
 
-function deny(reply: FastifyReply, code: number, title: string, detail: string): FastifyReply {
+/** A refusal page in the reader's language (`web/i18n.ts`). */
+function deny(reply: FastifyReply, code: number, title: MessageKey, detail: MessageKey): FastifyReply {
+  const lang = requestLang(reply.request);
   return reply
     .code(code)
     .type("text/html; charset=utf-8")
-    .send(
-      `<!doctype html><html lang="fr"><meta charset="utf-8"><title>${title}</title>` +
-        `<h1>${title}</h1><p>${detail}</p><p><a href="/">Retour au portail</a></p>`,
-    );
+    .send(errorPage(lang, t(lang, title), t(lang, detail)));
 }
 
 /** A request on exactly `/s/<id>/`: the student's page reload. */
@@ -83,7 +84,7 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
     const sessionId = (request.params as { sid?: string }).sid ?? "";
     let session: SessionRow | undefined = findSession(db, sessionId);
     if (!session) {
-      return deny(reply, 404, "Session inconnue", "Cette session n'existe pas ou plus.");
+      return deny(reply, 404, "sessionUnknownTitle", "sessionUnknownDetail");
     }
 
     const parsed = parseCookieValue(request.cookies[SESSION_COOKIE]);
@@ -95,14 +96,14 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
       return deny(
         reply,
         403,
-        "Session non autorisée",
-        "Ouvrez la session depuis le portail : ce navigateur n'a pas de cookie pour elle.",
+        "sessionDeniedTitle",
+        "sessionDeniedDetail",
       );
     }
 
     const assignment = findAssignment(db, session.assignmentId);
     if (!assignment) {
-      return deny(reply, 404, "Devoir inconnu", "Le devoir de cette session a disparu.");
+      return deny(reply, 404, "unknownAssignment", "assignmentGoneDetail");
     }
 
     // Exam mode: the SEB cookie, and it alone (invariant 5). A client address
@@ -131,8 +132,8 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
       return deny(
         reply,
         410,
-        "Session fermée",
-        "Cette session a été fermée. Rouvrez-la depuis la plateforme ; votre travail est conservé.",
+        "sessionClosedTitle",
+        "sessionClosedDetail",
       );
     }
 
@@ -149,13 +150,13 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
         return deny(
           reply,
           502,
-          "Session indisponible",
-          "Le conteneur n'a pas pu être relancé. Votre volume est intact ; réessayez.",
+          "sessionUnavailableTitle",
+          "sessionRestartFailed",
         );
       }
     }
     if (!session.containerIp) {
-      return deny(reply, 502, "Session indisponible", "Le conteneur n'a pas d'adresse.");
+      return deny(reply, 502, "sessionUnavailableTitle", "sessionNoAddress");
     }
     upstreams.set(sessionId, `http://${session.containerIp}:8080`);
     // Heartbeat: it is the proxy that keeps `lastSeen`, so an open tab is

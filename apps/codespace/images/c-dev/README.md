@@ -65,7 +65,7 @@ APPARMOR= images/c-dev/test.sh
 or spelled out as `podman --remote --url unix:///run/podman/podman.sock build …`.
 Without `--remote` the binary silently falls back to local rootless mode and builds
 into another store. Add `-t codespace/c-dev:latest` to get the floating tag as
-well, which is what `deploy/push.sh` does.
+well, which is what classroom's `deploy/push.sh` does.
 
 `run-hardened.sh` accepts `CTR_NAME`, `VOL_DIR`, `IMAGE`, `NETWORK`,
 `SECCOMP`, `APPARMOR`, `PODMAN_URL`, `EXTRA_ARGS`. It writes the container
@@ -77,8 +77,8 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
 
 - **Add an apt package**: add it to the `apt-get install` list of the `Containerfile` (step 1), add its binary to the presence assertion of `test.sh` § 7 (`test -x /usr/bin/…`), and add a row to the pinned-versions table above.
 - **Add an extension**: one `ARG` for its identifier, one `--install-extension` in the same `RUN`, one `grep -qi "^<id>@"` against `/etc/code-server/extensions.lock` so that the build fails if it is missing, its id in `extensions.allowed` of `settings.json`, the exact expected list asserted in `test.sh` § 3 (three ids, sorted), and a row in the pinned-versions table.
-- **Bump code-server**: `ARG CS_VERSION` in the `Containerfile`, then the tag `codespace/c-dev:4.137.0` wherever it is hard-coded — `.env.example` (`CODESPACE_IMAGE`, `CODESPACE_DEFAULT_IMAGE`), `src/auth/config.ts` (the defaults of those same two), `images/c-dev/run-hardened.sh`, `images/c-dev/test.sh`, `deploy/push.sh`, `deploy/bootstrap.sh`, `seed/assignments.yaml`, `CLAUDE.md`, `docs/deploy.md`, `docs/integration-classroom.md`, `src/git/README.md`, this README, and the tests that state it (`src/engine/index.test.ts`, `src/sessions/sessions.test.ts`, `src/sessions/containerEnv.test.ts`, `src/sessions/workspace.test.ts`, `src/proxy/proxy.test.ts`, `src/web/pages.test.ts`, `src/git/channel.integration.test.ts`).
-- **Deploy**: `deploy/push.sh --rebuild-image` rebuilds the image on the VM; without the flag it is only built there when the tag is missing.
+- **Bump code-server**: `ARG CS_VERSION` in the `Containerfile`, then the tag `codespace/c-dev:4.137.0` wherever it is hard-coded — `.env.example` (`CODESPACE_IMAGE`, `CODESPACE_DEFAULT_IMAGE`), `src/auth/config.ts` (the defaults of those same two), `images/c-dev/run-hardened.sh`, `images/c-dev/test.sh`, classroom's `deploy/push.sh`, classroom's `deploy/bootstrap.sh`, `seed/assignments.yaml`, `CLAUDE.md`, classroom's `docs/deploy.md`, `docs/integration-classroom.md`, `src/git/README.md`, this README, and the tests that state it (`src/engine/index.test.ts`, `src/sessions/sessions.test.ts`, `src/sessions/containerEnv.test.ts`, `src/sessions/workspace.test.ts`, `src/proxy/proxy.test.ts`, `src/web/pages.test.ts`, `src/git/channel.integration.test.ts`).
+- **Deploy**: classroom's `deploy/push.sh --rebuild-image` rebuilds the image on the VM; without the flag it is only built there when the tag is missing.
 - **Run `images/c-dev/test.sh`**: prerequisites are rootful Podman on `unix:///run/podman/podman.sock`, the image built, `python3` on the host (it fabricates the fake `.vsix`); no sudo. Its ten sections prove, in order:
   - § 0 the container starts under `run-hardened.sh` and answers `/healthz` (prints `MESURE_DEMARRAGE_SECONDES`);
   - § 1 `gdb` runs a program and produces a backtrace, with no "Operation not permitted";
@@ -599,8 +599,8 @@ sudo apparmor_parser -Q /etc/apparmor.d/codespace   # parse only, no load
 aa-status | grep codespace
 ```
 
-`deploy/bootstrap.sh` § 7bis does the install and the load, and
-`deploy/push.sh` reloads it right after the `infra/` rsync, so a change to the
+classroom's `deploy/bootstrap.sh` § 7bis does the install and the load, and
+classroom's `deploy/push.sh` reloads it right after the `infra/` rsync, so a change to the
 profile ships **without** `--bootstrap`. A container already running keeps the
 profile it was started with; the next session picks the new one up.
 
