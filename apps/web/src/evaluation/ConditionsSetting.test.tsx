@@ -2,7 +2,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import type { EvaluationDetail, EvaluationSettings } from "@quiz/contracts";
+import type { CourseCondition, EvaluationDetail, EvaluationSettings } from "@quiz/contracts";
 
 import { EVALUATION_ID, makeEvaluationDetail } from "../test/live-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
@@ -19,13 +19,20 @@ const withSettings = (settings: Partial<EvaluationSettings>): EvaluationDetail =
 
 function Harness({ detail, disabled = false }: { detail: EvaluationDetail; disabled?: boolean }) {
   const patch = useConfigPatch(evaluationTarget(EVALUATION_ID));
-  return <ConditionsSetting config={detail.evaluation} patch={patch} disabled={disabled} />;
+  return <ConditionsSetting config={detail.evaluation} courseId={detail.courseId} patch={patch} disabled={disabled} />;
 }
 
 const PATCH = `PATCH /app/api/evaluations/${EVALUATION_ID}`;
 const two = [
   { kind: "allowed" as const, text: "Notes" },
   { kind: "forbidden" as const, text: "Phones" },
+];
+const CATALOG = `GET /app/api/courses/${makeEvaluationDetail().courseId}/conditions`;
+const catalog: CourseCondition[] = [
+  { id: "11111111-1111-4111-8111-111111111111", kind: "allowed", text: "A dictionary", archivedAt: null },
+  { id: "22222222-2222-4222-8222-222222222222", kind: "forbidden", text: "Smartwatches", archivedAt: null },
+  // Archived: never offered.
+  { id: "44444444-4444-4444-8444-444444444444", kind: "info", text: "Retired line", archivedAt: "2026-01-01T00:00:00.000Z" },
 ];
 const lastPatch = (calls: { method: string; body: unknown }[]) => calls.filter((c) => c.method === "PATCH").at(-1)?.body;
 
@@ -93,5 +100,65 @@ describe("ConditionsSetting", () => {
     expect(screen.getByRole("textbox", { name: "Condition 1" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Actions on “Notes”" })).toBeNull();
     expect(screen.getByRole("button", { name: "Add" })).toBeDisabled();
+  });
+
+  describe("the course's catalog (F-ORG-16)", () => {
+    it("appends a ticked entry as a snapshot with its catalogId, and unticking removes it", async () => {
+      const detail = withSettings({ conditions: [{ ...two[0]!, catalogId: catalog[0]!.id }, two[1]!] });
+      const { calls } = mockFetch({ [PATCH]: ok(detail), [CATALOG]: ok(catalog) });
+      renderWithProviders(<Harness detail={detail} />);
+      const dictionary = await screen.findByRole("checkbox", { name: /A dictionary/ });
+      expect(dictionary).toBeChecked();
+      // The linked row says where it came from; the one-off row does not.
+      expect(screen.getAllByText("Catalog")).toHaveLength(1);
+      expect(screen.queryByText(/Retired line/)).toBeNull();
+
+      await userEvent.click(screen.getByRole("checkbox", { name: /Smartwatches/ }));
+      await waitFor(() =>
+        expect(lastPatch(calls)).toEqual({
+          settings: {
+            conditions: [
+              { ...two[0]!, catalogId: catalog[0]!.id },
+              two[1],
+              { kind: "forbidden", text: "Smartwatches", catalogId: catalog[1]!.id },
+            ],
+          },
+        }),
+      );
+      await userEvent.click(dictionary);
+      await waitFor(() => expect(lastPatch(calls)).toEqual({ settings: { conditions: [two[1]] } }));
+    });
+
+    it("shows a condition whose entry left the catalog as a one-off one, and keeps its catalogId", async () => {
+      const gone = "33333333-3333-4333-8333-333333333333";
+      const detail = withSettings({ conditions: [{ kind: "info", text: "Archived since", catalogId: gone }] });
+      const { calls } = mockFetch({ [PATCH]: ok(detail), [CATALOG]: ok(catalog) });
+      renderWithProviders(<Harness detail={detail} />);
+      expect(await screen.findByRole("checkbox", { name: /A dictionary/ })).not.toBeChecked();
+      expect(screen.queryByText("Catalog")).toBeNull();
+      await userEvent.click(screen.getByRole("checkbox", { name: /A dictionary/ }));
+      await waitFor(() =>
+        expect(lastPatch(calls)).toEqual({
+          settings: {
+            conditions: [
+              { kind: "info", text: "Archived since", catalogId: gone },
+              { kind: "allowed", text: "A dictionary", catalogId: catalog[0]!.id },
+            ],
+          },
+        }),
+      );
+    });
+
+    it("disables the unticked entries at 20 conditions, and says where the catalog is kept when empty", async () => {
+      const many = Array.from({ length: 20 }, (_, i) => ({ kind: "info" as const, text: `Line ${i}` }));
+      mockFetch({ [CATALOG]: ok(catalog) });
+      const { unmount } = renderWithProviders(<Harness detail={withSettings({ conditions: many })} />);
+      expect(await screen.findByRole("checkbox", { name: /A dictionary/ })).toBeDisabled();
+      unmount();
+
+      mockFetch({ [CATALOG]: ok([]) });
+      renderWithProviders(<Harness detail={withSettings({ conditions: two })} />);
+      expect(await screen.findByText(/The course has no catalog yet/)).toBeInTheDocument();
+    });
   });
 });

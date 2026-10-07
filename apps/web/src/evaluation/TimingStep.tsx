@@ -172,6 +172,7 @@ export function DateField({
  */
 export function ConfigSettings({
   config,
+  courseId,
   patch,
   presetOf,
   summary,
@@ -183,6 +184,8 @@ export function ConfigSettings({
   holdsCategorize = false,
 }: {
   config: ConfigView;
+  /** The course of the evaluation or the template: its catalog of conditions (F-ORG-16). */
+  courseId: string;
   patch: ConfigPatch;
   /** The body a preset card sends: an evaluation's carries dates, a template's cannot. */
   presetOf: (id: PresetId) => Parameters<ConfigPatch["mutate"]>[0];
@@ -296,7 +299,7 @@ export function ConfigSettings({
 
       {/* ADR-079: an exam or an exercise announces its conditions; a poll has none. */}
       {conditionsAllowedFor(mode) ? (
-        <ConditionsSetting config={config} closesAt={closesAt} patch={patch} disabled={disabled} />
+        <ConditionsSetting config={config} courseId={courseId} closesAt={closesAt} patch={patch} disabled={disabled} />
       ) : null}
 
       <AdvancedDisclosure
@@ -380,6 +383,7 @@ export function TimingStep({
 
       <ConfigSettings
         config={detail.evaluation}
+        courseId={detail.courseId}
         patch={patch}
         presetOf={(id) => presetPatch(id, mode)}
         summary={summary}

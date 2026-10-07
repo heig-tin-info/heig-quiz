@@ -53,6 +53,7 @@ import {
 } from "./pool";
 import {
   ME_TEACHER,
+  MOCK_CATALOG,
   classroomRoster,
   courses,
   roomOr404,
@@ -660,7 +661,14 @@ function seedEvaluations() {
   evaluations.push(
     // ADR-079: the draft exam announces its conditions (the editor's screenshot).
     makeEvaluation(room.id, "Quiz 1 — variables et types", "draft", 4, {
-      settings: { ...defaultEvaluationSettings(), conditions: MOCK_CONDITIONS },
+      // The first two were ticked in PRG1's catalog (F-ORG-16); the rest are one-off.
+      settings: {
+        ...defaultEvaluationSettings(),
+        conditions: MOCK_CONDITIONS.map((c, i) => {
+          const entry = MOCK_CATALOG.c1?.[i];
+          return i < 2 && entry ? { ...c, catalogId: entry.id } : c;
+        }),
+      },
     }),
     makeEvaluation(room.id, "Quiz 2 — boucles", "scheduled", 6, {
       opensAt: iso(2 * D),

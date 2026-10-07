@@ -2,14 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Archive, EyeOff, School } from "lucide-react";
 import { useState } from "react";
 
-import type { CourseDetail, CourseSummary } from "@quiz/contracts";
+import type { CourseCondition, CourseDetail, CourseSummary } from "@quiz/contracts";
 import { courseRoleAllows } from "@quiz/domain";
 
 import { api } from "../api";
 import { useT } from "../i18n";
 import type { Route } from "../router";
 import { Badge, cx, ToggleChip } from "../ui";
-import { courseKey, coursesKey } from "../queryKeys";
+import { courseConditionsKey, courseKey, coursesKey } from "../queryKeys";
 
 /**
  * The pieces of a course that its two readings share: the card on the
@@ -52,6 +52,18 @@ export function useCourseDetail(courseId: string) {
   return useQuery<CourseDetail>({
     queryKey: courseKey(courseId),
     queryFn: () => api(`/app/api/courses/${courseId}`),
+  });
+}
+
+/**
+ * The course's catalog of conditions (F-ORG-16): every entry, the active
+ * ones first; a reader filters on `archivedAt` (the editor offers the
+ * active ones, the Conditions tab shows both).
+ */
+export function useCourseConditions(courseId: string) {
+  return useQuery<CourseCondition[]>({
+    queryKey: courseConditionsKey(courseId),
+    queryFn: () => api(`/app/api/courses/${courseId}/conditions`),
   });
 }
 

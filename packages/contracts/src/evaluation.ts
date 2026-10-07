@@ -153,7 +153,7 @@ export type ConditionKind = z.infer<typeof ConditionKind>;
  * One condition the teacher announces (ADR-079, F-EVAL-33): a SNAPSHOT of
  * plain text, never translated, never rendered as markdown or HTML.
  * `catalogId` names the entry of the course's catalog it was copied from
- * (planned, ADR-079 §5); the text stays the snapshot whatever the catalog
+ * (`course_conditions`, ADR-079 §5); the text stays the snapshot whatever the catalog
  * does after. Staff only: the student views carry the kind and the text.
  */
 export const EvaluationCondition = z.object({

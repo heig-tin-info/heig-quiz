@@ -17,6 +17,8 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+import { CONDITION_KINDS } from "@quiz/domain";
+
 import { users } from "./auth.js";
 
 /**
@@ -170,4 +172,36 @@ export const userCoursePrefs = pgTable(
     hiddenAt: timestamp("hidden_at", { withTimezone: true }),
   },
   (t) => [primaryKey({ columns: [t.userId, t.courseId] })],
+);
+
+/**
+ * A course's catalog of conditions (ADR-079 §5, F-ORG-16): the frequent
+ * conditions its staff picks from when announcing an evaluation's. Every
+ * member writes it (ADR-068 §3). An entry is archived, never deleted: an
+ * evaluation that copied one keeps its `catalogId`, and the copy is a
+ * SNAPSHOT — editing or archiving the entry never changes it. Staff data:
+ * no student view ever reads this table.
+ *
+ * `position` orders the entries of one course; gaps are harmless, a new or
+ * unarchived entry goes last.
+ */
+export const courseConditions = pgTable(
+  "course_conditions",
+  {
+    id: uuid("id").primaryKey(),
+    courseId: uuid("course_id")
+      .notNull()
+      .references(() => courses.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: CONDITION_KINDS }).notNull(),
+    text: text("text").notNull(),
+    position: integer("position").notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("course_conditions_course_idx").on(t.courseId, t.position),
+    // The contract's rule (`EvaluationCondition.text`), kept by the database too.
+    check("course_conditions_text_ck", sql`char_length(${t.text}) between 1 and 200`),
+  ],
 );

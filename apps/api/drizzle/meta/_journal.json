@@ -568,6 +568,13 @@
       "when": 1791386655741,
       "tag": "0080_seb_projects",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1791402166780,
+      "tag": "0081_course_conditions",
+      "breakpoints": true
     }
   ]
 }

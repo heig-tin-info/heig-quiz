@@ -9,7 +9,7 @@ export type ClassroomQueryTab = "roster" | "evaluations" | "drill";
  * The tabs of a course's page (F-ORG-12), each a path of its own
  * (`/courses/:id/<tab>`); the classrooms are the bare `/courses/:id`.
  */
-export const COURSE_TABS = ["classrooms", "templates", "pools", "members", "settings"] as const;
+export const COURSE_TABS = ["classrooms", "templates", "pools", "members", "conditions", "settings"] as const;
 export type CourseTab = (typeof COURSE_TABS)[number];
 const isCourseTab = (s: string | undefined): s is CourseTab =>
   (COURSE_TABS as readonly (string | undefined)[]).includes(s);

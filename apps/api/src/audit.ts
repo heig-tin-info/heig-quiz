@@ -54,6 +54,17 @@ export type AuditAction =
   | "course.staff_role_change"
   | "course.update"
   /**
+   * The course's catalog of conditions (F-ORG-16, ADR-079 §5), written by
+   * any staff member; subject the course, `payload.conditionId`. `create`:
+   * `payload.kind`, `payload.text`; `update`: `payload.from` and
+   * `payload.to` (`{ kind, text }`); `archive` / `unarchive`:
+   * `payload.text`. A reorder is not traced: it changes no wording.
+   */
+  | "course.condition_create"
+  | "course.condition_update"
+  | "course.condition_archive"
+  | "course.condition_unarchive"
+  /**
    * The online workspace (ADR-047, M6-06). `launch_issued`: a student's
    * launch token minted by the start route (subject the project;
    * `payload.jti`, `payload.mode` and, from a `seb` session, `payload.seb:

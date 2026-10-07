@@ -5,8 +5,9 @@
 Accepted (2026-10-07, decided by the product owner in conversation on
 issue #584, "Manque un laïus sur les conditions de l'évaluation").
 Requirement F-EVAL-33. Delivered in three pull requests: the conditions
-themselves (this record's §1–§4, §6), the per-course catalog (§5) and the
-trusted-client gap (§7). Check the code for what has shipped.
+themselves (this record's §1–§4, §6), the per-course catalog (§5, shipped:
+see its as-built note) and the trusted-client gap (§7). Check the code for
+what has shipped.
 
 Scope: `EvaluationSettings.conditions`, the derivation `imposedConditions`
 (`packages/domain/src/evaluationConditions.ts`), the student views that carry
@@ -60,12 +61,27 @@ a text that changes after the exam leaves no record of what was announced.
    templates and classroom duplicates copy settings, so they carry the
    conditions; a template pull (F-EVAL-26) keeps the instance's settings and
    therefore does not bring them, and its confirmation says so.
-5. **A per-course catalog (planned).** Frequent conditions are kept in a
+5. **A per-course catalog.** Frequent conditions are kept in a
    catalog of the course, managed by every staff member (ADR-068 §3), with
    archiving only, never deletion; picking an entry copies its text into the
-   evaluation (the snapshot of §1) and records `catalogId`. Until it ships
-   the editor creates one-off conditions and preserves a `catalogId` it
-   finds. `catalogId` is staff data: no student view carries it.
+   evaluation (the snapshot of §1) and records `catalogId`. The editor
+   creates one-off conditions too, and preserves a `catalogId` it finds.
+   `catalogId` is staff data: no student view carries it.
+
+   *As built (2026-10-07, PR 2 of #584):* the table `course_conditions`
+   (`org` module: `kind`, `text` 1..200, `position`, `archived_at`) and the
+   routes `/courses/:id/conditions` (list: every entry, the active ones
+   first, the client filtering on `archivedAt`; create; `PATCH /:cid`; `PUT /order` with every active id once, else
+   `409 stale_order`; `POST /:cid/archive|unarchive`, an unarchived entry
+   going last), loaded under `staffAccess` with no role step. Audited as
+   `course.condition_create|update|archive|unarchive`; a reorder is not.
+   The course page has a Conditions tab ("Add condition" its primary); the
+   settings editor of an evaluation or a template lists the active entries
+   of its course as checkboxes — ticking appends `{ kind, text, catalogId }`,
+   unticking removes the entry with that id — and an entry whose
+   `catalogId` is not in the active catalog shows as a one-off condition.
+   No student route reads the table (tested on the waiting room, the ready
+   screen and the attempt).
 6. **One renderer, two blocks.** The student reads "Announced by your
    teacher" first, in the teacher's order, then "Imposed by the platform", in
    the fixed order. Every line carries its kind as an icon AND a word, never

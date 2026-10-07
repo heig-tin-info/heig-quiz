@@ -37,6 +37,7 @@ import {
   AttemptInspect,
   AttemptOrLobby,
   ByQuestion,
+  CourseCondition,
   CourseDetail,
   DashboardView,
   DrillClassroom,
@@ -294,6 +295,7 @@ const each = (route: string, path: string, schema: Schema): Case => ({
 
 const CHECKED: Case[] = [
   one("/app/api/courses/:id", `/app/api/courses/${courses[0]!.id}`, CourseDetail),
+  each("/app/api/courses/:id/conditions", `/app/api/courses/${courses[0]!.id}/conditions`, CourseCondition),
   each(
     "/app/api/courses/:id/templates",
     `/app/api/courses/${courses[0]!.id}/templates`,
