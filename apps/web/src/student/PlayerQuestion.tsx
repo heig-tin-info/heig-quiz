@@ -1,6 +1,7 @@
 import { memo, useCallback } from "react";
 import { Check, Lock, Minus } from "lucide-react";
 
+import type { CanvasShortcutsListener } from "@quiz/core/client";
 import type { AnswerMark } from "@quiz/domain";
 import type {
   CodeAnswer,
@@ -38,6 +39,7 @@ export const PlayerQuestion = memo(function PlayerQuestion({
   run,
   simulate,
   onUnsent,
+  onCanvasShortcuts,
 }: {
   itemId: string;
   type: string;
@@ -49,6 +51,8 @@ export const PlayerQuestion = memo(function PlayerQuestion({
   simulate: (itemId: string, answer: unknown) => Promise<RunResult>;
   /** The player holds an edit it does not send: the badge must not say "Saved". */
   onUnsent: (unsent: boolean) => void;
+  /** Stable: a focused canvas's keys, for the side column (`PlayerProps.onCanvasShortcuts`). */
+  onCanvasShortcuts?: CanvasShortcutsListener;
 }) {
   const onChange = useCallback(
     (payload: unknown) => setAnswer(itemId, payload, isAnswered(type, payload)),
@@ -96,6 +100,7 @@ export const PlayerQuestion = memo(function PlayerQuestion({
       onChange={onChange}
       readOnly={readOnly}
       onUnsent={onUnsent}
+      {...(onCanvasShortcuts ? { onCanvasShortcuts } : {})}
       // The room a canvas needs (ADR-046 §6); every type but `diagram` ignores it.
       Expand={ExpandLayer}
       {...(type === "code" ? { allowManualRun: true, onRun: runCodeAnswer } : {})}

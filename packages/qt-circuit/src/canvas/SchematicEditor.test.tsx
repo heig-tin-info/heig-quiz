@@ -2,6 +2,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { CanvasShortcutsListener } from "@quiz/core/client";
+
 import { Schematic, type Palette, type Supplies } from "../schema.js";
 
 import { SchematicEditor } from "./SchematicEditor.js";
@@ -60,12 +62,14 @@ function Harness({
   supplies = SUPPLIES,
   readOnly = false,
   onChange,
+  onShortcuts,
 }: {
   initial?: Schematic;
   palette?: Palette;
   supplies?: Supplies;
   readOnly?: boolean;
   onChange?: (next: Schematic) => void;
+  onShortcuts?: CanvasShortcutsListener;
 }) {
   const [value, setValue] = useState(initial);
   return (
@@ -78,6 +82,7 @@ function Harness({
       palette={palette}
       supplies={supplies}
       readOnly={readOnly}
+      onShortcuts={onShortcuts}
     />
   );
 }
@@ -468,5 +473,26 @@ describe("the strings", () => {
     );
     expect(screen.getByRole("button", { name: "Fil" })).toBeInTheDocument();
     expect(screen.getByText("Composants")).toBeInTheDocument();
+  });
+});
+
+describe("the shortcut zone (issue #549)", () => {
+  it("lends its lines while it has the focus, and none when read-only", () => {
+    const publish = vi.fn();
+    const { unmount } = render(<Harness onShortcuts={publish} />);
+    fireEvent.focus(screen.getByRole("group", { name: "Schematic editor" }));
+    expect(publish).toHaveBeenLastCalledWith(expect.arrayContaining([{ keys: ["1–9"], label: "Pick a part" }]));
+    unmount();
+    publish.mockClear();
+    render(<Harness readOnly onShortcuts={publish} />);
+    fireEvent.focus(screen.getByRole("group", { name: "Schematic editor" }));
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it("arms, on digit N, the palette button that says N", () => {
+    render(<Harness />);
+    fireEvent.keyDown(screen.getByRole("group", { name: "Schematic editor" }), { key: "2" });
+    const pressed = screen.getAllByRole("button", { pressed: true }).filter((b) => b.hasAttribute("aria-keyshortcuts"));
+    expect(pressed.map((b) => b.getAttribute("aria-keyshortcuts"))).toEqual(["2"]);
   });
 });

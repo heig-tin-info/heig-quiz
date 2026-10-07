@@ -34,6 +34,10 @@ export interface CanvasStrings {
   undo: string;
   redo: string;
   fit: string;
+  /** The shortcut zone's lines (`SHORTCUT_LINES`); W and Del reuse `toolWire` and `remove`. */
+  shortcutUndoRedo: string;
+  shortcutTransform: string;
+  shortcutPart: string;
 
   inspector: string;
   fieldName: string;
@@ -94,6 +98,9 @@ export const CANVAS_STRINGS: CanvasStrings = {
   undo: "Undo",
   redo: "Redo",
   fit: "Fit to view",
+  shortcutUndoRedo: "Undo / Redo",
+  shortcutTransform: "Rotate / Mirror",
+  shortcutPart: "Pick a part",
 
   inspector: "Selection",
   fieldName: "Name",

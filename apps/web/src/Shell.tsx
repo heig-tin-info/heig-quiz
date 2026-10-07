@@ -32,14 +32,13 @@ import {
 } from "./CourseNav";
 import type { NavCycle } from "./navTree";
 import { PoolNavTree, usePoolNavState } from "./pool/PoolNav";
-import { shortcutCaps, useActiveShortcuts, useGlobalShortcuts } from "./shortcuts";
+import { ShortcutKeys, useActiveShortcuts, useGlobalShortcuts } from "./shortcuts";
 import { setThemeChoice, useResolvedTheme, useThemeChoice } from "./theme";
 import { SECTION_ROOTS } from "./Trail";
 import {
   Button,
   cx,
   IconButton,
-  Kbd,
   modKey,
   pageColumnVars,
   Tip,
@@ -416,11 +415,7 @@ function ShortcutStrip() {
       <ul className="space-y-1">
         {shortcuts.map((shortcut, i) => (
           <li key={`${shortcut.keys}-${shortcut.label}-${i}`} className="flex items-center gap-2">
-            <span className="flex shrink-0 items-center gap-0.5">
-              {shortcutCaps(shortcut.keys).map((cap, j) => (
-                <Kbd key={`${cap}-${j}`}>{cap}</Kbd>
-              ))}
-            </span>
+            <ShortcutKeys shortcut={shortcut} />
             <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">{shortcut.label}</span>
           </li>
         ))}

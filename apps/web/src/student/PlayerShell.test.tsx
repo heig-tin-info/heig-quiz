@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 
+import { resetShortcuts, useShortcuts } from "../shortcuts";
 import { renderWithProviders } from "../test/render";
 import { PlayerShell } from "./PlayerShell";
 
@@ -39,5 +41,52 @@ describe("the zen player's frame", () => {
     expect(container.querySelector("aside")).toBeNull();
     expect(container.querySelector("header > div")).toHaveClass("max-w-190", "lg:max-w-400");
     expect(container.querySelector("main")!.parentElement).toHaveClass("max-w-190", "lg:max-w-400");
+  });
+});
+
+/*
+ * The keys a focused canvas lends (issue #549): under the move keys of the
+ * side column, and only those — the column is no live strip of the page.
+ */
+describe("the side column's canvas keys", () => {
+  afterEach(() => resetShortcuts());
+
+  const CANVAS = [
+    { keys: "Ctrl+Z", alternatives: ["Ctrl+Y"], label: "Undo / Redo" },
+    { keys: "Del", label: "Delete" },
+  ];
+
+  /** The player's own keys, registered as `usePlayerControls` does. */
+  function Question() {
+    useShortcuts([{ keys: "Ctrl+Enter", label: "Validate and continue" }]);
+    return <p>question</p>;
+  }
+
+  it("lists what the canvas lent under Alt + arrows, and nothing the page registered", () => {
+    const { container } = renderWithProviders(
+      <PlayerShell title="Test 1" deadlineAt={null} aside={<p>list</p>} asideShortcuts={CANVAS}>
+        <Question />
+      </PlayerShell>,
+    );
+    const aside = container.querySelector("aside")!;
+    const keys = within(aside).getByRole("list", { name: "Shortcuts" });
+    expect(within(keys).getAllByRole("listitem").map((el) => el.textContent)).toEqual([
+      "CtrlZ/CtrlYUndo / Redo",
+      "DelDelete",
+    ]);
+    // Under the move keys.
+    expect(aside.textContent!.indexOf("to move between questions")).toBeLessThan(
+      aside.textContent!.indexOf("Undo / Redo"),
+    );
+    expect(aside).not.toHaveTextContent("Validate and continue");
+  });
+
+  it("shows them nowhere without the side column", () => {
+    renderWithProviders(
+      <PlayerShell title="Test 1" deadlineAt={null} asideShortcuts={CANVAS}>
+        <Question />
+      </PlayerShell>,
+    );
+    expect(screen.queryByText("Undo / Redo")).toBeNull();
   });
 });

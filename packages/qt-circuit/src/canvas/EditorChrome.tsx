@@ -186,7 +186,7 @@ export function PaletteRail({
         <span className={paletteCount}>{fmt(s.componentCount, { used, max })}</span>
       </div>
       <div className={paletteGrid}>
-        {kinds.map((kind) => {
+        {kinds.map((kind, i) => {
           const disabled = full && !isTerminal(kind);
           const armed = mode === "place" && placeKind === kind;
           return (
@@ -197,6 +197,8 @@ export function PaletteRail({
               aria-pressed={armed}
               aria-label={s.kind(kind)}
               title={s.kind(kind)}
+              // The digit that arms it from the keyboard (`DIGIT` in useSelection.ts).
+              aria-keyshortcuts={i < 9 ? String(i + 1) : undefined}
               disabled={disabled}
               onPointerDown={(e) => {
                 if (e.button !== 0 || disabled) return;

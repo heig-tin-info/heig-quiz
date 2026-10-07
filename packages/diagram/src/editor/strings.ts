@@ -20,6 +20,9 @@ export const diagramStrings = {
   duplicate: "Duplicate",
   remove: "Delete",
   swap: "Reverse the direction",
+  /* the shortcut zone's lines (`SHORTCUT_LINES`); I and Del reuse `swap` and `remove` */
+  shortcutUndoRedo: "Undo / Redo",
+  shortcutTool: "Pick a tool",
   /* the element tools */
   "tool.class": "Class",
   "tool.actor": "Actor",

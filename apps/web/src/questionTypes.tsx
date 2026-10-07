@@ -25,7 +25,13 @@
 import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
 
 import type { TryResult } from "@quiz/contracts";
-import type { ConfigIssue, ExpandProps, ReviewSections, RichTextComponent } from "@quiz/core/client";
+import type {
+  CanvasShortcutsListener,
+  ConfigIssue,
+  ExpandProps,
+  ReviewSections,
+  RichTextComponent,
+} from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 import {
   clientRegistry,
@@ -115,6 +121,7 @@ import { MarkdownView } from "./markdown/MarkdownView";
 import { EditorExpandLayer } from "./question/EditorExpandLayer";
 import { BrowserRunnerUnavailable, runnerFor } from "./runner";
 import { imageReferenceRunRequest, referenceRunRequest } from "./runner/codeRun";
+import { useLentCanvasShortcuts, useShortcuts } from "./shortcuts";
 import { ScrollableCode, Skeleton, type IconType } from "./ui";
 
 /**
@@ -589,6 +596,8 @@ interface EditorHostProps {
   /** `diagram` and `circuit`: the layer a canvas expands into (`EditorProps.Expand`). */
   Expand?: ComponentType<ExpandProps>;
   onGenerateItem?: (index: number) => Promise<void>;
+  /** `diagram` and `circuit`: the sidebar strip a focused canvas lends its keys to. */
+  onCanvasShortcuts?: CanvasShortcutsListener;
 }
 
 /**
@@ -656,6 +665,10 @@ export function QuestionEditorHost({
   /** The wand of one element of the type's list (`EditorProps.onGenerateItem`, ADR-059). */
   onGenerateItem?: (index: number) => Promise<void>;
 }) {
+  // A focused canvas (the reference, the starter) lends its keys to the
+  // sidebar strip, on top of the page's, like a rich-text field (issue #549).
+  const [canvasKeys, onCanvasShortcuts] = useLentCanvasShortcuts();
+  useShortcuts(canvasKeys ?? [], canvasKeys !== null);
   const client = questionType(type);
   if (!client) return <Unknown>{t("qt.unknown")}</Unknown>;
   const Editor = client.Editor as unknown as ComponentType<EditorHostProps>;
@@ -685,6 +698,7 @@ export function QuestionEditorHost({
         // Every editor host lends the layer; the save state in its bar is the
         // question editor's (`EditorExpandChrome`), absent elsewhere.
         Expand={EditorExpandLayer}
+        onCanvasShortcuts={onCanvasShortcuts}
       />
     </Suspense>
   );

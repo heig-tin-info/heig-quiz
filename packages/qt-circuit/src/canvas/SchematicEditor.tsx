@@ -35,25 +35,26 @@
  *   byId · useWireDrawing [useState draft · useCallback finishWire, wireClick,
  *   cancelStep, wireUnder · useMemo draftPoints] · useCallback undo, redo ·
  *   usePointerTools [useCallback onPointerDown, onPointerMove, onPointerUp] ·
- *   useCallback onKeyDown · useMemo selectedComponent · useState nameDraft ·
- *   useRef editing · useCallback editComponent.
+ *   useCallback onKeyDown · useCanvasShortcuts [useRef inside, shown,
+ *   listener · useEffect ×3] · useMemo selectedComponent · useState
+ *   nameDraft · useRef editing · useCallback editComponent.
  */
 import { useCallback, useId, useMemo, useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import type { ComponentKind, PortId } from "../library.js";
 import { Schematic, countedComponents, type Palette, type SchematicComponent, type Supplies } from "../schema.js";
 
-import { resolveStrings } from "@quiz/core/client";
+import { resolveStrings, type CanvasShortcutsListener } from "@quiz/core/client";
 import { CANVAS_STRINGS, type CanvasStrings } from "./canvasStrings.js";
 import { canvasArea, cx, frame } from "./canvasStyles.js";
 import { Drawing, Inspector, PaletteRail, StatusBar, Toolbar, Transient } from "./EditorChrome.js";
 import { ORIENT_0, indexOf, newComponent, viewBoxAttr, type PinTarget } from "./geometry.js";
-import { useHistory } from "@quiz/ui";
+import { useCanvasShortcuts, useHistory } from "@quiz/ui";
 import { blockedCells, computeRoutes, withRoutes } from "./router.js";
 import { connectedPins, type FlaggedPin } from "./SchematicView.js";
 import { usePartDragging, type Ghost } from "./usePartDragging.js";
 import { usePointerTools, type Cursor } from "./usePointerTools.js";
-import { editorKey, isTerminal, keyActions, useSelection, type Mode } from "./useSelection.js";
+import { editorKey, isTerminal, keyActions, SHORTCUT_LINES, useSelection, type Mode } from "./useSelection.js";
 import { useViewport } from "./useViewport.js";
 import { useWireDrawing } from "./useWireDrawing.js";
 
@@ -79,6 +80,8 @@ export interface SchematicEditorProps {
   height?: number | "fill" | undefined;
   id?: string | undefined;
   "aria-label"?: string | undefined;
+  /** The host's shortcut zone (`EditorProps.onCanvasShortcuts`); never called when read-only. */
+  onShortcuts?: CanvasShortcutsListener | undefined;
 }
 
 export function SchematicEditor({
@@ -93,6 +96,7 @@ export function SchematicEditor({
   height = 420,
   id,
   "aria-label": ariaLabel,
+  onShortcuts,
 }: SchematicEditorProps): JSX.Element {
   const s = resolveStrings(CANVAS_STRINGS, strings);
   const reactId = useId();
@@ -187,6 +191,7 @@ export function SchematicEditor({
     },
     [draft, duplicate, kinds, mode, readOnly, redo, removeSelection, selection.size, setSelection, transformSelection, undo, value],
   );
+  const shortcutFocus = useCanvasShortcuts({ publish: onShortcuts, lines: SHORTCUT_LINES, strings: s, enabled: !readOnly });
 
   // --- the inspector -----------------------------------------------------
   const selectedComponent = useMemo(() => {
@@ -232,6 +237,7 @@ export function SchematicEditor({
       role="group"
       aria-label={label}
       onKeyDown={onKeyDown}
+      {...shortcutFocus}
     >
       <Toolbar
         strings={s} readOnly={readOnly} mode={mode} selection={selection} zoom={zoom}

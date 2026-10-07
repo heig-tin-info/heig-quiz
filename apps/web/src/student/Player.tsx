@@ -58,6 +58,7 @@ import { CalculatorDock } from "../calculator/CalculatorDock";
 import { currentItem, isLocked, neighbour, segmentsOf } from "../attempt/playerReducer";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
+import { useLentCanvasShortcuts } from "../shortcuts";
 import { Button, Card, Modal, useMinWidth } from "../ui";
 import { ConditionsList } from "./ConditionsList";
 import { ExpandChrome, type ExpandChromeValue } from "./ExpandLayer";
@@ -278,6 +279,8 @@ export function PlayerView({
   // on screen is not saved. The question keys this, and resets it on leaving.
   const [unsent, setUnsent] = useState(false);
   const [conditionsOpen, setConditionsOpen] = useState(false);
+  // A focused canvas's keys (issue #549), shown in the side column only.
+  const [canvasKeys, onCanvasShortcuts] = useLentCanvasShortcuts();
   const sync =
     unsent && (saverSync === "saved" || saverSync === "saving") ? "unsaved" : saverSync;
   const item = currentItem(state);
@@ -416,6 +419,7 @@ export function PlayerView({
           </>
         }
         {...(desktop ? {} : { footer: actions })}
+        {...(canvasKeys === null ? {} : { asideShortcuts: canvasKeys })}
         {...(rail
           ? {
               aside: (
@@ -461,6 +465,7 @@ export function PlayerView({
                 run={session.run}
                 simulate={session.simulate}
                 onUnsent={setUnsent}
+                onCanvasShortcuts={onCanvasShortcuts}
               />
             </Card>
             <QuestionTools

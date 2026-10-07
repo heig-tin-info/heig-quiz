@@ -163,6 +163,7 @@ export function CircuitPlayer({
   canvasStrings,
   renderMarkdown,
   Expand,
+  onCanvasShortcuts,
 }: CircuitPlayerProps) {
   const s = resolveStrings(PLAYER_STRINGS, strings);
   const locked = isLocked(readOnly, disabled);
@@ -275,6 +276,7 @@ export function CircuitPlayer({
               highlightPorts={highlightPorts}
               {...(expanded ? { height: "fill" as const } : {})}
               {...(canvasStrings === undefined ? {} : { strings: canvasStrings })}
+              onShortcuts={onCanvasShortcuts}
             />
             {/*
              * One line, never a panel: it sits UNDER the drawing and must not
