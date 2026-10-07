@@ -27,7 +27,8 @@ accepted ADR does not imply that its feature has shipped.
 
 The [repository map](docs/development/repository.md) owns the detailed layout.
 For orientation: `apps/api` is Fastify; `apps/web` is the React SPA;
-`apps/runner` executes question code. `packages/contracts` owns HTTP schemas,
+`apps/runner` executes question code; `apps/codespace` is the online workspace
+portal (its own `CLAUDE.md`). `packages/contracts` owns HTTP schemas,
 `packages/domain` pure rules, `packages/core` the question-type contracts,
 `packages/registry` their static wiring, `packages/qt-*` the types,
 `packages/diagram` the diagram engine and `packages/docrender` journal rendering.
@@ -40,8 +41,8 @@ entry points (`./server`, `./client`). Generic web primitives go in
 `apps/web/src/ui/`; `packages/ui` holds primitives shared by question types
 and must not import a `qt-*` package or `apps/web`. The accepted `ui-kit`
 extraction remains in ADR-035; do not create the superseded external npm
-library of ADR-029. `ui-kit`, then `canonical`, then `cli` (in this order) and
-`apps/codespace` are planned, not present; consult the relevant spec/task
+library of ADR-029. `ui-kit`, then `canonical`, then `cli` (in this order)
+are planned, not present; consult the relevant spec/task
 before implementing them.
 
 For UI work, read `apps/web/DESIGN.md` and `.claude/skills/quiz-ui/SKILL.md`.
@@ -123,7 +124,7 @@ Never work around these, not even "temporarily".
 These are already proven in the sibling project, and `apps/runner` implements
 them. Do not re-derive them, and do not relax one to make a test simpler.
 They bind `apps/runner`. The online workspace (`apps/codespace`, merge task
-M6-03) is not held to 11 and 12: it gets its own `CLAUDE.md` with its two
+M6-03) is not held to 11 and 12: it has its own `CLAUDE.md` with its two
 sanctioned divergences (a persistent work volume, a git channel on an
 internal bridge).
 

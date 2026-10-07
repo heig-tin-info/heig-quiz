@@ -1,0 +1,148 @@
+# heig-codespace student image: C, gdb, code-server.
+# Construite par : podman --remote --url unix:///run/podman/podman.sock \
+#                    build -t codespace/c-dev images/c-dev
+# Run by images/c-dev/run-hardened.sh (hardening is mandatory, CLAUDE.md invariant 3).
+
+# --- Stage 1: building the .vsix of the status-bar extension ----------------
+# Packaging only: the extension is plain JavaScript, with no dependency and no
+# bundler. `@vscode/vsce` is pinned; it is the only network access of this
+# stage and it leaves nothing in the final image, which only gets the .vsix.
+FROM docker.io/library/node:22-slim@sha256:4d676821dff059fd00d277ee4261ef34ea712317fed0737c03941481b5760c96 AS vsix
+ARG VSCE_VERSION=4.0.0
+ARG EXT_STATUSBAR_ID=heig.codespace-statusbar
+ARG EXT_STATUSBAR_VERSION=0.1.0
+WORKDIR /ext
+COPY extension/ /ext/
+# `--allow-missing-repository`: the extension is not published, it has no
+# repository of its own. Without that flag vsce refuses to package.
+RUN npx --yes "@vscode/vsce@${VSCE_VERSION}" package \
+        --allow-missing-repository \
+        --out "/${EXT_STATUSBAR_ID}-${EXT_STATUSBAR_VERSION}.vsix" && \
+    test -s "/${EXT_STATUSBAR_ID}-${EXT_STATUSBAR_VERSION}.vsix"
+
+# --- Stage 2: the student image ---------------------------------------------
+# Debian 13 "trixie", stable as of 2026-09-17, pinned by digest.
+FROM docker.io/library/debian:trixie-slim@sha256:abc9cb88a5587630d7f915f47b23b0668fe250fbfc6457aa4d52b534c1bbf73f
+
+# Pinned code-server version (GitHub release coder/code-server).
+ARG CS_VERSION=4.137.0
+# Open VSX extensions, pinned by identifier only: Open VSX does not guarantee
+# that an old version stays available. The version resolved at build time is
+# written to /etc/code-server/extensions.lock.
+ARG EXT_CLANGD=llvm-vs-code-extensions.vscode-clangd
+ARG EXT_DEBUG=webfreak.debug
+# Local extension, built by the `vsix` stage above: the portal status bar
+# (deadline countdown, return button). It is not published, so it is installed
+# from the .vsix and not from Open VSX.
+ARG EXT_STATUSBAR=heig.codespace-statusbar
+ARG EXT_STATUSBAR_VERSION=0.1.0
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8 \
+    TZ=Europe/Zurich
+
+# 0. The "slim" image excludes /usr/share/man through dpkg: we put it back
+#    BEFORE installing anything, otherwise manpages-dev is installed without
+#    its pages. The other exclusions (doc, locale, info) are kept.
+RUN printf 'path-include /usr/share/man/*\n' > /etc/dpkg/dpkg.cfg.d/heig-man-pages
+
+# 1. C toolchain, gdb, git, manual pages, clangd.
+#    curl and ca-certificates serve the .deb download and the /healthz
+#    acceptance test; procps and less the comfort of the terminal.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        gcc \
+        gdb \
+        make \
+        git \
+        man-db \
+        manpages-dev \
+        clangd \
+        libc6-dev \
+        binutils \
+        curl \
+        ca-certificates \
+        procps \
+        less && \
+    rm -rf /var/lib/apt/lists/*
+
+# 2. code-server from the GitHub release, pinned version.
+RUN curl -fsSL -o /tmp/code-server.deb \
+        "https://github.com/coder/code-server/releases/download/v${CS_VERSION}/code-server_${CS_VERSION}_amd64.deb" && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends /tmp/code-server.deb && \
+    rm -f /tmp/code-server.deb && \
+    rm -rf /var/lib/apt/lists/* && \
+    code-server --version
+
+# 3. student user, uid 1000. /work is the volume mount point.
+#    coder-logs is a link into the tmpfs: without it code-server throws at
+#    start-up trying to write its logs on the read-only root. The rest of
+#    ~/.local/share/code-server stays on the root, so the default extensions
+#    directory is not writable.
+RUN useradd --uid 1000 --create-home --shell /bin/bash student && \
+    mkdir -p /work /home/student/.cache /home/student/.local/share/code-server && \
+    ln -s /run/code-server/logs /home/student/.local/share/code-server/coder-logs && \
+    chown -R 1000:1000 /work /home/student
+
+# 4. Extensions preinstalled at build time from Open VSX (code-server's default
+#    gallery). The directory is on the root, hence read-only at run time: it is
+#    the only barrier that holds against a .vsix brought in by the student
+#    (docs/analyse.md 3.2).
+COPY --from=vsix /heig.codespace-statusbar-0.1.0.vsix /tmp/codespace-statusbar.vsix
+RUN mkdir -p /opt/code-server/extensions /tmp/cs-build /etc/code-server && \
+    code-server \
+        --extensions-dir /opt/code-server/extensions \
+        --user-data-dir /tmp/cs-build \
+        --force \
+        --install-extension "${EXT_CLANGD}" \
+        --install-extension "${EXT_DEBUG}" \
+        --install-extension /tmp/codespace-statusbar.vsix && \
+    code-server \
+        --extensions-dir /opt/code-server/extensions \
+        --user-data-dir /tmp/cs-build \
+        --list-extensions --show-versions | tee /etc/code-server/extensions.lock && \
+    grep -qi "^${EXT_CLANGD}@" /etc/code-server/extensions.lock && \
+    grep -qi "^${EXT_DEBUG}@" /etc/code-server/extensions.lock && \
+    grep -qi "^${EXT_STATUSBAR}@${EXT_STATUSBAR_VERSION}$" /etc/code-server/extensions.lock && \
+    rm -f /tmp/codespace-statusbar.vsix && \
+    rm -rf /tmp/cs-build /root/.config/code-server /root/.local && \
+    chown -R root:root /opt/code-server && \
+    chmod -R a-w /opt/code-server
+
+# 5. Machine settings. Copied into the tmpfs user-data-dir by the entrypoint.
+COPY settings.json /etc/code-server/settings.json
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 0644 /etc/code-server/settings.json && \
+    chmod 0755 /usr/local/bin/entrypoint.sh
+
+# 5b. Resolver: with --dns=none Podman writes no /etc/resolv.conf and the libc
+#     falls back to 127.0.0.1 with a five-second wait per attempt, so every
+#     failed resolution (curl, git, clangd) blocks for five seconds.
+#     The image ships a static resolv.conf with no nameserver at all, which
+#     brings the failure back under a second. It must be laid down by COPY and
+#     not by RUN: during a RUN, buildah mounts its own /etc/resolv.conf over it
+#     and the write would be lost along with the mount.
+COPY resolv.conf /etc/resolv.conf
+RUN chmod 0644 /etc/resolv.conf
+
+# 6. Default clangd settings for a C lab. clangd only reads
+#    $XDG_CONFIG_HOME/clangd/config.yaml (that is ~/.config/clangd/config.yaml)
+#    and the project's .clangd files: the template is therefore dropped in both
+#    useful places. ~/.config is on the read-only root; the entrypoint copies
+#    the same file into the tmpfs XDG_CONFIG_HOME, which code-server, its
+#    extension host and the integrated terminal all inherit.
+RUN mkdir -p /etc/clangd /home/student/.config/clangd && \
+    printf '%s\n' \
+    'CompileFlags:' \
+    '  Add: [-std=c17, -Wall, -Wextra]' \
+    > /etc/clangd/config.yaml && \
+    cp /etc/clangd/config.yaml /home/student/.config/clangd/config.yaml && \
+    chmod 0644 /etc/clangd/config.yaml /home/student/.config/clangd/config.yaml && \
+    chown -R 1000:1000 /home/student/.config
+
+USER 1000:1000
+WORKDIR /work
+EXPOSE 8080
+ENV PAGER=less
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

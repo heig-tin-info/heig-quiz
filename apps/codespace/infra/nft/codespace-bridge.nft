@@ -1,0 +1,31 @@
+#!/usr/sbin/nft -f
+#
+# Defence in depth, OPTIONAL: the ICC rule expressed in the `bridge` family,
+# as analyse.md D1 prescribes it.
+#
+# This file is loaded by infra/net/setup.sh only if the kernel supports the
+# bridge family (CONFIG_NF_TABLES_BRIDGE). On the development workstation
+# (WSL2, 6.18.33.2-microsoft-standard) it does NOT: nf_tables_bridge is absent
+# from both the modules and the builtins. On a standard Ubuntu 24.04/26.04 VM
+# it is, and that table then filters bridged traffic at layer 2, before
+# br_netfilter even lifts it to the IP hooks — hence including the non-IP
+# protocols the inet table does not see.
+#
+# `meta ibrname` / `meta obrname` = the master bridge of the ingress / egress
+# port. We prefer them to iifname/oifname here: in the bridge family, iifname
+# is the veth (unstable name, recreated per container), ibrname is the bridge
+# (name fixed at network creation by `--interface-name cs0`).
+#
+# TODO(verify) nftables 1.1.6: `meta obrname` has been documented since
+# nftables 0.9.x; syntax validated here by `nft -c -f` (lexical and grammatical
+# analysis only, the kernel load could not be done for lack of root).
+
+table bridge codespace
+delete table bridge codespace
+
+table bridge codespace {
+	chain forward {
+		type filter hook forward priority filter - 10; policy accept;
+		meta ibrname "cs0" meta obrname "cs0" drop comment "ICC L2: no container<->container"
+	}
+}

@@ -23,3 +23,6 @@ apps/web/public/runtimes
 # from the repository root. The language images are built on the runner VM
 # by apps/runner/images/build.sh, never from this context.
 apps/runner/images
+# apps/codespace stays for pnpm: the frozen install needs every importer of
+# the lockfile. Its student image is not built from here.
+apps/codespace/images

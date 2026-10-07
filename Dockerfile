@@ -16,10 +16,17 @@ RUN node apps/web/scripts/fetch-runtimes.mjs --strict
 # no package.json is listed here, so a new workspace package needs no change
 # to this file. The install below then links offline, for this image's
 # projects only.
+# better-sqlite3 is in the root `onlyBuiltDependencies` for apps/codespace,
+# which this image does not contain. Here it arrives only as drizzle-orm's
+# optional peer, which the API never loads, and its native build (a prebuilt
+# download, or a toolchain node:24-slim lacks) has no purpose: this image
+# drops it from the list before `fetch` (which builds too) and again after
+# `COPY . .` restores the file. The lockfile does not record the list.
+RUN echo "const fs=require('fs'),p=JSON.parse(fs.readFileSync('package.json'));p.pnpm.onlyBuiltDependencies=p.pnpm.onlyBuiltDependencies.filter((d)=>d!=='better-sqlite3');fs.writeFileSync('package.json',JSON.stringify(p,null,2))" > /tmp/no-sqlite-build.cjs
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
-RUN pnpm fetch --frozen-lockfile
+RUN node /tmp/no-sqlite-build.cjs && pnpm fetch --frozen-lockfile
 COPY . .
-RUN pnpm install --offline --frozen-lockfile --filter @quiz/api... --filter @quiz/web...
+RUN node /tmp/no-sqlite-build.cjs && pnpm install --offline --frozen-lockfile --filter @quiz/api... --filter @quiz/web...
 # The deployed commit, shown in the user menu (#179). The context has no .git.
 ARG COMMIT_SHA
 ARG COMMIT_DATE

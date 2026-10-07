@@ -97,11 +97,13 @@ jobs:
       - run: pnpm --filter "@quiz/${{ matrix.pkg }}" test --shard=${{ matrix.shard }}/${{ matrix.shards }}
 
   # Every other package's `test`: the question types, domain, contracts, ui,
-  # diagram, docrender, registry, the runner's unit suite, and the kiosk
-  # extension's plain-Node tests (extensions/kiosk-attestation). The runner's
-  # integration suite (`test:integration`, real containers) is NOT run here,
-  # so that an image build never holds up every PR: it has its own workflow,
-  # runner-integration.yml (#234).
+  # diagram, docrender, registry, the runner's and the codespace portal's
+  # unit suites, and the kiosk extension's plain-Node tests
+  # (extensions/kiosk-attestation). The runner's integration suite
+  # (`test:integration`, real containers) is NOT run here, so that an image
+  # build never holds up every PR: it has its own workflow,
+  # runner-integration.yml (#234). The portal's (`CODESPACE_INTEGRATION=1`,
+  # rootful Podman and a forge) runs in no workflow yet (M6-04).
   test-rest:
     needs: changes
     if: needs.changes.outputs.code == 'true'

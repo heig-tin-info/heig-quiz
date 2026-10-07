@@ -2,9 +2,34 @@
 
 ## Status
 
-Quiz implementation status (verified 2026-10-03): `apps/codespace` is not
-present; M6 remains pending in [merge progress](../merge/PROGRESS.md). The
-accepted workspace design below is future Quiz work, not a shipped service.
+Quiz implementation status (verified 2026-10-07): `apps/codespace` is
+present (imported by M6-03) but not wired to Quiz: no Quiz module calls it
+yet (M6-06), and it is not deployed (M6-04/M6-05). See
+[merge progress](../merge/PROGRESS.md).
+
+**Amended (2026-10-07, M6-03, product owner): the portal's GitHub relay and
+its own login.** Scope: the portal side of points 2 and 6 below, nothing
+on the platform side.
+(a) *Relay off.* The relay and the development (Forgejo) forge are
+imported, heig-classroom's App-backed GitHub forge is not, and the portal
+runs with `FORGE_KIND=none` by default: a push lands in the session's
+`staging.git` and its `PushEvent` is written (the proof of submission),
+nothing is relayed to GitHub. The portal refuses to start, in every
+environment, when `GITHUB_APP_ID` or `GITHUB_APP_PRIVATE_KEY_PATH` is set:
+the only App it was ever configured with is heig-classroom's, which Quiz
+never uses (root invariant 15, D23). Whether Quiz's own App key goes on the
+engine VM, and so whether the relay is turned back on, is **open**: an ADR
+at M6-04/M6-05 decides it. Until then the "only the portal relay writes"
+of point 2 is read as "nothing writes from a workspace".
+(b) *No login of its own.* The portal's OIDC login (`/auth/*`), its home
+page with a Start button, its `/teacher/sessions` dashboard and its
+standalone `/exam/:id/start` route are removed: a user exists only through
+the platform's launch token, every portal account is a student, and an
+exam opens through `/launch` only. A teacher sees an assignment's
+workspaces in Quiz, which calls the portal's
+`GET /api/assignments/:id/sessions` with a service token
+(`CodespaceSessionSummary`, `@quiz/contracts`). The portal's `seb/`
+directory is kept as is until M6-07 moves it onto `packages/seb`.
 
 **Imported from heig-classroom** (2026-09-30, merge task M0-03, ADR-035),
 where it is ADR-013 — Quiz's own ADR-013 is pool sharing, so it takes the

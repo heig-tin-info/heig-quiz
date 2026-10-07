@@ -4,6 +4,11 @@
     "branches": 82,
     "functions": 90
   },
+  "apps/codespace": {
+    "lines": 74,
+    "branches": 64,
+    "functions": 71
+  },
   "apps/runner": {
     "lines": 90,
     "branches": 81,
