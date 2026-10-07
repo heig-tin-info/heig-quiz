@@ -6,7 +6,6 @@ import {
   CourseConditionCreate,
   CourseConditionOrder,
   CourseConditionPatch,
-  CourseConditionsQuery,
 } from "./org.js";
 
 describe("ClassroomCreate — the dated period", () => {
@@ -92,9 +91,8 @@ describe("the course's catalog of conditions (F-ORG-16)", () => {
     expect(CourseConditionPatch.safeParse({}).success).toBe(false);
   });
 
-  it("orders a non-empty list of ids, and lists the active entries unless asked", () => {
+  it("orders a non-empty list of ids", () => {
     expect(CourseConditionOrder.safeParse({ ids: [] }).success).toBe(false);
     expect(CourseConditionOrder.safeParse({ ids: ["nope"] }).success).toBe(false);
-    expect(CourseConditionsQuery.parse({})).toEqual({ archived: "0" });
   });
 });

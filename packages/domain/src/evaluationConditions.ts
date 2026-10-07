@@ -43,11 +43,6 @@ export type ConditionKind = (typeof CONDITION_KINDS)[number];
 export const MAX_CONDITIONS = 20;
 /** The longest text of one announced condition, trimmed. */
 export const MAX_CONDITION_LENGTH = 200;
-/**
- * At most this many ACTIVE entries in a course's catalog (F-ORG-16); the
- * archived ones do not count. A picker longer than this is not one.
- */
-export const MAX_CATALOG_CONDITIONS = 100;
 
 /** The calculators a line can say are provided: every mode but `none`. */
 export const PROVIDED_CALCULATORS = ["standard", "scientific"] as const satisfies readonly CalculatorMode[];

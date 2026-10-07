@@ -7,7 +7,7 @@
  * A row is the evaluation editor's own (`ConditionRow`): the kind, the text
  * written when the field is left, and a menu to move it or archive it. An
  * entry is archived, never deleted; the archived ones wait collapsed under
- * the list, behind a "Show archived" chip, as a course's archived
+ * the list, behind a quiet "Show archived" disclosure, as a course's archived
  * classrooms do, each with its Restore.
  *
  * The snapshot rule is said once, under the list: picking an entry copies
@@ -15,7 +15,7 @@
  * already holds them.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Archive, ArchiveRestore, ArrowDown, ArrowUp } from "lucide-react";
+import { Archive, ArchiveRestore, ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -27,23 +27,19 @@ import {
 import { MAX_CONDITION_LENGTH } from "@quiz/domain";
 
 import { api } from "../api";
-import { ConditionRow } from "../evaluation/ConditionsSetting";
+import { ConditionRow, moveActions } from "../evaluation/ConditionsSetting";
 import { useT } from "../i18n";
 import { useErrorToast } from "../notify";
 import { courseConditionsKey } from "../queryKeys";
-import {
-  Button,
-  Card,
-  Field,
-  FieldLabel,
-  FormDialog,
-  FormError,
-  QueryError,
-  Segmented,
-  Skeleton,
-  ToggleChip,
-} from "../ui";
+import { Button, Card, Field, FieldLabel, FormDialog, QueryError, Segmented, Skeleton } from "../ui";
 import { useCourseConditions } from "./parts";
+
+/** One write to the catalog: a path under `/courses/:id/conditions`, a method, a body. */
+interface CatalogWrite {
+  path?: string;
+  method: string;
+  body?: unknown;
+}
 
 export function CourseConditions({
   courseId,
@@ -59,13 +55,12 @@ export function CourseConditions({
   const qc = useQueryClient();
   const toastError = useErrorToast();
   const [showArchived, setShowArchived] = useState(false);
-  const catalog = useCourseConditions(courseId, { archived: true });
+  const catalog = useCourseConditions(courseId);
   const base = `/app/api/courses/${courseId}/conditions`;
-  const refresh = () => qc.invalidateQueries({ queryKey: courseConditionsKey(courseId) });
   const write = useMutation({
-    mutationFn: ({ path = "", method, body }: { path?: string; method: string; body?: unknown }) =>
+    mutationFn: ({ path = "", method, body }: CatalogWrite) =>
       api(`${base}${path}`, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }),
-    onSettled: refresh,
+    onSettled: () => qc.invalidateQueries({ queryKey: courseConditionsKey(courseId) }),
     onError: toastError("error.save"),
   });
 
@@ -110,12 +105,7 @@ export function CourseConditions({
                   write.mutate({ path: `/${row.id}`, method: "PATCH", body });
                 }}
                 actions={[
-                  ...(i > 0
-                    ? [{ label: t("eval.conditions.moveUp"), icon: ArrowUp, onSelect: () => move(i, -1) }]
-                    : []),
-                  ...(i < active.length - 1
-                    ? [{ label: t("eval.conditions.moveDown"), icon: ArrowDown, onSelect: () => move(i, 1) }]
-                    : []),
+                  ...moveActions(t, i, active.length, move),
                   {
                     label: t("courses.conditions.archive"),
                     icon: Archive,
@@ -127,16 +117,17 @@ export function CourseConditions({
           </ol>
         )}
         {archived.length > 0 ? (
-          <div className="border-t border-line py-2.5">
-            <div className="flex justify-end">
-              <ToggleChip
-                icon={Archive}
-                tone="neutral"
-                label={t("courses.conditions.showArchived", { n: archived.length })}
-                pressed={showArchived}
-                onToggle={() => setShowArchived((v) => !v)}
-              />
-            </div>
+          <div className="border-t border-line py-2">
+            {/* A quiet disclosure: the tab's accent belongs to "Add condition". */}
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-expanded={showArchived}
+              onClick={() => setShowArchived((v) => !v)}
+            >
+              {showArchived ? <ChevronDown /> : <ChevronRight />}
+              {t("courses.conditions.showArchived", { n: archived.length })}
+            </Button>
             {showArchived ? (
               <ul className="mt-1 divide-y divide-line">
                 {archived.map((row) => (
@@ -161,35 +152,45 @@ export function CourseConditions({
       </Card>
       <p className="text-[13px] text-fg-muted">{t("courses.conditions.snapshot")}</p>
 
-      {adding ? <AddConditionModal courseId={courseId} onClose={() => onAdding(false)} /> : null}
+      {adding ? (
+        <AddConditionModal
+          submitting={write.isPending}
+          onCreate={(body) =>
+            write.mutate({ method: "POST", body }, { onSuccess: () => onAdding(false) })
+          }
+          onClose={() => onAdding(false)}
+        />
+      ) : null}
     </div>
   );
 }
 
-/** A new entry of the catalog: its kind and its text, two fields, so a `Modal`. */
-function AddConditionModal({ courseId, onClose }: { courseId: string; onClose: () => void }) {
+/**
+ * A new entry of the catalog: its kind and its text, two fields, so a
+ * `Modal`. The write is the tab's own; a refusal is its toast, and the
+ * dialog stays open on it.
+ */
+function AddConditionModal({
+  submitting,
+  onCreate,
+  onClose,
+}: {
+  submitting: boolean;
+  onCreate: (body: CourseConditionCreate) => void;
+  onClose: () => void;
+}) {
   const t = useT();
-  const qc = useQueryClient();
   const [kind, setKind] = useState<ConditionKind>("allowed");
   const [text, setText] = useState("");
   const body = CourseConditionCreate.safeParse({ kind, text });
-  const create = useMutation({
-    mutationFn: () =>
-      api(`/app/api/courses/${courseId}/conditions`, { method: "POST", body: JSON.stringify(body.data) }),
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: courseConditionsKey(courseId) });
-      onClose();
-    },
-  });
   return (
     <FormDialog
       title={t("courses.conditions.add")}
       onClose={onClose}
-      onSubmit={() => create.mutate()}
+      onSubmit={() => body.success && onCreate(body.data)}
       submitLabel={t("common.create")}
-      submitting={create.isPending}
+      submitting={submitting}
       canSubmit={body.success}
-      error={<FormError error={create.error} fallback={t("error.save")} />}
     >
       <fieldset className="space-y-1.5">
         <legend className="mb-1.5">

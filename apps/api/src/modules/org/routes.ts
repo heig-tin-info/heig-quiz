@@ -23,7 +23,6 @@ import {
   CourseConditionOrder,
   CourseConditionParam,
   CourseConditionPatch,
-  CourseConditionsQuery,
   CoursePatch,
   CourseCreate,
   CoursePoolsPut,
@@ -270,9 +269,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.get(
     "/app/api/courses/:id/conditions",
     { preHandler: requireTeacher },
-    teacher({ ...onCourse(), query: CourseConditionsQuery }, async ({ query, scope: course }) =>
-      service.listConditions(app.db, course.id, query.archived === "1"),
-    ),
+    teacher(onCourse(), async ({ scope: course }) => service.listConditions(app.db, course.id)),
   );
 
   app.post(
@@ -320,10 +317,10 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
       `/app/api/courses/:id/conditions/:cid/${path}`,
       { preHandler: requireTeacher },
       teacher(onCondition, async ({ req, now, scope }) => {
+        // Already in that state: nothing to write, nothing to trace.
+        if ((scope.row.archivedAt !== null) === archived) return service.conditionView(scope.row);
         const row = await service.setConditionArchived(app.db, scope.row, archived, now);
-        if (row !== scope.row) {
-          await trace(req, action, "course", scope.course.id, { conditionId: row.id, text: row.text });
-        }
+        await trace(req, action, "course", scope.course.id, { conditionId: row.id, text: row.text });
         return service.conditionView(row);
       }),
     );

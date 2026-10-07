@@ -56,7 +56,7 @@ function world(templates: unknown[] = [TEMPLATE]) {
     "GET /app/api/courses/c1": ok(DETAIL),
     "GET /app/api/courses/c1/templates": ok(templates),
     "GET /app/api/pools": ok([]),
-    "GET /app/api/courses/c1/conditions?archived=1": ok(CONDITIONS),
+    "GET /app/api/courses/c1/conditions": ok(CONDITIONS),
   };
 }
 
@@ -385,7 +385,6 @@ describe("CoursePage", () => {
       unmount();
       // The catalog of conditions is every member's (ADR-068 §3).
       renderWithProviders(<CoursePage id="c1" tab="conditions" navigate={vi.fn()} />);
-      expect(await screen.findByRole("button", { name: /Add condition/ })).toBeVisible();
       expect(await screen.findByRole("button", { name: "Actions on “Phones”" })).toBeVisible();
     });
 
@@ -488,7 +487,7 @@ describe("CoursePage", () => {
     });
 
     it("says so when the catalog is empty", async () => {
-      mockFetch({ ...world(), "GET /app/api/courses/c1/conditions?archived=1": ok([]) });
+      mockFetch({ ...world(), "GET /app/api/courses/c1/conditions": ok([]) });
       renderWithProviders(<CoursePage id="c1" tab="conditions" navigate={vi.fn()} />);
       expect(await screen.findByText(/No conditions yet/)).toBeVisible();
     });

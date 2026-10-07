@@ -70,11 +70,10 @@ a text that changes after the exam leaves no record of what was announced.
 
    *As built (2026-10-07, PR 2 of #584):* the table `course_conditions`
    (`org` module: `kind`, `text` 1..200, `position`, `archived_at`) and the
-   routes `/courses/:id/conditions` (list, `?archived=1` adds the archived;
-   create; `PATCH /:cid`; `PUT /order` with every active id once, else
+   routes `/courses/:id/conditions` (list: every entry, the active ones
+   first, the client filtering on `archivedAt`; create; `PATCH /:cid`; `PUT /order` with every active id once, else
    `409 stale_order`; `POST /:cid/archive|unarchive`, an unarchived entry
-   going last), loaded under `staffAccess` with no role step. At most 100
-   active entries (`409 catalog_full`). Audited as
+   going last), loaded under `staffAccess` with no role step. Audited as
    `course.condition_create|update|archive|unarchive`; a reorder is not.
    The course page has a Conditions tab ("Add condition" its primary); the
    settings editor of an evaluation or a template lists the active entries

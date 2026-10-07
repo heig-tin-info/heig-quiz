@@ -31,6 +31,8 @@ const CATALOG = `GET /app/api/courses/${makeEvaluationDetail().courseId}/conditi
 const catalog: CourseCondition[] = [
   { id: "11111111-1111-4111-8111-111111111111", kind: "allowed", text: "A dictionary", archivedAt: null },
   { id: "22222222-2222-4222-8222-222222222222", kind: "forbidden", text: "Smartwatches", archivedAt: null },
+  // Archived: never offered.
+  { id: "44444444-4444-4444-8444-444444444444", kind: "info", text: "Retired line", archivedAt: "2026-01-01T00:00:00.000Z" },
 ];
 const lastPatch = (calls: { method: string; body: unknown }[]) => calls.filter((c) => c.method === "PATCH").at(-1)?.body;
 
@@ -109,6 +111,7 @@ describe("ConditionsSetting", () => {
       expect(dictionary).toBeChecked();
       // The linked row says where it came from; the one-off row does not.
       expect(screen.getAllByText("Catalog")).toHaveLength(1);
+      expect(screen.queryByText(/Retired line/)).toBeNull();
 
       await userEvent.click(screen.getByRole("checkbox", { name: /Smartwatches/ }));
       await waitFor(() =>

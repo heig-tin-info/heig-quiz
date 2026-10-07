@@ -295,7 +295,7 @@ const each = (route: string, path: string, schema: Schema): Case => ({
 
 const CHECKED: Case[] = [
   one("/app/api/courses/:id", `/app/api/courses/${courses[0]!.id}`, CourseDetail),
-  each("/app/api/courses/:id/conditions", `/app/api/courses/${courses[0]!.id}/conditions?archived=1`, CourseCondition),
+  each("/app/api/courses/:id/conditions", `/app/api/courses/${courses[0]!.id}/conditions`, CourseCondition),
   each(
     "/app/api/courses/:id/templates",
     `/app/api/courses/${courses[0]!.id}/templates`,

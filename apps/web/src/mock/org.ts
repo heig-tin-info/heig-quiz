@@ -2,7 +2,7 @@
  * Section 1b — courses, classrooms, roster and administration: the world a
  * teacher organises before there is a single question in it.
  */
-import { DEFAULT_MAX_ACTIVE_SESSIONS, LlmSettingsPatch, ScheduledTaskPatch, TeacherCodespaceGrantPatch } from "@quiz/contracts";
+import { ConditionKind, DEFAULT_MAX_ACTIVE_SESSIONS, LlmSettingsPatch, ScheduledTaskPatch, TeacherCodespaceGrantPatch } from "@quiz/contracts";
 import type {
   AdminScheduledTask,
   AdminTeacher,
@@ -642,17 +642,14 @@ const catalogEntry = (m: RegExpMatchArray) => {
   if (!entry) throw new MockError(404, "Not found");
   return entry;
 };
-const catalogKind = (v: unknown): CourseCondition["kind"] =>
-  v === "forbidden" || v === "provided" || v === "info" ? v : "allowed";
-on("GET", "/app/api/courses/:id/conditions", (m, _body, url) => {
+on("GET", "/app/api/courses/:id/conditions", (m) => {
   const all = catalogOf(m.groups!.id!);
-  const active = all.filter((e) => e.archivedAt === null);
-  return url.searchParams.get("archived") === "1" ? [...active, ...all.filter((e) => e.archivedAt !== null)] : active;
+  return [...all.filter((e) => e.archivedAt === null), ...all.filter((e) => e.archivedAt !== null)];
 });
 on("POST", "/app/api/courses/:id/conditions", (m, body) => {
   const entry: CourseCondition = {
     id: crypto.randomUUID(),
-    kind: catalogKind(body.kind),
+    kind: ConditionKind.catch("allowed").parse(body.kind),
     text: String(body.text).trim(),
     archivedAt: null,
   };
@@ -661,7 +658,7 @@ on("POST", "/app/api/courses/:id/conditions", (m, body) => {
 });
 on("PATCH", "/app/api/courses/:id/conditions/:cid", (m, body) => {
   const entry = catalogEntry(m);
-  if (body.kind !== undefined) entry.kind = catalogKind(body.kind);
+  if (body.kind !== undefined) entry.kind = ConditionKind.catch("allowed").parse(body.kind);
   if (typeof body.text === "string") entry.text = body.text.trim();
   return entry;
 });

@@ -2,17 +2,15 @@
  * A course's catalog of conditions (F-ORG-16, ADR-079 §5), over the REAL
  * application: every staff member manages it (an assistant included, no
  * role step), anyone else gets the 404 of a missing course; entries are
- * archived, never deleted; the order is the active entries, whole; and no
+ * archived, never deleted; the list is every entry, the active ones first;
+ * the order is the active entries, whole; and no
  * student payload — waiting room, ready screen, attempt — ever carries an
  * entry that was not picked, nor an archived one.
  */
-import { randomUUID } from "node:crypto";
-
 import { and, desc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { AttemptEntry, CourseCondition } from "@quiz/contracts";
-import { MAX_CATALOG_CONDITIONS } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
 import { auditLog, courseConditions, courseStaff } from "../../db/schema.js";
@@ -65,8 +63,9 @@ const create = async (courseId: string, caller: Caller, kind: string, text: stri
   expect(res.statusCode).toBe(201);
   return res.json() as CourseCondition;
 };
-const list = async (courseId: string, archived = false) =>
-  (await send("GET", `${base(courseId)}${archived ? "?archived=1" : ""}`, owner)).json() as CourseCondition[];
+const list = async (courseId: string) => (await send("GET", base(courseId), owner)).json() as CourseCondition[];
+const activeIds = async (courseId: string) =>
+  (await list(courseId)).filter((r) => r.archivedAt === null).map((r) => r.id);
 
 describe("the catalog's routes", () => {
   it("are every staff member's, an assistant included, and a 404 for anyone else", async () => {
@@ -105,14 +104,14 @@ describe("the catalog's routes", () => {
     expect((await send("POST", `${base(courseId)}/${foreign.id}/archive`, owner)).statusCode).toBe(404);
   });
 
-  it("list the active entries in order, the archived ones on request, and never delete", async () => {
+  it("list every entry, the active ones first in their order, and never delete", async () => {
     const { courseId } = await seed();
     const a = await create(courseId, owner, "allowed", "Notes");
     const b = await create(courseId, owner, "forbidden", "Phones");
     const c = await create(courseId, owner, "provided", "Formula sheet");
 
     expect((await send("PUT", `${base(courseId)}/order`, owner, { ids: [c.id, a.id, b.id] })).statusCode).toBe(204);
-    expect((await list(courseId)).map((r) => r.id)).toEqual([c.id, a.id, b.id]);
+    expect(await activeIds(courseId)).toEqual([c.id, a.id, b.id]);
     // Not exactly the active entries: nothing moves.
     expect((await send("PUT", `${base(courseId)}/order`, owner, { ids: [a.id, b.id] })).json()).toMatchObject({
       error: "stale_order",
@@ -120,33 +119,15 @@ describe("the catalog's routes", () => {
     expect((await send("PUT", `${base(courseId)}/order`, owner, { ids: [a.id, a.id, b.id] })).statusCode).toBe(409);
 
     await send("POST", `${base(courseId)}/${a.id}/archive`, owner);
-    expect((await list(courseId)).map((r) => r.id)).toEqual([c.id, b.id]);
-    const all = await list(courseId, true);
+    expect(await activeIds(courseId)).toEqual([c.id, b.id]);
+    const all = await list(courseId);
     expect(all.map((r) => r.id)).toEqual([c.id, b.id, a.id]);
     expect(all[2]!.archivedAt).not.toBeNull();
 
     // Brought back, it goes last.
     await send("POST", `${base(courseId)}/${a.id}/unarchive`, owner);
-    expect((await list(courseId)).map((r) => r.id)).toEqual([c.id, b.id, a.id]);
+    expect(await activeIds(courseId)).toEqual([c.id, b.id, a.id]);
     expect(await db().select().from(courseConditions).where(eq(courseConditions.courseId, courseId))).toHaveLength(3);
-  });
-
-  it(`keeps at most ${MAX_CATALOG_CONDITIONS} active entries`, async () => {
-    const { courseId } = await seed();
-    await db()
-      .insert(courseConditions)
-      .values(
-        Array.from({ length: MAX_CATALOG_CONDITIONS }, (_, i) => ({
-          id: randomUUID(),
-          courseId,
-          kind: "info" as const,
-          text: `Line ${i}`,
-          position: i,
-        })),
-      );
-    const full = await send("POST", base(courseId), owner, { kind: "info", text: "One more" });
-    expect(full.statusCode).toBe(409);
-    expect(full.json()).toMatchObject({ error: "catalog_full" });
   });
 
   it("traces every write that changes a wording or the catalog's content", async () => {

@@ -7,8 +7,6 @@
  */
 import { z } from "zod";
 
-import { MAX_CATALOG_CONDITIONS } from "@quiz/domain";
-
 import { ConditionKind, EvaluationCondition } from "./evaluation.js";
 
 /** One roster entry of one classroom: `/classrooms/:id/roster/:eid`. */
@@ -198,8 +196,7 @@ export type CourseConditionParam = z.infer<typeof CourseConditionParam>;
 /**
  * `POST /courses/:id/conditions`: a kind and a text, the same rules as an
  * evaluation's condition (`EvaluationCondition`), which an entry is copied
- * into. Past {@link MAX_CATALOG_CONDITIONS} active entries, a create or an
- * unarchive is `409 catalog_full`.
+ * into.
  */
 export const CourseConditionCreate = EvaluationCondition.pick({ kind: true, text: true });
 export type CourseConditionCreate = z.infer<typeof CourseConditionCreate>;
@@ -216,15 +213,14 @@ export type CourseConditionPatch = z.infer<typeof CourseConditionPatch>;
  * their new order — all of them, each once (`409 stale_order` otherwise).
  */
 export const CourseConditionOrder = z.object({
-  ids: z.array(z.uuid()).min(1).max(MAX_CATALOG_CONDITIONS),
+  ids: z.array(z.uuid()).min(1).max(1000),
 });
 export type CourseConditionOrder = z.infer<typeof CourseConditionOrder>;
 
-/** `GET /courses/:id/conditions`: the active entries, and the archived ones with `?archived=1`. */
-export const CourseConditionsQuery = z.object({ archived: z.enum(["0", "1"]).default("0") });
-export type CourseConditionsQuery = z.infer<typeof CourseConditionsQuery>;
-
-/** One entry, as the staff reads it. Never part of a student payload. */
+/**
+ * One entry, as the staff reads it (`GET /courses/:id/conditions` lists them
+ * all, the active ones first). Never part of a student payload.
+ */
 export const CourseCondition = z.object({
   id: z.uuid(),
   kind: ConditionKind,

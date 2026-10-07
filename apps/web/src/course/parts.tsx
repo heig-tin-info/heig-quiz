@@ -9,7 +9,7 @@ import { api } from "../api";
 import { useT } from "../i18n";
 import type { Route } from "../router";
 import { Badge, cx, ToggleChip } from "../ui";
-import { courseConditionsAllKey, courseConditionsKey, courseKey, coursesKey } from "../queryKeys";
+import { courseConditionsKey, courseKey, coursesKey } from "../queryKeys";
 
 /**
  * The pieces of a course that its two readings share: the card on the
@@ -56,14 +56,14 @@ export function useCourseDetail(courseId: string) {
 }
 
 /**
- * The course's catalog of conditions (F-ORG-16): its active entries, which
- * the evaluation editor picks from, and the archived ones too with
- * `archived`, for the course's Conditions tab.
+ * The course's catalog of conditions (F-ORG-16): every entry, the active
+ * ones first; a reader filters on `archivedAt` (the editor offers the
+ * active ones, the Conditions tab shows both).
  */
-export function useCourseConditions(courseId: string, { archived = false }: { archived?: boolean } = {}) {
+export function useCourseConditions(courseId: string) {
   return useQuery<CourseCondition[]>({
-    queryKey: archived ? courseConditionsAllKey(courseId) : courseConditionsKey(courseId),
-    queryFn: () => api(`/app/api/courses/${courseId}/conditions${archived ? "?archived=1" : ""}`),
+    queryKey: courseConditionsKey(courseId),
+    queryFn: () => api(`/app/api/courses/${courseId}/conditions`),
   });
 }
 

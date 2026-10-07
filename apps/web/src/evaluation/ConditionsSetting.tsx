@@ -5,9 +5,21 @@ import { ConditionKind, conditionsOf, type CourseCondition, type EvaluationCondi
 import { imposedConditions, MAX_CONDITION_LENGTH, MAX_CONDITIONS } from "@quiz/domain";
 
 import { useCourseConditions } from "../course/parts";
-import { useT } from "../i18n";
+import { useT, type TFunction } from "../i18n";
 import { ConditionLine, imposedText } from "../student/ConditionsList";
-import { Actions, Badge, Button, Card, Checkbox, cx, inputClass, inputSize, Select, SettingRow } from "../ui";
+import {
+  Actions,
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  cx,
+  inputClass,
+  inputSize,
+  type MenuItem,
+  Select,
+  SettingRow,
+} from "../ui";
 import type { ConfigPatch, ConfigView } from "./editTarget";
 
 /**
@@ -49,7 +61,8 @@ export function ConditionsSetting({
   const t = useT();
   const list = conditionsOf(config.settings);
   const catalog = useCourseConditions(courseId);
-  const inCatalog = new Set((catalog.data ?? []).map((entry) => entry.id));
+  const offered = (catalog.data ?? []).filter((entry) => entry.archivedAt === null);
+  const inCatalog = new Set(offered.map((entry) => entry.id));
   const save = (conditions: EvaluationCondition[]) => patch.mutate({ settings: { conditions } });
   const replace = (i: number, next: EvaluationCondition) => save(list.map((c, j) => (j === i ? next : c)));
   const move = (i: number, delta: -1 | 1) => {
@@ -69,7 +82,7 @@ export function ConditionsSetting({
     <Card className="divide-y divide-line px-4">
       <SettingRow title={t("eval.conditions")} desc={t("eval.conditions.desc")} />
       <CatalogPicker
-        entries={catalog.data}
+        entries={catalog.data ? offered : undefined}
         failed={catalog.isError}
         picked={new Set(list.flatMap((c) => (c.catalogId ? [c.catalogId] : [])))}
         full={list.length >= MAX_CONDITIONS}
@@ -92,12 +105,7 @@ export function ConditionsSetting({
                 ) : null
               }
               actions={[
-                ...(i > 0
-                  ? [{ label: t("eval.conditions.moveUp"), icon: ArrowUp, onSelect: () => move(i, -1) }]
-                  : []),
-                ...(i < list.length - 1
-                  ? [{ label: t("eval.conditions.moveDown"), icon: ArrowDown, onSelect: () => move(i, 1) }]
-                  : []),
+                ...moveActions(t, i, list.length, move),
                 {
                   label: t("eval.conditions.remove"),
                   icon: Trash2,
@@ -214,6 +222,22 @@ export function KindSelect({
       ))}
     </Select>
   );
+}
+
+/**
+ * A row's "Move up" and "Move down", each only where it can go: the menu
+ * items of a list of `count` rows at row `i`.
+ */
+export function moveActions(
+  t: TFunction,
+  i: number,
+  count: number,
+  move: (i: number, delta: -1 | 1) => void,
+): MenuItem[] {
+  return [
+    ...(i > 0 ? [{ label: t("eval.conditions.moveUp"), icon: ArrowUp, onSelect: () => move(i, -1) }] : []),
+    ...(i < count - 1 ? [{ label: t("eval.conditions.moveDown"), icon: ArrowDown, onSelect: () => move(i, 1) }] : []),
+  ];
 }
 
 /**

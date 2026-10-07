@@ -77,14 +77,8 @@ export const courseKey = (id: string) => ["course", id] as const;
  * refresh reaches it. `null` while the course is not known yet.
  */
 export const courseTemplatesKey = (id: string | null) => ["course", id, "templates"] as const;
-/**
- * `GET /courses/:id/conditions` (F-ORG-16): the catalog's active entries,
- * which the evaluation editor picks from; also the prefix every catalog
- * write invalidates. `courseConditionsAllKey` adds the archived ones, for
- * the course's Conditions tab.
- */
+/** `GET /courses/:id/conditions` (F-ORG-16): the course's whole catalog, archived entries included. */
 export const courseConditionsKey = (id: string) => ["course", id, "conditions"] as const;
-export const courseConditionsAllKey = (id: string) => ["course", id, "conditions", "all"] as const;
 /** `null` while the id is not known yet: the query is disabled, the key still well-formed. */
 export const classroomKey = (id: string | null) => ["classroom", id] as const;
 /**

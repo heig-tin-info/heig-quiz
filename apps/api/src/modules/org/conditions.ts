@@ -13,19 +13,15 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, asc, count, eq, isNull, max, type SQL } from "drizzle-orm";
+import { and, asc, eq, isNull, max, sql, type SQL } from "drizzle-orm";
 
 import type { CourseCondition, CourseConditionCreate, CourseConditionPatch } from "@quiz/contracts";
-import { MAX_CATALOG_CONDITIONS } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { courseConditions } from "../../db/schema.js";
 import { DomainError } from "../http.js";
 
 export type CourseConditionRecord = typeof courseConditions.$inferSelect;
-
-const catalogFull = () =>
-  new DomainError("catalog_full", 409, `A course keeps at most ${MAX_CATALOG_CONDITIONS} active conditions`);
 
 /** What the staff reads of an entry. */
 export const conditionView = (row: CourseConditionRecord): CourseCondition => ({
@@ -38,15 +34,18 @@ export const conditionView = (row: CourseConditionRecord): CourseCondition => ({
 const active = (courseId: string): SQL =>
   and(eq(courseConditions.courseId, courseId), isNull(courseConditions.archivedAt))!;
 
-/** The catalog in its order: the active entries, then the archived ones when asked. */
-export async function listConditions(db: Db, courseId: string, archived: boolean): Promise<CourseCondition[]> {
+/** The whole catalog: the active entries in their order, then the archived ones in theirs. */
+export async function listConditions(db: Db, courseId: string): Promise<CourseCondition[]> {
   const rows = await db
     .select()
     .from(courseConditions)
-    .where(archived ? eq(courseConditions.courseId, courseId) : active(courseId))
-    .orderBy(asc(courseConditions.position), asc(courseConditions.createdAt));
-  // Active first, in their order; the archived after, in theirs.
-  return [...rows.filter((r) => !r.archivedAt), ...rows.filter((r) => r.archivedAt)].map(conditionView);
+    .where(eq(courseConditions.courseId, courseId))
+    .orderBy(
+      sql`${courseConditions.archivedAt} is not null`,
+      asc(courseConditions.position),
+      asc(courseConditions.createdAt),
+    );
+  return rows.map(conditionView);
 }
 
 /** One entry of THIS course, or null: an id of another course is a miss. */
@@ -72,18 +71,12 @@ async function nextPosition(db: Db, courseId: string): Promise<number> {
   return (row?.last ?? -1) + 1;
 }
 
-async function refuseWhenFull(db: Db, courseId: string): Promise<void> {
-  const [row] = await db.select({ n: count() }).from(courseConditions).where(active(courseId));
-  if ((row?.n ?? 0) >= MAX_CATALOG_CONDITIONS) throw catalogFull();
-}
-
-/** A new entry, last. `409 catalog_full` past the limit. */
+/** A new entry, last. */
 export async function createCondition(
   db: Db,
   courseId: string,
   body: CourseConditionCreate,
 ): Promise<CourseConditionRecord> {
-  await refuseWhenFull(db, courseId);
   const [row] = await db
     .insert(courseConditions)
     .values({ id: randomUUID(), courseId, ...body, position: await nextPosition(db, courseId) })
@@ -106,18 +99,13 @@ export async function updateCondition(
   return row!;
 }
 
-/**
- * Archive or bring back. An entry brought back goes last, and counts
- * against the limit again (`409 catalog_full`). Idempotent.
- */
+/** Archive or bring back; an entry brought back goes last. The route skips a no-op. */
 export async function setConditionArchived(
   db: Db,
   row: CourseConditionRecord,
   archived: boolean,
   now: Date,
 ): Promise<CourseConditionRecord> {
-  if ((row.archivedAt !== null) === archived) return row;
-  if (!archived) await refuseWhenFull(db, row.courseId);
   const [updated] = await db
     .update(courseConditions)
     .set(
