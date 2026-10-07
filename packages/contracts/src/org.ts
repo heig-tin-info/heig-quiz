@@ -7,6 +7,10 @@
  */
 import { z } from "zod";
 
+import { MAX_CATALOG_CONDITIONS } from "@quiz/domain";
+
+import { ConditionKind, EvaluationCondition } from "./evaluation.js";
+
 /** One roster entry of one classroom: `/classrooms/:id/roster/:eid`. */
 export const RosterEntryParams = z.object({ id: z.uuid(), eid: z.uuid() });
 export type RosterEntryParams = z.infer<typeof RosterEntryParams>;
@@ -184,3 +188,48 @@ export const CourseDetail = z.object({
   classrooms: z.array(ClassroomRef),
 });
 export type CourseDetail = z.infer<typeof CourseDetail>;
+
+// --- The course's catalog of conditions (ADR-079 §5, F-ORG-16) ---
+
+/** One entry of a course's catalog: `/courses/:id/conditions/:cid`. */
+export const CourseConditionParam = z.object({ id: z.uuid(), cid: z.uuid() });
+export type CourseConditionParam = z.infer<typeof CourseConditionParam>;
+
+/**
+ * `POST /courses/:id/conditions`: a kind and a text, the same rules as an
+ * evaluation's condition (`EvaluationCondition`), which an entry is copied
+ * into. Past {@link MAX_CATALOG_CONDITIONS} active entries, a create or an
+ * unarchive is `409 catalog_full`.
+ */
+export const CourseConditionCreate = EvaluationCondition.pick({ kind: true, text: true });
+export type CourseConditionCreate = z.infer<typeof CourseConditionCreate>;
+
+/** `PATCH /courses/:id/conditions/:cid`: its kind, its text, or both. */
+export const CourseConditionPatch = CourseConditionCreate.partial().refine(
+  (b) => Object.keys(b).length > 0,
+  { message: "Nothing to update" },
+);
+export type CourseConditionPatch = z.infer<typeof CourseConditionPatch>;
+
+/**
+ * `PUT /courses/:id/conditions/order`: the ids of the ACTIVE entries, in
+ * their new order — all of them, each once (`409 stale_order` otherwise).
+ */
+export const CourseConditionOrder = z.object({
+  ids: z.array(z.uuid()).min(1).max(MAX_CATALOG_CONDITIONS),
+});
+export type CourseConditionOrder = z.infer<typeof CourseConditionOrder>;
+
+/** `GET /courses/:id/conditions`: the active entries, and the archived ones with `?archived=1`. */
+export const CourseConditionsQuery = z.object({ archived: z.enum(["0", "1"]).default("0") });
+export type CourseConditionsQuery = z.infer<typeof CourseConditionsQuery>;
+
+/** One entry, as the staff reads it. Never part of a student payload. */
+export const CourseCondition = z.object({
+  id: z.uuid(),
+  kind: ConditionKind,
+  text: z.string(),
+  archivedAt: z.string().nullable(),
+});
+export type CourseCondition = z.infer<typeof CourseCondition>;
+

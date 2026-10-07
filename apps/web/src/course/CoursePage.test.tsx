@@ -10,7 +10,7 @@ import { CoursePage } from "./CoursePage";
 
 /*
  * The page of one course (F-ORG-12), in tabs: its classrooms, its templates,
- * its linked pools, its members and its settings, each tab with ONE primary
+ * its linked pools, its members, its conditions (F-ORG-16) and its settings, each tab with ONE primary
  * action in the header (none on Settings). The templates tab is the one
  * surface that lists them, so it says where the door is when empty.
  */
@@ -40,6 +40,12 @@ const TEMPLATE = {
   totalPoints: 6,
 };
 
+const CONDITIONS = [
+  { id: "k1", kind: "allowed", text: "One A4 sheet of notes", archivedAt: null },
+  { id: "k2", kind: "forbidden", text: "Phones", archivedAt: null },
+  { id: "k0", kind: "info", text: "Bring your student card", archivedAt: "2026-02-01T08:00:00.000Z" },
+];
+
 function world(templates: unknown[] = [TEMPLATE]) {
   return {
     [`GET ${COURSES}`]: ok([
@@ -50,11 +56,12 @@ function world(templates: unknown[] = [TEMPLATE]) {
     "GET /app/api/courses/c1": ok(DETAIL),
     "GET /app/api/courses/c1/templates": ok(templates),
     "GET /app/api/pools": ok([]),
+    "GET /app/api/courses/c1/conditions?archived=1": ok(CONDITIONS),
   };
 }
 
 describe("CoursePage", () => {
-  it("opens on the course's classrooms, with its five tabs under its name", async () => {
+  it("opens on the course's classrooms, with its six tabs under its name", async () => {
     mockFetch(world());
     const navigate = vi.fn();
     renderWithProviders(<CoursePage id="c1" navigate={navigate} />);
@@ -66,6 +73,7 @@ describe("CoursePage", () => {
       expect.stringMatching(/^Templates/),
       expect.stringMatching(/^Linked pools/),
       expect.stringMatching(/^Members/),
+      "Conditions",
       "Settings",
     ]);
     expect(within(tabs).getByRole("tab", { name: /Classrooms/ })).toHaveAttribute("aria-selected", "true");
@@ -92,6 +100,7 @@ describe("CoursePage", () => {
     ["templates", "New template"],
     ["pools", "Link a pool"],
     ["members", "Add a staff member"],
+    ["conditions", "Add condition"],
   ] as const)("has one primary action on %s: %s", async (tab, label) => {
     mockFetch(world());
     renderWithProviders(<CoursePage id="c1" tab={tab} navigate={vi.fn()} />);
@@ -371,8 +380,13 @@ describe("CoursePage", () => {
         expect(screen.queryByRole("button", { name: /Add a staff member/ })).toBeNull();
         unmount();
       }
-      renderWithProviders(<CoursePage id="c1" tab="templates" navigate={vi.fn()} />);
+      const { unmount } = renderWithProviders(<CoursePage id="c1" tab="templates" navigate={vi.fn()} />);
       expect(await screen.findByRole("button", { name: /New template/ })).toBeVisible();
+      unmount();
+      // The catalog of conditions is every member's (ADR-068 §3).
+      renderWithProviders(<CoursePage id="c1" tab="conditions" navigate={vi.fn()} />);
+      expect(await screen.findByRole("button", { name: /Add condition/ })).toBeVisible();
+      expect(await screen.findByRole("button", { name: "Actions on “Phones”" })).toBeVisible();
     });
 
     it("lists the pools without their unlink", async () => {
@@ -409,6 +423,74 @@ describe("CoursePage", () => {
       expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
       expect(screen.queryByRole("button", { name: /Delete course/ })).toBeNull();
       expect(screen.getByText(/are its owners' to change/)).toBeVisible();
+    });
+  });
+
+  describe("its catalog of conditions (F-ORG-16)", () => {
+    it("lists the active entries, keeps the archived ones collapsed, and says the snapshot rule", async () => {
+      const { calls } = mockFetch({
+        ...world(),
+        "POST /app/api/courses/c1/conditions/k0/unarchive": ok(CONDITIONS[2]),
+      });
+      renderWithProviders(<CoursePage id="c1" tab="conditions" navigate={vi.fn()} />);
+
+      expect(await screen.findByRole("textbox", { name: "Condition 1" })).toHaveValue("One A4 sheet of notes");
+      expect(screen.getByRole("textbox", { name: "Condition 2" })).toHaveValue("Phones");
+      expect(screen.queryByText("Bring your student card")).toBeNull();
+      expect(screen.getByText(/never changes the evaluations and templates that already exist/)).toBeVisible();
+
+      await userEvent.click(screen.getByRole("button", { name: /Show archived \(1\)/ }));
+      expect(screen.getByText("Bring your student card")).toBeVisible();
+      await userEvent.click(screen.getByRole("button", { name: /Restore/ }));
+      await waitFor(() =>
+        expect(calls.some((c) => c.method === "POST" && c.url.endsWith("/k0/unarchive"))).toBe(true),
+      );
+    });
+
+    it("adds an entry from the header, edits one, moves one and archives one", async () => {
+      const { calls } = mockFetch({
+        ...world(),
+        "POST /app/api/courses/c1/conditions": ok(CONDITIONS[0]),
+        "PATCH /app/api/courses/c1/conditions/k2": ok(CONDITIONS[1]),
+        "PUT /app/api/courses/c1/conditions/order": noContent(),
+        "POST /app/api/courses/c1/conditions/k1/archive": ok(CONDITIONS[0]),
+      });
+      renderWithProviders(<CoursePage id="c1" tab="conditions" navigate={vi.fn()} />);
+
+      await userEvent.click(await screen.findByRole("button", { name: /Add condition/ }));
+      const dialog = await screen.findByRole("dialog", { name: "Add condition" });
+      await userEvent.click(within(dialog).getByRole("radio", { name: "Provided" }));
+      await userEvent.type(within(dialog).getByRole("textbox", { name: /Condition/ }), "  A formula sheet ");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Create" }));
+      await waitFor(() =>
+        expect(calls.find((c) => c.method === "POST" && c.url === "/app/api/courses/c1/conditions")?.body).toEqual({
+          kind: "provided",
+          text: "A formula sheet",
+        }),
+      );
+
+      const phones = screen.getByRole("textbox", { name: "Condition 2" });
+      await userEvent.type(phones, " and watches");
+      await userEvent.tab();
+      await waitFor(() =>
+        expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ kind: "forbidden", text: "Phones and watches" }),
+      );
+
+      await userEvent.click(screen.getByRole("button", { name: "Actions on “One A4 sheet of notes”" }));
+      await userEvent.click(screen.getByRole("menuitem", { name: "Move down" }));
+      await waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ ids: ["k2", "k1"] }));
+
+      await userEvent.click(screen.getByRole("button", { name: "Actions on “One A4 sheet of notes”" }));
+      await userEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
+      await waitFor(() =>
+        expect(calls.some((c) => c.method === "POST" && c.url.endsWith("/k1/archive"))).toBe(true),
+      );
+    });
+
+    it("says so when the catalog is empty", async () => {
+      mockFetch({ ...world(), "GET /app/api/courses/c1/conditions?archived=1": ok([]) });
+      renderWithProviders(<CoursePage id="c1" tab="conditions" navigate={vi.fn()} />);
+      expect(await screen.findByText(/No conditions yet/)).toBeVisible();
     });
   });
 

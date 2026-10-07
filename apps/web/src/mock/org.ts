@@ -8,6 +8,7 @@ import type {
   AdminTeacher,
   AdminUser,
   ClassroomDetail,
+  CourseCondition,
   CourseRole,
   CourseSummary,
   ImpersonationLink,
@@ -29,6 +30,7 @@ import {
   H,
   MockError,
   MockPayload,
+  MOCK_CONDITIONS,
   flags,
   iso,
   nextId,
@@ -616,6 +618,74 @@ on("DELETE", "/app/api/courses/:id/staff/:uid", (m) => {
   c.staff = c.staff.filter((s) => s.userId !== m.groups!.uid);
   return undefined;
 });
+// --- The course's catalog of conditions (F-ORG-16) ---
+
+/**
+ * PRG1's catalog: the first two of the draft exam's conditions came from it
+ * (`mock/evaluation.ts` links them), two more wait unticked, and one is
+ * archived. The other courses start empty (`?empty=1` empties PRG1's too).
+ */
+export const MOCK_CATALOG: Record<string, CourseCondition[]> = {
+  c1: flags.empty
+    ? []
+    : [
+        { id: "0f6c7a52-6d1f-4c43-9a0e-7f1b8c2d3e41", ...MOCK_CONDITIONS[0]!, archivedAt: null },
+        { id: "1a7d8b63-7e2a-4d54-8b1f-8a2c9d3e4f52", ...MOCK_CONDITIONS[1]!, archivedAt: null },
+        { id: "2b8e9c74-8f3b-4e65-9c2a-9b3d0e4f5a63", kind: "allowed", text: "Une calculatrice non programmable", archivedAt: null },
+        { id: "3c9f0d85-9a4c-4f76-8d3b-0c4e1f5a6b74", kind: "info", text: "Les sorties sont autorisées après 30 minutes", archivedAt: null },
+        { id: "4d0a1e96-0b5d-4a87-9e4c-1d5f2a6b7c85", kind: "provided", text: "Une feuille de brouillon", archivedAt: iso(-120 * D) },
+      ],
+};
+const catalogOf = (courseId: string) => (MOCK_CATALOG[courseOr404(courseId).id] ??= []);
+const catalogEntry = (m: RegExpMatchArray) => {
+  const entry = catalogOf(m.groups!.id!).find((e) => e.id === m.groups!.cid);
+  if (!entry) throw new MockError(404, "Not found");
+  return entry;
+};
+const catalogKind = (v: unknown): CourseCondition["kind"] =>
+  v === "forbidden" || v === "provided" || v === "info" ? v : "allowed";
+on("GET", "/app/api/courses/:id/conditions", (m, _body, url) => {
+  const all = catalogOf(m.groups!.id!);
+  const active = all.filter((e) => e.archivedAt === null);
+  return url.searchParams.get("archived") === "1" ? [...active, ...all.filter((e) => e.archivedAt !== null)] : active;
+});
+on("POST", "/app/api/courses/:id/conditions", (m, body) => {
+  const entry: CourseCondition = {
+    id: crypto.randomUUID(),
+    kind: catalogKind(body.kind),
+    text: String(body.text).trim(),
+    archivedAt: null,
+  };
+  catalogOf(m.groups!.id!).push(entry);
+  return entry;
+});
+on("PATCH", "/app/api/courses/:id/conditions/:cid", (m, body) => {
+  const entry = catalogEntry(m);
+  if (body.kind !== undefined) entry.kind = catalogKind(body.kind);
+  if (typeof body.text === "string") entry.text = body.text.trim();
+  return entry;
+});
+on("PUT", "/app/api/courses/:id/conditions/order", (m, body) => {
+  const all = catalogOf(m.groups!.id!);
+  const ids = Array.isArray(body.ids) ? (body.ids as string[]) : [];
+  const ordered = ids.map((id) => all.find((e) => e.id === id)!).filter(Boolean);
+  all.splice(0, all.length, ...ordered, ...all.filter((e) => !ids.includes(e.id)));
+  return undefined;
+});
+for (const [path, archived] of [["archive", true], ["unarchive", false]] as const) {
+  on("POST", `/app/api/courses/:id/conditions/:cid/${path}`, (m) => {
+    const entry = catalogEntry(m);
+    entry.archivedAt = archived ? (entry.archivedAt ?? iso(0)) : null;
+    if (!archived) {
+      // Brought back, it goes last, as on the server.
+      const all = catalogOf(m.groups!.id!);
+      all.splice(all.indexOf(entry), 1);
+      all.push(entry);
+    }
+    return entry;
+  });
+}
+
 on("POST", "/app/api/courses/:id/classrooms", (m, body) => {
   const c = courseOr404(m.groups!.id!);
   const r: Room = {

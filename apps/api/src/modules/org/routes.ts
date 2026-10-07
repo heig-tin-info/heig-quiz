@@ -19,6 +19,11 @@ import {
   ClassroomCreate,
   ClassroomDeleteQuery,
   ClassroomPatch,
+  CourseConditionCreate,
+  CourseConditionOrder,
+  CourseConditionParam,
+  CourseConditionPatch,
+  CourseConditionsQuery,
   CoursePatch,
   CourseCreate,
   CoursePoolsPut,
@@ -242,6 +247,87 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
       return linked;
     }),
   );
+
+  // --- The course's catalog of conditions (F-ORG-16, ADR-079 §5) ---
+
+  /**
+   * Every member of the staff manages the catalog (ADR-068 §3): the course
+   * under `staffAccess` (404 otherwise), no role step. An entry is looked up
+   * within that course, so another course's id is the same 404.
+   */
+  const onCondition = {
+    params: CourseConditionParam,
+    load: async (req: FastifyRequest, reply: FastifyReply, p: { id: string; cid: string }) => {
+      const course = await loadCourse(req, reply, p);
+      if (!course) return null;
+      const row = await service.conditionOfCourse(app.db, course.id, p.cid);
+      if (row) return { course, row };
+      notFound(reply);
+      return null;
+    },
+  };
+
+  app.get(
+    "/app/api/courses/:id/conditions",
+    { preHandler: requireTeacher },
+    teacher({ ...onCourse(), query: CourseConditionsQuery }, async ({ query, scope: course }) =>
+      service.listConditions(app.db, course.id, query.archived === "1"),
+    ),
+  );
+
+  app.post(
+    "/app/api/courses/:id/conditions",
+    { preHandler: requireTeacher },
+    teacher({ ...onCourse(), body: CourseConditionCreate }, async ({ req, reply, body, scope: course }) => {
+      const row = await service.createCondition(app.db, course.id, body);
+      await trace(req, "course.condition_create", "course", course.id, {
+        conditionId: row.id,
+        kind: row.kind,
+        text: row.text,
+      });
+      return reply.code(201).send(service.conditionView(row));
+    }),
+  );
+
+  app.patch(
+    "/app/api/courses/:id/conditions/:cid",
+    { preHandler: requireTeacher },
+    teacher({ ...onCondition, body: CourseConditionPatch }, async ({ req, now, body, scope }) => {
+      const row = await service.updateCondition(app.db, scope.row.id, body, now);
+      await trace(req, "course.condition_update", "course", scope.course.id, {
+        conditionId: row.id,
+        from: { kind: scope.row.kind, text: scope.row.text },
+        to: { kind: row.kind, text: row.text },
+      });
+      return service.conditionView(row);
+    }),
+  );
+
+  app.put(
+    "/app/api/courses/:id/conditions/order",
+    { preHandler: requireTeacher },
+    teacher({ ...onCourse(), body: CourseConditionOrder }, async ({ reply, body, scope: course }) => {
+      await service.reorderConditions(app.db, course.id, body.ids);
+      return reply.code(204).send();
+    }),
+  );
+
+  for (const [path, action, archived] of [
+    ["archive", "course.condition_archive", true],
+    ["unarchive", "course.condition_unarchive", false],
+  ] as const) {
+    app.post(
+      `/app/api/courses/:id/conditions/:cid/${path}`,
+      { preHandler: requireTeacher },
+      teacher(onCondition, async ({ req, now, scope }) => {
+        const row = await service.setConditionArchived(app.db, scope.row, archived, now);
+        if (row !== scope.row) {
+          await trace(req, action, "course", scope.course.id, { conditionId: row.id, text: row.text });
+        }
+        return service.conditionView(row);
+      }),
+    );
+  }
 
   // --- Course staff ---
 

@@ -28,7 +28,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { registerForTests } from "@quiz/registry/server";
 
-import { attempts, courseStaff, enrollments, evaluations, journalPageRevisions, poolMembers, poolTags } from "../db/schema.js";
+import { attempts, courseConditions, courseStaff, enrollments, evaluations, journalPageRevisions, poolMembers, poolTags } from "../db/schema.js";
 import { fakeShort } from "../test/fakeType.js";
 import { routesOf, testServer, type Method, type TestServer } from "../test/http.js";
 import { seedLive } from "../test/live.js";
@@ -115,6 +115,9 @@ async function world(): Promise<World> {
   // A closed exam of the classroom: the gradebook's column (`kind`, `activityId`), which a draft has none of.
   const graded = await evaluationService.createEvaluation(db, { classroomId: seed.classroomId, title: "Graded", mode: "exam", createdBy: owner.id });
   await db.update(evaluations).set({ state: "closed" }).where(eq(evaluations.id, graded.id));
+  // An entry of the course's catalog of conditions (F-ORG-16): the `:cid`.
+  const conditionId = randomUUID();
+  await db.insert(courseConditions).values({ id: conditionId, courseId: seed.courseId, kind: "info", text: "Swept", position: 0 });
   const attemptId = randomUUID();
   await db.insert(attempts).values({ id: attemptId, evaluationId: seed.evaluationId, userId: enrolled.id, seed: 1 });
   return {
@@ -137,6 +140,7 @@ async function world(): Promise<World> {
       revisionId: revision!.id,
       kind: "evaluation",
       activityId: graded.id,
+      cid: conditionId,
     },
   };
 }

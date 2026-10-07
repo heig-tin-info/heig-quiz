@@ -142,6 +142,11 @@ const scenes = [
   { name: "course-page-pools", role: "teacher", path: "/courses/c1/pools" },
   { name: "course-page-link-pool", role: "teacher", path: "/courses/c1/pools", fold: true, act: (p) => p.getByRole("button", { name: /link a pool|lier une banque/i }).first().click() },
   { name: "course-page-members", role: "teacher", path: "/courses/c1/members" },
+  // F-ORG-16: the catalog of conditions, its archived entries shown, its Add
+  // dialog, and an empty one. The editor's picker is `eval-config-timing`.
+  { name: "course-page-conditions", role: "teacher", path: "/courses/c1/conditions", act: (p) => p.getByRole("button", { name: /show archived|afficher les archivées/i }).click() },
+  { name: "course-add-condition", role: "teacher", path: "/courses/c1/conditions", fold: true, act: (p) => p.getByRole("button", { name: /^(add condition|ajouter une condition)$/i }).first().click() },
+  { name: "course-page-no-conditions", role: "teacher", path: "/courses/c2/conditions" },
   { name: "course-page-settings", role: "teacher", path: "/courses/c1/settings" },
   { name: "course-page-edit", role: "teacher", path: "/courses/c1/settings", act: (p) => p.getByRole("button", { name: /^(edit|modifier)$/i }).first().click() },
   { name: "course-page-not-found", role: "teacher", path: "/courses/nope" },

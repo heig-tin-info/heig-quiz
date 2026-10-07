@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { ClassroomCreate, ClassroomPatch } from "./org.js";
+import {
+  ClassroomCreate,
+  ClassroomPatch,
+  CourseConditionCreate,
+  CourseConditionOrder,
+  CourseConditionPatch,
+  CourseConditionsQuery,
+} from "./org.js";
 
 describe("ClassroomCreate — the dated period", () => {
   it("defaults to no dates", () => {
@@ -64,5 +71,30 @@ describe("ClassroomPatch — the dated period", () => {
 
   it("still takes a label alone", () => {
     expect(ClassroomPatch.safeParse({ period: "Automne 2026" }).success).toBe(true);
+  });
+});
+
+describe("the course's catalog of conditions (F-ORG-16)", () => {
+  it("takes a kind and a trimmed text of 1 to 200 characters, as an evaluation's condition", () => {
+    expect(CourseConditionCreate.parse({ kind: "allowed", text: "  Notes  " })).toEqual({ kind: "allowed", text: "Notes" });
+    expect(CourseConditionCreate.safeParse({ kind: "allowed", text: "   " }).success).toBe(false);
+    expect(CourseConditionCreate.safeParse({ kind: "allowed", text: "x".repeat(201) }).success).toBe(false);
+    expect(CourseConditionCreate.safeParse({ kind: "maybe", text: "Notes" }).success).toBe(false);
+    // A catalog entry has no catalog reference of its own.
+    expect(CourseConditionCreate.parse({ kind: "info", text: "a", catalogId: crypto.randomUUID() })).toEqual({
+      kind: "info",
+      text: "a",
+    });
+  });
+
+  it("patches the kind, the text or both, never nothing", () => {
+    expect(CourseConditionPatch.safeParse({ kind: "forbidden" }).success).toBe(true);
+    expect(CourseConditionPatch.safeParse({}).success).toBe(false);
+  });
+
+  it("orders a non-empty list of ids, and lists the active entries unless asked", () => {
+    expect(CourseConditionOrder.safeParse({ ids: [] }).success).toBe(false);
+    expect(CourseConditionOrder.safeParse({ ids: ["nope"] }).success).toBe(false);
+    expect(CourseConditionsQuery.parse({})).toEqual({ archived: "0" });
   });
 });

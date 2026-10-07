@@ -4,7 +4,8 @@
  *
  * Every statement the routes run is here (audit B-12); `./roster.ts` holds
  * the roster import and the claim rules, a helper of this module that the
- * sign-in path reaches through the re-export below. Access is NOT decided
+ * sign-in path reaches through the re-export below, and `./conditions.ts`
+ * the course's catalog of conditions (F-ORG-16). Access is NOT decided
  * here: the routes load the entity through the guards first (invariant 6),
  * and a list takes the access predicate as an argument.
  */
@@ -41,6 +42,16 @@ import { accessRevoked } from "../realtime/bus.js";
 import { rosterRefusal } from "./errors.js";
 
 export { claimEnrollments, claimLines, type ClaimMatch } from "./roster.js";
+export {
+  conditionOfCourse,
+  conditionView,
+  createCondition,
+  listConditions,
+  reorderConditions,
+  setConditionArchived,
+  updateCondition,
+  type CourseConditionRecord,
+} from "./conditions.js";
 
 type CourseRecord = typeof courses.$inferSelect;
 type ClassroomRecord = typeof classrooms.$inferSelect;
