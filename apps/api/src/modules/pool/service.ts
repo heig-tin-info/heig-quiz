@@ -84,7 +84,7 @@ export {
   transferOnLoss,
   vacateSeats,
 } from "./members.js";
-export { poolTagNames, poolTags, describeTag } from "./tags.js";
+export { poolTagNames, poolTags, poolTagUsage, describeTag } from "./tags.js";
 export { mayLinkPool, poolsOfCourse, PoolLinkForbidden, setCoursePools } from "./coursePools.js";
 export {
   categoryTree,

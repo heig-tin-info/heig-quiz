@@ -729,6 +729,27 @@ describe("the tag vocabulary of a pool", () => {
     });
     expect(still.json()[0].description).toBe("Allocates memory on the heap");
   });
+
+  it("serves the tag usage to a member and a 404 to a stranger", async () => {
+    const res = await server.app.inject({
+      method: "GET",
+      url: `/app/api/pools/${tagPool}/tags/usage`,
+      headers: owner.headers,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([
+      { tag: "malloc", description: "Allocates memory on the heap", questions: 1, courses: 0 },
+      { tag: "pointers", description: "", questions: 1, courses: 0 },
+    ]);
+
+    const hidden = await server.app.inject({
+      method: "GET",
+      url: `/app/api/pools/${tagPool}/tags/usage`,
+      headers: outsider.headers,
+    });
+    expect(hidden.statusCode).toBe(404);
+    expect(hidden.json()).toEqual({ error: "not_found" });
+  });
 });
 
 // ---------------------------------------------------------------------------

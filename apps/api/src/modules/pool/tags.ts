@@ -1,10 +1,18 @@
 /** The tag vocabulary of a pool (`pool_tags`, `question_tags`). */
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
-import type { PoolTag } from "@quiz/contracts";
+import type { PoolTag, PoolTagUsage } from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
-import { poolTags as poolTagsTable, questionTags, questions } from "../../db/schema.js";
+import {
+  classrooms,
+  evaluationItems,
+  evaluations,
+  poolTags as poolTagsTable,
+  questionTags,
+  questionVersions,
+  questions,
+} from "../../db/schema.js";
 import type { Tx } from "./shared.js";
 
 /** The distinct tags used by the live questions of a pool, alphabetical. */
@@ -26,10 +34,7 @@ export async function poolTagNames(db: Db, poolId: string): Promise<string[]> {
  */
 export async function poolTags(db: Db, poolId: string): Promise<PoolTag[]> {
   const [described, used] = await Promise.all([
-    db
-      .select({ tag: poolTagsTable.tag, description: poolTagsTable.description })
-      .from(poolTagsTable)
-      .where(eq(poolTagsTable.poolId, poolId)),
+    describedTags(db, poolId),
     db
       .select({ tag: questionTags.tag, n: sql<number>`count(*)::int` })
       .from(questionTags)
@@ -37,13 +42,73 @@ export async function poolTags(db: Db, poolId: string): Promise<PoolTag[]> {
       .where(and(eq(questions.poolId, poolId), isNull(questions.deletedAt)))
       .groupBy(questionTags.tag),
   ]);
-  const counts = new Map(used.map((r) => [r.tag, r.n]));
-  const out = new Map<string, PoolTag>();
+  return vocabulary(described, used, (row) => ({ count: row?.n ?? 0 }));
+}
+
+/**
+ * The pool's "Tags" tab: every tag of the vocabulary (as {@link poolTags}),
+ * with its live questions and the DISTINCT courses that use one of them —
+ * the course of the classroom of an exam or an exercise, or the course of a
+ * template, whose items pin a version of the question. A poll (no course,
+ * or a classroom's poll) and the drill do not count. One grouped query;
+ * reads `evaluations`, `evaluation_items` and `classrooms` by join (indexed
+ * by `evaluation_items_version_idx`).
+ */
+export async function poolTagUsage(db: Db, poolId: string): Promise<PoolTagUsage[]> {
+  const course = sql`coalesce(${evaluations.courseId}, ${classrooms.courseId})`;
+  const [described, used] = await Promise.all([
+    describedTags(db, poolId),
+    db
+      .select({
+        tag: questionTags.tag,
+        questions: sql<number>`count(DISTINCT ${questions.id})::int`,
+        courses: sql<number>`count(DISTINCT ${course})::int`,
+      })
+      .from(questionTags)
+      .innerJoin(questions, eq(questionTags.questionId, questions.id))
+      .leftJoin(questionVersions, eq(questionVersions.questionId, questions.id))
+      .leftJoin(evaluationItems, eq(evaluationItems.questionVersionId, questionVersions.id))
+      .leftJoin(
+        evaluations,
+        and(
+          eq(evaluations.id, evaluationItems.evaluationId),
+          inArray(evaluations.mode, ["exam", "exercise"]),
+        ),
+      )
+      .leftJoin(classrooms, eq(classrooms.id, evaluations.classroomId))
+      .where(and(eq(questions.poolId, poolId), isNull(questions.deletedAt)))
+      .groupBy(questionTags.tag),
+  ]);
+  return vocabulary(described, used, (row) => ({
+    questions: row?.questions ?? 0,
+    courses: row?.courses ?? 0,
+  }));
+}
+
+function describedTags(db: Db, poolId: string) {
+  return db
+    .select({ tag: poolTagsTable.tag, description: poolTagsTable.description })
+    .from(poolTagsTable)
+    .where(eq(poolTagsTable.poolId, poolId));
+}
+
+/**
+ * The documented rows of `pool_tags` and, defensively, any tag worn by a
+ * question that has no row yet, each with its figures from `used`,
+ * alphabetical.
+ */
+function vocabulary<U extends { tag: string }, F>(
+  described: readonly { tag: string; description: string }[],
+  used: readonly U[],
+  figures: (row: U | undefined) => F,
+): ({ tag: string; description: string } & F)[] {
+  const byTag = new Map(used.map((r) => [r.tag, r]));
+  const out = new Map<string, { tag: string; description: string } & F>();
   for (const row of described) {
-    out.set(row.tag, { tag: row.tag, description: row.description, count: counts.get(row.tag) ?? 0 });
+    out.set(row.tag, { tag: row.tag, description: row.description, ...figures(byTag.get(row.tag)) });
   }
   for (const row of used) {
-    if (!out.has(row.tag)) out.set(row.tag, { tag: row.tag, description: "", count: row.n });
+    if (!out.has(row.tag)) out.set(row.tag, { tag: row.tag, description: "", ...figures(row) });
   }
   return [...out.values()].sort((a, b) => a.tag.localeCompare(b.tag));
 }
