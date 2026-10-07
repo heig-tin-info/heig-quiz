@@ -28,6 +28,7 @@ import {
   flags,
   iso,
   mockCalculator,
+  MOCK_CONDITIONS,
   now,
   on,
   rand,
@@ -657,7 +658,10 @@ function seedEvaluations() {
   const room = rooms[0];
   if (!room) return;
   evaluations.push(
-    makeEvaluation(room.id, "Quiz 1 — variables et types", "draft", 4),
+    // ADR-079: the draft exam announces its conditions (the editor's screenshot).
+    makeEvaluation(room.id, "Quiz 1 — variables et types", "draft", 4, {
+      settings: { ...defaultEvaluationSettings(), conditions: MOCK_CONDITIONS },
+    }),
     makeEvaluation(room.id, "Quiz 2 — boucles", "scheduled", 6, {
       opensAt: iso(2 * D),
       closesAt: iso(2 * D + H),
@@ -1143,6 +1147,15 @@ function assertConfigPatch(e: MockEvaluation, body: Record<string, unknown>): vo
   const settings = body.settings as
     | { lobby?: LobbyName; retakes?: { enabled?: boolean } }
     | undefined;
+  // ADR-079: a poll has no conditions, as on the server.
+  if (e.mode === "poll" && Array.isArray(body.settings && (body.settings as { conditions?: unknown }).conditions)) {
+    if (((body.settings as { conditions: unknown[] }).conditions).length > 0) {
+      throw new MockPayload(422, {
+        error: "conditions_not_allowed",
+        message: `an evaluation of mode "${e.mode}" has no conditions (ADR-079)`,
+      });
+    }
+  }
   // F-EVAL-15: an exam takes one attempt, as on the server.
   if (settings?.retakes?.enabled === true && e.mode !== "exercise") {
     throw new MockPayload(422, {

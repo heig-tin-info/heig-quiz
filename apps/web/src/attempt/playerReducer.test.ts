@@ -43,6 +43,7 @@ function view(
   lastItemId: string | null = null,
 ): AttemptView {
   return {
+    conditions: { announced: [], imposed: [] },
     attempt: {
       id: "a1",
       state: "in_progress",

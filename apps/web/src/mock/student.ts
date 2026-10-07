@@ -5,6 +5,7 @@ import {
   studentProjectGroup,
   type StudentActivityGroup,
 } from "@quiz/domain";
+import { evaluationConditionsOf } from "@quiz/contracts";
 import type {
   AttemptView,
   AutosaveResponse,
@@ -29,6 +30,7 @@ import {
   flags,
   iso,
   mockCalculator,
+  MOCK_CONDITIONS,
   now,
   on,
   scene,
@@ -347,7 +349,33 @@ export const setStudentDeadline = (at: number) => {
   studentDeadline = at;
 };
 
+/** The settings of the student's evaluation, which every one of its views states. */
+const studentSettings = (): AttemptView["evaluation"]["settings"] => ({
+  navigation: scene === "forward" ? "forward_only" : "free",
+  presentation: "zen",
+  lobby: "manual",
+  shuffleItems: false,
+  shuffleChoices: true,
+  timing: "duration",
+  showProgressBar: true,
+  logVisibility: true,
+  requireFullscreen: false,
+  ...(flags.negative ? { negativeMarking: true } : {}),
+  ...mockCalculator(),
+});
+
+/** ADR-079: what the server builds for this student — 20 minutes, a third more. */
+const studentConditions = () =>
+  evaluationConditionsOf({
+    mode: scene === "exercise" ? "exercise" : "exam",
+    settings: { ...studentSettings(), conditions: flags.empty ? [] : MOCK_CONDITIONS },
+    durationS: 20 * 60,
+    closesAt: null,
+    timeBonusPercent: 33,
+  });
+
 export const studentAttemptView = (): AttemptView => ({
+  conditions: studentConditions(),
   attempt: {
     id: STUDENT_ATTEMPT,
     // `closed` is the deadline case of F-LIVE-07: the server expired the
@@ -365,19 +393,7 @@ export const studentAttemptView = (): AttemptView => ({
     title: "Quiz 3 — Pointeurs et lois fondamentales",
     mode: scene === "exercise" ? "exercise" : "exam",
     state: studentEvaluationState(),
-    settings: {
-      navigation: scene === "forward" ? "forward_only" : "free",
-      presentation: "zen",
-      lobby: "manual",
-      shuffleItems: false,
-      shuffleChoices: true,
-      timing: "duration",
-      showProgressBar: true,
-      logVisibility: true,
-      requireFullscreen: false,
-      ...(flags.negative ? { negativeMarking: true } : {}),
-      ...mockCalculator(),
-    },
+    settings: studentSettings(),
     feedbackPolicy: {
       when: "on_release",
       showAnswer: true,
@@ -439,9 +455,7 @@ export const studentLobbyView = (): LobbyView => ({
     state: "lobby",
     announcedDurationS: 20 * 60,
   },
-  navigation: "free",
-  negativeMarking: flags.negative,
-  calculator: mockCalculator().calculator ?? "none",
+  conditions: studentConditions(),
   present: 18,
   enrolled: 24,
   timeBonusPercent: 33,
@@ -997,9 +1011,7 @@ export const studentReadyView = (): ReadyView => ({
     announcedDurationS: 20 * 60,
     closesAt: null,
   },
-  navigation: "free",
-  negativeMarking: flags.negative,
-  calculator: mockCalculator().calculator ?? "none",
+  conditions: studentConditions(),
   timeBonusPercent: 33,
 });
 

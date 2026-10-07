@@ -38,7 +38,7 @@
  * preview gets one whatever the mode: it has no clock to stop, and its Home
  * leads back to the evaluation.
  */
-import { Home, Moon, Sun } from "lucide-react";
+import { Home, Moon, ScrollText, Sun } from "lucide-react";
 import { useEffect, useLayoutEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 import { CommandPalette } from "../CommandPalette";
@@ -88,6 +88,7 @@ export function PlayerShell({
   progressLabel,
   headerAction,
   home,
+  onConditions,
   commands,
   banner,
   footer,
@@ -126,6 +127,11 @@ export function PlayerShell({
    * reads as disabled (the player ignores a second press).
    */
   home?: { onClick: () => void; label: string; busy?: boolean };
+  /**
+   * Reopens the evaluation's conditions (ADR-079): a quiet button of the bar,
+   * never a second floating one — the calculator holds the bottom right.
+   */
+  onConditions?: () => void;
   /** What `Ctrl+K` offers here. Empty means no palette at all. */
   commands?: Command[];
   /** The offline alert, in the flow under the bar. */
@@ -224,6 +230,11 @@ export function PlayerShell({
                 <p className="truncate text-[12px] leading-tight text-fg-muted">{subtitle}</p>
               ) : null}
             </div>
+            {onConditions ? (
+              <IconButton label={t("conditions.show")} onClick={onConditions}>
+                <ScrollText />
+              </IconButton>
+            ) : null}
             {/* Left of the clock, and there whether or not there IS a clock:
                 a `manual` evaluation has no deadline, and the toggle then
                 simply sits where the countdown would have been. */}

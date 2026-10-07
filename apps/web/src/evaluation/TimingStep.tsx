@@ -2,7 +2,7 @@ import { Check, Lock, MonitorPlay, Timer } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { TransitionRefusal, type EvaluationDetail, type EvaluationPatch } from "@quiz/contracts";
-import { configLock, isConfigFieldWritable } from "@quiz/domain";
+import { conditionsAllowedFor, configLock, isConfigFieldWritable } from "@quiz/domain";
 
 import { ApiError } from "../api";
 import { EvaluationDrillSetting } from "../drill/EvaluationDrillSetting";
@@ -24,6 +24,7 @@ import {
   SettingRow,
 } from "../ui";
 import { AdvancedDisclosure } from "./AdvancedDisclosure";
+import { ConditionsSetting } from "./ConditionsSetting";
 import type { ConfigPatch, ConfigView } from "./editTarget";
 import { RetakesSetting } from "./RetakesSetting";
 import { matchPreset, presetPatch, type PresetId } from "./presets";
@@ -50,7 +51,7 @@ import type { ConfigWriter } from "./usePatch";
  *
  * The step is two layers. `ConfigSettings` is the configuration an
  * evaluation and a template share — the presets, the timing kind and the
- * duration, the retakes, the advanced options — and `TimingStep` wraps it
+ * duration, the retakes, the conditions (ADR-079), the advanced options — and `TimingStep` wraps it
  * with what only a run has: its dates, the locks of a
  * started evaluation and the fields the launch still needs. A template's
  * editor wraps the same `ConfigSettings` with none of that (F-EVAL-25).
@@ -178,6 +179,7 @@ export function ConfigSettings({
   feedbackDisabled = disabled,
   missing = new Set(),
   dates,
+  closesAt = null,
   holdsCategorize = false,
 }: {
   config: ConfigView;
@@ -191,6 +193,8 @@ export function ConfigSettings({
   /** The timing fields the launch still needs (#76); none on arrival. */
   missing?: ReadonlySet<TimingField>;
   dates?: ReactNode;
+  /** The run's common end, for the conditions' deadline line (ADR-079); a template has none. */
+  closesAt?: string | null;
   /** An item is a `categorize` question: its policy row is shown (ADR-036). */
   holdsCategorize?: boolean;
 }) {
@@ -290,6 +294,11 @@ export function ConfigSettings({
         <RetakesSetting settings={settings} patch={patch} disabled={disabled} />
       ) : null}
 
+      {/* ADR-079: an exam or an exercise announces its conditions; a poll has none. */}
+      {conditionsAllowedFor(mode) ? (
+        <ConditionsSetting config={config} closesAt={closesAt} patch={patch} disabled={disabled} />
+      ) : null}
+
       <AdvancedDisclosure
         config={config}
         patch={patch}
@@ -378,6 +387,7 @@ export function TimingStep({
         feedbackDisabled={!isConfigFieldWritable(lock, "feedbackPolicy")}
         holdsCategorize={detail.items.some((i) => i.type === "categorize")}
         missing={missing}
+        closesAt={closesAt}
         dates={
           <>
             <div className="flex flex-col gap-1">

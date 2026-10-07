@@ -412,7 +412,9 @@ describe("the student is told before answering", () => {
     await applyState(db(), await reload(db(), seed.evaluationId), "lobby", server.clock.now());
     const lobby = (await send("POST", url, students[0]!.headers)).json() as AttemptOrLobby;
     expect(lobby.kind).toBe("lobby");
-    if (lobby.kind === "lobby") expect(lobby.view.negativeMarking).toBe(true);
+    if (lobby.kind === "lobby") {
+      expect(lobby.view.conditions.imposed.map((c) => c.key)).toContain("negative_marking");
+    }
 
     await applyState(db(), await reload(db(), seed.evaluationId), "running", server.clock.now());
     const entered = (await send("POST", url, students[0]!.headers)).json() as AttemptOrLobby;
@@ -432,7 +434,9 @@ describe("the student is told before answering", () => {
     const url = `/app/api/evaluations/${seed.evaluationId}/attempt`;
     await applyState(db(), await reload(db(), seed.evaluationId), "lobby", server.clock.now());
     const lobby = (await send("POST", url, students[0]!.headers)).json() as AttemptOrLobby;
-    if (lobby.kind === "lobby") expect(lobby.view.negativeMarking).toBe(false);
+    if (lobby.kind === "lobby") {
+      expect(lobby.view.conditions.imposed.map((c) => c.key)).not.toContain("negative_marking");
+    }
     await applyState(db(), await reload(db(), seed.evaluationId), "running", server.clock.now());
     const entered = (await send("POST", url, students[0]!.headers)).json() as AttemptOrLobby;
     if (entered.kind !== "attempt") throw new Error("attempt expected");

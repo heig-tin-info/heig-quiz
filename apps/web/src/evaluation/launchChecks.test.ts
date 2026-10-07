@@ -240,6 +240,18 @@ describe("launchChecks: the rules and access lines", () => {
     expect(one(checks(detailWith({ mode: "exam" }, {}, retakes(3))), "rules").detail).toBe("launch.rules.oneAttempt");
   });
 
+  it("counts the announced conditions on the info line, never as a warning (ADR-079)", () => {
+    const conditions = (n: number) => ({
+      conditions: Array.from({ length: n }, (_, i) => ({ kind: "info" as const, text: `Line ${i}` })),
+    });
+    expect(one(checks(detailWith({}, {}, conditions(1))), "rules").detail).toBe(
+      "launch.rules.oneAttempt · launch.rules.conditions.one",
+    );
+    const many = one(checks(detailWith({}, {}, conditions(3))), "rules");
+    expect(many.level).toBe("info");
+    expect(many.detail).toBe('launch.rules.oneAttempt · launch.rules.conditions.many {"n":3}');
+  });
+
   it("lists the access restrictions: the IP allow-list, then SEB, then the kiosk", () => {
     const access = one(
       checks(detailWith({ ipAllowlist: ["10.0.0.0/8"] }, {}, { safeExamBrowser: true, kiosk: true })),

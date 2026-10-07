@@ -1,8 +1,7 @@
 import { ChevronRight, Eye } from "lucide-react";
 import { useState } from "react";
 
-import { negativeMarkingOf, type EvaluationDetail } from "@quiz/contracts";
-import { calculatorOn, negativeMarkingOn } from "@quiz/domain";
+import { evaluationConditionsOf, type EvaluationDetail } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { LobbyScreen, type LobbyScreenView } from "../student/Lobby";
@@ -15,7 +14,7 @@ import { Card, Sheet } from "../ui";
  * mounting the connected one would open the `lobby:` stream, and a teacher
  * with a staff seat would then be counted present in the real room. Nobody
  * is present yet, so the ring reads 0 out of the roster; no question content
- * is involved, only the rules the waiting room states.
+ * is involved, only the conditions the waiting room states (ADR-079).
  */
 
 /** The waiting room's view of this evaluation, as the server builds it (`lobbyView`). */
@@ -28,10 +27,8 @@ export function lobbyPreviewView(detail: EvaluationDetail): LobbyScreenView {
       state: "lobby",
       announcedDurationS: evaluation.durationS,
     },
-    navigation: evaluation.settings.navigation,
-    negativeMarking: negativeMarkingOn(evaluation.mode, negativeMarkingOf(evaluation.settings)),
-    calculator: calculatorOn(evaluation.mode, evaluation.settings.calculator),
-    timeBonusPercent: 0,
+    // ADR-079: the same builder the server uses, for a student with no extra time.
+    conditions: evaluationConditionsOf({ ...evaluation, timeBonusPercent: 0 }),
   };
 }
 

@@ -9,12 +9,13 @@
  * `POST /evaluations/:id/attempt/start` and hands its answer to the entry
  * query, so the route renders the player (keyed on the attempt).
  *
- * It holds the evaluation's rules (the lobby's rules card) and no question
+ * It holds the evaluation's conditions (ADR-079) and no question
  * content (invariant 4).
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import type { AttemptEntry, ReadyView } from "@quiz/contracts";
+import { TIMING_CONDITION_KEYS } from "@quiz/domain";
 
 import { ApiError, api } from "../api";
 import { useT, type TFunction } from "../i18n";
@@ -22,7 +23,7 @@ import { useErrorToast } from "../notify";
 import { attemptEntryKey } from "../queryKeys";
 import { Button } from "../ui";
 import { isoDateTime } from "../ui/dates";
-import { RulesCard, minutesWithBonus } from "./Lobby";
+import { ConditionsList, minutesWithBonus } from "./ConditionsList";
 
 /** What Start announces: the clock of N minutes, a closing instant, or no clock. */
 function clockSentence(view: ReadyView, t: TFunction): string {
@@ -77,7 +78,9 @@ export function Ready({
       </p>
       <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-[-0.02em]">{title}</h1>
 
-      <RulesCard view={view} className="mt-8" />
+      {/* ADR-079: the conditions, without the time — the sentence above
+          Start says it, in the words of what Start does. */}
+      <ConditionsList conditions={view.conditions} omit={TIMING_CONDITION_KEYS} className="mt-8" />
 
       <p id="ready-clock" className="mt-8 text-base text-fg-muted">
         {clock}

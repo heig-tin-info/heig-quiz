@@ -12,7 +12,14 @@
 import { z } from "zod";
 
 import {
-  CalculatorMode,
+  announcedConditionsOn,
+  imposedConditions,
+  type ConditionsInput,
+  type ImposedCondition as DomainImposedCondition,
+} from "@quiz/domain";
+
+import {
+  ConditionKind,
   EvaluationMode,
   EvaluationSettings,
   EvaluationState,
@@ -89,6 +96,74 @@ export const AttemptItem = z.object({
 });
 export type AttemptItem = z.infer<typeof AttemptItem>;
 
+/**
+ * One line the platform adds to an evaluation's conditions (ADR-079): a key
+ * the screens translate, its kind and its parameters — `@quiz/domain`'s
+ * `ImposedCondition`, which `imposedConditions` derives; the two are checked
+ * equal below.
+ */
+export const ImposedCondition = z.discriminatedUnion("key", [
+  z.object({ key: z.literal("trusted_client"), kind: z.literal("forbidden"), clients: z.array(TrustedClient) }),
+  z.object({
+    key: z.literal("calculator"),
+    kind: z.literal("provided"),
+    calculator: z.enum(["standard", "scientific"]),
+  }),
+  z.object({
+    key: z.literal("duration"),
+    kind: z.literal("info"),
+    durationS: z.number().int(),
+    bonusPercent: z.number().int(),
+  }),
+  z.object({
+    key: z.literal("deadline"),
+    kind: z.literal("info"),
+    closesAt: z.iso.datetime(),
+    bonusPercent: z.number().int(),
+  }),
+  z.object({ key: z.literal("attempts"), kind: z.literal("info"), maxAttempts: z.number().int().nullable() }),
+  z.object({
+    key: z.literal("navigation"),
+    kind: z.literal("info"),
+    navigation: z.enum(["forward_only", "milestones"]),
+  }),
+  z.object({ key: z.literal("negative_marking"), kind: z.literal("info") }),
+  z.object({ key: z.literal("visibility_logged"), kind: z.literal("info") }),
+  z.object({ key: z.literal("autosave"), kind: z.literal("info") }),
+]);
+export type ImposedCondition = z.infer<typeof ImposedCondition>;
+
+// The wire shape and the domain's are the same union, both ways.
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+const _imposedSame: Same<ImposedCondition, DomainImposedCondition> = true;
+void _imposedSame;
+
+/**
+ * The conditions a student reads (ADR-079, F-EVAL-33): what the teacher
+ * announces — kind and text only, never the catalog reference — then what
+ * the platform imposes. Built by the server for the waiting room, the ready
+ * screen and the attempt; drawn by one component (`ConditionsList`).
+ */
+export const EvaluationConditions = z.object({
+  announced: z.array(z.object({ kind: ConditionKind, text: z.string() })),
+  imposed: z.array(ImposedCondition),
+});
+export type EvaluationConditions = z.infer<typeof EvaluationConditions>;
+
+/**
+ * THE builder of {@link EvaluationConditions}: the server calls it for every
+ * student view, the teacher's launch preview on the configuration it holds.
+ * The announced ones lose their catalog reference; a poll has none.
+ */
+export function evaluationConditionsOf(
+  input: ConditionsInput & { settings: { conditions?: { kind: ConditionKind; text: string }[] | undefined } },
+): EvaluationConditions {
+  return {
+    announced: announcedConditionsOn(input.mode, input.settings.conditions).map(({ kind, text }) => ({ kind, text })),
+    imposed: imposedConditions(input),
+  };
+}
+
 export const AttemptView = z.object({
   attempt: z.object({
     id: z.uuid(),
@@ -117,29 +192,24 @@ export const AttemptView = z.object({
     totalPoints: z.number(),
   }),
   items: z.array(AttemptItem),
+  /**
+   * ADR-079: the conditions, reopenable from the player's bar. The announced
+   * ones travel here only — `evaluation.settings` carries no `conditions`.
+   */
+  conditions: EvaluationConditions,
 });
 export type AttemptView = z.infer<typeof AttemptView>;
 
+
 /**
- * The rules of an evaluation a student reads BEFORE the clock runs, said by
- * the waiting room and by the ready screen alike (§6.3). Rules of the
- * evaluation, not question content.
+ * What an evaluation tells a student BEFORE the clock runs, said by the
+ * waiting room and by the ready screen alike (§6.3, ADR-076 §1 as amended by
+ * ADR-079): its conditions, and the student's own extra time, which the
+ * screens also need beside the duration. Rules of the evaluation, not
+ * question content.
  */
 export const EvaluationRules = z.object({
-  /**
-   * `settings.navigation`, so the screen can state the first of its three
-   * rules (F-LIVE-08): it says how the student may move, nothing about what
-   * they see.
-   */
-  navigation: Navigation,
-  /**
-   * The evaluation scores its choice questions with negative marking
-   * (ADR-026): said before anybody starts. The server always sends it;
-   * absent reads as off.
-   */
-  negativeMarking: z.boolean().optional(),
-  /** The calculator the screen will provide (ADR-069). Absent reads as none. */
-  calculator: CalculatorMode.optional(),
+  conditions: EvaluationConditions,
   timeBonusPercent: z.number().int(),
 });
 export type EvaluationRules = z.infer<typeof EvaluationRules>;

@@ -63,7 +63,9 @@ describe("the calculator setting", () => {
     };
     const without = await seed();
     const lobbyWithout = await lobbyOf(without.evaluationId);
-    expect(lobbyWithout.kind === "lobby" && lobbyWithout.view.calculator).toBe("none");
+    expect(lobbyWithout.kind === "lobby" && lobbyWithout.view.conditions.imposed.map((c) => c.key)).not.toContain(
+      "calculator",
+    );
 
     const { evaluationId } = await seed();
     const set = await send("PATCH", `/app/api/evaluations/${evaluationId}`, teacher.headers, {
@@ -71,7 +73,11 @@ describe("the calculator setting", () => {
     });
     expect(set.statusCode).toBe(200);
     const lobby = await lobbyOf(evaluationId);
-    expect(lobby.kind === "lobby" && lobby.view.calculator).toBe("standard");
+    expect(lobby.kind === "lobby" && lobby.view.conditions.imposed).toContainEqual({
+      key: "calculator",
+      kind: "provided",
+      calculator: "standard",
+    });
 
     await applyState(db(), await reload(db(), evaluationId), "running", server.clock.now());
     const url = `/app/api/evaluations/${evaluationId}/attempt`;

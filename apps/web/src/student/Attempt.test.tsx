@@ -27,7 +27,7 @@ const ATTEMPT = "22222222-2222-4222-8222-222222222222";
 
 const lobbyView: LobbyView = {
   evaluation: { id: EVAL, title: "Quiz 3 — Pointeurs", state: "lobby", announcedDurationS: 1200 },
-    navigation: "free",
+  conditions: { announced: [], imposed: [] },
   present: 3,
   enrolled: 6,
   timeBonusPercent: 0,
@@ -193,8 +193,7 @@ describe("/take/:id on a running evaluation not yet started", () => {
       announcedDurationS: 1200,
       closesAt: null,
     },
-    navigation: "free",
-    negativeMarking: false,
+    conditions: { announced: [], imposed: [] },
     timeBonusPercent: 25,
   };
 

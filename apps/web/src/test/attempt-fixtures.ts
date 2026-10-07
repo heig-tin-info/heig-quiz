@@ -58,6 +58,7 @@ export interface AttemptViewOptions {
 export function makeAttemptView(options: AttemptViewOptions = {}): AttemptView {
   const items = options.items ?? [makeAttemptItem({ id: "i1", position: 1 })];
   return {
+    conditions: { announced: [], imposed: [] },
     attempt: {
       id: "a1",
       state: "in_progress",

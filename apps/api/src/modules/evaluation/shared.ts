@@ -103,6 +103,13 @@ export class CalculatorNotAllowed extends EvaluationError {
   }
 }
 
+/** ADR-079: a poll has no conditions to sit under. */
+export class ConditionsNotAllowed extends EvaluationError {
+  constructor(mode: string) {
+    super("conditions_not_allowed", 422, `an evaluation of mode "${mode}" has no conditions (ADR-079)`);
+  }
+}
+
 /**
  * ADR-051 §2: the platform has no kiosk path (`KIOSK_ATTESTATION=off`), so an
  * exam that only a kiosk station may sit could never be sat.

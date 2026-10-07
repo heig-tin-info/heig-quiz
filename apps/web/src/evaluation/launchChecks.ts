@@ -19,11 +19,13 @@
  *     class nobody has signed in, and a warning there would be noise.
  */
 import {
+  conditionsOf,
   negativeMarkingOf,
   retakesOf,
   type EvaluationDetail,
 } from "@quiz/contracts";
 import {
+  announcedConditionsOn,
   lacksGradedPoints,
   negativeMarkingOn,
   retakesOn,
@@ -231,6 +233,7 @@ function timingCheck(
 function rulesCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
   const { settings, mode } = detail.evaluation;
   const retakes = retakesOf(settings);
+  const announced = announcedConditionsOn(mode, conditionsOf(settings));
   const attempts = !retakesOn(mode, retakes)
     ? t("launch.rules.oneAttempt")
     : retakes.maxAttempts === null
@@ -245,9 +248,18 @@ function rulesCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
         settings.shuffleItems ? t("launch.rules.shuffled") : t("launch.rules.fixedOrder"),
       ].join(", "),
     ),
-    detail: [attempts, ...(negativeMarkingOn(mode, negativeMarkingOf(settings)) ? [t("launch.rules.negative")] : [])].join(
-      " · ",
-    ),
+    detail: [
+      attempts,
+      ...(negativeMarkingOn(mode, negativeMarkingOf(settings)) ? [t("launch.rules.negative")] : []),
+      // ADR-079: said, never warned about — an evaluation without any is fine.
+      ...(announced.length === 0
+        ? []
+        : [
+            announced.length === 1
+              ? t("launch.rules.conditions.one")
+              : t("launch.rules.conditions.many", { n: announced.length }),
+          ]),
+    ].join(" · "),
     fix: { kind: "step", step: "timing" },
   };
 }
