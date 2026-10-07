@@ -403,9 +403,22 @@ describe("the online workspace (ADR-047, M6-06)", () => {
     const open = await screen.findByRole("link", { name: "Open workspace" });
     expect(open).toHaveAttribute("href", "/app/codespace/start/p1");
     expect(open.className).toMatch(/bg-accent/);
-    // GitHub is out of SEB's reach: no repository action in the header.
+    // GitHub is out of SEB's reach: no repository action in the header, no repository card.
     expect(screen.queryByRole("link", { name: "Open repository" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Open in Safe Exam Browser" })).toBeNull();
+    expect(screen.queryByText("My repository")).toBeNull();
+    expect(screen.queryByText("heig/labo-1-lea")).toBeNull();
+    expect(screen.queryByRole("link", { name: /See the run on GitHub/ })).toBeNull();
+  });
+
+  it("offers no invitation under Safe Exam Browser, outside SEB either (ADR-047 §2)", async () => {
+    mockFetch({ [URL]: ok(project({ workspace: { mode: "online_seb" }, repo: { ...project().repo!, invitation: "pending" } })) });
+    render();
+    expect(await screen.findByRole("button", { name: "Open in Safe Exam Browser" })).toHaveClass("bg-accent");
+    expect(screen.getByText("heig/labo-1-lea")).toBeInTheDocument();
+    expect(screen.queryByText("Invitation pending on GitHub")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Resend the invitation" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Open the invitation" })).toBeNull();
   });
 
   it("shows nothing of a workspace on a project worked in the student's own tools", async () => {

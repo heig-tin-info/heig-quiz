@@ -26,6 +26,7 @@ import {
   openProjectSebSession,
   openSebSession,
   PROJECT_SEB_ROUTES,
+  sebSessionOf,
   sebStartUrl,
   SITTING_ROUTES,
 } from "./testing.js";
@@ -449,9 +450,14 @@ describe("the seb session of a project (D21)", () => {
     expect((await call("GET", `/app/api/projects/${lab}/seb`, seb)).statusCode).toBe(401);
   });
 
-  it("opens only with the project's file: an evaluation's Config Key is refused", async () => {
+  it("opens only with the project's file: an evaluation's Config Key is refused, and does not burn the ticket", async () => {
     const startUrl = await sebStartUrl(server, lab, student.headers, `/app/api/projects/${lab}/seb`);
     expect((await launchSeb(server, startUrl, configKeyHeaderFor(startUrl))).headers.location).toBe("/?seb=invalid");
+    // The ticket was read, not consumed: the project's own header still opens it.
+    const opened = await launchSeb(server, startUrl, configKeyHeaderFor(startUrl, [PORTAL_HOST]));
+    expect(opened.headers.location).toBe(`/projects/${lab}`);
+    // It superseded the earlier session of the project: the tests below ride on this one.
+    seb = sebSessionOf(opened, startUrl, [PORTAL_HOST]);
   });
 
   it("knows its project, and reads that project's student page only", async () => {
