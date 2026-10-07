@@ -6,7 +6,7 @@
  * except for an administrator with Super Powers on (ADR-054), whose read is
  * audited (`assist.read`).
  */
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { AssistAsk, AssistListQuery, IdParam, type AssistAvailability } from "@quiz/contracts";
 import { ASSIST_TURNS_PER_MINUTE } from "@quiz/domain";
@@ -14,7 +14,7 @@ import { ASSIST_TURNS_PER_MINUTE } from "@quiz/domain";
 import { tracer } from "../../audit.js";
 import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
 import type { AppConfig } from "../../config.js";
-import { callerOf, ownPortalSession, teacherGuard } from "../guards.js";
+import { callerOf, ownSessionGuard, teacherGuard } from "../guards.js";
 import { invalid, notFound } from "../http.js";
 import { LlmError, llmFailure } from "../llm/service.js";
 import { loadCorpus } from "./corpus.js";
@@ -34,16 +34,9 @@ export async function assistPlugin(app: FastifyInstance, opts: { config: AppConf
   if (!corpus) app.log.warn("assist: no corpus (dist/assist-corpus.json); the assistant is unavailable");
   const stub = config.LLM_PROVIDER === "stub";
   const trace = tracer(app);
-  const requireTeacher = teacherGuard(app);
 
   /** A teacher or an administrator, in their own portal session, through the browser (ADR-080 §3). */
-  const requireAssist = async (req: FastifyRequest, reply: FastifyReply) => {
-    const denied = await requireTeacher(req, reply);
-    if (denied) return denied;
-    // `req.auth` is null for a token: a browser session of one's own only.
-    if (!ownPortalSession(req.auth)) return reply.code(403).send({ error: "forbidden" });
-    return undefined;
-  };
+  const requireAssist = [teacherGuard(app), ownSessionGuard(app)];
   /**
    * Reading another teacher's conversations is reaching their content: an
    * administrator with Super Powers on (ADR-054), audited (ADR-080 §6).
@@ -71,7 +64,8 @@ export async function assistPlugin(app: FastifyInstance, opts: { config: AppConf
     try {
       return await ask({ db: app.db, gateway: app.llmGateway, corpus, engine }, user, body.data, now);
     } catch (error) {
-      if (error instanceof ConversationNotFound) return notFound(reply);
+      // Missing, somebody else's, or purged while the model answered: the same 404.
+      if (error instanceof ConversationNotFound) return reply.code(404).send({ error: "conversation_not_found" });
       if (error instanceof LlmError) {
         const { status, body: failure } = llmFailure(error);
         return reply.code(status).send(failure);

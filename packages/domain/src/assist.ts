@@ -24,12 +24,12 @@ export const ASSIST_CAP_SHARE = 0.25;
 export const ASSIST_MAX_STEPS = 4;
 /** Questions per minute per teacher (`Budget`, ADR-080 §4): a guard against a held key, the share does the rest. */
 export const ASSIST_TURNS_PER_MINUTE = 6;
-/** Days a message is kept (ADR-080 §6): the nightly purge deletes older ones. */
+/** Days an exchange is kept (ADR-080 §6): the nightly purge deletes older ones. */
 export const ASSIST_RETENTION_DAYS = 30;
 /** The longest question a teacher may type. */
 export const ASSIST_MAX_MESSAGE_CHARS = 2000;
-/** The earlier messages replayed with a question: the conversation's last ones. */
-export const ASSIST_HISTORY_MESSAGES = 20;
+/** The earlier exchanges replayed with a question: the conversation's last ones. */
+export const ASSIST_HISTORY_EXCHANGES = 10;
 /** The output budget of one provider request. */
 export const ASSIST_MAX_TOKENS = 4000;
 /** The most of a page `read_guide` returns, in characters. */

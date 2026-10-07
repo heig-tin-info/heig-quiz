@@ -76,10 +76,13 @@ The context of a question (`AssistContext`, `@quiz/contracts`) is:
 - the route PATTERN (`/pools/:id`, `/courses/:id/pools`, `/admin?tab=llm`),
   every id a parameter — the contract accepts lower-case literal segments,
   `:params` and a `?tab=` only, so neither an id nor a name can ride along;
-- the screen's help topic id (`pool`), and the UI language (`en` or `fr`).
+- the screen's help topic id (`pool`) — the one its page header's "?"
+  opens, read from the slot that button fills while it is mounted
+  (`currentHelpTopic`), never a second list — and the UI language (`en` or
+  `fr`).
 
 Never an entity, a title, a student or a classroom. With it go the
-conversation's earlier messages and what the teacher typed. A teacher may
+conversation's earlier exchanges and what the teacher typed. A teacher may
 type a name; it is not masked (it cannot be told from any other word), and
 the panel says that the questions are read by an AI model (Anthropic).
 
@@ -107,9 +110,9 @@ the panel says that the questions are read by an AI model (Anthropic).
 - It is also refused once the day's total would leave less than that same
   quarter of the cap to the other purposes: when the cap nears, the chat is
   refused first and grading never starves (`shareAllows` of
-  `@quiz/domain`, a rule of any purpose holding a share).
+  `@quiz/domain`, the chat's share; the night review keeps its own rule, ADR-060 §5).
 - The share is checked under the gateway's reservation lock, request by
-  request (`reserveCall`'s `share`, here `ASSIST_CAP_SHARE`), before the cap. A share refusal is the
+  request (`reserveCall`'s `share`, `ASSIST_CAP_SHARE`), before the cap. A share refusal is the
   same `budget_exhausted` (`429 llm_budget_exhausted` to the client) but
   writes no row: the cap itself was not reached, so `llm.budget` stays
   green.
@@ -163,13 +166,15 @@ the panel says that the questions are read by an AI model (Anthropic).
 
 ### 6. Conversations are stored, 30 days
 
-- `assist_conversations` and `assist_messages` (owned by the `assist`
-  module) keep each question with its screen and each answer with its model
-  and corpus version. A question and its answer are written together once
-  the answer came: a failed call stores nothing.
-- **Retention**: every message is deleted 30 days after it was written, and
-  a conversation left empty with it, by the scheduled task `assist.purge`
-  (daily).
+- `assist_conversations` and `assist_exchanges` (owned by the `assist`
+  module, migration `0083`): one row per exchange — the question, its
+  answer, the screen it was asked on, the model and the corpus version, all
+  required. It is written once the answer came: a failed call stores
+  nothing. A conversation purged while the model answered is a `404
+  conversation_not_found`, never a half-written exchange.
+- **Retention**: every exchange is deleted 30 days after it was written,
+  and a conversation left empty with it, by the scheduled task
+  `assist.purge` (daily).
 - **Readers**: the teacher who owns a conversation — anyone else's is a 404
   (invariant 6) — and the administrators. Reading another person's
   conversation is reaching their content, so an administrator reads it with
@@ -191,7 +196,8 @@ the panel says that the questions are read by an AI model (Anthropic).
 ### 7. The entry point
 
 A 48 px round button at the bottom right, in the neutral ink — never the
-accent (ADR-069) — opening a non-modal panel above it, like the calculator.
+accent (ADR-069) — opening a non-modal panel above it: the calculator's
+dock, extracted into one primitive both use (`ToolDock`, `apps/web/src/ui/`).
 Its wrapper is a tool dock: the toasts rise above it (`--tool-dock-h`).
 Under `lg`, while the pool's bulk bar spans the bottom edge, the button
 steps aside. Checked at 1440 and 390 px (`apps/web/DESIGN.md`, "The help

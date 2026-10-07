@@ -2,15 +2,15 @@
  * The teacher assistant's conversations (ADR-080 §6), owned by the `assist`
  * module (`modules/assist/`): no other module writes these tables.
  *
- * A conversation belongs to the teacher who asked; its messages are what
- * was typed and what the model answered, kept 30 days each and deleted by
- * the nightly `assist.purge` (`ASSIST_RETENTION_DAYS`). A message records
- * the screen it was asked on (the route PATTERN, the help topic and the UI
- * language, never an entity) and, for an answer, the model and the corpus
- * version that produced it. The cost of each call is in `llm_calls`, purpose
- * `assist`, as for every other call.
+ * A conversation belongs to the teacher who asked. Each of its exchanges is
+ * one question with its answer, written together once the answer came: the
+ * screen it was asked on (the route PATTERN, the help topic and the UI
+ * language, never an entity), the model and the corpus version that
+ * answered. Kept 30 days each, deleted by the nightly `assist.purge`
+ * (`ASSIST_RETENTION_DAYS`). The cost of each call is in `llm_calls`,
+ * purpose `assist`, as for every other call.
  */
-import { index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 import type { AssistContext } from "@quiz/contracts";
 
@@ -24,30 +24,31 @@ export const assistConversations = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
-    /** The last message's time: the list's order. */
+    /** The last exchange's time: the list's order. */
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
   },
   (t) => [index("assist_conversations_user_idx").on(t.userId, t.updatedAt)],
 );
 
-export const assistMessages = pgTable(
-  "assist_messages",
+export const assistExchanges = pgTable(
+  "assist_exchanges",
   {
     id: uuid("id").primaryKey(),
     conversationId: uuid("conversation_id")
       .notNull()
       .references(() => assistConversations.id, { onDelete: "cascade" }),
-    /** The order in the conversation, from 0. */
-    seq: integer("seq").notNull(),
-    role: text("role", { enum: ["user", "assistant"] }).notNull(),
-    content: text("content").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
-    /** A question's screen; null on an answer. */
-    context: jsonb("context").$type<AssistContext>(),
-    /** An answer's model, `development-stub` for the stub's; null on a question. */
-    model: text("model"),
-    /** An answer's corpus (`AssistCorpus.version`); null on a question. */
-    corpusVersion: text("corpus_version"),
+    question: text("question").notNull(),
+    answer: text("answer").notNull(),
+    /** The screen the question was asked on. */
+    context: jsonb("context").$type<AssistContext>().notNull(),
+    /** The model that answered, `development-stub` for the stub. */
+    model: text("model").notNull(),
+    /** The corpus that answered (`AssistCorpus.version`). */
+    corpusVersion: text("corpus_version").notNull(),
   },
-  (t) => [unique("assist_messages_seq_unique").on(t.conversationId, t.seq), index("assist_messages_created_idx").on(t.createdAt)],
+  (t) => [
+    index("assist_exchanges_conversation_idx").on(t.conversationId, t.createdAt),
+    index("assist_exchanges_created_idx").on(t.createdAt),
+  ],
 );

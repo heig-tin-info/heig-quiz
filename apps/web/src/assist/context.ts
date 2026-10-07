@@ -1,12 +1,14 @@
 /**
  * What the teacher assistant knows of the screen (ADR-080 §2): the route
- * PATTERN, the screen's help topic and the UI language — never an id, a
- * title or a name — and where it is offered at all (§3).
+ * PATTERN, the screen's help topic — the one its `PageHelpButton` opens,
+ * read from that button's slot (`currentHelpTopic`) — and the UI language;
+ * never an id, a title or a name. And where it is offered at all (§3).
  */
 import { AssistContext, type Me } from "@quiz/contracts";
 
 import type { Locale } from "../i18n";
 import { routeToPath, type Route } from "../router";
+import { currentHelpTopic } from "../ui";
 
 /** The route fields that name an entity: each becomes `:<field>` in the pattern. */
 const ENTITY_FIELDS: ReadonlySet<string> = new Set(["id", "classroomId", "evaluationId", "attemptId", "code"]);
@@ -27,40 +29,8 @@ export function routePattern(route: Route): string {
   return AssistContext.shape.route.safeParse(pattern).success ? pattern : "/";
 }
 
-/**
- * The help topic of each teacher screen (`apps/web/src/help/<topic>.md`), the
- * one its `PageHeader help` opens; none for the others.
- */
-const HELP_TOPICS: Partial<Record<Route["view"], string>> = {
-  home: "courses",
-  settings: "mcq-policies",
-  course: "courses",
-  template: "courses",
-  classroom: "classroom",
-  classroomSettings: "classroom",
-  classroomGrades: "classroom",
-  classroomJournal: "journal",
-  classroomGroups: "groups",
-  groupSet: "groups",
-  project: "project",
-  projectNew: "project-new",
-  pools: "pools",
-  pool: "pool",
-  poolCategories: "categories",
-  question: "question-editor",
-  evaluation: "evaluation",
-  live: "live",
-  grading: "grading",
-  results: "results",
-};
-
-export function helpTopicOf(route: Route): string | null {
-  if (route.view === "classroom" && route.tab === "roster") return "roster";
-  return HELP_TOPICS[route.view] ?? null;
-}
-
 export function assistContext(route: Route, locale: Locale): AssistContext {
-  return { route: routePattern(route), helpTopic: helpTopicOf(route), locale };
+  return { route: routePattern(route), helpTopic: currentHelpTopic(), locale };
 }
 
 /**

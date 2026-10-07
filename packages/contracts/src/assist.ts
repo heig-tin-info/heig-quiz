@@ -39,20 +39,19 @@ export const AssistAsk = z
   .strict();
 export type AssistAsk = z.infer<typeof AssistAsk>;
 
-export const AssistMessage = z.object({
+/** One question and its answer (Markdown), written together once the answer came. */
+export const AssistExchange = z.object({
   id: z.uuid(),
-  role: z.enum(["user", "assistant"]),
-  /** Markdown for the assistant's, as typed for the user's. */
-  content: z.string(),
+  question: z.string(),
+  answer: z.string(),
   createdAt: z.iso.datetime(),
 });
-export type AssistMessage = z.infer<typeof AssistMessage>;
+export type AssistExchange = z.infer<typeof AssistExchange>;
 
-/** The answer to a question: the conversation it went into, and the assistant's message. */
+/** The answer to a question: the conversation it went into, and the exchange. */
 export const AssistReply = z.object({
   conversationId: z.uuid(),
-  question: AssistMessage,
-  answer: AssistMessage,
+  exchange: AssistExchange,
 });
 export type AssistReply = z.infer<typeof AssistReply>;
 
@@ -70,7 +69,7 @@ export const AssistConversation = z.object({
   id: z.uuid(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
-  messages: z.array(AssistMessage),
+  exchanges: z.array(AssistExchange),
 });
 export type AssistConversation = z.infer<typeof AssistConversation>;
 

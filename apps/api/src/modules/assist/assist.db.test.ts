@@ -8,7 +8,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { AssistAvailability, AssistConversation, AssistConversationSummary, AssistReply } from "@quiz/contracts";
@@ -17,7 +17,7 @@ import { ASSIST_MAX_STEPS, ASSIST_TURNS_PER_MINUTE } from "@quiz/domain";
 import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
 import { loadConfig } from "../../config.js";
-import { assistConversations, assistMessages, auditLog, llmCalls } from "../../db/schema.js";
+import { assistConversations, assistExchanges, auditLog, llmCalls } from "../../db/schema.js";
 import { testServer, type Payload, type TestServer } from "../../test/http.js";
 import type { ConverseReply, ConverseRequest, LlmProvider, Metered } from "../llm/provider.js";
 import { LlmError, LlmGateway } from "../llm/service.js";
@@ -140,22 +140,23 @@ describe("the development stub", () => {
       stub: true,
     });
     const reply = AssistReply.parse((await askAs(teacher, "Comment partager une banque ?")).json());
-    expect(reply.answer.content).toContain("Réponse de développement");
-    expect(reply.question.content).toBe("Comment partager une banque ?");
+    expect(reply.exchange.answer).toContain("Réponse de développement");
+    expect(reply.exchange.question).toBe("Comment partager une banque ?");
     const [stored] = await server.app.db
       .select()
-      .from(assistMessages)
-      .where(and(eq(assistMessages.conversationId, reply.conversationId), eq(assistMessages.role, "user")));
-    expect(stored?.context).toEqual(CONTEXT);
+      .from(assistExchanges)
+      .where(eq(assistExchanges.conversationId, reply.conversationId));
+    expect(stored).toMatchObject({ context: CONTEXT, model: "development-stub" });
     // The stub calls no model: nothing is billed.
     expect(await server.app.db.select().from(llmCalls)).toHaveLength(0);
 
+    server.clock.advance(1_000);
     const next = AssistReply.parse((await askAs(teacher, "Et la supprimer ?", reply.conversationId)).json());
     expect(next.conversationId).toBe(reply.conversationId);
     const detail = AssistConversation.parse(
       (await call(teacher, "GET", `/app/api/assist/conversations/${reply.conversationId}`)).json(),
     );
-    expect(detail.messages.map((m) => m.role)).toEqual(["user", "assistant", "user", "assistant"]);
+    expect(detail.exchanges.map((e) => e.question)).toEqual(["Comment partager une banque ?", "Et la supprimer ?"]);
   });
 
   it("limits the questions per minute", async () => {
@@ -169,7 +170,9 @@ describe("a conversation is its owner's (ADR-080 §6)", () => {
   it("is a 404 for another teacher, to read, to continue and to delete", async () => {
     const { conversationId } = AssistReply.parse((await askAs(teacher, "Où sont les tags ?")).json());
     expect((await call(colleague, "GET", `/app/api/assist/conversations/${conversationId}`)).statusCode).toBe(404);
-    expect((await askAs(colleague, "Et ensuite ?", conversationId)).statusCode).toBe(404);
+    const cont = await askAs(colleague, "Et ensuite ?", conversationId);
+    expect(cont.statusCode).toBe(404);
+    expect(cont.json()).toEqual({ error: "conversation_not_found" });
     expect((await call(colleague, "DELETE", `/app/api/assist/conversations/${conversationId}`)).statusCode).toBe(404);
     expect((await call(colleague, "GET", `/app/api/assist/conversations?userId=${teacher.id}`)).statusCode).toBe(404);
     const mine = (await call(colleague, "GET", "/app/api/assist/conversations")).json() as unknown[];
@@ -204,7 +207,7 @@ describe("a conversation is its owner's (ADR-080 §6)", () => {
     const { conversationId } = AssistReply.parse((await askAs(teacher, "Comment publier ?")).json());
     expect((await call(teacher, "DELETE", `/app/api/assist/conversations/${conversationId}`)).statusCode).toBe(204);
     expect((await call(teacher, "GET", `/app/api/assist/conversations/${conversationId}`)).statusCode).toBe(404);
-    expect(await server.app.db.select().from(assistMessages).where(eq(assistMessages.conversationId, conversationId))).toHaveLength(0);
+    expect(await server.app.db.select().from(assistExchanges).where(eq(assistExchanges.conversationId, conversationId))).toHaveLength(0);
   });
 });
 
@@ -224,7 +227,7 @@ describe("the model, through the gateway", () => {
     expect(AssistAvailability.parse((await call(teacher, "GET", "/app/api/assist/availability")).json()).stub).toBe(false);
     const res = await askAs(teacher, "À quoi sert l'option Grouper ?");
     expect(res.statusCode).toBe(200);
-    expect(AssistReply.parse(res.json()).answer.content).toBe("Clique sur **Partager**.");
+    expect(AssistReply.parse(res.json()).exchange.answer).toBe("Clique sur **Partager**.");
     const req = seen[0]!;
     expect(req.system.volatile).toContain("Route: /pools/:id");
     expect(req.system.volatile).toContain("help/pool");
@@ -288,23 +291,35 @@ describe("the model, through the gateway", () => {
 
   it("stores nothing when the model fails", async () => {
     script = () => Promise.reject(new LlmError("provider_error"));
-    const before = await server.app.db.select().from(assistMessages);
+    const before = await server.app.db.select().from(assistExchanges);
     const res = await askAs(teacher, "Comment partager ?");
     expect(res.statusCode).toBe(502);
     expect(res.json()).toMatchObject({ error: "llm_failed" });
-    expect(await server.app.db.select().from(assistMessages)).toHaveLength(before.length);
+    expect(await server.app.db.select().from(assistExchanges)).toHaveLength(before.length);
+  });
+
+  it("answers 404 when the conversation was purged while the model answered", async () => {
+    const { conversationId } = AssistReply.parse((await askAs(teacher, "Première ?")).json());
+    script = async (req, metered) => {
+      await server.app.db.delete(assistConversations).where(eq(assistConversations.id, conversationId));
+      return steps(1)(req, metered);
+    };
+    const res = await askAs(teacher, "Deuxième ?", conversationId);
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: "conversation_not_found" });
+    expect(await server.app.db.select().from(assistExchanges).where(eq(assistExchanges.conversationId, conversationId))).toHaveLength(0);
   });
 });
 
 describe("the 30-day retention (ADR-080 §6)", () => {
-  it("deletes the messages past 30 days, then the conversations left empty", async () => {
+  it("deletes the exchanges past 30 days, then the conversations left empty", async () => {
     await server.app.db.delete(assistConversations);
     script = steps(0);
     const old = AssistReply.parse((await askAs(colleague, "Vieille question")).json());
     server.clock.advance(20 * 86_400_000);
     const kept = AssistReply.parse((await askAs(colleague, "Récente")).json());
     server.clock.advance(11 * 86_400_000);
-    expect(await purgeAssist(server.app.db, server.clock.now())).toEqual({ messages: 2, conversations: 1 });
+    expect(await purgeAssist(server.app.db, server.clock.now())).toEqual({ exchanges: 1, conversations: 1 });
     const left = await server.app.db.select({ id: assistConversations.id }).from(assistConversations);
     expect(left.map((c) => c.id)).toEqual([kept.conversationId]);
     expect(left.map((c) => c.id)).not.toContain(old.conversationId);

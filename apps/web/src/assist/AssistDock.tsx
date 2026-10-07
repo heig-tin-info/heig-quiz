@@ -1,41 +1,37 @@
 /**
- * The teacher assistant (ADR-080, F-LLM-07): a round button at the bottom
- * right of every teacher screen, and the chat it opens above it.
+ * The teacher assistant (ADR-080, F-LLM-07): a `ToolDock` on every teacher
+ * screen — the round button at the bottom right, in the neutral ink, and the
+ * chat it opens above it. Under `lg`, while the pool's bulk bar is up, the
+ * dock steps aside (`data-assist-dock`, `style.css`).
  *
- * Like the calculator (ADR-069) the panel is a NON-modal floating layer: the
- * screen behind stays readable and usable, nothing is trapped, Escape or the
- * button closes it and gives focus back to the button. The button is the
- * neutral ink, never the accent, which stays the screen's primary action.
- * Its wrapper is a tool dock (`data-tool-dock`): the toasts rise above it;
- * under `lg` it steps aside while the pool's bulk bar is up (`style.css`).
- *
- * What it sends is the route pattern, the screen's help topic and the UI
- * language (`context.ts`), with the question. The conversation open in this
- * tab survives a reload (`sessionStorage`); the server keeps it 30 days.
+ * What it sends is the route pattern, the screen's help topic (the slot its
+ * `PageHelpButton` fills) and the UI language (`context.ts`), with the
+ * question. The conversation open in this tab survives a reload
+ * (`sessionStorage`); the server keeps it 30 days. One that is gone — purged,
+ * or deleted in another tab — is forgotten, and the question starts a new one.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, History, MessageCircleQuestion, SquarePen, Trash2, X } from "lucide-react";
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import type {
   AssistAsk,
   AssistAvailability,
   AssistConversation,
   AssistConversationSummary,
-  AssistMessage,
   AssistReply,
   Me,
 } from "@quiz/contracts";
 import { ASSIST_MAX_MESSAGE_CHARS } from "@quiz/domain";
 import { textareaClass } from "@quiz/ui";
 
-import { api, apiErrorMessage } from "../api";
+import { api, apiErrorMessage, refusedWith } from "../api";
 import { useConfirm } from "../confirm";
 import { useI18n } from "../i18n";
 import { Markdown } from "../markdown";
 import { assistAvailabilityKey, assistConversationKey, assistConversationsKey } from "../queryKeys";
 import type { Route } from "../router";
-import { Alert, Badge, cx, IconButton, QueryError, RelativeTime, Spinner, Z } from "../ui";
+import { Alert, Badge, cx, IconButton, QueryError, RelativeTime, Spinner, ToolDock } from "../ui";
 import { assistContext, assistVisible } from "./context";
 
 const CONVERSATION_KEY = "quiz-assist-conversation";
@@ -72,45 +68,29 @@ export function AssistDock({ me, route, teacherUi }: { me: Me; route: Route; tea
 
 function Dock({ route, stub }: { route: Route; stub: boolean }) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(storedConversation);
-  const trigger = useRef<HTMLButtonElement>(null);
-  const panelId = useId();
-  const titleId = useId();
 
-  const select = (id: string | null) => {
+  const select = useCallback((id: string | null) => {
     setConversationId(id);
     storeConversation(id);
     setShowHistory(false);
-  };
-  const close = () => {
-    setOpen(false);
-    trigger.current?.focus();
-  };
+  }, []);
 
   return (
-    <div data-tool-dock data-assist-dock>
-      {open ? (
-        <section
-          id={panelId}
-          role="dialog"
-          aria-modal="false"
-          aria-labelledby={titleId}
-          onKeyDown={(e) => {
-            if (e.key !== "Escape") return;
-            e.stopPropagation();
-            close();
-          }}
-          className={cx(
-            "fixed right-4 bottom-[calc(var(--bottom-nav-h)+var(--tool-dock-h)+1rem)] flex h-[min(36rem,calc(100dvh-var(--banner-h)-var(--bottom-nav-h)-var(--tool-dock-h)-5rem))] w-[24rem] max-w-[calc(100vw-2rem)] flex-col rounded-sheet border border-line bg-surface shadow-overlay sm:right-6",
-            Z.tool,
-          )}
-        >
+    <ToolDock
+      icon={MessageCircleQuestion}
+      openLabel={t("assist.open")}
+      closeLabel={t("assist.close")}
+      title={t("assist.title")}
+      offset="var(--bottom-nav-h)"
+      panelClassName="flex h-[min(36rem,calc(100dvh-var(--banner-h)-var(--bottom-nav-h)-var(--tool-dock-h)-5rem))] w-[24rem] flex-col"
+      dockProps={{ "data-assist-dock": true }}
+    >
+      {(close) => (
+        <>
           <header className="flex items-center gap-2 border-b border-line py-2 pr-2 pl-4">
-            <h2 id={titleId} className="text-[15px] font-bold tracking-tight">
-              {t("assist.title")}
-            </h2>
+            <h2 className="text-[15px] font-bold tracking-tight">{t("assist.title")}</h2>
             {stub ? <Badge tone="zinc">{t("assist.stub")}</Badge> : null}
             <span className="ml-auto flex items-center gap-1">
               <IconButton
@@ -133,25 +113,9 @@ function Dock({ route, stub }: { route: Route; stub: boolean }) {
           ) : (
             <Chat route={route} conversationId={conversationId} onConversation={select} />
           )}
-        </section>
-      ) : null}
-      <button
-        ref={trigger}
-        type="button"
-        aria-label={open ? t("assist.close") : t("assist.open")}
-        aria-expanded={open}
-        aria-controls={open ? panelId : undefined}
-        onClick={() => (open ? close() : setOpen(true))}
-        className={cx(
-          "fixed right-4 bottom-[calc(var(--bottom-nav-h)+1rem)] inline-flex size-12 items-center justify-center rounded-full border shadow-popover transition-[background-color,transform] duration-120 active:scale-[0.97] sm:right-6",
-          // Open, the neutral ink fill of a pressed toggle, as the calculator's: never the accent.
-          open ? "border-fg bg-fg text-surface" : "border-line bg-surface text-fg hover:bg-surface-2",
-          Z.tool,
-        )}
-      >
-        <MessageCircleQuestion className="size-5" aria-hidden />
-      </button>
-    </div>
+        </>
+      )}
+    </ToolDock>
   );
 }
 
@@ -162,7 +126,7 @@ function Chat({
 }: {
   route: Route;
   conversationId: string | null;
-  onConversation: (id: string) => void;
+  onConversation: (id: string | null) => void;
 }) {
   const { t, locale } = useI18n();
   const qc = useQueryClient();
@@ -176,36 +140,47 @@ function Chat({
     enabled: conversationId !== null,
     retry: false,
   });
+  // Gone (purged, deleted in another tab, never ours): forgotten, so the next question starts a new one.
+  const gone = conversation.isError;
+  useEffect(() => {
+    if (gone) onConversation(null);
+  }, [gone, onConversation]);
+
   const ask = useMutation({
-    mutationFn: (message: string) =>
+    mutationFn: (q: { message: string; conversationId: string | null }) =>
       api<AssistReply>("/app/api/assist/ask", {
         method: "POST",
         body: JSON.stringify({
-          message,
+          message: q.message,
           context: assistContext(route, locale),
-          ...(conversationId ? { conversationId } : {}),
+          ...(q.conversationId ? { conversationId: q.conversationId } : {}),
         } satisfies AssistAsk),
       }),
     onSuccess: (reply) => {
       qc.setQueryData<AssistConversation>(assistConversationKey(reply.conversationId), (old) => ({
         id: reply.conversationId,
-        createdAt: old?.createdAt ?? reply.question.createdAt,
-        updatedAt: reply.answer.createdAt,
-        messages: [...(old?.messages ?? []), reply.question, reply.answer],
+        createdAt: old?.createdAt ?? reply.exchange.createdAt,
+        updatedAt: reply.exchange.createdAt,
+        exchanges: [...(old?.exchanges ?? []), reply.exchange],
       }));
       void qc.invalidateQueries({ queryKey: assistConversationsKey, exact: true });
       onConversation(reply.conversationId);
       setDraft("");
     },
+    onError: (error, q) => {
+      // Purged while the page stood open: the question goes on in a new conversation.
+      if (q.conversationId && refusedWith(error, "conversation_not_found")) {
+        onConversation(null);
+        ask.mutate({ message: q.message, conversationId: null });
+      }
+    },
   });
 
-  // A conversation gone (purged, deleted in another tab) is forgotten: a new one starts.
-  const gone = conversation.isError;
   useEffect(() => {
     input.current?.focus();
   }, [conversationId]);
-  const messages: AssistMessage[] = conversationId && !gone ? (conversation.data?.messages ?? []) : [];
-  const count = messages.length + (ask.isPending ? 1 : 0);
+  const exchanges = conversationId && !gone ? (conversation.data?.exchanges ?? []) : [];
+  const count = exchanges.length + (ask.isPending ? 1 : 0);
   useEffect(() => {
     end.current?.scrollIntoView?.({ block: "end" });
   }, [count]);
@@ -214,32 +189,34 @@ function Chat({
     e?.preventDefault();
     const message = draft.trim();
     if (message === "" || ask.isPending) return;
-    ask.mutate(message);
+    ask.mutate({ message, conversationId: gone ? null : conversationId });
   };
+  const failed = ask.isError && !refusedWith(ask.error, "conversation_not_found");
 
   return (
     <>
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4" aria-live="polite">
         {conversationId && !gone && conversation.isLoading ? <Spinner className="py-8" /> : null}
-        {messages.length === 0 && !ask.isPending && !(conversationId && conversation.isLoading) ? (
+        {exchanges.length === 0 && !ask.isPending && !(conversationId && conversation.isLoading) ? (
           <div className="space-y-2 py-6 text-center">
             <MessageCircleQuestion className="mx-auto size-6 text-fg-faint" aria-hidden />
             <p className="text-sm font-semibold">{t("assist.empty.title")}</p>
             <p className="text-[13px] text-fg-muted">{t("assist.empty.body")}</p>
           </div>
         ) : null}
-        {messages.map((m) => (
-          <Bubble key={m.id} message={m} />
+        {exchanges.map((e) => (
+          <div key={e.id} className="space-y-4">
+            <Question text={e.question} />
+            <Answer text={e.answer} />
+          </div>
         ))}
         {ask.isPending ? (
           <>
-            <Bubble message={{ role: "user", content: ask.variables }} />
+            <Question text={ask.variables.message} />
             <Spinner label={t("assist.thinking")} className="items-start py-1" />
           </>
         ) : null}
-        {ask.isError ? (
-          <Alert tone="danger">{apiErrorMessage(ask.error, t("assist.error"))}</Alert>
-        ) : null}
+        {failed ? <Alert tone="danger">{apiErrorMessage(ask.error, t("assist.error"))}</Alert> : null}
         <div ref={end} />
       </div>
       <form onSubmit={submit} className="flex items-end gap-2 border-t border-line p-3">
@@ -272,15 +249,14 @@ function Chat({
   );
 }
 
-function Bubble({ message }: { message: Pick<AssistMessage, "role" | "content"> }) {
-  if (message.role === "user") {
-    return (
-      <p className="ml-8 rounded-card bg-surface-2 px-3 py-2 text-sm whitespace-pre-wrap text-fg">{message.content}</p>
-    );
-  }
+function Question({ text }: { text: string }) {
+  return <p className="ml-8 rounded-card bg-surface-2 px-3 py-2 text-sm whitespace-pre-wrap text-fg">{text}</p>;
+}
+
+function Answer({ text }: { text: string }) {
   return (
     <div className="space-y-2 text-sm leading-relaxed text-fg">
-      <Markdown source={message.content} />
+      <Markdown source={text} />
     </div>
   );
 }

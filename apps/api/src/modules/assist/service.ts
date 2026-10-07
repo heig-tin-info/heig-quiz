@@ -14,10 +14,10 @@ import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, lt, notExists, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type { AssistContext, AssistConversation, AssistConversationSummary, AssistMessage, AssistReply } from "@quiz/contracts";
+import type { AssistContext, AssistConversation, AssistConversationSummary, AssistExchange, AssistReply } from "@quiz/contracts";
 import {
   ASSIST_CAP_SHARE,
-  ASSIST_HISTORY_MESSAGES,
+  ASSIST_HISTORY_EXCHANGES,
   ASSIST_MAX_STEPS,
   ASSIST_MAX_TOKENS,
   ASSIST_RETENTION_DAYS,
@@ -30,7 +30,7 @@ import {
 } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { assistConversations, assistMessages } from "../../db/schema.js";
+import { assistConversations, assistExchanges } from "../../db/schema.js";
 import type { ConverseTurn, LlmGateway, ReadOnlyTool } from "../llm/service.js";
 import { STUB_MODEL } from "../llm/service.js";
 
@@ -77,10 +77,10 @@ export function readGuideTool(corpus: AssistCorpus, role: AssistRole, locale: As
 
 const roleOf = (role: string): AssistRole => (role === "admin" ? "admin" : "teacher");
 
-const toMessage = (row: typeof assistMessages.$inferSelect): AssistMessage => ({
+const toExchange = (row: typeof assistExchanges.$inferSelect): AssistExchange => ({
   id: row.id,
-  role: row.role,
-  content: row.content,
+  question: row.question,
+  answer: row.answer,
   createdAt: row.createdAt.toISOString(),
 });
 
@@ -102,24 +102,24 @@ export async function conversationDetail(
   db: Db,
   row: typeof assistConversations.$inferSelect,
 ): Promise<AssistConversation> {
-  const messages = await db
+  const exchanges = await db
     .select()
-    .from(assistMessages)
-    .where(eq(assistMessages.conversationId, row.id))
-    .orderBy(asc(assistMessages.seq));
+    .from(assistExchanges)
+    .where(eq(assistExchanges.conversationId, row.id))
+    .orderBy(asc(assistExchanges.createdAt), asc(assistExchanges.id));
   return {
     id: row.id,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
-    messages: messages.map(toMessage),
+    exchanges: exchanges.map(toExchange),
   };
 }
 
 /** A user's conversations, newest first, each previewed by its first question. */
 export async function listConversations(db: Db, userId: string): Promise<AssistConversationSummary[]> {
-  const first = sql<string>`(select ${assistMessages.content} from ${assistMessages}
-    where ${assistMessages.conversationId} = ${assistConversations.id}
-    order by ${assistMessages.seq} limit 1)`;
+  const first = sql<string>`(select ${assistExchanges.question} from ${assistExchanges}
+    where ${assistExchanges.conversationId} = ${assistConversations.id}
+    order by ${assistExchanges.createdAt}, ${assistExchanges.id} limit 1)`;
   const rows = await db
     .select({
       id: assistConversations.id,
@@ -142,7 +142,7 @@ export async function deleteConversation(db: Db, id: string): Promise<void> {
   await db.delete(assistConversations).where(eq(assistConversations.id, id));
 }
 
-/** The question cannot be answered: the conversation is not the asker's. */
+/** The question cannot be answered: the conversation is not the asker's, or no longer exists (purged meanwhile). */
 export class ConversationNotFound extends Error {}
 
 export interface AskDeps {
@@ -153,9 +153,9 @@ export interface AskDeps {
 }
 
 /**
- * One question (ADR-080 §5): the conversation's last messages and the new
+ * One question (ADR-080 §5): the conversation's last exchanges and the new
  * question go to the model with the stable prompt, the screen and the tool;
- * the question and its answer are stored TOGETHER once the answer came, so
+ * the question and its answer are stored as ONE exchange once the answer came, so
  * a failed call leaves nothing behind and the teacher simply asks again.
  * Throws `ConversationNotFound` or the gateway's `LlmError`.
  */
@@ -171,14 +171,16 @@ export async function ask(
   const role = roleOf(asker.role);
   const earlier = existing
     ? await db
-        .select({ role: assistMessages.role, content: assistMessages.content })
-        .from(assistMessages)
-        .where(eq(assistMessages.conversationId, existing.id))
-        .orderBy(desc(assistMessages.seq))
-        .limit(ASSIST_HISTORY_MESSAGES)
+        .select({ question: assistExchanges.question, answer: assistExchanges.answer })
+        .from(assistExchanges)
+        .where(eq(assistExchanges.conversationId, existing.id))
+        .orderBy(desc(assistExchanges.createdAt), desc(assistExchanges.id))
+        .limit(ASSIST_HISTORY_EXCHANGES)
     : [];
-  const history: ConverseTurn[] = earlier.reverse().map((m) => ({ role: m.role, text: m.content }));
-  // Questions and answers are written in pairs (below): the replay opens on a question.
+  const history: ConverseTurn[] = earlier.reverse().flatMap((e): ConverseTurn[] => [
+    { role: "user", text: e.question },
+    { role: "assistant", text: e.answer },
+  ]);
   history.push({ role: "user", text: question.message });
 
   const { text, model } =
@@ -199,51 +201,51 @@ export async function ask(
   return db.transaction(async (tx) => {
     const conversationId = existing?.id ?? randomUUID();
     if (existing) {
-      // Its row lock orders two tabs asking in the same conversation, before `seq` is read.
-      await tx.update(assistConversations).set({ updatedAt: now }).where(eq(assistConversations.id, conversationId));
+      // The model may have taken long enough for the purge, or another tab, to delete it.
+      const touched = await tx
+        .update(assistConversations)
+        .set({ updatedAt: now })
+        .where(eq(assistConversations.id, conversationId))
+        .returning({ id: assistConversations.id });
+      if (touched.length === 0) throw new ConversationNotFound();
     } else {
       await tx.insert(assistConversations).values({ id: conversationId, userId: asker.id, createdAt: now, updatedAt: now });
     }
-    const [last] = await tx
-      .select({ seq: sql<number>`coalesce(max(${assistMessages.seq}), -1)::int` })
-      .from(assistMessages)
-      .where(eq(assistMessages.conversationId, conversationId));
-    const seq = (last?.seq ?? -1) + 1;
-    const [asked, answered] = await tx
-      .insert(assistMessages)
-      .values([
-        { id: randomUUID(), conversationId, seq, role: "user", content: question.message, createdAt: now, context: question.context },
-        {
-          id: randomUUID(),
-          conversationId,
-          seq: seq + 1,
-          role: "assistant",
-          content: text,
-          createdAt: now,
-          model,
-          corpusVersion: corpus.version,
-        },
-      ])
+    const [exchange] = await tx
+      .insert(assistExchanges)
+      .values({
+        id: randomUUID(),
+        conversationId,
+        createdAt: now,
+        question: question.message,
+        answer: text,
+        context: question.context,
+        model,
+        corpusVersion: corpus.version,
+      })
       .returning();
-    return { conversationId, question: toMessage(asked!), answer: toMessage(answered!) };
+    return { conversationId, exchange: toExchange(exchange!) };
   });
 }
 
 /**
- * The retention of ADR-080 §6: every message older than 30 days, then every
- * conversation left without a message. A condition re-read at every pass,
- * so a missed night is caught up by the next one.
+ * The retention of ADR-080 §6: every exchange older than 30 days, then every
+ * conversation left without one. A condition re-read at every pass, so a
+ * missed night is caught up by the next one.
  */
-export async function purgeAssist(db: Db, now: Date): Promise<{ messages: number; conversations: number }> {
+export async function purgeAssist(db: Db, now: Date): Promise<{ exchanges: number; conversations: number }> {
   const before = new Date(now.getTime() - ASSIST_RETENTION_DAYS * 86_400_000);
-  const messages = await db.delete(assistMessages).where(lt(assistMessages.createdAt, before)).returning({ id: assistMessages.id });
-  const empty = db
+  const exchanges = await db
+    .delete(assistExchanges)
+    .where(lt(assistExchanges.createdAt, before))
+    .returning({ id: assistExchanges.id });
+  const left = db
     .select({ one: sql`1` })
-    .from(assistMessages)
-    .where(eq(assistMessages.conversationId, assistConversations.id));
+    .from(assistExchanges)
+    .where(eq(assistExchanges.conversationId, assistConversations.id));
   const conversations = await db
     .delete(assistConversations)
-    .where(notExists(empty))
+    .where(notExists(left))
     .returning({ id: assistConversations.id });
-  return { messages: messages.length, conversations: conversations.length };
+  return { exchanges: exchanges.length, conversations: conversations.length };
 }

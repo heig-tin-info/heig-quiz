@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { AssistContext, type Me } from "@quiz/contracts";
 
 import { ROUTE_VIEWS, type Route } from "../router";
-import { assistContext, assistVisible, helpTopicOf, routePattern } from "./context";
+import { assistContext, assistVisible, routePattern } from "./context";
 
 const ID = "0b6f6a52-6c7e-4a0d-9e8e-3a3f1e2b4c5d";
 const portal = { kind: "portal" } as Me["session"];
@@ -33,19 +33,11 @@ describe("routePattern — the screen, never the entity (ADR-080 §2)", () => {
   });
 });
 
-describe("helpTopicOf", () => {
-  it("names the screen's help topic, the roster tab included", () => {
-    expect(helpTopicOf({ view: "pool", id: ID })).toBe("pool");
-    expect(helpTopicOf({ view: "question", id: ID })).toBe("question-editor");
-    expect(helpTopicOf({ view: "classroom", id: ID, tab: "roster" })).toBe("roster");
-    expect(helpTopicOf({ view: "classroom", id: ID })).toBe("classroom");
-    expect(helpTopicOf({ view: "activities" })).toBeNull();
-  });
-
-  it("builds a context the server accepts", () => {
+describe("assistContext", () => {
+  it("builds a context the server accepts, with the topic of the mounted page's help button", () => {
     expect(AssistContext.parse(assistContext({ view: "pool", id: ID }, "fr"))).toEqual({
       route: "/pools/:id",
-      helpTopic: "pool",
+      helpTopic: null,
       locale: "fr",
     });
   });

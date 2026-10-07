@@ -11,8 +11,8 @@ export const ASSIST_TASKS: ScheduledTask[] = [
     key: "assist.purge",
     defaultIntervalMinutes: 24 * 60,
     run: async (app) => {
-      const { messages, conversations } = await purgeAssist(app.db, app.clock.now());
-      return `${messages} messages and ${conversations} conversations deleted`;
+      const { exchanges, conversations } = await purgeAssist(app.db, app.clock.now());
+      return `${exchanges} exchanges and ${conversations} conversations deleted`;
     },
   },
 ];

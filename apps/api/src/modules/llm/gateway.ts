@@ -39,7 +39,7 @@ export interface CompleteRequest<T> extends Omit<ProviderRequest<T>, "apiKey" | 
 export interface ConverseCall extends Omit<ConverseRequest, "apiKey" | "model"> {
   purpose: LlmPurpose;
   userId: string | null;
-  /** The part of the day's cap the purpose holds (ADR-080 §4): past it, a request is refused before the cap would. */
+  /** The chat's share of the day's cap (ADR-080 §4): past it, a request is refused before the cap would. */
   share?: number;
 }
 
@@ -57,7 +57,7 @@ interface Meter {
   model: string;
   capUsd: number;
   maxTokens: number;
-  share?: number;
+  share?: number | undefined;
 }
 
 /** What the provider's own reply says about the provider: a refusal or an unreadable reply is an answer. */
@@ -122,7 +122,7 @@ export class LlmGateway {
   async converse(req: ConverseCall): Promise<ConverseReply> {
     const { purpose, userId, share, ...request } = req;
     const { apiKey, model, capUsd } = await this.credentials(purpose);
-    const meter: Meter = { purpose, userId, model, capUsd, maxTokens: request.maxTokens, ...(share ? { share } : {}) };
+    const meter: Meter = { purpose, userId, model, capUsd, maxTokens: request.maxTokens, share };
     return this.provider.converse({ ...request, apiKey, model }, (promptChars, send) =>
       this.metered(meter, promptChars, send),
     );
@@ -152,15 +152,12 @@ export class LlmGateway {
    */
   private async metered<R extends ProviderStep>(meter: Meter, promptChars: number, send: () => Promise<R>): Promise<R> {
     const { db, clock } = this.deps;
+    const { maxTokens, ...call } = meter;
     const id = await reserveCall(db, {
+      ...call,
       now: clock.now(),
-      userId: meter.userId,
-      purpose: meter.purpose,
       provider: this.provider.id,
-      model: meter.model,
-      worstCaseUsd: llmWorstCaseUsd(meter.model, promptChars, meter.maxTokens),
-      capUsd: meter.capUsd,
-      ...(meter.share ? { share: meter.share } : {}),
+      worstCaseUsd: llmWorstCaseUsd(meter.model, promptChars, maxTokens),
     });
     const started = Date.now();
     let reply: R;

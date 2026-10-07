@@ -77,7 +77,7 @@ The code contains no advertising or commercial use. Content is sent to an AI mod
 - **Moderating and tidying a brainstorm's ideas**, live, only when its teacher turns the AI assistance on (ADR-072): the question and the ideas, under throwaway ids, never with an identifier. The names of the classroom's students and of the accounts that joined are masked; an anonymous guest's idea leaves as typed, which the poll page says before anyone types. The model hides offensive ideas, corrects the others and groups those that say the same; the stored answer is never changed, and the teacher can undo everything.
 - **Answering a teacher's question about the platform**, in the help assistant of the teacher screens (ADR-080): the platform's documentation, the screen the teacher is on (its kind, never its content: no course, student or answer) and the question as the teacher typed it, which is not masked; the panel says that an AI model reads it. The assistant is never offered to a student, nor in a student's view, nor during a sitting in Safe Exam Browser or on a kiosk station.
 
-Every call is logged with its model, its token counts and its estimated cost, never its content (`llm_calls`). The help assistant is the one exception: its questions and answers are stored (`assist_conversations`, `assist_messages`), read by the teacher who asked and by an administrator who switched Super Powers on, every such read being written to the audit log, and deleted after 30 days (see [Retention](#retention-and-what-happens-to-the-data-after-the-studies)). Whether the provider keeps the data it receives (no-retention mode), and whether a European or local model is required: **To be confirmed** (open question 43, deferred to the next data-protection audit by the product owner on 2026-10-02).
+Every call is logged with its model, its token counts and its estimated cost, never its content (`llm_calls`). The help assistant is the one exception: its questions and answers are stored (`assist_conversations`, `assist_exchanges`), read by the teacher who asked and by an administrator who switched Super Powers on, every such read being written to the audit log, and deleted after 30 days (see [Retention](#retention-and-what-happens-to-the-data-after-the-studies)). Whether the provider keeps the data it receives (no-retention mode), and whether a European or local model is required: **To be confirmed** (open question 43, deferred to the next data-protection audit by the product owner on 2026-10-02).
 
 ## Who reaches what
 
@@ -162,7 +162,7 @@ What is deleted, and when:
 | A student leaving the drill of a classroom | Nothing is deleted |
 | Expired sessions | Deleted automatically, every ten minutes |
 | Expired authorisations of AI assistants | Deleted automatically, every hour (`apps/api/src/auth/oauth/service.ts`) |
-| A message of the help assistant (a teacher's question or its answer) | Deleted automatically 30 days after it was written, every day (`apps/api/src/modules/assist/jobs.ts`); the teacher may delete a conversation sooner |
+| An exchange of the help assistant (a teacher's question and its answer) | Deleted automatically 30 days after it was written, every day (`apps/api/src/modules/assist/jobs.ts`); the teacher may delete a conversation sooner |
 
 What is never deleted automatically: the accounts (there is no account deletion), the e-mail addresses and edu-ID information kept, the notifications, and the audit log, which in particular keeps the name and address of a student removed from a classroom.
 

@@ -178,8 +178,8 @@ export async function writeSettings(
  * therefore cannot both slip under the cap. Otherwise `budget_exhausted` is
  * thrown and nothing reaches the provider; the day's first refusal is logged.
  *
- * `share`, the part of the cap a purpose holds (ADR-080 §4, `shareAllows`),
- * is checked first: its refusal is
+ * `share`, the chat's share of the cap (ADR-080 §4, `shareAllows`), is
+ * checked first: its refusal is
  * the same `budget_exhausted` but writes nothing — the cap itself was not
  * reached, so the `llm.budget` check stays green.
  */
@@ -193,7 +193,7 @@ export async function reserveCall(
     model: string;
     worstCaseUsd: number;
     capUsd: number;
-    share?: number;
+    share?: number | undefined;
   },
 ): Promise<string> {
   const row = {

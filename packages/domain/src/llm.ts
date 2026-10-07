@@ -85,11 +85,10 @@ export function isParis(answer: string): boolean {
 }
 
 /**
- * Whether a call of a purpose that holds a SHARE of the cap may be reserved
- * (ADR-080 §4): the purpose's own spend today stays within `share` of the
- * cap, and the day's total leaves that same part of the cap to the other
- * purposes, so the purpose is refused first when the cap nears. The cap's
- * own check still runs after this one.
+ * Whether a teacher-assistant call may be reserved (ADR-080 §4): the chat's
+ * own spend today stays within its `share` of the cap, and the day's total
+ * leaves that same part of the cap to every other purpose, so the chat is
+ * refused first when the cap nears. The cap's own check still runs after.
  */
 export function shareAllows(
   day: { spentTotalUsd: number; spentPurposeUsd: number; worstCaseUsd: number; capUsd: number },

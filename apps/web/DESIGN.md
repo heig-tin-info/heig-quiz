@@ -2032,7 +2032,7 @@ focus returns to the previous control when it clears.
 ## The calculator (ADR-069)
 
 A tool docked on the player when the evaluation provides one
-(`apps/web/src/calculator/`).
+(`apps/web/src/calculator/`), on the shared `ToolDock` (`src/ui/toolDock.tsx`).
 
 - **The button**: a 48 px round button at the bottom right, 16 px from the
   edges (24 from `sm`), above the phone footer through `--player-footer-h`.
@@ -2064,8 +2064,9 @@ A tool docked on the player when the evaluation provides one
 ## The help assistant (ADR-080)
 
 A chat docked on every teacher screen (`apps/web/src/assist/`), the
-calculator's sibling: the same button, the same kind of panel, the same
-refusal of the accent.
+calculator's sibling: both are a `ToolDock` (`src/ui/toolDock.tsx`), which
+owns the button, the non-modal panel, Escape and the focus's return, the
+placement over an `offset` and `Z.tool`.
 
 - **The button**: 48 px round, bottom right, 16 px from the edges (24 from
   `sm`), above the bottom bar through `--bottom-nav-h`. `surface`, hairline,
