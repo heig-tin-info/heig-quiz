@@ -26,7 +26,8 @@
 //   people    a person as a disc, its card, and a row of them (PersonPill,
 //             PersonCard, PeopleStack), on actions, popover and identity.
 //   live      the live primitives (PLAN-MVP §6.4).
-//   bar       a thin segmented bar of counts (SegmentedBar), on layers.
+//   bar       a thin segmented bar of counts (SegmentedBar), vertical bars
+//             (Bars, StackedBars) and their legend, on layers.
 //   forms     the short form in a dialog (FormDialog), on layers + controls.
 //   combobox  the ARIA combobox with virtual focus (useCombobox,
 //             ComboboxList, ComboboxOption), on layers and menu.

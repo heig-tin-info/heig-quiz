@@ -131,3 +131,20 @@ describe("ByQuestionView", () => {
     expect(within(cases).getByRole("img")).toHaveAccessibleName("passed: 2 · failed: 1");
   });
 });
+
+describe("the head of the Questions tab", () => {
+  it("draws one column per question and names the hardest and the best answered", () => {
+    renderWithProviders(<ByQuestionView questions={[MCQ, CLOZE, SHORT_UNANSWERED]} />);
+
+    const chart = screen.getByRole("table", { name: "Question distribution" });
+    const rows = within(chart).getAllByRole("row").slice(1);
+    expect(rows.map((r) => r.textContent)).toEqual(["Question 13011", "Question 22011", "Question 30000"]);
+
+    // Two rated questions: 60 % and 50 %, so a 55 % mean; the unanswered one has no rate.
+    expect(screen.getByText("Mean success").parentElement).toHaveTextContent("55%");
+    expect(screen.getByText("Hardest").parentElement).toHaveTextContent("Q2");
+    expect(screen.getByText("Best answered").parentElement).toHaveTextContent("Q1");
+    // Two blanks over the nine papers counted.
+    expect(screen.getByText("No answer").parentElement).toHaveTextContent("2 / 9");
+  });
+});

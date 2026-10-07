@@ -11,11 +11,11 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { IdParam, PublishCorrectionBody, ReleaseBody } from "@quiz/contracts";
+import { AttemptParam, IdParam, PublishCorrectionBody, ReleaseBody } from "@quiz/contracts";
 
 import { tracer } from "../../audit.js";
 import { iso } from "../../clock.js";
-import { loadEvaluation, ownAttempt, teacherGuard, withCourseRole } from "../guards.js";
+import { loadEvaluation, loadEvaluationAttempt, ownAttempt, teacherGuard, withCourseRole } from "../guards.js";
 import { studentRoute, teacherRoute } from "../http.js";
 import { byId } from "../evaluation/service.js";
 import * as gradingEvents from "../grading/events.js";
@@ -49,6 +49,7 @@ export async function resultsPlugin(app: FastifyInstance) {
     (scope) => scope.classroom.courseId,
     "owner",
   );
+  const staffEvaluationAttempt = loadEvaluationAttempt(app);
   const own = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
     ownAttempt(app, req, reply, p.id);
 
@@ -59,6 +60,15 @@ export async function resultsPlugin(app: FastifyInstance) {
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: staffEvaluation }, ({ scope }) =>
       service.resultsView(app.db, scope.evaluation),
+    ),
+  );
+
+  /** One student's copy, opened from a row of the grade table. */
+  app.get(
+    "/app/api/evaluations/:id/results/attempts/:attemptId",
+    { preHandler: requireTeacher },
+    teacher({ params: AttemptParam, load: staffEvaluationAttempt }, ({ scope }) =>
+      service.staffCopy(app.db, scope.evaluation, scope.attempt),
     ),
   );
 

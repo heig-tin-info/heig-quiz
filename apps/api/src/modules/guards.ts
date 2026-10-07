@@ -1240,6 +1240,24 @@ export async function staffAttempt(
   return row.attempt;
 }
 
+/**
+ * An evaluation and one of its attempts, for its staff: the loader of the
+ * routes on `/evaluations/:id/attempts/:attemptId` and their kin, bound to
+ * the app once per plugin. Each half answers its own 404.
+ */
+export const loadEvaluationAttempt =
+  (app: FastifyInstance) =>
+  async (
+    req: FastifyRequest,
+    reply: FastifyReply,
+    p: { id: string; attemptId: string },
+  ): Promise<{ evaluation: typeof evaluations.$inferSelect; attempt: typeof attempts.$inferSelect } | null> => {
+    const scope = await loadEvaluation(app, req, reply, p.id);
+    if (!scope) return null;
+    const attempt = await staffAttempt(app, req, reply, p.id, p.attemptId);
+    return attempt && { evaluation: scope.evaluation, attempt };
+  };
+
 // ---------------------------------------------------------------------------
 // Grading loaders (WP6) — an answer and a grading are reached through the
 // evaluation they belong to, by the same predicate as everything above, and

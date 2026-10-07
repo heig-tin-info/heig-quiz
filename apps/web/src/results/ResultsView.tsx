@@ -8,10 +8,11 @@ import {
   Undo2,
   Users,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import type {
   ByQuestion,
+  ResultRow,
   EvaluationDetail,
   ReleaseResponse,
   ResultsView as ResultsPayload,
@@ -38,19 +39,22 @@ import {
   PageSkeleton,
   QueryError,
   RelativeTime,
-  SectionHeading,
   Skeleton,
   Tabs,
 } from "../ui";
 import { ByQuestionView, isNotOver } from "./ByQuestionView";
 import { ExportButton } from "./ExportButton";
-import { GradeTable } from "./GradeTable";
+import { GradeTable, useGradeSort } from "./GradeTable";
 import { Histogram } from "./Histogram";
-import { StatsRow } from "./StatsRow";
+import { StudentCopy } from "./StudentCopy";
+import { StudentStats } from "./StudentStats";
+import { Summary } from "./Summary";
 import { useIsCourseOwner } from "../course/parts";
 import { evaluationKey, resultsByQuestionKey, resultsKey, resultsViewKey } from "../queryKeys";
 
 type Tab = "students" | "questions";
+
+const NO_ROWS: ResultRow[] = [];
 
 /**
  * The results of one evaluation (F-RES-01 to F-RES-03).
@@ -76,6 +80,8 @@ export function ResultsView({
   const [tabParam, setTab] = useSearchParam("tab", "students");
   const tab: Tab = tabParam === "questions" ? "questions" : "students";
   const [releasing, setReleasing] = useState(false);
+  /** The student's copy open over the table, by attempt, in the URL. */
+  const [copyId, setCopyId] = useSearchParam("copy", "");
 
   const results = useQuery<ResultsPayload>({
     queryKey: resultsViewKey(evaluationId),
@@ -105,6 +111,19 @@ export function ResultsView({
 
   const view = results.data;
   const title = view?.title ?? "";
+
+  const table = useGradeSort(view?.rows ?? NO_ROWS);
+  /** The open copy, and ↑ / ↓ through the table's attempts in the order on screen. */
+  const copy = useMemo(() => {
+    const order = table.sorted.flatMap((r) => (r.attemptId === null ? [] : [{ ...r, attemptId: r.attemptId }]));
+    const at = order.findIndex((r) => r.attemptId === copyId);
+    if (at < 0) return null;
+    const step = (delta: number) => {
+      const next = order[at + delta];
+      return next === undefined ? undefined : () => setCopyId(next.attemptId);
+    };
+    return { row: order[at]!, prev: step(-1), next: step(1) };
+  }, [table.sorted, copyId, setCopyId]);
 
   const ask = async (on: boolean) => {
     const ok = await confirm({
@@ -271,12 +290,22 @@ export function ResultsView({
           </Card>
         ) : (
           <div className="space-y-6">
-            <StatsRow stats={view.stats} rows={view.rows} />
-            <Card className="space-y-4 p-5">
-              <SectionHeading title={t("results.histogram.title")} />
-              <Histogram buckets={view.stats.histogram} />
-            </Card>
-            <GradeTable rows={view.rows} />
+            <Summary
+              title={t("results.histogram.title")}
+              chart={<Histogram buckets={view.stats.histogram} className="h-40 lg:h-56" />}
+              stats={<StudentStats stats={view.stats} rows={view.rows} />}
+            />
+            <GradeTable table={table} openId={copy ? copyId : null} onOpen={setCopyId} />
+            {copy ? (
+              <StudentCopy
+                evaluationId={evaluationId}
+                row={copy.row}
+                items={view.items}
+                onClose={() => setCopyId("")}
+                onMove={{ prev: copy.prev, next: copy.next }}
+                navigate={navigate}
+              />
+            ) : null}
           </div>
         )
       ) : byQuestion.isLoading ? (

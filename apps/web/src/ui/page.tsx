@@ -362,12 +362,19 @@ export function Stat({
   label,
   value,
   hint,
+  aside,
   icon: Icon,
   onClick,
 }: {
   label: ReactNode;
   value: ReactNode;
   hint?: ReactNode;
+  /**
+   * A short figure that qualifies the value ("24 students", "19 / 24"), on
+   * the label's line, flush right: for a stat in a narrow stacked column,
+   * where a `hint` line would make the cards uneven. A sentence is a `hint`.
+   */
+  aside?: ReactNode;
   icon?: IconType;
   onClick?: () => void;
 }) {
@@ -376,6 +383,7 @@ export function Stat({
       <span className="flex items-center gap-1.5 text-xs font-medium text-fg-muted">
         {Icon ? <Icon className="size-3.5 text-fg-faint" /> : null}
         {label}
+        {aside ? <span className="ml-auto pl-2 tabular-nums text-fg-faint">{aside}</span> : null}
       </span>
       <span className="mt-1 block text-[22px] font-bold leading-none tabular-nums tracking-tight">{value}</span>
       {hint ? <span className="mt-1.5 block text-xs text-fg-faint">{hint}</span> : null}

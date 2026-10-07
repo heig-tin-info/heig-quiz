@@ -32,6 +32,7 @@ import type {
   ResultsItem,
   ResultsView,
   RetakeStatus,
+  StaffCopy,
   StudentFeedback,
   StudentResultItem,
 } from "@quiz/contracts";
@@ -737,42 +738,16 @@ async function retakeStatus(
 }
 
 /**
- * THE application of the feedback policy. Nothing else in the API builds a
- * result payload for a student, exactly as nothing else builds a question
- * payload for one (invariant 4).
+ * One attempt's questions, each with its answer, its validated grading and
+ * whatever `policy` lets through: the student's feedback reads it under the
+ * evaluation's policy, the teacher's copy under {@link STAFF_POLICY}.
  */
-export async function studentFeedback(
+async function reviewedItems(
   db: Db,
   evaluation: EvaluationRecord,
   attempt: typeof attempts.$inferSelect,
-  now: Date,
-): Promise<StudentFeedback> {
-  const policy = feedbackOf(evaluation);
-  const gate = feedbackAvailable(policy, evaluation, attempt.state);
-  const pending = (reason: FeedbackRefusal) => ({
-    available: false as const,
-    reason,
-    evaluation: { id: evaluation.id, title: evaluation.title },
-  });
-  if (!gate.ok && gate.reason !== "retakes_open") return pending(gate.reason);
-  // While the exercise takes retakes, the page offers the next attempt — on
-  // the score alone (ADR-025) or beside a published correction (ADR-050).
-  const retake =
-    attempt.userId !== null && retakesOpen(evaluation)
-      ? { retake: await retakeStatus(db, evaluation, attempt.userId, now) }
-      : {};
-  if (!gate.ok) {
-    // The points of THIS attempt, and not one item: no verdict, no answer,
-    // no key (ADR-025).
-    const items = await joinedItems(db, evaluation.id);
-    const tally = (await tallyByAttempt(db, [attempt.id])).get(attempt.id);
-    return {
-      ...pending(gate.reason),
-      score: scoreOf(tally, items.length, evaluationTotal(items.map((i) => i.item))),
-      ...retake,
-    };
-  }
-
+  policy: FeedbackPolicy,
+): Promise<Pick<StaffCopy, "points" | "totalPoints" | "grade" | "pendingCount" | "items">> {
   const items = await joinedItems(db, evaluation.id);
   const totalPoints = evaluationTotal(items.map((i) => i.item));
   const answerRows = await db.select().from(answers).where(eq(answers.attemptId, attempt.id));
@@ -838,8 +813,58 @@ export async function studentFeedback(
   // points above always come from the gradings, which the snapshot mirrors.
   const hit =
     attempt.userId === null ? null : cachedGrade(evaluation, attempt.userId, attempt.id);
+  return {
+    points: hit ? hit.points : points,
+    totalPoints: hit ? hit.totalPoints : totalPoints,
+    grade: hit ? hit.grade : gradeFromPoints(points, totalPoints, scaleOf(evaluation)),
+    pendingCount,
+    items: result,
+  };
+}
+
+/**
+ * THE application of the feedback policy. Nothing else in the API builds a
+ * result payload for a student, exactly as nothing else builds a question
+ * payload for one (invariant 4).
+ */
+export async function studentFeedback(
+  db: Db,
+  evaluation: EvaluationRecord,
+  attempt: typeof attempts.$inferSelect,
+  now: Date,
+): Promise<StudentFeedback> {
+  const policy = feedbackOf(evaluation);
+  const gate = feedbackAvailable(policy, evaluation, attempt.state);
+  const pending = (reason: FeedbackRefusal) => ({
+    available: false as const,
+    reason,
+    evaluation: { id: evaluation.id, title: evaluation.title },
+  });
+  if (!gate.ok && gate.reason !== "retakes_open") return pending(gate.reason);
+  // While the exercise takes retakes, the page offers the next attempt — on
+  // the score alone (ADR-025) or beside a published correction (ADR-050).
+  const retake =
+    attempt.userId !== null && retakesOpen(evaluation)
+      ? { retake: await retakeStatus(db, evaluation, attempt.userId, now) }
+      : {};
+  if (!gate.ok) {
+    // The points of THIS attempt, and not one item: no verdict, no answer,
+    // no key (ADR-025).
+    const items = await joinedItems(db, evaluation.id);
+    const tally = (await tallyByAttempt(db, [attempt.id])).get(attempt.id);
+    return {
+      ...pending(gate.reason),
+      score: scoreOf(tally, items.length, evaluationTotal(items.map((i) => i.item))),
+      ...retake,
+    };
+  }
+
+  const copy = await reviewedItems(db, evaluation, attempt, policy);
   // No grade before the release, nor while a cell is pending.
-  const gradeShown = feedbackGradeShown({ released: evaluation.releasedAt !== null, pendingCount });
+  const gradeShown = feedbackGradeShown({
+    released: evaluation.releasedAt !== null,
+    pendingCount: copy.pendingCount,
+  });
   return {
     available: true,
     evaluation: {
@@ -848,17 +873,37 @@ export async function studentFeedback(
       releasedAt: isoOrNull(evaluation.releasedAt),
     },
     attemptId: attempt.id,
-    points: hit ? hit.points : points,
-    totalPoints: hit ? hit.totalPoints : totalPoints,
-    grade: !gradeShown
-      ? null
-      : hit
-        ? hit.grade
-        : gradeFromPoints(points, totalPoints, scaleOf(evaluation)),
-    pendingCount,
-    items: result,
+    ...copy,
+    grade: gradeShown ? copy.grade : null,
     ...retake,
   };
+}
+
+/** The policy that shows everything: the teacher's reading of a copy. */
+const STAFF_POLICY: FeedbackPolicy = {
+  when: "immediate",
+  showAnswer: true,
+  showKey: true,
+  showExplanation: true,
+  showHiddenCaseNames: true,
+  showTeacherComment: true,
+};
+
+/**
+ * What the teacher reads of one attempt beside the grade table: the
+ * student's copy with everything shown, whatever the feedback policy and
+ * before any release — the answer, the key, the explanation, the comment,
+ * with the grade table's own figures. Staff only: its route loads the
+ * attempt through `loadEvaluationAttempt`. It is not the live dashboard's
+ * `attemptInspect` (F-DASH-05), which reads an attempt being written —
+ * its journal and its answers, no grading.
+ */
+export async function staffCopy(
+  db: Db,
+  evaluation: EvaluationRecord,
+  attempt: typeof attempts.$inferSelect,
+): Promise<StaffCopy> {
+  return { attemptId: attempt.id, ...(await reviewedItems(db, evaluation, attempt, STAFF_POLICY)) };
 }
 
 /**

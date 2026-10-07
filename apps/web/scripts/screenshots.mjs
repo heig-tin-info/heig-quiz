@@ -1270,6 +1270,8 @@ const scenes = [
   { name: "results", role: "teacher", path: "/evaluations/closed/results" },
   { name: "results-released", role: "teacher", path: "/evaluations/released/results" },
   { name: "results-questions", role: "teacher", path: "/evaluations/closed/results?tab=questions", settle: 2500 },
+  // One student's copy, opened from their row: the whole correction, before any release.
+  { name: "results-copy", role: "teacher", path: "/evaluations/closed/results", fold: true, settle: 1500, act: (p) => p.locator("tbody tr[tabindex]").first().click() },
   // The correction on a beamer (ADR-033): hidden, revealed (R), and walked
   // down to the cloze, the eighth question, whose blanks carry their bars.
   { name: "correction", role: "teacher", path: "/evaluations/closed/correction", fold: true, settle: 2500, act: (p) => projectNext(p, 1) },

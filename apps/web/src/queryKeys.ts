@@ -291,6 +291,9 @@ export const resultsKey = (evaluationId: string) => ["results", evaluationId] as
 export const resultsViewKey = (evaluationId: string) => ["results", evaluationId, "view"] as const;
 export const resultsByQuestionKey = (evaluationId: string) =>
   ["results", evaluationId, "by-question"] as const;
+/** One student's copy, as the teacher opens it from the grade table. */
+export const resultsCopyKey = (evaluationId: string, attemptId: string) =>
+  ["results", evaluationId, "copy", attemptId] as const;
 
 // --- Students ------------------------------------------------------------------
 
