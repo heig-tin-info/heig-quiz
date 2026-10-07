@@ -14,7 +14,7 @@ import { useCallback, useState, type Dispatch, type SetStateAction } from "react
 
 import { BOX, GRID, LIBRARY, type ComponentKind } from "../library.js";
 import type { Orientation, Schematic, SchematicComponent, Wire, WireEnd } from "../schema.js";
-import type { CanvasShortcut } from "@quiz/core/client";
+import { isTextField, type CanvasShortcutLine } from "@quiz/ui";
 
 import type { CanvasStrings } from "./canvasStrings.js";
 
@@ -431,13 +431,13 @@ const bindingOf = (key: string): KeyBinding | undefined =>
  * `useSelection.test.ts` holds it against the tables, both ways: a key bound
  * and not shown must be in `UNLISTED_KEYS`.
  */
-export const SHORTCUT_LINES = [
+export const SHORTCUT_LINES: readonly CanvasShortcutLine<CanvasStrings>[] = [
   { keys: ["Mod+Z", "Mod+Y"], label: "shortcutUndoRedo" },
   { keys: ["R", "H", "V"], label: "shortcutTransform" },
   { keys: ["W"], label: "toolWire" },
   { keys: ["1–9"], label: "shortcutPart" },
   { keys: ["Del"], label: "remove" },
-] as const satisfies ReadonlyArray<{ keys: readonly string[]; label: keyof CanvasStrings }>;
+];
 
 /**
  * Bound but not shown: the aliases of a shown key (Space rotates like R,
@@ -445,17 +445,7 @@ export const SHORTCUT_LINES = [
  * the toolbar or the status line already teach (duplicate, select all,
  * Escape) — five lines is all the zone has room for.
  */
-export const UNLISTED_KEYS = ["Space", "Backspace", "Mod+Shift+Z", "Mod+D", "Mod+A", "Esc"] as const;
-
-/** The lines, in the canvas's language. */
-export const canvasShortcuts = (s: CanvasStrings): CanvasShortcut[] =>
-  SHORTCUT_LINES.map((line) => ({ keys: line.keys, label: s[line.label] }));
-
-/** A key pressed while typing in the inspector belongs to the field, not the editor. */
-export const isTextField = (target: EventTarget | null): boolean => {
-  const el = target as HTMLElement | null;
-  return el !== null && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
-};
+export const UNLISTED_KEYS: readonly string[] = ["Space", "Backspace", "Mod+Shift+Z", "Mod+D", "Mod+A", "Esc"];
 
 /** The editor's keyboard, as one lookup: chords first, then single keys. */
 export function editorKey(
@@ -470,6 +460,7 @@ export function editorKey(
   actions: KeyActions,
   readOnly: boolean,
 ): void {
+  // A key typed in the inspector belongs to the field, not the editor.
   if (isTextField(e.target)) return;
   if (e.ctrlKey || e.metaKey) {
     const chord = CHORDS.get(e.key.toLowerCase());

@@ -415,7 +415,7 @@ function ShortcutStrip() {
       <ul className="space-y-1">
         {shortcuts.map((shortcut, i) => (
           <li key={`${shortcut.keys}-${shortcut.label}-${i}`} className="flex items-center gap-2">
-            <ShortcutKeys keys={shortcut.keys} />
+            <ShortcutKeys shortcut={shortcut} />
             <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">{shortcut.label}</span>
           </li>
         ))}

@@ -52,7 +52,7 @@ describe("the side column's canvas keys", () => {
   afterEach(() => resetShortcuts());
 
   const CANVAS = [
-    { keys: "Ctrl+Z / Ctrl+Y", label: "Undo / Redo" },
+    { keys: "Ctrl+Z", alternatives: ["Ctrl+Y"], label: "Undo / Redo" },
     { keys: "Del", label: "Delete" },
   ];
 

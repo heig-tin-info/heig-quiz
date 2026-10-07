@@ -295,7 +295,7 @@ export function PlayerShell({
                   // The column is narrow: a label that does not fit beside its
                   // keys goes under them rather than being cut.
                   <li key={shortcut.keys} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <ShortcutKeys keys={shortcut.keys} />
+                    <ShortcutKeys shortcut={shortcut} />
                     <span className="text-[12px] leading-relaxed text-fg-faint">{shortcut.label}</span>
                   </li>
                 ))}

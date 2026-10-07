@@ -111,26 +111,3 @@ describe("the expand layer of the diagram player", () => {
     expect(screen.queryByRole("button", { name: "Expand" })).toBeNull();
   });
 });
-
-describe("the canvas keys the student's host is lent (issue #549)", () => {
-  it("reach the host from a focused diagram, and leave with the focus", async () => {
-    const lend = vi.fn();
-    renderWithProviders(
-      <QuestionHost type="diagram" student={student} answer={null} onChange={vi.fn()} readOnly={false} onCanvasShortcuts={lend} />,
-    );
-    const canvas = await screen.findByRole("group", { name: "Your diagram" });
-    fireEvent.focus(canvas);
-    expect(lend).toHaveBeenLastCalledWith(expect.arrayContaining([{ keys: ["Mod+Z", "Mod+Y"], label: "Undo / Redo" }]));
-    fireEvent.blur(canvas, { relatedTarget: document.body });
-    expect(lend).toHaveBeenLastCalledWith(null);
-  });
-
-  it("are not lent by a locked answer", async () => {
-    const lend = vi.fn();
-    renderWithProviders(
-      <QuestionHost type="diagram" student={student} answer={null} onChange={vi.fn()} readOnly onCanvasShortcuts={lend} />,
-    );
-    fireEvent.focus(await screen.findByRole("group", { name: "Your diagram" }));
-    expect(lend).not.toHaveBeenCalled();
-  });
-});

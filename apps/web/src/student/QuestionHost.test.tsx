@@ -1,5 +1,5 @@
-import { screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 import { QUESTION_TYPE_IDS } from "../questionTypes";
 import { renderWithProviders } from "../test/render";
@@ -78,5 +78,24 @@ describe("QuestionHost for a choice question", () => {
       await screen.findByText("Une réponse fausse coûte des points ; ne pas répondre ne coûte rien."),
     ).toBeInTheDocument();
     expect(screen.getByText("Choisissez une réponse.")).toBeInTheDocument();
+  });
+});
+
+/* A focused canvas lends its keys through the host (issue #549), for the player's side column. */
+describe("QuestionHost for a diagram", () => {
+  it("hands the canvas's keys to the player's listener", async () => {
+    const lend = vi.fn();
+    renderWithProviders(
+      <QuestionHost
+        type="diagram"
+        student={{ prompt: "Dessinez.", kind: "flow" }}
+        answer={null}
+        onChange={() => {}}
+        readOnly={false}
+        onCanvasShortcuts={lend}
+      />,
+    );
+    fireEvent.focus(await screen.findByRole("group", { name: "Your diagram" }));
+    expect(lend).toHaveBeenLastCalledWith(expect.arrayContaining([{ keys: ["Mod+Z", "Mod+Y"], label: "Undo / Redo" }]));
   });
 });

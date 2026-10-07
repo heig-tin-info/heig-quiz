@@ -74,4 +74,4 @@ export { AdvancedDisclosure, EditorSection, PromptSection } from "./sections.js"
 export { PromptField } from "./PromptField.js";
 export { pointsOrDash, ScoreHeader, Verdict, verdictTone } from "./verdict.js";
 export { useHistory, type History } from "./history.js";
-export { useCanvasShortcuts } from "./canvasShortcuts.js";
+export { isTextField, useCanvasShortcuts, type CanvasShortcutLine } from "./canvasShortcuts.js";

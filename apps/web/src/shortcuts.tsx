@@ -19,15 +19,16 @@ import { Kbd, modKey } from "./ui";
  * in the palette) and a command rarely has a key.
  */
 export interface Shortcut {
-  /**
-   * As shown: "Ctrl+S", "Ctrl+Shift+P", "Tab", "Esc". `modKey()` in
-   * ui/feedback.tsx spells Ctrl/⌘. Alternatives for one action are joined by
-   * " / ": "Ctrl+Z / Ctrl+Y" (a canvas's grouped lines).
-   */
+  /** As shown: "Ctrl+S", "Ctrl+Shift+P", "Tab", "Esc". `modKey()` in ui/feedback.tsx spells Ctrl/⌘. */
   keys: string;
+  /** Other keys for the same action, drawn after `keys`: a canvas's "Ctrl+Z / Ctrl+Y". */
+  alternatives?: readonly string[];
   /** Translated, short: "Save", "Try the question". */
   label: string;
 }
+
+/** Every combination of a line, `keys` first. */
+const combinationsOf = (s: Shortcut): string[] => [s.keys, ...(s.alternatives ?? [])];
 
 let nextId = 0;
 /** The frame's own shortcuts, always ahead of the page's (see `useGlobalShortcuts`). */
@@ -43,7 +44,7 @@ function emit(): void {
   // also what the key does, since the field stops that event from reaching
   // the page.
   const byKeys = new Map<string, Shortcut>();
-  for (const s of [...globals.values(), ...registry.values()].flat()) byKeys.set(s.keys, s);
+  for (const s of [...globals.values(), ...registry.values()].flat()) byKeys.set(combinationsOf(s).join(" "), s);
   snapshot = [...byKeys.values()];
   for (const l of listeners) l();
 }
@@ -99,13 +100,14 @@ export function useActiveShortcuts(): Shortcut[] {
 
 /**
  * The lines a focused canvas lends (`CanvasShortcut`, issue #549) in the
- * strip's spelling: `Mod` becomes Ctrl or ⌘, alternatives are joined by " / ".
+ * strip's spelling: `Mod` becomes Ctrl or ⌘, the first combination is
+ * `keys` and the others its `alternatives`.
  */
 export function canvasShortcutLines(list: readonly CanvasShortcut[]): Shortcut[] {
-  return list.map((line) => ({
-    keys: line.keys.map((k) => k.replace(/^Mod\+/, `${modKey()}+`)).join(" / "),
-    label: line.label,
-  }));
+  return list.map((line) => {
+    const [keys = "", ...alternatives] = line.keys.map((k) => k.replace(/^Mod\+/, `${modKey()}+`));
+    return alternatives.length === 0 ? { keys, label: line.label } : { keys, alternatives, label: line.label };
+  });
 }
 
 /**
@@ -119,10 +121,10 @@ export function useLentCanvasShortcuts(): [Shortcut[] | null, CanvasShortcutsLis
 }
 
 /** The keys of one line as caps, its alternatives apart: Ctrl Z / Ctrl Y. */
-export function ShortcutKeys({ keys }: { keys: string }) {
+export function ShortcutKeys({ shortcut }: { shortcut: Shortcut }) {
   return (
     <span className="flex shrink-0 items-center gap-0.5">
-      {keys.split(" / ").map((alternative, i) => (
+      {combinationsOf(shortcut).map((alternative, i) => (
         <Fragment key={`${alternative}-${i}`}>
           {i > 0 ? <span className="px-0.5 text-[11px] text-fg-faint">/</span> : null}
           {shortcutCaps(alternative).map((cap, j) => (

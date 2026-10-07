@@ -35,9 +35,9 @@
  *   byId · useWireDrawing [useState draft · useCallback finishWire, wireClick,
  *   cancelStep, wireUnder · useMemo draftPoints] · useCallback undo, redo ·
  *   usePointerTools [useCallback onPointerDown, onPointerMove, onPointerUp] ·
- *   useCallback onKeyDown ·
- *   useCanvasShortcuts [useRef shown, listener · useEffect ×3] · useMemo selectedComponent · useState nameDraft ·
- *   useRef editing · useCallback editComponent.
+ *   useCallback onKeyDown · useCanvasShortcuts [useRef inside, shown,
+ *   listener · useEffect ×3] · useMemo selectedComponent · useState
+ *   nameDraft · useRef editing · useCallback editComponent.
  */
 import { useCallback, useId, useMemo, useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
@@ -54,7 +54,7 @@ import { blockedCells, computeRoutes, withRoutes } from "./router.js";
 import { connectedPins, type FlaggedPin } from "./SchematicView.js";
 import { usePartDragging, type Ghost } from "./usePartDragging.js";
 import { usePointerTools, type Cursor } from "./usePointerTools.js";
-import { canvasShortcuts, editorKey, isTerminal, isTextField, keyActions, useSelection, type Mode } from "./useSelection.js";
+import { editorKey, isTerminal, keyActions, SHORTCUT_LINES, useSelection, type Mode } from "./useSelection.js";
 import { useViewport } from "./useViewport.js";
 import { useWireDrawing } from "./useWireDrawing.js";
 
@@ -191,9 +191,7 @@ export function SchematicEditor({
     },
     [draft, duplicate, kinds, mode, readOnly, redo, removeSelection, selection.size, setSelection, transformSelection, undo, value],
   );
-  const shortcutFocus = useCanvasShortcuts({
-    publish: onShortcuts, list: canvasShortcuts(s), enabled: !readOnly, isTextField,
-  });
+  const shortcutFocus = useCanvasShortcuts({ publish: onShortcuts, lines: SHORTCUT_LINES, strings: s, enabled: !readOnly });
 
   // --- the inspector -----------------------------------------------------
   const selectedComponent = useMemo(() => {

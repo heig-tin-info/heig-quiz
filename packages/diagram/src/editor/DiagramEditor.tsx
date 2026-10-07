@@ -15,8 +15,8 @@
  * `useViewport`, the edits are the pure functions of `ops.ts`, the markup
  * is `Toolbar`, `Overlay` and `Inspector`.
  */
-import { fmt, resolveStrings, type CanvasShortcut, type CanvasShortcutsListener } from "@quiz/core/client";
-import { useCanvasShortcuts, useHistory } from "@quiz/ui";
+import { fmt, resolveStrings, type CanvasShortcutsListener } from "@quiz/core/client";
+import { isTextField, useCanvasShortcuts, useHistory, type CanvasShortcutLine } from "@quiz/ui";
 import { useCallback, useId, useMemo, useRef, useState, type JSX, type KeyboardEvent, type PointerEvent } from "react";
 
 import { BODIED, INK, KINDS, NAMELESS, RESIZABLE, kindIssues, typeOfTool, type DiagramKind, type PlaceTool } from "../kinds.js";
@@ -95,26 +95,19 @@ type Drag =
  * line: the tools are the kind's. `DiagramEditor.test.tsx` holds it against
  * the handlers, both ways.
  */
-export const SHORTCUT_LINES = [
+export const SHORTCUT_LINES: readonly CanvasShortcutLine<DiagramStrings>[] = [
   { keys: ["Mod+Z", "Mod+Y"], label: "shortcutUndoRedo" },
   { keys: ["I"], label: "swap" },
   { keys: ["1–9"], label: "shortcutTool" },
   { keys: ["Del"], label: "remove" },
-] as const satisfies ReadonlyArray<{ keys: readonly string[]; label: keyof DiagramStrings }>;
+];
 
 /**
  * Bound but not shown: the aliases of a shown key (Backspace, Ctrl+Shift+Z)
  * and three the toolbar or the status line already teach (duplicate, select
  * all, Escape).
  */
-export const UNLISTED_KEYS = ["Backspace", "Mod+Shift+Z", "Mod+D", "Mod+A", "Esc"] as const;
-
-const shortcutLines = (s: DiagramStrings): CanvasShortcut[] =>
-  SHORTCUT_LINES.map((line) => ({ keys: line.keys, label: s[line.label] }));
-
-/** A key typed in the inspector or the text pane is the field's, not the editor's. */
-const isTextField = (target: EventTarget | null): boolean =>
-  target instanceof Element && target.matches("input, textarea, select");
+export const UNLISTED_KEYS: readonly string[] = ["Backspace", "Mod+Shift+Z", "Mod+D", "Mod+A", "Esc"];
 
 /** Two presses this close in time and space are a double click. */
 const DOUBLE_MS = 380;
@@ -438,6 +431,7 @@ export function DiagramEditor(props: DiagramEditorProps): JSX.Element {
     a: () => select([...value.nodes, ...value.links].map((x) => x.id)),
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
+    // A key typed in the inspector or the text pane is the field's, not the editor's.
     if (isTextField(e.target) || readOnly || pane !== "draw") return;
     const run = e.ctrlKey || e.metaKey ? withModifier[e.key.toLowerCase()]?.bind(null, e.shiftKey) : shortcuts[e.key];
     const tool = !e.ctrlKey && !e.metaKey && /^[1-9]$/.test(e.key) ? tools[Number(e.key) - 1] : undefined;
@@ -462,9 +456,9 @@ export function DiagramEditor(props: DiagramEditorProps): JSX.Element {
   const ghost = mode.kind === "place" && cursor.inside && !INK.has(typeOfTool(mode.tool)) ? newElement(value, mode.tool, cursor, measure, s) : null;
   const shortcutFocus = useCanvasShortcuts({
     publish: props.onShortcuts,
-    list: shortcutLines(s),
+    lines: SHORTCUT_LINES,
+    strings: s,
     enabled: !readOnly && pane === "draw",
-    isTextField,
   });
   const hint = s[
     hintFor({ mode: mode.kind, tool: mode.kind === "place" ? mode.tool : null, drawing: draft !== null, selected: selection.size, kind })

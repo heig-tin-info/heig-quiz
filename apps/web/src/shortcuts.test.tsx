@@ -137,7 +137,7 @@ describe("canvasShortcutLines", () => {
         { keys: ["1–9"], label: "Pick a part" },
       ]),
     ).toEqual([
-      { keys: `${modKey()}+Z / ${modKey()}+Y`, label: "Undo / Redo" },
+      { keys: `${modKey()}+Z`, alternatives: [`${modKey()}+Y`], label: "Undo / Redo" },
       { keys: "1–9", label: "Pick a part" },
     ]);
   });
