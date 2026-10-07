@@ -32,7 +32,7 @@
  */
 import { createHash } from "node:crypto";
 
-import { parsePlist, type SebDict, type SebValue } from "./plist.js";
+import { parsePlist, renderReal, type SebDict, type SebValue } from "./plist.js";
 
 /**
  * Rule 3 [PL:array_sort]. The reference calls `(new Collator('root'))->asort()`,
@@ -124,8 +124,7 @@ function jsonString(text: string, keepBackslash: boolean): string {
  * so the divergence is left unhandled and untested.
  */
 function jsonNumber(value: number, kind: "integer" | "real"): string {
-  if (kind === "integer") return value.toFixed(0);
-  return Number.isInteger(value) ? `${value}.0` : String(value);
+  return kind === "integer" ? value.toFixed(0) : renderReal(value);
 }
 
 function serialise(value: SebValue): string {

@@ -297,8 +297,11 @@ function renderValue(value: SebValue, indent: string): string {
   }
 }
 
-/** Renders a `<real>`: an integral value keeps a decimal part, as plist does. */
-function renderReal(value: number): string {
+/**
+ * A `<real>` as text: an integral value keeps a decimal part, as plist does,
+ * and as PHP's `json_encode` does for a float (the Config Key reuses it).
+ */
+export function renderReal(value: number): string {
   return Number.isInteger(value) ? `${value}.0` : String(value);
 }
 

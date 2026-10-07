@@ -4080,12 +4080,18 @@ serves now (16a), and what waits for the group repositories (16b).
   `.seb` bytes and Config Key identical before/after (snapshot);
   `seb.db.test` route sweep unchanged.
 - **As delivered** (branch `merge/M6-02-packages-seb`): no migration, no
-  route, no behaviour change. `packages/seb` (`@quiz/seb`, one entry `.`):
+  route; no behaviour change but one: `absoluteRequestUrl` drops a
+  `#fragment` from the target (SEB's spec hashes the URL "without Fragment
+  part"), which a browser never sends but a hand-made request could.
+  `packages/seb` (`@quiz/seb`, one entry `.`, exporting the card's list:
+  the plist constructors and types, `toPlistXml`, `configKey`,
+  `buildSebConfig`, `absoluteRequestUrl`, `expectedHash`, `hashesEqual`,
+  `CONFIG_KEY_HEADER`):
   `plist.ts` (classroom's typed `SebValue` tree, render and parse; the
   parser serves the vectors and reading a file back), `configKey.ts`
   (classroom's full port of Moodle's rules: `originatorVersion` stripped at
   every depth, empty dictionaries pruned, `<data>`/`<real>`/`<date>`),
-  `request.ts` (`CONFIG_KEY_HEADER`, `REQUEST_HASH_HEADER`,
+  `request.ts` (`CONFIG_KEY_HEADER`,
   `absoluteRequestUrl(publicUrl, target)`, `expectedHash`, `hashesEqual`),
   `sebConfig.ts` (`buildSebConfig({startUrl, allowedHosts, examKeySalt?})`:
   Quiz's keys in Quiz's order; the start URL's host always first,
@@ -4105,7 +4111,7 @@ serves now (16a), and what waits for the group repositories (16b).
   and the hashes from `@quiz/seb`. `auth/seb.snapshot.test.ts` +
   `auth/fixtures/launch.seb`, committed before the move, pin the file's
   bytes and its Config Key; `seb.db.test.ts` changed one import only. Not
-  done (M6-07): project hosts, `SEB_EXTRA_ALLOWED_HOSTS`, BEK checks, the
+  done (M6-07): the BEK header (`x-safeexambrowser-requesthash`), project hosts, `SEB_EXTRA_ALLOWED_HOSTS`, BEK checks, the
   verifier, the codespace portal's adoption of the package.
 
 ### M6-03 — Import `apps/codespace`

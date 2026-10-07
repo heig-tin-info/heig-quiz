@@ -17,8 +17,6 @@ import { createHash, timingSafeEqual } from "node:crypto";
 
 /** The Config Key hash SEB sends on every request: `sha256(URL + Config Key)`. */
 export const CONFIG_KEY_HEADER = "x-safeexambrowser-configkeyhash";
-/** The Browser Exam Key hash, same formula over a BEK (not checked yet: M6-07). */
-export const REQUEST_HASH_HEADER = "x-safeexambrowser-requesthash";
 
 /**
  * The absolute URL SEB hashed for a request: the origin of the public URL

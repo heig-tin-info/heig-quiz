@@ -42,7 +42,9 @@ the full port of classroom's (every Moodle rule: `originatorVersion`
 stripped, empty dictionaries pruned, `<data>`, `<real>`, `<date>`), checked
 against all of Moodle's vectors, the 201-key one included. The file Quiz
 serves is unchanged byte for byte, and so is its Config Key
-(`auth/seb.snapshot.test.ts`); `auth/seb.ts` keeps the routes and the
+(`auth/seb.snapshot.test.ts`). One change: the absolute URL a request's
+header is checked against drops a `#fragment` (the SEB specification
+hashes the URL "without Fragment part"; a browser never sends one); `auth/seb.ts` keeps the routes and the
 evaluation's configuration (Quiz's host only).
 
 ## Context
