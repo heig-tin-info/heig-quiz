@@ -1,0 +1,22 @@
+# The closed network of one portal instance (%i = prod | staging): its Podman
+# network, its bridge anchor and the nftables table (infra/net/README.md).
+# Neither the network's bridge nor the table survives a reboot: setup.sh,
+# idempotent, is replayed at every boot. Installed by lib.sh
+# (cs_install_host) into /etc/systemd/system/; runs the host copy under
+# /usr/local/lib/quiz-codespace, never the checkout.
+[Unit]
+Description=quiz — closed codespace network of instance %i (bridge, anchor, nftables)
+Documentation=https://github.com/heig-tin-info/heig-quiz/blob/main/apps/codespace/infra/net/README.md
+Requires=podman.socket
+After=podman.socket network-online.target
+Before=quiz-codespace-%i.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=CS_INSTANCE=%i
+ExecStart=/usr/local/lib/quiz-codespace/infra/net/setup.sh
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target

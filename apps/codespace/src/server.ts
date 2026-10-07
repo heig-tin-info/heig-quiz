@@ -109,6 +109,7 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
     options.engine ??
     createEngine({
       podmanUrl: config.PODMAN_URL,
+      instance: config.CODESPACE_INSTANCE,
       network: config.CODESPACE_NETWORK,
       gateway: config.CODESPACE_GATEWAY,
       seccompProfile: config.seccompProfile,
@@ -124,6 +125,7 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
   const manager = createSessionManager({
     db,
     engine,
+    instance: config.CODESPACE_INSTANCE,
     volumesRoot: config.volumesRoot,
     graceMs: config.SESSION_GRACE_MS,
     gcIntervalMs: config.SESSION_GC_INTERVAL_MS,

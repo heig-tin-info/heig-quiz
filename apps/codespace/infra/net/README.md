@@ -11,6 +11,28 @@ Three scripts and two rule files:
 | `../nft/codespace.nft` | the two fixed rules, `inet` family |
 | `../nft/codespace-bridge.nft` | the same ICC rule in the `bridge` family, defence in depth, optional |
 
+## One network per portal instance (M6-04)
+
+The engine VM runs two portals, `prod` and `staging`
+(`deploy/RUNBOOK.md`). The scripts take `CS_INSTANCE` (the portal's
+`CODESPACE_INSTANCE`; `default` when unset) and `common.sh` picks the
+values: `default` and `prod` are the network described below (`codespace`,
+`cs0`, `10.77.0.0/24`, gateway `10.77.0.254`, anchor `codespace-anchor`);
+`staging` is `codespace-staging`, `cs1`, `10.77.1.0/24`, gateway
+`10.77.1.254`, anchor `codespace-staging-anchor`. On the VM the network
+unit `quiz-codespace-net@<instance>.service` runs `setup.sh` with it;
+`CS_INSTANCE=staging test.sh` checks the second bridge.
+
+One table, `inet codespace`, covers both bridges, whichever instance loads
+it: no packet is forwarded from or to `cs0` or `cs1` (inter-container and
+inter-bridge traffic alike, the networks being `--internal`), and the input
+rule accepts the git port on each bridge for **that bridge's gateway
+only**. Without that pinning, Linux would deliver a packet arriving on
+`cs1` for `10.77.0.254` (an address of the host), and a staging container
+would reach production's git channel, which authenticates by source address
+against production's database. A shared bridge with one port per instance
+was the alternative, rejected for that reason.
+
 ## Decision: anchor container, no binding on 0.0.0.0
 
 With netavark, the bridge of a Podman network only exists as long as a container

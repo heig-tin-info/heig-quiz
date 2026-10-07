@@ -103,7 +103,8 @@ jobs:
   # (`test:integration`, real containers) is NOT run here, so that an image
   # build never holds up every PR: it has its own workflow,
   # runner-integration.yml (#234). The portal's (`CODESPACE_INTEGRATION=1`,
-  # rootful Podman and a forge) runs in no workflow yet (M6-04).
+  # rootful Podman and a forge) runs in no workflow yet; its deploy smoke is
+  # apps/codespace/deploy/smoke.mjs, on the engine VM (M6-04).
   test-rest:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -161,6 +162,11 @@ jobs:
           # rootful socket (apps/runner/README.md).
           - image: quiz-runner
             file: apps/runner/Dockerfile
+          # The online workspace portal (apps/codespace, M6-04): the same
+          # pinned `podman-remote` client, plus git and better-sqlite3. Its
+          # student image is built on the engine VM, never here.
+          - image: quiz-codespace
+            file: apps/codespace/Dockerfile
     steps:
       - uses: actions/checkout@v7
       # The commit and its date, baked into the SPA and the API (#179,
@@ -202,14 +208,19 @@ jobs:
   # Each VM's authorized_keys pins a CI key to a script (forced commands) —
   # a key can ONLY deploy, never open a shell:
   #   staging key    → ~/quiz-staging/deploy.sh staging           (app VM, srvstg)
+  #                  → /opt/quiz-runner/infra/engine/deploy.sh staging    (code VM)
   #   production key → /srv/quiz/deploy.sh production             (app VM, srv)
-  #                  → /opt/quiz-runner/apps/runner/deploy/deploy.sh (code VM)
+  #                  → /opt/quiz-runner/infra/engine/deploy.sh production (code VM)
   # Staging runs as its OWN account, with its own rootless Docker: it executes
   # every commit of main before any approval, so it must not share the account
-  # that owns production's secrets, volumes and backups.
+  # that owns production's secrets, volumes and backups. On the code VM the
+  # dispatcher confines the staging key to the staging portal (M6-04).
   # The SSH command is "<sha> <ephemeral GHCR token>" (→ $SSH_ORIGINAL_COMMAND):
-  # the commit to deploy, and a pull credential stored nowhere. Without its
-  # key a job no-ops, so the pipeline stays green until keys are provisioned.
+  # the commit to deploy, and a pull credential stored nowhere; the code VM's
+  # dispatcher also takes "codespace <instance> <sha> <token>". Without its
+  # key a job no-ops, so the pipeline stays green until keys are provisioned;
+  # the codespace steps also wait for the environment variable
+  # CODESPACE_DEPLOY=1, set once the instance is bootstrapped (its RUNBOOK.md).
   deploy-staging:
     needs: image
     runs-on: ubuntu-latest
@@ -226,6 +237,9 @@ jobs:
       DEPLOY_SSH_KEY: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
       DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
       DEPLOY_HOST_KEY: ${{ vars.DEPLOY_HOST_KEY }}
+      DEPLOY_RUNNER_HOST: ${{ vars.DEPLOY_RUNNER_HOST }}
+      DEPLOY_RUNNER_HOST_KEY: ${{ vars.DEPLOY_RUNNER_HOST_KEY }}
+      CODESPACE_DEPLOY: ${{ vars.CODESPACE_DEPLOY }}
       STAGING_URL: ${{ vars.STAGING_URL || 'https://quiz.dev.chevallier.io' }}
     steps:
       - name: Skip when the staging key is not configured
@@ -238,6 +252,9 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           printf '%s %s\n' "$DEPLOY_HOST" "$DEPLOY_HOST_KEY" >> ~/.ssh/known_hosts
+          if [ -n "$DEPLOY_RUNNER_HOST" ]; then
+            printf '%s %s\n' "$DEPLOY_RUNNER_HOST" "$DEPLOY_RUNNER_HOST_KEY" >> ~/.ssh/known_hosts
+          fi
       - name: Deploy to staging (forced command runs ~/quiz-staging/deploy.sh staging)
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != ''
         env:
@@ -257,6 +274,15 @@ jobs:
           done
           echo "::error::$STAGING_URL/healthz did not answer 200 within 150 s"
           exit 1
+      # The staging portal (code-dev.chevallier.io), same sha. Not guarded by
+      # live sessions, like the application's staging; the exit code is the
+      # portal's /healthz after the restart, so a portal that does not come up
+      # stops the promotion too.
+      - name: Deploy the codespace portal, staging instance (forced command runs infra/engine/deploy.sh staging on the code VM)
+        if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != '' && env.DEPLOY_RUNNER_HOST != '' && env.CODESPACE_DEPLOY == '1'
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "codespace staging $GITHUB_SHA $GHCR_TOKEN"
 
   deploy-production:
     needs: deploy-staging
@@ -283,6 +309,7 @@ jobs:
       DEPLOY_HOST_KEY: ${{ vars.DEPLOY_HOST_KEY }}
       DEPLOY_RUNNER_HOST: ${{ vars.DEPLOY_RUNNER_HOST }}
       DEPLOY_RUNNER_HOST_KEY: ${{ vars.DEPLOY_RUNNER_HOST_KEY }}
+      CODESPACE_DEPLOY: ${{ vars.CODESPACE_DEPLOY }}
     steps:
       - name: Skip when the deploy key is not configured
         if: env.DEPLOY_SSH_KEY == '' || env.DEPLOY_HOST == ''
@@ -315,8 +342,28 @@ jobs:
             echo "::warning::DEPLOY_FORCE_SHA names this sha: the live-evaluation guard is overridden."
           fi
           ssh -i ~/.ssh/id_ed25519 "${DEPLOY_USER:?vars.DEPLOY_USER is not set}"@"$DEPLOY_HOST" "${force}$GITHUB_SHA $GHCR_TOKEN"
-      - name: Deploy the runner (forced command runs apps/runner/deploy/deploy.sh on the code VM)
+      # The request keeps the runner's own form, "<sha> <token>": the copy of
+      # the deploy script already on the code VM (before M6-04) understands
+      # it, and this step is what moves the VM's checkout onto the dispatcher.
+      - name: Deploy the runner (forced command runs infra/engine/deploy.sh production on the code VM)
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != '' && env.DEPLOY_RUNNER_HOST != ''
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "$GITHUB_SHA $GHCR_TOKEN"
+      # The production portal (code.chevallier.io), after the runner, whose
+      # deploy has just moved the checkout to this sha. Refused (exit 3, the
+      # job fails) while a session of the prod instance runs; setting
+      # CODESPACE_FORCE_SHA to THIS run's sha, then re-running the job,
+      # forces it (apps/codespace/deploy/RUNBOOK.md, The live-session guard).
+      - name: Deploy the codespace portal, prod instance (forced command runs infra/engine/deploy.sh production on the code VM)
+        if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != '' && env.DEPLOY_RUNNER_HOST != '' && env.CODESPACE_DEPLOY == '1'
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CODESPACE_FORCE_SHA: ${{ vars.CODESPACE_FORCE_SHA }}
+        run: |
+          force=
+          if [ "$CODESPACE_FORCE_SHA" = "$GITHUB_SHA" ]; then
+            force="force "
+            echo "::warning::CODESPACE_FORCE_SHA names this sha: the live-session guard is overridden."
+          fi
+          ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "${force}codespace prod $GITHUB_SHA $GHCR_TOKEN"

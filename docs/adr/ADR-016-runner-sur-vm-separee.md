@@ -18,6 +18,54 @@ remain those of `apps/runner`. The plan is
 `docs/merge/06-codespace-seb-infra.md` §6.2; it ships with phase M6,
 after the cutover (D09, settled 2026-10-01).
 
+**Amended (2026-10-07, M6-04): how the portal is deployed beside the
+runner.** Scope: point 4 below and the addendum above; the runner's own
+deploy steps are unchanged.
+(a) *One dispatcher.* `infra/engine/deploy.sh` is the engine VM's forced
+command for both components, with a scope fixed by the `authorized_keys`
+line (`production`: the runner and the portal's `prod`; `staging`: the
+portal's `staging` only). It parses `[force] <component> <instance> <sha>
+<token>` strictly, still accepts the runner's `<sha> <token>`, serialises
+the VM's deploys with a lock, moves the checkout and runs the component's
+steps (`apps/runner/deploy/install.sh`, the former script's steps verbatim;
+`apps/codespace/deploy/install.sh <instance>`). The former path forwards
+to it, so the existing key line keeps deploying.
+(b) *Two portal instances on the VM*, `prod` (`code.chevallier.io`, for
+production) and `staging` (`code-dev.chevallier.io`, for
+`quiz.dev.chevallier.io`), with separate environment files and secrets,
+ports, data directories, SQLite and volumes. Because a portal removes the
+session containers its database does not know, every session container
+carries `heig-codespace.instance=<CODESPACE_INSTANCE>` and an instance
+lists, stops and removes only its own. Each instance has its own Podman
+network and bridge (`cs0`, `cs1`), the nftables table pinning each bridge
+to its own gateway, rather than one shared bridge: the git channel
+authenticates a push by source address against its own database, so a
+staging container must not reach production's channel at all.
+(c) *An image per sha.* The portal is built by the CI
+(`ghcr.io/heig-tin-info/quiz-codespace:<sha>`, `apps/codespace/Dockerfile`,
+no secret inside) and runs as a quadlet like the runner — host network,
+the rootful socket, the data directory bound at the same path, read-only
+root, no capability — rather than as a `pnpm deploy` tarball on the
+host's Node: the build happens once, on the image's own glibc, and the
+deploy is the runner's (pull by sha, retag, restart). The student image
+follows the runner's language images: built on the VM by hand
+(`apps/codespace/images/build.sh`), never by a deploy, never pulled.
+(d) *The live-session guard.* A `prod` deploy refuses (exit 3) while a
+session container of that instance runs, unless the request starts with
+`force` (CI: `CODESPACE_FORCE_SHA` naming the run's sha), as the
+application's live-evaluation guard; `staging` is not guarded.
+(e) *Host-level pieces* (the nftables table, the AppArmor profile, the
+network and shadow units, under `/usr/local/lib/quiz-codespace`) are
+written by the bootstrap and by a `prod` deploy only, never by a staging
+deploy. The switch from heig-classroom's portal and the operations are
+`apps/codespace/deploy/RUNBOOK.md`. The portal holds no GitHub App key
+(`FORGE_KIND=none`, root invariant 15).
+**Accepted risk, open for the owner:** the staging key deploys every
+commit of `main` before approval, as root, onto the VM that hosts the
+production runner and portal; the staging portal mounts the rootful Podman
+socket, which is root-equivalent. The app VM separates staging by account;
+this VM cannot, short of a staging engine of its own.
+
 ## Context
 
 `docs/spec/05-architecture.md` (5.5 and 5.9) and ADR-009 put the runner in the

@@ -4189,6 +4189,67 @@ serves now (16a), and what waits for the group repositories (16b).
 - **Goal**: artifact per sha, engine-VM dispatcher shared with the runner,
   production deploy guarded by live sessions, `push.sh` for bootstrap only;
   the image supply-chain rule settled.
+- **As delivered** (branch `merge/M6-04-codespace-deploy`; the repository
+  side only, the VM steps are the owner's, from the runbook). Decisions in
+  ADR-016's M6-04 amendment.
+  - **Artifact**: a container image per sha,
+    `ghcr.io/heig-tin-info/quiz-codespace:<sha>` (`apps/codespace/Dockerfile`:
+    node:24-slim, better-sqlite3 built in the image, the runner's pinned
+    `podman-remote` installed as `podman`, git; no secret), a third entry of
+    the CI's `image` matrix. Not a `pnpm deploy` tarball: one build on the
+    image's glibc, and the runner's deploy shape. Run as the quadlet
+    `deploy/quiz-codespace.container` (host network, the rootful socket, the
+    data directory bound at the same path, read-only root, no capability,
+    `NoNewPrivileges`; the mapping from classroom's systemd hardening is in
+    the file). The student image stays built on the VM by hand
+    (`images/build.sh`): the runner's supply-chain rule.
+  - **Two instances**, `prod` (`code.chevallier.io`, :3110, for
+    `quiz.chevallier.io`) and `staging` (`code-dev.chevallier.io`, :3120, for
+    `quiz.dev.chevallier.io`): `/etc/quiz-codespace/<i>/env` (secrets drawn
+    by `bootstrap.sh`), `/srv/quiz-codespace/<i>/{var,volumes}`, their own
+    Podman network (`codespace`/`cs0`, `codespace-staging`/`cs1`,
+    `infra/net/common.sh` by `CS_INSTANCE`) and anchor, one nftables table
+    pinning each bridge's git port to its own gateway (no forwarding from or
+    to either bridge). A shared bridge was rejected: the git channel
+    authenticates by source address against its own database.
+    `CODESPACE_INSTANCE` (new key, closed charset, default `default`): the
+    container name `cs-<instance>-<id>`, the label
+    `heig-codespace.instance`, the `ps` filter, and `stop`/`rm` that leave
+    any other container alone (`engine/instance.test.ts`: listing, stop/rm,
+    a reconciliation that removes its own orphan only).
+  - **Dispatcher** `infra/engine/deploy.sh <production|staging>`:
+    `[force] <component> <instance> <sha> <token>` and the runner's
+    `<sha> <token>`, strictly parsed, scope checked before the login, a
+    `flock`, checkout and re-exec as before; the runner's steps moved
+    verbatim to `apps/runner/deploy/install.sh`; the old
+    `apps/runner/deploy/deploy.sh` forwards (the existing key line keeps
+    working, and the first deploy hands over from the old copy). CI: the
+    staging job deploys `codespace staging`, the production job `runner`
+    then `codespace prod`, both behind the environment variable
+    `CODESPACE_DEPLOY=1`.
+  - **Guard**: a `prod` deploy exits 3 while a running session container
+    of that instance exists (asked of Podman, fail closed), unless
+    `force` (`CODESPACE_FORCE_SHA` = the run's sha); staging unguarded, as
+    the application's.
+  - `deploy/`: the quadlet, `quiz-codespace-net@.service`,
+    `quiz-codespace-shadow@.{service,timer}` + `shadow-snapshot.sh` (root
+    snapshots, from classroom), `Caddyfile` (the access log replaces the
+    `token` query parameter and drops the Referer: M6-05's masking item,
+    done here), `env.example` (every key, the production refusals),
+    `lib.sh`, `install.sh`, `bootstrap.sh` (for `push.sh --bootstrap`),
+    `smoke.mjs` (health, service token, sync, `--launch`, tokens signed
+    locally with Node's standard library), `RUNBOOK.md`. Host-level pieces
+    (nftables, AppArmor, units) are written by the bootstrap and by a prod
+    deploy only.
+  - Verified locally: the image built and run against the rootful socket
+    (reconcile through `podman --remote`), `smoke.mjs` against it, the
+    Caddy fragment with Caddy 2.10 (a `token=` never logged), the quadlet
+    through Podman's generator, the nftables table loaded in a user
+    namespace, the dispatcher's parsing with stubs, shellcheck.
+  - Open: the staging key runs unapproved commits as root on the VM that
+    hosts production (the staging portal holds the rootful socket anyway);
+    `test:integration` still runs in no workflow; VM capacity, slices and
+    the off-VM backup are M6-05's.
 
 ### M6-05 — Engine VM capacity, hygiene, seccomp
 - **Depends on**: D09. ‖ M6-01…04.

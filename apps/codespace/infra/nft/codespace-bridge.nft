@@ -27,5 +27,6 @@ table bridge codespace {
 	chain forward {
 		type filter hook forward priority filter - 10; policy accept;
 		meta ibrname "cs0" meta obrname "cs0" drop comment "ICC L2: no container<->container"
+		meta ibrname "cs1" meta obrname "cs1" drop comment "ICC L2, staging bridge (M6-04)"
 	}
 }

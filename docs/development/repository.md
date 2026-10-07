@@ -41,6 +41,7 @@ docs/
   assets/     the screenshots of the guide, light and dark
 infra/
   keycloak/   the development realm imported by docker-compose.dev.yml
+  engine/     deploy.sh, the engine VM's deploy dispatcher (runner + codespace, M6-04)
 scripts/      smoke.sh, the end-to-end HTTP walk; staging-export.sh and
               staging-refresh.sh
 ```
@@ -105,9 +106,14 @@ for the codespace schemas) and knows the platform through two signed HTTP
 messages. It has no login of its own and its GitHub relay is off (ADR-047,
 M6-03 amendment); its pages are in English and French (`src/web/i18n.ts`).
 Its `CLAUDE.md` records its invariants and its two sanctioned divergences
-from the runner's; `images/` and `infra/` are inert until M6-04/M6-05, and
-its deployment (heig-classroom's `deploy/` was not imported) is M6-04's. No
-image built from the root context contains it.
+from the runner's. Its own image, `apps/codespace/Dockerfile` (built from
+the root context by the CI, `quiz-codespace:<sha>`), runs on the engine VM
+as two instances, `prod` and `staging`; `deploy/` holds the quadlet, unit
+and Caddy templates, `install.sh` (run by `infra/engine/deploy.sh`),
+`bootstrap.sh` and the [runbook](https://github.com/heig-tin-info/heig-quiz/blob/main/apps/codespace/deploy/RUNBOOK.md).
+`images/` (the student image) is built on the VM by hand; `infra/` holds
+the network scripts, nftables, AppArmor and seccomp the deploy installs.
+The application image does not contain it.
 
 ## Packages
 

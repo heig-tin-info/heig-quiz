@@ -122,6 +122,7 @@ describe("the student's git identity", () => {
 describe("engine.runArgs — the container environment carries only these variables", () => {
   const engine = createEngine({
     podmanUrl: "unix:///run/podman/podman.sock",
+    instance: "prod",
     network: "codespace",
     gateway: "10.77.0.254",
     seccompProfile: "/repo/infra/seccomp/codespace.json",

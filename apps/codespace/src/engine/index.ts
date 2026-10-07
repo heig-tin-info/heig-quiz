@@ -18,6 +18,15 @@
  * container without that label is ignored by the engine — first and foremost
  * the anchor container `codespace-anchor` (label `heig-codespace.role=anchor`),
  * which keeps the `cs0` bridge up and must never be touched.
+ *
+ * Since M6-04 two portals share one engine (`prod` and `staging` on the
+ * engine VM), and the reconciliation removes every session container its own
+ * database does not know. So a session carries a second label,
+ * `heig-codespace.instance=<CODESPACE_INSTANCE>`, and the engine lists, stops
+ * and removes **only** the containers of its own instance: the listing
+ * filters on both labels, and `stop`/`rm` leave alone a container whose
+ * instance label is not this one. A container of another instance, or one
+ * started before M6-04 (no instance label), is invisible and never touched.
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -27,8 +36,23 @@ const execFileAsync = promisify(execFile);
 /** Label that marks a session container, and nothing else. */
 export const SESSION_LABEL = "heig-codespace.session";
 
+/** Label naming the portal instance a session container belongs to (M6-04). */
+export const INSTANCE_LABEL = "heig-codespace.instance";
+
+/**
+ * `CODESPACE_INSTANCE`: a closed charset, because the value enters container
+ * names, labels and a `podman ps --filter`. Lower-case letters and digits,
+ * starting with a letter, at most 16 characters.
+ */
+export const INSTANCE_PATTERN = /^[a-z][a-z0-9]{0,15}$/;
+
+/** Runs `podman <argv>` and returns its stdout; replaced in the unit tests. */
+export type PodmanRunner = (argv: string[], timeoutMs: number) => Promise<string>;
+
 export interface EngineOptions {
   podmanUrl: string;
+  /** `CODESPACE_INSTANCE` (`INSTANCE_PATTERN`): whose containers this engine sees. */
+  instance: string;
   network: string;
   gateway: string;
   seccompProfile: string;
@@ -56,6 +80,8 @@ export interface EngineOptions {
   /** `crun` by default; `runsc` (gVisor) remains a parameter, cf. analyse.md D2. */
   runtime?: string;
   log?: { info: (o: object, m: string) => void; warn: (o: object, m: string) => void };
+  /** The unit tests' fake Podman; the real binary otherwise. */
+  podmanRunner?: PodmanRunner;
 }
 
 export interface RunRequest {
@@ -100,7 +126,7 @@ export interface Engine {
   inspect(idOrName: string): Promise<ContainerInfo | null>;
   stop(idOrName: string, timeoutSeconds?: number): Promise<void>;
   rm(idOrName: string): Promise<void>;
-  /** Only the containers carrying the session label. */
+  /** Only the containers carrying the session label and this instance's label. */
   listSessions(): Promise<ContainerInfo[]>;
   /** Waits for `GET http://<ip>:8080/healthz`. Returns the delay in ms. */
   waitHealthy(ip: string, timeoutMs: number): Promise<number>;
@@ -121,16 +147,24 @@ interface PodmanInspect {
   };
 }
 
+async function execPodman(argv: string[], timeoutMs: number): Promise<string> {
+  const { stdout } = await execFileAsync("podman", argv, {
+    maxBuffer: 16 * 1024 * 1024,
+    timeout: timeoutMs,
+  });
+  return stdout;
+}
+
 export function createEngine(opts: EngineOptions): Engine {
+  if (!INSTANCE_PATTERN.test(opts.instance)) {
+    throw new Error(`invalid engine instance "${opts.instance}" (${INSTANCE_PATTERN.source})`);
+  }
   const base = ["--remote", "--url", opts.podmanUrl];
+  const runPodman = opts.podmanRunner ?? execPodman;
 
   async function podman(args: string[], timeoutMs = 120_000): Promise<string> {
     try {
-      const { stdout } = await execFileAsync("podman", [...base, ...args], {
-        maxBuffer: 16 * 1024 * 1024,
-        timeout: timeoutMs,
-      });
-      return stdout;
+      return await runPodman([...base, ...args], timeoutMs);
     } catch (err) {
       const e = err as { stderr?: string; message?: string };
       throw new EngineError(
@@ -138,6 +172,43 @@ export function createEngine(opts: EngineOptions): Engine {
         e.stderr ?? "",
       );
     }
+  }
+
+  /** Raw `podman inspect` of one container, or null when it does not exist. */
+  async function inspectRaw(idOrName: string): Promise<PodmanInspect | null> {
+    const out = await podman(["inspect", idOrName, "--format", "json"], 30_000).catch(() => "");
+    if (out.trim() === "") return null;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(out);
+    } catch {
+      return null;
+    }
+    const list = Array.isArray(parsed) ? (parsed as PodmanInspect[]) : [parsed as PodmanInspect];
+    return list[0] ?? null;
+  }
+
+  /** A session container of THIS instance: the only kind the engine acts on. */
+  function owned(labels: Record<string, string> | null | undefined): boolean {
+    return Boolean(labels?.[SESSION_LABEL]) && labels?.[INSTANCE_LABEL] === opts.instance;
+  }
+
+  /**
+   * `stop` and `rm` go through here: a name that designates another
+   * instance's container (or the anchor, or anything unlabelled) is left
+   * alone, whatever the caller believes.
+   */
+  async function ifOwned(idOrName: string, action: () => Promise<unknown>): Promise<void> {
+    const raw = await inspectRaw(idOrName);
+    if (!raw) return;
+    if (!owned(raw.Config?.Labels)) {
+      opts.log?.warn(
+        { container: idOrName, instance: opts.instance },
+        "not a session container of this instance: left alone",
+      );
+      return;
+    }
+    await action();
   }
 
   function infoFrom(raw: PodmanInspect): ContainerInfo {
@@ -163,6 +234,9 @@ export function createEngine(opts: EngineOptions): Engine {
       // at nothing else, so the anchor is invisible to them.
       "--label",
       `${SESSION_LABEL}=${req.sessionId}`,
+      // Whose session: two portals share the engine VM (M6-04).
+      "--label",
+      `${INSTANCE_LABEL}=${opts.instance}`,
       "--label",
       "codespace.role=student",
       // --- hardening, copied from images/c-dev/run-hardened.sh -------------
@@ -217,8 +291,9 @@ export function createEngine(opts: EngineOptions): Engine {
 
     async run(req) {
       // A same-named container left over from an earlier start would prevent
-      // the `run`; reconciliation has normally removed it already.
-      await podman(["rm", "-f", req.name], 30_000).catch(() => "");
+      // the `run`; reconciliation has normally removed it already. Only ours:
+      // another instance's container is never removed to make room.
+      await this.rm(req.name);
       await podman(runArgs(req), 180_000);
       const info = await this.inspect(req.name);
       if (!info) throw new EngineError(`container ${req.name} not found after run`, "");
@@ -230,35 +305,31 @@ export function createEngine(opts: EngineOptions): Engine {
     },
 
     async inspect(idOrName) {
-      const out = await podman(["inspect", idOrName, "--format", "json"], 30_000).catch(
-        () => "",
-      );
-      if (out.trim() === "") return null;
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(out);
-      } catch {
-        return null;
-      }
-      const list = Array.isArray(parsed) ? (parsed as PodmanInspect[]) : [parsed as PodmanInspect];
-      const first = list[0];
-      return first ? infoFrom(first) : null;
+      const raw = await inspectRaw(idOrName);
+      return raw ? infoFrom(raw) : null;
     },
 
     async stop(idOrName, timeoutSeconds = 5) {
-      await podman(["stop", "-t", String(timeoutSeconds), idOrName], 60_000).catch(() => "");
+      await ifOwned(idOrName, () =>
+        podman(["stop", "-t", String(timeoutSeconds), idOrName], 60_000).catch(() => ""),
+      );
     },
 
     async rm(idOrName) {
-      await podman(["rm", "-f", idOrName], 60_000).catch(() => "");
+      await ifOwned(idOrName, () => podman(["rm", "-f", idOrName], 60_000).catch(() => ""));
     },
 
     async listSessions() {
+      // Two `label=` filters are ANDed by Podman; `owned` repeats the
+      // instance condition on every row, so nothing of another instance
+      // comes back even if they were not.
       const out = await podman([
         "ps",
         "--all",
         "--filter",
         `label=${SESSION_LABEL}`,
+        "--filter",
+        `label=${INSTANCE_LABEL}=${opts.instance}`,
         "--format",
         "json",
       ]);
@@ -273,8 +344,8 @@ export function createEngine(opts: EngineOptions): Engine {
       for (const row of rows) {
         const sessionId = row.Labels?.[SESSION_LABEL];
         // `--filter label=` alone would accept a container with an empty
-        // label; what defines a session is a value.
-        if (!sessionId) continue;
+        // label; what defines a session is a value, of this instance.
+        if (!sessionId || !owned(row.Labels)) continue;
         const detailed = await this.inspect(row.Id ?? row.Names?.[0] ?? "");
         infos.push(
           detailed ?? {
