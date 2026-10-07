@@ -1474,6 +1474,29 @@ const scenes = [
       await p.waitForTimeout(400);
     } },
   { name: "journal-deleted", role: "teacher", path: `${JOURNAL_EDIT}?journal=1`, fold: true, act: (p) => journalPagesMenu(p, /^(deleted pages|pages supprimées)$/i) },
+  // The calculator's dock on the player (ADR-069), the `ToolDock` it shares
+  // with the assistant below.
+  { name: "calculator-dock", role: "student", path: `${TAKE}?calculator=1&scene=running`, fold: true },
+  { name: "calculator-dock-open", role: "student", path: `${TAKE}?calculator=1&scene=running`, fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^(calculator|calculatrice)$/i }).click();
+      await p.waitForTimeout(400);
+    } },
+  // The teacher assistant (ADR-080): its button at the bottom right, the
+  // chat it opens (the mock answers as the development stub), its history.
+  { name: "assist-closed", role: "teacher", path: "/pools/p1", fold: true, act: skipCoach },
+  { name: "assist-open", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("button", { name: /^(ask the help assistant|demander à l'assistant d'aide)$/i }).click();
+      await p.getByRole("textbox", { name: /question/i }).fill("À quoi sert l'option Grouper du tableau ?");
+      await p.keyboard.press("Enter");
+      await p.waitForTimeout(800);
+    } },
+  { name: "assist-history", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("button", { name: /^(ask the help assistant|demander à l'assistant d'aide)$/i }).click();
+      await p.getByRole("button", { name: /^(past conversations|conversations précédentes)$/i }).click();
+      await p.waitForTimeout(400);
+    } },
 ];
 
 /**

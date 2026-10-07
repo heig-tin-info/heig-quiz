@@ -34,6 +34,8 @@
 //   state     browser state a screen reads: remembered choices
 //             (usePersistentChoice), isTyping, useFullscreen. Imports no
 //             sibling.
+//   toolDock  a tool docked at the bottom right (ToolDock: the calculator,
+//             the help assistant), on layers.
 //   expand    the layer a question type's canvas expands into
 //             (ExpandPanel), on layers + controls.
 //
@@ -58,4 +60,5 @@ export * from "./forms";
 export * from "./combobox";
 export * from "./state";
 export * from "./expand";
+export * from "./toolDock";
 export { FormError, PageError, QueryError } from "../queryError";

@@ -31,6 +31,12 @@ export type AuditAction =
   | "auth.seb_config_key_mismatch"
   | "auth.seb_refused"
   | "auth.session_superseded"
+  /**
+   * ADR-080 §6: an administrator read a teacher's assistant conversations —
+   * one (subject the conversation, `payload.owner`), or their list (subject
+   * the user). The owner's own reads are not traced.
+   */
+  | "assist.read"
   | "avatar.delete"
   | "avatar.update"
   | "attempt.close"

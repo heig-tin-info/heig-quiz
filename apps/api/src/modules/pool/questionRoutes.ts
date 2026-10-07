@@ -25,11 +25,11 @@ import { iso, isoOrNull } from "../../clock.js";
 import { questions } from "../../db/schema.js";
 import { callerOf, findAccessiblePool, requirePoolRole } from "../guards.js";
 import { invalid } from "../http.js";
-import { LlmError } from "../llm/service.js";
+import { LlmError, llmFailure } from "../llm/service.js";
 import { poolChanged } from "./events.js";
 import { GenerateRefusal, generateAnswers, generatorTypes } from "./generate.js";
 import * as service from "./service.js";
-import { coreFailure, llmFailure, LLM_CALLS_PER_MINUTE, type PoolRouteContext } from "./routeContext.js";
+import { coreFailure, LLM_CALLS_PER_MINUTE, type PoolRouteContext } from "./routeContext.js";
 
 export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { requireTeacher, trace, teacher, inPool, onQuestion } = ctx;

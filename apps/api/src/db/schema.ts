@@ -25,5 +25,6 @@ export * from "./codespace.js";
 export * from "./system.js";
 export * from "./kiosk.js";
 export * from "./llm.js";
+export * from "./assist.js";
 export * from "./review.js";
 export * from "./importClassroom.js";

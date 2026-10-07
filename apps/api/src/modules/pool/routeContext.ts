@@ -5,7 +5,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import type { LlmErrorCode, PoolRole } from "@quiz/contracts";
+import type { PoolRole } from "@quiz/contracts";
 import { QuizCoreError } from "@quiz/core/server";
 
 import { tracer } from "../../audit.js";
@@ -22,27 +22,12 @@ import {
   teacherGuard,
 } from "../guards.js";
 import { notFound, teacherRoute } from "../http.js";
-import type { LlmError } from "../llm/service.js";
 import { userTopic } from "../realtime/bus.js";
 import * as service from "./service.js";
 
 /** A held-down wand, not a quota (ADR-059): the gateway's daily cap is the ceiling. */
 export const LLM_CALLS_PER_MINUTE = 10;
 
-/**
- * How a failed model call answers the screen (the wand, ADR-059; Review
- * now, ADR-060): the gateway's code, worded by the client.
- */
-const LLM_FAILURES: Partial<Record<LlmErrorCode, [number, string]>> = {
-  not_configured: [409, "llm_not_configured"],
-  key_unreadable: [409, "llm_not_configured"],
-  budget_exhausted: [429, "llm_budget_exhausted"],
-  rate_limited: [429, "rate_limited"],
-};
-export const llmFailure = (error: LlmError): { status: number; body: { error: string; reason: string } } => {
-  const [status, code] = LLM_FAILURES[error.code] ?? [502, "llm_failed"];
-  return { status, body: { error: code, reason: error.code } };
-};
 
 /**
  * A failure raised by the question-type layer is a client error, not a 500:

@@ -425,6 +425,8 @@ export const en = {
     "Follows renamed and deleted project repositories, refreshes their last commit, and re-invites a student still without access, at most once a day.",
   "admin.task.llm.review": "LLM review of the questions",
   "admin.task.llm.review.desc": "Between 1 and 6 a.m., reviews the latest version of the questions of the pools that asked, within a quarter of the day's AI cap.",
+  "admin.task.assist.purge": "Help assistant retention",
+  "admin.task.assist.purge.desc": "Deletes the help assistant's messages older than 30 days.",
   "admin.kiosk": "Kiosk stations",
   "admin.kiosk.hint":
     "The school's Chromebooks that attested themselves. Name a station to let students pair with it; retire one to take it out of service.",
@@ -753,6 +755,27 @@ export const en = {
   "shortcuts.title": "Shortcuts",
 
   "help.title": "Help",
+
+  // --- The teacher assistant (assist/AssistDock.tsx, ADR-080) ---
+  "assist.open": "Ask the help assistant",
+  "assist.close": "Close the help assistant",
+  "assist.title": "Help assistant",
+  "assist.stub": "Development stub",
+  "assist.new": "New conversation",
+  "assist.history": "Past conversations",
+  "assist.back": "Back to the conversation",
+  "assist.empty.title": "Ask about this screen",
+  "assist.empty.body": "Answers come from the platform's documentation, written by an AI model (Anthropic). Your questions are kept 30 days; an administrator can read them.",
+  "assist.placeholder": "Ask a question about the platform…",
+  "assist.send": "Send",
+  "assist.thinking": "Looking it up in the documentation…",
+  "assist.error": "The assistant could not answer. Try again.",
+  "assist.retention": "Kept 30 days, then deleted.",
+  "assist.history.empty": "No conversation yet.",
+  "assist.history.error": "Could not load your conversations",
+  "assist.delete": "Delete",
+  "assist.delete.title": "Delete this conversation?",
+  "assist.delete.body": "Its questions and answers are deleted for good.",
 
   "dur.day": "{n} day",
   "dur.days": "{n} days",

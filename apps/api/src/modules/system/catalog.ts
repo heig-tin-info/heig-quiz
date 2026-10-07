@@ -15,13 +15,15 @@
  * webhook deliveries (ADR-011, M2-04); `RECONCILE_TASKS` catches up the
  * projects' runs, invitations and repositories GitHub's webhooks missed
  * (ADR-011, N-RES-08, M3-06); `REVIEW_TASKS` reviews the questions of the
- * pools that asked, at night (ADR-060 §5). A new task also adds its key to
+ * pools that asked, at night (ADR-060 §5); `ASSIST_TASKS` deletes the
+ * assistant's messages past their 30 days (ADR-080 §6). A new task also adds its key to
  * `SCHEDULED_TASK_KEYS` (`@quiz/contracts`) and its names to the web's
  * dictionaries.
  */
 import { purgeOAuth } from "../../auth/oauth/service.js";
 import { purgeExpiredSessions } from "../../auth/session.js";
 import type { ScheduledTask } from "../../ticker.js";
+import { ASSIST_TASKS } from "../assist/jobs.js";
 import { DRILL_TASKS } from "../drill/jobs.js";
 import { GITHUB_TASKS } from "../github/jobs.js";
 import { NOTIFICATION_TASKS } from "../notifications/jobs.js";
@@ -49,6 +51,7 @@ export const SCHEDULED_TASKS: readonly ScheduledTask[] = [
   ...GITHUB_TASKS,
   ...RECONCILE_TASKS,
   ...REVIEW_TASKS,
+  ...ASSIST_TASKS,
   {
     key: "health.checks",
     defaultIntervalMinutes: 5,

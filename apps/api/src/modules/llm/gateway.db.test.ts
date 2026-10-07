@@ -23,6 +23,7 @@ let next: (req: ProviderRequest<unknown>) => Promise<unknown>;
 const seen: ProviderRequest<unknown>[] = [];
 const fake: LlmProvider = {
   id: "anthropic",
+  converse: () => Promise.reject(new Error("no conversation here")),
   async complete<T>(req: ProviderRequest<T>) {
     seen.push(req as ProviderRequest<unknown>);
     return (await next(req as ProviderRequest<unknown>)) as never as Awaited<

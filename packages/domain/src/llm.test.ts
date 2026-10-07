@@ -7,6 +7,7 @@ import {
   llmModel,
   llmWorstCaseUsd,
   modelFor,
+  shareAllows,
 } from "./llm.js";
 
 describe("llmCostUsd", () => {
@@ -49,3 +50,27 @@ describe("isParis", () => {
     expect(isParis("Parisien")).toBe(false);
   });
 });
+
+describe("shareAllows", () => {
+  const cap = 20;
+  const share = 0.25 * cap;
+
+  it("allows a call within the chat's share and the others' reserve", () => {
+    expect(shareAllows({ spentTotalUsd: 0, spentPurposeUsd: 0, worstCaseUsd: 0.1, capUsd: cap }, 0.25)).toBe(true);
+    expect(shareAllows({ spentTotalUsd: 1, spentPurposeUsd: share - 0.1, worstCaseUsd: 0.1, capUsd: cap }, 0.25)).toBe(
+      true,
+    );
+  });
+
+  it("refuses once the chat spent its share", () => {
+    expect(shareAllows({ spentTotalUsd: share, spentPurposeUsd: share, worstCaseUsd: 0.01, capUsd: cap }, 0.25)).toBe(
+      false,
+    );
+  });
+
+  it("refuses the chat first when the day nears the cap, whoever spent it", () => {
+    // Grading spent 14.95 USD: the chat may not take what is left of the last quarter.
+    expect(shareAllows({ spentTotalUsd: 14.95, spentPurposeUsd: 0, worstCaseUsd: 0.1, capUsd: cap }, 0.25)).toBe(false);
+  });
+});
+

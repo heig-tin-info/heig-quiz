@@ -548,6 +548,27 @@ export function HelpIcon({
 }
 
 /**
+ * The help topic of the mounted screen: the ONE slot its `PageHelpButton`
+ * fills while it is mounted, as `screenCommands.ts` does for the palette's
+ * commands. The teacher assistant reads it when a question leaves
+ * (ADR-080 §2), so the screen's topic is the one its "?" opens, never a
+ * second list beside it. One slot: one page header is mounted at a time.
+ */
+let currentTopic: string | null = null;
+
+export function useCurrentHelpTopic(topic: string): void {
+  useEffect(() => {
+    currentTopic = topic;
+    return () => {
+      if (currentTopic === topic) currentTopic = null;
+    };
+  }, [topic]);
+}
+
+/** The mounted screen's help topic, or null when it has none. */
+export const currentHelpTopic = (): string | null => currentTopic;
+
+/**
  * The help of a whole page: a round button in the header's action row, as
  * tall as the secondary buttons beside it (34 px) and outlined like them, so
  * it lines up with them instead of with the title. The title changes — it is
@@ -558,6 +579,7 @@ export function HelpIcon({
 export function PageHelpButton({ topic }: { topic: string }) {
   const { t } = useI18n();
   const { open } = useContext(HelpContext);
+  useCurrentHelpTopic(topic);
   return (
     <Tip label={t("help.title")}>
       <button

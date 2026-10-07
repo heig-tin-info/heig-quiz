@@ -103,6 +103,13 @@
 :root:has([data-tool-dock]) {
   --tool-dock-h: 4rem;
 }
+/* The assistant's button (ADR-080) steps aside while the pool's bulk bar is
+   up on a screen too narrow for both: the bar spans the bottom edge there. */
+@variant max-lg {
+  :root:has([data-bulk-bar]) [data-assist-dock] {
+    display: none;
+  }
+}
 @variant max-lg {
   :root {
     /* An anchored section lands under the sticky top bar, not behind it. */

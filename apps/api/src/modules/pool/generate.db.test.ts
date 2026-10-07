@@ -18,6 +18,7 @@ let next: (req: ProviderRequest<unknown>) => unknown;
 const seen: ProviderRequest<unknown>[] = [];
 const fake: LlmProvider = {
   id: "anthropic",
+  converse: () => Promise.reject(new Error("no conversation here")),
   async complete(req) {
     seen.push(req as ProviderRequest<unknown>);
     return { value: next(req as ProviderRequest<unknown>), model: "claude-sonnet-5-5", inputTokens: 10, outputTokens: 10 } as never;

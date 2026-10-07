@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
 
 /**
- * Minimal Markdown renderer for the help panels: headings, paragraphs, bullet
- * lists, bold, inline code and links. Small and dependency-free (the same
- * reasoning as the hand-rolled timeline); the input is trusted content we
- * author, not user input. Rendered to React elements, never raw HTML.
+ * Minimal Markdown renderer for the help panels and the assistant's answers
+ * (ADR-080): headings, paragraphs, bullet and numbered lists, bold, inline
+ * code and links. Small and dependency-free (the same reasoning as the
+ * hand-rolled timeline). Rendered to React elements, never raw HTML; a link
+ * gets an `href` only when it is http(s), because a model's answer is not
+ * content we author and a `javascript:` URL must stay text.
  */
 function inline(text: string, keyBase: string): ReactNode[] {
   const nodes: ReactNode[] = [];
@@ -25,6 +27,8 @@ function inline(text: string, keyBase: string): ReactNode[] {
           {m[4]}
         </code>,
       );
+    } else if (m[6] !== undefined && !/^https?:\/\//i.test(m[7]!)) {
+      nodes.push(m[6]);
     } else if (m[6] !== undefined) {
       nodes.push(
         <a
@@ -70,6 +74,16 @@ export function Markdown({ source }: { source: string }) {
                 <li key={ii}>{inline(it, `l${bi}-${ii}`)}</li>
               ))}
             </ul>
+          );
+        }
+        if (/^\d+[.)] /.test(trimmed)) {
+          const items = trimmed.split("\n").map((l) => l.replace(/^\d+[.)] /, ""));
+          return (
+            <ol key={bi} className="list-decimal space-y-1 pl-5">
+              {items.map((it, ii) => (
+                <li key={ii}>{inline(it, `o${bi}-${ii}`)}</li>
+              ))}
+            </ol>
           );
         }
         return <p key={bi}>{inline(trimmed.replace(/\n/g, " "), `p${bi}`)}</p>;

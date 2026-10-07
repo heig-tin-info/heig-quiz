@@ -210,6 +210,7 @@ export function BulkBar({
         // on one line the browser clamps it to half the height, so the pill is
         // unchanged, and on a phone — where five actions really do wrap — the
         // bar stays a rounded rectangle instead of becoming a lens.
+        data-bulk-bar
         className={`fixed inset-x-0 bottom-4 mx-auto flex w-[min(54rem,calc(100%-2rem))] flex-wrap items-center gap-2 rounded-[28px] border border-line bg-surface px-4 py-2 shadow-overlay ${Z.popover}`}
       >
         <span className="text-[13px] font-medium tabular-nums">

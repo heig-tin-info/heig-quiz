@@ -70,13 +70,14 @@ The data is used to:
 - produce statistics: per evaluation for the teacher, and per question in a pool (see [Statistics](#statistics-and-anonymisation));
 - keep a trace of changes (the audit log) and diagnose failures (the technical log).
 
-The code contains no advertising or commercial use. Content is sent to an AI model (Anthropic's Claude, through the platform's one key, ADR-058) once an administrator has stored a key, for four purposes:
+The code contains no advertising or commercial use. Content is sent to an AI model (Anthropic's Claude, through the platform's one key, ADR-058) once an administrator has stored a key, for five purposes:
 
 - **Generating the answer of a question** in the editor, on a teacher's click (ADR-059), and **reviewing published questions** at night, in the pools whose owner turned it on (ADR-060): the question's content, never a student's.
 - **Proposing a grade for essays and diagrams**, automatically after an evaluation closes (ADR-063): the statement, the rubric, the model answer and the student's answer (a diagram in its text form). Before it leaves, the answer is masked: the first names, last names and e-mail addresses of the classroom's students and of whoever sat the evaluation are replaced by `[student]` (`packages/domain/src/maskNames.ts`); the request carries no identifier, no evaluation and no classroom. The proposal, its justification and its points per criterion are shown to the teacher only, who validates the grade; the student reads only the comment the teacher writes or accepts by hand. Circuits are never sent: their simulation grades them. No model is called while an evaluation runs, except for the brainstorm below.
 - **Moderating and tidying a brainstorm's ideas**, live, only when its teacher turns the AI assistance on (ADR-072): the question and the ideas, under throwaway ids, never with an identifier. The names of the classroom's students and of the accounts that joined are masked; an anonymous guest's idea leaves as typed, which the poll page says before anyone types. The model hides offensive ideas, corrects the others and groups those that say the same; the stored answer is never changed, and the teacher can undo everything.
+- **Answering a teacher's question about the platform**, in the help assistant of the teacher screens (ADR-080): the platform's documentation, the screen the teacher is on (its kind, never its content: no course, student or answer) and the question as the teacher typed it, which is not masked; the panel says that an AI model reads it. The assistant is never offered to a student, nor in a student's view, nor during a sitting in Safe Exam Browser or on a kiosk station.
 
-Every call is logged with its model, its token counts and its estimated cost, never its content (`llm_calls`). Whether the provider keeps the data it receives (no-retention mode), and whether a European or local model is required: **To be confirmed** (open question 43, deferred to the next data-protection audit by the product owner on 2026-10-02).
+Every call is logged with its model, its token counts and its estimated cost, never its content (`llm_calls`). The help assistant is the one exception: its questions and answers are stored (`assist_conversations`, `assist_exchanges`), read by the teacher who asked and by an administrator who switched Super Powers on, every such read being written to the audit log, and deleted after 30 days (see [Retention](#retention-and-what-happens-to-the-data-after-the-studies)). Whether the provider keeps the data it receives (no-retention mode), and whether a European or local model is required: **To be confirmed** (open question 43, deferred to the next data-protection audit by the product owner on 2026-10-02).
 
 ## Who reaches what
 
@@ -110,7 +111,7 @@ Whoever administers the machines has access to the database, the backups and the
 
 ### What is traced
 
-The audit log (`apps/api/src/audit.ts`) records the actions that change something: sign-ins, imports and edits of class lists, gradings, releases of results, opening a view as a student, grants made by the administrator. It does not trace reads: who looked at which paper or which class list is recorded nowhere.
+The audit log (`apps/api/src/audit.ts`) records the actions that change something: sign-ins, imports and edits of class lists, gradings, releases of results, opening a view as a student, grants made by the administrator. It does not trace reads: who looked at which paper or which class list is recorded nowhere. The one exception is an administrator reading a teacher's help-assistant conversations, which is written to the log.
 
 ## Hosting and location of the data
 
@@ -131,7 +132,7 @@ External services called:
 | Scaleway Transactional Email (Paris region by default) | The recipient's address, the title of the evaluation or the name of the pool concerned; no grade, according to the code (`apps/api/src/modules/notifications/`) |
 | Microsoft Teams | For a linked account, a notification with the title concerned; limited to the authorised organisations |
 | The host of the edu-ID picture | A browser showing a portrait that was not uploaded loads it directly from the address edu-ID provided, without sending the page's address |
-| Anthropic (Claude), once a key is stored | Question content; after the close, essay and diagram answers masked of the students' names; a brainstorm's ideas, live, when its AI assistance is on (see [Purposes](#purposes)) |
+| Anthropic (Claude), once a key is stored | Question content; after the close, essay and diagram answers masked of the students' names; a brainstorm's ideas, live, when its AI assistance is on; a teacher's questions to the help assistant (see [Purposes](#purposes)) |
 
 E-mails and Teams messages carry titles, names of classrooms and pools, and counts; they never carry a grade or a question's content: "your grade changed" says that it changed, not what it is (`apps/api/src/modules/notifications/templates.ts`). Whether e-mail and Teams are enabled in production: **To be confirmed**. The platform loads no analytics script, and no font or library from a third party: everything is served by the server itself.
 
@@ -147,7 +148,7 @@ This section will describe what is in place once it is.
 
 ## Retention and what happens to the data after the studies
 
-**One retention period is enforced: five years for the drill.** A drill review is deleted five years after it was made, and a question's drill card five years after its last review; the server checks every six hours (`apps/api/src/modules/drill/jobs.ts`, ADR-041, N-DATA-03). Every other piece of data stays until a teacher deletes it (N-DATA-03). In particular, nothing happens automatically when a student completes or leaves their studies.
+**Two retention periods are enforced: five years for the drill, 30 days for the help assistant's conversations (below).** A drill review is deleted five years after it was made, and a question's drill card five years after its last review; the server checks every six hours (`apps/api/src/modules/drill/jobs.ts`, ADR-041, N-DATA-03). Every other piece of data stays until a teacher deletes it (N-DATA-03). In particular, nothing happens automatically when a student completes or leaves their studies.
 
 What is deleted, and when:
 
@@ -161,6 +162,7 @@ What is deleted, and when:
 | A student leaving the drill of a classroom | Nothing is deleted |
 | Expired sessions | Deleted automatically, every ten minutes |
 | Expired authorisations of AI assistants | Deleted automatically, every hour (`apps/api/src/auth/oauth/service.ts`) |
+| An exchange of the help assistant (a teacher's question and its answer) | Deleted automatically 30 days after it was written, every day (`apps/api/src/modules/assist/jobs.ts`); the teacher may delete a conversation sooner |
 
 What is never deleted automatically: the accounts (there is no account deletion), the e-mail addresses and edu-ID information kept, the notifications, and the audit log, which in particular keeps the name and address of a student removed from a classroom.
 

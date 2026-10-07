@@ -86,6 +86,9 @@ type RouteTab = "journal" | "groups" | "grades" | "settings";
 export type ClassroomTab = ClassroomQueryTab | RouteTab;
 type Tab = ClassroomTab;
 
+/** The help topic of a tab that has its own; the classroom's for the others. */
+const TAB_HELP: Partial<Record<Tab, string>> = { groups: "groups", journal: "journal", roster: "roster" };
+
 /**
  * The tabs that are routes of their own (`/classrooms/:id/<tab>`), not a
  * `?tab=` on the classroom's address: the Journal, the Groups, the Grades and the Settings.
@@ -312,7 +315,7 @@ export function ClassroomView({
             ) : null}
           </span>
         }
-        help={tab === "groups" ? "groups" : tab === "journal" ? "journal" : "classroom"}
+        help={TAB_HELP[tab] ?? "classroom"}
         actions={
           <>
             {/* Secondary, and to the left of the primary: it is a detour into

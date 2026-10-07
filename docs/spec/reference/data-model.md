@@ -65,7 +65,8 @@ Common columns omitted: `id uuid pk`, `created_at`, `updated_at`.
 | `answer_flags` | `answer_id`, `user_id`, `reason`, `resolved_at` | Student flag, phase 2 |
 | `poll_idea_marks` | PK (`evaluation_id` FK cascade, `idea_key`), `status` approved / hidden / null, `merged_into`, `label`, `correction`, `source` teacher / ai, `updated_at` | A brainstorm's decisions, keyed by the normalised idea (ADR-071). The teacher writes `label`; a model writes `correction` and a mark only where none exists (ADR-072). |
 | `poll_ai_runs` | `evaluation_id` PK (FK cascade), `lease_at`, `calls`, `error`, `updated_at` | The lease of a brainstorm's AI pass, its call count against the per-run limit, its last failure (ADR-072). `updated_at` is the pass's heartbeat. |
-| `llm_calls` | `user_id` nullable, `purpose` test / grade / generate / review / poll, `provider`, `model`, `input_tokens`, `output_tokens`, `cost_usd`, `duration_ms`, `status` pending / ok / error, `error` | Never the prompt or reply. Cost is an estimate stored at write time; pending calls reserve budget (ADR-058). |
+| `llm_calls` | `user_id` nullable, `purpose` test / grade / generate / review / poll / assist, `provider`, `model`, `input_tokens`, `output_tokens`, `cost_usd`, `duration_ms`, `status` pending / ok / error, `error` | Never the prompt or reply. Cost is an estimate stored at write time; pending calls reserve budget (ADR-058). |
+| `assist_conversations`, `assist_exchanges` | a conversation: `user_id` (the owner), `created_at`, `updated_at`; an exchange: `conversation_id`, `created_at`, `question`, `answer`, `context` (the route pattern, help topic and UI language), `model`, `corpus_version`, all required | The teacher assistant's (ADR-080 §6), owned by the `assist` module. Read by the owner and by an administrator with Super Powers (audited). Each exchange deleted 30 days after it was written, an empty conversation with it, by `assist.purge`. |
 
 **Drill**
 
