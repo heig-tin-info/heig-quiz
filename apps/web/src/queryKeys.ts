@@ -56,6 +56,11 @@ export const pairPreviewKey = (code: string) => ["pair-preview", code] as const;
 export const adminSystemKey = ["admin-system"] as const;
 /** Whether the editor's "Generate answers" wand works now, and for which types (ADR-059). */
 export const generateAvailabilityKey = ["generate-availability"] as const;
+/** The teacher assistant (ADR-080): whether it answers, the caller's conversations and one of them. */
+export const assistKey = ["assist"] as const;
+export const assistAvailabilityKey = [...assistKey, "availability"] as const;
+export const assistConversationsKey = [...assistKey, "conversations"] as const;
+export const assistConversationKey = (id: string) => [...assistConversationsKey, id] as const;
 /** The caller's personal API tokens (settings). */
 export const apiTokensKey = ["api-tokens"] as const;
 /** The assistants connected through OAuth (settings, ADR-023). */

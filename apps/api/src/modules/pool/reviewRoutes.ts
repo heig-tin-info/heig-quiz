@@ -9,11 +9,11 @@ import type { FastifyInstance } from "fastify";
 import { IdParam, ReviewFixBody, ReviewToggle } from "@quiz/contracts";
 
 import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
-import { LlmError } from "../llm/service.js";
+import { LlmError, llmFailure } from "../llm/service.js";
 import { poolChanged } from "./events.js";
 import { applyReviewFix, ReviewRefusal, reviewVersion } from "./review.js";
 import { ignoreReview, latestVersionOf, poolReviews, reviewJson, reviewOf, setReviewEnabled } from "./reviewStore.js";
-import { llmFailure, LLM_CALLS_PER_MINUTE, type PoolRouteContext } from "./routeContext.js";
+import { LLM_CALLS_PER_MINUTE, type PoolRouteContext } from "./routeContext.js";
 
 export function reviewRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { requireTeacher, trace, teacher, inPool, onQuestion } = ctx;

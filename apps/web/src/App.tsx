@@ -11,6 +11,7 @@ import { Logo } from "./Header";
 import { type Dict, useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
 import { useGithubLinkReturn } from "./github/linkReturn";
+import { AssistDock } from "./assist/AssistDock";
 import { CoachLayer } from "./coach/CoachLayer";
 import { useRoute, type Navigate, type Route, type RouteOf } from "./router";
 import { ImpersonationBanner, Shell, StudentViewBanner } from "./Shell";
@@ -630,6 +631,8 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
     {/* Inside the frame only: a full-screen view (an exam, a projection)
         returned above and never gets a bubble. */}
     <CoachLayer me={me.data} view={shown.view} teacherUi={teacherUi} />
+    {/* The teacher assistant (ADR-080): inside the frame only, like the coach. */}
+    <AssistDock me={me.data} route={shown} teacherUi={teacherUi} />
     </ImpersonationBanner>
     </SuperPowersBanner>
   );

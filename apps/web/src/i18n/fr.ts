@@ -423,6 +423,8 @@ export const fr: Record<keyof Dict, string> = {
     "Suit les dépôts de projet renommés ou supprimés, rafraîchit leur dernier commit et réinvite un étudiant toujours sans accès, au plus une fois par jour.",
   "admin.task.llm.review": "Revue LLM des questions",
   "admin.task.llm.review.desc": "Entre 1 h et 6 h, relit la dernière version des questions des pools qui l'ont demandé, dans la limite d'un quart du plafond d'IA du jour.",
+  "admin.task.assist.purge": "Rétention de l'assistant d'aide",
+  "admin.task.assist.purge.desc": "Supprime les messages de l'assistant d'aide de plus de 30 jours.",
   "admin.kiosk": "Postes kiosque",
   "admin.kiosk.hint":
     "Les Chromebooks de l'école qui se sont attestés. Nommez un poste pour que les étudiants puissent s'y appairer ; retirez-le pour le mettre hors service.",
@@ -751,6 +753,27 @@ export const fr: Record<keyof Dict, string> = {
   "shortcuts.title": "Raccourcis",
 
   "help.title": "Aide",
+
+  // --- L'assistant d'aide (assist/AssistDock.tsx, ADR-080) ---
+  "assist.open": "Demander à l'assistant d'aide",
+  "assist.close": "Fermer l'assistant d'aide",
+  "assist.title": "Assistant d'aide",
+  "assist.stub": "Simulation de développement",
+  "assist.new": "Nouvelle conversation",
+  "assist.history": "Conversations précédentes",
+  "assist.back": "Retour à la conversation",
+  "assist.empty.title": "Une question sur cet écran ?",
+  "assist.empty.body": "Les réponses viennent de la documentation de la plateforme, rédigées par un modèle d'IA (Anthropic). Vos questions sont conservées 30 jours ; un administrateur peut les lire.",
+  "assist.placeholder": "Posez une question sur la plateforme…",
+  "assist.send": "Envoyer",
+  "assist.thinking": "Recherche dans la documentation…",
+  "assist.error": "L'assistant n'a pas pu répondre. Réessayez.",
+  "assist.retention": "Conservées 30 jours, puis supprimées.",
+  "assist.history.empty": "Aucune conversation pour l'instant.",
+  "assist.history.error": "Impossible de charger vos conversations",
+  "assist.delete": "Supprimer",
+  "assist.delete.title": "Supprimer cette conversation ?",
+  "assist.delete.body": "Ses questions et ses réponses sont supprimées définitivement.",
 
   "dur.day": "{n} jour",
   "dur.days": "{n} jours",

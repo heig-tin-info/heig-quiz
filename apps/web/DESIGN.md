@@ -2060,3 +2060,40 @@ A tool docked on the player when the evaluation provides one
   `ToggleChip`s above them; `2nd` swaps six keys in place (x² → x³, √x → ∛x,
   xʸ → ʸ√x, 10ˣ → 2ˣ, log → logᵧx, ln → eˣ) and the trigonometry to its
   inverses, as on Windows.
+
+## The help assistant (ADR-080)
+
+A chat docked on every teacher screen (`apps/web/src/assist/`), the
+calculator's sibling: the same button, the same kind of panel, the same
+refusal of the accent.
+
+- **The button**: 48 px round, bottom right, 16 px from the edges (24 from
+  `sm`), above the bottom bar through `--bottom-nav-h`. `surface`, hairline,
+  popover shadow; a speech bubble with a question mark, which says "ask"
+  without the help drawer's bare "?". Open, it takes the ink fill
+  (`bg-fg`), never the accent: the screen's primary action keeps the one
+  red. It is a tool dock (`data-tool-dock`), so the toasts rise above it
+  (`--tool-dock-h`). Under `lg`, while the pool's bulk bar is up
+  (`data-bulk-bar`), it steps aside (`style.css`): the bar spans the bottom
+  edge there, and the selection is the task of the moment.
+- **The panel**: a non-modal floating layer 12 px above the button on
+  `Z.tool`, `rounded-sheet`, hairline, overlay shadow; 384 px wide, never
+  wider than the screen less 32 px, at most 576 px tall and never taller
+  than the window under the top bar. The page stays usable behind it;
+  Escape or the cross closes it and focus returns to the button.
+- **Inside**: a header (the 15 px bold title, a `zinc` badge when the
+  development stub answers, then History, New and Close as small icon
+  buttons); the conversation; the composer, pinned at the bottom. A
+  question is a `surface-2` bubble on the right, at 14 px; an answer is
+  plain 14 px text on the surface (the help drawer's Markdown: paragraphs,
+  bullet and numbered lists, bold, code; a link only when it is http(s)),
+  never a bubble, so the reading weight is on the answer. The send button
+  is a 36 px ink disc with an up arrow, dimmed while empty or waiting.
+  Enter sends, Shift+Enter breaks the line.
+- **States**: empty — a muted bubble icon, "Ask about this screen" and the
+  notice that an AI model (Anthropic) reads the question, kept 30 days and
+  readable by an administrator; waiting — the question shown at once and a
+  spinner "Looking it up in the documentation…"; refused or failed — a
+  `danger` `Alert` under the conversation, the draft kept; history — the
+  retention line, then one row per conversation (its first question, its
+  relative time, a danger icon button that deletes through `useConfirm`).

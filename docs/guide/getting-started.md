@@ -76,6 +76,14 @@ Every main screen carries a round question-mark button at the top right, in the 
 
 The topics are short and describe one screen each. This guide is the longer version: it walks through the tasks that cross several screens.
 
+## The help assistant
+
+When the platform has an AI model, every teacher screen carries a round button at the bottom right, with a speech bubble and a question mark. It opens the **Help assistant**, a small chat that stays beside the page: ask in French or in English how to do something on the screen you are on, and it answers from this guide and the help topics, naming the buttons as the screen labels them. It knows which screen you are on, never what is on it: no course, no student, no answer is sent.
+
+It answers questions about the platform only, and declines anything else. It explains; it changes nothing for you. The clock icon lists your past conversations and the pen starts a new one. Your questions are read by an AI model (Anthropic), kept 30 days, and an administrator can read them (see [Data protection](data-protection.md)); delete a conversation from the list whenever you like.
+
+The assistant is absent from the student view, from a session acting as a student and from the screens meant for a projector.
+
 ## Notifications
 
 The bell beside the account row collects what happened to you while you were elsewhere: a colleague shared a pool with you, naming the role they gave you; the ownership of a pool was transferred to you; students joined one of your classrooms; roster entries need your decision. Events of one classroom are counted in one entry ("3 students joined PRG1-2026") until you read it. An unread count sits on the bell, **Mark all as read** clears it, and a notification is a link to the pool or the roster it talks about.

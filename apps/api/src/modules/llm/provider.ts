@@ -33,9 +33,69 @@ export interface ProviderReply<T> extends LlmUsageCount {
   model: string;
 }
 
+/**
+ * A tool the model may call during a conversation (ADR-080 §5, amending
+ * ADR-058 §1): READ-ONLY by contract — it reads what the server already
+ * holds in memory and changes nothing. `run` validates its own input and
+ * answers a text; a refusal is a text too, so the model can try again.
+ */
+export interface ReadOnlyTool {
+  name: string;
+  description: string;
+  /** The input's JSON schema, an object with `additionalProperties: false`. */
+  inputSchema: { type: "object"; properties: Record<string, unknown>; required: string[]; additionalProperties: false };
+  run(input: unknown): string;
+}
+
+/** A conversation turn as stored: plain text, the model's reasoning never kept. */
+export interface ConverseTurn {
+  role: "user" | "assistant";
+  text: string;
+}
+
+/**
+ * A multi-turn request with read-only tools (ADR-080 §5). The system prompt
+ * comes in two parts: `stable`, the cached prefix, then `volatile`, what
+ * changes from one question to the next. `history` ends with the question.
+ * At most `maxSteps` provider requests, the last of which may not call a
+ * tool: one question costs at most `maxSteps` reservations.
+ */
+export interface ConverseRequest {
+  apiKey: string;
+  model: string;
+  system: { stable: string; volatile: string };
+  history: ConverseTurn[];
+  tools: ReadOnlyTool[];
+  maxTokens: number;
+  maxSteps: number;
+  effort?: "low" | "medium" | "high";
+}
+
+/** One provider request of a conversation, as the gateway meters it. */
+export interface ProviderStep extends LlmUsageCount {
+  model: string;
+}
+
+/**
+ * How a provider sends each request of a conversation: the gateway reserves
+ * its worst case (`promptChars` and the request's `maxTokens`), calls
+ * `send`, and settles the call with what `send` returns or throws.
+ */
+export type Metered = <R extends ProviderStep>(promptChars: number, send: () => Promise<R>) => Promise<R>;
+
+export interface ConverseReply {
+  /** The model's answer, Markdown. */
+  text: string;
+  /** The model that answered last. */
+  model: string;
+  /** Provider requests made. */
+  steps: number;
+}
+
 export interface LlmProvider {
   readonly id: "anthropic";
   complete<T>(req: ProviderRequest<T>): Promise<ProviderReply<T>>;
+  converse(req: ConverseRequest, metered: Metered): Promise<ConverseReply>;
 }
 
 /**

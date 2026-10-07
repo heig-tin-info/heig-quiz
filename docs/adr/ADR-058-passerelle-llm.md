@@ -8,6 +8,9 @@ foundation of LLM assistance; [ADR-059](ADR-059-generer-la-reponse.md) (the
 (the nightly review of the questions) build on it and are accepted.
 [ADR-060](ADR-060-revue-llm-des-questions.md) §5 amends the daily cap with a nightly review share;
 [ADR-063](ADR-063-correction-llm.md) supersedes §8 below by wiring grading to the gateway.
+[ADR-080](ADR-080-assistant-enseignant.md) amends §1 (a multi-turn `converse()` with
+read-only tools, the `assist` purpose), §4 (the assistant's conversations are
+stored, outside `llm_calls`) and §5 (the assistant's share of the cap).
 
 Delivers F-LLM-04 (the call log) and N-SEC-08 (the key encrypted at rest)
 for the platform's own key. Delivered with `apps/api/src/modules/llm/`
@@ -65,7 +68,7 @@ The `llm` module owns an `LlmGateway` with one method:
 complete({ purpose, userId, system, prompt, schema, maxTokens }) → Promise<T>
 ```
 
-`purpose` is a closed union (`test`, `grade`, `generate`, `review`, and `poll` since [ADR-072](ADR-072-ia-du-brainstorm.md)), `userId`
+`purpose` is a closed union (`test`, `grade`, `generate`, `review`, `poll` since [ADR-072](ADR-072-ia-du-brainstorm.md), and `assist` since [ADR-080](ADR-080-assistant-enseignant.md), whose `converse()` is the gateway's second method), `userId`
 the teacher the call is made for (null for a call no person made), `schema`
 a zod schema the reply must satisfy. The gateway asks the provider for a
 STRUCTURED output (JSON matching the schema), parses it, retries once on an

@@ -74,6 +74,8 @@
  *                      pages (`?journal=1`), and the staff's writes (M4-05);
  *   kiosk.ts       10. the kiosk stations: the admin's registry, and what a
  *                      station knows of itself (ADR-051).
+ *   assist.ts      11. the teacher assistant's development stub: its
+ *                      answer, one stored conversation and the history (ADR-080).
  *
  * That list is also the dependency order, and the graph is acyclic: a file
  * reads the ones above it and never the ones below. Two handlers are
@@ -146,6 +148,7 @@ import "./projectNew";
 import "./codespace";
 import "./journal";
 import "./kiosk";
+import "./assist";
 import {
   polls,
   findTeacherPoll,

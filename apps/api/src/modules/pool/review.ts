@@ -186,7 +186,7 @@ export async function runNightReview(db: Db, gateway: LlmGateway, now: Date): Pr
   let failed = 0;
   for (const version of candidates) {
     const promptChars = JSON.stringify(version.config).length + version.explanation.length + SYSTEM.length;
-    if ((await spentToday(db, now, "review")) + llmWorstCaseUsd(model, promptChars, MAX_TOKENS) > share) {
+    if ((await spentToday(db, now, { purpose: "review", unattributed: true })) + llmWorstCaseUsd(model, promptChars, MAX_TOKENS) > share) {
       return `${reviewed} reviewed, ${failed} failed; the night's share of the cap is spent`;
     }
     try {

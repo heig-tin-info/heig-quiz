@@ -13,6 +13,7 @@ import {
   LLM_MODEL_IDS,
   llmCostUsd,
   SCHOOL_TIME_ZONE,
+  shareAllows,
   type LlmModelId,
   type LlmPurpose,
 } from "@quiz/domain";
@@ -23,8 +24,24 @@ import { llmCalls, llmSettings, users } from "../../db/schema.js";
 import { decryptKey, encryptKey } from "./crypto.js";
 import { LlmError, type LlmUsageCount } from "./provider.js";
 
-export { LlmError } from "./provider.js";
-export { LlmGateway, type CompleteRequest, type Completion } from "./gateway.js";
+export { LlmError, type ConverseTurn, type ReadOnlyTool } from "./provider.js";
+export { LlmGateway, type CompleteRequest, type Completion, type ConverseCall } from "./gateway.js";
+export { STUB_MODEL } from "./stub.js";
+
+/**
+ * How a failed model call answers a screen (the wand, ADR-059; Review now,
+ * ADR-060; the assistant, ADR-080): the gateway's code, worded by the client.
+ */
+const LLM_FAILURES: Partial<Record<LlmErrorCode, [number, string]>> = {
+  not_configured: [409, "llm_not_configured"],
+  key_unreadable: [409, "llm_not_configured"],
+  budget_exhausted: [429, "llm_budget_exhausted"],
+  rate_limited: [429, "rate_limited"],
+};
+export const llmFailure = (error: LlmError): { status: number; body: { error: string; reason: string } } => {
+  const [status, code] = LLM_FAILURES[error.code] ?? [502, "llm_failed"];
+  return { status, body: { error: code, reason: error.code } };
+};
 
 type SettingsRow = typeof llmSettings.$inferSelect;
 type Secret = Pick<AppConfig, "LLM_KEY_SECRET">;
@@ -44,18 +61,24 @@ const startOf = (unit: "day" | "month", now: Date) =>
 export const startOfDay = (now: Date) => startOf("day", now);
 
 /**
- * Today's estimated spend, calls in flight included at their reserved worst
- * case. `unattributed` narrows it to the calls of a purpose made by no person:
- * the night's review counts its own share with it (ADR-060 §5).
+ * Today's estimated spend, calls in flight included at their worst case.
+ * `purpose` narrows it to one purpose, and `unattributed` to its calls made
+ * by no person: the night's review counts its own share so (ADR-060 §5),
+ * the assistant its own, every teacher's together (ADR-080 §4).
  */
-export async function spentToday(db: Db | Tx, now: Date, unattributed?: LlmPurpose): Promise<number> {
+export async function spentToday(
+  db: Db | Tx,
+  now: Date,
+  only?: { purpose: LlmPurpose; unattributed?: boolean },
+): Promise<number> {
   const [row] = await db
     .select({ total: sum(llmCalls.costUsd) })
     .from(llmCalls)
     .where(
       and(
         gte(llmCalls.createdAt, startOf("day", now)),
-        ...(unattributed ? [eq(llmCalls.purpose, unattributed), isNull(llmCalls.userId)] : []),
+        ...(only ? [eq(llmCalls.purpose, only.purpose)] : []),
+        ...(only?.unattributed ? [isNull(llmCalls.userId)] : []),
       ),
     );
   return Number(row?.total ?? 0);
@@ -154,6 +177,11 @@ export async function writeSettings(
  * the call is inserted `pending` at that worst case. Two parallel calls
  * therefore cannot both slip under the cap. Otherwise `budget_exhausted` is
  * thrown and nothing reaches the provider; the day's first refusal is logged.
+ *
+ * `share`, the part of the cap a purpose holds (ADR-080 §4, `shareAllows`),
+ * is checked first: its refusal is
+ * the same `budget_exhausted` but writes nothing — the cap itself was not
+ * reached, so the `llm.budget` check stays green.
  */
 export async function reserveCall(
   db: Db,
@@ -165,6 +193,7 @@ export async function reserveCall(
     model: string;
     worstCaseUsd: number;
     capUsd: number;
+    share?: number;
   },
 ): Promise<string> {
   const row = {
@@ -177,7 +206,22 @@ export async function reserveCall(
   };
   const reserved = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('llm-budget', 0))`);
-    if ((await spentToday(tx, call.now)) + call.worstCaseUsd <= call.capUsd) {
+    const spentTotalUsd = await spentToday(tx, call.now);
+    if (
+      call.share !== undefined &&
+      !shareAllows(
+        {
+          spentTotalUsd,
+          spentPurposeUsd: await spentToday(tx, call.now, { purpose: call.purpose }),
+          worstCaseUsd: call.worstCaseUsd,
+          capUsd: call.capUsd,
+        },
+        call.share,
+      )
+    ) {
+      return false;
+    }
+    if (spentTotalUsd + call.worstCaseUsd <= call.capUsd) {
       await tx.insert(llmCalls).values({ ...row, status: "pending", costUsd: call.worstCaseUsd });
       return true;
     }

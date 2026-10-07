@@ -219,7 +219,8 @@ the pools fill with near-duplicates.
 - An LLM author can create as much as its owner can. The audit log's
   `api_key` rows are how to tell afterwards what an assistant did.
 - F-LLM-04 (anonymisation of what is sent to a provider) is not engaged: the
-  platform sends nothing to a provider; the teacher's own client reads what
+  platform sends nothing to a provider (true of this server; the in-app
+  assistant of [ADR-080](ADR-080-assistant-enseignant.md) §8 is the platform sending); the teacher's own client reads what
   its owner can read. The tools expose no student data beyond what
   `get_course` (staff names) and `get_evaluation` return; the question
   statistics of `get_pool_question_stats` are anonymous aggregates of ten

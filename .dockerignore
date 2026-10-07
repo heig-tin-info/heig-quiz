@@ -9,7 +9,10 @@ node_modules
 secrets
 .env
 .env.*
-docs
+# The documentation stays out, but for the user guide: the API's build turns
+# it into the teacher assistant's corpus (ADR-080 §5).
+docs/*
+!docs/guide
 site
 mockups
 *.xlsx

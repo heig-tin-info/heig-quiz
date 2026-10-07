@@ -4,8 +4,8 @@
  * costs. No I/O: the `llm` module of the API reads and writes, this decides.
  */
 
-/** Why a call is made: the `purpose` column of `llm_calls` (ADR-058 §1). */
-export const LLM_PURPOSES = ["test", "grade", "generate", "review", "poll"] as const;
+/** Why a call is made: the `purpose` column of `llm_calls` (ADR-058 §1; `assist`, the teacher assistant, ADR-080). */
+export const LLM_PURPOSES = ["test", "grade", "generate", "review", "poll", "assist"] as const;
 export type LlmPurpose = (typeof LLM_PURPOSES)[number];
 
 export interface LlmModel {
@@ -82,4 +82,19 @@ export function modelFor(models: Partial<Record<LlmPurpose | "default", string>>
 /** Whether the connection test's answer names Paris, whatever its case, accents or punctuation. */
 export function isParis(answer: string): boolean {
   return /\bparis\b/.test(answer.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase());
+}
+
+/**
+ * Whether a call of a purpose that holds a SHARE of the cap may be reserved
+ * (ADR-080 §4): the purpose's own spend today stays within `share` of the
+ * cap, and the day's total leaves that same part of the cap to the other
+ * purposes, so the purpose is refused first when the cap nears. The cap's
+ * own check still runs after this one.
+ */
+export function shareAllows(
+  day: { spentTotalUsd: number; spentPurposeUsd: number; worstCaseUsd: number; capUsd: number },
+  share: number,
+): boolean {
+  const part = share * day.capUsd;
+  return day.spentPurposeUsd + day.worstCaseUsd <= part && day.spentTotalUsd + day.worstCaseUsd <= day.capUsd - part;
 }

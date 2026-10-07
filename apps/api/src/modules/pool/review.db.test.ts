@@ -24,6 +24,7 @@ let next: () => unknown;
 let calls = 0;
 const fake: LlmProvider = {
   id: "anthropic",
+  converse: () => Promise.reject(new Error("no conversation here")),
   async complete() {
     calls += 1;
     return { value: next(), model: "claude-sonnet-5-5", inputTokens: 1_000, outputTokens: 200 } as never;

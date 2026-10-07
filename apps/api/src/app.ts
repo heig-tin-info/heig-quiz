@@ -46,6 +46,7 @@ import { createKioskAttestor } from "./modules/kiosk/attestation.js";
 import { kioskPlugin } from "./modules/kiosk/routes.js";
 import { legacyPlugin } from "./modules/legacy/routes.js";
 import { livePlugin } from "./modules/live/routes.js";
+import { assistPlugin } from "./modules/assist/routes.js";
 import { createLlm } from "./modules/llm/index.js";
 import { llmPlugin } from "./modules/llm/routes.js";
 import { LlmGateway } from "./modules/llm/service.js";
@@ -205,6 +206,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(realtimePlugin);
   await app.register(adminPlugin, { config });
   await app.register(llmPlugin, { config });
+  // The teacher assistant (ADR-080): its corpus loaded once, at boot.
+  await app.register(assistPlugin, { config });
   await app.register(avatarPlugin);
   await app.register(orgPlugin, { config });
   // Without Quiz's GitHub App (D23) none of its routes exists: a 404.
