@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Eye, ListChecks, Plus, ScanSearch, StarOff } from "lucide-react";
+import { ArrowLeft, Eye, ListChecks, Plus, ScanSearch, StarOff, Tags } from "lucide-react";
 import { useEffect, useMemo, useState, type DragEvent, type KeyboardEvent } from "react";
 
 import type {
@@ -42,6 +42,7 @@ import { categoryPaths, findCategory } from "./categories";
 import { setQuestionDrag } from "./move";
 import {
   EMPTY_FILTERS,
+  NO_FILTERS,
   hasStatsFilter,
   matchesStats,
   questionQuery,
@@ -62,8 +63,19 @@ import { useQuestionActions } from "../question/useQuestionActions";
 import { useLlmAvailability } from "../llmAvailability";
 import { poolKey, poolQuestionStatsKey, poolQuestionsKey } from "../queryKeys";
 import { ReviewTab } from "./ReviewTab";
+import { TagsTab } from "./TagsTab";
 
-type PoolTab = "questions" | "review";
+type PoolTab = "questions" | "tags" | "review";
+
+/**
+ * The filters once `?tag=` moved from `was` to `tag`: `tag` as the one tag
+ * chip; an emptied parameter drops the chip it carried, and only that one.
+ */
+const withTag = (filters: QuestionFilters, tag: string, was = ""): QuestionFilters => {
+  if (tag !== "") return { ...filters, tags: [tag] };
+  const carried = was !== "" && filters.tags.length === 1 && filters.tags[0] === was;
+  return carried ? { ...filters, tags: [] } : filters;
+};
 
 /**
  * The pool screen: the questions across the full
@@ -85,6 +97,11 @@ type PoolTab = "questions" | "review";
  * query-string parameter. A tree is navigation, and navigation belongs in
  * one place; the page then keeps its whole width for the table, which is
  * what a screen made of seven columns needs.
+ *
+ * The "Tags" tab lists the pool's vocabulary with its usage (`TagsTab`); a
+ * tag there opens this list filtered on it through the `tag` query-string
+ * parameter. The parameter mirrors the filter while it holds exactly one tag
+ * chip, so the link survives a reload and clearing the chip drops it.
  *
  * The ONE primary action is "New question". Importing, exporting and adding
  * to an evaluation are later work packages; nothing else here competes with
@@ -192,14 +209,30 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const qc = useQueryClient();
   // Everything but the category is local to the screen; the category is the
   // sidebar's selection, and "" means "all questions".
-  const [filters, setFilters] = useState<QuestionFilters>(EMPTY_FILTERS);
-  const [categoryParam] = useSearchParam("category", "");
+  // `?tag=` seeds the tag chip, and the chip writes it back while it is the
+  // only one. `seenTag` exists for a `?tag=` that changes while this page
+  // stays mounted — an in-app link to `/pools/:id?tag=…` from this very pool
+  // (the router's `SEARCH_PARAM_EVENT`) — where the `useState` seed above
+  // would not run again: the chip follows the new value.
+  const [tagParam, setTagParam] = useSearchParam("tag", "");
+  const [filters, setFilters] = useState<QuestionFilters>(() => withTag(EMPTY_FILTERS, tagParam));
+  const [seenTag, setSeenTag] = useState(tagParam);
+  if (seenTag !== tagParam) {
+    setSeenTag(tagParam);
+    setFilters((f) => withTag(f, tagParam, seenTag));
+  }
+  const applyFilters = (next: QuestionFilters) => {
+    setFilters(next);
+    setTagParam(next.tags.length === 1 ? next.tags[0]! : "");
+  };
+  const [categoryParam, setCategory] = useSearchParam("category", "");
   // The "LLM review" tab (ADR-060), offered while the platform has a model.
   const [tabParam, setTab] = useSearchParam("tab", "questions");
-  const tab: PoolTab = tabParam === "review" ? "review" : "questions";
   const llm = useLlmAvailability();
   const poolsRoot = useRootCrumb("pools");
   const reviewTab = llm.data?.available === true;
+  const tab: PoolTab =
+    tabParam === "tags" ? "tags" : tabParam === "review" && reviewTab ? "review" : "questions";
   const categoryId = categoryParam === "" ? null : categoryParam;
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
   const [creating, setCreating] = useState<{ type: string | null } | null>(null);
@@ -275,6 +308,18 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
    * about to stop seeing in that place. The first click on a column takes the
    * order a reader expects of it: a name ascends, a date starts at the newest.
    */
+  /**
+   * A tag of the Tags tab: the whole pool's questions that wear it — its
+   * counts are the pool's, so the category and every other filter go; the
+   * sort stays, as it does when the filters are cleared.
+   */
+  const openTag = (tag: string) => {
+    setChecked(new Set());
+    applyFilters({ ...filters, ...NO_FILTERS, q: "", tags: [tag] });
+    setCategory("");
+    setTab("questions");
+  };
+
   const sortBy = (key: QuestionSort) => {
     setChecked(new Set());
     setFilters((f) =>
@@ -392,21 +437,26 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
         }
       />
 
-      {reviewTab ? (
-        <Tabs<PoolTab>
-          value={tab}
-          onChange={setTab}
-          idPrefix="pool"
-          items={[
-            { value: "questions", label: t("pool.tab.questions"), icon: ListChecks },
-            { value: "review", label: t("review.title"), icon: ScanSearch },
-          ]}
-        />
-      ) : null}
+      <Tabs<PoolTab>
+        value={tab}
+        onChange={setTab}
+        idPrefix="pool"
+        items={[
+          { value: "questions", label: t("pool.tab.questions"), icon: ListChecks },
+          { value: "tags", label: t("pool.tab.tags"), icon: Tags },
+          ...(reviewTab
+            ? [{ value: "review" as const, label: t("review.title"), icon: ScanSearch }]
+            : []),
+        ]}
+      />
 
-      {tab === "review" && reviewTab ? (
+      {tab === "review" ? (
         <TabPanel idPrefix="pool" value="review">
           <ReviewTab poolId={id} role={detail.role} navigate={navigate} />
+        </TabPanel>
+      ) : tab === "tags" ? (
+        <TabPanel idPrefix="pool" value="tags">
+          <TagsTab poolId={id} onOpenTag={openTag} />
         </TabPanel>
       ) : (
       /* Escape closes the pane from anywhere in the list or the pane. */
@@ -425,7 +475,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                 filters={filters}
                 onChange={(next) => {
                   setChecked(new Set());
-                  setFilters(next);
+                  applyFilters(next);
                 }}
                 tags={detail.tags}
                 stats={questionStats}
@@ -470,7 +520,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                   // The sort is not a filter: clearing what hides the rows must not
                   // also change the order they come back in.
                   onClearFilters={() =>
-                    setFilters((f) => ({ ...EMPTY_FILTERS, sort: f.sort, dir: f.dir }))
+                    applyFilters({ ...EMPTY_FILTERS, sort: filters.sort, dir: filters.dir })
                   }
                 />
               ) : (

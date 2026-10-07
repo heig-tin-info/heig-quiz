@@ -1535,6 +1535,8 @@ const tagDescriptions = new Map<string, string>([
   ["p1\u0000memoire", "malloc, free et la durée de vie des objets"],
   ["p1\u0000securite", "Débordements, entrées non validées, comportements indéfinis"],
   ["p1\u0000tableaux", "Tableaux, indices et leur relation aux pointeurs"],
+  // Documented, worn by no question yet: in the Tags tab's list, not in its heat.
+  ["p1\u0000structures", "struct, union et alignement en mémoire"],
 ]);
 
 /** `GET /pools/:id/tags`: the vocabulary of the pool, with its usage counts. */
@@ -1544,6 +1546,36 @@ const poolTagDetails = (poolId: string) =>
     description: tagDescriptions.get(`${poolId}\u0000${tag}`) ?? "",
     count: liveQuestions(poolId).filter((q) => q.tags.includes(tag)).length,
   }));
+
+/** The made-up course counts of the Tags tab: the mock has no course walk. */
+const tagCourses = new Map<string, number>([
+  ["p1\u0000pointeurs", 2],
+  ["p1\u0000tableaux", 2],
+  ["p1\u0000memoire", 1],
+  ["p1\u0000boucles", 1],
+  ["p1\u0000fichiers", 1],
+]);
+
+/**
+ * `GET /pools/:id/tags/usage`: the vocabulary (the tags worn and the ones
+ * only documented) with the questions and a course count from `tagCourses`.
+ */
+const poolTagUsage = (poolId: string) => {
+  const documented = flags.empty
+    ? []
+    : [...tagDescriptions.keys()]
+        .filter((key) => key.startsWith(`${poolId}\u0000`))
+        .map((key) => key.slice(poolId.length + 1));
+  return [...new Set([...poolTags(poolId), ...documented])].sort().map((tag) => {
+    const key = `${poolId}\u0000${tag}`;
+    return {
+      tag,
+      description: tagDescriptions.get(key) ?? "",
+      questions: liveQuestions(poolId).filter((q) => q.tags.includes(tag)).length,
+      courses: tagCourses.get(key) ?? 0,
+    };
+  });
+};
 
 // --- The LLM review (ADR-060): two remarks on ptr-null-check, ptr-arith-01
 // clean; the pool `p1` asked for the night's review. `?empty=1`: none.
@@ -2433,6 +2465,7 @@ on("POST", "/app/api/notifications/teams/tab", (): TeamsTabState => {
   return { state: "unlinked", linkUrl: `${window.location.origin}/teams/link?token=${"T".repeat(43)}` };
 });
 on("GET", "/app/api/pools/:id/tags", (m) => poolTagDetails(poolOr404(m.groups!.id!).id));
+on("GET", "/app/api/pools/:id/tags/usage", (m) => poolTagUsage(poolOr404(m.groups!.id!).id));
 on("PATCH", "/app/api/pools/:id/tags/:tag", (m, body) => {
   const pool = poolOr404(m.groups!.id!);
   const tag = decodeURIComponent(m.groups!.tag!).toLowerCase();

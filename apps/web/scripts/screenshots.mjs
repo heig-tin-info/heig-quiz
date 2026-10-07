@@ -980,6 +980,10 @@ const scenes = [
   // The LLM review (ADR-060): the pool's tab, and its empty state.
   { name: "pool-review", role: "teacher", path: "/pools/p1?tab=review&empty=0" },
   { name: "pool-review-empty", role: "teacher", path: "/pools/p2?tab=review&empty=0" },
+  { name: "pool-tags", role: "teacher", path: "/pools/p1?tab=tags" },
+  { name: "pool-tags-heat", role: "teacher", path: "/pools/p1?tab=tags", ls: { "quiz-pool-tags-view": "heat" } },
+  // The personal pool: its poll questions wear no tag.
+  { name: "pool-tags-empty", role: "teacher", path: "/pools/p0?tab=tags" },
   { name: "pool-empty", role: "teacher", path: "/pools/p1?empty=1", settle: 800 },
   { name: "pool-error", role: "teacher", path: "/pools/p1?fail=1", settle: 2500 },
   { name: "pool-loading", role: "teacher", path: "/pools/p1?slow=1", settle: 300 },

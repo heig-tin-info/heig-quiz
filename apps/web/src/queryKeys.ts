@@ -198,6 +198,8 @@ export const poolReviewsKey = (poolId: string) => ["pool", poolId, "reviews"] as
  */
 export const poolStarredKey = (poolId: string) => ["pool", poolId, "starred"] as const;
 export const poolTagsKey = (poolId: string) => ["pool", poolId, "tags"] as const;
+/** The pool's "Tags" tab (`GET /pools/:id/tags/usage`): under the tags, so their refresh reaches it. */
+export const poolTagUsageKey = (poolId: string) => ["pool", poolId, "tags", "usage"] as const;
 /** `GET /pools/:id/categories`, the tree with its counts: under the pool, like the tags. */
 export const poolCategoriesKey = (poolId: string) => ["pool", poolId, "categories"] as const;
 export const poolMembersKey = (poolId: string) => ["pool-members", poolId] as const;

@@ -168,6 +168,18 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
   );
 
   /**
+   * The pool's "Tags" tab: each tag with its live questions and the number
+   * of courses using it — a bare count over every course, never a name.
+   */
+  app.get(
+    "/app/api/pools/:id/tags/usage",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: inPool() }, ({ scope: pool }) =>
+      service.poolTagUsage(app.db, pool.id),
+    ),
+  );
+
+  /**
    * Documents one tag of the pool. The row is created on the spot when the
    * tag only existed on questions so far, so a teacher never has to "declare"
    * a tag before describing it.

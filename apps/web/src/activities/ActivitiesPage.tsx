@@ -14,6 +14,7 @@ import {
   Button,
   Card,
   EmptyState,
+  iconOption,
   isoDateParts,
   PageHeader,
   QueryError,
@@ -133,15 +134,6 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
     return next;
   };
 
-  const viewOption = (value: View, icon: ReactNode, label: string) => ({
-    value,
-    label: (
-      <span title={label} className="flex items-center">
-        {icon}
-        <span className="sr-only">{label}</span>
-      </span>
-    ),
-  });
 
   const props: ViewProps = { rows: shown, navigate, onEnd: end };
   let body: ReactNode;
@@ -259,9 +251,9 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
             value={view}
             onChange={setView}
             options={[
-              viewOption("list", <List className="size-4" />, t("view.list")),
-              viewOption("cards", <LayoutGrid className="size-4" />, t("view.cards")),
-              viewOption("schedule", <CalendarRange className="size-4" />, t("view.schedule")),
+              iconOption("list", <List className="size-4" />, t("view.list")),
+              iconOption("cards", <LayoutGrid className="size-4" />, t("view.cards")),
+              iconOption("schedule", <CalendarRange className="size-4" />, t("view.schedule")),
             ]}
           />
         </div>

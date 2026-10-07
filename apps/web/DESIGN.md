@@ -185,7 +185,8 @@ Two pairs stay below their target, on purpose:
   toast), because those genuinely sit above the page.
 - Focus: 2 px accent ring at 2 px offset, on every interactive element. It is
   declared once in `style.css` on `:focus-visible`; no component restyles it,
-  except the mode banner (below), whose dark fill would swallow a red ring.
+  except the mode banner (below), whose dark fill would swallow a red ring,
+  and the cells of the pool's tag heat (below), whose box would clip it.
 
 ## Long-form reading (the journal)
 
@@ -1669,6 +1670,27 @@ surfaces, so its rules are written here.
   nothing.
 - The ring sits BESIDE the pressable part of the row, not inside it: a
   focusable thing nested in a button is one control too many.
+
+## The pool's tag heat (Tags tab, "Heat")
+
+A squarified treemap of the pool's tags (`pool/TagsTab.tsx`, layout in
+`pool/treemap.ts`): one cell per tag a question wears, its AREA the tag's
+share of the summed question counts. The area is the whole message, so the
+chart has no colour yet: every cell is `surface` (`surface-2` on hover) and
+the hairlines between them are the box's `line` fill showing through a 1 px
+gap — the hairline language of a table, not a border per cell, which would
+draw them 2 px where two cells meet.
+
+- **The box**: the page's width, 288 px tall on a phone and 416 px from
+  `sm`, `rounded-card` with a `line` border. It is measured, so the layout
+  runs on its real aspect and a square cell stays square.
+- **A cell is a button**: `#tag` at 13 px / 600 over the count in `fg-muted`
+  at 12 px, both truncated; under 44 × 40 px only the count is drawn. Its
+  accessible name and `title` carry the tag and both counts in words. The
+  box clips, so the focus ring is drawn INSIDE the cell (`-2px` offset)
+  instead of the usual 2 px outside, which an edge cell would lose.
+- **A tag no question wears has no area**: it is in the table, never in the
+  heat; a caption under the box says so.
 
 ## Correction projection (the graded evaluation on a beamer)
 

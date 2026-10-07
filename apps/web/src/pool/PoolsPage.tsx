@@ -32,11 +32,13 @@ import {
   Badge,
   Button,
   Card,
+  type Column,
   cx,
   EmptyState,
   Field,
   FormDialog,
   FormError,
+  iconOption,
   Menu,
   type MenuItem,
   PageHeader,
@@ -52,7 +54,6 @@ import {
   Tip,
   usePersistentChoice,
   useSortableTable,
-  type Column,
 } from "../ui";
 import { PoolIcon } from "./PoolIcon";
 import { PoolIconPicker } from "./PoolIconPicker";
@@ -529,16 +530,6 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
     },
   ];
 
-  /** Two pictures of one list; the name stays for the pointer and the reader. */
-  const viewOption = (value: PoolsView, icon: ReactNode, label: string) => ({
-    value,
-    label: (
-      <span title={label} className="flex items-center">
-        {icon}
-        <span className="sr-only">{label}</span>
-      </span>
-    ),
-  });
 
   return (
     <div className="space-y-6">
@@ -564,8 +555,8 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
             value={view}
             onChange={setView}
             options={[
-              viewOption("cards", <LayoutGrid className="size-4" />, t("view.cards")),
-              viewOption("list", <List className="size-4" />, t("view.list")),
+              iconOption("cards", <LayoutGrid className="size-4" />, t("view.cards")),
+              iconOption("list", <List className="size-4" />, t("view.list")),
             ]}
           />
         </div>

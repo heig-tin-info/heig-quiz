@@ -701,6 +701,23 @@ export const PoolTag = z.object({
 });
 export type PoolTag = z.infer<typeof PoolTag>;
 
+/**
+ * One tag of the pool's "Tags" tab (`GET /pools/:id/tags/usage`): the tag,
+ * its description, how many live questions wear it, and how many DISTINCT
+ * courses use one of them — an exam or an exercise of a classroom of the
+ * course, or a template of the course, pinning a version of such a
+ * question. A bare count over every course, the ones the reader cannot
+ * reach included: never a name. A route of its own, so the tag field
+ * (`PoolTag`) does not pay for the join.
+ */
+export const PoolTagUsage = z.object({
+  tag: z.string(),
+  description: z.string(),
+  questions: z.number().int(),
+  courses: z.number().int(),
+});
+export type PoolTagUsage = z.infer<typeof PoolTagUsage>;
+
 export const TagPatch = z.object({
   description: z.string().trim().max(200),
 });

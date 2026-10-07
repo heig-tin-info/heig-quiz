@@ -811,4 +811,129 @@ describe("PoolView", () => {
       expect(screen.queryByRole("button", { name: "Clear favourites" })).toBeNull();
     });
   });
+
+  describe("the Tags tab", () => {
+    const USAGE = [
+      { tag: "pointeurs", description: "Adresses et déréférencement", questions: 4, courses: 2 },
+      { tag: "securite", description: "", questions: 1, courses: 0 },
+      { tag: "structures", description: "struct et union", questions: 0, courses: 0 },
+    ];
+    const tagRoutes = (over: Record<string, ReturnType<typeof ok>> = {}) =>
+      routes({
+        "GET /app/api/pools/p1/tags/usage": ok(USAGE),
+        "GET /app/api/pools/p1/questions?tag=pointeurs&limit=25": ok(PAGE),
+        ...over,
+      });
+
+    it("lists every tag, most used first, and filters on the name and the description", async () => {
+      const user = userEvent.setup();
+      mockFetch(tagRoutes());
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tab=tags" });
+      const table = await screen.findByRole("table");
+      const names = within(table)
+        .getAllByRole("button", { name: /^#/ })
+        .map((b) => b.textContent);
+      expect(names).toEqual(["#pointeurs", "#securite", "#structures"]);
+      expect(within(rowOfTag("pointeurs")).getByText("4")).toBeInTheDocument();
+      expect(within(rowOfTag("pointeurs")).getByText("2")).toBeInTheDocument();
+
+      await user.type(screen.getByRole("searchbox", { name: "Filter tags" }), "union");
+      expect(within(screen.getByRole("table")).getAllByRole("button", { name: /^#/ })).toHaveLength(1);
+      await user.clear(screen.getByRole("searchbox", { name: "Filter tags" }));
+      await user.type(screen.getByRole("searchbox", { name: "Filter tags" }), "nothing");
+      expect(screen.getByText("No tag matches")).toBeInTheDocument();
+    });
+
+    it("draws the heat without the tags no question wears", async () => {
+      const user = userEvent.setup();
+      mockFetch(tagRoutes());
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tab=tags" });
+      await screen.findByRole("table");
+      await user.click(screen.getByRole("radio", { name: "Heat" }));
+      expect(
+        screen.getByRole("button", { name: "#pointeurs: 4 questions, 2 courses. Show its questions." }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "#securite: 1 question, 0 courses. Show its questions." })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^#structures/ })).toBeNull();
+    });
+
+    it("measures the heat's box when it appears after an empty heat", async () => {
+      const observed: Element[] = [];
+      vi.stubGlobal(
+        "ResizeObserver",
+        class {
+          observe(el: Element) {
+            observed.push(el);
+          }
+          disconnect() {}
+        },
+      );
+      try {
+        const user = userEvent.setup();
+        mockFetch(tagRoutes());
+        renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tab=tags" });
+        await screen.findByRole("table");
+        // Only #structures matches, and no question wears it: no box is drawn.
+        await user.type(screen.getByRole("searchbox", { name: "Filter tags" }), "union");
+        await user.click(screen.getByRole("radio", { name: "Heat" }));
+        expect(screen.getByText("None of these tags is on a question yet")).toBeInTheDocument();
+        await user.clear(screen.getByRole("searchbox", { name: "Filter tags" }));
+        const cell = await screen.findByRole("button", { name: /^#pointeurs:/ });
+        // Other parts of the page observe their own size: the box is the one holding a cell.
+        expect(observed.some((el) => el.contains(cell))).toBe(true);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it("says so when the pool has no tag", async () => {
+      mockFetch(tagRoutes({ "GET /app/api/pools/p1/tags/usage": ok([]) }));
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tab=tags" });
+      expect(await screen.findByText("No tags yet")).toBeInTheDocument();
+      // Nothing to filter: the field and the view switch are not drawn.
+      expect(screen.queryByRole("searchbox", { name: "Filter tags" })).toBeNull();
+    });
+
+    it("offers a retry when the usage fails to load", async () => {
+      mockFetch(tagRoutes({ "GET /app/api/pools/p1/tags/usage": fail(500, { error: "boom" }) }));
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tab=tags" });
+      expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
+    });
+
+    it("opens the questions filtered on a tag, and clearing the chip drops ?tag", async () => {
+      const user = userEvent.setup();
+      const { calls } = mockFetch(tagRoutes());
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, {
+        route: "/?tab=tags&category=k2",
+      });
+      await screen.findByRole("table");
+      await user.click(screen.getByRole("button", { name: "#pointeurs" }));
+      await screen.findByText("ptr-arith-01");
+      // The whole pool's questions with the tag: the category is dropped.
+      expect(calls.some((c) => c.url === "/app/api/pools/p1/questions?tag=pointeurs&limit=25")).toBe(
+        true,
+      );
+      const params = new URLSearchParams(window.location.search);
+      expect(params.get("tag")).toBe("pointeurs");
+      expect(params.get("tab")).toBeNull();
+      expect(params.get("category")).toBeNull();
+
+      await user.click(screen.getByRole("button", { name: "Clear filters — #pointeurs" }));
+      await waitFor(() => expect(new URLSearchParams(window.location.search).get("tag")).toBeNull());
+    });
+
+    it("seeds the tag filter from ?tag on arrival", async () => {
+      const { calls } = mockFetch(tagRoutes());
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tag=pointeurs" });
+      await screen.findByText("ptr-arith-01");
+      expect(calls.some((c) => c.url === "/app/api/pools/p1/questions?tag=pointeurs&limit=25")).toBe(
+        true,
+      );
+      expect(calls.some((c) => c.url === "/app/api/pools/p1/questions?limit=25")).toBe(false);
+    });
+  });
 });
+
+/** The row of the Tags tab's table that carries a tag. */
+const rowOfTag = (tag: string) =>
+  within(screen.getByRole("table")).getByRole("button", { name: `#${tag}` }).closest("tr")!;
