@@ -87,7 +87,7 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
   - § 4 the root filesystem is read-only, `CapEff` is zero, `NoNewPrivs` is 1, the seccomp filter is loaded and the AppArmor label is the `codespace` profile (skipped with a note on a host without AppArmor);
   - § 5 uid 1000 inside, host UID outside 0–65535, and two containers side by side get different host UIDs;
   - § 6 a fork bomb is capped by `--pids-limit 256`, the host and the neighbouring container are intact;
-  - § 7 code-server: machine settings copied, `extensions.allowed`, the settings found in the embedded package, the font-prompt chain, the colour-scheme detection and its two bundled themes, the return URL's origin trusted (and nothing trusted without one), neutralised gallery, no uncaught exception, toolchain binaries and man pages present;
+  - § 7 code-server: machine settings copied, `extensions.allowed`, the settings found in the embedded package, the font-prompt chain, the colour-scheme settings and their two bundled themes, the return URL's origin trusted (and nothing trusted without one), neutralised gallery, no uncaught exception, toolchain binaries and man pages present;
   - § 8 `/etc/resolv.conf` comes from the image, with no nameserver, and resolution fails in under two seconds;
   - § 9 the container carries the seven portal variables and nothing else, the git identity works without a configuration file, and the VS Code server inherits the environment.
   - § 10 the seccomp profile is the runner's plus `ptrace`: `unshare -r true` fails, and raw `unshare(CLONE_NEWUSER)` and `mount(2)` answer `ENOSYS`.
@@ -340,8 +340,8 @@ French as soon as `vscode.env.language` starts with `fr`, English otherwise.
 ### Return link trusted (2026-10-08)
 
 VS Code's link protection asked before opening the "Close" URL.
-`entrypoint.sh` passes the origin of `CODESPACE_RETURN_URL` (from
-`PLATFORM_URL`) to code-server's `--link-protection-trusted-domains`, which
+`entrypoint.sh` passes the origin of `CODESPACE_RETURN_URL` (set by the portal from
+`PLATFORM_URL` or `PUBLIC_URL`) to code-server's `--link-protection-trusted-domains`, which
 adds it to the product's trusted domains; no new container variable.
 `test.sh` § 7 finds it in the served workbench page.
 
@@ -748,9 +748,8 @@ listed here.
   the command line. The "Commit" button of the interface, on the other hand, requires a
   browser; to be observed at the next real session.
 
-- `TODO(verify)` **VS Code 1.137.0** — `window.autoDetectColorScheme`: the
-  key, the media query and both theme ids are collected from the package and
-  replayed by `test.sh` § 7; the editor opening dark under a dark system, and
+- `TODO(verify)` **VS Code 1.137.0** — `window.autoDetectColorScheme`: both
+  theme ids are checked in the bundled theme-defaults by `test.sh` § 7; the editor opening dark under a dark system, and
   switching live, requires a browser. Likewise the Close button opening the
   platform without the link-protection prompt: the trusted origin is in the
   served page, the absence of the dialog is to be observed.
