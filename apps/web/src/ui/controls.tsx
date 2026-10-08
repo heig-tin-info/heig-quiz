@@ -355,7 +355,7 @@ export function Checkbox({
   ...props
 }: React.InputHTMLAttributes<HTMLInputElement> & { label: ReactNode; indeterminate?: boolean }) {
   return (
-    <label className={cx("inline-flex cursor-pointer items-center gap-2.5 text-sm", props.disabled && "opacity-50", className)}>
+    <label className={cx("touch-hit inline-flex cursor-pointer items-center gap-2.5 text-sm", props.disabled && "opacity-50", className)}>
       <span className="relative inline-flex size-4 shrink-0">
         <input
           type="checkbox"

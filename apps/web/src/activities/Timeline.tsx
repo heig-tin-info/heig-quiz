@@ -318,7 +318,7 @@ export function ActivityTimeline({
 
   return (
     <Card className="p-5">
-      <div className="mb-3 flex items-center gap-1">
+      <div className="touch-group mb-3 flex items-center gap-1">
         <p className="mr-auto text-[13px] text-fg-muted">{t("activities.timeline.hint")}</p>
         <IconButton label={t("activities.timeline.zoomOut")} onClick={() => zoomBy(1.6)}>
           <ZoomOut />

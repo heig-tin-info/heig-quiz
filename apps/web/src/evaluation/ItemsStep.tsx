@@ -224,7 +224,7 @@ function ItemGap({
             onClick={action.onClick}
             aria-label={action.ariaLabel}
             className={cx(
-              "flex items-center gap-1 rounded-full border border-line-strong bg-surface px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-fg-muted opacity-0 transition-opacity duration-150 hover:border-accent hover:text-accent focus-visible:opacity-100 pointer-coarse:opacity-100",
+              "flex items-center gap-1 rounded-full border border-line-strong bg-surface px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-fg-muted opacity-0 transition-opacity duration-150 hover:border-accent hover:text-accent focus-visible:opacity-100 hover-reveal",
               reveal,
             )}
           >
@@ -434,7 +434,7 @@ function ItemCard({
         {/* A fixed, right-aligned slot: the refresh button appears on some
             rows only, and without it the points fields of the rows would not
             line up — a column of numbers that wanders is unreadable. */}
-        <span className="flex w-17 shrink-0 items-center justify-end gap-0.5">
+        <span className="touch-group flex w-17 shrink-0 items-center justify-end gap-0.5">
           {/* Only a stale item has anything to refresh, so only a stale item
               shows the button: a permanently disabled icon teaches nothing. */}
           {stale && !locked ? (

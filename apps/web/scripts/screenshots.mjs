@@ -6,7 +6,8 @@
 //   pnpm --filter @quiz/web screenshots       # in another
 //
 // Flags: --dark, --width=390|768|1440 (repeatable), --height=<px>, --only=<substring>,
-//        --fold (viewport only, instead of the full page), --list.
+//        --fold (viewport only, instead of the full page), --touch (a touch
+//        screen: coarse pointer, no hover), --list.
 // Environment: BASE (default http://localhost:5173), OUT (default
 // apps/web/screenshots).
 
@@ -26,6 +27,7 @@ const opt = (name) =>
   argv.filter((a) => a.startsWith(`--${name}=`)).map((a) => a.slice(name.length + 3));
 
 const dark = flag("dark");
+const touch = flag("touch");
 const fullPage = !flag("fold");
 const only = opt("only").concat(argv.filter((a) => !a.startsWith("--")));
 const widths = opt("width").map(Number).filter(Boolean);
@@ -1979,6 +1981,8 @@ for (const width of widths.length ? widths : [1440]) {
     viewport: { width, height: heightOpt ?? (width < 700 ? 844 : 900) },
     deviceScaleFactor: 1,
     colorScheme: dark ? "dark" : "light",
+    // --touch: a touch screen — `pointer: coarse` and `hover: none` (#450).
+    hasTouch: touch,
   });
   for (const scene of picked) {
     const page = await ctx.newPage();

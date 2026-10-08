@@ -2,7 +2,7 @@ import { act, render, renderHook, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { TableHead, useSortableTable, type Column, type SortState } from "./table";
+import { T, TableHead, useSortableTable, type Column, type SortState } from "./table";
 
 /*
  * The one motif every table of the app sorts through: the hook that holds the
@@ -118,5 +118,28 @@ describe("TableHead", () => {
     renderHead(null);
     const actions = screen.getByRole("columnheader", { name: "Actions" });
     expect(within(actions).getByText("Actions")).toHaveClass("sr-only");
+  });
+
+  it("draws the head of a row-card table: the row mode, the roles, the sub headers set aside", () => {
+    const columns: Column<Key>[] = [
+      { key: "name", label: "Student", stack: "main" },
+      { key: "score", label: "Score", right: true, stack: "sub" },
+      { key: "actions", label: "Actions", sortable: false, srOnly: true, stack: "end" },
+    ];
+    render(
+      <table>
+        <TableHead columns={columns} sort={null} onToggle={vi.fn()} />
+      </table>,
+    );
+    const student = screen.getByRole("columnheader", { name: "Student" });
+    expect(student.closest("tr")?.className).toBe(T.stack.row);
+    expect(student.className).toContain(T.stack.main);
+    expect(screen.getByRole("columnheader", { name: "Score" }).className).toContain(T.stack.subHead);
+    expect(screen.getByRole("columnheader", { name: "Actions" }).className).toContain(T.stack.end);
+  });
+
+  it("leaves a plain table's head row without the row-card mode", () => {
+    renderHead(null);
+    expect(screen.getByRole("columnheader", { name: "Student" }).closest("tr")).not.toHaveAttribute("class");
   });
 });

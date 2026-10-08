@@ -156,21 +156,42 @@ export function PageHeader({
   // button of a student's card does (the student's project page). A row of
   // several controls, or one with help or a menu, keeps its intrinsic width.
   const soleAction = isValidElement(actions) && actions.type !== Fragment && !button && !help && !menu;
+  // Under `lg` the header is a grid: the title and, beside it at the top
+  // right, "?" and "…"; the actions on a row of their own under both. The
+  // help no longer drops onto a line of its own once the primary left for
+  // the FAB. From `lg` the two inner groups are `contents`: one action row,
+  // as before.
   return (
-    <header className={cx("flex flex-wrap items-end justify-between gap-x-6 gap-y-3", className)}>
+    <header
+      className={cx(
+        "flex flex-wrap items-end justify-between gap-x-6 gap-y-3",
+        "max-lg:grid max-lg:grid-cols-[minmax(0,1fr)_auto] max-lg:items-start max-lg:gap-x-3",
+        className,
+      )}
+    >
       <div className="min-w-0">
         {eyebrow ? <div className="mb-1.5 text-[13px] text-fg-muted">{eyebrow}</div> : null}
         <h1 className="text-[28px] font-bold leading-tight tracking-[-0.02em]">{title}</h1>
         {description ? <div className="mt-1.5 text-sm text-fg-muted">{description}</div> : null}
       </div>
       {right ? (
-        <div className={cx("flex flex-wrap items-center gap-2", soleAction && "max-sm:w-full")}>
-          {actions}
-          {button}
-          {/* "?" and "…" wrap as one: on a phone the row breaks before them,
-              never between them, so "…" is not left alone on a line. */}
+        <div className="flex flex-wrap items-center gap-2 max-lg:contents">
+          {actions || button ? (
+            <div
+              className={cx(
+                "flex flex-wrap items-center gap-2 lg:contents",
+                "max-lg:col-span-2 max-lg:justify-self-start",
+                soleAction && "max-sm:w-full max-sm:justify-self-stretch",
+              )}
+            >
+              {actions}
+              {button}
+            </div>
+          ) : null}
+          {/* "?" and "…" stay together: beside the title on a phone, at the
+              end of the action row from `lg`. */}
           {help || menu ? (
-            <span className="flex items-center gap-2">
+            <span className="flex items-center gap-2 max-lg:col-start-2 max-lg:row-start-1">
               {help ? <PageHelpButton topic={help} /> : null}
               {menu}
             </span>
@@ -323,7 +344,7 @@ export function EditableTitle({
       {pending ?? value}
       <PenLine
         aria-hidden
-        className="ml-2 inline-block size-4 -translate-y-0.5 align-middle text-fg-faint opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+        className="hover-reveal ml-2 inline-block size-4 -translate-y-0.5 align-middle text-fg-faint opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
       />
     </button>
   );

@@ -4,7 +4,7 @@ import type { CourseSummary } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import type { Route } from "../router";
-import { Actions, Card, PeopleStack, SectionHeading, T } from "../ui";
+import { Actions, Card, cx, PeopleStack, SectionHeading, T } from "../ui";
 import { CoursePools } from "./CoursePools";
 import { ArchivedClassrooms, ClassroomRow, HiddenBadge } from "./parts";
 import { useCourseActions } from "./useCourseActions";
@@ -110,8 +110,8 @@ export function CourseRow({
   const t = useT();
   const { items, staffActions, dialogs } = useCourseActions(course);
   return (
-    <tr className={T.row}>
-      <td className={T.td}>
+    <tr role="row" className={cx(T.row, T.stack.row)}>
+      <td role="cell" className={cx(T.td, T.stack.main)}>
         <span className="flex flex-wrap items-baseline gap-2">
           <span className="font-semibold">
             <CourseLink course={course} navigate={navigate} />
@@ -120,7 +120,7 @@ export function CourseRow({
           <HiddenBadge course={course} />
         </span>
       </td>
-      <td className={T.td}>
+      <td role="cell" className={cx(T.td, T.stack.sub, "@max-md:-ml-1.5")}>
         {course.classrooms.length === 0 ? (
           <span className="text-fg-faint">—</span>
         ) : (
@@ -139,14 +139,14 @@ export function CourseRow({
           </span>
         )}
       </td>
-      <td className={T.td}>
+      <td role="cell" className={cx(T.td, T.stack.sub)}>
         {course.staff.length === 0 ? (
           <span className="text-fg-faint">—</span>
         ) : (
           <PeopleStack people={course.staff} actions={staffActions} />
         )}
       </td>
-      <td className={`${T.td} w-10 text-right`}>
+      <td role="cell" className={cx(T.td, T.stack.end, "w-10 text-right")}>
         <Actions items={items} label={t("common.actions")} />
         {dialogs}
       </td>

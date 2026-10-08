@@ -12,6 +12,7 @@ import type { Route } from "./router";
 import {
   Button,
   Card,
+  cx,
   EmptyState,
   PageHeader,
   QueryError,
@@ -88,10 +89,10 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
     { key: "name", dir: 1 },
   );
   const columns: Column<CourseSortKey>[] = [
-    { key: "name", label: t("courses.name") },
-    { key: "classrooms", label: t("classrooms.title") },
-    { key: "staff", label: t("courses.staff") },
-    { key: "actions", label: t("common.actions"), sortable: false, srOnly: true, className: "w-10" },
+    { key: "name", label: t("courses.name"), stack: "main" },
+    { key: "classrooms", label: t("classrooms.title"), stack: "sub" },
+    { key: "staff", label: t("courses.staff"), stack: "sub" },
+    { key: "actions", label: t("common.actions"), sortable: false, srOnly: true, className: "w-10", stack: "end" },
   ];
 
   /**
@@ -192,10 +193,10 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
           {t("courses.empty.body")}
         </EmptyState>
       ) : view === "list" ? (
-        <Card className="overflow-hidden">
-          <table className={T.table}>
+        <Card className={cx(T.container, "overflow-hidden")}>
+          <table role="table" className={cx(T.table, T.stack.table)}>
             <TableHead columns={columns} sort={sort} onToggle={toggle} />
-            <tbody>
+            <tbody role="rowgroup">
               {sorted.map((c) => (
                 <CourseRow key={c.id} course={c} navigate={navigate} />
               ))}

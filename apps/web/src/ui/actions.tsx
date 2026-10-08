@@ -47,7 +47,7 @@ export function Actions({
     <span
       role="group"
       aria-label={label ?? t("common.actions")}
-      className={cx("inline-flex items-center", size === "sm" ? "gap-0" : "gap-0.5")}
+      className={cx("touch-group inline-flex items-center", size === "sm" ? "gap-0" : "gap-0.5")}
     >
       {items.map((it, i) => {
         const Icon = it.icon!;

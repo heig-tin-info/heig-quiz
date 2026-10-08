@@ -596,7 +596,7 @@ export function PageHelpButton({ topic }: { topic: string }) {
         // The outline and height of a secondary button, written out: `buttonClass`
         // carries a horizontal padding that a square button cannot override
         // (two paddings are settled by stylesheet order, not by writing order).
-        className="inline-flex size-8.5 shrink-0 items-center justify-center rounded-full border border-line-strong bg-surface text-fg-muted transition-colors duration-150 hover:bg-surface-2 hover:text-fg active:scale-97 [&_svg]:size-4"
+        className="touch-hit inline-flex size-8.5 shrink-0 items-center justify-center rounded-full border border-line-strong bg-surface text-fg-muted transition-colors duration-150 hover:bg-surface-2 hover:text-fg active:scale-97 [&_svg]:size-4"
       >
         <CircleHelp />
       </button>
@@ -604,10 +604,13 @@ export function PageHelpButton({ topic }: { topic: string }) {
   );
 }
 
-/** The round ghost disc of an icon button and an icon link. */
+/**
+ * The round ghost disc of an icon button and an icon link. Drawn at 28 or
+ * 32 px; under a coarse pointer its hit area is 44 px (`touch-hit`).
+ */
 const iconDisc = (size: "sm" | "md") =>
   cx(
-    "inline-flex shrink-0 items-center justify-center rounded-full transition-colors duration-150",
+    "touch-hit inline-flex shrink-0 items-center justify-center rounded-full transition-colors duration-150",
     size === "sm" ? "size-7 [&_svg]:size-3.5" : "size-8 [&_svg]:size-4",
   );
 
@@ -898,7 +901,10 @@ export const ASIDE_MIN_WIDTH = 1280;
 
 /**
  * Right-hand drawer for anything longer than three fields (assignment form,
- * imports, histories). Header and footer stay put, the body scrolls.
+ * imports, histories). Header and footer stay put, the body scrolls. Under
+ * `lg` the same dialog is a BOTTOM sheet (DESIGN.md › Sheet): full width,
+ * rising from the bottom edge, as tall as its content up to the window less
+ * a strip of the page behind it.
  * Same closing rule as the dialog: Escape or the X, never the backdrop.
  *
  * `aside` docks a READING pane on the drawer's left edge, over the page the
@@ -947,16 +953,21 @@ export function Sheet({
       footer={footer}
       leading={leading}
       actions={actions}
-      backdropClass={`layer-backdrop fixed inset-0 ${Z.modal} flex justify-end bg-fg/30 backdrop-blur-[2px]`}
+      backdropClass={`layer-backdrop fixed inset-0 ${Z.modal} flex flex-col justify-end bg-fg/30 backdrop-blur-[2px] lg:flex-row`}
       panelClass={cx(
-        "sheet-panel flex h-full border-l border-line bg-surface shadow-sheet focus:outline-none",
-        docked ? "max-w-full" : cx("w-full", width === "lg" ? "sm:max-w-190" : "sm:max-w-150"),
+        "sheet-panel flex bg-surface focus:outline-none",
+        // Under `lg`, a bottom sheet: full width, as tall as its content up to
+        // the window less a strip of the page, its top corners rounded, the
+        // home-indicator inset kept clear. From `lg`, the right-hand drawer.
+        "max-lg:max-h-[calc(100dvh-2.5rem)] max-lg:flex-col max-lg:rounded-t-sheet max-lg:border-t max-lg:border-line max-lg:pb-[env(safe-area-inset-bottom)] max-lg:shadow-overlay",
+        "lg:h-full lg:border-l lg:border-line lg:shadow-sheet",
+        docked ? "max-w-full" : cx("w-full", width === "lg" ? "lg:max-w-190" : "lg:max-w-150"),
       )}
       aside={{
         node: aside,
         className: "min-h-0 w-120 overflow-y-auto border-r border-line bg-surface-2 2xl:w-160",
         columnClass: cx(
-          "flex min-w-0 flex-col",
+          "flex min-h-0 min-w-0 flex-col",
           docked ? cx("shrink-0", width === "lg" ? "w-190" : "w-150") : "flex-1",
         ),
       }}

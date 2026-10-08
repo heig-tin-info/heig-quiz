@@ -63,7 +63,9 @@ import { ReviewBadge } from "./ReviewBadge";
  * Which columns survive a narrow page is `T`'s column priority, measured on
  * the table's own container and not on the viewport. Version goes first
  * (`T.colLow`), then Updated (`T.colMid`), then Tags (`T.colHigh`); the name,
- * the difficulty, the tick box and the actions never go.
+ * the difficulty, the tick box and the actions never go. On a phone the
+ * table turns into row cards (`T.stack`): the tick box, the name and the
+ * actions on the first line, the difficulty and the version under the name.
  */
 
 export function DifficultyDots({ value }: { value: number }) {
@@ -219,6 +221,7 @@ export function QuestionTable({
             key: "select",
             sortable: false as const,
             className: "w-8",
+            stack: "lead" as const,
             label: (
               <Checkbox
                 label={<span className="sr-only">{t("pool.selectAll")}</span>}
@@ -228,12 +231,12 @@ export function QuestionTable({
             ),
           },
         ]),
-    { key: "name", label: t("pool.col.name") },
+    { key: "name", label: t("pool.col.name"), stack: "main" },
     // The tags are read, never ordered: a row carries several of them, and a
     // list sorted on "the first tag" is an order nobody asked for.
     { key: "tags", label: t("pool.col.tags"), sortable: false, className: T.colHigh },
-    { key: "difficulty", label: t("pool.col.difficulty"), className: "whitespace-nowrap" },
-    { key: "version", label: t("pool.col.version"), className: T.colLow },
+    { key: "difficulty", label: t("pool.col.difficulty"), className: "whitespace-nowrap", stack: "sub" },
+    { key: "version", label: t("pool.col.version"), className: T.colLow, stack: "sub" },
     { key: "updated", label: t("pool.col.updated"), className: T.colMid },
     ...(readOnly
       ? []
@@ -244,20 +247,21 @@ export function QuestionTable({
             sortable: false as const,
             srOnly: true,
             className: T.stickyEnd,
+            stack: "end" as const,
           },
         ]),
   ];
   return (
     <div className={cx(T.container, "overflow-x-auto rounded-card border border-line bg-surface")}>
-      <table className={T.table}>
+      <table role="table" className={cx(T.table, T.stack.table)}>
         <TableHead columns={columns} sort={sortState} onToggle={onSort} />
         {groups.map((group) => (
-          <tbody key={group.key}>
+          <tbody role="rowgroup" key={group.key}>
             {group.label === null ? null : (
-              <tr>
-                <td
+              <tr role="row" className={T.stack.band}>
+                <td role="cell"
                   colSpan={span}
-                  className="border-t border-line bg-surface-2 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-fg-muted"
+                  className={cx(T.stack.band, "border-t border-line bg-surface-2 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-fg-muted")}
                 >
                   {group.label}
                   <span className="ml-2 tabular-nums text-fg-faint">{group.rows.length}</span>
@@ -265,15 +269,15 @@ export function QuestionTable({
               </tr>
             )}
             {group.rows.map((row) => (
-              <tr
+              <tr role="row"
                 key={entryKey(group, row)}
                 {...rowProps(entryKey(group, row), row)}
                 draggable={onDragStart !== undefined}
                 onDragStart={onDragStart ? (event) => onDragStart(event, row) : undefined}
-                className={cx(T.row, T.rowHover, "cursor-pointer aria-[current=true]:bg-accent-soft")}
+                className={cx(T.row, T.rowHover, T.stack.row, "cursor-pointer aria-[current=true]:bg-accent-soft")}
               >
                 {readOnly ? null : (
-                  <td className={T.td} onClick={(e) => e.stopPropagation()}>
+                  <td role="cell" className={cx(T.td, T.stack.lead)} onClick={(e) => e.stopPropagation()}>
                     <Checkbox
                       label={
                         <span className="sr-only">{t("pool.select", { name: row.internalName })}</span>
@@ -283,7 +287,7 @@ export function QuestionTable({
                     />
                   </td>
                 )}
-                <td className={cx(T.td, "whitespace-nowrap")}>
+                <td role="cell" className={cx(T.td, T.stack.main, "whitespace-nowrap")}>
                   <span className="flex items-center gap-2">
                     <StarButton row={row} onToggle={() => onStar(row)} />
                     <TypeGlyph type={row.type} />
@@ -296,7 +300,7 @@ export function QuestionTable({
                     <RowStatsButton row={row} statsFor={statsFor} />
                   </span>
                 </td>
-                <td className={cx(T.td, "max-w-56", T.colHigh)}>
+                <td role="cell" className={cx(T.td, "max-w-56", T.colHigh)}>
                   {row.tags.length === 0 ? (
                     <span className="text-fg-faint">—</span>
                   ) : (
@@ -309,21 +313,24 @@ export function QuestionTable({
                     </span>
                   )}
                 </td>
-                <td className={cx(T.td, "whitespace-nowrap")}>
+                <td role="cell" className={cx(T.td, readOnly ? T.stack.sub : T.stack.subIndent, "whitespace-nowrap")}>
                   <DifficultyDots value={row.difficulty} />
                 </td>
-                <td className={cx(T.td, T.colLow)}>
+                {/* On a card the version is the row's status, beside the difficulty. */}
+                <td role="cell" className={cx(T.td, T.colLow, T.stack.sub, "@max-md:block")}>
+                  <span className="sr-only @md:hidden">{t("pool.col.version")} </span>
                   <VersionCell row={row} />
                 </td>
-                <td className={cx(T.td, "whitespace-nowrap text-fg-muted", T.colMid)}>
+                <td role="cell" className={cx(T.td, "whitespace-nowrap text-fg-muted", T.colMid)}>
                   <RelativeTime iso={row.updatedAt} />
                 </td>
                 {readOnly ? null : (
-                  <td
+                  <td role="cell"
                     className={cx(
                       T.td,
                       "text-right",
                       T.stickyEnd,
+                      T.stack.end,
                       // The row's tint laid OVER an opaque fill, hovered or not:
                       // in dark mode `accent-soft` is translucent, and as the
                       // fill it would let the scrolled cells show through.
@@ -331,7 +338,7 @@ export function QuestionTable({
                     )}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <span className="inline-flex items-center gap-0.5">
+                    <span className="touch-group inline-flex items-center gap-0.5">
                       <IconButton
                         size="sm"
                         label={t("pool.editRow", { name: row.internalName })}

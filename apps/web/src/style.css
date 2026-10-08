@@ -393,6 +393,67 @@ html.dark {
 .sheet-panel {
   animation: sheet-in 0.26s var(--ease-out-emphasized);
 }
+/* Touch (DESIGN.md › Touch). A finger needs a 44 px target: `touch-hit`
+   widens the HIT AREA of a small control to 44 × 44 around its centre with
+   an invisible `::before`, and leaves its drawn size alone. Only under a
+   coarse pointer, so a desktop is untouched. In the components layer, so a
+   control positioned by a utility (`absolute`) keeps its position. */
+@layer components {
+  @media (pointer: coarse) {
+    .touch-hit {
+      position: relative;
+    }
+    .touch-hit::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      transform: translate(-50%, -50%);
+    }
+  }
+}
+/* A cluster of `touch-hit` controls (a row's icon buttons, a strip's link and
+   chevron) takes `touch-group`: under a coarse pointer its children stand at
+   least 8 px apart, so a 44 px area only ever covers the GAP beside its
+   neighbour and never the neighbour's own disc (a 28 px disc reaches 8 px out,
+   a 32 px one 6 px). A margin, not a gap, so it works in a table cell or an
+   inline row as well as in a flex one; unlayered, so it beats `gap-0.5`'s
+   tight spacing by adding to it. */
+@media (pointer: coarse) {
+  .touch-group > * + * {
+    margin-inline-start: 0.5rem;
+  }
+}
+/* What a hover reveals (row actions, a pencil, a sort arrow) is simply on
+   where there is no hover to give: a control a finger cannot reveal is a
+   control a finger does not have. Unlayered, so it beats `opacity-0` and
+   `invisible`. */
+@media (hover: none) {
+  .hover-reveal {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+/* Under `lg` the sheet is a bottom sheet (`Sheet` in ui/layers.tsx): it rises
+   from the bottom edge instead of sliding in from the right. */
+@keyframes sheet-up {
+  from {
+    transform: translateY(48px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@variant max-lg {
+  .sheet-panel {
+    animation-name: sheet-up;
+  }
+}
 .menu-panel {
   transform-origin: top right;
   transform: translateX(var(--menu-x, 0));

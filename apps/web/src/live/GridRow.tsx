@@ -344,7 +344,7 @@ export const GridRow = memo(function GridRow({
           stick,
         )}
       >
-        <span className="flex items-center justify-end gap-0.5">
+        <span className="touch-group flex items-center justify-end gap-0.5">
           {/* First: a student whose laptop just died is the one the
               supervisor is standing beside, with the station's code. */}
           {onAssign && live && !finished && row.userId !== null ? (

@@ -109,8 +109,10 @@ export function HelpProvider({ children }: { children: ReactNode }) {
       {topic ? <div className={`fixed inset-0 ${Z.helpBackdrop}`} onClick={() => setTopic(null)} /> : null}
       <div
         ref={panel}
-        className={`fixed inset-y-0 right-0 ${Z.help} w-85 max-w-full transform border-l border-line bg-surface shadow-sheet transition-transform duration-200 ease-out-emphasized focus:outline-none ${
-          source ? "translate-x-0" : "translate-x-full"
+        className={`fixed inset-y-0 right-0 ${Z.help} w-85 max-w-full transform border-l border-line bg-surface transition-transform duration-200 ease-out-emphasized focus:outline-none ${
+          // The shadow only while open: parked off the right edge, its blur
+          // still reached into the window, a grey seam down every page.
+          source ? "translate-x-0 shadow-sheet" : "translate-x-full"
         }`}
         {...(source
           ? { role: "dialog" as const, "aria-modal": true, "aria-labelledby": titleId }

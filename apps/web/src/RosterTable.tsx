@@ -156,7 +156,7 @@ function Row({
           />
         </td>
         <td className={cx(T.td, T.colLow)} />
-        <td className={cx(T.td, "whitespace-nowrap text-right sticky right-0 bg-surface-2")}>
+        <td className={cx(T.td, "touch-group whitespace-nowrap text-right sticky right-0 bg-surface-2")}>
           <IconButton label={t("common.save")} onClick={() => save.mutate()} disabled={save.isPending}>
             <Check />
           </IconButton>

@@ -45,6 +45,48 @@ export function useSortableTable<T, K extends string>(
 }
 
 /**
+ * `T.stack`, the row-card mode of a table (DESIGN.md › Tables › Row cards): under a
+ * 28 rem container — a phone — each row becomes a two-line card instead of a
+ * row that scrolls sideways. A table opts in with `stack.table` on the
+ * `<table>` and `stack.row` on every row (the head's included), then gives
+ * each visible cell its ROLE:
+ *
+ * - `lead`  the tick box, first on the first line;
+ * - `main`  the identity column, the rest of the first line (it truncates);
+ * - `end`   the row's actions, last on the first line, always reachable;
+ * - `sub`   the status and the one number that matter, on the second line.
+ *
+ * The cells the column priority already hid stay hidden; a cell with no role
+ * goes on the second line too. In the head only `lead`, `main` and `end`
+ * remain (the select-all box and the main sort), the `sub` headers step
+ * aside (`Column.stack`). A full-width band (a group's label) takes
+ * `stack.band` on its row and its cell. The table, its row groups, rows and
+ * cells carry explicit ARIA roles (`role="table"`, …): a `display` that is
+ * no longer `table` makes some screen readers drop the semantics, and a cell
+ * whose header the card hides names itself (an `sr-only` label). From 28 rem the classes do nothing:
+ * the desktop table is untouched.
+ */
+const stack = {
+  table: "@max-md:block @max-md:[&>tbody]:block @max-md:[&>thead]:block",
+  /**
+   * A flex row that wraps: the `::after` is a full-width item ordered between
+   * the first line and the `sub` cells, so it is what breaks the line.
+   */
+  row: "@max-md:flex @max-md:flex-wrap @max-md:items-center @max-md:after:order-1 @max-md:after:basis-full @max-md:after:content-['']",
+  /** 2 px after the tick box: with the identity's 12 px, its 44 px touch area stops short of the next control. */
+  lead: "@max-md:shrink-0 @max-md:pr-0.5 @max-md:pb-1",
+  main: "@max-md:min-w-0 @max-md:flex-1 @max-md:truncate @max-md:pb-1",
+  end: "@max-md:static @max-md:ml-auto @max-md:shrink-0 @max-md:pb-1",
+  /** The second line: small, muted, under the identity. */
+  sub: "@max-md:order-2 @max-md:pt-0 @max-md:pb-2 @max-md:text-xs",
+  /** The second line's first cell, under a row that has a `lead`: aligned on the identity. */
+  subIndent: "@max-md:order-2 @max-md:pt-0 @max-md:pb-2 @max-md:pl-10.5 @max-md:text-xs",
+  band: "@max-md:block",
+  /** A `sub` column's header: the card has no head line for it. */
+  subHead: "@max-md:hidden",
+} as const;
+
+/**
  * Table styles (DESIGN.md › Components and › Tables): dense 13 px rows,
  * hairline dividers, and the column priority that lets a seven-column table
  * survive a narrow column.
@@ -63,8 +105,14 @@ export const T = {
   td: "px-3 py-2.5 align-middle",
   row: "border-t border-line transition-colors",
   rowHover: "group hover:bg-surface-2/70",
-  /** On the wrapper that scrolls: turns it into the query container. */
-  container: "@container",
+  /**
+   * On the wrapper that scrolls: turns it into the query container. It is
+   * also the containing block of what is positioned inside the table — an
+   * `sr-only` label is `absolute`, and without a positioned scroller it is
+   * placed against the page, past the scroller's clip, and widens the whole
+   * page on a phone.
+   */
+  container: "relative @container",
   /** Lowest priority — the first column to go (container under 64rem). */
   colLow: "hidden @5xl:table-cell",
   /** Goes second (container under 56rem). */
@@ -85,6 +133,8 @@ export const T = {
    * included, or the pinned cell reads as a seam.
    */
   stickyEnd: "sticky right-0 bg-surface group-hover:bg-surface-2/70",
+  /** The row-card mode under a 28 rem container (see `stack` above). */
+  stack,
 } as const;
 
 /**
@@ -121,6 +171,7 @@ export function SortHeader<K extends string>({
   return (
     <th
       scope="col"
+      role="columnheader"
       aria-sort={active ? (sort.dir === 1 ? "ascending" : "descending") : undefined}
       className={cx(T.th, right && "text-right", className)}
     >
@@ -146,7 +197,7 @@ export function SortHeader<K extends string>({
         ) : (
           <ArrowUpDown
             aria-hidden
-            className="size-3 shrink-0 text-fg-faint opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+            className="hover-reveal size-3 shrink-0 text-fg-faint opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
           />
         )}
       </button>
@@ -168,6 +219,8 @@ export type Column<K extends string> = {
   right?: boolean;
   /** Extra classes: a `T.col*` priority, a width, `T.stickyEnd`. */
   className?: string;
+  /** Its role in the row-card mode (`stack`), when the table opts in. */
+  stack?: "lead" | "main" | "end" | "sub";
 } & ({ key: K; sortable?: true } | { key: string; sortable: false });
 
 /**
@@ -190,15 +243,21 @@ export function TableHead<K extends string>({
   sort: SortState<K> | null;
   onToggle: (k: K) => void;
 }) {
+  const stacked = columns.some((c) => c.stack !== undefined);
+  const role = (c: Column<K>) =>
+    c.stack === undefined ? undefined : c.stack === "sub" ? stack.subHead : stack[c.stack];
   return (
-    <thead className={T.head}>
-      <tr>
+    // Explicit roles: a row-card table changes `display`, and some screen
+    // readers (VoiceOver) drop a table's semantics with it.
+    <thead role="rowgroup" className={T.head}>
+      <tr role="row" className={stacked ? stack.row : undefined}>
         {columns.map((c) =>
           c.sortable === false ? (
             <th
               key={c.key}
               scope="col"
-              className={cx(T.th, c.right && "text-right", c.className)}
+              role="columnheader"
+              className={cx(T.th, c.right && "text-right", c.className, role(c))}
             >
               {c.srOnly ? <span className="sr-only">{c.label}</span> : c.label}
             </th>
@@ -209,7 +268,7 @@ export function TableHead<K extends string>({
               sort={sort}
               onToggle={onToggle}
               right={c.right}
-              className={c.className}
+              className={cx(c.className, role(c))}
             >
               {c.srOnly ? <span className="sr-only">{c.label}</span> : c.label}
             </SortHeader>
