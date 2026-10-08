@@ -143,17 +143,6 @@ export const PoolMembers = z.object({
 });
 export type PoolMembers = z.infer<typeof PoolMembers>;
 
-/** `GET /pools/:id/candidates?q=`: a few letters of a name or an address. */
-export const PoolCandidateQuery = z.object({ q: z.string().trim().max(100).default("") });
-export type PoolCandidateQuery = z.infer<typeof PoolCandidateQuery>;
-
-/** A teacher account that holds no seat on the pool yet: what the invite picker offers. */
-export const PoolCandidate = PersonRef;
-export type PoolCandidate = z.infer<typeof PoolCandidate>;
-
-export const PoolCandidates = z.array(PoolCandidate);
-export type PoolCandidates = z.infer<typeof PoolCandidates>;
-
 /**
  * `POST /pools/:id/members`: the account picked among the candidates
  * (`userId`), or named by an address the picker does not list — one of the

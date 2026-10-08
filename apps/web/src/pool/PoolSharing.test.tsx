@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import type { Pool, PoolCandidate, PoolMembers } from "@quiz/contracts";
+import type { Pool, TeacherCandidate, PoolMembers } from "@quiz/contracts";
 
 import { flowingClock } from "../test/clock";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
@@ -28,13 +28,13 @@ const POOL: Pool = {
 const MEMBERS = "/app/api/pools/p1/members";
 const CANDIDATES = "/app/api/pools/p1/candidates";
 
-const grace: PoolCandidate = {
+const grace: TeacherCandidate = {
   userId: "t2",
   email: "grace.hopper@heig-vd.ch",
   givenName: "Grace",
   familyName: "Hopper",
 };
-const linus: PoolCandidate = {
+const linus: TeacherCandidate = {
   userId: "t3",
   email: "linus.t@heig-vd.ch",
   givenName: "Linus",
@@ -42,7 +42,7 @@ const linus: PoolCandidate = {
 };
 
 /** The picker asks after every keystroke: one stub per prefix of what is typed. */
-function candidatesFor(typed: string, rows: PoolCandidate[]) {
+function candidatesFor(typed: string, rows: TeacherCandidate[]) {
   const stubs: Record<string, ReturnType<typeof ok>> = {};
   for (let i = 1; i <= typed.length; i += 1) {
     stubs[`GET ${CANDIDATES}?q=${encodeURIComponent(typed.slice(0, i))}`] = ok(rows);

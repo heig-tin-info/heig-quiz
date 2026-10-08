@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 
 import {
   IdParam,
-  PoolCandidateQuery,
+  TeacherCandidateQuery,
   PoolMemberInvite,
   PoolMemberParam,
   PoolMemberPatch,
@@ -41,7 +41,7 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
     "/app/api/pools/:id/candidates",
     { preHandler: requireTeacher },
     teacher(
-      { params: IdParam, query: PoolCandidateQuery, load: inPool("owner") },
+      { params: IdParam, query: TeacherCandidateQuery, load: inPool("owner") },
       async ({ query, scope: pool }) => {
         return service.listCandidates(app.db, pool, query.q);
       },

@@ -29,14 +29,17 @@ you archive it.
 
 ## Staff
 
-**Add a staff member** takes the e-mail of an account that has already
-signed in once, and a role. Every member of the staff reaches every
-classroom of the course. An **owner** also runs it: the staff and their
-roles, the course's name and deletion, its linked pools, creating and
-deleting classrooms, and publishing results. An **assistant** does the rest.
-On **Members**, an owner changes a role or removes someone from a person's
-row, and anyone leaves the course from their own. A course keeps at least
-one owner.
+**Add a staff member** finds a colleague by name among the teachers who
+have signed in once (an address typed in full works too), and takes a
+role. Every member of the staff reaches every classroom of the course. A
+**teacher** also runs it: the staff and their roles, the course's name and
+deletion, its linked pools, creating and deleting classrooms, and
+publishing results. An **assistant** does the rest. On **Members**, a
+teacher changes a role or removes someone from a person's row, and anyone
+leaves the course from their own. A course keeps at least one teacher.
+
+The **conditions catalog**, in the course's **Settings**, keeps the
+conditions you announce often; every member of the staff manages it.
 
 ## Pools of this course
 

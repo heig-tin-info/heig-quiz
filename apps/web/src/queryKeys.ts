@@ -96,6 +96,12 @@ export const courseKey = (id: string) => ["course", id] as const;
 export const courseTemplatesKey = (id: string | null) => ["course", id, "templates"] as const;
 /** `GET /courses/:id/conditions` (F-ORG-16): the course's whole catalog, archived entries included. */
 export const courseConditionsKey = (id: string) => ["course", id, "conditions"] as const;
+/**
+ * The prefix of `GET /courses/:id/staff/candidates?q=` (the picker of "Add a
+ * person" appends the typed text): under the course, so a staff change
+ * refreshes it.
+ */
+export const courseStaffCandidatesKey = (id: string) => ["course", id, "staff-candidates"] as const;
 /** `null` while the id is not known yet: the query is disabled, the key still well-formed. */
 export const classroomKey = (id: string | null) => ["classroom", id] as const;
 /**

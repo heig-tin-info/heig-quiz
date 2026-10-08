@@ -70,7 +70,6 @@ export {
 export {
   listMembers,
   findTeacherByEmail,
-  findTeacherById,
   listCandidates,
   isMemberOrOwner,
   addMember,
@@ -80,6 +79,7 @@ export {
   transferOnLoss,
   vacateSeats,
 } from "./members.js";
+export { findTeacherById } from "../../directory.js";
 export { mayLinkPool, poolsOfCourse, setCoursePools } from "./coursePools.js";
 export {
   categoryTree,

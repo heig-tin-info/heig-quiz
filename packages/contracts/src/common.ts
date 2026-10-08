@@ -102,3 +102,27 @@ export const IntList = z
 export const BoolFlag = z
   .union([z.string(), z.boolean()])
   .transform((v) => v === true || v === "1" || v === "true");
+
+// --- The staff directory: teachers picked by name (F-POOL-05, ADR-068) ---
+
+/**
+ * `GET /pools/:id/candidates?q=` and `GET /courses/:id/staff/candidates?q=`:
+ * a few letters of a name or an address.
+ */
+export const TeacherCandidateQuery = z.object({ q: z.string().trim().max(100).default("") });
+export type TeacherCandidateQuery = z.infer<typeof TeacherCandidateQuery>;
+
+/**
+ * A teacher or admin account that holds no seat on the pool or the course
+ * yet: what the picker of a share sheet or of the course's staff offers.
+ */
+export const TeacherCandidate = z.object({
+  userId: z.uuid(),
+  email: z.string(),
+  givenName: z.string(),
+  familyName: z.string(),
+});
+export type TeacherCandidate = z.infer<typeof TeacherCandidate>;
+
+export const TeacherCandidates = z.array(TeacherCandidate);
+export type TeacherCandidates = z.infer<typeof TeacherCandidates>;

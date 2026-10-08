@@ -236,7 +236,7 @@ describe("dragging a question onto another pool", () => {
     fireEvent.dragEnter(row, { dataTransfer });
     fireEvent.drop(row, { dataTransfer });
 
-    expect(await screen.findByText("Only an owner of PRG1 may add this pool to it.")).toBeInTheDocument();
+    expect(await screen.findByText("Only a teacher of PRG1 may add this pool to it.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add the pool and move" })).toBeNull();
     expect(calls.filter((c) => c.url === "/app/api/questions/move")).toHaveLength(1);
   });

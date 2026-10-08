@@ -11,7 +11,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, asc, eq, inArray, isNull, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, notInArray, or, sql, type SQL } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
 
 import type {
@@ -21,12 +21,14 @@ import type {
   EnrollmentPatch,
   StudentClassroom,
   StudentClassroomPage,
+  TeacherCandidates,
 } from "@quiz/contracts";
 import { effectiveCourseRole, staffChangeRefusal, type StaffChange } from "@quiz/domain";
 
 import type { AuditActor } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { isUniqueViolation, type Db, type Tx } from "../../db/client.js";
+import { searchTeachers } from "../../directory.js";
 import {
   avatars,
   classrooms,
@@ -44,6 +46,7 @@ import { accessRevoked } from "../realtime/bus.js";
 import { rosterRefusal } from "./errors.js";
 
 export { claimEnrollments, claimLines, type ClaimMatch } from "./roster.js";
+export { findTeacherById } from "../../directory.js";
 export {
   conditionOfCourse,
   conditionView,
@@ -295,6 +298,21 @@ export async function setCourseHidden(
  * is new; false when the account already held one, which is left as it was
  * (the route answers 409 `already_staff`; a role changes by `changeStaffSeat`).
  */
+/**
+ * The teachers and admins who hold no seat on the course's staff yet,
+ * matched on name or address: what the picker of "Add a person" offers.
+ */
+export async function staffCandidates(db: Db, courseId: string, q: string): Promise<TeacherCandidates> {
+  return searchTeachers(
+    db,
+    q,
+    notInArray(
+      users.id,
+      db.select({ userId: courseStaff.userId }).from(courseStaff).where(eq(courseStaff.courseId, courseId)),
+    ),
+  );
+}
+
 export async function addStaff(
   db: Db,
   courseId: string,

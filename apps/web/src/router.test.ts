@@ -79,6 +79,8 @@ describe("routeToPath / parsePath", () => {
     expect(parsePath("/courses/k-1/conditions")).toEqual({ view: "course", id: "k-1", tab: "settings" });
     expect(routeToPath({ view: "course", id: "k-1", tab: "classrooms" })).toBe("/courses/k-1");
     expect(parsePath("/courses/k-1/nope")).toEqual({ view: "course", id: "k-1" });
+    // The catalog of conditions moved into the settings: an old link lands there.
+    expect(parsePath("/courses/k-1/conditions")).toEqual({ view: "course", id: "k-1", tab: "settings" });
   });
 
   it("parses the editor of one template, a page of its course (F-EVAL-25)", () => {
