@@ -74,7 +74,8 @@ export function EditCourseModal({ course, onClose }: { course: CourseSummary; on
 /**
  * The one form of a course, its name and its code, for its creation and its
  * edit. `CourseCreate` trims and upper-cases the code, so what `changed` and
- * `save` receive is what the server will store.
+ * `save` receive is what the server will store, and what the preview shows as
+ * the sidebar will.
  */
 function CourseFormModal({
   title,
@@ -137,6 +138,14 @@ function CourseFormModal({
         value={form.code}
         onChange={(e) => setForm({ ...form, code: e.target.value })}
       />
+      {parsed.success && (
+        <p className="text-[13px] text-fg-muted">
+          {t("courses.codePreview")}{" "}
+          <span className="font-medium text-fg">
+            {t("nav.classroomCourse", { code: parsed.data.code, name: parsed.data.name })}
+          </span>
+        </p>
+      )}
     </FormDialog>
   );
 }

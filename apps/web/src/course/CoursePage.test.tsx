@@ -511,9 +511,11 @@ describe("CoursePage", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Edit" }));
     const dialog = await screen.findByRole("dialog", { name: "Edit the course" });
-    const code = within(dialog).getByRole("textbox", { name: /^Code/ });
+    const code = within(dialog).getByRole("textbox", { name: /^Course code/ });
     await userEvent.clear(code);
     await userEvent.type(code, "prg2");
+    // The preview shows the code as the sidebar will: trimmed and upper-cased.
+    expect(within(dialog).getByText("PRG2 · Programmation C")).toBeVisible();
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
     expect(calls.filter((c) => c.method === "PATCH")).toEqual([
@@ -531,9 +533,9 @@ describe("CoursePage", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
     const dialog = await screen.findByRole("dialog", { name: "Edit the course" });
-    await userEvent.type(within(dialog).getByRole("textbox", { name: /^Code/ }), "X");
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /^Course code/ }), "X");
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    expect(await within(dialog).findByText("Another course already uses this code.")).toBeVisible();
+    expect(await within(dialog).findByText("Another course already uses this code. Make it more specific, e.g. PRG1-IL.")).toBeVisible();
   });
 
   it("hides the course for its reader from its settings", async () => {
