@@ -123,6 +123,11 @@ Store settings allow it: it is the recommended one. Otherwise publish as
 outside the two origins and without the enterprise policy, so there is
 nothing to protect. Never **Public**.
 
+The Store's **Privacy practices** tab needs a privacy policy URL that
+leads directly to a policy, not to a README: link
+[`PRIVACY.md`](PRIVACY.md) on `main`
+(`https://github.com/heig-tin-info/heig-quiz/blob/main/extensions/kiosk-attestation/PRIVACY.md`).
+
 ## Deploying it on the kiosk stations
 
 In the Google Admin console, on the organizational unit of the exam
