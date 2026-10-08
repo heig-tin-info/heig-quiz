@@ -4,7 +4,16 @@
  */
 import type { DrillSession, DrillSessionCard } from "@quiz/contracts";
 
-import type { TFunction } from "../i18n";
+import type { Dict, TFunction } from "../i18n";
+
+/** The confidence scale in the student's words, 0 No idea to 4 Certain (ADR-085). */
+export const CONFIDENCE = [
+  "drill.confidence.0",
+  "drill.confidence.1",
+  "drill.confidence.2",
+  "drill.confidence.3",
+  "drill.confidence.4",
+] as const satisfies readonly (keyof Dict)[];
 
 /** "5 questions · up to 10 min": what today holds, never how many days in a row. */
 export function sessionLine(session: DrillSession, t: TFunction): string {

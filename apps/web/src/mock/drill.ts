@@ -12,12 +12,16 @@
  *
  * Scene flag `?reviewed=1`: today's drill is already done — the empty day,
  * "nothing to review today" with the next due date. `?empty=1` has no
- * classroom at all, so no drill.
+ * classroom at all, so no drill. `?unstated=1`: no confidence stated yet
+ * (ADR-085 §8) — no calibration for the student, and no question of `r1`
+ * stated by enough students for the teacher's 2×2.
  */
 import type {
+  DrillCalibrationLevel,
   DrillClassroom,
   DrillClassroomSettings,
   DrillProgress,
+  DrillQuestionConfidence,
   DrillRecall,
   DrillReviewResult,
   DrillServed,
@@ -178,6 +182,22 @@ on("POST", "/app/api/drill/cards/:id/answer", (m, body): DrillReviewResult => {
   };
 });
 
+/**
+ * The student's calibration (ADR-085 §8): roughly calibrated, a little
+ * overconfident at Certain, and "No idea" stated too rarely for a rate.
+ */
+const CALIBRATION: DrillCalibrationLevel[] = [
+  { confidence: 0, answers: 3, right: 1 },
+  { confidence: 1, answers: 9, right: 4 },
+  { confidence: 2, answers: 17, right: 11 },
+  { confidence: 3, answers: 21, right: 13 },
+  { confidence: 4, answers: 12, right: 9 },
+];
+
+on("GET", "/app/api/drill/calibration", (): DrillCalibrationLevel[] =>
+  flags.unstated ? CALIBRATION.map((l) => ({ ...l, answers: 0, right: 0 })) : CALIBRATION,
+);
+
 // --- Teacher ---------------------------------------------------------------
 
 /** evaluation id -> the cards it gave rise to. */
@@ -328,4 +348,21 @@ const MASTERY: DrillTagMastery[] = [
 
 on("GET", "/app/api/classrooms/:id/drill/mastery", (m): DrillTagMastery[] =>
   hasHistory(roomOr404(m.groups!.id!).id) ? MASTERY : [],
+);
+
+/**
+ * The 2×2 per question of `r1` (ADR-085 §8): only what passed the server's
+ * ten-student threshold — a question that misleads, one that is simply
+ * hard, and one the class knows.
+ */
+const CONFIDENCE_SPLITS: Omit<DrillQuestionConfidence, "questionId" | "name">[] = [
+  { students: 17, split: { rightSure: 9, rightUnsure: 4, wrongSure: 14, wrongUnsure: 3 } },
+  { students: 14, split: { rightSure: 6, rightUnsure: 7, wrongSure: 3, wrongUnsure: 9 } },
+  { students: 12, split: { rightSure: 19, rightUnsure: 3, wrongSure: 0, wrongUnsure: 0 } },
+];
+
+on("GET", "/app/api/classrooms/:id/drill/confidence", (m): DrillQuestionConfidence[] =>
+  hasHistory(roomOr404(m.groups!.id!).id) && !flags.unstated
+    ? CONFIDENCE_SPLITS.map((row, i) => ({ ...row, questionId: picked[i]!.id, name: picked[i]!.internalName }))
+    : [],
 );

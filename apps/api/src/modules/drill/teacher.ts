@@ -1,8 +1,9 @@
 /**
  * The teacher's view of a classroom's drill (ADR-041 §8, §10 items 8 and 10,
- * #317 slice 4): each student's activity, the weekly progression, and the
- * mastery per tag. Reads only; the routes load the classroom through
- * `staffAccess` first (invariant 6).
+ * #317 slice 4): each student's activity, the weekly progression, the
+ * mastery per tag, and the confidence per question (ADR-085 §8). Reads
+ * only; the routes load the classroom through `staffAccess` first
+ * (invariant 6).
  *
  * What every read holds by construction:
  *   - only the cards met first in THIS classroom count (06, question 28 (j)):
@@ -21,10 +22,14 @@
  */
 import { and, eq, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 
-import type { DrillProgress, DrillStudentActivity, DrillTagMastery } from "@quiz/contracts";
+import type { DrillProgress, DrillQuestionConfidence, DrillStudentActivity, DrillTagMastery } from "@quiz/contracts";
 import {
   DRILL_RECALLED_MIN_RATING,
   SCHOOL_TIME_ZONE,
+  drillConfidenceShown,
+  drillConfidenceSplit,
+  drillConfidentErrorShare,
+  type DrillConfidence,
   drillLocalDate,
   drillProgressRange,
   drillWeekStarts,
@@ -33,7 +38,7 @@ import { drillRetrievability } from "@quiz/domain/drillSchedule";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { drillCards, drillReviews, enrollments, questionTags } from "../../db/schema.js";
+import { drillCards, drillReviews, enrollments, questionTags, questions } from "../../db/schema.js";
 
 const DAY_MS = 86_400_000;
 
@@ -50,8 +55,11 @@ function visibleReviews(db: Db, classroomId: string) {
     .select({
       cardId: drillReviews.cardId,
       userId: drillCards.userId,
+      questionId: drillCards.questionId,
       reviewedAt: drillReviews.reviewedAt,
       rating: drillReviews.rating,
+      correctness: drillReviews.correctness,
+      confidence: drillReviews.confidence,
       first: sql<boolean>`row_number() over (partition by ${drillReviews.cardId} order by ${drillReviews.reviewedAt}, ${drillReviews.id}) = 1`.as(
         "first",
       ),
@@ -65,8 +73,11 @@ function visibleReviews(db: Db, classroomId: string) {
       enrollmentId: sql<string>`${enrollments.id}`.as("enrollment_id"),
       cardId: ranked.cardId,
       userId: ranked.userId,
+      questionId: ranked.questionId,
       reviewedAt: ranked.reviewedAt,
       rating: ranked.rating,
+      correctness: ranked.correctness,
+      confidence: ranked.confidence,
       first: ranked.first,
     })
     .from(ranked)
@@ -213,4 +224,55 @@ export async function classroomMastery(db: Db, classroomId: string, now: Date): 
   return [...tags]
     .map(([tag, e]) => ({ tag, cards: e.cards.size, students: e.students.size, retrievability: e.sum / e.cards.size }))
     .sort((a, b) => a.retrievability - b.retrievability || String(a.tag).localeCompare(String(b.tag)));
+}
+
+/**
+ * Per question, the 2×2 of the classroom's stated reviews (ADR-085 §8):
+ * right or wrong × sure or unsure, over the same visible reviews as the
+ * activity. AGGREGATED ONLY: a question whose statements come from fewer
+ * than `DRILL_CONFIDENCE_MIN_STUDENTS` distinct students is dropped here,
+ * so its counts never leave the server. Two queries; the most confident
+ * errors among the wrong answers first.
+ */
+export async function classroomConfidence(db: Db, classroomId: string): Promise<DrillQuestionConfidence[]> {
+  const v = visibleReviews(db, classroomId);
+  const stated = isNotNull(v.confidence);
+  const [counts, perQuestion] = await Promise.all([
+    db
+      .select({
+        questionId: v.questionId,
+        confidence: v.confidence,
+        correctness: v.correctness,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(v)
+      .where(stated)
+      .groupBy(v.questionId, v.confidence, v.correctness),
+    db
+      .select({
+        questionId: v.questionId,
+        name: questions.internalName,
+        students: sql<number>`count(distinct ${v.userId})::int`,
+      })
+      .from(v)
+      .innerJoin(questions, eq(questions.id, v.questionId))
+      .where(stated)
+      .groupBy(v.questionId, questions.internalName),
+  ]);
+  return perQuestion
+    .filter((q) => drillConfidenceShown(q.students))
+    .map((q) => ({
+      ...q,
+      split: drillConfidenceSplit(
+        counts
+          .filter((c) => c.questionId === q.questionId)
+          .map((c) => ({ ...c, confidence: c.confidence as DrillConfidence })),
+      ),
+    }))
+    .sort(
+      (a, b) =>
+        (drillConfidentErrorShare(b.split) ?? -1) - (drillConfidentErrorShare(a.split) ?? -1) ||
+        b.split.wrongSure - a.split.wrongSure ||
+        a.name.localeCompare(b.name),
+    );
 }

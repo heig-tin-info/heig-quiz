@@ -256,6 +256,8 @@ const scenes = [
   { name: "classroom-drill-student", role: "teacher", path: "/classrooms/r1?tab=drill", fold: true, act: async (p) => { await p.getByRole("button", { name: /^(Progression of|Progression de)/ }).first().click(); await p.getByText(/^(Reviews per week|Révisions par semaine)$/).first().waitFor(); } },
   { name: "classroom-drill-none", role: "teacher", path: "/classrooms/r2?tab=drill" },
   { name: "classroom-drill-off", role: "teacher", path: "/classrooms/r3?tab=drill" },
+  // ADR-085 §8: the 2×2 per question is on `classroom-drill`; here no question has ten students yet.
+  { name: "classroom-drill-unstated", role: "teacher", path: "/classrooms/r1?tab=drill&unstated=1" },
   { name: "classroom-import", role: "teacher", path: "/classrooms/r1?tab=roster", act: (p) => p.getByRole("button", { name: /add students/i }).first().click() },
   // #156: the period dialog — the months, the two semester presets, the label
   // — opened from the period beside the title (the header's overflow menu
@@ -722,6 +724,8 @@ const scenes = [
   { name: "drill-confidence", role: "student", path: "/drill", act: drillConfidence },
   { name: "drill-confident-error", role: "student", path: "/drill", act: drillConfidentError },
   { name: "drill-done", role: "student", path: "/drill", act: drillWalk },
+  // ADR-085 §8: the calibration under the classrooms (also on `drill-today`, full page).
+  { name: "drill-calibration", role: "student", path: "/drill", fold: true, act: (p) => p.getByRole("heading", { name: /^(How sure, how right|Certitude et réussite)$/ }).scrollIntoViewIfNeeded() },
   { name: "drill-empty", role: "student", path: "/drill?reviewed=1" },
   { name: "drill-off", role: "student", path: "/drill?empty=1" },
   { name: "drill-error", role: "student", path: "/drill?fail=1", settle: 2500 },

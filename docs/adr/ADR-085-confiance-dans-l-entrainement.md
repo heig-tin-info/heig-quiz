@@ -9,7 +9,10 @@ control, the storage (migration `0086_drill_confidence`), the contract and
 the line after the correction; part 2 the student's calibration chart and
 the teacher's 2×2 in the question statistics. *Amended 2026-10-08 (product
 owner, issue #453): a confident error comes back tomorrow at the latest
-(§4); the rating and the FSRS state stay untouched.*
+(§4); the rating and the FSRS state stay untouched.* *Amended 2026-10-08
+(issue #453, part 2): the calibration and the 2×2, their thresholds and
+where they are shown (§8) — the 2×2 in the classroom's Drill tab rather
+than the pool's statistics panel.*
 
 Scope: the column `drill_reviews.confidence`, the body of
 `POST /app/api/drill/cards/:id/answer` (`DrillAnswerBody`), the pure rule
@@ -139,6 +142,48 @@ Individual confidence is drill data like a review (ADR-041 §8, five years,
 the classroom's staff). Part 2's teacher view aggregates it per question
 over the classroom; no individual confidence appears in a table the class
 could see.
+
+### 8. What the statements add up to (part 2)
+
+*Amendment 2026-10-08 (issue #453, part 2).* Two reads of
+`drill_reviews.confidence`, without a migration; the pure rules are
+`drillCalibration`, `drillCalibrationRate`, `drillConfidenceSplit`,
+`drillConfidentErrorShare` and `drillConfidenceShown` in `@quiz/domain`
+(`drillCalibration.ts`).
+
+- **The student's calibration**, on their drill page, under the classrooms
+  (`GET /app/api/drill/calibration`): for each of the five levels, the
+  student's stated reviews and how many were right, every classroom pooled,
+  their own rows only. A partial answer counts as an answer that is not
+  right. In plain words — "When you said “Sure”, you were right 62 % of the
+  time", the count beside it, a bar under it. A level with fewer than
+  `DRILL_CALIBRATION_MIN_N` (**5**) answers says "not enough answers yet"
+  instead of a rate: a rate over two answers teaches nothing. The section
+  is not drawn before the student has stated once. It is a read with no
+  action; the page's primary action stays Start.
+- **The teacher's 2×2 per question**, in the classroom's **Drill tab**
+  (`GET /app/api/classrooms/:id/drill/confidence`, loaded through
+  `staffAccess`, invariant 6): right or wrong × sure (Sure, Certain, the
+  confident-error line of §3) or unsure (No idea to Fairly sure), over the
+  classroom's visible reviews (its own cards, student seats, the opt-out cut
+  of ADR-041 §8); partial answers are left out. With it, the **confident
+  errors among the wrong answers** — high, a misconception; low, a gap — by
+  which the questions are sorted, highest first.
+- **The threshold**: a question appears only when its statements come from
+  at least `DRILL_CONFIDENCE_MIN_STUDENTS` (**10**, the
+  `QUESTION_STATS_MIN_N` of N-DATA-06) **distinct students**, a cut made on
+  the server so a smaller group never travels. Distinct students, not
+  reviews: ten reviews of one student are that student's statements.
+  Unlike the per-tag mastery (06, question 28 (l): no minimum within a
+  classroom, because the per-student view shows it anyway), the teacher
+  never sees an individual confidence, so a small aggregate would hand one
+  back. The differencing risk of ADR-038 ("Residual risk") applies the
+  same way and is accepted on the same grounds.
+- **Where, and not in the pool's statistics panel**: the pool's readers
+  include teachers of other classrooms (ADR-038 §5), while drill reviews are
+  seen only by the staff of the classroom their card belongs to (F-DRILL-04,
+  06, question 28 (j)). The 2×2 is therefore a classroom read beside the
+  other drill aggregates, not a column of `GET /pools/:id/question-stats`.
 
 ## Consequences
 

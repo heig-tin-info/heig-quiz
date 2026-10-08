@@ -10,7 +10,8 @@
  *   - `review.ts`: the student's session, the served card, its time on
  *     screen and the review;
  *   - `teacher.ts`: the teacher's reads of a classroom — each student's
- *     activity, the weekly progression, the mastery per tag.
+ *     activity, the weekly progression, the mastery per tag, the confidence
+ *     per question (aggregated only).
  *
  * The module owns `drill_cards` and `drill_reviews`. The switches it reads
  * belong to their modules and are written through their services:
@@ -51,6 +52,7 @@ export {
   drillSession,
   reportShown,
   serveCard,
+  studentCalibration,
   studentDrillClassrooms,
 } from "./review.js";
-export { classroomActivity, classroomMastery, classroomProgress } from "./teacher.js";
+export { classroomActivity, classroomConfidence, classroomMastery, classroomProgress } from "./teacher.js";

@@ -14,11 +14,13 @@ import {
   DrillSessionQuery,
   DrillShownBody,
   EvaluationDrillBody,
+  type DrillCalibrationLevel,
   type DrillCardsRemoved,
   type DrillClassroom,
   type DrillClassroomSettings,
   type DrillDeviceClass,
   type DrillProgress,
+  type DrillQuestionConfidence,
   type DrillReviewResult,
   type DrillServed,
   type DrillSession,
@@ -28,7 +30,7 @@ import {
 } from "@quiz/contracts";
 
 import { api } from "../api";
-import { classroomDrillKey, drillClassroomsKey, drillSessionKey } from "../queryKeys";
+import { classroomDrillKey, drillCalibrationKey, drillClassroomsKey, drillSessionKey } from "../queryKeys";
 import { useCoarsePointer } from "../ui";
 
 /** A write's body, parsed by its contract before it leaves. */
@@ -100,6 +102,15 @@ export function useDrillSession(device: DrillDeviceClass, enabled = true) {
     queryFn: () => fetchDrillSession(device),
     enabled,
     staleTime: 60_000,
+  });
+}
+
+/** The student's own calibration (ADR-085 §8): the five levels, lowest first. */
+export function useDrillCalibration(enabled = true) {
+  return useQuery({
+    queryKey: drillCalibrationKey,
+    queryFn: () => api<DrillCalibrationLevel[]>("/app/api/drill/calibration"),
+    enabled,
   });
 }
 
@@ -176,5 +187,13 @@ export function useClassroomDrillMastery(classroomId: string) {
   return useQuery({
     queryKey: classroomDrillKey(classroomId, "mastery"),
     queryFn: () => api<DrillTagMastery[]>(`/app/api/classrooms/${classroomId}/drill/mastery`),
+  });
+}
+
+/** Per question, the classroom's 2×2 of confidence (ADR-085 §8): only questions stated by enough students. */
+export function useClassroomDrillConfidence(classroomId: string) {
+  return useQuery({
+    queryKey: classroomDrillKey(classroomId, "confidence"),
+    queryFn: () => api<DrillQuestionConfidence[]>(`/app/api/classrooms/${classroomId}/drill/confidence`),
   });
 }

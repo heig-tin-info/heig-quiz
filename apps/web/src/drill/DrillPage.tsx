@@ -12,7 +12,8 @@
  *   - Finish: cards on the warm canvas, hairlines, no shadow.
  *
  * The run takes the page while it lasts: the classrooms and the header go,
- * one card at a time is all there is.
+ * one card at a time is all there is. Under the classrooms, once the student
+ * has stated a confidence, their calibration (ADR-085 §8): a read, no action.
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { CalendarCheck, Dumbbell } from "lucide-react";
@@ -25,6 +26,7 @@ import { drillRootKey } from "../queryKeys";
 import type { Route } from "../router";
 import { Button, Card, EmptyState, isoDateParts, PageHeader, QueryError, Skeleton } from "../ui";
 import { useDrillClassrooms, useDrillDevice, useDrillSession } from "./api";
+import { DrillCalibration } from "./Confidence";
 import { DrillClassrooms } from "./DrillClassrooms";
 import { DrillRun, DrillSummary, type DrillOutcome } from "./DrillRun";
 import { sessionCourses, sessionLine } from "./format";
@@ -116,6 +118,8 @@ export function DrillPage({ navigate }: { navigate: (r: Route) => void }) {
       <PageHeader title={t("nav.drill")} description={t("drill.subtitle")} />
       {day()}
       {hasRooms ? <DrillClassrooms rooms={rooms.data!} /> : null}
+      {/* Secondary, after the switches: what the statements on the cards add up to (ADR-085 §8). */}
+      {hasRooms ? <DrillCalibration /> : null}
     </div>
   );
 }
