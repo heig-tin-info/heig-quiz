@@ -221,7 +221,8 @@ own App (D23) since M2/M4; what remains dark sits behind its switch
    grace], no live evaluation; announce a week and a day ahead.
 
 **C — Freeze and migrate (target ≤ 1 h).**
-1. Caddy maintenance fragment on `classroom.chevallier.io`: a bilingual 503
+1. Caddy maintenance fragment on `classroom.chevallier.io`
+   (`infra/caddy/classroom-maintenance.caddy`): a bilingual 503
    with `Retry-After`; `/webhooks/github` answers 503 (classroom's App
    is idle from then on; Quiz's App received its own deliveries); pause the uptime probe;
    `docker compose stop app` (Postgres stays up). If the rehearsal takes
@@ -232,7 +233,9 @@ own App (D23) since M2/M4; what remains dark sits behind its switch
 3. `import-classroom --apply` (classroom project ids kept).
 4. Codespace identity remap (M8-04), `PLATFORM_URL` = Quiz, start the portal.
 5. Set `CODESPACE_*` in Quiz (if M6 is in scope), `up -d app`.
-6. Replace the maintenance fragment with the redirect fragment. Classroom's
+6. Replace the maintenance fragment with the redirect fragment
+   (`infra/caddy/classroom-redirect.caddy`; check it with
+   `infra/caddy/check-classroom-redirects.sh https://classroom.chevallier.io`). Classroom's
    App is left installed and idle; its webhook points at a stopped service.
 7. Catch up: `reconcile.repos`, `reconcile.grades` by hand (Quiz's App saw
    every push, but only for repositories the import just made known); `codespace.sync` for every online project (new Config Keys ⇒
@@ -276,18 +279,11 @@ Caddy.
 | `/app/api/users/:uid/avatar` | Quiz equivalent | 302 via the resolver, else 410 |
 | `code.chevallier.io/*` | same host | unchanged |
 
-Draft fragment (M8-03):
-
-```caddy
-classroom.chevallier.io {
-  @gone path /webhooks/github /app/api/* /app/events /kc/* /healthz /metrics
-  handle @gone { respond `{"error":"moved","to":"https://quiz.chevallier.io"}` 410 }
-  @legacy path /classrooms/* /app/codespace/start/*
-  handle @legacy { redir https://quiz.chevallier.io/legacy/classroom{uri} 302 }
-  handle /app/auth/github/callback { redir https://quiz.chevallier.io/settings 302 }
-  handle { redir https://quiz.chevallier.io/ 302 }
-}
-```
+The fragment is `infra/caddy/classroom-redirect.caddy` (M8-03): Caddy
+answers the 410 rows (the avatar excepted) and sends every other path to
+`/legacy/classroom<path>`, which owns the rows; the query is dropped, the
+path's percent-encoding kept. `infra/caddy/check-classroom-redirects.sh`
+asserts each row's status and `Location`.
 
 ## 6.7 Rollback
 

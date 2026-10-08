@@ -4994,6 +4994,26 @@ serves now (16a), and what waits for the group repositories (16b).
   in the classroom repository).
 - **Acceptance**: `caddy validate`; the script asserts status and
   `Location` of every pattern.
+- **As delivered** (branch `merge/M8-03-caddy-fragments`):
+  - `infra/caddy/classroom-maintenance.caddy` (C1),
+    `infra/caddy/classroom-redirect.caddy` (C6),
+    `infra/caddy/check-classroom-redirects.sh [--maintenance] [--resolve
+    HOST:PORT:ADDR] BASE_URL` (curl >= 7.84).
+  - The redirect fragment answers only the 410 rows (any method on
+    `/webhooks/github`; the avatar excluded in the matcher) and sends every
+    other path to `/legacy/classroom<path>` with one 302: `legacyRule` owns
+    the human rows. The query is dropped for every row (classroom's OAuth
+    `code`, unsubscribe tokens); the path keeps its percent-encoding
+    (`{path}` would decode it, so the path is cut from the raw `{uri}` by
+    `vars_regexp`). The site address `{$CLASSROOM_SITE:classroom.chevallier.io}`
+    is unset in production, `http://:port` locally. M8-03b not built.
+  - Validation (Caddy 2.10.2): `caddy validate --adapter caddyfile --config
+    <fragment>` and `caddy fmt --diff` on both;
+    `CLASSROOM_SITE=http://:18480 caddy run --adapter caddyfile --config
+    infra/caddy/classroom-redirect.caddy`, then
+    `infra/caddy/check-classroom-redirects.sh http://127.0.0.1:18480`; the
+    same with the maintenance fragment and `--maintenance`. Each mode fails
+    against the other fragment.
 
 ### M8-04 — Codespace identity remap (if M6 is in scope)
 - **Acceptance**: on a copy of the portal DB and volumes, one real session

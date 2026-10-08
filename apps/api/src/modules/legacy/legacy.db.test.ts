@@ -95,6 +95,8 @@ describe("every row of §6.6, as the Caddy fragment hands it over", () => {
   // The table of rows is the domain test's; here, one 302 and one 410 over HTTP.
   it.each([
     ["a redirect", "/app/auth/github/callback", 302, "/settings"],
+    // The fragment sends `/` as `/legacy/classroom/`: the wildcard is empty.
+    ["the root", "/", 302, "/"],
     ["a dead API", "/app/api/classrooms", 410, undefined],
   ] as const)("%s, whoever asks", async (_row, path, status, to) => {
     for (const headers of [{}, teacher.headers]) {

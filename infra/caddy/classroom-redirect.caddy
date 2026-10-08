@@ -1,0 +1,36 @@
+# classroom.chevallier.io after the cutover (merge task M8-03, step C6 of
+# docs/merge/06 §6.5). It replaces the maintenance fragment on the
+# application VM:
+#   cp infra/caddy/classroom-redirect.caddy /etc/caddy/conf.d/classroom.caddy \
+#     && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile \
+#     && sudo systemctl reload caddy
+# Checked by infra/caddy/check-classroom-redirects.sh.
+#
+# Caddy answers the machines; every row a human clicks (§6.6) is Quiz's
+# resolver's (`GET /legacy/classroom/*`, `legacyRule` in @quiz/domain),
+# never repeated here. Every redirect is a 302 until the point of no return
+# (phase D): browsers cache 301 and 308.
+# CLASSROOM_SITE only exists to test the fragment on a local port; production
+# leaves it unset.
+{$CLASSROOM_SITE:classroom.chevallier.io} {
+	# Dead machine paths: GitHub's webhook, any method (classroom's App is
+	# idle, Quiz's has its own URL; GitHub follows no redirect), the old API,
+	# journal assets included (journal ids are not kept, D03), the SSE stream,
+	# Keycloak, the probes. The avatar is a human's and goes to the resolver.
+	@gone {
+		path /webhooks/github /app/api/* /app/events /kc/* /healthz /metrics
+		not path /app/api/users/*/avatar
+	}
+	handle @gone {
+		header Content-Type application/json
+		respond `{"error":"moved","to":"https://quiz.chevallier.io/"}` 410
+	}
+
+	# Everything else, to the resolver: the path as sent (percent-encoding
+	# kept, `{path}` would decode it), the query dropped (classroom's OAuth
+	# `code`, an unsubscribe token: nothing of it may reach Quiz).
+	@any vars_regexp raw {uri} ^([^?]*)
+	handle @any {
+		redir https://quiz.chevallier.io/legacy/classroom{re.raw.1} 302
+	}
+}
