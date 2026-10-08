@@ -7,16 +7,21 @@ comment of that day: drill only, asked on every card, optional, nothing
 preselected). Requirement F-DRILL-07. Part 1 of the issue delivers the
 control, the storage (migration `0086_drill_confidence`), the contract and
 the line after the correction; part 2 the student's calibration chart and
-the teacher's 2×2 in the question statistics.
+the teacher's 2×2 in the question statistics. *Amended 2026-10-08 (product
+owner, issue #453): a confident error comes back tomorrow at the latest
+(§4); the rating and the FSRS state stay untouched.*
 
 Scope: the column `drill_reviews.confidence`, the body of
 `POST /app/api/drill/cards/:id/answer` (`DrillAnswerBody`), the pure rule
-`drillConfidenceOutcome` of `@quiz/domain`, and the drill player
+`drillConfidenceOutcome` and `drillConfidenceDue` of `@quiz/domain`, the
+review written by `apps/api/src/modules/drill/review.ts`, and the drill player
 (`apps/web/src/drill/DrillRun.tsx`).
 
 Relations: extends [ADR-041](ADR-041-entrainement-espace.md) and leaves its
 §4 (the rating) and §5 (the scheduler) unchanged; it is not the self-rating
-ADR-041 rejected ("Alternatives considered", strategy B).
+ADR-041 rejected ("Alternatives considered", strategy B). Since the
+amendment of 2026-10-08, §4 caps the due date of a confident error and
+leaves ADR-041 §5's FSRS computation itself unchanged.
 
 ## Context
 
@@ -49,10 +54,12 @@ confidence becomes strategy and stress. Ungraded exercises may come later
 The confidence is sent with the drill answer and stored on the review row,
 `drill_reviews.confidence smallint null` (0–4, a check constraint; null when
 the student skipped it). It is **never read** by the grading, the rating of
-ADR-041 §4, the FSRS schedule of §5, or any score. The same answer at the
-same time on screen yields the same rating, due date and FSRS state with or
-without a confidence; the database tests hold that for a confident error and
-for a lucky right answer.
+ADR-041 §4, the FSRS computation of §5, or any score. The same answer at the
+same time on screen yields the same rating and FSRS state (stability,
+difficulty, reps, lapses) with or without a confidence, and the same due
+date too except for a confident error (§4, amended 2026-10-08); the database
+tests hold that for a confident error on a new and on a mature card, an
+error stated "Fairly sure", a lucky right answer and a "Certain" right one.
 
 ### 3. What a statement says about a review
 
@@ -70,22 +77,44 @@ A partial answer is neither an error nor a success: it is never a confident
 error nor lucky. The outcome is what part 2's calibration chart and 2×2
 read; it is computed, never stored.
 
-### 4. "Comes back sooner": Again already covers it
+### 4. "Comes back sooner": a confident error is due tomorrow at the latest
 
-The issue asked that a confident error come back sooner. Every wrong answer
-is already rated **Again**, FSRS's lowest rating, which gives the card its
-shortest interval and counts a lapse. Confidence therefore changes **nothing
-in the schedule**: FSRS stays untouched, and so does ADR-041 §11's bound on
-what the client can influence (a confidence is one more client input, and it
-reaches no rating).
+*Amended 2026-10-08 (product owner, issue #453). The first version of this
+section left the schedule to Again alone and kept "due tomorrow" as an open
+alternative; the product owner adopted it.*
 
-What Again gives, measured on the scheduler (FSRS-5 default weights, no
-short-term steps): a new card answered wrong is due the next day; a mature
-card (stability ≈ 270 days) answered wrong is due in about 9 days, its
-stability falling to ≈ 8.6. A rule "a confident error is due tomorrow,
-whatever Again says" would move only the due date of mature cards; it is
-not adopted (see the alternatives) and can be added later without a
-migration, since every confidence is kept.
+Every wrong answer is rated **Again**, FSRS's lowest rating, which gives the
+card its shortest interval and counts a lapse. What Again gives, measured on
+the scheduler (FSRS-5 default weights, no short-term steps): a new card
+answered wrong is due the next day; a mature card (stability ≈ 270 days)
+answered wrong is due in about 9 days, its stability falling to ≈ 8.6.
+
+A **confident error** (`drillConfidenceOutcome` = `confident_error`) comes
+back **the next day**: the review is written with the due date
+`drillConfidenceDue(outcome, fsrsDue, now)` =
+**min(FSRS's due date, `drillDayBounds(now).end`)** — the first instant of
+the next calendar day on the drill's clock (Europe/Zurich), the instant from
+which tomorrow's session counts the card as due (a card is due in a session
+when its due date falls before that day's end, F-DRILL-03). The rule follows
+the drill's own day boundaries rather than `now + 24 h`, so that an error at
+23:30 and one at 08:00 both come back in the next day's session, a change
+of time included.
+
+Only `due_at` is capped. The rating stays Again and the FSRS state —
+stability, difficulty, reps, lapses — stays exactly what FSRS computed; the
+next review of the card starts from that state, earlier than FSRS asked. A
+new card's due date only moves to the first instant of the same next day;
+the cap really changes the mature cards. One side effect on FSRS, harmless:
+an error at 23:30 reviewed again at 00:10 counts 0 elapsed days in
+`ts-fsrs`, which treats it as a same-day review of the state it already
+holds. No other outcome touches the
+schedule. ADR-041 §11's bound on the client holds: a confidence still
+reaches no rating and no FSRS state, and the most a student can obtain by
+stating "Sure" on an error is to see that card again the next day. No
+migration: the confidence was already stored.
+
+The result screen's line ("To see again soon · next review tomorrow") reads
+the due date the review returns, so it stays truthful.
 
 ### 5. Right with no idea
 
@@ -128,11 +157,19 @@ could see.
 - **Confidence drives FSRS (strategy B, or a forced Again / Easy).** Rejected
   by ADR-041 as gameable; a lucky right answer upgraded to Easy, or a
   "Certain" that shortened intervals, would hand the schedule to the student.
-- **A confident error due tomorrow** (§4). Pedagogically arguable — the
-  hypercorrection effect says such an error, once corrected, is remembered
-  better, not worse — and it would make confidence change the schedule.
-  Left for a later decision on data: the stored confidences let part 2 show
+- **Leaving a confident error to Again alone** (the first version of §4).
+  The hypercorrection effect says such an error, once corrected, is
+  remembered better, which argued for no change; the product owner chose on
+  2026-10-08 to bring it back the next day, so that a misconception is
+  checked while the correction is fresh. Part 2's data can still show
   whether confident errors relapse more than others.
+- **A confident error rescheduled through FSRS** (a lower stability, an
+  extra lapse). Would make confidence change the model itself; capping the
+  due date alone keeps FSRS's state the one the answer earned.
+- **`now + 24 h` rather than the next local day.** Simpler, but a card
+  answered at 08:00 would fall in tomorrow's session only by the drill's
+  "due before the day ends" rule, and the instant would not match how the
+  drill counts its days.
 - **Asking one card in N.** Fewer taps, but sparse data per student and a
   rule the student cannot predict; the product owner chose every card.
 - **A preselected middle level.** Skews the data and makes "skipped"

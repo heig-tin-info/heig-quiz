@@ -21,7 +21,9 @@ contract (docs/spec/04 §4.1) and the drill tables (docs/spec/05 §5.4).
 
 Amended by [ADR-056](ADR-056-questions-parametrees.md) §5: parameterized drill reviews store their drawn
 values. Extended by [ADR-085](ADR-085-confiance-dans-l-entrainement.md): a review
-stores the confidence the student stated, which §4 and §5 never read. Read §15 below for the final location of the teacher's drill switch;
+stores the confidence the student stated, which §4 and §5 never read; since
+ADR-085 §4's amendment of 2026-10-08, the due date §5 computes is capped to
+the next day for a confident error, FSRS's state untouched. Read §15 below for the final location of the teacher's drill switch;
 §14 describes the earlier screen arrangement.
 
 ## Context
@@ -222,8 +224,11 @@ from the browser:
 - **The declared device class.** A student may claim `coarse` on a
   computer, to be compared with the slower phone times; like the reports,
   this can only make a time look shorter against its reference.
+- **The stated confidence** (ADR-085, amended 2026-10-08). It reaches no
+  rating and no FSRS state; it can only bring a confident error's due date
+  earlier, to the next day at the latest.
 
-Both can turn a Good into an Easy. Before a question has ten correct times
+The first two can turn a Good into an Easy. Before a question has ten correct times
 on a device class, the reference is the student's own previous time, which
 the same student produced. The damage is bounded by the serving rule: a
 card is served and answered only when **today's session would hand it
