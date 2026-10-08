@@ -101,7 +101,7 @@ export const attempts = pgTable(
      */
     instances: jsonb("instances").$type<Record<string, StoredInstance>>().notNull().default({}),
     startedAt: timestamp("started_at", { withTimezone: true }),
-    /** Null in `manual` timing: only the teacher closes (F-EVAL-04). */
+    /** Null in `manual` timing without a safety deadline: only the teacher closes (F-EVAL-04, ADR-086). */
     deadlineAt: timestamp("deadline_at", { withTimezone: true }),
     /** The accommodation actually granted, in seconds (F-ORG-07, decision D8). */
     bonusS: integer("bonus_s").notNull().default(0),

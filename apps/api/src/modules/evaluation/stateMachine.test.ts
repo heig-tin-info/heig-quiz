@@ -97,6 +97,13 @@ describe("readiness (assertReady)", () => {
     expect(() => guardTransition(deadline, "scheduled", ctx())).not.toThrow();
   });
 
+  it("opens a live exam only with its safety deadline: an exam must end by itself (ADR-086 §2)", () => {
+    const live = row({ durationS: null, settings: { timing: "manual" } });
+    refusal(() => guardTransition(live, "lobby", ctx()), { reason: "timing_incomplete", missing: ["closesAt"] });
+    expect(() => guardTransition({ ...live, closesAt: at(HOUR) }, "lobby", ctx())).not.toThrow();
+    expect(() => guardTransition({ ...live, mode: "exercise" }, "lobby", ctx())).not.toThrow();
+  });
+
   it("names the missing opening time of a common-end exercise (#76)", () => {
     const exercise = row({
       mode: "exercise",
@@ -133,6 +140,14 @@ describe("a time already past (#178)", () => {
     const paused = { ...passed, state: "paused" as const };
     expect(pastTimingOf(paused, "running", NOW)).toBeNull();
     expect(() => guardTransition(paused, "running", ctx())).not.toThrow();
+  });
+
+  it("refuses a past end whatever the timing: the ticker closes on it alike (ADR-086)", () => {
+    for (const timing of ["manual", "duration"] as const) {
+      refusal(() => guardTransition(row({ settings: { timing }, closesAt: NOW }), "lobby", ctx()), {
+        reason: "closes_at_past",
+      });
+    }
   });
 
   it("refuses to schedule at an opening time already past", () => {

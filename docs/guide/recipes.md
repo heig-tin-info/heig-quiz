@@ -25,7 +25,7 @@ The shift between the two votes is the point: a share of right answers that rise
 
 The students read before the lesson and answer two or three comprehension questions; you read their answers the evening before and build the lesson on what they got wrong.
 
-- Create an [exercise](evaluations.md) in the classroom with the **Homework exercise** preset, and set its **Closes at** to the evening before the lesson, so you have the answers in time.
+- Create an [exercise](evaluations.md) in the classroom, choose **Scheduled** without a time limit, and set its **Closes at** to the evening before the lesson, so you have the answers in time.
 - An evaluation has no introduction text yet: put the reading instructions in the statement of the first question, with a link to the reading or a few paragraphs.
 - Ask two or three short questions, multiple choice or short answer, that a student who did the reading can answer and one who skimmed cannot.
 - The grade of such an exercise means little; its answers are what you need. On the [results page](grading.md#questions), the **Questions** tab shows the success rate of each question and what the class answered: the share of each choice, the values typed. Start the lesson with the question that went worst, and **Present** puts the same blocks on the beamer once the exercise is closed.

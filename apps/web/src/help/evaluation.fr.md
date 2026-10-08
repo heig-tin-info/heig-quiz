@@ -34,16 +34,24 @@ cette évaluation — la question, elle, reste dans sa banque.
 
 ## Temps et mode
 
-Deux préréglages portent cette étape. **Évaluation en classe** : 45 minutes
-par étudiant, une salle d'attente que vous ouvrez vous-même, résultats
-publiés ensuite. **Exercice à la maison** : ouvert jusqu'à une date limite
-commune, retour dès qu'une question est validée, pas de salle d'attente.
+Une question porte cette étape : qui mène le temps ? **Planifiée** : la
+plateforme l'ouvre et la ferme d'elle-même entre **Ouverture** et
+**Fermeture** ; les étudiants travaillent sans vous, sans salle d'attente.
+**En direct** : vous ouvrez la salle d'attente et donnez le départ ; elle se
+termine quand vous la clôturez, ou à **Ferme au plus tard**, une échéance de
+sécurité facultative (obligatoire pour un examen sans limite de temps). La date **Prévue le**
+d'une évaluation en direct la place seulement dans le calendrier : rien ne
+s'ouvre de soi-même.
 
-Tout ce qu'un préréglage a décidé reste visible et modifiable en dessous —
-le temps (par étudiant, fin commune, ou vous clôturez), la salle d'attente,
-le retour à l'étudiant. Le reste vit sous **Options avancées** : navigation,
-présentation, mélange, barre de progression. Le temps supplémentaire de la
-liste s'ajoute à la durée.
+Puis un interrupteur, **Limite de temps par étudiant** : les **Minutes** se
+comptent depuis le début de chaque étudiant, coupées à la fin (celle de la fenêtre, ou
+l'échéance de sécurité) même s'il reste du temps. Le temps supplémentaire de la
+liste s'ajoute, au-delà de cette fin aussi.
+
+Le reste vit sous **Options avancées** : navigation, présentation, mélange,
+barre de progression, retour à l'étudiant, et la salle d'attente d'une
+évaluation en direct (vous démarrez, départ quand tout le monde est là, ou
+aucune).
 
 Pendant que l'évaluation est en cours ou en pause, cette étape est
 verrouillée jusqu'à la clôture : seuls le titre et le retour à l'étudiant
@@ -55,9 +63,10 @@ publication des résultats.
 
 ## Démarrage
 
-Un récapitulatif, puis une seule action : ouvrir la salle d'attente, ou
-planifier. Une fois la classe entrée, la pause, la prolongation et la
-clôture se font depuis le tableau de bord.
+Un récapitulatif, puis une seule action : ouvrir la salle d'attente (en
+direct), ou planifier (planifiée, tant que son début est à venir ; **Ouvrir
+maintenant** l'ouvre tout de suite). Une fois la classe entrée, la pause, la
+prolongation et la clôture se font depuis le tableau de bord.
 
 ## La renommer
 

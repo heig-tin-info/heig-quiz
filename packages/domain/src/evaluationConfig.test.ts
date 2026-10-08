@@ -87,8 +87,9 @@ describe("missingTimingFields (F-EVAL-04, decision D8)", () => {
     ).toEqual(["opensAt"]);
   });
 
-  it("refuses `I close it` for an exam only: an exam must announce its end", () => {
-    expect(missingTimingFields({ ...base, timing: "manual" })).toEqual(["timing"]);
+  it("asks a live exam without a limit for its safety deadline: an exam must announce its end (ADR-086 §2)", () => {
+    expect(missingTimingFields({ ...base, timing: "manual" })).toEqual(["closesAt"]);
+    expect(missingTimingFields({ ...base, timing: "manual", closesAt: new Date(0) })).toEqual([]);
     expect(missingTimingFields({ ...base, mode: "exercise", timing: "manual" })).toEqual([]);
   });
 });
@@ -96,19 +97,19 @@ describe("missingTimingFields (F-EVAL-04, decision D8)", () => {
 describe("pastTiming (#178)", () => {
   const now = new Date("2026-10-01T10:00:00.000Z");
   const at = (ms: number) => new Date(now.getTime() + ms);
-  const deadline = { timing: "deadline" as const, opensAt: at(-60_000), closesAt: now };
+  const deadline = { opensAt: at(-60_000), closesAt: now };
 
-  it("refuses to schedule, open or start once the common end is reached, the instant included", () => {
+  it("refuses to schedule, open or start once the end is reached, the instant included", () => {
     for (const to of ["scheduled", "lobby", "running"] as const) {
       expect(pastTiming(deadline, "draft", to, now)).toBe("closes_at_past");
     }
     expect(pastTiming({ ...deadline, closesAt: at(1).toISOString() }, "lobby", "running", now)).toBeNull();
-    // A duration has no common end to pass.
-    expect(pastTiming({ ...deadline, timing: "duration" }, "lobby", "running", now)).toBeNull();
+    // No end at all: nothing to pass.
+    expect(pastTiming({ ...deadline, closesAt: null }, "lobby", "running", now)).toBeNull();
   });
 
   it("refuses a past opening only for a schedule", () => {
-    const opening = { timing: "duration" as const, opensAt: now, closesAt: null };
+    const opening = { opensAt: now, closesAt: null };
     expect(pastTiming(opening, "draft", "scheduled", now)).toBe("opens_at_past");
     expect(pastTiming(opening, "draft", "lobby", now)).toBeNull();
     expect(pastTiming({ ...opening, opensAt: at(1) }, "draft", "scheduled", now)).toBeNull();

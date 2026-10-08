@@ -83,8 +83,7 @@ export function guardTransition(
  * and what the ticker's own openings leave where they are.
  */
 export function pastTimingOf(row: EvaluationRecord, to: EvaluationState, now: Date): PastTiming | null {
-  const timing = { timing: settingsOf(row).timing, opensAt: row.opensAt, closesAt: row.closesAt };
-  return pastTiming(timing, row.state, to, now);
+  return pastTiming(row, row.state, to, now);
 }
 
 /**

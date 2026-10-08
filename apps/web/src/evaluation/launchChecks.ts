@@ -37,7 +37,7 @@ import type { Dict, TFunction } from "../i18n";
 import type { CheckLevel } from "../ui";
 import { typeLabel } from "../questionTypes";
 import { imposedText } from "../student/ConditionsList";
-import { timingFragment } from "./presetSummary";
+import { timingFragment } from "./clockSummary";
 import { missingTiming, missingTimingKey } from "./timing";
 
 /** The shared check levels (`ui`), less `unknown`, plus the rules of the session. */
@@ -193,16 +193,13 @@ function timingCheck(
       level: "blocker",
       title: t("launch.timing.incomplete"),
       status: t("eval.launch.needTiming"),
-      detail: missing.map((field) => t(missingTimingKey(field))).join(" "),
+      detail: missing.map((field) => t(missingTimingKey(field, evaluation.settings.timing))).join(" "),
       fix,
     };
   }
-  if (
-    evaluation.settings.timing === "deadline" &&
-    evaluation.closesAt !== null &&
-    Date.parse(evaluation.closesAt) <= now
-  ) {
-    // The server refuses to open it (#178). Scheduled, its opening has passed
+  if (evaluation.closesAt !== null && Date.parse(evaluation.closesAt) <= now) {
+    // The server refuses to open it (#178), whatever the timing: the ticker
+    // closes on `closesAt` (`pastTiming`, ADR-086). Scheduled, its opening has passed
     // too and the server refuses a patch that leaves it there: the way out is
     // the action bar's "Back to draft", not the timing step.
     const date = formatDate(evaluation.closesAt);

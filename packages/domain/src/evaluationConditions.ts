@@ -127,9 +127,17 @@ const DERIVE: { [K in ImposedConditionKey]: (input: ConditionsInput) => Line<K> 
     settings.timing === "duration" && durationS !== null && durationS > 0
       ? { key: "duration", kind: "info", durationS, bonusPercent: timeBonusPercent }
       : null,
+  // Whatever the timing (ADR-086): the common end, the end of the window
+  // that cuts a duration, or a live evaluation's safety deadline. The
+  // accommodation pushes the first two, never a safety deadline.
   deadline: ({ settings, closesAt, timeBonusPercent }) =>
-    settings.timing === "deadline" && closesAt !== null
-      ? { key: "deadline", kind: "info", closesAt, bonusPercent: timeBonusPercent }
+    closesAt !== null
+      ? {
+          key: "deadline",
+          kind: "info",
+          closesAt,
+          bonusPercent: settings.timing === "manual" ? 0 : timeBonusPercent,
+        }
       : null,
   attempts: ({ mode, settings: { retakes } }) => ({
     key: "attempts",

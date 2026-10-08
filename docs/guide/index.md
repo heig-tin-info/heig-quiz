@@ -33,7 +33,7 @@ Administrator
 | Pool | A collection of questions, with categories and tags. A pool belongs to you, not to a course; a course draws on the pools linked to it. |
 | Question and published version | A question is the stable entry in a pool. Its content lives in numbered versions; only a published version can be used in an evaluation, and a published version never changes. |
 | Evaluation | An ordered set of published question versions, run in a classroom with a timing, a feedback policy and a grade scale. |
-| Mode | **Exam**: timed per student, opened from a waiting room. **Exercise**: open until a common deadline, no waiting room. **Poll**: one question on the wall, answered by whoever is in the room. |
+| Mode | **Exam**: starts **Live**, timed per student, opened from a waiting room. **Exercise**: starts **Live** without a waiting room, open until you close it; choose **Scheduled** to give it a window that opens and closes by itself. **Poll**: one question on the wall, answered by whoever is in the room. |
 | Attempt | One student's participation in one evaluation, with its start, its deadline and its state. |
 | Grading | The points given to an answer. Automatic gradings arrive already validated for deterministic types; you validate or adjust the rest. |
 | Release | The moment the grades, and whatever the feedback policy allows, become visible to the students. |

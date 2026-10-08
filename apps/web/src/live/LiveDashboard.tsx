@@ -387,8 +387,8 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
         state={evaluationState}
         deadlineAt={deadline}
         endPassed={
+          // Whatever the timing: before the start "+N min" moves the end (ADR-086).
           lobby &&
-          detail.data?.evaluation.settings.timing === "deadline" &&
           view.evaluation.closesAt !== null &&
           Date.parse(view.evaluation.closesAt) <= serverNow()
         }

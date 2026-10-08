@@ -151,10 +151,13 @@ function autoCloseAt(closesAt: Date, latestAttemptDeadline: Date | null): Date {
 }
 
 /**
- * Step 4: `running` past `closes_at` → `closed` (+ enqueue grading).
+ * Step 4: `running` past `closes_at` → `closed` (+ enqueue grading),
+ * whatever the timing: a common end, the end of a `duration` window, or a
+ * live evaluation's safety deadline (`manual`, ADR-086 §2) alike.
  *
  * A `paused` evaluation is left alone: time stands still while it is
- * paused, and the resume moves `closes_at` (in `deadline` timing) and every
+ * paused, and the resume moves `closes_at` (in `deadline` timing, and
+ * `manual` with a safety deadline) and every
  * open deadline forward by the pause. Only the teacher closes a paused
  * evaluation (#77).
  */

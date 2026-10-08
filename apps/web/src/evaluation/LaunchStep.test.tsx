@@ -7,11 +7,11 @@ import type { EvaluationDetail } from "@quiz/contracts";
 import { EVALUATION_ID, makeEvaluationDetail, makeItemRow } from "../test/live-fixtures";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { LaunchStep } from "./LaunchStep";
-import { toLocalInput } from "./timing";
+
 
 /*
  * The pre-flight checklist of #152: which rows block, which warn, what the
- * one action posts, and what "Schedule…" sends before it changes the state.
+ * one action posts, and when Schedule is that action (ADR-086).
  */
 
 const BASE = `/app/api/evaluations/${EVALUATION_ID}`;
@@ -149,7 +149,7 @@ describe("LaunchStep checklist (#152)", () => {
     // The server refuses to open it: a blocker, not a warning.
     expect(screen.getByRole("heading", { name: /not ready yet/i })).toBeInTheDocument();
     expect(screen.getByText(/nobody in the classroom yet/i)).toBeInTheDocument();
-    expect(screen.getByText(/the common end has passed/i)).toBeInTheDocument();
+    expect(screen.getByText(/its end has passed/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeDisabled();
     unmount();
 
@@ -258,67 +258,44 @@ describe("the waiting-room preview (#152)", () => {
   });
 });
 
-describe("Schedule… (#152)", () => {
-  it("writes the opening time, then schedules", async () => {
-    const user = userEvent.setup();
-    const { calls } = mockFetch({
-      [`PATCH ${BASE}`]: ok(makeEvaluationDetail()),
-      [`POST ${BASE}/state`]: ok({}),
+describe("Schedule (#152, ADR-086)", () => {
+  const scheduled = (opensAt: string) =>
+    withEvaluation({
+      mode: "exercise",
+      settings: { ...makeEvaluationDetail().evaluation.settings, timing: "deadline", lobby: "skip" },
+      opensAt,
+      closesAt: new Date(Date.parse(opensAt) + 48 * HOUR).toISOString(),
     });
-    render(makeEvaluationDetail());
-    await user.click(screen.getByRole("button", { name: /schedule/i }));
-    const dialog = await screen.findByRole("dialog", { name: /schedule the opening/i });
-    const when = new Date(Date.now() + 48 * HOUR);
-    when.setSeconds(0, 0);
-    const input = within(dialog).getByLabelText(/opens at/i);
-    await user.clear(input);
-    await user.type(input, toLocalInput(when.toISOString()));
-    await user.click(within(dialog).getByRole("button", { name: /^schedule$/i }));
 
-    await waitFor(() => expect(calls.some((c) => c.url.endsWith("/state"))).toBe(true));
-    const writes = calls.filter((c) => c.method !== "GET");
-    expect(writes[0]).toMatchObject({ method: "PATCH", body: { opensAt: when.toISOString() } });
-    expect(writes[1]).toMatchObject({ method: "POST", body: { to: "scheduled" } });
-  });
-
-  it("shows the opening time of a common end read-only, and leads to the timing to change it", async () => {
+  it("is the one action of a Scheduled draft whose start is to come, opening at once the other", async () => {
     const user = userEvent.setup();
-    mockFetch({});
-    render(
-      withEvaluation({
-        settings: { ...makeEvaluationDetail().evaluation.settings, timing: "deadline" },
-        opensAt: new Date(Date.now() - HOUR).toISOString(),
-        closesAt: new Date(Date.now() + 2 * HOUR).toISOString(),
-      }),
+    const { calls } = mockFetch({ [`POST ${BASE}/state`]: ok({}) });
+    render(scheduled(new Date(Date.now() + 24 * HOUR).toISOString()));
+    expect(screen.getByRole("status")).toHaveTextContent(/once scheduled, it opens by itself on/i);
+    expect(screen.getByRole("button", { name: /^open now$/i })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: /^schedule$/i }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.url.endsWith("/state"))).toMatchObject({ body: { to: "scheduled" } }),
     );
-    await user.click(screen.getByRole("button", { name: /schedule/i }));
-    const dialog = await screen.findByRole("dialog", { name: /schedule the opening/i });
-    expect(within(dialog).queryByRole("textbox")).toBeNull();
-    // Already past: scheduling it would open it at the next tick.
-    expect(within(dialog).getByText(/this time has passed/i)).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: /^schedule$/i })).toBeDisabled();
-    await user.click(within(dialog).getByRole("button", { name: /change it in time and mode/i }));
-    expect(onStep).toHaveBeenCalledWith("timing");
+    // The date is the timing step's: nothing is written before the move.
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false);
   });
 
-  it("translates the server's refusal of a schedule without an opening time", async () => {
-    const user = userEvent.setup();
-    mockFetch({
-      [`POST ${BASE}/state`]: fail(409, {
-        error: "illegal_transition",
-        message: "a scheduled evaluation needs an opening time",
-        reason: "opens_at_missing",
-      }),
-    });
-    const opensAt = new Date(Date.now() + 24 * HOUR).toISOString();
-    render(withEvaluation({ opensAt }));
-    await user.click(screen.getByRole("button", { name: /schedule/i }));
-    const dialog = await screen.findByRole("dialog", { name: /schedule the opening/i });
-    await user.click(within(dialog).getByRole("button", { name: /^schedule$/i }));
-    expect(await within(dialog).findByText(/choose when it opens/i)).toBeInTheDocument();
+  it("is not offered once the start has passed: the action is to open it", () => {
+    mockFetch({});
+    render(scheduled(new Date(Date.now() - HOUR).toISOString()));
+    expect(screen.queryByRole("button", { name: /^schedule$/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /^open$/i })).toBeEnabled();
   });
 
-  it("translates the server's refusal of a common end its clock says has passed (#178)", async () => {
+  it("is never offered Live, whose date is for the calendar only", () => {
+    mockFetch({});
+    render(withEvaluation({ opensAt: new Date(Date.now() + 24 * HOUR).toISOString() }));
+    expect(screen.queryByRole("button", { name: /schedule/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeEnabled();
+  });
+
+  it("translates the server's refusal of an end its clock says has passed (#178)", async () => {
     const user = userEvent.setup();
     mockFetch({
       [`POST ${BASE}/state`]: fail(409, {
@@ -327,11 +304,9 @@ describe("Schedule… (#152)", () => {
         reason: "closes_at_past",
       }),
     });
-    const opensAt = new Date(Date.now() + 24 * HOUR).toISOString();
-    render(withEvaluation({ opensAt }));
-    await user.click(screen.getByRole("button", { name: /schedule/i }));
-    const dialog = await screen.findByRole("dialog", { name: /schedule the opening/i });
-    await user.click(within(dialog).getByRole("button", { name: /^schedule$/i }));
-    expect(await within(dialog).findByText(/the common end has passed/i)).toBeInTheDocument();
+    render(scheduled(new Date(Date.now() + 24 * HOUR).toISOString()));
+    await user.click(screen.getByRole("button", { name: /^schedule$/i }));
+    expect(await screen.findByText(/its end has passed: move it later/i)).toBeInTheDocument();
   });
 });
+

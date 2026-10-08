@@ -86,7 +86,19 @@ describe("imposedConditions (ADR-079)", () => {
       closesAt,
       bonusPercent: 0,
     });
-    expect(keys(base({ closesAt }, { timing: "manual" }))).not.toContain("deadline");
+    expect(keys(base({}, { timing: "manual" }))).not.toContain("deadline");
+  });
+
+  it("states the end of a window and a safety deadline too, the bonus pushing all but the latter (ADR-086)", () => {
+    const closesAt = "2026-10-08T10:00:00.000Z";
+    const line = (timing: "manual" | "duration" | "deadline") =>
+      imposedConditions(base({ closesAt, durationS: 600, timeBonusPercent: 25 }, { timing })).find(
+        (c) => c.key === "deadline",
+      );
+    expect(line("manual")).toEqual({ key: "deadline", kind: "info", closesAt, bonusPercent: 0 });
+    for (const timing of ["duration", "deadline"] as const) {
+      expect(line(timing)).toEqual({ key: "deadline", kind: "info", closesAt, bonusPercent: 25 });
+    }
   });
 
   it("states the retakes of an exercise, and one attempt on an exam whatever its row says", () => {

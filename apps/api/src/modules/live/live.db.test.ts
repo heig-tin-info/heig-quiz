@@ -777,6 +777,98 @@ describe("teacher controls (F-LIVE-11, F-LIVE-12)", () => {
     );
   });
 
+  /*
+   * ADR-086 §2: a Live evaluation's safety deadline is a common end with no
+   * accommodation. The attempts hang off it, "+N min" to everybody moves it,
+   * the gate refuses a write past it + 3 s and the ticker closes on it.
+   */
+  it("closes a live evaluation at its safety deadline, which an extension to all moves (ADR-086 §2)", async () => {
+    const closesAt = new Date(clock.now().getTime() + 3_600_000);
+    const { evaluation, attempt, items } = await running({
+      settings: { timing: "manual" },
+      durationS: null,
+      closesAt,
+    });
+    expect(attempt.deadlineAt!.getTime()).toBe(closesAt.getTime());
+
+    await service.extendTime(db, evaluation, { minutes: 5 }, clock.now());
+    const extended = await reload(db, evaluation.id);
+    const end = closesAt.getTime() + 5 * 60_000;
+    expect(extended.closesAt!.getTime()).toBe(end);
+    const moved = (await service.attemptById(db, attempt.id))!;
+    expect(moved.deadlineAt!.getTime()).toBe(end);
+    // The minutes are in `closes_at` and nowhere else (#252).
+    expect(moved.extraS).toBe(0);
+
+    const write = (revision: number) =>
+      service.saveAnswer(db, {
+        evaluation: extended,
+        attempt: moved,
+        itemId: items[0]!.id,
+        payload: "x",
+        revision,
+        now: clock.now(),
+      });
+    clock.set(new Date(end + GRACE_MS));
+    await expect(write(1)).resolves.toMatchObject({ accepted: true });
+    clock.advance(1);
+    await expect(write(2)).rejects.toMatchObject({ code: "attempt_closed", reason: "deadline" });
+
+    await service.expireDueAttempts(db, clock.now());
+    expect(await service.autoCloseDue(db, clock.now())).toContainEqual(
+      expect.objectContaining({ id: evaluation.id }),
+    );
+    expect((await service.attemptById(db, attempt.id))!.state).toBe("expired");
+  });
+
+  it("moves a live evaluation's safety deadline by the pause, never the attempt's extra time (ADR-086 §2)", async () => {
+    const closesAt = new Date(clock.now().getTime() + 3_600_000);
+    const { evaluation, attempt } = await running({ settings: { timing: "manual" }, durationS: null, closesAt });
+    const paused = await service.pauseEvaluation(db, evaluation, clock.now());
+    clock.advance(10 * 60_000);
+    const resumed = await service.resumeEvaluation(db, paused, clock.now());
+    const end = closesAt.getTime() + 10 * 60_000;
+    expect(resumed.closesAt!.getTime()).toBe(end);
+    const after = (await service.attemptById(db, attempt.id))!;
+    expect(after.deadlineAt!.getTime()).toBe(end);
+    expect(after.extraS).toBe(0);
+    // Closed, so the later tests' ticker passes never meet it.
+    await service.closeEvaluation(db, resumed, clock.now());
+  });
+
+  it("moves a passed end of a limited live evaluation by +N before the start (#178, ADR-086)", async () => {
+    // A stored `duration` + waiting room + `closes_at`: Live with a limit and a safety deadline.
+    const seed = await seedLive(db, {
+      settings: { timing: "duration", lobby: "manual" },
+      closesAt: new Date(clock.now().getTime() - 60_000),
+    });
+    const lobby = await applyState(db, await reload(db, seed.evaluationId), "lobby", clock.now());
+    await service.extendTime(db, lobby, { minutes: 10 }, clock.now());
+    const moved = await reload(db, seed.evaluationId);
+    // From now, since the end had passed.
+    expect(moved.closesAt!.getTime()).toBe(clock.now().getTime() + 10 * 60_000);
+  });
+
+  it("cuts a time limit at the window's end even with time left (ADR-086 §3)", async () => {
+    // 30 minutes each, but the window closes in 10.
+    const closesAt = new Date(clock.now().getTime() + 10 * 60_000);
+    const { evaluation, attempt } = await running({
+      settings: { timing: "duration", lobby: "skip" },
+      durationS: 1800,
+      opensAt: clock.now(),
+      closesAt,
+    });
+    expect(attempt.deadlineAt!.getTime()).toBe(closesAt.getTime());
+
+    clock.set(new Date(closesAt.getTime() + GRACE_MS + 1));
+    expect(await service.expireDueAttempts(db, clock.now())).toContainEqual(
+      expect.objectContaining({ id: attempt.id }),
+    );
+    expect(await service.autoCloseDue(db, clock.now())).toContainEqual(
+      expect.objectContaining({ id: evaluation.id }),
+    );
+  });
+
   it("extends every attempt, or exactly one (+1/+5/+10)", async () => {
     const seed = await seedLive(db, { students: 2 });
     const row = await applyState(db, await reload(db, seed.evaluationId), "running", clock.now());

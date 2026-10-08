@@ -633,6 +633,8 @@ registerUsedProbe((questionId) =>
 );
 /** The draft exercise with retakes (F-EVAL-15), addressable by id. */
 export const RETAKE_DRAFT_ID = "eeeeeeee-0000-4000-8000-000000000015";
+/** A Scheduled draft exercise whose window is to come (ADR-086), addressable by id. */
+export const SCHEDULED_DRAFT_ID = "eeeeeeee-0000-4000-8000-000000000016";
 /** The draft made from a template that has moved since (F-EVAL-26), addressable by id. */
 export const TEMPLATE_INSTANCE_ID = "eeeeeeee-0000-4000-8000-000000000026";
 /** The classroom every seeded evaluation belongs to (`r1`, emptied or not). */
@@ -709,6 +711,16 @@ function seedEvaluations() {
         showHiddenCaseNames: true,
         showTeacherComment: true,
       },
+    }),
+    // ADR-086: a Scheduled exercise, 20 minutes each inside a week's window
+    // starting tomorrow — the launch step's Schedule (the timing screenshots).
+    makeEvaluation(room.id, "Série 6 — à rendre", "draft", 4, {
+      id: SCHEDULED_DRAFT_ID,
+      mode: "exercise",
+      durationS: 20 * 60,
+      opensAt: iso(D),
+      closesAt: iso(8 * D),
+      settings: { ...defaultEvaluationSettings(), timing: "duration", lobby: "skip" },
     }),
     makeEvaluation(room.id, "Exercice — allocation dynamique", "paused", 5, {
       mode: "exercise",
@@ -1731,7 +1743,7 @@ on("POST", "/app/api/evaluations/:id/state", (m, body) => {
     });
   }
   const past = pastTiming(
-    { timing: (e.settings as { timing: EvaluationTiming }).timing, opensAt: e.opensAt, closesAt: e.closesAt },
+    e,
     e.state,
     body.to as MockEvaluation["state"],
     new Date(),

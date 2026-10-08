@@ -7,7 +7,7 @@
  * "Go to launch" can put the focus on it and the launch step can name it.
  */
 import { TransitionRefusal, type Evaluation } from "@quiz/contracts";
-import { missingTimingFields, type TimingField } from "@quiz/domain";
+import { missingTimingFields, type EvaluationTiming, type TimingField } from "@quiz/domain";
 
 import { ApiError } from "../api";
 import type { Dict, TFunction } from "../i18n";
@@ -26,15 +26,17 @@ export function missingTiming(evaluation: Evaluation): TimingField[] {
 
 /** The DOM id of the control that fixes each field, for the focus and `aria-describedby`. */
 export const TIMING_FIELD_ID: Record<TimingField, string> = {
-  timing: "eval-timing",
   durationS: "eval-duration",
   opensAt: "eval-opens-at",
   closesAt: "eval-closes-at",
 };
 
-/** What to do about each missing field, in the teacher's words. */
-export function missingTimingKey(field: TimingField): keyof Dict {
-  return `eval.missing.${field}`;
+/**
+ * What to do about each missing field, in the teacher's words: the end a
+ * live exam needs is its safety deadline (ADR-086 §2), not a window's end.
+ */
+export function missingTimingKey(field: TimingField, timing: EvaluationTiming): keyof Dict {
+  return field === "closesAt" && timing === "manual" ? "eval.missing.closesAt.live" : `eval.missing.${field}`;
 }
 
 /** A `datetime-local` value from an ISO instant, in the reader's own zone. */
@@ -58,9 +60,10 @@ export function fromLocalInput(value: string): string | null {
  * the machine half of the refusal instead: a missing question, the timing
  * fields still to fill, a schedule without its opening time (#152), a time
  * already past by the server's clock (#178), or a move the evaluation no longer allows because it changed elsewhere.
- * Anything else is the ordinary "server did not answer".
+ * Anything else is the ordinary "server did not answer". `timing` words the
+ * missing fields in the evaluation's mode (`missingTimingKey`).
  */
-export function transitionErrorMessage(error: unknown, t: TFunction): string {
+export function transitionErrorMessage(error: unknown, t: TFunction, timing: EvaluationTiming): string {
   if (!(error instanceof ApiError)) return t("error.server");
   const refusal = TransitionRefusal.safeParse(error.body);
   if (!refusal.success) return t("error.server");
@@ -71,7 +74,7 @@ export function transitionErrorMessage(error: unknown, t: TFunction): string {
   if (reason === "opens_at_past") return t("launch.schedule.past");
   if (reason === "closes_at_past") return t("eval.launch.closesAtPast");
   if (reason === "timing_incomplete" && missing && missing.length > 0) {
-    return missing.map((field) => t(missingTimingKey(field))).join(" ");
+    return missing.map((field) => t(missingTimingKey(field, timing))).join(" ");
   }
   return t("eval.launch.stale");
 }

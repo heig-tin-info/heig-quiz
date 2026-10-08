@@ -59,7 +59,7 @@ import { classroomKey, evaluationKey, evaluationsKey } from "../queryKeys";
  * lives in `?step=`, so that reload keeps it and a link can point at it.
  *
  * The one primary action belongs to the STEP, never to the page HEADER: "Add
- * questions" on the first, a preset on the second, "Open the waiting room" on
+ * questions" on the first, the clock mode on the second, "Open the waiting room" on
  * the third. The header therefore holds no primary at all — a breadcrumb, the
  * title (which renames itself in place), the state, the help and the overflow
  * menu. The foot of the frame carries the way FORWARD, which names the step it
@@ -193,13 +193,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
       return;
     }
     setTimingChecked(true);
-    const target = document.getElementById(TIMING_FIELD_ID[missing[0]!]);
-    // The timing row is a radio group: the focus goes to the choice in force.
-    const control =
-      target instanceof HTMLInputElement
-        ? target
-        : target?.querySelector<HTMLInputElement>("input:checked");
-    control?.focus();
+    document.getElementById(TIMING_FIELD_ID[missing[0]!])?.focus();
   };
 
   /**

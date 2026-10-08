@@ -28,6 +28,12 @@ per-repository jobs one job per project settling its repositories four at a
 time, each step re-reading the row; a deadline is per repository (D13
 amended). The decision is [ADR-064](ADR-064-echeance-des-projets-baux.md).
 
+**Addendum (2026-10-08, issue #555):** the evaluation deadlines the ticker
+sweeps gain two cases, with the same rule (server clock, `deadline + 3 s`):
+a Live evaluation's optional safety deadline (`manual` timing with a
+`closes_at`), and the end of a Scheduled window cutting a per-student limit.
+The decision is [ADR-086](ADR-086-planifiee-ou-en-direct.md).
+
 **Addendum (2026-09-30, D10, merge task M2-05):** the ticker now carries
 two kinds of periodic work. The clock-bound sweeps above stay `TickTask`s
 of the loop, neither configurable nor disableable. The minutes-scale

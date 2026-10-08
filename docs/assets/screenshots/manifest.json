@@ -486,7 +486,7 @@
       "name": "eval-timing",
       "caption": "Step 2: time and mode.",
       "persona": "teacher",
-      "path": "/evaluations/dbfb181f-1d28-4474-9bcd-1730cf6c37c2?step=timing",
+      "path": "/evaluations/18756045-182f-4e4a-9541-a45243d41f15?step=timing",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -501,15 +501,15 @@
         "light": "eval-timing-light.png",
         "dark": "eval-timing-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-08T10:06:56.227Z",
+      "commit": "a0f23218",
+      "base": "http://localhost:3155"
     },
     {
       "name": "eval-launch",
       "caption": "Step 3: launch.",
       "persona": "teacher",
-      "path": "/evaluations/dbfb181f-1d28-4474-9bcd-1730cf6c37c2?step=launch",
+      "path": "/evaluations/18756045-182f-4e4a-9541-a45243d41f15?step=launch",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -524,9 +524,9 @@
         "light": "eval-launch-light.png",
         "dark": "eval-launch-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-08T10:06:56.227Z",
+      "commit": "a0f23218",
+      "base": "http://localhost:3155"
     },
     {
       "name": "eval-rename",

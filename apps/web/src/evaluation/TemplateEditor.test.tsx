@@ -140,7 +140,7 @@ describe("TemplateEditor", () => {
     expect(screen.queryByRole("button", { name: "Use in a classroom" })).toBeNull();
   });
 
-  it("writes through the template's own routes: an item update, and a preset without dates", async () => {
+  it("writes through the template's own routes: an item update, and a clock mode without dates", async () => {
     const { calls } = mockFetch({
       ...world(),
       [`POST ${BASE}/items/update-versions`]: ok(detail({ staleItems: [] })),
@@ -158,10 +158,10 @@ describe("TemplateEditor", () => {
     );
 
     await userEvent.click(screen.getByRole("tab", { name: "Settings" }));
-    await userEvent.click(screen.getByRole("button", { name: /Homework exercise/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^Scheduled/ }));
     await waitFor(() => expect(calls.some((c) => c.method === "PATCH")).toBe(true));
     const body = calls.find((c) => c.method === "PATCH")!.body as Record<string, unknown>;
-    expect(body).toHaveProperty("settings.timing", "deadline");
+    expect(body).toHaveProperty("settings.lobby", "skip");
     for (const key of ["opensAt", "closesAt", "ipAllowlist"]) expect(body).not.toHaveProperty(key);
   });
 
