@@ -108,6 +108,7 @@ export const FLAG_NAMES = [
   "codespace",
   "sebproject",
   "nollm",
+  "unstated",
 ] as const;
 type FlagName = (typeof FLAG_NAMES)[number];
 export const flags = {} as Record<FlagName, boolean>;

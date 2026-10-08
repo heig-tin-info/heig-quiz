@@ -58,7 +58,7 @@ import {
   type Tone,
 } from "../ui";
 import { answerCard, reportShown, serveCard } from "./api";
-import { dueIn } from "./format";
+import { CONFIDENCE, dueIn } from "./format";
 
 /** How a correctness reads: the verdict's words (the grading's), its badge, its share of the summary bar. */
 const CORRECTNESS: Record<
@@ -72,15 +72,6 @@ const CORRECTNESS: Record<
 
 /** The FSRS rating, 1 Again to 4 Easy, in the student's words. */
 const RATING = ["drill.rating.1", "drill.rating.2", "drill.rating.3", "drill.rating.4"] as const;
-
-/** The confidence scale in the student's words, 0 No idea to 4 Certain (ADR-085). */
-const CONFIDENCE = [
-  "drill.confidence.0",
-  "drill.confidence.1",
-  "drill.confidence.2",
-  "drill.confidence.3",
-  "drill.confidence.4",
-] as const satisfies readonly (keyof Dict)[];
 
 /** What one card of the session came to: its review, or skipped when it could not be served. */
 export type DrillOutcome = DrillReviewResult | "skipped";

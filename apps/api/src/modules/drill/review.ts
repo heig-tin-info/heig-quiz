@@ -23,9 +23,16 @@ import { randomUUID } from "node:crypto";
 
 import { and, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 
-import type { DrillDeviceClass, DrillReviewResult, DrillServed, DrillSession } from "@quiz/contracts";
+import type {
+  DrillCalibrationLevel,
+  DrillDeviceClass,
+  DrillReviewResult,
+  DrillServed,
+  DrillSession,
+} from "@quiz/contracts";
 import {
   composeDrillSession,
+  drillCalibration,
   drillConfidenceDue,
   drillConfidenceOutcome,
   drillCorrectness,
@@ -603,4 +610,24 @@ export async function studentDrillClassrooms(db: Db, userId: string, classroomId
     )
     .orderBy(courses.code, classrooms.name);
   return rows.map((r) => ({ ...r, optedOutAt: r.optedOutAt === null ? null : iso(r.optedOutAt) }));
+}
+
+/**
+ * The student's calibration (ADR-085 §8): their own stated reviews, in every
+ * classroom, counted by level and correctness, then folded into the five
+ * levels by `drillCalibration`. One query, filtered by the card's owner: no
+ * other student's row can enter it.
+ */
+export async function studentCalibration(db: Db, userId: string): Promise<DrillCalibrationLevel[]> {
+  const rows = await db
+    .select({
+      confidence: drillReviews.confidence,
+      correctness: drillReviews.correctness,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(drillReviews)
+    .innerJoin(drillCards, eq(drillCards.id, drillReviews.cardId))
+    .where(and(eq(drillCards.userId, userId), isNotNull(drillReviews.confidence)))
+    .groupBy(drillReviews.confidence, drillReviews.correctness);
+  return drillCalibration(rows.map((r) => ({ ...r, confidence: r.confidence as DrillConfidence })));
 }

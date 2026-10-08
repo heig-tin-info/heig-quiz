@@ -220,3 +220,47 @@ export const DrillTagMastery = z.object({
   retrievability: z.number(),
 });
 export type DrillTagMastery = z.infer<typeof DrillTagMastery>;
+
+// --- Confidence (ADR-085 §8, part 2 of issue #453) ---------------------------
+
+/**
+ * `GET /drill/calibration`: the student's own calibration, one entry per
+ * level of confidence, lowest first, all five present. `answers` counts the
+ * student's reviews stated at that level, in every classroom; `right` those
+ * that were right (a partial answer is not). The rate is the client's to
+ * show through `drillCalibrationRate`, which says "not enough answers"
+ * below its threshold.
+ */
+export const DrillCalibrationLevel = z.object({
+  confidence: DrillConfidence,
+  answers: z.number().int(),
+  right: z.number().int(),
+});
+export type DrillCalibrationLevel = z.infer<typeof DrillCalibrationLevel>;
+
+/** Right or wrong × sure (Sure, Certain) or unsure (No idea to Fairly sure); partial answers left out. */
+export const DrillConfidenceSplit = z.object({
+  rightSure: z.number().int(),
+  rightUnsure: z.number().int(),
+  wrongSure: z.number().int(),
+  wrongUnsure: z.number().int(),
+});
+export type DrillConfidenceSplit = z.infer<typeof DrillConfidenceSplit>;
+
+/**
+ * `GET /classrooms/:id/drill/confidence`: per question of the classroom's
+ * cards, the 2×2 of the stated reviews of its student seats, an opt-out
+ * cutting as in the activity. AGGREGATED ONLY, never one student's
+ * statement; a question is absent unless `students` — the distinct students
+ * behind its cells, who stated a confidence with a right or wrong answer —
+ * reaches `DRILL_CONFIDENCE_MIN_STUDENTS`,
+ * a cut made on the server so a smaller group never travels.
+ */
+export const DrillQuestionConfidence = z.object({
+  questionId: z.uuid(),
+  /** The question's internal name: a staff read. */
+  name: z.string(),
+  students: z.number().int(),
+  split: DrillConfidenceSplit,
+});
+export type DrillQuestionConfidence = z.infer<typeof DrillQuestionConfidence>;

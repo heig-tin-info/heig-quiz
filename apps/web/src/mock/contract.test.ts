@@ -46,8 +46,10 @@ import {
   CourseCondition,
   CourseDetail,
   DashboardView,
+  DrillCalibrationLevel,
   DrillClassroom,
   DrillProgress,
+  DrillQuestionConfidence,
   DrillSession,
   DrillStudentActivity,
   DrillTagMastery,
@@ -595,6 +597,13 @@ const CHECKED: Case[] = [
     DrillProgress,
   ),
   each("/app/api/classrooms/:id/drill/mastery", `/app/api/classrooms/${classroomId}/drill/mastery`, DrillTagMastery),
+  // Confidence (ADR-085 §8): the student's calibration, the teacher's 2×2 per question.
+  each("/app/api/drill/calibration", "/app/api/drill/calibration", DrillCalibrationLevel),
+  each(
+    "/app/api/classrooms/:id/drill/confidence",
+    `/app/api/classrooms/${classroomId}/drill/confidence`,
+    DrillQuestionConfidence,
+  ),
   // F-EVAL-15: the score-only feedback between two attempts of an exercise.
   one(
     `/app/api/attempts/${STUDENT_RETAKE_ATTEMPT}/feedback`,

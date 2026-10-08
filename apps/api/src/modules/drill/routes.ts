@@ -9,7 +9,9 @@
  * Teacher: the drill switch of a classroom, "Allow drill" and "Remove these
  * questions from the drill" on an evaluation, each loaded through
  * `staffAccess` first; and the reads of the teacher's view — each
- * student's activity, the weekly progression, the mastery per tag.
+ * student's activity, the weekly progression, the mastery per tag, the
+ * confidence per question (ADR-085 §8, aggregated only). The student also
+ * reads their own calibration.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
@@ -22,6 +24,7 @@ import {
   DrillShownBody,
   EvaluationDrillBody,
   IdParam,
+  type DrillCalibrationLevel,
   type DrillCardsRemoved,
   type DrillClassroom,
   type DrillClassroomSettings,
@@ -71,6 +74,13 @@ export async function drillPlugin(app: FastifyInstance) {
     "/app/api/drill/classrooms",
     { preHandler: requireSession },
     async (req): Promise<DrillClassroom[]> => service.studentDrillClassrooms(app.db, req.user!.id),
+  );
+
+  /** ADR-085 §8: the student's own calibration, every classroom pooled; nobody else's rows. */
+  app.get(
+    "/app/api/drill/calibration",
+    { preHandler: requireSession },
+    async (req): Promise<DrillCalibrationLevel[]> => service.studentCalibration(app.db, req.user!.id),
   );
 
   /** ADR-041 §6: out of one classroom's drill, or back in. */
@@ -201,6 +211,15 @@ export async function drillPlugin(app: FastifyInstance) {
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: staffClassroom }, ({ now, scope }) =>
       service.classroomMastery(app.db, scope.room.id, now),
+    ),
+  );
+
+  /** ADR-085 §8: per question, the classroom's 2×2 of confidence, from enough students only. */
+  app.get(
+    "/app/api/classrooms/:id/drill/confidence",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: staffClassroom }, ({ scope }) =>
+      service.classroomConfidence(app.db, scope.room.id),
     ),
   );
 

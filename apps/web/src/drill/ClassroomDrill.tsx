@@ -1,6 +1,7 @@
 /**
  * The Drill tab of a classroom (ADR-041 §6, §8, #317 slice 4): each
- * student's activity, and the mastery per tag. A read view, so the page
+ * student's activity, the mastery per tag, and the confidence per question
+ * (ADR-085 §8, aggregated only). A read view, so the page
  * header carries no primary action on this tab.
  *
  * The switch is a row of the classroom's Settings (D24): with the drill off,
@@ -26,6 +27,7 @@ import {
   Stat,
 } from "../ui";
 import { useClassroomDrillActivity, useClassroomDrillMastery, useDrillProgress } from "./api";
+import { ConfidencePerQuestion } from "./Confidence";
 import { DrillActivityTable, studentName, TrendMark } from "./DrillActivityTable";
 import { WeeklyProgress } from "./WeeklyProgress";
 
@@ -96,6 +98,7 @@ export function ClassroomDrill({
           <p className="px-1 text-xs text-fg-faint">{t("drill.teacher.notice")}</p>
         </section>
         <MasteryPerTag classroomId={room.id} />
+        <ConfidencePerQuestion classroomId={room.id} />
       </>
     );
   }
