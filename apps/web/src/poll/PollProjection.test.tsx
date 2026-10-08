@@ -173,7 +173,7 @@ describe("PollProjection", () => {
     expect(toaster).not.toBeNull();
     // 1rem from the bottom, plus the student's bottom bar when it is up (#191)
     // and the calculator's button (ADR-069).
-    expect(toaster!.className).toContain("bottom-[calc(1rem+var(--bottom-nav-h)+var(--tool-dock-h))]");
+    expect(toaster!.className).toContain("bottom-[calc(1rem+var(--bottom-nav-h)+var(--fab-h)+var(--tool-dock-h))]");
     expect(toaster!.contains(join!)).toBe(false);
   });
 

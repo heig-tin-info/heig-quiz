@@ -57,8 +57,9 @@ export function Fab({ icon: Icon, label, onClick, coach }: PagePrimary) {
         type="button"
         aria-label={label}
         data-coach={coach}
+        data-collapsed={collapsed ? "" : undefined}
         onClick={onClick}
-        className="pointer-events-auto inline-flex h-14 min-w-14 items-center justify-center rounded-full bg-accent px-4 text-on-fill shadow-overlay transition-[background-color,transform] duration-120 hover:bg-accent-hover active:scale-[0.97]"
+        className="pointer-events-auto inline-flex h-14 min-w-14 items-center justify-center rounded-full bg-accent px-4 text-on-fill shadow-overlay transition-[background-color,transform] duration-120 hover:bg-accent-hover active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100"
       >
         <Icon className="size-6 shrink-0" />
         <span

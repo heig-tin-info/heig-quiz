@@ -426,7 +426,8 @@ over it, not as one more card in it.
   over the page and its sticky bars, under every dialog.
 - Bottom docks: a bar docked on the window's bottom edge and marked
   `data-bottom-dock` (the phone's bottom bar, the launch step's phone dock,
-  the floating action button, whose wrapper reaches the edge) takes its height out of the window the coach places in (`visibleBottom`).
+  the floating action button, whose wrapper reaches the edge) takes its
+  height out of the window the coach places in (`visibleBottom`).
   The bubble stays above it, the target is scrolled to the middle of what is
   left, the ring is clipped where the bar starts, and a target wholly behind
   the bar hides the bubble until it is scrolled back: a bubble never covers
@@ -1888,7 +1889,9 @@ product owner's decisions of 2026-10-08). `ui/fab.tsx`.
   stays in the row. Never on a form or a flow (save, submit, launch: the
   sticky bottom action bar), never a destructive action, never a primary
   that is not a creation — the polls launcher's "Launch" stays in its header.
-  The empty state's own button still replaces it while a list is empty.
+  On the courses home and the pools, while the list is empty, the screen
+  passes no `primary` at all: the empty state's button is the one action,
+  and there is no FAB. A pool's FAB is on its Questions tab only.
 - **Shape.** A 56 px `rounded-full` in the `accent` fill (it IS the screen's
   primary, the one red fill), `on-fill` ink, the overlay shadow: a floating
   layer. 16 px from the right edge, 16 px above the bottom bar
@@ -1900,6 +1903,8 @@ product owner's decisions of 2026-10-08). `ui/fab.tsx`.
   easing; no animation under `prefers-reduced-motion`) and the circle
   stays. Scrolled back to the top, the label returns. The `aria-label` is
   always the label.
+- **Focus order.** The FAB is a portal at the end of `body`: a keyboard or a
+  screen reader reaches it last, after the page and the bottom bar.
 - **Collisions.** `--fab-h` (3.5 rem and its 1 rem of air) is set only while
   a FAB is up (`style.css`, `:root:has([data-fab])`, under `lg`), as
   `--bottom-nav-h` is for the bar:

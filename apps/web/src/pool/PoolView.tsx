@@ -445,7 +445,8 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
           ) : undefined
         }
         primary={
-          readOnly
+          // The questions' list only: the tags and the review tabs create nothing.
+          readOnly || tab !== "questions"
             ? undefined
             : {
                 icon: Plus,

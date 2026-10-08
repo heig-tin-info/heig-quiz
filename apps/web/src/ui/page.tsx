@@ -5,7 +5,7 @@ import type { CSSProperties, ReactNode, RefObject } from "react";
 import { buttonClass } from "@quiz/ui";
 
 import { Fab, type PagePrimary } from "./fab";
-import { cx, HelpIcon, PageHelpButton, Tip, useMinWidth, type IconType } from "./layers";
+import { cx, HelpIcon, LG_PX, PageHelpButton, Tip, useMinWidth, type IconType } from "./layers";
 import { rovingIndex } from "./menu";
 
 // Surfaces and page structure.
@@ -114,9 +114,6 @@ export function NotePanel({
     </div>
   );
 }
-
-/** Tailwind's `lg`, the frame's breakpoint: under it the phone layout, bottom bar included. */
-const LG_PX = 1024;
 
 /**
  * Title row of a page: one h1, an optional line under it, the actions right.

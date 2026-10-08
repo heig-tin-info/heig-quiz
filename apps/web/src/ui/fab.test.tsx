@@ -40,19 +40,18 @@ describe("PageHeader's primary (#450)", () => {
   it("folds its label away once the page scrolls, and keeps its accessible name", () => {
     header();
     const fab = screen.getByRole("button", { name: "New course" });
-    const label = fab.querySelector("span")!;
-    expect(label.className).toContain("opacity-100");
+    expect(fab.hasAttribute("data-collapsed")).toBe(false);
     act(() => {
       window.scrollY = 200;
       window.dispatchEvent(new Event("scroll"));
     });
-    expect(label.className).toContain("max-w-0");
+    expect(fab.hasAttribute("data-collapsed")).toBe(true);
     expect(fab.getAttribute("aria-label")).toBe("New course");
     act(() => {
       window.scrollY = 0;
       window.dispatchEvent(new Event("scroll"));
     });
-    expect(label.className).toContain("opacity-100");
+    expect(fab.hasAttribute("data-collapsed")).toBe(false);
   });
 
   it("is the header's accent button from lg, with no FAB", () => {
