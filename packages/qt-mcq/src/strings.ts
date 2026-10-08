@@ -87,6 +87,8 @@ export const mcqPlayerStrings = {
   limitReached: "You have reached the maximum number of selections.",
   /** Negative marking (ADR-026): shown on every choice question it applies to. */
   negativeMarking: "Wrong answers cost points; not answering costs nothing.",
+  /** Beside a right choice when a teacher's preview shows the key (`answerKey`, #554). */
+  correctAnswer: "Correct answer",
 } as const;
 
 export type McqPlayerStringKey = keyof typeof mcqPlayerStrings;

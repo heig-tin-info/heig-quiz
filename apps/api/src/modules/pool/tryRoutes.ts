@@ -25,7 +25,7 @@ import {
 import { questions } from "../../db/schema.js";
 import { studentSolutionViewOf, studentViewOf, teacherPreviewView } from "../live/studentView.js";
 import { isParameterized, loadConfig, tryLoadConfig, typeOf } from "./config.js";
-import { exampleInstance, parameterIssues, previewInstances } from "./instance.js";
+import { exampleInstance, explanationOrNull, parameterIssues, previewInstances } from "./instance.js";
 import type { VersionRecord } from "./shared.js";
 import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";
@@ -33,12 +33,15 @@ import type { PoolRouteContext } from "./routeContext.js";
 export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { requireTeacher, teacher, onQuestion } = ctx;
 
-  /** The config of `"draft"` or of a published number, migrated and parsed. */
+  /**
+   * The config of `"draft"` or of a published number, migrated and parsed,
+   * and its explanation (instantiated like the config when parameterized).
+   */
   async function configOf(
     reply: FastifyReply,
     question: typeof questions.$inferSelect,
     source: "draft" | number,
-  ): Promise<{ config: unknown; parameterized: boolean } | null> {
+  ): Promise<{ config: unknown; explanation: string; parameterized: boolean } | null> {
     const row =
       source === "draft"
         ? await service.draftOf(app.db, question.id)
@@ -48,14 +51,16 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
       return null;
     }
     const parameterized = isParameterized(row);
-    const outcome = parameterized ? tryInstance(question, row) : tryLoadConfig(question.type, row);
+    const outcome = parameterized
+      ? tryInstance(question, row)
+      : { ...tryLoadConfig(question.type, row), explanation: row.explanation };
     if (!outcome.ok) {
       await reply
         .code(422)
         .send({ error: "config_invalid", message: "This version cannot be rendered", details: outcome.issues });
       return null;
     }
-    return { config: outcome.config, parameterized };
+    return { config: outcome.config, explanation: outcome.explanation, parameterized };
   }
 
   /**
@@ -68,8 +73,8 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
    */
   function tryInstance(question: typeof questions.$inferSelect, row: VersionRecord) {
     try {
-      const { version } = exampleInstance(question.type, row);
-      return { ok: true as const, config: loadConfig(question.type, version) };
+      const { version, explanation } = exampleInstance(question.type, row);
+      return { ok: true as const, config: loadConfig(question.type, version), explanation };
     } catch (error) {
       const issues = parameterIssues(question.type, row);
       return { ok: false as const, issues: issues.length > 0 ? issues : issuesOf(error) };
@@ -105,7 +110,9 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   /**
    * The key of the same view, for the preview's "Show answers": asked for on
    * the click, so the preview above never carries it. The key a student reads
-   * once it is shown (ADR-037), not the teacher's whole solution.
+   * once it is shown (ADR-037), not the teacher's whole solution — and the
+   * explanation, shown with it (#554). A teacher route: the student view
+   * above never carries the explanation (invariant 4).
    */
   app.post(
     "/app/api/questions/:id/preview/solution",
@@ -117,6 +124,7 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
         if (!loaded) return reply;
         return {
           solution: studentSolutionViewOf(scope.question.type, loaded.config, teacherPreviewView(scope.question.id)),
+          explanation: explanationOrNull(loaded.explanation),
         } satisfies PreviewSolution;
       },
     ),

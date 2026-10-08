@@ -73,6 +73,8 @@ export const shortPlayerStrings = {
   hintNumber: "Type a number; a comma or a dot both work.",
   hintDate: "Type a date, for instance 2026-09-20.",
   hintTime: "Type a time, for instance 14:05.",
+  /** Under the field when a teacher's preview shows the key (`answerKey`, #554). */
+  expected: "Accepted answers",
 } as const;
 
 export type ShortPlayerStringKey = keyof typeof shortPlayerStrings;

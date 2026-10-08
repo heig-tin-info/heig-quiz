@@ -509,7 +509,8 @@ function Draws({
               showsAnswers
               solution={{
                 queryKey: [...questionInstancesKey(questionId, savedStamp ?? ""), current.seed, "solution"],
-                queryFn: () => Promise.resolve({ solution: current.solution }),
+                // The draw's explanation is always shown under it, key or not.
+                queryFn: () => Promise.resolve({ solution: current.solution, explanation: null }),
               }}
             />
             {current.explanation.trim() !== "" ? (

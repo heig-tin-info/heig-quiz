@@ -1370,6 +1370,7 @@ export const fr: Record<keyof Dict, string> = {
   "qt.mcq.p.chooseUpTo": "Choisissez au plus le nombre de réponses autorisé.",
   "qt.mcq.p.limitReached": "Vous avez atteint le nombre maximum de sélections.",
   "qt.mcq.p.negativeMarking": "Une réponse fausse coûte des points ; ne pas répondre ne coûte rien.",
+  "qt.mcq.p.correctAnswer": "Bonne réponse",
   "qt.mcq.r.yourAnswer": "Votre réponse",
   "qt.mcq.r.noAnswer": "Pas de réponse",
   "qt.mcq.r.correct": "Correct",
@@ -1453,6 +1454,7 @@ export const fr: Record<keyof Dict, string> = {
   "qt.short.p.hintNumber": "Saisissez un nombre ; la virgule et le point conviennent.",
   "qt.short.p.hintDate": "Saisissez une date, par exemple 2026-09-20.",
   "qt.short.p.hintTime": "Saisissez une heure, par exemple 14:05.",
+  "qt.short.p.expected": "Réponses acceptées",
   "qt.short.r.yourAnswer": "Votre réponse",
   "qt.short.r.noAnswer": "Pas de réponse",
   "qt.short.r.accepted": "Acceptée",
@@ -1580,6 +1582,7 @@ export const fr: Record<keyof Dict, string> = {
   "qt.cloze.e.preview": "Aperçu",
   "qt.cloze.p.blank": "Trou",
   "qt.cloze.p.choose": "Choisir…",
+  "qt.cloze.p.expected": "Attendu",
   "qt.cloze.p.hint":
     "Remplissez chaque trou. Vos réponses sont enregistrées au fil de la saisie.",
   "qt.cloze.r.blank": "Trou",

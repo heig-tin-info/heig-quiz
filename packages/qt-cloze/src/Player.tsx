@@ -5,15 +5,19 @@
  * Controlled — the host owns the answer and autosaves it. A dropdown stores the
  * CANONICAL option index as a decimal string (decision D4), so the shuffled
  * order on screen never changes what was stored.
+ *
+ * With an `answerKey` (a teacher's preview, "Show answers", #554) each blank
+ * keeps its field and gets its expected answer right after it, so the text
+ * keeps the layout it has without the key.
  */
 import type { PlayerProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
-import type { ClozeAnswer, ClozeStudent } from "./schema.js";
+import type { ClozeAnswer, ClozeSolution, ClozeStudent } from "./schema.js";
 import { clozePlayerStrings, type ClozePlayerStringKey } from "./strings.js";
 import { ClozeFallbackText, type ClozeTextRenderer } from "./text.js";
-import { caption, cx, inputClass, isLocked } from "@quiz/ui";
+import { caption, cx, inputClass, isLocked, Verdict } from "@quiz/ui";
 
-type ClozePlayerProps = PlayerProps<ClozeStudent, ClozeAnswer> & {
+type ClozePlayerProps = PlayerProps<ClozeStudent, ClozeAnswer, ClozeSolution> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
   disabled?: boolean;
   strings?: StringOverrides<ClozePlayerStringKey>;
@@ -38,6 +42,7 @@ export function ClozePlayer({
   answer,
   onChange,
   readOnly,
+  answerKey,
   disabled,
   strings,
   renderText,
@@ -46,8 +51,24 @@ export function ClozePlayer({
   const locked = isLocked(readOnly, disabled);
   const given = answer?.blanks ?? [];
   const count = student.blanks.length;
+  const expected = new Map(answerKey?.blanks.map((blank) => [blank.index, blank.expected]) ?? []);
 
   const renderBlank = (index: number) => {
+    const field = renderField(index);
+    const key = expected.get(index);
+    if (field === null || key === undefined) return field;
+    return (
+      <>
+        {field}
+        <Verdict tone="success" className="mx-0.5 font-mono">
+          <span className="sr-only">{s.expected} </span>
+          {key}
+        </Verdict>
+      </>
+    );
+  };
+
+  const renderField = (index: number) => {
     const blank = student.blanks.find((b) => b.index === index);
     if (blank === undefined) return null;
     const label = `${s.blank} ${index + 1}`;

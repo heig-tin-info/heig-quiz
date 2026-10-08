@@ -1238,7 +1238,7 @@ const scenes = [
   { name: "editor-codeimage-try", role: "teacher", path: "/questions/q16", settle: 5000, act: async (p) => { await p.getByRole("button", { name: /try the reference solution|essayer la solution de référence/i }).click(); await p.getByRole("button", { name: /use as target|utiliser comme cible/i }).waitFor(); await p.getByRole("button", { name: /use as target|utiliser comme cible/i }).scrollIntoViewIfNeeded(); } },
   // "Student preview": a page of its own, opened by the editor in a new tab.
   { name: "question-preview", role: "teacher", path: "/questions/q2/preview", settle: 3000 },
-  // "Show answers": the player replaced by the type's review of the key.
+  // "Show answers": the key marked on the same player, the explanation under it (#554).
   { name: "question-preview-answers", role: "teacher", path: "/questions/q2/preview", settle: 1500, act: (p) => p.getByRole("button", { name: /show answers|afficher les réponses/i }).click() },
   { name: "question-preview-code", role: "teacher", path: "/questions/q1/preview", settle: 8000 },
   { name: "editor-publish", role: "teacher", path: "/questions/q2", fold: true, act: (p) => p.keyboard.press("Control+Shift+P") },

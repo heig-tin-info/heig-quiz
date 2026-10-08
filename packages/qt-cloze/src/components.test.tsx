@@ -91,6 +91,21 @@ describe("ClozePlayer", () => {
     expect(screen.getByRole("combobox", { name: "Blank 4" })).toHaveValue("0");
   });
 
+  it("keeps every field and writes the expected answer after it, given a key (#554)", () => {
+    render(
+      <ClozePlayer
+        student={student}
+        answer={{ blanks: ["Newt", null, null, null, null] }}
+        onChange={() => {}}
+        readOnly={false}
+        answerKey={{ blanks: [{ index: 0, expected: "Newton" }] }}
+      />,
+    );
+    expect(screen.getAllByRole("textbox")).toHaveLength(4);
+    expect(screen.getByRole("textbox", { name: "Blank 1" })).toHaveValue("Newt");
+    expect(screen.getByText("Expected").parentElement).toHaveTextContent("Expected Newton");
+  });
+
   it("is read-only once the attempt is closed", () => {
     render(<ClozePlayer student={student} answer={null} onChange={() => {}} readOnly />);
     for (const field of screen.getAllByRole("textbox")) expect(field).toBeDisabled();

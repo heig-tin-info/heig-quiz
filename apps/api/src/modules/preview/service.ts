@@ -195,15 +195,16 @@ export async function itemPreview(
 
 /**
  * The key of that same item preview, for its "Show answers": the one a
- * student reads once the key is shown (ADR-037), for the same view.
+ * student reads once the key is shown (ADR-037), for the same view, with
+ * the explanation of that instance (#554). A teacher route only.
  */
 export async function itemSolution(
   db: Db,
   evaluation: EvaluationRecord,
   itemId: string,
 ): Promise<PreviewSolution> {
-  const { input } = await previewedItem(db, evaluation, itemId);
-  return { solution: studentSolutionView(input) };
+  const { input, explanation } = await previewedItem(db, evaluation, itemId);
+  return { solution: studentSolutionView(input), explanation: explanationOrNull(explanation) };
 }
 
 /** One item at its frozen version, in the teacher preview's view. */
@@ -212,10 +213,11 @@ async function previewedItem(db: Db, evaluation: EvaluationRecord, itemId: strin
   if (!joined) throw notFound();
   const view = teacherPreviewView(joined.item.id);
   // A parameterized question shows the instance of the view's seed (ADR-056).
-  const { version } = instanceOf(joined.question.type, joined.version, view);
+  const { version, explanation } = instanceOf(joined.question.type, joined.version, view);
   return {
     joined,
     input: { type: joined.question.type, version, ...view },
+    explanation,
   };
 }
 

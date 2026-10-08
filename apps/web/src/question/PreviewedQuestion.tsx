@@ -6,9 +6,9 @@ import type { PreviewSolution } from "@quiz/contracts";
 
 import { apiErrorMessage } from "../api";
 import { useT } from "../i18n";
-import { QuestionReviewHost } from "../questionTypes";
+import { MarkdownView } from "../markdown/MarkdownView";
 import { emptyAnswerOf, QuestionHost } from "../student/QuestionHost";
-import { Alert, Button, Card, Skeleton } from "../ui";
+import { Alert, Button, Card, NotePanel, Skeleton } from "../ui";
 import { EditorExpandLayer } from "./EditorExpandLayer";
 
 /** One question as the server built it for a student (`studentView`, invariant 4). */
@@ -28,9 +28,9 @@ export interface SolutionSource {
 }
 
 /**
- * The types whose key reads plainly in their review without a grading: the
- * right choices, the expected blanks. The others come one by one, once their
- * review is known to draw something useful from the key alone.
+ * The types whose player marks the key on the question itself
+ * (`PlayerProps.answerKey`): the right choices, the expected blanks. The
+ * others come one by one, once their player draws the key.
  */
 const SHOWS_ANSWERS = new Set(["mcq", "cloze"]);
 
@@ -73,12 +73,13 @@ export function PreviewedQuestion({
 }
 
 /**
- * A loaded preview, played. "Show answers" REPLACES the player with the
- * type's own review of what the teacher answered, beside the key a student
- * reads once it is shown — nothing is graded, so there is no verdict. "Hide
- * answers" gives the player back with the answer as it was: it lives here,
- * above the swap. The key is hidden on every open and on every new question,
- * so a preview on a classroom's projector never shows it unasked.
+ * A loaded preview, played. "Show answers" keeps the player — the question
+ * does not move (issue #554) — and hands it the key a student reads once it
+ * is shown, which the player marks in place (`PlayerProps.answerKey`), with
+ * the question's explanation under it. Nothing is graded, so there is no
+ * verdict, and the teacher's answer stays as it was. The key is hidden on
+ * every open and on every new question, so a preview on a classroom's
+ * projector never shows it unasked.
  *
  * The answer and the shown key belong to ONE question: a caller that swaps
  * the question under a mounted preview remounts it with a `key` per question.
@@ -97,8 +98,8 @@ export function PlayedQuestion({
   /** The player's own line above the question, where the surface wants it. */
   label?: string;
   /**
-   * Whether "Show answers" is offered; by default for the types whose
-   * review reads plainly from the key alone. The draws of a parameterized
+   * Whether "Show answers" is offered; by default for `SHOWS_ANSWERS`.
+   * The draws of a parameterized
    * draft offer it for `short` too: there the teacher checks each draw's
    * computed key WITH its tolerance ("6.85 ± 0.01"), which the values table
    * does not show, while the Try tab shows a short's key only beside the
@@ -117,6 +118,8 @@ export function PlayedQuestion({
     enabled: shown,
     refetchOnWindowFocus: false,
   });
+  // A key being fetched again is not shown: the draft may have changed.
+  const revealed = shown && key.data && !key.isFetching ? key.data : null;
 
   return (
     <div className="space-y-3">
@@ -135,38 +138,27 @@ export function PlayedQuestion({
           </Button>
         ) : null}
       </div>
-      <Card className="p-5 sm:p-6">
-        {!shown ? (
-          <QuestionHost
-            type={view.type}
-            student={view.student}
-            answer={answer}
-            onChange={setAnswer}
-            readOnly={false}
-            Expand={EditorExpandLayer}
-          />
-        ) : key.isError ? (
+      <Card className="space-y-4 p-5 sm:p-6">
+        <QuestionHost
+          type={view.type}
+          student={view.student}
+          answer={answer}
+          onChange={setAnswer}
+          readOnly={false}
+          Expand={EditorExpandLayer}
+          {...(revealed ? { answerKey: revealed.solution } : {})}
+        />
+        {!shown ? null : key.isError ? (
           <Alert tone="warning" icon={AlertTriangle} title={t("preview.answers.failed")}>
             {apiErrorMessage(key.error, t("error.server"))}
           </Alert>
-        ) : !key.data || key.isFetching ? (
-          <div className="space-y-3">
-            <Skeleton className="h-5 w-2/3" />
-            <Skeleton className="h-24 w-full" />
-          </div>
-        ) : (
-          <QuestionReviewHost
-            t={t}
-            type={view.type}
-            student={view.student}
-            answer={answer}
-            solution={key.data.solution}
-            details={null}
-            points={null}
-            maxPoints={view.points}
-            audience="student"
-          />
-        )}
+        ) : !revealed ? (
+          <Skeleton className="h-16 w-full" />
+        ) : revealed.explanation ? (
+          <NotePanel eyebrow={t("question.explanation")}>
+            <MarkdownView size="sm" source={revealed.explanation} />
+          </NotePanel>
+        ) : null}
       </Card>
     </div>
   );

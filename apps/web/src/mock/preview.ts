@@ -148,7 +148,10 @@ function itemSolution(e: MockEvaluation, itemId: string): PreviewSolution {
   const item = e.items.find((i) => i.id === itemId);
   const q = item ? itemQuestion(item) : null;
   if (!item || !q) throw new MockError(404, "not_found");
-  return { solution: studentSolutionOf(q, solutionOf(q)) };
+  return {
+    solution: studentSolutionOf(q, solutionOf(q)),
+    explanation: q.versions.at(-1)?.explanation || null,
+  };
 }
 
 on("GET", "/app/api/evaluations/:id/preview/items/:itemId/solution", (m) =>

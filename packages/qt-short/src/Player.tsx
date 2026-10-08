@@ -10,6 +10,9 @@
  * the answer is a whole number between 1 and 100 is knowing what the field
  * takes, not which number it wants — and the grader re-derives nothing from
  * them except the integer rule.
+ *
+ * With an `answerKey` (a teacher's preview, "Show answers", #554) the
+ * accepted answers are listed under the field, which keeps its place.
  */
 import type { MarkdownRenderer, PlayerProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
@@ -19,12 +22,13 @@ import {
   type ShortAnswer,
   type ShortConstraints,
   type ShortKind,
+  type ShortSolution,
   type ShortStudent,
 } from "./schema.js";
 import { shortPlayerStrings, type ShortPlayerStringKey } from "./strings.js";
-import { caption, cx, inputClass, inputSize, isLocked, label, markdown } from "@quiz/ui";
+import { caption, cx, inputClass, inputSize, isLocked, label, markdown, Verdict } from "@quiz/ui";
 
-type ShortPlayerProps = PlayerProps<ShortStudent, ShortAnswer> & {
+type ShortPlayerProps = PlayerProps<ShortStudent, ShortAnswer, ShortSolution> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
   disabled?: boolean;
   strings?: StringOverrides<ShortPlayerStringKey>;
@@ -76,6 +80,7 @@ export function ShortPlayer({
   answer,
   onChange,
   readOnly,
+  answerKey,
   disabled,
   strings,
   renderMarkdown,
@@ -119,6 +124,20 @@ export function ShortPlayer({
         />
         <p className={caption}>{hint}</p>
       </div>
+      {answerKey && answerKey.expected.length > 0 ? (
+        <div className="flex flex-col gap-1.5">
+          <span className={label}>{s.expected}</span>
+          <ul className="flex flex-wrap gap-1.5">
+            {answerKey.expected.map((expected, i) => (
+              <li key={`${expected}-${i}`}>
+                <Verdict tone="success" className="font-mono">
+                  {expected}
+                </Verdict>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }

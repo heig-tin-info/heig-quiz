@@ -26,6 +26,8 @@ export const clozePlayerStrings = {
   blank: "Blank",
   choose: "Choose…",
   hint: "Fill every blank. Your answers are saved as you type.",
+  /** The accessible name of a blank's expected answer, shown with the key (`answerKey`, #554). */
+  expected: "Expected",
 } as const;
 
 export type ClozePlayerStringKey = keyof typeof clozePlayerStrings;

@@ -293,6 +293,21 @@ describe("ShortPlayer", () => {
     expect(input).toHaveAttribute("minlength", "3");
   });
 
+  it("lists the accepted answers under the field, given a key (#554)", () => {
+    render(
+      <ShortPlayer
+        student={student}
+        answer={{ text: "4" }}
+        onChange={() => {}}
+        readOnly={false}
+        answerKey={{ expected: ["6.85 ± 0.01"] }}
+      />,
+    );
+    expect(screen.getByLabelText("Your answer")).toHaveValue(4);
+    expect(screen.getByText("Accepted answers")).toBeInTheDocument();
+    expect(screen.getByText("6.85 ± 0.01")).toBeInTheDocument();
+  });
+
   it("shows the placeholder the teacher wrote, never an answer", () => {
     render(<ShortPlayer student={student} answer={null} onChange={() => {}} readOnly={false} />);
     expect(screen.getByLabelText("Your answer")).toHaveAttribute("placeholder", "bytes");

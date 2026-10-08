@@ -54,24 +54,27 @@ describe("StudentPreviewPage", () => {
   });
 
   /*
-   * "Show answers" asks for the key on the click, never before, and replaces
-   * the player with the type's review of what the teacher ticked; "Hide
-   * answers" gives the player back with the tick still there.
+   * "Show answers" asks for the key on the click, never before, and marks it
+   * on the same player, the teacher's tick kept, with the explanation under
+   * the question (#554); "Hide answers" takes both away again.
    */
   it("shows the answers on demand, and hides them again with the answer kept", async () => {
     const user = userEvent.setup();
     const { calls } = mockFetch({
       "POST /app/api/questions/q1/preview": ok(PREVIEW),
-      "POST /app/api/questions/q1/preview/solution": ok({ solution: { correct: [1] } }),
+      "POST /app/api/questions/q1/preview/solution": ok({ solution: { correct: [1] }, explanation: "Lire avant d'écrire." }),
     });
     renderWithProviders(<StudentPreviewPage id="q1" />);
     await user.click(await screen.findByRole("radio", { name: "NULL" }));
     expect(calls.map((c) => c.url)).toEqual(["/app/api/questions/q1/preview"]);
 
     await user.click(screen.getByRole("button", { name: "Show answers" }));
-    expect(await screen.findByText("Missed")).toBeInTheDocument();
-    expect(screen.getByText("Incorrect")).toBeInTheDocument();
-    expect(screen.queryByRole("radio")).toBeNull();
+    expect(await screen.findByText("Correct answer")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Une valeur indéterminée/ })).toHaveAccessibleName(
+      "Une valeur indéterminée Correct answer",
+    );
+    expect(screen.getByRole("radio", { name: "NULL" })).toBeChecked();
+    expect(screen.getByText("Lire avant d'écrire.")).toBeInTheDocument();
     expect(calls[1]).toMatchObject({
       method: "POST",
       url: "/app/api/questions/q1/preview/solution",
@@ -80,6 +83,8 @@ describe("StudentPreviewPage", () => {
 
     await user.click(screen.getByRole("button", { name: "Hide answers" }));
     expect(screen.getByRole("radio", { name: "NULL" })).toBeChecked();
+    expect(screen.queryByText("Correct answer")).toBeNull();
+    expect(screen.queryByText("Lire avant d'écrire.")).toBeNull();
   });
 
   it("offers no answers for a type whose key it does not show yet", async () => {

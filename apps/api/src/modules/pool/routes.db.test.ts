@@ -392,14 +392,21 @@ describe("POST /questions/:id/try (F-QST-09)", () => {
     expect(JSON.stringify(res.json())).not.toContain("secret-key");
   });
 
-  it("serves the key of the preview on its own route, never with the preview", async () => {
+  it("serves the key and the explanation of the preview on its own route, never with the preview", async () => {
     const id = await createQuestion("keyed");
     await server.app.inject({
       method: "PUT",
       url: `/app/api/questions/${id}/draft`,
       headers: owner.headers,
-      payload: { config: { statement: "Visible", answer: "secret-key" } },
+      payload: { config: { statement: "Visible", answer: "secret-key" }, explanation: "secret-why" },
     });
+    const preview = await server.app.inject({
+      method: "POST",
+      url: `/app/api/questions/${id}/preview`,
+      headers: owner.headers,
+      payload: { source: "draft" },
+    });
+    expect(JSON.stringify(preview.json())).not.toContain("secret-why");
     const res = await server.app.inject({
       method: "POST",
       url: `/app/api/questions/${id}/preview/solution`,
@@ -407,7 +414,7 @@ describe("POST /questions/:id/try (F-QST-09)", () => {
       payload: { source: "draft" },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ solution: { answer: "secret-key" } });
+    expect(res.json()).toEqual({ solution: { answer: "secret-key" }, explanation: "secret-why" });
     const off = await server.app.inject({
       method: "POST",
       url: `/app/api/questions/${id}/preview/solution`,

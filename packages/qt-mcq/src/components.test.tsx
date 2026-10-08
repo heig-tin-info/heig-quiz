@@ -597,6 +597,24 @@ describe("McqPlayer", () => {
     expect(boxes[2]).toBeDisabled();
   });
 
+  it("marks the key in place when a teacher's preview hands it (#554)", async () => {
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <McqPlayer student={student} answer={null} onChange={onChange} readOnly={false} />,
+    );
+    expect(screen.queryByText("Correct answer")).toBeNull();
+    const radios = screen.getAllByRole("radio");
+    rerender(
+      <McqPlayer student={student} answer={null} onChange={onChange} readOnly={false} answerKey={{ correct: [1] }} />,
+    );
+    // The same controls, still answerable, and one verdict in words.
+    expect(screen.getAllByRole("radio")).toEqual(radios);
+    expect(screen.getAllByText("Correct answer")).toHaveLength(1);
+    expect(screen.getByRole("radio", { name: /0x1004/ })).toHaveAccessibleName("0x1004 Correct answer");
+    await userEvent.click(screen.getAllByRole("radio")[0]!);
+    expect(onChange).toHaveBeenCalled();
+  });
+
   it("is read-only once the attempt is closed", () => {
     render(<McqPlayer student={student} answer={{ selected: [0] }} onChange={() => {}} readOnly />);
     for (const radio of screen.getAllByRole("radio")) expect(radio).toBeDisabled();

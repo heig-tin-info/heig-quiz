@@ -101,6 +101,7 @@ export function QuestionHost({
   onUnsent,
   Expand,
   onCanvasShortcuts,
+  answerKey,
 }: {
   type: string;
   student: unknown;
@@ -124,6 +125,8 @@ export function QuestionHost({
   Expand?: PlayerProps<unknown, unknown>["Expand"];
   /** Where a focused canvas lends its keys (`PlayerProps.onCanvasShortcuts`): the side column. */
   onCanvasShortcuts?: PlayerProps<unknown, unknown>["onCanvasShortcuts"];
+  /** A teacher's preview only, "Show answers" on: see `PlayerProps.answerKey`. */
+  answerKey?: unknown;
 }) {
   const t = useT();
   let Player: ComponentType<HostPlayerProps>;
@@ -158,6 +161,7 @@ export function QuestionHost({
           {...(onSimulate ? { onSimulate } : {})}
           {...(onUnsent ? { onUnsent } : {})}
           {...(Expand ? { Expand } : {})}
+          {...(answerKey === undefined ? {} : { answerKey })}
           {...(onCanvasShortcuts ? { onCanvasShortcuts } : {})}
         />
       </Suspense>
