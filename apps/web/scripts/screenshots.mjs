@@ -1462,6 +1462,68 @@ const scenes = [
   { name: "admin-error", role: "admin", path: "/admin?fail=1", settle: 2500 },
   { name: "admin-loading", role: "admin", path: "/admin?slow=1", settle: 300 },
   // F-ADMIN-06: the scheduled tasks, one of each state.
+  // ADR-081 (second addendum): the sorting of the existing tags, a group
+  // selected with its decision pending, each decision's layer, and the
+  // 409 of a new concept whose label is taken.
+  { name: "admin-concepts", role: "admin", path: "/admin?tab=concepts" },
+  { name: "admin-concepts-empty", role: "admin", path: "/admin?tab=concepts&empty=1" },
+  { name: "admin-concepts-error", role: "admin", path: "/admin?tab=concepts&fail=1", settle: 2500 },
+  {
+    name: "admin-concepts-selected",
+    role: "admin",
+    path: "/admin?tab=concepts",
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("checkbox", { name: /lecture-code/ }).check();
+      await p.getByRole("button", { name: /^drop$|^abandonner$/i }).click();
+      await p.getByRole("radio", { name: /kind of task|type de tâche/i }).check();
+      await p.getByRole("dialog").getByRole("button", { name: /^drop$|^abandonner$/i }).click();
+      await p.getByRole("button", { name: /excerpts|extraits/i }).first().click();
+    },
+  },
+  // One pair of a group ticked: the group's box mixed, Accept off and why.
+  {
+    name: "admin-concepts-partial",
+    role: "admin",
+    path: "/admin?tab=concepts",
+    fold: true,
+    act: (p) => p.getByRole("checkbox", { name: /pointeurs in Info1|pointeurs dans Info1/ }).check(),
+  },
+  {
+    name: "admin-concepts-map",
+    role: "admin",
+    path: "/admin?tab=concepts",
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("checkbox", { name: /tag of pointeur|tags de pointeur/ }).check();
+      await p.getByRole("button", { name: /map to a concept|associer à une notion/i }).click();
+      await p.getByRole("radio").first().waitFor();
+    },
+  },
+  {
+    name: "admin-concepts-new",
+    role: "admin",
+    path: "/admin?tab=concepts",
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("checkbox", { name: /tag of chaine|tags de chaine/ }).check();
+      await p.getByRole("button", { name: /new concept|nouvelle notion/i }).click();
+    },
+  },
+  {
+    name: "admin-concepts-conflict",
+    role: "admin",
+    path: "/admin?tab=concepts",
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("checkbox", { name: /tag of pointeur|tags de pointeur/ }).check();
+      await p.getByRole("button", { name: /new concept|nouvelle notion/i }).click();
+      await p.getByRole("dialog").getByRole("textbox", { name: /^label|^libellé/i }).last().fill("Pointer");
+      await p.getByRole("button", { name: /apply to|appliquer à/i }).click();
+      await p.getByRole("button", { name: /^accept|^accepter/i }).click();
+      await p.getByRole("button", { name: /map to pointer|associer à pointeur/i }).waitFor();
+    },
+  },
   { name: "admin-tasks", role: "admin", path: "/admin?tab=tasks" },
   { name: "admin-tasks-error", role: "admin", path: "/admin?tab=tasks&fail=1", settle: 2500 },
   // N-OPS-03 (ADR-055): the system status, healthy, degraded, and its states.

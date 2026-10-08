@@ -42,6 +42,14 @@ export const adminTasksKey = [...adminTeachersKey, "tasks"] as const;
  */
 export const adminLlmKey = [...adminTeachersKey, "llm"] as const;
 export const adminLlmUsageKey = [...adminTeachersKey, "llm-usage"] as const;
+/**
+ * The sorting of the existing tags (ADR-081, second addendum): every (pool,
+ * tag) pair and its decision. Under `adminTeachersKey`, so another
+ * administrator's `admin` hint refreshes it.
+ */
+export const adminConceptSortingKey = [...adminTeachersKey, "concept-sorting"] as const;
+/** The instance's vocabulary of concepts, merged ones left out (ADR-081). */
+export const conceptsKey = ["concepts"] as const;
 /** The kiosk station registry (ADR-051 §5). */
 export const adminKioskKey = ["admin-kiosk-devices"] as const;
 /** Whether this browser is a kiosk station: its `quiz_kiosk` cookie, read by the server. */

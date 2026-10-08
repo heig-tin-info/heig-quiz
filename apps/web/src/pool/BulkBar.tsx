@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderInput, FolderSymlink, Star, StarOff, Tag, Trash2, X } from "lucide-react";
+import { FolderInput, FolderSymlink, Star, StarOff, Tag, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import type { Category, CategoryNode, PoolDetail, PoolSummary, QuestionRow } from "@quiz/contracts";
@@ -10,13 +10,12 @@ import { useT } from "../i18n";
 import { categoryPaths } from "./categories";
 import { useMoveQuestions } from "./move";
 import { useErrorToast, useToast } from "../notify";
-import { Button, Field, FormDialog, IconButton, Select, Spinner, Z } from "../ui";
+import { Button, Field, FormDialog, Select, SelectionBar, Spinner } from "../ui";
 import { anyPoolKey, poolKey, poolsKey } from "../queryKeys";
 
 /**
- * What to do with the ticked questions, on the pool screen: a floating
- * bar that only exists while a selection does. It is the one place in the
- * screen allowed a shadow — it genuinely sits above the table.
+ * What to do with the ticked questions, on the pool screen, in the
+ * floating `SelectionBar`.
  *
  * Three of the four operations are sequential calls to the ordinary routes
  * (`PATCH /questions/:id`, `DELETE /questions/:id`): the API has no bulk
@@ -201,21 +200,7 @@ export function BulkBar({
 
   return (
     <>
-      <div
-        role="region"
-        aria-label={t("pool.bulk.selected", { n: ids.length })}
-        // 54 rem: 40 held three actions, 48 the fourth ("another pool"), and the
-        // fifth ("Star") pushed the close button onto a second line — a pill bar that
-        // wraps reads as two bars. The radius is 28 px rather than `full`:
-        // on one line the browser clamps it to half the height, so the pill is
-        // unchanged, and on a phone — where five actions really do wrap — the
-        // bar stays a rounded rectangle instead of becoming a lens.
-        data-bulk-bar
-        className={`fixed inset-x-0 bottom-4 mx-auto flex w-[min(54rem,calc(100%-2rem))] flex-wrap items-center gap-2 rounded-[28px] border border-line bg-surface px-4 py-2 shadow-overlay ${Z.popover}`}
-      >
-        <span className="text-[13px] font-medium tabular-nums">
-          {t("pool.bulk.selected", { n: ids.length })}
-        </span>
+      <SelectionBar label={t("pool.bulk.selected", { n: ids.length })} onClear={onClear}>
         <Button size="sm" variant="ghost" onClick={() => void onStar(ids, !allStarred)}>
           {allStarred ? <StarOff /> : <Star />} {t(allStarred ? "pool.bulk.unstar" : "pool.bulk.star")}
         </Button>
@@ -231,12 +216,7 @@ export function BulkBar({
         <Button size="sm" variant="ghost" onClick={() => void remove()} loading={busy}>
           <Trash2 /> {t("pool.bulk.delete")}
         </Button>
-        <span className="ml-auto">
-          <IconButton label={t("pool.bulk.clear")} onClick={onClear}>
-            <X />
-          </IconButton>
-        </span>
-      </div>
+      </SelectionBar>
 
       {dialog === "tag" ? (
         <FormDialog

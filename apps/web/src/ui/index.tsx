@@ -31,6 +31,8 @@
 //   forms     the short form in a dialog (FormDialog), on layers + controls.
 //   combobox  the ARIA combobox with virtual focus (useCombobox,
 //             ComboboxList, ComboboxOption), on layers and menu.
+//   selection the floating bar of a list's ticked rows (SelectionBar), on
+//             layers.
 //   state     browser state a screen reads: remembered choices
 //             (usePersistentChoice), isTyping, useFullscreen. Imports no
 //             sibling.
@@ -58,6 +60,7 @@ export * from "./live";
 export * from "./bar";
 export * from "./forms";
 export * from "./combobox";
+export * from "./selection";
 export * from "./state";
 export * from "./expand";
 export * from "./toolDock";
