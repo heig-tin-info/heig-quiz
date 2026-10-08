@@ -12,7 +12,8 @@
  * `sebFile.ts`, read against SEB Windows 2.2.3's and the SEB project's
  * published files); `sendBrowserExamKey` is what makes SEB send the Config
  * Key header. The keys and their order are the ones Quiz's evaluations have
- * served since ADR-027: their bytes, and so their Config Key, are pinned by
+ * served since ADR-027, plus the quit link beside `allowQuit` (2026-10-08):
+ * their bytes, and so their Config Key, are pinned by
  * `apps/api/src/auth/seb.snapshot.test.ts`.
  */
 import { array, bool, data, dict, int, str, type SebDict, type SebValue } from "./plist.js";
@@ -20,6 +21,13 @@ import { array, bool, data, dict, int, str, type SebDict, type SebValue } from "
 export interface SebConfigInput {
   /** The absolute URL SEB opens first. Its host is always allowed. */
   readonly startUrl: string;
+  /**
+   * The quit link: SEB quits, without asking, when it is about to navigate
+   * there (`quitURL`, `quitURLConfirm` false; what Moodle's "link to quit
+   * SEB" sets). The file hides SEB's task bar, and with it the Quit button,
+   * so this link is how the student leaves once the activity is over.
+   */
+  readonly quitUrl: string;
   /**
    * Hosts the URL filter allows beside the start URL's (a project's
    * workspace host, Quiz's `SEB_EXTRA_ALLOWED_HOSTS`). Duplicates are dropped.
@@ -49,6 +57,8 @@ export function buildSebConfig(input: SebConfigInput): SebValue {
   const entries: SebDict = [
     ["startURL", str(input.startUrl)],
     ["allowQuit", bool(true)],
+    ["quitURL", str(input.quitUrl)],
+    ["quitURLConfirm", bool(false)],
     ["URLFilterEnable", bool(true)],
     ["URLFilterEnableContentFilter", bool(true)],
     ["URLFilterRulesAsRegex", bool(false)],

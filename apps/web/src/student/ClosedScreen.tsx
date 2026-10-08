@@ -15,6 +15,7 @@ import type { AttemptClosed } from "@quiz/contracts";
 
 import { useT, type Dict } from "../i18n";
 import { Button, Card, EmptyState, type IconType } from "../ui";
+import { SebQuitButton, SebQuitKeys } from "./SebQuit";
 
 const COPY: Record<
   AttemptClosed["reason"],
@@ -47,6 +48,7 @@ export function ClosedScreen({
   onResults,
   actionsHeld = false,
   note,
+  seb = false,
 }: {
   reason: AttemptClosed["reason"];
   /** The evaluation's own title, so the page still says what ended. */
@@ -67,6 +69,12 @@ export function ClosedScreen({
   actionsHeld?: boolean;
   /** One more sentence under the body: what happens next on its own (a kiosk station's return). */
   note?: string;
+  /**
+   * Sat in Safe Exam Browser (ADR-027): nothing else of Quiz is reachable
+   * from there, so the one way out is quitting SEB — the file's quit link,
+   * and the keyboard shortcut under the body.
+   */
+  seb?: boolean;
 }) {
   const t = useT();
   const copy = COPY[reason];
@@ -81,24 +89,29 @@ export function ClosedScreen({
           // heading of any level (W4).
           titleAs="h1"
           action={
-            <div
-              className={`flex flex-wrap items-center justify-center gap-2${actionsHeld ? " invisible" : ""}`}
-              aria-hidden={actionsHeld || undefined}
-            >
-              {onResults ? (
-                <Button variant="primary" onClick={onResults}>
-                  <BarChart3 /> {t("player.closed.results")}
+            seb ? (
+              <SebQuitButton />
+            ) : (
+              <div
+                className={`flex flex-wrap items-center justify-center gap-2${actionsHeld ? " invisible" : ""}`}
+                aria-hidden={actionsHeld || undefined}
+              >
+                {onResults ? (
+                  <Button variant="primary" onClick={onResults}>
+                    <BarChart3 /> {t("player.closed.results")}
+                  </Button>
+                ) : null}
+                <Button variant={onResults ? "secondary" : "primary"} onClick={onHome}>
+                  {t("player.closed.home")}
                 </Button>
-              ) : null}
-              <Button variant={onResults ? "secondary" : "primary"} onClick={onHome}>
-                {t("player.closed.home")}
-              </Button>
-            </div>
+              </div>
+            )
           }
         >
           <span className="mb-1 block font-medium text-fg">{title}</span>
           {t(copy.body)}
           {note ? <span className="mt-2 block text-fg-faint">{note}</span> : null}
+          {seb ? <SebQuitKeys /> : null}
         </EmptyState>
       </Card>
     </main>

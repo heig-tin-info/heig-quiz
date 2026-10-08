@@ -13,7 +13,7 @@
 import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { IdParam } from "@quiz/contracts";
+import { IdParam, SEB_QUIT_PATH } from "@quiz/contracts";
 import {
   CONFIG_KEY_HEADER,
   absoluteRequestUrl,
@@ -91,9 +91,12 @@ export function sebAllowedHosts(
   return [...portal, ...config.SEB_EXTRA_ALLOWED_HOSTS];
 }
 
-/** The configuration of one launch: Quiz's host, then `allowedHosts`. */
+/**
+ * The configuration of one launch: Quiz's host, then `allowedHosts`. The quit
+ * link is on the start URL's host (`PUBLIC_URL`'s), which the filter allows.
+ */
 export const sebConfig = (startUrl: string, allowedHosts: readonly string[] = []): SebValue =>
-  buildSebConfig({ startUrl, allowedHosts });
+  buildSebConfig({ startUrl, quitUrl: new URL(SEB_QUIT_PATH, startUrl).href, allowedHosts });
 
 /**
  * Whether `header` is the Config Key hash of `absoluteUrl` under the key

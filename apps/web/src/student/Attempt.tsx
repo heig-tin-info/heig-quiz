@@ -70,6 +70,8 @@ export function AttemptPage({
 
   // ADR-051 §7: a kiosk station has no home but its own screen.
   const station = me.data?.session?.kind === "kiosk";
+  // ADR-027: inside Safe Exam Browser, the end of the attempt offers quitting it.
+  const seb = me.data?.session?.kind === "seb";
   const home = station ? toKiosk : () => navigate({ view: "home" });
   /*
    * The one way out of the student view from inside an attempt (ADR-018
@@ -162,6 +164,7 @@ export function AttemptPage({
       onHome={home}
       onResults={(attemptId, options) => navigate(feedbackLink(attemptId).route, options)}
       station={station}
+      seb={seb}
       {...(exitStudentView ? { onExitStudentView: exitStudentView } : {})}
     />
   );

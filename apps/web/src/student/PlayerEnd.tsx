@@ -35,6 +35,7 @@ export function PlayerEnd({
   onHome,
   onResults,
   station = false,
+  seb = false,
 }: {
   reason: AttemptClosed["reason"];
   initial: AttemptView;
@@ -47,11 +48,16 @@ export function PlayerEnd({
    * station back to its own screen.
    */
   station?: boolean;
+  /**
+   * Sat in Safe Exam Browser (ADR-027): the rest of Quiz is out of its
+   * reach, so neither the results nor the home are offered; quitting SEB is.
+   */
+  seb?: boolean;
 }) {
   const t = useT();
   const preview = initial.attempt.preview;
   const retakes =
-    !preview && !station && retakesOn(initial.evaluation.mode, retakesOf(initial.evaluation.settings));
+    !preview && !station && !seb && retakesOn(initial.evaluation.mode, retakesOf(initial.evaluation.settings));
   const toResults =
     retakes && onResults !== undefined && (reason === "submitted" || reason === "deadline");
   const forwarded = useRef(false);
@@ -65,7 +71,8 @@ export function PlayerEnd({
   // to show (`immediate`). The page's own route answers, so the rule stays
   // the server's one; the answer also warms the page it leads to. A teacher
   // preview has no attempt of its own, so nothing is asked for it.
-  const asked = !preview && !station && onResults !== undefined && !toResults;
+  // In SEB the feedback page is out of reach: the one action is quitting it.
+  const asked = !preview && !station && !seb && onResults !== undefined && !toResults;
   const feedback = useQuery<StudentFeedback>({
     queryKey: attemptFeedbackKey(initial.attempt.id),
     queryFn: () => api(`/app/api/attempts/${initial.attempt.id}/feedback`),
@@ -88,6 +95,7 @@ export function PlayerEnd({
       reason={reason}
       title={initial.evaluation.title}
       onHome={onHome}
+      seb={seb}
       {...(station ? { note: t("kiosk.returning") } : {})}
       // Held until the answer settles; an error leaves Back to home alone.
       actionsHeld={asked && feedback.isLoading}

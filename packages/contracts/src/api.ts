@@ -49,6 +49,14 @@ export interface PublicConfig {
 export const SESSION_KINDS = ["portal", "impersonation", ...TRUSTED_CLIENTS] as const;
 export type SessionKind = (typeof SESSION_KINDS)[number];
 
+/**
+ * The quit link of every `.seb` Quiz builds (ADR-027), on Quiz's own host:
+ * SEB quits when it is about to navigate there, so the request never leaves
+ * it. Outside SEB the SPA answers it with a page that says the window may be
+ * closed.
+ */
+export const SEB_QUIT_PATH = "/seb/quit";
+
 export interface Me {
   id: string;
   email: string;

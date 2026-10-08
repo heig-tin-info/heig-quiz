@@ -73,7 +73,7 @@ Some exams are sat in [Safe Exam Browser](https://safeexambrowser.org) (SEB) onl
 
 The button appears once the exam is open; until then the card is under **Coming up**.
 
-If SEB says the file is invalid or has expired, quit SEB and download a new file from your home. Once you have handed in, you may quit SEB; your results are read later from your **Grades**, in an ordinary browser.
+If SEB says the file is invalid or has expired, quit SEB and download a new file from your home. Once you have handed in, press **Quit Safe Exam Browser** on the screen that says so: SEB closes at once. The keyboard does the same, **Ctrl+Q** on Windows and **⌘Q** on macOS. Your results are read later from your **Grades**, in an ordinary browser.
 
 ## Sitting an exam on a kiosk station
 

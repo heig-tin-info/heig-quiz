@@ -141,6 +141,7 @@ export function Player({
   onResults,
   onExitStudentView,
   station = false,
+  seb = false,
 }: {
   initial: AttemptView;
   onHome: () => void;
@@ -148,6 +149,8 @@ export function Player({
   onResults: OnResults;
   /** Sat on a kiosk station (ADR-051 §7): the end returns to the station's screen by itself. */
   station?: boolean;
+  /** Sat in Safe Exam Browser (ADR-027): the end's one action is quitting it. */
+  seb?: boolean;
   /**
    * Given only to a TEACHER walking their own test attempt (ADR-018
    * addendum): the exam screen carries no teacher chrome — that is the point
@@ -245,6 +248,7 @@ export function Player({
         homeBusy={leaving}
         onResults={onResults}
         station={station}
+        seb={seb}
         {...(onExitStudentView ? { onExitStudentView } : {})}
       />
     </>
@@ -263,6 +267,7 @@ export function PlayerView({
   tools,
   homeBusy = false,
   station = false,
+  seb = false,
 }: {
   initial: AttemptView;
   session: PlayerSession;
@@ -284,6 +289,8 @@ export function PlayerView({
   tools?: ReactNode;
   /** Sat on a kiosk station: see {@link PlayerEnd}. */
   station?: boolean;
+  /** Sat in Safe Exam Browser: see {@link PlayerEnd}. */
+  seb?: boolean;
 }) {
   const t = useT();
   const { state, dispatch, sync: saverSync, closed, paused } = session;
@@ -363,6 +370,7 @@ export function PlayerView({
         onHome={onHome}
         onResults={onResults}
         station={station}
+        seb={seb}
       />
     );
   }

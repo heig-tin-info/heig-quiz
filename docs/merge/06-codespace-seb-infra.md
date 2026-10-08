@@ -178,7 +178,14 @@ the staging portal, with `SEB_CONFIG_KEY_ENFORCE=0` (audit-only) on Quiz and
    compare. Different keys confirm the limit above (leave the list empty);
    equal keys mean a list can work, and Quiz then gains a staff field for
    it (removed from M6-07 until this step).
-8. Record the versions, the outcome of each step and the logs in the card
+8. Quit: the project page carries *Quit Safe Exam Browser*. Note the
+   file's `quitURL` (`<Quiz host>/seb/quit`, `quitURLConfirm` false) in
+   the configuration tool, then press the button. **Expected**: SEB closes
+   at once, without a confirmation or a password. Open the file again
+   (new download), sit an evaluation that requires SEB to the end: its
+   closed screen's *Quit Safe Exam Browser* closes SEB too, and so does
+   the shortcut its line names (Ctrl+Q on Windows, ⌘Q on macOS).
+9. Record the versions, the outcome of each step and the logs in the card
    M6-07; only then turn `SEB_CONFIG_KEY_ENFORCE` on and open SEB projects
    to students.
 

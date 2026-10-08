@@ -5,6 +5,7 @@ import { LogOut } from "lucide-react";
 import type { KioskStation, Me } from "@quiz/contracts";
 
 import { api, useMe, usePublicConfig } from "./api";
+import { SebQuitButton, SebQuitKeys, SebQuitPage } from "./student/SebQuit";
 import { toKiosk, useStationSessionWatch } from "./kiosk/navigation";
 import { kioskStationKey } from "./queryKeys";
 import { Logo } from "./Header";
@@ -156,6 +157,12 @@ function Landing() {
             {t(refused)}
           </ErrorText>
         ) : null}
+        {/* A refused launch is inside SEB, whose Quit button the file hides. */}
+        {refused === "seb.invalid" ? (
+          <div className="mt-4">
+            <SebQuitButton variant="secondary" />
+          </div>
+        ) : null}
         <LinkButton href="/app/auth/login" variant="primary" size="lg" className="mt-8 w-full">
           {t("landing.signin")}
         </LinkButton>
@@ -247,6 +254,7 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   teamsLink: (_, c) => <TeamsLinkPage me={c.me} onSettings={() => c.navigate({ view: "settings" })} />,
   teamsTab: () => null,
   kiosk: () => null,
+  sebQuit: () => null,
   pair: (_, c) => <PairPage me={c.me} navigate={c.navigate} />,
   // Invariant 3: the gallery exists in development only. The
   // route parses in every build; this is what refuses to render it.
@@ -446,9 +454,9 @@ function StationOrLanding() {
 
 /**
  * ADR-027, ADR-051 §7: what a confined session (`seb`, `kiosk`) shows outside
- * its evaluation — after the submit, or on leaving the waiting room. Safe
- * Exam Browser is closed from its own frame; the one action here is going
- * back to the exam. A kiosk station has nothing to show outside its exam:
+ * its evaluation — after the submit, or on leaving the waiting room. The one
+ * action is quitting Safe Exam Browser (the `.seb`'s quit link: its task bar
+ * is hidden); going back to the exam is the second. A kiosk station has nothing to show outside its exam:
  * it goes back to its own screen.
  */
 function ConfinedElsewhere({ kiosk, onBack }: { kiosk: boolean; onBack: () => void }) {
@@ -468,9 +476,17 @@ function SebElsewhere({ onBack }: { onBack: () => void }) {
           icon={LogOut}
           title={t("seb.elsewhere.title")}
           titleAs="h1"
-          action={<Button onClick={onBack}>{t("seb.elsewhere.back")}</Button>}
+          action={
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <SebQuitButton />
+              <Button variant="secondary" onClick={onBack}>
+                {t("seb.elsewhere.back")}
+              </Button>
+            </div>
+          }
         >
           {t("seb.elsewhere.body")}
+          <SebQuitKeys />
         </EmptyState>
       </Card>
     </main>
@@ -507,6 +523,8 @@ export default function App() {
   }
   // ADR-051 §7: a kiosk station has no session to wait for; it attests
   // itself and shows its code.
+  // ADR-027: the `.seb`'s quit link, reached outside SEB (inside, SEB quits first).
+  if (route.view === "sebQuit") return <SebQuitPage />;
   if (route.view === "kiosk") {
     return (
       <Suspense fallback={<Spinner className="py-24" />}>

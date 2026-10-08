@@ -31,3 +31,18 @@ describe("the end of a sitting on a kiosk station (ADR-051 §7)", () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe("the end of a sitting in Safe Exam Browser (ADR-027)", () => {
+  it("offers quitting SEB as the one action, with its shortcut, and asks nothing of the server", () => {
+    const { calls } = mockFetch({});
+    renderWithProviders(<PlayerEnd reason="submitted" initial={view} onHome={vi.fn()} onResults={vi.fn()} seb />);
+    expect(screen.getByRole("heading", { name: "Handed in" })).toBeVisible();
+    const quit = screen.getByRole("link", { name: "Quit Safe Exam Browser" });
+    expect(quit).toHaveAttribute("href", "/seb/quit");
+    expect(quit.className).toMatch(/bg-accent/);
+    expect(screen.getByText(/^Or press /)).toBeVisible();
+    // The rest of Quiz is out of SEB's reach: no Back to home, no results.
+    expect(screen.queryByRole("button", { name: "Back to home" })).toBeNull();
+    expect(calls).toHaveLength(0);
+  });
+});
