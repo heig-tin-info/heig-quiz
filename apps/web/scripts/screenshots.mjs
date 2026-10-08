@@ -1537,6 +1537,25 @@ const scenes = [
       await p.getByRole("button", { name: /map to pointer|associer à pointeur/i }).waitFor();
     },
   },
+  // Second addendum §3: the model's proposals, a suggested group ready to
+  // accept, and a run of "Propose with AI" under way.
+  {
+    name: "admin-concepts-suggested",
+    role: "admin",
+    path: "/admin?tab=concepts",
+    fold: true,
+    act: (p) => p.getByRole("checkbox", { name: /tag of pointeur|tags de pointeur/ }).check(),
+  },
+  {
+    name: "admin-concepts-running",
+    role: "admin",
+    path: "/admin?tab=concepts",
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /propose with ai|proposer avec l'ia/i }).click();
+      await p.getByText(/proposing…|proposition…/i).waitFor();
+    },
+  },
   { name: "admin-tasks", role: "admin", path: "/admin?tab=tasks" },
   { name: "admin-tasks-error", role: "admin", path: "/admin?tab=tasks&fail=1", settle: 2500 },
   // N-OPS-03 (ADR-055): the system status, healthy, degraded, and its states.

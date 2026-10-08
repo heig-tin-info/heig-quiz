@@ -4,7 +4,12 @@
  * tags spell the same notions differently (`pointeurs` / `pointeur`,
  * `chaînes` / `chaines`), a chapter label (`c01`), a kind of task
  * (`lecture-de-code`) and a homonym across languages (`static` /
- * `static-cpp`). Two pairs are already accepted.
+ * `static-cpp`). One pair is already accepted.
+ *
+ * The model's last pass (yesterday) proposed a concept for the pointer tags
+ * and for `héritage`, a new concept for `récursivité`, a drop for the kind of
+ * task and the chapter label. "Propose with AI" starts a run that advances
+ * one group per poll, then also proposes the strings and the noise.
  *
  * Accepting a NEW concept whose label is already taken (`Pointeur`, say)
  * answers `409 concept_exists`, as the server does.
@@ -13,6 +18,7 @@
  */
 import type {
   Concept,
+  ConceptSortRun,
   TagPair,
   TagSorting,
   TagSortingAcceptResponse,
@@ -22,7 +28,7 @@ import type {
 } from "@quiz/contracts";
 import { groupNewConcepts, groupTagsByConceptKey, qualifiedConceptKey, tagGroupKey } from "@quiz/domain";
 
-import { D, flags, iso, MockPayload, on } from "./runtime";
+import { D, flags, H, iso, MockPayload, on, refuse } from "./runtime";
 
 const INFO1 = { poolId: "c0a1b2c3-0000-4000-8000-0000000000a1", poolName: "Info1" };
 const PROGC = { poolId: "c0a1b2c3-0000-4000-8000-0000000000c1", poolName: "Prog C — C10" };
@@ -112,7 +118,7 @@ const pairs: Pair[] = flags.empty
       pair(POO, "todo", 2),
     ];
 
-// Two pairs already decided: the chapter label dropped, the array tag mapped.
+// One pair already decided: the array tag mapped.
 const decided = (choice: TagSortingChoice, conceptOf: Concept | null): TagSorting => ({
   decision: choice.kind === "drop" ? "drop" : "concept",
   concept: conceptOf,
@@ -122,9 +128,50 @@ const decided = (choice: TagSortingChoice, conceptOf: Concept | null): TagSortin
   decidedAt: iso(-2 * 3_600_000),
 });
 for (const p of pairs) {
-  if (p.tag === "c01") p.sorting = decided({ kind: "drop", reason: "organisational" }, null);
   if (p.tag === "tableaux") p.sorting = decided({ kind: "concept", conceptId: concepts[1]!.id }, concepts[1]!);
 }
+
+// The model's proposals: what a pass of `sort` left on the undecided pairs.
+const MODEL = "claude-haiku-4-5";
+type Proposal = NonNullable<TagSorting["proposal"]>;
+const toConcept = (c: Concept, note: string): Proposal => ({ kind: "concept", conceptId: c.id, model: MODEL, note });
+const toNew = (fr: string, en: string, description: string, note: string): Proposal => ({
+  kind: "new",
+  newConcept: { fr: { label: fr, qualifier: "", description }, en: { label: en, qualifier: "", description: "" } },
+  model: MODEL,
+  note,
+});
+const toDrop = (dropReason: "organisational" | "task_kind" | "noise", note: string): Proposal => ({
+  kind: "drop",
+  dropReason,
+  model: MODEL,
+  note,
+});
+/** Proposals by tag: the first pass's, and what a run started here adds. */
+const FIRST_PASS: Record<string, Proposal> = {
+  pointeurs: toConcept(concepts[0]!, "Plural of an existing concept."),
+  pointeur: toConcept(concepts[0]!, "Same notion as the validated concept."),
+  héritage: toConcept(concepts[5]!, "Matches a proposed concept."),
+  récursivité: toNew("Récursivité", "Recursion", "Fonction qui s'appelle elle-même.", "No concept covers it yet."),
+  "lecture-de-code": toDrop("task_kind", "What the student does, not a notion."),
+  c01: toDrop("organisational", "A chapter number."),
+};
+const strings = toNew("Chaîne de caractères", "String", "Suite de caractères terminée par \\0.", "Two spellings of one notion.");
+const NEXT_PASS: Record<string, Proposal> = {
+  chaînes: strings,
+  chaines: strings,
+  test: toDrop("noise", "A leftover test."),
+  todo: toDrop("noise", "A reminder, not a notion."),
+};
+/** Proposes on every pair with no accepted decision, as a run does. */
+function proposeFrom(pass: Record<string, Proposal>) {
+  for (const p of pairs) {
+    const proposal = pass[p.tag];
+    if (!proposal || p.sorting?.decision != null) continue;
+    p.sorting = { decision: null, concept: null, dropReason: null, proposal, decidedBy: null, decidedAt: null };
+  }
+}
+proposeFrom(FIRST_PASS);
 
 const pairKey = (p: TagPair) => JSON.stringify([p.poolId, p.tag]);
 
@@ -198,6 +245,29 @@ on("POST", "/app/api/admin/concept-sorting/accept", (_m, body): TagSortingAccept
     return { ...bare(item), sorting };
   });
   return { rows, created: created.map((n) => n.c) };
+});
+
+// The model pass (second addendum §3). Yesterday's run is done; a run
+// started here advances one group per poll of its status, then proposes.
+let run: ConceptSortRun | null = flags.empty
+  ? null
+  : { state: "done", groupsDone: 6, groupsTotal: 6, batchesFailed: 0, startedAt: iso(-D - H), finishedAt: iso(-D), error: null };
+
+on("POST", "/app/api/admin/concept-sorting/propose", () => {
+  if (flags.nollm) throw refuse(409, "llm_not_configured", "No model is configured", { reason: "not_configured" });
+  if (run?.state === "running") throw refuse(409, "concept_sort_running", "A proposal run is already running");
+  const open = new Set(pairs.filter((p) => p.sorting?.decision == null).map((p) => tagGroupKey(p.tag)));
+  run = { state: "running", groupsDone: 0, groupsTotal: open.size, batchesFailed: 0, startedAt: iso(0), finishedAt: null, error: null };
+  return { run };
+});
+
+on("GET", "/app/api/admin/concept-sorting/run", () => {
+  if (run?.state === "running") {
+    const groupsDone = Math.min(run.groupsDone + 1, run.groupsTotal);
+    run = groupsDone < run.groupsTotal ? { ...run, groupsDone } : { ...run, groupsDone, state: "done", finishedAt: iso(0) };
+    if (run.state === "done") proposeFrom(NEXT_PASS);
+  }
+  return { run };
 });
 
 function bare({ poolId, tag }: TagPair): TagPair {

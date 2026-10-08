@@ -3,18 +3,16 @@
  * selection onto an existing concept, name a new one, or drop it with a
  * reason. Each sets a PENDING decision; Accept, on the screen, writes it.
  */
-import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { TAG_DROP_REASONS, TagSortingChoice, type Concept, type ConceptList, type TagDropReason, type TagSortingRow } from "@quiz/contracts";
+import { TAG_DROP_REASONS, TagSortingChoice, type Concept, type TagDropReason, type TagSortingRow } from "@quiz/contracts";
 import { closeConcepts } from "@quiz/domain";
 
-import { api } from "../api";
 import { fuzzyScore } from "../fuzzy";
 import { useT, type Locale } from "../i18n";
-import { conceptsKey } from "../queryKeys";
 import { Badge, Button, Field, FormDialog, QueryError, RadioRow, Sheet, Spinner, Textarea } from "../ui";
 import { byUse, conceptName } from "./sorting";
+import { useConcepts } from "./useConcepts";
 
 const namesOf = (c: Concept) => [c.labels.fr, c.labels.en].filter((l): l is string => l !== null);
 
@@ -55,7 +53,7 @@ export function MapDialog({
   onPick: (concept: Concept) => void;
 }) {
   const t = useT();
-  const concepts = useQuery<ConceptList>({ queryKey: conceptsKey, queryFn: () => api("/app/api/concepts") });
+  const concepts = useConcepts();
   const [query, setQuery] = useState(() => byUse(pairs)[0]?.tag ?? "");
   const [picked, setPicked] = useState<string | null>(null);
 

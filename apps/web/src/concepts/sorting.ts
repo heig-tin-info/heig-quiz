@@ -24,21 +24,25 @@ import { fuzzyScore } from "../fuzzy";
 import { useT, type Locale, type TFunction } from "../i18n";
 import { useToast } from "../notify";
 import { adminConceptSortingKey, conceptsKey } from "../queryKeys";
+import { useConcepts } from "./useConcepts";
 
 export const FILTERS = ["undecided", "accepted", "all"] as const;
 export type Filter = (typeof FILTERS)[number];
 
 /**
- * A decision not accepted yet, and where it comes from: the admin, here.
- * The model's proposals (a later step) will be the other source, read by
- * `decisionOf` when the admin has set nothing on the pair.
+ * A decision not accepted yet, and where it comes from: the admin, here, or
+ * the model's proposal, which `decisionOf` reads when the admin has set
+ * nothing on the pair. Both are accepted the same way.
  */
-export interface Pending {
+export interface Decision {
   choice: TagSortingChoice;
   /** The concept a `concept` choice names, to show it. */
   concept?: Concept;
-  source: "admin";
 }
+export type Pending =
+  | (Decision & { source: "admin" })
+  /** `note`: the model's few words on why. */
+  | (Decision & { source: "model"; note?: string });
 
 export type Conflict = TagSortingConflict["conflicts"][number];
 export type ItemsErrorCode = TagSortingItemsError["error"];
@@ -86,6 +90,31 @@ export function storedDecision(t: TFunction, locale: Locale, row: TagSortingRow)
   return null;
 }
 
+/**
+ * What a dismissal is keyed on: the pair AND the proposal, so a fresh
+ * proposal from a later run shows again.
+ */
+export const proposalKey = (row: TagSortingRow) => JSON.stringify([row.poolId, row.tag, row.sorting?.proposal ?? null]);
+
+/** Whether the row's proposal names a concept still being looked up: neither shown nor ready yet. */
+export const namesConcept = (row: TagSortingRow) =>
+  row.sorting?.decision == null && row.sorting?.proposal?.kind === "concept";
+
+/**
+ * The model's proposal of a row as a pending decision: none once the row is
+ * accepted, and none for a concept the vocabulary no longer lists. A `new`
+ * proposal is the very choice the New-concept sheet makes, both labels.
+ */
+export function proposalOf(row: TagSortingRow, concepts: readonly Concept[]): Pending | null {
+  const p = row.sorting?.proposal;
+  if (!p || row.sorting?.decision != null) return null;
+  const from = { source: "model", ...(p.note ? { note: p.note } : {}) } as const;
+  if (p.kind === "drop") return { choice: { kind: "drop", reason: p.dropReason }, ...from };
+  if (p.kind === "new") return { choice: { kind: "new", ...p.newConcept }, ...from };
+  const concept = concepts.find((c) => c.id === p.conceptId);
+  return concept ? { choice: { kind: "concept", conceptId: concept.id }, concept, ...from } : null;
+}
+
 /** An accept refused with something the screen can act on, read through the contracts. */
 type Refusal = { kind: "conflict"; conflicts: Conflict[] } | { kind: "items"; code: ItemsErrorCode; items: TagPair[] };
 
@@ -107,11 +136,24 @@ export function useTagSorting(rows: readonly TagSortingRow[]) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [pending, setPending] = useState<ReadonlyMap<string, Pending>>(new Map());
+  /** The proposals the admin cleared, for this session, by `proposalKey`. */
+  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [failure, setFailure] = useState<{ code: ItemsErrorCode; keys: ReadonlySet<string> } | null>(null);
 
-  /** The seam every read of a pair's pending decision goes through. */
-  const decisionOf = (row: TagPair): Pending | null => pending.get(keyOf(row)) ?? null;
+  // A `concept` proposal is shown by its concept's name: the vocabulary is
+  // read only when one is there to name.
+  const concepts = useConcepts(rows.some(namesConcept));
+  const vocabulary = concepts.data?.concepts ?? [];
+  /** A row whose proposal waits for the vocabulary to be named: shown as loading, not ready. */
+  const resolving = (row: TagSortingRow) =>
+    concepts.isLoading && namesConcept(row) && !pending.has(keyOf(row));
+
+  /** The seam every read of a pair's pending decision goes through: the admin's, else the model's. */
+  const decisionOf = (row: TagSortingRow): Pending | null => {
+    const key = keyOf(row);
+    return pending.get(key) ?? (dismissed.has(proposalKey(row)) ? null : proposalOf(row, vocabulary));
+  };
 
   const query = search.trim();
   const visible = rows.filter(
@@ -152,14 +194,16 @@ export function useTagSorting(rows: readonly TagSortingRow[]) {
     clearNotices();
   };
 
-  const decide = (pairs: readonly TagPair[], value: Omit<Pending, "source">) => {
+  const decide = (pairs: readonly TagPair[], value: Decision) => {
     const keys = new Set(pairs.map(keyOf));
     setPending((p) => new Map([...p, ...[...keys].map((k) => [k, { ...value, source: "admin" }] as const)]));
     forget(keys);
   };
-  const clearPending = (row: TagPair) => {
+  /** The admin's decision goes, and the model's shows again; clearing the model's dismisses it. */
+  const clearPending = (row: TagSortingRow) => {
     const key = keyOf(row);
-    setPending((p) => new Map([...p].filter(([k]) => k !== key)));
+    if (pending.has(key)) setPending((p) => new Map([...p].filter(([k]) => k !== key)));
+    else setDismissed((d) => new Set([...d, proposalKey(row)]));
     forget(new Set([key]));
   };
   /** One click: the items that asked for a taken label map to the concept holding it. */
@@ -210,6 +254,7 @@ export function useTagSorting(rows: readonly TagSortingRow[]) {
     select,
     clearSelection,
     decisionOf,
+    resolving,
     decide,
     clearPending,
     remap,
