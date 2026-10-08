@@ -1557,7 +1557,7 @@ export const en = {
   "concepts.picker.already": "This concept is already on the question.",
   "concepts.picker.loadFailed": "The concepts could not be loaded.",
   "concepts.picker.existed": "“{name}” already existed: it was added instead.",
-  "concepts.picker.dropped": "An administrator dropped this label: it is not a concept. Pick an existing one.",
+  "concepts.picker.dropped": "An administrator dropped this label: it is not a concept. Pick an existing one, or tell it apart with a qualifier.",
   "concepts.picker.invalid": "This label cannot be a concept: it needs a letter or a digit.",
   "concepts.picker.new.title": "New concept",
   "concepts.picker.new.label": "Label",

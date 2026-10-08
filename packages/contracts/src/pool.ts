@@ -378,15 +378,19 @@ const ConceptInputs = z.array(z.string().trim().min(1).max(120)).max(32);
 /**
  * `POST /pools/:id/questions`. `concepts` and `createMissing` as in
  * `QuestionPatch`, resolved in the same transaction as the creation: a
- * refusal creates nothing.
+ * refusal creates nothing. Strict like `QuestionPatch`: a client of before
+ * the cut-over sending `tags` gets a 400 `validation`, not a question
+ * silently without them.
  */
-export const QuestionCreate = z.object({
-  type: QuestionTypeId,
-  internalName: z.string().trim().min(1).max(200),
-  categoryId: z.uuid().nullable().optional(),
-  concepts: ConceptInputs.optional(),
-  createMissing: z.boolean().optional(),
-});
+export const QuestionCreate = z
+  .object({
+    type: QuestionTypeId,
+    internalName: z.string().trim().min(1).max(200),
+    categoryId: z.uuid().nullable().optional(),
+    concepts: ConceptInputs.optional(),
+    createMissing: z.boolean().optional(),
+  })
+  .strict();
 export type QuestionCreate = z.infer<typeof QuestionCreate>;
 
 /**

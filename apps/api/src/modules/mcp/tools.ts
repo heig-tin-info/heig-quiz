@@ -484,7 +484,9 @@ export const TOOLS: Tool[] = [
       concepts: Concepts,
       createMissing: CreateMissing,
       publish: z.boolean().default(true),
-    }),
+    })
+    // A client still holding the tool of before the cut-over (its `tags`) is refused, not ignored.
+    .strict(),
     annotations: WRITE,
     run: async (api, a) => {
       if (a.publish) {

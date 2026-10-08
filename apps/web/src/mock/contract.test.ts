@@ -1014,6 +1014,8 @@ describe("the mock's concept creation (ADR-081, third addendum §5)", () => {
       error: "concept_dropped",
       reason: "organisational",
     });
+    // A qualifier tells a concept apart from the dropped tag.
+    expect((await post({ lang: "fr", label: "C01", qualifier: "langage" })).status).toBe(200);
   });
 
   it("answers an invalid body with 400 validation", async () => {

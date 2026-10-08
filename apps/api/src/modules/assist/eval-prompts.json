@@ -7,7 +7,7 @@
       "message": "À quoi sert l'option Grouper par dans le tableau des questions ?",
       "expect": "answer",
       "language": "fr",
-      "mentions": ["Grouper", "catégorie", "type", "tags"]
+      "mentions": ["Regrouper", "catégorie", "type", "notions"]
     },
     {
       "id": "legit-en-share",

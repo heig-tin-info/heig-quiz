@@ -100,10 +100,8 @@ describe("planConceptWrite", () => {
     });
   });
 
-  it("refuses to create a dropped tag's key, by the bare label, qualifier or not", () => {
-    expect(
-      plan(["C01", "Lecture de code", "c01 (cours)", "prog (c)"], true),
-    ).toEqual({
+  it("refuses to create a dropped tag's key, unless a qualifier tells it apart", () => {
+    expect(plan(["C01", "Lecture de code", "c01 (cours)", "prog (c)"], true)).toEqual({
       kind: "refused",
       errors: [
         { input: "C01", error: "concept_dropped", reason: "organisational" },
@@ -112,12 +110,11 @@ describe("planConceptWrite", () => {
           error: "concept_dropped",
           reason: "task_kind",
         },
-        {
-          input: "c01 (cours)",
-          error: "concept_dropped",
-          reason: "organisational",
-        },
       ],
+    });
+    expect(plan(["c01 (cours)"], true)).toMatchObject({
+      kind: "ok",
+      creates: [{ label: "c01", qualifier: "cours" }],
     });
   });
 
@@ -167,8 +164,9 @@ describe("conceptToCreate", () => {
 
 describe("droppedReason", () => {
   it("names the reason of a dropped key, null otherwise", () => {
-    expect(droppedReason("Prog C", dropped)).toBe("organisational");
-    expect(droppedReason("pointeur", dropped)).toBeNull();
+    expect(droppedReason("Prog C", "", dropped)).toBe("organisational");
+    expect(droppedReason("Prog C", "langage", dropped)).toBeNull();
+    expect(droppedReason("pointeur", "", dropped)).toBeNull();
   });
 });
 

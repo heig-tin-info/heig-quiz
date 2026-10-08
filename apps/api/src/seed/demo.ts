@@ -164,6 +164,7 @@ async function ensureConcepts(db: Db, teacherId: string, now: Date): Promise<voi
     db,
     CONCEPTS.map((c) => c.fr.label),
     "fr",
+    ctx.caller,
   );
   for (const [i, spec] of CONCEPTS.entries()) {
     if (found[i]!.kind === "resolved") continue;

@@ -159,9 +159,13 @@ describe("resolving a typed label", () => {
     await server.app.db
       .insert(conceptTagSortings)
       .values({ poolId, tag: "lecture-de-code", decision: "drop", dropReason: "task_kind", decidedAt: new Date() });
-    const [dropped, other] = await resolve("Lecture de code", "inconnu total");
+    const [dropped, other, qualified] = await resolve("Lecture de code", "inconnu total", "Lecture de code (cours)");
     expect(dropped).toEqual({ input: "Lecture de code", kind: "dropped", reason: "task_kind" });
     expect(other).toMatchObject({ kind: "unknown" });
+    expect(qualified).toMatchObject({ kind: "unknown" });
+    // The admin, the vocabulary's curator, is not bound by the stop list.
+    const byAdmin = await call(admin, "GET", resolveUrl(["Lecture de code"]));
+    expect(ConceptResolveResponse.parse(byAdmin.json()).results[0]).toMatchObject({ kind: "unknown" });
     await server.app.db.delete(pools).where(eq(pools.id, poolId));
   });
 

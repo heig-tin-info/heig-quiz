@@ -238,6 +238,18 @@ describe("an authoring session", () => {
     expect(dropped.isError).toBe(true);
     expect(JSON.stringify(dropped.data)).toContain("task_kind");
     expect((await ok("list_questions", { poolId: pool.id })).total).toBe(0);
+    // A client still holding the tool of before the cut-over: its `tags` are refused, never ignored.
+    const stale = await call("create_question", {
+      poolId: pool.id,
+      type: "mcq",
+      internalName: "fr-stale-tags",
+      config: describeQuestionType("mcq").example,
+      tags: ["vocabulaire"],
+    });
+    expect(stale.isError).toBe(true);
+    expect(stale.data).toMatchObject({ error: "invalid_arguments" });
+    expect(JSON.stringify(stale.data)).toContain("tags");
+    expect((await ok("list_questions", { poolId: pool.id })).total).toBe(0);
 
     const ids: string[] = [];
     for (const type of ["mcq", "short", "cloze"] as const) {

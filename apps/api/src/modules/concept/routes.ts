@@ -9,9 +9,9 @@
  * - `GET /app/api/concepts/resolve?input=…`: what each typed label
  *   designates; a read, so the teacher assistant may call it.
  * - `POST /app/api/concepts`: a `proposed` concept; 409 `concept_exists`;
- *   422 `concept_dropped` for the key of a tag the admin dropped (third
- *   addendum §4, `ConceptWriteRefusal`); `PATCH` likewise for a rename
- *   onto such a key.
+ *   422 `concept_dropped`, for a teacher, for an unqualified label whose key
+ *   is a tag the admin dropped (third addendum §4 as amended,
+ *   `ConceptWriteRefusal`); `PATCH` likewise for an edit onto such a key.
  * - `PATCH /app/api/concepts/:id`: 403 `concept_forbidden`, 409
  *   `concept_merged` or `concept_exists`, 422 `concept_label_missing`, 404
  *   for an unknown id.
@@ -71,7 +71,7 @@ export async function conceptPlugin(app: FastifyInstance) {
   app.get("/app/api/concepts/resolve", { preHandler: requireTeacher }, async (req, reply) => {
     const query = ConceptResolveQuery.safeParse(req.query);
     if (!query.success) return invalid(reply, query.error);
-    const results = await service.resolveLabels(app.db, query.data.input, readerLang(req));
+    const results = await service.resolveLabels(app.db, query.data.input, readerLang(req), callerOf(req));
     return { results } satisfies ConceptResolveResponse;
   });
 

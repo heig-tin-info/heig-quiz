@@ -76,7 +76,7 @@ export function conceptToCreate(input: string): ConceptToCreate | null {
  * - several exact matches: `concept_ambiguous` with them;
  * - close matches only, or nothing: `concept_unknown` with the close ones,
  *   unless `create` — then a new concept, but `concept_dropped` with the
- *   reason when its bare label is on the stop list ({@link droppedReason}).
+ *   reason when its unqualified label is on the stop list ({@link droppedReason}).
  *
  * Inputs that would create concepts with one key create ONE. An input from
  * which no valid label comes out is `concept_unknown`.
@@ -112,7 +112,7 @@ export function planConceptWrite<R>(
       });
       continue;
     }
-    const reason = droppedReason(fresh.label, options.dropped);
+    const reason = droppedReason(fresh.label, fresh.qualifier, options.dropped);
     if (reason !== null) {
       errors.push({ input, error: "concept_dropped", reason });
       continue;
@@ -127,15 +127,19 @@ export function planConceptWrite<R>(
 }
 
 /**
- * The stop list (third addendum §4), the one rule of every write that names
- * a label — a write resolving concepts, `POST /concepts`, a rename: the drop
- * reason when the key of the BARE label (no qualifier) is the `conceptKey`
- * of a tag the admin dropped, else null.
+ * The stop list (third addendum §4, amended 2026-10-08), the one rule of
+ * every write that names a label — a write resolving concepts,
+ * `POST /concepts`, a rename: the drop reason when the label has no
+ * qualifier and its key is the `conceptKey` of a tag the admin dropped,
+ * else null. A qualifier tells a real concept apart from the dropped tag
+ * ("Trace (matrice)" beside the dropped `trace`), so it lifts the refusal.
  */
 export function droppedReason<R>(
   label: string,
+  qualifier: string,
   dropped: ReadonlyMap<string, R>,
 ): R | null {
+  if (qualifier.trim() !== "") return null;
   return dropped.get(conceptKey(label)) ?? null;
 }
 

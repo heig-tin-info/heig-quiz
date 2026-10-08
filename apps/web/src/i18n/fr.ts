@@ -1553,7 +1553,7 @@ export const fr: Record<keyof Dict, string> = {
   "concepts.picker.already": "Cette notion est déjà sur la question.",
   "concepts.picker.loadFailed": "Les notions n'ont pas pu être chargées.",
   "concepts.picker.existed": "« {name} » existait déjà : elle a été ajoutée à la place.",
-  "concepts.picker.dropped": "Un administrateur a écarté ce libellé : ce n'est pas une notion. Choisissez-en une existante.",
+  "concepts.picker.dropped": "Un administrateur a écarté ce libellé : ce n'est pas une notion. Choisissez-en une existante, ou précisez-la par un qualificatif.",
   "concepts.picker.invalid": "Ce libellé ne peut pas être une notion : il lui faut une lettre ou un chiffre.",
   "concepts.picker.new.title": "Nouvelle notion",
   "concepts.picker.new.label": "Libellé",

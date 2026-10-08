@@ -16,8 +16,8 @@
  *
  * The question editor's concept picker (third addendum §5) creates a
  * `proposed` concept: `409 concept_exists` with the holder when its key is
- * taken, `422 concept_dropped` when it is the key of a tag the admin dropped
- * (`c01`, dropped as a chapter label, is one from the start).
+ * taken, `422 concept_dropped` when, unqualified, it is the key of a tag the
+ * admin dropped (`c01`, dropped as a chapter label, is one from the start).
  *
  * `?empty=1`: no question wears a tag.
  */
@@ -281,7 +281,10 @@ on("POST", "/app/api/concepts", (_m, raw): Concept => {
   const body = ConceptCreate.safeParse(raw);
   if (!body.success) throw new MockPayload(400, { error: "validation", message: body.error.message });
   const { lang, label, qualifier = "", description = "" } = body.data;
-  const drop = pairs.find((p) => p.sorting?.decision === "drop" && conceptKey(p.tag) === conceptKey(label));
+  // A qualifier tells a concept apart from a dropped tag (third addendum §4, amended).
+  const drop = qualifier.trim() === ""
+    ? pairs.find((p) => p.sorting?.decision === "drop" && conceptKey(p.tag) === conceptKey(label))
+    : undefined;
   if (drop) {
     // `ConceptWriteRefusal`, as the server answers a label on the stop list.
     throw refuse(422, "concept_dropped", "This label was dropped from the vocabulary", {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { Pool, PoolColor, PoolCreate, PoolPatch, POOL_COLORS } from "./pool.js";
+import { Pool, PoolColor, PoolCreate, PoolPatch, POOL_COLORS, QuestionCreate, QuestionPatch } from "./pool.js";
 
 describe("PoolColor — the colour of a pool's icon (#213)", () => {
   it("is a closed set of fifteen names, grey being null and not a name", () => {
@@ -36,5 +36,27 @@ describe("PoolColor — the colour of a pool's icon (#213)", () => {
     };
     expect(Pool.safeParse(pool).success).toBe(false);
     expect(Pool.parse({ ...pool, color: null }).color).toBeNull();
+  });
+});
+
+describe("Question writes after the cut-over to concepts (ADR-081 third addendum)", () => {
+  const create = { type: "mcq", internalName: "q1" };
+
+  it("refuses `tags` on create and patch rather than ignoring them", () => {
+    expect(QuestionCreate.parse({ ...create, concepts: ["boucle"], createMissing: true })).toEqual({
+      ...create,
+      concepts: ["boucle"],
+      createMissing: true,
+    });
+    const created = QuestionCreate.safeParse({ ...create, tags: ["boucles"] });
+    expect(created.success).toBe(false);
+    expect(created.error?.issues[0]).toMatchObject({ code: "unrecognized_keys", keys: ["tags"] });
+
+    expect(QuestionPatch.parse({ concepts: [] })).toEqual({ concepts: [] });
+    expect(QuestionPatch.safeParse({ tags: ["boucles"] }).success).toBe(false);
+  });
+
+  it("finds nothing to update in `createMissing` alone", () => {
+    expect(QuestionPatch.safeParse({ createMissing: true }).success).toBe(false);
   });
 });
