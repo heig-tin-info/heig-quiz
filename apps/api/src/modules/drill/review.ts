@@ -479,13 +479,14 @@ export async function reportShown(
  * first evaluation, its active time summed by the server, the rating of
  * strategy A against the reference time of the device class, the card
  * rescheduled by FSRS — reset first when the answer key changed since it
- * was last scheduled (ADR-041 §7) — and the key shown.
+ * was last scheduled (ADR-041 §7) — and the key shown. The confidence the
+ * student stated, if any, is only stored (ADR-085).
  */
 export async function answerCard(
   db: Db,
   userId: string,
   cardId: string,
-  input: { answer: unknown; deviceClass: DrillDeviceClass },
+  input: { answer: unknown; deviceClass: DrillDeviceClass; confidence?: number | null | undefined },
   now: Date,
 ): Promise<DrillReviewResult> {
   return db.transaction(async (tx) => {
@@ -544,6 +545,9 @@ export async function answerCard(
       reviewedAt: now,
       answerPayload: answer,
       values: instance.stored,
+      // Stored beside the review, read by nothing above: the rating and the
+      // schedule are computed without it (ADR-085 §2).
+      confidence: input.confidence ?? null,
     });
     await tx
       .update(drillCards)

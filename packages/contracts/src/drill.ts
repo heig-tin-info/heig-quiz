@@ -78,10 +78,23 @@ export type DrillServed = z.infer<typeof DrillServed>;
 export const DrillShownBody = z.object({ shown: z.boolean() });
 export type DrillShownBody = z.infer<typeof DrillShownBody>;
 
-/** `POST /drill/cards/:id/answer`. The answer is parsed by the type's own schema. */
+/**
+ * How sure the student says they are, stated before the correction (ADR-085):
+ * 0 No idea, 1 Unsure, 2 Fairly sure, 3 Sure, 4 Certain.
+ */
+export const DrillConfidence = z.number().int().min(0).max(4);
+export type DrillConfidence = z.infer<typeof DrillConfidence>;
+
+/**
+ * `POST /drill/cards/:id/answer`. The answer is parsed by the type's own
+ * schema. `confidence` is optional — absent or null when the student skipped
+ * it — stored beside the review and never read by its rating or its schedule
+ * (ADR-085 §2).
+ */
 export const DrillAnswerBody = z.object({
   answer: z.unknown(),
   deviceClass: DrillDeviceClass,
+  confidence: DrillConfidence.nullable().optional(),
 });
 export type DrillAnswerBody = z.infer<typeof DrillAnswerBody>;
 

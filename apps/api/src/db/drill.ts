@@ -121,10 +121,17 @@ export const drillReviews = pgTable(
     answerPayload: jsonb("answer_payload"),
     /** The values of a parameterized question the answer was given to (ADR-056 §5); null when static. */
     values: jsonb("values").$type<StoredInstance>(),
+    /**
+     * How sure the student said they were before the correction, 0 No idea to
+     * 4 Certain (ADR-085); null when they skipped it. Never read by the
+     * rating, the schedule or any score.
+     */
+    confidence: smallint("confidence"),
   },
   (t) => [
     index("drill_reviews_card_idx").on(t.cardId, t.reviewedAt),
     index("drill_reviews_reviewed_idx").on(t.reviewedAt),
     check("drill_reviews_rating_ck", sql`${t.rating} between 1 and 4`),
+    check("drill_reviews_confidence_ck", sql`${t.confidence} between 0 and 4`),
   ],
 );

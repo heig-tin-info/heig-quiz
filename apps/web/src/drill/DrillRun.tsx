@@ -14,6 +14,12 @@
  * can only shorten the time counted (ADR-041 §11) — which is why the hidden
  * one must not be lost: an interval left open is credited up to the idle cap.
  *
+ * Under the answer, before the correction, the student may say how sure they
+ * are (ADR-085): five options, nothing selected, keys 0 to 4, never required.
+ * It is sent with the answer and changes nothing of the rating; after the
+ * correction one line says it back, highlighted when the student was sure
+ * and wrong.
+ *
  * The four decisions:
  *   - Type: the progress line and the question; the verdict is a badge and
  *     one line, the key is the type's own review.
@@ -23,14 +29,16 @@
  *   - Finish: one card on the canvas, hairlines, no shadow.
  */
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, CircleDot, PartyPopper, XCircle } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, CheckCircle2, CircleDot, Eye, PartyPopper, XCircle } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import type { DrillCorrectness, DrillDeviceClass, DrillReviewResult, DrillSessionCard } from "@quiz/contracts";
+import { DRILL_CONFIDENCE_LEVELS, drillConfidenceOutcome, type DrillConfidence } from "@quiz/domain";
 
 import { useDocumentVisible } from "../attempt/signals";
 import { useI18n, useT, type Dict } from "../i18n";
 import { drillServeKey } from "../queryKeys";
+import { useShortcuts } from "../shortcuts";
 import { QuestionReviewHost } from "../questionTypes";
 import { isAnswered, QuestionHost } from "../student/QuestionHost";
 import {
@@ -38,8 +46,10 @@ import {
   Badge,
   Button,
   Card,
+  isTyping,
   ProgressSegments,
   QueryError,
+  Segmented,
   SegmentedBar,
   Skeleton,
   useNow,
@@ -62,6 +72,15 @@ const CORRECTNESS: Record<
 
 /** The FSRS rating, 1 Again to 4 Easy, in the student's words. */
 const RATING = ["drill.rating.1", "drill.rating.2", "drill.rating.3", "drill.rating.4"] as const;
+
+/** The confidence scale in the student's words, 0 No idea to 4 Certain (ADR-085). */
+const CONFIDENCE = [
+  "drill.confidence.0",
+  "drill.confidence.1",
+  "drill.confidence.2",
+  "drill.confidence.3",
+  "drill.confidence.4",
+] as const satisfies readonly (keyof Dict)[];
 
 /** What one card of the session came to: its review, or skipped when it could not be served. */
 export type DrillOutcome = DrillReviewResult | "skipped";
@@ -146,6 +165,7 @@ function DrillCard({
   const now = useNow(60_000);
   const [answer, setAnswer] = useState<unknown>(null);
   const [result, setResult] = useState<DrillReviewResult | null>(null);
+  const [confidence, setConfidence] = useState<DrillConfidence | null>(null);
   const settled = useRef(false);
   // A new card and its verdict both start at their top: on a phone the
   // student pressed the button under a long question, and the page would
@@ -169,7 +189,7 @@ function DrillCard({
   useShownReports(card.id, served.isSuccess && result === null, settled);
 
   const submit = useMutation({
-    mutationFn: () => answerCard(card.id, isAnswered(card.type, answer) ? answer : null, device),
+    mutationFn: () => answerCard(card.id, isAnswered(card.type, answer) ? answer : null, device, confidence),
     onSuccess: (review) => {
       // Before the render that tears the reports down: the answer closed the interval.
       settled.current = true;
@@ -221,6 +241,7 @@ function DrillCard({
                 })}
               </p>
             </div>
+            <ConfidenceLine correctness={result.correctness} confidence={confidence} />
             <QuestionReviewHost
               t={t}
               type={served.data.type}
@@ -251,6 +272,11 @@ function DrillCard({
             readOnly={submit.isPending}
           />
         </Card>
+        <ConfidencePicker
+          value={confidence}
+          onChange={setConfidence}
+          disabled={submit.isPending}
+        />
         {submit.isError ? (
           <Alert tone="danger" icon={AlertTriangle} title={t("drill.answerFailed")}>
             {t("drill.answerFailed.body")}
@@ -273,6 +299,93 @@ function DrillCard({
       {body()}
     </div>
   );
+}
+
+/**
+ * "How sure are you?" (ADR-085): the five levels as one segmented control,
+ * nothing selected until the student picks one, and the digits 0 to 4 as its
+ * keys — unless the caret is in a field of the answer, where a digit is part
+ * of what is typed. Pressing the selected level's digit again clears it:
+ * the question stays optional to the end.
+ */
+function ConfidencePicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: DrillConfidence | null;
+  onChange: (value: DrillConfidence | null) => void;
+  disabled: boolean;
+}) {
+  const t = useT();
+  const id = useId();
+  useShortcuts([{ keys: "0–4", label: t("drill.confidence.shortcut") }], !disabled);
+  useEffect(() => {
+    if (disabled) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+      const target = e.target as HTMLInputElement | null;
+      // A radio or a checkbox (the control's own, or a choice of the answer)
+      // takes no digit; a text field does.
+      if (isTyping(target) && target?.type !== "radio" && target?.type !== "checkbox") return;
+      const level = DRILL_CONFIDENCE_LEVELS.find((l) => String(l) === e.key);
+      if (level === undefined) return;
+      e.preventDefault();
+      onChange(level === value ? null : level);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [disabled, value, onChange]);
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <p id={id} className="text-sm text-fg-muted">
+        {t("drill.confidence.question")} <span className="text-fg-faint">({t("drill.confidence.optional")})</span>
+      </p>
+      {/* The five pills fit 390 px in both languages; narrower, the track
+          scrolls inside its row rather than the page. */}
+      <div className="max-w-full overflow-x-auto">
+        <Segmented<string>
+          name={`${id}-confidence`}
+          labelledBy={id}
+          size="sm"
+          value={value === null ? "" : String(value)}
+          options={DRILL_CONFIDENCE_LEVELS.map((l) => ({ value: String(l), label: t(CONFIDENCE[l]) }))}
+          onChange={(v) => onChange(Number(v) as DrillConfidence)}
+          disabled={disabled}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The confidence said back after the correction (ADR-085 §3): nothing when it
+ * was skipped; the highlight when the student was sure and wrong; a plain
+ * line otherwise, "lucky" when they were right with no idea.
+ */
+function ConfidenceLine({
+  correctness,
+  confidence,
+}: {
+  correctness: DrillCorrectness;
+  confidence: DrillConfidence | null;
+}) {
+  const t = useT();
+  if (confidence === null) return null;
+  const level = t(CONFIDENCE[confidence]);
+  switch (drillConfidenceOutcome(correctness, confidence)) {
+    case "confident_error":
+      return (
+        <Alert tone="warning" icon={Eye} title={t("drill.confidence.confidentError")}>
+          {t("drill.confidence.confidentError.body", { level })}
+        </Alert>
+      );
+    case "lucky":
+      return <p className="text-sm text-fg-muted">{t("drill.confidence.lucky", { level })}</p>;
+    default:
+      return <p className="text-sm text-fg-muted">{t("drill.confidence.said", { level })}</p>;
+  }
 }
 
 /** The end of today's session: how it went, and the way back. */

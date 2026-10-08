@@ -97,6 +97,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-076 — An attempt starts by an explicit Start, not by opening the link](ADR-076-demarrage-explicite-d-une-tentative.md)
 - [ADR-079 — The conditions of an evaluation: announced by the teacher, imposed by the platform](ADR-079-conditions-de-l-evaluation.md)
 - [ADR-084 — A text before an item: the intro of an evaluation item](ADR-084-texte-avant-un-item.md)
+- [ADR-085 — Confidence in the drill: stated beside the review, never part of a score](ADR-085-confiance-dans-l-entrainement.md)
 
 ### Question analytics
 
