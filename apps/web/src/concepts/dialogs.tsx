@@ -6,35 +6,12 @@
 import { useState } from "react";
 
 import { TAG_DROP_REASONS, TagSortingChoice, type Concept, type TagDropReason, type TagSortingRow } from "@quiz/contracts";
-import { closeConcepts } from "@quiz/domain";
 
-import { fuzzyScore } from "../fuzzy";
 import { useT, type Locale } from "../i18n";
 import { Badge, Button, Field, FormDialog, QueryError, RadioRow, Sheet, Spinner, Textarea } from "../ui";
-import { byUse, conceptName } from "./sorting";
+import { rankConcepts } from "./ranking";
+import { byUse, conceptName, conceptSide } from "./sorting";
 import { useConcepts } from "./useConcepts";
-
-const namesOf = (c: Concept) => [c.labels.fr, c.labels.en].filter((l): l is string => l !== null);
-
-/**
- * The concepts `query` designates, best first: the exact and close matches
- * of the shared matcher (`closeConcepts`, the rule the teacher's picker and
- * the resolution use), then every other concept the search still matches,
- * validated ones first. An empty search lists them all.
- */
-export function rankConcepts(query: string, concepts: readonly Concept[], locale: Locale): Concept[] {
-  const byId = new Map(concepts.map((c) => [c.id, c]));
-  const hits = closeConcepts(query, concepts.map((c) => ({ id: c.id, names: namesOf(c) }))).map((m) => byId.get(m.id)!);
-  const seen = new Set(hits.map((c) => c.id));
-  const rest = concepts
-    .filter((c) => !seen.has(c.id) && (query.trim() === "" || namesOf(c).some((n) => fuzzyScore(query, n) !== null)))
-    .sort(
-      (a, b) =>
-        Number(a.status !== "validated") - Number(b.status !== "validated") ||
-        conceptName(a, locale).localeCompare(conceptName(b, locale), locale),
-    );
-  return [...hits, ...rest];
-}
 
 /**
  * The searchable list of the vocabulary, to map the selection onto one
@@ -93,7 +70,7 @@ export function MapDialog({
         <fieldset className="max-h-72 divide-y divide-line overflow-y-auto rounded-field border border-line">
           <legend className="sr-only">{t("admin.concepts.map.list")}</legend>
           {matches.map((c) => {
-            const description = c.descriptions[locale] || c.descriptions.fr || c.descriptions.en;
+            const { description } = conceptSide(c, locale);
             return (
               <RadioRow key={c.id} name="concept" value={c.id} checked={picked === c.id} onPick={setPicked}>
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">

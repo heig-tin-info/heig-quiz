@@ -325,6 +325,8 @@ where named.
    cut-over on: a label in the interface language and an optional
    qualifier; the concepts already used in the pool first (§5). The model's
    fill of the other language and "Suggest concepts" come later (#557).
+   The picker shows a concept's qualifier wherever it has one (only
+   homonyms carry one), amending §5's "only when ambiguous" for the picker.
 6. **The pool's Tags tab becomes a read-only "Notions" tab**: the concepts
    used in the pool, with their question counts, each opening the filter.
    No description editing (addendum §6). The bulk bar adds a concept.

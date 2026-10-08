@@ -8,7 +8,7 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { ConceptResolveResponse, Concept as ConceptSchema, type Concept } from "@quiz/contracts";
+import { ConceptExists, ConceptResolveResponse, Concept as ConceptSchema, type Concept } from "@quiz/contracts";
 
 import { auditLog, concepts } from "../../db/schema.js";
 import { testServer, type Payload, type TestServer } from "../../test/http.js";
@@ -93,7 +93,7 @@ describe("proposing a concept", () => {
     const first = await create(teacher, { lang: "fr", label: "pointeur" });
     const res = await post(colleague, { lang: "fr", label: "Pointeurs" });
     expect(res.statusCode).toBe(409);
-    expect(res.json()).toMatchObject({ error: "concept_exists", concept: { id: first.id } });
+    expect(ConceptExists.parse(res.json())).toMatchObject({ error: "concept_exists", concept: { id: first.id } });
     // The same key in the other language is another key.
     await create(colleague, { lang: "en", label: "pointeurs" });
   });
@@ -214,7 +214,7 @@ describe("editing a concept", () => {
     const { id } = await create(teacher, { lang: "fr", label: "référence" });
     const res = await patch(admin, id, { fr: { label: "Pointeurs" } });
     expect(res.statusCode).toBe(409);
-    expect(res.json()).toMatchObject({ error: "concept_exists", concept: { id: holder.id } });
+    expect(ConceptExists.parse(res.json())).toMatchObject({ error: "concept_exists", concept: { id: holder.id } });
   });
 
   it("refuses a qualifier or a description on a language without a label", async () => {

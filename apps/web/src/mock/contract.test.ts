@@ -77,7 +77,10 @@ import {
   JournalRevisionContent,
   KioskDevice,
   TagSortingList,
+  Concept,
+  ConceptExists,
   ConceptList,
+  ConceptWriteRefusal,
   KioskStation,
   PairPreview,
   NotificationList,
@@ -985,5 +988,39 @@ describe("the mock's assistant drives the interface (ADR-080 P2b)", () => {
     expect(issuesOf(AssistReply, reply)).toEqual([]);
     expect(reply.actions).toEqual([{ kind: "open_screen", screen: "pool", ids: { id: "p1" }, params: { q: "tag:pointeurs" } }]);
     expect(reply.exchange.answer).toContain("**Programmation C**");
+  });
+});
+
+describe("the mock's concept creation (ADR-081, third addendum §5)", () => {
+  const post = async (body: unknown) => {
+    const res = await fetch("/app/api/concepts", { method: "POST", body: JSON.stringify(body) });
+    return { status: res.status, body: (await res.json()) as Record<string, unknown> };
+  };
+
+  it("creates a proposed concept in the creator's language, and answers a taken key with its holder", async () => {
+    const created = await post({ lang: "en", label: "Linked list", qualifier: "" });
+    expect(issuesOf(Concept, created.body)).toEqual([]);
+    expect(created.body).toMatchObject({ status: "proposed", labels: { fr: null, en: "Linked list" } });
+    const listed = (await get("/app/api/concepts")) as { concepts: { id: string }[] };
+    expect(listed.concepts.map((c) => c.id)).toContain(created.body.id);
+
+    const taken = await post({ lang: "en", label: "linked list" });
+    expect(taken.status).toBe(409);
+    expect(issuesOf(ConceptExists, taken.body)).toEqual([]);
+  });
+
+  it("refuses the key of a dropped tag with 422 concept_dropped and its reason", async () => {
+    const dropped = await post({ lang: "fr", label: "C01" });
+    expect(dropped.status).toBe(422);
+    expect(issuesOf(ConceptWriteRefusal, dropped.body)).toEqual([]);
+    expect((dropped.body as ConceptWriteRefusal).errors[0]).toEqual({
+      input: "C01",
+      error: "concept_dropped",
+      reason: "organisational",
+    });
+  });
+
+  it("answers an invalid body with 400 validation", async () => {
+    expect((await post({ lang: "fr", label: "--" })).status).toBe(400);
   });
 });

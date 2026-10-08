@@ -5,7 +5,7 @@
  */
 import { and, inArray, ne, or } from "drizzle-orm";
 
-import { CONCEPT_LANGS, type Concept, type ConceptLang, type ConceptRef } from "@quiz/contracts";
+import { CONCEPT_LANGS, type Concept, type ConceptExists, type ConceptLang, type ConceptRef } from "@quiz/contracts";
 import { conceptLabelIn, qualifiedConceptKey, type ResolvableConcept } from "@quiz/domain";
 
 import { isUniqueViolation, type Db, type Tx } from "../../db/client.js";
@@ -135,6 +135,8 @@ export async function conflictOr(
   });
   const [holder] = await holdersOf(db, violated);
   return holder
-    ? new DomainError("concept_exists", 409, "A concept with this label already exists", { concept: toConcept(holder) })
+    ? new DomainError("concept_exists", 409, "A concept with this label already exists", {
+        concept: toConcept(holder),
+      } satisfies Omit<ConceptExists, "error" | "message">)
     : error;
 }
