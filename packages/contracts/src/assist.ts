@@ -6,8 +6,12 @@ import {
   ASSIST_MAX_MESSAGE_CHARS,
   ASSIST_MAX_SCREEN_COMMANDS,
   type AssistAction as DomainAssistAction,
+  type AssistScreenCommand as DomainAssistScreenCommand,
   type AssistEntityKind,
 } from "@quiz/domain";
+
+/** `true` when `A` and `B` are the same shape, `false` otherwise. */
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
 /**
  * The teacher assistant (ADR-080, F-LLM-07), under `/app/api/assist`:
@@ -109,8 +113,9 @@ export const AssistAction = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("run_command"), id: z.string().regex(ASSIST_COMMAND_ID) }),
 ]);
 export type AssistAction = z.infer<typeof AssistAction>;
-// The domain's actions (`AssistUiTurn`) are this contract's: a drift is a compile error.
-true satisfies [AssistAction] extends [DomainAssistAction] ? ([DomainAssistAction] extends [AssistAction] ? true : false) : false;
+// The domain's actions and commands (`AssistUiTurn`) are this contract's: a drift is a compile error.
+true satisfies Same<AssistAction, DomainAssistAction>;
+true satisfies Same<AssistScreenCommand, DomainAssistScreenCommand>;
 
 /**
  * The answer to a question: the conversation it went into, the exchange,

@@ -1087,6 +1087,7 @@ export const fr: Record<keyof Dict, string> = {
   "assist.opened": "Ouvert : {screen}",
   "assist.ran": "Fait : {command}",
   "assist.openFailed": "Impossible d'ouvrir cet écran.",
+  "assist.stayed": "Resté sur cet écran.",
   "assist.runFailed": "Cette commande n'est plus disponible ici.",
   "assist.screen.course": "Cours",
   "assist.screen.template": "Modèle d'évaluation",

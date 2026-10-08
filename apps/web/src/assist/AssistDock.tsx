@@ -31,7 +31,6 @@ import {
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import type {
-  AssistAction,
   AssistAsk,
   AssistAvailability,
   AssistConversation,
@@ -39,7 +38,7 @@ import type {
   AssistReply,
   Me,
 } from "@quiz/contracts";
-import { ASSIST_MAX_MESSAGE_CHARS } from "@quiz/domain";
+import { ASSIST_MAX_MESSAGE_CHARS, type AssistRole } from "@quiz/domain";
 import { textareaClass } from "@quiz/ui";
 
 import { api, apiErrorMessage, refusedWith } from "../api";
@@ -48,7 +47,7 @@ import { useI18n } from "../i18n";
 import { Markdown } from "../markdown";
 import { assistAvailabilityKey, assistConversationKey, assistConversationsKey } from "../queryKeys";
 import { parsePath, type Navigate, type Route } from "../router";
-import { Alert, Badge, cx, IconButton, QueryError, RelativeTime, Spinner, ToolDock } from "../ui";
+import { Alert, Badge, Button, cx, IconButton, QueryError, RelativeTime, Spinner, ToolDock } from "../ui";
 import { runAssistActions, type ActionOutcome } from "./actions";
 import { assistContext, assistVisible } from "./context";
 
@@ -92,10 +91,21 @@ export function AssistDock({
     retry: false,
   });
   if (!visible || !availability.data?.available) return null;
-  return <Dock route={route} stub={availability.data.stub} navigate={navigate} />;
+  const role = me.role === "admin" ? "admin" : "teacher";
+  return <Dock route={route} stub={availability.data.stub} navigate={navigate} role={role} />;
 }
 
-function Dock({ route, stub, navigate }: { route: Route; stub: boolean; navigate: Navigate | undefined }) {
+function Dock({
+  route,
+  stub,
+  navigate,
+  role,
+}: {
+  route: Route;
+  stub: boolean;
+  navigate: Navigate | undefined;
+  role: AssistRole;
+}) {
   const { t } = useI18n();
   const [showHistory, setShowHistory] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(storedConversation);
@@ -141,7 +151,13 @@ function Dock({ route, stub, navigate }: { route: Route; stub: boolean; navigate
           {showHistory ? (
             <HistoryList current={conversationId} onOpen={select} />
           ) : (
-            <Chat route={route} conversationId={conversationId} onConversation={select} navigate={navigate} />
+            <Chat
+              route={route}
+              conversationId={conversationId}
+              onConversation={select}
+              navigate={navigate}
+              role={role}
+            />
           )}
         </>
       )}
@@ -154,27 +170,21 @@ function Chat({
   conversationId,
   onConversation,
   navigate,
+  role,
 }: {
   route: Route;
   conversationId: string | null;
   onConversation: (id: string | null) => void;
   navigate: Navigate | undefined;
+  role: AssistRole;
 }) {
   const { t, locale } = useI18n();
   const qc = useQueryClient();
   const [draft, setDraft] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLDivElement>(null);
-  // The UI actions of the last answer (ADR-080 P2b), run once it is on
-  // screen; what each did, by exchange, for this tab only (never stored).
-  const [pending, setPending] = useState<{ exchangeId: string; actions: AssistAction[] } | null>(null);
+  // What the UI actions of an answer did (ADR-080 P2b), by exchange, for this tab only (never stored).
   const [outcomes, setOutcomes] = useState<Record<string, ActionOutcome[]>>({});
-  useEffect(() => {
-    if (!pending) return;
-    setPending(null);
-    const done = runAssistActions(pending.actions, navigate, t);
-    setOutcomes((o) => ({ ...o, [pending.exchangeId]: done }));
-  }, [pending, navigate, t]);
 
   const conversation = useQuery({
     queryKey: assistConversationKey(conversationId ?? ""),
@@ -208,7 +218,11 @@ function Chat({
       void qc.invalidateQueries({ queryKey: assistConversationsKey, exact: true });
       onConversation(reply.conversationId);
       setDraft("");
-      if (reply.actions.length > 0) setPending({ exchangeId: reply.exchange.id, actions: reply.actions });
+      if (reply.actions.length > 0) {
+        void runAssistActions(reply.actions, navigate, role, t).then((done) =>
+          setOutcomes((o) => ({ ...o, [reply.exchange.id]: done })),
+        );
+      }
     },
     onError: (error, q) => {
       // Purged while the page stood open: the question goes on in a new conversation.
@@ -320,12 +334,19 @@ function Answer({
     <div className="space-y-2 text-sm leading-relaxed text-fg">
       {/* Same-origin links only: an answer may echo text others wrote (ADR-080 P2, item 8). */}
       <Markdown source={text} links="same-origin" onNavigate={onNavigate} />
-      {outcomes?.map((o, i) => (
-        <p key={i} className={cx("flex items-center gap-1.5 text-[12px]", o.ok ? "text-fg-muted" : "text-danger")}>
-          {o.ok ? <CornerDownRight className="size-3.5" aria-hidden /> : <CircleAlert className="size-3.5" aria-hidden />}
-          {o.text}
-        </p>
-      ))}
+      {outcomes?.map((o, i) =>
+        o.click ? (
+          // A command that needs the teacher's own click (a new tab): offered, not run.
+          <Button key={i} variant="secondary" size="sm" onClick={o.click}>
+            {o.text}
+          </Button>
+        ) : (
+          <p key={i} className={cx("flex items-center gap-1.5 text-[12px]", o.ok ? "text-fg-muted" : "text-danger")}>
+            {o.ok ? <CornerDownRight className="size-3.5" aria-hidden /> : <CircleAlert className="size-3.5" aria-hidden />}
+            {o.text}
+          </p>
+        ),
+      )}
     </div>
   );
 }

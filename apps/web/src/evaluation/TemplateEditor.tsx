@@ -2,15 +2,16 @@ import { useQuery } from "@tanstack/react-query";
 import { CopyPlus, FileStack, Settings2, Unlink } from "lucide-react";
 
 import { TemplatePatch, type TemplateDetail } from "@quiz/contracts";
+import { TEMPLATE_TABS, type CourseTab } from "@quiz/domain";
 
 import { api, ApiError } from "../api";
 import { useCourses } from "../course/parts";
 import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import { templateKey } from "../queryKeys";
-import type { CourseTab, Route } from "../router";
+import type { Route } from "../router";
 import { Trail, useTemplateCrumbs } from "../Trail";
-import { TEMPLATE_TABS, useSearchParam } from "../router";
+import { useSearchParam } from "../router";
 import {
   Actions,
   Alert,
@@ -95,9 +96,8 @@ export function TemplateEditor({ id, navigate }: { id: string; navigate: (r: Rou
   return <Editor data={detail.data} navigate={navigate} />;
 }
 
-const TABS = TEMPLATE_TABS;
-type Tab = (typeof TABS)[number];
-const isTab = (v: string): v is Tab => (TABS as readonly string[]).includes(v);
+type Tab = (typeof TEMPLATE_TABS)[number];
+const isTab = (v: string): v is Tab => (TEMPLATE_TABS as readonly string[]).includes(v);
 
 function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route) => void }) {
   const t = useT();

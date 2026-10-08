@@ -103,6 +103,8 @@ export function useEditorShortcuts({
     {
       id: "question:preview",
       effect: "none",
+      // A new tab: a pop-up unless the teacher clicks.
+      gesture: true,
       label: t("palette.preview"),
       icon: Eye,
       group: "action",

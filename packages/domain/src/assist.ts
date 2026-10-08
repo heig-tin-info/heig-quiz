@@ -352,18 +352,25 @@ function terms(text: string): string[] {
     .filter((w) => w.length >= 4);
 }
 
-export const STUB_TEXT: Record<AssistLocale, { intro: string; related: string; none: string; topic: string }> = {
+export const STUB_TEXT: Record<
+  AssistLocale,
+  { intro: string; related: string; none: string; topic: string; opened: string; searched: string }
+> = {
   en: {
     intro: "Development stub, not a model: no AI model is configured on this platform.",
     related: "These sections of the documentation look related:",
     none: "No section of the documentation matches the question.",
     topic: "The help of this screen is",
+    opened: "I opened the pool",
+    searched: "searched with",
   },
   fr: {
     intro: "Réponse de développement, pas un modèle : aucun modèle d'IA n'est configuré sur cette plateforme.",
     related: "Ces sections de la documentation semblent liées :",
     none: "Aucune section de la documentation ne correspond à la question.",
     topic: "L'aide de cet écran est",
+    opened: "J'ai ouvert la banque",
+    searched: "avec la recherche",
   },
 };
 
@@ -556,7 +563,7 @@ export async function stubReply(
 // --- The development stub drives the interface (ADR-080 P2b) -----------------
 
 /** A question the stub answers by opening a screen: it asks to see, show or open something. */
-export function wantsScreen(question: string): boolean {
+function wantsScreen(question: string): boolean {
   return /\b(montre|montrez|affiche|affichez|ouvre|ouvrez|voir|show|open|display)\b/i.test(question);
 }
 
@@ -564,7 +571,7 @@ export function wantsScreen(question: string): boolean {
  * The pool a question names: one whose name's words (four letters or more)
  * all appear in it; of several, the one with the most such words.
  */
-export function poolNamed<P extends { id: string; name: string }>(question: string, pools: readonly P[]): P | null {
+function poolNamed<P extends { id: string; name: string }>(question: string, pools: readonly P[]): P | null {
   const asked = new Set(terms(question));
   let best: P | null = null;
   let bestWords = 0;
@@ -579,15 +586,10 @@ export function poolNamed<P extends { id: string; name: string }>(question: stri
 }
 
 /** The pool search a question asks for: its `tag:x` or `#x`, as the search box writes it. */
-export function searchOf(question: string): string | null {
+function searchOf(question: string): string | null {
   const tag = /(?:tag:|#)([\p{L}\p{N}_-]+)/u.exec(question)?.[1];
   return tag ? `tag:${tag}` : null;
 }
-
-export const STUB_SCREEN_TEXT: Record<AssistLocale, { opened: string; searched: string }> = {
-  en: { opened: "I opened the pool", searched: "searched with" },
-  fr: { opened: "J'ai ouvert la banque", searched: "avec la recherche" },
-};
 
 /**
  * The development stub's whole turn (ADR-080 §5, P2, P2b), shared by the
@@ -609,9 +611,9 @@ export async function stubTurn(
   const pool = wantsScreen(question) ? poolNamed(question, await readers.pools().catch(() => [])) : null;
   if (!pool) return { text: await stubReply(corpus, role, question, screen, readers.results), actions: [] };
   const q = searchOf(question);
-  const text = STUB_SCREEN_TEXT[screen.locale];
+  const text = STUB_TEXT[screen.locale];
   return {
-    text: `${STUB_TEXT[screen.locale].intro}\n\n${text.opened} **${pool.name}**${q ? ` ${text.searched} \`${q}\`` : ""}.`,
+    text: `${text.intro}\n\n${text.opened} **${pool.name}**${q ? ` ${text.searched} \`${q}\`` : ""}.`,
     actions: [{ kind: "open_screen", screen: "pool", ids: { id: pool.id }, params: q ? { q } : {} }],
   };
 }

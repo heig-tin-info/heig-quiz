@@ -81,7 +81,7 @@ export function routeEntities(route: Route): AssistEntities {
  * The mounted screen's palette commands (ADR-080 P2b): id, label and
  * effect, the server offering the model the effect-free ones only. Screen
  * chrome — a screen command's label never embeds an entity's name
- * (`Command.effect`) —; one the contract would refuse is left out rather
+ * (`ScreenCommand`) —; one the contract would refuse is left out rather
  * than refused with the whole question.
  */
 export function screenCommandsContext(): AssistScreenCommand[] {

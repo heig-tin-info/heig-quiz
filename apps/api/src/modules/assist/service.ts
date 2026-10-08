@@ -256,15 +256,8 @@ export async function ask(
       results: (id) => classroomResults(api, id),
       pools: () => userPools(api),
     });
-    // The stub's actions pass the same check as a model's; a refused one is dropped.
-    for (const action of reply.actions) {
-      try {
-        if (action.kind === "open_screen") turn.open(action);
-        else turn.run(action);
-      } catch {
-        // Not on the catalogue: the answer goes without it.
-      }
-    }
+    // The stub's actions (it only opens a screen) pass the same check as a model's.
+    for (const action of reply.actions) if (action.kind === "open_screen") turn.open(action);
     return { text: reply.text, model: STUB_MODEL };
   });
 

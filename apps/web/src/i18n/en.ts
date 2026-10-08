@@ -1089,6 +1089,7 @@ export const en = {
   "assist.opened": "Opened: {screen}",
   "assist.ran": "Done: {command}",
   "assist.openFailed": "Could not open this screen.",
+  "assist.stayed": "Stayed on this screen.",
   "assist.runFailed": "This command is no longer available here.",
   "assist.screen.course": "Course",
   "assist.screen.template": "Evaluation template",

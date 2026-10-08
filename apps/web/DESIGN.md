@@ -2115,9 +2115,12 @@ placement over an `offset` and `Z.tool`.
 - **Driving the interface** (ADR-080 P2b): an answer may open a screen or
   run an effect-free command of this one, once it is shown. The panel stays
   open over the new screen; under the answer, one 12 px `fg-muted` line
-  with a corner arrow says "Opened: Question pool" or "Done: Preview", and
-  a `danger` line with an alert icon says when it could not. Nothing else
-  moves: no toast, no focus change, the composer keeps the focus.
+  with a corner arrow says "Opened: Question pool" or "Done: Try it", and
+  a `danger` line with an alert icon says when it could not ("Stayed on
+  this screen" when the leave guard kept the teacher there). A command that
+  needs the teacher's own click (the preview's new tab) is a small
+  `secondary` button under the answer instead. Nothing else moves: no
+  toast, no focus change, the composer keeps the focus.
 - **States**: empty — a muted bubble icon, "Ask about this screen" and
   what it answers (the screen, the teacher's own data), kept 30 days and
   readable by an administrator; waiting — the question shown at once and a

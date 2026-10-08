@@ -139,24 +139,11 @@ describe("the model's UI tools (ADR-080 P2b)", () => {
     expect(results[1]!.content).toContain("browser opens Question pool after your answer");
   });
 
-  it("refuse an invalid screen, ids or params, and a second screen — the model reads why, nothing comes back", async () => {
-    script = calling(
-      ["open_screen", { screen: "attempt", ids: { evaluationId: poolId } }],
-      ["open_screen", { screen: "admin" }],
-      ["open_screen", { screen: "pool", ids: { id: "../admin" } }],
-      ["open_screen", { screen: "pool", ids: { id: poolId }, params: { tab: "grades" } }],
-      ["open_screen", { screen: "pool", ids: { id: poolId }, params: { evil: "1" } }],
-    );
-    const reply = AssistReply.parse((await ask("Ouvre n'importe quoi")).json());
+  it("refuse a screen off the catalogue — the model reads why, nothing comes back (the matrix is the domain's)", async () => {
+    script = calling(["open_screen", { screen: "attempt", ids: { evaluationId: poolId } }]);
+    const reply = AssistReply.parse((await ask("Ouvre l'examen")).json());
     expect(reply.actions).toEqual([]);
-    expect(results.every((r) => r.error)).toBe(true);
-    expect(results[0]!.content).toMatch(/No screen "attempt"/);
-
-    results.length = 0;
-    script = calling(["open_screen", { screen: "pools" }], ["open_screen", { screen: "activities" }]);
-    const twice = AssistReply.parse((await ask("Ouvre deux écrans")).json());
-    expect(twice.actions).toEqual([{ kind: "open_screen", screen: "pools", ids: {}, params: {} }]);
-    expect(results[1]!.content).toMatch(/One screen per answer/);
+    expect(results[0]).toMatchObject({ error: true, content: expect.stringMatching(/No screen "attempt"/) });
   });
 
   it("never return a command that writes, nor one the screen did not list, even when the model names it", async () => {

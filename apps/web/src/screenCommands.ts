@@ -1,13 +1,22 @@
 import { useEffect } from "react";
 
-import type { Command, CommandEffect } from "./commands";
+import type { Command } from "./commands";
 
 /**
- * A command a mounted screen lends: its `effect` is REQUIRED (ADR-080 P2b),
- * so a new screen command is classified when it is written — the assistant
- * runs only those of effect `none`.
+ * A command a mounted screen lends, classified where it is written for the
+ * teacher assistant (ADR-080 P2b).
+ *
+ * - `effect`: what running it does to the platform's data — `none` (it
+ *   opens, shows, selects, previews, and changes nothing) or `write`. The
+ *   assistant is offered, and runs, the `none` ones only.
+ * - `gesture`: it needs a real user gesture (`window.open` is blocked as a
+ *   pop-up after an asynchronous answer), so the assistant's answer offers
+ *   it as a button the teacher clicks instead of running it.
+ * - Its `label` reaches the model with its id: it is screen chrome, and
+ *   never embeds an entity's name or content (a title, a student, a
+ *   question); a command that would need one uses a generic label.
  */
-export type ScreenCommand = Command & { effect: CommandEffect };
+export type ScreenCommand = Command & { effect: "none" | "write"; gesture?: true };
 
 /**
  * The ONE registry of "the commands of the mounted screen"

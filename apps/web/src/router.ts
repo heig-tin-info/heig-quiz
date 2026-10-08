@@ -1,33 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { SEB_QUIT_PATH, encodeJournalPath, safeJournalPath } from "@quiz/contracts";
+import { COURSE_TABS, type AdminTab, type ClassroomQueryTab, type CourseTab } from "@quiz/domain";
 
-/** The classroom's sections that live in `?tab=`; the others are routes of their own. */
-export const CLASSROOM_QUERY_TABS = ["evaluations", "roster", "drill"] as const;
-export type ClassroomQueryTab = (typeof CLASSROOM_QUERY_TABS)[number];
-
-/*
- * The `?tab=` (or `?step=`) values of the screens that read one off the
- * query string, kept here beside the routes so a screen and the assistant's
- * catalogue (`assist/screens.ts`, ADR-080 P2b) read the same list.
- */
-/** The pool screen's tabs (`?tab=`); `review` while the platform has a model. */
-export const POOL_TABS = ["questions", "tags", "review"] as const;
-/** The question editor's tabs (`?tab=`). */
-export const QUESTION_TABS = ["edit", "try", "versions"] as const;
-/** The results' tabs (`?tab=`). */
-export const RESULTS_TABS = ["students", "questions"] as const;
-/** The evaluation configuration's steps (`?step=`). */
-export const EVALUATION_STEPS = ["questions", "timing", "launch"] as const;
-/** The template editor's tabs (`?tab=`). */
-export const TEMPLATE_TABS = ["questions", "settings"] as const;
-
-/**
- * The tabs of a course's page (F-ORG-12), each a path of its own
- * (`/courses/:id/<tab>`); the classrooms are the bare `/courses/:id`.
- */
-export const COURSE_TABS = ["classrooms", "templates", "pools", "members", "conditions", "settings"] as const;
-export type CourseTab = (typeof COURSE_TABS)[number];
 const isCourseTab = (s: string | undefined): s is CourseTab =>
   (COURSE_TABS as readonly (string | undefined)[]).includes(s);
 
@@ -297,9 +272,6 @@ export const CLASSROOM_PAGES =
 /** Whether `view` parses in this build: not a `preview` route, or `CLASSROOM_PAGES` on. */
 export const routeEnabled = (view: Route["view"]): boolean => !ROUTES[view].preview || CLASSROOM_PAGES;
 
-/** The tabs of the Administration page, in their order (`AdminPanel.tsx`). */
-export const ADMIN_TABS = ["people", "system", "tasks", "llm", "concepts"] as const;
-export type AdminTab = (typeof ADMIN_TABS)[number];
 
 /** A view whose path is one fixed segment (`/settings`, `/polls`, …), whatever follows it. */
 function fixed<V extends Route["view"]>(
@@ -701,8 +673,12 @@ export function parsePath(path: string): Route {
  * instead of pushing one: a page that only ever forwards (the player of a
  * finished retake attempt, which goes to the score) must not be a Back
  * target that bounces the student forward again.
+ *
+ * The router's own resolves true once the app moved, false when the leave
+ * guard kept it on the screen (the assistant says which, ADR-080 P2b); a
+ * caller that does not care ignores it, and a stand-in may return nothing.
  */
-export type Navigate = (r: Route, options?: NavigateOptions) => void;
+export type Navigate = (r: Route, options?: NavigateOptions) => void | Promise<boolean>;
 
 export interface NavigateOptions {
   replace?: boolean;
@@ -808,12 +784,13 @@ export function useRoute(): [Route, Navigate] {
     const guard = leaveGuard;
     if (guard === null || path === window.location.pathname) {
       go();
-      return;
+      return Promise.resolve(true);
     }
-    void guard().then((ok) => {
-      if (!ok) return;
+    return guard().then((ok) => {
+      if (!ok) return false;
       leaveGuard = null;
       go();
+      return true;
     });
   }, []);
   return [route, navigate];

@@ -107,7 +107,9 @@ describe("useRoute and the query string", () => {
     goTo("/classrooms/c1?tab=roster");
     const { result } = routeAndTab();
     expect(result.current.tab[0]).toBe("roster");
-    act(() => result.current.route[1]({ view: "classroom", id: "c2" }));
+    act(() => {
+      void result.current.route[1]({ view: "classroom", id: "c2" });
+    });
     expect(window.location.pathname + window.location.search).toBe("/classrooms/c2");
     expect(result.current.tab[0]).toBe("evaluations");
   });
@@ -115,7 +117,9 @@ describe("useRoute and the query string", () => {
   it("drops the query of the page on view when it is navigated to again", () => {
     goTo("/classrooms/c1?tab=roster");
     const { result } = routeAndTab();
-    act(() => result.current.route[1]({ view: "classroom", id: "c1" }));
+    act(() => {
+      void result.current.route[1]({ view: "classroom", id: "c1" });
+    });
     expect(window.location.pathname + window.location.search).toBe("/classrooms/c1");
     expect(result.current.tab[0]).toBe("evaluations");
   });
@@ -124,7 +128,9 @@ describe("useRoute and the query string", () => {
     goTo("/classrooms/c1");
     const before = window.history.length;
     const { result } = routeAndTab();
-    act(() => result.current.route[1]({ view: "classroom", id: "c1" }));
+    act(() => {
+      void result.current.route[1]({ view: "classroom", id: "c1" });
+    });
     expect(window.history.length).toBe(before);
   });
 });
@@ -149,7 +155,9 @@ describe("useLeaveGuard", () => {
   it("lets `navigate` go at once while nothing is at stake", () => {
     goTo("/activities");
     const { result, ask } = guarded(false, false);
-    act(() => result.current[1]({ view: "pools" }));
+    act(() => {
+      void result.current[1]({ view: "pools" });
+    });
     expect(ask).not.toHaveBeenCalled();
     expect(window.location.pathname).toBe("/pools");
   });
@@ -157,7 +165,12 @@ describe("useLeaveGuard", () => {
   it("holds `navigate` until the screen answers, and stays on a no", async () => {
     goTo("/activities");
     const { result, ask } = guarded(true, false);
-    await act(async () => result.current[1]({ view: "pools" }));
+    let moved: boolean | void = undefined;
+    await act(async () => {
+      moved = await result.current[1]({ view: "pools" });
+    });
+    // It says it stayed (the assistant's "Stayed on this screen", ADR-080 P2b).
+    expect(moved).toBe(false);
     expect(ask).toHaveBeenCalledTimes(1);
     expect(window.location.pathname).toBe("/activities");
     expect(result.current[0].view).not.toBe("pools");
@@ -166,7 +179,11 @@ describe("useLeaveGuard", () => {
   it("goes on a yes", async () => {
     goTo("/activities");
     const { result } = guarded(true, true);
-    await act(async () => result.current[1]({ view: "pools" }));
+    let moved: boolean | void = undefined;
+    await act(async () => {
+      moved = await result.current[1]({ view: "pools" });
+    });
+    expect(moved).toBe(true);
     expect(window.location.pathname).toBe("/pools");
     expect(result.current[0]).toEqual({ view: "pools" });
   });

@@ -1,16 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { assistScreen, assistSystem, buildCorpus, poolNamed, searchOf, stubTurn, wantsScreen } from "./assist.js";
+import { assistScreen, assistSystem, buildCorpus, stubTurn } from "./assist.js";
 import {
   ASSIST_MAX_COMMANDS,
-  ASSIST_SCREENS,
   AssistUiTurn,
   assistCommandList,
   assistScreenCatalogue,
   assistScreensFor,
   checkOpenScreen,
   isUuid,
-  runnableCommands,
   type AssistScreenCommand,
 } from "./assistScreens.js";
 
@@ -26,15 +24,16 @@ const COMMANDS: AssistScreenCommand[] = [
 const corpus = buildCorpus([{ id: "guide/pools", locale: "en", text: "# Pools\n\n## Sharing a pool\n\nShare it." }]);
 
 describe("the screen catalogue (ADR-080 P2b)", () => {
-  it("is the router's, generated, and keeps the administration for an administrator", () => {
-    expect(ASSIST_SCREENS.map((s) => s.screen)).toContain("pool");
-    expect(assistScreensFor("admin").map((s) => s.screen)).toContain("admin");
-    expect(assistScreensFor("teacher").map((s) => s.screen)).not.toContain("admin");
+  it("keeps the administration for an administrator", () => {
+    expect(assistScreensFor("admin").map(([name]) => name)).toContain("admin");
+    expect(assistScreensFor("teacher").map(([name]) => name)).not.toContain("admin");
   });
 
-  it("is listed in the stable prompt with its ids and params, the administration for an administrator only", () => {
+  it("is listed in the stable prompt with its ids and params", () => {
     const teacher = assistScreenCatalogue("teacher");
-    expect(teacher).toContain("- pool — /pools/:id — Question pool (help/pool); ids: id=<pool id>; params: tab=questions|tags|review, q=<the search box");
+    expect(teacher).toContain(
+      "- pool — /pools/:id — Question pool (help/pool); ids: id=<pool id>; params: tab=questions|tags|review, q=<the search box",
+    );
     expect(teacher).toContain("category=<category id>");
     expect(teacher).toContain("- activities — /activities — Activities\n");
     expect(teacher).not.toContain("- admin —");
@@ -47,18 +46,20 @@ describe("the screen catalogue (ADR-080 P2b)", () => {
 
 describe("checkOpenScreen", () => {
   it("returns the action for a screen of the catalogue with its ids and params", () => {
-    expect(checkOpenScreen({ screen: "pool", ids: { id: POOL }, params: { q: "tag:printf", category: CATEGORY } }, "teacher")).toEqual({
+    expect(
+      checkOpenScreen({ screen: "pool", ids: { id: POOL }, params: { q: "tag:printf", category: CATEGORY } }, "teacher"),
+    ).toEqual({ kind: "open_screen", screen: "pool", ids: { id: POOL }, params: { q: "tag:printf", category: CATEGORY } });
+    expect(checkOpenScreen({ screen: "activities" }, "teacher")).toEqual({
       kind: "open_screen",
-      screen: "pool",
-      ids: { id: POOL },
-      params: { q: "tag:printf", category: CATEGORY },
+      screen: "activities",
+      ids: {},
+      params: {},
     });
-    expect(checkOpenScreen({ screen: "activities" }, "teacher")).toEqual({ kind: "open_screen", screen: "activities", ids: {}, params: {} });
-    expect(checkOpenScreen({ screen: "classroom", ids: { id: POOL }, params: { tab: "roster" }, }, "teacher").params).toEqual({ tab: "roster" });
   });
 
-  it("refuses a screen off the catalogue, or the role's", () => {
+  it("refuses a screen off the catalogue, or off the role's", () => {
     expect(() => checkOpenScreen({ screen: "attempt", ids: { evaluationId: POOL } }, "teacher")).toThrow(/No screen "attempt"/);
+    expect(() => checkOpenScreen({ screen: "constructor" }, "teacher")).toThrow(/No screen "constructor"/);
     expect(() => checkOpenScreen({ screen: "admin" }, "teacher")).toThrow(/No screen "admin"/);
     expect(() => checkOpenScreen("pool", "teacher")).toThrow(/No screen "undefined"/);
     expect(checkOpenScreen({ screen: "admin", params: { tab: "llm" } }, "admin").screen).toBe("admin");
@@ -85,7 +86,7 @@ describe("checkOpenScreen", () => {
     expect(pool(null).params).toEqual({});
   });
 
-  it("takes another id rule where the caller gives one (the browser mock's ids)", () => {
+  it("takes another id rule where the caller gives one (the browser's path segments)", () => {
     expect(checkOpenScreen({ screen: "pool", ids: { id: "p1" } }, "teacher", (s) => /^p\d$/.test(s)).ids).toEqual({ id: "p1" });
     expect(isUuid(POOL)).toBe(true);
     expect(isUuid("p1")).toBe(false);
@@ -93,12 +94,10 @@ describe("checkOpenScreen", () => {
 });
 
 describe("the screen's commands", () => {
-  it("offers the effect-free ones only, in the screen part of the prompt", () => {
-    expect(runnableCommands(COMMANDS).map((c) => c.id)).not.toContain("question:publish");
-    expect(runnableCommands(undefined)).toEqual([]);
+  it("lists the effect-free ones only, in the screen part of the prompt", () => {
     expect(assistCommandList(COMMANDS)).toContain("  - question:preview — Preview");
     expect(assistCommandList(COMMANDS)).not.toContain("publish");
-    expect(assistCommandList([])).toBe("- Commands you may run here: none.");
+    expect(assistCommandList(undefined)).toBe("- Commands you may run here: none.");
     const screen = assistScreen(corpus, "teacher", { route: "/questions/:id", helpTopic: null, locale: "en", commands: COMMANDS });
     expect(screen).toContain("Commands you may run here (run_screen_command)");
   });
@@ -139,34 +138,25 @@ describe("the stub drives the interface (ADR-080 P2b)", () => {
   ];
   const screen = { route: "/", helpTopic: null, locale: "fr" as const };
   const readers = { results: () => Promise.reject(new Error("no")), pools: () => Promise.resolve(pools) };
+  const ask = (question: string, locale: "en" | "fr" = "fr", read = readers) => stubTurn(corpus, "teacher", question, { ...screen, locale }, read);
 
-  it("recognizes a request to see something, the pool it names and its tag", () => {
-    expect(wantsScreen("Montre-moi les questions du pool sandbox")).toBe(true);
-    expect(wantsScreen("How do I share a pool?")).toBe(false);
-    expect(poolNamed("Montre-moi les questions du pool sandbox", pools)?.id).toBe(POOL);
-    expect(poolNamed("open programmation c", pools)?.id).toBe(CATEGORY);
-    expect(poolNamed("open the c pool", pools)).toBeNull();
-    expect(searchOf("seulement tag:printf")).toBe("tag:printf");
-    expect(searchOf("only #pointeurs")).toBe("tag:pointeurs");
-    expect(searchOf("only the printf ones")).toBeNull();
-  });
-
-  it("opens the pool, searched, and says so", async () => {
-    const turn = await stubTurn(corpus, "teacher", "Montre-moi les questions du pool sandbox, tag:printf", screen, readers);
+  it("opens the pool a request to see names, searched by its tag:x or #x, and says so", async () => {
+    const turn = await ask("Montre-moi les questions du pool sandbox, tag:printf");
     expect(turn.actions).toEqual([{ kind: "open_screen", screen: "pool", ids: { id: POOL }, params: { q: "tag:printf" } }]);
     expect(turn.text).toContain("J'ai ouvert la banque **Sandbox** avec la recherche `tag:printf`.");
-    const plain = await stubTurn(corpus, "teacher", "show the sandbox pool", { ...screen, locale: "en" }, readers);
+    expect((await ask("open programmation c, only #pointeurs", "en")).actions).toEqual([
+      { kind: "open_screen", screen: "pool", ids: { id: CATEGORY }, params: { q: "tag:pointeurs" } },
+    ]);
+    const plain = await ask("show the sandbox pool", "en");
     expect(plain.actions[0]).toMatchObject({ params: {} });
     expect(plain.text).toContain("I opened the pool **Sandbox**.");
   });
 
-  it("answers from the documentation otherwise, with no action", async () => {
-    const asked = await stubTurn(corpus, "teacher", "How do I share a pool?", screen, readers);
-    expect(asked.actions).toEqual([]);
-    const unread = await stubTurn(corpus, "teacher", "Show the sandbox pool", screen, {
-      ...readers,
-      pools: () => Promise.reject(new Error("refused")),
-    });
+  it("answers from the documentation, with no action, for any other question", async () => {
+    expect((await ask("How do I share a pool?")).actions).toEqual([]);
+    // A name too short to match, or no pool read.
+    expect((await ask("open the c pool")).actions).toEqual([]);
+    const unread = await ask("Show the sandbox pool", "fr", { ...readers, pools: () => Promise.reject(new Error("refused")) });
     expect(unread.actions).toEqual([]);
   });
 });

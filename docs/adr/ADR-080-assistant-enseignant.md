@@ -371,37 +371,41 @@ The design, as built:
   is being opened** (the commands are the current screen's, which the
   navigation leaves). The gateway's loop is unchanged: the two tools are
   `ReadOnlyTool`s that read nothing either.
-- **The screen catalogue has one source: the router.** `ASSIST_SCREEN_SPECS`
-  (`apps/web/src/assist/screens.ts`) is a table mapped over the router's
-  `Route` union, so a view added to the router and not classified there is a
-  compile error, and a test walks it against `ROUTE_VIEWS`. Each view is
-  either `null` — a student's screen, a projection, a preview, a guest's or
-  a station's page, a creation form, a page whose ids no read tool returns
-  (a project, a group set) — or the screen with its i18n label, its help
-  topic and its parameters. The pattern is the router's own (`routePattern`),
-  the ids' kinds are the P2 table's (`routeEntities`), the tabs are the
-  router's lists (`POOL_TABS`, `CLASSROOM_QUERY_TABS`, …, which the screens
-  now read too). The server reads the same catalogue from `@quiz/domain`
-  (`ASSIST_SCREENS`), a file **generated** from that table: its test fails
-  while the two differ (`UPDATE_ASSIST_SCREENS=1` rewrites it). The
-  administration is offered to an administrator's assistant only.
-- **Checks.** On the server: a screen of the role's catalogue, exactly its
-  ids, each a uuid, and only its parameters — a tab from its list, the
-  pool's search as one line of at most 200 characters, a category or an
-  item as a uuid. In the browser: the screen is looked up again, every id
-  must be a plain path segment, and the route's path must parse back to
-  that screen (`parsePath`); otherwise nothing moves and the answer says
-  "Could not open this screen" — never a silent jump to the home.
+- **The screen catalogue is held to the router.** It is written once, in
+  `@quiz/domain` (`ASSIST_SCREENS`, `assistScreens.ts`), one line per
+  screen — pattern, ids and their entity kinds, parameters, English title,
+  help topic, administrator-only —, beside the tab lists the screens and
+  the router now read from there (`POOL_TABS`, `CLASSROOM_QUERY_TABS`,
+  `COURSE_TABS`, …). The web classifies every view of the router in
+  `ASSIST_SCREEN_LABELS` (`apps/web/src/assist/screens.ts`), a table mapped
+  over the `Route` union — a view added to the router and not classified is
+  a compile error —: the label a screen of the catalogue is named by, or
+  `null` — a student's screen, a projection, a preview, a guest's or a
+  station's page, a creation form, a page whose ids no read tool returns (a
+  project, a group set). Its test holds the two to each other and to the
+  router: the same screens, each pattern the router's own (`routePattern`),
+  each id of the kind the P2 table gives (`routeEntities`), each title the
+  label's English text. The administration is offered to an administrator's
+  assistant only.
+- **Checks.** One rule, `checkOpenScreen` (`@quiz/domain`), on both sides:
+  a screen of the role's catalogue, exactly its ids, and only its
+  parameters — a tab from its list, the pool's search as one line of at
+  most 200 characters, a category or an item id. The server requires uuids;
+  the browser requires each id to be a plain path segment, and the route's
+  path to parse back to that screen (`parsePath`). Otherwise nothing moves
+  and the answer says "Could not open this screen" — never a silent jump
+  to the home. The router's `navigate` resolves whether the app moved: when
+  the leave guard kept it on the screen, the answer says "Stayed on this
+  screen", never "Opened".
 - **Filtering reuses the screens' own address state.** The parameters a
   route does not carry go on the query string (`navigate`'s new `query`
   option), where the screen reads them with `useSearchParam`. The pool
   screen gains `?q=`, its search box as typed, in the grammar of
   `pool/searchSyntax.ts` (`tag:`, `type:`, `difficulty:`, `version:`); it is
   also kept in the address when the teacher types, so a reload keeps it.
-- **Commands carry an effect.** The palette's `Command` gains
-  `effect: "none" | "write"`, absent meaning `write`; a screen command
-  (`useScreenCommands`) must declare it, so every one is classified where
-  it is written. Classified `none`: the editor's preview and "try it", the
+- **Commands carry an effect.** A screen command (`ScreenCommand`,
+  `useScreenCommands`) must declare `effect: "none" | "write"`, so every
+  one is classified where it is written. Classified `none`: the editor's preview and "try it", the
   live dashboard's "configure", the grading's and the results' links to
   each other, the pool's "new question of type …" (it opens the creation
   sheet; nothing exists until the teacher saves), the classroom's "connect
@@ -410,15 +414,20 @@ The design, as built:
   screen's commands as `{id, label, effect}` in the context
   (`AssistContext.commands`); the server lists the `none` ones to the model
   in the screen part of the prompt and accepts only those; the browser runs
-  a command only while it is still registered and still `none`.
+  a command only while it is still registered and still `none`. A command
+  that needs a real user gesture — the editor's preview opens a new tab,
+  which a browser blocks as a pop-up after an asynchronous answer — is
+  marked `gesture` and offered in the answer as a button the teacher
+  clicks, never run on its own.
 - **A command's label is screen chrome.** It reaches the model, so a screen
   command's label never embeds an entity's name or content (a title, a
   student, a question); a command that would need one uses a generic label.
-  The rule is written on `Command.effect`.
+  The rule is written on `ScreenCommand`.
 - **Nothing is stored.** The exchange keeps its text and the screen
   (pattern, topic, language): never the commands nor the actions, as for
-  the tool calls of P2 (item 9). The panel shows "Opened: <screen>" or
-  "Done: <command>" under the answer for this tab only.
+  the tool calls of P2 (item 9). The panel shows "Opened: <screen>",
+  "Stayed on this screen" or "Done: <command>" under the answer, for this
+  tab only.
 - **The prompt prefers showing over listing**: asked to see, show, open or
   display something, the assistant finds its id with its read tools, opens
   the screen (searched or on a tab when the teacher narrows it) and replies

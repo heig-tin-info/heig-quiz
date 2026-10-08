@@ -9,6 +9,7 @@ import type {
   QuestionPage,
   QuestionRow,
 } from "@quiz/contracts";
+import type { POOL_TABS } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -16,7 +17,7 @@ import { useToast } from "../notify";
 import { useT } from "../i18n";
 import { QUESTION_TYPE_IDS, typeIcon, typeLabel } from "../questionTypes";
 import type { Route } from "../router";
-import { useSearchParam, type POOL_TABS } from "../router";
+import { useSearchParam } from "../router";
 import { Trail, useRootCrumb } from "../Trail";
 import { useScreenCommands } from "../screenCommands";
 import { useShortcuts } from "../shortcuts";

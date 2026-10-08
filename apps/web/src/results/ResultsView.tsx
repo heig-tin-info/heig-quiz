@@ -17,6 +17,7 @@ import type {
   ReleaseResponse,
   ResultsView as ResultsPayload,
 } from "@quiz/contracts";
+import type { RESULTS_TABS } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -25,7 +26,7 @@ import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
-import { useSearchParam, type RESULTS_TABS } from "../router";
+import { useSearchParam } from "../router";
 import { Trail, useEvaluationCrumbs } from "../Trail";
 import { useScreenCommands } from "../screenCommands";
 import {

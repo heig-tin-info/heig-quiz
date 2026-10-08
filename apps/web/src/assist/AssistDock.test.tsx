@@ -228,16 +228,16 @@ describe("the assistant drives the interface (ADR-080 P2b)", () => {
   });
 
   it("runs an effect-free command of the screen, re-checked when it runs; never one that writes", async () => {
-    const preview = vi.fn();
+    const tryIt = vi.fn();
     const publish = vi.fn();
     const commands: ScreenCommand[] = [
-      { id: "question:preview", label: "Preview", icon: Eye, group: "action", effect: "none", run: preview },
+      { id: "question:try", label: "Try it", icon: Eye, group: "action", effect: "none", run: tryIt },
       { id: "question:publish", label: "Publish this question", icon: Eye, group: "action", effect: "write", run: publish },
     ];
     const { calls } = mockFetch({
       ...AVAILABLE,
       "POST /app/api/assist/ask": replying([
-        { kind: "run_command", id: "question:preview" },
+        { kind: "run_command", id: "question:try" },
         { kind: "run_command", id: "question:publish" },
         { kind: "run_command", id: "question:gone" },
       ]),
@@ -247,16 +247,34 @@ describe("the assistant drives the interface (ADR-080 P2b)", () => {
         <Commands commands={commands} />
       </WithRouter>,
     );
-    const panel = await askInDock("Preview it");
-    expect(await within(panel).findByText("Done: Preview")).toBeVisible();
-    expect(preview).toHaveBeenCalledTimes(1);
+    const panel = await askInDock("Try it");
+    expect(await within(panel).findByText("Done: Try it")).toBeVisible();
+    expect(tryIt).toHaveBeenCalledTimes(1);
     expect(publish).not.toHaveBeenCalled();
     expect(within(panel).getAllByText("This command is no longer available here.")).toHaveLength(2);
     // The screen's commands ride with the question, each with its effect; the server offers the `none` ones.
     expect((calls.find((c) => c.method === "POST")?.body as { context: { commands: unknown } }).context.commands).toEqual([
-      { id: "question:preview", label: "Preview", effect: "none" },
+      { id: "question:try", label: "Try it", effect: "none" },
       { id: "question:publish", label: "Publish this question", effect: "write" },
     ]);
+  });
+
+  it("offers a command that needs a real gesture (a new tab) as a button, run on the teacher's click", async () => {
+    const preview = vi.fn();
+    const commands: ScreenCommand[] = [
+      { id: "question:preview", label: "Preview", icon: Eye, group: "action", effect: "none", gesture: true, run: preview },
+    ];
+    mockFetch({ ...AVAILABLE, "POST /app/api/assist/ask": replying([{ kind: "run_command", id: "question:preview" }]) });
+    renderWithProviders(
+      <WithRouter>
+        <Commands commands={commands} />
+      </WithRouter>,
+    );
+    const panel = await askInDock("Preview it");
+    const button = await within(panel).findByRole("button", { name: "Preview" });
+    expect(preview).not.toHaveBeenCalled();
+    await userEvent.click(button);
+    expect(preview).toHaveBeenCalledTimes(1);
   });
 
   it("asks before leaving unsaved work, and stays when the teacher says no", async () => {
@@ -267,8 +285,10 @@ describe("the assistant drives the interface (ADR-080 P2b)", () => {
         <Dirty ask={ask} />
       </WithRouter>,
     );
-    await askInDock("Montre-moi Sandbox");
+    const panel = await askInDock("Montre-moi Sandbox");
     await waitFor(() => expect(ask).toHaveBeenCalled());
+    expect(await within(panel).findByText("Stayed on this screen.")).toBeVisible();
+    expect(within(panel).queryByText(/^Opened/)).toBeNull();
     expect(window.location.pathname).toBe("/");
   });
 });
