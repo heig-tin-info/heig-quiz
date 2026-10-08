@@ -138,7 +138,7 @@ export function InspectModal({
       footer={
         <span className="flex w-full items-center justify-between gap-2">
           <span className="text-xs tabular-nums text-fg-muted">{position}</span>
-          <span className="flex items-center gap-1">
+          <span className="touch-group flex items-center gap-1">
             <IconButton
               label={t("live.inspect.prev")}
               disabled={rowIndex <= 0}

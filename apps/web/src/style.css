@@ -414,6 +414,18 @@ html.dark {
     }
   }
 }
+/* A cluster of `touch-hit` controls (a row's icon buttons, a strip's link and
+   chevron) takes `touch-group`: under a coarse pointer its children stand at
+   least 8 px apart, so a 44 px area only ever covers the GAP beside its
+   neighbour and never the neighbour's own disc (a 28 px disc reaches 8 px out,
+   a 32 px one 6 px). A margin, not a gap, so it works in a table cell or an
+   inline row as well as in a flex one; unlayered, so it beats `gap-0.5`'s
+   tight spacing by adding to it. */
+@media (pointer: coarse) {
+  .touch-group > * + * {
+    margin-inline-start: 0.5rem;
+  }
+}
 /* What a hover reveals (row actions, a pencil, a sort arrow) is simply on
    where there is no hover to give: a control a finger cannot reveal is a
    control a finger does not have. Unlayered, so it beats `opacity-0` and

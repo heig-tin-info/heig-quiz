@@ -278,7 +278,7 @@ export function PollModeration({ id }: { id: string }) {
                       <li
                         key={v.key}
                         className={cx(
-                          "inline-flex items-center gap-1.5 rounded-full border border-line py-0.5 pr-0.5 pl-2.5 text-[13px]",
+                          "touch-group inline-flex items-center gap-1.5 rounded-full border border-line py-0.5 pr-0.5 pl-2.5 text-[13px]",
                           v.status === "hidden" ? "bg-surface-2 text-fg-faint line-through" : "bg-surface text-fg",
                         )}
                       >

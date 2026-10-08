@@ -1599,6 +1599,8 @@ A phone has no hover and a finger is not a cursor. Two classes in
 
 - `hover-reveal` goes on whatever a hover reveals (`opacity-0` /
   `invisible` + `group-hover:`): under `@media (hover: none)` it is simply on.
+  It is unlayered, so it overrides the opacity and visibility utilities
+  there.
   Applied: the grading row's Validate / Adjust, the category's rename pencil,
   the title's rename pencil, the sort arrow, the gaps of the evaluation's
   items.
@@ -1607,8 +1609,11 @@ A phone has no hover and a finger is not a cursor. Two classes in
   changing its drawn size. Built into `IconButton`, `IconLink`, the page's
   "?" and `Checkbox`; on the journal strip's entries, whose strip grows
   8 px of padding under a coarse pointer so its scroller does not clip the
-  area. Neighbouring areas may overlap; the later one wins the overlap and
-  each control keeps at least its own disc.
+  area. Touch-hit controls stand at least 8 px apart under a coarse pointer:
+  a cluster of them (a row's icon buttons, `Actions`, a strip entry's link
+  and chevron) takes `touch-group`, which spaces its children by a margin,
+  so an overlap of two areas only ever covers the gap between them, never a
+  neighbour's disc.
 
 Drag handles stay a pointer affordance: every drag has a menu or button
 twin (the group set's →, the category's "Move to…", the pool's bulk Move).

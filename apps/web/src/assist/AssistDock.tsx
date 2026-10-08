@@ -139,7 +139,7 @@ function Dock({
               {t("assist.title")}
             </h2>
             {stub ? <Badge tone="zinc">{t("assist.stub")}</Badge> : null}
-            <span className="ml-auto flex items-center gap-1">
+            <span className="touch-group ml-auto flex items-center gap-1">
               <IconButton
                 size="sm"
                 label={showHistory ? t("assist.back") : t("assist.history")}

@@ -434,7 +434,7 @@ function ItemCard({
         {/* A fixed, right-aligned slot: the refresh button appears on some
             rows only, and without it the points fields of the rows would not
             line up — a column of numbers that wanders is unreadable. */}
-        <span className="flex w-17 shrink-0 items-center justify-end gap-0.5">
+        <span className="touch-group flex w-17 shrink-0 items-center justify-end gap-0.5">
           {/* Only a stale item has anything to refresh, so only a stale item
               shows the button: a permanently disabled icon teaches nothing. */}
           {stale && !locked ? (

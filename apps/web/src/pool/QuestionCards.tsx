@@ -124,7 +124,7 @@ function QuestionCard({
 
       {readOnly ? null : (
         <div
-          className="-mb-1 flex justify-end gap-0.5 border-t border-line pt-2"
+          className="touch-group -mb-1 flex justify-end gap-0.5 border-t border-line pt-2"
           onClick={(e) => e.stopPropagation()}
         >
           <IconButton size="sm" label={t("pool.editRow", { name: row.internalName })} onClick={onEdit}>

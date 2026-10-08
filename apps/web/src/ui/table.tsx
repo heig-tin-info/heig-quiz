@@ -60,7 +60,10 @@ export function useSortableTable<T, K extends string>(
  * goes on the second line too. In the head only `lead`, `main` and `end`
  * remain (the select-all box and the main sort), the `sub` headers step
  * aside (`Column.stack`). A full-width band (a group's label) takes
- * `stack.band` on its row and its cell. From 28 rem the classes do nothing:
+ * `stack.band` on its row and its cell. The table, its row groups, rows and
+ * cells carry explicit ARIA roles (`role="table"`, …): a `display` that is
+ * no longer `table` makes some screen readers drop the semantics, and a cell
+ * whose header the card hides names itself (an `sr-only` label). From 28 rem the classes do nothing:
  * the desktop table is untouched.
  */
 const stack = {
@@ -70,13 +73,14 @@ const stack = {
    * the first line and the `sub` cells, so it is what breaks the line.
    */
   row: "@max-md:flex @max-md:flex-wrap @max-md:items-center @max-md:after:order-1 @max-md:after:basis-full @max-md:after:content-['']",
-  lead: "@max-md:shrink-0 @max-md:pr-0 @max-md:pb-1",
+  /** 2 px after the tick box: with the identity's 12 px, its 44 px touch area stops short of the next control. */
+  lead: "@max-md:shrink-0 @max-md:pr-0.5 @max-md:pb-1",
   main: "@max-md:min-w-0 @max-md:flex-1 @max-md:truncate @max-md:pb-1",
   end: "@max-md:static @max-md:ml-auto @max-md:shrink-0 @max-md:pb-1",
   /** The second line: small, muted, under the identity. */
   sub: "@max-md:order-2 @max-md:pt-0 @max-md:pb-2 @max-md:text-xs",
   /** The second line's first cell, under a row that has a `lead`: aligned on the identity. */
-  subIndent: "@max-md:order-2 @max-md:pt-0 @max-md:pb-2 @max-md:pl-10 @max-md:text-xs",
+  subIndent: "@max-md:order-2 @max-md:pt-0 @max-md:pb-2 @max-md:pl-10.5 @max-md:text-xs",
   band: "@max-md:block",
   /** A `sub` column's header: the card has no head line for it. */
   subHead: "@max-md:hidden",
@@ -167,6 +171,7 @@ export function SortHeader<K extends string>({
   return (
     <th
       scope="col"
+      role="columnheader"
       aria-sort={active ? (sort.dir === 1 ? "ascending" : "descending") : undefined}
       className={cx(T.th, right && "text-right", className)}
     >
@@ -242,13 +247,16 @@ export function TableHead<K extends string>({
   const role = (c: Column<K>) =>
     c.stack === undefined ? undefined : c.stack === "sub" ? stack.subHead : stack[c.stack];
   return (
-    <thead className={T.head}>
-      <tr className={stacked ? stack.row : undefined}>
+    // Explicit roles: a row-card table changes `display`, and some screen
+    // readers (VoiceOver) drop a table's semantics with it.
+    <thead role="rowgroup" className={T.head}>
+      <tr role="row" className={stacked ? stack.row : undefined}>
         {columns.map((c) =>
           c.sortable === false ? (
             <th
               key={c.key}
               scope="col"
+              role="columnheader"
               className={cx(T.th, c.right && "text-right", c.className, role(c))}
             >
               {c.srOnly ? <span className="sr-only">{c.label}</span> : c.label}

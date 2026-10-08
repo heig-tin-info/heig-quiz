@@ -102,7 +102,7 @@ export function ActivityMenu({
 function ProjectRepoLinks({ row }: { row: ProjectActivitySummary }) {
   const t = useT();
   return (
-    <span className="inline-flex items-center gap-0.5">
+    <span className="touch-group inline-flex items-center gap-0.5">
       <IconLink label={t("project.source")} href={repoHref(row.source.fullName)}>
         <GitBranch />
       </IconLink>

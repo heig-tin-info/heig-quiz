@@ -175,7 +175,7 @@ export function ImageView({
         <div
           role="toolbar"
           aria-label={t("md.image.menu")}
-          className="absolute top-1.5 right-1.5 flex items-center gap-0.5 rounded-full border border-line bg-surface px-0.5 shadow-overlay"
+          className="touch-group absolute top-1.5 right-1.5 flex items-center gap-0.5 rounded-full border border-line bg-surface px-0.5 shadow-overlay"
           // The bar floats over the document; nothing in it moves the caret.
           onMouseDown={(e) => e.preventDefault()}
         >

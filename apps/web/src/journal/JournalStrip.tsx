@@ -166,7 +166,8 @@ function Entry({ selected, children }: { selected: boolean; children: ReactNode 
   return (
     <li
       data-current={selected || undefined}
-      className={cx("flex shrink-0 items-center rounded-field", selected && "bg-accent-soft font-medium text-accent")}
+      // `touch-group`: a folder's link and its chevron stand apart under a finger.
+      className={cx("touch-group flex shrink-0 items-center rounded-field", selected && "bg-accent-soft font-medium text-accent")}
     >
       {children}
     </li>

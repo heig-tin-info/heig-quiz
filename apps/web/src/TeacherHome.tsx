@@ -194,9 +194,9 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
         </EmptyState>
       ) : view === "list" ? (
         <Card className={cx(T.container, "overflow-hidden")}>
-          <table className={cx(T.table, T.stack.table)}>
+          <table role="table" className={cx(T.table, T.stack.table)}>
             <TableHead columns={columns} sort={sort} onToggle={toggle} />
-            <tbody>
+            <tbody role="rowgroup">
               {sorted.map((c) => (
                 <CourseRow key={c.id} course={c} navigate={navigate} />
               ))}

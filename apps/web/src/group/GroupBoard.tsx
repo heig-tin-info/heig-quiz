@@ -416,7 +416,7 @@ function StudentChip({
     </>
   );
   return (
-    <li ref={setNodeRef} data-student={student.enrollmentId} className={cx("flex items-center gap-0.5", isDragging && "opacity-40")}>
+    <li ref={setNodeRef} data-student={student.enrollmentId} className={cx("touch-group flex items-center gap-0.5", isDragging && "opacity-40")}>
       {readOnly ? (
         <span className={cx(chipClass, "flex-1 border-line")}>
           <span className="min-w-0 flex-1 truncate">{name}</span>

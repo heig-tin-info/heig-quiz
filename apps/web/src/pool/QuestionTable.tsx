@@ -253,13 +253,13 @@ export function QuestionTable({
   ];
   return (
     <div className={cx(T.container, "overflow-x-auto rounded-card border border-line bg-surface")}>
-      <table className={cx(T.table, T.stack.table)}>
+      <table role="table" className={cx(T.table, T.stack.table)}>
         <TableHead columns={columns} sort={sortState} onToggle={onSort} />
         {groups.map((group) => (
-          <tbody key={group.key}>
+          <tbody role="rowgroup" key={group.key}>
             {group.label === null ? null : (
-              <tr className={T.stack.band}>
-                <td
+              <tr role="row" className={T.stack.band}>
+                <td role="cell"
                   colSpan={span}
                   className={cx(T.stack.band, "border-t border-line bg-surface-2 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-fg-muted")}
                 >
@@ -269,7 +269,7 @@ export function QuestionTable({
               </tr>
             )}
             {group.rows.map((row) => (
-              <tr
+              <tr role="row"
                 key={entryKey(group, row)}
                 {...rowProps(entryKey(group, row), row)}
                 draggable={onDragStart !== undefined}
@@ -277,7 +277,7 @@ export function QuestionTable({
                 className={cx(T.row, T.rowHover, T.stack.row, "cursor-pointer aria-[current=true]:bg-accent-soft")}
               >
                 {readOnly ? null : (
-                  <td className={cx(T.td, T.stack.lead)} onClick={(e) => e.stopPropagation()}>
+                  <td role="cell" className={cx(T.td, T.stack.lead)} onClick={(e) => e.stopPropagation()}>
                     <Checkbox
                       label={
                         <span className="sr-only">{t("pool.select", { name: row.internalName })}</span>
@@ -287,7 +287,7 @@ export function QuestionTable({
                     />
                   </td>
                 )}
-                <td className={cx(T.td, T.stack.main, "whitespace-nowrap")}>
+                <td role="cell" className={cx(T.td, T.stack.main, "whitespace-nowrap")}>
                   <span className="flex items-center gap-2">
                     <StarButton row={row} onToggle={() => onStar(row)} />
                     <TypeGlyph type={row.type} />
@@ -300,7 +300,7 @@ export function QuestionTable({
                     <RowStatsButton row={row} statsFor={statsFor} />
                   </span>
                 </td>
-                <td className={cx(T.td, "max-w-56", T.colHigh)}>
+                <td role="cell" className={cx(T.td, "max-w-56", T.colHigh)}>
                   {row.tags.length === 0 ? (
                     <span className="text-fg-faint">—</span>
                   ) : (
@@ -313,18 +313,19 @@ export function QuestionTable({
                     </span>
                   )}
                 </td>
-                <td className={cx(T.td, readOnly ? T.stack.sub : T.stack.subIndent, "whitespace-nowrap")}>
+                <td role="cell" className={cx(T.td, readOnly ? T.stack.sub : T.stack.subIndent, "whitespace-nowrap")}>
                   <DifficultyDots value={row.difficulty} />
                 </td>
                 {/* On a card the version is the row's status, beside the difficulty. */}
-                <td className={cx(T.td, T.colLow, T.stack.sub, "@max-md:block")}>
+                <td role="cell" className={cx(T.td, T.colLow, T.stack.sub, "@max-md:block")}>
+                  <span className="sr-only @md:hidden">{t("pool.col.version")} </span>
                   <VersionCell row={row} />
                 </td>
-                <td className={cx(T.td, "whitespace-nowrap text-fg-muted", T.colMid)}>
+                <td role="cell" className={cx(T.td, "whitespace-nowrap text-fg-muted", T.colMid)}>
                   <RelativeTime iso={row.updatedAt} />
                 </td>
                 {readOnly ? null : (
-                  <td
+                  <td role="cell"
                     className={cx(
                       T.td,
                       "text-right",
@@ -337,7 +338,7 @@ export function QuestionTable({
                     )}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <span className="inline-flex items-center gap-0.5">
+                    <span className="touch-group inline-flex items-center gap-0.5">
                       <IconButton
                         size="sm"
                         label={t("pool.editRow", { name: row.internalName })}
