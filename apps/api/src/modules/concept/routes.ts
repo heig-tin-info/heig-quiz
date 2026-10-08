@@ -7,7 +7,10 @@
  *
  * - `GET /app/api/concepts`: every concept that is not merged.
  * - `POST /app/api/concepts/resolve`: what each typed label designates.
- * - `POST /app/api/concepts`: a `proposed` concept; 409 `concept_exists`.
+ * - `POST /app/api/concepts`: a `proposed` concept; 409 `concept_exists`;
+ *   422 `concept_dropped` for the key of a tag the admin dropped (third
+ *   addendum §4, `ConceptWriteRefusal`); `PATCH` likewise for a rename
+ *   onto such a key.
  * - `PATCH /app/api/concepts/:id`: 403 `concept_forbidden`, 409
  *   `concept_merged` or `concept_exists`, 422 `concept_label_missing`, 404
  *   for an unknown id.

@@ -5,11 +5,12 @@
  */
 import { and, inArray, ne, or } from "drizzle-orm";
 
-import type { Concept, ConceptLang } from "@quiz/contracts";
-import { qualifiedConceptKey } from "@quiz/domain";
+import { CONCEPT_LANGS, type Concept, type ConceptLang, type ConceptRef } from "@quiz/contracts";
+import { conceptLabelIn, qualifiedConceptKey, type ResolvableConcept } from "@quiz/domain";
 
-import type { Db } from "../../db/client.js";
+import { isUniqueViolation, type Db, type Tx } from "../../db/client.js";
 import { concepts } from "../../db/schema.js";
+import { DomainError } from "../http.js";
 
 export type ConceptRow = typeof concepts.$inferSelect;
 
@@ -89,7 +90,7 @@ export function toConcept(row: ConceptRow): Concept {
  * The concepts, not merged, that hold one of `keys` in its language: who
  * answers a write that hit a key's unique index (addendum §3).
  */
-export async function holdersOf(db: Db, keys: Record<ConceptLang, readonly string[]>): Promise<ConceptRow[]> {
+export async function holdersOf(db: Db | Tx, keys: Record<ConceptLang, readonly string[]>): Promise<ConceptRow[]> {
   const held = (["fr", "en"] as const)
     .filter((lang) => keys[lang].length > 0)
     .map((lang) => inArray(concepts[COLUMNS[lang].key], [...keys[lang]]));
@@ -98,4 +99,42 @@ export async function holdersOf(db: Db, keys: Record<ConceptLang, readonly strin
     .select()
     .from(concepts)
     .where(and(ne(concepts.status, "merged"), or(...held)));
+}
+
+/** A concept as the resolver of `@quiz/domain` sees it: its id, its merge, its labels with their qualifiers. */
+export function toResolvable(row: ConceptRow): ResolvableConcept {
+  return {
+    id: row.id,
+    mergedInto: row.mergedInto,
+    labels: CONCEPT_LANGS.flatMap((lang) => {
+      const { label, qualifier } = sideOf(row, lang);
+      return label === null ? [] : [{ label, qualifier }];
+    }),
+  };
+}
+
+/** A concept as a question shows it, in the reader's language or the other one (`conceptLabelIn`). */
+export function toConceptRef(row: ConceptRow, lang: ConceptLang): ConceptRef {
+  return { id: row.id, status: row.status, ...conceptLabelIn(perLang((l) => sideOf(row, l)), lang) };
+}
+
+/**
+ * A write that hit a key's unique index: the 409 `concept_exists` naming the
+ * concept that holds the key (any of the keys asked, per language). Anything
+ * else is rethrown as it came.
+ */
+export async function conflictOr(
+  db: Db | Tx,
+  error: unknown,
+  keys: Record<ConceptLang, string | null | readonly string[]>,
+): Promise<unknown> {
+  const violated = perLang((lang) => {
+    const key = keys[lang];
+    const asked = key === null ? [] : typeof key === "string" ? [key] : key;
+    return isUniqueViolation(error, COLUMNS[lang].index) ? asked : [];
+  });
+  const [holder] = await holdersOf(db, violated);
+  return holder
+    ? new DomainError("concept_exists", 409, "A concept with this label already exists", { concept: toConcept(holder) })
+    : error;
 }

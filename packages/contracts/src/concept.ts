@@ -307,3 +307,58 @@ export type ConceptSortRun = z.infer<typeof ConceptSortRun>;
 /** `GET /admin/concept-sorting/run`, and the answer of `POST /admin/concept-sorting/propose` (202): the last run, null before the first. */
 export const ConceptSortRunStatus = z.object({ run: ConceptSortRun.nullable() });
 export type ConceptSortRunStatus = z.infer<typeof ConceptSortRunStatus>;
+
+// ---------------------------------------------------------------------------
+// Links between questions and concepts (ADR-081, third addendum 2026-10-08):
+// a write that names concepts, and a concept as a question shows it.
+// ---------------------------------------------------------------------------
+
+/**
+ * A concept as a question shows it: its label and qualifier in the reader's
+ * language, falling back to the other one (a `proposed` concept may have one
+ * language only), and its status.
+ */
+export const ConceptRef = z.object({
+  id: z.uuid(),
+  label: z.string(),
+  qualifier: z.string(),
+  status: ConceptStatus,
+});
+export type ConceptRef = z.infer<typeof ConceptRef>;
+
+/**
+ * Why one input of a write naming concepts is refused (addendum §2, third
+ * addendum §4): several exact matches (`concept_ambiguous`), close matches
+ * only or none without creation asked (`concept_unknown`, "did you mean"
+ * candidates best first, possibly none), or the key of a tag the admin
+ * dropped in the sorting, refused even with creation asked
+ * (`concept_dropped`, with the drop's reason).
+ */
+export const ConceptInputError = z.discriminatedUnion("error", [
+  z.object({ input: z.string(), error: z.literal("concept_ambiguous"), candidates: z.array(ConceptRef) }),
+  z.object({ input: z.string(), error: z.literal("concept_unknown"), candidates: z.array(ConceptRef) }),
+  z.object({ input: z.string(), error: z.literal("concept_dropped"), reason: TagDropReason }),
+]);
+export type ConceptInputError = z.infer<typeof ConceptInputError>;
+
+/**
+ * The 422 of a write naming concepts, all or nothing: every input at fault,
+ * in the order of the request; `error` is the first one's code. Its
+ * candidates are `ConceptRef`s (`POST /concepts/resolve` still answers whole
+ * `Concept`s; it moves to `ConceptRef` at the cut-over). `POST` and `PATCH
+ * /concepts` answer a label on the stop list with this body too.
+ */
+export const ConceptWriteRefusal = z.object({
+  error: z.enum(["concept_ambiguous", "concept_unknown", "concept_dropped"]),
+  message: z.string().optional(),
+  errors: z.array(ConceptInputError).min(1),
+});
+export type ConceptWriteRefusal = z.infer<typeof ConceptWriteRefusal>;
+
+/** The 422 of setting a question's concepts: these ids are missing, or merged. */
+export const ConceptNotFound = z.object({
+  error: z.literal("concept_not_found"),
+  message: z.string().optional(),
+  ids: z.array(z.uuid()).min(1),
+});
+export type ConceptNotFound = z.infer<typeof ConceptNotFound>;

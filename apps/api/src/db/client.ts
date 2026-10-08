@@ -102,3 +102,12 @@ export function isUniqueViolation(err: unknown, constraint: string): boolean {
 export function isForeignKeyViolation(err: unknown, constraint: string): boolean {
   return isViolation(err, "23503", constraint);
 }
+
+/**
+ * PostgreSQL's `restrict_violation` (23001) on the named constraint: a
+ * delete refused by an `ON DELETE RESTRICT` foreign key, which, unlike the
+ * default `NO ACTION`, does not raise 23503.
+ */
+export function isRestrictViolation(err: unknown, constraint: string): boolean {
+  return isViolation(err, "23001", constraint);
+}

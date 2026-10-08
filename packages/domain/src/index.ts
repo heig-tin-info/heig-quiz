@@ -41,6 +41,7 @@ export * from "./clockMode.js";
 export * from "./cloze.js";
 export * from "./concepts.js";
 export * from "./conceptSorting.js";
+export * from "./conceptWrites.js";
 export * from "./compareOutput.js";
 export * from "./outputDiff.js";
 export * from "./cooldown.js";
