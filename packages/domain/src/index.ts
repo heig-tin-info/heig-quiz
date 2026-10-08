@@ -39,6 +39,7 @@ export {
 } from "./ciScore.js";
 export * from "./cloze.js";
 export * from "./concepts.js";
+export * from "./conceptSorting.js";
 export * from "./compareOutput.js";
 export * from "./outputDiff.js";
 export * from "./cooldown.js";

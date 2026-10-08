@@ -19,6 +19,11 @@
  * - `POST /app/api/admin/concept-sorting/accept`: the decisions, in one
  *   transaction; 409 `concept_exists` (with `conflicts`), 422 `tag_unknown`,
  *   `concept_not_found` or `concept_batch_conflict` (with `items`).
+ * - `POST /app/api/admin/concept-sorting/propose`: starts the model pass
+ *   that proposes the sorting (`./propose.ts`); 202 with the run; 409
+ *   `concept_sort_running` while one is alive, 409 `llm_not_configured`
+ *   without a usable model.
+ * - `GET /app/api/admin/concept-sorting/run`: the last run, null before the first.
  * - `POST /app/api/admin/concepts/:id/validate`: 422
  *   `concept_label_missing`, 409 `concept_merged`, 404.
  * - `DELETE /app/api/admin/concepts/:id`: 204; 409 `concept_in_use`, 404.
@@ -27,6 +32,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import {
   ConceptCreate,
+  type ConceptSortRunStatus,
   type ConceptList,
   ConceptPatch,
   ConceptResolveRequest,
@@ -40,6 +46,7 @@ import {
 import { actorOf } from "../../audit.js";
 import { adminGuard, callerOf, teacherGuard } from "../guards.js";
 import { invalid, notFound, sendFailure } from "../http.js";
+import { LlmError, llmFailure } from "../llm/service.js";
 import * as service from "./service.js";
 
 export async function conceptPlugin(app: FastifyInstance) {
@@ -99,6 +106,24 @@ export async function conceptPlugin(app: FastifyInstance) {
     } catch (error) {
       return sendFailure(reply, error, now);
     }
+  });
+
+  app.post("/app/api/admin/concept-sorting/propose", { preHandler: requireAdmin }, async (req, reply) => {
+    const now = app.clock.now();
+    try {
+      const run = await service.startSortRun(app, { userId: callerOf(req).id, actor: actorOf(req), now });
+      return reply.code(202).send({ run } satisfies ConceptSortRunStatus);
+    } catch (error) {
+      if (error instanceof LlmError) {
+        const { status, body } = llmFailure(error);
+        return reply.code(status).send(body);
+      }
+      return sendFailure(reply, error, now);
+    }
+  });
+
+  app.get("/app/api/admin/concept-sorting/run", { preHandler: requireAdmin }, async () => {
+    return { run: await service.lastSortRun(app, app.clock.now()) } satisfies ConceptSortRunStatus;
   });
 
   app.post("/app/api/admin/concepts/:id/validate", { preHandler: requireAdmin }, async (req, reply) => {

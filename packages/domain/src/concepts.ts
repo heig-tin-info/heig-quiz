@@ -344,13 +344,23 @@ export function groupTagsByConceptKey<T extends PoolTagCount>(
   );
 }
 
+/** The longest label, and qualifier, a concept takes (the contracts' bound, and the model pass's). */
+export const CONCEPT_LABEL_MAX = 120;
+export const CONCEPT_QUALIFIER_MAX = 120;
+/** The longest description of one language of a concept. */
+export const CONCEPT_DESCRIPTION_MAX = 500;
+/** The longest free-text hint of a sorting proposal (`broader`, `note`). */
+export const CONCEPT_HINT_MAX = 200;
+/** A label must hold a letter or a digit, so that its key is never empty. */
+export const CONCEPT_LABEL_PATTERN = /[\p{L}\p{N}]/u;
+
 /** A qualifier as stored: trimmed, inner spaces collapsed; nothing else touched. */
 export function cleanConceptQualifier(qualifier: string): string {
   return qualifier.trim().replace(/\s+/g, " ");
 }
 
-type ConceptLanguage = "fr" | "en";
-const CONCEPT_LANGUAGES: readonly ConceptLanguage[] = ["fr", "en"];
+export type ConceptLanguage = "fr" | "en";
+export const CONCEPT_LANGUAGES: readonly ConceptLanguage[] = ["fr", "en"];
 
 /** One language of a new concept, as asked. */
 export interface NewConceptSideInput {

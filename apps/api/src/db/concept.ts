@@ -18,6 +18,7 @@ import {
   check,
   foreignKey,
   index,
+  integer,
   jsonb,
   pgTable,
   primaryKey,
@@ -28,6 +29,8 @@ import {
 } from "drizzle-orm/pg-core";
 
 import {
+  CONCEPT_SORT_RUN_ERRORS,
+  CONCEPT_SORT_RUN_STATES,
   CONCEPT_STATUSES,
   TAG_DROP_REASONS,
   TAG_SORTING_DECISIONS,
@@ -125,5 +128,37 @@ export const conceptTagSortings = pgTable(
         and (${t.dropReason} is not null) = (${t.decision} is not distinct from 'drop')`,
     ),
     index("concept_tag_sortings_concept_idx").on(t.conceptId),
+  ],
+);
+
+/**
+ * The model pass that proposes the sorting (second addendum §3): ONE row
+ * (`id = 'default'`), the last run. A run is started by claiming the row:
+ * one conditional upsert that succeeds only when no run is `running`, or
+ * when the running one's heartbeat went silent — its process died — so a
+ * crash never blocks the next start. `started_at` is the run's lease: the
+ * job carries it and writes only while it is still the row's. The
+ * heartbeat moves at every batch.
+ */
+export const conceptSortRuns = pgTable(
+  "concept_sort_runs",
+  {
+    id: text("id").primaryKey().default("default"),
+    state: text("state", { enum: CONCEPT_SORT_RUN_STATES }).notNull(),
+    /** The admin who started it, billed for its calls; null once their account is gone. */
+    startedBy: uuid("started_by").references(() => users.id, { onDelete: "set null" }),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    groupsDone: integer("groups_done").notNull().default(0),
+    groupsTotal: integer("groups_total").notNull().default(0),
+    /** Batches whose call failed without stopping the run: their pairs kept what they had. */
+    batchesFailed: integer("batches_failed").notNull().default(0),
+    error: text("error", { enum: CONCEPT_SORT_RUN_ERRORS }),
+  },
+  (t) => [
+    check("concept_sort_runs_singleton", sql`${t.id} = 'default'`),
+    check("concept_sort_runs_finished_ck", sql`(${t.state} = 'running') = (${t.finishedAt} is null)`),
+    check("concept_sort_runs_error_ck", sql`(${t.state} = 'failed') = (${t.error} is not null)`),
   ],
 );
