@@ -1,0 +1,49 @@
+# classroom.chevallier.io during the freeze (merge task M8-03, step C1 of
+# docs/merge/06 §6.5): every path answers 503 with `Retry-After`, until step
+# C6 replaces this fragment with classroom-redirect.caddy. On the application VM:
+#   cp infra/caddy/classroom-maintenance.caddy /etc/caddy/conf.d/classroom.caddy \
+#     && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile \
+#     && sudo systemctl reload caddy
+# Checked by `infra/caddy/check-classroom-redirects.sh --maintenance`.
+# CLASSROOM_SITE only exists to test the fragment on a local port; production
+# leaves it unset. The page is self-contained: no external asset.
+{$CLASSROOM_SITE:classroom.chevallier.io} {
+	header {
+		Retry-After 3600
+		Cache-Control no-store
+	}
+
+	# GitHub's deliveries to classroom's App: refused, the App is idle from
+	# now on (Quiz's App receives its own).
+	handle /webhooks/github {
+		header Content-Type application/json
+		respond `{"error":"maintenance"}` 503
+	}
+
+	handle {
+		header Content-Type "text/html; charset=utf-8"
+		respond <<HTML
+			<!doctype html>
+			<html lang="fr">
+			<head>
+			<meta charset="utf-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1">
+			<title>Maintenance — classroom</title>
+			<style>
+			body { font-family: system-ui, sans-serif; max-width: 36rem; margin: 4rem auto; padding: 0 1rem; line-height: 1.5; color: #1f2328; background: #fff; }
+			@media (prefers-color-scheme: dark) { body { color: #e6edf3; background: #0d1117; } }
+			h1 { font-size: 1.4rem; }
+			hr { border: 0; border-top: 1px solid #8884; margin: 2rem 0; }
+			</style>
+			</head>
+			<body>
+			<h1>Classroom déménage vers Quiz</h1>
+			<p>Le service est en maintenance pendant sa migration vers <strong>quiz.chevallier.io</strong>. Il sera de retour dans environ une heure ; vos liens continueront de fonctionner et vous mèneront à Quiz.</p>
+			<hr>
+			<h1 lang="en">Classroom is moving to Quiz</h1>
+			<p lang="en">The service is down for maintenance while it moves to <strong>quiz.chevallier.io</strong>. It will be back in about an hour; your links will keep working and lead you to Quiz.</p>
+			</body>
+			</html>
+			HTML 503
+	}
+}
