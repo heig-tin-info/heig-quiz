@@ -4256,7 +4256,7 @@ serves now (16a), and what waits for the group repositories (16b).
   (forced command, cookie tokens blanked) and `scripts/engine-backup/`
   (`srv`'s daily pull, 14 kept); monitoring deferred, checked by hand.
   Remaining: host nft `input` policy, the restore drill, the acceptance runs.
-- **As delivered (part 3: host nft)** (branch `merge/M6-05-host-nft`;
+- **As delivered (part 3: host nft)** (#613;
   repository only, applying it is the owner's). `infra/engine/host.nft`,
   `table inet host`, input policy drop, the flows of `deployment.md` §3
   (The host firewall), runner clients in two named sets; never
