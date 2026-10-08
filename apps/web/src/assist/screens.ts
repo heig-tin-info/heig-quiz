@@ -30,6 +30,8 @@ export const ASSIST_SCREEN_LABELS: { readonly [V in Route["view"]]: keyof Dict |
   classroom: "assist.screen.classroom",
   project: null,
   activities: "nav.activities",
+  // The phone's "right now" list (#449): not in the domain catalogue yet.
+  classrooms: null,
   pools: "pools.title",
   poolCategories: "assist.screen.poolCategories",
   pool: "pool.title",
