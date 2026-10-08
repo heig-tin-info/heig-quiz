@@ -139,7 +139,7 @@ for the pinned rail and the wide code question (ADR-066); `player-run` and
 | `pools` | teacher | `/pools` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `pool` | teacher | `/pools/014cc676-210c-4231-8342-00a0009f060c` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `pool-filters` | teacher | `/pools/014cc676-210c-4231-8342-00a0009f060c` | seeded | Clicked “Filters” above the question table. | 1440×900 |
-| `pool-share` | teacher | `/pools` | seeded | Opened the row menu of the first pool and picked “Share…”. | 1440×900 |
+| `pool-share` | teacher | `/pools/<pool>?tab=settings` | seeded | Opened the pool's Settings tab. | 1440×900 |
 | `editor-mcq` | teacher | `/questions/10eb3127-c30a-4cde-b8be-05197fa76a8c` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `editor-short` | teacher | `/questions/dcaaf3e6-7023-4f27-9dac-38d8212b4177` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `editor-cloze` | teacher | `/questions/557c0ffa-9fc0-46aa-b524-dc89ae4af138` | seeded | Nothing: the page as it loads. | 1440×900 |

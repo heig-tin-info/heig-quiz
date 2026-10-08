@@ -24,13 +24,15 @@ contient, y compris celles qui n'ont jamais été publiées. Une question
 supprimée disparaît de la banque et du compte ; les évaluations qui
 l'utilisent déjà la résolvent encore.
 
-## Renommer, supprimer
+## Nom, icône, partage, suppression
 
-**Renommer la banque** ne touche que le nom. **Supprimer la banque** emporte
-ses questions et ses catégories, après une confirmation qui la nomme. Si
-vous vouliez seulement cesser de la proposer, déliez-la de vos cours.
+L'onglet **Réglages** d'une banque, dans la banque elle-même, réunit tout le
+reste. **Renommer** ne touche que le nom ; la tuile de l'icône choisit son
+icône et sa couleur. **Partage** règle sa visibilité et donne à un collègue
+une place dessus, en lecture, en écriture ou comme propriétaire ; une banque
+partagée avec vous est aussi listée ici, avec votre rôle.
 
-**Partager…** dans le menu d'une banque donne à un collègue une place
-dessus, en lecture ou en écriture ; une banque partagée avec vous est aussi
-listée ici, avec votre rôle. La banque lisible par tous les profs viendra
-plus tard.
+**Supprimer la banque** emporte ses questions et ses catégories, après une
+confirmation qui la nomme. Si vous vouliez seulement cesser de la proposer,
+déliez-la de vos cours. Une banque qu'on vous a partagée propose **Quitter**
+à la place.

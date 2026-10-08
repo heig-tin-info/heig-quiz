@@ -1,19 +1,19 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import type { PoolCandidate, PoolMembers, PoolSummary } from "@quiz/contracts";
+import type { Pool, PoolCandidate, PoolMembers } from "@quiz/contracts";
 
 import { flowingClock } from "../test/clock";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
-import { PoolShareSheet } from "./PoolShareSheet";
+import { PoolSharing } from "./PoolSharing";
 
 /*
- * Sharing a pool: the visibility, the seats, and the row that gives one. The
+ * Sharing a pool, in its Settings tab: the visibility, the seats, and the row that gives one. The
  * owner's row is stated, never offered as a choice — it is the pool's own row.
  */
 
-const POOL: PoolSummary = {
+const POOL: Pool = {
   id: "p1",
   name: "Programmation C",
   icon: "code",
@@ -23,15 +23,6 @@ const POOL: PoolSummary = {
   isPersonal: false,
   createdAt: "2026-01-01T08:00:00.000Z",
   updatedAt: "2026-09-01T08:00:00.000Z",
-  questionCount: 14,
-  role: "owner",
-  ownerName: "Prof Démo",
-  heldRole: "owner",
-  usedCount: 0,
-  ownerGivenName: "Prof",
-  ownerFamilyName: "Démo",
-  ownerAvatarUrl: null,
-  memberCount: 1,
 };
 
 const MEMBERS = "/app/api/pools/p1/members";
@@ -83,10 +74,10 @@ const list: PoolMembers = {
   ],
 };
 
-describe("PoolShareSheet", () => {
+describe("PoolSharing", () => {
   it("lists the seats, the owner's first and not removable", async () => {
     mockFetch({ [`GET ${MEMBERS}`]: ok(list) });
-    renderWithProviders(<PoolShareSheet pool={POOL} onClose={vi.fn()} />);
+    renderWithProviders(<PoolSharing pool={POOL} />);
 
     expect(await screen.findByText("Prof Démo")).toBeVisible();
     expect(screen.getByText("Ada Lovelace")).toBeVisible();
@@ -103,7 +94,7 @@ describe("PoolShareSheet", () => {
       [`GET ${MEMBERS}`]: ok(list),
       "PATCH /app/api/pools/p1/members/t1": { status: 204 },
     });
-    renderWithProviders(<PoolShareSheet pool={POOL} onClose={vi.fn()} />);
+    renderWithProviders(<PoolSharing pool={POOL} />);
     await userEvent.selectOptions(
       await screen.findByRole("combobox", { name: "Role of Ada Lovelace" }),
       "reader",
@@ -117,7 +108,7 @@ describe("PoolShareSheet", () => {
       [`GET ${MEMBERS}`]: ok(list),
       "PATCH /app/api/pools/p1": ok(POOL),
     });
-    renderWithProviders(<PoolShareSheet pool={POOL} onClose={vi.fn()} />);
+    renderWithProviders(<PoolSharing pool={POOL} />);
     await screen.findByText("Ada Lovelace");
     expect(
       screen.getByText("The teachers invited below, each with the role you give them."),
@@ -137,7 +128,7 @@ describe("PoolShareSheet", () => {
       ...candidatesFor("gra", [grace]),
       "POST /app/api/pools/p1/members": { status: 201, body: list },
     });
-    renderWithProviders(<PoolShareSheet pool={POOL} onClose={vi.fn()} />);
+    renderWithProviders(<PoolSharing pool={POOL} />);
 
     const field = await screen.findByRole("combobox", { name: "Teacher" });
     // Nothing typed yet: not an address, nothing picked, nothing to send.
@@ -168,7 +159,7 @@ describe("PoolShareSheet", () => {
         message: "No teacher account",
       }),
     });
-    renderWithProviders(<PoolShareSheet pool={POOL} onClose={vi.fn()} />);
+    renderWithProviders(<PoolSharing pool={POOL} />);
 
     const field = await screen.findByRole("combobox", { name: "Teacher" });
     await user.type(field, "Nobody@heig-vd.ch");
@@ -184,13 +175,13 @@ describe("PoolShareSheet", () => {
     mockFetch({
       [`GET ${MEMBERS}`]: ok({ visibility: "private", members: [list.members[0]!] }),
     });
-    renderWithProviders(<PoolShareSheet pool={POOL} onClose={vi.fn()} />);
+    renderWithProviders(<PoolSharing pool={POOL} />);
     expect(await screen.findByText("Nobody else has access yet.")).toBeVisible();
   });
 
   it("shows the failure of the list, with a retry", async () => {
     mockFetch({ [`GET ${MEMBERS}`]: fail(500, { message: "Simulated failure" }) });
-    renderWithProviders(<PoolShareSheet pool={POOL} onClose={vi.fn()} />);
+    renderWithProviders(<PoolSharing pool={POOL} />);
     const alert = await screen.findByRole("status");
     expect(within(alert).getByText("Simulated failure")).toBeVisible();
     expect(within(alert).getByRole("button", { name: /Retry/ })).toBeVisible();

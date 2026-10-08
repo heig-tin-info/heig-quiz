@@ -1,32 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Globe,
-  LayoutGrid,
-  Library,
-  List,
-  Lock,
-  LogOut,
-  Pencil,
-  Plus,
-  Shapes,
-  Trash2,
-  Users,
-  UserPlus,
-} from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Globe, History, LayoutGrid, Library, List, Lock, Plus, Users } from "lucide-react";
+import { useState } from "react";
 
-import {
-  PoolInUse,
-  type Me,
-  type Pool,
-  type PoolColor,
-  type PoolSummary,
-} from "@quiz/contracts";
+import type { Me, PoolSummary } from "@quiz/contracts";
 
-import { api, ApiError, useMe } from "../api";
-import { useConfirm } from "../confirm";
+import { api, useMe } from "../api";
 import { useT, type TFunction } from "../i18n";
-import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
 import {
   Badge,
@@ -35,12 +14,7 @@ import {
   type Column,
   cx,
   EmptyState,
-  Field,
-  FormDialog,
-  FormError,
   iconOption,
-  Menu,
-  type MenuItem,
   PageHeader,
   PersonAvatar,
   pressable,
@@ -51,34 +25,12 @@ import {
   Spinner,
   T,
   TableHead,
-  Tip,
   usePersistentChoice,
   useSortableTable,
 } from "../ui";
-import { IconField } from "./IconField";
+import { PoolFormModal } from "./PoolFormModal";
 import { PoolIcon } from "./PoolIcon";
-import { PoolIconPicker } from "./PoolIconPicker";
-import { PoolShareSheet } from "./PoolShareSheet";
 import { poolsKey } from "../queryKeys";
-
-/** The body of a `409 pool_in_use`, or null for any other failure. */
-function poolInUse(error: unknown): PoolInUse | null {
-  if (!(error instanceof ApiError) || error.status !== 409) return null;
-  const parsed = PoolInUse.safeParse(error.body);
-  return parsed.success ? parsed.data : null;
-}
-
-/** What still holds the pool, by title, with the ones the caller cannot open counted. */
-function poolInUseMessage(inUse: PoolInUse, t: TFunction): string {
-  const titles = inUse.uses.map((u) => u.title).join(", ");
-  const one = inUse.hidden === 1;
-  if (titles === "") return t(one ? "pools.inUse.hidden.one" : "pools.inUse.hidden", { n: inUse.hidden });
-  const names =
-    inUse.hidden > 0
-      ? t(one ? "pools.inUse.more.one" : "pools.inUse.more", { names: titles, n: inUse.hidden })
-      : titles;
-  return t("pools.inUse", { names });
-}
 
 /**
  * The teacher's question pools.
@@ -98,9 +50,9 @@ function poolInUseMessage(inUse: PoolInUse, t: TFunction): string {
  * what, updated when" once a teacher has a dozen of them. The choice is a
  * habit, so it is remembered.
  *
- * Everything else a pool offers — renaming it, its icon, its members, leaving
- * it, deleting it — is in the overflow menu, gated by the caller's role: the
- * server decides what it accepts, and this only offers what it would accept.
+ * Nothing else is offered here: a pool's name, icon, members, leaving it and
+ * deleting it are its Settings tab's (`PoolSettings.tsx`), as a course's and
+ * a classroom's are theirs. A card is one door, with no menu beside it.
  */
 
 const VIEW_KEY = "quiz-pools-view";
@@ -146,192 +98,6 @@ function poolAttribution(pool: PoolSummary, mine: boolean, t: TFunction): string
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-interface PoolActions {
-  items: MenuItem[];
-  dialogs: ReactNode;
-}
-
-/**
- * The menu of one pool, and the layers it opens. One hook, so the card and
- * the row offer exactly the same things in the same order.
- */
-function usePoolActions(pool: PoolSummary, me: Me | null | undefined): PoolActions {
-  const t = useT();
-  const qc = useQueryClient();
-  const toast = useToast();
-  const toastError = useErrorToast();
-  const confirm = useConfirm();
-  const [edit, setEdit] = useState<"form" | "icon" | null>(null);
-  const [sharing, setSharing] = useState(false);
-
-  const owner = pool.role === "owner";
-  /** The account the pool BELONGS to cannot leave it; a co-owner can. */
-  const seat = me != null && pool.ownerId !== me.id;
-
-  const remove = useMutation({
-    mutationFn: () => api(`/app/api/pools/${pool.id}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: poolsKey }),
-    // ADR-031: a pool an evaluation or a template still pins is refused, and
-    // the refusal names them — translated here from its machine half.
-    onError: (error) => {
-      const inUse = poolInUse(error);
-      if (inUse) toast(poolInUseMessage(inUse, t), "error");
-      else toastError("error.save")(error);
-    },
-  });
-  const leave = useMutation({
-    mutationFn: () =>
-      api(`/app/api/pools/${pool.id}/members/${me?.id ?? ""}`, { method: "DELETE" }),
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: poolsKey });
-      toast(t("pools.leaveDone", { name: pool.name }), "success");
-    },
-    onError: toastError("error.save"),
-  });
-
-  const items: MenuItem[] = [];
-  if (owner) {
-    items.push(
-      { label: t("pools.rename"), icon: Pencil, onSelect: () => setEdit("form") },
-      { label: t("pools.changeIcon"), icon: Shapes, onSelect: () => setEdit("icon") },
-      { label: t("pools.share"), icon: UserPlus, onSelect: () => setSharing(true) },
-    );
-  }
-  if (seat) {
-    items.push({
-      label: t("pools.leave"),
-      icon: LogOut,
-      danger: true,
-      separator: items.length > 0,
-      onSelect: async () => {
-        const ok = await confirm({
-          title: t("pools.leave"),
-          message: t("pools.leaveConfirm", { name: pool.name }),
-          confirmLabel: t("pools.leaveAction"),
-          cancelLabel: t("common.cancel"),
-          danger: true,
-        });
-        if (ok) leave.mutate();
-      },
-    });
-  }
-  if (owner) {
-    items.push({
-      label: t("pools.delete"),
-      icon: Trash2,
-      danger: true,
-      separator: true,
-      onSelect: async () => {
-        const ok = await confirm({
-          title: t("pools.delete"),
-          message: t("pools.deleteConfirm", { name: pool.name }),
-          confirmLabel: t("common.delete"),
-          cancelLabel: t("common.cancel"),
-          danger: true,
-        });
-        if (ok) remove.mutate();
-      },
-    });
-  }
-
-  return {
-    items,
-    dialogs: (
-      <>
-        {edit ? (
-          <PoolFormModal pool={pool} startAt={edit} onClose={() => setEdit(null)} />
-        ) : null}
-        {sharing ? <PoolShareSheet pool={pool} onClose={() => setSharing(false)} /> : null}
-      </>
-    ),
-  };
-}
-
-/**
- * Creating a pool, and editing the two things that make it recognizable: its
- * name and its icon.
- *
- * The icon picker is the SAME dialog, one step further in — the tile in the
- * form opens it, picking one comes back. Not a second window over the first:
- * choosing an icon is part of naming a pool, not a decision of its own.
- */
-export function PoolFormModal({
-  pool,
-  startAt = "form",
-  onClose,
-}: {
-  /** Absent: create. Present: edit. */
-  pool?: PoolSummary;
-  /** "icon" opens straight on the picker (the "Change icon" menu item). */
-  startAt?: "form" | "icon";
-  onClose: () => void;
-}) {
-  const t = useT();
-  const qc = useQueryClient();
-  const [name, setName] = useState(pool?.name ?? "");
-  const [icon, setIcon] = useState<string | null>(pool?.icon ?? null);
-  const [color, setColor] = useState<PoolColor | null>(pool?.color ?? null);
-  const [step, setStep] = useState<"form" | "icon">(startAt);
-
-  const save = useMutation({
-    mutationFn: () => {
-      const body = JSON.stringify({ name: name.trim(), icon, color });
-      return pool
-        ? api<Pool>(`/app/api/pools/${pool.id}`, { method: "PATCH", body })
-        : api<Pool>("/app/api/pools", { method: "POST", body });
-    },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: poolsKey });
-      onClose();
-    },
-  });
-
-  if (step === "icon") {
-    return (
-      <PoolIconPicker
-        value={icon}
-        color={color}
-        onColor={setColor}
-        onPick={(picked) => {
-          setIcon(picked);
-          setStep("form");
-        }}
-        // Opened straight on the picker: there is no form step to go back to
-        // that the teacher asked for, so the way out is out — unless a colour
-        // was picked on the way, which the form then holds, ready to save.
-        onClose={() =>
-          startAt === "icon" && pool && color === pool.color ? onClose() : setStep("form")
-        }
-      />
-    );
-  }
-
-  return (
-    <FormDialog
-      title={pool ? t("pools.rename") : t("pools.new")}
-      onClose={onClose}
-      onSubmit={() => save.mutate()}
-      submitLabel={pool ? t("common.save") : t("pools.newAction")}
-      submitting={save.isPending}
-      canSubmit={name.trim() !== ""}
-      dense
-      error={<FormError error={save.error} fallback={t("pools.createFailed")} />}
-    >
-      <IconField onPick={() => setStep("icon")} icon={<PoolIcon icon={icon} color={color} className="size-4.5" />}>
-        <Field
-          label={t("pools.name")}
-          className="min-w-0"
-          width="min-w-0 flex-1"
-          autoFocus
-          placeholder={t("pools.namePlaceholder")}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-      </IconField>
-    </FormDialog>
-  );
-}
-
 function PoolCard({
   pool,
   me,
@@ -342,22 +108,19 @@ function PoolCard({
   navigate: (r: Route) => void;
 }) {
   const t = useT();
-  const { items, dialogs } = usePoolActions(pool, me);
   const mine = me != null && pool.ownerId === me.id;
   const attribution = poolAttribution(pool, mine, t);
 
   return (
-    // A column, so the "Updated …" strip is at the BOTTOM of every card and
-    // not wherever its own text ended: three cards side by side with three
-    // rules at three heights read as three different objects.
-    <Card className="relative flex h-full flex-col overflow-hidden">
-      {/* The card IS the door, so the whole of it is one button and the menu
-          sits beside it rather than inside it: a menu trigger nested in a
-          clickable card is two controls claiming the same click. */}
+    // A column, so the date strip is at the BOTTOM of every card and not
+    // wherever its own text ended: three cards side by side with three rules
+    // at three heights read as three different objects.
+    <Card className="flex h-full flex-col overflow-hidden">
+      {/* The card IS the door, so the whole of it is one button. */}
       <button
         type="button"
         onClick={() => navigate({ view: "pool", id: pool.id })}
-        className="flex w-full flex-1 items-start gap-3 p-4 pr-11 text-left transition-colors hover:bg-surface-2/50"
+        className="flex w-full flex-1 items-start gap-3 p-4 text-left transition-colors hover:bg-surface-2/50"
       >
         <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-field bg-surface-2 text-fg-muted">
           <PoolIcon icon={pool.icon} color={pool.color} className="size-6" />
@@ -377,15 +140,14 @@ function PoolCard({
           </span>
         </span>
       </button>
-      <div className="border-t border-line px-4 py-2 text-xs text-fg-faint">
-        {t("pools.updated")} <RelativeTime iso={pool.updatedAt} />
+      {/* The last change, said by its icon rather than by the same word on
+          every card, and set to the right where a date is read. Outside the
+          door: the date carries its own tooltip and focus. */}
+      <div className="flex items-center justify-end gap-1.5 border-t border-line px-4 py-2 text-xs text-fg-faint">
+        <History aria-hidden className="size-3.5" />
+        <span className="sr-only">{t("pools.updated")}</span>
+        <RelativeTime iso={pool.updatedAt} />
       </div>
-      {items.length > 0 ? (
-        <div className="absolute right-2 top-2">
-          <Menu label={t("common.actions")} items={items} />
-        </div>
-      ) : null}
-      {dialogs}
     </Card>
   );
 }
@@ -400,16 +162,15 @@ function PoolRow({
   navigate: (r: Route) => void;
 }) {
   const t = useT();
-  const { items, dialogs } = usePoolActions(pool, me);
   const mine = me != null && pool.ownerId === me.id;
 
   return (
     <tr
       {...pressable(() => navigate({ view: "pool", id: pool.id }), "row")}
       onClick={() => navigate({ view: "pool", id: pool.id })}
-      className={cx(T.row, T.rowHover, T.stack.row, "cursor-pointer")}
+      className={cx(T.row, T.rowHover, "cursor-pointer")}
     >
-      <td role="cell" className={cx(T.td, T.stack.main)}>
+      <td className={T.td}>
         <span className="flex min-w-0 items-center gap-2.5">
           <PoolIcon
             icon={pool.icon}
@@ -419,16 +180,12 @@ function PoolRow({
           <span className="min-w-0 truncate font-semibold">{pool.name}</span>
         </span>
       </td>
-      {/* On a card the count stands alone on its line, so it says what it counts. */}
-      <td role="cell" className={cx(T.td, T.stack.sub, "text-right tabular-nums @max-md:pl-9.5 @max-md:text-fg-muted")}>
-        <span className="@md:hidden">{t("pools.questions", { n: pool.questionCount })}</span>
-        <span className="hidden @md:inline">{pool.questionCount}</span>
-      </td>
-      <td role="cell" className={`${T.td} ${T.colMid} text-right tabular-nums`}>{pool.usedCount}</td>
-      <td role="cell" className={cx(T.td, T.stack.sub)}>
+      <td className={`${T.td} text-right tabular-nums`}>{pool.questionCount}</td>
+      <td className={`${T.td} ${T.colMid} text-right tabular-nums`}>{pool.usedCount}</td>
+      <td className={T.td}>
         <VisibilityBadge pool={pool} />
       </td>
-      <td role="cell" className={`${T.td} ${T.colMid}`}>
+      <td className={`${T.td} ${T.colMid}`}>
         {/* The avatar stands alone, so it carries the name (DESIGN.md ›
             PersonAvatar); the accent disc is the reader's own, as in the shell. */}
         <PersonAvatar
@@ -440,13 +197,9 @@ function PoolRow({
       </td>
       {/* The role HELD, never the one Super Powers lend: an admin passing
           through a colleague's pool is not its owner (ADR-013). */}
-      <td role="cell" className={`${T.td} ${T.colLow}`}>{t(`share.role.${pool.heldRole}`)}</td>
-      <td role="cell" className={`${T.td} ${T.colHigh} whitespace-nowrap text-fg-muted`}>
+      <td className={`${T.td} ${T.colLow}`}>{t(`share.role.${pool.heldRole}`)}</td>
+      <td className={`${T.td} ${T.colHigh} whitespace-nowrap text-fg-muted`}>
         <RelativeTime iso={pool.updatedAt} />
-      </td>
-      <td role="cell" className={cx(T.td, T.stickyEnd, T.stack.end, "w-10 text-right")}>
-        {items.length > 0 ? <Menu label={t("common.actions")} items={items} /> : null}
-        {dialogs}
       </td>
     </tr>
   );
@@ -504,21 +257,13 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
     null,
   );
   const columns: Column<PoolSort>[] = [
-    { key: "name", label: t("pools.name"), stack: "main" },
-    { key: "questions", label: t("pools.questionsColumn"), right: true, stack: "sub" },
+    { key: "name", label: t("pools.name") },
+    { key: "questions", label: t("pools.questionsColumn"), right: true },
     { key: "used", label: t("pools.usedColumn"), right: true, className: T.colMid },
-    { key: "visibility", label: t("pools.visibility"), stack: "sub" },
+    { key: "visibility", label: t("pools.visibility") },
     { key: "owner", label: t("pools.owner"), className: T.colMid },
     { key: "role", label: t("pools.role"), className: T.colLow },
     { key: "updated", label: t("pools.updatedColumn"), className: T.colHigh },
-    {
-      key: "actions",
-      label: t("common.actions"),
-      sortable: false,
-      srOnly: true,
-      className: "w-10",
-      stack: "end",
-    },
   ];
 
 
@@ -580,9 +325,9 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
       ) : view === "list" ? (
         <Card className="overflow-hidden">
           <div className={cx(T.container, "overflow-x-auto")}>
-            <table role="table" className={cx(T.table, T.stack.table)}>
+            <table className={T.table}>
               <TableHead columns={columns} sort={sort} onToggle={toggle} />
-              <tbody role="rowgroup">
+              <tbody>
                 {sorted.map((pool) => (
                   <PoolRow key={pool.id} pool={pool} me={me.data} navigate={navigate} />
                 ))}

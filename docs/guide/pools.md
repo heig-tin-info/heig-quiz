@@ -12,7 +12,7 @@ A pool is where your questions live: a tree of categories, a vocabulary of tags,
   <figcaption>The pools of a teacher: one card per pool, with its icon, its question count and its visibility.</figcaption>
 </figure>
 
-**New pool** creates one from a name. The menu at the end of a card offers **Rename pool**, **Change icon**, **Share…** and **Delete pool**. Renaming touches the name only. Deleting takes the questions and the categories with it, after a confirmation that names the pool.
+**New pool** creates one from a name and an icon. Everything else about a pool is in its **Settings** tab, inside the pool: **Rename**, the icon tile, the sharing, and **Delete pool** (or **Leave** for a pool shared with you). Renaming touches the name only. Deleting takes the questions and the categories with it, after a confirmation that names the pool.
 
 !!! note
     The question count includes drafts never published. A deleted question disappears from the pool and from the count, but an evaluation that already uses it keeps resolving it: results are never lost to a deletion.
@@ -183,12 +183,12 @@ When you add a question to an evaluation, the evaluation freezes the published v
 
 ## Sharing a pool
 
-**Share…** in a pool's menu opens the sharing sheet.
+The **Sharing** section of a pool's **Settings** tab says who may read and write it. Only an owner sees it.
 
 <figure markdown="span">
-  ![The sharing sheet of a pool](../assets/screenshots/pool-share-light.png#only-light)
-  ![The sharing sheet of a pool](../assets/screenshots/pool-share-dark.png#only-dark)
-  <figcaption>Sharing a pool: its visibility, who has access, and an invitation by e-mail.</figcaption>
+  ![The Settings tab of a pool](../assets/screenshots/pool-share-light.png#only-light)
+  ![The Settings tab of a pool](../assets/screenshots/pool-share-dark.png#only-dark)
+  <figcaption>The Settings tab of a pool: its name and icon, its visibility, who has access, and an invitation.</figcaption>
 </figure>
 
 **Visibility** has three settings. **Private** is you alone, plus the teachers you invite. **Shared** is the invited teachers, each with the role you give them; inviting someone into a private pool switches it to shared by itself. **Public** lets every teacher of the school read the pool, while writing stays with you and your members.

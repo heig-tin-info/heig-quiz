@@ -1,5 +1,14 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Eye, ListChecks, Plus, ScanSearch, StarOff, Tags } from "lucide-react";
+import {
+  ArrowLeft,
+  Eye,
+  ListChecks,
+  Plus,
+  ScanSearch,
+  Settings as SettingsIcon,
+  StarOff,
+  Tags,
+} from "lucide-react";
 import { useEffect, useMemo, useState, type DragEvent, type KeyboardEvent } from "react";
 
 import type {
@@ -63,6 +72,7 @@ import { QuestionPreview } from "../question/QuestionPreview";
 import { useQuestionActions } from "../question/useQuestionActions";
 import { useLlmAvailability } from "../llmAvailability";
 import { poolKey, poolQuestionStatsKey, poolQuestionsKey } from "../queryKeys";
+import { PoolSettings } from "./PoolSettings";
 import { ReviewTab } from "./ReviewTab";
 import { TagsTab } from "./TagsTab";
 
@@ -98,6 +108,9 @@ const withTag = (filters: QuestionFilters, tag: string, was = ""): QuestionFilte
  * query-string parameter. A tree is navigation, and navigation belongs in
  * one place; the page then keeps its whole width for the table, which is
  * what a screen made of seven columns needs.
+ *
+ * The "Settings" tab holds the pool's name, icon, sharing, and the ways out
+ * of it (`PoolSettings`): the pools list keeps no menu.
  *
  * The "Tags" tab lists the pool's vocabulary with its usage (`TagsTab`); a
  * tag there opens this list filtered on it through the `tag` query-string
@@ -243,7 +256,11 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const poolsRoot = useRootCrumb("pools");
   const reviewTab = llm.data?.available === true;
   const tab: PoolTab =
-    tabParam === "tags" ? "tags" : tabParam === "review" && reviewTab ? "review" : "questions";
+    tabParam === "tags" || tabParam === "settings"
+      ? tabParam
+      : tabParam === "review" && reviewTab
+        ? "review"
+        : "questions";
   const categoryId = categoryParam === "" ? null : categoryParam;
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
   const [creating, setCreating] = useState<{ type: string | null } | null>(null);
@@ -445,7 +462,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
           ) : undefined
         }
         primary={
-          // The questions' list only: the tags and the review tabs create nothing.
+          // The questions' list only: the other tabs create nothing.
           readOnly || tab !== "questions"
             ? undefined
             : {
@@ -467,10 +484,15 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
           ...(reviewTab
             ? [{ value: "review" as const, label: t("review.title"), icon: ScanSearch }]
             : []),
+          { value: "settings", label: t("pool.tab.settings"), icon: SettingsIcon },
         ]}
       />
 
-      {tab === "review" ? (
+      {tab === "settings" ? (
+        <TabPanel idPrefix="pool" value="settings">
+          <PoolSettings detail={detail} navigate={navigate} />
+        </TabPanel>
+      ) : tab === "review" ? (
         <TabPanel idPrefix="pool" value="review">
           <ReviewTab poolId={id} role={detail.role} navigate={navigate} />
         </TabPanel>

@@ -235,14 +235,10 @@ const scenes = [
   },
   {
     name: "pool-share",
-    caption: "Sharing a pool with another teacher.",
+    caption: "The Settings tab of a pool: its name, its icon and its sharing.",
     persona: "teacher",
-    path: "/pools",
-    act: async (p) => {
-      await openRowMenu(p, /^actions$/i);
-      await p.getByRole("menuitem", { name: /^share…$/i }).click();
-    },
-    action: "Opened the row menu of the first pool and picked “Share…”.",
+    path: (w) => `/pools/${w.pool.id}?tab=settings`,
+    action: "Opened the pool's Settings tab.",
     state: "As seeded.",
   },
   {
