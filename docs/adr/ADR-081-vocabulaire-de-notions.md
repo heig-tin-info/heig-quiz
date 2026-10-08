@@ -6,7 +6,9 @@ Accepted (2026-10-08) by the product owner, in a design discussion; the
 points listed in [open question 54](../spec/06-questions-ouvertes.md) remain
 open. Amended the same day by the [addendum](#addendum-2026-10-08-transition-resolution-and-storage)
 (transition, resolution of a typed label, storage, rights), settled with the
-product owner before step 3 of #599. Not implemented: the work is tracked by a parent issue that groups #557
+product owner before step 3 of #599, and by the
+[second addendum](#second-addendum-2026-10-08-sorting-the-existing-tags)
+(sorting the existing tags). Not implemented: the work is tracked by a parent issue that groups #557
 and #578.
 
 Scope: what a question is classified by, who may create and change that
@@ -232,3 +234,53 @@ amends §6, §7 and §11 where named; the rest stands.
 7. **The MCP tools' descriptions** say that concepts are what a question
    exercises — not organisational labels nor kinds of task — so that an LLM
    client does not recreate what §1 dropped.
+
+## Second addendum 2026-10-08: sorting the existing tags
+
+Settled with the product owner before step (b) of the transition
+(addendum §1). It amends §11 and addendum §5 where named.
+
+1. **The sorting is stored per (pool, tag)** in `concept_tag_sortings`,
+   owned by the `concept` module: a decision (`concept`, with the concept
+   it maps to, or `drop`, with a reason among `organisational`,
+   `task_kind`, `noise`), the model's raw proposal, a state (`proposed`,
+   `accepted`), who decided and when. It reads `question_tags` and
+   `pool_tags` by join and never writes them. A pool's rows go with the
+   pool. Re-running the proposal adds the pairs with no row and replaces
+   `proposed` rows only, never an `accepted` one. One row maps to one
+   concept at most; a homonym inside one pool is fixed by hand after the
+   cut-over.
+2. **Accepting a "new concept" creates it validated (amends §11).** The
+   admin has just reviewed it, so a second validation pass would be the same
+   work twice. A validated concept has both labels, French and English; the
+   model proposes the missing one and the admin corrects it. A pool tag's
+   description seeds the concept's description. Before the cut-over the
+   admin may delete a concept nothing refers to; afterwards, a concept is
+   merged, never deleted. A suggested broader concept stays a hint in the
+   proposal; relations and aliases come with the curation screen.
+3. **The model pass** is a background job started by the admin, under its
+   own LLM purpose (`sort`), billed to that admin within the daily cap
+   (ADR-058). A deterministic pre-pass first groups the tags of every pool
+   by `conceptKey`; the model then sees the groups in sequential batches,
+   each with the concepts already in the registry or proposed so far, so
+   later batches map onto earlier ones. It receives, per tag: the tag, its
+   count, the pool's name and the tag's description, and at most two
+   question statements cut to about 300 characters, taken from the version's
+   content (never the internal name). No author, course or classroom name.
+   The product owner accepted this on 2026-10-08 (open question 43). The
+   screen works without a model: a row then has no proposal and the admin
+   decides by hand.
+4. **The admin role is enough (exception to ADR-054 §2).** The sorting
+   screen shows the tag names, pool names and statement excerpts of every
+   pool, private ones included, to an admin without Super Powers. The
+   product owner chose this exception on 2026-10-08: the sorting is a
+   one-off curation of the instance's vocabulary, not the reading of a
+   colleague's work, and it shows excerpts, never a whole question. It
+   covers the sorting routes only.
+5. **Audit.** Accepting or changing a decision (`concept.sort`, with the
+   pairs and decisions), validating a concept (`concept.validate`) and
+   deleting an unused one (`concept.delete`) are audited.
+6. **UI names (settles open question 54 (a)):** "Notions" in French,
+   "Concepts" in English. The admin screen is a "Notions" / "Concepts" tab
+   of the administration; its one primary action is accepting the selected
+   decisions.

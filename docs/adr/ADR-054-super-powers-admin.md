@@ -9,7 +9,9 @@ Accepted (2026-09-30, settled with the product owner; with
 and `superpowers.disabled`, the settings section and the red banner of
 `apps/web/src/SuperPowers.tsx`, and F-ADMIN-05). Amends ADR-013 §3 (the
 resolution order), ADR-032 (context), ADR-034 §2 (who issues the link) and
-removes the `?scope=all` switch of the pool list (#63).
+removes the `?scope=all` switch of the pool list (#63). §2 has one scoped
+exception: the sorting of the existing tags into concepts is open to the
+admin role without Super Powers ([ADR-081, second addendum §4](ADR-081-vocabulaire-de-notions.md#second-addendum-2026-10-08-sorting-the-existing-tags)).
 
 ## Context
 

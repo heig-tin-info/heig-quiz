@@ -14,11 +14,28 @@
  * admin's curation, not in this step.
  */
 import { sql } from "drizzle-orm";
-import { check, foreignKey, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  check,
+  foreignKey,
+  index,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 
-import { CONCEPT_STATUSES } from "@quiz/contracts";
+import {
+  CONCEPT_STATUSES,
+  TAG_DROP_REASONS,
+  TAG_SORTING_DECISIONS,
+  type TagSortingProposal,
+} from "@quiz/contracts";
 
 import { users } from "./auth.js";
+import { pools } from "./pool.js";
 
 /**
  * A concept: a label, a qualifier and a description per language. A
@@ -58,5 +75,55 @@ export const concepts = pgTable(
     uniqueIndex("concepts_key_en_uq")
       .on(t.keyEn)
       .where(sql`${t.status} <> 'merged' and ${t.keyEn} is not null`),
+  ],
+);
+
+/**
+ * The sorting of the existing tags (ADR-081, second addendum 2026-10-08 §1):
+ * one row per (pool, tag), so a homonym can go to two concepts. It reads
+ * `question_tags` and `pool_tags` by join and never writes them; a pool's
+ * rows go with the pool.
+ *
+ * Two hands write a row: the model's job fills `proposal`; the admin's
+ * accept fills the decision columns and keeps the proposal beside it. A row
+ * is accepted exactly when it has a decision — there is no separate state —
+ * and is otherwise the model's proposal alone. The checks keep it so: a
+ * decision is taken at an instant, a row without one holds a proposal and
+ * nobody's decision, a `concept` decision names its concept and no reason, a
+ * `drop` names its reason and no concept. `concept_id` restricts deletion:
+ * a concept a decision maps to cannot vanish under it.
+ */
+export const conceptTagSortings = pgTable(
+  "concept_tag_sortings",
+  {
+    poolId: uuid("pool_id")
+      .notNull()
+      .references(() => pools.id, { onDelete: "cascade" }),
+    tag: text("tag").notNull(),
+    decision: text("decision", { enum: TAG_SORTING_DECISIONS }),
+    conceptId: uuid("concept_id").references(() => concepts.id),
+    dropReason: text("drop_reason", { enum: TAG_DROP_REASONS }),
+    /** The model's raw answer for the pair; null when the admin decided without one. */
+    proposal: jsonb("proposal").$type<TagSortingProposal>(),
+    decidedBy: uuid("decided_by").references(() => users.id, { onDelete: "set null" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.poolId, t.tag] }),
+    // A decision is taken at an instant; without one, the row is the model's proposal and nobody's decision.
+    check(
+      "concept_tag_sortings_decided_ck",
+      sql`(${t.decision} is null) = (${t.decidedAt} is null)
+        and (${t.decision} is not null or (${t.proposal} is not null and ${t.decidedBy} is null))`,
+    ),
+    // A decision carries exactly what it needs: its concept, or its reason.
+    check(
+      "concept_tag_sortings_decision_ck",
+      sql`(${t.conceptId} is not null) = (${t.decision} is not distinct from 'concept')
+        and (${t.dropReason} is not null) = (${t.decision} is not distinct from 'drop')`,
+    ),
+    index("concept_tag_sortings_concept_idx").on(t.conceptId),
   ],
 );
