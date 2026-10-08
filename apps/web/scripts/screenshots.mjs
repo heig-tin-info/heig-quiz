@@ -131,7 +131,11 @@ const scenes = [
   // of them is where a colleague's address and their seat are.
   { name: "teacher-home-staff", role: "teacher", path: "/", fold: true, act: (p) => p.getByRole("button", { name: "Prof Démo", exact: true }).first().click() },
   { name: "course-link-pool", role: "teacher", path: "/", fold: true, act: (p) => p.getByRole("button", { name: /link a pool|lier une banque/i }).first().click() },
-  { name: "course-new", role: "teacher", path: "/", act: (p) => p.getByRole("button", { name: /new course/i }).first().click() },
+  { name: "course-new", role: "teacher", path: "/", act: async (p) => {
+    await p.getByRole("button", { name: /new course/i }).first().click();
+    await p.getByRole("textbox", { name: /^Name/ }).fill("Introduction to physics");
+    await p.getByRole("textbox", { name: /^Course code/ }).fill("phys-101");
+  } },
   { name: "classroom-new", role: "teacher", path: "/", act: (p) => p.getByRole("button", { name: /new classroom/i }).first().click() },
   // F-ORG-12: the page of one course, in tabs. PRG1 holds the mock's two
   // templates, EMB none (the empty state), and an id nobody reaches is the
