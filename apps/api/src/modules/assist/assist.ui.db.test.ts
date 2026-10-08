@@ -85,11 +85,11 @@ describe("the development stub (ADR-080 P2b)", () => {
   beforeAll(() => setup(true));
   afterAll(() => server.close());
 
-  it("opens the pool a question names, searched by its tag, and stores the text only", async () => {
+  it("opens the pool a question names, searched by its concept, and stores the text only", async () => {
     const res = await ask("Montre-moi les questions du pool sandbox, seulement tag:printf");
     expect(res.statusCode).toBe(200);
     const reply = AssistReply.parse(res.json());
-    expect(reply.actions).toEqual([{ kind: "open_screen", screen: "pool", ids: { id: poolId }, params: { q: "tag:printf" } }]);
+    expect(reply.actions).toEqual([{ kind: "open_screen", screen: "pool", ids: { id: poolId }, params: { q: "#printf" } }]);
     expect(reply.exchange.answer).toContain("**Sandbox**");
     const [stored] = await server.app.db.select().from(assistExchanges).where(eq(assistExchanges.id, reply.exchange.id));
     // The screen, never its commands nor the actions.
@@ -130,14 +130,28 @@ describe("the model's UI tools (ADR-080 P2b)", () => {
   });
 
   it("return the checked actions with the answer, the model told it is done by the browser", async () => {
-    script = calling(["run_screen_command", { id: "question:preview" }], ["open_screen", { screen: "pool", ids: { id: poolId }, params: { q: "tag:printf" } }]);
+    script = calling(["run_screen_command", { id: "question:preview" }], ["open_screen", { screen: "pool", ids: { id: poolId }, params: { q: "#printf" } }]);
     const reply = AssistReply.parse((await ask("Montre les printf")).json());
     expect(reply.actions).toEqual([
       { kind: "run_command", id: "question:preview" },
-      { kind: "open_screen", screen: "pool", ids: { id: poolId }, params: { q: "tag:printf" } },
+      { kind: "open_screen", screen: "pool", ids: { id: poolId }, params: { q: "#printf" } },
     ]);
     expect(results.map((r) => r.error)).toEqual([false, false]);
     expect(results[1]!.content).toContain("browser opens Question pool after your answer");
+  });
+
+  it("let the read-only assistant filter a pool's questions by a concept label (ADR-081)", async () => {
+    const created = await call(teacher, "POST", `/app/api/pools/${poolId}/questions`, {
+      type: "mcq",
+      internalName: "printf-format",
+      concepts: ["entrées-sorties formatées"],
+      createMissing: true,
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    script = calling(["list_questions", { poolId, concepts: ["Entrées-sorties formatées"] }]);
+    await ask("Quelles questions sur les entrées-sorties formatées ?");
+    expect(results[0], results[0]?.content).toMatchObject({ error: false });
+    expect(results[0]!.content).toContain("printf-format");
   });
 
   it("refuse a screen off the catalogue — the model reads why, nothing comes back (the matrix is the domain's)", async () => {

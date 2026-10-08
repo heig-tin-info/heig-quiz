@@ -5,6 +5,8 @@
  */
 import { z } from "zod";
 
+import { ConceptRef } from "./concept.js";
+
 /** The pointer a review was made with (`useCoarsePointer`): `coarse` is a phone or a tablet. */
 export const DrillDeviceClass = z.enum(["coarse", "fine"]);
 export type DrillDeviceClass = z.infer<typeof DrillDeviceClass>;
@@ -207,19 +209,20 @@ export const DrillProgress = z.object({ weeks: z.array(DrillWeek) });
 export type DrillProgress = z.infer<typeof DrillProgress>;
 
 /**
- * `GET /classrooms/:id/drill/mastery`: per tag, the mean retrievability now
- * of the classroom's reviewed cards (ADR-041 §10, item 10). No minimum group
- * size within a classroom (06, question 28 (l)). `tag` null gathers the
- * questions without any tag.
+ * `GET /classrooms/:id/drill/mastery`: per concept, the mean retrievability
+ * now of the classroom's reviewed cards (ADR-041 §10, item 10; ADR-081 third
+ * addendum §8: today's classification, labelled in the reader's language).
+ * No minimum group size within a classroom (06, question 28 (l)). `concept`
+ * null gathers the questions without any concept.
  */
-export const DrillTagMastery = z.object({
-  tag: z.string().nullable(),
+export const DrillConceptMastery = z.object({
+  concept: ConceptRef.nullable(),
   cards: z.number().int(),
   students: z.number().int(),
   /** 0 to 1. */
   retrievability: z.number(),
 });
-export type DrillTagMastery = z.infer<typeof DrillTagMastery>;
+export type DrillConceptMastery = z.infer<typeof DrillConceptMastery>;
 
 // --- Confidence (ADR-085 §8, part 2 of issue #453) ---------------------------
 

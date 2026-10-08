@@ -24,6 +24,8 @@ import {
   questions,
   users,
 } from "../db/schema.js";
+import type { AuditActor } from "../audit.js";
+import * as conceptService from "../modules/concept/service.js";
 import * as evaluationService from "../modules/evaluation/service.js";
 import { runEvaluationGrading } from "../modules/grading/jobs.js";
 import * as live from "../modules/live/service.js";
@@ -31,6 +33,7 @@ import { typeOf } from "../modules/pool/config.js";
 import * as poolService from "../modules/pool/service.js";
 import {
   CLOSED_TITLE,
+  CONCEPTS,
   EVALUATIONS,
   PAPERS,
   POOLS,
@@ -129,7 +132,13 @@ async function ensureQuestion(
     createdBy: ctx.teacherId,
   });
   const row = (await questionByName(db, ctx.poolId, spec.internalName))!;
-  await poolService.patchQuestion(db, row, { difficulty: spec.difficulty, tags: spec.tags });
+  // The French labels of the seed's vocabulary (`ensureConcepts`), resolved like a teacher's input.
+  await poolService.patchQuestion(
+    db,
+    row,
+    { difficulty: spec.difficulty, concepts: spec.concepts },
+    { userId: ctx.teacherId, lang: "fr", actor: seedActor(ctx.teacherId) },
+  );
   await poolService.putDraft(db, row, { config: spec.config, explanation: spec.explanation });
   // Throws `DraftInvalid` when the demo config does not satisfy the type's
   // schema — which is exactly the feedback the author of `content.ts` needs.
@@ -138,6 +147,30 @@ async function ensureQuestion(
     changeNote: "Version initiale (seed)",
   });
   return { id, created: true };
+}
+
+/** The seed acts as the demo teacher, as the application would audit them. */
+const seedActor = (teacherId: string): AuditActor => ({ actorUserId: teacherId, actorType: "user" });
+
+/**
+ * The demo vocabulary (ADR-081), validated, through the concept service as a
+ * teacher and the admin would build it: proposed in French, completed in
+ * English, validated. A concept whose French label already resolves is left
+ * alone, so a second run creates nothing.
+ */
+async function ensureConcepts(db: Db, teacherId: string, now: Date): Promise<void> {
+  const ctx = { caller: { id: teacherId, role: "teacher" }, actor: seedActor(teacherId), now };
+  const found = await conceptService.resolveLabels(
+    db,
+    CONCEPTS.map((c) => c.fr.label),
+    "fr",
+  );
+  for (const [i, spec] of CONCEPTS.entries()) {
+    if (found[i]!.kind === "resolved") continue;
+    const created = await conceptService.createConcept(db, ctx, { lang: "fr", ...spec.fr });
+    await conceptService.patchConcept(db, ctx, created.id, { en: spec.en });
+    await conceptService.validateConcept(db, ctx, created.id);
+  }
 }
 
 async function ensurePool(
@@ -394,6 +427,7 @@ export async function seedDemoContent(
   const questionIds = new Map<string, string>();
   const linked: string[] = [];
 
+  await ensureConcepts(db, ctx.teacherId, now);
   for (const spec of POOLS) {
     const poolId = await ensurePool(db, spec, ctx.teacherId, counts, questionIds);
     if (spec.courseCode === ctx.courseCode) linked.push(poolId);

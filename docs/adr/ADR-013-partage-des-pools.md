@@ -13,6 +13,11 @@ like any teacher; the pure rule's fact is `reachesAll`, formerly `isAdmin`.
 Access to pools and the resolution order of §3 are unchanged; §7 also records the widening
 of who may fetch an owner's uploaded avatar, which follows from it.
 
+**Amended 2026-10-08 by [ADR-081](ADR-081-vocabulaire-de-notions.md#third-addendum-2026-10-08-the-cut-over),
+scope: the wording of §1.** Since the cut-over from tags to concepts, a `contributor` writes
+the question's concepts, not tags; the vocabulary itself is the instance's, not the pool's
+(ADR-081, addendum §5, for who creates and edits a concept).
+
 ## Context
 
 Until now a question pool was reached by its owner and by the teaching staff of the courses
@@ -35,7 +40,8 @@ every teacher. Two facts shape the design:
 
 1. **Three roles, one vocabulary** — `reader`, `contributor`, `owner`
    (`pool_members.role`, migrated from `viewer`/`editor`). `reader` reads; `contributor`
-   also writes questions, categories, tags and assets; `owner` also manages the members, the
+   also writes questions, categories, the question's concepts (tags before the ADR-081
+   cut-over) and assets; `owner` also manages the members, the
    name, the icon, the visibility and the deletion.
 
 2. **Two predicates, two answers.** `poolAccess` (SQL, in `guards.ts`) says who SEES a pool:

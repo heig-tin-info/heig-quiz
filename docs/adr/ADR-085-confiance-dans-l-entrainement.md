@@ -177,7 +177,7 @@ could see.
   one's statements over the line — a cut made on the server so a smaller
   group never travels. Distinct students, not reviews: ten reviews of one
   student are that student's statements.
-  Unlike the per-tag mastery (06, question 28 (l): no minimum within a
+  Unlike the per-tag mastery (per concept since ADR-081's cut-over) (06, question 28 (l): no minimum within a
   classroom, because the per-student view shows it anyway), the teacher
   never sees an individual confidence, so a small aggregate would hand one
   back. The differencing risk of ADR-038 ("Residual risk") applies the

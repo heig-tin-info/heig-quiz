@@ -3,6 +3,9 @@ import { readdir } from "node:fs/promises";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { z } from "zod";
+
+import { ConceptWriteRefusal, PoolConcept, QuestionMeta } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import { assets, coursePools, courseStaff, courses, pools, questions, users } from "../../db/schema.js";
@@ -638,9 +641,17 @@ describe("pool lifecycle", () => {
   });
 });
 
-describe("the tag vocabulary of a pool", () => {
-  let tagPool: string;
+describe("the concepts of a pool's questions (ADR-081 third addendum)", () => {
+  let conceptPool: string;
+  let questionId: string;
+  let malloc: string;
   let outsider: Awaited<ReturnType<TestServer["signIn"]>>;
+  const as = (who: { headers: Record<string, string> }, lang: "en" | "fr" = "en") => ({
+    ...who.headers,
+    "accept-language": `${lang}-CH,${lang};q=0.9`,
+  });
+  const patch = (payload: Payload) =>
+    server.app.inject({ method: "PATCH", url: `/app/api/questions/${questionId}`, headers: as(owner), payload });
 
   beforeAll(async () => {
     outsider = await server.signIn("teacher");
@@ -648,114 +659,130 @@ describe("the tag vocabulary of a pool", () => {
       method: "POST",
       url: "/app/api/pools",
       headers: owner.headers,
-      payload: { name: "Tagged pool" },
+      payload: { name: "Pool with concepts" },
     });
-    tagPool = created.json().id;
+    conceptPool = created.json().id;
     const question = await server.app.inject({
       method: "POST",
-      url: `/app/api/pools/${tagPool}/questions`,
+      url: `/app/api/pools/${conceptPool}/questions`,
       headers: owner.headers,
-      payload: { type: "short", internalName: "tagged" },
+      payload: { type: "short", internalName: "classified" },
     });
-    await server.app.inject({
+    questionId = question.json().meta.id;
+    const concept = await server.app.inject({
+      method: "POST",
+      url: "/app/api/concepts",
+      headers: owner.headers,
+      payload: { lang: "en", label: "dynamic allocation" },
+    });
+    expect(concept.statusCode).toBe(201);
+    malloc = concept.json().id;
+    const french = await server.app.inject({
       method: "PATCH",
-      url: `/app/api/questions/${question.json().meta.id}`,
+      url: `/app/api/concepts/${malloc}`,
       headers: owner.headers,
-      payload: { tags: ["Malloc", "pointers"] },
+      payload: { fr: { label: "allocation dynamique" } },
     });
+    expect(french.statusCode).toBe(200);
   });
 
-  it("lists every tag with its description and its usage count", async () => {
-    const res = await server.app.inject({
-      method: "GET",
-      url: `/app/api/pools/${tagPool}/tags`,
-      headers: owner.headers,
+  it("sets a question's concepts by label, creating a missing one only when asked", async () => {
+    const refused = await patch({ concepts: ["Allocation dynamique", "heap fragmentation"] });
+    expect(refused.statusCode).toBe(422);
+    expect(ConceptWriteRefusal.parse(refused.json())).toMatchObject({
+      error: "concept_unknown",
+      errors: [{ input: "heap fragmentation", error: "concept_unknown" }],
     });
+
+    const res = await patch({ concepts: ["Allocation dynamique", "heap fragmentation"], createMissing: true });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual([
-      { tag: "malloc", description: "", count: 1 },
-      { tag: "pointers", description: "", count: 1 },
+    const meta = QuestionMeta.parse(res.json());
+    expect(meta.concepts.map((c) => [c.label, c.status])).toEqual([
+      ["dynamic allocation", "proposed"],
+      ["heap fragmentation", "proposed"],
     ]);
   });
 
-  it("writes the description of a tag, and the pool detail still lists plain names", async () => {
-    const res = await server.app.inject({
-      method: "PATCH",
-      url: `/app/api/pools/${tagPool}/tags/malloc`,
-      headers: owner.headers,
-      payload: { description: "Allocates memory on the heap" },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({
-      tag: "malloc",
-      description: "Allocates memory on the heap",
-      count: 1,
-    });
-
-    const detail = await server.app.inject({
-      method: "GET",
-      url: `/app/api/pools/${tagPool}`,
-      headers: owner.headers,
-    });
-    expect(detail.json().tags).toEqual(["malloc", "pointers"]);
-  });
-
-  it("refuses a description that is not a string", async () => {
-    const res = await server.app.inject({
-      method: "PATCH",
-      url: `/app/api/pools/${tagPool}/tags/malloc`,
-      headers: owner.headers,
-      payload: { description: 42 },
-    });
+  it("refuses the former `tags`, as any unknown key, so that a stale editor does not lose them", async () => {
+    const res = await patch({ tags: ["malloc"] });
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toBe("validation");
+    expect(JSON.stringify(res.json().details)).toContain("tags");
+    expect((await patch({ difficulty: 2, colour: "red" })).statusCode).toBe(400);
   });
 
-  it("answers 404 to a stranger, on the listing as on the description", async () => {
-    const listed = await server.app.inject({
-      method: "GET",
-      url: `/app/api/pools/${tagPool}/tags`,
-      headers: outsider.headers,
-    });
-    expect(listed.statusCode).toBe(404);
+  it("creates a question with its concepts in one transaction, and nothing when one is refused", async () => {
+    const create = (internalName: string, concepts: string[]) =>
+      server.app.inject({
+        method: "POST",
+        url: `/app/api/pools/${conceptPool}/questions`,
+        headers: as(owner),
+        payload: { type: "short", internalName, concepts },
+      });
+    const refused = await create("refused at birth", ["dynamic allocation", "never heard of it"]);
+    expect(refused.statusCode).toBe(422);
+    expect(ConceptWriteRefusal.parse(refused.json()).error).toBe("concept_unknown");
+    const names = await server.app.db.select().from(questions).where(eq(questions.poolId, conceptPool));
+    expect(names.map((q) => q.internalName)).not.toContain("refused at birth");
 
-    const described = await server.app.inject({
-      method: "PATCH",
-      url: `/app/api/pools/${tagPool}/tags/malloc`,
-      headers: outsider.headers,
-      payload: { description: "mine now" },
-    });
-    expect(described.statusCode).toBe(404);
-    expect(described.json()).toEqual({ error: "not_found" });
-
-    // And nothing was written behind the 404.
-    const still = await server.app.inject({
-      method: "GET",
-      url: `/app/api/pools/${tagPool}/tags`,
-      headers: owner.headers,
-    });
-    expect(still.json()[0].description).toBe("Allocates memory on the heap");
+    const born = await create("born classified", ["Allocation dynamique"]);
+    expect(born.statusCode).toBe(201);
+    expect(born.json().meta.concepts.map((c: { id: string }) => c.id)).toEqual([malloc]);
+    // Back out of the counts the next tests read.
+    await server.app.db.delete(questions).where(eq(questions.id, born.json().meta.id));
   });
 
-  it("serves the tag usage to a member and a 404 to a stranger", async () => {
-    const res = await server.app.inject({
+  it("labels the concepts in the reader's language, on the question and the pool", async () => {
+    const detail = await server.app.inject({
       method: "GET",
-      url: `/app/api/pools/${tagPool}/tags/usage`,
-      headers: owner.headers,
+      url: `/app/api/questions/${questionId}`,
+      headers: as(owner, "fr"),
     });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual([
-      { tag: "malloc", description: "Allocates memory on the heap", questions: 1, courses: 0 },
-      { tag: "pointers", description: "", questions: 1, courses: 0 },
+    expect(detail.json().meta.concepts.map((c: { label: string }) => c.label)).toContain("allocation dynamique");
+    const pool = await server.app.inject({ method: "GET", url: `/app/api/pools/${conceptPool}`, headers: as(owner) });
+    expect(pool.json().concepts.map((c: { concept: { label: string } }) => c.concept.label)).toEqual([
+      "dynamic allocation",
+      "heap fragmentation",
     ]);
+  });
 
-    const hidden = await server.app.inject({
+  it("filters the list by concept ids and refuses an id that is not one", async () => {
+    const hit = await server.app.inject({
       method: "GET",
-      url: `/app/api/pools/${tagPool}/tags/usage`,
-      headers: outsider.headers,
+      url: `/app/api/pools/${conceptPool}/questions?concept=${malloc}`,
+      headers: as(owner),
     });
+    expect(hit.json().items.map((q: { id: string }) => q.id)).toEqual([questionId]);
+    const bad = await server.app.inject({
+      method: "GET",
+      url: `/app/api/pools/${conceptPool}/questions?concept=malloc`,
+      headers: as(owner),
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
+  it("serves the pool's concepts with their counts in its detail, to a member only", async () => {
+    const res = await server.app.inject({ method: "GET", url: `/app/api/pools/${conceptPool}`, headers: as(owner) });
+    expect(res.statusCode).toBe(200);
+    expect(z.array(PoolConcept).parse(res.json().concepts).map((c) => [c.concept.label, c.count])).toEqual([
+      ["dynamic allocation", 1],
+      ["heap fragmentation", 1],
+    ]);
+    const hidden = await server.app.inject({ method: "GET", url: `/app/api/pools/${conceptPool}`, headers: outsider.headers });
     expect(hidden.statusCode).toBe(404);
     expect(hidden.json()).toEqual({ error: "not_found" });
+  });
+
+  it("no longer serves the tag routes, nor a concepts route of its own", async () => {
+    for (const [method, url] of [
+      ["GET", `/app/api/pools/${conceptPool}/concepts`],
+      ["GET", `/app/api/pools/${conceptPool}/tags`],
+      ["GET", `/app/api/pools/${conceptPool}/tags/usage`],
+      ["PATCH", `/app/api/pools/${conceptPool}/tags/malloc`],
+    ] as const) {
+      const res = await server.app.inject({ method, url, headers: owner.headers, payload: { description: "x" } });
+      expect(res.statusCode).toBe(404);
+    }
   });
 });
 
@@ -1406,17 +1433,15 @@ describe("the order of the refusals, over HTTP", () => {
       message: "Only an owner of this pool may do that",
       role: "reader",
     });
-    // …and before a sub-parameter too: a tag name too long for `TagParam`.
-    const longTag = "t".repeat(65);
-    const tagAsReader = await patch(`/app/api/pools/${open}/tags/${longTag}`, reader.headers, {
-      description: "x",
+    // …and before a sub-parameter too: a member id that is not one.
+    const memberAsReader = await patch(`/app/api/pools/${open}/members/not-a-uuid`, reader.headers, {
+      role: "reader",
     });
-    expect(tagAsReader.statusCode).toBe(403);
-    const tagAsOwner = await patch(`/app/api/pools/${open}/tags/${longTag}`, owner.headers, {
-      description: "x",
+    expect(memberAsReader.statusCode).toBe(403);
+    const memberAsOwner = await patch(`/app/api/pools/${open}/members/not-a-uuid`, owner.headers, {
+      role: "reader",
     });
-    expect(tagAsOwner.statusCode).toBe(400);
-    expect(tagAsOwner.json().error).toBe("validation");
+    expect(memberAsOwner.statusCode).toBe(404);
 
     const malformed = await patch(`/app/api/pools/${open}`, owner.headers, badBody);
     expect(malformed.statusCode).toBe(400);

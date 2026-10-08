@@ -6,7 +6,7 @@ import { groupQuestions, isGroupBy } from "./QuestionGroups";
 
 /*
  * The grouping rule, on rows that would break it if it were written another
- * way: a question wearing two tags, a question wearing none, a question in no
+ * way: a question with two concepts, a question with none, a question in no
  * category, and a type the registry does not list.
  */
 
@@ -14,7 +14,7 @@ const row = (over: Partial<QuestionRow> & { id: string }): QuestionRow => ({
   type: "mcq",
   internalName: over.id,
   difficulty: 3,
-  tags: [],
+  concepts: [],
   categoryId: null,
   latestNumber: 1,
   hasDraftChanges: false,
@@ -28,16 +28,21 @@ const row = (over: Partial<QuestionRow> & { id: string }): QuestionRow => ({
   ...over,
 });
 
+const concept = (id: string, label: string, qualifier = "") =>
+  ({ id, label, qualifier, status: "validated" }) as const;
+const POINTEURS = concept("00000000-0000-4000-8000-000000000001", "Pointeurs");
+const MEMOIRE = concept("00000000-0000-4000-8000-000000000002", "Adresse", "mémoire");
+
 const ROWS = [
-  row({ id: "a", type: "code", tags: ["pointeurs", "memoire"], categoryId: "k2" }),
-  row({ id: "b", type: "mcq", tags: [], categoryId: "k1" }),
-  row({ id: "c", type: "mcq", tags: ["memoire"], categoryId: null }),
+  row({ id: "a", type: "code", concepts: [POINTEURS, MEMOIRE], categoryId: "k2" }),
+  row({ id: "b", type: "mcq", concepts: [], categoryId: "k1" }),
+  row({ id: "c", type: "mcq", concepts: [MEMOIRE], categoryId: null }),
 ];
 
 const LABELS = {
   type: (id: string) => `T:${id}`,
   category: (id: string) => `C:${id}`,
-  noTag: "No tag",
+  noConcept: "No concept",
   noCategory: "No category",
 };
 
@@ -59,11 +64,11 @@ describe("groupQuestions", () => {
     ]);
   });
 
-  it("repeats a question under each of its tags, and gathers the untagged last", () => {
-    expect(group("tags").map((g) => [g.label, g.rows.map((r) => r.id)])).toEqual([
-      ["#memoire", ["a", "c"]],
-      ["#pointeurs", ["a"]],
-      ["No tag", ["b"]],
+  it("repeats a question under each of its concepts, by name, and gathers those with none last", () => {
+    expect(group("concepts").map((g) => [g.label, g.rows.map((r) => r.id)])).toEqual([
+      ["Adresse (mémoire)", ["a", "c"]],
+      ["Pointeurs", ["a"]],
+      ["No concept", ["b"]],
     ]);
   });
 
@@ -91,14 +96,15 @@ describe("groupQuestions", () => {
   });
 
   it("gives every section a key of its own, even for one repeated row", () => {
-    const keys = group("tags").map((g) => g.key);
+    const keys = group("concepts").map((g) => g.key);
     expect(new Set(keys).size).toBe(keys.length);
   });
 });
 
 describe("isGroupBy", () => {
   it("guards what comes back out of localStorage", () => {
-    expect(isGroupBy("tags")).toBe(true);
+    expect(isGroupBy("concepts")).toBe(true);
+    expect(isGroupBy("tags")).toBe(false);
     expect(isGroupBy("colour")).toBe(false);
   });
 });

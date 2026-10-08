@@ -1,12 +1,13 @@
 /**
- * HTTP surface of the `concept` module (ADR-081, addendum 2026-10-08 §1a):
- * the vocabulary of concepts, connected to nothing yet. Teachers only (an
+ * HTTP surface of the `concept` module (ADR-081, addendum 2026-10-08): the
+ * vocabulary of concepts that classifies the questions. Teachers only (an
  * admin passes the guard); the vocabulary is the instance's, not anyone's
  * content, so there is no entity to load through an access predicate — the
  * rights on a concept are the service's (addendum §5).
  *
  * - `GET /app/api/concepts`: every concept that is not merged.
- * - `POST /app/api/concepts/resolve`: what each typed label designates.
+ * - `GET /app/api/concepts/resolve?input=…`: what each typed label
+ *   designates; a read, so the teacher assistant may call it.
  * - `POST /app/api/concepts`: a `proposed` concept; 409 `concept_exists`;
  *   422 `concept_dropped` for the key of a tag the admin dropped (third
  *   addendum §4, `ConceptWriteRefusal`); `PATCH` likewise for a rename
@@ -20,7 +21,9 @@
  *
  * - `GET /app/api/admin/concept-sorting`: every (pool, tag) pair to sort.
  * - `POST /app/api/admin/concept-sorting/accept`: the decisions, in one
- *   transaction; 409 `concept_exists` (with `conflicts`), 422 `tag_unknown`,
+ *   transaction, and the links of a pair accepted into a concept; 409
+ *   `concept_exists` (with `conflicts`), 409 `sorting_locked` (with
+ *   `items`) for a pair already accepted, 422 `tag_unknown`,
  *   `concept_not_found` or `concept_batch_conflict` (with `items`).
  * - `POST /app/api/admin/concept-sorting/propose`: starts the model pass
  *   that proposes the sorting (`./propose.ts`); 202 with the run; 409
@@ -38,7 +41,7 @@ import {
   type ConceptSortRunStatus,
   type ConceptList,
   ConceptPatch,
-  ConceptResolveRequest,
+  ConceptResolveQuery,
   type ConceptResolveResponse,
   IdParam,
   TagSortingAccept,
@@ -48,7 +51,7 @@ import {
 
 import { actorOf } from "../../audit.js";
 import { adminGuard, callerOf, teacherGuard } from "../guards.js";
-import { invalid, notFound, sendFailure } from "../http.js";
+import { invalid, notFound, readerLang, sendFailure } from "../http.js";
 import { LlmError, llmFailure } from "../llm/service.js";
 import * as service from "./service.js";
 
@@ -65,10 +68,11 @@ export async function conceptPlugin(app: FastifyInstance) {
     return { concepts: await service.listConcepts(app.db) } satisfies ConceptList;
   });
 
-  app.post("/app/api/concepts/resolve", { preHandler: requireTeacher }, async (req, reply) => {
-    const body = ConceptResolveRequest.safeParse(req.body);
-    if (!body.success) return invalid(reply, body.error);
-    return { results: await service.resolveLabels(app.db, body.data.inputs) } satisfies ConceptResolveResponse;
+  app.get("/app/api/concepts/resolve", { preHandler: requireTeacher }, async (req, reply) => {
+    const query = ConceptResolveQuery.safeParse(req.query);
+    if (!query.success) return invalid(reply, query.error);
+    const results = await service.resolveLabels(app.db, query.data.input, readerLang(req));
+    return { results } satisfies ConceptResolveResponse;
   });
 
   app.post("/app/api/concepts", { preHandler: requireTeacher }, async (req, reply) => {

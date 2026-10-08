@@ -59,7 +59,7 @@ import {
   poolAccess,
   teacherGuard,
 } from "../guards.js";
-import { csrfRefused, emptyBody, invalid, notFound, sendFailure, teacherRoute } from "../http.js";
+import { csrfRefused, emptyBody, invalid, notFound, readerLang, sendFailure, teacherRoute } from "../http.js";
 import * as live from "../live/service.js";
 import * as poolService from "../pool/service.js";
 import * as ai from "./ai.js";
@@ -196,6 +196,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
         poolWhere: accessWhere(callerOf(req), poolAccess(req.user!.id)),
         courseId,
         search: query.data,
+        lang: readerLang(req),
       });
     } catch (error) {
       if (error instanceof poolService.InvalidCursor) {
@@ -244,7 +245,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
       type: body.data.type,
       internalName: body.data.internalName,
     });
-    return reply.code(201).send(await poolService.questionDetail(app.db, created));
+    return reply.code(201).send(await poolService.questionDetail(app.db, created, readerLang(req)));
   });
 
   /** F-LIVE-13: create AND start, in one call. */

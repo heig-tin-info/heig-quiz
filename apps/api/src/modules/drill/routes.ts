@@ -9,7 +9,7 @@
  * Teacher: the drill switch of a classroom, "Allow drill" and "Remove these
  * questions from the drill" on an evaluation, each loaded through
  * `staffAccess` first; and the reads of the teacher's view — each
- * student's activity, the weekly progression, the mastery per tag, the
+ * student's activity, the weekly progression, the mastery per concept, the
  * confidence per question (ADR-085 §8, aggregated only). The student also
  * reads their own calibration.
  */
@@ -34,7 +34,7 @@ import {
 import { tracer } from "../../audit.js";
 import { isoOrNull } from "../../clock.js";
 import { accessibleClassroom, loadEvaluation, teacherGuard } from "../guards.js";
-import { invalid, notFound, studentRoute, teacherRoute } from "../http.js";
+import { invalid, notFound, readerLang, studentRoute, teacherRoute } from "../http.js";
 import { drillAllowed, setAllowDrill, type EvaluationRecord } from "../evaluation/service.js";
 import { setClassroomDrill, setDrillOptOut } from "../org/service.js";
 import * as service from "./service.js";
@@ -205,12 +205,12 @@ export async function drillPlugin(app: FastifyInstance) {
     ),
   );
 
-  /** Mastery per tag: the mean retrievability of the classroom's reviewed cards. */
+  /** Mastery per concept: the mean retrievability of the classroom's reviewed cards. */
   app.get(
     "/app/api/classrooms/:id/drill/mastery",
     { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: staffClassroom }, ({ now, scope }) =>
-      service.classroomMastery(app.db, scope.room.id, now),
+    teacher({ params: IdParam, load: staffClassroom }, ({ req, now, scope }) =>
+      service.classroomMastery(app.db, scope.room.id, now, readerLang(req)),
     ),
   );
 

@@ -25,6 +25,7 @@ import {
   ConceptCreate,
   type Concept,
   type ConceptExists,
+  type ConceptRef,
   type ConceptSortRun,
   type TagPair,
   type TagSorting,
@@ -33,7 +34,14 @@ import {
   type TagSortingItem,
   type TagSortingRow,
 } from "@quiz/contracts";
-import { conceptKey, groupNewConcepts, groupTagsByConceptKey, qualifiedConceptKey, tagGroupKey } from "@quiz/domain";
+import {
+  conceptKey,
+  groupNewConcepts,
+  groupTagsByConceptKey,
+  qualifiedConceptKey,
+  splitQualifiedLabel,
+  tagGroupKey,
+} from "@quiz/domain";
 
 import { D, flags, H, iso, MockPayload, on, refuse } from "./runtime";
 
@@ -67,6 +75,68 @@ const concepts: Concept[] = [
   concept("proposed", ["Héritage"], ["Inheritance"]),
   concept("validated", ["Allocation dynamique", "", "malloc, free et la durée de vie du tas."], ["Dynamic allocation"]),
 ];
+
+/** The English of the mock's seeded labels, so an English reader reads English. */
+const SEED_EN: Record<string, string> = {
+  "Arithmétique des pointeurs": "Pointer arithmetic",
+  Sécurité: "Security",
+  Fichier: "File",
+  Accéléromètre: "Accelerometer",
+  Filtre: "Filter",
+  Capteur: "Sensor",
+  "Circuit RC": "RC circuit",
+  Électronique: "Electronics",
+  Résistance: "Resistor",
+  "Conversion analogique-numérique": "Analog-to-digital conversion",
+  Mesure: "Measurement",
+  Amplificateur: "Amplifier",
+  Boucle: "Loop",
+  Pile: "Stack",
+  "Diagramme de classes": "Class diagram",
+  "Chaîne de caractères": "String",
+  Structure: "Struct",
+  "Opérations bit à bit": "Bitwise operations",
+};
+
+/**
+ * The concepts of the mock's questions (`pool.ts`, `poll.ts`), by French
+ * label — `Adresse (mémoire)` with its qualifier: the vocabulary's entry, or
+ * a validated one created on first use, its English from `SEED_EN`.
+ */
+export function seedConceptIds(labels: readonly string[]): string[] {
+  return labels.map((written) => {
+    const { label, qualifier } = splitQualifiedLabel(written) ?? { label: written, qualifier: "" };
+    const key = qualifiedConceptKey(label, qualifier);
+    const known = concepts.find((c) => c.labels.fr !== null && qualifiedConceptKey(c.labels.fr, c.qualifiers.fr) === key);
+    if (known) return known.id;
+    const created = concept("validated", [label, qualifier], [SEED_EN[label] ?? label, qualifier]);
+    concepts.push(created);
+    return created.id;
+  });
+}
+
+/**
+ * Concept ids as a question shows them (`ConceptRef`): in the reader's
+ * language (the page's, as the interface set it), falling back to the other;
+ * a merged one as the concept it went into, an unknown one left out — as the
+ * server reads its links.
+ */
+export function conceptRefs(ids: readonly string[]): ConceptRef[] {
+  const reader = typeof document !== "undefined" && document.documentElement.lang === "fr" ? "fr" : "en";
+  const out = new Map<string, ConceptRef>();
+  for (const id of ids) {
+    let c = concepts.find((x) => x.id === id);
+    if (c?.mergedInto) c = concepts.find((x) => x.id === c!.mergedInto);
+    if (!c) continue;
+    const lang = c.labels[reader] !== null ? reader : reader === "fr" ? "en" : "fr";
+    out.set(c.id, { id: c.id, label: c.labels[lang] ?? "", qualifier: c.qualifiers[lang], status: c.status });
+  }
+  return [...out.values()];
+}
+
+/** Whether every id names a live concept: what `PATCH /questions/:id` checks (`422 concept_not_found`). */
+export const unknownConceptIds = (ids: readonly string[]): string[] =>
+  ids.filter((id) => !concepts.some((c) => c.id === id && c.status !== "merged"));
 
 interface Pair {
   poolId: string;

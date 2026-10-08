@@ -645,6 +645,13 @@
       "when": 1791470664304,
       "tag": "0091_course_icon",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1791475489498,
+      "tag": "0092_concept_cutover_fill",
+      "breakpoints": true
     }
   ]
 }

@@ -10,7 +10,7 @@
  *   - `review.ts`: the student's session, the served card, its time on
  *     screen and the review;
  *   - `teacher.ts`: the teacher's reads of a classroom — each student's
- *     activity, the weekly progression, the mastery per tag, the confidence
+ *     activity, the weekly progression, the mastery per concept, the confidence
  *     per question (aggregated only).
  *
  * The module owns `drill_cards` and `drill_reviews`. The switches it reads

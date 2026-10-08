@@ -11,7 +11,7 @@ create, rename, move, reorder and delete.
 ## Search and filters
 
 The search field matches the internal name and the statement. **Filters**
-opens type, difficulty, tag and **Show deleted questions**. Whatever is
+opens type, difficulty, concept and **Show deleted questions**. Whatever is
 active comes back as removable chips under the bar, with the number of
 questions they leave.
 
@@ -20,7 +20,7 @@ once you know the vocabulary:
 
 | Written | Means |
 | --- | --- |
-| `tag:pointers`, `tag:#pointers` | the questions wearing that tag |
+| `#pointers`, `tag:pointers` | the questions classified under a concept that word names |
 | `type:mcq`, `type:short`, `type:cloze`, `type:code` | that question type |
 | `difficulty:3` | exactly 3 |
 | `difficulty:>3`, `difficulty:>=2`, `difficulty:<3`, `difficulty:<=4` | a bound |
@@ -29,16 +29,19 @@ once you know the vocabulary:
 | `version:>1`, `version:>=2`, `version:<3`, `version:1-3` | a bound, a range |
 | `"a whole phrase"` | those words together |
 
-Anything else is free text. Several `tag:` add up; two `version:` bounds
-narrow each other. What you type and what you tick are the SAME filter: both
+A concept word matches every concept it names — its label in either
+language, or the label with its qualifier (`#"address (memory)"`); a word
+shared by homonyms matches them all. A word that names no concept gets a
+dashed chip that says so, and filters nothing. Anything else is free text. Several
+concept words add up; two `version:` bounds narrow each other. What you type and what you tick are the SAME filter: both
 appear as chips, and removing a chip removes the word from the field too.
-Right after `tag:` or `type:` a short list opens under the field — type to
+Right after `#` or `type:` a short list opens under the field — type to
 narrow it, arrows to move, Enter to insert, Escape to close.
 
 ## The table, the cards and the grouping
 
 One row per question: the type as an icon in front of the internal name
-(hover it for its name), tags, difficulty as five dots, the published
+(hover it for its name), concepts, difficulty as five dots, the published
 version, the last change as a distance — hover it for the exact date. Every
 row carries edit, duplicate and delete at its end.
 
@@ -54,10 +57,17 @@ already loaded; clicking it again reverses the order. The default is the
 last change, newest first.
 
 Beside the filters, three controls change how the list is drawn: **cards or
-table**, **group by** (nothing, type, tag or category) and the **sort**,
+table**, **group by** (nothing, type, concepts or category) and the **sort**,
 which is the only place the type can be sorted since it lost its column. A
-question wearing three tags appears in each of the three sections. All of it
+question with three concepts appears in each of the three sections. All of it
 is remembered for the next visit.
+
+## The Concepts tab
+
+**Concepts** lists the concepts the pool's questions exercise, each with its
+number of questions; a click opens those questions. It is read-only: the
+labels and descriptions are the platform's shared vocabulary, curated by the
+administrator.
 
 ## Favourites
 
@@ -78,7 +88,7 @@ and so does starring it.
 
 ## Several at once
 
-Tick the rows and a bar appears at the bottom: star them, add a tag, move
+Tick the rows and a bar appears at the bottom: star them, add a concept, move
 them to a category, delete them. It reports once, at the end.
 
 ## New question, versions

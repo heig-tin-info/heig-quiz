@@ -1,8 +1,8 @@
 /**
  * The vocabulary of concepts (ADR-081, addendum 2026-10-08): reading it,
  * resolving what someone typed to a concept, proposing a concept and editing
- * it. No question, course or tag reads or writes it yet: the links to
- * questions (`./links.ts`) are inert until the cut-over (third addendum §1).
+ * it. Questions are classified by it since the cut-over (third addendum):
+ * their links are `./links.ts`'s.
  *
  * Every teacher reads the whole vocabulary, proposed concepts included, so
  * as not to recreate one (addendum §5). A teacher proposes; the creator
@@ -18,6 +18,7 @@ import {
   CONCEPT_LANGS,
   type Concept,
   type ConceptCreate,
+  type ConceptLang,
   type ConceptPatch,
   type ConceptResolution,
 } from "@quiz/contracts";
@@ -29,13 +30,16 @@ import { concepts } from "../../db/schema.js";
 import type { Caller } from "../guards.js";
 import { DomainError } from "../http.js";
 import { droppedKeys, insertProposed, refuseInputs } from "./links.js";
-import { columnsOf, conflictOr, perLang, side, sideOf, toConcept, toResolvable } from "./row.js";
+import { columnsOf, conflictOr, perLang, side, sideOf, toConcept, toConceptRef, toResolvable } from "./row.js";
 
-export { toConcept } from "./row.js";
+export { toConcept, toConceptRef } from "./row.js";
 export { acceptTagSortings, listTagSortings, type SortingContext } from "./sorting.js";
 export { lastSortRun, startSortRun } from "./propose.js";
 export {
+  byLabel,
   conceptsOf,
+  copyQuestionConcepts,
+  poolConcepts,
   resolveForWrite,
   setQuestionConcepts,
   type ConceptWrite,
@@ -63,19 +67,28 @@ export async function listConcepts(db: Db): Promise<Concept[]> {
  * What each typed string designates (ADR-081 addendum §2): an id, a
  * qualified label, or a bare label matched against the labels of the
  * concepts that are not merged (`resolveConceptLabel`, which computes the
- * keys itself). One result per input, in order.
+ * keys itself). One result per input, in order, each concept labelled in
+ * the reader's language. An input that designates no concept and whose key
+ * is a dropped tag's is `dropped` (third addendum §4), so a client can
+ * refuse it before writing anything.
  */
-export async function resolveLabels(db: Db, inputs: readonly string[]): Promise<ConceptResolution[]> {
+export async function resolveLabels(
+  db: Db,
+  inputs: readonly string[],
+  lang: ConceptLang,
+): Promise<ConceptResolution[]> {
   const rows = await db.select().from(concepts);
-  const byId = new Map(rows.map((r) => [r.id, toConcept(r)]));
+  const byId = new Map(rows.map((r) => [r.id, toConceptRef(r, lang)]));
   const vocabulary = rows.map(toResolvable);
   const concept = (id: string) => byId.get(id)!;
+  const dropped = await droppedKeys(db);
 
-  return inputs.map((input) => {
+  return inputs.map((input): ConceptResolution => {
     const outcome = resolveConceptLabel(input, vocabulary);
-    return outcome.kind === "resolved"
-      ? { input, kind: "resolved", concept: concept(outcome.id) }
-      : { input, kind: outcome.kind, candidates: outcome.candidates.map(concept) };
+    if (outcome.kind === "resolved") return { input, kind: "resolved", concept: concept(outcome.id) };
+    const reason = outcome.kind === "unknown" ? droppedReason(input, dropped) : null;
+    if (reason !== null) return { input, kind: "dropped", reason };
+    return { input, kind: outcome.kind, candidates: outcome.candidates.map(concept) };
   });
 }
 
@@ -202,9 +215,8 @@ export async function validateConcept(db: Db, ctx: Omit<ConceptContext, "caller"
 /**
  * Deletes a concept nothing refers to (ADR-081 second addendum §2, third
  * addendum §7): a sorting decision that maps to it, a concept merged into
- * it, or a question linked to it makes the
- * foreign key refuse, answered 409 `concept_in_use`; a missing one is a 404.
- * Before the cut-over this is the only deletion; afterwards a concept is
+ * it, or a question linked to it makes the foreign key refuse, answered 409
+ * `concept_in_use`; a missing one is a 404. A concept a question uses is
  * merged, never deleted.
  */
 export async function deleteConcept(db: Db, ctx: Omit<ConceptContext, "caller">, id: string): Promise<void> {

@@ -62,7 +62,7 @@ import {
   drillReviews,
   enrollments,
   evaluations,
-  questionTags,
+  questionConcepts,
   questions,
 } from "../../db/schema.js";
 import { gradeDefaults, type DbOrTx, type EvaluationRecord } from "../evaluation/service.js";
@@ -355,7 +355,8 @@ async function referenceTimes(
 /**
  * Today's session (F-DRILL-03, ADR-041 §6): the due cards — due before the
  * end of the day, Zurich time — then the new ones up to the day's cap, until
- * the budget is spent, courses and tags interleaved. A card reviewed today,
+ * the budget is spent, courses and concepts interleaved (a question by its
+ * first concept id, ADR-081 third addendum §8). A card reviewed today,
  * or whose key may not reach the student yet, is left out. An empty day
  * gives the next due date (06, question 28 (b)).
  */
@@ -371,15 +372,18 @@ export async function drillSession(
   const rows = active.filter((row) => questionOf(row, context)?.open === true);
   const questionIds = [...new Set(rows.map((r) => r.card.questionId))];
   const introduced = await introducedToday(db, userId, day);
-  const tags =
+  const firsts =
     questionIds.length === 0
       ? []
       : await db
-          .select({ questionId: questionTags.questionId, tag: sql<string>`min(${questionTags.tag})` })
-          .from(questionTags)
-          .where(inArray(questionTags.questionId, questionIds))
-          .groupBy(questionTags.questionId);
-  const tagOf = new Map(tags.map((t) => [t.questionId, t.tag]));
+          .select({
+            questionId: questionConcepts.questionId,
+            conceptId: sql<string>`min(${questionConcepts.conceptId}::text)`,
+          })
+          .from(questionConcepts)
+          .where(inArray(questionConcepts.questionId, questionIds))
+          .groupBy(questionConcepts.questionId);
+  const conceptOf = new Map(firsts.map((t) => [t.questionId, t.conceptId]));
   const references = await referenceTimes(db, questionIds, device, userId);
 
   const rowOf = new Map(rows.map((r) => [r.card.id, r]));
@@ -392,7 +396,7 @@ export async function drillSession(
         dueAt: card.dueAt,
         retrievability: drillRetrievability(stateOf(card), now),
         referenceMs: references.get(card.questionId) ?? null,
-        group: `${courseCode}\u0000${tagOf.get(card.questionId) ?? ""}`,
+        group: `${courseCode}\u0000${conceptOf.get(card.questionId) ?? ""}`,
       })),
     // "Due" is due before the day ends: FSRS counts whole days from the
     // instant of the last review, and a card due at 14:00 belongs to the

@@ -10,7 +10,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { ConceptExists, ConceptResolveResponse, Concept as ConceptSchema, type Concept } from "@quiz/contracts";
 
-import { auditLog, concepts } from "../../db/schema.js";
+import { randomUUID } from "node:crypto";
+
+import { auditLog, concepts, conceptTagSortings, pools } from "../../db/schema.js";
 import { testServer, type Payload, type TestServer } from "../../test/http.js";
 
 type Who = Awaited<ReturnType<TestServer["signIn"]>>;
@@ -21,8 +23,19 @@ let colleague: Who;
 let admin: Who;
 let student: Who;
 
-const call = (who: Who, method: "GET" | "POST" | "PATCH", url: string, payload?: Payload) =>
-  server.app.inject({ method, url, headers: who.headers, ...(payload === undefined ? {} : { payload }) });
+const call = (
+  who: Who,
+  method: "GET" | "POST" | "PATCH",
+  url: string,
+  payload?: Payload,
+  headers: Record<string, string> = {},
+) =>
+  server.app.inject({
+    method,
+    url,
+    headers: { ...who.headers, ...headers },
+    ...(payload === undefined ? {} : { payload }),
+  });
 
 const post = (who: Who, body: Payload) => call(who, "POST", "/app/api/concepts", body);
 
@@ -34,8 +47,12 @@ async function create(who: Who, body: Payload): Promise<Concept> {
 
 const patch = (who: Who, id: string, body: Payload) => call(who, "PATCH", `/app/api/concepts/${id}`, body);
 
+/** `GET /concepts/resolve`, one `input` parameter per string. */
+const resolveUrl = (inputs: string[]) =>
+  `/app/api/concepts/resolve?${new URLSearchParams(inputs.map((i): [string, string] => ["input", i]))}`;
+
 async function resolve(...inputs: string[]) {
-  const res = await call(teacher, "POST", "/app/api/concepts/resolve", { inputs });
+  const res = await call(teacher, "GET", resolveUrl(inputs));
   expect(res.statusCode, res.body).toBe(200);
   return ConceptResolveResponse.parse(res.json()).results;
 }
@@ -121,7 +138,7 @@ describe("proposing a concept", () => {
   it("is refused to a student by the guard", async () => {
     expect((await post(student, { lang: "fr", label: "pile" })).statusCode).toBe(403);
     expect((await call(student, "GET", "/app/api/concepts")).statusCode).toBe(403);
-    expect((await call(student, "POST", "/app/api/concepts/resolve", { inputs: ["pile"] })).statusCode).toBe(403);
+    expect((await call(student, "GET", resolveUrl(["pile"]))).statusCode).toBe(403);
   });
 });
 
@@ -136,12 +153,27 @@ describe("resolving a typed label", () => {
     expect(qualified).toMatchObject({ kind: "resolved", concept: { id: memory.id } });
   });
 
+  it("reports a label the admin dropped in the sorting, with its reason", async () => {
+    const poolId = randomUUID();
+    await server.app.db.insert(pools).values({ id: poolId, name: "Dropped tags", ownerId: teacher.id });
+    await server.app.db
+      .insert(conceptTagSortings)
+      .values({ poolId, tag: "lecture-de-code", decision: "drop", dropReason: "task_kind", decidedAt: new Date() });
+    const [dropped, other] = await resolve("Lecture de code", "inconnu total");
+    expect(dropped).toEqual({ input: "Lecture de code", kind: "dropped", reason: "task_kind" });
+    expect(other).toMatchObject({ kind: "unknown" });
+    await server.app.db.delete(pools).where(eq(pools.id, poolId));
+  });
+
   it("resolves one exact match through either language's label", async () => {
     const stack = await create(teacher, { lang: "fr", label: "pile" });
     expect((await patch(teacher, stack.id, { en: { label: "stack" } })).statusCode).toBe(200);
     const [fr, en] = await resolve("Piles", "stacks");
     expect(fr).toMatchObject({ kind: "resolved", concept: { id: stack.id } });
     expect(en).toMatchObject({ kind: "resolved", concept: { id: stack.id } });
+    // A concept as a reader sees it (`ConceptRef`), in the language their browser asks for.
+    const english = await call(teacher, "GET", resolveUrl(["piles"]), undefined, { "accept-language": "en" });
+    expect(english.json().results[0].concept).toEqual({ id: stack.id, label: "stack", qualifier: "", status: "proposed" });
   });
 
   it("proposes a close match as a candidate only", async () => {
@@ -164,7 +196,9 @@ describe("resolving a typed label", () => {
   });
 
   it("validates its input", async () => {
-    expect((await call(teacher, "POST", "/app/api/concepts/resolve", { inputs: [] })).statusCode).toBe(400);
+    expect((await call(teacher, "GET", "/app/api/concepts/resolve")).statusCode).toBe(400);
+    // A label may hold a comma: one `input` is one string, never split.
+    expect(await resolve("pile, file")).toHaveLength(1);
   });
 });
 

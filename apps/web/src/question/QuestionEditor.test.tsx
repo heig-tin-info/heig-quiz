@@ -53,7 +53,7 @@ const POOL: PoolDetail = {
   },
   role: "owner",
   categories: [{ id: "k1", poolId: "p1", parentId: null, name: "Pointeurs", position: 0, children: [] }],
-  tags: ["pointeurs"],
+  concepts: [{ concept: { id: "00000000-0000-4000-8000-0000000000a1", label: "Pointeur", qualifier: "", status: "validated" }, count: 1 }],
   questionCount: 1,
 };
 
@@ -68,7 +68,7 @@ function mcqDetail(over: Partial<QuestionDetail> = {}): QuestionDetail {
       difficulty: 2,
       shuffleable: true,
       randomizable: false,
-      tags: ["pointeurs"],
+      concepts: [{ id: "00000000-0000-4000-8000-0000000000a1", label: "Pointeur", qualifier: "", status: "validated" }],
       createdBy: "u-me",
       originQuestionId: null,
       deletedAt: null,

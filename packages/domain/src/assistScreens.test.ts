@@ -32,7 +32,7 @@ describe("the screen catalogue (ADR-080 P2b)", () => {
   it("is listed in the stable prompt with its ids and params", () => {
     const teacher = assistScreenCatalogue("teacher");
     expect(teacher).toContain(
-      "- pool — /pools/:id — Question pool (help/pool); ids: id=<pool id>; params: tab=questions|tags|review|settings, q=<the search box",
+      "- pool — /pools/:id — Question pool (help/pool); ids: id=<pool id>; params: tab=questions|concepts|review|settings, q=<the search box",
     );
     expect(teacher).toContain("category=<category id>");
     expect(teacher).toContain("- activities — /activities — Activities\n");
@@ -47,8 +47,8 @@ describe("the screen catalogue (ADR-080 P2b)", () => {
 describe("checkOpenScreen", () => {
   it("returns the action for a screen of the catalogue with its ids and params", () => {
     expect(
-      checkOpenScreen({ screen: "pool", ids: { id: POOL }, params: { q: "tag:printf", category: CATEGORY } }, "teacher"),
-    ).toEqual({ kind: "open_screen", screen: "pool", ids: { id: POOL }, params: { q: "tag:printf", category: CATEGORY } });
+      checkOpenScreen({ screen: "pool", ids: { id: POOL }, params: { q: "#printf", category: CATEGORY } }, "teacher"),
+    ).toEqual({ kind: "open_screen", screen: "pool", ids: { id: POOL }, params: { q: "#printf", category: CATEGORY } });
     expect(checkOpenScreen({ screen: "activities" }, "teacher")).toEqual({
       kind: "open_screen",
       screen: "activities",
@@ -78,7 +78,7 @@ describe("checkOpenScreen", () => {
     const pool = (params: unknown) => checkOpenScreen({ screen: "pool", ids: { id: POOL }, params }, "teacher");
     expect(() => pool({ step: "x" })).toThrow("The screen pool takes the params tab, q, category.");
     expect(() => checkOpenScreen({ screen: "pools", params: { q: "x" } }, "teacher")).toThrow("The screen pools takes no param.");
-    expect(() => pool({ tab: "admin" })).toThrow("`tab` must be one of questions, tags, review, settings.");
+    expect(() => pool({ tab: "admin" })).toThrow("`tab` must be one of questions, concepts, review, settings.");
     expect(() => pool({ q: " " })).toThrow("`q` must be a non-empty line");
     expect(() => pool({ q: "a\nb" })).toThrow("`q` must be a non-empty line");
     expect(() => pool({ q: "x".repeat(201) })).toThrow("`q` must be a non-empty line");
@@ -173,12 +173,12 @@ describe("the stub drives the interface (ADR-080 P2b)", () => {
   const readers = { results: () => Promise.reject(new Error("no")), pools: () => Promise.resolve(pools) };
   const ask = (question: string, locale: "en" | "fr" = "fr", read = readers) => stubTurn(corpus, "teacher", question, { ...screen, locale }, read);
 
-  it("opens the pool a request to see names, searched by its tag:x or #x, and says so", async () => {
+  it("opens the pool a request to see names, searched by its concept #x (or tag:x), and says so", async () => {
     const turn = await ask("Montre-moi les questions du pool sandbox, tag:printf");
-    expect(turn.actions).toEqual([{ kind: "open_screen", screen: "pool", ids: { id: POOL }, params: { q: "tag:printf" } }]);
-    expect(turn.text).toContain("J'ai ouvert la banque **Sandbox** avec la recherche `tag:printf`.");
+    expect(turn.actions).toEqual([{ kind: "open_screen", screen: "pool", ids: { id: POOL }, params: { q: "#printf" } }]);
+    expect(turn.text).toContain("J'ai ouvert la banque **Sandbox** avec la recherche `#printf`.");
     expect((await ask("open programmation c, only #pointeurs", "en")).actions).toEqual([
-      { kind: "open_screen", screen: "pool", ids: { id: CATEGORY }, params: { q: "tag:pointeurs" } },
+      { kind: "open_screen", screen: "pool", ids: { id: CATEGORY }, params: { q: "#pointeurs" } },
     ]);
     const plain = await ask("show the sandbox pool", "en");
     expect(plain.actions[0]).toMatchObject({ params: {} });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { QuestionStats } from "@quiz/contracts";
+import type { Concept, QuestionStats } from "@quiz/contracts";
 
 import {
   activeFilterCount,
@@ -12,6 +12,26 @@ import {
   resolveFilters,
   toggle,
 } from "./filters";
+
+const P = "00000000-0000-4000-8000-00000000000a";
+const M1 = "00000000-0000-4000-8000-00000000000b";
+const M2 = "00000000-0000-4000-8000-00000000000c";
+const concept = (id: string, fr: [string, string?], en: [string, string?]): Concept => ({
+  id,
+  status: "validated",
+  mergedInto: null,
+  labels: { fr: fr[0], en: en[0] },
+  qualifiers: { fr: fr[1] ?? "", en: en[1] ?? "" },
+  descriptions: { fr: "", en: "" },
+  createdBy: null,
+  createdAt: "2026-10-01T08:00:00.000Z",
+});
+/** A pointer in two languages, and two homonyms told apart by their qualifier. */
+const VOCABULARY = [
+  concept(P, ["Pointeur"], ["Pointer"]),
+  concept(M1, ["Adresse", "mémoire"], ["Address", "memory"]),
+  concept(M2, ["Adresse", "réseau"], ["Address", "network"]),
+];
 
 describe("questionQuery", () => {
   // The exact query of a few states, parameter order included.
@@ -27,7 +47,7 @@ describe("questionQuery", () => {
       "?sort=name&dir=asc&limit=25&cursor=c-1",
     ],
   ])("%s", (_, filters, cursor, expected) => {
-    expect(questionQuery(filters, cursor)).toBe(expected);
+    expect(questionQuery(filters, undefined, cursor)).toBe(expected);
   });
 
   it("composes every filter into the query the API parses", () => {
@@ -35,7 +55,7 @@ describe("questionQuery", () => {
       ...EMPTY_FILTERS,
       q: "  pointeurs ",
       types: ["code", "mcq"],
-      tags: ["pointers", "memory"],
+      concepts: [P, M1],
       difficulties: [4, 2],
       categoryId: "cat-1",
       includeDeleted: true,
@@ -43,7 +63,7 @@ describe("questionQuery", () => {
     const params = new URLSearchParams(query.slice(1));
     expect(params.get("q")).toBe("pointeurs");
     expect(params.get("type")).toBe("code,mcq");
-    expect(params.get("tag")).toBe("pointers,memory");
+    expect(params.get("concept")).toBe(`${P},${M1}`);
     // Ascending, so two equal states give one query key.
     expect(params.get("difficulty")).toBe("2,4");
     expect(params.get("categoryId")).toBe("cat-1");
@@ -56,8 +76,8 @@ describe("questionQuery", () => {
   });
 
   it("is stable for equal states", () => {
-    const a = questionQuery({ ...EMPTY_FILTERS, tags: ["a"], difficulties: [3, 1] });
-    const b = questionQuery({ ...EMPTY_FILTERS, tags: ["a"], difficulties: [1, 3] });
+    const a = questionQuery({ ...EMPTY_FILTERS, concepts: [P], difficulties: [3, 1] });
+    const b = questionQuery({ ...EMPTY_FILTERS, concepts: [P], difficulties: [1, 3] });
     expect(a).toBe(b);
   });
 });
@@ -68,12 +88,12 @@ describe("activeFilterCount", () => {
     ["the category, which is not a filter", { ...EMPTY_FILTERS, categoryId: "cat-1" }, 0],
     [
       "every active filter",
-      { ...EMPTY_FILTERS, q: "ptr", types: ["code"], tags: ["a", "b"], difficulties: [5], includeDeleted: true },
+      { ...EMPTY_FILTERS, q: "ptr", types: ["code"], concepts: [P, M1], difficulties: [5], includeDeleted: true },
       6,
     ],
     ["a whitespace-only search as nothing", { ...EMPTY_FILTERS, q: "   " }, 0],
     // A token of the search field is a filter like a chip.
-    ["two tag tokens of the field", { ...EMPTY_FILTERS, q: "tag:a tag:b" }, 2],
+    ["two concept words of the field", { ...EMPTY_FILTERS, q: "#a tag:b" }, 2],
     ["a version token of the field", { ...EMPTY_FILTERS, q: "version:>2" }, 1],
     // A statistics range counts once, and "without statistics" alone is none.
     ["two ranges and without-stats", { ...EMPTY_FILTERS, rateMin: 20, rateMax: 60, timeMin: 30, withoutStats: true }, 2],
@@ -119,11 +139,13 @@ describe("resolveFilters", () => {
   it("merges the search box tokens into the chips and keeps the free text", () => {
     const resolved = resolveFilters({
       ...EMPTY_FILTERS,
-      q: "tag:pointeurs type:code difficulty:>3 version:>1 segfault",
-      tags: ["memoire"],
-    });
+      q: "#pointer type:code difficulty:>3 version:>1 segfault",
+      concepts: [M1],
+    }, VOCABULARY);
     expect(resolved.q).toBe("segfault");
-    expect(resolved.tags).toEqual(["memoire", "pointeurs"]);
+    expect(resolved.concepts).toEqual([M1, P]);
+    expect(resolved.words).toEqual([{ word: "pointer", ids: [P] }]);
+    expect(resolved.pending).toBe(false);
     expect(resolved.types).toEqual(["code"]);
     expect(resolved.difficulties).toEqual([4, 5]);
     expect(resolved.versionMin).toBe(2);
@@ -131,8 +153,32 @@ describe("resolveFilters", () => {
   });
 
   it("never lists the same value twice when both sides carry it", () => {
-    const resolved = resolveFilters({ ...EMPTY_FILTERS, q: "tag:memoire", tags: ["memoire"] });
-    expect(resolved.tags).toEqual(["memoire"]);
+    const resolved = resolveFilters({ ...EMPTY_FILTERS, q: "#pointeur", concepts: [P] }, VOCABULARY);
+    expect(resolved.concepts).toEqual([P]);
+  });
+
+  // ADR-081 third addendum §7: a word filters on every concept it may designate.
+  it.each([
+    ["a label in the other language", "#pointers", [P]],
+    ["the tags' spelling", "tag:#pointeur", [P]],
+    ["no merely close spelling", "#pointr", []],
+    ["homonyms, inclusively", "#adresse", [M1, M2]],
+    ["one homonym by its qualifier", '#"adresse (réseau)"', [M2]],
+  ])("resolves %s", (_, q, ids) => {
+    const resolved = resolveFilters({ ...EMPTY_FILTERS, q }, VOCABULARY);
+    expect([...resolved.concepts].sort()).toEqual([...ids].sort());
+  });
+
+  it("filters nothing on a word that designates no concept, and says which", () => {
+    const resolved = resolveFilters({ ...EMPTY_FILTERS, q: "#inductance" }, VOCABULARY);
+    expect(resolved.words).toEqual([{ word: "inductance", ids: [] }]);
+    expect(resolved.concepts).toEqual([]);
+    expect(questionQuery({ ...EMPTY_FILTERS, q: "#inductance" }, VOCABULARY)).toBe("?limit=25");
+  });
+
+  it("is pending while the vocabulary is not there", () => {
+    expect(resolveFilters({ ...EMPTY_FILTERS, q: "#pointer" }).pending).toBe(true);
+    expect(resolveFilters({ ...EMPTY_FILTERS, q: "pointer" }).pending).toBe(false);
   });
 
   it("puts a token of the field into the query the API parses", () => {

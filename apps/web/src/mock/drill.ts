@@ -27,12 +27,13 @@ import type {
   DrillServed,
   DrillSession,
   DrillStudentActivity,
-  DrillTagMastery,
+  DrillConceptMastery,
   DrillWeek,
   EvaluationDrill,
 } from "@quiz/contracts";
 import { allowDrillWritable, drillLocalDate, drillWeekStarts } from "@quiz/domain";
 
+import { conceptRefs, seedConceptIds } from "./concept";
 import { evaluationOr404, evaluations, toEvaluation, type MockEvaluation } from "./evaluation";
 import { courses, roomOr404, rooms } from "./org";
 import { frozenConfig, questions, studentSolutionOf, studentView, tryAnswer, type MockQuestion } from "./pool";
@@ -336,18 +337,23 @@ on("GET", "/app/api/classrooms/:id/drill/progress", (m, _body, url): DrillProgre
   return { weeks: found.weeks.map((x) => x.week) };
 });
 
-/** The tags of the C course, and the questions without one; weakest first. */
-const MASTERY: DrillTagMastery[] = [
-  { tag: "pointeurs", cards: 40, students: 18, retrievability: 0.58 },
-  { tag: "memoire", cards: 57, students: 17, retrievability: 0.66 },
-  { tag: "tableaux", cards: 74, students: 16, retrievability: 0.74 },
-  { tag: null, cards: 25, students: 13, retrievability: 0.79 },
-  { tag: "boucles", cards: 91, students: 15, retrievability: 0.83 },
-  { tag: "types", cards: 108, students: 14, retrievability: 0.88 },
-];
+/** The concepts of the C course, and the questions without one; weakest first. */
+const MASTERY_IDS = seedConceptIds(["Pointeur", "Allocation dynamique", "Tableau", "Boucle", "Types"]);
+/** Labelled when asked, in the reader's language, as the server labels them. */
+const mastery = (): DrillConceptMastery[] => {
+  const [pointer, allocation, array, loop, types] = conceptRefs(MASTERY_IDS);
+  return [
+    { concept: pointer!, cards: 40, students: 18, retrievability: 0.58 },
+    { concept: allocation!, cards: 57, students: 17, retrievability: 0.66 },
+    { concept: array!, cards: 74, students: 16, retrievability: 0.74 },
+    { concept: null, cards: 25, students: 13, retrievability: 0.79 },
+    { concept: loop!, cards: 91, students: 15, retrievability: 0.83 },
+    { concept: types!, cards: 108, students: 14, retrievability: 0.88 },
+  ];
+};
 
-on("GET", "/app/api/classrooms/:id/drill/mastery", (m): DrillTagMastery[] =>
-  hasHistory(roomOr404(m.groups!.id!).id) ? MASTERY : [],
+on("GET", "/app/api/classrooms/:id/drill/mastery", (m): DrillConceptMastery[] =>
+  hasHistory(roomOr404(m.groups!.id!).id) ? mastery() : [],
 );
 
 /**

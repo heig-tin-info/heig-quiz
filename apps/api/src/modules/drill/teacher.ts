@@ -1,7 +1,7 @@
 /**
  * The teacher's view of a classroom's drill (ADR-041 §8, §10 items 8 and 10,
  * #317 slice 4): each student's activity, the weekly progression, the
- * mastery per tag, and the confidence per question (ADR-085 §8). Reads
+ * mastery per concept, and the confidence per question (ADR-085 §8). Reads
  * only; the routes load the classroom through `staffAccess` first
  * (invariant 6).
  *
@@ -22,7 +22,13 @@
  */
 import { and, eq, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 
-import type { DrillProgress, DrillQuestionConfidence, DrillStudentActivity, DrillTagMastery } from "@quiz/contracts";
+import type {
+  ConceptLang,
+  DrillConceptMastery,
+  DrillProgress,
+  DrillQuestionConfidence,
+  DrillStudentActivity,
+} from "@quiz/contracts";
 import {
   DRILL_RECALLED_MIN_RATING,
   SCHOOL_TIME_ZONE,
@@ -38,7 +44,8 @@ import { drillRetrievability } from "@quiz/domain/drillSchedule";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { drillCards, drillReviews, enrollments, questionTags, questions } from "../../db/schema.js";
+import { concepts, drillCards, drillReviews, enrollments, questionConcepts, questions } from "../../db/schema.js";
+import { byLabel, toConceptRef } from "../concept/service.js";
 
 const DAY_MS = 86_400_000;
 
@@ -198,32 +205,49 @@ export async function classroomProgress(
 }
 
 /**
- * Per tag, the mean retrievability now of the classroom's reviewed cards,
- * over its current student seats (ADR-041 §10, item 10). One query; the
- * retrievability is FSRS's (`drillRetrievability`), computed here rather
- * than re-derived in SQL. A card's state is its last review's, so a card
- * of a student who opted out stands as it was before (28 (k)). Weakest tag
- * first.
+ * Per concept, the mean retrievability now of the classroom's reviewed
+ * cards, over its current student seats (ADR-041 §10, item 10; ADR-081
+ * third addendum §8: today's classification of past reviews, labelled in
+ * `lang`). One query; the retrievability is FSRS's (`drillRetrievability`),
+ * computed here rather than re-derived in SQL. A card's state is its last
+ * review's, so a card of a student who opted out stands as it was before
+ * (28 (k)). Weakest concept first; `concept` null gathers the questions
+ * without any.
  */
-export async function classroomMastery(db: Db, classroomId: string, now: Date): Promise<DrillTagMastery[]> {
+export async function classroomMastery(
+  db: Db,
+  classroomId: string,
+  now: Date,
+  lang: ConceptLang,
+): Promise<DrillConceptMastery[]> {
   const rows = await db
-    .select({ card: drillCards, tag: questionTags.tag })
+    .select({ card: drillCards, concept: concepts })
     .from(drillCards)
     .innerJoin(enrollments, and(studentSeat(classroomId), eq(enrollments.userId, drillCards.userId)))
-    .leftJoin(questionTags, eq(questionTags.questionId, drillCards.questionId))
+    .leftJoin(questionConcepts, eq(questionConcepts.questionId, drillCards.questionId))
+    .leftJoin(concepts, eq(concepts.id, questionConcepts.conceptId))
     .where(and(eq(drillCards.classroomId, classroomId), isNotNull(drillCards.lastReviewAt)));
 
-  const tags = new Map<string | null, { cards: Set<string>; students: Set<string>; sum: number }>();
-  for (const { card, tag } of rows) {
-    const entry = tags.get(tag) ?? { cards: new Set(), students: new Set(), sum: 0 };
-    tags.set(tag, entry);
+  type Entry = { concept: DrillConceptMastery["concept"]; cards: Set<string>; students: Set<string>; sum: number };
+  const groups = new Map<string | null, Entry>();
+  for (const { card, concept } of rows) {
+    const key = concept?.id ?? null;
+    let entry = groups.get(key);
+    if (!entry) {
+      entry = { concept: concept ? toConceptRef(concept, lang) : null, cards: new Set(), students: new Set(), sum: 0 };
+      groups.set(key, entry);
+    }
     entry.cards.add(card.id);
     entry.students.add(card.userId);
     entry.sum += drillRetrievability(card, now);
   }
-  return [...tags]
-    .map(([tag, e]) => ({ tag, cards: e.cards.size, students: e.students.size, retrievability: e.sum / e.cards.size }))
-    .sort((a, b) => a.retrievability - b.retrievability || String(a.tag).localeCompare(String(b.tag)));
+  return [...groups.values()]
+    .map((e) => ({ concept: e.concept, cards: e.cards.size, students: e.students.size, retrievability: e.sum / e.cards.size }))
+    .sort(
+      (a, b) =>
+        a.retrievability - b.retrievability ||
+        (a.concept === null ? 1 : b.concept === null ? -1 : byLabel(a.concept, b.concept)),
+    );
 }
 
 /**

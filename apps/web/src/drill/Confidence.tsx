@@ -10,7 +10,7 @@
  *   stated by enough students; an individual statement never reaches it.
  *
  * Both are secondary sections of a read view: no accent, no action. The bar
- * is a share with no verdict (`info`, as the mastery per tag), and its figure
+ * is a share with no verdict (`info`, as the mastery per concept), and its figure
  * is always written beside it, so colour is never the only reading.
  */
 import type { DrillCalibrationLevel, DrillConfidenceSplit, DrillQuestionConfidence } from "@quiz/contracts";

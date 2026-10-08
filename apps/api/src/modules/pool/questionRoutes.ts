@@ -23,8 +23,9 @@ import { registeredServerIds } from "@quiz/registry/server";
 import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
 import { iso, isoOrNull } from "../../clock.js";
 import { questions } from "../../db/schema.js";
+import { actorOf } from "../../audit.js";
 import { callerOf, findAccessiblePool, requirePoolRole } from "../guards.js";
-import { invalid } from "../http.js";
+import { invalid, readerLang } from "../http.js";
 import { LlmError, llmFailure } from "../llm/service.js";
 import { poolChanged } from "./events.js";
 import { GenerateRefusal, generateAnswers, generatorTypes } from "./generate.js";
@@ -41,7 +42,7 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
       { params: IdParam, query: QuestionSearch, load: inPool() },
       async ({ req, reply, query, scope: pool }) => {
         try {
-          return await service.listQuestions(app.db, pool.id, req.user!.id, query);
+          return await service.listQuestions(app.db, pool.id, req.user!.id, query, readerLang(req));
         } catch (error) {
           // A cursor is only valid for the order that produced it: a client that
           // changes column mid-scroll starts the list again rather than reading a
@@ -72,14 +73,21 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
           internalName: body.internalName,
           categoryId: body.categoryId ?? null,
           createdBy: req.user!.id,
+          // A concept that cannot be resolved is the 422 `ConceptWriteRefusal`, and nothing is created.
+          concepts: body.concepts && {
+            inputs: body.concepts,
+            createMissing: body.createMissing ?? false,
+            writer: { userId: req.user!.id, lang: readerLang(req), actor: actorOf(req) },
+          },
         });
         await trace(req, "question.create", "question", created.id, {
           poolId: pool.id,
           type: body.type,
           internalName: body.internalName,
+          ...(body.concepts ? { concepts: body.concepts } : {}),
         });
         poolChanged(pool.id);
-        return reply.code(201).send(await service.questionDetail(app.db, created));
+        return reply.code(201).send(await service.questionDetail(app.db, created, readerLang(req)));
       },
     ),
   );
@@ -87,8 +95,8 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
   app.get(
     "/app/api/questions/:id",
     { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: onQuestion() }, ({ scope }) =>
-      service.questionDetail(app.db, scope.question),
+    teacher({ params: IdParam, load: onQuestion() }, ({ req, scope }) =>
+      service.questionDetail(app.db, scope.question, readerLang(req)),
     ),
   );
 
@@ -99,14 +107,19 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
       { params: IdParam, body: QuestionPatch, load: onQuestion("contributor") },
       async ({ req, reply, body, scope }) => {
         // `NameTaken`'s 409 and `poolFailure`'s 404, like the create route.
-        await service.patchQuestion(app.db, scope.question, body);
+        // A concept that cannot be resolved is the 422 `ConceptWriteRefusal`.
+        await service.patchQuestion(app.db, scope.question, body, {
+          userId: req.user!.id,
+          lang: readerLang(req),
+          actor: actorOf(req),
+        });
         await trace(req, "question.update", "question", scope.question.id, body);
         poolChanged(scope.pool.id);
         const [fresh] = await app.db
           .select()
           .from(questions)
           .where(eq(questions.id, scope.question.id));
-        return (await service.questionDetail(app.db, fresh!)).meta;
+        return (await service.questionDetail(app.db, fresh!, readerLang(req))).meta;
       },
     ),
   );
@@ -249,7 +262,7 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
         .select()
         .from(questions)
         .where(eq(questions.id, scope.question.id));
-      return service.questionDetail(app.db, fresh!);
+      return service.questionDetail(app.db, fresh!, readerLang(req));
     }),
   );
 
@@ -355,7 +368,7 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
           targetPoolId: target.id,
         });
         poolChanged(target.id);
-        return reply.code(201).send(await service.questionDetail(app.db, created));
+        return reply.code(201).send(await service.questionDetail(app.db, created, readerLang(req)));
       },
     ),
   );

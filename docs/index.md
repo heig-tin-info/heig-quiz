@@ -1,6 +1,6 @@
 # HEIG Quiz
 
-A quiz platform for HEIG-VD teachers. Question pools with categories, tags
+A quiz platform for HEIG-VD teachers. Question pools with categories, concepts
 and published versions; evaluations run live on a server-side clock, with a
 projector dashboard and automatic grading, including code executed in a
 sandbox; live polls answered from a phone through a QR code. One

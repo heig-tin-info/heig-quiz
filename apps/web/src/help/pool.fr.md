@@ -12,7 +12,7 @@ déplacer, réordonner et supprimer.
 ## Recherche et filtres
 
 Le champ de recherche porte sur le nom interne et l'énoncé. **Filtres**
-ouvre le type, la difficulté, les tags et **Afficher les questions
+ouvre le type, la difficulté, les notions et **Afficher les questions
 supprimées**. Ce qui est actif revient en pastilles amovibles sous la barre,
 avec le nombre de questions qu'elles laissent.
 
@@ -21,7 +21,7 @@ panneau une fois le vocabulaire connu :
 
 | Écrit | Signifie |
 | --- | --- |
-| `tag:pointeurs`, `tag:#pointeurs` | les questions portant ce tag |
+| `#pointeurs`, `tag:pointeurs` | les questions classées sous une notion que ce mot désigne |
 | `type:mcq`, `type:short`, `type:cloze`, `type:code` | ce type de question |
 | `difficulty:3` | exactement 3 |
 | `difficulty:>3`, `difficulty:>=2`, `difficulty:<3`, `difficulty:<=4` | une borne |
@@ -30,17 +30,21 @@ panneau une fois le vocabulaire connu :
 | `version:>1`, `version:>=2`, `version:<3`, `version:1-3` | une borne, un intervalle |
 | `"une phrase entière"` | ces mots ensemble |
 
-Le reste est du texte libre. Plusieurs `tag:` s'additionnent ; deux bornes
-`version:` se resserrent. Ce que vous tapez et ce que vous cochez sont le
+Un mot de notion vaut pour toutes les notions qu'il désigne — son libellé
+dans l'une ou l'autre langue, ou le libellé avec son qualificatif
+(`#"adresse (mémoire)"`) ; un mot commun à des homonymes les désigne tous.
+Un mot qui ne désigne aucune notion reçoit une pastille en pointillés qui le
+dit, et ne filtre rien. Le reste est du texte libre. Plusieurs mots de
+notion s'additionnent ; deux bornes `version:` se resserrent. Ce que vous tapez et ce que vous cochez sont le
 MÊME filtre : les deux apparaissent en pastilles, et retirer une pastille
-retire aussi le mot du champ. Juste après `tag:` ou `type:`, une courte liste
+retire aussi le mot du champ. Juste après `#` ou `type:`, une courte liste
 s'ouvre sous le champ — tapez pour la resserrer, les flèches pour vous
 déplacer, Entrée pour insérer, Échap pour fermer.
 
 ## Le tableau, les cartes et le regroupement
 
 Une ligne par question : le type en icône devant le nom interne (survolez-la
-pour son nom), les tags, la difficulté en cinq points, la version publiée, la
+pour son nom), les notions, la difficulté en cinq points, la version publiée, la
 dernière modification en distance — survolez-la pour la date exacte. Chaque
 ligne porte modifier, dupliquer et supprimer à son extrémité.
 
@@ -56,10 +60,18 @@ questions déjà chargées ; recliquer inverse l'ordre. Par défaut : la derniè
 modification, la plus récente en tête.
 
 À côté des filtres, trois contrôles changent la manière dont la liste est
-dessinée : **cartes ou tableau**, **regrouper par** (rien, type, tag ou
+dessinée : **cartes ou tableau**, **regrouper par** (rien, type, notions ou
 catégorie) et le **tri**, seul endroit d'où trier par type puisqu'il a perdu
-sa colonne. Une question portant trois tags apparaît dans les trois sections.
+sa colonne. Une question à trois notions apparaît dans les trois sections.
 Tout cela est retenu pour la prochaine visite.
+
+
+## L'onglet Notions
+
+**Notions** liste les notions que les questions de la banque exercent, chacune
+avec son nombre de questions ; un clic ouvre ces questions. Il est en lecture
+seule : libellés et descriptions appartiennent au vocabulaire commun de la
+plateforme, tenu par l'administrateur.
 
 ## Favoris
 
@@ -82,7 +94,7 @@ c'est l'ouvrir — et la mettre en favori aussi.
 ## Plusieurs à la fois
 
 Cochez les lignes : une barre apparaît en bas — les mettre en favori, ajouter
-un tag, les déplacer dans une catégorie, les supprimer. Elle rend compte une fois, à la fin.
+une notion, les déplacer dans une catégorie, les supprimer. Elle rend compte une fois, à la fin.
 
 ## Nouvelle question, versions
 

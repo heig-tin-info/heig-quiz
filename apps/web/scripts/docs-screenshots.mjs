@@ -226,7 +226,7 @@ const scenes = [
   },
   {
     name: "pool-filters",
-    caption: "The filters of a pool: type, difficulty, tags, state.",
+    caption: "The filters of a pool: type, difficulty, concepts, state.",
     persona: "teacher",
     path: (w) => `/pools/${w.pool.id}`,
     act: (p) => p.getByRole("button", { name: /^filters/i }).first().click(),

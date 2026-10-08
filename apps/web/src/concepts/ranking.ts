@@ -13,7 +13,7 @@ import { conceptName } from "./sorting";
 const namesOf = (c: Concept) => [c.labels.fr, c.labels.en].filter((l): l is string => l !== null);
 
 /** A concept as the resolver of `@quiz/domain` sees it, as the server builds it (`toResolvable`). */
-const resolvable = (c: Concept): ResolvableConcept => ({
+export const resolvable = (c: Concept): ResolvableConcept => ({
   id: c.id,
   mergedInto: c.mergedInto,
   labels: CONCEPT_LANGS.flatMap((lang) => {

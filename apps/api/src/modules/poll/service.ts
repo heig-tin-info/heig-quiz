@@ -33,6 +33,7 @@ import {
   type ClosedBy,
   POLL_SHORT_CAP,
   type PollAudience,
+  type ConceptLang,
   type PollPoolPage,
   type PollPoolSearch,
   type PollPublicView,
@@ -1111,7 +1112,7 @@ export async function questionPicks(
  */
 export async function poolQuestionPage(
   db: Db,
-  input: { poolWhere: SQL | undefined; courseId: string | null; search: PollPoolSearch },
+  input: { poolWhere: SQL | undefined; courseId: string | null; search: PollPoolSearch; lang: ConceptLang },
 ): Promise<PollPoolPage> {
   const found = await searchReachableQuestions(db, {
     poolWhere: input.poolWhere,
@@ -1119,9 +1120,10 @@ export async function poolQuestionPage(
     types: POLLABLE_TYPES,
     search: input.search,
     staticOnly: true,
+    lang: input.lang,
   });
   return {
-    items: found.items.map(({ question, pool, tags, latestNumber, latest }) => {
+    items: found.items.map(({ question, pool, concepts, latestNumber, latest }) => {
       let prompt = "";
       try {
         const student = studentPayload(question.type, latest, question.id) as { prompt?: unknown };
@@ -1136,14 +1138,14 @@ export async function poolQuestionPage(
         internalName: question.internalName,
         prompt,
         pool,
-        tags,
+        concepts,
         difficulty: question.difficulty,
         latestNumber,
       };
     }),
     nextCursor: found.nextCursor,
     total: found.total,
-    tags: found.tags,
+    concepts: found.concepts,
   };
 }
 

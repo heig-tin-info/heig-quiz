@@ -42,7 +42,7 @@ const SHORT = { configVersion: 2, prompt: "Un mot pour pointeur ?", matchers: [{
 async function question(
   poolId: string,
   ownerId: string,
-  input: { type: "mcq" | "short"; name: string; config: unknown; tags?: string[]; publish?: boolean },
+  input: { type: "mcq" | "short"; name: string; config: unknown; concepts?: string[]; publish?: boolean },
 ): Promise<string> {
   const db = server.app.db;
   const { id } = await poolService.createQuestion(db, {
@@ -53,7 +53,14 @@ async function question(
   });
   const [row] = await db.select().from(questions).where(eq(questions.id, id));
   await poolService.putDraft(db, row!, { config: input.config });
-  if (input.tags) await poolService.patchQuestion(db, row!, { tags: input.tags });
+  if (input.concepts) {
+    await poolService.patchQuestion(
+      db,
+      row!,
+      { concepts: input.concepts, createMissing: true },
+      { userId: ownerId, lang: "fr", actor: { actorUserId: ownerId, actorType: "user" } },
+    );
+  }
   if (input.publish !== false) await poolService.publishQuestion(db, row!, { userId: ownerId });
   return id;
 }
@@ -64,6 +71,7 @@ const post = (url: string, headers: Record<string, string>, payload: Payload) =>
   server.app.inject({ method: "POST", url, headers, payload });
 
 const ids = (body: { items: { id: string }[] }) => body.items.map((i) => i.id).sort();
+const labels = (concepts: { label: string }[]) => concepts.map((c) => c.label);
 
 beforeAll(async () => {
   server = await testServer();
@@ -76,7 +84,7 @@ beforeAll(async () => {
     type: "mcq",
     name: "Capitale VD",
     config: MCQ,
-    tags: ["capitales"],
+    concepts: ["capitales"],
   });
   // Neither a draft nor a deleted question can run a poll.
   await question(seed.poolId, teacher.id, { type: "mcq", name: "Brouillon", config: MCQ, publish: false });
@@ -94,7 +102,7 @@ beforeAll(async () => {
     type: "short",
     name: "Mot libre",
     config: SHORT,
-    tags: ["vocab"],
+    concepts: ["vocab"],
   });
 
   const foreign = await poolService.createPool(db, {
@@ -102,7 +110,7 @@ beforeAll(async () => {
     visibility: "private",
     ownerId: colleague.id,
   });
-  foreignId = await question(foreign.id, colleague.id, { type: "mcq", name: "Secret", config: MCQ, tags: ["secret"] });
+  foreignId = await question(foreign.id, colleague.id, { type: "mcq", name: "Secret", config: MCQ, concepts: ["secret"] });
 });
 afterAll(async () => {
   await server.close();
@@ -116,15 +124,15 @@ describe("GET /app/api/polls/pool-questions", () => {
     expect(ids(body)).toEqual([linkedId, unlinkedId].sort());
     expect(body.total).toBe(2);
     expect(body.nextCursor).toBeNull();
-    // The scope's tags feed the filter sheet; a pool out of reach lends none.
-    expect(body.tags).toEqual(["capitales", "vocab"]);
+    // The scope's concepts feed the filter sheet; a pool out of reach lends none.
+    expect(labels(body.concepts)).toEqual(["capitales", "vocab"]);
     const row = body.items.find((i: { id: string }) => i.id === unlinkedId);
     expect(row).toMatchObject({
       type: "short",
       internalName: "Mot libre",
       prompt: SHORT.prompt,
       pool: { id: unlinkedPoolId, name: "Réserve" },
-      tags: ["vocab"],
+      concepts: [expect.objectContaining({ label: "vocab", qualifier: "", status: "proposed" })],
       latestNumber: 1,
     });
     // The statement is the student's view: the key never travels here.
@@ -135,14 +143,16 @@ describe("GET /app/api/polls/pool-questions", () => {
     const res = await get(`/app/api/polls/pool-questions?classroomId=${seed.classroomId}`, teacher.headers);
     expect(res.statusCode).toBe(200);
     expect(ids(res.json())).toEqual([linkedId]);
-    expect(res.json().tags).toEqual(["capitales"]);
+    expect(labels(res.json().concepts)).toEqual(["capitales"]);
   });
 
-  it("speaks the pool screen's filters: text, tag, type, difficulty", async () => {
+  it("speaks the pool screen's filters: text, concept, type, difficulty", async () => {
     const by = async (qs: string) => ids((await get(`/app/api/polls/pool-questions?${qs}`, teacher.headers)).json());
+    const scope = (await get("/app/api/polls/pool-questions", teacher.headers)).json();
+    const capitales = scope.concepts.find((c: { label: string }) => c.label === "capitales").id;
     expect(await by("q=libre")).toEqual([unlinkedId]);
     expect(await by("q=Lausanne")).toEqual([linkedId]);
-    expect(await by("tag=capitales")).toEqual([linkedId]);
+    expect(await by(`concept=${capitales}`)).toEqual([linkedId]);
     expect(await by("type=short")).toEqual([unlinkedId]);
     // A type a poll cannot run matches nothing; it never widens the search.
     expect(await by("type=code")).toEqual([]);
@@ -167,7 +177,7 @@ describe("GET /app/api/polls/pool-questions", () => {
   it("answers a colleague with their own pools only", async () => {
     const res = await get("/app/api/polls/pool-questions", colleague.headers);
     expect(ids(res.json())).toEqual([foreignId]);
-    expect(res.json().tags).toEqual(["secret"]);
+    expect(labels(res.json().concepts)).toEqual(["secret"]);
   });
 
   it("404s a classroom the caller is not on the staff of, 400s a malformed one", async () => {

@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ApiTokenCreated } from "@quiz/contracts";
 import { questionType } from "@quiz/registry/server";
 
-import { evaluations } from "../../db/schema.js";
+import { conceptTagSortings, evaluations } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { EXPLANATION, PARAMETERIZED, VARIABLES } from "../../test/parameterized.js";
 
@@ -213,6 +213,32 @@ describe("an authoring session", () => {
     const linked = await ok("link_pool_to_course", { courseId: course.id, poolId: pool.id });
     expect(linked.map((p: { id: string }) => p.id)).toEqual([pool.id]);
 
+    // A concept the vocabulary lacks is refused before anything is created, unless asked for (ADR-081).
+    const unknown = await call("create_question", {
+      poolId: pool.id,
+      type: "mcq",
+      internalName: "fr-unknown-concept",
+      config: describeQuestionType("mcq").example,
+      concepts: ["figures de style"],
+    });
+    expect(unknown.isError).toBe(true);
+    expect((await ok("list_questions", { poolId: pool.id })).total).toBe(0);
+    // A label the admin dropped is refused before anything is created, even with creation asked.
+    await server.app.db
+      .insert(conceptTagSortings)
+      .values({ poolId: pool.id, tag: "vocabulaire", decision: "drop", dropReason: "task_kind", decidedAt: new Date() });
+    const dropped = await call("create_question", {
+      poolId: pool.id,
+      type: "mcq",
+      internalName: "fr-dropped-concept",
+      config: describeQuestionType("mcq").example,
+      concepts: ["Vocabulaire"],
+      createMissing: true,
+    });
+    expect(dropped.isError).toBe(true);
+    expect(JSON.stringify(dropped.data)).toContain("task_kind");
+    expect((await ok("list_questions", { poolId: pool.id })).total).toBe(0);
+
     const ids: string[] = [];
     for (const type of ["mcq", "short", "cloze"] as const) {
       const guide = describeQuestionType(type);
@@ -223,7 +249,9 @@ describe("an authoring session", () => {
         config: guide.example,
         explanation: "Parce que.",
         difficulty: 4,
-        tags: ["vocabulaire"],
+        // The first creates the concept; the others find it, whatever the case.
+        concepts: [type === "mcq" ? "figures de style" : "Figures de style"],
+        createMissing: type === "mcq",
       });
       expect(q).toMatchObject({ valid: true, publishedVersion: 1 });
       ids.push(q.questionId);
@@ -231,8 +259,13 @@ describe("an authoring session", () => {
 
     const listed = await ok("list_questions", { poolId: pool.id, type: ["mcq", "cloze"] });
     expect(listed.total).toBe(2);
+    expect((await ok("list_questions", { poolId: pool.id, concepts: ["figures de style"] })).total).toBe(3);
+    expect((await call("list_questions", { poolId: pool.id, concepts: ["nothing like it"] })).isError).toBe(true);
     const detail = await ok("get_question", { questionId: ids[0] });
-    expect(detail.meta).toMatchObject({ difficulty: 4, tags: ["vocabulaire"] });
+    expect(detail.meta).toMatchObject({
+      difficulty: 4,
+      concepts: [expect.objectContaining({ label: "figures de style", status: "proposed" })],
+    });
     expect(detail.draft.explanation).toBe("Parce que.");
 
     const evaluation = await ok("create_evaluation", {

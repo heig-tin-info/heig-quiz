@@ -24,10 +24,53 @@ export interface QuestionSpec {
   category: string;
   /** 1 (trivial) to 5 (hard), as `questions.difficulty` stores it. */
   difficulty: number;
-  tags: string[];
+  /**
+   * What the question exercises (ADR-081): French labels of `CONCEPTS`, the
+   * seed's vocabulary. No organisational label nor kind of task (§1).
+   */
+  concepts: string[];
   explanation: string;
   /** Validated by the type's own schema when the question is published. */
   config: unknown;
+}
+
+/** One concept of the demo vocabulary, validated: both labels, both descriptions. */
+export interface ConceptSpec {
+  fr: { label: string; description: string };
+  en: { label: string; description: string };
+}
+
+/**
+ * The demo vocabulary (ADR-081): the concepts the demo questions exercise,
+ * keyed by their French label, which `QuestionSpec.concepts` names.
+ */
+export const CONCEPTS: ConceptSpec[] = [
+  c("pointeurs", "Variables qui contiennent une adresse", "pointers", "Variables holding an address"),
+  c("mémoire", "Organisation et durée de vie de la mémoire", "memory", "How memory is laid out and how long it lives"),
+  c("tableaux", "Suites d'éléments contigus en mémoire", "arrays", "Sequences of elements contiguous in memory"),
+  c("sizeof", "Taille en octets d'un type ou d'un objet", "sizeof", "Size in bytes of a type or an object"),
+  c("opérateurs", "Opérateurs du langage et leur priorité", "operators", "The language's operators and their precedence"),
+  c("opérateurs bit à bit", "Masques, décalages et opérations sur les bits", "bitwise operators", "Masks, shifts and operations on bits"),
+  c("mots-clés", "Mots réservés du langage", "keywords", "Reserved words of the language"),
+  c("chaînes de caractères", "Tableaux de caractères terminés par un zéro", "strings", "Zero-terminated character arrays"),
+  c("boucles", "Répétition: for, while, do-while", "loops", "Repetition: for, while, do-while"),
+  c("structures de contrôle", "Conditions et branchements", "control structures", "Conditions and branching"),
+  c("bibliothèque standard", "Fonctions de la bibliothèque standard du C", "standard library", "Functions of the C standard library"),
+  c("pile", "Pile d'appels: variables locales et retours", "stack", "Call stack: local variables and returns"),
+  c("types", "Types de données et conversions", "types", "Data types and conversions"),
+  c("fonctions", "Définition, appel et passage de paramètres", "functions", "Definition, call and parameter passing"),
+  c("loi d'Ohm", "Relation entre tension, courant et résistance", "Ohm's law", "Relation between voltage, current and resistance"),
+  c("régime continu", "Circuits en courant continu", "DC analysis", "Circuits under direct current"),
+  c("résistances", "Associations série et parallèle", "resistors", "Series and parallel combinations"),
+  c("diviseur de tension", "Tension aux bornes d'une résistance d'un pont", "voltage divider", "Voltage across one resistor of a divider"),
+  c("filtre RC", "Filtre du premier ordre résistance-condensateur", "RC filter", "First-order resistor-capacitor filter"),
+  c("régime alternatif", "Circuits en régime sinusoïdal", "AC analysis", "Circuits under sinusoidal steady state"),
+  c("diode", "Comportement d'une diode à jonction", "diode", "Behaviour of a junction diode"),
+  c("semi-conducteurs", "Composants à semi-conducteurs", "semiconductors", "Semiconductor devices"),
+];
+
+function c(fr: string, frDescription: string, en: string, enDescription: string): ConceptSpec {
+  return { fr: { label: fr, description: frDescription }, en: { label: en, description: enDescription } };
 }
 
 export interface PoolSpec {
@@ -313,7 +356,7 @@ const C_POOL: PoolSpec = {
       type: "mcq",
       category: POINTERS,
       difficulty: 2,
-      tags: ["pointeurs", "mémoire"],
+      concepts: ["pointeurs", "mémoire"],
       explanation:
         "Seules les variables statiques et globales sont mises à zéro au démarrage. " +
         "Un pointeur automatique contient ce qui traînait sur la pile : le déréférencer " +
@@ -340,7 +383,7 @@ const C_POOL: PoolSpec = {
       type: "mcq",
       category: TYPES,
       difficulty: 3,
-      tags: ["tableaux", "sizeof", "pointeurs"],
+      concepts: ["tableaux", "sizeof", "pointeurs"],
       explanation:
         "Un paramètre de type tableau est ajusté en pointeur : `int t[10]` devient `int *t`. " +
         "`sizeof` mesure donc un pointeur, soit 8 octets sur une machine 64 bits.",
@@ -365,7 +408,7 @@ const C_POOL: PoolSpec = {
       type: "mcq",
       category: TYPES,
       difficulty: 4,
-      tags: ["opérateurs", "bits"],
+      concepts: ["opérateurs", "opérateurs bit à bit"],
       explanation:
         "`x` vaut `0b110`. `x >> 2` vaut 1, `x & 1` vaut 0 donc `!(x & 1)` vaut 1, " +
         "et `6 % 5` vaut 1. En revanche `x & 3` vaut 2 et `x ^ 6` vaut 0.",
@@ -390,7 +433,7 @@ const C_POOL: PoolSpec = {
       type: "short",
       category: TYPES,
       difficulty: 1,
-      tags: ["mots-clés"],
+      concepts: ["mots-clés"],
       explanation:
         "`const` qualifie le type : le compilateur refuse toute écriture à travers " +
         "ce nom. Il ne place pas forcément la valeur en mémoire morte.",
@@ -410,7 +453,7 @@ const C_POOL: PoolSpec = {
       type: "short",
       category: STRINGS,
       difficulty: 2,
-      tags: ["chaînes", "mémoire"],
+      concepts: ["chaînes de caractères", "mémoire"],
       explanation:
         "Quatre caractères plus le `\\0` terminal : une chaîne littérale de n caractères " +
         "occupe n + 1 octets.",
@@ -429,7 +472,7 @@ const C_POOL: PoolSpec = {
       type: "cloze",
       category: TYPES,
       difficulty: 2,
-      tags: ["boucles", "structures de contrôle"],
+      concepts: ["boucles", "structures de contrôle"],
       explanation:
         "La condition doit être stricte : avec `<=` la boucle afficherait aussi `10`.",
       config: {
@@ -446,7 +489,7 @@ const C_POOL: PoolSpec = {
       type: "cloze",
       category: STRINGS,
       difficulty: 2,
-      tags: ["chaînes", "bibliothèque standard"],
+      concepts: ["chaînes de caractères", "bibliothèque standard"],
       explanation:
         "`strlen` ne compte pas le `\\0`, mais `\"HEIG-VD\"` occupe bien 8 octets : " +
         "sept caractères plus le terminateur.",
@@ -465,7 +508,7 @@ const C_POOL: PoolSpec = {
       type: "code",
       category: POINTERS,
       difficulty: 3,
-      tags: ["pointeurs", "tableaux"],
+      concepts: ["pointeurs", "tableaux"],
       explanation:
         "Un simple parcours indexé suffit. Attention à la borne : `i < n`, jamais `i <= n`.",
       config: {
@@ -500,7 +543,7 @@ const C_POOL: PoolSpec = {
       type: "code",
       category: STRINGS,
       difficulty: 3,
-      tags: ["chaînes", "boucles"],
+      concepts: ["chaînes de caractères", "boucles"],
       explanation:
         "Le parcours s'arrête sur le `\\0`. Le `y` compte comme voyelle dans cet énoncé.",
       config: {
@@ -535,7 +578,7 @@ const C_POOL: PoolSpec = {
       type: "code",
       category: STRINGS,
       difficulty: 4,
-      tags: ["chaînes", "pointeurs"],
+      concepts: ["chaînes de caractères", "pointeurs"],
       explanation:
         "L'inversion se fait en place : on échange le caractère i avec le caractère " +
         "n - 1 - i jusqu'au milieu de la chaîne.",
@@ -571,7 +614,7 @@ const C_POOL: PoolSpec = {
       type: "codeimage",
       category: TYPES,
       difficulty: 2,
-      tags: ["boucles", "image"],
+      concepts: ["boucles"],
       explanation:
         "Une case est noire quand la somme de ses coordonnées est paire : " +
         "`(x + y) % 2 == 0`. Le `main` écrit 1 pour une case blanche, 0 pour une noire.",
@@ -599,7 +642,7 @@ const C_POOL: PoolSpec = {
       type: "rich",
       category: POINTERS,
       difficulty: 3,
-      tags: ["pile", "mémoire", "rédaction"],
+      concepts: ["pile", "mémoire"],
       explanation:
         "La pile d'un thread a une taille fixe ; une récursion sans fin l'épuise, et " +
         "l'écriture suivante touche la page de garde, ce qui déclenche une erreur de segmentation.",
@@ -629,7 +672,7 @@ const C_POOL: PoolSpec = {
       type: "categorize",
       category: TYPES,
       difficulty: 2,
-      tags: ["types", "pointeurs", "classement"],
+      concepts: ["types", "pointeurs"],
       explanation:
         "`int` et `size_t` sont des entiers ; `double` et `float` des " +
         "flottants ; `char *`, `void *` et `int (*)(void)` (un pointeur de fonction) des " +
@@ -671,7 +714,7 @@ const C_POOL: PoolSpec = {
       type: "categorize",
       category: POINTERS,
       difficulty: 2,
-      tags: ["pointeurs", "fonctions"],
+      concepts: ["pointeurs", "fonctions"],
       explanation:
         "`echanger` reçoit des adresses : l'appel passe `&x` et `&y`, et la fonction lit " +
         "et écrit les valeurs par `*a` et `*b`, avec une variable temporaire. `echanger(x, y)` " +
@@ -709,7 +752,7 @@ const C_POOL: PoolSpec = {
       type: "diagram",
       category: TYPES,
       difficulty: 2,
-      tags: ["boucles", "organigramme", "diagramme"],
+      concepts: ["boucles"],
       explanation:
         "La boucle teste `i < n` AVANT d'ajouter `t[i]` : un tableau vide rend 0. " +
         "Sans `i ← i + 1`, la boucle ne se termine jamais.",
@@ -753,7 +796,7 @@ const ELECTRONICS_POOL: PoolSpec = {
       type: "mcq",
       category: DC,
       difficulty: 1,
-      tags: ["loi d'ohm", "régime continu"],
+      concepts: ["loi d'Ohm", "régime continu"],
       explanation: "U = R · I = 2200 Ω × 0,005 A = 11 V.",
       config: {
         configVersion: 2,
@@ -776,7 +819,7 @@ const ELECTRONICS_POOL: PoolSpec = {
       type: "short",
       category: DC,
       difficulty: 2,
-      tags: ["résistances", "régime continu"],
+      concepts: ["résistances", "régime continu"],
       explanation: "Deux résistances égales en parallèle valent la moitié de l'une d'elles.",
       config: {
         configVersion: 2,
@@ -794,7 +837,7 @@ const ELECTRONICS_POOL: PoolSpec = {
       type: "mcq",
       category: DC,
       difficulty: 2,
-      tags: ["diviseur de tension", "régime continu"],
+      concepts: ["diviseur de tension", "régime continu"],
       explanation: "U_sortie = 12 V × 1k / (1k + 2k) = 4 V, à vide.",
       config: {
         configVersion: 2,
@@ -817,7 +860,7 @@ const ELECTRONICS_POOL: PoolSpec = {
       type: "circuit",
       category: DC,
       difficulty: 3,
-      tags: ["filtre", "rc", "régime alternatif"],
+      concepts: ["filtre RC", "régime alternatif"],
       explanation:
         "La fréquence de coupure vaut f = 1 / (2 π R C) ≈ 1 kHz pour R = 1,59 kΩ et " +
         "C = 100 nF. La résistance est en série, le condensateur en parallèle sur la sortie.",
@@ -871,7 +914,7 @@ const ELECTRONICS_POOL: PoolSpec = {
       type: "cloze",
       category: SEMICONDUCTORS,
       difficulty: 2,
-      tags: ["diode", "semi-conducteurs"],
+      concepts: ["diode", "semi-conducteurs"],
       explanation:
         "La tension de seuil d'une jonction au silicium est de l'ordre de 0,7 V ; " +
         "elle vaut environ 0,3 V pour le germanium.",

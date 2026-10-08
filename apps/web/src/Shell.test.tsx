@@ -59,7 +59,7 @@ const POOL: PoolDetail = {
     },
     { id: "k3", poolId: "p1", parentId: null, name: "Structs", position: 1, children: [] },
   ],
-  tags: [],
+  concepts: [],
   questionCount: 7,
 };
 

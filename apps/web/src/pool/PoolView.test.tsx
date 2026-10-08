@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { PoolDetail, QuestionPage } from "@quiz/contracts";
+import type { Concept, PoolDetail, QuestionPage } from "@quiz/contracts";
 
 import { fail, mockFetch, ok, renderWithProviders, type RecordedCall } from "../test/render";
 import { PoolView } from "./PoolView";
@@ -20,6 +20,25 @@ import { PoolView } from "./PoolView";
  * sidebar and hands its selection over through the `category` query-string
  * parameter, which the last two tests here cover from the page's side.
  */
+
+const PTR = "00000000-0000-4000-8000-0000000000a1";
+const ADDR = "00000000-0000-4000-8000-0000000000a2";
+const FRESH_ID = "00000000-0000-4000-8000-0000000000a3";
+/** The instance's vocabulary, as `GET /concepts` answers it: what a typed word resolves against. */
+const VOCABULARY: Concept[] = [
+  [PTR, "Pointeur", "Pointer", ""],
+  [ADDR, "Adresse", "Address", "mémoire"],
+  [FRESH_ID, "Sécurité", null, ""],
+].map(([id, fr, en, qualifier]) => ({
+  id: id!,
+  status: id === FRESH_ID ? "proposed" : "validated",
+  mergedInto: null,
+  labels: { fr: fr!, en: en ?? null },
+  qualifiers: { fr: qualifier!, en: en ? qualifier! : "" },
+  descriptions: { fr: "", en: "" },
+  createdBy: null,
+  createdAt: "2026-10-01T08:00:00.000Z",
+}));
 
 const POOL: PoolDetail = {
   pool: {
@@ -46,7 +65,7 @@ const POOL: PoolDetail = {
       ],
     },
   ],
-  tags: ["pointeurs", "securite"],
+  concepts: [{ concept: { id: PTR, label: "Pointeur", qualifier: "", status: "validated" }, count: 1 }],
   questionCount: 2,
 };
 
@@ -57,7 +76,7 @@ const PAGE: QuestionPage = {
       type: "code",
       internalName: "ptr-arith-01",
       difficulty: 3,
-      tags: ["pointeurs"],
+      concepts: [{ id: PTR, label: "Pointeur", qualifier: "", status: "validated" }],
       categoryId: "k2",
       latestNumber: 3,
       hasDraftChanges: true,
@@ -74,7 +93,7 @@ const PAGE: QuestionPage = {
       type: "mcq",
       internalName: "ptr-null-check",
       difficulty: 2,
-      tags: [],
+      concepts: [],
       categoryId: "k1",
       latestNumber: null,
       hasDraftChanges: true,
@@ -154,7 +173,7 @@ describe("PoolView", () => {
     expect(screen.queryByRole("button", { name: "All questions" })).not.toBeInTheDocument();
     // A question with no published version reads as a draft, not as "v0".
     expect(screen.getByText("draft")).toBeInTheDocument();
-    // A row with no tag shows a dash rather than an empty cell.
+    // A row with no concept shows a dash rather than an empty cell.
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 
@@ -523,6 +542,31 @@ describe("PoolView", () => {
     expect(await screen.findByRole("region", { name: "1 selected" })).toBeInTheDocument();
   });
 
+  it("adds a concept to every ticked question, keeping the concepts each one has", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch(
+      routes({
+        "GET /app/api/concepts": ok({ concepts: VOCABULARY }),
+        "PATCH /app/api/questions/q1": ok({}),
+        "PATCH /app/api/questions/q2": ok({}),
+      }),
+    );
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    await screen.findByText("ptr-arith-01");
+    await user.click(screen.getByLabelText("Select ptr-arith-01"));
+    await user.click(screen.getByLabelText("Select ptr-null-check"));
+    const bar = await screen.findByRole("region", { name: "2 selected" });
+    await user.click(within(bar).getByRole("button", { name: "Add a concept" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add a concept to 2 questions" });
+    await user.type(within(dialog).getByLabelText("Concepts"), "address");
+    await user.click(await screen.findByRole("option", { name: /Address/ }));
+    await user.click(within(dialog).getByRole("button", { name: "Add a concept" }));
+    await waitFor(() => expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(2));
+    const body = (id: string) => calls.find((c) => c.method === "PATCH" && c.url.endsWith(id))?.body;
+    expect(body("q1")).toEqual({ concepts: [PTR, ADDR] });
+    expect(body("q2")).toEqual({ concepts: [ADDR] });
+  });
+
   it("creates a category from the move dialog and files the selection into it", async () => {
     const user = userEvent.setup();
     const { calls } = mockFetch(
@@ -812,52 +856,66 @@ describe("PoolView", () => {
     });
   });
 
-  describe("the Tags tab", () => {
+  describe("the Concepts tab", () => {
+    const POINTEUR = { id: PTR, label: "Pointeur", qualifier: "", status: "validated" as const };
+    const ADDRESS = { id: ADDR, label: "Adresse", qualifier: "mémoire", status: "validated" as const };
+    const FRESH = { id: FRESH_ID, label: "Sécurité", qualifier: "", status: "proposed" as const };
     const USAGE = [
-      { tag: "pointeurs", description: "Adresses et déréférencement", questions: 4, courses: 2 },
-      { tag: "securite", description: "", questions: 1, courses: 0 },
-      { tag: "structures", description: "struct et union", questions: 0, courses: 0 },
+      { concept: ADDRESS, count: 1 },
+      { concept: POINTEUR, count: 4 },
+      { concept: FRESH, count: 2 },
     ];
-    const tagRoutes = (over: Record<string, ReturnType<typeof ok>> = {}) =>
+    /** The pool detail carries its concepts with their counts: the tab asks for nothing else. */
+    const conceptRoutes = (over: Record<string, ReturnType<typeof ok>> = {}, usage = USAGE) =>
       routes({
-        "GET /app/api/pools/p1/tags/usage": ok(USAGE),
-        "GET /app/api/pools/p1/questions?tag=pointeurs&limit=25": ok(PAGE),
+        "GET /app/api/pools/p1": ok({ ...POOL, concepts: usage }),
+        [`GET /app/api/pools/p1/questions?concept=${PTR}&limit=25`]: ok(PAGE),
+        "GET /app/api/concepts": ok({ concepts: VOCABULARY }),
         ...over,
       });
 
-    it("lists every tag, most used first, and filters on the name and the description", async () => {
+    it("lists every concept, most used first, its qualifier and whether it is proposed", async () => {
       const user = userEvent.setup();
-      mockFetch(tagRoutes());
-      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tab=tags" });
+      mockFetch(conceptRoutes());
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tab=concepts" });
       const table = await screen.findByRole("table");
       const names = within(table)
-        .getAllByRole("button", { name: /^#/ })
+        .getAllByTitle(/^Show the questions under/)
         .map((b) => b.textContent);
-      expect(names).toEqual(["#pointeurs", "#securite", "#structures"]);
-      expect(within(rowOfTag("pointeurs")).getByText("4")).toBeInTheDocument();
-      expect(within(rowOfTag("pointeurs")).getByText("2")).toBeInTheDocument();
+      expect(names).toEqual(["Pointeur", "Sécurité", "Adresse (mémoire)"]);
+      expect(within(rowOfConcept("Pointeur")).getByText("4")).toBeInTheDocument();
+      expect(within(rowOfConcept("Sécurité")).getByText("proposed")).toBeInTheDocument();
+      // Read-only: nothing to edit on a row.
+      expect(within(table).queryByRole("textbox")).toBeNull();
 
-      await user.type(screen.getByRole("searchbox", { name: "Filter tags" }), "union");
-      expect(within(screen.getByRole("table")).getAllByRole("button", { name: /^#/ })).toHaveLength(1);
-      await user.clear(screen.getByRole("searchbox", { name: "Filter tags" }));
-      await user.type(screen.getByRole("searchbox", { name: "Filter tags" }), "nothing");
-      expect(screen.getByText("No tag matches")).toBeInTheDocument();
+      await user.type(screen.getByRole("searchbox", { name: "Filter concepts" }), "mém");
+      expect(within(screen.getByRole("table")).getAllByTitle(/^Show the questions under/)).toHaveLength(1);
+      await user.clear(screen.getByRole("searchbox", { name: "Filter concepts" }));
+      await user.type(screen.getByRole("searchbox", { name: "Filter concepts" }), "nothing");
+      expect(screen.getByText("No concept matches")).toBeInTheDocument();
     });
 
-    it("draws the heat without the tags no question wears", async () => {
-      const user = userEvent.setup();
-      mockFetch(tagRoutes());
+    it("keeps an address of the tags' time: ?tab=tags opens the Concepts tab", async () => {
+      mockFetch(conceptRoutes());
       renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tab=tags" });
+      expect(await screen.findByRole("tab", { name: "Concepts", selected: true })).toBeInTheDocument();
+    });
+
+    it("draws the heat, one cell per concept", async () => {
+      const user = userEvent.setup();
+      mockFetch(conceptRoutes());
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tab=concepts" });
       await screen.findByRole("table");
       await user.click(screen.getByRole("radio", { name: "Heat" }));
       expect(
-        screen.getByRole("button", { name: "#pointeurs: 4 questions, 2 courses. Show its questions." }),
+        screen.getByRole("button", { name: "Pointeur: 4 questions. Show its questions." }),
       ).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "#securite: 1 question, 0 courses. Show its questions." })).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: /^#structures/ })).toBeNull();
+      expect(
+        screen.getByRole("button", { name: "Adresse (mémoire): 1 question. Show its questions." }),
+      ).toBeInTheDocument();
     });
 
-    it("measures the heat's box when it appears after an empty heat", async () => {
+    it("measures the heat's box when it appears after an empty filter", async () => {
       const observed: Element[] = [];
       vi.stubGlobal(
         "ResizeObserver",
@@ -870,15 +928,14 @@ describe("PoolView", () => {
       );
       try {
         const user = userEvent.setup();
-        mockFetch(tagRoutes());
-        renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tab=tags" });
+        mockFetch(conceptRoutes());
+        renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tab=concepts" });
         await screen.findByRole("table");
-        // Only #structures matches, and no question wears it: no box is drawn.
-        await user.type(screen.getByRole("searchbox", { name: "Filter tags" }), "union");
+        await user.type(screen.getByRole("searchbox", { name: "Filter concepts" }), "nothing");
         await user.click(screen.getByRole("radio", { name: "Heat" }));
-        expect(screen.getByText("None of these tags is on a question yet")).toBeInTheDocument();
-        await user.clear(screen.getByRole("searchbox", { name: "Filter tags" }));
-        const cell = await screen.findByRole("button", { name: /^#pointeurs:/ });
+        expect(screen.getByText("No concept matches")).toBeInTheDocument();
+        await user.clear(screen.getByRole("searchbox", { name: "Filter concepts" }));
+        const cell = await screen.findByRole("button", { name: /^Pointeur:/ });
         // Other parts of the page observe their own size: the box is the one holding a cell.
         expect(observed.some((el) => el.contains(cell))).toBe(true);
       } finally {
@@ -886,63 +943,71 @@ describe("PoolView", () => {
       }
     });
 
-    it("says so when the pool has no tag", async () => {
-      mockFetch(tagRoutes({ "GET /app/api/pools/p1/tags/usage": ok([]) }));
-      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tab=tags" });
-      expect(await screen.findByText("No tags yet")).toBeInTheDocument();
+    it("says so when the pool's questions have no concept", async () => {
+      mockFetch(conceptRoutes({}, []));
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tab=concepts" });
+      expect(await screen.findByText("No concept yet")).toBeInTheDocument();
       // Nothing to filter: the field and the view switch are not drawn.
-      expect(screen.queryByRole("searchbox", { name: "Filter tags" })).toBeNull();
+      expect(screen.queryByRole("searchbox", { name: "Filter concepts" })).toBeNull();
     });
 
-    it("offers a retry when the usage fails to load", async () => {
-      mockFetch(tagRoutes({ "GET /app/api/pools/p1/tags/usage": fail(500, { error: "boom" }) }));
-      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tab=tags" });
-      expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
-    });
-
-    it("opens the questions filtered on a tag, and clearing the chip drops ?tag", async () => {
+    it("opens the questions filtered on a concept, and clearing the chip drops ?concept", async () => {
       const user = userEvent.setup();
-      const { calls } = mockFetch(tagRoutes());
+      const { calls } = mockFetch(conceptRoutes());
       renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, {
-        route: "/?tab=tags&category=k2",
+        route: "/?tab=concepts&category=k2",
       });
       await screen.findByRole("table");
-      await user.click(screen.getByRole("button", { name: "#pointeurs" }));
+      await user.click(screen.getByRole("button", { name: "Pointeur" }));
       await screen.findByText("ptr-arith-01");
-      // The whole pool's questions with the tag: the category is dropped.
-      expect(calls.some((c) => c.url === "/app/api/pools/p1/questions?tag=pointeurs&limit=25")).toBe(
-        true,
-      );
+      // The whole pool's questions under the concept: the category is dropped.
+      expect(calls.some((c) => c.url === `/app/api/pools/p1/questions?concept=${PTR}&limit=25`)).toBe(true);
       const params = new URLSearchParams(window.location.search);
-      expect(params.get("tag")).toBe("pointeurs");
+      expect(params.get("concept")).toBe(PTR);
       expect(params.get("tab")).toBeNull();
       expect(params.get("category")).toBeNull();
 
-      await user.click(screen.getByRole("button", { name: "Clear filters — #pointeurs" }));
-      await waitFor(() => expect(new URLSearchParams(window.location.search).get("tag")).toBeNull());
+      await user.click(screen.getByRole("button", { name: "Clear filters — Pointeur" }));
+      await waitFor(() => expect(new URLSearchParams(window.location.search).get("concept")).toBeNull());
     });
 
-    it("seeds the tag filter from ?tag on arrival", async () => {
-      const { calls } = mockFetch(tagRoutes());
-      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tag=pointeurs" });
+    it("seeds the concept filter from ?concept on arrival", async () => {
+      const { calls } = mockFetch(conceptRoutes());
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: `/?concept=${PTR}` });
       await screen.findByText("ptr-arith-01");
-      expect(calls.some((c) => c.url === "/app/api/pools/p1/questions?tag=pointeurs&limit=25")).toBe(
-        true,
-      );
+      expect(calls.some((c) => c.url === `/app/api/pools/p1/questions?concept=${PTR}&limit=25`)).toBe(true);
       expect(calls.some((c) => c.url === "/app/api/pools/p1/questions?limit=25")).toBe(false);
     });
 
+    it("reads an old ?tag= as the typed #word, resolved like any other", async () => {
+      const { calls } = mockFetch(conceptRoutes());
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tag=pointeur" });
+      await screen.findByText("ptr-arith-01");
+      expect(screen.getByDisplayValue("#pointeur")).toBeVisible();
+      expect(calls.some((c) => c.url === `/app/api/pools/p1/questions?concept=${PTR}&limit=25`)).toBe(true);
+      // Never the unfiltered list first.
+      expect(calls.some((c) => c.url === "/app/api/pools/p1/questions?limit=25")).toBe(false);
+    });
+
+    it("quotes an old ?tag= of two words, and says so when it names no concept", async () => {
+      mockFetch(conceptRoutes());
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tag=bobine%20torique" });
+      await screen.findByText("ptr-arith-01");
+      expect(screen.getByDisplayValue('#"bobine torique"')).toBeVisible();
+      expect(screen.getByText(/no concept matches/)).toBeInTheDocument();
+    });
+
     it("seeds the search box from ?q on arrival (the assistant opens a pool searched, ADR-080 P2b)", async () => {
-      const { calls } = mockFetch(tagRoutes());
+      const { calls } = mockFetch(conceptRoutes());
       renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?q=tag%3Apointeurs" });
       await screen.findByText("ptr-arith-01");
       expect(screen.getByDisplayValue("tag:pointeurs")).toBeVisible();
-      expect(calls.some((c) => c.url === "/app/api/pools/p1/questions?tag=pointeurs&limit=25")).toBe(true);
+      expect(calls.some((c) => c.url === `/app/api/pools/p1/questions?concept=${PTR}&limit=25`)).toBe(true);
       expect(calls.some((c) => c.url === "/app/api/pools/p1/questions?limit=25")).toBe(false);
     });
   });
 });
 
-/** The row of the Tags tab's table that carries a tag. */
-const rowOfTag = (tag: string) =>
-  within(screen.getByRole("table")).getByRole("button", { name: `#${tag}` }).closest("tr")!;
+/** The row of the Concepts tab's table that carries a concept. */
+const rowOfConcept = (label: string) =>
+  within(screen.getByRole("table")).getAllByTitle(/^Show the questions under/).find((b) => b.textContent!.startsWith(label))!.closest("tr")!;

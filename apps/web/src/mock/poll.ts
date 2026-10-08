@@ -18,6 +18,7 @@ import {
   type PollRunCounts,
 } from "@quiz/domain";
 import { hasKey } from "../poll/pollTally";
+import { conceptRefs } from "./concept";
 import {
   D,
   MockError,
@@ -928,7 +929,7 @@ const unsavedPast: MockQuestion[] = [
     difficulty: 2,
     shuffleable: true,
     randomizable: false,
-    tags: [],
+    concepts: [],
     config: {
       prompt: "Quelle boucle s'exécute toujours au moins une fois ?",
       mode: "single",
@@ -948,7 +949,7 @@ const unsavedPast: MockQuestion[] = [
     difficulty: 1,
     shuffleable: true,
     randomizable: false,
-    tags: [],
+    concepts: [],
     config: { prompt: "Un mot pour résumer la séance ?", matchers: [] },
     published: [{ number: 1, changeNote: "", daysAgo: 1 }],
   }),
@@ -1116,7 +1117,7 @@ on("POST", "/app/api/polls/questions", (_m, body) => {
     difficulty: 3,
     shuffleable: true,
     randomizable: false,
-    tags: [],
+    concepts: [],
     config: emptyConfig(type),
   });
   created.updatedAt = iso(0);
@@ -1160,13 +1161,15 @@ on("GET", "/app/api/polls/pool-questions", (_m, _body, url): PollPoolPage => {
         id: q.poolId,
         name: pools.find((p) => p.id === q.poolId)?.name ?? "",
       },
-      tags: q.tags,
+      concepts: conceptRefs(q.concepts),
       difficulty: q.difficulty,
       latestNumber: q.versions.at(-1)!.number,
     })),
     nextCursor: start + limit < matching.length ? page.at(-1)!.id : null,
     total: matching.length,
-    tags: [...new Set(scope.flatMap((q) => q.tags))].sort(),
+    concepts: conceptRefs([...new Set(scope.flatMap((q) => q.concepts))]).sort((a, b) =>
+      a.label.localeCompare(b.label),
+    ),
   };
 });
 
@@ -1204,7 +1207,7 @@ on("POST", "/app/api/polls/inline", (_m, body) => {
     difficulty: 2,
     shuffleable: true,
     randomizable: false,
-    tags: [],
+    concepts: [],
     config,
     published: [{ number: 1, changeNote: "", daysAgo: 0 }],
   });
@@ -1341,7 +1344,7 @@ on("POST", "/app/api/evaluations/:id/poll/keep", (m) => {
       difficulty: 2,
       shuffleable: true,
       randomizable: false,
-      tags: [],
+      concepts: [],
       config: configOfPoll(poll),
       published: [{ number: 1, changeNote: "", daysAgo: 0 }],
     });

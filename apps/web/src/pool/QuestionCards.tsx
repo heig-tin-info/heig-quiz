@@ -3,6 +3,7 @@ import type { DragEvent } from "react";
 
 import type { QuestionRow } from "@quiz/contracts";
 
+import { ConceptNames } from "../concepts/refs";
 import { useT } from "../i18n";
 import { Badge, Card, Checkbox, cx, IconButton, RelativeTime, Skeleton } from "../ui";
 import { DifficultyDots, RowStatsButton, TypeGlyph, VersionCell, type StatsFor } from "./QuestionTable";
@@ -17,14 +18,14 @@ import { ReviewBadge } from "./ReviewBadge";
  *
  * A table answers "which of these is the oldest, and how hard is it" in one
  * scan; a card answers "what is this question" — the name gets a line of its
- * own instead of a column that must not wrap, and the tags sit under it
+ * own instead of a column that must not wrap, and the concepts sit under it
  * rather than inside a 224 px cell. A teacher browsing a pool they did not
  * write reads cards; one triaging their own reads the table. Which one is a
  * habit, so the choice is remembered (`PoolView`), not a state of the data.
  *
  * Everything on it comes from the row the table shows, in the same order the
  * row reads left to right: the type glyph and the name, the difficulty dots,
- * the tags, the version, the last change. The three actions are the row's
+ * the concepts, the version, the last change. The three actions are the row's
  * three actions, on a hairline of their own at the bottom edge — always
  * drawn, not revealed on hover: a card is also what a touch screen shows,
  * and an action that needs a pointer to exist does not exist there.
@@ -101,15 +102,7 @@ function QuestionCard({
         )}
       </div>
 
-      {row.tags.length === 0 ? null : (
-        <div className="flex flex-wrap gap-1">
-          {row.tags.map((tag) => (
-            <span key={tag} className="text-xs text-fg-muted">
-              #{tag}
-            </span>
-          ))}
-        </div>
-      )}
+      {row.concepts.length === 0 ? null : <ConceptNames concepts={row.concepts} />}
 
       <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-fg-muted">
         <DifficultyDots value={row.difficulty} />

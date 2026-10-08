@@ -30,7 +30,7 @@ Administrator
 | Course | The lasting unit you teach, with a name and a short code, for example "Programmation C" and `PRG1`. It holds the staff, the classrooms and the linked pools. |
 | Classroom | One group following a course for one period. Rosters, evaluations and results live in a classroom. |
 | Roster and seat | The class list. Each row is a seat with a name, an e-mail address and an extra-time percentage; a seat is **pending** until the student claims it. |
-| Pool | A collection of questions, with categories and tags. A pool belongs to you, not to a course; a course draws on the pools linked to it. |
+| Pool | A collection of questions, with categories; each question is classified by the concepts it exercises. A pool belongs to you, not to a course; a course draws on the pools linked to it. |
 | Question and published version | A question is the stable entry in a pool. Its content lives in numbered versions; only a published version can be used in an evaluation, and a published version never changes. |
 | Evaluation | An ordered set of published question versions, run in a classroom with a timing, a feedback policy and a grade scale. |
 | Mode | **Exam**: starts **Live**, timed per student, opened from a waiting room. **Exercise**: starts **Live** without a waiting room, open until you close it; choose **Scheduled** to give it a window that opens and closes by itself. **Poll**: one question on the wall, answered by whoever is in the room. |

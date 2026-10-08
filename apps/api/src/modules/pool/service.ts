@@ -9,7 +9,6 @@
  *     category guard and `qualified`;
  *   - `pools.ts`: the pools themselves, and the detail of one;
  *   - `members.ts`: the people of a pool (F-POOL-05);
- *   - `tags.ts`: the tag vocabulary of a pool;
  *   - `coursePools.ts`: `course_pools`, called by the `org` module;
  *   - `categories.ts`: the category tree;
  *   - `questionList.ts`: listing and searching questions, their JSON views;
@@ -84,7 +83,6 @@ export {
   transferOnLoss,
   vacateSeats,
 } from "./members.js";
-export { poolTagNames, poolTags, poolTagUsage, describeTag } from "./tags.js";
 export { mayLinkPool, poolsOfCourse, PoolLinkForbidden, setCoursePools } from "./coursePools.js";
 export {
   categoryTree,
@@ -122,6 +120,7 @@ export {
   softDeleteQuestion,
   hardDeleteQuestion,
   copyQuestion,
+  type QuestionWriter,
 } from "./questionWrite.js";
 export type { UsingCourse } from "./move.js";
 export {

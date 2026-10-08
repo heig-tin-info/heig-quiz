@@ -2,7 +2,12 @@
 
 ## Status
 
-Accepted (2026-09-22, asked for by the product owner).
+Accepted (2026-09-22, asked for by the product owner). §5 amended by the
+[third addendum of ADR-081](ADR-081-vocabulaire-de-notions.md#third-addendum-2026-10-08-the-cut-over)
+(the cut-over from tags to concepts): a question's concepts are the
+question's and travel with it; nothing is taught to the target pool, since
+the vocabulary is the instance's and the per-pool tag descriptions are gone
+([ADR-081, addendum §6](ADR-081-vocabulaire-de-notions.md#addendum-2026-10-08-transition-resolution-and-storage)).
 
 ## Context
 
@@ -73,6 +78,11 @@ items already frozen on it go on resolving perfectly.
    `pool_tags` rows are LEFT: a teacher's sentence explaining what "pointeurs"
    means in that pool documents the pool, not the question that left, and
    deleting it on the way out would destroy writing nobody asked to destroy.
+   *Amended by ADR-081 (third addendum, the cut-over):* the question's
+   concepts (`question_concepts`) travel with it like any of its rows; the
+   vocabulary is instance-wide, so there is nothing to teach the target pool
+   and no per-pool description to leave behind. The paragraph above describes
+   the tags before the cut-over.
 
 6. **Assets stay with the source pool.** `assets.pool_id` is not rewritten. An
    asset is addressed by id and served by the asset route, which authorizes
@@ -146,4 +156,5 @@ every filing mistake into history.
    decision, and sharing decisions are made on purpose.
 5. **Moving the assets and the `pool_tags` descriptions along.** It would make
    a move write into a pool the caller may only be a contributor of, to delete
-   documentation they did not write.
+   documentation they did not write. (The descriptions are gone since the
+   ADR-081 cut-over; the argument stands for the assets.)

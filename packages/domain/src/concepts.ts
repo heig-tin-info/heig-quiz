@@ -291,6 +291,19 @@ export function resolveConceptLabel(
   return { kind: "unknown", candidates: matches.map((m) => m.id) };
 }
 
+/**
+ * The concepts a FILTER word designates (ADR-081 third addendum §7): the one
+ * it resolves to — by id, by its qualified form or by one exact match — or,
+ * when it is ambiguous, every homonym it may mean. Never a close-only
+ * candidate: "did you mean" is a suggestion, not a match. Empty when the
+ * word designates nothing; the caller says so rather than filtering on it.
+ */
+export function filterIds(resolution: LabelResolution): string[] {
+  if (resolution.kind === "resolved") return [resolution.id];
+  if (resolution.kind === "ambiguous") return [...resolution.candidates];
+  return [];
+}
+
 /** One tag of one pool, with the number of live questions that wear it. */
 export interface PoolTagCount {
   poolId: string;

@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 
 import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 
-import type { Pool, PoolColor, PoolInUse, PoolRole, PoolSummary } from "@quiz/contracts";
+import type { ConceptLang, Pool, PoolColor, PoolInUse, PoolRole, PoolSummary } from "@quiz/contracts";
 import { displayName, effectivePoolRole, heldPoolRole, type PoolRoleFacts } from "@quiz/domain";
 
 import { isForeignKeyViolation, type Db } from "../../db/client.js";
@@ -25,7 +25,7 @@ import {
   users,
 } from "../../db/schema.js";
 import { type PoolRow, qualified } from "./shared.js";
-import { poolTagNames } from "./tags.js";
+import { poolConcepts } from "../concept/service.js";
 import { categoryTree } from "./categories.js";
 
 export const questionCount = sql<number>`(SELECT count(*) FROM ${questions} WHERE ${qualified(questions.poolId)} = ${qualified(pools.id)} AND ${qualified(questions.deletedAt)} IS NULL)::int`;
@@ -316,21 +316,21 @@ export async function deletePool(db: Db, poolId: string): Promise<boolean> {
   }
 }
 /**
- * `GET /pools/:id`: the pool, its category tree, the tags in use — and the
- * caller's effective role, which is what the screen reads to decide whether
- * it offers an editor or a reading view.
+ * `GET /pools/:id`: the pool, its category tree, the concepts in use with
+ * their counts (labelled in `lang`, the pool's "Concepts" tab) — and the caller's effective role, which is what the
+ * screen reads to decide whether it offers an editor or a reading view.
  */
-export async function poolDetail(db: Db, pool: PoolRow, role: PoolRole) {
-  const [tree, tags, [counted]] = await Promise.all([
+export async function poolDetail(db: Db, pool: PoolRow, role: PoolRole, lang: ConceptLang) {
+  const [tree, used, [counted]] = await Promise.all([
     categoryTree(db, pool.id),
-    poolTagNames(db, pool.id),
+    poolConcepts(db, pool.id, lang),
     db.select({ n: questionCount }).from(pools).where(eq(pools.id, pool.id)),
   ]);
   return {
     pool: poolJson(pool),
     role,
     categories: tree,
-    tags,
+    concepts: used,
     questionCount: counted?.n ?? 0,
   };
 }

@@ -8,7 +8,7 @@
  */
 import { publish, type Topic } from "../../events.js";
 
-/** One pool changed: its question list, its categories or its tags. */
+/** One pool changed: its question list, its categories or the concepts of its questions. */
 export function poolChanged(poolId: string): void {
   publish("pool", [`pool:${poolId}`]);
 }

@@ -41,7 +41,7 @@ export const MCP_READS = {
     "time spent, the discrimination `r`, and for mcq the share of each option. A question absent from `items` has " +
     "too few answers. Never a student, never an individual grade.",
   list_questions:
-    "Searches a pool's questions by text, type, tag or category. `latestNumber` null: never published. " +
+    "Searches a pool's questions by text, type, concept (what a question exercises) or category. `latestNumber` null: never published. " +
     "Pass `cursor` from the previous page to continue.",
   find_similar_questions:
     "Questions close to a given statement, from the course's pools first, then from every pool the user reaches. " +
@@ -151,7 +151,7 @@ export function assistUiTools(turn: AssistUiTurn): ReadOnlyTool[] {
           ids: { type: "object", description: "The screen's ids, such as { \"id\": \"<pool id>\" }.", additionalProperties: { type: "string" } },
           params: {
             type: "object",
-            description: "Optional: the screen's parameters, such as { \"q\": \"tag:printf\" } or { \"tab\": \"roster\" }.",
+            description: "Optional: the screen's parameters, such as { \"q\": \"#printf\" } or { \"tab\": \"roster\" }.",
             additionalProperties: { type: "string" },
           },
         },

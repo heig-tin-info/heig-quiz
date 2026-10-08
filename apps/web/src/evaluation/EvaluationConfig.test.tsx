@@ -50,7 +50,7 @@ function routes(
           type: "mcq",
           internalName: "Pointer declaration",
           difficulty: 2,
-          tags: [],
+          concepts: [],
           categoryId: null,
           latestNumber: 1,
           hasDraftChanges: false,

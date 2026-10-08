@@ -72,7 +72,7 @@ describe("the draft (D16)", () => {
     expect(saved.valid).toBe(false);
     expect(messages(saved.issues)).toContain("parameters.bad_name");
     expect(saved.issues[0]!.path[0]).toBe("variables");
-    const detail = await service.questionDetail(db, (await db.select().from(questions).where(eq(questions.id, q.id)))[0]!);
+    const detail = await service.questionDetail(db, (await db.select().from(questions).where(eq(questions.id, q.id)))[0]!, "en");
     expect(detail.draft.variables).toEqual(half);
     expect(detail.draft.valid).toBe(false);
     // Absent keeps the stored table; null makes the question static again.

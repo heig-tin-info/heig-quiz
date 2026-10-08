@@ -52,7 +52,7 @@ import {
   DrillQuestionConfidence,
   DrillSession,
   DrillStudentActivity,
-  DrillTagMastery,
+  DrillConceptMastery,
   EvaluationDetail,
   EvaluationDrill,
   EvaluationSummary,
@@ -114,8 +114,6 @@ import {
   PoolMembers,
   PoolQuestionStats,
   PoolSummary,
-  PoolTag,
-  PoolTagUsage,
   QuestionDetail,
   QuestionPage,
   ResultsView,
@@ -345,8 +343,6 @@ const CHECKED: Case[] = [
     one("/app/api/pools/:id/members", `/app/api/pools/${p.id}/members`, PoolMembers),
     one("/app/api/pools/:id/candidates", `/app/api/pools/${p.id}/candidates?q=a`, PoolCandidates),
     one("/app/api/pools/:id/questions", `/app/api/pools/${p.id}/questions`, QuestionPage),
-    each("/app/api/pools/:id/tags", `/app/api/pools/${p.id}/tags`, PoolTag),
-    each("/app/api/pools/:id/tags/usage", `/app/api/pools/${p.id}/tags/usage`, PoolTagUsage),
     one("/app/api/pools/:id/question-stats", `/app/api/pools/${p.id}/question-stats`, PoolQuestionStats),
   ]),
   // Every question: the payload of a `circuit` is not the payload of an
@@ -599,7 +595,7 @@ const CHECKED: Case[] = [
     `/app/api/classrooms/${classroomId}/drill/progress?student=${firstSeat}`,
     DrillProgress,
   ),
-  each("/app/api/classrooms/:id/drill/mastery", `/app/api/classrooms/${classroomId}/drill/mastery`, DrillTagMastery),
+  each("/app/api/classrooms/:id/drill/mastery", `/app/api/classrooms/${classroomId}/drill/mastery`, DrillConceptMastery),
   // Confidence (ADR-085 §8): the student's calibration, the teacher's 2×2 per question.
   each("/app/api/drill/calibration", "/app/api/drill/calibration", DrillCalibrationLevel),
   each(
@@ -986,7 +982,7 @@ describe("the mock's assistant drives the interface (ADR-080 P2b)", () => {
     expect(res.status).toBe(200);
     const reply = (await res.json()) as AssistReply;
     expect(issuesOf(AssistReply, reply)).toEqual([]);
-    expect(reply.actions).toEqual([{ kind: "open_screen", screen: "pool", ids: { id: "p1" }, params: { q: "tag:pointeurs" } }]);
+    expect(reply.actions).toEqual([{ kind: "open_screen", screen: "pool", ids: { id: "p1" }, params: { q: "#pointeurs" } }]);
     expect(reply.exchange.answer).toContain("**Programmation C**");
   });
 });

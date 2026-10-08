@@ -3,6 +3,7 @@ import type { DragEvent } from "react";
 
 import type { QuestionRow } from "@quiz/contracts";
 
+import { ConceptNames } from "../concepts/refs";
 import { useT } from "../i18n";
 import { typeIcon, typeLabel } from "../questionTypes";
 import {
@@ -44,7 +45,7 @@ import { ReviewBadge } from "./ReviewBadge";
  * A badge repeating "Multiple choice" on forty rows is forty copies of a word
  * nobody reads twice; the icon is what the eye actually sorts on, and the
  * label stays one hover (`Tip`) and one screen-reader stop away. The 110 px
- * that column cost went to the name and the tags.
+ * that column cost went to the name and the concepts.
  *
  * Sorting is the SERVER's (`sort` / `dir` of `QuestionSearch`), not a local
  * `useSortableTable`: the list is paginated, and a page sorted in the browser
@@ -62,7 +63,7 @@ import { ReviewBadge } from "./ReviewBadge";
  *
  * Which columns survive a narrow page is `T`'s column priority, measured on
  * the table's own container and not on the viewport. Version goes first
- * (`T.colLow`), then Updated (`T.colMid`), then Tags (`T.colHigh`); the name,
+ * (`T.colLow`), then Updated (`T.colMid`), then Concepts (`T.colHigh`); the name,
  * the difficulty, the tick box and the actions never go. On a phone the
  * table turns into row cards (`T.stack`): the tick box, the name and the
  * actions on the first line, the difficulty and the version under the name.
@@ -232,9 +233,9 @@ export function QuestionTable({
           },
         ]),
     { key: "name", label: t("pool.col.name"), stack: "main" },
-    // The tags are read, never ordered: a row carries several of them, and a
-    // list sorted on "the first tag" is an order nobody asked for.
-    { key: "tags", label: t("pool.col.tags"), sortable: false, className: T.colHigh },
+    // The concepts are read, never ordered: a row carries several of them, and a
+    // list sorted on "the first concept" is an order nobody asked for.
+    { key: "concepts", label: t("pool.col.concepts"), sortable: false, className: T.colHigh },
     { key: "difficulty", label: t("pool.col.difficulty"), className: "whitespace-nowrap", stack: "sub" },
     { key: "version", label: t("pool.col.version"), className: T.colLow, stack: "sub" },
     { key: "updated", label: t("pool.col.updated"), className: T.colMid },
@@ -301,16 +302,10 @@ export function QuestionTable({
                   </span>
                 </td>
                 <td role="cell" className={cx(T.td, "max-w-56", T.colHigh)}>
-                  {row.tags.length === 0 ? (
+                  {row.concepts.length === 0 ? (
                     <span className="text-fg-faint">—</span>
                   ) : (
-                    <span className="flex flex-wrap gap-1">
-                      {row.tags.map((tag) => (
-                        <span key={tag} className="text-xs text-fg-muted">
-                          #{tag}
-                        </span>
-                      ))}
-                    </span>
+                    <ConceptNames concepts={row.concepts} />
                   )}
                 </td>
                 <td role="cell" className={cx(T.td, readOnly ? T.stack.sub : T.stack.subIndent, "whitespace-nowrap")}>

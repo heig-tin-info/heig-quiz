@@ -18,17 +18,24 @@ import {
 describe("parseSearch", () => {
   it.each([
     ["keeps plain words as the free text", "  pointeurs   null ", { q: "pointeurs null" }],
-    ["reads a tag with and without its hash", "tag:pointeurs tag:#memoire", { tags: ["pointeurs", "memoire"] }],
-    ["lowercases a tag and never lists it twice", "tag:Memoire tag:memoire", { tags: ["memoire"] }],
+    ["reads a concept word after its hash", "#pointeurs #Mémoire", { conceptWords: ["pointeurs", "Mémoire"] }],
+    [
+      "reads the tags' spelling as concept words",
+      "tag:pointeurs tag:#memoire",
+      { conceptWords: ["pointeurs", "memoire"] },
+    ],
+    ["never lists a word twice whatever its case", "#Memoire tag:memoire", { conceptWords: ["Memoire"] }],
     [
       "takes a quoted phrase whole, quotes stripped",
-      '"null pointer" tag:"deux mots"',
-      { q: "null pointer", tags: ["deux mots"] },
+      '"null pointer" #"deux mots" tag:"trois mots ici"',
+      { q: "null pointer", conceptWords: ["deux mots", "trois mots ici"] },
     ],
+    ["is not a concept with a bare hash", "# x", { conceptWords: [], q: "# x" }],
+    ["leaves concept: as free text", "concept:boucle", { conceptWords: [], q: "concept:boucle" }],
     ["reads the type ids", "type:mcq type:code", { types: ["mcq", "code"] }],
     ["leaves an unknown type as text", "type:essay", { types: [], q: "type:essay" }],
     ["drops a broken difficulty back to text", "difficulty:hard", { q: "difficulty:hard" }],
-    ["is not a token without a value", "tag:", { tags: [], q: "tag:" }],
+    ["is not a token without a value", "tag:", { conceptWords: [], q: "tag:" }],
     ["intersects two version bounds", "version:>1 version:<5", { versionMin: 2, versionMax: 4 }],
   ])("%s", (_, line, expected) => {
     expect(parseSearch(line)).toMatchObject(expected);
@@ -60,10 +67,10 @@ describe("parseSearch", () => {
   });
 
   it("reads a whole line of filters and the words left over", () => {
-    const parsed = parseSearch("tag:#pointeurs type:code difficulty:>=4 version:>1 segfault");
+    const parsed = parseSearch("#pointeurs type:code difficulty:>=4 version:>1 segfault");
     expect(parsed).toEqual({
       q: "segfault",
-      tags: ["pointeurs"],
+      conceptWords: ["pointeurs"],
       types: ["code"],
       difficulties: [4, 5],
       versionMin: 2,
@@ -81,8 +88,9 @@ describe("difficultyValues / versionBounds", () => {
 
 describe("withoutToken", () => {
   it.each([
-    ["takes one tag out and leaves the rest", "tag:a tag:b segfault", "tag", "a", "tag:b segfault"],
-    ["takes a hashed tag out", "tag:#a segfault", "tag", "a", "segfault"],
+    ["takes one concept word out and leaves the rest", "#a #b segfault", "concept", "a", "#b segfault"],
+    ["takes a word out whatever its spelling", "tag:#A tag:b #\"a\" segfault", "concept", "a", "tag:b segfault"],
+    ["takes every concept word at once", "#a tag:b ptr", "concept", undefined, "ptr"],
     ["takes the whole range a removed value came from", "difficulty:>3 ptr", "difficulty", "4", "ptr"],
     ["keeps a range the value is not in", "difficulty:>3 ptr", "difficulty", "2", "difficulty:>3 ptr"],
     // The version chip is one filter: every version token goes at once.
@@ -95,19 +103,22 @@ describe("withoutToken", () => {
 
 describe("completionAt", () => {
   it.each([
-    ["opens on an empty tag token", "tag:", 4, { kind: "tag", prefix: "", hash: false }],
-    ["carries what follows the colon, hash included", "tag:#poi", 8, { kind: "tag", prefix: "poi", hash: true }],
+    ["opens on a bare hash", "#", 1, { kind: "concept", prefix: "" }],
+    ["carries what follows the hash", "ptr #poi", 8, { kind: "concept", prefix: "poi", start: 5 }],
+    ["opens on the tags' spelling", "tag:", 4, { kind: "concept", prefix: "" }],
+    ["carries what follows the colon, hash left out", "tag:#poi", 8, { kind: "concept", prefix: "poi", start: 5 }],
     ["carries a type prefix", "type:co", 7, { kind: "type", prefix: "co" }],
     // Only the token the caret is in.
-    ["answers for the first token under the caret", "tag:a type:m", 5, { kind: "tag", prefix: "a" }],
-    ["answers for the second token under the caret", "tag:a type:m", 12, { kind: "type", prefix: "m" }],
+    ["answers for the first token under the caret", "#a type:m", 2, { kind: "concept", prefix: "a" }],
+    ["answers for the second token under the caret", "#a type:m", 9, { kind: "type", prefix: "m" }],
   ])("%s", (_, line, caret, expected) => {
     expect(completionAt(line, caret)).toMatchObject(expected);
   });
 
   it.each([
     ["free text", "pointeurs", 9],
-    ["a finished token", "tag:a ", 6],
+    ["a finished token", "#a ", 3],
+    ["a hash after a type", "type:#", 6],
     ["a kind it does not complete", "difficulty:", 11],
   ])("stays shut on %s", (_, line, caret) => {
     expect(completionAt(line, caret)).toBe(null);
@@ -116,11 +127,17 @@ describe("completionAt", () => {
 
 describe("applyCompletion", () => {
   it("replaces the value, adds one space and puts the caret after it", () => {
-    const at = completionAt("tag:poi", 7)!;
-    expect(applyCompletion("tag:poi", at, "pointeurs")).toEqual({
-      text: "tag:pointeurs ",
-      caret: 14,
+    const at = completionAt("#poi", 4)!;
+    expect(applyCompletion("#poi", at, "Pointeur")).toEqual({
+      text: "#Pointeur ",
+      caret: 10,
     });
+  });
+
+  it("quotes a name of several words", () => {
+    const at = completionAt("#adr", 4)!;
+    expect(applyCompletion("#adr", at, "Adresse (mémoire)").text).toBe('#"Adresse (mémoire)" ');
+    expect(parseSearch('#"Adresse (mémoire)" ').conceptWords).toEqual(["Adresse (mémoire)"]);
   });
 
   it.each([

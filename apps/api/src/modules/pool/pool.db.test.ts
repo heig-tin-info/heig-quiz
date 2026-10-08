@@ -14,10 +14,10 @@ import {
   courseStaff,
   courses,
   notifications,
+  conceptTagSortings,
   poolMembers,
-  poolTags,
   pools,
-  questionTags,
+  questionConcepts,
   questionVersions,
   questions,
   teacherGrants,
@@ -30,28 +30,26 @@ import { syncRoleOfUser, syncUserRole } from "../../roles.js";
 import { poolAccess } from "../guards.js";
 import { testDb } from "../../test/db.js";
 import { fakeShort, fakeV1Config } from "../../test/fakeType.js";
+import * as conceptService from "../concept/service.js";
 import { notify } from "../notifications/service.js";
 import * as service from "./service.js";
-
-/**
- * The backfill of the `pool_tags` migration, read from the shipped SQL: the
- * test exercises the statement that really runs, not a copy of it.
- */
-function backfillStatement(): string {
-  const file = fileURLToPath(
-    new URL("../../../drizzle/0004_goofy_george_stacy.sql", import.meta.url),
-  );
-  const statement = readFileSync(file, "utf8")
-    .split("--> statement-breakpoint")
-    .find((part) => part.includes('INSERT INTO "pool_tags"'));
-  if (!statement) throw new Error("the pool_tags migration no longer carries its backfill");
-  return statement;
-}
 
 const search = (extra: Record<string, unknown> = {}) =>
   ({ limit: 50, sort: "updated", dir: "desc", ...extra }) as Parameters<
     typeof service.listQuestions
   >[3];
+
+/** Who changes a question in these tests: the seeded owner, reading English. */
+const writer = () => ({ userId: ownerId, lang: "en" as const, actor: { actorUserId: ownerId, actorType: "user" as const } });
+
+/** A validated concept, through the registry's own services: proposed in English, completed in French, validated. */
+async function seedConcept(en: string, fr = en, qualifier = ""): Promise<string> {
+  const ctx = { caller: { id: ownerId, role: "teacher" }, actor: writer().actor, now: new Date() };
+  const created = await conceptService.createConcept(db, ctx, { lang: "en", label: en, qualifier });
+  await conceptService.patchConcept(db, ctx, created.id, { fr: { label: fr, qualifier } });
+  await conceptService.validateConcept(db, ctx, created.id);
+  return created.id;
+}
 
 /** The caller of `listPools`: the seeded owner, an ordinary teacher. */
 const viewer = () => ({ id: ownerId, role: "teacher", reach: "seats" as const });
@@ -122,7 +120,7 @@ describe("publication (F-QST-03)", () => {
       .from(questionVersions)
       .where(and(eq(questionVersions.questionId, id), isNull(questionVersions.number)));
     expect(drafts).toHaveLength(1);
-    const detail = await service.questionDetail(db, await questionRow(id));
+    const detail = await service.questionDetail(db, await questionRow(id), "en");
     expect(detail.versions.map((v) => v.number)).toEqual([2, 1]);
     expect(detail.latestPublished?.number).toBe(2);
     // Publishing leaves the draft in step with the version it just cut.
@@ -144,14 +142,14 @@ describe("publication (F-QST-03)", () => {
     const version = await service.publishQuestion(db, await questionRow(id), { userId: ownerId });
 
     const stateInList = async () => {
-      const page = await service.listQuestions(db, poolId, ownerId, search({ q: "republished" }));
+      const page = await service.listQuestions(db, poolId, ownerId, search({ q: "republished" }), "en");
       const row = page.items.find((r) => r.id === id)!;
       return { latestNumber: row.latestNumber, hasDraftChanges: row.hasDraftChanges };
     };
     expect(await stateInList()).toEqual({ latestNumber: 2, hasDraftChanges: false });
 
     // What the editor sends back once the refetched draft lands on screen.
-    const detail = await service.questionDetail(db, await questionRow(id));
+    const detail = await service.questionDetail(db, await questionRow(id), "en");
     const echo = await service.putDraft(db, await questionRow(id), {
       config: detail.draft.config,
       explanation: detail.draft.explanation,
@@ -229,7 +227,7 @@ describe("the read/write pipeline (§1.6)", () => {
       .set({ config: fakeV1Config("Old wording", "42"), configVersion: 1 })
       .where(and(eq(questionVersions.questionId, id), isNull(questionVersions.number)));
 
-    const detail = await service.questionDetail(db, await questionRow(id));
+    const detail = await service.questionDetail(db, await questionRow(id), "en");
     expect(detail.draft.valid).toBe(true);
     expect(detail.draft.config).toEqual({ statement: "Old wording", answer: "42" });
 
@@ -249,7 +247,7 @@ describe("versions", () => {
     await writeDraft(id, { statement: "Second", answer: "b" });
 
     expect(await service.restoreVersion(db, await questionRow(id), 1)).toBe(true);
-    const detail = await service.questionDetail(db, await questionRow(id));
+    const detail = await service.questionDetail(db, await questionRow(id), "en");
     expect(detail.draft.config).toEqual({ statement: "First", answer: "a" });
     expect(await service.restoreVersion(db, await questionRow(id), 99)).toBe(false);
   });
@@ -261,7 +259,7 @@ describe("versions", () => {
     const version = await service.deprecateVersion(db, id, 1, "superseded by the new syllabus");
     expect(version?.deprecatedAt).not.toBeNull();
     expect(version?.deprecationNote).toBe("superseded by the new syllabus");
-    const page = await service.listQuestions(db, poolId, ownerId, search({ q: "Old" }));
+    const page = await service.listQuestions(db, poolId, ownerId, search({ q: "Old" }), "en");
     expect(page.items.find((q) => q.id === id)?.deprecated).toBe(true);
   });
 });
@@ -273,14 +271,14 @@ describe("soft delete (F-QST-11)", () => {
     await service.publishQuestion(db, await questionRow(id), { userId: ownerId });
 
     await service.softDeleteQuestion(db, await questionRow(id));
-    const visible = await service.listQuestions(db, poolId, ownerId, search());
+    const visible = await service.listQuestions(db, poolId, ownerId, search(), "en");
     expect(visible.items.map((q) => q.id)).not.toContain(id);
 
     const withDeleted = await service.listQuestions(
       db,
       poolId,
       ownerId,
-      search({ includeDeleted: true }),
+      search({ includeDeleted: true }), "en"
     );
     expect(withDeleted.items.map((q) => q.id)).toContain(id);
     expect(await service.listVersions(db, id)).toHaveLength(1);
@@ -305,6 +303,8 @@ describe("search", () => {
   let searchPool: string;
   let alpha: string;
   let beta: string;
+  let memory: string;
+  let theory: string;
 
   beforeAll(async () => {
     searchPool = await seedPool();
@@ -312,60 +312,77 @@ describe("search", () => {
     beta = await seedQuestion("Recursion basics", searchPool);
     await writeDraft(alpha, { statement: "What does malloc return?", answer: "a pointer" });
     await writeDraft(beta, { statement: "Define a base case", answer: "termination" });
-    await service.patchQuestion(db, await questionRow(alpha), {
-      tags: ["memory", "C"],
-      difficulty: 4,
-    });
-    await service.patchQuestion(db, await questionRow(beta), { tags: ["theory"], difficulty: 2 });
+    memory = await seedConcept("search memory", "mémoire de recherche");
+    theory = await seedConcept("search theory", "théorie de recherche");
+    await seedConcept("search language C", "langage C de recherche");
+    await service.patchQuestion(
+      db,
+      await questionRow(alpha),
+      { concepts: [memory, "search language C"], difficulty: 4 },
+      writer(),
+    );
+    await service.patchQuestion(db, await questionRow(beta), { concepts: [theory], difficulty: 2 }, writer());
   });
 
   it("finds a question by the text of its draft, through the generated tsvector", async () => {
-    const page = await service.listQuestions(db, searchPool, ownerId, search({ q: "malloc" }));
+    const page = await service.listQuestions(db, searchPool, ownerId, search({ q: "malloc" }), "en");
     expect(page.items.map((q) => q.id)).toEqual([alpha]);
   });
 
   it("finds a question by its internal name", async () => {
-    const page = await service.listQuestions(db, searchPool, ownerId, search({ q: "Recursion" }));
+    const page = await service.listQuestions(db, searchPool, ownerId, search({ q: "Recursion" }), "en");
     expect(page.items.map((q) => q.id)).toEqual([beta]);
   });
 
-  it("filters by tag, by type and by difficulty", async () => {
+  it("filters by concept ids (any of them), by type and by difficulty", async () => {
     expect(
-      (await service.listQuestions(db, searchPool, ownerId, search({ tag: ["memory"] }))).items.map(
+      (await service.listQuestions(db, searchPool, ownerId, search({ concept: [memory] }), "en")).items.map(
         (q) => q.id,
       ),
     ).toEqual([alpha]);
     expect(
-      (await service.listQuestions(db, searchPool, ownerId, search({ difficulty: [2] }))).items.map(
+      (await service.listQuestions(db, searchPool, ownerId, search({ concept: [memory, theory] }), "en")).items
+        .map((q) => q.id)
+        .sort(),
+    ).toEqual([alpha, beta].sort());
+    expect(
+      (await service.listQuestions(db, searchPool, ownerId, search({ difficulty: [2] }), "en")).items.map(
         (q) => q.id,
       ),
     ).toEqual([beta]);
     expect(
-      (await service.listQuestions(db, searchPool, ownerId, search({ type: ["short"] }))).items,
+      (await service.listQuestions(db, searchPool, ownerId, search({ type: ["short"] }), "en")).items,
     ).toHaveLength(2);
     expect(
-      (await service.listQuestions(db, searchPool, ownerId, search({ type: ["mcq"] }))).items,
+      (await service.listQuestions(db, searchPool, ownerId, search({ type: ["mcq"] }), "en")).items,
     ).toHaveLength(0);
   });
 
-  it("lists the tags of the pool, deduplicated and sorted", async () => {
-    expect(await service.poolTagNames(db, searchPool)).toEqual(["c", "memory", "theory"]);
-    expect(await service.poolTags(db, searchPool)).toEqual([
-      { tag: "c", description: "", count: 1 },
-      { tag: "memory", description: "", count: 1 },
-      { tag: "theory", description: "", count: 1 },
+  it("lists the concepts of each row and of the pool, labelled in the reader's language", async () => {
+    const page = await service.listQuestions(db, searchPool, ownerId, search({ q: "malloc" }), "fr");
+    expect(page.items[0]!.concepts.map((c) => c.label)).toEqual(["langage C de recherche", "mémoire de recherche"]);
+    expect(await conceptService.poolConcepts(db, searchPool, "en")).toEqual([
+      { concept: expect.objectContaining({ label: "search language C" }), count: 1 },
+      { concept: expect.objectContaining({ id: memory, label: "search memory", status: "validated" }), count: 1 },
+      { concept: expect.objectContaining({ id: theory, label: "search theory" }), count: 1 },
+    ]);
+    const [row] = await db.select().from(pools).where(eq(pools.id, searchPool));
+    expect((await service.poolDetail(db, row!, "owner", "en")).concepts.map((c) => [c.concept.label, c.count])).toEqual([
+      ["search language C", 1],
+      ["search memory", 1],
+      ["search theory", 1],
     ]);
   });
 
   it("paginates with an opaque cursor", async () => {
-    const first = await service.listQuestions(db, searchPool, ownerId, search({ limit: 1 }));
+    const first = await service.listQuestions(db, searchPool, ownerId, search({ limit: 1 }), "en");
     expect(first.items).toHaveLength(1);
     expect(first.nextCursor).not.toBeNull();
     const second = await service.listQuestions(
       db,
       searchPool,
       ownerId,
-      search({ limit: 1, cursor: first.nextCursor }),
+      search({ limit: 1, cursor: first.nextCursor }), "en"
     );
     expect(second.items).toHaveLength(1);
     expect(second.items[0]!.id).not.toBe(first.items[0]!.id);
@@ -373,27 +390,27 @@ describe("search", () => {
   });
 
   it("counts every question the search matches, on every page", async () => {
-    const first = await service.listQuestions(db, searchPool, ownerId, search({ limit: 1 }));
+    const first = await service.listQuestions(db, searchPool, ownerId, search({ limit: 1 }), "en");
     expect(first.total).toBe(2);
     const second = await service.listQuestions(
       db,
       searchPool,
       ownerId,
-      search({ limit: 1, cursor: first.nextCursor }),
+      search({ limit: 1, cursor: first.nextCursor }), "en"
     );
     expect(second.total).toBe(2);
     const tagged = await service.listQuestions(
       db,
       searchPool,
       ownerId,
-      search({ tag: ["memory"] }),
+      search({ concept: [memory] }), "en"
     );
     expect(tagged.total).toBe(1);
     const none = await service.listQuestions(
       db,
       searchPool,
       ownerId,
-      search({ q: "nothing-matches" }),
+      search({ q: "nothing-matches" }), "en"
     );
     expect(none.total).toBe(0);
   });
@@ -426,7 +443,8 @@ describe("categories and copies", () => {
     const target = await seedPool();
     const id = await seedQuestion("copy me");
     await writeDraft(id, { statement: "Copied", answer: "yes" });
-    await service.patchQuestion(db, await questionRow(id), { tags: ["shared"] });
+    const shared = await seedConcept("copied concept");
+    await service.patchQuestion(db, await questionRow(id), { concepts: [shared] }, writer());
 
     const { id: copyId } = await service.copyQuestion(db, await questionRow(id), {
       targetPoolId: target.valueOf(),
@@ -435,9 +453,10 @@ describe("categories and copies", () => {
     const copy = await questionRow(copyId);
     expect(copy.poolId).toBe(target);
     expect(copy.originQuestionId).toBe(id);
-    const detail = await service.questionDetail(db, copy);
+    const detail = await service.questionDetail(db, copy, "en");
     expect(detail.draft.config).toEqual({ statement: "Copied", answer: "yes" });
-    expect(detail.meta.tags).toEqual(["shared"]);
+    // The copy names the same concepts: the vocabulary is the instance's.
+    expect(detail.meta.concepts.map((c) => c.id)).toEqual([shared]);
     // The history stays with the original.
     expect(detail.versions).toEqual([]);
 
@@ -449,97 +468,115 @@ describe("categories and copies", () => {
     expect((await questionRow(sibling)).internalName).toBe("copy me (copy)");
   });
 
-  it("keeps the tag set of a question in step with the patch", async () => {
-    const id = await seedQuestion("retagged");
-    await service.patchQuestion(db, await questionRow(id), { tags: ["A", "b", "A"] });
-    const rows = await db.select().from(questionTags).where(eq(questionTags.questionId, id));
-    expect(rows.map((r) => r.tag).sort()).toEqual(["a", "b"]);
-    await service.patchQuestion(db, await questionRow(id), { tags: [] });
-    expect(await db.select().from(questionTags).where(eq(questionTags.questionId, id))).toEqual([]);
+  it("keeps the concept set of a question in step with the patch", async () => {
+    const id = await seedQuestion("reclassified");
+    const a = await seedConcept("set concept A");
+    const b = await seedConcept("set concept B");
+    await service.patchQuestion(db, await questionRow(id), { concepts: [a, "set concept b", a] }, writer());
+    const rows = await db.select().from(questionConcepts).where(eq(questionConcepts.questionId, id));
+    expect(rows.map((r) => r.conceptId).sort()).toEqual([a, b].sort());
+    await service.patchQuestion(db, await questionRow(id), { concepts: [] }, writer());
+    expect(await db.select().from(questionConcepts).where(eq(questionConcepts.questionId, id))).toEqual([]);
   });
 });
 
-describe("the tag vocabulary of a pool", () => {
-  it("creates the row of a tag the pool has never seen, and keeps it when the tag is dropped", async () => {
-    const vocabulary = await seedPool();
-    const id = await seedQuestion("lazy tag", vocabulary);
-    await service.patchQuestion(db, await questionRow(id), { tags: ["Fork", "pipe"] });
+describe("the concepts of a question (ADR-081 third addendum)", () => {
+  const conceptsOf = async (id: string) =>
+    (await db.select().from(questionConcepts).where(eq(questionConcepts.questionId, id))).map((r) => r.conceptId);
+  const refused = async (id: string, concepts: string[], createMissing?: boolean) => {
+    try {
+      await service.patchQuestion(db, await questionRow(id), { concepts, createMissing }, writer());
+    } catch (error) {
+      return error as { code: string; status: number; details?: { errors?: { input: string; error: string }[] } };
+    }
+    throw new Error("the patch was not refused");
+  };
 
-    const rows = await db.select().from(poolTags).where(eq(poolTags.poolId, vocabulary));
-    expect(rows.map((r) => r.tag).sort()).toEqual(["fork", "pipe"]);
-    expect(rows.every((r) => r.description === "")).toBe(true);
-
-    // The documentation of a tag outlives its last use: the row stays, the
-    // count falls to zero, and re-adding the tag finds its description again.
-    await service.describeTag(db, vocabulary, "fork", "Creates a child process");
-    await service.patchQuestion(db, await questionRow(id), { tags: ["pipe"] });
-    expect(await service.poolTags(db, vocabulary)).toEqual([
-      { tag: "fork", description: "Creates a child process", count: 0 },
-      { tag: "pipe", description: "", count: 1 },
-    ]);
+  it("resolves a label in either language, an id, or a qualified label", async () => {
+    const id = await seedQuestion("resolved labels");
+    const loop = await seedConcept("loop resolved", "boucle résolue");
+    const pointer = await seedConcept("pointer resolved", "pointeur résolu");
+    const address = await seedConcept("address resolved", "adresse résolue", "memory");
+    await service.patchQuestion(
+      db,
+      await questionRow(id),
+      { concepts: ["Boucle résolue", pointer, "address resolved (memory)"] },
+      writer(),
+    );
+    expect((await conceptsOf(id)).sort()).toEqual([loop, pointer, address].sort());
   });
 
-  it("counts the live questions of each tag, never the deleted ones", async () => {
+  it("refuses an unknown label, all or nothing, and creates it as proposed only when asked", async () => {
+    const id = await seedQuestion("created on demand");
+    const kept = await seedConcept("kept before");
+    await service.patchQuestion(db, await questionRow(id), { concepts: [kept] }, writer());
+
+    const error = await refused(id, [kept, "brand new concept"]);
+    expect(error).toMatchObject({ code: "concept_unknown", status: 422 });
+    expect(error.details?.errors).toEqual([{ input: "brand new concept", error: "concept_unknown", candidates: [] }]);
+    expect(await conceptsOf(id)).toEqual([kept]);
+
+    await service.patchQuestion(
+      db,
+      await questionRow(id),
+      { concepts: [kept, "brand new concept"], createMissing: true },
+      writer(),
+    );
+    const linked = await conceptsOf(id);
+    expect(linked).toHaveLength(2);
+    const fresh = (await conceptService.listConcepts(db)).find((c) => c.labels.en === "brand new concept")!;
+    expect(fresh).toMatchObject({ status: "proposed", createdBy: ownerId, labels: { fr: null } });
+    expect(linked).toContain(fresh.id);
+  });
+
+  it("refuses an ambiguous label with its candidates", async () => {
+    const id = await seedQuestion("ambiguous label");
+    await seedConcept("stack homonym", "pile homonyme", "memory");
+    await seedConcept("stack homonym", "pile homonyme", "battery");
+    const error = await refused(id, ["stack homonym"], true);
+    expect(error).toMatchObject({ code: "concept_ambiguous", status: 422 });
+    expect(error.details?.errors?.[0]).toMatchObject({ input: "stack homonym", error: "concept_ambiguous" });
+    expect(await conceptsOf(id)).toEqual([]);
+  });
+
+  it("refuses a label the admin dropped in the sorting, even with creation asked", async () => {
+    const id = await seedQuestion("dropped label", poolId);
+    await db.insert(conceptTagSortings).values({
+      poolId,
+      tag: "week-03",
+      decision: "drop",
+      dropReason: "organisational",
+      decidedAt: new Date(),
+    });
+    const error = await refused(id, ["Week 03"], true);
+    expect(error).toMatchObject({ code: "concept_dropped", status: 422 });
+    expect(error.details?.errors).toEqual([{ input: "Week 03", error: "concept_dropped", reason: "organisational" }]);
+  });
+
+  it("keeps the concepts of a moved question: the vocabulary is the instance's", async () => {
+    const target = await seedPool();
+    const id = await seedQuestion("moved with its concepts");
+    const kept = await seedConcept("moved concept");
+    await service.patchQuestion(db, await questionRow(id), { concepts: [kept] }, writer());
+    await service.moveQuestions(db, { questions: [await questionRow(id)], targetPoolId: target, categoryId: null });
+    expect(await conceptsOf(id)).toEqual([kept]);
+    expect((await conceptService.poolConcepts(db, target, "en")).map((c) => c.concept.id)).toEqual([kept]);
+  });
+
+  it("counts the live questions of each concept of a pool, never the deleted ones", async () => {
     const counted = await seedPool();
     const one = await seedQuestion("counted one", counted);
     const two = await seedQuestion("counted two", counted);
-    await service.patchQuestion(db, await questionRow(one), { tags: ["shared", "solo"] });
-    await service.patchQuestion(db, await questionRow(two), { tags: ["shared"] });
-    expect(await service.poolTags(db, counted)).toEqual([
-      { tag: "shared", description: "", count: 2 },
-      { tag: "solo", description: "", count: 1 },
-    ]);
+    const shared = await seedConcept("counted shared");
+    const solo = await seedConcept("counted solo");
+    await service.patchQuestion(db, await questionRow(one), { concepts: [shared, solo] }, writer());
+    await service.patchQuestion(db, await questionRow(two), { concepts: [shared] }, writer());
+    const count = async () =>
+      new Map((await conceptService.poolConcepts(db, counted, "en")).map((c) => [c.concept.id, c.count]));
+    expect(await count()).toEqual(new Map([[shared, 2], [solo, 1]]));
 
     await service.softDeleteQuestion(db, await questionRow(two));
-    expect((await service.poolTags(db, counted)).find((t) => t.tag === "shared")?.count).toBe(1);
-  });
-
-  it("normalizes the tag it documents and overwrites an existing description", async () => {
-    const documented = await seedPool();
-    const id = await seedQuestion("documented", documented);
-    await service.patchQuestion(db, await questionRow(id), { tags: ["malloc"] });
-
-    expect(await service.describeTag(db, documented, "#MALLOC", "Allocates memory")).toEqual({
-      tag: "malloc",
-      description: "Allocates memory",
-      count: 1,
-    });
-    await service.describeTag(db, documented, "malloc", "Allocates on the heap");
-    expect(await service.poolTags(db, documented)).toEqual([
-      { tag: "malloc", description: "Allocates on the heap", count: 1 },
-    ]);
-  });
-
-  it("gives a row to a tag that only exists on a copied question", async () => {
-    const source = await seedPool();
-    const target = await seedPool();
-    const id = await seedQuestion("copied tags", source);
-    await service.patchQuestion(db, await questionRow(id), { tags: ["ipc"] });
-
-    await service.copyQuestion(db, await questionRow(id), {
-      targetPoolId: target,
-      userId: ownerId,
-    });
-    expect(await service.poolTags(db, target)).toEqual([{ tag: "ipc", description: "", count: 1 }]);
-  });
-
-  it("backfills the pools written before the table existed, exactly as the migration does", async () => {
-    const legacy = await seedPool();
-    const id = await seedQuestion("legacy tags", legacy);
-    await service.patchQuestion(db, await questionRow(id), { tags: ["legacy"] });
-    // Back to the state of a database migrated from before `pool_tags`: the
-    // questions wear their tags and no vocabulary row exists.
-    await db.delete(poolTags).where(eq(poolTags.poolId, legacy));
-    expect(await db.select().from(poolTags).where(eq(poolTags.poolId, legacy))).toEqual([]);
-
-    await db.execute(sql.raw(backfillStatement()));
-
-    const rows = await db.select().from(poolTags).where(eq(poolTags.poolId, legacy));
-    expect(rows.map((r) => r.tag)).toEqual(["legacy"]);
-    // `ON CONFLICT DO NOTHING`: replaying the migration keeps the descriptions.
-    await service.describeTag(db, legacy, "legacy", "From the old world");
-    await db.execute(sql.raw(backfillStatement()));
-    expect((await service.poolTags(db, legacy))[0]!.description).toBe("From the old world");
+    expect((await count()).get(shared)).toBe(1);
   });
 });
 
@@ -553,7 +590,7 @@ describe("question counts", () => {
     expect(listed[0]!.questionCount).toBe(3);
 
     const [row] = await db.select().from(pools).where(eq(pools.id, counted));
-    expect((await service.poolDetail(db, row!, "owner")).questionCount).toBe(3);
+    expect((await service.poolDetail(db, row!, "owner", "en")).questionCount).toBe(3);
 
     const courseId = randomUUID();
     await db
@@ -918,14 +955,14 @@ describe("question listing: sort, cursor and version bounds (F-POOL-03)", () => 
       db,
       sorted,
       ownerId,
-      search({ sort: "name", dir: "asc" }),
+      search({ sort: "name", dir: "asc" }), "en"
     );
     expect(asc.items.map((q) => q.internalName)).toEqual(["alpha", "Bravo", "Charlie", "delta"]);
     const desc = await service.listQuestions(
       db,
       sorted,
       ownerId,
-      search({ sort: "name", dir: "desc" }),
+      search({ sort: "name", dir: "desc" }), "en"
     );
     expect(desc.items.map((q) => q.internalName)).toEqual(["delta", "Charlie", "Bravo", "alpha"]);
   });
@@ -938,7 +975,7 @@ describe("question listing: sort, cursor and version bounds (F-POOL-03)", () => 
         db,
         sorted,
         ownerId,
-        search({ sort: "name", dir: "asc", limit: 2, ...(cursor ? { cursor } : {}) }),
+        search({ sort: "name", dir: "asc", limit: 2, ...(cursor ? { cursor } : {}) }), "en"
       );
       seen.push(...page.items.map((q) => q.internalName));
       cursor = page.nextCursor;
@@ -951,7 +988,7 @@ describe("question listing: sort, cursor and version bounds (F-POOL-03)", () => 
       db,
       sorted,
       ownerId,
-      search({ sort: "name", dir: "asc", limit: 1 }),
+      search({ sort: "name", dir: "asc", limit: 1 }), "en"
     );
     expect(page.nextCursor).toBeTruthy();
     await expect(
@@ -959,7 +996,7 @@ describe("question listing: sort, cursor and version bounds (F-POOL-03)", () => 
         db,
         sorted,
         ownerId,
-        search({ sort: "difficulty", dir: "asc", cursor: page.nextCursor! }),
+        search({ sort: "difficulty", dir: "asc", cursor: page.nextCursor! }), "en"
       ),
     ).rejects.toBeInstanceOf(service.InvalidCursor);
     await expect(
@@ -967,7 +1004,7 @@ describe("question listing: sort, cursor and version bounds (F-POOL-03)", () => 
         db,
         sorted,
         ownerId,
-        search({ sort: "name", dir: "desc", cursor: page.nextCursor! }),
+        search({ sort: "name", dir: "desc", cursor: page.nextCursor! }), "en"
       ),
     ).rejects.toBeInstanceOf(service.InvalidCursor);
     await expect(
@@ -975,7 +1012,7 @@ describe("question listing: sort, cursor and version bounds (F-POOL-03)", () => 
         db,
         sorted,
         ownerId,
-        search({ sort: "name", dir: "asc", cursor: "not-a-cursor" }),
+        search({ sort: "name", dir: "asc", cursor: "not-a-cursor" }), "en"
       ),
     ).rejects.toBeInstanceOf(service.InvalidCursor);
   });
@@ -985,28 +1022,28 @@ describe("question listing: sort, cursor and version bounds (F-POOL-03)", () => 
       db,
       sorted,
       ownerId,
-      search({ sort: "version", dir: "desc" }),
+      search({ sort: "version", dir: "desc" }), "en"
     );
     expect(desc.items.map((q) => q.latestNumber)).toEqual([2, 1, null, null]);
     const asc = await service.listQuestions(
       db,
       sorted,
       ownerId,
-      search({ sort: "version", dir: "asc" }),
+      search({ sort: "version", dir: "asc" }), "en"
     );
     expect(asc.items.map((q) => q.latestNumber)).toEqual([1, 2, null, null]);
   });
 
   it("bounds the published version number, and a draft-only question matches neither", async () => {
-    const atLeastTwo = await service.listQuestions(db, sorted, ownerId, search({ versionMin: 2 }));
+    const atLeastTwo = await service.listQuestions(db, sorted, ownerId, search({ versionMin: 2 }), "en");
     expect(atLeastTwo.items.map((q) => q.internalName)).toEqual(["alpha"]);
-    const atMostOne = await service.listQuestions(db, sorted, ownerId, search({ versionMax: 1 }));
+    const atMostOne = await service.listQuestions(db, sorted, ownerId, search({ versionMax: 1 }), "en");
     expect(atMostOne.items.map((q) => q.internalName)).toEqual(["Bravo"]);
     const between = await service.listQuestions(
       db,
       sorted,
       ownerId,
-      search({ versionMin: 1, versionMax: 2 }),
+      search({ versionMin: 1, versionMax: 2 }), "en"
     );
     expect(between.items.map((q) => q.internalName).sort()).toEqual(["Bravo", "alpha"]);
   });

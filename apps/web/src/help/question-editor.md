@@ -9,22 +9,23 @@ draft is stored as it is; publishing is what asks for the missing pieces.
 ## Three tabs
 
 - **Edit** — the form of the question type, the explanation, and the
-  properties on the right: internal name, category, difficulty, tags,
+  properties on the right: internal name, category, difficulty, concepts,
   whether the choices are shuffled per student.
 - **Try** — answer your own question and see the correction. Nothing is
   recorded.
 - **Versions** — every published version, with its change note. You can
   view one, restore it into the draft, or mark it deprecated with a reason.
 
-## Tags
+## Concepts
 
-The tags field suggests the vocabulary already in use in the pool, with the
-number of questions wearing each tag and the one-line description of what it
-means. Pick one rather than typing a synonym: two spellings of the same idea
-split the pool in two. A word nobody has used yet is offered as
-**Create "..."**, and you are asked to describe it on the spot — that
-description is what the next teacher reads. Click a tag to write or change
-its description; press Backspace in the empty field to take the last one off.
+The concepts field says what the question exercises, from the platform's
+shared vocabulary: type a few letters and pick one. The concepts this pool
+already uses come first, each with its qualifier when it has one (only
+homonyms do) and its description. Pick one rather than proposing a synonym.
+When nothing matches, **Create "…"** proposes a new concept in your language,
+with an optional qualifier; it reads *proposed* until the administrator
+reviews it. Press Backspace in the empty field to take the last one off.
+
 
 ## Writing the statement
 

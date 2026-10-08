@@ -518,6 +518,7 @@ export type AuditAction =
    * (a class, `http_502`) — never the address.
    */
   | "system.test_mail"
+  // historical: old rows; no trigger since the cut-over to concepts (ADR-081)
   | "tag.describe"
   /** An admin paused, resumed or changed the period of a scheduled task (D10; `payload` the patch). */
   | "task.configure"

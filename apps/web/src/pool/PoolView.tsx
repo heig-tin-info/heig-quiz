@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState, type DragEvent, type KeyboardEvent } from "react";
 
+
 import type {
   CategoryNode,
   PoolDetail,
@@ -74,19 +75,20 @@ import { useLlmAvailability } from "../llmAvailability";
 import { poolKey, poolQuestionStatsKey, poolQuestionsKey } from "../queryKeys";
 import { PoolSettings } from "./PoolSettings";
 import { ReviewTab } from "./ReviewTab";
-import { TagsTab } from "./TagsTab";
+import { ConceptsTab } from "./ConceptsTab";
+import { useFilterVocabulary } from "./useFilterVocabulary";
 
 type PoolTab = (typeof POOL_TABS)[number];
 
-/**
- * The filters once `?tag=` moved from `was` to `tag`: `tag` as the one tag
- * chip; an emptied parameter drops the chip it carried, and only that one.
- */
-const withTag = (filters: QuestionFilters, tag: string, was = ""): QuestionFilters => {
-  if (tag !== "") return { ...filters, tags: [tag] };
-  const carried = was !== "" && filters.tags.length === 1 && filters.tags[0] === was;
-  return carried ? { ...filters, tags: [] } : filters;
+/** The search box with an old `?tag=word` typed into it, as `#word` (quoted when it holds a space). */
+const withTagWord = (q: string, tag: string): string => {
+  if (tag === "") return q;
+  const word = /\s/.test(tag) ? `#"${tag}"` : `#${tag}`;
+  return q.trim() === "" ? word : `${q} ${word}`;
 };
+
+/** `?concept=a,b` → the ids it carries. */
+const idsOf = (param: string): string[] => (param === "" ? [] : param.split(",").filter((id) => id !== ""));
 
 /**
  * The pool screen: the questions across the full
@@ -112,10 +114,15 @@ const withTag = (filters: QuestionFilters, tag: string, was = ""): QuestionFilte
  * The "Settings" tab holds the pool's name, icon, sharing, and the ways out
  * of it (`PoolSettings`): the pools list keeps no menu.
  *
- * The "Tags" tab lists the pool's vocabulary with its usage (`TagsTab`); a
- * tag there opens this list filtered on it through the `tag` query-string
- * parameter. The parameter mirrors the filter while it holds exactly one tag
- * chip, so the link survives a reload and clearing the chip drops it.
+ * The "Concepts" tab lists the concepts the pool's questions use, with their
+ * counts (`ConceptsTab`); a concept there opens this list filtered on it
+ * through the `concept` query-string parameter, which mirrors the ticked
+ * concepts (ids, comma-separated), so the link survives a reload and clearing
+ * the chip drops it. An address of the tags' time still works: `?tab=tags`
+ * is the Concepts tab, and `?tag=word` becomes the typed `#word` of the
+ * search box (ADR-081 third addendum §7) — resolved like any typed word, its
+ * chip saying so when it names no concept — and leaves the address with the
+ * first change of the filters.
  *
  * The ONE primary action is "New question". Importing, exporting and adding
  * to an evaluation are later work packages; nothing else here competes with
@@ -205,7 +212,7 @@ function useListing(
         {
           type: (typeId) => typeLabel(t, typeId),
           category: (catId) => paths.find((p) => p.id === catId)?.label ?? catId,
-          noTag: t("pool.group.noTag"),
+          noConcept: t("pool.group.noConcept"),
           noCategory: t("pool.bulk.root"),
         },
         QUESTION_TYPE_IDS,
@@ -223,32 +230,45 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const qc = useQueryClient();
   // Everything but the category is local to the screen; the category is the
   // sidebar's selection, and "" means "all questions".
-  // `?tag=` seeds the tag chip, and the chip writes it back while it is the
-  // only one. `seenTag` exists for a `?tag=` that changes while this page
-  // stays mounted — an in-app link to `/pools/:id?tag=…` from this very pool
-  // (the router's `SEARCH_PARAM_EVENT`) — where the `useState` seed above
-  // would not run again: the chip follows the new value.
+  // `?concept=` seeds the concept chips, and the chips write it back.
+  // `seenConcept` exists for a `?concept=` that changes while this page
+  // stays mounted — an in-app link to `/pools/:id?concept=…` from this very
+  // pool (the router's `SEARCH_PARAM_EVENT`) — where the `useState` seed
+  // above would not run again: the chips follow the new value.
   // `?q=` is the search box as typed (`searchSyntax.ts`), kept in the
   // address the same way: a reload keeps it, and the assistant opens the
-  // pool already searched (`tag:printf`, ADR-080 P2b).
+  // pool already searched (`#printf`, ADR-080 P2b).
+  const [conceptParam, setConceptParam] = useSearchParam("concept", "");
   const [tagParam, setTagParam] = useSearchParam("tag", "");
   const [qParam, setQParam] = useSearchParam("q", "");
-  const [filters, setFilters] = useState<QuestionFilters>(() => ({ ...withTag(EMPTY_FILTERS, tagParam), q: qParam }));
+  const [filters, setFilters] = useState<QuestionFilters>(() => ({
+    ...EMPTY_FILTERS,
+    concepts: idsOf(conceptParam),
+    q: withTagWord(qParam, tagParam),
+  }));
+  const [seenConcept, setSeenConcept] = useState(conceptParam);
   const [seenTag, setSeenTag] = useState(tagParam);
   const [seenQ, setSeenQ] = useState(qParam);
-  if (seenTag !== tagParam) {
-    setSeenTag(tagParam);
-    setFilters((f) => withTag(f, tagParam, seenTag));
+  if (seenConcept !== conceptParam) {
+    setSeenConcept(conceptParam);
+    setFilters((f) => ({ ...f, concepts: idsOf(conceptParam) }));
   }
   if (seenQ !== qParam) {
     setSeenQ(qParam);
     setFilters((f) => ({ ...f, q: qParam }));
   }
+  if (seenTag !== tagParam) {
+    setSeenTag(tagParam);
+    setFilters((f) => ({ ...f, q: withTagWord(f.q, tagParam) }));
+  }
   const applyFilters = (next: QuestionFilters) => {
     setFilters(next);
-    setTagParam(next.tags.length === 1 ? next.tags[0]! : "");
+    setConceptParam(next.concepts.join(","));
     setQParam(next.q);
+    // The search box now carries the old tag as `#word`.
+    setTagParam("");
   };
+  const { vocabulary, waiting } = useFilterVocabulary(filters.q);
   const [categoryParam, setCategory] = useSearchParam("category", "");
   // The "LLM review" tab (ADR-060), offered while the platform has a model.
   const [tabParam, setTab] = useSearchParam("tab", "questions");
@@ -256,8 +276,10 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const poolsRoot = useRootCrumb("pools");
   const reviewTab = llm.data?.available === true;
   const tab: PoolTab =
-    tabParam === "tags" || tabParam === "settings"
-      ? tabParam
+    tabParam === "concepts" || tabParam === "tags"
+      ? "concepts"
+      : tabParam === "settings"
+        ? "settings"
       : tabParam === "review" && reviewTab
         ? "review"
         : "questions";
@@ -273,6 +295,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
     queryFn: () => api(`/app/api/pools/${id}`),
   });
   const mayWrite = pool.data?.role !== "reader";
+  const poolConceptIds = useMemo(() => (pool.data?.concepts ?? []).map((c) => c.concept.id), [pool.data]);
 
   // What this screen adds to the command palette while it is open
   // (docs/spec/08 §8.3): one entry per question type, so an expert never
@@ -293,11 +316,12 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   );
 
   const search = useMemo<QuestionFilters>(() => ({ ...filters, categoryId }), [filters, categoryId]);
-  const query = questionQuery(search);
+  const query = questionQuery(search, vocabulary);
   const questions = useInfiniteQuery<QuestionPage>({
     queryKey: poolQuestionsKey(id, query),
     queryFn: ({ pageParam }) =>
-      api(`/app/api/pools/${id}/questions${questionQuery(search, pageParam as string | null)}`),
+      api(`/app/api/pools/${id}/questions${questionQuery(search, vocabulary, pageParam as string | null)}`),
+    enabled: !waiting,
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
   });
@@ -339,13 +363,13 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
    * order a reader expects of it: a name ascends, a date starts at the newest.
    */
   /**
-   * A tag of the Tags tab: the whole pool's questions that wear it — its
+   * A concept of the Concepts tab: the whole pool's questions under it — its
    * counts are the pool's, so the category and every other filter go; the
    * sort stays, as it does when the filters are cleared.
    */
-  const openTag = (tag: string) => {
+  const openConcept = (conceptId: string) => {
     setChecked(new Set());
-    applyFilters({ ...filters, ...NO_FILTERS, q: "", tags: [tag] });
+    applyFilters({ ...filters, ...NO_FILTERS, q: "", concepts: [conceptId] });
     setCategory("");
     setTab("questions");
   };
@@ -480,7 +504,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
         idPrefix="pool"
         items={[
           { value: "questions", label: t("pool.tab.questions"), icon: ListChecks },
-          { value: "tags", label: t("pool.tab.tags"), icon: Tags },
+          { value: "concepts", label: t("pool.tab.concepts"), icon: Tags },
           ...(reviewTab
             ? [{ value: "review" as const, label: t("review.title"), icon: ScanSearch }]
             : []),
@@ -496,9 +520,9 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
         <TabPanel idPrefix="pool" value="review">
           <ReviewTab poolId={id} role={detail.role} navigate={navigate} />
         </TabPanel>
-      ) : tab === "tags" ? (
-        <TabPanel idPrefix="pool" value="tags">
-          <TagsTab poolId={id} onOpenTag={openTag} />
+      ) : tab === "concepts" ? (
+        <TabPanel idPrefix="pool" value="concepts">
+          <ConceptsTab concepts={detail.concepts} onOpenConcept={openConcept} />
         </TabPanel>
       ) : (
       /* Escape closes the pane from anywhere in the list or the pane. */
@@ -519,7 +543,8 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                   setChecked(new Set());
                   applyFilters(next);
                 }}
-                tags={detail.tags}
+                concepts={detail.concepts.map((c) => c.concept)}
+                vocabulary={vocabulary}
                 stats={questionStats}
                 total={total}
                 view={view}
@@ -544,7 +569,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                 }
               />
 
-              {questions.isLoading || (gathering && rows.length === 0 && !questions.isError) ? (
+              {questions.isLoading || waiting || (gathering && rows.length === 0 && !questions.isError) ? (
                 <PoolListSkeleton view={view} />
               ) : questions.isError ? (
                 <QueryError
@@ -642,6 +667,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
           ids={checkedIds}
           rows={rows}
           categories={detail.categories}
+          poolConceptIds={poolConceptIds}
           onStar={setStars}
           onClear={() => setChecked(new Set())}
         />

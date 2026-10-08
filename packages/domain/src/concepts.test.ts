@@ -5,6 +5,7 @@ import {
   closeConcepts,
   conceptKey,
   editDistance,
+  filterIds,
   groupNewConcepts,
   groupTagsByConceptKey,
   qualifiedConceptKey,
@@ -264,6 +265,18 @@ describe("resolveConceptLabel", () => {
     concept("ovf", [["dépassement"]], ["overflow"]),
     concept("old", [["pointeurs bruts"]], [], "ptr"),
   ];
+
+  it("filters on what a word designates only: the resolved concept, every homonym, never a close match", () => {
+    const ids = (input: string) => filterIds(resolveConceptLabel(input, vocabulary));
+    expect(ids("Pointer")).toEqual(["ptr"]);
+    expect(ids("old")).toEqual(["ptr"]);
+    expect(ids("adresse (postale)")).toEqual(["post"]);
+    expect(ids("adresse").sort()).toEqual(["mem", "post"]);
+    // A typo has close candidates, which a filter never uses.
+    expect(resolveConceptLabel("pointuer", vocabulary)).toMatchObject({ kind: "unknown", candidates: ["ptr"] });
+    expect(ids("pointuer")).toEqual([]);
+    expect(ids("récursivité")).toEqual([]);
+  });
 
   it("resolves a concept's id, and a merged one's to its final concept", () => {
     expect(resolveConceptLabel("ptr", vocabulary)).toEqual({

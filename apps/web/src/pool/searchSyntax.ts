@@ -3,13 +3,19 @@
  *
  * A teacher who lives in this screen types faster than they click, and the
  * filter sheet is four lists behind a button. So the field itself accepts the
- * filters as tokens — `tag:pointeurs type:code difficulty:>3 version:>1` — and
+ * filters as tokens — `#pointeurs type:code difficulty:>3 version:>1` — and
  * whatever is left over is the free text the API searches with `q`.
  *
- * The grammar, in one line: `tag:<name>` (or `tag:#<name>`), `type:<id>`,
+ * The grammar, in one line: `#<concept>` (also `tag:<word>` and
+ * `tag:#<word>`, the spelling of the tags the concepts replaced),
+ * `type:<id>`,
  * `difficulty:<n|>n|>=n|<n|<=n|a-b>`, `version:<v1|n|>n|>=n|<n|<=n|a-b>`,
  * `"a quoted phrase"`, everything else is free text. A token repeated adds to
  * its set; two version bounds intersect.
+ *
+ * A concept token carries a WORD, not a concept: which concepts it names is
+ * the vocabulary's business (`conceptIdsOf`), resolved by `resolveFilters`
+ * once the vocabulary is at hand (ADR-081 third addendum §7).
  *
  * It is pure on purpose: the parser, the caret probe the completion popover
  * reads and the removal a chip performs are all string in, string out, and
@@ -18,12 +24,13 @@
 import { QuestionTypeId } from "@quiz/contracts";
 
 /** The four token kinds. The free text is not one: it is what is left. */
-export type SearchTokenKind = "tag" | "type" | "difficulty" | "version";
+export type SearchTokenKind = "concept" | "type" | "difficulty" | "version";
 
 export interface ParsedSearch {
   /** The free text, tokens taken out and quotes stripped. */
   q: string;
-  tags: string[];
+  /** The concept words, as typed (`#pointeurs` → `pointeurs`), each once whatever its case. */
+  conceptWords: string[];
   types: string[];
   /** `difficulty:>3` arrives here expanded, as the API takes a list. */
   difficulties: number[];
@@ -45,7 +52,7 @@ interface Piece {
 }
 
 /**
- * Splits on whitespace, except inside double quotes: `tag:"deux mots"` and
+ * Splits on whitespace, except inside double quotes: `#"deux mots"` and
  * `"une phrase"` are each one piece, quotes included (the value strips them).
  */
 function pieces(input: string): Piece[] {
@@ -77,16 +84,23 @@ function unquote(value: string): string {
   return value.replace(/"/g, "");
 }
 
-/** `tag:#foo` → `{ kind: "tag", value: "foo" }`; `null` for free text. */
+/** `#foo`, `tag:foo`, `tag:#foo` → `{ kind: "concept", value: "foo" }`; `null` for free text. */
 function tokenOf(text: string): { kind: SearchTokenKind; value: string } | null {
+  if (text.startsWith("#")) {
+    const value = unquote(text.slice(1)).trim();
+    return value === "" ? null : { kind: "concept", value };
+  }
   const match = /^(tag|type|difficulty|version):(.*)$/i.exec(text);
   if (!match) return null;
-  const kind = match[1]!.toLowerCase() as SearchTokenKind;
+  const name = match[1]!.toLowerCase();
+  const kind = (name === "tag" ? "concept" : name) as SearchTokenKind;
   const raw = unquote(match[2]!).trim();
   if (raw === "") return null;
-  const value = kind === "tag" ? raw.replace(/^#/, "") : raw;
+  const value = kind === "concept" ? raw.replace(/^#/, "").trim() : raw;
   return value === "" ? null : { kind, value };
 }
+
+const sameWord = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 /** A bound expression: `3`, `>3`, `>=2`, `<3`, `<=4`, `2-4`. */
 function range(value: string, floor: number, ceiling: number): { min: number; max: number } | null {
@@ -145,7 +159,7 @@ export function versionBounds(value: string): { min: number | null; max: number 
 
 /** The whole field, as data. Unknown `type:` ids and broken bounds are text. */
 export function parseSearch(input: string): ParsedSearch {
-  const tags: string[] = [];
+  const conceptWords: string[] = [];
   const types: string[] = [];
   const difficulties: number[] = [];
   let versionMin: number | null = null;
@@ -159,9 +173,8 @@ export function parseSearch(input: string): ParsedSearch {
       if (text !== "") free.push(text);
       continue;
     }
-    if (token.kind === "tag") {
-      const tag = token.value.toLowerCase();
-      if (!tags.includes(tag)) tags.push(tag);
+    if (token.kind === "concept") {
+      if (!conceptWords.some((w) => sameWord(w, token.value))) conceptWords.push(token.value);
       continue;
     }
     if (token.kind === "type") {
@@ -190,7 +203,7 @@ export function parseSearch(input: string): ParsedSearch {
 
   return {
     q: free.join(" "),
-    tags,
+    conceptWords,
     types,
     difficulties: [...difficulties].sort((a, b) => a - b),
     versionMin,
@@ -211,8 +224,8 @@ export function withoutToken(input: string, kind: SearchTokenKind, value?: strin
     if (!token || token.kind !== kind) return true;
     if (value === undefined) return false;
     switch (kind) {
-      case "tag":
-        return token.value.toLowerCase() !== value.toLowerCase();
+      case "concept":
+        return !sameWord(token.value, value);
       case "type":
         return token.value.toLowerCase() !== value.toLowerCase();
       case "difficulty":
@@ -227,26 +240,29 @@ export function withoutToken(input: string, kind: SearchTokenKind, value?: strin
 // --- The completion popover ------------------------------------------------
 
 export interface Completion {
-  kind: "tag" | "type";
+  kind: "concept" | "type";
   /** What follows the colon, for the fuzzy filter of the list. */
   prefix: string;
   /** The span of the value in the input, which a pick replaces. */
   start: number;
   end: number;
-  /** The token was written `tag:#…`, so the inserted value keeps the `#`. */
-  hash: boolean;
 }
 
 /**
- * What the caret sits in, or `null`. Only `tag:` and `type:` have a list to
+ * What the caret sits in, or `null`. Only a concept (`#`, `tag:`) and
+ * `type:` have a list to
  * offer; `difficulty:` and `version:` are five values and an operator, and a
  * popover for those would be more keystrokes than typing them.
  */
 export function completionAt(input: string, caret: number): Completion | null {
   const before = input.slice(0, Math.max(caret, 0));
-  const match = /(?:^|\s)(tag|type):(#?)([^\s"]*)$/i.exec(before);
-  if (!match) return null;
-  const kind = match[1]!.toLowerCase() as "tag" | "type";
+  const match = /(?:^|\s)(?:(tag|type):)?(#?)([^\s"]*)$/i.exec(before);
+  // A bare word is free text: only a prefix or a `#` opens the list.
+  if (!match || (match[1] === undefined && match[2] === "")) return null;
+  const name = match[1]?.toLowerCase();
+  const kind = name === "type" ? "type" : "concept";
+  // `type:#…` is not a type.
+  if (kind === "type" && match[2] === "#") return null;
   const prefix = match[3]!;
   // The value runs to the end of the word, so a pick made mid-token replaces
   // the whole of it rather than leaving its tail behind.
@@ -256,7 +272,6 @@ export function completionAt(input: string, caret: number): Completion | null {
     prefix,
     start: before.length - prefix.length,
     end: caret + rest.length,
-    hash: match[2] === "#",
   };
 }
 
@@ -267,8 +282,9 @@ export function applyCompletion(
   value: string,
 ): { text: string; caret: number } {
   // `at.start` already sits after the `#` when there is one, so the hash the
-  // teacher typed is kept by not touching it.
-  const inserted = value;
+  // teacher typed is kept by not touching it. A name of several words is
+  // quoted, or its second word would be free text.
+  const inserted = /\s/.test(value) ? `"${value}"` : value;
   const tail = input.slice(at.end);
   const text = `${input.slice(0, at.start)}${inserted}${tail.startsWith(" ") ? "" : " "}${tail}`;
   return { text, caret: at.start + inserted.length + 1 };

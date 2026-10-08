@@ -38,7 +38,8 @@ describe("ParametersDraft — the variables table of ADR-056", () => {
     expect(DraftPut.parse({ config: {} }).variables).toBeUndefined();
     expect(DraftPut.parse({ config: {}, variables: null }).variables).toBeNull();
     expect(DraftPut.parse({ config: {}, variables: table([{ name: "x", expr: "1" }]) }).variables?.rows).toHaveLength(1);
-    // `randomizable` is derived at publication (ADR-056 §1): an unknown key is dropped.
-    expect(QuestionPatch.parse({ randomizable: true, difficulty: 2 })).toEqual({ difficulty: 2 });
+    // `randomizable` is derived at publication (ADR-056 §1): the patch is strict, so it is refused.
+    expect(QuestionPatch.safeParse({ randomizable: true, difficulty: 2 }).success).toBe(false);
+    expect(QuestionPatch.parse({ difficulty: 2 })).toEqual({ difficulty: 2 });
   });
 });

@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { DrillProgress, DrillStudentActivity, DrillTagMastery } from "@quiz/contracts";
+import type { DrillProgress, DrillStudentActivity, DrillConceptMastery } from "@quiz/contracts";
 
 import { makeClassroomDetail } from "../test/fixtures";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
@@ -13,7 +13,7 @@ import { ClassroomDrill } from "./ClassroomDrill";
  * the empty states (drill off; on with nothing yet), the table of students
  * — sortable, the opt-out as a badge with its date, the recall rate with
  * its trend — the per-student progression in a sheet, and the mastery per
- * tag.
+ * concept.
  */
 
 afterEach(() => {
@@ -69,9 +69,14 @@ const WEEKS: DrillProgress = {
   ],
 };
 
-const MASTERY: DrillTagMastery[] = [
-  { tag: "pointeurs", cards: 40, students: 12, retrievability: 0.58 },
-  { tag: null, cards: 5, students: 3, retrievability: 0.8 },
+const MASTERY: DrillConceptMastery[] = [
+  {
+    concept: { id: "00000000-0000-4000-8000-0000000000a1", label: "Adresse", qualifier: "mémoire", status: "validated" },
+    cards: 40,
+    students: 12,
+    retrievability: 0.58,
+  },
+  { concept: null, cards: 5, students: 3, retrievability: 0.8 },
 ];
 
 const base = "/app/api/classrooms/r1/drill";
@@ -129,13 +134,13 @@ describe("the classroom's Drill tab", () => {
     expect(names()).toEqual(["Bernard Ada", "Alder Ada", "Cattaneo Ada"]);
   });
 
-  it("shows the mastery per tag, weakest first, the untagged questions named as such", async () => {
+  it("shows the mastery per concept, weakest first, the questions without one named as such", async () => {
     mockFetch({ [`GET ${base}/activity`]: ok(ROWS), [`GET ${base}/mastery`]: ok(MASTERY) });
     renderWithProviders(<ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} onSettings={vi.fn()} />);
-    expect(await screen.findByRole("heading", { name: "Mastery per tag" })).toBeVisible();
-    expect(screen.getByText("pointeurs")).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Mastery per concept" })).toBeVisible();
+    expect(screen.getByText("Adresse (mémoire)")).toBeVisible();
     expect(screen.getByText("58%")).toBeVisible();
-    expect(screen.getByText("Without a tag")).toBeVisible();
+    expect(screen.getByText("Without a concept")).toBeVisible();
     expect(screen.getByText("40 cards · 12 students")).toBeVisible();
   });
 
@@ -180,6 +185,6 @@ describe("the classroom's Drill tab", () => {
     const sheet = await screen.findByRole("dialog", { name: "Ada Cattaneo" });
     expect(await within(sheet).findByText("No review over this period.")).toBeVisible();
     // No mastery yet: no section for it.
-    expect(screen.queryByRole("heading", { name: "Mastery per tag" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Mastery per concept" })).toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 /**
  * The composition of a drill session (F-DRILL-03, ADR-041 §6): the cards
  * due first, the most nearly forgotten ahead, then new cards up to the
- * day's cap, until the time budget is spent; courses and tags interleaved
+ * day's cap, until the time budget is spent; courses and concepts interleaved
  * rather than in blocks.
  */
 import { SCHOOL_TIME_ZONE, zoneOffset } from "./zone.js";
@@ -52,7 +52,7 @@ export interface DrillCandidate {
   retrievability: number;
   /** The expected time of one review on this device class, from `drillReferenceMs`; null counts `DRILL_UNKNOWN_REFERENCE_MS`. */
   referenceMs: number | null;
-  /** What is interleaved: a course, a tag, or both joined — the caller's choice. */
+  /** What is interleaved: a course, a concept, or both joined — the caller's choice. */
   group: string;
 }
 
