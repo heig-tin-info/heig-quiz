@@ -4235,7 +4235,7 @@ serves now (16a), and what waits for the group repositories (16b).
   seccomp convergence (keep `ptrace`); `deployment.md` §3.
 - **Acceptance**: grading stays within `RUNNER_TIMEOUT_MS` with N sessions
   live; one restore performed; gdb breaks and steps; `unshare -r` fails.
-- **As delivered (part 1: seccomp)** (branch `merge/M6-05-seccomp`; the
+- **As delivered (part 1: seccomp)** (branch `merge/M6-05-seccomp`, #602; the
   rest of the card — resize, slices, host nft, Caddy log mask, backups,
   `deployment.md` §3 — is still to do).
   - `apps/codespace/infra/seccomp/codespace.json` is now
