@@ -7,7 +7,7 @@
  * (decision D1).
  */
 import type { z } from "zod";
-import type { AnswerGenerator } from "./generate.js";
+import type { AnswerGenerator, AssistTextLabel } from "./generate.js";
 import type { LlmGradeRequest } from "./llm.js";
 import type { RunnerOutcome, RunnerRequest, RunnerService } from "./runner.js";
 
@@ -542,14 +542,15 @@ export interface QuestionTypeServer<
 }
 
 /**
- * The free-text fields of a type's config, as dotted paths where `*` is any
- * index of a list (`choices.*.text`), and the one list new items may be
- * appended to, each made of `item` with its `field` written (`choices`, an
- * item `{ correct: false }` and its `text`): ADR-059's fill-and-append, never
- * a key — an appended item takes the item's settings, never a tick.
+ * The free-text fields of a type's config, each a dotted path where `*` is
+ * any index of a list (`choices.*.text`) with the label the editor names it
+ * by, and the one list new items may be appended to, each made of `item`
+ * with its `field` written (`choices`, an item `{ correct: false }` and its
+ * `text`, which must be one of `fields`): ADR-059's fill-and-append, never a
+ * key — an appended item takes the item's settings, never a tick.
  */
 export interface AssistTextSpec {
-  readonly fields: readonly string[];
+  readonly fields: readonly { readonly path: string; readonly label: AssistTextLabel }[];
   readonly append?: {
     readonly list: string;
     readonly field: string;

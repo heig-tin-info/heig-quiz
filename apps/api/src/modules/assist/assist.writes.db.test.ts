@@ -12,7 +12,7 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { AssistReply, AssistWriteDone } from "@quiz/contracts";
-import { ASSIST_PENDING_TTL_MS } from "@quiz/domain";
+import { ASSIST_PENDING_TTL_MS, ASSIST_WRITE_TOOLS } from "@quiz/domain";
 
 import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { ASSIST_AUDIENCE } from "../../auth/tokens.js";
@@ -21,6 +21,7 @@ import { apiTokens, auditLog, categories, questions } from "../../db/schema.js";
 import { testServer, type Payload, type TestServer } from "../../test/http.js";
 import type { ConverseReply, ConverseRequest, LlmProvider, Metered } from "../llm/provider.js";
 import { LlmGateway } from "../llm/service.js";
+import { TOOLS } from "../mcp/tools.js";
 
 const SECRET = "test-llm-master-key-0123456789abcdef";
 const KEY = "sk-ant-api03-test-key-0123456789-WXYZ";
@@ -92,6 +93,18 @@ async function question(name: string, publish: boolean): Promise<string> {
   expect((await call(teacher, "PUT", `/app/api/questions/${id}/draft`, { config: MCQ("2 + 2 ?"), explanation: "" })).statusCode).toBe(200);
   if (publish) expect((await call(teacher, "POST", `/app/api/questions/${id}/publish`, {})).statusCode).toBe(201);
   return id;
+}
+
+/** The route's own audit entry of a confirmed write: the assistant, the teacher as actor, the tool named. */
+async function expectAudited(action: string, subjectId: string, tool: string) {
+  const rows = await server.app.db
+    .select()
+    .from(auditLog)
+    .where(and(eq(auditLog.action, action), eq(auditLog.subjectId, subjectId)));
+  expect(rows.length).toBeGreaterThan(0);
+  const last = rows.at(-1)!;
+  expect(last).toMatchObject({ actorType: "assistant", actorUserId: teacher.id });
+  expect(last.payload).toMatchObject({ assistTool: tool });
 }
 
 /** The single pending write of a reply. */
@@ -233,6 +246,7 @@ describe("the writes it may prepare (decision 4)", () => {
     const detail = (await call(teacher, "GET", `/app/api/questions/${id}`)).json() as { latestPublished: unknown; meta: { internalName: string } };
     expect(detail.meta.internalName).toBe("assist-q");
     expect(detail.latestPublished).toBeNull();
+    await expectAudited("question.create", id, "create_question");
   });
 
   it("refuses an invalid question config before anything is prepared", async () => {
@@ -261,9 +275,10 @@ describe("the writes it may prepare (decision 4)", () => {
     ]);
     const done = AssistWriteDone.parse((await confirmAs(teacher, pendingOf(reply).id, reply.conversationId)).json());
     expect(done.path).toMatch(/^\/templates\/[0-9a-f-]{36}$/);
+    await expectAudited("template.create", done.path.split("/").at(-1)!, "create_template");
   });
 
-  it("names, on a link's card, the whole staff who gain access", async () => {
+  it("names, on a link's card, the whole staff who gain access; confirmed, it is audited as the assistant", async () => {
     const other = await call(teacher, "POST", "/app/api/pools", { name: "Autre" });
     const otherId = (other.json() as { id: string }).id;
     script = calling(["link_pool_to_course", { courseId, poolId: otherId }]);
@@ -275,10 +290,31 @@ describe("the writes it may prepare (decision 4)", () => {
     ]);
     expect(lines[2]).toMatchObject({ field: "access" });
     expect(lines[2]!.values).toHaveLength(1);
+    const done = AssistWriteDone.parse((await confirmAs(teacher, pendingOf(reply).id, reply.conversationId)).json());
+    expect(done.path).toBe(`/courses/${courseId}/pools`);
+    await expectAudited("course.pools_update", courseId, "link_pool_to_course");
+  });
+
+  it("adds published questions to a template on Confirm, audited as the assistant", async () => {
+    const created = await call(teacher, "POST", `/app/api/courses/${courseId}/templates`, { title: "Vide", mode: "exercise", preset: "exercise" });
+    expect(created.statusCode).toBe(201);
+    const templateId = (created.json() as { id: string }).id;
+    script = calling(["add_questions_to_template", { templateId, questionIds: [publishedId] }]);
+    const reply = AssistReply.parse((await ask(teacher, "Ajoute la question")).json());
+    expect(pendingOf(reply).lines).toEqual([
+      { field: "template", values: ["Vide"] },
+      { field: "questions", values: ["publiee"] },
+    ]);
+    const done = AssistWriteDone.parse((await confirmAs(teacher, pendingOf(reply).id, reply.conversationId)).json());
+    expect(done.path).toBe(`/templates/${templateId}`);
+    await expectAudited("template.update", templateId, "add_questions_to_template");
   });
 
   it("never reaches an excluded write, whatever the model names", async () => {
+    // The ONE list of decision 4's exclusions: every MCP write but the five the assistant prepares.
     const excluded = ["update_question", "update_evaluation", "add_questions_to_evaluation", "create_evaluation", "instantiate_template", "create_pool", "create_classroom", "create_poll", "create_course"];
+    const writes = TOOLS.filter((t) => t.annotations.readOnlyHint !== true).map((t) => t.name);
+    expect(writes.filter((w) => !(ASSIST_WRITE_TOOLS as readonly string[]).includes(w)).sort()).toEqual([...excluded].sort());
     script = calling(...excluded.map((name): [string, unknown] => [name, {}]));
     const reply = AssistReply.parse((await ask(teacher, "Fais tout")).json());
     expect(reply.actions).toEqual([]);

@@ -13,10 +13,10 @@
  * of a cloze (its key), an `asset:` reference — is kept verbatim: the same
  * tokens, as many times, or the proposal is refused.
  */
-import type { AssistTextSpec } from "@quiz/core/server";
+import { sameItemText, type AssistTextLabel, type AssistTextSpec } from "@quiz/core/server";
 
 /** The statement only: what a type that declares no `assistText` lends the assistant. */
-export const DEFAULT_ASSIST_TEXT: AssistTextSpec = { fields: ["prompt"] };
+export const DEFAULT_ASSIST_TEXT: AssistTextSpec = { fields: [{ path: "prompt", label: "statement" }] };
 
 /** The longest text the assistant may write in one field (the types' own statement limit). */
 export const ASSIST_MAX_FIELD_CHARS = 20_000;
@@ -31,9 +31,18 @@ export interface AssistDraftTexts {
   explanation: string;
 }
 
-/** One field of the diff the panel shows: `before` null for an appended item. */
-export interface AssistFieldChange {
+/** How the diff names a field: the type's label, or the explanation beside the config. */
+export type AssistFieldLabel = AssistTextLabel | typeof EXPLANATION_FIELD;
+
+/** A free-text field of the draft: its concrete path, its label and, in a list, its 1-based number. */
+export interface AssistTextField {
   path: string;
+  label: AssistFieldLabel;
+  n: number | null;
+}
+
+/** One field of the diff the panel shows: `before` null for an appended item. */
+export interface AssistFieldChange extends AssistTextField {
   before: string | null;
   after: string;
 }
@@ -66,17 +75,21 @@ export function preservedTokens(text: string): string[] {
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
-/** The concrete paths a pattern names in `config` (`choices.*.text` → `choices.0.text`, …), with their values. */
-function expand(config: unknown, pattern: string): { path: string; value: unknown }[] {
-  let found: { path: string[]; value: unknown }[] = [{ path: [], value: config }];
+/**
+ * The concrete paths a pattern names in `config` (`choices.*.text` →
+ * `choices.0.text`, …), with their values and the 1-based index of the
+ * pattern's `*`, if it has one.
+ */
+function expand(config: unknown, pattern: string): { path: string; value: unknown; n: number | null }[] {
+  let found: { path: string[]; value: unknown; n: number | null }[] = [{ path: [], value: config, n: null }];
   for (const part of pattern.split(".")) {
-    found = found.flatMap(({ path, value }) => {
-      if (part === "*") return Array.isArray(value) ? value.map((v, i) => ({ path: [...path, String(i)], value: v })) : [];
+    found = found.flatMap(({ path, value, n }) => {
+      if (part === "*") return Array.isArray(value) ? value.map((v, i) => ({ path: [...path, String(i)], value: v, n: i + 1 })) : [];
       if (Array.isArray(value)) return [];
-      return isRecord(value) && part in value ? [{ path: [...path, part], value: value[part] }] : [];
+      return isRecord(value) && part in value ? [{ path: [...path, part], value: value[part], n }] : [];
     });
   }
-  return found.map(({ path, value }) => ({ path: path.join("."), value }));
+  return found.map(({ path, value, n }) => ({ path: path.join("."), value, n }));
 }
 
 /**
@@ -84,9 +97,9 @@ function expand(config: unknown, pattern: string): { path: string; value: unknow
  * and its current text: what the prompt shows the model of the open draft,
  * and the only paths a proposal may write.
  */
-export function assistTextFields(config: unknown, spec: AssistTextSpec): { path: string; text: string }[] {
-  return spec.fields.flatMap((pattern) =>
-    expand(config, pattern).flatMap(({ path, value }) => (typeof value === "string" ? [{ path, text: value }] : [])),
+export function assistTextFields(config: unknown, spec: AssistTextSpec): (AssistTextField & { text: string })[] {
+  return spec.fields.flatMap(({ path: pattern, label }) =>
+    expand(config, pattern).flatMap(({ path, value, n }) => (typeof value === "string" ? [{ path, label, n, text: value }] : [])),
   );
 }
 
@@ -131,7 +144,7 @@ export function proposeQuestionEdit(
   input: AssistEditInput,
 ): AssistEditQuestion {
   const fields = assistTextFields(base.config, spec);
-  const byPath = new Map(fields.map((f) => [f.path, f.text]));
+  const byPath = new Map(fields.map((f) => [f.path, f]));
   const config = clone(base.config);
   const changes: AssistFieldChange[] = [];
   const edits = input.edits ?? [];
@@ -140,41 +153,42 @@ export function proposeQuestionEdit(
   const seen = new Set<string>();
   for (const edit of edits) {
     const path = typeof edit?.path === "string" ? edit.path : "";
-    const before = byPath.get(path);
-    if (before === undefined) {
+    const field = byPath.get(path);
+    if (field === undefined) {
       throw new Error(
         `\`${path}\` is not a text you may rewrite. The texts are: ${[...byPath.keys()].join(", ") || "(none)"}, and the explanation.`,
       );
     }
     if (seen.has(path)) throw new Error(`\`${path}\` is edited twice.`);
     seen.add(path);
-    const after = checkText(path, before, edit.text);
-    if (after === before) continue;
+    const after = checkText(path, field.text, edit.text);
+    if (after === field.text) continue;
     writeAt(config, path, after);
-    changes.push({ path, before, after });
+    changes.push({ path, label: field.label, n: field.n, before: field.text, after });
   }
 
   if (input.add && input.add.length > 0) {
     const append = spec.append;
     if (!append) throw new Error("This question type takes no new items; rewrite its texts only.");
+    const itemLabel = spec.fields.find((f) => f.path === `${append.list}.*.${append.field}`)?.label ?? "statement";
     const list = expand(config, append.list)[0]?.value;
     if (!Array.isArray(list)) throw new Error(`The draft has no \`${append.list}\` list.`);
     const textOf = (item: unknown) => (isRecord(item) && typeof item[append.field] === "string" ? (item[append.field] as string) : "");
-    const held = new Set(list.map((item) => textOf(item).trim()).filter((t) => t !== ""));
+    const held = new Set(list.map((item) => sameItemText(textOf(item))).filter((t) => t !== ""));
     for (const raw of input.add) {
       const text = checkText(`${append.list}[new]`, "", raw).trim();
-      if (held.has(text)) throw new Error(`"${text}" is already in \`${append.list}\`.`);
-      held.add(text);
+      if (held.has(sameItemText(text))) throw new Error(`"${text}" is already in \`${append.list}\`.`);
+      held.add(sameItemText(text));
       const empty = list.findIndex((item) => isRecord(item) && textOf(item).trim() === "");
       if (empty >= 0) {
         const path = `${append.list}.${empty}.${append.field}`;
         (list[empty] as Record<string, unknown>)[append.field] = text;
-        changes.push({ path, before: null, after: text });
+        changes.push({ path, label: itemLabel, n: empty + 1, before: null, after: text });
         continue;
       }
       if (list.length >= append.max) throw new Error(`\`${append.list}\` holds at most ${append.max} items.`);
       list.push({ ...clone(append.item), [append.field]: text });
-      changes.push({ path: `${append.list}.${list.length - 1}.${append.field}`, before: null, after: text });
+      changes.push({ path: `${append.list}.${list.length - 1}.${append.field}`, label: itemLabel, n: list.length, before: null, after: text });
     }
   }
 
@@ -182,7 +196,8 @@ export function proposeQuestionEdit(
   if (input.explanation !== undefined) {
     const after = checkText(EXPLANATION_FIELD, base.explanation, input.explanation);
     if (after !== base.explanation) {
-      changes.push({ path: EXPLANATION_FIELD, before: base.explanation === "" ? null : base.explanation, after });
+      const before = base.explanation === "" ? null : base.explanation;
+      changes.push({ path: EXPLANATION_FIELD, label: EXPLANATION_FIELD, n: null, before, after });
       explanation = after;
     }
   }

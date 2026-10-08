@@ -484,7 +484,10 @@ live in `ui/state.ts`, each written once.
   copy of something (a classroom whose Quiz-mode journal holds pages, that
   journal itself: F-ORG-09, F-JRN-04) asks for the classroom's name in the
   same dialog (`useConfirm({ typeToConfirm })`): one field under the
-  message, the `danger` button off until the name matches.
+  message, the `danger` button off until the name matches. `ink` (`fg`
+  fill, surface text): the primary of a neutral tool's own layer — the
+  assistant's Confirm and Apply (ADR-069, ADR-080 P3) — never on the page
+  itself, where `primary` is the one accent.
   Sizes `sm` 28 px, `md` 34 px, `lg` 40 px.
   Pressed to 0.97. The class list is `buttonClass` in `@quiz/ui`, which the
   app's `Button` and `LinkButton` and the question types all wear.
@@ -2209,8 +2212,8 @@ placement over an `offset` and `Z.tool`.
   ("created as a draft", "the course's whole staff becomes contributor")
   and "Nothing is written until you confirm." in `fg-faint`. Its actions
   sit right-aligned at the bottom: **Cancel** `secondary`, then **Confirm**
-  or **Apply to the draft** in the dock's ink (`bg-fg`, never the accent:
-  the screen's primary keeps the one red). Acted on, the buttons give way to
+  or **Apply to the draft**, an `ink` button (never the accent: the
+  screen's primary keeps the one red). Acted on, the buttons give way to
   one 12 px line — muted with a corner arrow ("Done.", "Applied to the
   draft…" with a ghost **Undo**, "Cancelled: nothing was done."), or
   `danger` with an alert icon ("no longer applies", "expired").

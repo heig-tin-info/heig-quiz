@@ -17,6 +17,7 @@ import {
   AssistWriteDecision,
   IdParam,
   type AssistAvailability,
+  type AssistWriteFailed,
   type AssistWriteDone,
 } from "@quiz/contracts";
 import { ASSIST_TURNS_PER_MINUTE } from "@quiz/domain";
@@ -37,7 +38,6 @@ import {
   ConversationNotFound,
   conversationDetail,
   deleteConversation,
-  EditorOffScreen,
   findConversation,
   listConversations,
 } from "./service.js";
@@ -91,7 +91,6 @@ export async function assistPlugin(app: FastifyInstance, opts: { config: AppConf
       const link = (path: string) => `${config.WEB_URL}${path}`;
       return await ask({ db: app.db, gateway: app.llmGateway, corpus, engine, api, link, pending }, user, body.data, now);
     } catch (error) {
-      if (error instanceof EditorOffScreen) return reply.code(400).send({ error: "editor_off_screen" });
       // Missing, somebody else's, or purged while the model answered: the same
       // 404. In the last case the model's requests were made and logged; the
       // panel asks again in a new conversation, so that rare race is charged
@@ -128,7 +127,7 @@ export async function assistPlugin(app: FastifyInstance, opts: { config: AppConf
         injectedApi(app, `Bearer ${token.token}`, config.WEB_URL, { [ASSIST_TOOL_HEADER]: write.tool }),
         write,
       );
-      if (!done.ok) return reply.code(422).send({ error: "write_failed", reason: done.reason });
+      if (!done.ok) return reply.code(422).send({ error: "write_failed", reason: done.reason } satisfies AssistWriteFailed);
       return { path: done.path } satisfies AssistWriteDone;
     } finally {
       await dropAssistToken(app.db, token.id);

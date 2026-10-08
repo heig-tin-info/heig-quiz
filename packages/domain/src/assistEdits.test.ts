@@ -14,10 +14,19 @@ import {
 
 const Q = "11111111-1111-4111-8111-111111111111";
 const MCQ: AssistTextSpec = {
-  fields: ["prompt", "choices.*.text"],
+  fields: [
+    { path: "prompt", label: "statement" },
+    { path: "choices.*.text", label: "choice" },
+  ],
   append: { list: "choices", field: "text", item: { correct: false }, max: 4 },
 };
-const CATEGORIZE: AssistTextSpec = { fields: ["prompt", "columns.*.label", "cards.*.text"] };
+const CATEGORIZE: AssistTextSpec = {
+  fields: [
+    { path: "prompt", label: "statement" },
+    { path: "columns.*.label", label: "column" },
+    { path: "cards.*.text", label: "card" },
+  ],
+};
 
 const mcq = () => ({
   config: {
@@ -37,9 +46,9 @@ const mcq = () => ({
 describe("assistTextFields — the free texts a type lends the assistant (ADR-080 P3)", () => {
   it("expands each declared path over the draft, strings only", () => {
     expect(assistTextFields(mcq().config, MCQ)).toEqual([
-      { path: "prompt", text: "quelle est la valeur de [[x]] ? ![](asset:abc-1)" },
-      { path: "choices.0.text", text: "[[x]]" },
-      { path: "choices.1.text", text: "" },
+      { path: "prompt", label: "statement", n: null, text: "quelle est la valeur de [[x]] ? ![](asset:abc-1)" },
+      { path: "choices.0.text", label: "choice", n: 1, text: "[[x]]" },
+      { path: "choices.1.text", label: "choice", n: 2, text: "" },
     ]);
     expect(assistTextFields({ prompt: 3 }, DEFAULT_ASSIST_TEXT)).toEqual([]);
     expect(assistTextFields(null, MCQ)).toEqual([]);
@@ -55,7 +64,7 @@ describe("proposeQuestionEdit — texts only, everything else the draft's", () =
     });
     expect(edit.kind).toBe("edit_question");
     expect(edit.fields).toEqual([
-      { path: "prompt", before: base.config.prompt, after: "Quelle est la valeur de [[x]] ?\n\n![](asset:abc-1)" },
+      { path: "prompt", label: "statement", n: null, before: base.config.prompt, after: "Quelle est la valeur de [[x]] ?\n\n![](asset:abc-1)" },
     ]);
     const config = edit.config as ReturnType<typeof mcq>["config"];
     expect({ ...config, prompt: base.config.prompt }).toEqual(base.config);
@@ -73,7 +82,7 @@ describe("proposeQuestionEdit — texts only, everything else the draft's", () =
       /choices.0.text/,
     );
     expect(() =>
-      proposeQuestionEdit(Q, { config: { text: "Le {{chat|chien}} dort." }, explanation: "" }, { fields: ["text"] }, {
+      proposeQuestionEdit(Q, { config: { text: "Le {{chat|chien}} dort." }, explanation: "" }, { fields: [{ path: "text", label: "statement" }] }, {
         edits: [{ path: "text", text: "Le {{chien}} dort." }],
       }),
     ).toThrow(/\{\{chat\|chien\}\}/);
@@ -108,10 +117,13 @@ describe("proposeQuestionEdit — texts only, everything else the draft's", () =
       { text: "13", correct: false },
     ]);
     expect(edit.fields).toEqual([
-      { path: "choices.1.text", before: null, after: "12" },
-      { path: "choices.2.text", before: null, after: "13" },
+      { path: "choices.1.text", label: "choice", n: 2, before: null, after: "12" },
+      { path: "choices.2.text", label: "choice", n: 3, before: null, after: "13" },
     ]);
     expect(() => proposeQuestionEdit(Q, mcq(), MCQ, { add: ["12", "12"] })).toThrow(/already in `choices`/);
+    // The wand's rule of "the same choice" (`sameItemText`): case and spaces aside.
+    const held = { ...mcq(), config: { ...mcq().config, choices: [{ text: "Une  Valeur", correct: true }] } };
+    expect(() => proposeQuestionEdit(Q, held, MCQ, { add: [" une valeur "] })).toThrow(/already in `choices`/);
     // A new item brings no expression of its own: the variables are the teacher's.
     expect(() => proposeQuestionEdit(Q, mcq(), MCQ, { add: ["[[x+1]]"] })).toThrow(/must keep exactly these/);
     expect(() => proposeQuestionEdit(Q, mcq(), MCQ, { add: ["1", "2", "3", "4"] })).toThrow("`choices` holds at most 4 items.");
@@ -121,7 +133,7 @@ describe("proposeQuestionEdit — texts only, everything else the draft's", () =
   it("writes the explanation beside the config, and refuses an empty, a twice-edited or a no-op proposal", () => {
     const edit = proposeQuestionEdit(Q, mcq(), MCQ, { explanation: "La valeur est celle tirée." });
     expect(edit.explanation).toBe("La valeur est celle tirée.");
-    expect(edit.fields).toEqual([{ path: "explanation", before: null, after: "La valeur est celle tirée." }]);
+    expect(edit.fields).toEqual([{ path: "explanation", label: "explanation", n: null, before: null, after: "La valeur est celle tirée." }]);
     expect(() => proposeQuestionEdit(Q, mcq(), MCQ, { explanation: "Car [[x]] vaut x." })).toThrow(/explanation/);
     expect(() => proposeQuestionEdit(Q, mcq(), MCQ, { edits: [{ path: "choices.1.text", text: "  " }] })).toThrow(/non-empty/);
     expect(() =>

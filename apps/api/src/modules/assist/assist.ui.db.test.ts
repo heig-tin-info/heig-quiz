@@ -101,15 +101,6 @@ describe("the development stub (ADR-080 P2b)", () => {
     expect(reply.actions).toEqual([]);
   });
 
-  it("prepares a quoted category on a pool through the same write tool as a model's (ADR-080 P3)", async () => {
-    const context = { route: "/pools/:id", helpTopic: "pool", locale: "en", entities: { pool: poolId } };
-    const reply = AssistReply.parse((await ask('Create the category "Pointers"', context)).json());
-    expect(reply.actions).toMatchObject([
-      { kind: "pending_write", tool: "create_category", lines: [{ field: "pool", values: ["Sandbox"] }, { field: "name", values: ["Pointers"] }] },
-    ]);
-    expect(reply.exchange.answer).toContain("Nothing is created until you confirm it.");
-  });
-
   it("refuses a command id that is not the palette's shape, or a write labelled as anything else", async () => {
     const bad = { ...CONTEXT, commands: [{ id: "Question Publish!", label: "x", effect: "none" }] };
     expect((await ask("?", bad)).statusCode).toBe(400);

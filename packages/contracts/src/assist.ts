@@ -11,6 +11,7 @@ import {
   type AssistScreenCommand as DomainAssistScreenCommand,
   type AssistEntityKind,
 } from "@quiz/domain";
+import { ASSIST_TEXT_LABELS } from "@quiz/core/generate";
 
 /** `true` when `A` and `B` are the same shape, `false` otherwise. */
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
@@ -108,7 +109,13 @@ export const AssistAsk = z
     context: AssistContext,
     editor: AssistEditorDraft.optional(),
   })
-  .strict();
+  .strict()
+  // ADR-080 P3, decision 2: the draft rides with a question asked from that very question's editor, never another screen.
+  .superRefine((ask, ctx) => {
+    if (!ask.editor) return;
+    if (ask.context.route === "/questions/:id" && ask.context.entities?.question === ask.editor.questionId) return;
+    ctx.addIssue({ code: "custom", path: ["editor"], message: "editor_off_screen" });
+  });
 export type AssistAsk = z.infer<typeof AssistAsk>;
 
 /** One question and its answer (Markdown), written together once the answer came. */
@@ -143,7 +150,15 @@ export const AssistAction = z.discriminatedUnion("kind", [
     base: z.object({ config: z.unknown(), explanation: z.string() }),
     config: z.unknown(),
     explanation: z.string(),
-    fields: z.array(z.object({ path: z.string(), before: z.string().nullable(), after: z.string() })),
+    fields: z.array(
+      z.object({
+        path: z.string(),
+        label: z.enum([...ASSIST_TEXT_LABELS, "explanation"]),
+        n: z.number().int().min(1).nullable(),
+        before: z.string().nullable(),
+        after: z.string(),
+      }),
+    ),
   }),
   // ADR-080 P3: a write frozen on the server, run only on the teacher's Confirm.
   z.object({
@@ -195,6 +210,17 @@ export type AssistConversation = z.infer<typeof AssistConversation>;
  */
 export const AssistWriteDecision = z.object({ conversationId: z.uuid() }).strict();
 export type AssistWriteDecision = z.infer<typeof AssistWriteDecision>;
+
+/**
+ * Why a confirmed write was not done (`422 write_failed`), a code the browser
+ * words in the UI language: what it concerns is not on the teacher's seats or
+ * is gone, the platform refused it (a role), its frozen arguments no longer
+ * hold, or anything else.
+ */
+export const AssistWriteFailure = z.enum(["not_found", "refused", "invalid", "failed"]);
+export type AssistWriteFailure = z.infer<typeof AssistWriteFailure>;
+export const AssistWriteFailed = z.object({ error: z.literal("write_failed"), reason: AssistWriteFailure });
+export type AssistWriteFailed = z.infer<typeof AssistWriteFailed>;
 
 /** A confirmed write, done: the app's path of what it made or changed, for the card's link. */
 export const AssistWriteDone = z.object({ path: z.string().regex(/^\/[a-z0-9/-]*$/) });

@@ -6,7 +6,9 @@
  * stub's results path (ADR-080 P2) reads the mock gradebook; its "show me
  * the pool …" (P2b) opens one of the mock's pools; in the question editor,
  * "rewrite …" proposes the statement tidied, and on a pool, "create the
- * category «…»" prepares it behind a confirmation card (P3).
+ * category «…»" prepares it behind a confirmation card (P3). The mock has no
+ * server registry: it lends the assistant `DEFAULT_ASSIST_TEXT` (the
+ * statement) for every type.
  */
 import type { AssistAction, AssistContext, AssistConversation, AssistEditorDraft, AssistExchange } from "@quiz/contracts";
 import {

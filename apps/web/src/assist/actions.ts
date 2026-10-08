@@ -75,7 +75,7 @@ export function runConfirmedCommand(id: string): boolean {
 }
 
 /** The actions the panel shows as cards rather than runs (ADR-080 P3). */
-export const isProposal = (action: AssistAction): boolean =>
+export const isProposal = (action: AssistAction): action is Exclude<AssistAction, { kind: "open_screen" | "run_command" }> =>
   action.kind === "confirm_command" || action.kind === "edit_question" || action.kind === "pending_write";
 
 /** Runs `actions` in order and says what each did; the proposals are left to their cards. */
@@ -87,7 +87,7 @@ export async function runAssistActions(
 ): Promise<ActionOutcome[]> {
   const outcomes: ActionOutcome[] = [];
   for (const action of actions) {
-    if (action.kind !== "open_screen" && action.kind !== "run_command") continue;
+    if (isProposal(action)) continue;
     if (action.kind === "run_command") {
       const command = screenCommands().find((c) => c.id === action.id);
       if (!command || command.effect !== "none") outcomes.push({ ok: false, text: t("assist.runFailed") });

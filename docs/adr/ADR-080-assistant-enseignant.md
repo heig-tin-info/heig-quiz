@@ -471,12 +471,14 @@ F-LLM-07 (docs/spec/02).
    type's other free-text fields as the type declares them
    (`QuestionTypeServer.assistText`, `@quiz/core`: `mcq` its choices,
    `categorize` its columns' labels and cards' texts, `cloze` its text; any
-   other type its `prompt`). Never an id, a setting, the key (an mcq tick),
+   other type its `prompt`), each with the label the diff names it by
+   (`ASSIST_TEXT_LABELS`: statement, choice, column, card). Never an id, a setting, the key (an mcq tick),
    the scoring, the variables, a `[[…]]` expression, a cloze's `{{…}}`
    blank nor an `asset:` reference: a rewrite keeps every such token
    verbatim and as many times, or it is refused. "Add N choices" uses
    ADR-059's fill-and-append — the empty rows first, then appended, never a
-   text already there, never past the type's maximum — and an added choice
+   text already there (the wand's own rule of "the same item",
+   `sameItemText` of `@quiz/core`), never past the type's maximum — and an added choice
    is UNTICKED (`append.item`): the key stays the teacher's. *This amends
    ADR-059 §1–2 for the assistant only: the wand keeps its own rules (it
    writes only what is empty, and may propose a key).*
@@ -488,8 +490,8 @@ F-LLM-07 (docs/spec/02).
    tab) is dropped and says so. Before a question asked from the editor,
    the client FLUSHES the autosave, and sends the draft's config and
    explanation with the question (`AssistAsk.editor`) — on the editor
-   screen only: the server refuses it with `400 editor_off_screen` on any
-   other screen or for another question. *This amends §2: from the
+   screen only: the contract (`AssistAsk`) refuses it, `editor_off_screen`,
+   on any other screen or for another question. *This amends §2: from the
    question editor, the context carries the teacher's own text, never
    stored; the prompt shows the model the draft's free texts only, by path,
    not its key nor its settings.*
@@ -548,7 +550,9 @@ F-LLM-07 (docs/spec/02).
    of the result for the card's link. A write that is not this teacher's
    and this conversation's, already spent, cancelled or expired is one
    answer, `404 write_not_found`; a refusal of the route is `422
-   write_failed` with a reason code (`not_found`, `refused`, `invalid`, `failed`) the browser words in the UI language. **Cancel**
+   write_failed` with a reason code (`AssistWriteFailed`, `@quiz/contracts`:
+   `not_found`, `refused`, `invalid`, `failed`) the browser words in the UI
+   language. **Cancel**
    (`…/cancel`) forgets it. Confirm does not resume the model. Super Powers
    never pass: the token resolves the teacher's own seats (§8).
 8. **Audit.** `assistant` joins the closed `actorType` list
@@ -569,8 +573,8 @@ F-LLM-07 (docs/spec/02).
    publish palette command the teacher confirms (5) is the teacher's own
    action.
 10. **The panel.** A proposal is a card under the answer; **Confirm** or
-    **Apply** is the card's own primary, in the dock's ink — never the
-    accent (ADR-069) —, **Cancel** secondary; after a confirmed write, a
+    **Apply** is the card's own primary, the `ink` button variant — never
+    the accent (ADR-069) —, **Cancel** secondary; after a confirmed write, a
     link opens the result. Strings in English and French. The P2b
     leftover is fixed: the screen part of the prompt says which command
     opens a new tab (offered as a button) and which changes data, and the

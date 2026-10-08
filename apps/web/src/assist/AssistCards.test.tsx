@@ -23,7 +23,7 @@ const EDIT = {
   base: BASE,
   config: { prompt: "Quelle valeur ?", choices: [{ text: "4", correct: true }] },
   explanation: "",
-  fields: [{ path: "prompt", before: "quelle valeur ?", after: "Quelle valeur ?" }],
+  fields: [{ path: "prompt", label: "statement", n: null, before: "quelle valeur ?", after: "Quelle valeur ?" }],
 };
 const replying = (actions: unknown[]) =>
   ok({ conversationId: CID, exchange: { id: "e1", question: "?", answer: "Voici ma proposition.", createdAt: at }, actions });

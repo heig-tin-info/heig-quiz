@@ -21,9 +21,7 @@ import { useMutation } from "@tanstack/react-query";
 import { CircleAlert, CornerDownRight, FilePenLine, Play, ShieldCheck } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import type { AssistAction, AssistWriteDecision, AssistWriteDone } from "@quiz/contracts";
-import { EXPLANATION_FIELD } from "@quiz/domain";
-import { buttonClass } from "@quiz/ui";
+import { AssistWriteFailed, type AssistAction, type AssistWriteDecision, type AssistWriteDone } from "@quiz/contracts";
 
 import { api, ApiError, refusedWith } from "../api";
 import { useI18n, type TFunction } from "../i18n";
@@ -38,25 +36,15 @@ type Edit = Extract<AssistAction, { kind: "edit_question" }>;
 type Command = Extract<AssistAction, { kind: "confirm_command" }>;
 type Write = Extract<AssistAction, { kind: "pending_write" }>;
 
-/** Why a confirmed write was not done, as the route's code says it (`write_failed`'s `reason`). */
-function failureOf(error: unknown): "not_found" | "refused" | "invalid" | "failed" {
-  const reason = error instanceof ApiError ? (error.body as { reason?: unknown } | null)?.reason : undefined;
-  return reason === "not_found" || reason === "refused" || reason === "invalid" ? reason : "failed";
+/** Why a confirmed write was not done: the route's `write_failed` reason, or `failed` for anything else. */
+function failureOf(error: unknown): AssistWriteFailed["reason"] {
+  const body = AssistWriteFailed.safeParse(error instanceof ApiError ? error.body : null);
+  return body.success ? body.data.reason : "failed";
 }
 
-/** The card's primary: ink on the neutral dock, never the accent. */
-const inkClass = buttonClass("secondary", "sm", "!border-transparent !bg-fg !text-surface hover:!opacity-90");
-
-/** A field of the draft, named as the editor names it. */
-export function fieldLabel(path: string, t: TFunction): string {
-  if (path === "prompt" || path === "text") return t("assist.edit.statement");
-  if (path === EXPLANATION_FIELD) return t("assist.edit.explanation");
-  const item = /^(choices|columns|cards)\.(\d+)\./.exec(path);
-  if (item) {
-    const key = { choices: "assist.edit.choice", columns: "assist.edit.column", cards: "assist.edit.card" } as const;
-    return t(key[item[1] as keyof typeof key], { n: Number(item[2]) + 1 });
-  }
-  return path;
+/** A field of the draft, named by the label its type declares (`assistText`), numbered in a list. */
+export function fieldLabel(field: Edit["fields"][number], t: TFunction): string {
+  return t(`assist.edit.${field.label}`, { n: field.n ?? 0 });
 }
 
 function Shell({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
@@ -98,9 +86,9 @@ function Decide({
       <Button variant="secondary" size="sm" onClick={onCancel} disabled={busy}>
         {t("assist.cancel")}
       </Button>
-      <button type="button" className={inkClass} onClick={onConfirm} disabled={busy}>
+      <Button variant="ink" size="sm" onClick={onConfirm} disabled={busy}>
         {confirmLabel}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -126,7 +114,7 @@ function EditCard({ edit }: { edit: Edit }) {
       <ul className="space-y-2.5">
         {edit.fields.map((f) => (
           <li key={f.path} className="space-y-1 text-[13px]">
-            <p className="text-[12px] font-semibold text-fg-muted">{fieldLabel(f.path, t)}</p>
+            <p className="text-[12px] font-semibold text-fg-muted">{fieldLabel(f, t)}</p>
             {f.before === null ? null : (
               <p className="rounded-field bg-danger-soft/60 px-2 py-1 whitespace-pre-wrap text-fg-muted line-through decoration-danger/40">
                 <span className="sr-only">{t("assist.edit.before")}: </span>

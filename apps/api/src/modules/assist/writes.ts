@@ -20,9 +20,11 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import type { AssistTextSpec } from "@quiz/core/server";
+import type { AssistWriteFailure, CategoryNode } from "@quiz/contracts";
 import {
   ASSIST_MAX_WRITES,
   ASSIST_WRITE_TOOLS,
+  assistTextFields,
   cardExcerpt,
   DEFAULT_ASSIST_TEXT,
   proposeQuestionEdit,
@@ -56,21 +58,28 @@ const WRITE_DESCRIPTIONS: Record<AssistWriteTool, string> = {
     "questions, and the course's WHOLE staff becomes contributor of the pool. Needs the course's owner role.",
 };
 
-/** What a prepared write's card reads back and the confirmation needs. */
-interface Prepared {
-  lines: AssistWriteLine[];
+/**
+ * One write the assistant may prepare: the card it shows, read AS THE
+ * TEACHER from the frozen arguments (anything it cannot read is a refusal,
+ * and nothing is prepared), and the app's path of what it made or changed
+ * once confirmed (decision 7: the card's link), from its arguments and the
+ * tool's result.
+ */
+interface WriteSpec {
+  card(api: Api, args: Record<string, any>): Promise<AssistWriteLine[]>;
+  path(args: Record<string, any>, value: any): string;
 }
 
 /** One line of a card. */
 const line = (field: AssistWriteLine["field"], ...values: string[]): AssistWriteLine => ({ field, values });
 
 /** The category tree of a pool, flat. */
-function flatten(nodes: readonly { id: string; name: string; children?: unknown }[]): { id: string; name: string }[] {
-  return nodes.flatMap((n) => [
-    { id: n.id, name: n.name },
-    ...flatten((n.children as { id: string; name: string; children?: unknown }[] | undefined) ?? []),
-  ]);
+function flatten(nodes: readonly CategoryNode[]): CategoryNode[] {
+  return nodes.flatMap((n) => [n, ...flatten(n.children)]);
 }
+
+/** A pool as its detail route reads it: its name and its category tree. */
+type PoolRead = { pool: { name: string }; categories: CategoryNode[] };
 
 /** A category's name in a pool's tree, or a refusal the model reads. */
 function categoryName(categories: readonly { id: string; name: string }[], id: string): string {
@@ -95,70 +104,75 @@ async function publishedNames(api: Api, ids: readonly string[]): Promise<string[
   return names;
 }
 
-/**
- * What each write's card shows, read AS THE TEACHER from the frozen
- * arguments; anything it cannot read is a refusal, and nothing is prepared.
- */
-const CARDS: Record<AssistWriteTool, (api: Api, args: Record<string, any>) => Promise<Prepared>> = {
-  async create_question(api, a) {
-    const issues = checkConfig(a.type, a.config, { explanation: a.explanation, variables: a.variables });
-    if (issues) {
-      throw new Error(
-        `The config does not satisfy the type's schema; nothing was prepared: ${issues.map((i) => `${i.path || "config"}: ${i.message}`).join("; ")}`,
-      );
-    }
-    const pool = (await api.get(`/pools/${a.poolId}`)) as { pool: { name: string }; categories: { id: string; name: string }[] };
-    const statement = typeof a.config.prompt === "string" ? a.config.prompt : typeof a.config.text === "string" ? a.config.text : "";
-    return {
-      lines: [
+/** The writes of decision 4, each its card and its result's path. */
+const WRITES: Record<AssistWriteTool, WriteSpec> = {
+  create_question: {
+    async card(api, a) {
+      const issues = checkConfig(a.type, a.config, { explanation: a.explanation, variables: a.variables });
+      if (issues) {
+        throw new Error(
+          `The config does not satisfy the type's schema; nothing was prepared: ${issues.map((i) => `${i.path || "config"}: ${i.message}`).join("; ")}`,
+        );
+      }
+      const pool = (await api.get(`/pools/${a.poolId}`)) as PoolRead;
+      // The statement as the type declares it (`assistText`): its field labelled so.
+      const statement = assistTextFields(a.config, assistTextOf(a.type)).find((f) => f.label === "statement")?.text ?? "";
+      return [
         line("pool", pool.pool.name),
         ...(a.categoryId ? [line("category", categoryName(flatten(pool.categories), a.categoryId))] : []),
         line("type", a.type),
         line("name", a.internalName),
         ...(statement ? [line("statement", cardExcerpt(statement))] : []),
-      ],
-    };
+      ];
+    },
+    path: (_a, value) => `/questions/${value.questionId}`,
   },
-  async create_category(api, a) {
-    const pool = (await api.get(`/pools/${a.poolId}`)) as { pool: { name: string }; categories: { id: string; name: string }[] };
-    return {
-      lines: [
+  create_category: {
+    async card(api, a) {
+      const pool = (await api.get(`/pools/${a.poolId}`)) as PoolRead;
+      return [
         line("pool", pool.pool.name),
         ...(a.parentId ? [line("parent", categoryName(flatten(pool.categories), a.parentId))] : []),
         line("name", a.name),
-      ],
-    };
+      ];
+    },
+    path: (a) => `/pools/${a.poolId}/categories`,
   },
-  async create_template(api, a) {
-    const course = (await api.get(`/courses/${a.courseId}`)) as { course: { name: string } };
-    const questions = await publishedNames(api, a.questionIds);
-    return {
-      lines: [
+  create_template: {
+    async card(api, a) {
+      const course = (await api.get(`/courses/${a.courseId}`)) as { course: { name: string } };
+      const questions = await publishedNames(api, a.questionIds);
+      return [
         line("course", course.course.name),
         line("title", a.title),
         line("mode", a.mode),
         ...(questions.length > 0 ? [line("questions", ...questions)] : []),
-      ],
-    };
+      ];
+    },
+    path: (_a, value) => `/templates/${value.template.id}`,
   },
-  async add_questions_to_template(api, a) {
-    const template = (await api.get(`/templates/${a.templateId}`)) as { template: { title: string } };
-    return { lines: [line("template", template.template.title), line("questions", ...(await publishedNames(api, a.questionIds)))] };
+  add_questions_to_template: {
+    async card(api, a) {
+      const template = (await api.get(`/templates/${a.templateId}`)) as { template: { title: string } };
+      return [line("template", template.template.title), line("questions", ...(await publishedNames(api, a.questionIds)))];
+    },
+    path: (a) => `/templates/${a.templateId}`,
   },
-  async link_pool_to_course(api, a) {
-    const course = (await api.get(`/courses/${a.courseId}`)) as {
-      course: { name: string };
-      staff: { givenName: string; familyName: string }[];
-    };
-    const pool = (await api.get(`/pools/${a.poolId}`)) as { pool: { name: string } };
-    return {
-      lines: [
+  link_pool_to_course: {
+    async card(api, a) {
+      const course = (await api.get(`/courses/${a.courseId}`)) as {
+        course: { name: string };
+        staff: { givenName: string; familyName: string }[];
+      };
+      const pool = (await api.get(`/pools/${a.poolId}`)) as PoolRead;
+      return [
         line("course", course.course.name),
         line("pool", pool.pool.name),
         // Decision 4: the card names who gains access — the course's whole staff.
         line("access", ...course.staff.map((s) => `${s.givenName} ${s.familyName}`.trim())),
-      ],
-    };
+      ];
+    },
+    path: (a) => `/courses/${a.courseId}/pools`,
   },
 };
 
@@ -206,16 +220,16 @@ export function assistWriteTools(api: Api, ctx: WriteTurn): ReadOnlyTool[] {
         throw new Error("Call find_similar_questions with this statement first, and reuse a close question rather than duplicate it.");
       }
       const args = frozenArgs(name, raw);
-      let card: Prepared;
+      let lines: AssistWriteLine[];
       try {
-        card = await CARDS[name](api, args);
+        lines = await WRITES[name].card(api, args);
       } catch (error) {
         throw error instanceof Error && !("status" in error) ? error : new Error(readFailure(error));
       }
       const id = randomUUID();
       const expiresAt = PendingWrites.expiry(ctx.now);
       ctx.prepared.push({ id, write: { tool: name, args, expiresAt } });
-      return ctx.turn.prepare({ kind: "pending_write", id, tool: name, lines: card.lines, expiresAt: expiresAt.toISOString() });
+      return ctx.turn.prepare({ kind: "pending_write", id, tool: name, lines, expiresAt: expiresAt.toISOString() });
     },
   }));
 }
@@ -225,16 +239,6 @@ function readFailure(error: unknown): string {
   const status = (error as { status?: number }).status ?? 500;
   return failureText({ kind: "refused", status, body: null });
 }
-
-/** The app's path of what a confirmed write made or changed (decision 7: the card's link). */
-export function writtenPath(tool: AssistWriteTool, args: Record<string, unknown>, value: unknown): string {
-  const url = (value as { url?: unknown } | null)?.url;
-  if (typeof url === "string") return new URL(url).pathname;
-  return tool === "create_category" ? `/pools/${String(args.poolId)}/categories` : `/courses/${String(args.courseId)}/pools`;
-}
-
-/** Why a confirmed write was not done: a code the browser words in the UI language. */
-export type AssistWriteFailure = "not_found" | "refused" | "invalid" | "failed";
 
 /**
  * Runs a confirmed write: EXACTLY its frozen arguments, once, through the
@@ -248,7 +252,7 @@ export async function confirmWrite(api: Api, write: PendingWrite): Promise<{ ok:
     const reason = e.kind === "refused" ? (e.status === 404 ? "not_found" : "refused") : e.kind === "invalid_arguments" ? "invalid" : "failed";
     return { ok: false, reason };
   }
-  return { ok: true, path: writtenPath(write.tool, write.args as Record<string, unknown>, outcome.value) };
+  return { ok: true, path: WRITES[write.tool].path(write.args, outcome.value) };
 }
 
 const EditInput = z.object({
@@ -258,13 +262,7 @@ const EditInput = z.object({
 });
 
 /** The free-text fields a question type lends the assistant (ADR-080 P3, decision 1). */
-export const assistTextOf = (type: string): AssistTextSpec => {
-  try {
-    return questionType(type).assistText ?? DEFAULT_ASSIST_TEXT;
-  } catch {
-    return { fields: [] };
-  }
-};
+export const assistTextOf = (type: string): AssistTextSpec => questionType(type).assistText ?? DEFAULT_ASSIST_TEXT;
 
 /**
  * Whether a proposed config keeps the type's schema on the fields it
@@ -272,12 +270,7 @@ export const assistTextOf = (type: string): AssistTextSpec => {
  * proposal's.
  */
 function schemaIssues(type: string, config: unknown, changed: readonly string[]): string[] {
-  let parsed;
-  try {
-    parsed = questionType(type).configSchema.safeParse(config);
-  } catch {
-    return [];
-  }
+  const parsed = questionType(type).configSchema.safeParse(config);
   if (parsed.success) return [];
   return parsed.error.issues
     .map((i) => ({ path: i.path.join("."), message: i.message }))

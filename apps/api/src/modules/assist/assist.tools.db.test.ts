@@ -270,19 +270,8 @@ describe("the model's tools", () => {
       "add_questions_to_template",
       "link_pool_to_course",
     ]);
-    // Every other MCP write is out of reach, whatever its name; the results reader is not in the MCP catalogue.
+    // Every other MCP write is out of reach (the excluded list: `assist.writes.db.test.ts`); the results reader is not in the MCP catalogue.
     const writes = TOOLS.filter((t) => t.annotations.readOnlyHint !== true).map((t) => t.name);
-    expect(writes.filter((w) => !(ASSIST_WRITE_TOOLS as readonly string[]).includes(w)).sort()).toEqual([
-      "add_questions_to_evaluation",
-      "create_classroom",
-      "create_course",
-      "create_evaluation",
-      "create_poll",
-      "create_pool",
-      "instantiate_template",
-      "update_evaluation",
-      "update_question",
-    ]);
     for (const name of writes) if (!(ASSIST_WRITE_TOOLS as readonly string[]).includes(name)) expect(names).not.toContain(name);
     expect(TOOLS.map((t) => t.name)).not.toContain(RESULTS_TOOL);
     // The assistant's own descriptions: no authoring nudge.

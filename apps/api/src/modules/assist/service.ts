@@ -186,13 +186,6 @@ export interface AskDeps {
   pending: PendingWrites;
 }
 
-/** The editor draft sent from another screen than its question's editor: refused (ADR-080 P3, decision 2). */
-export class EditorOffScreen extends Error {}
-
-/** Whether the editor draft rides with a question asked from that very question's editor. */
-export const editorOnScreen = (context: AssistContext, editor: AssistEditorDraft): boolean =>
-  context.route === "/questions/:id" && context.entities?.question === editor.questionId;
-
 /**
  * The open draft as the assistant may see and rewrite it: the question's
  * type READ AS THE TEACHER (a question they cannot read is no editor), its
@@ -258,7 +251,6 @@ export async function ask(
   now: Date,
 ): Promise<AssistReply> {
   const { db, corpus } = deps;
-  if (question.editor && !editorOnScreen(question.context, question.editor)) throw new EditorOffScreen();
   const existing = question.conversationId ? await findConversation(db, question.conversationId, asker.id) : null;
   if (question.conversationId && !existing) throw new ConversationNotFound();
   // Known before the model answers: a write it prepares belongs to this conversation (ADR-080 P3).

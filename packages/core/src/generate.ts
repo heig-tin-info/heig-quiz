@@ -25,6 +25,23 @@ import type { RunnerService } from "./runner.js";
  * (a case that timed out, a picture with a missing pixel). The draft comes
  * back merged all the same; the editor says what is left to do.
  */
+/**
+ * Two items of a list are the same when this says so: trimmed, lower-cased,
+ * spaces collapsed. The ONE rule of "never repeat a text the list holds",
+ * for the wand's fill-and-append (ADR-059 §2) and the assistant's (ADR-080
+ * P3, decision 1).
+ */
+export const sameItemText = (text: string): string => text.trim().toLowerCase().replace(/\s+/g, " ");
+
+/**
+ * How the editor names a free-text field in the assistant's diff, a closed
+ * list the web translates (`assist.edit.<label>`); an item of a list is
+ * numbered ("Choice 2"). A type whose field fits none adds one here, and
+ * its English and French strings beside the others.
+ */
+export const ASSIST_TEXT_LABELS = ["statement", "choice", "column", "card"] as const;
+export type AssistTextLabel = (typeof ASSIST_TEXT_LABELS)[number];
+
 export const GENERATE_INCOMPLETE = ["runner_unavailable", "draft_invalid", "compile_failed", "partial"] as const;
 export type GenerateIncomplete = (typeof GENERATE_INCOMPLETE)[number];
 

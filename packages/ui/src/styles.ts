@@ -105,6 +105,9 @@ const BUTTON_VARIANT = {
   secondary: "border border-line-strong bg-surface text-fg hover:bg-surface-2",
   subtle: "bg-surface-3 text-fg hover:bg-line-strong/70",
   ghost: "text-fg-muted hover:bg-surface-2 hover:text-fg",
+  // The primary of a neutral tool's own layer (the assistant's cards, ADR-069,
+  // ADR-080 P3): ink, never the accent, which stays the screen's one primary.
+  ink: "bg-fg text-surface hover:bg-fg/85",
   danger: "bg-danger text-on-fill hover:opacity-90",
   // The trigger of a destructive action whose confirmation is the `danger`
   // dialog, in a settings row: red ink without the fill, so the row says what
@@ -123,7 +126,7 @@ export type ButtonVariant = keyof typeof BUTTON_VARIANT;
 export type ButtonSize = keyof typeof BUTTON_SIZE;
 
 /**
- * The class list of a button: a pill in one of six variants and three
+ * The class list of a button: a pill in one of seven variants and three
  * sizes, pressed to 0.97. `apps/web`'s `Button` and `LinkButton` are this
  * list on a `<button>` and an `<a>`; a question type, which cannot import
  * them, writes it on its own `<button>`.

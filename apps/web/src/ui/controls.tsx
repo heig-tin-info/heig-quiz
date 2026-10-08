@@ -20,7 +20,7 @@ import { HelpIcon, type IconType } from "./layers";
 // --- Buttons ---
 
 /*
- * The class list of a button (`buttonClass`, six variants, three sizes) is
+ * The class list of a button (`buttonClass`, seven variants, three sizes) is
  * written once, in `@quiz/ui`, where the question types read it too; <Button>,
  * <LinkButton> and the raw anchors of the app wear the same list.
  */

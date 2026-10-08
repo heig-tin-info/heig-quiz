@@ -163,5 +163,11 @@ export const categorizeServer: QuestionTypeServer<
 
   generator: categorizeGenerator,
   // ADR-080 P3: the statement, the columns' labels and the cards' texts; never an id nor a placement.
-  assistText: { fields: ["prompt", "columns.*.label", "cards.*.text"] },
+  assistText: {
+    fields: [
+      { path: "prompt", label: "statement" },
+      { path: "columns.*.label", label: "column" },
+      { path: "cards.*.text", label: "card" },
+    ],
+  },
 };

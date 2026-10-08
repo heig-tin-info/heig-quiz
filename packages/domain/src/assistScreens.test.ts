@@ -142,7 +142,7 @@ describe("AssistUiTurn", () => {
       base: { config: {}, explanation: "" },
       config: {},
       explanation: "x",
-      fields: [{ path: "explanation", before: null, after: "x" }],
+      fields: [{ path: "explanation", label: "explanation" as const, n: null, before: null, after: "x" }],
     };
     expect(turn.propose(edit)).toMatch(/^Proposed: .*1 field\(s\) with an Apply button/);
     expect(() => turn.propose(edit)).toThrow("One proposal per answer");
