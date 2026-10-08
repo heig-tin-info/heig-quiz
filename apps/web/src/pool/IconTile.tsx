@@ -18,12 +18,14 @@ export function IconTile({
   label,
   icon,
   color,
+  fallback,
   selected,
   onPick,
 }: {
   label: string;
-  /** null draws the default icon. */
+  /** null draws the default icon, `fallback` (`PoolIcon`'s). */
   icon: string | null;
+  fallback?: string;
   /** The colour being chosen, so the tile previews the result. */
   color: PoolColor | null;
   selected: boolean;
@@ -43,7 +45,7 @@ export function IconTile({
             : "border-line-strong bg-surface text-fg-muted hover:border-fg-faint hover:text-fg",
         )}
       >
-        <PoolIcon icon={icon} color={color} className="size-5" />
+        <PoolIcon icon={icon} color={color} fallback={fallback} className="size-5" />
       </button>
     </Tip>
   );

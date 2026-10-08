@@ -9,7 +9,7 @@
  * classroom's. The actions are `useCourseActions`', the card's own copy, so
  * the two readings of a course cannot drift.
  *
- * The name, the code and the deletion are an owner's (ADR-068): an assistant
+ * The name, the code, the icon and the deletion are an owner's (ADR-068): an assistant
  * sees only their own navigation's row, and one line saying why the rest is
  * not there — no disabled buttons, as a pool's read-only screens.
  */
@@ -20,6 +20,7 @@ import type { CourseSummary } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { Button, Card, SectionHeading, SettingRow } from "../ui";
+import { CourseIcon } from "./CourseIcon";
 import { EditCourseModal } from "./modals";
 import type { useCourseActions } from "./useCourseActions";
 
@@ -39,7 +40,15 @@ export function CourseSettings({
         <SectionHeading icon={Library} title={t("courses.settings.general")} />
         <Card className="divide-y divide-line px-5">
           {isOwner ? (
-            <SettingRow title={t("courses.settings.identity")} desc={`${course.code} — ${course.name}`}>
+            <SettingRow
+              title={t("courses.settings.identity")}
+              desc={
+                <span className="inline-flex items-center gap-1.5">
+                  <CourseIcon course={course} className="size-4 shrink-0" />
+                  {course.code} — {course.name}
+                </span>
+              }
+            >
               <Button variant="secondary" onClick={() => setEditing(true)}>
                 {t("courses.settings.edit")}
               </Button>

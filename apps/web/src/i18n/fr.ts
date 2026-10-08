@@ -419,7 +419,7 @@ export const fr: Record<keyof Dict, string> = {
   "courses.members.hint":
     "Chaque membre de l'équipe accède à tout le cours. Les propriétaires le dirigent en plus : ils ajoutent et retirent des membres, lient les banques, créent et suppriment les classes, et publient les résultats. On ajoute un collègue par l'adresse avec laquelle il se connecte, une fois qu'il s'est connecté.",
   "courses.settings.general": "Cours",
-  "courses.settings.identity": "Nom et abréviation",
+  "courses.settings.identity": "Nom, abréviation et icône",
   "courses.settings.edit": "Modifier",
   "courses.settings.editTitle": "Modifier le cours",
   "courses.settings.saved": "Cours modifié.",
@@ -4197,6 +4197,7 @@ export const fr: Record<keyof Dict, string> = {
   "pools.icon.change": "Changer l'icône",
   "pools.icon.title": "Choisir une icône",
   "pools.icon.hint": "Ce à quoi cette banque ressemble sur l'étagère : choisissez une couleur, puis une icône.",
+  "courses.icon.hint": "Ce à quoi ce cours ressemble dans la barre latérale et sur sa carte : choisissez une couleur, puis une icône.",
   "pools.icon.default": "Icône par défaut",
   "pools.icon.more": "Plus d'icônes…",
   "pools.icon.all": "Toutes les icônes",

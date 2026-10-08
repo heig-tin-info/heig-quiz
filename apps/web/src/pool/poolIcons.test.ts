@@ -5,7 +5,13 @@ import { describe, expect, it } from "vitest";
 import { searchIcons } from "./IconCatalogue";
 import { POOL_ICON_COMPONENTS } from "./PoolIcon";
 import { CUSTOM_ICON_KEYWORDS, CUSTOM_ICON_NAMES } from "./customIcons";
-import { DEFAULT_POOL_ICON, ICON_SEARCH_LIMIT, POOL_ICON_GROUPS, POOL_ICONS } from "./poolIcons";
+import {
+  DEFAULT_COURSE_ICON,
+  DEFAULT_POOL_ICON,
+  ICON_SEARCH_LIMIT,
+  POOL_ICON_GROUPS,
+  POOL_ICONS,
+} from "./poolIcons";
 
 /*
  * The curated shelf is a list of STRINGS drawn by a static map, so nothing
@@ -18,17 +24,18 @@ import { DEFAULT_POOL_ICON, ICON_SEARCH_LIMIT, POOL_ICON_GROUPS, POOL_ICONS } fr
 describe("poolIcons", () => {
   it("offers only icons this lucide ships or Quiz draws", () => {
     const catalogue = new Set<string>([...iconNames, ...CUSTOM_ICON_NAMES]);
-    expect([...POOL_ICONS, DEFAULT_POOL_ICON].filter((n) => !catalogue.has(n))).toEqual([]);
+    expect([...POOL_ICONS, DEFAULT_POOL_ICON, DEFAULT_COURSE_ICON].filter((n) => !catalogue.has(n))).toEqual([]);
   });
 
   it("draws every curated name, and draws nothing else", () => {
-    const shelf = [DEFAULT_POOL_ICON, ...POOL_ICONS].sort();
+    const shelf = [DEFAULT_POOL_ICON, DEFAULT_COURSE_ICON, ...POOL_ICONS].sort();
     expect(Object.keys(POOL_ICON_COMPONENTS).sort()).toEqual(shelf);
   });
 
   it("holds no duplicate, and not the default twice", () => {
     expect(new Set(POOL_ICONS).size).toBe(POOL_ICONS.length);
     expect(POOL_ICONS).not.toContain(DEFAULT_POOL_ICON);
+    expect(POOL_ICONS).not.toContain(DEFAULT_COURSE_ICON);
   });
 
   it("puts every custom icon on the shelf, under a name lucide does not use", () => {

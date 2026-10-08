@@ -29,6 +29,9 @@ import { POOL_ICON_GROUPS } from "./poolIcons";
  * sets it there at once, so a teacher who only wants a colour picks it and
  * leaves, and the dialog keeps its one intent, "give this pool its look",
  * with no second button.
+ *
+ * A course picks its look in the same dialog: only the hint and the default
+ * tile change.
  */
 
 /** 1500 names and their lazy imports: downloaded when, and if, they are asked for. */
@@ -40,6 +43,8 @@ export function PoolIconPicker({
   onColor,
   onPick,
   onClose,
+  hint,
+  fallback,
 }: {
   /** The pool's current icon; null is the default. */
   value: string | null;
@@ -51,6 +56,10 @@ export function PoolIconPicker({
   onPick: (icon: string | null) => void;
   /** Escape, the X, or "Back": the dialog closes with the icon unchanged. */
   onClose: () => void;
+  /** The first step's subtitle; a pool's by default. */
+  hint?: string;
+  /** The default icon the first tile draws (`PoolIcon`'s `fallback`). */
+  fallback?: string;
 }) {
   const t = useT();
   const [all, setAll] = useState(false);
@@ -58,7 +67,7 @@ export function PoolIconPicker({
   return (
     <Modal
       title={all ? t("pools.icon.all") : t("pools.icon.title")}
-      subtitle={all ? t("pools.icon.allHint") : t("pools.icon.hint")}
+      subtitle={all ? t("pools.icon.allHint") : (hint ?? t("pools.icon.hint"))}
       scroll
       onClose={onClose}
       footer={
@@ -84,6 +93,7 @@ export function PoolIconPicker({
             label={t("pools.icon.default")}
             icon={null}
             color={color}
+            fallback={fallback}
             selected={value === null}
             onPick={() => onPick(null)}
           />

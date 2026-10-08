@@ -102,7 +102,7 @@ describe("TeacherHome", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Create course" }));
 
     expect(calls.filter((c) => c.method === "POST")).toEqual([
-      { url: COURSES, method: "POST", body: { name: "Programmation C", code: "PRG1" } },
+      { url: COURSES, method: "POST", body: { name: "Programmation C", code: "PRG1", icon: null, color: null } },
     ]);
   });
 

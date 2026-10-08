@@ -8,6 +8,7 @@
 import { z } from "zod";
 
 import { ConditionKind, EvaluationCondition } from "./evaluation.js";
+import { PoolColor, PoolIcon } from "./pool.js";
 
 /** One roster entry of one classroom: `/classrooms/:id/roster/:eid`. */
 export const RosterEntryParams = z.object({ id: z.uuid(), eid: z.uuid() });
@@ -18,6 +19,9 @@ export const CourseCreate = z.object({
   name: z.string().trim().min(1).max(200),
   /** Short school code (`PRG1`), trimmed and upper-cased here, on both sides. */
   code: z.string().trim().toUpperCase().min(1).max(32),
+  /** The course's icon and its colour, picked as a pool's are; null is the default. */
+  icon: PoolIcon.nullable().optional(),
+  color: PoolColor.nullable().optional(),
 });
 export type CourseCreate = z.infer<typeof CourseCreate>;
 
