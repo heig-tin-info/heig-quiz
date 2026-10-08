@@ -17,7 +17,7 @@ import { useEffect, useState } from "react";
 import { ClassroomPatch, type ClassroomDetail, type EvaluationSummary } from "@quiz/contracts";
 import type { ClassroomQueryTab } from "@quiz/domain";
 
-import { NewActivity } from "./activities/NewActivity";
+import { NewActivity, newProjectAction } from "./activities/NewActivity";
 import { api, useMe } from "./api";
 import { PeriodFields, periodBody, periodInvalid, type PeriodDraft } from "./ClassroomPeriod";
 import { ClassroomSettings } from "./ClassroomSettings";
@@ -422,7 +422,12 @@ export function ClassroomView({
         ) : tab === "evaluations" ? (
           <div className="space-y-8">
             {/* WP8: evaluation + dashboard */}
-            <EvaluationList classroomId={id} navigate={navigate} onNew={() => setCreating(true)} />
+            <EvaluationList
+              classroomId={id}
+              navigate={navigate}
+              onNew={() => setCreating(true)}
+              newProject={newProjectAction(id, github.isSuccess ? github.data : undefined, navigate, openConnect, t)}
+            />
             {/* M3-10: the projects, a group of their own under the evaluations. */}
             <ProjectGroup classroomId={id} navigate={navigate} />
           </div>

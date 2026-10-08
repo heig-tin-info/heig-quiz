@@ -2,7 +2,7 @@ import { ChevronDown, ClipboardList, FolderGit2, Plus } from "lucide-react";
 
 import type { GithubClassroom } from "@quiz/contracts";
 
-import { useT } from "../i18n";
+import { useT, type TFunction } from "../i18n";
 import { routeEnabled, type Navigate } from "../router";
 import { Button, Menu, type MenuItem } from "../ui";
 
@@ -41,22 +41,17 @@ export function NewActivity({
   onConnect: () => void;
 }) {
   const t = useT();
-  if (!github || !routeEnabled("projectNew")) {
+  const project = newProjectAction(classroomId, github, navigate, onConnect, t);
+  if (!project) {
     return (
       <Button onClick={onEvaluation}>
         <Plus /> {t("eval.new")}
       </Button>
     );
   }
-  const connected = github.link !== null;
   const items: MenuItem[] = [
     { label: t("activity.new.evaluation"), icon: ClipboardList, onSelect: onEvaluation },
-    {
-      label: t("activity.new.project"),
-      icon: FolderGit2,
-      ...(connected ? {} : { description: t("project.notConnected") }),
-      onSelect: () => (connected ? navigate({ view: "projectNew", classroomId }) : onConnect()),
-    },
+    { label: t("activity.new.project"), icon: FolderGit2, ...project },
   ];
   return (
     <Menu
@@ -69,4 +64,23 @@ export function NewActivity({
       }
     />
   );
+}
+
+/**
+ * Where "New project" leads, shared by the menu above and the evaluations'
+ * empty state: `null` while it has no door (see `NewActivity`), the
+ * Settings' connect sheet on a classroom not connected — saying so in
+ * `description` — and the new project otherwise.
+ */
+export function newProjectAction(
+  classroomId: string,
+  github: GithubClassroom | undefined,
+  navigate: Navigate,
+  onConnect: () => void,
+  t: TFunction,
+): { description?: string; onSelect: () => void } | null {
+  if (!github || !routeEnabled("projectNew")) return null;
+  return github.link !== null
+    ? { onSelect: () => navigate({ view: "projectNew", classroomId }) }
+    : { description: t("project.notConnected"), onSelect: onConnect };
 }

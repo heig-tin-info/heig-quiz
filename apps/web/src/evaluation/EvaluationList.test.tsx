@@ -130,6 +130,23 @@ describe("EvaluationList", () => {
     expect(screen.queryByRole("button", { name: /new evaluation/i })).toBeNull();
   });
 
+  it("offers the new project beside it in the empty state, only when it has a door", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    mockFetch(list([]));
+    const { unmount } = renderWithProviders(
+      <EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} newProject={{ onSelect }} />,
+    );
+    await user.click(await screen.findByRole("button", { name: /new project/i }));
+    expect(onSelect).toHaveBeenCalledOnce();
+    unmount();
+
+    mockFetch(list([]));
+    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} newProject={null} />);
+    await screen.findByRole("button", { name: /new evaluation/i });
+    expect(screen.queryByRole("button", { name: /new project/i })).toBeNull();
+  });
+
   it("creates one from the dialog and hands its id over", async () => {
     const user = userEvent.setup();
     const onCreated = vi.fn();

@@ -5,6 +5,7 @@ import {
   ClipboardList,
   Copy,
   FileStack,
+  FolderGit2,
   MonitorPlay,
   Plus,
   Presentation,
@@ -185,11 +186,17 @@ export function EvaluationList({
   classroomId,
   navigate,
   onNew,
+  newProject,
 }: {
   classroomId: string;
   navigate: (r: Route) => void;
   /** Opens the page's "New evaluation" dialog, from the empty state. */
   onNew: () => void;
+  /**
+   * The header menu's "Project" (`newProjectAction`), offered beside "New
+   * evaluation" in the empty state; absent where a project has no door.
+   */
+  newProject?: { description?: string; onSelect: () => void } | null;
 }) {
   const t = useT();
   const qc = useQueryClient();
@@ -273,9 +280,18 @@ export function EvaluationList({
             icon={ClipboardList}
             title={t("eval.empty.title")}
             action={
-              <Button onClick={onNew}>
-                <Plus /> {t("eval.new")}
-              </Button>
+              /* The header's "New ▾" folded open: an empty tab has room to
+                 show both doors, the evaluation still the primary. */
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button onClick={onNew}>
+                  <Plus /> {t("eval.new")}
+                </Button>
+                {newProject ? (
+                  <Button variant="secondary" title={newProject.description} onClick={newProject.onSelect}>
+                    <FolderGit2 /> {t("project.new")}
+                  </Button>
+                ) : null}
+              </div>
             }
           >
             {t("eval.empty.body")}
