@@ -22,10 +22,6 @@ status and amendment history.
    records describe heig-classroom until their Quiz status/addendum adapts them;
    its `GR-`, `GH-`, `AU-` and `NFR-` IDs are not Quiz requirement IDs.
 
-Two historical records share **ADR-040**. Always cite their full filename
-or linked title (favourites versus frequency-domain circuit stimuli). Their
-paths are retained for existing links; do not assign 040 to another record.
-
 ## Topics
 
 Each record appears once below. Cross-topic dependencies live in the records,
@@ -73,10 +69,10 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-024 — One locked editor, three student tools, a visible cooldown](ADR-024-editeur-verrouille-et-outils-etudiant.md)
 - [ADR-036 — Categorize: a new question type, sorting cards into columns](ADR-036-type-classement.md)
 - [ADR-040 — Favourite stars on questions: a second per-user preference table](ADR-040-favoris-de-question.md)
-- [ADR-040 — Frequency-domain stimuli for circuit](ADR-040-stimulus-frequentiel-de-circuit.md)
 - [ADR-046 — Diagram: one editor engine, one question type, eight notations](ADR-046-type-diagramme.md)
 - [ADR-056 — Parameterized questions: variables drawn per attempt](ADR-056-questions-parametrees.md)
 - [ADR-081 — Concepts replace tags: one instance-wide, bilingual vocabulary, curated by the admin](ADR-081-vocabulaire-de-notions.md)
+- [ADR-083 — Frequency-domain stimuli for circuit](ADR-083-stimulus-frequentiel-de-circuit.md)
 
 ### Evaluations, grading and practice
 
@@ -141,8 +137,10 @@ Use the [template](TEMPLATE.md) for new decisions. Keep one decision per record;
 put requirements in the spec, operational commands in the runbook and delivery
 progress in the merge task cards. Link to those sources instead of copying them.
 
-Keep existing IDs, paths and heading anchors stable. Select an unused ID after
-checking both the repository and concurrent branches/PRs. For a changed decision,
+Keep existing IDs, paths and heading anchors stable, except to resolve a
+duplicate number, noted in the record's Status. Select an unused ID after
+checking both the repository and concurrent branches/PRs; rebase before
+merging, and renumber yours if that ID landed meanwhile. For a changed decision,
 name the affected section in the new record and add a reciprocal link in the old
 record's Status. Use **superseded** only for a whole decision that no longer
 applies; otherwise say **amended**, with its scope. Keep the old rationale, and

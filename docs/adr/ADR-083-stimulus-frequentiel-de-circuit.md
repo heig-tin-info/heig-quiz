@@ -1,11 +1,11 @@
-# ADR-040 — Frequency-domain stimuli for circuit
+# ADR-083 — Frequency-domain stimuli for circuit
 
 ## Status
 
-This historical ID is shared with [another record](ADR-040-favoris-de-question.md).
-Cite this record by its full filename or title, not by `ADR-040` alone.
-
 Accepted (2026-09-29, with the `ac` analysis of `packages/qt-circuit`).
+Numbered ADR-040 until 2026-10-08, when it was renumbered because the
+favourites record ([ADR-040](ADR-040-favoris-de-question.md)) landed first
+under the same number (#342).
 Extends ADR-019, which it does not replace: a transient stimulus is graded
 exactly as before.
 

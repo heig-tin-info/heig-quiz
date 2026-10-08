@@ -563,7 +563,7 @@ describe("studentDetails", () => {
 });
 
 // ---------------------------------------------------------------------------
-// The AC sweep: the envelope rule (ADR-040)
+// The AC sweep: the envelope rule (ADR-083)
 // ---------------------------------------------------------------------------
 
 describe("wrapDegrees", () => {

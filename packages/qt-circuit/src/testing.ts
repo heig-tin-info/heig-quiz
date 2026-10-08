@@ -199,7 +199,7 @@ export const circuitLeakFixture: StudentLeakFixture<CircuitConfig> = {
     "policy",
     "reference",
     "tolerance",
-    // The Bode envelope (ADR-040) sits beside the tolerance, and leaves with it.
+    // The Bode envelope (ADR-083) sits beside the tolerance, and leaves with it.
     "bode",
     "magDb",
     "floorDb",

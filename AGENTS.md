@@ -40,6 +40,8 @@ deploying, not for editing.
   changed it, and a new workspace package with its entry in
   `pnpm-workspace.yaml`. Otherwise `pnpm install --frozen-lockfile` fails on
   CI and nothing deploys.
+- **ADR numbers** follow the ID rule of `docs/adr/README.md` (origin/main and
+  open PRs); `checks` refuses a shared prefix (`scripts/check-adr-numbers.mjs`).
 
 ## 4. Before you push to `main`
 

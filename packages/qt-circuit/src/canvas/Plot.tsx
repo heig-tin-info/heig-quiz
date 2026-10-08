@@ -13,7 +13,7 @@
  *
  * Two charts share the geometry below: a transient's waveforms against time,
  * and an AC sweep's Bode plot — magnitude on top, phase underneath, on one
- * logarithmic frequency axis (ADR-040). `Plot` picks by the series' kind.
+ * logarithmic frequency axis (ADR-083). `Plot` picks by the series' kind.
  */
 import { useEffect, useMemo, useRef, useState, type JSX, type ReactNode, type RefObject } from "react";
 

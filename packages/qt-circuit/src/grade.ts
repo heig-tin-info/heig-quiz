@@ -218,7 +218,7 @@ export function wrapDegrees(delta: number): number {
 }
 
 /**
- * The envelope rule of an AC stimulus (ADR-040): does the student's Bode plot
+ * The envelope rule of an AC stimulus (ADR-083): does the student's Bode plot
  * stay inside a band around the reference's, at EVERY frequency?
  *
  * The floor is RELATIVE: `floorDb` under the reference's own peak, so the rule
@@ -486,7 +486,7 @@ type Rule<K extends AnalysisKind> = (
  * The pass rule of each analysis kind. A transient is compared on its stored
  * samples, as it always was (ADR-019); an AC sweep on the FULL tables, since
  * a resonance peak that decimation steps over is exactly what the envelope
- * is there to catch (ADR-044).
+ * is there to catch (ADR-083).
  */
 const RULES: { [K in AnalysisKind]: Rule<K> } = {
   tran: (student, reference, grading) => {
