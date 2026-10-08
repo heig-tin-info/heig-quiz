@@ -5,6 +5,7 @@ import { LogOut } from "lucide-react";
 import type { KioskStation, Me } from "@quiz/contracts";
 
 import { api, useMe, usePublicConfig } from "./api";
+import { inSebBrowser, SebQuitButton, SebQuitKeys, SebQuitPage } from "./student/SebQuit";
 import { toKiosk, useStationSessionWatch } from "./kiosk/navigation";
 import { kioskStationKey } from "./queryKeys";
 import { Logo } from "./Header";
@@ -137,6 +138,7 @@ function Landing() {
   const t = useT();
   const search = new URLSearchParams(window.location.search);
   const refused = REFUSALS.find(([param]) => search.has(param))?.[1] ?? null;
+  const seb = refused === "seb.invalid" && inSebBrowser();
   // The one unauthenticated endpoint. A failure is not an error state here:
   // the OIDC button is the real door and it is always there.
   const config = usePublicConfig();
@@ -156,24 +158,36 @@ function Landing() {
             {t(refused)}
           </ErrorText>
         ) : null}
-        <LinkButton href="/app/auth/login" variant="primary" size="lg" className="mt-8 w-full">
-          {t("landing.signin")}
-        </LinkButton>
-        {config.data?.devLogin ? (
+        {/* ADR-027: inside SEB, signing in is out of its URL filter's reach. */}
+        {seb ? (
           <>
-            <Button
-              variant="secondary"
-              size="lg"
-              className="mt-3 w-full"
-              onClick={() => {
-                window.location.href = "/app/auth/dev";
-              }}
-            >
-              {t("landing.devSignin")}
-            </Button>
-            <p className="mt-2 text-xs text-fg-faint">{t("landing.devHint")}</p>
+            <SebQuitButton size="lg" className="mt-8 w-full" />
+            <p className="text-sm">
+              <SebQuitKeys />
+            </p>
           </>
-        ) : null}
+        ) : (
+          <>
+            <LinkButton href="/app/auth/login" variant="primary" size="lg" className="mt-8 w-full">
+              {t("landing.signin")}
+            </LinkButton>
+            {config.data?.devLogin ? (
+              <>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  className="mt-3 w-full"
+                  onClick={() => {
+                    window.location.href = "/app/auth/dev";
+                  }}
+                >
+                  {t("landing.devSignin")}
+                </Button>
+                <p className="mt-2 text-xs text-fg-faint">{t("landing.devHint")}</p>
+              </>
+            ) : null}
+          </>
+        )}
       </div>
       <p className="mt-12 text-xs text-fg-faint">{t("landing.footer")}</p>
     </main>
@@ -247,6 +261,7 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   teamsLink: (_, c) => <TeamsLinkPage me={c.me} onSettings={() => c.navigate({ view: "settings" })} />,
   teamsTab: () => null,
   kiosk: () => null,
+  sebQuit: () => null,
   pair: (_, c) => <PairPage me={c.me} navigate={c.navigate} />,
   // Invariant 3: the gallery exists in development only. The
   // route parses in every build; this is what refuses to render it.
@@ -446,10 +461,10 @@ function StationOrLanding() {
 
 /**
  * ADR-027, ADR-051 §7: what a confined session (`seb`, `kiosk`) shows outside
- * its evaluation — after the submit, or on leaving the waiting room. Safe
- * Exam Browser is closed from its own frame; the one action here is going
- * back to the exam. A kiosk station has nothing to show outside its exam:
- * it goes back to its own screen.
+ * its evaluation — after the submit, or on leaving the waiting room. In SEB
+ * the one action is quitting it, going back to the exam the second. A kiosk
+ * station has nothing to show outside its exam: it goes back to its own
+ * screen.
  */
 function ConfinedElsewhere({ kiosk, onBack }: { kiosk: boolean; onBack: () => void }) {
   useEffect(() => {
@@ -468,9 +483,17 @@ function SebElsewhere({ onBack }: { onBack: () => void }) {
           icon={LogOut}
           title={t("seb.elsewhere.title")}
           titleAs="h1"
-          action={<Button onClick={onBack}>{t("seb.elsewhere.back")}</Button>}
+          action={
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <SebQuitButton />
+              <Button variant="secondary" onClick={onBack}>
+                {t("seb.elsewhere.back")}
+              </Button>
+            </div>
+          }
         >
           {t("seb.elsewhere.body")}
+          <SebQuitKeys />
         </EmptyState>
       </Card>
     </main>
@@ -505,6 +528,8 @@ export default function App() {
       </Suspense>
     );
   }
+  // ADR-027: the `.seb`'s quit link, reached outside SEB (inside, SEB quits first).
+  if (route.view === "sebQuit") return <SebQuitPage />;
   // ADR-051 §7: a kiosk station has no session to wait for; it attests
   // itself and shows its code.
   if (route.view === "kiosk") {

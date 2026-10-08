@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { encodeJournalPath, safeJournalPath } from "@quiz/contracts";
+import { SEB_QUIT_PATH, encodeJournalPath, safeJournalPath } from "@quiz/contracts";
 
 /** The classroom's sections that live in `?tab=`; the others are routes of their own. */
 export type ClassroomQueryTab = "roster" | "evaluations" | "drill";
@@ -170,6 +170,8 @@ export type Route =
    * it. Drawn with no session and without waiting on `/me` (App.tsx).
    */
   | { view: "kiosk" }
+  /** The `.seb`'s quit link outside SEB, drawn with no session (ADR-027). */
+  | { view: "sebQuit" }
   /**
    * The phone's half of the pairing (ADR-051 §7): the code of the station in
    * front of the student, from the QR (`?code=`, which the page reads itself)
@@ -536,6 +538,12 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   kiosk: {
     path: () => "/kiosk",
     match: (parts) => (parts.length === 1 && parts[0] === "kiosk" ? { view: "kiosk" } : null),
+    studentSafe: true,
+  },
+  // ADR-027: `/seb/quit` exactly, the `.seb`'s quit link.
+  sebQuit: {
+    path: () => SEB_QUIT_PATH,
+    match: (parts) => (parts.join("/") === SEB_QUIT_PATH.slice(1) ? { view: "sebQuit" } : null),
     studentSafe: true,
   },
   pair: fixed("pair", { view: "pair" }, true),

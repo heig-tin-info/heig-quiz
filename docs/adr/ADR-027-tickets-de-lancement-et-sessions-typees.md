@@ -64,6 +64,24 @@ that activity's file, then consumes: a refused header never burns the
 ticket. One session per (user, activity) (ADR-051 §4). Still no Browser
 Exam Key in Quiz (ADR-047 amendment "M6-07").
 
+**Addendum (2026-10-08): the quit link.** The file hides SEB's task bar,
+and with it SEB's Quit button: a student who had handed in found no way
+out. Every `.seb` Quiz builds now carries, after `allowQuit`, a `quitURL`
+(`<PUBLIC_URL>/seb/quit`, `SEB_QUIT_PATH`, on the start URL's host, which
+the filter already allows) and `quitURLConfirm` false: SEB quits, without
+confirmation, when it is about to navigate there — the key Moodle's
+`quizaccess_seb` sets as its "link to quit SEB". The screens a `seb`
+session shows when it is done (the end of the attempt, *You have left the
+exam*, the refused launch seen in SEB) and a project's page in SEB carry
+that link as *Quit Safe Exam Browser*, with SEB's shortcut (Ctrl+Q, ⌘Q),
+which may ask to confirm, beside it.
+Outside SEB the address is an SPA page saying the window may be closed.
+This changes the bytes of every file, hence every Config Key
+(`auth/seb.snapshot.test.ts` updated deliberately): an open session keeps
+the key it was launched with, and a file downloaded before the deploy and
+opened after is refused at its start route without burning its ticket —
+the student downloads it again.
+
 ## Context
 
 An exam sat in Safe Exam Browser (SEB) is a separate browser: the portal's

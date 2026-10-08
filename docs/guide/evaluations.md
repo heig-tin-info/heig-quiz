@@ -136,7 +136,7 @@ What changes for the students:
 
 - The card of the exam on their home no longer opens it: its button, **Open in Safe Exam Browser**, shows the steps (install SEB, download the exam file, open it) and hands out the file.
 - The button appears once the exam is open (from its scheduled opening, or when you open it). The file is personal, works once and expires after 5 minutes. Opening it starts SEB straight on the exam, **without signing in again**: in its waiting room if it has one, until you press **Start** (or until the whole roster is there, with an automatic waiting room), then on the questions.
-- The exam cannot be sat from an ordinary browser, and inside SEB nothing else of the platform is reachable. After handing in, the student may quit SEB; the results are read later from the portal.
+- The exam cannot be sat from an ordinary browser, and inside SEB nothing else of the platform is reachable. After handing in, the screen offers one button, **Quit Safe Exam Browser**, which closes SEB at once, without a password; the line under it gives the keyboard shortcut, **Ctrl+Q** on Windows and **⌘Q** on Mac, which may ask to confirm. SEB's own task bar, and its Quit button, are hidden. The results are read later from the portal.
 
 To try it yourself before the class does, give yourself a seat with **Join as student** in the classroom (a seat badged as a staff test), switch to the student view and download the file like a student. Plan a first run on a real machine of the room: SEB must be installed there, and its version is what the students will use.
 

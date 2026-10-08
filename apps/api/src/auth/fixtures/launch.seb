@@ -6,6 +6,10 @@
   <string>https://quiz.example.org/app/auth/seb/s3cret-ticket_0</string>
   <key>allowQuit</key>
   <true/>
+  <key>quitURL</key>
+  <string>https://quiz.example.org/seb/quit</string>
+  <key>quitURLConfirm</key>
+  <false/>
   <key>URLFilterEnable</key>
   <true/>
   <key>URLFilterEnableContentFilter</key>

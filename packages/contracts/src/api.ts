@@ -49,6 +49,9 @@ export interface PublicConfig {
 export const SESSION_KINDS = ["portal", "impersonation", ...TRUSTED_CLIENTS] as const;
 export type SessionKind = (typeof SESSION_KINDS)[number];
 
+/** The quit link of every `.seb` Quiz builds, on Quiz's own host (ADR-027). */
+export const SEB_QUIT_PATH = "/seb/quit";
+
 export interface Me {
   id: string;
   email: string;

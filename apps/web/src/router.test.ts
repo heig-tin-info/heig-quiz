@@ -249,6 +249,7 @@ describe("ROUTES", () => {
     teamsLink: { view: "teamsLink" },
     teamsTab: { view: "teamsTab" },
     kiosk: { view: "kiosk" },
+    sebQuit: { view: "sebQuit" },
     pair: { view: "pair" },
     feedback: { view: "feedback", attemptId: "a-1" },
     drill: { view: "drill" },
@@ -294,6 +295,7 @@ describe("ROUTES", () => {
       "pair",
       // F-PROJ-15 (M3-13): one address, the student's project for a student.
       "project",
+      "sebQuit",
       "settings",
       // F-ORG-14: the student's Courses (M5-02) and Grades.
       "studentCourses",
@@ -348,6 +350,7 @@ describe("ROUTES", () => {
         "projectNew",
         "questionPreview",
         "results",
+        "sebQuit",
         "settings",
         "studentCourses",
         "studentGrades",

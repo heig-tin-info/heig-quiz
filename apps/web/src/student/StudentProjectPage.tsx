@@ -81,6 +81,7 @@ import {
   studentRefusalMessage,
 } from "./projectRow";
 import { SebLaunchModal } from "./SebLaunchModal";
+import { SebQuitButton } from "./SebQuit";
 import { studentProjectNotices, studentProjectNoticeToast } from "./studentProjectNotices";
 
 const isNotFound = (error: unknown) => error instanceof ApiError && error.status === 404;
@@ -181,10 +182,16 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
           </>
         }
         actions={
-          action ? (
-            <span className="block w-full sm:w-auto" data-coach="sproj.action">
-              <RowActionControl action={action} className="w-full sm:w-auto" />
-            </span>
+          action || inSeb ? (
+            <>
+              {/* ADR-027 */}
+              {inSeb ? <SebQuitButton variant="secondary" /> : null}
+              {action ? (
+                <span className="block w-full sm:w-auto" data-coach="sproj.action">
+                  <RowActionControl action={action} className="w-full sm:w-auto" />
+                </span>
+              ) : null}
+            </>
           ) : undefined
         }
       />

@@ -403,6 +403,10 @@ describe("the online workspace (ADR-047, M6-06)", () => {
     const open = await screen.findByRole("link", { name: "Open workspace" });
     expect(open).toHaveAttribute("href", "/app/codespace/start/p1");
     expect(open.className).toMatch(/bg-accent/);
+    // SEB's task bar is hidden: its quit link is on the page, secondary.
+    const quit = screen.getByRole("link", { name: "Quit Safe Exam Browser" });
+    expect(quit).toHaveAttribute("href", "/seb/quit");
+    expect(quit.className).not.toMatch(/bg-accent/);
     // GitHub is out of SEB's reach: no repository action in the header, no repository card.
     expect(screen.queryByRole("link", { name: "Open repository" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Open in Safe Exam Browser" })).toBeNull();
@@ -415,6 +419,7 @@ describe("the online workspace (ADR-047, M6-06)", () => {
     mockFetch({ [URL]: ok(project({ workspace: { mode: "online_seb" }, repo: { ...project().repo!, invitation: null } })) });
     render();
     expect(await screen.findByRole("button", { name: "Open in Safe Exam Browser" })).toHaveClass("bg-accent");
+    expect(screen.queryByRole("link", { name: "Quit Safe Exam Browser" })).toBeNull();
     expect(screen.getByText("heig/labo-1-lea")).toBeInTheDocument();
     expect(screen.queryByText("Invitation pending on GitHub")).toBeNull();
     expect(screen.queryByRole("button", { name: "Resend the invitation" })).toBeNull();

@@ -19,7 +19,7 @@ describe("the end of a sitting on a kiosk station (ADR-051 §7)", () => {
     vi.useFakeTimers();
     const { calls } = mockFetch({});
     const onHome = vi.fn();
-    renderWithProviders(<PlayerEnd reason="submitted" initial={view} onHome={onHome} onResults={vi.fn()} station />);
+    renderWithProviders(<PlayerEnd reason="submitted" initial={view} onHome={onHome} onResults={vi.fn()} confinement="kiosk" />);
     expect(screen.getByRole("heading", { name: "Handed in" })).toBeVisible();
     expect(screen.getByText("This station goes back to its start screen in a few seconds.")).toBeVisible();
     // Its session is gone: nothing more is asked of the server, no results link.
@@ -28,6 +28,21 @@ describe("the end of a sitting on a kiosk station (ADR-051 §7)", () => {
     expect(onHome).not.toHaveBeenCalled();
     await act(() => vi.advanceTimersByTimeAsync(1));
     expect(onHome).toHaveBeenCalledOnce();
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe("the end of a sitting in Safe Exam Browser (ADR-027)", () => {
+  it("offers quitting SEB as the one action, with its shortcut, and asks nothing of the server", () => {
+    const { calls } = mockFetch({});
+    renderWithProviders(<PlayerEnd reason="submitted" initial={view} onHome={vi.fn()} onResults={vi.fn()} confinement="seb" />);
+    expect(screen.getByRole("heading", { name: "Handed in" })).toBeVisible();
+    const quit = screen.getByRole("link", { name: "Quit Safe Exam Browser" });
+    expect(quit).toHaveAttribute("href", "/seb/quit");
+    expect(quit.className).toMatch(/bg-accent/);
+    expect(screen.getByText("Or press Ctrl+Q (Windows) or ⌘Q (Mac).")).toBeVisible();
+    // The rest of Quiz is out of SEB's reach: no Back to home, no results.
+    expect(screen.queryByRole("button", { name: "Back to home" })).toBeNull();
     expect(calls).toHaveLength(0);
   });
 });

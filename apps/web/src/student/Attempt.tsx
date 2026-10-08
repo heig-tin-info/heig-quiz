@@ -69,7 +69,10 @@ export function AttemptPage({
   });
 
   // ADR-051 §7: a kiosk station has no home but its own screen.
-  const station = me.data?.session?.kind === "kiosk";
+  const kind = me.data?.session?.kind;
+  const station = kind === "kiosk";
+  // ADR-051, ADR-027: the trusted client the attempt is sat in, if any.
+  const confinement = kind === "kiosk" || kind === "seb" ? kind : undefined;
   const home = station ? toKiosk : () => navigate({ view: "home" });
   /*
    * The one way out of the student view from inside an attempt (ADR-018
@@ -161,7 +164,7 @@ export function AttemptPage({
       initial={data.view}
       onHome={home}
       onResults={(attemptId, options) => navigate(feedbackLink(attemptId).route, options)}
-      station={station}
+      confinement={confinement}
       {...(exitStudentView ? { onExitStudentView: exitStudentView } : {})}
     />
   );

@@ -104,6 +104,7 @@ const NEVER: ReadonlySet<Route["view"]> = new Set([
   "teamsTab",
   "pair",
   "kiosk",
+  "sebQuit",
 ]);
 
 /**
