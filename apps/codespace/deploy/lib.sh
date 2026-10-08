@@ -47,8 +47,8 @@ cs_instance() {
 
 # Host-level pieces, shared by both instances: the network scripts and the
 # nftables table, the AppArmor profile, the shadow snapshot and backup export
-# scripts, the systemd templates and the VM's two slices (shared with the
-# runner's deploy). Written by bootstrap.sh and by a PRODUCTION deploy
+# scripts, the systemd templates, the VM's two slices and its host input
+# policy (shared with the runner's deploy). Written by bootstrap.sh and by a PRODUCTION deploy
 # only, so that an ordinary staging deploy cannot change what production's
 # containers run under by accident. Not a security boundary: the staging
 # key is root on this VM (ADR-016, M6-04 amendment).
@@ -61,6 +61,7 @@ cs_install_host() {
 		"$CS_APP/deploy/quiz-codespace-shadow@.service" \
 		"$CS_APP/deploy/quiz-codespace-shadow@.timer" /etc/systemd/system/
 	install_slices
+	reload_host_nft
 	# The backup export's one dependency (deployment.md §3, Backup).
 	command -v sqlite3 >/dev/null 2>&1 \
 		|| echo "deploy: warning: no sqlite3 (apt install sqlite3): backup-export.sh cannot run" >&2

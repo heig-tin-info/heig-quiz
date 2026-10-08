@@ -163,6 +163,7 @@ precondition of the 4 h RTO ([ADR-010](../adr/ADR-010-stockage-secrets.md)).
 | the runner's environment | `/etc/quiz-runner/env`, `chmod 600` | `apps/runner/deploy/env.example` |
 | the language images | built on the VM through the rootful socket | `apps/runner/images/build.sh` |
 | the slices | `quiz-runner.slice`, `codespace.slice` in `/etc/systemd/system/` | `infra/engine/*.slice`, installed by the deploys (below) |
+| the host input policy | `table inet host`, `/etc/quiz-engine/host.nft` included by `/etc/nftables.conf` | `infra/engine/host.nft`, applied by `infra/engine/nft-apply.sh` (below) |
 | the codespace backup export | `/usr/local/lib/quiz-codespace/backup-export.sh`, root's forced command for the backup key | `apps/codespace/deploy/backup-export.sh` (below) |
 
 `quiz-runner.container` is a Podman quadlet: `systemd` generates
@@ -193,7 +194,8 @@ enough on its own. `/health` is guarded on purpose: a token the API got wrong
 shows up as a runner `down` in `/healthz`, not as one that says `up` and
 refuses every run. If the application VM moves again, add its new address to
 that line (in the repository and in `/etc/caddy/conf.d/quiz-runner.caddy` on
-the code VM) before the switch, as the 2026-09-25 migration did.
+the code VM) and to the host firewall's sets (below) before the switch, as
+the 2026-09-25 migration did.
 
 The runner holds one secret, that token, and nothing else: it reaches no
 database and passes none of its environment into the sandbox containers. The
@@ -294,6 +296,58 @@ systemctl show quiz-runner.slice codespace.slice -p CPUWeight,IOWeight,MemoryLow
 systemd-cgls --no-pager -u quiz-runner.slice; systemd-cgls --no-pager -u codespace.slice
 systemd-cgtop -m -n 1 --depth=2 | grep -E 'slice|machine'
 ```
+
+### The host firewall (M6-05)
+
+The VM's `input` hook drops what this table does not list; output is free
+and forwarding belongs to netavark and the codespace table. The rules are
+[`infra/engine/host.nft`](https://github.com/heig-tin-info/heig-quiz/blob/main/infra/engine/host.nft),
+one table, `inet host`, that never flushes the others: `inet codespace`
+and `bridge codespace` stay the codespace network unit's, `inet netavark`
+Podman's. The flows it admits, and nothing else:
+
+| Inbound | From | Why |
+| --- | --- | --- |
+| loopback; established and related | | the host's own traffic, replies |
+| tcp 22 | anywhere, IPv4 and IPv6 | the operator, the CI's deploy keys (GitHub's runners, no fixed address), the backup pull; forced commands |
+| tcp 80, tcp and udp 443 | anywhere | Caddy: ACME and the redirect, HTTPS, HTTP/3 |
+| tcp 8443 | the sets `runner_clients_v4/v6`: the application VM, `128.140.71.35` (`2a01:4f8:1c19:1164::1` for a future AAAA) | the runner, behind Caddy's `remote_ip` and the token; move the sets with the Caddyfile |
+| everything from `cs0`, `cs1` | the session containers | already narrowed by `inet codespace` to each bridge's git channel (9418); a drop here would override that table's accept |
+| tcp and udp 53 on `podman*` | build containers | aardvark-dns |
+| udp 67 → 68 on `eth0` | the DHCP server | the IPv4 lease |
+| ICMPv6 neighbour and router discovery (hop limit 255); ICMP and ICMPv6 errors; echo at 10/s | | IPv6 works, path MTU, ping |
+
+Anything else is dropped and counted (`nft list chain inet host input`);
+from outside a closed port times out instead of being refused. ufw stays
+inactive: never enable it beside this table.
+
+**Applying it the first time**, as root on the VM, from the production
+checkout, in a session kept open, before anything else listens on a new
+port (`ss -tulpn` lists what does):
+
+```bash
+cd /opt/quiz-runner && git log -1 --oneline     # a commit that has infra/engine/host.nft
+infra/engine/nft-apply.sh                       # check, arm the rollback (180 s), load
+# within 180 s, from other terminals:
+infra/engine/nft-check.sh outside               # workstation: SSH, :80, code-dev /healthz, :8443 and 9418 time out
+infra/engine/nft-check.sh app                   # application VM, as srv in /srv/quiz: SSH, :8443 answers 401
+infra/engine/nft-check.sh vm                    # here, in a second session: tables, policy, codespace network tests
+infra/engine/nft-apply.sh confirm               # all green; otherwise do nothing and the table goes
+```
+
+`confirm` writes `/etc/quiz-engine/host.nft`, an `/etc/nftables.conf` that
+only includes it (the old one, with its `flush ruleset` and empty
+`inet filter`, is kept as `/etc/nftables.conf.before-quiz`; the empty table
+is deleted), a drop-in that makes stopping `nftables.service` delete this
+table only instead of flushing every table, and enables the service, so a
+reboot restores it. Until a confirm, `/etc` is untouched and a reboot boots
+without the table. Afterwards every production deploy (runner, codespace
+`prod` or bootstrap: `reload_host_nft`, `infra/engine/lib.sh`) reloads the
+table when the checkout's file differs from the confirmed copy, behind the
+same rollback, and confirms only if the loaded chain still admits tcp/22;
+otherwise the deploy fails and the previous table returns within 180 s.
+Rerun the three checks after such a deploy. To take the table off:
+`systemctl stop nftables` (it deletes `inet host`, nothing else).
 
 ### Backup and restore of the codespace data (M6-05)
 

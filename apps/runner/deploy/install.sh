@@ -27,5 +27,6 @@ caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
 systemctl daemon-reload
 systemctl restart quiz-runner.service
 systemctl reload caddy
+reload_host_nft
 drop_old_sha_tags "$image" "$tag"
 echo "deploy: runner at ${tag:0:7}"

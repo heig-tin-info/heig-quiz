@@ -1,0 +1,81 @@
+#!/usr/sbin/nft -f
+#
+# The engine VM's host input policy (M6-05 part 3): code.chevallier.io,
+# which hosts the runner and both workspace portals. Every inbound flow the
+# VM serves is listed here and in deployment.md §3 (The host firewall), the
+# only two places it is written; anything else that reaches the host is
+# dropped and counted.
+#
+# Applied by infra/engine/nft-apply.sh (safety net, then confirm), which
+# writes /etc/nftables.conf to include a copy of this file. This file owns
+# ONE table and never runs `flush ruleset`: `inet codespace`,
+# `bridge codespace` (apps/codespace/infra/nft/) and `inet netavark`
+# (Podman) belong to their owners and survive a reload. Only `input` is
+# filtered: forwarding is netavark's and the codespace table's, output is
+# free.
+#
+# Several base chains on one hook: a `drop` in any of them is final, an
+# `accept` ends only its own chain. Hence the cs0/cs1 accept below: the
+# codespace input chain (priority filter - 10) has already narrowed those
+# bridges to the git channel, and this chain must not drop what it let
+# through.
+#
+# Idempotent: `table` then `delete table` then the definition, replayable
+# with `nft -f`.
+
+table inet host
+delete table inet host
+
+table inet host {
+
+	# The runner's only client, the application VM (deployment.md §3: the
+	# same address as `@quiz remote_ip` in apps/runner/deploy/Caddyfile;
+	# move both together). The v6 address is ready for an AAAA on
+	# code.chevallier.io, which has none today.
+	set runner_clients_v4 {
+		type ipv4_addr
+		elements = { 128.140.71.35 }
+	}
+	set runner_clients_v6 {
+		type ipv6_addr
+		elements = { 2a01:4f8:1c19:1164::1 }
+	}
+
+	chain input {
+		type filter hook input priority filter; policy drop;
+
+		iif "lo" accept
+
+		# Neighbour discovery and router advertisements, link-local only
+		# (hop limit 255), before the conntrack verdict: conntrack does not
+		# track them.
+		icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-advert } ip6 hoplimit 255 accept
+
+		ct state vmap { established : accept, related : accept, invalid : drop }
+
+		# The codespace bridges, already narrowed by `inet codespace` to
+		# the git channel (9418) of each bridge's own gateway.
+		iifname { "cs0", "cs1" } accept comment "filtered by inet codespace"
+		# aardvark-dns on a Podman bridge (image builds).
+		iifname "podman*" meta l4proto { tcp, udp } th dport 53 accept
+
+		iifname "eth0" udp sport 67 udp dport 68 accept comment "DHCPv4 replies"
+
+		# SSH from anywhere: the operator, the CI's deploy keys (GitHub's
+		# runners, no fixed address) and the backup pull (forced commands).
+		tcp dport 22 accept
+		# Caddy: ACME HTTP-01 and the redirect, then HTTPS and HTTP/3.
+		tcp dport { 80, 443 } accept
+		udp dport 443 accept
+		# The runner's Caddy site, for the application VM only.
+		tcp dport 8443 ip saddr @runner_clients_v4 accept
+		tcp dport 8443 ip6 saddr @runner_clients_v6 accept
+
+		icmp type { destination-unreachable, time-exceeded, parameter-problem } accept
+		icmp type echo-request limit rate 10/second burst 20 packets accept
+		icmpv6 type { destination-unreachable, packet-too-big, time-exceeded, parameter-problem } accept
+		icmpv6 type echo-request limit rate 10/second burst 20 packets accept
+
+		counter comment "dropped by the input policy"
+	}
+}

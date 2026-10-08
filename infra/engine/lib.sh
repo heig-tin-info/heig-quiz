@@ -26,6 +26,14 @@ install_slices() {
 	install -m 0644 "$ENGINE_DIR/quiz-runner.slice" "$ENGINE_DIR/codespace.slice" /etc/systemd/system/
 }
 
+# reload_host_nft: the VM's host input policy (host.nft), from a production
+# checkout only (the runner's deploy, a codespace bootstrap or prod deploy).
+# Nothing until it has been applied and confirmed once by hand; then
+# reloaded when it changed, behind the same rollback (nft-apply.sh deploy).
+reload_host_nft() {
+	"$ENGINE_DIR/nft-apply.sh" deploy
+}
+
 # drop_old_sha_tags <repository> <sha to keep>: untags every other 40-hex
 # tag of the repository. An image that keeps another tag (:latest, :prod,
 # :staging) stays; one left with none and unused is deleted. Never a global
