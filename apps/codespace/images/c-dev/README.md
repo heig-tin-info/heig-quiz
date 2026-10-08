@@ -18,8 +18,8 @@ invariants 1 and 3 of [CLAUDE.md](../../CLAUDE.md).
 | `resolv.conf` | empty resolver, installed as `/etc/resolv.conf` |
 | `extension/` | source of `heig.codespace-statusbar`, packaged into a `.vsix` at build time |
 | `run-hardened.sh` | `podman run` with the mandatory hardening |
-| `test.sh` | P1 acceptance test (47 assertions) |
-| `../../infra/seccomp/codespace.json` | seccomp profile of the project |
+| `test.sh` | acceptance test of the image |
+| `../../infra/seccomp/codespace.json` | seccomp profile of the project: the runner's plus `ptrace` (M6-05) |
 | `../../infra/apparmor/codespace` | AppArmor profile of the project (what makes gdb work again) |
 
 ## Pinned versions
@@ -79,9 +79,9 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
 - **Add an extension**: one `ARG` for its identifier, one `--install-extension` in the same `RUN`, one `grep -qi "^<id>@"` against `/etc/code-server/extensions.lock` so that the build fails if it is missing, its id in `extensions.allowed` of `settings.json`, the exact expected list asserted in `test.sh` § 3 (three ids, sorted), and a row in the pinned-versions table.
 - **Bump code-server**: `ARG CS_VERSION` in the `Containerfile`, then the tag `codespace/c-dev:4.137.0` wherever it is hard-coded — `.env.example` (`CODESPACE_IMAGE`, `CODESPACE_DEFAULT_IMAGE`), `src/auth/config.ts` (the defaults of those same two), `images/c-dev/run-hardened.sh`, `images/c-dev/test.sh`, classroom's `deploy/push.sh`, classroom's `deploy/bootstrap.sh`, `seed/assignments.yaml`, `CLAUDE.md`, classroom's `docs/deploy.md`, `docs/integration-classroom.md`, `src/git/README.md`, this README, and the tests that state it (`src/engine/index.test.ts`, `src/sessions/sessions.test.ts`, `src/sessions/containerEnv.test.ts`, `src/sessions/workspace.test.ts`, `src/proxy/proxy.test.ts`, `src/web/pages.test.ts`, `src/git/channel.integration.test.ts`).
 - **Deploy**: classroom's `deploy/push.sh --rebuild-image` rebuilds the image on the VM; without the flag it is only built there when the tag is missing.
-- **Run `images/c-dev/test.sh`**: prerequisites are rootful Podman on `unix:///run/podman/podman.sock`, the image built, `python3` on the host (it fabricates the fake `.vsix`); no sudo. Its ten sections prove, in order:
+- **Run `images/c-dev/test.sh`**: prerequisites are rootful Podman on `unix:///run/podman/podman.sock`, the image built, `python3` on the host (it fabricates the fake `.vsix`); no sudo. Its eleven sections prove, in order:
   - § 0 the container starts under `run-hardened.sh` and answers `/healthz` (prints `MESURE_DEMARRAGE_SECONDES`);
-  - § 1 `gdb` runs a program and produces a backtrace, with no "Operation not permitted";
+  - § 1 `gdb` runs a program and produces a backtrace, with no "Operation not permitted", and breaks in `main`, steps over a line and into a call;
   - § 2 `personality(ADDR_NO_RANDOMIZE)` passes the project seccomp profile, and the control container on the default profile still varies;
   - § 3 no extension can be installed, and the server knows exactly the three baked-in ones;
   - § 4 the root filesystem is read-only, `CapEff` is zero, `NoNewPrivs` is 1, the seccomp filter is loaded and the AppArmor label is the `codespace` profile (skipped with a note on a host without AppArmor);
@@ -90,6 +90,7 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
   - § 7 code-server: machine settings copied, `extensions.allowed`, the settings found in the embedded package, the font-prompt chain, neutralised gallery, no uncaught exception, toolchain binaries and man pages present;
   - § 8 `/etc/resolv.conf` comes from the image, with no nameserver, and resolution fails in under two seconds;
   - § 9 the container carries the seven portal variables and nothing else, the git identity works without a configuration file, and the VS Code server inherits the environment.
+  - § 10 the seccomp profile is the runner's plus `ptrace`: `unshare -r true` fails, and raw `unshare(CLONE_NEWUSER)` and `mount(2)` answer `ENOSYS`.
 
 ## Measurements (2026-09-17, WSL2, 24 cores, Podman 5.7 rootful, crun, overlay)
 
@@ -486,27 +487,17 @@ to end, including the `podman exec` call).
 
 ## Seccomp profile: `infra/seccomp/codespace.json`
 
-Source: `/usr/share/containers/seccomp.json` of the workstation (package
-`containers-common`, consistent with Podman 5.7.0). **A single entry added**,
-nothing else modified, nothing removed, nothing reordered apart from the insertion:
+The profile is `apps/runner/infra/seccomp/runner.json` plus one rule
+allowing `ptrace` (gdb), since M6-05. `src/seccomp.test.ts` fails on any
+other difference. What the runner's profile denies, and why, is listed in
+`apps/runner/README.md` ("The seccomp profile, tightened"); `test.sh` § 10
+proves it on the image. To change the profile, change the runner's and copy
+it here with the `ptrace` rule.
 
-```json
-{
-  "names": ["personality"],
-  "action": "SCMP_ACT_ALLOW",
-  "args": [{ "index": 0, "value": 262144, "valueTwo": 0, "op": "SCMP_CMP_EQ" }],
-  "comment": "ADDR_NO_RANDOMIZE (0x40000): required by gdb set disable-randomization on (heig-codespace P1)",
-  "includes": {},
-  "excludes": {}
-}
-```
-
-The five `personality` values already allowed by the upstream profile are
-kept: `0`, `8`, `131072` (0x20000), `131080` (0x20008), `4294967295`
-(0xffffffff). The added entry is inserted right after them. Diff verified by
-set comparison of the 40 upstream entries → 41 project entries: one added,
-zero removed, zero modified, head keys (`defaultAction`, `architectures`,
-`archMap`) identical.
+The deploy installs it as the instance's `/etc/quiz-codespace/<i>/seccomp.json`
+(`deploy/lib.sh`); Podman copies the profile into a container's spec when
+it creates it, so an existing session container keeps the old filter until
+it is created again.
 
 Regression covered by `test.sh` § 2: a control container started with the
 **default** profile gives three different addresses for `main` over three

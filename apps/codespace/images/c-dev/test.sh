@@ -74,7 +74,29 @@ PY
 
 cat > "${VOL_BASE}/a/work/hello.c" <<'EOF'
 #include <stdio.h>
-int main(void) { printf("&main=%p\n", (void *)main); return 0; }
+static int square(int x) { return x * x; }
+int main(void) {
+  int a = 3;
+  int b = square(a);
+  printf("&main=%p\n", (void *)main);
+  return b - 9;
+}
+EOF
+
+# § 10: the raw syscalls, so that the answer is the seccomp filter's (ENOSYS)
+# and not a refusal by util-linux or AppArmor before the call.
+cat > "${VOL_BASE}/a/work/nsprobe.c" <<'EOF'
+#define _GNU_SOURCE
+#include <errno.h>
+#include <sched.h>
+#include <stdio.h>
+#include <sys/mount.h>
+int main(void) {
+  int u = unshare(CLONE_NEWUSER) == 0 ? 0 : errno;
+  int m = mount("none", "/tmp", "tmpfs", 0, NULL) == 0 ? 0 : errno;
+  printf("unshare=%d mount=%d ENOSYS=%d\n", u, m, ENOSYS);
+  return 0;
+}
 EOF
 
 echo "P1: hardened student image, working gdb"
@@ -137,13 +159,13 @@ case "$OUT" in
 esac
 ok "gcc -g -O0 hello.c then gdb -batch -ex run -ex bt: no Operation not permitted"
 
-OUT=$(cexec 'cd /work && gdb -batch -ex "break main" -ex run -ex bt ./a.out' 2>&1) \
+OUT=$(cexec 'cd /work && gdb -batch -ex "break main" -ex run -ex next -ex step -ex bt ./a.out' 2>&1) \
   || fail "gdb with a breakpoint failed" "$OUT"
 case "$OUT" in
-  *"#0"*main*) : ;;
-  *) fail "bt did not produce a stack containing main" "$OUT" ;;
+  *"Breakpoint 1, main ()"*"#0  square (x=3)"*"#1 "*"in main ()"*) : ;;
+  *) fail "gdb did not break in main, then next and step into square" "$OUT" ;;
 esac
-ok "bt on a breakpoint in main produces a stack"
+ok "gdb breaks in main, steps over a line and into square (x=3), bt shows main below it"
 
 # --------------------------------------------------------------------------
 head2 "2. ASLR can be disabled: personality(ADDR_NO_RANDOMIZE) passes the seccomp profile"
@@ -577,6 +599,25 @@ if cexec 'test -e /tmp/codespace-statusbar.json' >/dev/null 2>&1; then
   fail "the activation witness exists before any connection: it comes from the image"
 fi
 ok "no activation witness in the image (it only appears when the editor is opened)"
+
+# --------------------------------------------------------------------------
+head2 "10. seccomp: the runner's profile plus ptrace (M6-05)"
+# --------------------------------------------------------------------------
+# infra/seccomp/codespace.json is apps/runner/infra/seccomp/runner.json plus
+# one rule allowing ptrace (src/seccomp.test.ts): no user namespace, no mount
+# (gdb breaking and stepping is § 1).
+OUT=$(cexec 'unshare -r true' 2>&1) && fail "unshare -r true succeeded inside the container" "$OUT"
+case "$OUT" in
+  *"Function not implemented"*) ok "unshare -r true fails: Function not implemented" ;;
+  *) fail "unshare -r true failed, but not on the seccomp filter (ENOSYS expected)" "$OUT" ;;
+esac
+
+OUT=$(cexec 'cd /work && gcc -o nsprobe nsprobe.c && ./nsprobe' 2>&1) \
+  || fail "the namespace probe did not build or run" "$OUT"
+case "$OUT" in
+  "unshare=38 mount=38 ENOSYS=38") ok "raw unshare(CLONE_NEWUSER) and mount(2) answer ENOSYS: $OUT" ;;
+  *) fail "unshare(2) or mount(2) did not answer ENOSYS" "$OUT" ;;
+esac
 
 printf '\n%d assertions, all green.\n' "$NTEST"
 printf 'MESURE_DEMARRAGE_SECONDES=%s\n' "$BOOT"

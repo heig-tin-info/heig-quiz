@@ -19,7 +19,7 @@ The values (names, ports, platform URLs) are in `deploy/lib.sh`
 | Portal (quadlet) | `/etc/containers/systemd/quiz-codespace-<i>.container` → `quiz-codespace-<i>.service` |
 | Image the quadlet runs | `ghcr.io/heig-tin-info/quiz-codespace:<i>` (the deployed sha, retagged) |
 | Environment, secrets | `/etc/quiz-codespace/<i>/env` (0600) |
-| Seccomp profile (host path) | `/etc/quiz-codespace/<i>/seccomp.json` |
+| Seccomp profile (host path) | `/etc/quiz-codespace/<i>/seccomp.json`, from `infra/seccomp/codespace.json` (the runner's plus `ptrace`, M6-05) |
 | SQLite, volumes | `/srv/quiz-codespace/<i>/var`, `/srv/quiz-codespace/<i>/volumes` |
 | Network, anchor, nftables | `quiz-codespace-net@<i>.service` |
 | Shadow snapshots | `quiz-codespace-shadow@<i>.timer` |

@@ -4235,6 +4235,18 @@ serves now (16a), and what waits for the group repositories (16b).
   seccomp convergence (keep `ptrace`); `deployment.md` §3.
 - **Acceptance**: grading stays within `RUNNER_TIMEOUT_MS` with N sessions
   live; one restore performed; gdb breaks and steps; `unshare -r` fails.
+- **As delivered (part 1: seccomp)** (branch `merge/M6-05-seccomp`, #602):
+  `apps/codespace/infra/seccomp/codespace.json` is now the runner's profile
+  plus one rule allowing `ptrace` (gdb); what that profile denies is in
+  `apps/runner/README.md`. `apps/codespace/src/seccomp.test.ts` (unit suite)
+  fails on any other difference. `images/c-dev/test.sh` § 10: `unshare -r
+  true` fails, raw `unshare(CLONE_NEWUSER)` and `mount(2)` answer `ENOSYS`;
+  § 1: gdb breaks, steps over a line and into a call. Run green on the WSL2
+  workstation (rootful socket, `APPARMOR=`); not run: the extension host and
+  terminal in a browser. A session container keeps the filter it was
+  created with until it is created again. Remaining: slices, host nft,
+  Caddy log mask, backups, `deployment.md` §3; no resize (owner's decision,
+  2026-10-08).
 
 ### M6-06 — Quiz `codespace` module
 - **Depends on**: M6-03, M3-02.
