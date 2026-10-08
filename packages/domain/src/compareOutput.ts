@@ -16,17 +16,29 @@ export interface CompareOptions {
   numeric?: NumericCompare | null | undefined;
 }
 
+/**
+ * The part of ONE line the comparison reads, case untouched: its line ending
+ * dropped, and its trailing blanks too under `trimTrailing`. The output diff
+ * (`outputDiff.ts`) cuts its lines with the same rule.
+ */
+export function lineBody(line: string, opts: CompareOptions): string {
+  const body = line.endsWith("\r") ? line.slice(0, -1) : line;
+  return opts.trimTrailing === false ? body : body.replace(/[ \t]+$/, "");
+}
+
+/** {@link lineBody}, case-folded under `ignoreCase`: what one line is compared as. */
+export function normalizeLine(line: string, opts: CompareOptions): string {
+  const body = lineBody(line, opts);
+  return opts.ignoreCase === true ? body.toLowerCase() : body;
+}
+
 function prepare(s: string, opts: CompareOptions): string {
-  let out = s.replace(/\r\n?/g, "\n");
-  if (opts.trimTrailing !== false) {
-    out = out
-      .split("\n")
-      .map((line) => line.replace(/[ \t]+$/, ""))
-      .join("\n")
-      .replace(/\n+$/, "");
-  }
-  if (opts.ignoreCase === true) out = out.toLowerCase();
-  return out;
+  const out = s
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => normalizeLine(line, opts))
+    .join("\n");
+  return opts.trimTrailing === false ? out : out.replace(/\n+$/, "");
 }
 
 /** True when the produced output counts as the expected one. */

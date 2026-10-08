@@ -296,8 +296,12 @@ const CODE_BAD = [
 /** `code` never reaches a runner here, so its case-by-case detail is built. */
 function mockCodeDetails(config: Record<string, unknown>, ability: number) {
   const cases = ((config.tests as { cases?: CodeCaseLike[] })?.cases ?? []) as CodeCaseLike[];
-  const results = cases.map((c) => {
+  const results = cases.map((c, i) => {
     const ok = rand() < ability;
+    // The first case fails on a stray leading space — the difference only
+    // the whitespace glyphs and the diff view show (#553); the others on a
+    // plainly wrong value.
+    const wrong = i === 0 ? ` ${c.expected}` : "0";
     return {
       name: c.name,
       visible: c.visible,
@@ -308,7 +312,7 @@ function mockCodeDetails(config: Record<string, unknown>, ability: number) {
       timedOut: false,
       oom: false,
       expected: c.expected,
-      actual: ok ? c.expected : "0",
+      actual: ok ? c.expected : wrong,
       stderr: "",
     };
   });

@@ -1309,6 +1309,16 @@ const scenes = [
   { name: "grading-panel-expected", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
       await openRow(p, 0);
     } },
+  // Issue #553: a failed code answer whose first case differs by a leading
+  // space only — the glyphs come on by themselves; then the diff view.
+  { name: "grading-panel-output", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await openFailedCode(p);
+    } },
+  { name: "grading-panel-output-diff", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await openFailedCode(p);
+      await p.getByRole("radio", { name: /^(Diff|Différences)$/ }).first().click({ force: true });
+      await p.evaluate(() => localStorage.removeItem("quiz.outputMode"));
+    } },
   { name: "grading-override", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
       await openRow(p, 1);
       await p.getByRole("dialog").getByRole("button", { name: /^(Adjust|Modifier)$/ }).click();
@@ -1615,6 +1625,15 @@ async function openTemplate(page) {
 /** Opens a row of the grading table in its panel: 0 is the expected row. */
 async function openRow(page, n) {
   await page.locator("tbody tr").nth(n).click();
+  await page.waitForTimeout(400);
+}
+
+/** Opens the grading panel on the first code answer that passed no test (issue #553). */
+async function openFailedCode(page) {
+  // Focus and Enter, the table's own "Open": a click on the program unfolds it instead.
+  await page.locator("tbody tr", { hasText: /^0\/3 / }).first().focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("radiogroup", { name: /^(Output view|Affichage de la sortie)$/ }).first().waitFor();
   await page.waitForTimeout(400);
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareOutput } from "./compareOutput.js";
+import { compareOutput, lineBody, normalizeLine } from "./compareOutput.js";
 
 describe("compareOutput", () => {
   it("folds CRLF on both sides", () => {
@@ -15,6 +15,12 @@ describe("compareOutput", () => {
   it("is case-sensitive unless asked otherwise", () => {
     expect(compareOutput("OK", "ok")).toBe(false);
     expect(compareOutput("OK", "ok", { ignoreCase: true })).toBe(true);
+  });
+
+  it("reads one line through the same rule the output diff uses", () => {
+    expect(lineBody("Ab \t\r", {})).toBe("Ab");
+    expect(lineBody("Ab \r", { trimTrailing: false })).toBe("Ab ");
+    expect(normalizeLine("Ab  ", { ignoreCase: true })).toBe("ab");
   });
 
   it("keeps a leading difference significant", () => {

@@ -40,6 +40,7 @@ export {
 export * from "./cloze.js";
 export * from "./concepts.js";
 export * from "./compareOutput.js";
+export * from "./outputDiff.js";
 export * from "./cooldown.js";
 export * from "./correction.js";
 export * from "./courseRole.js";
