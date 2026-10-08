@@ -9,8 +9,8 @@ themselves (this record's §1–§4, §6), the per-course catalog (§5, shipped:
 see its as-built note) and the trusted-client gap (§7). Check the code for
 what has shipped.
 
-Amended 2026-10-08 (issue #584, reopened by a teacher; decided by the
-product owner's supervisor): §6 only — the student reads the conditions
+Amended 2026-10-08 (requested by a teacher in #584, decided by the product
+owner, 2026-10-08): §6 only — the student reads the conditions
 grouped by kind instead of in two blocks (announced, imposed). See the
 amendment under §6; the rest of the record is unchanged.
 
@@ -143,8 +143,8 @@ a text that changes after the exam leaves no record of what was announced.
   in the duration or deadline line, which the ready screen's sentence by
   Start reads too.
 - A teacher can still write something the platform cannot check ("phones
-  forbidden"): it reads as the teacher's word, under their heading, which is
-  what it is.
+  forbidden"): it reads as the teacher's word, first in its kind's block
+  (§6 as amended 2026-10-08), which is what it is.
 - `requireFullscreen` remains inert, and is now documented as such.
 
 ## Alternatives considered

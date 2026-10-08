@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CONDITION_KIND_ORDER,
+  CONDITION_KINDS,
   announcedConditionsOn,
   conditionsAllowedFor,
   conditionsByKind,
@@ -147,6 +149,10 @@ describe("conditionsByKind (ADR-079 §6, amended 2026-10-08)", () => {
     { kind: "allowed" as const, text: "A dictionary" },
     { kind: "forbidden" as const, text: "Smart watches" },
   ];
+
+  it("orders every kind, each once", () => {
+    expect([...CONDITION_KIND_ORDER].sort()).toEqual([...CONDITION_KINDS].sort());
+  });
 
   it("groups forbidden, allowed, provided, then good to know", () => {
     const groups = conditionsByKind(announced, imposedConditions(base({}, { calculator: "standard" })));
