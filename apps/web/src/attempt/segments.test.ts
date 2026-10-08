@@ -22,6 +22,7 @@ const item = (id: string, over: Partial<PlayerItem> = {}): PlayerItem => ({
   type: "short",
   milestone: false,
   bonus: false,
+  intro: null,
   markedDone: false,
   skipped: false,
   flagged: false,
@@ -51,6 +52,7 @@ function state(navigation: Navigation, locked: boolean): PlayerState {
       item("i4", { serverLocked: locked }),
     ],
     answers: { i0: "x", i2: "z", i3: "" },
+    passed: {},
   };
 }
 
@@ -80,6 +82,7 @@ describe("segmentsOf", () => {
       index: 1,
       items: [item("i0", { markedDone: true }), item("i1")],
       answers: {},
+      passed: {},
     };
     expect(segmentsOf(s, answered).map((x) => x.locked)).toEqual([true, false]);
   });
@@ -91,6 +94,7 @@ describe("segmentsOf", () => {
       index: 0,
       items: [item("i0"), item("i1", { type: "mcq" }), item("i2", { type: "code" })],
       answers: { i1: { selected: [0] } },
+      passed: {},
     };
     segmentsOf(s, spy);
     expect(spy.mock.calls).toEqual([
@@ -106,6 +110,7 @@ describe("segmentsOf", () => {
       index: 0,
       items: [item("i0"), item("i1", { type: "mcq" }), item("i2", { type: "mcq" })],
       answers: { i1: { selected: [2] }, i2: { selected: [] } },
+      passed: {},
     };
     expect(segmentsOf(s, isAnswered).map((x) => x.mark)).toEqual([
       "unanswered",
@@ -115,6 +120,6 @@ describe("segmentsOf", () => {
   });
 
   it("an empty attempt has an empty strip", () => {
-    expect(segmentsOf({ navigation: "free", index: 0, items: [], answers: {} }, answered)).toEqual([]);
+    expect(segmentsOf({ navigation: "free", index: 0, items: [], answers: {}, passed: {} }, answered)).toEqual([]);
   });
 });

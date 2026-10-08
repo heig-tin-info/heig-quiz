@@ -30,6 +30,11 @@
  *   - on an unsettled question in `free`, none: the answer field IS the
  *     action, and an accent on "Next" would push past it.
  *
+ * An item may carry the teacher's text before it (ADR-084): arriving on it
+ * shows that passage in place of the question, and the one primary action
+ * is then "Continue". Under `free` navigation "Read the text again" brings
+ * it back; elsewhere Continue is one way (`passageOf`, `canReread`).
+ *
  * A one-question evaluation has no navigation to draw: no progress strip
  * (the strip is a map of a paper that has one page) and no previous / next
  * buttons — absent, not disabled. Two dead controls are worse than none.
@@ -47,7 +52,7 @@
  * where the student decides to try again (ADR-025 addendum, issue #121).
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ShieldAlert } from "lucide-react";
+import { ChevronRight, ShieldAlert } from "lucide-react";
 
 import type { AttemptView } from "@quiz/contracts";
 import { answerMark, calculatorOn, mayValidate } from "@quiz/domain";
@@ -55,13 +60,21 @@ import { answerMark, calculatorOn, mayValidate } from "@quiz/domain";
 import { postSimulate } from "../attempt/run";
 import { useAttempt, type UseAttempt } from "../attempt/useAttempt";
 import { CalculatorDock } from "../calculator/CalculatorDock";
-import { currentItem, isLocked, neighbour, segmentsOf } from "../attempt/playerReducer";
+import {
+  canReread,
+  currentItem,
+  isLocked,
+  neighbour,
+  passageOf,
+  segmentsOf,
+} from "../attempt/playerReducer";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useLentCanvasShortcuts } from "../shortcuts";
 import { Button, Card, Modal, useMinWidth } from "../ui";
 import { ConditionsList } from "./ConditionsList";
 import { ExpandChrome, type ExpandChromeValue } from "./ExpandLayer";
+import { IntroPassage, RereadButton } from "./IntroPassage";
 import { OfflineBanner } from "./OfflineBanner";
 import { PausedOverlay, ScreenOverlay } from "./PausedOverlay";
 import { useStationAttestation } from "../kiosk/useStationAttestation";
@@ -284,6 +297,9 @@ export function PlayerView({
   const sync =
     unsent && (saverSync === "saved" || saverSync === "saving") ? "unsaved" : saverSync;
   const item = currentItem(state);
+  // ADR-084: the teacher's text before the question, until Continue. While
+  // it shows, the question — and everything that acts on it — waits.
+  const passage = passageOf(state);
   const total = state.items.length;
   const locked = item ? isLocked(state, item.id) : true;
   const readOnly = locked || closed !== null || paused;
@@ -306,7 +322,11 @@ export function PlayerView({
   // "Validate and continue" exists where the navigation locks (F-LIVE-08),
   // and is offered while it can still be pressed.
   const canValidate =
-    item !== undefined && !readOnly && !validated && mayValidate(state.navigation, item);
+    item !== undefined &&
+    passage === null &&
+    !readOnly &&
+    !validated &&
+    mayValidate(state.navigation, item);
   const controls = usePlayerControls({ session, item, readOnly, canValidate, blank: !answered });
   const move = useCallback((delta: 1 | -1) => dispatch({ type: "move", delta }), [dispatch]);
 
@@ -354,7 +374,7 @@ export function PlayerView({
    * one way out of the last question.
    */
   const settled = mark !== "unanswered" || validated;
-  const handInIsPrimary = !canValidate && settled && next === null;
+  const handInIsPrimary = passage === null && !canValidate && settled && next === null;
   // A single question has no neighbours to walk to: the two buttons are
   // absent rather than disabled, and so is the strip above (F-LIVE-09 draws
   // the questions, and one question is not a progression). Nothing to show
@@ -369,8 +389,18 @@ export function PlayerView({
   // ADR-069: the calculator the evaluation provides, for the whole attempt —
   // outside the keyed question, so its number survives a move.
   const calculator = calculatorOn(initial.evaluation.mode, initial.evaluation.settings.calculator);
+  // The passage's one action stands where the question's go — the phone's
+  // footer, under the text on a desktop — on the right, where Next would be.
   const actions =
-    manyItems || canValidate ? (
+    passage !== null && item ? (
+      <>
+        <div className="flex-1" />
+        <Button variant="primary" onClick={() => dispatch({ type: "pass", itemId: item.id })}>
+          {t("player.intro.continue")}
+          <ChevronRight className="size-4" aria-hidden />
+        </Button>
+      </>
+    ) : manyItems || canValidate ? (
       <PlayerActions
         manyItems={manyItems}
         canValidate={canValidate}
@@ -427,15 +457,28 @@ export function PlayerView({
                   segments={segments}
                   onSelect={selectSegment}
                   label={progressLabel}
-                  points={item.points}
+                  // The passage is not the question: its points and the
+                  // preview's tools for it wait for Continue (ADR-084).
+                  {...(passage === null ? { points: item.points } : {})}
                 >
-                  {tools}
+                  {passage === null ? tools : null}
                 </PlayerRail>
               ),
             }
           : {})}
       >
-        {item ? (
+        {item && passage !== null ? (
+          <>
+            <IntroPassage
+              source={passage}
+              index={state.index}
+              oneWay={state.navigation !== "free"}
+            />
+            {desktop && actions ? (
+              <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>
+            ) : null}
+          </>
+        ) : item ? (
           <>
             <QuestionHeading
               index={state.index}
@@ -444,6 +487,11 @@ export function PlayerView({
               validated={validated}
               mark={mark}
             />
+            {canReread(state) ? (
+              <div className="-mt-1 mb-2">
+                <RereadButton onClick={() => dispatch({ type: "reread", itemId: item.id })} />
+              </div>
+            ) : null}
             {/* `flow-root` holds the floated flag: the statement's first
                 lines wrap around it instead of running under it. */}
             <Card className="flow-root p-5 sm:p-6">

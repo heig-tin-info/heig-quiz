@@ -62,7 +62,10 @@ import { studentRooms } from "./org";
 // serves:
 //
 //   ?scene=lobby | ready | running | paused | closed | extend | single | marks
-//          | forward | exercise                       (running by default)
+//          | forward | exercise | intro               (running by default)
+//
+// `intro` gives Q1 and Q4 the teacher's text before them (ADR-084): the
+// paper opens on the passage screen.
 //
 // `ready` is a running evaluation the student has not started (ADR-076): the
 // entry route answers the ready screen until `POST …/attempt/start`.
@@ -317,6 +320,15 @@ studentAnswers.set(studentItem(7), {
   done: false,
 });
 let studentPosition: string | null = studentItem(1);
+/** ADR-084: the passages of `?scene=intro`, by question number. */
+const STUDENT_INTROS: Record<number, string> = {
+  1:
+    "## Avant de commencer\n\nLisez les chapitres 8 et 9 du polycopié (**pointeurs** et **lois de Kirchhoff**). " +
+    "Les trois premières questions portent sur le chapitre 8.\n\n- Une seule réponse par question à choix\n- Le code se compile en C17",
+  4:
+    "## Partie 2 — Code\n\nLes questions suivantes demandent d'écrire du code. Relisez votre fonction avant de continuer : " +
+    "`r_parallele` doit gérer une résistance nulle.",
+};
 if (scene === "marks" || scene === "forward") {
   // Q1 answered, Q2 left on purpose, Q3 flagged and still empty (where the
   // student is), Q4 flagged with an answer; Q5 answered, Q6 untouched.
@@ -438,6 +450,7 @@ export const studentAttemptView = (): AttemptView => ({
       milestone: n === 3,
       // The circuit, a bonus question (ADR-052): the player's label.
       bonus: n === 5,
+      intro: scene === "intro" ? (STUDENT_INTROS[n] ?? null) : null,
       // ADR-026: what `toStudent` adds to a choice question under negative marking.
       student:
         n === 1 && flags.negative

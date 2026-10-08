@@ -315,12 +315,18 @@ export function mockVerdict(seed: number): "correct" | "partial" | "wrong" {
   return n < 6 ? "correct" : n < 8 ? "partial" : "wrong";
 }
 
+const MOCK_INTRO_FIRST =
+  "Lisez les chapitres 8 et 9 du polycopié avant de répondre. **Une seule réponse** par question à choix.";
+const MOCK_INTRO_PART2 =
+  "## Partie 2\n\nFin de la première partie. Les questions suivantes portent sur le code.";
+
 interface MockItem {
   id: string;
   position: number;
   points: number;
   milestone: boolean;
   bonus: boolean;
+  intro: string | null;
   questionId: string;
   questionVersionId: string;
   type: string;
@@ -455,6 +461,9 @@ function makeItems(count: number): MockItem[] {
       // One bonus question (ADR-052) in a list long enough to keep others
       // that count: the builder's candy toggle and the student's label.
       bonus: count >= 4 && i === 2,
+      // ADR-084: the instructions before the first question, and a transition
+      // after the first section break — the builder's text bands.
+      intro: i === 0 ? MOCK_INTRO_FIRST : i === 2 ? MOCK_INTRO_PART2 : null,
       questionId: q.id,
       questionVersionId: uuid(),
       type: q.type,
@@ -1411,6 +1420,7 @@ on("GET", "/app/api/evaluations/:id/pull-template", (m) => {
     points: i.points,
     milestone: i.milestone,
     bonus: i.bonus,
+    intro: i.intro,
   });
   return {
     templateId: template.id,
@@ -1516,6 +1526,7 @@ function addItemsTo(e: MockEvaluation, questionIds: string[]): void {
       points: q.type === "code" ? 3 : 1,
       milestone: false,
       bonus: false,
+      intro: null,
       questionId: q.id,
       questionVersionId: uuid(),
       type: q.type,
@@ -1533,6 +1544,9 @@ function patchItemOf(e: MockEvaluation, itemId: string, body: Record<string, unk
   if (typeof body.points === "number") item.points = body.points;
   if (typeof body.milestone === "boolean") item.milestone = body.milestone;
   if (typeof body.bonus === "boolean") item.bonus = body.bonus;
+  if (typeof body.intro === "string" || body.intro === null) {
+    item.intro = typeof body.intro === "string" && body.intro.trim() !== "" ? body.intro : null;
+  }
   return item;
 }
 
@@ -1588,7 +1602,7 @@ on("DELETE", "/app/api/evaluations/:id/items/:itemId", (m) => {
  */
 const contentOf = (e: MockEvaluation) =>
   JSON.stringify([
-    e.items.map((i) => [i.id, i.points, i.milestone, i.bonus, i.versionNumber]),
+    e.items.map((i) => [i.id, i.points, i.milestone, i.bonus, i.intro, i.versionNumber]),
     e.settings,
     e.gradingScale,
     e.feedbackPolicy,

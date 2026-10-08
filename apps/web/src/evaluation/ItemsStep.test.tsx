@@ -187,3 +187,73 @@ describe("ItemsStep — bonus questions (ADR-052)", () => {
     expect(within(rowOf("pointer-decl")).getByRole("button", { name: /^bonus$/i })).toBeDisabled();
   });
 });
+
+describe("ItemsStep — the text before an item (ADR-084)", () => {
+  const intro = "Read chapters 8 and 9 before answering.";
+  const patchUrl = (id: string) => `PATCH /app/api/evaluations/${EVALUATION_ID}/items/${id}`;
+
+  it("offers + Text in each gap, above the first row too, and opens the editor for that item", async () => {
+    const user = userEvent.setup();
+    mockFetch({});
+    renderWithProviders(
+      <ItemsStep
+        target={target}
+        lock={null}
+        detail={makeEvaluationDetail({ items: [frozen, other] })}
+        navigate={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Add a text before pointer-decl" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Add a text before array-decay" }));
+    const dialog = await screen.findByRole("dialog", { name: "Text before array-decay" });
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeInTheDocument();
+  });
+
+  it("shows the text as a band over its item, saves an edit and removes it after a confirmation", async () => {
+    const user = userEvent.setup();
+    const withIntro = makeItemRow(1, { internalName: "array-decay", intro });
+    const { calls } = mockFetch({ [patchUrl(withIntro.id)]: ok([]) });
+    renderWithProviders(
+      <ItemsStep
+        target={target}
+        lock={null}
+        detail={makeEvaluationDetail({ items: [frozen, withIntro] })}
+        navigate={vi.fn()}
+      />,
+    );
+    const row = rowOf("array-decay");
+    expect(within(row).getByText("Text before the question")).toBeInTheDocument();
+    expect(within(row).getByText(intro)).toBeInTheDocument();
+    // It has one: no "+ Text" for it.
+    expect(screen.queryByRole("button", { name: "Add a text before array-decay" })).toBeNull();
+
+    await user.click(within(row).getByRole("button", { name: "Edit the text before array-decay" }));
+    const dialog = await screen.findByRole("dialog", { name: "Text before array-decay" });
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ intro }));
+
+    await user.click(
+      within(rowOf("array-decay")).getByRole("button", { name: "Remove the text before array-decay" }),
+    );
+    await user.click(await screen.findByRole("button", { name: "Remove the text" }));
+    await waitFor(() =>
+      expect(calls.filter((c) => c.method === "PATCH").map((c) => c.body)).toContainEqual({ intro: null }),
+    );
+  });
+
+  it("is locked with the item list", () => {
+    mockFetch({});
+    const withIntro = makeItemRow(1, { internalName: "array-decay", intro });
+    renderWithProviders(
+      <ItemsStep
+        target={target}
+        lock={itemListLock("running", 2)}
+        detail={makeEvaluationDetail({ items: [frozen, withIntro] })}
+        navigate={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /^add a text before/i })).toBeNull();
+    expect(screen.getByRole("button", { name: "Edit the text before array-decay" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remove the text before array-decay" })).toBeDisabled();
+  });
+});

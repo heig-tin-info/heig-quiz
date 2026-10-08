@@ -65,7 +65,7 @@ export function TemplateBehindBadge({
   );
 }
 
-/** What moved on one item: its version, its points, its section break, its bonus flag. */
+/** What moved on one item: its version, its points, its section break, its bonus flag, its intro. */
 function changeOf(from: TemplatePullItem, to: TemplatePullItem, t: TFunction): string {
   const parts = [
     ...(from.versionNumber !== to.versionNumber
@@ -78,6 +78,7 @@ function changeOf(from: TemplatePullItem, to: TemplatePullItem, t: TFunction): s
     ...(from.bonus !== to.bonus
       ? [t(to.bonus ? "templatePull.change.bonusOn" : "templatePull.change.bonusOff")]
       : []),
+    ...(from.intro !== to.intro ? [t("templatePull.change.intro")] : []),
   ];
   return `${to.internalName} (${parts.join(", ")})`;
 }

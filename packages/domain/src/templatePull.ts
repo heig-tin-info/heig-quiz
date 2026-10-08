@@ -5,7 +5,7 @@
  * never offer a pull the server refuses, nor hide one it allows.
  *
  * A pull replaces the instance's QUESTIONS ONLY — the frozen versions, points,
- * order, milestones and bonus flags of the template — and keeps everything else of the
+ * order, milestones, bonus flags and intros of the template — and keeps everything else of the
  * instance. It is therefore a write to the item list, and allowed exactly
  * where that list is editable (`itemListLock`: `draft` or `scheduled`, no
  * attempt of anybody, a teacher's own included).
@@ -47,6 +47,8 @@ export interface PullItem {
   milestone: boolean;
   /** ADR-052. */
   bonus: boolean;
+  /** ADR-084: the passage before the item, compared as written. */
+  intro: string | null;
 }
 
 /** What a pull would change in the question list, instance → template. */
@@ -55,7 +57,7 @@ export interface ItemListDiff<T extends PullItem> {
   added: T[];
   /** In the instance, not in the template: a local addition, or a question the template dropped. */
   removed: T[];
-  /** The same question on both sides with another version, points, milestone or bonus flag. */
+  /** The same question on both sides with another version, points, milestone, bonus flag or intro. */
   changed: { from: T; to: T }[];
   /** The questions both sides hold do not come in the same order. */
   reordered: boolean;
@@ -91,7 +93,8 @@ export function itemListDiff<T extends PullItem>(
       from.versionNumber !== to.versionNumber ||
       from.points !== to.points ||
       from.milestone !== to.milestone ||
-      from.bonus !== to.bonus,
+      from.bonus !== to.bonus ||
+      from.intro !== to.intro,
   );
   // `pairs` is in the template's order; the instance's order of the same
   // questions must then be increasing too.

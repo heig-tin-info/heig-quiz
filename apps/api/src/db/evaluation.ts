@@ -255,6 +255,11 @@ export const evaluationItems = pgTable(
      * (`evaluationTotal`), and its score is floored at 0 (`itemPoints`).
      */
     bonus: boolean("bonus").notNull().default(false),
+    /**
+     * ADR-084: the teacher's markdown shown as a passage screen before this
+     * item; null for none. Item content, like `milestone`.
+     */
+    intro: text("intro"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

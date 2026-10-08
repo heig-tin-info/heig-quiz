@@ -159,6 +159,7 @@ export async function patchItem(
   if (patch.points !== undefined) next.points = patch.points;
   if (patch.milestone !== undefined) next.milestone = patch.milestone;
   if (patch.bonus !== undefined) next.bonus = patch.bonus;
+  if (patch.intro !== undefined) next.intro = patch.intro;
   await db
     .update(evaluationItems)
     .set(next)
@@ -303,7 +304,7 @@ export async function replaceItems(
 
 /**
  * THE copy of an item list into `evaluationId`: the SAME frozen versions,
- * points, order, milestones and bonus flags, under new ids — copying must never silently
+ * points, order, milestones, bonus flags and intros (ADR-084), under new ids — copying must never silently
  * upgrade a question. Written by `copyEvaluation` and by a template pull
  * (F-EVAL-26), inside the caller's transaction.
  */
@@ -322,6 +323,7 @@ export async function copyItems(
       points: item.points,
       milestone: item.milestone,
       bonus: item.bonus,
+      intro: item.intro,
     })),
   );
 }

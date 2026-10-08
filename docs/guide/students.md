@@ -121,6 +121,8 @@ Your teacher chooses one of three rules, and the waiting room names the one in f
 - **One way through**: a question you validate cannot be opened again.
 - **Checkpoints**: the list has milestones. Passing one closes every question before it, and you do not come back. The player asks for confirmation before you cross a milestone.
 
+Your teacher may put a text before a question: instructions, a transition, something to read. It shows as a page of its own, **Before question 3**, with a **Continue** button. Under free navigation, **Read the text again** above the question brings it back; otherwise the page tells you that once you continue, you will not be able to read it again.
+
 A question counts as **answered** as soon as it holds an answer: there is nothing to click, and the header of the question reads **Answered**. The rest is quiet:
 
 - The **flag** in the top-right corner of the question marks a question you want to come back to (**Flag for review**). Click it again to take it off. It changes nothing to your grade. Your teacher sees the flags on the live grid, which tells them when a question is unclear to many; the other students never see them.

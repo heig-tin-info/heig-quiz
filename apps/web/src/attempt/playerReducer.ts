@@ -28,6 +28,8 @@ export interface PlayerItem {
   milestone: boolean;
   /** ADR-052: labelled "Bonus question"; its points are not in the total. */
   bonus: boolean;
+  /** ADR-084: the teacher's passage shown before the item; null for none. */
+  intro: string | null;
   /**
    * VALIDATED: "Validate and continue" in `forward_only`, a crossed
    * checkpoint in `milestones` (F-LIVE-08, issue #89).
@@ -56,6 +58,12 @@ export interface PlayerState {
   navigation: Navigation;
   /** itemId → the answer payload, `null` for "opened, nothing written". */
   answers: Record<string, unknown>;
+  /**
+   * ADR-084: the items whose intro this player has passed ("Continue"), or
+   * that were already started when the attempt loaded. Held here, never
+   * stored: see {@link passageOf}.
+   */
+  passed: Readonly<Record<string, true>>;
 }
 
 export type PlayerAction =
@@ -76,6 +84,10 @@ export type PlayerAction =
   | { type: "done"; itemId: string; done: boolean }
   | { type: "skip"; itemId: string; skipped: boolean }
   | { type: "flag"; itemId: string; flagged: boolean }
+  /** ADR-084: "Continue" on the passage screen: the question shows. */
+  | { type: "pass"; itemId: string }
+  /** ADR-084: "Read the text again", under `free` navigation only. */
+  | { type: "reread"; itemId: string }
   /**
    * The teacher's preview only (ADR-018, sixth addendum): one item moved to
    * a newer version of its question. Its content is replaced and its answer
@@ -88,6 +100,7 @@ export const emptyPlayerState: PlayerState = {
   index: 0,
   navigation: "free",
   answers: {},
+  passed: {},
 };
 
 const toItem = (item: AttemptItem): PlayerItem => ({
@@ -97,6 +110,7 @@ const toItem = (item: AttemptItem): PlayerItem => ({
   type: item.type,
   milestone: item.milestone,
   bonus: item.bonus,
+  intro: item.intro,
   markedDone: item.markedDone,
   skipped: item.skipped,
   flagged: item.flagged,
@@ -138,6 +152,39 @@ export function canReach(state: PlayerState, index: number): boolean {
 }
 
 export const currentItem = (state: PlayerState): PlayerItem | undefined => state.items[state.index];
+
+/**
+ * The passage screen (ADR-084): the intro of the item on screen while it has
+ * not been passed, `null` once it has — or when there is none. One rule for
+ * every navigation: an intro shows on arriving at its item until Continue;
+ * what differs is only whether `reread` can bring it back ({@link canReread}).
+ */
+export function passageOf(state: PlayerState): string | null {
+  const item = currentItem(state);
+  if (!item || item.intro === null || state.passed[item.id] === true) return null;
+  return item.intro;
+}
+
+/**
+ * Whether the intro of `itemId` can be read again: one it has, already
+ * passed, under `free` navigation only. In `forward_only` and `milestones`
+ * Continue is one way — what makes "memorise this, then answer" possible
+ * (ADR-084 §6). The one rule behind the button and the `reread` action.
+ */
+function rereadable(state: PlayerState, itemId: string): boolean {
+  const item = state.items.find((i) => i.id === itemId);
+  return state.navigation === "free" && item?.intro != null && state.passed[itemId] === true;
+}
+
+/** {@link rereadable}, for the item on screen. */
+export function canReread(state: PlayerState): boolean {
+  const item = currentItem(state);
+  return item !== undefined && rereadable(state, item.id);
+}
+
+/** Already started: an answer, "Leave unanswered", or validated. Its intro is behind the student. */
+const started = (item: AttemptItem): boolean =>
+  item.answer !== null || item.skipped || item.markedDone;
 
 /** The next index the arrows would land on, or `null` when there is none. */
 export function neighbour(state: PlayerState, delta: 1 | -1): number | null {
@@ -206,7 +253,25 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
         0,
         items.findIndex((i) => i.id === resumed),
       );
-      return { items, index, navigation: action.view.evaluation.settings.navigation, answers };
+      // ADR-084: a passage once passed stays passed across a refetch; one
+      // whose item is already started is not shown again after a reload.
+      const passed: Record<string, true> = { ...state.passed };
+      for (const item of action.view.items) if (started(item)) passed[item.id] = true;
+      return {
+        items,
+        index,
+        navigation: action.view.evaluation.settings.navigation,
+        answers,
+        passed,
+      };
+    }
+    case "pass":
+      if (state.passed[action.itemId] === true) return state;
+      return { ...state, passed: { ...state.passed, [action.itemId]: true } };
+    case "reread": {
+      if (!rereadable(state, action.itemId)) return state;
+      const { [action.itemId]: _reopened, ...passed } = state.passed;
+      return { ...state, passed };
     }
     case "goto": {
       const index = state.items.findIndex((i) => i.id === action.itemId);

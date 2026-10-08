@@ -1119,3 +1119,62 @@ describe("the conditions during the attempt", () => {
     expect(screen.queryByRole("button", { name: "Voir les conditions" })).toBeNull();
   });
 });
+
+describe("the text before a question (ADR-084)", () => {
+  const INTRO = "Lisez le **chapitre 8** avant de répondre.";
+  /** The three questions, the third preceded by a text. */
+  const withIntro = (navigation: "free" | "forward_only" | "milestones", lastItemId: string) => {
+    const view = withNavigation(attemptView({ lastItemId }), navigation);
+    return {
+      ...view,
+      items: view.items.map((item) => (item.id === "i3" ? { ...item, intro: INTRO } : item)),
+    };
+  };
+
+  it("shows the passage on arriving, Continue opens the question, and free navigation reopens it", async () => {
+    const view = withIntro("free", "i2");
+    stubs(view);
+    render(view);
+    await screen.findByText("Question 2");
+    await userEvent.click(screen.getByRole("button", { name: "Suivant" }));
+
+    expect(await screen.findByText("Avant la question 3")).toBeInTheDocument();
+    expect(screen.getByText("chapitre 8")).toBeInTheDocument();
+    // The passage is not a question: nothing to flag or answer, one primary action.
+    expect(screen.queryByRole("button", { name: "Marquer à revoir" })).toBeNull();
+    const go = screen.getByRole("button", { name: "Continuer" });
+    expect(isPrimary(go)).toBe(true);
+    expect(screen.queryByText(/ne pourrez plus relire/)).toBeNull();
+
+    await userEvent.click(go);
+    expect(await screen.findByText("Question 3")).toBeInTheDocument();
+    expect(screen.queryByText("chapitre 8")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Relire le texte" }));
+    expect(await screen.findByText("Avant la question 3")).toBeInTheDocument();
+  });
+
+  it("is one way under forward_only: said before Continue, not reopenable after", async () => {
+    const view = withIntro("forward_only", "i3");
+    stubs(view);
+    render(view);
+    expect(await screen.findByText("Avant la question 3")).toBeInTheDocument();
+    expect(screen.getByText(/ne pourrez plus relire ce texte/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Continuer" }));
+    expect(await screen.findByText("Question 3")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Relire le texte" })).toBeNull();
+  });
+
+  it("is not shown again on reloading a question already started", async () => {
+    const view = withIntro("free", "i2");
+    const started = {
+      ...view,
+      items: view.items.map((item) => (item.id === "i2" ? { ...item, intro: INTRO } : item)),
+    };
+    stubs(started);
+    render(started);
+    expect(await screen.findByText("Question 2")).toBeInTheDocument();
+    expect(screen.queryByText("Avant la question 2")).toBeNull();
+    // Still there to read again, under free navigation.
+    expect(screen.getByRole("button", { name: "Relire le texte" })).toBeInTheDocument();
+  });
+});

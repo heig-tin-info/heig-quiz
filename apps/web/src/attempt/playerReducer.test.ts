@@ -4,11 +4,13 @@ import type { AttemptView } from "@quiz/contracts";
 
 import {
   canReach,
+  canReread,
   currentItem,
   emptyPlayerState,
   isLocked,
   lockedIds,
   neighbour,
+  passageOf,
   playerReducer,
   type PlayerState,
 } from "./playerReducer";
@@ -27,6 +29,7 @@ const item = (n: number, over: Partial<AttemptView["items"][number]> = {}) => ({
   type: "mcq",
   milestone: false,
   bonus: false,
+  intro: null as string | null,
   student: {},
   answer: null,
   revision: 0,
@@ -279,5 +282,51 @@ describe("playerReducer: replacing one item (ADR-018, sixth addendum)", () => {
   it("ignores an item the walk does not hold", () => {
     const state = load(view("free", [item(1)]));
     expect(playerReducer(state, { type: "replace", item: item(9) })).toBe(state);
+  });
+});
+
+describe("playerReducer: the text before an item (ADR-084)", () => {
+  const intro = "Read chapter 8.";
+
+  it("shows the intro of the item on screen until it is passed; free navigation rereads it", () => {
+    let state = load(view("free", [item(1, { intro }), item(2)]));
+    expect(passageOf(state)).toBe(intro);
+    expect(canReread(state)).toBe(false);
+    state = playerReducer(state, { type: "pass", itemId: "i1" });
+    expect(passageOf(state)).toBeNull();
+    expect(canReread(state)).toBe(true);
+    // Moving away and back keeps it passed.
+    state = playerReducer(state, { type: "move", delta: 1 });
+    state = playerReducer(state, { type: "move", delta: -1 });
+    expect(passageOf(state)).toBeNull();
+    state = playerReducer(state, { type: "reread", itemId: "i1" });
+    expect(passageOf(state)).toBe(intro);
+  });
+
+  it("cannot be reread once passed outside free navigation", () => {
+    for (const navigation of ["forward_only", "milestones"] as const) {
+      const state = playerReducer(load(view(navigation, [item(1, { intro }), item(2)])), {
+        type: "pass",
+        itemId: "i1",
+      });
+      expect(canReread(state)).toBe(false);
+      expect(playerReducer(state, { type: "reread", itemId: "i1" })).toBe(state);
+      expect(passageOf(state)).toBeNull();
+    }
+  });
+
+  it("is passed on load for an item already started, and stays passed across a refetch", () => {
+    const items = [
+      item(1, { intro, answer: { selected: [0] } }),
+      item(2, { intro, skipped: true }),
+      item(3, { intro, markedDone: true }),
+      item(4, { intro }),
+    ];
+    let state = load(view("free", items, "i4"));
+    expect(Object.keys(state.passed).sort()).toEqual(["i1", "i2", "i3"]);
+    expect(passageOf(state)).toBe(intro);
+    state = playerReducer(state, { type: "pass", itemId: "i4" });
+    state = playerReducer(state, { type: "load", view: view("free", items, "i4") });
+    expect(passageOf(state)).toBeNull();
   });
 });
