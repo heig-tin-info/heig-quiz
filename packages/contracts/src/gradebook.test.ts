@@ -11,10 +11,10 @@ import {
 const uuid = "11111111-1111-4111-8111-111111111111";
 
 describe("gradebook inputs", () => {
-  it("takes a weight from 0 to 10 at the tenth, a flag, a position — and at least one", () => {
-    expect(GradebookColumnPatch.safeParse({ weight: 2.5 }).success).toBe(true);
+  it("takes a weight as a whole percentage 0 to 100, a flag, a position — and at least one", () => {
+    for (const weight of [0, 40, 100]) expect(GradebookColumnPatch.safeParse({ weight }).success).toBe(true);
     expect(GradebookColumnPatch.safeParse({ counts: false, position: null }).success).toBe(true);
-    for (const bad of [{}, { weight: -1 }, { weight: 10.5 }, { weight: 0.25 }, { position: -1 }, { counts: "yes" }]) {
+    for (const bad of [{}, { weight: -1 }, { weight: 101 }, { weight: 2.5 }, { position: -1 }, { counts: "yes" }]) {
       expect(GradebookColumnPatch.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
     }
   });

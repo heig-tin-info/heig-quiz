@@ -23,7 +23,7 @@ export interface ColumnSettings {
   position: number | null;
 }
 
-/** The settings of an activity without a stored column: weight 1, exams and projects count, exercises do not (D06). */
+/** The settings of an activity without a stored column: weight 100 %, exams and projects count, exercises do not (D06). */
 export function defaultSettings(mode: GradebookColumnKind): ColumnSettings {
   return { weight: WEIGHT_DEFAULT, counts: countsByDefault(mode), position: null };
 }

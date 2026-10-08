@@ -38,11 +38,11 @@ function book(over: Record<string, unknown> = {}, weights = false): GradebookStu
   return GradebookStudent.parse({
     classroomId: ROOM,
     columns: [
-      column(0, "Test 1", "exam", w(1)),
-      column(1, "Test 2", "exam", w(2)),
-      column(2, "Exercises", "exercise", w(1, false)),
-      column(3, "Test 3", "exam", w(1)),
-      column(4, "Quick quiz", "exam", w(1)),
+      column(0, "Test 1", "exam", w(50)),
+      column(1, "Test 2", "exam", w(100)),
+      column(2, "Exercises", "exercise", w(100, false)),
+      column(3, "Test 3", "exam", w(50)),
+      column(4, "Quick quiz", "exam", w(50)),
     ],
     cells: {
       [IDS[0]!]: cell("grade", 5.5),
@@ -85,7 +85,7 @@ describe("the student's own cells", () => {
 
   it("draws the mean and the weights once the payload carries them", async () => {
     renderTab(book({ mean: 4.3 }, true));
-    expect(await within(await row("Test 2")).findByText(/Weight 2/)).toBeInTheDocument();
+    expect(await within(await row("Test 2")).findByText(/Weight 100 %/)).toBeInTheDocument();
     expect(within(await row("Exercises")).getByText(/Not counted/)).toBeInTheDocument();
     const mean = await row("Mean");
     expect(within(mean).getByText("4.3")).toBeInTheDocument();

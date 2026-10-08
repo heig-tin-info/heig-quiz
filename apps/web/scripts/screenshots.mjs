@@ -396,6 +396,17 @@ const scenes = [
       await p.getByRole("menu").waitFor();
     },
   },
+  {
+    name: "classroom-grades-weight",
+    role: "teacher",
+    path: "/classrooms/r1/grades",
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("columnheader").nth(1).getByRole("button").click();
+      await p.getByRole("menuitem", { name: /weight|poids|pondération/i }).click();
+      await p.getByRole("dialog").waitFor();
+    },
+  },
   { name: "classroom-grades-empty", role: "teacher", path: "/classrooms/r2/grades" },
   { name: "classroom-grades-student", role: "student", path: "/classrooms/r1/grades" },
   { name: "group-set", role: "teacher", path: `${SET_FINAL}?groups=1&projects=1` },

@@ -7,7 +7,7 @@
  * mean — and the student's own cells. All checked by `contract.test.ts`.
  *
  * It decides what the server decides, with the same pure rules (`resolveCell`,
- * `gradebookMean` of `@quiz/domain`): a column not released shows no grade of
+ * `gradebookMean`, `classMean` of `@quiz/domain`): a column not released shows no grade of
  * its activity (a staff mark stands there) and stays out of the mean; an
  * exam released and not taken is a derived absence; the student's cells are
  * the narrowed ones — `withheld` under the feedback policy `none`,
@@ -35,6 +35,7 @@ import {
 } from "@quiz/contracts";
 import {
   cellGrade,
+  classMean,
   countsByDefault,
   gradebookMean,
   gradeFromPoints,
@@ -61,7 +62,7 @@ interface MockMark {
   setAt: string;
 }
 
-interface MockColumn extends GradebookColumn {
+interface MockColumn extends Omit<GradebookColumn, "classMean"> {
   /** The feedback policy `none`: released, but a student reads no grade. */
   withheld: boolean;
   /** The activity's result per student (a roster line), whatever the release says. */
@@ -98,12 +99,12 @@ interface Spec {
 }
 
 const SPECS: Spec[] = [
-  { n: 1, title: "Test 1 — Bases du C", mode: "exam", kind: "evaluation", daysAgo: 42, released: true, weight: 1 },
-  { n: 2, title: "Test 2 — Pointeurs", mode: "exam", kind: "evaluation", daysAgo: 28, released: true, weight: 2 },
-  { n: 3, title: "Exercices — Boucles", mode: "exercise", kind: "evaluation", daysAgo: 21, released: true, weight: 1 },
-  { n: 4, title: "Labo 1 — Calculatrice", mode: "project", kind: "project", daysAgo: 14, released: true, weight: 1 },
-  { n: 5, title: "Test 3 — Tableaux", mode: "exam", kind: "evaluation", daysAgo: 3, released: false, weight: 1 },
-  { n: 6, title: "Test éclair — Révision", mode: "exam", kind: "evaluation", daysAgo: 35, released: true, weight: 1, withheld: true },
+  { n: 1, title: "Test 1 — Bases du C", mode: "exam", kind: "evaluation", daysAgo: 42, released: true, weight: 50 },
+  { n: 2, title: "Test 2 — Pointeurs", mode: "exam", kind: "evaluation", daysAgo: 28, released: true, weight: 100 },
+  { n: 3, title: "Exercices — Boucles", mode: "exercise", kind: "evaluation", daysAgo: 21, released: true, weight: 100 },
+  { n: 4, title: "Labo 1 — Calculatrice", mode: "project", kind: "project", daysAgo: 14, released: true, weight: 40 },
+  { n: 5, title: "Test 3 — Tableaux", mode: "exam", kind: "evaluation", daysAgo: 3, released: false, weight: 100 },
+  { n: 6, title: "Test éclair — Révision", mode: "exam", kind: "evaluation", daysAgo: 35, released: true, weight: 10, withheld: true },
 ];
 
 /** The activity's own result of student `i` (an index into the classroom's students) in column `spec`. */
@@ -221,16 +222,9 @@ const meanOf = (columns: MockColumn[], outcomes: Map<string, CellOutcome>): numb
       .map((c): MeanColumn => ({ weight: c.weight, counts: c.counts, cell: outcomes.get(c.activityId) ?? { kind: "empty" } })),
   );
 
-const asColumn = ({ withheld: _w, beneath: _b, ...column }: MockColumn): GradebookColumn => column;
-
 function staffTable(room: (typeof rooms)[number], book: MockBook): GradebookStaff {
   const students = seatsOf(room.id);
-  return {
-    classroomId: room.id,
-    archived: room.archivedAt !== null,
-    meanPublished: book.meanPublished,
-    columns: book.columns.map(asColumn),
-    rows: students
+  const rows = students
       .slice()
       .sort((a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`))
       .map((s) => {
@@ -245,7 +239,17 @@ function staffTable(room: (typeof rooms)[number], book: MockBook): GradebookStaf
           );
         }
         return { enrollmentId: s.id, email: s.email, nom: s.nom, prenom: s.prenom, cells, mean: meanOf(book.columns, outcomes) };
-      }),
+      });
+  return {
+    classroomId: room.id,
+    archived: room.archivedAt !== null,
+    meanPublished: book.meanPublished,
+    columns: book.columns.map(({ withheld: _w, beneath: _b, ...column }) => ({
+      ...column,
+      classMean: column.released ? classMean(rows.map((row) => row.cells[column.activityId]!.grade)) : null,
+    })),
+    rows,
+    classMean: classMean(rows.map((row) => row.mean)),
   };
 }
 

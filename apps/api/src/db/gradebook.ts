@@ -10,7 +10,7 @@
  *   - `gradebook_columns`: the settings of one activity's column — its
  *     weight, whether it counts toward the mean, its position. A column is
  *     materialized by the first write that names it; an activity without a
- *     row has the defaults (`@quiz/domain`: weight 1, exams and projects
+ *     row has the defaults (`@quiz/domain`: weight 100 %, exams and projects
  *     count, exercises do not). Exactly one of `evaluation_id` /
  *     `project_id`;
  *   - `gradebook_marks`: a staff mark on one student of one column, which
@@ -39,7 +39,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import { GRADEBOOK_MARK_KINDS } from "@quiz/domain";
+import { GRADEBOOK_MARK_KINDS, WEIGHT_DEFAULT } from "@quiz/domain";
 
 import { users } from "./auth.js";
 import { evaluations } from "./evaluation.js";
@@ -55,8 +55,8 @@ export const gradebookColumns = pgTable(
       .references(() => classrooms.id, { onDelete: "cascade" }),
     evaluationId: uuid("evaluation_id").references(() => evaluations.id, { onDelete: "cascade" }),
     projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }),
-    /** 0 to 10, at the tenth (`validWeight`). */
-    weight: numeric("weight", { precision: 3, scale: 1, mode: "number" }).notNull(),
+    /** A whole percentage, 0 to 100, relative to the classroom's other columns (#545, `GradebookWeight`). */
+    weight: integer("weight").notNull().default(WEIGHT_DEFAULT),
     /** Whether the column counts toward the mean: the teacher's choice, or the kind's default at creation. */
     counts: boolean("counts").notNull(),
     /** The teacher's order; null keeps the activity's own date order. */
@@ -66,7 +66,7 @@ export const gradebookColumns = pgTable(
   },
   (t) => [
     check("gradebook_columns_one_activity", sql`(${t.evaluationId} IS NULL) <> (${t.projectId} IS NULL)`),
-    check("gradebook_columns_weight_range", sql`${t.weight} >= 0 AND ${t.weight} <= 10`),
+    check("gradebook_columns_weight_range", sql`${t.weight} >= 0 AND ${t.weight} <= 100`),
     uniqueIndex("gradebook_columns_evaluation_uq").on(t.evaluationId).where(sql`${t.evaluationId} IS NOT NULL`),
     uniqueIndex("gradebook_columns_project_uq").on(t.projectId).where(sql`${t.projectId} IS NOT NULL`),
     index("gradebook_columns_classroom_idx").on(t.classroomId),

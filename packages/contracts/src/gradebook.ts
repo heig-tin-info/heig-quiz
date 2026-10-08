@@ -4,7 +4,8 @@
  * row per claimed student seat — and its two readers.
  *
  * - The STAFF table (`GradebookStaff`), on the course's `staffAccess`: every
- *   cell with its source, the staff marks, every student's mean.
+ *   cell with its source, the staff marks, every student's mean, and the
+ *   class means (per column and overall, #545) — never in a student payload.
  * - The STUDENT's own cells (`GradebookStudent`), the gradebook's student
  *   exit (spec 05 §5.7): only what F-RES-04 lets a student read, no source,
  *   no teacher's comment, no mark of an unreleased column, no unreleased
@@ -17,8 +18,7 @@
  */
 import { z } from "zod";
 
-import { FINAL_SCORE_SOURCES, GRADEBOOK_MARK_KINDS, validWeight, WEIGHT_MAX, WEIGHT_MIN } from "@quiz/domain";
-
+import { FINAL_SCORE_SOURCES, GRADEBOOK_MARK_KINDS, WEIGHT_MAX, WEIGHT_MIN } from "@quiz/domain";
 
 /** What a column is of; a poll never has one. */
 export const GradebookColumnKind = z.enum(["exam", "exercise", "project"]);
@@ -31,11 +31,8 @@ export type GradebookActivityKind = z.infer<typeof GradebookActivityKind>;
 export const GradebookMarkKind = z.enum(GRADEBOOK_MARK_KINDS);
 export type GradebookMarkKind = z.infer<typeof GradebookMarkKind>;
 
-const Weight = z
-  .number()
-  .min(WEIGHT_MIN)
-  .max(WEIGHT_MAX)
-  .refine(validWeight, "a weight has at most one decimal");
+/** A column's weight: a whole percentage, 0 to 100, relative to the others' (#545). */
+export const GradebookWeight = z.number().int().min(WEIGHT_MIN).max(WEIGHT_MAX);
 
 /** `…/gradebook/columns/:kind/:activityId`, under a classroom. */
 export const GradebookColumnParams = z.object({
@@ -56,7 +53,7 @@ export type GradebookSettingsPatch = z.infer<typeof GradebookSettingsPatch>;
 /** `PATCH …/gradebook/columns/:kind/:activityId` (F-GBOOK-06): at least one field. */
 export const GradebookColumnPatch = z
   .object({
-    weight: Weight,
+    weight: GradebookWeight,
     counts: z.boolean(),
     position: z.number().int().min(0).max(1000).nullable(),
   })
@@ -113,9 +110,12 @@ export const GradebookColumn = z.object({
   date: z.iso.datetime(),
   /** The results are released (an evaluation's release, a project's release): only then do the grades show and count. */
   released: z.boolean(),
-  weight: z.number(),
+  /** A whole percentage, 0 to 100. */
+  weight: GradebookWeight,
   counts: z.boolean(),
   position: z.number().int().nullable(),
+  /** The class's mean of the column: its released cells' grades (an absence 1.0, an empty cell left out); null before the release or with none. */
+  classMean: z.number().nullable(),
 });
 export type GradebookColumn = z.infer<typeof GradebookColumn>;
 
@@ -176,6 +176,8 @@ export const GradebookStaff = z.object({
   columns: z.array(GradebookColumn),
   /** One row per claimed student seat, by last then first name; never a staff seat (ADR-018 §3). */
   rows: z.array(GradebookStaffRow),
+  /** The class's overall mean: the mean of the students' means, a student with none left out; null with none. */
+  classMean: z.number().nullable(),
 });
 export type GradebookStaff = z.infer<typeof GradebookStaff>;
 
@@ -203,7 +205,7 @@ export const GradebookStudentColumn = z.object({
   mode: GradebookColumnKind,
   title: z.string(),
   date: z.iso.datetime(),
-  weight: z.number().optional(),
+  weight: GradebookWeight.optional(),
   counts: z.boolean().optional(),
 });
 export type GradebookStudentColumn = z.infer<typeof GradebookStudentColumn>;

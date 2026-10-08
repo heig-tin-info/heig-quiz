@@ -1629,8 +1629,8 @@ What replaces them:
   (42 rem of card) and scrolls with the rest below it. On a phone the e-mail
   under the name goes, so the first grade column stays on screen.
 - **Head.** A column's title (13 px semibold, truncated) with its kind and
-  weight under it in 11 px muted ("Not counted" when it is left out of the
-  mean), and the menu of its settings behind a faint chevron: whether it
+  weight under it in 11 px muted — "Exam · 40 %", the weight a whole
+  percentage ("Not counted" when it is left out of the mean), and the menu of its settings behind a faint chevron: whether it
   counts, its weight. A column NOT released carries a `zinc` badge with the
   eye-off icon and a `surface-2` strip over its whole height; its cells show
   no grade of the activity (a mark of the teacher's stands there) and the
@@ -1646,6 +1646,11 @@ What replaces them:
   colours (green, amber and red all mean a verdict, as on the live grid).
   The text is the notation of the school and of the CSV, the same in every
   language; the tooltip and the screen reader say what it stands for.
+- **Class means.** A `<tfoot>` row on `surface-2` (the student's mean row's
+  fill), "Class mean" in the sticky student column with a tooltip saying
+  what it is: each column's class mean, centred and semibold like a grade,
+  a dash for a column not released, and the overall class mean under the
+  mean, pinned with it from `@2xl`. Staff only.
 - **Primary.** Export CSV, in the page header (`variant="primary"`), a plain
   download link. The switch "Students see their mean" is a `SettingRow`
   above the matrix, never an accent; every other action is a menu or a

@@ -4,7 +4,9 @@
  * - {@link staffGradebook}: the staff's table of a classroom loaded through
  *   `staffAccess` — every column (released or not), every claimed student
  *   seat, each cell with its source, the staff marks, every student's mean
- *   over the RELEASED columns that count.
+ *   over the RELEASED columns that count, and the class means (#545): a
+ *   released column's, over its cells' grades, and the overall one, over
+ *   the students' means.
  * - {@link studentGradebook}: the caller's own cells of a classroom loaded
  *   through `readableClassroom`, the gradebook's student exit (05 §5.7):
  *   only what the kinds' student views let a student read, no source, no
@@ -15,7 +17,7 @@
  * recomputed here; a staff mark wins over it (`resolveCell`).
  */
 import type { GradebookStaff, GradebookStaffCell, GradebookStudent, GradebookStudentCell } from "@quiz/contracts";
-import { cellGrade, gradebookMean, resolveCell, type CellOutcome, type MeanColumn } from "@quiz/domain";
+import { cellGrade, classMean, gradebookMean, resolveCell, type CellOutcome, type MeanColumn } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -101,8 +103,11 @@ export async function staffGradebook(db: Db, room: typeof classrooms.$inferSelec
       weight: settings.weight,
       counts: settings.counts,
       position: settings.position,
+      // The released grades only, as the screen shows them: a mark in a column not released is not one yet.
+      classMean: entry.released ? classMean(rows.map((row) => row.cells[entry.activityId]!.grade)) : null,
     })),
     rows,
+    classMean: classMean(rows.map((row) => row.mean)),
   };
 }
 

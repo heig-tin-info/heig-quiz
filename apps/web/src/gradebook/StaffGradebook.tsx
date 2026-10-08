@@ -1,7 +1,9 @@
 /**
  * The staff's Grades tab of a classroom (F-GBOOK-01, -02, -05, -06, ADR-074,
  * M5-04): the gradebook as a matrix — a row per claimed student, a column per
- * exam, exercise or graded project, the weighted mean last. The server owns
+ * exam, exercise or graded project, the weighted mean last, and under the
+ * students the class's means (#545): each column's, and the overall one under
+ * the mean, on a `surface-2` footer row as the student's mean row is. The server owns
  * every figure (`GET /classrooms/:id/gradebook`, and every write answers the
  * table); this tab computes nothing, it draws and it sends writes.
  *
@@ -245,6 +247,23 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            <tr className={cx(T.row, "bg-surface-2")}>
+              <th scope="row" className={cx(T.td, "sticky left-0 z-10 bg-surface-2 text-left font-semibold")}>
+                <Tip label={t("gbook.classMean.help")}>
+                  <span>{t("gbook.classMean")}</span>
+                </Tip>
+              </th>
+              {data.columns.map((column) => (
+                <td key={column.activityId} className={cx(T.td, "text-center font-semibold tabular-nums")}>
+                  <GradeOrDash value={column.classMean} />
+                </td>
+              ))}
+              <td className={cx(T.td, "text-right font-semibold tabular-nums", MEAN_PIN, "@2xl:bg-surface-2")}>
+                <GradeOrDash value={data.classMean} />
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </Card>
       <p className="text-[13px] text-fg-muted">{t("gbook.legend")}</p>
@@ -286,7 +305,7 @@ function ColumnHead({ column, items }: { column: GradebookColumn; items: MenuIte
       </span>
       <span className="text-[11px] font-normal text-fg-muted">
         {t(MODE_LABEL[column.mode])} ·{" "}
-        {t(column.counts ? "gbook.weight" : "gbook.notCounted", { weight: String(column.weight) })}
+        {t(column.counts ? "gbook.weightShort" : "gbook.notCounted", { weight: String(column.weight) })}
       </span>
     </>
   );
