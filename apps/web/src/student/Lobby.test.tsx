@@ -117,8 +117,8 @@ describe("the lobby", () => {
     const before = (a: string, b: string) =>
       screen.getByText(a).compareDocumentPosition(screen.getByText(b)) & Node.DOCUMENT_POSITION_FOLLOWING;
     // Inside a kind: the teacher's, then the platform's.
-    expect(before("<b>Téléphones</b>", "Passée dans Safe Exam Browser")).toBeTruthy();
-    expect(before("Passée dans Safe Exam Browser", "Une feuille A4 de notes")).toBeTruthy();
+    expect(before("<b>Téléphones</b>", "Toute autre application que Safe Exam Browser")).toBeTruthy();
+    expect(before("Toute autre application que Safe Exam Browser", "Une feuille A4 de notes")).toBeTruthy();
     expect(before("Répondez en français", "Une seule tentative")).toBeTruthy();
     expect(before("Une seule tentative", "Enregistré au fil de la frappe")).toBeTruthy();
     // The teacher's text is plain text, never markup.
