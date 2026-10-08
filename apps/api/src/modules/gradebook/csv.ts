@@ -10,6 +10,12 @@
  * as 1.0 and must stay distinguishable from a real 1.0 in the file), or empty.
  * The file says what the screen says: a column not released carries its
  * header's ` (unreleased)` suffix, and stays out of the mean.
+ *
+ * Two lines frame the students (#545): right under the header, `weight`
+ * with each counted column's weight in whole percent (empty for a column
+ * that does not count, and under `mean`); last, `class_mean` with each
+ * column's class mean and the class's overall mean under `mean`. Both put
+ * their label in the `email` field and leave the names empty.
  */
 import type { GradebookStaff, GradebookStaffCell } from "@quiz/contracts";
 
@@ -19,6 +25,8 @@ import { csvFile, grade, line, type NumericField } from "../../csv.js";
 const UNRELEASED_SUFFIX = " (unreleased)";
 /** A header built from an activity's title is truncated to this, as the results export's. */
 const HEADER_MAX = 30;
+
+const optionalGrade = (value: number | null): string | NumericField => (value === null ? "" : grade(value));
 
 /** How a cell is written: its grade, the absence sigil, or nothing. */
 function cellField(cell: GradebookStaffCell | undefined): string | NumericField {
@@ -35,14 +43,16 @@ export function gradebookCsv(table: GradebookStaff): string {
     ...table.columns.map((c) => `${c.title.slice(0, HEADER_MAX)}${c.released ? "" : UNRELEASED_SUFFIX}`),
     "mean",
   ];
+  const weights = line(["weight", "", "", ...table.columns.map((c) => (c.counts ? { numeric: String(c.weight) } : "")), ""]);
   const rows = table.rows.map((row) =>
     line([
       row.email,
       row.nom,
       row.prenom,
       ...table.columns.map((c) => cellField(row.cells[c.activityId])),
-      row.mean === null ? "" : grade(row.mean),
+      optionalGrade(row.mean),
     ]),
   );
-  return csvFile([line(header), ...rows]);
+  const classMeans = line(["class_mean", "", "", ...table.columns.map((c) => optionalGrade(c.classMean)), optionalGrade(table.classMean)]);
+  return csvFile([line(header), weights, ...rows, classMeans]);
 }

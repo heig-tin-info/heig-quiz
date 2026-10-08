@@ -6,8 +6,7 @@
  */
 import { useState } from "react";
 
-import { validWeight } from "@quiz/domain";
-import type { GradebookColumn, GradebookMarkPut, GradebookStaffCell, GradebookStaffRow } from "@quiz/contracts";
+import { GradebookWeight, type GradebookColumn, type GradebookMarkPut, type GradebookStaffCell, type GradebookStaffRow } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { Field, FormDialog, Textarea } from "../ui";
@@ -76,7 +75,7 @@ export function ScoreDialog({
   );
 }
 
-/** A column's weight in the mean: 0 to 10, at the tenth. */
+/** A column's weight in the mean: a whole percentage, 0 to 100, checked by the route's own schema (invariant 7). */
 export function WeightDialog({
   column,
   submitting,
@@ -97,14 +96,15 @@ export function WeightDialog({
       onClose={onClose}
       submitLabel={t("common.save")}
       submitting={submitting}
-      canSubmit={validWeight(weight)}
+      canSubmit={GradebookWeight.safeParse(weight).success}
       dense
       onSubmit={() => onSubmit(weight)}
     >
+      {/* The rule above the field, not under it: the field is three digits wide, and the sentence would wrap word by word. */}
+      <p className="text-sm text-fg-muted">{t("gbook.weight.hint")}</p>
       <Field
         label={t("gbook.weight.label")}
-        description={t("gbook.weight.hint")}
-        inputMode="decimal"
+        inputMode="numeric"
         value={text}
         onChange={(e) => setText(e.target.value)}
         autoFocus

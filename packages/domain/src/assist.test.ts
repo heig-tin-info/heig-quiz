@@ -253,8 +253,8 @@ describe("the results reader (ADR-080 P2, items 1–2)", () => {
   const table: ResultsSource = {
     classroomId: "room",
     columns: [
-      { activityId: "e1", mode: "exam", title: "E1", date: "2026-10-01T08:00:00.000Z", released: true, weight: 1, counts: true },
-      { activityId: "live", mode: "exam", title: "Running", date: "2026-10-08T08:00:00.000Z", released: false, weight: 1, counts: true },
+      { activityId: "e1", mode: "exam", title: "E1", date: "2026-10-01T08:00:00.000Z", released: true, weight: 100, counts: true },
+      { activityId: "live", mode: "exam", title: "Running", date: "2026-10-08T08:00:00.000Z", released: false, weight: 100, counts: true },
     ],
     rows: [
       { nom: "Doe", prenom: "Ada", cells: { e1: cell(5), live: cell(2.5) }, mean: 5 },

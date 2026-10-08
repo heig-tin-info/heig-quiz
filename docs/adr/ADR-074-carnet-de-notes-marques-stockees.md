@@ -12,6 +12,10 @@ CSV export is M5-03b and the screens M5-04.
 Scope: F-GBOOK-01..06 (F-GBOOK-01 amended the same day), the `gradebook`
 module, and the gradebook entries of the `ActivityKind` registry.
 
+Amended 2026-10-08 (product owner, #545): the unit of a column's weight
+(§6, §7) and the class means; see *Amendment of 2026-10-08* at the end of
+the Decision.
+
 Relations: completes D06 (`docs/merge/08-decisions.md`) and spec 06 no. 48
 (`docs/spec/history/settled-questions.md`, "how a teacher marks an absence by
 hand", settled here); reads the releases of
@@ -75,7 +79,8 @@ to students only if the teacher publishes it. Two gaps remained.
    no draft; a poll never has one. Exams and projects **count** by default,
    exercises are **opt-in**, per column (the `counts` flag: the teacher
    includes the exercises they choose, not all of them at once). A column's
-   **weight** is 0 to 10 at the tenth, 1 by default. A stored column row
+   **weight** is 0 to 10 at the tenth, 1 by default (*amended 2026-10-08:
+   a whole percentage 0 to 100, 100 % by default, below*). A stored column row
    (`gradebook_columns`, exactly one of `evaluation_id` / `project_id`) is
    made by the first write that names it; an activity without one has the
    defaults. `position` lets the teacher order columns; the default order is
@@ -114,6 +119,57 @@ to students only if the teacher publishes it. Two gaps remained.
    gradebook is read-only (`409 classroom_archived`). The settings are audited
    (`gradebook.column_updated`, `gradebook.mean_published`,
    `gradebook.mean_unpublished`).
+
+### Amendment of 2026-10-08 (product owner, #545)
+
+Scope: the weight of §6 and the mean of §7; the staff's table and its CSV
+gain the class means. Everything else stands.
+
+1. **A weight is a whole percentage, 0 to 100, 100 % by default**
+   (`gradebook_columns.weight` `integer`, check 0..100, default 100;
+   `GradebookWeight` in `@quiz/contracts` on both sides). It is read
+   more easily than a coefficient, and it is shown in the column's header
+   ("Exam · 40 %").
+2. **Weights are relative, not a budget.** They need not sum to 100: a
+   student's mean is Σ(wᵢ·gᵢ) / Σ(wᵢ) over the released columns that count
+   and in which they have a grade, as §7 says, in integers (percent ×
+   tenths) so the half tenth still rounds up exactly. Ten quizzes at 10 %
+   and an exam at 100 % make the exam half of the mean. A column with no
+   grade for the student is skipped and the others renormalised (F-GBOOK-02
+   as written, not a 0); 0 % keeps the column in view and out of the mean;
+   all weights at 0 % give no mean.
+3. **Class means, staff only.** A released column's class mean is the plain
+   mean of the grades its cells count as — an absence (derived or marked)
+   as 1.0, exactly as a student's mean counts it; an empty cell left out —,
+   null before the release. The class's overall mean is the plain mean of
+   the students' means, a student without one left out. Both are computed
+   on read (`classMean`, `@quiz/domain`), never stored, never in a student
+   payload. The CSV gains a `weight` line under its header and a last
+   `class_mean` line (F-GBOOK-04).
+4. **The student's view is unchanged**: the mean only when published, and
+   with it each column's weight (now in percent) and counted flag, as §7
+   and F-GBOOK-05 had it.
+5. **Migration** (`0089_gradebook_weight_percent`). A coefficient 2 next to
+   1s meant double weight; ×100 would give 200, outside the new range. So
+   each classroom is **normalised to its largest weight**: the weights are
+   taken in tenths (exact), divided by the classroom's largest — never less
+   than the old default 1 — and multiplied by 100, rounded to the whole
+   percent. A classroom whose weights never exceeded 1 is thus ×100 exactly;
+   one with a 2 beside 1s becomes 100 % beside 50 %. In such a classroom an
+   activity without a stored column weighed the old default 1, which the
+   new default would turn into 100 %: the migration stores those columns
+   (the activities of `gradebookEntries`: exams and exercises that are no
+   draft, graded projects that are no draft, with their kind's `counts`) at
+   1 first, so the normalisation reaches them. Relative weights are kept
+   within each classroom; only rounding to the whole percent can move a
+   mean, slightly. In a classroom normalised from a largest weight above 1,
+   an activity created later (or still a draft at migration time) gets the
+   new default 100 %, that is the classroom's top weight, not the old
+   default's normalised share. (Production held no stored column on the
+   day.)
+6. The weight change stays audited as `gradebook.column_updated`, its
+   before and after now in percent. Duplicating a classroom copies no
+   gradebook column (none did before), so no weight either.
 
 ## Consequences
 

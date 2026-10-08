@@ -439,7 +439,7 @@ export interface AssistResults {
 }
 
 const RESULTS_SCALE =
-  "Swiss grades from 1.0 to 6.0, 4.0 passes; `absent` counts as 1.0. Final (released) columns only; the mean is the gradebook's weighted mean of the released columns that count.";
+  "Swiss grades from 1.0 to 6.0, 4.0 passes; `absent` counts as 1.0. Final (released) columns only; the mean is the gradebook's weighted mean of the released columns that count, each weight a relative whole percentage (0 to 100).";
 
 /** The final results of a classroom from its staff gradebook (pure: the route did the access check). */
 export function assistResults(table: ResultsSource): AssistResults {

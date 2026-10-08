@@ -18,7 +18,16 @@
  * The **mean** is the weighted mean of the columns that count and in which
  * the student has a grade (an absence is a 1.0), computed from the cell
  * grades AS DISPLAYED (each rounded to the tenth), then rounded to the
- * tenth. No ranking anywhere.
+ * tenth. A weight is a whole percentage, 0 to 100 (#545): RELATIVE, not a
+ * budget — the weights need not sum to 100, the mean divides by the sum of
+ * the weights it used, so a column the student has no grade in is skipped
+ * and the others renormalised; 0 % keeps a column in view and out of the
+ * mean. No ranking anywhere.
+ *
+ * The **class means** are the staff's alone: a column's is the plain mean
+ * of the grades its cells count as (an absence a 1.0, as in a student's
+ * mean; an empty cell left out), the class's overall one the plain mean of
+ * the students' means (a student with none left out).
  */
 import { MIN_GRADE } from "./grade.js";
 import { roundToTenth } from "./round.js";
@@ -30,10 +39,10 @@ export type GradebookMarkKind = (typeof GRADEBOOK_MARK_KINDS)[number];
 /** An absence reads as the scale's minimum: `a1.0`. */
 export const ABSENT_GRADE = MIN_GRADE;
 
-/** A column's weight: 0 to 10, to the tenth; 1 by default. */
+/** A column's weight: a whole percentage, 0 to 100 (`GradebookWeight`, `@quiz/contracts`); 100 % by default (#545, ADR-074 amendment). */
 export const WEIGHT_MIN = 0;
-export const WEIGHT_MAX = 10;
-export const WEIGHT_DEFAULT = 1;
+export const WEIGHT_MAX = 100;
+export const WEIGHT_DEFAULT = 100;
 
 /** What a gradebook column is of: an evaluation's mode, or a project (a poll never has a column). */
 export type GradebookColumnKind = "exam" | "exercise" | "project";
@@ -85,10 +94,20 @@ export interface MeanColumn {
 }
 
 /**
+ * `numerator / denominator` tenths as a grade, the half-tenth rounded up:
+ * both are integers, so the rounding is exact whatever the binary float of
+ * 4.35 is. Null for an empty denominator.
+ */
+function tenthsRatio(numerator: number, denominator: number): number | null {
+  if (denominator === 0) return null;
+  return Math.floor((2 * numerator + denominator) / (2 * denominator)) / 10;
+}
+
+/**
  * The weighted mean of the counted columns the student has a grade in, to
- * the tenth, or null when there is none (or every such weight is 0). The
- * arithmetic is in integer tenths — grades and weights alike — so the
- * half-tenth rounds up exactly, whatever the binary float of 4.35 is.
+ * the tenth, or null when there is none (or every such weight is 0):
+ * `Σ(wᵢ·gᵢ) / Σ(wᵢ)`. The arithmetic is in integers — whole percentages
+ * times grade tenths — so the half-tenth rounds up exactly.
  */
 export function gradebookMean(columns: readonly MeanColumn[]): number | null {
   let numerator = 0;
@@ -96,20 +115,25 @@ export function gradebookMean(columns: readonly MeanColumn[]): number | null {
   for (const { weight, counts, cell } of columns) {
     const grade = cellGrade(cell);
     if (!counts || grade === null) continue;
-    const w = Math.round(weight * 10);
+    const w = Math.round(weight);
     numerator += w * Math.round(grade * 10);
     denominator += w;
   }
-  if (denominator === 0) return null;
-  return Math.floor((2 * numerator + denominator) / (2 * denominator)) / 10;
+  return tenthsRatio(numerator, denominator);
 }
 
-/** A weight the settings accept: 0 to 10, at most one decimal. */
-export function validWeight(weight: number): boolean {
-  return (
-    Number.isFinite(weight) &&
-    weight >= WEIGHT_MIN &&
-    weight <= WEIGHT_MAX &&
-    Math.abs(weight * 10 - Math.round(weight * 10)) < 1e-9
-  );
+/**
+ * The class's mean of some grades, to the tenth, half up: a column's (the
+ * grades its cells count as, `cellGrade`) or the class's overall one (the
+ * students' means). A null is no grade and left out; none at all is null.
+ */
+export function classMean(grades: Iterable<number | null>): number | null {
+  let sum = 0;
+  let count = 0;
+  for (const grade of grades) {
+    if (grade === null) continue;
+    sum += Math.round(grade * 10);
+    count += 1;
+  }
+  return tenthsRatio(sum, count);
 }

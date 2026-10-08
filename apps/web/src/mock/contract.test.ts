@@ -943,10 +943,10 @@ describe("the mock's gradebook (M5-04)", () => {
     const t = await table();
     const column = t.columns.find((c) => c.kind === "evaluation" && c.released)!;
     const path = `/app/api/classrooms/${t.classroomId}/gradebook/columns/${column.kind}/${column.activityId}`;
-    const patched = (await send(path, "PATCH", { weight: 4.5, counts: false })).body as GradebookStaff;
+    const patched = (await send(path, "PATCH", { weight: 45, counts: false })).body as GradebookStaff;
     expect(issuesOf(GradebookStaff, patched)).toEqual([]);
-    expect(patched.columns.find((c) => c.activityId === column.activityId)).toMatchObject({ weight: 4.5, counts: false });
-    expect((await send(path, "PATCH", { weight: 11 })).status).toBe(400);
+    expect(patched.columns.find((c) => c.activityId === column.activityId)).toMatchObject({ weight: 45, counts: false });
+    expect((await send(path, "PATCH", { weight: 101 })).status).toBe(400);
     const off = (await send(`/app/api/classrooms/${t.classroomId}/gradebook`, "PATCH", { meanPublished: false })).body as GradebookStaff;
     expect(off.meanPublished).toBe(false);
   });

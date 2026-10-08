@@ -34,9 +34,9 @@ function makeTable(over: Partial<GradebookStaff> = {}): GradebookStaff {
     archived: false,
     meanPublished: false,
     columns: [
-      { kind: "evaluation", activityId: TEST, mode: "exam", title: "Test 1", date: "2026-09-10T08:00:00.000Z", released: true, weight: 1, counts: true, position: null },
-      { kind: "evaluation", activityId: EXERCISE, mode: "exercise", title: "Exercises", date: "2026-09-20T08:00:00.000Z", released: true, weight: 1, counts: false, position: null },
-      { kind: "evaluation", activityId: LATER, mode: "exam", title: "Test 2", date: "2026-10-01T08:00:00.000Z", released: false, weight: 2.5, counts: true, position: null },
+      { kind: "evaluation", activityId: TEST, mode: "exam", title: "Test 1", date: "2026-09-10T08:00:00.000Z", released: true, weight: 100, counts: true, position: null, classMean: 3.3 },
+      { kind: "evaluation", activityId: EXERCISE, mode: "exercise", title: "Exercises", date: "2026-09-20T08:00:00.000Z", released: true, weight: 100, counts: false, position: null, classMean: null },
+      { kind: "evaluation", activityId: LATER, mode: "exam", title: "Test 2", date: "2026-10-01T08:00:00.000Z", released: false, weight: 40, counts: true, position: null, classMean: null },
     ],
     rows: [
       {
@@ -64,6 +64,7 @@ function makeTable(over: Partial<GradebookStaff> = {}): GradebookStaff {
         },
       },
     ],
+    classMean: 3.3,
     ...over,
   });
 }
@@ -103,9 +104,17 @@ describe("the matrix", () => {
     await cell("Alice Dupont", "Test 2");
     const later = screen.getByRole("columnheader", { name: /Test 2/ });
     expect(within(later).getByText("Not released")).toBeInTheDocument();
-    expect(within(later).getByText(/Weight 2\.5/)).toBeInTheDocument();
+    expect(within(later).getByText(/40 %/)).toBeInTheDocument();
     expect(within(screen.getByRole("columnheader", { name: /Exercises/ })).getByText(/Not counted/)).toBeInTheDocument();
     expect(within(screen.getByRole("columnheader", { name: /Test 1/ })).queryByText("Not released")).toBeNull();
+  });
+
+  it("closes on the class means: each column's, a dash where there is none, and the overall one under the mean", async () => {
+    renderTab(makeTable());
+    const row = await screen.findByRole("row", { name: /Class mean/ });
+    const cells = within(row).getAllByRole("cell");
+    // A grade carries its band in words for a screen reader: the figure leads.
+    expect(cells.map((c) => c.textContent!.split(" ")[0])).toEqual(["3.3", "—", "—", "3.3"]);
   });
 
   it("scrolls inside its card, never the page", async () => {
@@ -222,7 +231,7 @@ describe("the writes of a cell", () => {
 });
 
 describe("the settings of a column and of the mean", () => {
-  it("toggles whether a column counts, and sets its weight at the tenth", async () => {
+  it("toggles whether a column counts, and sets its weight as a whole percentage", async () => {
     const { calls } = renderTab(makeTable(), {
       [`PATCH ${URL_COLUMN(EXERCISE)}`]: ok(makeTable()),
       [`PATCH ${URL_COLUMN(TEST)}`]: ok(makeTable()),
@@ -235,14 +244,17 @@ describe("the settings of a column and of the mean", () => {
     await choose(screen.getByRole("button", { name: /^Test 1/ }), "Set the weight…");
     const dialog = await screen.findByRole("dialog", { name: "Weight of Test 1" });
     const save = within(dialog).getByRole("button", { name: "Save" });
-    await userEvent.clear(within(dialog).getByLabelText("Weight"));
-    await userEvent.type(within(dialog).getByLabelText("Weight"), "11");
-    expect(save).toBeDisabled();
-    await userEvent.clear(within(dialog).getByLabelText("Weight"));
-    await userEvent.type(within(dialog).getByLabelText("Weight"), "2.5");
+    const field = within(dialog).getByLabelText("Weight (%)");
+    for (const bad of ["101", "2.5", "-1"]) {
+      await userEvent.clear(field);
+      await userEvent.type(field, bad);
+      expect(save, bad).toBeDisabled();
+    }
+    await userEvent.clear(field);
+    await userEvent.type(field, "40");
     await userEvent.click(save);
     await waitFor(() => expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(2));
-    expect(calls.filter((c) => c.method === "PATCH")[1]!.body).toEqual({ weight: 2.5 });
+    expect(calls.filter((c) => c.method === "PATCH")[1]!.body).toEqual({ weight: 40 });
   });
 
   it("publishes the mean to the students, and stops", async () => {

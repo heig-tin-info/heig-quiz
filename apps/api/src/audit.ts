@@ -175,7 +175,8 @@ export type AuditAction =
    * `before` and `after` (the mark: `{ kind, points, max, comment }`, null
    * for none), `override` (a real grade lay beneath); `mark_cleared`: the
    * same, `after` null. `column_updated`: `kind`, `activityId`, `before`
-   * and `after` (`{ weight, counts, position }`). `mean_published` /
+   * and `after` (`{ weight, counts, position }`, the weight in whole
+   * percent since #545). `mean_published` /
    * `mean_unpublished`: no payload. Never a grade of another student.
    */
   | "gradebook.mark_set"

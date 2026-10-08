@@ -12,8 +12,9 @@
  * - the staff's cells ARE the activities' own results (golden against
  *   `resultsView`), a released exam not taken an absence derived (a1.0), an
  *   exercise not taken an empty cell;
- * - the mean: weighted, to the tenth, from the displayed cells, over the
- *   released columns that count; exercises opt-in;
+ * - the mean: weighted by whole percentages (relative, #545), to the tenth,
+ *   from the displayed cells, over the released columns that count;
+ *   exercises opt-in; the class means per column and overall, staff only;
  * - the marks: they win over a grade beneath only with `override` (`409
  *   grade_exists` otherwise), replace and clear, are audited with before and
  *   after, refuse an archived classroom;
@@ -280,7 +281,7 @@ describe("the staff's table (F-GBOOK-01)", () => {
     const table = await staffTable();
     const byTitle = Object.fromEntries(table.columns.map((c) => [c.title, c]));
     expect(Object.keys(byTitle).sort()).toEqual(["E1", "E2", "E3", "E4", "P1", "P2", "X1"]);
-    expect(byTitle["E1"]).toMatchObject({ kind: "evaluation", mode: "exam", released: true, weight: 1, counts: true });
+    expect(byTitle["E1"]).toMatchObject({ kind: "evaluation", mode: "exam", released: true, weight: 100, counts: true });
     expect(byTitle["X1"]).toMatchObject({ mode: "exercise", released: true, counts: false });
     expect(byTitle["P1"]).toMatchObject({ kind: "project", mode: "project", released: true, counts: true });
     expect(byTitle["E3"]).toMatchObject({ released: false });
@@ -338,10 +339,10 @@ describe("the mean (F-GBOOK-02)", () => {
     // s0: E1 5.0, E2 4.0, E4 4.5 (released under `none`: the staff read the real grade) and P1 5.5 count;
     // X1 (an exercise) does not; E3 and P2 are not released.
     const expected = gradebookMean([
-      { weight: 1, counts: true, cell: { kind: "grade", grade: 5 } },
-      { weight: 1, counts: true, cell: { kind: "grade", grade: 4 } },
-      { weight: 1, counts: true, cell: { kind: "grade", grade: gradeFromPoints(7, 10, {}) } },
-      { weight: 1, counts: true, cell: { kind: "grade", grade: 5.5 } },
+      { weight: 100, counts: true, cell: { kind: "grade", grade: 5 } },
+      { weight: 100, counts: true, cell: { kind: "grade", grade: 4 } },
+      { weight: 100, counts: true, cell: { kind: "grade", grade: gradeFromPoints(7, 10, {}) } },
+      { weight: 100, counts: true, cell: { kind: "grade", grade: 5.5 } },
     ]);
     expect(expected).toBe(4.8); // 19 / 4 = 4.75, half up
     expect(rowOf(table, 0).mean).toBe(4.8);
@@ -351,28 +352,53 @@ describe("the mean (F-GBOOK-02)", () => {
     expect(rowOf(table, 1).mean).toBe(1.8);
   });
 
-  it("takes a weight, and an exercise once the teacher includes it", async () => {
-    const res = await call("PATCH", colUrl("evaluation", "E2"), teacher.headers, { weight: 2 });
+  it("gives the class mean of each released column and the class's overall mean, to the tenth", async () => {
+    const table = await staffTable();
+    const classMeanOf = (name: string) => table.columns.find((c) => c.activityId === col[name])!.classMean;
+    // E1: 5.0, 3.5 and an absence counted 1.0 -> 9.5 / 3 = 3.17
+    expect(classMeanOf("E1")).toBe(3.2);
+    // E2: 4.0, an absence, 6.0 -> 11 / 3 = 3.67
+    expect(classMeanOf("E2")).toBe(3.7);
+    // X1, an exercise: its one grade, though it does not count; empty cells are left out.
+    expect(classMeanOf("X1")).toBe(5.5);
+    // P1: the one score; the seat that never accepted and the one not scored are empty.
+    expect(classMeanOf("P1")).toBe(5.5);
+    // Not released: no class mean.
+    expect(classMeanOf("E3")).toBeNull();
+    expect(classMeanOf("P2")).toBeNull();
+    // The students' means 4.8, 1.8, 2.7 -> 9.3 / 3
+    expect(table.classMean).toBe(3.1);
+  });
+
+  it("takes a weight as a relative percentage, 0 % leaving the column out, and an exercise once the teacher includes it", async () => {
+    await call("PATCH", colUrl("evaluation", "E1"), teacher.headers, { weight: 50 });
+    const res = await call("PATCH", colUrl("evaluation", "E4"), teacher.headers, { weight: 50 });
     expect(res.statusCode, res.body).toBe(200);
     const table = GradebookStaff.parse(res.json());
-    expect(table.columns.find((c) => c.title === "E2")).toMatchObject({ weight: 2, counts: true });
-    // s2: (1*1 + 2*6 + 1*1) / 4 = 3.5
+    expect(table.columns.find((c) => c.title === "E4")).toMatchObject({ weight: 50, counts: true });
+    // s2: E1 absent at 50, E2 6.0 at 100, E4 absent at 50 -> (50 + 600 + 50) / 200 = 3.5
     expect(rowOf(table, 2).mean).toBe(3.5);
 
     const withExercise = GradebookStaff.parse((await call("PATCH", colUrl("evaluation", "X1"), teacher.headers, { counts: true })).json());
-    // s0: E1 5.0, E2 4.0 x2, E4 4.5, P1 5.5, X1 5.5 -> (5 + 8 + 4.5 + 5.5 + 5.5) / 6 = 4.75
-    expect(rowOf(withExercise, 0).mean).toBe(4.8);
+    // s0: E1 5.0 at 50, E2 4.0, E4 4.5 at 50, P1 5.5, X1 5.5 -> (250 + 400 + 225 + 550 + 550) / 400 = 4.94
+    expect(rowOf(withExercise, 0).mean).toBe(4.9);
     // s1: X1 is an empty cell: it does not count against them.
     expect(withExercise.columns.find((c) => c.title === "X1")).toMatchObject({ counts: true });
     expect(rowOf(withExercise, 1).mean).toBe(rowOf(table, 1).mean);
 
-    await call("PATCH", colUrl("evaluation", "E2"), teacher.headers, { weight: 1 });
+    // 0 %: the column stays in the table, with its class mean, and out of every mean.
+    const zero = GradebookStaff.parse((await call("PATCH", colUrl("evaluation", "E2"), teacher.headers, { weight: 0 })).json());
+    expect(zero.columns.find((c) => c.title === "E2")).toMatchObject({ weight: 0, classMean: 3.7 });
+    // s2: E1 absent at 50, E4 absent at 50 -> 1.0
+    expect(rowOf(zero, 2).mean).toBe(1);
+
+    for (const name of ["E1", "E2", "E4"]) await call("PATCH", colUrl("evaluation", name), teacher.headers, { weight: 100 });
     await call("PATCH", colUrl("evaluation", "X1"), teacher.headers, { counts: false });
   });
 
   it("refuses a weight out of range, a body that changes nothing, and a column the classroom does not have", async () => {
-    expect((await call("PATCH", colUrl("evaluation", "E1"), teacher.headers, { weight: 11 })).statusCode).toBe(400);
-    expect((await call("PATCH", colUrl("evaluation", "E1"), teacher.headers, { weight: 0.25 })).statusCode).toBe(400);
+    expect((await call("PATCH", colUrl("evaluation", "E1"), teacher.headers, { weight: 101 })).statusCode).toBe(400);
+    expect((await call("PATCH", colUrl("evaluation", "E1"), teacher.headers, { weight: 2.5 })).statusCode).toBe(400);
     expect((await call("PATCH", colUrl("evaluation", "E1"), teacher.headers, {})).statusCode).toBe(400);
     expect((await call("PATCH", `${base()}/columns/evaluation/${randomUUID()}`, teacher.headers, { weight: 2 })).statusCode).toBe(404);
     // A project id under `evaluation` is no column of an evaluation.
@@ -380,20 +406,25 @@ describe("the mean (F-GBOOK-02)", () => {
   });
 
   it("audits a column's update with before and after, and nothing for a write that changes nothing", async () => {
-    await call("PATCH", colUrl("evaluation", "E4"), teacher.headers, { weight: 3 });
-    await call("PATCH", colUrl("evaluation", "E4"), teacher.headers, { weight: 3 });
-    const rows = await db()
-      .select()
-      .from(auditLog)
-      .where(and(eq(auditLog.action, "gradebook.column_updated"), eq(auditLog.subjectId, seed.classroomId)));
-    const forE4 = rows.filter((r) => (r.payload as { activityId: string }).activityId === col["E4"]);
+    const auditedE4 = async () =>
+      (
+        await db()
+          .select()
+          .from(auditLog)
+          .where(and(eq(auditLog.action, "gradebook.column_updated"), eq(auditLog.subjectId, seed.classroomId)))
+          .orderBy(auditLog.id)
+      ).filter((r) => (r.payload as { activityId: string }).activityId === col["E4"]);
+    const earlier = (await auditedE4()).length;
+    await call("PATCH", colUrl("evaluation", "E4"), teacher.headers, { weight: 30 });
+    await call("PATCH", colUrl("evaluation", "E4"), teacher.headers, { weight: 30 });
+    const forE4 = (await auditedE4()).slice(earlier);
     expect(forE4).toHaveLength(1);
     expect(forE4[0]!.payload).toMatchObject({
       activityKind: "evaluation",
-      before: { weight: 1, counts: true, position: null },
-      after: { weight: 3, counts: true, position: null },
+      before: { weight: 100, counts: true, position: null },
+      after: { weight: 30, counts: true, position: null },
     });
-    await call("PATCH", colUrl("evaluation", "E4"), teacher.headers, { weight: 1 });
+    await call("PATCH", colUrl("evaluation", "E4"), teacher.headers, { weight: 100 });
   });
 });
 
@@ -516,7 +547,7 @@ describe("the staff's marks (D06, 2026-10-05)", () => {
   it("materializes the stored column with its kind's defaults on the first write that names it", async () => {
     const stored = await db().select().from(gradebookColumns).where(eq(gradebookColumns.classroomId, seed.classroomId));
     const x1 = stored.find((c) => c.evaluationId === col["X1"])!;
-    expect(x1).toMatchObject({ weight: 1, projectId: null });
+    expect(x1).toMatchObject({ weight: 100, projectId: null });
     expect(stored.filter((c) => c.evaluationId === col["X1"])).toHaveLength(1);
   });
 
@@ -551,7 +582,7 @@ describe("the published mean and the archived classroom (F-GBOOK-05, F-GBOOK-06)
     try {
       const attempts = [
         call("PATCH", base(), teacher.headers, { meanPublished: true }),
-        call("PATCH", colUrl("evaluation", "E1"), teacher.headers, { weight: 2 }),
+        call("PATCH", colUrl("evaluation", "E1"), teacher.headers, { weight: 20 }),
         call("PUT", markUrl("evaluation", "X1", seats[1]!), teacher.headers, { kind: "absent" }),
         call("DELETE", markUrl("evaluation", "X1", seats[1]!), teacher.headers),
       ];
@@ -619,7 +650,7 @@ describe("the student's own cells (F-GBOOK-05, F-RES-04) and what must never rea
       for (const [who, headers] of callers) {
         const { body, raw } = await studentRead(headers);
         // The unreleased: E3 (2.5, then the mark 1.5) and P2 (1.5, then the mark 2.5): none of those grades, nor the comment, anywhere.
-        for (const forbidden of ['"grade":2.5', '"grade":1.5', SECRET, '"source"', '"mark"', '"setBy"', '"comment"', '"hasGrade"', '"changedAfterRelease"', '"email"', '"enrollmentId"', '"teacherPoints"', '"review"', '"ci"']) {
+        for (const forbidden of ['"grade":2.5', '"grade":1.5', SECRET, '"classMean"', '"source"', '"mark"', '"setBy"', '"comment"', '"hasGrade"', '"changedAfterRelease"', '"email"', '"enrollmentId"', '"teacherPoints"', '"review"', '"ci"']) {
           expect(body, `${who}: ${forbidden}`).not.toContain(forbidden);
         }
         // Nothing of the other students: their names, their e-mails, their cells.
@@ -654,11 +685,13 @@ describe("the student's own cells (F-GBOOK-05, F-RES-04) and what must never rea
       const s0 = (await studentRead(students[0]!.headers)).parsed;
       // s0 sees E1 5.0, E2 4.0, P1 5.5 (counted): E4 is withheld, so it is not in what they read.
       expect(s0.mean).toBe(gradebookMean([
-        { weight: 1, counts: true, cell: { kind: "grade", grade: 5 } },
-        { weight: 1, counts: true, cell: { kind: "grade", grade: 4 } },
-        { weight: 1, counts: true, cell: { kind: "grade", grade: 5.5 } },
+        { weight: 100, counts: true, cell: { kind: "grade", grade: 5 } },
+        { weight: 100, counts: true, cell: { kind: "grade", grade: 4 } },
+        { weight: 100, counts: true, cell: { kind: "grade", grade: 5.5 } },
       ]));
-      expect(s0.columns.find((c) => c.activityId === col["E1"])).toMatchObject({ weight: 1, counts: true });
+      expect(s0.columns.find((c) => c.activityId === col["E1"])).toMatchObject({ weight: 100, counts: true });
+      // The class means are the staff's: never in a student's payload, published mean or not.
+      expect(JSON.stringify(s0)).not.toContain("classMean");
       expect(s0.columns.find((c) => c.activityId === col["X1"])).toMatchObject({ counts: false });
       // s1: E1 3.5, E2 absent (1.0): (3.5 + 1) / 2 = 2.25 -> 2.3.
       expect((await studentRead(students[1]!.headers)).parsed.mean).toBe(2.3);
@@ -676,7 +709,7 @@ describe("the CSV export (F-GBOOK-04, M5-03b)", () => {
     expect(res.statusCode, res.body).toBe(200);
     return res;
   };
-  /** The file's lines under the BOM: the header, then a row per student. */
+  /** The file's lines under the BOM: the header, the weights, a row per student, the class means. */
   const linesOf = async () => (await read()).payload.slice(1).trimEnd().split("\r\n");
 
   it("is the F-RES-02 format: a UTF-8 BOM, `;`, CRLF, an attachment", async () => {
@@ -689,7 +722,8 @@ describe("the CSV export (F-GBOOK-04, M5-03b)", () => {
 
   it("has a row per claimed student, a column per gradebook column in order, and the mean", async () => {
     const table = await staffTable();
-    const [header, ...rows] = await linesOf();
+    const [header, , ...withClassMeans] = await linesOf();
+    const rows = withClassMeans.slice(0, -1);
     expect(header!.split(";")).toEqual([
       "email",
       "last_name",
@@ -712,7 +746,7 @@ describe("the CSV export (F-GBOOK-04, M5-03b)", () => {
 
   it("writes a grade at one decimal, the absence `a1.0`, an empty cell empty", async () => {
     const table = await staffTable();
-    const rows = (await linesOf()).slice(1);
+    const rows = (await linesOf()).slice(2);
     const at = (student: number, name: string) => {
       const index = table.columns.findIndex((c) => c.activityId === col[name]);
       const row = table.rows.findIndex((r) => r.enrollmentId === seats[student]);
@@ -733,11 +767,33 @@ describe("the CSV export (F-GBOOK-04, M5-03b)", () => {
     expect(put.statusCode, put.body).toBe(200);
     try {
       const table = await staffTable();
-      const rows = (await linesOf()).slice(1);
+      const rows = (await linesOf()).slice(2);
       const index = 3 + table.columns.findIndex((c) => c.activityId === col["X1"]);
       expect(rows[table.rows.findIndex((r) => r.enrollmentId === seats[2])]!.split(";")[index]).toBe("a1.0");
     } finally {
       await call("DELETE", markUrl("evaluation", "X1", seats[2]!), teacher.headers);
+    }
+  });
+
+  it("writes the weights under the header and the class means last (#545)", async () => {
+    await call("PATCH", colUrl("evaluation", "E2"), teacher.headers, { weight: 40 });
+    try {
+      const table = await staffTable();
+      const lines = await linesOf();
+      const field = (line: string, name: string) => line.split(";")[3 + table.columns.findIndex((c) => c.activityId === col[name])];
+      const weights = lines[1]!;
+      expect(weights.split(";").slice(0, 3)).toEqual(["weight", "", ""]);
+      expect([field(weights, "E1"), field(weights, "E2"), field(weights, "P1")]).toEqual(["100", "40", "100"]);
+      // An exercise not counted carries no weight; nor does the mean.
+      expect(field(weights, "X1")).toBe("");
+      expect(weights.split(";").at(-1)).toBe("");
+
+      const means = lines.at(-1)!;
+      expect(means.split(";").slice(0, 3)).toEqual(["class_mean", "", ""]);
+      expect([field(means, "E1"), field(means, "E2"), field(means, "X1"), field(means, "E3")]).toEqual(["3.2", "3.7", "5.5", ""]);
+      expect(means.split(";").at(-1)).toBe(table.classMean!.toFixed(1));
+    } finally {
+      await call("PATCH", colUrl("evaluation", "E2"), teacher.headers, { weight: 100 });
     }
   });
 
