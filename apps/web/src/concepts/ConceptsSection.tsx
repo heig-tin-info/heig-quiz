@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Ban, Check, ChevronDown, ChevronRight, Hourglass, Link2, Plus, Tags, X } from "lucide-react";
+import { Ban, Check, ChevronDown, ChevronRight, Hourglass, Link2, Plus, Sparkles, Tags, X } from "lucide-react";
 import { useId, useState } from "react";
 
 import type { TagSortingList, TagSortingRow } from "@quiz/contracts";
@@ -27,7 +27,8 @@ import {
   T,
 } from "../ui";
 import { DropDialog, MapDialog, NewConceptSheet } from "./dialogs";
-import { choiceText, conceptName, FILTERS, keyOf, storedDecision, useTagSorting, type Filter, type Pending } from "./sorting";
+import { ProposeAction } from "./ProposeAction";
+import { choiceText, conceptName, FILTERS, keyOf, storedDecision, useTagSorting, type Decision, type Filter, type Pending } from "./sorting";
 
 type Translate = ReturnType<typeof useT>;
 
@@ -39,8 +40,9 @@ type Translate = ReturnType<typeof useT>;
  * Two steps, on purpose: a decision is first set on the selected pairs
  * (pending, in this screen only), then the one primary action, **Accept**,
  * writes the selected pairs that carry one, in one transaction. The model's
- * proposals (a later step) will arrive as pending decisions the admin
- * accepts the same way (`decisionOf`).
+ * proposals ("Propose with AI", the header's secondary action) arrive as
+ * pending decisions, marked as suggested, that the admin accepts the same
+ * way (`decisionOf`).
  *
  * The rows come in `conceptKey` groups, so `pointeurs` in one pool and
  * `pointeur` in another sit together: a group is selected at once from its
@@ -58,14 +60,19 @@ export function ConceptsSection() {
   });
   const rows = list.data?.rows ?? [];
   const s = useTagSorting(rows);
-  const decide = (value: Omit<Pending, "source">) => {
+  const decide = (value: Decision) => {
     s.decide(s.chosen, value);
     setDialog(null);
   };
 
   return (
     <section className={cx("space-y-4", s.chosen.length > 0 && "pb-24")}>
-      <SectionHeading icon={Tags} title={t("admin.concepts")} description={t("admin.concepts.hint")} />
+      <SectionHeading
+        icon={Tags}
+        title={t("admin.concepts")}
+        description={t("admin.concepts.hint")}
+        actions={<ProposeAction />}
+      />
 
       {list.isLoading ? (
         <Skeleton className="h-80 w-full" />
@@ -165,6 +172,7 @@ export function ConceptsSection() {
                           checked={s.selected.has(keyOf(r))}
                           onCheck={(on) => s.select([keyOf(r)], on)}
                           pending={s.decisionOf(r)}
+                          resolving={s.resolving(r)}
                           onClearPending={() => s.clearPending(r)}
                           error={s.failure?.keys.has(keyOf(r)) ? t(`admin.concepts.error.${s.failure.code}`) : null}
                         />
@@ -274,6 +282,7 @@ function PairRows({
   checked,
   onCheck,
   pending,
+  resolving,
   onClearPending,
   error,
 }: {
@@ -282,6 +291,8 @@ function PairRows({
   checked: boolean;
   onCheck: (on: boolean) => void;
   pending: Pending | null;
+  /** The model's proposal names a concept still being looked up. */
+  resolving: boolean;
   onClearPending: () => void;
   error: string | null;
 }) {
@@ -298,7 +309,7 @@ function PairRows({
             onChange={(e) => onCheck(e.target.checked)}
           />
         </td>
-        <td className={cx(T.td, "min-w-40 max-w-md align-top")}>
+        <td className={cx(T.td, "min-w-28 max-w-md align-top @2xl:min-w-40")}>
           <div className="font-semibold">{row.tag}</div>
           {/* Under 42 rem the pool and the count leave their columns for this
               line, so the decision keeps the width its badge needs. */}
@@ -324,9 +335,14 @@ function PairRows({
           <div className="flex flex-wrap items-center gap-1">
             {pending ? (
               <>
-                {/* Not told apart by its colour alone: the hourglass, and the words for a screen reader. */}
-                <Badge tone="amber" icon={Hourglass} className="max-w-56">
-                  <span className="sr-only">{t("admin.concepts.pendingNamed", { decision: choiceText(t, locale, pending) })}</span>
+                {/* Not told apart by its colour alone: the hourglass (the admin's)
+                    or the sparkles (the model's), and the words for a screen reader. */}
+                <Badge tone="amber" icon={pending.source === "model" ? Sparkles : Hourglass} className="max-w-36 @2xl:max-w-56">
+                  <span className="sr-only">
+                    {t(pending.source === "model" ? "admin.concepts.suggestedNamed" : "admin.concepts.pendingNamed", {
+                      decision: choiceText(t, locale, pending),
+                    })}
+                  </span>
                   <span aria-hidden className="truncate">
                     {choiceText(t, locale, pending)}
                   </span>
@@ -335,14 +351,19 @@ function PairRows({
                   <X />
                 </IconButton>
               </>
+            ) : resolving ? (
+              <Skeleton className="h-5.5 w-24" />
             ) : stored ? (
-              <Badge tone={stored.drop ? "zinc" : "green"} className="max-w-56">
+              <Badge tone={stored.drop ? "zinc" : "green"} className="max-w-36 @2xl:max-w-56">
                 <span className="truncate">{stored.text}</span>
               </Badge>
             ) : (
               <span className="whitespace-nowrap text-fg-faint">{t("admin.concepts.undecided")}</span>
             )}
           </div>
+          {pending?.source === "model" && pending.note ? (
+            <p className="mt-1 line-clamp-2 max-w-56 text-xs text-fg-faint">{pending.note}</p>
+          ) : null}
           {pending && stored ? (
             <div className="mt-1 text-xs text-fg-faint">{t("admin.concepts.current", { decision: stored.text })}</div>
           ) : null}
