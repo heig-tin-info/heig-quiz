@@ -32,6 +32,7 @@ import {
   Gavel,
   GitBranch,
   Globe,
+  GraduationCap,
   Hammer,
   Handshake,
   HeartPulse,
@@ -89,7 +90,7 @@ import { lazy, Suspense } from "react";
 import type { PoolColor } from "@quiz/contracts";
 
 import { CUSTOM_ICON_COMPONENTS } from "./customIcons";
-import { DEFAULT_POOL_ICON } from "./poolIcons";
+import { DEFAULT_COURSE_ICON, DEFAULT_POOL_ICON } from "./poolIcons";
 
 /**
  * The icon of a pool, drawn from its stored lucide name.
@@ -122,6 +123,7 @@ import { DEFAULT_POOL_ICON } from "./poolIcons";
  */
 export const POOL_ICON_COMPONENTS: Record<string, LucideIcon> = {
   library: Library,
+  [DEFAULT_COURSE_ICON]: GraduationCap,
   code: Code,
   terminal: Terminal,
   binary: Binary,
@@ -214,10 +216,13 @@ const DynamicIcon = lazy(() =>
 export function PoolIcon({
   icon,
   color,
+  fallback = DEFAULT_POOL_ICON,
   className = "size-5",
 }: {
   /** The pool's stored icon name; null (or unknown to this lucide) is the default. */
   icon: string | null | undefined;
+  /** The default: a pool's shelf, or a course's cap (`DEFAULT_COURSE_ICON`). Curated. */
+  fallback?: string;
   /** The pool's colour (#213); null keeps whatever ink the call site gives. */
   color?: PoolColor | null | undefined;
   className?: string;
@@ -227,10 +232,10 @@ export function PoolIcon({
   // the grey a pool with no colour keeps exactly as before, and the fifteen
   // names need no class map for Tailwind to find.
   const style = color ? { color: `var(--pool-${color})` } : undefined;
-  const name = icon ?? DEFAULT_POOL_ICON;
+  const name = icon ?? fallback;
   const Curated = POOL_ICON_COMPONENTS[name];
   if (Curated) return <Curated className={className} style={style} aria-hidden="true" />;
-  const Fallback = POOL_ICON_COMPONENTS[DEFAULT_POOL_ICON]!;
+  const Fallback = POOL_ICON_COMPONENTS[fallback]!;
   return (
     <Suspense fallback={<Fallback className={className} style={style} aria-hidden="true" />}>
       <DynamicIcon

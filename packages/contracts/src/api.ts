@@ -11,6 +11,7 @@ import { TRUSTED_CLIENTS } from "@quiz/domain";
 import { McqPolicy } from "./evaluation.js";
 import type { TeacherCodespaceGrant } from "./codespace.js";
 import type { CourseRole } from "./org.js";
+import type { PoolColor } from "./pool.js";
 
 /** Display format for date-times; null falls back to ISO (`2026-09-01 08:00`). */
 export const DATE_FORMATS = ["iso", "eu", "uk", "us"] as const;
@@ -186,6 +187,10 @@ export interface CourseSummary {
   id: string;
   name: string;
   code: string;
+  /** A lucide icon name, drawn as a pool's is; null shows the default. */
+  icon: string | null;
+  /** The icon's colour; null is grey, the default. */
+  color: PoolColor | null;
   createdAt: string;
   /**
    * The caller hid this course from their own navigation (#155, ADR-032):

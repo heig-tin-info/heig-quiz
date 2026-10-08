@@ -17,6 +17,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+import { POOL_COLORS } from "@quiz/contracts";
 import { CONDITION_KINDS } from "@quiz/domain";
 
 import { users } from "./auth.js";
@@ -30,6 +31,10 @@ export const courses = pgTable("courses", {
   name: text("name").notNull(),
   /** Short school code (`PRG1`), unique across the instance. */
   code: text("code").notNull().unique(),
+  /** A lucide icon name (`cpu`), drawn as a pool's is; null shows the default. */
+  icon: text("icon"),
+  /** The icon's colour, a `PoolColor` name (`teal`); null is grey, the default. */
+  color: text("color", { enum: POOL_COLORS }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

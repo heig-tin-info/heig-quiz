@@ -15,6 +15,8 @@ import { and, asc, eq, inArray, isNull, ne, or, sql, type SQL } from "drizzle-or
 import type { FastifyBaseLogger } from "fastify";
 
 import type {
+  CourseCreate,
+  CoursePatch,
   CourseRole,
   EnrollmentPatch,
   StudentClassroom,
@@ -101,6 +103,8 @@ export async function listCourses(
       id: courses.id,
       name: courses.name,
       code: courses.code,
+      icon: courses.icon,
+      color: courses.color,
       createdAt: courses.createdAt,
       hiddenAt: userCoursePrefs.hiddenAt,
     })
@@ -138,6 +142,8 @@ export async function listCourses(
     id: c.id,
     name: c.name,
     code: c.code,
+    icon: c.icon,
+    color: c.color,
     createdAt: c.createdAt.toISOString(),
     hidden: c.hiddenAt !== null,
     // Every listed course is reached by a seat or by Super Powers, so the
@@ -184,13 +190,19 @@ export async function listCourses(
  */
 export async function createCourse(
   db: Db,
-  input: { name: string; code: string },
+  input: CourseCreate,
   creatorId: string,
 ): Promise<CourseRecord | null> {
   const id = randomUUID();
   const [created] = await db
     .insert(courses)
-    .values({ id, name: input.name, code: input.code })
+    .values({
+      id,
+      name: input.name,
+      code: input.code,
+      icon: input.icon ?? null,
+      color: input.color ?? null,
+    })
     .onConflictDoNothing({ target: courses.code })
     .returning();
   if (!created) return null;
@@ -199,14 +211,15 @@ export async function createCourse(
 }
 
 /**
- * Renames a course, its name or its code. `null` when the new code is
+ * Renames a course, its name or its code, or changes its icon and colour
+ * (null puts the default back). `null` when the new code is
  * already another course's: the code is unique across the instance, and the
  * caller answers 409 `duplicate_code` as the creation does.
  */
 export async function updateCourse(
   db: Db,
   courseId: string,
-  patch: { name?: string | undefined; code?: string | undefined },
+  patch: CoursePatch,
 ) {
   try {
     const [updated] = await db
@@ -214,6 +227,8 @@ export async function updateCourse(
       .set({
         ...(patch.name ? { name: patch.name } : {}),
         ...(patch.code ? { code: patch.code } : {}),
+        ...(patch.icon !== undefined ? { icon: patch.icon } : {}),
+        ...(patch.color !== undefined ? { color: patch.color } : {}),
         updatedAt: new Date(),
       })
       .where(eq(courses.id, courseId))

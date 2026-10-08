@@ -799,3 +799,29 @@ describe("the order of the refusals, over HTTP", () => {
     expect(last.json().error).toBe("last_owner");
   });
 });
+
+describe("course icon", () => {
+  it("is set on creation, changed and reset by PATCH, and listed", async () => {
+    const created = await server.app.inject({
+      method: "POST",
+      url: "/app/api/courses",
+      headers: teacher.headers,
+      payload: { name: "Icônes", code: "ICO1", icon: "cpu", color: "teal" },
+    });
+    expect(created.json()).toMatchObject({ icon: "cpu", color: "teal" });
+    const id = created.json().id as string;
+    const patch = (payload: Payload) =>
+      server.app.inject({ method: "PATCH", url: `/app/api/courses/${id}`, headers: teacher.headers, payload });
+
+    expect((await patch({ icon: "code" })).json()).toMatchObject({ icon: "code", color: "teal" });
+    expect((await patch({ color: "beige" })).statusCode).toBe(400);
+    expect((await patch({ icon: null, color: null })).json()).toMatchObject({ icon: null, color: null });
+
+    await patch({ color: "red" });
+    const list = await server.app.inject({ method: "GET", url: "/app/api/courses", headers: teacher.headers });
+    expect(list.json().find((c: { id: string }) => c.id === id)).toMatchObject({
+      icon: null,
+      color: "red",
+    });
+  });
+});

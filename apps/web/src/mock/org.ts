@@ -2,7 +2,7 @@
  * Section 1b — courses, classrooms, roster and administration: the world a
  * teacher organises before there is a single question in it.
  */
-import { ConditionKind, DEFAULT_MAX_ACTIVE_SESSIONS, LlmSettingsPatch, ScheduledTaskPatch, TeacherCodespaceGrantPatch } from "@quiz/contracts";
+import { ConditionKind, DEFAULT_MAX_ACTIVE_SESSIONS, LlmSettingsPatch, PoolColor, ScheduledTaskPatch, TeacherCodespaceGrantPatch } from "@quiz/contracts";
 import type {
   AdminScheduledTask,
   AdminTeacher,
@@ -110,6 +110,8 @@ export interface Course {
   id: string;
   name: string;
   code: string;
+  icon?: string | null;
+  color?: CourseSummary["color"];
   createdAt: string;
   staff: CourseSummary["staff"];
   /** The mock teacher hid this course from their navigation (#155). */
@@ -150,6 +152,8 @@ export const courses: Course[] = [
     id: "c1",
     name: "Programmation C",
     code: "PRG1",
+    icon: "code",
+    color: "blue",
     createdAt: iso(-400 * D),
     staff: staffOf(ROULET),
   },
@@ -478,6 +482,8 @@ const courseSummary = (c: Course): CourseSummary => ({
   id: c.id,
   name: c.name,
   code: c.code,
+  icon: c.icon ?? null,
+  color: c.color ?? null,
   createdAt: c.createdAt,
   hidden: c.hidden ?? false,
   myRole: myRoleOn(c.id),
@@ -553,6 +559,8 @@ on("POST", "/app/api/courses", (_m, body) => {
     id: nextId("c"),
     name: String(body.name),
     code: String(body.code).toUpperCase(),
+    icon: typeof body.icon === "string" ? body.icon : null,
+    color: PoolColor.safeParse(body.color).data ?? null,
     createdAt: iso(0),
     staff: [{ ...ME_TEACHER, role: "owner" }],
   };
@@ -563,6 +571,8 @@ on("PATCH", "/app/api/courses/:id", (m, body) => {
   const c = courseOr404(m.groups!.id!);
   if (typeof body.name === "string") c.name = body.name;
   if (typeof body.code === "string") c.code = body.code.toUpperCase();
+  if ("icon" in body) c.icon = typeof body.icon === "string" ? body.icon : null;
+  if ("color" in body) c.color = PoolColor.safeParse(body.color).data ?? null;
   return courseSummary(c);
 });
 on("DELETE", "/app/api/courses/:id", (m) => {

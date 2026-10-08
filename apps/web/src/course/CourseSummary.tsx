@@ -1,10 +1,11 @@
-import { FileStack, Library, School } from "lucide-react";
+import { FileStack, School } from "lucide-react";
 
 import type { CourseSummary } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import type { Route } from "../router";
 import { Actions, Card, cx, PeopleStack, SectionHeading, T } from "../ui";
+import { CourseIcon } from "./CourseIcon";
 import { CoursePools } from "./CoursePools";
 import { ArchivedClassrooms, ClassroomRow, HiddenBadge } from "./parts";
 import { useCourseActions } from "./useCourseActions";
@@ -48,9 +49,9 @@ export function CourseCard({
           teaches a course is part of naming it, and the hairline-separated
           strip it used to live in said "STAFF" to announce three discs. */}
       <SectionHeading
-        icon={Library}
         title={
           <span className="flex min-w-0 flex-wrap items-center gap-2">
+            <CourseIcon course={course} className="size-4 shrink-0 text-fg-faint" />
             <CourseLink course={course} navigate={navigate} />
             <span className="text-[13px] font-normal text-fg-faint">{course.code}</span>
             <HiddenBadge course={course} />
@@ -113,6 +114,7 @@ export function CourseRow({
     <tr role="row" className={cx(T.row, T.stack.row)}>
       <td role="cell" className={cx(T.td, T.stack.main)}>
         <span className="flex flex-wrap items-baseline gap-2">
+          <CourseIcon course={course} className="size-4 shrink-0 self-center text-fg-faint" />
           <span className="font-semibold">
             <CourseLink course={course} navigate={navigate} />
           </span>

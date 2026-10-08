@@ -85,6 +85,8 @@ export function makeCourseSummary(overrides: Partial<CourseSummary> = {}): Cours
     id: "c1",
     name: "Programmation C",
     code: "PRG1",
+    icon: null,
+    color: null,
     createdAt: at(-400 * DAY),
     hidden: false,
     templates: 0,

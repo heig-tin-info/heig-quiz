@@ -15,8 +15,12 @@ import { newPeriodDraft, PeriodFields, periodBody, periodInvalid } from "../Clas
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { invalidateHint } from "../realtime/hints";
+import { IconField } from "../pool/IconField";
+import { PoolIconPicker } from "../pool/PoolIconPicker";
+import { DEFAULT_COURSE_ICON } from "../pool/poolIcons";
 import { Field, FieldLabel, FormDialog, FormError, Segmented } from "../ui";
 import { coursesKey } from "../queryKeys";
+import { CourseIcon } from "./CourseIcon";
 
 /**
  * The short forms around a course, each in a `Modal` because none has more
@@ -33,7 +37,7 @@ export function NewCourseModal({ onClose }: { onClose: () => void }) {
       title={t("courses.new")}
       submitLabel={t("courses.newAction")}
       fallback={t("courses.createFailed")}
-      initial={{ name: "", code: "" }}
+      initial={{ name: "", code: "", icon: null, color: null }}
       save={(course) => api("/app/api/courses", { method: "POST", body: JSON.stringify(course) })}
       onClose={onClose}
     />
@@ -41,7 +45,7 @@ export function NewCourseModal({ onClose }: { onClose: () => void }) {
 }
 
 /**
- * The course's name and code, from its Settings tab. The code is unique
+ * The course's name, code and icon, from its Settings tab. The code is unique
  * across the instance and printed in the exports, so a code another course
  * holds is refused (409 `duplicate_code`) and said here; only what changed is
  * sent.
@@ -55,14 +59,11 @@ export function EditCourseModal({ course, onClose }: { course: CourseSummary; on
       submitLabel={t("common.save")}
       fallback={t("error.save")}
       initial={course}
-      changed={(next) => next.name !== course.name || next.code !== course.code}
+      changed={(next) => Object.keys(patchOf(course, next)).length > 0}
       save={(next) =>
         api(`/app/api/courses/${course.id}`, {
           method: "PATCH",
-          body: JSON.stringify({
-            ...(next.name !== course.name ? { name: next.name } : {}),
-            ...(next.code !== course.code ? { code: next.code } : {}),
-          } satisfies CoursePatch),
+          body: JSON.stringify(patchOf(course, next)),
         })
       }
       onSaved={() => toast(t("courses.settings.saved"), "success")}
@@ -71,9 +72,17 @@ export function EditCourseModal({ course, onClose }: { course: CourseSummary; on
   );
 }
 
+/** What an edit changes, field by field: only that is sent. */
+const patchOf = (course: CourseSummary, next: CourseCreate): CoursePatch => {
+  const keys = Object.keys(CourseCreate.shape) as (keyof CourseCreate)[];
+  return Object.fromEntries(keys.filter((k) => next[k] !== course[k]).map((k) => [k, next[k]])) as CoursePatch;
+};
+
 /**
- * The one form of a course, its name and its code, for its creation and its
- * edit. `CourseCreate` trims and upper-cases the code, so what `changed` and
+ * The one form of a course, its name, its code and its icon, for its creation
+ * and its edit. The icon is picked as a pool's is (`PoolFormModal`): the tile
+ * beside the name opens the picker in the same dialog, picking comes back.
+ * `CourseCreate` trims and upper-cases the code, so what `changed` and
  * `save` receive is what the server will store, and what the preview shows as
  * the sidebar will.
  */
@@ -90,7 +99,7 @@ function CourseFormModal({
   title: string;
   submitLabel: string;
   fallback: string;
-  initial: { name: string; code: string };
+  initial: Pick<CourseSummary, "name" | "code" | "icon" | "color">;
   changed?: (course: CourseCreate) => boolean;
   save: (course: CourseCreate) => Promise<unknown>;
   onSaved?: () => void;
@@ -98,7 +107,8 @@ function CourseFormModal({
 }) {
   const t = useT();
   const qc = useQueryClient();
-  const [form, setForm] = useState({ name: initial.name, code: initial.code });
+  const [form, setForm] = useState(initial);
+  const [picking, setPicking] = useState(false);
   const parsed = CourseCreate.safeParse(form);
   const mutation = useMutation({
     mutationFn: () => save(parsed.data!),
@@ -110,6 +120,22 @@ function CourseFormModal({
       onClose();
     },
   });
+  if (picking) {
+    return (
+      <PoolIconPicker
+        value={form.icon}
+        color={form.color}
+        hint={t("courses.icon.hint")}
+        fallback={DEFAULT_COURSE_ICON}
+        onColor={(color) => setForm({ ...form, color })}
+        onPick={(icon) => {
+          setForm({ ...form, icon });
+          setPicking(false);
+        }}
+        onClose={() => setPicking(false)}
+      />
+    );
+  }
   return (
     <FormDialog
       title={title}
@@ -120,15 +146,18 @@ function CourseFormModal({
       canSubmit={parsed.success && changed(parsed.data)}
       error={<FormError error={mutation.error} fallback={fallback} />}
     >
-      <Field
-        label={t("courses.name")}
-        required
-        fullWidth
-        autoFocus
-        placeholder={t("courses.namePlaceholder")}
-        value={form.name}
-        onChange={(e) => setForm({ ...form, name: e.target.value })}
-      />
+      <IconField onPick={() => setPicking(true)} icon={<CourseIcon course={form} className="size-4.5" />}>
+        <Field
+          label={t("courses.name")}
+          required
+          className="min-w-0"
+          width="min-w-0 flex-1"
+          autoFocus
+          placeholder={t("courses.namePlaceholder")}
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+        />
+      </IconField>
       <Field
         label={t("courses.code")}
         required

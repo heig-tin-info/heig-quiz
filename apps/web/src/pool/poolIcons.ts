@@ -27,6 +27,9 @@ export type PoolIconName = IconName | CustomIconName;
 
 export const DEFAULT_POOL_ICON: IconName = "library";
 
+/** A course wears the same icons as a pool; with none picked, a cap, not a shelf. */
+export const DEFAULT_COURSE_ICON: IconName = "graduation-cap";
+
 export const POOL_ICON_GROUPS = [
   {
     id: "languages",

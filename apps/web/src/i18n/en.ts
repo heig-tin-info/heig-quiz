@@ -422,7 +422,7 @@ export const en = {
   "courses.members.hint":
     "Every member of the staff reaches the whole course. Owners also run it: they add and remove members, link pools, create and delete classrooms, and release results. A colleague is added by the address they sign in with, once they have signed in.",
   "courses.settings.general": "Course",
-  "courses.settings.identity": "Name and code",
+  "courses.settings.identity": "Name, code and icon",
   "courses.settings.edit": "Edit",
   "courses.settings.editTitle": "Edit the course",
   "courses.settings.saved": "Course updated.",
@@ -4198,6 +4198,7 @@ export const en = {
   "pools.icon.change": "Change the icon",
   "pools.icon.title": "Choose an icon",
   "pools.icon.hint": "What this pool looks like on the shelf: pick a colour, then an icon.",
+  "courses.icon.hint": "What this course looks like in the sidebar and on its card: pick a colour, then an icon.",
   "pools.icon.default": "Default icon",
   "pools.icon.more": "More icons…",
   "pools.icon.all": "All icons",

@@ -23,6 +23,7 @@ import {
   Tabs,
 } from "../ui";
 import { CourseConditions } from "./CourseConditions";
+import { CourseIcon } from "./CourseIcon";
 import { CourseSettings } from "./CourseSettings";
 import { LinkedPools, LinkPoolMenu } from "./CoursePools";
 import { ArchivedClassrooms, ClassroomRow, HiddenBadge, useCourseDetail, useCourses } from "./parts";
@@ -144,6 +145,7 @@ function Course({
         }
         title={
           <span className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
+            <CourseIcon course={course} className="size-6 shrink-0 self-center text-fg-faint" />
             {course.name}
             <span className="text-base font-normal text-fg-muted">{course.code}</span>
             <HiddenBadge course={course} />

@@ -3,6 +3,7 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import type { ClassroomSummary, CourseSummary } from "@quiz/contracts";
 import { isCurrent } from "@quiz/domain";
 
+import { CourseIcon } from "./course/CourseIcon";
 import { useT } from "./i18n";
 import { NavTree, navRowClass, useNavCycle, type NavCycle } from "./navTree";
 import type { Route } from "./router";
@@ -182,6 +183,7 @@ function CourseRow({
           "hover:bg-surface-2 hover:text-fg",
         )}
       >
+        <CourseIcon course={course} className="size-4 shrink-0 text-fg-faint" />
         <span className="min-w-0 flex-1 truncate">{course.code}</span>
       </button>
     </Tip>
