@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DIFF_CELL_BUDGET,
   diffOutput,
   differsOnlyByWhitespace,
   missingFinalNewline,
@@ -167,6 +168,19 @@ describe("diffOutput", () => {
     ]);
     // Without the flag, the same outputs differ.
     expect(show(diffOutput(expected, actual))).toContain("-[line 4]");
+  });
+
+  it("spends one cell budget over all the character diffs of a diff", () => {
+    // Each pair alone fits the budget; together they do not.
+    const pairs = Math.ceil(DIFF_CELL_BUDGET / 1_000_000) + 2;
+    const a = Array.from({ length: pairs }, (_, i) => `${i}:${"ab".repeat(500)}`).join("\n");
+    const b = Array.from({ length: pairs }, (_, i) => `${i};${"ba".repeat(500)}`).join("\n");
+    const lines = diffOutput(a, b);
+    const added = lines.filter((l) => l.op === "added");
+    expect(added).toHaveLength(pairs);
+    // The first pair got a character diff; the last, past the budget, is changed whole.
+    expect(added[0]!.segments.length).toBeGreaterThan(1);
+    expect(added[pairs - 1]!.segments).toEqual([{ text: `${pairs - 1};${"ba".repeat(500)}`, changed: true }]);
   });
 
   it("stays usable on outputs too large for the table", () => {

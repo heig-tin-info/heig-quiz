@@ -2,14 +2,17 @@
  * How a test's expected and obtained outputs are SHOWN side by side or as a
  * diff (issue #553). The verdict stays `compareOutput`'s; these functions only
  * explain it, and they follow the same options so that a difference the grade
- * ignores (trailing whitespace, case) is never drawn as an error.
+ * ignores (trailing whitespace, case) is never drawn as an error. A numeric
+ * tolerance (`numeric`) is not: within a numeric case the diff only stops
+ * flagging whitespace between tokens, and two numbers within the epsilon of
+ * each other still read as different characters.
  *
- * Pure, no dependency: an in-house LCS rather than a diff library, because
- * the outputs are small (16 000 characters at most) and the two granularities
- * we need — lines, then characters inside a changed line — fit in one
- * function.
+ * Pure, no dependency: an in-house LCS rather than a diff library. Outputs
+ * reach the runner's output cap (`RUNNER_MAX_OUTPUT_KB`, 256 KB by default),
+ * so one budget of LCS cells bounds the work of a whole diff; past it, a
+ * block is drawn as changed whole lines.
  */
-import { compareOutput, type CompareOptions } from "./compareOutput.js";
+import { compareOutput, lineBody, normalizeLine, type CompareOptions } from "./compareOutput.js";
 
 /** The whitespace a reader cannot see and a comparison can trip on. */
 export type WhitespaceKind = "space" | "tab" | "cr" | "nbsp" | "zw";
@@ -21,7 +24,10 @@ export interface TextSpan {
 }
 
 const NBSP = /[\u00a0\u2007\u202f]/;
-const ZERO_WIDTH = /[\u200b\u200c\u200d\u2060\ufeff]/;
+/** The zero-width characters, once: the glyph rule and the squeeze both read it. */
+const ZERO_WIDTH_CHARS = "\u200b\u200c\u200d\u2060\ufeff";
+const ZERO_WIDTH = new RegExp(`[${ZERO_WIDTH_CHARS}]`);
+const INVISIBLE_RUN = new RegExp(`[\\s${ZERO_WIDTH_CHARS}]+`, "g");
 
 /** The kind of an invisible character, `null` for any other. */
 export function whitespaceKind(ch: string): WhitespaceKind | null {
@@ -82,7 +88,7 @@ export function missingFinalNewline(text: string, opts: CompareOptions = {}): bo
 }
 
 function squeeze(s: string, opts: CompareOptions): string {
-  const out = s.replace(/[\s\u200b\u200c\u200d\u2060\ufeff]+/g, "");
+  const out = s.replace(INVISIBLE_RUN, "");
   return opts.ignoreCase === true ? out.toLowerCase() : out;
 }
 
@@ -125,18 +131,26 @@ export interface DiffOptions extends CompareOptions {
   truncated?: boolean | undefined;
 }
 
-/** Above this many cells the LCS table is not built: the block is replaced whole. */
-const MAX_CELLS = 2_000_000;
+/**
+ * The LCS cells one whole diff may fill, the line diff and every character
+ * diff together. Past it, a block is replaced whole.
+ */
+export const DIFF_CELL_BUDGET = 2_000_000;
+
+/** What remains of the budget, spent by each LCS table as it is built. */
+interface Budget {
+  cells: number;
+}
 
 type Op = { op: "equal" | "removed" | "added"; a: number; b: number };
 
 /**
  * The edit script between two sequences, compared by key: an LCS over the
- * middle once the common prefix and suffix are set aside. When the middle is
- * too large for the table, it is reported as removed then added — honest, if
- * coarse.
+ * middle once the common prefix and suffix are set aside. When the middle's
+ * table does not fit in what remains of the budget, it is reported as removed
+ * then added — honest, if coarse.
  */
-function editScript(a: readonly string[], b: readonly string[]): Op[] {
+function editScript(a: readonly string[], b: readonly string[], budget: Budget): Op[] {
   let start = 0;
   while (start < a.length && start < b.length && a[start] === b[start]) start += 1;
   let endA = a.length;
@@ -150,10 +164,11 @@ function editScript(a: readonly string[], b: readonly string[]): Op[] {
 
   const n = endA - start;
   const m = endB - start;
-  if (n * m > MAX_CELLS) {
+  if (n * m > budget.cells) {
     for (let i = start; i < endA; i += 1) ops.push({ op: "removed", a: i, b: -1 });
     for (let j = start; j < endB; j += 1) ops.push({ op: "added", a: -1, b: j });
   } else {
+    budget.cells -= n * m;
     // lcs[i][j] = length of the LCS of a[start+i..endA) and b[start+j..endB).
     const width = m + 1;
     const lcs = new Uint32Array((n + 1) * width);
@@ -185,11 +200,10 @@ function editScript(a: readonly string[], b: readonly string[]): Op[] {
   return ops;
 }
 
+/** A line as the comparison reads it; a numeric case compares tokens, so blanks between them never count. */
 function lineKey(line: string, opts: CompareOptions): string {
-  let out = line.endsWith("\r") ? line.slice(0, -1) : line;
-  if (opts.numeric != null) out = out.trim().split(/\s+/).join(" ");
-  else if (opts.trimTrailing !== false) out = out.replace(/[ \t]+$/, "");
-  return opts.ignoreCase === true ? out.toLowerCase() : out;
+  const key = normalizeLine(line, opts);
+  return opts.numeric != null ? key.trim().split(/\s+/).join(" ") : key;
 }
 
 /**
@@ -207,9 +221,8 @@ function splitLines(text: string, opts: CompareOptions): Lines {
   if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
   if (opts.trimTrailing !== false) {
     while (lines.length > 0 && lineKey(lines[lines.length - 1]!, opts) === "") lines.pop();
-    return { lines, open: false };
   }
-  return { lines, open: text !== "" && !text.endsWith("\n") };
+  return { lines, open: missingFinalNewline(text, opts) };
 }
 
 function keysOf({ lines, open }: Lines, opts: CompareOptions): string[] {
@@ -231,19 +244,32 @@ function merge(segments: DiffSegment[]): DiffSegment[] {
 
 /** The part of a line the comparison reads, and the tail it ignores. */
 function splitTail(line: string, opts: CompareOptions): [string, string] {
-  const body = line.endsWith("\r") ? line.slice(0, -1) : line;
-  const cut = opts.trimTrailing === false ? body.length : body.replace(/[ \t]+$/, "").length;
+  const cut = lineBody(line, opts).length;
   return [line.slice(0, cut), line.slice(cut)];
 }
 
-/** The character diff of a changed pair of lines: the removed side, then the added one. */
-function charDiff(removed: string, added: string, opts: CompareOptions): [DiffSegment[], DiffSegment[]] {
+/**
+ * The character diff of a changed pair of lines: the removed side, then the
+ * added one. Once the budget is spent, the pair comes back changed whole.
+ */
+function charDiff(
+  removed: string,
+  added: string,
+  opts: CompareOptions,
+  budget: Budget,
+): [DiffSegment[], DiffSegment[]] {
   const [bodyA, tailA] = splitTail(removed, opts);
   const [bodyB, tailB] = splitTail(added, opts);
   const a = Array.from(bodyA);
   const b = Array.from(bodyB);
+  if (a.length * b.length > budget.cells) {
+    return [
+      merge([{ text: bodyA, changed: true }, { text: tailA, changed: false }]),
+      merge([{ text: bodyB, changed: true }, { text: tailB, changed: false }]),
+    ];
+  }
   const key = (c: string) => (opts.ignoreCase === true ? c.toLowerCase() : c);
-  const ops = editScript(a.map(key), b.map(key));
+  const ops = editScript(a.map(key), b.map(key), budget);
   const left: DiffSegment[] = [];
   const right: DiffSegment[] = [];
   for (const op of ops) {
@@ -273,7 +299,8 @@ export function diffOutput(expected: string, actual: string, opts: DiffOptions =
   if (opts.truncated === true) left.open = right.open = false;
   const a = left.lines;
   const b = right.lines;
-  const ops = editScript(keysOf(left, opts), keysOf(right, opts));
+  const budget: Budget = { cells: DIFF_CELL_BUDGET };
+  const ops = editScript(keysOf(left, opts), keysOf(right, opts), budget);
   const openA = left.open ? a.length - 1 : -1;
   const openB = right.open ? b.length - 1 : -1;
   const line = (op: DiffLine["op"], segments: DiffSegment[], open: boolean): DiffLine =>
@@ -303,7 +330,7 @@ export function diffOutput(expected: string, actual: string, opts: DiffOptions =
         before.push(line("removed", [{ text: a[ia]!, changed: true }], ia === openA));
         return;
       }
-      const [l, r] = charDiff(a[ia]!, b[ib]!, opts);
+      const [l, r] = charDiff(a[ia]!, b[ib]!, opts, budget);
       before.push(line("removed", l, ia === openA));
       after.push(line("added", r, ib === openB));
     });
