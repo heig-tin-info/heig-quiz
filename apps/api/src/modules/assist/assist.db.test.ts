@@ -12,7 +12,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { AssistAvailability, AssistConversation, AssistConversationSummary, AssistReply } from "@quiz/contracts";
-import { ASSIST_MAX_STEPS, ASSIST_TURNS_PER_MINUTE } from "@quiz/domain";
+import { ASSIST_MAX_STEPS, ASSIST_TURNS_PER_MINUTE, ASSIST_WRITE_TOOLS } from "@quiz/domain";
 
 import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
@@ -237,7 +237,7 @@ describe("the model, through the gateway", () => {
     expect(req.system.volatile).toContain("Route: /pools/:id");
     expect(req.system.volatile).toContain("help/pool");
     expect(req.history.at(-1)).toEqual({ role: "user", text: "À quoi sert l'option Grouper ?" });
-    expect(req.tools.map((t) => t.name)).toEqual(["read_guide", ...ASSIST_DATA_TOOLS, "open_screen", "run_screen_command"]);
+    expect(req.tools.map((t) => t.name)).toEqual(["read_guide", ...ASSIST_DATA_TOOLS, "open_screen", "run_screen_command", ...ASSIST_WRITE_TOOLS]);
     expect(req.maxSteps).toBe(ASSIST_MAX_STEPS);
     expect(JSON.stringify(req)).not.toContain(teacher.id);
     expect(JSON.stringify(req)).not.toContain("@heig.test");

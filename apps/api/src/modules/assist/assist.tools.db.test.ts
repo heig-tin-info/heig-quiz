@@ -13,6 +13,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { AssistReply, type ApiToken } from "@quiz/contracts";
+import { ASSIST_WRITE_TOOLS } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
 import { MCP_PATH } from "../../auth/oauth/service.js";
@@ -244,7 +245,7 @@ describe("the model's tools", () => {
     expect((await ask(teacher, "Mes cours ?")).statusCode).toBe(200);
     const names = seen[0]!.tools.map((t) => t.name);
     // The UI tools (ADR-080 P2b) run nothing on the server: `assist.ui.db.test.ts`.
-    expect(names).toEqual(["read_guide", ...ASSIST_DATA_TOOLS, "open_screen", "run_screen_command"]);
+    expect(names).toEqual(["read_guide", ...ASSIST_DATA_TOOLS, "open_screen", "run_screen_command", ...ASSIST_WRITE_TOOLS]);
     expect(names).toEqual([
       "read_guide",
       "list_courses",
@@ -262,11 +263,27 @@ describe("the model's tools", () => {
       "get_classroom_results",
       "open_screen",
       "run_screen_command",
+      // ADR-080 P3: they PREPARE a write the teacher confirms (`assist.writes.db.test.ts`).
+      "create_question",
+      "create_category",
+      "create_template",
+      "add_questions_to_template",
+      "link_pool_to_course",
     ]);
-    // Every MCP write is out of reach, whatever its name; the results reader is not in the MCP catalogue.
+    // Every other MCP write is out of reach, whatever its name; the results reader is not in the MCP catalogue.
     const writes = TOOLS.filter((t) => t.annotations.readOnlyHint !== true).map((t) => t.name);
-    expect(writes.length).toBeGreaterThan(0);
-    for (const name of writes) expect(names).not.toContain(name);
+    expect(writes.filter((w) => !(ASSIST_WRITE_TOOLS as readonly string[]).includes(w)).sort()).toEqual([
+      "add_questions_to_evaluation",
+      "create_classroom",
+      "create_course",
+      "create_evaluation",
+      "create_poll",
+      "create_pool",
+      "instantiate_template",
+      "update_evaluation",
+      "update_question",
+    ]);
+    for (const name of writes) if (!(ASSIST_WRITE_TOOLS as readonly string[]).includes(name)) expect(names).not.toContain(name);
     expect(TOOLS.map((t) => t.name)).not.toContain(RESULTS_TOOL);
     // The assistant's own descriptions: no authoring nudge.
     for (const tool of seen[0]!.tools) expect(tool.description).not.toMatch(/BEFORE create|create_question|Look before/i);

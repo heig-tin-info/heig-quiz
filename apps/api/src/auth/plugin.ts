@@ -54,10 +54,18 @@ declare module "fastify" {
   interface FastifyRequest {
     user: SessionUser | null;
     /**
-     * How `user` was resolved: a browser session cookie, or a personal API
-     * token in `Authorization: Bearer` (ADR-022). Null when anonymous.
+     * How `user` was resolved: a browser session cookie, a personal API
+     * token in `Authorization: Bearer` (ADR-022), or the teacher
+     * assistant's own token on its in-process calls (ADR-080 §8; its writes,
+     * which the teacher confirmed, are audited as `assistant`, P3). Null when
+     * anonymous.
      */
-    authVia: "session" | "token" | null;
+    authVia: "session" | "token" | "assistant" | null;
+    /**
+     * The assistant's tool a write of `authVia: "assistant"` runs
+     * (`ASSIST_TOOL_HEADER`), for its audit entry; null otherwise.
+     */
+    assistTool: string | null;
     /**
      * What the browser session is (ADR-027) and its Super Powers (ADR-054);
      * null for a token or when anonymous.
@@ -112,6 +120,14 @@ const SAFE_METHODS: readonly string[] = ["GET", "HEAD", "OPTIONS"];
  */
 export const INTERNAL_CALL_HEADER = "x-quiz-internal-call";
 
+/**
+ * The tool a confirmed write of the teacher assistant runs (ADR-080 P3,
+ * decision 8): read only beside the assistant's own token on an internal
+ * call, and only into its audit entries.
+ */
+export const ASSIST_TOOL_HEADER = "x-quiz-assist-tool";
+const TOOL_NAME = /^[a-z_]{1,64}$/;
+
 async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
   const provider = new OidcProvider(config, app.log);
@@ -131,6 +147,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   // --- Session resolution on every request ---
   app.decorateRequest("user", null);
   app.decorateRequest("authVia", null);
+  app.decorateRequest("assistTool", null);
   app.decorateRequest("auth", null);
   app.decorateRequest("caller", null);
   app.decorateRequest("sid", null);
@@ -162,7 +179,11 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
         if (path === MCP_PATH ? assistant : !isInternalCall(req)) return;
       }
       req.user = found.user;
-      req.authVia = "token";
+      if (found.audience === ASSIST_AUDIENCE) {
+        req.authVia = "assistant";
+        const tool = req.headers[ASSIST_TOOL_HEADER];
+        req.assistTool = typeof tool === "string" && TOOL_NAME.test(tool) ? tool : null;
+      } else req.authVia = "token";
       req.caller = callerFor(found.user, null, app.clock.now());
       return;
     }

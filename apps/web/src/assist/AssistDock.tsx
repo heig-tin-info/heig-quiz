@@ -14,7 +14,11 @@
  * (`sessionStorage`); the server keeps it 30 days. An answer may open a
  * screen or run an effect-free command of this one (P2b, `actions.ts`):
  * the panel stays open across the navigation and says, under the answer,
- * what it opened. One that is gone — purged,
+ * what it opened. An answer may also PROPOSE (P3): an edit of the open
+ * question draft, a write command of this screen, a prepared write — a card
+ * each (`AssistCards.tsx`), acting only on the teacher's Apply or Confirm.
+ * Asked from the question editor, a question first flushes the autosave and
+ * carries the draft's texts (`editor.ts`). One that is gone — purged,
  * or deleted in another tab — is forgotten, and the question starts a new one.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -31,6 +35,7 @@ import {
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import type {
+  AssistAction,
   AssistAsk,
   AssistAvailability,
   AssistConversation,
@@ -48,8 +53,10 @@ import { Markdown } from "../markdown";
 import { assistAvailabilityKey, assistConversationKey, assistConversationsKey } from "../queryKeys";
 import { parsePath, type Navigate, type Route } from "../router";
 import { Alert, Badge, Button, cx, IconButton, QueryError, RelativeTime, Spinner, ToolDock } from "../ui";
-import { runAssistActions, type ActionOutcome } from "./actions";
+import { isProposal, runAssistActions, type ActionOutcome } from "./actions";
+import { AssistCards } from "./AssistCards";
 import { assistContext, assistVisible } from "./context";
+import { assistEditor } from "./editor";
 
 const CONVERSATION_KEY = "quiz-assist-conversation";
 
@@ -185,6 +192,8 @@ function Chat({
   const end = useRef<HTMLDivElement>(null);
   // What the UI actions of an answer did (ADR-080 P2b), by exchange, for this tab only (never stored).
   const [outcomes, setOutcomes] = useState<Record<string, ActionOutcome[]>>({});
+  // Its proposals (ADR-080 P3), by exchange, for this tab only: the cards act on Apply or Confirm.
+  const [proposals, setProposals] = useState<Record<string, AssistAction[]>>({});
 
   const conversation = useQuery({
     queryKey: assistConversationKey(conversationId ?? ""),
@@ -199,15 +208,21 @@ function Chat({
   }, [gone, onConversation]);
 
   const ask = useMutation({
-    mutationFn: (q: { message: string; conversationId: string | null }) =>
-      api<AssistReply>("/app/api/assist/ask", {
+    mutationFn: async (q: { message: string; conversationId: string | null }) => {
+      // From the question editor (ADR-080 P3, decision 2): what is typed is saved first, and its draft rides along.
+      const editor = route.view === "question" ? assistEditor(route.id) : null;
+      if (editor) await editor.flush();
+      const draft = editor?.draft() ?? null;
+      return api<AssistReply>("/app/api/assist/ask", {
         method: "POST",
         body: JSON.stringify({
           message: q.message,
           context: assistContext(route, locale),
           ...(q.conversationId ? { conversationId: q.conversationId } : {}),
+          ...(draft ? { editor: draft } : {}),
         } satisfies AssistAsk),
-      }),
+      });
+    },
     onSuccess: (reply) => {
       qc.setQueryData<AssistConversation>(assistConversationKey(reply.conversationId), (old) => ({
         id: reply.conversationId,
@@ -218,7 +233,9 @@ function Chat({
       void qc.invalidateQueries({ queryKey: assistConversationsKey, exact: true });
       onConversation(reply.conversationId);
       setDraft("");
-      if (reply.actions.length > 0) {
+      const proposed = reply.actions.filter(isProposal);
+      if (proposed.length > 0) setProposals((p) => ({ ...p, [reply.exchange.id]: proposed }));
+      if (reply.actions.length > proposed.length) {
         void runAssistActions(reply.actions, navigate, role, t).then((done) =>
           setOutcomes((o) => ({ ...o, [reply.exchange.id]: done })),
         );
@@ -265,6 +282,9 @@ function Chat({
           <div key={e.id} className="space-y-4">
             <Question text={e.question} />
             <Answer text={e.answer} navigate={navigate} outcomes={outcomes[e.id]} />
+            {proposals[e.id] && conversationId ? (
+              <AssistCards actions={proposals[e.id]!} conversationId={conversationId} navigate={navigate} />
+            ) : null}
           </div>
         ))}
         {ask.isPending ? (

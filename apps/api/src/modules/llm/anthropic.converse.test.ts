@@ -107,6 +107,18 @@ describe("anthropicProvider.converse", () => {
     expect(create.mock.calls.map((c) => c[0].tool_choice.type)).toEqual(["auto", "auto", "none"]);
   });
 
+  it("ends the turn once `endAfter` says so: the next request may not call a tool (ADR-080 P3)", async () => {
+    create.mockResolvedValueOnce(toolTurn("t1")).mockResolvedValueOnce(textTurn("J'ai préparé la catégorie."));
+    let asked = 0;
+    const reply = await anthropicProvider.converse(
+      request({ maxSteps: 6, endAfter: () => (asked += 1) > 0 }),
+      meter().metered,
+    );
+    expect(reply.steps).toBe(2);
+    expect(asked).toBe(1);
+    expect(create.mock.calls.map((c) => c[0].tool_choice.type)).toEqual(["auto", "none"]);
+  });
+
   it("answers an unknown tool and a failing one with an error the model reads", async () => {
     create
       .mockResolvedValueOnce({ ...toolTurn("t1"), content: [{ type: "tool_use", id: "t1", name: "write_pool", input: {} }] })

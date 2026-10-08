@@ -104,8 +104,9 @@ export const anthropicProvider: LlmProvider = {
     }));
     const messages: Anthropic.MessageParam[] = req.history.map((t) => ({ role: t.role, content: t.text }));
     const fixedChars = req.system.stable.length + req.system.volatile.length + JSON.stringify(tools).length;
+    let ended = false;
     for (let step = 1; ; step++) {
-      const last = step >= req.maxSteps;
+      const last = step >= req.maxSteps || ended;
       const { message, model } = await metered(fixedChars + JSON.stringify(messages).length, async () => {
         let res: Anthropic.Message;
         try {
@@ -138,6 +139,7 @@ export const anthropicProvider: LlmProvider = {
       messages.push({ role: "assistant", content: message.content });
       // Every result of the turn's calls in ONE user message, in the calls' order.
       messages.push({ role: "user", content: await Promise.all(calls.map((call) => runTool(req.tools, call))) });
+      ended = req.endAfter?.() ?? false;
     }
   },
 };

@@ -531,4 +531,29 @@ export interface QuestionTypeServer<
 
   /** "Generate answers" (ADR-059): what the model may propose, and how it merges. Absent: no wand. */
   readonly generator?: AnswerGenerator<TConfig>;
+
+  /**
+   * The teacher's own texts the in-app assistant may rewrite in the editor
+   * (ADR-080, P3 amendment): never an id, a setting, the key nor the scoring.
+   * Absent: the statement (`prompt`) only, besides the explanation, which
+   * every type has.
+   */
+  readonly assistText?: AssistTextSpec;
+}
+
+/**
+ * The free-text fields of a type's config, as dotted paths where `*` is any
+ * index of a list (`choices.*.text`), and the one list new items may be
+ * appended to, each made of `item` with its `field` written (`choices`, an
+ * item `{ correct: false }` and its `text`): ADR-059's fill-and-append, never
+ * a key — an appended item takes the item's settings, never a tick.
+ */
+export interface AssistTextSpec {
+  readonly fields: readonly string[];
+  readonly append?: {
+    readonly list: string;
+    readonly field: string;
+    readonly item: Readonly<Record<string, unknown>>;
+    readonly max: number;
+  };
 }

@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { AssistReply } from "@quiz/contracts";
+import { ASSIST_WRITE_TOOLS } from "@quiz/domain";
 
 import { loadConfig } from "../../config.js";
 import { assistExchanges } from "../../db/schema.js";
@@ -100,6 +101,15 @@ describe("the development stub (ADR-080 P2b)", () => {
     expect(reply.actions).toEqual([]);
   });
 
+  it("prepares a quoted category on a pool through the same write tool as a model's (ADR-080 P3)", async () => {
+    const context = { route: "/pools/:id", helpTopic: "pool", locale: "en", entities: { pool: poolId } };
+    const reply = AssistReply.parse((await ask('Create the category "Pointers"', context)).json());
+    expect(reply.actions).toMatchObject([
+      { kind: "pending_write", tool: "create_category", lines: [{ field: "pool", values: ["Sandbox"] }, { field: "name", values: ["Pointers"] }] },
+    ]);
+    expect(reply.exchange.answer).toContain("Nothing is created until you confirm it.");
+  });
+
   it("refuses a command id that is not the palette's shape, or a write labelled as anything else", async () => {
     const bad = { ...CONTEXT, commands: [{ id: "Question Publish!", label: "x", effect: "none" }] };
     expect((await ask("?", bad)).statusCode).toBe(400);
@@ -116,16 +126,16 @@ describe("the model's UI tools (ADR-080 P2b)", () => {
   });
   afterAll(() => server.close());
 
-  it("are handed after the read tools, with the catalogue in the stable prompt and the effect-free commands in the screen's", async () => {
+  it("are handed after the read tools, with the catalogue in the stable prompt and the screen's commands, each kind said, in the screen's", async () => {
     script = calling();
     expect((await ask("Bonjour")).statusCode).toBe(200);
     const req = seen[0]!;
-    expect(req.tools.map((t) => t.name)).toEqual(["read_guide", ...ASSIST_DATA_TOOLS, "open_screen", "run_screen_command"]);
+    expect(req.tools.map((t) => t.name)).toEqual(["read_guide", ...ASSIST_DATA_TOOLS, "open_screen", "run_screen_command", ...ASSIST_WRITE_TOOLS]);
     expect(req.system.stable).toContain("- pool — /pools/:id — Question pool (help/pool)");
     expect(req.system.stable).not.toContain("- admin —");
     expect(req.system.volatile).toContain("  - question:preview — Preview");
-    // A command that writes is never offered.
-    expect(req.system.volatile).not.toContain("question:publish");
+    // A command that writes is offered behind the teacher's confirmation only (ADR-080 P3).
+    expect(req.system.volatile).toContain("question:publish — Publish this question (changes data: the user is shown a card and it runs only if they confirm)");
   });
 
   it("return the checked actions with the answer, the model told it is done by the browser", async () => {
@@ -146,10 +156,11 @@ describe("the model's UI tools (ADR-080 P2b)", () => {
     expect(results[0]).toMatchObject({ error: true, content: expect.stringMatching(/No screen "attempt"/) });
   });
 
-  it("never return a command that writes, nor one the screen did not list, even when the model names it", async () => {
+  it("return a command that writes as a proposal to confirm, never as run, and never one the screen did not list", async () => {
     script = calling(["run_screen_command", { id: "question:publish" }], ["run_screen_command", { id: "live:close" }]);
     const reply = AssistReply.parse((await ask("Publie")).json());
-    expect(reply.actions).toEqual([]);
-    expect(results.map((r) => r.error)).toEqual([true, true]);
+    expect(reply.actions).toEqual([{ kind: "confirm_command", id: "question:publish", label: "Publish this question" }]);
+    expect(results.map((r) => r.error)).toEqual([false, true]);
+    expect(results[0]!.content).toMatch(/runs only if they confirm it/);
   });
 });

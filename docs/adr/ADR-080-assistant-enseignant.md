@@ -8,13 +8,19 @@ is implemented, by requirement F-LLM-07. **P2 (§8) is implemented** under
 the [P2 amendment of 2026-10-08](#p2-amendment-2026-10-08), which amends
 §2, §3 and §5 where they say so. **P2b — driving the interface — is
 implemented** under the [P2b amendment of 2026-10-08](#p2b-amendment-2026-10-08),
-which amends §1 and the P2 amendment's item 10 where it says so. P3 (§9) is
-decided and recorded here, not built.
+which amends §1 and the P2 amendment's item 10 where it says so. **P3 —
+proposals the teacher confirms — is implemented** under the
+[P3 amendment of 2026-10-08](#p3-amendment-2026-10-08), which amends §1,
+§2, §5, §8, §9, the P2 amendment's item 10, the P2b amendment's decision 2
+and, for the assistant only, ADR-059 §1–2.
 
 Scope: the in-app chat of the teacher UI, the `assist` purpose of the LLM
 gateway, the conversations it stores.
 
 Relations:
+- Amends [ADR-059](ADR-059-generer-la-reponse.md) §1–2 for the assistant
+  only (P3 amendment, decision 1): in the editor it may rewrite the
+  teacher's own texts; the wand keeps its rules.
 - Amends [ADR-058](ADR-058-passerelle-llm.md) §1 (the gateway gains a
   multi-turn call with read-only tools; `LLM_PURPOSES` gains `assist`) and
   §5 (the chat's share of the cap and its per-minute limit) and §4 (a
@@ -259,7 +265,7 @@ assistant").
   client is the one that sends; it does not hold for the in-app assistant,
   where the platform sends, under this record.
 
-### 9. P3 — writes (recorded, not built)
+### 9. P3 — writes (built, under the P3 amendment)
 
 - Every write is a proposal the teacher confirms one by one, with a diff.
 - Never a publication. `create_poll` (live in front of students) and
@@ -451,6 +457,153 @@ The design, as built:
 Deferred to P3: commands with an effect (behind a confirmation), and a
 navigation whose result the model reads back.
 
+### P3 amendment (2026-10-08)
+
+The product owner's decisions of 2026-10-08 (1–5) and the orchestrator's
+(6–11), for P3: the assistant PROPOSES changes, and only the teacher's
+Apply or Confirm makes them. They amend §1, §2, §8 and §9 where they say
+so, the P2 amendment's item 10 and the P2b amendment's decision 2,
+[ADR-059](ADR-059-generer-la-reponse.md) §1–2 for the assistant only, and
+F-LLM-07 (docs/spec/02).
+
+1. **In the question editor the assistant may rewrite the teacher's own
+   texts**: the statement, the choices' texts, the explanation, and the
+   type's other free-text fields as the type declares them
+   (`QuestionTypeServer.assistText`, `@quiz/core`: `mcq` its choices,
+   `categorize` its columns' labels and cards' texts, `cloze` its text; any
+   other type its `prompt`). Never an id, a setting, the key (an mcq tick),
+   the scoring, the variables, a `[[…]]` expression, a cloze's `{{…}}`
+   blank nor an `asset:` reference: a rewrite keeps every such token
+   verbatim and as many times, or it is refused. "Add N choices" uses
+   ADR-059's fill-and-append — the empty rows first, then appended, never a
+   text already there, never past the type's maximum — and an added choice
+   is UNTICKED (`append.item`): the key stays the teacher's. *This amends
+   ADR-059 §1–2 for the assistant only: the wand keeps its own rules (it
+   writes only what is empty, and may propose a key).*
+2. **An editor proposal is a diff the teacher applies.** The panel shows
+   each field before and after, with **Apply to the draft**; Apply merges it
+   into the open draft as ONE edit, which **Undo** reverses while nothing
+   else changed the draft; the autosave stores it; nothing publishes it. A
+   proposal whose base is no longer the editor's draft (a keystroke, another
+   tab) is dropped and says so. Before a question asked from the editor,
+   the client FLUSHES the autosave, and sends the draft's config and
+   explanation with the question (`AssistAsk.editor`) — on the editor
+   screen only: the server refuses it with `400 editor_off_screen` on any
+   other screen or for another question. *This amends §2: from the
+   question editor, the context carries the teacher's own text, never
+   stored; the prompt shows the model the draft's free texts only, by path,
+   not its key nor its settings.*
+3. **No server-side `update_question`.** An existing question changes only
+   in its own editor, through (1) and (2).
+4. **The writes, each confirmed one by one**, a closed list
+   (`ASSIST_WRITE_TOOLS`, `@quiz/domain`): `create_question` — FORCED to a
+   draft (its schema as handed to the model has no `publish`, and a
+   `publish: true` is dropped), after a `find_similar_questions` in the same
+   answer (refused otherwise), its config checked by the type's schema —,
+   `create_category`, `create_template` (no questions, or published ones
+   only), `add_questions_to_template` (published ones only),
+   `link_pool_to_course` (its card names who gains access: the course's
+   whole staff, each by name). **Excluded**, never handed to the model and
+   pinned by a test: `update_question`, `update_evaluation`,
+   `add_questions_to_evaluation`, `create_evaluation`,
+   `instantiate_template`, `create_pool`, `create_classroom`, `create_poll`,
+   `create_course`.
+5. **The screen's write commands, behind a confirmation.** A palette
+   command with `effect: "write"` is listed to the model as such and, named
+   by it, comes back as a card naming the command (`confirm_command`); the
+   browser runs it on **Confirm** only, and only while the screen still
+   registers it as a write. Its own confirmation dialog, if any, still asks.
+   *This amends the P2b amendment's decision 2.* Every write command the
+   screens register today is offered (see the classification below); none
+   deletes. A deletion is never lent to the assistant as a screen command
+   unless the command itself asks its own `danger` confirmation.
+6. **An editor proposal is a tool**, `propose_question_edit`, offered only
+   when the editor's draft rides with the question: the server reads the
+   question AS THE TEACHER (a question they cannot read has no editor, and
+   no tool), checks the patch (`proposeQuestionEdit`, `@quiz/domain`: text
+   fields only, the rest of the config the base's by construction, the
+   preserved tokens kept) and the proposed config against the type's
+   `configSchema` on the fields it changed (the draft's own issues
+   elsewhere are the draft's, D16), and returns it as an action
+   (`edit_question`, with its `base`). Nothing is written on the server.
+7. **A write the model asks for is not executed.** The call is checked —
+   its arguments parsed by the MCP tool's own schema, each entity read back
+   as the teacher (a 404 is a refusal the model reads) — and FROZEN as a
+   pending write, IN MEMORY (`PendingWrites`, `modules/assist/pending.ts`),
+   keyed by the teacher and the conversation, ten minutes
+   (`ASSIST_PENDING_TTL_MS`), taken once. **A deploy or a restart forgets
+   every pending write**: nothing was written, the teacher asks again. One
+   card per write call, at most three per answer (`ASSIST_MAX_WRITES`), and
+   the turn ENDS after a step that prepared one: the gateway's next request
+   is the last and may not call a tool (`ConverseRequest.endAfter`, an
+   amendment of §5's loop), so the model only says what it prepared. The
+   card is rendered by the SERVER from the frozen arguments, the titles
+   resolved (`AssistPendingWrite.lines`, labelled by the browser in the UI
+   language), never from the model's prose. **Confirm**
+   (`POST /app/api/assist/writes/:id/confirm`, with the conversation; the
+   same guard as a question: a teacher's or an administrator's own portal
+   session, never an impersonation) mints a fresh assist-audience token for
+   that single call, runs EXACTLY the frozen arguments through the MCP
+   tool's handler (`runTool`), deletes the token, and answers the app's path
+   of the result for the card's link. A write that is not this teacher's
+   and this conversation's, already spent, cancelled or expired is one
+   answer, `404 write_not_found`; a refusal of the route is `422
+   write_failed` with a reason code (`not_found`, `refused`, `invalid`, `failed`) the browser words in the UI language. **Cancel**
+   (`…/cancel`) forgets it. Confirm does not resume the model. Super Powers
+   never pass: the token resolves the teacher's own seats (§8).
+8. **Audit.** `assistant` joins the closed `actorType` list
+   (`AUDIT_ACTOR_TYPES`, `db/auth.ts`; invariant 9). A request
+   authenticated by an assist-audience token (`authVia: "assistant"`) is
+   audited as `assistant`, the teacher as `actor_user_id`, and the tool's
+   name in the payload (`assistTool`) where the route traces through
+   `tracer` (the header `ASSIST_TOOL_HEADER`, read beside that token on an
+   internal call only). The column is text, its list the schema's, so the
+   change needs no migration (`pnpm db:generate`: no schema change). *P2's
+   reads write no audit rows* — a GET is not audited —, and an editor
+   proposal applied or a write command confirmed in the browser is the
+   teacher's own edit or action, on their own session, audited as `user`
+   where the route audits at all. *This completes §9's last point.*
+9. **Drafts cannot go into templates.** Asked to put a draft into a
+   template, the assistant prepares nothing and says to publish it in the
+   editor, then to ask again. It never publishes through a server tool; a
+   publish palette command the teacher confirms (5) is the teacher's own
+   action.
+10. **The panel.** A proposal is a card under the answer; **Confirm** or
+    **Apply** is the card's own primary, in the dock's ink — never the
+    accent (ADR-069) —, **Cancel** secondary; after a confirmed write, a
+    link opens the result. Strings in English and French. The P2b
+    leftover is fixed: the screen part of the prompt says which command
+    opens a new tab (offered as a button) and which changes data, and the
+    tool's answer says so, so the model's wording is right.
+11. **The prompt** lets the assistant propose edits and prepare writes for
+    confirmation; it says what it prepared and that nothing happens until
+    the teacher confirms or applies it; it never claims a write happened;
+    it still declines anything off-topic and explains how to make any
+    change it may not propose. *This amends the P2 amendment's item 10.*
+
+The screens' write commands, classified (decision 5):
+
+| Command | Screen | Offered behind the card | Its own confirmation |
+|---|---|---|---|
+| `question:publish` | question editor | yes | the publish dialog |
+| `live:start` | live dashboard | yes | none (the start itself) |
+| `live:pause` (pause or resume) | live dashboard | yes | none |
+| `live:extend` (+5 min for all) | live dashboard | yes | none |
+| `live:close` | live dashboard | yes | the `danger` close dialog |
+| `grading:run` | grading | yes | none |
+| `grading:regrade` | grading | yes | the regrade dialog |
+| `results:release` | results | yes | the release dialog |
+
+The development stub (`stubTurn`) proposes a tidied statement in the
+editor ("rewrite …", `stubRewrite`) and prepares a quoted category on a
+pool ("create the category «…»"), through the same tools as a model's; the
+browser mock does the same.
+
+Deferred: a write's result read back by the model (Confirm does not resume
+it), pending writes that survive a deploy, writes over MCP that need the
+teacher's confirmation, and an editor proposal for a field a type does not
+declare.
+
 ## Consequences
 
 - A teacher asks a question from any teacher screen and gets an answer that
@@ -466,6 +619,11 @@ navigation whose result the model reads back.
   build, so it is never older than the code; the guide's English is the
   model's to translate.
 - The gateway has two shapes of call; a new provider implements both.
+- Since P3, the assistant proposes and the teacher decides, change by
+  change: an editor rewrite is a diff applied to the draft, a write is a
+  card confirmed within ten minutes, a write command a card confirmed in
+  the browser. A deploy forgets the pending writes; the audit log tells the
+  assistant's confirmed writes (`assistant`) from the teacher's own.
 - An offline evaluation prompt set (`apps/api/src/modules/assist/eval-prompts.json`:
   off-topic, jailbreak and legitimate questions, in French and English)
   waits for the stub-free evaluation; it is not run in CI.

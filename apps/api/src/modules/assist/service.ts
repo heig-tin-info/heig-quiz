@@ -15,7 +15,10 @@
  * exchange (§6), read by their owner and by the administrators. The
  * answer may carry UI actions (P2b amendment): a screen to open, an
  * effect-free command to run, checked here and run by the browser; they
- * are not stored.
+ * are not stored. Since P3 it may also PROPOSE: a rewrite of the open
+ * question draft's texts, a write command of the screen, or one of a closed
+ * list of writes, frozen as a pending write the teacher confirms
+ * (`./writes.ts`, `./pending.ts`); nothing is written by a question.
  */
 import { randomUUID } from "node:crypto";
 
@@ -25,6 +28,7 @@ import { z } from "zod";
 import {
   assistScreenOf,
   type AssistContext,
+  type AssistEditorDraft,
   type AssistConversation,
   type AssistConversationSummary,
   type AssistExchange,
@@ -37,12 +41,15 @@ import {
   ASSIST_MAX_TOKENS,
   ASSIST_RETENTION_DAYS,
   assistScreen,
+  assistTextFields,
   assistSystem,
   AssistUiTurn,
   readGuide,
+  STUB_TEXT,
   stubTurn,
   type AssistCorpus,
   type AssistRole,
+  type AssistScreen,
 } from "@quiz/domain";
 
 import { dropAssistToken, mintAssistToken } from "../../auth/tokens.js";
@@ -51,7 +58,9 @@ import { assistConversations, assistExchanges } from "../../db/schema.js";
 import type { ConverseTurn, LlmGateway, ReadOnlyTool } from "../llm/service.js";
 import { STUB_MODEL } from "../llm/service.js";
 import type { Api } from "../mcp/service.js";
+import { PendingWrites } from "./pending.js";
 import { assistDataTools, assistUiTools, classroomResults, userPools } from "./tools.js";
+import { assistTextOf, assistWriteTools, proposeEditTool, type WriteTurn } from "./writes.js";
 
 /** How the assistant answers on this server: the gateway's model, the development stub, or not at all. */
 export type AssistEngine = "model" | "stub" | null;
@@ -173,6 +182,31 @@ export interface AskDeps {
   api: (authorization: string) => Api;
   /** The web app's URL of a screen (`Api.link`). */
   link: (path: string) => string;
+  /** The prepared writes waiting for their teacher's Confirm (ADR-080 P3). */
+  pending: PendingWrites;
+}
+
+/** The editor draft sent from another screen than its question's editor: refused (ADR-080 P3, decision 2). */
+export class EditorOffScreen extends Error {}
+
+/** Whether the editor draft rides with a question asked from that very question's editor. */
+export const editorOnScreen = (context: AssistContext, editor: AssistEditorDraft): boolean =>
+  context.route === "/questions/:id" && context.entities?.question === editor.questionId;
+
+/**
+ * The open draft as the assistant may see and rewrite it: the question's
+ * type READ AS THE TEACHER (a question they cannot read is no editor), its
+ * texts by the type's `assistText`. Null when it cannot be read.
+ */
+async function openDraft(api: Api, editor: AssistEditorDraft) {
+  let type: string;
+  try {
+    type = ((await api.get(`/questions/${editor.questionId}`)) as { meta: { type: string } }).meta.type;
+  } catch {
+    return null;
+  }
+  const base = { config: editor.config, explanation: editor.explanation };
+  return { questionId: editor.questionId, type, base, texts: assistTextFields(editor.config, assistTextOf(type)) };
 }
 
 /**
@@ -215,12 +249,20 @@ async function asTheTeacher<T>(deps: AskDeps, userId: string, now: Date, fn: (ap
 export async function ask(
   deps: AskDeps,
   asker: { id: string; role: string },
-  question: { conversationId?: string | undefined; message: string; context: AssistContext },
+  question: {
+    conversationId?: string | undefined;
+    message: string;
+    context: AssistContext;
+    editor?: AssistEditorDraft | undefined;
+  },
   now: Date,
 ): Promise<AssistReply> {
   const { db, corpus } = deps;
+  if (question.editor && !editorOnScreen(question.context, question.editor)) throw new EditorOffScreen();
   const existing = question.conversationId ? await findConversation(db, question.conversationId, asker.id) : null;
   if (question.conversationId && !existing) throw new ConversationNotFound();
+  // Known before the model answers: a write it prepares belongs to this conversation (ADR-080 P3).
+  const conversationId = existing?.id ?? randomUUID();
   const role = roleOf(asker.role);
   const earlier = existing
     ? await db
@@ -238,31 +280,55 @@ export async function ask(
 
   // The UI actions of this answer (ADR-080 P2b): checked here, run by the browser, never stored.
   const turn = new AssistUiTurn(role, question.context.commands);
+  // The writes prepared in this answer (ADR-080 P3): pending once the exchange is stored, never before.
+  const writes: WriteTurn = { turn, searched: { done: false }, prepared: [], now };
   const { text, model } = await asTheTeacher(deps, asker.id, now, async (api) => {
+    const draft = question.editor ? await openDraft(api, question.editor) : null;
+    const screen: AssistScreen = {
+      ...question.context,
+      ...(draft ? { editor: { texts: draft.texts, explanation: draft.base.explanation } } : {}),
+    };
+    const tools: ReadOnlyTool[] = [
+      readGuideTool(corpus, role, question.context.locale),
+      ...assistDataTools(api).map((tool) => (tool.name === "find_similar_questions" ? marking(tool, writes.searched) : tool)),
+      ...assistUiTools(turn),
+      ...(draft ? [proposeEditTool(turn, draft)] : []),
+      ...assistWriteTools(api, writes),
+    ];
     if (deps.engine === "model") {
       return deps.gateway.converse({
         purpose: "assist",
         userId: asker.id,
-        system: { stable: assistSystem(corpus, role), volatile: assistScreen(corpus, role, question.context) },
+        system: { stable: assistSystem(corpus, role), volatile: assistScreen(corpus, role, screen) },
         history,
-        tools: [readGuideTool(corpus, role, question.context.locale), ...assistDataTools(api), ...assistUiTools(turn)],
+        tools,
         maxTokens: ASSIST_MAX_TOKENS,
         maxSteps: ASSIST_MAX_STEPS,
         effort: "low",
         share: ASSIST_CAP_SHARE,
+        endAfter: () => turn.writing,
       });
     }
-    const reply = await stubTurn(corpus, role, question.message, question.context, {
+    const reply = await stubTurn(corpus, role, question.message, screen, {
       results: (id) => classroomResults(api, id),
       pools: () => userPools(api),
     });
-    // The stub's actions (it only opens a screen) pass the same check as a model's.
+    // The stub's actions and calls pass the same checks, through the same tools, as a model's.
     for (const action of reply.actions) if (action.kind === "open_screen") turn.open(action);
+    try {
+      for (const call of reply.calls ?? []) {
+        const tool = tools.find((t) => t.name === call.tool);
+        if (!tool) throw new Error(`No tool named ${call.tool}.`);
+        await tool.run(call.input);
+      }
+    } catch (error) {
+      const refused = STUB_TEXT[question.context.locale];
+      return { text: `${refused.intro}\n\n${refused.refused} ${(error as Error).message}`, model: STUB_MODEL };
+    }
     return { text: reply.text, model: STUB_MODEL };
   });
 
-  return db.transaction(async (tx) => {
-    const conversationId = existing?.id ?? randomUUID();
+  const reply = await db.transaction(async (tx) => {
     if (existing) {
       // The model may have taken long enough for the purge, or another tab, to delete it.
       const touched = await tx
@@ -290,6 +356,20 @@ export async function ask(
       .returning();
     return { conversationId, exchange: toExchange(exchange!), actions: turn.actions };
   });
+  for (const { id, write } of writes.prepared) deps.pending.put(id, { ...write, userId: asker.id, conversationId }, now);
+  return reply;
+}
+
+/** `tool`, noting in `flag` that it ran: `create_question` requires a look for similar questions first. */
+function marking(tool: ReadOnlyTool, flag: { done: boolean }): ReadOnlyTool {
+  return {
+    ...tool,
+    run: async (input) => {
+      const result = await tool.run(input);
+      flag.done = true;
+      return result;
+    },
+  };
 }
 
 /**

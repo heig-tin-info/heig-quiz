@@ -23,6 +23,15 @@ reject"): see §3.
 §6 amended by [ADR-082](ADR-082-carte-ia-de-l-editeur.md): "Generate
 answers" is in the editor's AI card, offered once the statement is written.
 
+§1–2 amended, for the teacher assistant only, by
+[ADR-080's P3 amendment](ADR-080-assistant-enseignant.md#p3-amendment-2026-10-08)
+(decision 1): in the question editor the assistant may REWRITE the
+teacher's own texts (statement, choices' texts, explanation, the type's
+declared free texts) — never an id, a setting, the key, the scoring, the
+variables, a `[[…]]` expression nor an `asset:` reference — as a diff the
+teacher applies; its "add N choices" fills and appends as §2 does, the new
+choices unticked. The wand keeps the rules below.
+
 ## Context
 
 A teacher writes a statement and has to produce what makes it a question:

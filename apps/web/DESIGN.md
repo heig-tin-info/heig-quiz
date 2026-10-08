@@ -2199,6 +2199,21 @@ placement over an `offset` and `Z.tool`.
   needs the teacher's own click (the preview's new tab) is a small
   `secondary` button under the answer instead. Nothing else moves: no
   toast, no focus change, the composer keeps the focus.
+- **Proposals** (ADR-080 P3): a card under the answer for each — a
+  hairline `rounded-card` on the surface, a 13 px semibold title with a
+  muted icon. An editor proposal lists each field: its label (Statement,
+  Choice 2, Explanation) in 12 px muted, the text before on a pale
+  `danger-soft` struck through, the text after on a pale `success-soft`; a
+  prepared write lists what the server read back as a two-column list
+  (label muted, value in ink; several values as bullets), then its notes
+  ("created as a draft", "the course's whole staff becomes contributor")
+  and "Nothing is written until you confirm." in `fg-faint`. Its actions
+  sit right-aligned at the bottom: **Cancel** `secondary`, then **Confirm**
+  or **Apply to the draft** in the dock's ink (`bg-fg`, never the accent:
+  the screen's primary keeps the one red). Acted on, the buttons give way to
+  one 12 px line — muted with a corner arrow ("Done.", "Applied to the
+  draft…" with a ghost **Undo**, "Cancelled: nothing was done."), or
+  `danger` with an alert icon ("no longer applies", "expired").
 - **States**: empty — a muted bubble icon, "Ask about this screen" and
   what it answers (the screen, the teacher's own data), kept 30 days and
   readable by an administrator; waiting — the question shown at once and a

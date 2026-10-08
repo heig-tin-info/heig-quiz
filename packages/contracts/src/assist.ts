@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import {
   ASSIST_COMMAND_ID,
+  ASSIST_WRITE_FIELDS,
+  ASSIST_WRITE_TOOLS,
   ASSIST_LOCALES,
   ASSIST_MAX_MESSAGE_CHARS,
   ASSIST_MAX_SCREEN_COMMANDS,
@@ -45,6 +47,8 @@ export const AssistScreenCommand = z
     id: z.string().regex(ASSIST_COMMAND_ID),
     label: z.string().min(1).max(120),
     effect: z.enum(["none", "write"]),
+    /** It needs the teacher's own click (a new tab): offered as a button (ADR-080 P3, decision 10). */
+    gesture: z.boolean().optional(),
   })
   .strict();
 export type AssistScreenCommand = z.infer<typeof AssistScreenCommand>;
@@ -78,12 +82,31 @@ export type AssistContext = z.infer<typeof AssistContext>;
 /** The context as an exchange stores it (`assist_exchanges.context`): the screen, never an id nor a command. */
 export const assistScreenOf = ({ route, helpTopic, locale }: AssistContext) => ({ route, helpTopic, locale });
 
+/** The longest editor draft a question may carry, as JSON. */
+export const ASSIST_MAX_EDITOR_CHARS = 200_000;
+
+/**
+ * The question editor's open draft (ADR-080 P3, decision 2): its config and
+ * its explanation, the teacher's own text, sent with a question asked from
+ * the editor ONLY — the server refuses it on any other screen. Never stored.
+ */
+export const AssistEditorDraft = z
+  .object({
+    questionId: z.uuid(),
+    config: z.unknown(),
+    explanation: z.string().max(20_000),
+  })
+  .strict()
+  .refine((d) => JSON.stringify(d.config ?? null).length <= ASSIST_MAX_EDITOR_CHARS, { message: "draft_too_large" });
+export type AssistEditorDraft = z.infer<typeof AssistEditorDraft>;
+
 /** `POST /app/api/assist/ask`: a question, in a conversation of the asker's or in a new one. */
 export const AssistAsk = z
   .object({
     conversationId: z.uuid().optional(),
     message: z.string().trim().min(1).max(ASSIST_MAX_MESSAGE_CHARS),
     context: AssistContext,
+    editor: AssistEditorDraft.optional(),
   })
   .strict();
 export type AssistAsk = z.infer<typeof AssistAsk>;
@@ -111,6 +134,25 @@ export const AssistAction = z.discriminatedUnion("kind", [
     params: z.record(z.string(), z.string()),
   }),
   z.object({ kind: z.literal("run_command"), id: z.string().regex(ASSIST_COMMAND_ID) }),
+  // ADR-080 P3: a write command of the screen, run by the browser on the teacher's Confirm only.
+  z.object({ kind: z.literal("confirm_command"), id: z.string().regex(ASSIST_COMMAND_ID), label: z.string() }),
+  // ADR-080 P3: an editor proposal, applied by the teacher to the draft it was computed against.
+  z.object({
+    kind: z.literal("edit_question"),
+    questionId: z.uuid(),
+    base: z.object({ config: z.unknown(), explanation: z.string() }),
+    config: z.unknown(),
+    explanation: z.string(),
+    fields: z.array(z.object({ path: z.string(), before: z.string().nullable(), after: z.string() })),
+  }),
+  // ADR-080 P3: a write frozen on the server, run only on the teacher's Confirm.
+  z.object({
+    kind: z.literal("pending_write"),
+    id: z.uuid(),
+    tool: z.enum(ASSIST_WRITE_TOOLS),
+    lines: z.array(z.object({ field: z.enum(ASSIST_WRITE_FIELDS), values: z.array(z.string()) })),
+    expiresAt: z.iso.datetime(),
+  }),
 ]);
 export type AssistAction = z.infer<typeof AssistAction>;
 // The domain's actions and commands (`AssistUiTurn`) are this contract's: a drift is a compile error.
@@ -145,6 +187,18 @@ export const AssistConversation = z.object({
   exchanges: z.array(AssistExchange),
 });
 export type AssistConversation = z.infer<typeof AssistConversation>;
+
+/**
+ * `POST /app/api/assist/writes/:id/confirm` and `…/cancel` (ADR-080 P3,
+ * decision 7): the conversation the write was prepared in — a pending write
+ * is its teacher's and its conversation's alone.
+ */
+export const AssistWriteDecision = z.object({ conversationId: z.uuid() }).strict();
+export type AssistWriteDecision = z.infer<typeof AssistWriteDecision>;
+
+/** A confirmed write, done: the app's path of what it made or changed, for the card's link. */
+export const AssistWriteDone = z.object({ path: z.string().regex(/^\/[a-z0-9/-]*$/) });
+export type AssistWriteDone = z.infer<typeof AssistWriteDone>;
 
 /** `GET /app/api/assist/conversations` query: `userId` is an administrator's, to read another person's list. */
 export const AssistListQuery = z.object({ userId: z.uuid().optional() }).strict();

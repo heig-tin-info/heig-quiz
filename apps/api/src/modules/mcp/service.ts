@@ -8,6 +8,7 @@ import type { FastifyInstance } from "fastify";
 
 import { INTERNAL_CALL_HEADER } from "../../auth/plugin.js";
 import { ApiError, type Api } from "./tools.js";
+export { checkConfig } from "./questionTypes.js";
 
 export {
   ApiError,
@@ -25,9 +26,15 @@ export {
  * (`authorization` is the whole header): every call is an `app.inject`, so a
  * tool reaches exactly what the token's owner reaches, and a refusal is an
  * `ApiError` with the route's own status and body. `webUrl` makes the web
- * app's links a tool hands back.
+ * app's links a tool hands back. `extra` adds headers to every call (the
+ * assistant's tool name, `ASSIST_TOOL_HEADER`, ADR-080 P3).
  */
-export function injectedApi(app: FastifyInstance, authorization: string, webUrl: string): Api {
+export function injectedApi(
+  app: FastifyInstance,
+  authorization: string,
+  webUrl: string,
+  extra: Readonly<Record<string, string>> = {},
+): Api {
   const call = async (
     method: "GET" | "POST" | "PUT" | "PATCH",
     path: string,
@@ -41,6 +48,7 @@ export function injectedApi(app: FastifyInstance, authorization: string, webUrl:
       method,
       url: `/app/api${path}${qs ? `?${qs}` : ""}`,
       headers: {
+        ...extra,
         authorization,
         // An OAuth access token is bound to the MCP endpoint (RFC 8707), the
         // help assistant's to these calls (ADR-080 §8); this is what lets the

@@ -25,7 +25,7 @@ export function sessionTeacherGuard(app: FastifyInstance) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
     const denied = await requireTeacher(req, reply);
     if (denied) return denied;
-    if (req.authVia === "token") return reply.code(403).send({ error: "session_required" });
+    if (req.authVia !== "session") return reply.code(403).send({ error: "session_required" });
     return undefined;
   };
 }
