@@ -1,4 +1,5 @@
-import { CircleCheck, CircleX, PenLine, ScanSearch, Sparkles, Undo2, WandSparkles } from "lucide-react";
+import { CircleCheck, CircleX, PenLine, ScanSearch, Sparkles, Undo2, WandSparkles, type LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 import type { QuestionDetail, QuestionReview } from "@quiz/contracts";
 
@@ -50,10 +51,9 @@ export function AiCard({
             </>
           ) : (
             // Why there is no button yet: the model completes a question, it never invents one.
-            <p className="flex items-start gap-2 text-[13px] text-fg-muted">
-              <PenLine className="mt-0.5 size-4 shrink-0 text-fg-faint" aria-hidden />
+            <Line icon={PenLine} tone="text-fg-faint">
               {t("question.ai.needsStatement")}
-            </p>
+            </Line>
           )}
           {wand.undo ? (
             <div role="status" className="space-y-1 rounded-field bg-surface-2 p-3 text-[13px]">
@@ -106,18 +106,16 @@ function ReviewOutcome({
   const n = review.versionNumber;
   if (review.state === "clean" || review.state === "ignored") {
     return (
-      <p className="flex items-start gap-2 text-[13px] text-fg-muted">
-        <CircleCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
+      <Line icon={CircleCheck} tone="text-success">
         {t("question.ai.review.clean", { n })}
-      </p>
+      </Line>
     );
   }
   if (review.state === "failed") {
     return (
-      <p className="flex items-start gap-2 text-[13px] text-fg-muted">
-        <CircleX className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden />
+      <Line icon={CircleX} tone="text-danger">
         {t("question.ai.review.failed", { n })}
-      </p>
+      </Line>
     );
   }
   return (
@@ -140,5 +138,15 @@ function ReviewOutcome({
         {t("question.ai.review.open")}
       </AppLink>
     </div>
+  );
+}
+
+/** One muted line of the card, behind its icon. */
+function Line({ icon: Icon, tone, children }: { icon: LucideIcon; tone: string; children: ReactNode }) {
+  return (
+    <p className="flex items-start gap-2 text-[13px] text-fg-muted">
+      <Icon className={cx("mt-0.5 size-4 shrink-0", tone)} aria-hidden />
+      {children}
+    </p>
   );
 }

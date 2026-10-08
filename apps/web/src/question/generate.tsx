@@ -17,7 +17,7 @@ import type { Draft } from "./useQuestionDraft";
  * one. A draft is unvalidated (D16), so a missing or non-string prompt counts
  * as empty. Trimmed, as the server trims it.
  */
-export function draftStatement(config: unknown): string {
+function draftStatement(config: unknown): string {
   const prompt = typeof config === "object" && config !== null ? (config as { prompt?: unknown }).prompt : undefined;
   return typeof prompt === "string" ? prompt.trim() : "";
 }

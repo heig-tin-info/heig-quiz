@@ -1227,7 +1227,7 @@ export const en = {
   "question.generate.undo": "Undo",
   "question.generate.incomplete.runner_unavailable": "Nothing was run: the code runner is not available here. Run Try to check the reference, then complete the expected outputs or the target picture.",
   "question.generate.incomplete.compile_failed": "The proposed reference does not compile, so nothing was computed from it: fix it, then run Try.",
-  "question.generate.incomplete.draft_invalid": "Nothing was run: the draft is not complete enough to run (see the issues below). Fix it, then run Try.",
+  "question.generate.incomplete.draft_invalid": "Nothing was run: the draft is not complete enough to run (see the issues in the form). Fix it, then run Try.",
   "question.generate.incomplete.partial": "Some results could not be computed (a test that ran too long, a picture with missing pixels): check them in Try.",
   "question.generate.stale": "The draft changed while the AI was writing: its proposal was dropped.",
   "question.generate.failed": "The AI could not propose anything. Try again.",

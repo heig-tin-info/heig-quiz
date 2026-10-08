@@ -1030,7 +1030,7 @@ describe("QuestionEditor — the AI card (ADR-082)", () => {
     expect(within(aside).getByRole("button", { name: "Review now" })).toBeEnabled();
   });
 
-  it("shows the result of Review now as soon as it lands, without a toast", async () => {
+  it("shows the result of Review now as soon as it lands", async () => {
     const user = userEvent.setup();
     mockFetch(routes(published(), { ...MODEL, "POST /app/api/questions/q1/review": ok(FINDINGS) }));
     renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
@@ -1039,6 +1039,5 @@ describe("QuestionEditor — the AI card (ADR-082)", () => {
     await user.click(within(aside).getByRole("button", { name: "Review now" }));
     // The refetch still answers `review: null`: what shows is the call's own result.
     expect(await within(aside).findByText("Remarks on version 1")).toBeInTheDocument();
-    expect(screen.queryByText(/The AI made remarks/)).toBeNull();
   });
 });

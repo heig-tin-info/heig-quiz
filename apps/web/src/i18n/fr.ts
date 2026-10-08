@@ -1223,7 +1223,7 @@ export const fr: Record<keyof Dict, string> = {
   "question.generate.undo": "Annuler",
   "question.generate.incomplete.runner_unavailable": "Rien n'a été exécuté : le runner de code n'est pas disponible ici. Lancez Essayer pour vérifier la référence, puis complétez les sorties attendues ou l'image cible.",
   "question.generate.incomplete.compile_failed": "La référence proposée ne compile pas, rien n'en a été calculé : corrigez-la, puis lancez Essayer.",
-  "question.generate.incomplete.draft_invalid": "Rien n'a été exécuté : le brouillon n'est pas assez complet pour être lancé (voir les problèmes ci-dessous). Corrigez-le, puis lancez Essayer.",
+  "question.generate.incomplete.draft_invalid": "Rien n'a été exécuté : le brouillon n'est pas assez complet pour être lancé (voir les problèmes dans le formulaire). Corrigez-le, puis lancez Essayer.",
   "question.generate.incomplete.partial": "Certains résultats n'ont pas pu être calculés (un test trop long, une image avec des pixels manquants) : vérifiez-les dans Essayer.",
   "question.generate.stale": "Le brouillon a changé pendant que l'IA écrivait : sa proposition a été écartée.",
   "question.generate.failed": "L'IA n'a rien pu proposer. Réessayez.",
