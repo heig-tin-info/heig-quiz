@@ -99,6 +99,17 @@ async function fillProject(p) {
   await p.getByText(/^(Default branch|Branche par défaut)/).waitFor();
 }
 
+/** A new multiple-choice question of the pool on view, its editor open (ADR-082 scenes). */
+async function newMcq(p) {
+  await p.getByRole("button", { name: /nouvelle question|new question/i }).first().click();
+  await p.getByRole("button", { name: /^(multiple choice|choix multiple)\b/i }).first().click();
+  await p.getByLabel(/internal name|nom interne/i).fill("sizeof-int-64");
+  await p.keyboard.press("Enter");
+  await p.waitForURL(/\/questions\//);
+  await p.waitForTimeout(2000);
+  await skipCoach(p); // the editor's first-visit tour
+}
+
 /** The group sets of `mock/groups.ts` (`?groups=1`, M3-16a). */
 const SET_PAIRS = "/classrooms/r1/groups/5e7a0000-0000-4000-8000-000000000001";
 const SET_FINAL = "/classrooms/r1/groups/5e7a0000-0000-4000-8000-000000000002";
@@ -1148,6 +1159,26 @@ const scenes = [
   { name: "editor-mcq-wand", role: "teacher", path: "/questions/q2", settle: 1500, act: async (p) => { await p.getByRole("textbox", { name: "Text of choice B" }).fill(""); await p.getByRole("button", { name: "Suggest this choice B" }).hover(); await p.waitForTimeout(400); } },
   { name: "editor-code", role: "teacher", path: "/questions/q1", settle: 5000 },
   { name: "editor-code-generated", role: "teacher", path: "/questions/q1", settle: 5000, fold: true, act: async (p) => { await p.getByRole("button", { name: "Generate answers" }).click(); await p.getByText("Answers suggested by the AI").waitFor(); } },
+  // ADR-082, the AI card above Properties (run with --width=390 too: it
+  // follows the explanation there). A new MCQ: no statement yet, so the card
+  // says why there is no "Generate answers"; then a statement and no answers.
+  { name: "editor-ai-no-statement", role: "teacher", path: "/pools/p1", settle: 2000, act: newMcq },
+  { name: "editor-ai-statement", role: "teacher", path: "/pools/p1", settle: 2000, act: async (p) => {
+      await newMcq(p);
+      await p.getByRole("textbox", { name: "Statement" }).click();
+      await p.keyboard.type("Que vaut sizeof(int) sur une machine 64 bits ?");
+      await p.waitForTimeout(500);
+    } },
+  // Published, with the stored findings of its latest version (read-only), and
+  // the clean line of another; then "Review now", whose result shows at once.
+  { name: "editor-ai-findings", role: "teacher", path: "/questions/q2", settle: 2000 },
+  { name: "editor-ai-review-now", role: "teacher", path: "/questions/q1", settle: 5000, act: async (p) => {
+      await p.getByRole("button", { name: "Review now" }).click();
+      await p.getByText("Remarks on version 3").waitFor();
+    } },
+  // No card: a reader (the pool p3 is only shared), and a platform without a model.
+  { name: "editor-ai-reader", role: "teacher", path: "/questions/q12", settle: 2000 },
+  { name: "editor-ai-nollm", role: "teacher", path: "/questions/q2?nollm=1", settle: 2000 },
   { name: "editor-short", role: "teacher", path: "/questions/q3" },
   // Issue #97: every field of an accepted answer labelled, and the sentence
   // saying what it accepts — a number with a tolerance, a date and a time.

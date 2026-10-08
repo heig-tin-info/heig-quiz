@@ -102,7 +102,12 @@ export type Route =
   | { view: "activities" }
   /** The teacher's question pools (WP7). */
   | { view: "pools" }
-  | { view: "pool"; id: string }
+  /**
+   * `tab`: the pool's tab to open on (the editor's AI card links to the
+   * "LLM review", ADR-082). Written into `?tab=` only, like the classroom's:
+   * `parsePath` never reads it back, the page reads it off the query string.
+   */
+  | { view: "pool"; id: string; tab?: "review" }
   /** The categories of one pool, as a tree to rename, move and reorder. */
   | { view: "poolCategories"; id: string }
   /**
@@ -460,7 +465,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     section: "pools",
   },
   pool: {
-    path: (r) => `/pools/${r.id}`,
+    path: (r) => `/pools/${r.id}${r.tab ? `?tab=${r.tab}` : ""}`,
     match: ([head, id]) => (head === "pools" && id ? { view: "pool", id } : null),
     studentSafe: false,
     section: "pools",

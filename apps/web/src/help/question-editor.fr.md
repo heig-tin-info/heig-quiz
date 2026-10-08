@@ -83,6 +83,16 @@ La syntaxe brute `{{…}}` n'a pas disparu : le bouton **source Markdown** la
 montre, et `Newton|newton`, `=a|b|c`, `#3.14:0.01`, `/^N$/i` et le préfixe de
 poids `2*` restent ce qui est enregistré.
 
+## La carte IA
+
+Quand la plateforme dispose d'un modèle, la carte **IA**, au-dessus des
+propriétés, réunit ce que l'IA peut faire pour cette question. **Générer les
+réponses** complète le brouillon une fois l'énoncé écrit : rien de ce que
+vous avez écrit n'est modifié, Annuler rétablit le brouillon, et rien n'est
+publié. **Relire maintenant**, une fois la question publiée, fait relire la
+dernière version par l'IA ; ses remarques s'affichent dans la carte, et vous
+les corrigez dans l'onglet **Revue LLM** du pool ou en modifiant la question.
+
 ## Publier
 
 **Publier** valide le brouillon contre le schéma du type et crée la version

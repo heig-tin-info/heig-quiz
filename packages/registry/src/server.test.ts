@@ -173,3 +173,29 @@ describe.each(REGISTERED)("the contract of %s", (id) => {
     expect(() => type.migrate(fixture.config, type.configVersion + 1)).toThrow(ConfigMigrationError);
   });
 });
+
+/*
+ * The editor's AI card (ADR-082) offers "Generate answers" only once the
+ * statement is written, and reads that statement as `config.prompt`
+ * (`draftStatement`, apps/web/src/question/generate.tsx); the server reads it
+ * through each generator's `statement` and refuses an empty one
+ * (`statement_empty`). This holds the two together for EVERY registration
+ * with a generator: a type added later that keeps its statement elsewhere
+ * fails here, not in a teacher's editor.
+ */
+const WITH_GENERATOR = Object.values(serverRegistry).filter((type) => type?.generator !== undefined);
+
+describe("every generator reads its statement from config.prompt", () => {
+  it("covers the types that have a wand", () => {
+    expect(WITH_GENERATOR.length).toBeGreaterThan(0);
+  });
+
+  it.each(WITH_GENERATOR.map((type) => [type!.id, type!] as const))("%s", (id, type) => {
+    const config = LEAK_FIXTURES[id as RegisteredId].config as Record<string, unknown>;
+    const statement = type.generator!.statement as (config: unknown) => string;
+    expect(typeof config["prompt"]).toBe("string");
+    expect(statement(config)).toBe(config["prompt"]);
+    const { prompt: _prompt, ...withoutPrompt } = config;
+    expect(statement(withoutPrompt)).toBe("");
+  });
+});

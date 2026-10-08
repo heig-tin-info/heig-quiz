@@ -10,6 +10,10 @@ quota"): the night's review spends at most a share of the cap (§5). Its
 never changes what the teacher wrote: a review's fix does exactly that, on
 purpose, one field at a time (§4).
 
+§1 amended by [ADR-082](ADR-082-carte-ia-de-l-editeur.md): "Review now"
+leaves the editor's `…` menu for its AI card, which shows the review of the
+latest published version, read-only.
+
 Delivered with the table `question_reviews` and `review_pools` (migration
 `question_reviews`, owned by the `pool` module), `apps/api/src/modules/pool/review.ts`
 and `reviewRoutes.ts`, the scheduled task `llm.review`, the contracts

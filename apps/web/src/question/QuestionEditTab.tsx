@@ -9,8 +9,10 @@ import { HelpIcon } from "../help";
 import { useT } from "../i18n";
 import { MarkdownField } from "../markdown/MarkdownField";
 import { QuestionEditorHost, type TryOutcome } from "../questionTypes";
+import type { Navigate } from "../router";
 import { Alert, Card, Spinner } from "../ui";
-import { GenerateBar, useGenerate } from "./generate";
+import { AiCard } from "./AiCard";
+import { useGenerate } from "./generate";
 import { toConfigIssues } from "./issues";
 import { MetaPanel } from "./MetaPanel";
 import type { Draft } from "./useQuestionDraft";
@@ -18,9 +20,9 @@ import { isVariablesIssue, VariablesSection } from "./VariablesSection";
 
 /**
  * The Edit tab: the type's own form, the variables of a type that takes
- * them (ADR-056) and the explanation on the left, the question's properties
- * on the right — with, under them, the slot a type may portal its own
- * settings into.
+ * them (ADR-056) and the explanation on the left; on the right the AI card
+ * (ADR-082), the question's properties and, under them, the slot a type may
+ * portal its own settings into.
  */
 export function QuestionEditTab({
   data,
@@ -33,8 +35,10 @@ export function QuestionEditTab({
   onTry,
   savedStamp,
   dirty,
+  navigate,
 }: {
   data: QuestionDetail;
+  navigate: Navigate;
   /** `undefined` while the pool is loading. */
   pool: PoolDetail | undefined;
   draft: Draft | null;
@@ -104,8 +108,6 @@ export function QuestionEditTab({
           </p>
         ) : null}
 
-        <GenerateBar wand={wand} />
-
         <Card className="p-5">
           {draft ? (
             <QuestionEditorHost
@@ -169,6 +171,9 @@ export function QuestionEditTab({
       </div>
 
       <aside aria-label={t("aside.questionMeta")} className="space-y-5">
+        {/* Above "Properties": what the AI can do for this question. On a
+            narrow screen the aside follows the explanation, and so does it. */}
+        {draft ? <AiCard data={data} wand={wand} readOnly={readOnly} navigate={navigate} /> : null}
         <MetaPanel
           meta={data.meta}
           categories={pool?.categories ?? []}

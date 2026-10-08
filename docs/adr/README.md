@@ -116,6 +116,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-060 — The LLM review of the published questions](ADR-060-revue-llm-des-questions.md)
 - [ADR-063 — LLM grading of essays and diagrams](ADR-063-correction-llm.md)
 - [ADR-080 — The teacher assistant: ask the documentation from any screen](ADR-080-assistant-enseignant.md)
+- [ADR-082 — The AI card of the question editor](ADR-082-carte-ia-de-l-editeur.md)
 
 ### Classroom merge, projects and journal
 

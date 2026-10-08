@@ -158,21 +158,27 @@ export function ReviewTab({
   );
 }
 
-function FindingRow({
+/**
+ * One finding: its severity, its field, the message and the exact fix as
+ * text. Without `onFix` it is read-only — the editor's AI card (ADR-082)
+ * shows it that way — and its text takes the whole width, since no button
+ * has to wrap under it.
+ */
+export function FindingRow({
   finding,
   onFix,
-  pending,
+  pending = false,
 }: {
   finding: ReviewFinding;
-  onFix: ((undo: boolean) => void) | undefined;
-  pending: boolean;
+  onFix?: ((undo: boolean) => void) | undefined;
+  pending?: boolean;
 }) {
   const t = useT();
   const { icon: Icon, className, label } = SEVERITY[finding.severity];
   return (
     <li className="flex flex-wrap items-start gap-x-3 gap-y-1.5 rounded-field bg-surface-2 px-3 py-2 text-sm">
       <Icon className={cx("mt-0.5 size-4 shrink-0", className)} aria-label={t(label)} />
-      <div className="min-w-0 flex-1 basis-60 space-y-1">
+      <div className={cx("min-w-0 flex-1 space-y-1", onFix && "basis-60")}>
         <p>
           <code className="mr-2 rounded bg-surface-3 px-1 text-xs text-fg-muted">{finding.path}</code>
           {/* The model writes Markdown (a `p` in code); rendered, never as HTML of its own. */}

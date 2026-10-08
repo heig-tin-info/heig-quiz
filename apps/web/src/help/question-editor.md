@@ -76,6 +76,16 @@ The raw `{{…}}` syntax has not gone anywhere: the **Markdown source** button
 shows it, and `Newton|newton`, `=a|b|c`, `#3.14:0.01`, `/^N$/i` and a `2*`
 weight prefix are still what gets stored.
 
+## The AI card
+
+When the platform has a model, the **AI** card above the properties holds
+what the AI can do for this question. **Generate answers** completes the
+draft once the statement is written — nothing you wrote is changed, Undo
+puts the draft back, and nothing is published. **Review now**, once the
+question is published, asks the AI to read the latest version; its remarks
+show in the card, and you fix them in the pool's **LLM review** tab or by
+editing the question.
+
 ## Publishing
 
 **Publish** validates the draft against the type's schema and creates the

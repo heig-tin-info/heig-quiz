@@ -66,6 +66,8 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  * `staffseat`: the student persona is a teacher on a STAFF seat (ADR-077): their
  *   project page offers the real actions; `staffrepo`: the staff project page
  *   shows that teacher's test repository, badged (`mock/project.ts`).
+ * `nollm`: the platform has no model (`GET /generate/availability` says so):
+ *   no AI card in the question editor, no "LLM review" tab (ADR-082).
  */
 export const FLAG_NAMES = [
   "empty",
@@ -105,6 +107,7 @@ export const FLAG_NAMES = [
   "staffrepo",
   "codespace",
   "sebproject",
+  "nollm",
 ] as const;
 type FlagName = (typeof FLAG_NAMES)[number];
 export const flags = {} as Record<FlagName, boolean>;
