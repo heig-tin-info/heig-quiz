@@ -702,13 +702,17 @@ describe("previewing one item", () => {
     expect((await get(itemUrl(w, w.mcqItemId), student.headers)).statusCode).toBe(403);
   });
 
-  it("serves the key of the same view on its own route, to the staff only", async () => {
+  it("serves the key of the same view, and its explanation, on its own route, to the staff only", async () => {
     const w = await world();
     const key = `${itemUrl(w, w.mcqItemId)}/solution`;
     const res = await get(key, teacher.headers);
     expect(res.statusCode).toBe(200);
     // Seed 0, no shuffle, the frozen version: the key of the choices the player shows.
-    expect(res.json()).toEqual({ solution: { correct: [1, 3] } });
+    // The explanation travels with the key, never with the preview (#554).
+    expect(res.json()).toEqual({ solution: { correct: [1, 3] }, explanation: SECRETS.explanation });
+    expect(JSON.stringify((await get(itemUrl(w, w.mcqItemId), teacher.headers)).json())).not.toContain(
+      SECRETS.explanation,
+    );
     expect((await get(key, stranger.headers)).statusCode).toBe(404);
     expect((await get(key, student.headers)).statusCode).toBe(403);
     const other = await world();

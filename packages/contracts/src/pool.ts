@@ -566,8 +566,12 @@ export type PreviewResult = z.infer<typeof PreviewResult>;
  * never sent with the preview itself: the one a student reads once the key
  * is shown (`studentSolutionView`, ADR-037), for the same view as the player.
  * `POST /questions/:id/preview/solution` and `GET …/preview/items/:itemId/solution`.
+ *
+ * `explanation` (issue #554) is the question's explanation for the same view
+ * (instantiated for a parameterized question), `null` when it has none. A
+ * teacher route only: the student view never carries it (invariant 4).
  */
-export const PreviewSolution = z.object({ solution: z.unknown() });
+export const PreviewSolution = z.object({ solution: z.unknown(), explanation: z.string().nullable() });
 export type PreviewSolution = z.infer<typeof PreviewSolution>;
 
 /**

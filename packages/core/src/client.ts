@@ -210,12 +210,22 @@ export interface RichTextProps {
 
 export type RichTextComponent = ComponentType<RichTextProps>;
 
-export interface PlayerProps<TStudent, TAnswer> {
+export interface PlayerProps<TStudent, TAnswer, TSolution = unknown> {
   student: TStudent;
   answer: TAnswer | null;
   onChange: (next: TAnswer) => void;
   /** Read-only when the attempt is submitted / paused / expired. */
   readOnly: boolean;
+  /**
+   * The key, marked ON the question (issue #554): a teacher's preview with
+   * "Show answers" on hands the key a student reads once it is shown
+   * (`studentSolutionView`), so the question keeps its own layout and the
+   * right choices, the expected blanks, the accepted answers are drawn over
+   * the player. Nothing is graded. Absent in an attempt — no student route
+   * ever sends one to a player — and a player that has nothing to mark
+   * ignores it.
+   */
+  answerKey?: TSolution | null;
   /** Code type only: interactive run through `POST /attempts/:id/run`. */
   run?: (payload: unknown) => Promise<unknown>;
   /**
@@ -333,7 +343,7 @@ export interface QuestionTypeClient<
 
   /** `React.lazy`, so `qt-code` (Monaco) never enters the initial bundle (N-PERF-05). */
   readonly Editor: LazyExoticComponent<ComponentType<EditorProps<TConfig>>>;
-  readonly Player: LazyExoticComponent<ComponentType<PlayerProps<TStudent, TAnswer>>>;
+  readonly Player: LazyExoticComponent<ComponentType<PlayerProps<TStudent, TAnswer, TSolution>>>;
   readonly Review: LazyExoticComponent<ComponentType<ReviewProps<TStudent, TAnswer, TSolution, TDetails>>>;
 
   /** Empty answer for a fresh item (e.g. `{ selected: [] }`). */

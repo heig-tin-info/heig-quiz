@@ -150,6 +150,10 @@ describe("the Try tab of a parameterized draft", () => {
 
     const solution = await post(id, "preview/solution", { source: "draft" });
     expect(solution.json().solution).toEqual(first.solution);
+    // The explanation of draw 1, instantiated with its values (#554).
+    expect(solution.json().explanation).toBe(first.explanation);
+    expect(solution.json().explanation).not.toContain("[[");
+    expect(JSON.stringify(preview.json())).not.toContain(first.explanation);
 
     // Choice 0 is `[[t]] s`, the key, in the canonical order the answer uses.
     const right = await post(id, "try", { source: "draft", answer: { selected: [0] } });

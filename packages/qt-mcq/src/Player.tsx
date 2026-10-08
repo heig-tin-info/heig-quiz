@@ -5,15 +5,19 @@
  * shuffled by the server — and reports every change through `onChange`. It
  * holds no state, so a reload or a resumed attempt shows the stored answer and
  * nothing else. The ids it sends back are canonical (decision D3).
+ *
+ * With an `answerKey` (a teacher's preview, "Show answers", #554) the right
+ * choices are marked in place, a success tint and their verdict in words, so
+ * the question keeps the layout it has without the key.
  */
 import type { MarkdownRenderer, PlayerProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
-import type { McqAnswer, McqStudent } from "./schema.js";
+import type { McqAnswer, McqSolution, McqStudent } from "./schema.js";
 import { mcqPlayerStrings, type McqPlayerStringKey } from "./strings.js";
-import { caption, cx, isLocked, markdown } from "@quiz/ui";
+import { caption, cx, isLocked, markdown, Verdict } from "@quiz/ui";
 import { choiceLetter, Pastille } from "./ui.js";
 
-type McqPlayerProps = PlayerProps<McqStudent, McqAnswer> & {
+type McqPlayerProps = PlayerProps<McqStudent, McqAnswer, McqSolution> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
   disabled?: boolean;
   strings?: StringOverrides<McqPlayerStringKey>;
@@ -25,6 +29,7 @@ export function McqPlayer({
   answer,
   onChange,
   readOnly,
+  answerKey,
   disabled,
   strings,
   renderMarkdown,
@@ -35,6 +40,7 @@ export function McqPlayer({
   const multiple = student.mode === "multiple";
   const limit = student.maxSelections;
   const atLimit = multiple && limit !== undefined && selected.length >= limit;
+  const correct = new Set(answerKey?.correct ?? []);
 
   const toggle = (id: number, checked: boolean) => {
     if (!multiple) {
@@ -69,6 +75,7 @@ export function McqPlayer({
       <ul className="flex flex-col gap-2">
         {student.choices.map((choice, index) => {
           const checked = selected.includes(choice.id);
+          const right = correct.has(choice.id);
           const frozen = locked || (atLimit && !checked);
           return (
             <li key={choice.id}>
@@ -84,7 +91,7 @@ export function McqPlayer({
               <label
                 className={cx(
                   "relative flex cursor-pointer items-start gap-3 rounded-xl px-3 py-2.5 text-sm text-fg transition-colors",
-                  checked ? "bg-accent-soft" : "hover:bg-surface-2",
+                  checked ? "bg-accent-soft" : right ? "bg-success-soft" : "hover:bg-surface-2",
                   locked && "cursor-default opacity-80",
                   !frozen && "group/opt",
                 )}
@@ -108,6 +115,15 @@ export function McqPlayer({
                 <span className="mt-2.25 min-w-0 flex-1">
                   {markdown(renderMarkdown, choice.text)}
                 </span>
+                {/* The space keeps the verdict a word of its own in the row's name. */}
+                {right ? (
+                  <>
+                    {" "}
+                    <Verdict tone="success" className="mt-2.25 shrink-0">
+                      {s.correctAnswer}
+                    </Verdict>
+                  </>
+                ) : null}
               </label>
             </li>
           );

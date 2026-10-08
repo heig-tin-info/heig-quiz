@@ -2989,7 +2989,7 @@ on("POST", "/app/api/questions/:id/preview", (m, body) => {
 on("POST", "/app/api/questions/:id/draft/instances", (m) => mockDraws(questionOr404(m.groups!.id!)));
 on("POST", "/app/api/questions/:id/preview/solution", (m) => {
   const q = questionOr404(m.groups!.id!);
-  return { solution: studentSolutionOf(q, solutionOf(q)) };
+  return { solution: studentSolutionOf(q, solutionOf(q)), explanation: q.draft.explanation || null };
 });
 on("POST", "/app/api/questions/:id/try", (m, body) => {
   const q = questionOr404(m.groups!.id!);
