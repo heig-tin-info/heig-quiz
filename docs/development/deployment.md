@@ -44,7 +44,11 @@ the codespace VM already runs the rootful Podman the runner was written
 against. The neighbours are not touched. The application VM's Caddy imports
 one fragment per service from `/etc/caddy/conf.d/`; the code VM's
 `/etc/caddy/Caddyfile`, owned by heig-codespace, gained that one
-`import /etc/caddy/conf.d/*.caddy` line and nothing else.
+`import /etc/caddy/conf.d/*.caddy` line and nothing else. Its global block also
+turns HTTP/3 off (`servers { protocols h1 h2 }`, 2026-10-08): Caddy advertised
+`h3` but no request ever arrived over UDP 443, and a browser that had read the
+`Alt-Svc` header stalled on every request after the first one, so the
+workspace never opened. A reinstall of the code VM keeps that block.
 
 ## 1. DNS
 
