@@ -103,7 +103,7 @@ describe("the phone's pairing page (ADR-051 §7)", () => {
     expect(screen.getByRole("heading", { name: "Allowed" })).toBeVisible();
     expect(screen.getByText("Open book")).toBeVisible();
     expect(screen.queryByText("One A4 sheet")).toBeNull();
-    expect(screen.getByText("Sat on a school station")).toBeVisible();
+    expect(screen.getByText("Any device other than the school's exam station")).toBeVisible();
     // Read before the action: the list comes first in the page.
     const start = screen.getByRole("button", { name: "Start on this station" });
     expect(screen.getByText("Open book").compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
