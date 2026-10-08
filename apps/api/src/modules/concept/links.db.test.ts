@@ -314,6 +314,7 @@ describe("PATCH /concepts and the stop list", () => {
     // Already on the list, the side may not move to another dropped key for the creator.
     const moved = await patch(teacher, id, { en: { label: "C01" } });
     expect(moved.statusCode, moved.body).toBe(422);
+    expect(moved.json()).toMatchObject({ error: "concept_dropped" });
   });
 
   it("lets a qualifier-only edit pass on a concept whose label is dropped elsewhere", async () => {
