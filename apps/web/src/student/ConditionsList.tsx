@@ -3,12 +3,15 @@
  * the waiting room, the ready screen, the player's "Show the conditions"
  * dialog and the teacher's previews of them.
  *
- * Two blocks, never mixed: what the teacher ANNOUNCES first, in their order,
- * then what the platform IMPOSES, in its fixed order. Every line carries its
- * kind twice — an icon and a word (Allowed, Forbidden, Provided, Good to
- * know) — so the kind never rests on a colour, and no colour is used: the
- * waiting room has no accent (its decisions, `Lobby.tsx`), and a red
- * "Forbidden" would read as the thing to click.
+ * One block per kind, in a fixed order — Forbidden, Allowed, Provided, Good
+ * to know — an empty kind drawing no block (`conditionsByKind`,
+ * `@quiz/domain`; ADR-079 §6 as amended 2026-10-08, issue #584). Inside a
+ * block, what the teacher ANNOUNCES comes first, in their order, then what
+ * the platform IMPOSES, in its fixed order. The kind is carried twice — the
+ * block's heading names it, each line repeats its icon — so it never rests on
+ * a colour, and no colour is used: the waiting room has no accent (its
+ * decisions, `Lobby.tsx`), and a red "Forbidden" would read as the thing to
+ * click.
  *
  * The announced text is the teacher's snapshot, drawn as plain text: React
  * escapes it, and nothing here parses markdown or HTML. The imposed lines are
@@ -19,7 +22,7 @@ import { Ban, Check, Info, PackageCheck, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { ConditionKind, EvaluationConditions, ImposedCondition } from "@quiz/contracts";
-import type { ImposedConditionKey } from "@quiz/domain";
+import { conditionsByKind, type ImposedConditionKey } from "@quiz/domain";
 
 import { useT, type TFunction } from "../i18n";
 import { Card, cx } from "../ui";
@@ -75,15 +78,31 @@ export function imposedText(line: ImposedCondition, t: TFunction): { title: stri
   }
 }
 
-/** One line of the list: the kind's icon and word, the text, and a detail. */
-export function ConditionLine({ kind, title, body, compact }: { kind: ConditionKind; title: string; body?: string; compact: boolean }) {
+/**
+ * One line: the kind's icon, the text, and a detail. Under a kind's heading
+ * the word would repeat it; a line drawn outside such a block (the settings
+ * editor's preview) asks for it with `labelled`.
+ */
+export function ConditionLine({
+  kind,
+  title,
+  body,
+  compact,
+  labelled = false,
+}: {
+  kind: ConditionKind;
+  title: string;
+  body?: string;
+  compact: boolean;
+  labelled?: boolean;
+}) {
   const t = useT();
   const Icon = KIND_ICON[kind];
   return (
     <li className={cx("flex items-start gap-3", compact ? "px-4 py-2.5" : "px-5 py-3")}>
       <Icon className="mt-0.5 size-4 shrink-0 text-fg-faint" aria-hidden />
       <div className="min-w-0">
-        <p className="text-xs font-medium text-fg-faint">{t(`conditions.kind.${kind}`)}</p>
+        {labelled ? <p className="text-xs font-medium text-fg-faint">{t(`conditions.kind.${kind}`)}</p> : null}
         <p className="text-sm font-semibold [overflow-wrap:anywhere]">{title}</p>
         {body ? <p className="mt-0.5 text-[13px] leading-relaxed text-fg-muted">{body}</p> : null}
       </div>
@@ -121,20 +140,19 @@ export function ConditionsList({
   className?: string;
 }) {
   const t = useT();
-  const imposed = conditions.imposed.filter((line) => !omit.includes(line.key));
-  if (conditions.announced.length === 0 && imposed.length === 0) return null;
+  const groups = conditionsByKind(
+    conditions.announced,
+    conditions.imposed.filter((line) => !omit.includes(line.key)),
+  );
+  if (groups.length === 0) return null;
   return (
     <Card className={cx("w-full divide-y divide-line overflow-hidden text-left", className)}>
-      {conditions.announced.length > 0 ? (
-        <Block heading={t("conditions.announced")} compact={compact}>
-          {conditions.announced.map((line, i) => (
-            <ConditionLine key={i} kind={line.kind} title={line.text} compact={compact} />
+      {groups.map((group) => (
+        <Block key={group.kind} heading={t(`conditions.kind.${group.kind}`)} compact={compact}>
+          {group.announced.map((line, i) => (
+            <ConditionLine key={`announced-${i}`} kind={line.kind} title={line.text} compact={compact} />
           ))}
-        </Block>
-      ) : null}
-      {imposed.length > 0 ? (
-        <Block heading={t("conditions.imposed")} compact={compact}>
-          {imposed.map((line) => (
+          {group.imposed.map((line) => (
             <ConditionLine
               key={line.key}
               kind={line.kind}
@@ -144,7 +162,7 @@ export function ConditionsList({
             />
           ))}
         </Block>
-      ) : null}
+      ))}
     </Card>
   );
 }

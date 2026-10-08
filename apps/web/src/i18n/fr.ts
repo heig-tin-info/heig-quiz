@@ -2691,8 +2691,6 @@ export const fr: Record<keyof Dict, string> = {
   "ready.later": "Plus tard",
   "ready.startFailed": "La tentative n'a pas pu démarrer",
   "conditions.title": "Conditions",
-  "conditions.announced": "Annoncées par votre enseignant",
-  "conditions.imposed": "Imposées par la plateforme",
   "conditions.kind.allowed": "Autorisé",
   "conditions.kind.forbidden": "Interdit",
   "conditions.kind.provided": "Fourni",
@@ -2735,7 +2733,7 @@ export const fr: Record<keyof Dict, string> = {
   "eval.conditions.remove": "Retirer",
   "eval.conditions.actions": "Actions sur « {text} »",
   "eval.conditions.imposed": "Ajoutées par la plateforme",
-  "eval.conditions.imposed.desc": "Déduites des réglages ; les étudiants les lisent sous les vôtres.",
+  "eval.conditions.imposed.desc": "Déduites des réglages ; les étudiants les lisent après les vôtres, type par type.",
   // The course's catalog of conditions (F-ORG-16, ADR-079 §5).
   "courses.tab.conditions": "Conditions",
   "courses.conditions.add": "Ajouter une condition",

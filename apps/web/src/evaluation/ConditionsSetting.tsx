@@ -127,7 +127,7 @@ export function ConditionsSetting({
         <p className="mt-0.5 text-[13px] text-fg-muted">{t("eval.conditions.imposed.desc")}</p>
         <ul className="-mx-4 mt-1">
           {imposed.map((line) => (
-            <ConditionLine key={line.key} kind={line.kind} title={imposedText(line, t).title} compact />
+            <ConditionLine key={line.key} kind={line.kind} title={imposedText(line, t).title} compact labelled />
           ))}
         </ul>
       </div>

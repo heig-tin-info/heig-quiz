@@ -2693,8 +2693,6 @@ export const en = {
   "ready.later": "Later",
   "ready.startFailed": "The attempt could not start",
   "conditions.title": "Conditions",
-  "conditions.announced": "Announced by your teacher",
-  "conditions.imposed": "Imposed by the platform",
   "conditions.kind.allowed": "Allowed",
   "conditions.kind.forbidden": "Forbidden",
   "conditions.kind.provided": "Provided",
@@ -2737,7 +2735,7 @@ export const en = {
   "eval.conditions.remove": "Remove",
   "eval.conditions.actions": "Actions on “{text}”",
   "eval.conditions.imposed": "Added by the platform",
-  "eval.conditions.imposed.desc": "Derived from the settings; students read them under yours.",
+  "eval.conditions.imposed.desc": "Derived from the settings; students read them after yours, kind by kind.",
   // The course's catalog of conditions (F-ORG-16, ADR-079 §5).
   "courses.tab.conditions": "Conditions",
   "courses.conditions.add": "Add condition",

@@ -95,19 +95,36 @@ describe("the lobby", () => {
     expect(onLeave).toHaveBeenCalled();
   });
 
-  it("states the teacher's conditions first, then the platform's (ADR-079)", () => {
-    render();
-    const announced = screen.getByRole("heading", { name: "Annoncées par votre enseignant" });
-    const imposed = screen.getByRole("heading", { name: "Imposées par la plateforme" });
-    expect(announced.compareDocumentPosition(imposed) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByText("Une feuille A4 de notes")).toBeInTheDocument();
-    // The kind is a word, not a colour.
-    expect(screen.getByText("Autorisé")).toBeInTheDocument();
-    expect(screen.getByText("Interdit")).toBeInTheDocument();
+  it("groups the conditions by kind, the teacher's lines first inside a kind (ADR-079 §6)", () => {
+    render(undefined, undefined, {
+      ...view,
+      conditions: {
+        announced: [
+          { kind: "allowed", text: "Une feuille A4 de notes" },
+          { kind: "forbidden", text: "<b>Téléphones</b>" },
+          { kind: "info", text: "Répondez en français" },
+        ],
+        imposed: [
+          { key: "trusted_client", kind: "forbidden", clients: ["seb"] },
+          { key: "attempts", kind: "info", maxAttempts: 1 },
+          { key: "autosave", kind: "info" },
+        ],
+      },
+    });
+    // The kind is the block's heading, a word, not a colour; the order is fixed.
+    const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(headings).toEqual(["Interdit", "Autorisé", "À savoir"]);
+    const before = (a: string, b: string) =>
+      screen.getByText(a).compareDocumentPosition(screen.getByText(b)) & Node.DOCUMENT_POSITION_FOLLOWING;
+    // Inside a kind: the teacher's, then the platform's.
+    expect(before("<b>Téléphones</b>", "Passée dans Safe Exam Browser")).toBeTruthy();
+    expect(before("Passée dans Safe Exam Browser", "Une feuille A4 de notes")).toBeTruthy();
+    expect(before("Répondez en français", "Une seule tentative")).toBeTruthy();
+    expect(before("Une seule tentative", "Enregistré au fil de la frappe")).toBeTruthy();
     // The teacher's text is plain text, never markup.
     expect(screen.getByText("<b>Téléphones</b>")).toBeInTheDocument();
-    expect(screen.getByText("Enregistré au fil de la frappe")).toBeInTheDocument();
-    expect(screen.getByText("Une seule tentative")).toBeInTheDocument();
+    // No "Provided" block without a provided line.
+    expect(screen.queryByRole("heading", { name: "Fourni" })).toBeNull();
   });
 
   it("states the duration with the student's extra time, once", () => {
@@ -122,7 +139,7 @@ describe("the lobby", () => {
       conditions: { announced: [], imposed: [{ key: "navigation", kind: "info", navigation: "forward_only" }] },
     });
     expect(screen.getByText("Sens unique")).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Annoncées par votre enseignant" })).toBeNull();
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual(["À savoir"]);
   });
 
   it("follows the live count", () => {
