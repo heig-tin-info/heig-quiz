@@ -71,8 +71,8 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-040 — Favourite stars on questions: a second per-user preference table](ADR-040-favoris-de-question.md)
 - [ADR-046 — Diagram: one editor engine, one question type, eight notations](ADR-046-type-diagramme.md)
 - [ADR-056 — Parameterized questions: variables drawn per attempt](ADR-056-questions-parametrees.md)
-- [ADR-083 — Frequency-domain stimuli for circuit](ADR-083-stimulus-frequentiel-de-circuit.md)
 - [ADR-081 — Concepts replace tags: one instance-wide, bilingual vocabulary, curated by the admin](ADR-081-vocabulaire-de-notions.md)
+- [ADR-083 — Frequency-domain stimuli for circuit](ADR-083-stimulus-frequentiel-de-circuit.md)
 
 ### Evaluations, grading and practice
 
@@ -137,8 +137,10 @@ Use the [template](TEMPLATE.md) for new decisions. Keep one decision per record;
 put requirements in the spec, operational commands in the runbook and delivery
 progress in the merge task cards. Link to those sources instead of copying them.
 
-Keep existing IDs, paths and heading anchors stable. Select an unused ID after
-checking both the repository and concurrent branches/PRs. For a changed decision,
+Keep existing IDs, paths and heading anchors stable, except to resolve a
+duplicate number, noted in the record's Status. Select an unused ID after
+checking both the repository and concurrent branches/PRs; rebase before
+merging, and renumber yours if that ID landed meanwhile. For a changed decision,
 name the affected section in the new record and add a reciprocal link in the old
 record's Status. Use **superseded** only for a whole decision that no longer
 applies; otherwise say **amended**, with its scope. Keep the old rationale, and

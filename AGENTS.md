@@ -40,13 +40,8 @@ deploying, not for editing.
   changed it, and a new workspace package with its entry in
   `pnpm-workspace.yaml`. Otherwise `pnpm install --frozen-lockfile` fails on
   CI and nothing deploys.
-- **ADR numbers.** "The next free number" on your base is often taken on
-  another branch. Before writing an ADR, take the highest number on
-  `origin/main` (`git fetch && git ls-tree --name-only origin/main docs/adr/`)
-  and on every open PR (`gh pr list`, then `gh pr diff <n> --name-only`), and
-  use the next one. Rebase before merging; if the number landed meanwhile,
-  renumber yours. `checks` refuses two files sharing an `ADR-NNN-` prefix
-  (`node scripts/check-adr-numbers.mjs`).
+- **ADR numbers** follow the ID rule of `docs/adr/README.md` (origin/main and
+  open PRs); `checks` refuses a shared prefix (`scripts/check-adr-numbers.mjs`).
 
 ## 4. Before you push to `main`
 
