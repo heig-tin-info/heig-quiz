@@ -788,6 +788,13 @@ live in `ui/state.ts`, each written once.
   a document the reader walks through, today the whole of one student's
   answers opened from the live grid — and the footer is how they walk to the
   next one, so it must not sit at the bottom of a hundred lines of code.
+  The Safe Exam Browser launch of an exam (`SebLaunchModal`) is the second
+  reader: its steps and an exam's conditions, which can run to twenty lines.
+  From `lg` the steps hold a left column that stays put (`sticky`) while the
+  conditions scroll beside them, so a laptop screen 640 px tall shows the steps,
+  the conditions' start and the download without a scroll; narrower, the
+  steps come first and the conditions follow under their heading. Without
+  conditions (a workspace's file) it stays a 520 px dialog.
 - FormDialog (`ui/forms.tsx`): the short form in a dialog — one to three
   fields, Cancel (`common.cancel`, always) and ONE submit button whose label
   is the verb ("Create course", "Save"), spinner while `submitting`, disabled

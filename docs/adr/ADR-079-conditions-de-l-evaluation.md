@@ -126,8 +126,11 @@ a text that changes after the exam leaves no record of what was announced.
    `PairableEvaluation` always does; both are built by
    `evaluationConditionsOf` with the seat's extra time, inside the existing
    loaders (the student home's seats, `pairableEvaluations`), and carry no
-   `catalogId`. The SEB launch dialog draws them first, its body scrolling
-   under a footer that keeps the download in view; `/pair` draws the chosen
+   `catalogId`. The SEB launch dialog draws them with its steps, its body
+   scrolling under a footer that keeps the download in view (until
+   2026-10-08 drawn above the steps; since then beside them from `lg`,
+   under them below it, because twenty conditions pushed the steps out of a
+   laptop screen; `apps/web/DESIGN.md`, Dialog); `/pair` draws the chosen
    exam's list between the exam and "Start on this station", none while
    several exams await a choice. The direct start (ADR-076 §4) is unchanged.
 
