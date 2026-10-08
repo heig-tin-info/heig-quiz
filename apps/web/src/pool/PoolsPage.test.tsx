@@ -8,9 +8,9 @@ import { makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/ren
 import { PoolsPage } from "./PoolsPage";
 
 /*
- * The pools page: one primary action ("New pool"), two readings of the same
- * shelf, and a menu whose items depend on what the caller may actually do —
- * an owner renames and deletes, a member leaves.
+ * The pools page: one primary action ("New pool") and two readings of the
+ * same shelf. What a pool offers beyond opening it is its Settings tab's
+ * (`PoolSettings.test.tsx`).
  */
 
 const POOLS = "/app/api/pools";
@@ -96,7 +96,7 @@ describe("PoolsPage", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "pool", id: "p1" });
   });
 
-  it("offers the owner's actions to an owner and the member's to a member", async () => {
+  it("offers no menu: a card is one door, the rest is the pool's Settings tab", async () => {
     mockFetch({
       [`GET ${POOLS}`]: ok([
         makePool(),
@@ -105,21 +105,9 @@ describe("PoolsPage", () => {
     });
     renderWithProviders(<PoolsPage navigate={vi.fn()} />, { queryClient: withMe() });
     await screen.findByText("Programmation C");
-
-    const menus = screen.getAllByRole("button", { name: "Actions" });
-    await userEvent.click(menus[0]!);
-    const mine = screen.getByRole("menu");
-    expect(within(mine).getByRole("menuitem", { name: /Rename pool/ })).toBeVisible();
-    expect(within(mine).getByRole("menuitem", { name: /Share/ })).toBeVisible();
-    expect(within(mine).getByRole("menuitem", { name: /Delete pool/ })).toBeVisible();
-    expect(within(mine).queryByRole("menuitem", { name: /Leave/ })).toBeNull();
-    await userEvent.keyboard("{Escape}");
-
-    await userEvent.click(menus[1]!);
-    const theirs = screen.getByRole("menu");
-    expect(within(theirs).getByRole("menuitem", { name: /Leave pool/ })).toBeVisible();
-    expect(within(theirs).queryByRole("menuitem", { name: /Delete pool/ })).toBeNull();
-    expect(within(theirs).queryByRole("menuitem", { name: /Share/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Actions" })).toBeNull();
+    await userEvent.click(screen.getByRole("radio", { name: "List" }));
+    expect(screen.queryByRole("button", { name: "Actions" })).toBeNull();
   });
 
   it("creates a pool with the icon that was picked", async () => {
@@ -141,60 +129,6 @@ describe("PoolsPage", () => {
     expect(post?.body).toEqual({ name: "Chimie", icon: "flask-conical", color: null });
   });
 
-  it("colours the icon from the same dialog and saves it with the icon (#213)", async () => {
-    const { calls } = mockFetch({
-      [`GET ${POOLS}`]: ok([makePool()]),
-      [`PATCH ${POOLS}/p1`]: ok(makePool({ color: "cyan" })),
-    });
-    renderWithProviders(<PoolsPage navigate={vi.fn()} />, { queryClient: withMe() });
-    await screen.findByText("Programmation C");
-
-    await userEvent.click(screen.getByRole("button", { name: "Actions" }));
-    await userEvent.click(screen.getByRole("menuitem", { name: /Change icon/ }));
-
-    // Sixteen swatches, each named, grey (the default) chosen.
-    const swatches = within(screen.getByRole("group", { name: "Colour" })).getAllByRole("radio");
-    expect(swatches).toHaveLength(16);
-    expect(screen.getByRole("radio", { name: "Grey (default)" })).toBeChecked();
-
-    // A click, then the arrow keys walk the row.
-    await userEvent.click(screen.getByRole("radio", { name: "Teal" }));
-    expect(screen.getByRole("radio", { name: "Teal" })).toBeChecked();
-    await userEvent.keyboard("{ArrowRight}");
-    expect(screen.getByRole("radio", { name: "Cyan" })).toBeChecked();
-
-    // Every tile previews its icon in the colour being chosen.
-    const tile = screen.getByRole("button", { name: "code" });
-    expect(tile).toHaveAttribute("aria-pressed", "true");
-    expect(tile.querySelector("svg")).toHaveStyle({ color: "var(--pool-cyan)" });
-
-    // Picking the icon takes both back to the form; Save sends both.
-    await userEvent.click(tile);
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    const patch = calls.find((c) => c.method === "PATCH");
-    expect(patch?.body).toEqual({ name: "Programmation C", icon: "code", color: "cyan" });
-  });
-
-  it("saves a colour alone, without picking the icon again (#213)", async () => {
-    const { calls } = mockFetch({
-      [`GET ${POOLS}`]: ok([makePool()]),
-      [`PATCH ${POOLS}/p1`]: ok(makePool({ color: "pink" })),
-    });
-    renderWithProviders(<PoolsPage navigate={vi.fn()} />, { queryClient: withMe() });
-    await screen.findByText("Programmation C");
-
-    await userEvent.click(screen.getByRole("button", { name: "Actions" }));
-    await userEvent.click(screen.getByRole("menuitem", { name: /Change icon/ }));
-    await userEvent.click(screen.getByRole("radio", { name: "Pink" }));
-    // Leaving the picker keeps the colour: the form holds it, ready to save.
-    await userEvent.keyboard("{Escape}");
-    const trigger = await screen.findByRole("button", { name: "Change the icon" });
-    expect(trigger.querySelector("svg")).toHaveStyle({ color: "var(--pool-pink)" });
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    const patch = calls.find((c) => c.method === "PATCH");
-    expect(patch?.body).toEqual({ name: "Programmation C", icon: "code", color: "pink" });
-  });
-
   it("draws a pool's colour on its card and keeps grey as it always was (#213)", async () => {
     mockFetch({
       [`GET ${POOLS}`]: ok([
@@ -214,10 +148,6 @@ describe("PoolsPage", () => {
     // A reader sees the colour...
     const coloured = screen.getByRole("button", { name: /Électronique/ });
     expect(coloured.querySelector("svg")).toHaveStyle({ color: "var(--pool-violet)" });
-    // ...and is offered no way to change it.
-    await userEvent.click(screen.getAllByRole("button", { name: "Actions" })[1]!);
-    const menu = screen.getByRole("menu");
-    expect(within(menu).queryByRole("menuitem", { name: /Change icon/ })).toBeNull();
   });
 
   it("switches to the table reading and keeps the same facts", async () => {
@@ -271,7 +201,7 @@ describe("PoolsPage", () => {
     expect(within(theirs).getByText("0")).toBeVisible();
   });
 
-  it("shows an admin with Super Powers the role they hold, and still offers every action", async () => {
+  it("shows an admin with Super Powers the role they hold, not the one lent", async () => {
     // ADR-013 amendment: Super Powers make an owner of every pool for what
     // can be DONE, never for what the list says.
     mockFetch({
@@ -288,8 +218,6 @@ describe("PoolsPage", () => {
     const row = screen.getByRole("row", { name: /Programmation C/ });
     expect(within(row).getByText("Reader")).toBeVisible();
     expect(within(row).queryByText("Owner")).toBeNull();
-    await userEvent.click(within(row).getByRole("button", { name: "Actions" }));
-    expect(screen.getByRole("menuitem", { name: /Delete pool/ })).toBeVisible();
   });
 
   it("sorts the table reading by the column label that was clicked", async () => {

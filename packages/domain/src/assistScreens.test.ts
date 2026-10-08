@@ -32,7 +32,7 @@ describe("the screen catalogue (ADR-080 P2b)", () => {
   it("is listed in the stable prompt with its ids and params", () => {
     const teacher = assistScreenCatalogue("teacher");
     expect(teacher).toContain(
-      "- pool — /pools/:id — Question pool (help/pool); ids: id=<pool id>; params: tab=questions|tags|review, q=<the search box",
+      "- pool — /pools/:id — Question pool (help/pool); ids: id=<pool id>; params: tab=questions|tags|review|settings, q=<the search box",
     );
     expect(teacher).toContain("category=<category id>");
     expect(teacher).toContain("- activities — /activities — Activities\n");
@@ -78,7 +78,7 @@ describe("checkOpenScreen", () => {
     const pool = (params: unknown) => checkOpenScreen({ screen: "pool", ids: { id: POOL }, params }, "teacher");
     expect(() => pool({ step: "x" })).toThrow("The screen pool takes the params tab, q, category.");
     expect(() => checkOpenScreen({ screen: "pools", params: { q: "x" } }, "teacher")).toThrow("The screen pools takes no param.");
-    expect(() => pool({ tab: "admin" })).toThrow("`tab` must be one of questions, tags, review.");
+    expect(() => pool({ tab: "admin" })).toThrow("`tab` must be one of questions, tags, review, settings.");
     expect(() => pool({ q: " " })).toThrow("`q` must be a non-empty line");
     expect(() => pool({ q: "a\nb" })).toThrow("`q` must be a non-empty line");
     expect(() => pool({ q: "x".repeat(201) })).toThrow("`q` must be a non-empty line");

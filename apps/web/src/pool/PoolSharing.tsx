@@ -3,11 +3,11 @@ import { Globe, Lock, Trash2, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 
 import type {
+  Pool,
   PoolCandidate,
   PoolMember,
   PoolMembers,
   PoolRole,
-  PoolSummary,
   PoolVisibility,
 } from "@quiz/contracts";
 
@@ -18,26 +18,29 @@ import { useErrorToast } from "../notify";
 import { TeacherPicker, nameOf } from "./TeacherPicker";
 import {
   Button,
+  Card,
   ErrorText,
   IconButton,
   Initials,
   QueryError,
+  SectionHeading,
   Segmented,
   Select,
   SettingRow,
-  Sheet,
   Skeleton,
 } from "../ui";
-import { poolCandidatesKey, poolMembersKey, poolsKey } from "../queryKeys";
+import { poolCandidatesKey, poolKey, poolMembersKey, poolsKey } from "../queryKeys";
 
 /**
- * Who may read and write a pool (F-POOL-05), in one sheet: the visibility of
- * the pool, the accounts that hold a seat on it, and the row that adds one.
+ * Who may read and write a pool (F-POOL-05), in the pool's Settings tab: the
+ * visibility of the pool, the accounts that hold a seat on it, and the row
+ * that adds one.
  *
- * Only an owner opens it, so every control here is live — a sheet whose
- * halves are half disabled is a screen that should not have opened. The one
- * primary action is "Invite": the visibility and the roles are settings that
- * save as they are touched, and the footer only holds the way out.
+ * Only an owner is shown it, so every control here is live — a section whose
+ * halves are disabled is a section that should not have been drawn. The
+ * visibility and the roles are settings that save as they are touched;
+ * "Invite" is the one button that sends anything, and it stays `secondary`:
+ * a settings tab has no primary.
  *
  * The invitee is picked by name among the colleagues (`TeacherPicker`). An
  * address the picker does not list may still be typed and sent as such: the
@@ -142,7 +145,7 @@ function MemberRow({
   );
 }
 
-export function PoolShareSheet({ pool, onClose }: { pool: PoolSummary; onClose: () => void }) {
+export function PoolSharing({ pool }: { pool: Pool }) {
   const t = useT();
   const qc = useQueryClient();
   const toastError = useErrorToast();
@@ -166,6 +169,7 @@ export function PoolShareSheet({ pool, onClose }: { pool: PoolSummary; onClose: 
     onSuccess: async () => {
       await Promise.all([
         qc.invalidateQueries({ queryKey: poolsKey }),
+        qc.invalidateQueries({ queryKey: poolKey(pool.id) }),
         qc.invalidateQueries({ queryKey: key }),
       ]);
     },
@@ -188,6 +192,7 @@ export function PoolShareSheet({ pool, onClose }: { pool: PoolSummary; onClose: 
       await Promise.all([
         qc.invalidateQueries({ queryKey: key }),
         qc.invalidateQueries({ queryKey: poolsKey }),
+        qc.invalidateQueries({ queryKey: poolKey(pool.id) }),
         // The newcomer leaves the list of who may still be invited.
         qc.invalidateQueries({ queryKey: poolCandidatesKey(pool.id) }),
       ]);
@@ -200,37 +205,32 @@ export function PoolShareSheet({ pool, onClose }: { pool: PoolSummary; onClose: 
   const rows = members.data?.members ?? [];
 
   return (
-    <Sheet title={t("share.title")} subtitle={pool.name} onClose={onClose}>
-      <div className="space-y-6">
-        <section>
-          <SettingRow
-            className="pt-0"
-            title={t("share.visibility")}
-            desc={t(`share.visibility.${visibility}.help`)}
-          >
-            <Segmented
-              name="pool-visibility"
-              value={visibility}
-              disabled={setVisibility.isPending}
-              onChange={(v) => setVisibility.mutate(v)}
-              options={(["private", "shared", "public"] as const).map((v) => {
-                const Icon = VISIBILITY_ICON[v];
-                return {
-                  value: v,
-                  label: (
-                    <span className="flex items-center gap-1.5">
-                      <Icon className="size-3.5" />
-                      {t(`share.visibility.${v}`)}
-                    </span>
-                  ),
-                };
-              })}
-            />
-          </SettingRow>
-        </section>
+    <section className="space-y-3">
+      <SectionHeading icon={Users} title={t("share.title")} />
+      <Card className="divide-y divide-line px-5">
+        <SettingRow title={t("share.visibility")} desc={t(`share.visibility.${visibility}.help`)}>
+          <Segmented
+            name="pool-visibility"
+            value={visibility}
+            disabled={setVisibility.isPending}
+            onChange={(v) => setVisibility.mutate(v)}
+            options={(["private", "shared", "public"] as const).map((v) => {
+              const Icon = VISIBILITY_ICON[v];
+              return {
+                value: v,
+                label: (
+                  <span className="flex items-center gap-1.5">
+                    <Icon className="size-3.5" />
+                    {t(`share.visibility.${v}`)}
+                  </span>
+                ),
+              };
+            })}
+          />
+        </SettingRow>
 
-        <section>
-          <h3 className="text-sm font-semibold">{t("share.members")}</h3>
+        <div className="py-3">
+          <h3 className="text-sm font-medium">{t("share.members")}</h3>
           {members.isLoading ? (
             <div className="mt-3 space-y-2">
               <Skeleton className="h-10 w-full" />
@@ -266,10 +266,10 @@ export function PoolShareSheet({ pool, onClose }: { pool: PoolSummary; onClose: 
               a pool never becomes an orphan, and the order of this very
               list is what decides who inherits it. */}
           <p className="mt-3 text-xs text-fg-faint">{t("share.succession")}</p>
-        </section>
+        </div>
 
-        <section className="border-t border-line pt-5">
-          <h3 className="text-sm font-semibold">{t("share.invite")}</h3>
+        <div className="py-4">
+          <h3 className="text-sm font-medium">{t("share.invite")}</h3>
           <form
             className="mt-3 flex flex-wrap items-end gap-2"
             onSubmit={(e) => {
@@ -302,15 +302,20 @@ export function PoolShareSheet({ pool, onClose }: { pool: PoolSummary; onClose: 
               <option value="contributor">{t("share.role.contributor")}</option>
               <option value="owner">{t("share.role.owner")}</option>
             </Select>
-            <Button type="submit" loading={invite.isPending} disabled={!canInvite}>
+            <Button
+              type="submit"
+              variant="secondary"
+              loading={invite.isPending}
+              disabled={!canInvite}
+            >
               <UserPlus /> {t("share.inviteAction")}
             </Button>
           </form>
           {invite.isError ? (
             <ErrorText className="mt-2">{inviteMessage(invite.error, t)}</ErrorText>
           ) : null}
-        </section>
-      </div>
-    </Sheet>
+        </div>
+      </Card>
+    </section>
   );
 }

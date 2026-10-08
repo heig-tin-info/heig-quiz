@@ -22,12 +22,15 @@ The figure under a pool's name counts every question it holds, including
 those never published yet. A deleted question is hidden from the pool and
 from the count; the evaluations that already use it still resolve it.
 
-## Rename, delete
+## Name, icon, sharing, deletion
 
-**Rename the pool** touches the name only. **Delete the pool** takes its
-questions and its categories with it, after a confirmation naming the pool.
-Unlink it from your courses first if you only meant to stop offering it.
+A pool's **Settings** tab, inside the pool, holds everything else about it.
+**Rename** touches the name only; the icon tile picks its icon and colour.
+**Sharing** sets its visibility and gives a colleague a seat on it, as a
+reader, a contributor or an owner; a pool shared with you is listed here
+too, with your role.
 
-**Share…** in a pool's menu gives a colleague a seat on it, as a reader or
-an editor; a pool shared with you is listed here too, with your role. The
-pool every teacher can read is later work.
+**Delete pool** takes its questions and its categories with it, after a
+confirmation naming the pool. Unlink it from your courses first if you only
+meant to stop offering it. A pool someone shared with you offers **Leave**
+instead.
