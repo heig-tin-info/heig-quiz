@@ -830,12 +830,11 @@ function LayerShell({
  * default). Long forms belong in a <Sheet>. Deliberately no close on
  * backdrop click: a stray click must not discard what the user typed.
  *
- * `xl` + `scroll` is the READING variant, and the one exception to the rule
- * above: not a form, a document — the whole of one student's answers, opened
- * from the live grid. It is as wide as a question needs (920 px, the width
- * the student read it at) and its body scrolls under a title and a footer
- * that stay put, because the footer is how the teacher walks to the next
- * student and it must not be at the bottom of a hundred lines of code.
+ * `xl` + `scroll` is the READING variant, the one exception to the rule
+ * above: not a form, a document whose body scrolls under a title and a
+ * footer that stay put — one student's answers opened from the live grid,
+ * the Safe Exam Browser launch of an exam (its steps beside its conditions).
+ * Its users and their reasons: `apps/web/DESIGN.md`, Dialog.
  */
 export function Modal({
   title,

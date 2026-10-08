@@ -791,7 +791,7 @@ live in `ui/state.ts`, each written once.
   The Safe Exam Browser launch of an exam (`SebLaunchModal`) is the second
   reader: its steps and an exam's conditions, which can run to twenty lines.
   From `lg` the steps hold a left column that stays put (`sticky`) while the
-  conditions scroll beside them, so a 640 px laptop screen shows the steps,
+  conditions scroll beside them, so a laptop screen 640 px tall shows the steps,
   the conditions' start and the download without a scroll; narrower, the
   steps come first and the conditions follow under their heading. Without
   conditions (a workspace's file) it stays a 520 px dialog.

@@ -7,16 +7,11 @@
  *
  * An exam's conditions are drawn here too (ADR-079 §7): SEB may begin the
  * attempt directly (ADR-076 §4), so this dialog is the last place to read them
- * before the clock. They can run to twenty lines, so they never push the
- * steps out of sight: from `lg` the dialog is a reading one (`xl`, DESIGN.md)
- * with the steps in a left column that stays put while the conditions scroll
- * beside them; narrower, the steps come first and the conditions follow under
- * their heading. The footer, and its one primary action, stays in view, a
- * phone included.
+ * before the clock. Layout: `apps/web/DESIGN.md`, Dialog (reading variant).
  */
-import type { EvaluationConditions } from "@quiz/contracts";
-
 import { useId } from "react";
+
+import type { EvaluationConditions } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { Button, Modal } from "../ui";
@@ -102,9 +97,9 @@ export function SebLaunchModal({
         </div>
         {conditions ? (
           <section aria-labelledby={conditionsId} className="mt-6 lg:mt-0">
-            <p id={conditionsId} className="mb-2 text-sm font-semibold">
+            <h3 id={conditionsId} className="mb-2 text-sm font-semibold">
               {t("conditions.title")}
-            </p>
+            </h3>
             <ConditionsList conditions={conditions} />
           </section>
         ) : null}
