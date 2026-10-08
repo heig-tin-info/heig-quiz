@@ -1,7 +1,7 @@
 import { CalendarRange, Dumbbell, Library, School, Trophy, UserRound, Vote } from "lucide-react";
 
 import type { Dict } from "./i18n";
-import { bottomSlotOf, type BottomSlotId, type Route } from "./router";
+import { bottomSlotOf, type BottomSlotId, type Route, type StudentSlotId, type TeacherSlotId } from "./router";
 import type { IconType } from "./ui";
 
 /**
@@ -18,15 +18,15 @@ export type { BottomSlotId };
  * label, the page's own name, are the bar's and those of the student's
  * sidebar rows that mirror it (`sidebarSlots`).
  */
-export interface BottomSlot {
-  id: BottomSlotId;
+export interface BottomSlot<Id extends BottomSlotId = BottomSlotId> {
+  id: Id;
   route: Route;
   icon: IconType;
   label: keyof Dict;
 }
 
 /** The student's, in the order they are drawn; Drill (#317) in the middle. */
-export const STUDENT_SLOTS: readonly BottomSlot[] = [
+export const STUDENT_SLOTS: readonly BottomSlot<StudentSlotId>[] = [
   { id: "activities", route: { view: "home" }, icon: CalendarRange, label: "nav.activities" },
   { id: "courses", route: { view: "studentCourses" }, icon: School, label: "nav.courses" },
   { id: "drill", route: { view: "drill" }, icon: Dumbbell, label: "nav.drill" },
@@ -41,7 +41,7 @@ export const STUDENT_SLOTS: readonly BottomSlot[] = [
  * screen's one accent fill), the "right now" classrooms, the profile.
  * Pools are reached from a course; Administration from the profile.
  */
-export const TEACHER_SLOTS: readonly BottomSlot[] = [
+export const TEACHER_SLOTS: readonly BottomSlot<TeacherSlotId>[] = [
   { id: "activities", route: { view: "activities" }, icon: CalendarRange, label: "nav.activities" },
   { id: "courses", route: { view: "home" }, icon: Library, label: "nav.courses" },
   { id: "polls", route: { view: "polls" }, icon: Vote, label: "poll.nav" },

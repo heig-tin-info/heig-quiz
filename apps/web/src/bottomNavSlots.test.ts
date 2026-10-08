@@ -1,7 +1,38 @@
 import { describe, expect, it } from "vitest";
 
 import { bottomNavShown, homeLook, sidebarSlots, visibleSlots } from "./bottomNavSlots";
-import { bottomSlotOf, parsePath, type Route } from "./router";
+import { bottomSlotOf, parsePath, ROUTE_VIEWS, ROUTES, type Route } from "./router";
+
+/**
+ * The views with no teacher bar (#449), each for a reason: a new route must
+ * either light a slot of the teacher's bar or join this list.
+ */
+const TEACHER_HIDDEN: readonly Route["view"][] = [
+  // The teacher's full-screen working surfaces.
+  "live",
+  "question",
+  "evaluation", // its last step is the launch dock
+  "grading",
+  // Drawn on the whole screen, outside the frame (App.tsx's FULL_SCREEN).
+  "questionPreview",
+  "evaluationPreview",
+  "poll",
+  "correction",
+  "attempt",
+  "join",
+  "oauthConsent",
+  "teamsLink",
+  "pair",
+  // Drawn with no session or no frame at all.
+  "teamsTab",
+  "kiosk",
+  "sebQuit",
+  "discover",
+  // Student pages a teacher's UI never shows as such, and the dev gallery.
+  "drill",
+  "feedback",
+  "devUi",
+];
 
 describe("bottomNavShown (#191)", () => {
   it("draws the bar for the student on the pages its slots lead to", () => {
@@ -68,18 +99,9 @@ describe("the teacher's bar (#449)", () => {
     for (const [path, slot] of lit) expect([path, bottomSlotOf(parsePath(path), true)]).toEqual([path, slot]);
   });
 
-  it("is hidden on the teacher's full-screen surfaces: the live grid, the editor, the configuration and its launch step, the grading", () => {
-    const hidden: Route[] = [
-      { view: "live", id: "e1" },
-      { view: "question", id: "q1" },
-      { view: "questionPreview", id: "q1" },
-      { view: "evaluationPreview", id: "e1" },
-      { view: "evaluation", id: "e1" },
-      { view: "grading", evaluationId: "e1" },
-      { view: "poll", id: "e1" },
-      { view: "correction", evaluationId: "e1" },
-    ];
-    for (const route of hidden) expect([route.view, bottomNavShown(route, true)]).toEqual([route.view, false]);
+  it("makes every view choose: lit for the teacher, or on the one list of views without the bar", () => {
+    const unlit = ROUTE_VIEWS.filter((view) => !ROUTES[view].bottomSlot?.teacher).sort();
+    expect(unlit).toEqual([...TEACHER_HIDDEN].sort());
   });
 
   it("draws its five slots, Polls in the middle, whatever the drill", () => {
