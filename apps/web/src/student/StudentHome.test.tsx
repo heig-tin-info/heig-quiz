@@ -126,7 +126,7 @@ describe("the student home", () => {
     render();
     await userEvent.click(await screen.findByRole("button", { name: "Ouvrir dans Safe Exam Browser" }));
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("Annoncées par votre enseignant")).toBeInTheDocument();
+    expect(within(dialog).getByRole("heading", { name: "Autorisé" })).toBeInTheDocument();
     expect(within(dialog).getByText("Une feuille A4 recto-verso")).toBeInTheDocument();
     expect(within(dialog).getByText("Passée dans Safe Exam Browser")).toBeInTheDocument();
     const download = within(dialog).getByRole("button", { name: "Télécharger le fichier d'examen" });

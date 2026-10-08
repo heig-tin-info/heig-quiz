@@ -97,9 +97,10 @@ describe("the phone's pairing page (ADR-051 §7)", () => {
     });
     await screen.findByRole("button", { name: "Start on this station" });
     // Nothing chosen yet: no conditions to read.
-    expect(screen.queryByText("Announced by your teacher")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Allowed" })).toBeNull();
     await userEvent.click(screen.getByRole("radio", { name: /Test 2/ }));
-    expect(screen.getByText("Announced by your teacher")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Forbidden" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Allowed" })).toBeVisible();
     expect(screen.getByText("Open book")).toBeVisible();
     expect(screen.queryByText("One A4 sheet")).toBeNull();
     expect(screen.getByText("Sat on a school station")).toBeVisible();

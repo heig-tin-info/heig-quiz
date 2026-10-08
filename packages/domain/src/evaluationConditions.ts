@@ -21,6 +21,10 @@
  * result to the student (the waiting room, the ready screen, the attempt),
  * and the teacher's editor and launch preview call it on the configuration
  * they hold, so both read the same lines.
+ *
+ * The two halves are kept apart in the data, not on the screen: the student
+ * reads them grouped by kind ({@link conditionsByKind}, ADR-079 §6 as
+ * amended 2026-10-08, issue #584), the teacher's lines first inside each kind.
  */
 import type { EvaluationTiming } from "./deadline.js";
 import {
@@ -38,6 +42,12 @@ import { retakesOn, type RetakePolicy } from "./retake.js";
 /** What a condition says about the thing it names, as on the wire. */
 export const CONDITION_KINDS = ["allowed", "forbidden", "provided", "info"] as const;
 export type ConditionKind = (typeof CONDITION_KINDS)[number];
+
+/**
+ * The order in which a student reads the kinds: what they must not use
+ * first, then what they may, what they are given, and the rest.
+ */
+export const CONDITION_KIND_ORDER = ["forbidden", "allowed", "provided", "info"] as const satisfies readonly ConditionKind[];
 
 /** At most this many announced conditions on one evaluation. */
 export const MAX_CONDITIONS = 20;
@@ -138,4 +148,28 @@ const DERIVE: { [K in ImposedConditionKey]: (input: ConditionsInput) => Line<K> 
 export function imposedConditions(input: ConditionsInput): ImposedCondition[] {
   if (!conditionsAllowedFor(input.mode)) return [];
   return Object.values(DERIVE).flatMap((derive) => derive(input) ?? []);
+}
+
+/** The lines of one kind: the teacher's, in their order, then the platform's, in the fixed order. */
+export interface ConditionGroup<A, I> {
+  kind: ConditionKind;
+  announced: A[];
+  imposed: I[];
+}
+
+/**
+ * The conditions as the student reads them (ADR-079 §6, amended 2026-10-08):
+ * one group per kind, in {@link CONDITION_KIND_ORDER}, a kind with no line
+ * left out. The order inside each half is kept as given, so a caller that
+ * hides an imposed line (the ready screen's clock) filters before calling.
+ */
+export function conditionsByKind<A extends { kind: ConditionKind }, I extends { kind: ConditionKind }>(
+  announced: readonly A[],
+  imposed: readonly I[],
+): ConditionGroup<A, I>[] {
+  return CONDITION_KIND_ORDER.map((kind) => ({
+    kind,
+    announced: announced.filter((line) => line.kind === kind),
+    imposed: imposed.filter((line) => line.kind === kind),
+  })).filter((group) => group.announced.length + group.imposed.length > 0);
 }

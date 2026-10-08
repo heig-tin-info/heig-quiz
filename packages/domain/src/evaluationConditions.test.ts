@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   announcedConditionsOn,
   conditionsAllowedFor,
+  conditionsByKind,
   imposedConditions,
   type ConditionsInput,
 } from "./evaluationConditions.js";
@@ -135,5 +136,46 @@ describe("imposedConditions (ADR-079)", () => {
       "visibility_logged",
       "autosave",
     ]);
+  });
+});
+
+describe("conditionsByKind (ADR-079 §6, amended 2026-10-08)", () => {
+  const announced = [
+    { kind: "info" as const, text: "Answer in French" },
+    { kind: "allowed" as const, text: "One A4 sheet" },
+    { kind: "forbidden" as const, text: "Phones" },
+    { kind: "allowed" as const, text: "A dictionary" },
+    { kind: "forbidden" as const, text: "Smart watches" },
+  ];
+
+  it("groups forbidden, allowed, provided, then good to know", () => {
+    const groups = conditionsByKind(announced, imposedConditions(base({}, { calculator: "standard" })));
+    expect(groups.map((g) => g.kind)).toEqual(["forbidden", "allowed", "provided", "info"]);
+  });
+
+  it("keeps the teacher's order inside a kind, then the platform's fixed order, apart", () => {
+    const imposed = imposedConditions(base({}, { safeExamBrowser: true, negativeMarking: true }));
+    const [forbidden, allowed, info] = conditionsByKind(announced, imposed);
+    expect(forbidden).toEqual({
+      kind: "forbidden",
+      announced: [announced[2], announced[4]],
+      imposed: [{ key: "trusted_client", kind: "forbidden", clients: ["seb"] }],
+    });
+    expect(allowed!.announced.map((l) => l.text)).toEqual(["One A4 sheet", "A dictionary"]);
+    expect(allowed!.imposed).toEqual([]);
+    expect(info!.announced.map((l) => l.text)).toEqual(["Answer in French"]);
+    expect(info!.imposed.map((l) => l.key)).toEqual(["attempts", "negative_marking", "autosave"]);
+  });
+
+  it("leaves out a kind with no line, and returns nothing for no line at all", () => {
+    expect(conditionsByKind([{ kind: "provided", text: "A formula sheet" }], []).map((g) => g.kind)).toEqual([
+      "provided",
+    ]);
+    expect(conditionsByKind([], [])).toEqual([]);
+  });
+
+  it("drops a kind whose only lines the caller filtered out (the ready screen's omit)", () => {
+    const imposed = imposedConditions(base({}, { calculator: "scientific" })).filter((l) => l.key !== "calculator");
+    expect(conditionsByKind([], imposed).map((g) => g.kind)).toEqual(["info"]);
   });
 });

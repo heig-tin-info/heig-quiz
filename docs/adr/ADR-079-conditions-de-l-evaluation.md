@@ -9,6 +9,11 @@ themselves (this record's §1–§4, §6), the per-course catalog (§5, shipped:
 see its as-built note) and the trusted-client gap (§7). Check the code for
 what has shipped.
 
+Amended 2026-10-08 (issue #584, reopened by a teacher; decided by the
+product owner's supervisor): §6 only — the student reads the conditions
+grouped by kind instead of in two blocks (announced, imposed). See the
+amendment under §6; the rest of the record is unchanged.
+
 Scope: `EvaluationSettings.conditions`, the derivation `imposedConditions`
 (`packages/domain/src/evaluationConditions.ts`), the student views that carry
 `EvaluationConditions` (waiting room, ready screen, attempt, and for a
@@ -82,7 +87,8 @@ a text that changes after the exam leaves no record of what was announced.
    `catalogId` is not in the active catalog shows as a one-off condition.
    No student route reads the table (tested on the waiting room, the ready
    screen and the attempt).
-6. **One renderer, two blocks.** The student reads "Announced by your
+6. **One renderer, two blocks.** *(The two blocks and the per-line word are
+   obsolete: see the amendment of 2026-10-08 below.)* The student reads "Announced by your
    teacher" first, in the teacher's order, then "Imposed by the platform", in
    the fixed order. Every line carries its kind as an icon AND a word, never
    a colour alone. The list replaces the rules card of the waiting room and
@@ -94,6 +100,21 @@ a text that changes after the exam leaves no record of what was announced.
    The launch checklist counts the announced conditions on its rules line,
    and never warns about an evaluation without any. There is no "I have
    read" acknowledgment.
+
+   *Amended 2026-10-08 (issue #584):* a student looks for what they may
+   bring, not for who said it; a forbidden item split across two blocks was
+   missed. The renderer draws **one block per kind, in the order Forbidden,
+   Allowed, Provided, Good to know**; a kind without a line draws no block.
+   Inside a block, the teacher's announced lines come first, in their order,
+   then the platform's imposed lines, in their fixed order (§2). The block's
+   heading names the kind, so each line keeps only its icon: the kind is
+   still carried by a word, never by a colour, and no colour is used. The
+   grouping is one pure function, `conditionsByKind` beside
+   `imposedConditions`; a screen that omits an imposed line (the ready
+   screen's time) filters before grouping. The data are unchanged: the
+   student views still carry `announced` and `imposed` apart. The settings
+   editor's preview of the imposed lines, drawn outside any block, keeps the
+   kind's word on each line.
 7. **The trusted-client gap.** A student sitting in Safe Exam
    Browser or on a kiosk enters past the portal's waiting room; the
    conditions are therefore also shown before the SEB launch and on the
