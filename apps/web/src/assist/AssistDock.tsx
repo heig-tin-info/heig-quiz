@@ -274,7 +274,15 @@ function Question({ text }: { text: string }) {
 
 function Answer({ text, navigate }: { text: string; navigate: Navigate | undefined }) {
   // An in-app link is a path of this origin (`linkTarget`): its page, through the router.
-  const onNavigate = navigate ? (path: string) => navigate(parsePath(new URL(path, window.location.origin).pathname)) : undefined;
+  // A `Route` holds no query string, so a link carrying one (`?tab=roster`) is a
+  // full load: the router would land on the page without its tab.
+  const onNavigate = navigate
+    ? (path: string) => {
+        const url = new URL(path, window.location.origin);
+        if (url.search) window.location.assign(url.pathname + url.search + url.hash);
+        else navigate(parsePath(url.pathname));
+      }
+    : undefined;
   return (
     <div className="space-y-2 text-sm leading-relaxed text-fg">
       {/* Same-origin links only: an answer may echo text others wrote (ADR-080 P2, item 8). */}
