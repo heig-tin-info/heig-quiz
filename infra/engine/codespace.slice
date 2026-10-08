@@ -1,0 +1,25 @@
+# The online workspace's slice on the engine VM (M6-05, ADR-016): both portal
+# instances (quiz-codespace.container, Slice=), their session containers
+# (CODESPACE_CGROUP_PARENT, --cgroup-parent), the shadow snapshots and the
+# backup export. Installed into /etc/systemd/system/ by install_slices
+# (infra/engine/lib.sh).
+#
+# Below the runner: a tenth of quiz-runner.slice's CPU and IO weight (weights
+# only matter under contention; an idle runner leaves the CPU to sessions).
+#
+# Memory, for the VM of 2026-10-08 (3.8 GB, no resize): what the runner's
+# MemoryLow (1.5 GB) and the host (Caddy, Podman, systemd, ~0.3 GB) leave.
+# Two portals (~150 MB each in use) and the sessions at CODESPACE_MEMORY each:
+# at 1536m that is ONE session; at 768m, two (RUNBOOK.md, Capacity). Above
+# MemoryHigh the slice is throttled and reclaimed; MemoryMax is the OOM line,
+# which takes a session, never a grading run.
+[Unit]
+Description=quiz — online workspace portals, sessions, snapshots and backup
+Documentation=https://github.com/heig-tin-info/heig-quiz/blob/main/apps/codespace/deploy/RUNBOOK.md
+Before=slices.target
+
+[Slice]
+CPUWeight=100
+IOWeight=100
+MemoryHigh=1792M
+MemoryMax=2048M

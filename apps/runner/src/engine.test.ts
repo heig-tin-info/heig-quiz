@@ -57,6 +57,7 @@ function engine(overrides: Partial<Parameters<typeof createEngine>[0]> = {}) {
     seccompProfile: "/etc/quiz/seccomp.json",
     usernsAuto: true,
     runtime: null,
+    cgroupParent: null,
     capabilities: FAKE_CAPABILITIES,
     instanceId: INSTANCE,
     ...overrides,
@@ -95,6 +96,20 @@ describe("containerArgs", () => {
     const withAuto = engine().containerArgs(CREATE);
     const without = engine({ usernsAuto: false }).containerArgs(CREATE);
     expect(without).toEqual(withAuto.filter((arg) => arg !== "--userns=auto"));
+  });
+
+  it("adds the slice after --cpus, and nothing else, when one is configured", () => {
+    // M6-05: an ADDITION to the list above. Every hardening flag stays where
+    // it is; only `--cgroup-parent=<slice>` is inserted.
+    const plain = engine().containerArgs(CREATE);
+    const sliced = engine({ cgroupParent: "quiz-runner.slice" }).containerArgs(CREATE);
+    const at = plain.indexOf("--cpus") + 2;
+    expect(sliced).toEqual([
+      ...plain.slice(0, at),
+      "--cgroup-parent=quiz-runner.slice",
+      ...plain.slice(at),
+    ]);
+    expect(plain.some((arg) => arg.startsWith("--cgroup-parent"))).toBe(false);
   });
 
   it("adds gVisor when the host has it", () => {

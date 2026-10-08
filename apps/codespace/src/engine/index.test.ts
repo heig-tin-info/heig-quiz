@@ -120,6 +120,39 @@ describe("engine.runArgs — invariant 3, the hardening comes from run-hardened.
   });
 });
 
+describe("engine.runArgs — the slice (M6-05)", () => {
+  it("adds --cgroup-parent after --cpus, and nothing else, when a slice is configured", () => {
+    const sliced = createEngine({
+      podmanUrl: "unix:///run/podman/podman.sock",
+      instance: "prod",
+      network: "codespace",
+      gateway: "10.77.0.254",
+      seccompProfile: "/repo/infra/seccomp/codespace.json",
+      apparmorProfile: "codespace",
+      image: "codespace/c-dev:4.137.0",
+      memory: "1536m",
+      cpus: "1",
+      pidsLimit: 256,
+      cgroupParent: "codespace.slice",
+    }).runArgs({ sessionId: "s1", name: "cs-s1", workDir: "/vol/student/tp/work" });
+    const at = args.indexOf("--cpus") + 2;
+    expect(sliced).toEqual([...args.slice(0, at), "--cgroup-parent=codespace.slice", ...args.slice(at)]);
+    expect(args.some((a) => a.startsWith("--cgroup-parent"))).toBe(false);
+  });
+
+  it("takes a slice unit name or nothing", () => {
+    expect(loadConfig({}).CODESPACE_CGROUP_PARENT).toBe("");
+    expect(loadConfig({ CODESPACE_CGROUP_PARENT: "codespace.slice" }).CODESPACE_CGROUP_PARENT).toBe(
+      "codespace.slice",
+    );
+    for (const bad of ["/sys/fs/cgroup/x", "codespace", "-x.slice", "a b.slice", "a/b.slice"]) {
+      expect(() => loadConfig({ CODESPACE_CGROUP_PARENT: bad }), bad).toThrow(
+        /CODESPACE_CGROUP_PARENT/,
+      );
+    }
+  });
+});
+
 describe("CODESPACE_APPARMOR_PROFILE", () => {
   it("defaults to the profile of infra/apparmor/codespace", () => {
     expect(loadConfig({}).CODESPACE_APPARMOR_PROFILE).toBe("codespace");

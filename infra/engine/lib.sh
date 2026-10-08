@@ -4,6 +4,7 @@
 # shellcheck shell=bash
 
 ENGINE_PODMAN_URL=unix:///run/podman/podman.sock
+ENGINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # The rootful engine, always through its socket (root invariant 13).
 pd() { podman --remote --url "$ENGINE_PODMAN_URL" "$@"; }
@@ -14,6 +15,15 @@ pd() { podman --remote --url "$ENGINE_PODMAN_URL" "$@"; }
 pull_retag() {
 	pd pull "$1:$2"
 	pd tag "$1:$2" "$1:$3"
+}
+
+# install_slices: the two slices of the VM (M6-05), quiz-runner.slice and
+# codespace.slice, into /etc/systemd/system/; the caller's daemon-reload
+# applies a changed weight or limit to the running slice. A slice a unit
+# names before its file exists is created empty by systemd, so the order of
+# the deploys does not matter.
+install_slices() {
+	install -m 0644 "$ENGINE_DIR/quiz-runner.slice" "$ENGINE_DIR/codespace.slice" /etc/systemd/system/
 }
 
 # drop_old_sha_tags <repository> <sha to keep>: untags every other 40-hex

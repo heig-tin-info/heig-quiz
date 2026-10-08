@@ -138,6 +138,7 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
       memory: config.CODESPACE_MEMORY,
       cpus: config.CODESPACE_CPUS,
       pidsLimit: config.CODESPACE_PIDS_LIMIT,
+      cgroupParent: config.CODESPACE_CGROUP_PARENT,
       log: app.log,
     });
 

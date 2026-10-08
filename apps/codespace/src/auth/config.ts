@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 
 import { z } from "zod";
 
-import { INSTANCE_PATTERN } from "../engine/index.js";
+import { INSTANCE_PATTERN, SLICE_PATTERN } from "../engine/index.js";
 
 /**
  * Repository root: the first ancestor of this module that carries the
@@ -94,6 +94,19 @@ const EnvSchema = z.object({
   CODESPACE_MEMORY: z.string().default("1536m"),
   CODESPACE_CPUS: z.string().default("1"),
   CODESPACE_PIDS_LIMIT: z.coerce.number().int().min(16).default(256),
+  /**
+   * The systemd slice the session containers are created in,
+   * `--cgroup-parent=<slice>` (M6-05: `codespace.slice` on the engine VM, set
+   * by the quadlet, below the runner's CPU and IO weight and under a memory
+   * ceiling). **Empty (default) = no flag**: the engine's own default.
+   */
+  CODESPACE_CGROUP_PARENT: z
+    .string()
+    .trim()
+    .default("")
+    .refine((value) => value === "" || SLICE_PATTERN.test(value), {
+      message: "a systemd slice unit name ending in .slice, or empty",
+    }),
 
   // --- Session lifecycle (sessions/) ---------------------------------------
   /** Grace period after the last heartbeat before the container is destroyed. */

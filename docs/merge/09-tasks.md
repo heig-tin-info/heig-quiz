@@ -4247,6 +4247,39 @@ serves now (16a), and what waits for the group repositories (16b).
   created with until it is created again. Remaining: slices, host nft,
   Caddy log mask, backups, `deployment.md` §3; no resize (owner's decision,
   2026-10-08).
+- **As delivered (part 2: slices and backup)** (branch
+  `merge/M6-05-slices-backup`; the repository side only, the VM steps are
+  the owner's). Decisions in ADR-016's M6-05 amendment; procedures in
+  `deployment.md` §3 (The slices; Backup and restore of the codespace data).
+  - **Slices** `infra/engine/quiz-runner.slice` (CPU/IO weight 1000,
+    `MemoryLow=1536M`, `MemoryMax=1792M`: two containers at 512 MB plus the
+    service) and `infra/engine/codespace.slice` (weight 100,
+    `MemoryHigh=1792M`, `MemoryMax=2048M` on the 3.8 GB VM), installed by
+    `install_slices` (`infra/engine/lib.sh`) from the runner's deploy and
+    `cs_install_host`; `Slice=` in both quadlets and the shadow service.
+  - **Engines**: `RUNNER_CGROUP_PARENT` and `CODESPACE_CGROUP_PARENT`
+    (empty: no flag; otherwise a slice unit name, refused at startup if
+    not) add `--cgroup-parent=<slice>` after `--cpus`; set by the quadlets,
+    not the env files. The runner's flag-for-flag test and README list gain
+    it as a conditional addition (`engine.test.ts`, `config.test.ts`,
+    `engine/index.test.ts`).
+  - **Backup, destination A**: `apps/codespace/deploy/backup-export.sh`
+    (root forced command, `restrict`, `from=` the app VM; per instance an
+    integrity-checked SQLite `.backup` plus the volumes, `tar
+    --numeric-owner --xattrs | zstd` to stdout, in `codespace.slice` at
+    idle IO; needs `sqlite3` and `zstd` on the VM) and
+    `scripts/engine-backup/` (`pull.sh` and `srv`'s user service and timer:
+    daily 03:00 + up to 2 h, `zstd -t`, 14 dated archives in
+    `/srv/quiz-engine-backups`, a failed unit in the journal). Exercised in
+    an Ubuntu 24.04 container (two instances, WAL database, a mapped owner):
+    the archive restores, `integrity_check` ok, `git fsck` clean, the owner
+    numeric.
+  - Capacity: with 1536m sessions `codespace.slice` holds one; the RUNBOOK
+    recommends `CODESPACE_MEMORY=768m` while test-only.
+  - Remaining: the host nft `input` drop policy (Caddy's log mask landed
+    with M6-04); on the VM, the rollout, one restore drill and the
+    acceptance runs (grading within `RUNNER_TIMEOUT_MS` under live
+    sessions).
 
 ### M6-06 — Quiz `codespace` module
 - **Depends on**: M6-03, M3-02.

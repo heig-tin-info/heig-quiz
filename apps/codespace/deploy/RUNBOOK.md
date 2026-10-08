@@ -23,6 +23,8 @@ The values (names, ports, platform URLs) are in `deploy/lib.sh`
 | SQLite, volumes | `/srv/quiz-codespace/<i>/var`, `/srv/quiz-codespace/<i>/volumes` |
 | Network, anchor, nftables | `quiz-codespace-net@<i>.service` |
 | Shadow snapshots | `quiz-codespace-shadow@<i>.timer` |
+| Slice (both instances, sessions, snapshots, backup) | `codespace.slice`, from `infra/engine/codespace.slice` (M6-05) |
+| Backup export (both instances) | `/usr/local/lib/quiz-codespace/backup-export.sh`, pulled daily by the application VM |
 | Caddy site, access log | `/etc/caddy/conf.d/quiz-codespace-<i>.caddy`, `/var/log/caddy/quiz-codespace-<i>.log` |
 | Host-level copies (both instances) | `/usr/local/lib/quiz-codespace/`, `/etc/apparmor.d/codespace`, `/etc/systemd/system/quiz-codespace-*@.*` |
 | Session containers | `cs-<i>-<session>`, label `heig-codespace.instance=<i>` |
@@ -306,6 +308,25 @@ a named refusal; nothing is lost.
 
 ### Capacity
 
-2 vCPU and 3.7 GB for two portals (512 MB cap each), the runner (512 MB) and
-student containers at `CODESPACE_MEMORY` each; staging sessions take
-production's memory. Resizing, slices and the off-VM backup are M6-05's.
+2 vCPU and 3.8 GB, not resized (owner, 2026-10-08). Since M6-05 the two
+portals, their sessions, the shadow snapshots and the backup export share
+`codespace.slice` (CPU and IO weight 100, `MemoryHigh=1792M`,
+`MemoryMax=2048M`), below `quiz-runner.slice` (weight 1000, 1.5 GB
+protected for grading); deployment.md §3, The slices. Both instances draw
+from the same 2 GB: the portals use about 150 MB each, so with
+`CODESPACE_MEMORY=1536m` the slice holds **one session** at a time, staging
+and prod together, and a second one pushes the slice to its ceiling (the
+kernel kills a session's process, never a grading run). **While the
+workspace is test-only, set `CODESPACE_MEMORY=768m`** in both
+`/etc/quiz-codespace/<i>/env` (then restart the instance): two sessions. A
+real class needs the resize first (§6.2 of `docs/merge/06-codespace-seb-infra.md`).
+
+### Backup and restore
+
+The SQLite and the volumes of both instances are exported once a day by
+`backup-export.sh` (root's forced command for the application VM's backup
+key) and pulled by `srv` on the application VM, 14 archives kept. Setup,
+checks and the restore procedure (staging first): deployment.md §3, Backup
+and restore of the codespace data. The export's messages travel back over
+SSH: they are in `srv`'s journal (`journalctl --user -u quiz-engine-backup`
+on the application VM), not in this VM's.

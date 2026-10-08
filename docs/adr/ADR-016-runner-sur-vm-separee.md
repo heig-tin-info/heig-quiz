@@ -81,6 +81,36 @@ staging portal mounts the rootful Podman socket, which is root-equivalent.
 The app VM separates staging by account; this VM cannot, short of a
 staging engine of its own.
 
+**Amended (2026-10-08, M6-05 part 2): capacity and backups of the engine
+VM.** Scope: the addendum's "resized before a real class" and its slices,
+and the backups this VM never had.
+(a) *No resize for now* (owner, 2026-10-08): 2 vCPU, 3.8 GB, while the
+workspace is test-only; a real class still needs the resize first.
+(b) *Two slices* (`infra/engine/quiz-runner.slice`, `codespace.slice`),
+installed by the runner's deploy and by a codespace bootstrap or `prod`
+deploy. `quiz-runner.slice` (CPU and IO weight 1000, `MemoryLow` sized for
+`RUNNER_CONCURRENCY` containers at `RUNNER_MAX_MEMORY_MB` plus the service,
+`MemoryMax` a little above) holds the runner service and its sandbox
+containers; `codespace.slice` (weight 100, `MemoryHigh`/`MemoryMax` what the
+runner's protected memory and the host leave) holds both portals, their
+session containers, the shadow snapshots and the backup export. The
+containers reach their slice through `--cgroup-parent=<slice>`
+(`RUNNER_CGROUP_PARENT`, `CODESPACE_CGROUP_PARENT`, set by the quadlets,
+validated as slice unit names; empty, no flag): an addition to invariant
+12's list, never a substitute for a per-container limit. With 1536 MB
+sessions the codespace slice holds one session; 768 MB while test-only.
+(c) *Backup, destination A as a stopgap:* the engine VM exports, through a
+root forced command (`restrict`, `from=` the app VM), one `zstd` tar of
+each instance's online SQLite `.backup` and its volumes with numeric owners;
+`srv` on the app VM pulls it daily with a user timer and keeps 14 archives.
+No secret travels (the env files stay in the vault, ADR-010). Accepted
+because it costs nothing and the data is test data; its limits are the app
+VM's small disk, a root key whose only power is to read all workspace data,
+and both copies within one provider.
+(d) *Destination B, later:* `restic` to an S3 bucket from the engine VM
+(encrypted, deduplicated, off-provider), decided before a real class.
+Procedures: `docs/development/deployment.md` §3.
+
 ## Context
 
 `docs/spec/05-architecture.md` (5.5 and 5.9) and ADR-009 put the runner in the

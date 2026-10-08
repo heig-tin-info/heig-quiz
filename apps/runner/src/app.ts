@@ -29,6 +29,7 @@ export async function buildApp({ config, engine }: AppDeps): Promise<FastifyInst
       seccompProfile: config.RUNNER_SECCOMP,
       usernsAuto: probe.capabilities.usernsAuto,
       runtime: probe.capabilities.runtime,
+      cgroupParent: config.RUNNER_CGROUP_PARENT,
       capabilities: probe.capabilities,
     });
     // The hardening a deployment actually got, in one line of its journal. A
@@ -42,6 +43,7 @@ export async function buildApp({ config, engine }: AppDeps): Promise<FastifyInst
         runtime: probe.capabilities.runtime ?? "default",
         cgroups: probe.capabilities.cgroupVersion,
         seccomp: config.RUNNER_SECCOMP,
+        cgroupParent: config.RUNNER_CGROUP_PARENT ?? "engine default",
         notes: probe.notes,
       },
       "podman engine ready",

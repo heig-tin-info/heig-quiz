@@ -1,0 +1,13 @@
+# srv's user unit (application VM): pull the engine VM's codespace backup
+# (M6-05, deployment.md §3). Installed by hand into ~/.config/systemd/user/;
+# started by quiz-engine-backup.timer. A failure leaves the unit failed, with
+# the reason in `journalctl --user -u quiz-engine-backup`.
+[Unit]
+Description=quiz — pull the engine VM's codespace backup
+
+[Service]
+Type=oneshot
+ExecStart=/srv/quiz/scripts/engine-backup/pull.sh
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=2h

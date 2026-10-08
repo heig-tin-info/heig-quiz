@@ -1,0 +1,25 @@
+# The code runner's slice on the engine VM (M6-05, ADR-016): the service
+# (quiz-runner.container, Slice=) and every sandbox container it starts
+# (RUNNER_CGROUP_PARENT, --cgroup-parent). Installed into /etc/systemd/system/
+# by install_slices (infra/engine/lib.sh).
+#
+# Grading first: ten times codespace.slice's CPU and IO weight, so that an
+# exam's workspace sessions cannot starve a grading run, and its memory
+# protected from reclaim up to what it can actually use at once.
+#
+# Sizing, for the VM of 2026-10-08 (2 vCPU, 3.8 GB) and /etc/quiz-runner/env:
+#   RUNNER_CONCURRENCY=2 containers x RUNNER_MAX_MEMORY_MB=512   1024 MB
+#   + the service itself (quadlet --memory=512m)                  512 MB
+#   = MemoryLow 1536M; MemoryMax a little above, the slice's own ceiling
+#   (each container keeps its --memory, which is what kills a memory bomb).
+# Raising RUNNER_CONCURRENCY or RUNNER_MAX_MEMORY_MB raises both lines.
+[Unit]
+Description=quiz — code runner and its sandbox containers
+Documentation=https://github.com/heig-tin-info/heig-quiz/blob/main/docs/development/deployment.md
+Before=slices.target
+
+[Slice]
+CPUWeight=1000
+IOWeight=1000
+MemoryLow=1536M
+MemoryMax=1792M

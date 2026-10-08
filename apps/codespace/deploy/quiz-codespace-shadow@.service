@@ -6,6 +6,7 @@ Description=quiz — shadow repository snapshot of codespace instance %i
 
 [Service]
 Type=oneshot
+Slice=codespace.slice
 Environment=CODESPACE_VOLUMES=/srv/quiz-codespace/%i/volumes
 ExecStart=/usr/local/lib/quiz-codespace/shadow-snapshot.sh
 Nice=10
