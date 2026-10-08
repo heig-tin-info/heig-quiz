@@ -98,7 +98,7 @@ describe("TeacherHome", () => {
 
     const dialog = await screen.findByRole("dialog");
     await userEvent.type(within(dialog).getByLabelText(/Name/), "Programmation C");
-    await userEvent.type(within(dialog).getByLabelText(/Code/), "PRG1");
+    await userEvent.type(within(dialog).getByLabelText(/Course code/), "PRG1");
     await userEvent.click(within(dialog).getByRole("button", { name: "Create course" }));
 
     expect(calls.filter((c) => c.method === "POST")).toEqual([
