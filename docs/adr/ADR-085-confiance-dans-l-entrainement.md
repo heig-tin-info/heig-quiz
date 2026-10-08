@@ -104,7 +104,10 @@ Only `due_at` is capped. The rating stays Again and the FSRS state —
 stability, difficulty, reps, lapses — stays exactly what FSRS computed; the
 next review of the card starts from that state, earlier than FSRS asked. A
 new card's due date only moves to the first instant of the same next day;
-the cap really changes the mature cards. No other outcome touches the
+the cap really changes the mature cards. One side effect on FSRS, harmless:
+an error at 23:30 reviewed again at 00:10 counts 0 elapsed days in
+`ts-fsrs`, which treats it as a same-day review of the state it already
+holds. No other outcome touches the
 schedule. ADR-041 §11's bound on the client holds: a confidence still
 reaches no rating and no FSRS state, and the most a student can obtain by
 stating "Sure" on an error is to see that card again the next day. No

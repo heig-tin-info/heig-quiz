@@ -58,5 +58,11 @@ describe("drillConfidenceDue", () => {
     expect(drillConfidenceDue("confident_error", later, new Date("2026-10-25T00:30:00.000Z"))).toEqual(
       new Date("2026-10-25T23:00:00.000Z"),
     );
+    // 29 March 2026, 01:30 CET: summer time starts at 02:00, the day lasts
+    // 23 hours and the 30th starts at 00:00 CEST, 22:00 UTC.
+    const spring = new Date("2026-04-07T08:00:00.000Z");
+    expect(drillConfidenceDue("confident_error", spring, new Date("2026-03-29T00:30:00.000Z"))).toEqual(
+      new Date("2026-03-29T22:00:00.000Z"),
+    );
   });
 });

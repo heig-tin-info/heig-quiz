@@ -640,10 +640,12 @@ describe("the confidence stated beside a review (ADR-085)", () => {
       }
       await drill.serveCard(db, userId, card.id, app.clock.now());
       app.clock.advance(12_000);
-      const result = await drill.answerCard(db, userId, card.id, { answer, deviceClass: "fine", ...input }, app.clock.now());
+      const answeredAt = app.clock.now();
+      const result = await drill.answerCard(db, userId, card.id, { answer, deviceClass: "fine", ...input }, answeredAt);
       const [row] = await db.select().from(drillCards).where(eq(drillCards.id, card.id));
       const [stored] = await db.select().from(drillReviews).where(eq(drillReviews.cardId, card.id));
-      return { result, row: row!, stored: stored! };
+      // The first instant of the day after the answer, Zurich time: tomorrow's session.
+      return { result, row: row!, stored: stored!, tomorrow: drillDayBounds(answeredAt).end };
     };
     return { a: await review(stated, { confidence }), b: await review(silent, {}) };
   }
@@ -658,8 +660,6 @@ describe("the confidence stated beside a review (ADR-085)", () => {
     lastReviewAt: r.row.lastReviewAt,
   });
   const schedule = (r: Awaited<ReturnType<typeof twin>>["a"]) => ({ ...fsrsState(r), dueAt: r.result.dueAt });
-  // The first instant of the day after T0, Zurich time: tomorrow's session.
-  const tomorrow = drillDayBounds(new Date(T0)).end;
 
   it("rates a confident error as the same error stated with nothing, and brings it back tomorrow", async () => {
     const { a, b } = await twin("wrong", 4);
@@ -668,9 +668,9 @@ describe("the confidence stated beside a review (ADR-085)", () => {
     expect(fsrsState(a)).toEqual(fsrsState(b));
     // A new card answered wrong is due tomorrow anyway; the cap only moves
     // it to the first instant of that day.
-    expect(a.result.dueAt).toBe(tomorrow.toISOString());
-    expect(a.row.dueAt).toEqual(tomorrow);
-    expect(new Date(b.result.dueAt) < drillDayBounds(tomorrow).end).toBe(true);
+    expect(a.result.dueAt).toBe(a.tomorrow.toISOString());
+    expect(a.row.dueAt).toEqual(a.tomorrow);
+    expect(new Date(b.result.dueAt) < drillDayBounds(b.tomorrow).end).toBe(true);
     expect(a.stored.confidence).toBe(4);
     expect(b.stored.confidence).toBeNull();
   });
@@ -679,9 +679,9 @@ describe("the confidence stated beside a review (ADR-085)", () => {
     const { a, b } = await twin("wrong", 3, true);
     expect(fsrsState(a)).toEqual(fsrsState(b));
     expect(a.row.lapses).toBe(1);
-    expect(a.result.dueAt).toBe(tomorrow.toISOString());
+    expect(a.result.dueAt).toBe(a.tomorrow.toISOString());
     // Again alone sends the mature card days away.
-    expect(Date.parse(b.result.dueAt) - Date.parse(T0)).toBeGreaterThan(5 * 86_400_000);
+    expect(Date.parse(b.result.dueAt) - b.tomorrow.getTime()).toBeGreaterThan(4 * 86_400_000);
   });
 
   it("schedules an error stated fairly sure exactly as the same error stated with nothing", async () => {
