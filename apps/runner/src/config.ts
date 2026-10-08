@@ -171,5 +171,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RunnerConfig {
     ...data,
     RUNNER_TOKEN: token,
     PODMAN_SOCKET: data.PODMAN_REMOTE === "false" ? null : socket,
-    RUNNER_SECCOMP: seccomp,  };
+    RUNNER_SECCOMP: seccomp,
+  };
 }
