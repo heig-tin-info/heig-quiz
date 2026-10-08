@@ -20,7 +20,8 @@ N-DATA-02, N-DATA-03 and N-DATA-07 (docs/spec/03), the question-type
 contract (docs/spec/04 §4.1) and the drill tables (docs/spec/05 §5.4).
 
 Amended by [ADR-056](ADR-056-questions-parametrees.md) §5: parameterized drill reviews store their drawn
-values. Read §15 below for the final location of the teacher's drill switch;
+values. Extended by [ADR-085](ADR-085-confiance-dans-l-entrainement.md): a review
+stores the confidence the student stated, which §4 and §5 never read. Read §15 below for the final location of the teacher's drill switch;
 §14 describes the earlier screen arrangement.
 
 ## Context

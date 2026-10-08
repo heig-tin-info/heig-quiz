@@ -25,7 +25,7 @@ import {
 } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
-import { auditLog, drillCards } from "../../db/schema.js";
+import { auditLog, drillCards, drillReviews } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type Payload, type TestServer } from "../../test/http.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
@@ -147,10 +147,21 @@ describe("the drill over HTTP", () => {
     expect((await call("POST", `${base}/shown`, student, { shown: true })).statusCode).toBe(204);
     server.clock.advance(2_000);
     expect((await call("POST", `${base}/answer`, student, { deviceClass: "phone" })).statusCode).toBe(400);
-    const answered = await call("POST", `${base}/answer`, student, { answer: "answer-q0", deviceClass: "fine" });
+    // The confidence is the contract's 0 to 4, or nothing (ADR-085).
+    for (const confidence of [5, -1, 2.5, "sure"]) {
+      const refused = await call("POST", `${base}/answer`, student, { answer: "answer-q0", deviceClass: "fine", confidence });
+      expect(refused.statusCode).toBe(400);
+    }
+    const answered = await call("POST", `${base}/answer`, student, {
+      answer: "answer-q0",
+      deviceClass: "fine",
+      confidence: 2,
+    });
     expect(answered.statusCode).toBe(200);
     const result = DrillReviewResult.parse(answered.json());
     expect(result).toMatchObject({ correctness: "right", rating: 3, activeMs: 6_000, solution: { answer: "answer-q0" } });
+    const [review] = await server.app.db.select().from(drillReviews).where(eq(drillReviews.cardId, card!.id));
+    expect(review!.confidence).toBe(2);
   });
 
   it("lets the student opt out, which empties the session and the tab's switch says so", async () => {

@@ -731,7 +731,12 @@ live in `ui/state.ts`, each written once.
 - Segmented: `surface-3` pill track, selected chip raised to `surface`.
   Segmented is ONE choice out of a set small enough to show whole — two or
   three normally, five at most and only with one-word labels (the pool
-  toolbar's "Group by"); ToggleChip is any number out of many.
+  toolbar's "Group by"); ToggleChip is any number out of many. One
+  exception: the drill's "How sure are you?" scale (ADR-085), five short
+  levels of one scale ("Fairly sure" is the longest), `sm`, which fits
+  390 px in both languages and scrolls inside its row below that. Its
+  value starts EMPTY (no pill selected) and a digit pressed again clears
+  it: an optional statement must not have a default.
   Do not use one for the other's job, and do not reach for a `Select` just
   because there are four options: a select hides the set until it is opened,
   which is the wrong trade for a control the reader sets once and then reads.

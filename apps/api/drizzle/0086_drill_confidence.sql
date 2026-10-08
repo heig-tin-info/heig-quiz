@@ -1,0 +1,2 @@
+ALTER TABLE "drill_reviews" ADD COLUMN "confidence" smallint;--> statement-breakpoint
+ALTER TABLE "drill_reviews" ADD CONSTRAINT "drill_reviews_confidence_ck" CHECK ("drill_reviews"."confidence" between 0 and 4);

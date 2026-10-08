@@ -110,7 +110,13 @@ export async function drillPlugin(app: FastifyInstance) {
     "/app/api/drill/cards/:id/answer",
     { preHandler: requireSession },
     student({ params: IdParam, body: DrillAnswerBody, load: me }, ({ now, params, body, scope }) =>
-      service.answerCard(app.db, scope.userId, params.id, { answer: body.answer, deviceClass: body.deviceClass }, now),
+      service.answerCard(
+        app.db,
+        scope.userId,
+        params.id,
+        { answer: body.answer, deviceClass: body.deviceClass, confidence: body.confidence },
+        now,
+      ),
     ),
   );
 

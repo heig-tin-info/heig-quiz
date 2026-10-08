@@ -705,6 +705,9 @@ const scenes = [
   { name: "drill-today", role: "student", path: "/drill" },
   { name: "drill-card", role: "student", path: "/drill", act: drillStart },
   { name: "drill-feedback", role: "student", path: "/drill", act: drillAnswer },
+  // How sure the student is (ADR-085): the scale picked, then a confident error's correction.
+  { name: "drill-confidence", role: "student", path: "/drill", act: drillConfidence },
+  { name: "drill-confident-error", role: "student", path: "/drill", act: drillConfidentError },
   { name: "drill-done", role: "student", path: "/drill", act: drillWalk },
   { name: "drill-empty", role: "student", path: "/drill?reviewed=1" },
   { name: "drill-off", role: "student", path: "/drill?empty=1" },
@@ -1744,6 +1747,22 @@ async function drillStart(page) {
 async function drillAnswer(page) {
   await drillStart(page);
   await page.getByText(/^Une valeur indéterminée/).click();
+  await page.getByRole("button", { name: /^(check|vérifier)$/i }).click();
+  await page.waitForTimeout(800);
+}
+
+/** The first card with a choice and a confidence picked, before the check. */
+async function drillConfidence(page) {
+  await drillStart(page);
+  await page.getByText(/^Une valeur indéterminée/).click();
+  await page.getByText(/^(Fairly sure|Plutôt sûr)$/).click();
+}
+
+/** A wrong choice stated "Certain" (the key 4): the correction highlighted. */
+async function drillConfidentError(page) {
+  await drillStart(page);
+  await page.getByText(/^L.adresse de la fonction englobante/).click();
+  await page.getByText(/^(Certain)$/).click();
   await page.getByRole("button", { name: /^(check|vérifier)$/i }).click();
   await page.waitForTimeout(800);
 }

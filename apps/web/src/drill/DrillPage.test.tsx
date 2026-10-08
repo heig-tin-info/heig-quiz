@@ -97,7 +97,9 @@ describe("the drill session", () => {
     expect(screen.getByText(/^Good · next review in 4 days$/)).toBeVisible();
     expect(await screen.findByText("4 bytes")).toBeVisible();
     const answer = calls.find((c) => c.url === "/app/api/drill/cards/k1/answer");
-    expect(answer?.body).toEqual({ answer: { text: "4" }, deviceClass: "fine" });
+    // The confidence was skipped: it leaves as null, and nothing is said back.
+    expect(answer?.body).toEqual({ answer: { text: "4" }, deviceClass: "fine", confidence: null });
+    expect(screen.queryByText(/^You said/)).toBeNull();
     // One primary: Next, and nothing else to press but the page's navigation.
     await user.click(screen.getByRole("button", { name: "Next" }));
 
@@ -109,6 +111,7 @@ describe("the drill session", () => {
     expect(calls.find((c) => c.url === "/app/api/drill/cards/k2/answer")?.body).toEqual({
       answer: null,
       deviceClass: "fine",
+      confidence: null,
     });
     await user.click(screen.getByRole("button", { name: "Finish" }));
 
@@ -117,6 +120,70 @@ describe("the drill session", () => {
     expect(screen.getByText("1 right · 0 partly right · 1 wrong")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Back to home" }));
     expect(navigate).toHaveBeenCalledWith({ view: "home" });
+  });
+
+  it("asks how sure the student is, optional, by click or by the keys 0 to 4 (ADR-085)", async () => {
+    const user = userEvent.setup();
+    const { calls } = stub();
+    renderWithProviders(<DrillPage navigate={() => {}} />);
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    const field = await screen.findByRole("textbox", { name: "Your answer" });
+
+    const scale = screen.getByRole("radiogroup", { name: /How sure are you\?/ });
+    const levels = within(scale).getAllByRole("radio");
+    expect(levels).toHaveLength(5);
+    // Nothing selected: a default would skew what is measured.
+    expect(levels.every((l) => !(l as HTMLInputElement).checked)).toBe(true);
+
+    // A digit typed in the answer belongs to the answer.
+    await user.type(field, "4");
+    expect(field).toHaveValue("4");
+    expect(levels.every((l) => !(l as HTMLInputElement).checked)).toBe(true);
+
+    // Outside a field, the digit picks the level; the same digit again clears it.
+    field.blur();
+    await user.keyboard("3");
+    expect(within(scale).getByRole("radio", { name: "Sure" })).toBeChecked();
+    await user.keyboard("3");
+    expect(levels.every((l) => !(l as HTMLInputElement).checked)).toBe(true);
+    await user.click(within(scale).getByText("Fairly sure"));
+    expect(within(scale).getByRole("radio", { name: "Fairly sure" })).toBeChecked();
+
+    // The primary action is unchanged.
+    await user.click(screen.getByRole("button", { name: "Check" }));
+    expect(await screen.findByText("You said: Fairly sure")).toBeVisible();
+    expect(calls.find((c) => c.url === "/app/api/drill/cards/k1/answer")?.body).toEqual({
+      answer: { text: "4" },
+      deviceClass: "fine",
+      confidence: 2,
+    });
+  });
+
+  it("highlights the correction when the student was sure and wrong", async () => {
+    const user = userEvent.setup();
+    stub({ "POST /app/api/drill/cards/k1/answer": ok(review({ correctness: "wrong", rating: 1, points: 0 })) });
+    renderWithProviders(<DrillPage navigate={() => {}} />);
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await screen.findByRole("textbox", { name: "Your answer" });
+    await user.keyboard("4");
+    await user.click(screen.getByRole("button", { name: "Show the answer" }));
+
+    const highlight = await screen.findByText("You were sure: look closely");
+    expect(highlight).toBeVisible();
+    expect(screen.getByText("You said “Certain”, and the answer was wrong. This is the correction worth remembering.")).toBeVisible();
+    // The rating is the server's, untouched: Again, as any wrong answer.
+    expect(screen.getByText(/^To see again soon · next review/)).toBeVisible();
+  });
+
+  it("says a right answer given with no idea was luck", async () => {
+    const user = userEvent.setup();
+    stub();
+    renderWithProviders(<DrillPage navigate={() => {}} />);
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await screen.findByRole("textbox", { name: "Your answer" });
+    await user.keyboard("0");
+    await user.click(screen.getByRole("button", { name: "Show the answer" }));
+    expect(await screen.findByText("You said: No idea — right this time, counted as luck.")).toBeVisible();
   });
 
   it("reports the question hidden while the tab is, and shown when it comes back", async () => {

@@ -76,6 +76,7 @@ The actions are provided by the mounted screens, through the command registry in
 | Circuit canvas | `Ctrl+Z` / `Ctrl+Y` · `R` `H` `V` · `W` · `1`–`9` · `Del` | Undo / redo · rotate / mirror · wire tool · pick the nth part of the palette · delete. Also bound, not listed in the strip: `Space` (rotate), `Backspace`, `Ctrl+Shift+Z`, `Ctrl+D` (duplicate), `Ctrl+A` (select all), `Esc` (unwinds the wire, the tool, the selection). While the canvas has the focus and is editable, its lines join the sidebar strip of the question editor and the side column of the student player (issue #549, ADR-046 addendum 2026-10-07) |
 | Diagram canvas | `Ctrl+Z` / `Ctrl+Y` · `I` · `1`–`9` · `Del` | Undo / redo · reverse the selected link · pick the nth tool · delete. Also bound, not listed: `Backspace`, `Ctrl+Shift+Z`, `Ctrl+D`, `Ctrl+A`, `Esc`. Shown as for the circuit canvas |
 | Student player | `Alt+→` `Alt+←` | Next / previous question |
+| Drill card | `0`–`4` | How sure you are, before the correction; the same digit again clears it. Not while typing in a field of the answer (ADR-085) |
 | Student player | `Ctrl+Enter` | "Validate and continue", where the navigation has one (`forward_only`, a checkpoint question in `milestones`); it opens the same confirmation as the button. Nothing in `free`, where a question is answered as soon as it holds an answer (issue #89) |
 | Dashboard | `n` `r` `s` | Toggle names / answers / results |
 | Dashboard | `Space` | Pause / resume |

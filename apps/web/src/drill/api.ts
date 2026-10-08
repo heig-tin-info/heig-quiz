@@ -65,10 +65,16 @@ export const reportShown = (cardId: string, shown: boolean) =>
     keepalive: true,
   });
 
-export const answerCard = (cardId: string, answer: unknown, deviceClass: DrillDeviceClass) =>
+/** `confidence` is the student's, null when they skipped it (ADR-085); the server only stores it. */
+export const answerCard = (
+  cardId: string,
+  answer: unknown,
+  deviceClass: DrillDeviceClass,
+  confidence: number | null = null,
+) =>
   api<DrillReviewResult>(
     `/app/api/drill/cards/${cardId}/answer`,
-    send("POST", DrillAnswerBody, { answer, deviceClass }),
+    send("POST", DrillAnswerBody, { answer, deviceClass, confidence }),
   );
 
 export const setOptOut = (classroomId: string, optedOut: boolean) =>

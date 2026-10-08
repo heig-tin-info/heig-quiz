@@ -613,6 +613,77 @@ describe("a review (F-DRILL-02, ADR-041 §4)", () => {
   });
 });
 
+describe("the confidence stated beside a review (ADR-085)", () => {
+  /**
+   * Two students answer the same question the same way, after the same time
+   * on screen; one states a confidence, the other none. Everything the
+   * schedule holds must come out identical: the confidence is stored, never
+   * read.
+   */
+  async function twin(answer: string, confidence: number) {
+    const app = await appAt();
+    const seed = await world(app, { mode: "exercise", students: 2 });
+    await sit(app, seed);
+    const [stated, silent] = seed.studentIds as [string, string];
+    const review = async (userId: string, input: { confidence?: number }) => {
+      const card = (await cardsOf({ userId })).find((c) => c.questionId === seed.questionIds[0])!;
+      app.clock.set(T0);
+      await drill.serveCard(db, userId, card.id, app.clock.now());
+      app.clock.advance(12_000);
+      const result = await drill.answerCard(db, userId, card.id, { answer, deviceClass: "fine", ...input }, app.clock.now());
+      const [row] = await db.select().from(drillCards).where(eq(drillCards.id, card.id));
+      const [stored] = await db.select().from(drillReviews).where(eq(drillReviews.cardId, card.id));
+      return { result, row: row!, stored: stored! };
+    };
+    return { a: await review(stated, { confidence }), b: await review(silent, {}) };
+  }
+
+  const schedule = (r: Awaited<ReturnType<typeof twin>>["a"]) => ({
+    rating: r.result.rating,
+    dueAt: r.result.dueAt,
+    activeMs: r.result.activeMs,
+    stability: r.row.stability,
+    difficulty: r.row.difficulty,
+    reps: r.row.reps,
+    lapses: r.row.lapses,
+  });
+
+  it("rates and schedules a confident error exactly as the same error stated with nothing", async () => {
+    const { a, b } = await twin("wrong", 4);
+    expect(a.result.correctness).toBe("wrong");
+    expect(a.result.rating).toBe(1);
+    expect(schedule(a)).toEqual(schedule(b));
+    expect(a.stored.confidence).toBe(4);
+    expect(b.stored.confidence).toBeNull();
+  });
+
+  it("never upgrades a lucky right answer", async () => {
+    const { a, b } = await twin("answer-q0", 0);
+    expect(a.result.correctness).toBe("right");
+    expect(schedule(a)).toEqual(schedule(b));
+    expect(a.stored.confidence).toBe(0);
+  });
+
+  it("stores an explicit null as not given", async () => {
+    const app = await appAt();
+    const { userId, right } = await oneStudent(app);
+    await drill.serveCard(db, userId, right.id, app.clock.now());
+    await drill.answerCard(db, userId, right.id, { answer: "x", deviceClass: "fine", confidence: null }, app.clock.now());
+    const [stored] = await db.select().from(drillReviews).where(eq(drillReviews.cardId, right.id));
+    expect(stored!.confidence).toBeNull();
+  });
+
+  it("is bounded to 0..4 by the database itself", async () => {
+    const app = await appAt();
+    const { userId, right } = await oneStudent(app);
+    await drill.serveCard(db, userId, right.id, app.clock.now());
+    await drill.answerCard(db, userId, right.id, { answer: "x", deviceClass: "fine", confidence: 1 }, app.clock.now());
+    await expect(
+      db.update(drillReviews).set({ confidence: 5 }).where(eq(drillReviews.cardId, right.id)),
+    ).rejects.toThrow();
+  });
+});
+
 describe("the mcq of a review (06, question 28 (d), (h))", () => {
   it("shuffles the choices with each seed, and never serves the key before the answer", async () => {
     const app = await appAt();
