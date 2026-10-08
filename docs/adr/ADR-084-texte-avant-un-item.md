@@ -77,7 +77,7 @@ teacher who actually read.
 7. **Shuffled items carry their intro.** Under `shuffleItems` an intro
    travels with its item, as the milestone flag already does: it is the
    item's, not a position's. The builder says nothing more; whether a
-   shuffled paper should pin its intros is open (06 no. 55).
+   shuffled paper should pin its intros was left open in 06 no. 55, settled 2026-10-08: it travels with its item.
 
 ## Consequences
 
@@ -88,7 +88,7 @@ teacher who actually read.
 - The "passed" fact is held by the player, not stored: a student who
   reloads before starting a question sees its text again, even after a
   milestone. Acceptable for instructions and transitions; for "memorise",
-  it is the limit recorded in 06 no. 55.
+  it is the limit recorded in 06 no. 55, accepted by the product owner on 2026-10-08.
 - The builder reads as sections: a recessed band with the text's first
   lines above the item it precedes, and a "+ Text" control in each gap
   between items (and above the first).
@@ -104,6 +104,6 @@ teacher who actually read.
 - **A separate list of sections on the evaluation.** Rejected: an intro
   then needs an anchor that survives reorders, deletions, copies and
   pulls, which the item already is.
-- **Recording the passage on the server.** Deferred (06 no. 55): it needs a
+- **Recording the passage on the server.** Not done (06 no. 55, settled 2026-10-08 by the product owner): it needs a
   write per passage and a column on the answer, for a guarantee no teacher
   has asked for yet.
