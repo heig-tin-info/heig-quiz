@@ -2114,3 +2114,33 @@ placement over an `offset` and `Z.tool`.
   `danger` `Alert` under the conversation, the draft kept; history — the
   retention line, then one row per conversation (its first question, its
   relative time, a danger icon button that deletes through `useConfirm`).
+
+## The discovery page (`/discover`)
+
+The one surface of the product read BEFORE an account exists: someone who
+reached the door without access sees what is behind it. It is a page to
+read and to be convinced by, not a tool, so it departs from the rules above
+in four places, all confined to `src/discover/` (`discover.css` scopes them
+under `.discover`):
+
+- **The wordmark's four colours as section identity** (`--q-red`,
+  `--q-yellow`, `--q-blue`, `--q-green`, the bubbles of `assets/quiz.svg`).
+  Decoration only: a dot, a glow, a rule. Text stays in `fg` / `fg-muted`,
+  and the one accent is still the sign-in button — the page's single primary
+  action, the same door as the landing page.
+- **Display type above the scale**: the hero headline goes to 72 px
+  (800, `-0.035em`), section titles to 48 px. A product page has to be read
+  from across a room; the 28 px page title is for screens one works in.
+- **Looping motion.** Every scene is a miniature of a real screen drawn with
+  the tokens (so it follows the theme by itself), runs only while it is on
+  screen (`useInView`), and shows its end state under
+  `prefers-reduced-motion` (`useStep` returns `STILL`). Scenes are
+  `aria-hidden`: the text beside each says the same.
+- **Shadows on the scenes' windows** (`--shadow-overlay`, `--shadow-popover`):
+  they are pictures of floating windows, not cards in the page flow.
+
+Language and theme are chosen in its top bar for this browser only (no
+account to persist them to). It is drawn with no session and without
+waiting on `/me`, like the kiosk station. The question-types section lists
+exactly the types of `packages/registry/src/server.ts`; a type added there
+gets a card here (`typeScenes.tsx`) and its strings in both dictionaries.

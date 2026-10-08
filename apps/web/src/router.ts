@@ -173,6 +173,11 @@ export type Route =
   /** The `.seb`'s quit link outside SEB, drawn with no session (ADR-027). */
   | { view: "sebQuit" }
   /**
+   * The public discovery page: what Quiz is, for someone with no account.
+   * Drawn with no session and without waiting on `/me` (App.tsx).
+   */
+  | { view: "discover" }
+  /**
    * The phone's half of the pairing (ADR-051 §7): the code of the station in
    * front of the student, from the QR (`?code=`, which the page reads itself)
    * or typed; then the exam to open there.
@@ -547,6 +552,11 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     studentSafe: true,
   },
   pair: fixed("pair", { view: "pair" }, true),
+  discover: {
+    path: () => "/discover",
+    match: (parts) => (parts.length === 1 && parts[0] === "discover" ? { view: "discover" } : null),
+    studentSafe: true,
+  },
   // WP10: the student's feedback on one attempt — the ONE student results page.
   feedback: {
     path: (r) => `/attempts/${r.attemptId}/feedback`,
