@@ -64,11 +64,15 @@ export type AuditAction =
    * row per pool of the batch; `payload.decisions`: `tag`, `decision`,
    * `conceptId`, `reason`). `validate`: the admin validated a concept, or
    * created one validated while sorting (`payload.created`; `payload.labels`).
+   * `sort_propose`: the admin started the model pass that proposes the
+   * sorting (second addendum §3; subject the one run, `default`;
+   * `payload.startedAt`).
    */
   | "concept.delete"
   | "concept.edit"
   | "concept.propose"
   | "concept.sort"
+  | "concept.sort_propose"
   | "concept.validate"
   | "course.create"
   | "course.delete"

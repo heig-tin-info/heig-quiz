@@ -309,9 +309,9 @@ describe("accepting decisions", () => {
     await expect(insert({ decision: "concept", decidedAt: now })).rejects.toThrow();
     await expect(insert({ decision: "drop", decidedAt: now })).rejects.toThrow();
     await expect(insert({ decision: "drop", dropReason: "noise" })).rejects.toThrow();
-    await expect(insert({ proposal: { model: "m" }, decidedBy: admin.id })).rejects.toThrow();
+    await expect(insert({ proposal: { model: "m", kind: "drop", dropReason: "noise" }, decidedBy: admin.id })).rejects.toThrow();
     await expect(insert({})).rejects.toThrow();
-    await insert({ proposal: { model: "m" } });
+    await insert({ proposal: { model: "m", kind: "drop", dropReason: "noise" } });
     await server.app.db.delete(conceptTagSortings);
     await insert({ decision: "drop", dropReason: "noise", decidedAt: now });
   });

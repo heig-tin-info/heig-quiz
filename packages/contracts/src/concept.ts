@@ -10,6 +10,16 @@
  */
 import { z } from "zod";
 
+import {
+  CONCEPT_DESCRIPTION_MAX,
+  CONCEPT_HINT_MAX,
+  CONCEPT_LABEL_MAX,
+  CONCEPT_LABEL_PATTERN,
+  CONCEPT_QUALIFIER_MAX,
+} from "@quiz/domain";
+
+import type { LlmErrorCode } from "./llm.js";
+
 export const CONCEPT_LANGS = ["fr", "en"] as const;
 export const ConceptLang = z.enum(CONCEPT_LANGS);
 export type ConceptLang = z.infer<typeof ConceptLang>;
@@ -44,10 +54,10 @@ const ConceptLabel = z
   .string()
   .trim()
   .min(1)
-  .max(120)
-  .regex(/[\p{L}\p{N}]/u, "a label needs a letter or a digit");
-const ConceptQualifier = z.string().trim().max(120);
-const ConceptDescription = z.string().trim().max(500);
+  .max(CONCEPT_LABEL_MAX)
+  .regex(CONCEPT_LABEL_PATTERN, "a label needs a letter or a digit");
+const ConceptQualifier = z.string().trim().max(CONCEPT_QUALIFIER_MAX);
+const ConceptDescription = z.string().trim().max(CONCEPT_DESCRIPTION_MAX);
 
 /** A new `proposed` concept, in one language: the creator's. */
 export const ConceptCreate = z.object({
@@ -116,12 +126,38 @@ const NewConceptSide = z.object({
   description: ConceptDescription.optional(),
 });
 
+/** One language of a proposed new concept: what the model wrote, cleaned; `""` for none. */
+const ProposedConceptSide = z.object({
+  label: ConceptLabel,
+  qualifier: ConceptQualifier,
+  description: ConceptDescription,
+});
+
+/** What every proposal carries: the model that answered, and its free-text hints. */
+const ProposalBase = z.object({
+  model: z.string(),
+  broader: z.string().max(CONCEPT_HINT_MAX).optional(),
+  note: z.string().max(CONCEPT_HINT_MAX).optional(),
+});
+
 /**
- * What the model proposed for a pair, kept as it answered; the background
- * job of a later step (purpose `sort`) fills it and defines its shape. A
- * suggested broader concept stays a hint in it (second addendum §2).
+ * What the model proposed for a pair (the admin's pass, purpose `sort`,
+ * second addendum §3): an existing concept (`conceptId`, checked to exist
+ * and not be merged when written), a NEW concept with both languages (pairs
+ * of one run that name the same new concept carry the same labels, so
+ * accepting them creates one), or a drop with its reason. `broader` (a
+ * suggested broader concept, a hint only, second addendum §2) and `note`
+ * (why, in a few words) are free text. The shape is `SortProposal` of
+ * `@quiz/domain`, plus the model.
  */
-export const TagSortingProposal = z.looseObject({ model: z.string() });
+export const TagSortingProposal = z.discriminatedUnion("kind", [
+  ProposalBase.extend({ kind: z.literal("concept"), conceptId: z.uuid() }),
+  ProposalBase.extend({
+    kind: z.literal("new"),
+    newConcept: z.object({ fr: ProposedConceptSide, en: ProposedConceptSide }),
+  }),
+  ProposalBase.extend({ kind: z.literal("drop"), dropReason: TagDropReason }),
+]);
 export type TagSortingProposal = z.infer<typeof TagSortingProposal>;
 
 /**
@@ -228,3 +264,46 @@ export const TagSortingItemsError = z.object({
   items: z.array(TagPair),
 });
 export type TagSortingItemsError = z.infer<typeof TagSortingItemsError>;
+
+// ---------------------------------------------------------------------------
+// The model pass that proposes the sorting (second addendum §3): one run at
+// a time, started by the admin, in the background.
+// ---------------------------------------------------------------------------
+
+/** The gateway's codes that stop a run (no key, an unreadable or refused key, the day's cap): no later call can succeed. */
+export const CONCEPT_SORT_STOPPING = [
+  "not_configured",
+  "key_unreadable",
+  "auth_failed",
+  "budget_exhausted",
+] as const satisfies readonly LlmErrorCode[];
+/**
+ * Why a run failed: a stopping code; `interrupted`, a run whose heartbeat
+ * went silent (its process died); `internal`, anything else.
+ */
+export const CONCEPT_SORT_RUN_ERRORS = [...CONCEPT_SORT_STOPPING, "interrupted", "internal"] as const;
+export const ConceptSortRunError = z.enum(CONCEPT_SORT_RUN_ERRORS);
+export type ConceptSortRunError = z.infer<typeof ConceptSortRunError>;
+
+export const CONCEPT_SORT_RUN_STATES = ["running", "done", "failed"] as const;
+
+/**
+ * A run of the pass: its progress in `conceptKey` groups (those holding a
+ * pair without a decision when it started), its instants, and why it
+ * failed. A batch the model failed on counts as done — its pairs keep what
+ * they had — and in `batchesFailed`.
+ */
+export const ConceptSortRun = z.object({
+  state: z.enum(CONCEPT_SORT_RUN_STATES),
+  groupsDone: z.number().int().nonnegative(),
+  groupsTotal: z.number().int().nonnegative(),
+  batchesFailed: z.number().int().nonnegative(),
+  startedAt: z.iso.datetime(),
+  finishedAt: z.iso.datetime().nullable(),
+  error: ConceptSortRunError.nullable(),
+});
+export type ConceptSortRun = z.infer<typeof ConceptSortRun>;
+
+/** `GET /admin/concept-sorting/run`, and the answer of `POST /admin/concept-sorting/propose` (202): the last run, null before the first. */
+export const ConceptSortRunStatus = z.object({ run: ConceptSortRun.nullable() });
+export type ConceptSortRunStatus = z.infer<typeof ConceptSortRunStatus>;

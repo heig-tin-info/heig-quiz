@@ -35,6 +35,7 @@ import { columnsOf, COLUMNS, holdersOf, perLang, side, sideOf, toConcept } from 
 
 export { toConcept } from "./row.js";
 export { acceptTagSortings, listTagSortings, type SortingContext } from "./sorting.js";
+export { lastSortRun, startSortRun } from "./propose.js";
 
 /** Who writes: the caller for the rights, the actor for the audit, the server's instant. */
 export interface ConceptContext {

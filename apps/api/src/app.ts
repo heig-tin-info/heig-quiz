@@ -30,6 +30,7 @@ import { adminGuard } from "./modules/guards.js";
 import { avatarPlugin } from "./modules/avatar.js";
 import { registerCodespaceJobs } from "./modules/codespace/jobs.js";
 import { codespacePlugin } from "./modules/codespace/routes.js";
+import { registerConceptJobs } from "./modules/concept/propose.js";
 import { conceptPlugin } from "./modules/concept/routes.js";
 import { codespaceOn } from "./modules/codespace/service.js";
 import { drillPlugin } from "./modules/drill/routes.js";
@@ -282,6 +283,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     await step("system jobs registration", () => registerSystemJobs(app, started, config));
     // A brainstorm's AI passes (ADR-072). Without a queue a pass runs inline.
     await step("poll jobs registration", () => registerPollJobs(app, started));
+    // The model pass that proposes the sorting of the tags (ADR-081). Without a queue it runs in process.
+    await step("concept jobs registration", () => registerConceptJobs(app, started));
     // The webhook worker (M2-04), only with Quiz's App: without it there is no intake.
     if (githubApp(config)) {
       await step("github jobs registration", () => registerGithubJobs(app, started, config));

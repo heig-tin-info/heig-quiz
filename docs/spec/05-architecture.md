@@ -52,7 +52,7 @@ Each module lives in `apps/api/src/modules/<name>/` with `routes.ts` the HTTP ha
 | `auth` | OIDC, sessions, claims, multi-address identity, global roles | |
 | `org` | Courses, classrooms, staff, rosters, accommodations | `auth` |
 | `pool` | Pools, categories, tags, questions, versions, drafts, assets, search | `auth`, `core` |
-| `concept` | The instance-wide vocabulary of concepts (ADR-081): concepts, the resolution of a typed label, proposing and editing; the sorting of the existing tags (`concept_tag_sortings`, second addendum); aliases, relations and the links to questions and courses come with the cut-over (addendum §1) | `auth` |
+| `concept` | The instance-wide vocabulary of concepts (ADR-081): concepts, the resolution of a typed label, proposing and editing; the sorting of the existing tags (`concept_tag_sortings`, second addendum) and the model pass that proposes it (`concept_sort_runs`, LLM purpose `sort`); aliases, relations and the links to questions and courses come with the cut-over (addendum §1) | `auth` |
 | `evaluation` | Configuration of an evaluation, items, lifecycle, settings | `org`, `pool` |
 | `live` | Attempts, answers, autosave, presence, clock, live control, deadline ticker | `evaluation` |
 | `preview` | The teacher's stateless preview of an evaluation: seed, student view, runs and grading, nothing stored (ADR-018) | `live`, `grading`, `runner` |
