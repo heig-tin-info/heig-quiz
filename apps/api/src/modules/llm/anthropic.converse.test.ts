@@ -123,6 +123,32 @@ describe("anthropicProvider.converse", () => {
     expect(create.mock.calls[1]![0].messages[2].content[0]).toMatchObject({ is_error: true, content: "bad input" });
   });
 
+  it("awaits asynchronous tools and returns every result of a turn in one message, in order", async () => {
+    create
+      .mockResolvedValueOnce({
+        ...toolTurn("t1"),
+        content: [
+          { type: "tool_use", id: "slow", name: "read_guide", input: { page: "slow" } },
+          { type: "tool_use", id: "fast", name: "read_guide", input: { page: "fast" } },
+        ],
+      })
+      .mockResolvedValueOnce(textTurn("ok"));
+    const delayed = request();
+    delayed.tools[0]!.run = async (input) => {
+      const { page } = input as { page: string };
+      await new Promise((resolve) => setTimeout(resolve, page === "slow" ? 20 : 0));
+      return `page ${page}`;
+    };
+    await anthropicProvider.converse(delayed, meter().metered);
+    expect(create.mock.calls[1]![0].messages[2]).toEqual({
+      role: "user",
+      content: [
+        { type: "tool_result", tool_use_id: "slow", content: "page slow" },
+        { type: "tool_result", tool_use_id: "fast", content: "page fast" },
+      ],
+    });
+  });
+
   it("maps a refusal and an empty answer to the gateway's vocabulary", async () => {
     create.mockResolvedValueOnce(textTurn("", "refusal"));
     await expect(anthropicProvider.converse(request(), meter().metered)).rejects.toMatchObject({ code: "refused" });

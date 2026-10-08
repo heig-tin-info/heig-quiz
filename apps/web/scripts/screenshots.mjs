@@ -1526,6 +1526,23 @@ const scenes = [
       await p.keyboard.press("Enter");
       await p.waitForTimeout(800);
     } },
+  // P2 (ADR-080 amendment of 2026-10-08): the data notice above the
+  // composer, and the stub's results path off a classroom: the mock's ids
+  // are not uuids, so it never sends one, and the stub asks for a classroom.
+  { name: "assist-p2-notice", role: "teacher", path: "/classrooms/r1", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("button", { name: /^(ask the help assistant|demander à l'assistant d'aide)$/i }).click();
+      await p.getByRole("button", { name: /^(new conversation|nouvelle conversation)$/i }).click();
+      await p.waitForTimeout(400);
+    } },
+  { name: "assist-p2-results-no-classroom", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("button", { name: /^(ask the help assistant|demander à l'assistant d'aide)$/i }).click();
+      await p.getByRole("button", { name: /^(new conversation|nouvelle conversation)$/i }).click();
+      await p.getByRole("textbox", { name: /question/i }).fill("Quelle est la moyenne de chaque étudiant ?");
+      await p.keyboard.press("Enter");
+      await p.waitForTimeout(800);
+    } },
   { name: "assist-history", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
       await skipCoach(p);
       await p.getByRole("button", { name: /^(ask the help assistant|demander à l'assistant d'aide)$/i }).click();

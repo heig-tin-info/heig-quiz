@@ -1,11 +1,13 @@
-# ADR-080 — The teacher assistant: ask the documentation from any screen
+# ADR-080 — The teacher assistant: ask the documentation and your own data from any screen
 
 ## Status
 
 Accepted (2026-10-07, decisions of the product owner on issue #559, after
-a spec challenge). Records the whole feature in three phases; **P1 only**
-(§1–§7) is implemented, by requirement F-LLM-07. P2 (§8) and P3 (§9) are
-decided and recorded here, not built.
+a spec challenge). Records the whole feature in three phases; P1 (§1–§7)
+is implemented, by requirement F-LLM-07. **P2 (§8) is implemented** under
+the [P2 amendment of 2026-10-08](#p2-amendment-2026-10-08), which amends
+§2, §3 and §5 where they say so. P3 (§9) is decided and recorded here, not
+built.
 
 Scope: the in-app chat of the teacher UI, the `assist` purpose of the LLM
 gateway, the conversations it stores.
@@ -86,6 +88,12 @@ conversation's earlier exchanges and what the teacher typed. A teacher may
 type a name; it is not masked (it cannot be told from any other word), and
 the panel says that the questions are read by an AI model (Anthropic).
 
+*Amended by the P2 amendment, item 3: the context also carries the ids of
+the screen's entities from a closed list of kinds — course, classroom,
+pool, question, evaluation, template — and never a user's, an
+enrollment's, an attempt's or a student's; the stored exchange keeps the
+pattern without them.*
+
 ### 3. Where it is offered
 
 - Teacher and administrator **portal** sessions only, enforced by the
@@ -101,7 +109,11 @@ the panel says that the questions are read by an AI model (Anthropic).
 - **Allowed while an evaluation runs.** F-LLM-03 forbids a model call during
   a running evaluation for the fairness of grading; the assistant grades,
   releases and reads nothing of the evaluation, so the reason does not apply
-  (amendment of F-LLM-03, as ADR-072 did for polls).
+  (amendment of F-LLM-03, as ADR-072 did for polls). *Amended by the P2
+  amendment, item 2: the assistant grades and releases nothing; it may read
+  a running evaluation's structure (settings, items), and its results
+  reader returns final marks only — the released columns —, never a running
+  or unreleased evaluation's partial scores.*
 
 ### 4. Its share of the cap, refused first
 
@@ -147,7 +159,7 @@ the panel says that the questions are read by an AI model (Anthropic).
 - **Reply language**: the language of the user's last message, otherwise
   the UI language.
 - **No streaming** in v1. At most **4 provider requests per question**
-  (`ASSIST_MAX_STEPS`); the last one may not call a tool, so a question
+  (`ASSIST_MAX_STEPS`; *6 since the P2 amendment, item 7*); the last one may not call a tool, so a question
   ends. Each request is reserved at its worst case against the cap and the
   share, and logged in `llm_calls`.
 - **ADR-058 §1 amended**: the gateway gains `converse()` — a multi-turn call
@@ -203,18 +215,43 @@ Under `lg`, while the pool's bulk bar spans the bottom edge, the button
 steps aside. Checked at 1440 and 390 px (`apps/web/DESIGN.md`, "The help
 assistant").
 
-### 8. P2 — read tools (recorded, not built)
+### 8. P2 — read tools (built, under the P2 amendment)
 
 - Read tools call the API as the teacher, through a per-question,
   short-lived, audience-bound token (ADR-023's machinery): the audit shows
   `api_key`, and **Super Powers never pass through the assistant**
   (F-ADMIN-05 confirmed): a token carries none, so an administrator's
   assistant reaches what the administrator's own seats reach.
+- **The identity, as built.** A question mints, on its first data-tool call
+  only (a question the documentation answers writes no token), a token of
+  the asking teacher (`mintAssistToken`, `auth/tokens.ts`) with the
+  dedicated audience `urn:quiz:assist` and a 15-minute expiry; its later
+  calls reuse it. The auth hook accepts it only on
+  an in-process call that carries the boot-time internal secret
+  (`INTERNAL_CALL_HEADER`) and refuses it on the public MCP path, so it is
+  worth nothing outside the process. It is never listed on the teacher's
+  tokens page nor revocable there (`listApiTokens` and `revokeApiToken` take
+  personal tokens only), and it changes nothing a person sees (its own
+  `last_used_at`, on a row nobody lists, aside). It is **deleted** in a
+  `finally` when the question ends, answered or failed (`asTheTeacher`,
+  `modules/assist/service.ts`), and one a crash leaves behind expires and is
+  deleted by the daily `assist.purge` task. It resolves like every token —
+  the teacher's current role and seats, `callerFor(user, null)`, so `reach`
+  is `seats` and never `all` — and the tools reach the API through the MCP
+  tools' own chain (`injectedApi`, `app.inject`, `runTool`), so access loading
+  (invariant 6), the contracts (invariant 7) and the audit are a normal
+  request's. A 404 is handed to the model as "the user holds no seat on the
+  course this belongs to, or it does not exist", which it says plainly; it
+  never retries around it. *Why a token rather than injecting a request
+  already authenticated as the user:* the token path exists, is tested and
+  is the one the MCP tools take; a second, header-borne identity on the
+  internal call would be a new way to authenticate a request, wider than a
+  token bound to one audience and one question.
 - **N-DATA-05 and open question 43, scoped to P2**: the product owner
   accepts that P2's read tools may return student names and results of the
   teacher's own classrooms to the provider, as the screen shows them to the
-  teacher. This is decided, not implemented; P2 states its tools, its
-  masking if any, and the panel's notice before it ships.
+  teacher. *Built under the P2 amendment: the tools are its item 6, there is
+  no masking (item 4), and the panel's notice says it.*
 - **ADR-022's consequence** ("F-LLM-04 is not engaged: the platform sends
   nothing to a provider") holds for the MCP server, where the teacher's own
   client is the one that sends; it does not hold for the in-app assistant,
@@ -229,15 +266,80 @@ assistant").
   ADR-059 proposal path: merged into the draft, one Undo, the teacher
   publishes.
 - Writes made on the assistant's behalf get a new `assistant` actor in
-  `audit.ts`'s `actorType` (invariant 9). P1 writes nothing on the
-  assistant's behalf, so P1 does not add it.
+  `audit.ts`'s `actorType` (invariant 9). P1 and P2 write nothing on the
+  assistant's behalf, so neither adds it.
+
+### P2 amendment (2026-10-08)
+
+The product owner's decisions of 2026-10-08 (1–4) and the spec challenge's
+(5–10), for P2. They amend §2, §3, §5 and §8 where those say so, F-LLM-03
+and F-LLM-07 (docs/spec/02), N-DATA-05 and N-DATA-07 (docs/spec/03), and
+ADR-022's consequence.
+
+1. **The results reader is the assistant's alone.** `get_classroom_results`
+   reads the staff gradebook route (`GET /classrooms/:id/gradebook`)
+   through the same in-process chain as the other tools, and is NOT in the
+   MCP catalogue (`modules/mcp/tools.ts`): the grants and personal tokens
+   already given to MCP clients never gain it (ADR-022's promise). It
+   returns final marks only: each released column, each student by name
+   with a grade per column (`absent` for a1.0) and the gradebook's mean
+   (`assistResults`, `@quiz/domain`).
+2. **During a running evaluation** the assistant may read the evaluation's
+   structure; the results reader returns the released columns only, so
+   neither a running nor an unreleased evaluation's partial scores — nor a
+   staff mark standing in such a column — ever reach the model. F-LLM-03
+   is amended accordingly (§3).
+3. **The screen's ids** (`AssistContext.entities`): a closed list of kinds
+   — course, classroom, pool, question, evaluation, template — each a uuid,
+   checked by the contract, which refuses any other key (a student, a user,
+   an enrollment, an attempt) rather than dropping it. The web derives them
+   from the route by a closed table (`routeEntities`), never from a field
+   it does not know. The prompt lists them under "On screen"; the stored
+   exchange keeps the route pattern, the topic and the language only
+   (`assistScreenOf`).
+4. **No masking.** The panel says, in both languages, that to answer about
+   the teacher's classrooms the assistant reads their data as the teacher
+   sees it, students' names and results included, and sends it to
+   Anthropic (`assist.notice`). N-DATA-07 and the data-protection guide say
+   so to the students.
+5. **Identity**: §8, "The identity, as built".
+6. **A closed allowlist of tools**, pinned by a test
+   (`assist.tools.db.test.ts`): `read_guide`; the MCP read tools that carry
+   no student data — `list_courses`, `get_course`, `list_pools`,
+   `get_pool`, `get_pool_question_stats`, `list_questions`,
+   `find_similar_questions`, `get_question`, `describe_question_types`,
+   `list_evaluations`, `get_evaluation`, `list_templates` — reusing their
+   schemas and handlers with the assistant's own descriptions (no authoring
+   nudge); and the results reader. No write tool is handed to the model,
+   an unknown name is an error it reads, and the client the tools are given
+   refuses every write before sending it (`readOnly`).
+7. **Bounds.** Every tool result is cut at 24,000 characters (about 8k
+   tokens) with a "narrow your request" marker (`capToolResult`);
+   `ASSIST_MAX_STEPS` is 6; each request is still reserved at its worst case
+   against the cap and the 25 % share (§4).
+8. **Links.** In an answer, only a link to the app's own origin is
+   clickable (`Markdown links="same-origin"`); any other renders as its text,
+   so a page or a title that steers the model into a link carrying what it
+   read off to another site is never one click away.
+9. **What is stored** is the question and the answer, never a tool call nor
+   its result. A student's name the answer quotes may stay in the teacher's
+   conversation up to 30 days after that student's erasure;
+   `docs/guide/data-protection.md` says so.
+10. **The prompt** lets the assistant answer about the user's own data from
+    what a tool returned; it still declines anything off-topic, never claims
+    to have changed anything (no writes until P3), and explains how to do it
+    in the interface when asked to change something.
+
+Deferred: the results reader over MCP, opaque handles instead of uuids in
+the context, per-attempt detail (an answer, a paper), streaming, and the
+writes of P3.
 
 ## Consequences
 
 - A teacher asks a question from any teacher screen and gets an answer that
   names the screen's labels, without leaving the screen; in development,
   with the stub.
-- Each question costs up to four metered requests; with the prefix cached,
+- Each question costs up to six metered requests (four before P2); with the prefix cached,
   a question costs a few cents with Sonnet. The chat cannot spend
   more than a quarter of the cap, nor the last quarter of it.
 - A new personal-data table about staff (their questions), read by its

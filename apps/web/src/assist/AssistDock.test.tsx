@@ -62,14 +62,16 @@ describe("the chat", () => {
     await userEvent.click(await screen.findByRole("button", OPEN));
     const panel = screen.getByRole("dialog", { name: "Help assistant" });
     expect(within(panel).getByText(/kept 30 days/)).toBeVisible();
+    // The notice of ADR-080 P2, item 4: what is read and who reads it.
+    expect(within(panel).getByText(/students' names and results included, and sends it to Anthropic/)).toBeVisible();
     await userEvent.type(within(panel).getByRole("textbox"), "What is the Group option for?{Enter}");
     expect(await within(panel).findByText("category")).toBeVisible();
     const sent = calls.find((c) => c.method === "POST");
     expect(sent?.body).toEqual({
       message: "What is the Group option for?",
-      context: { route: "/pools/:id", helpTopic: "pool", locale: "en" },
+      // The pattern carries no id; the pool's id rides as an entity of the closed list (ADR-080 P2).
+      context: { route: "/pools/:id", helpTopic: "pool", locale: "en", entities: { pool: POOL } },
     });
-    expect(JSON.stringify(sent?.body)).not.toContain(POOL);
     expect(sessionStorage.getItem("quiz-assist-conversation")).toBe(CID);
   });
 

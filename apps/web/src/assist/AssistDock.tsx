@@ -5,8 +5,12 @@
  * dock steps aside (`data-assist-dock`, `style.css`).
  *
  * What it sends is the route pattern, the screen's help topic (the slot its
- * `PageHelpButton` fills) and the UI language (`context.ts`), with the
- * question. The conversation open in this tab survives a reload
+ * `PageHelpButton` fills), the UI language and the ids of the screen's
+ * entities from a closed list of kinds (`context.ts`), with the question.
+ * The panel always says that what the assistant reads to answer — students'
+ * names and results included — goes to Anthropic (ADR-080 P2), and an
+ * answer's links are clickable only into the app itself. The conversation
+ * open in this tab survives a reload
  * (`sessionStorage`); the server keeps it 30 days. One that is gone — purged,
  * or deleted in another tab — is forgotten, and the question starts a new one.
  */
@@ -30,7 +34,7 @@ import { useConfirm } from "../confirm";
 import { useI18n } from "../i18n";
 import { Markdown } from "../markdown";
 import { assistAvailabilityKey, assistConversationKey, assistConversationsKey } from "../queryKeys";
-import type { Route } from "../router";
+import { parsePath, type Navigate, type Route } from "../router";
 import { Alert, Badge, cx, IconButton, QueryError, RelativeTime, Spinner, ToolDock } from "../ui";
 import { assistContext, assistVisible } from "./context";
 
@@ -53,7 +57,18 @@ function storeConversation(id: string | null): void {
   }
 }
 
-export function AssistDock({ me, route, teacherUi }: { me: Me; route: Route; teacherUi: boolean }) {
+export function AssistDock({
+  me,
+  route,
+  teacherUi,
+  navigate,
+}: {
+  me: Me;
+  route: Route;
+  teacherUi: boolean;
+  /** The app's router: an answer's in-app link moves the app without a reload. */
+  navigate?: Navigate;
+}) {
   const visible = assistVisible({ teacherUi, me, view: route.view });
   const availability = useQuery({
     queryKey: assistAvailabilityKey,
@@ -63,10 +78,10 @@ export function AssistDock({ me, route, teacherUi }: { me: Me; route: Route; tea
     retry: false,
   });
   if (!visible || !availability.data?.available) return null;
-  return <Dock route={route} stub={availability.data.stub} />;
+  return <Dock route={route} stub={availability.data.stub} navigate={navigate} />;
 }
 
-function Dock({ route, stub }: { route: Route; stub: boolean }) {
+function Dock({ route, stub, navigate }: { route: Route; stub: boolean; navigate: Navigate | undefined }) {
   const { t } = useI18n();
   const [showHistory, setShowHistory] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(storedConversation);
@@ -82,15 +97,16 @@ function Dock({ route, stub }: { route: Route; stub: boolean }) {
       icon={MessageCircleQuestion}
       openLabel={t("assist.open")}
       closeLabel={t("assist.close")}
-      title={t("assist.title")}
       offset="var(--bottom-nav-h)"
       panelClassName="flex h-[min(36rem,calc(100dvh-var(--banner-h)-var(--bottom-nav-h)-var(--tool-dock-h)-5rem))] w-[24rem] flex-col"
       dockProps={{ "data-assist-dock": true }}
     >
-      {(close) => (
+      {(close, titleId) => (
         <>
           <header className="flex items-center gap-2 border-b border-line py-2 pr-2 pl-4">
-            <h2 className="text-[15px] font-bold tracking-tight">{t("assist.title")}</h2>
+            <h2 id={titleId} className="text-[15px] font-bold tracking-tight">
+              {t("assist.title")}
+            </h2>
             {stub ? <Badge tone="zinc">{t("assist.stub")}</Badge> : null}
             <span className="ml-auto flex items-center gap-1">
               <IconButton
@@ -111,7 +127,7 @@ function Dock({ route, stub }: { route: Route; stub: boolean }) {
           {showHistory ? (
             <HistoryList current={conversationId} onOpen={select} />
           ) : (
-            <Chat route={route} conversationId={conversationId} onConversation={select} />
+            <Chat route={route} conversationId={conversationId} onConversation={select} navigate={navigate} />
           )}
         </>
       )}
@@ -123,10 +139,12 @@ function Chat({
   route,
   conversationId,
   onConversation,
+  navigate,
 }: {
   route: Route;
   conversationId: string | null;
   onConversation: (id: string | null) => void;
+  navigate: Navigate | undefined;
 }) {
   const { t, locale } = useI18n();
   const qc = useQueryClient();
@@ -207,7 +225,7 @@ function Chat({
         {exchanges.map((e) => (
           <div key={e.id} className="space-y-4">
             <Question text={e.question} />
-            <Answer text={e.answer} />
+            <Answer text={e.answer} navigate={navigate} />
           </div>
         ))}
         {ask.isPending ? (
@@ -219,7 +237,8 @@ function Chat({
         {failed ? <Alert tone="danger">{apiErrorMessage(ask.error, t("assist.error"))}</Alert> : null}
         <div ref={end} />
       </div>
-      <form onSubmit={submit} className="flex items-end gap-2 border-t border-line p-3">
+      <p className="border-t border-line px-4 pt-2 text-[12px] leading-snug text-fg-faint">{t("assist.notice")}</p>
+      <form onSubmit={submit} className="flex items-end gap-2 p-3 pt-2">
         <label className="sr-only" htmlFor="assist-question">
           {t("assist.placeholder")}
         </label>
@@ -253,10 +272,21 @@ function Question({ text }: { text: string }) {
   return <p className="ml-8 rounded-card bg-surface-2 px-3 py-2 text-sm whitespace-pre-wrap text-fg">{text}</p>;
 }
 
-function Answer({ text }: { text: string }) {
+function Answer({ text, navigate }: { text: string; navigate: Navigate | undefined }) {
+  // An in-app link is a path of this origin (`linkTarget`): its page, through the router.
+  // A `Route` holds no query string, so a link carrying one (`?tab=roster`) is a
+  // full load: the router would land on the page without its tab.
+  const onNavigate = navigate
+    ? (path: string) => {
+        const url = new URL(path, window.location.origin);
+        if (url.search) window.location.assign(url.pathname + url.search + url.hash);
+        else navigate(parsePath(url.pathname));
+      }
+    : undefined;
   return (
     <div className="space-y-2 text-sm leading-relaxed text-fg">
-      <Markdown source={text} />
+      {/* Same-origin links only: an answer may echo text others wrote (ADR-080 P2, item 8). */}
+      <Markdown source={text} links="same-origin" onNavigate={onNavigate} />
     </div>
   );
 }

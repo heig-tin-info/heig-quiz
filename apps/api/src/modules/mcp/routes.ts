@@ -16,59 +16,16 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { OAUTH_SCOPE } from "@quiz/contracts";
 
 import { MCP_PATH } from "../../auth/oauth/service.js";
-import { INTERNAL_CALL_HEADER } from "../../auth/plugin.js";
 import type { AppConfig } from "../../config.js";
 import { handleMessage, RPC } from "./protocol.js";
-import { ApiError, type Api } from "./tools.js";
+import { injectedApi } from "./service.js";
 
 
 export async function mcpPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
 
   /** The in-process client of `/app/api`, acting with the caller's own token. */
-  function apiFor(req: FastifyRequest): Api {
-    const authorization = req.headers.authorization!;
-    const call = async (
-      method: "GET" | "POST" | "PUT" | "PATCH",
-      path: string,
-      body?: unknown,
-      query?: Record<string, string | number | undefined>,
-    ) => {
-      const search = new URLSearchParams();
-      for (const [k, v] of Object.entries(query ?? {})) if (v !== undefined) search.set(k, String(v));
-      const qs = search.toString();
-      const res = await app.inject({
-        method,
-        url: `/app/api${path}${qs ? `?${qs}` : ""}`,
-        headers: {
-          authorization,
-          // An OAuth access token is bound to the MCP endpoint (RFC 8707);
-          // this is what lets the SAME token through on the routes a tool
-          // forwards to, and only from inside this process.
-          [INTERNAL_CALL_HEADER]: app.internalCallSecret,
-          ...(body === undefined ? {} : { "content-type": "application/json" }),
-        },
-        ...(body === undefined ? {} : { payload: JSON.stringify(body) }),
-      });
-      let parsed: unknown = null;
-      if (res.body) {
-        try {
-          parsed = JSON.parse(res.body);
-        } catch {
-          parsed = res.body;
-        }
-      }
-      if (res.statusCode >= 400) throw new ApiError(res.statusCode, parsed);
-      return parsed as any;
-    };
-    return {
-      get: (path, query) => call("GET", path, undefined, query),
-      post: (path, body) => call("POST", path, body ?? {}),
-      put: (path, body) => call("PUT", path, body),
-      patch: (path, body) => call("PATCH", path, body),
-      link: (path) => `${config.WEB_URL}${path}`,
-    };
-  }
+  const apiFor = (req: FastifyRequest) => injectedApi(app, req.headers.authorization!, config.WEB_URL);
 
   /**
    * RFC 9728 §5.1: the 401 names the protected resource metadata, which is

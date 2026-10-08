@@ -23,7 +23,7 @@ import { oauthRoutes } from "./oauth/routes.js";
 import { sebRoutes } from "./seb.js";
 import { trustRefused } from "./trust.js";
 import { apiTokenRoutes } from "./tokenRoutes.js";
-import { findTokenUser, isApiToken } from "./tokens.js";
+import { ASSIST_AUDIENCE, findTokenUser, isApiToken } from "./tokens.js";
 import {
   CSRF_COOKIE,
   CSRF_HEADER,
@@ -153,10 +153,13 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
       const found = await findTokenUser(app.db, bearer, app.clock.now());
       if (!found) return;
       // An OAuth token is good for the resource it was issued for, and for
-      // the tool calls made on its behalf — nowhere else.
+      // the tool calls made on its behalf — nowhere else. The help
+      // assistant's token (ADR-080 §8) has no public resource at all: only
+      // its own tools' in-process calls, never the MCP endpoint.
       if (found.audience !== null) {
         const path = req.url.split("?")[0];
-        if (path !== MCP_PATH && !isInternalCall(req)) return;
+        const assistant = found.audience === ASSIST_AUDIENCE;
+        if (path === MCP_PATH ? assistant : !isInternalCall(req)) return;
       }
       req.user = found.user;
       req.authVia = "token";

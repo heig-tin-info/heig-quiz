@@ -73,7 +73,7 @@ interface ToolAnnotations {
   openWorldHint?: boolean;
 }
 
-interface Tool<S extends z.ZodObject = z.ZodObject> {
+export interface Tool<S extends z.ZodObject = z.ZodObject> {
   name: string;
   title: string;
   description: string;
@@ -636,6 +636,44 @@ export const TOOLS: Tool[] = [
 
 export const toolByName = new Map(TOOLS.map((t) => [t.name, t]));
 
+/** A tool's input as JSON Schema, `$schema` dropped: what a model is handed (`tools/list`, the help assistant). */
+export function inputJsonSchema(input: z.ZodObject): Record<string, unknown> {
+  const schema = z.toJSONSchema(input, { io: "input", unrepresentable: "any" }) as Record<string, unknown>;
+  delete schema.$schema;
+  return schema;
+}
+
+/** Why a tool call gave no result; each caller words it for its own reader. */
+export type ToolFailure =
+  | { kind: "invalid_arguments"; issues: { path: string; message: string }[] }
+  | { kind: "refused"; status: number; body: unknown }
+  | { kind: "tool_refusal"; message: string; details: unknown }
+  | { kind: "internal"; cause: unknown };
+export type ToolOutcome = { ok: true; value: unknown } | { ok: false; error: ToolFailure };
+
+/**
+ * One call of a tool: its arguments validated by its schema, then its
+ * handler over `api`. A refusal of a route (`ApiError`), of the tool
+ * (`ToolRefusal`) or an unexpected error comes back as a `ToolFailure`,
+ * never thrown: the MCP server and the help assistant word it each their way.
+ */
+export async function runTool(api: Api, tool: Tool, raw: unknown): Promise<ToolOutcome> {
+  const args = tool.input.safeParse(raw);
+  if (!args.success) {
+    const issues = args.error.issues.map((i) => ({ path: i.path.join("."), message: i.message }));
+    return { ok: false, error: { kind: "invalid_arguments", issues } };
+  }
+  try {
+    return { ok: true, value: await tool.run(api, args.data) };
+  } catch (error) {
+    if (error instanceof ApiError) return { ok: false, error: { kind: "refused", status: error.status, body: error.body } };
+    if (error instanceof ToolRefusal) {
+      return { ok: false, error: { kind: "tool_refusal", message: error.message, details: error.details } };
+    }
+    return { ok: false, error: { kind: "internal", cause: error } };
+  }
+}
+
 /**
  * `tools/list`: the catalogue with each input as JSON Schema. Every tool
  * declares the OAuth scheme it needs: ChatGPT reads `securitySchemes` per
@@ -643,8 +681,7 @@ export const toolByName = new Map(TOOLS.map((t) => [t.name, t]));
  */
 export function toolDescriptors() {
   return TOOLS.map((t) => {
-    const inputSchema = z.toJSONSchema(t.input, { io: "input", unrepresentable: "any" }) as Record<string, unknown>;
-    delete inputSchema.$schema;
+    const inputSchema = inputJsonSchema(t.input);
     return {
       name: t.name,
       title: t.title,

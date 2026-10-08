@@ -6,7 +6,7 @@
  * except for an administrator with Super Powers on (ADR-054), whose read is
  * audited (`assist.read`).
  */
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { AssistAsk, AssistListQuery, IdParam, type AssistAvailability } from "@quiz/contracts";
 import { ASSIST_TURNS_PER_MINUTE } from "@quiz/domain";
@@ -17,6 +17,7 @@ import type { AppConfig } from "../../config.js";
 import { callerOf, ownSessionGuard, teacherGuard } from "../guards.js";
 import { invalid, notFound } from "../http.js";
 import { LlmError, llmFailure } from "../llm/service.js";
+import { injectedApi } from "../mcp/service.js";
 import { loadCorpus } from "./corpus.js";
 import {
   ask,
@@ -44,6 +45,14 @@ export async function assistPlugin(app: FastifyInstance, opts: { config: AppConf
   const readsEveryone = (req: FastifyRequest) => callerOf(req).reach === "all";
   /** The engine that answers now, or null: no corpus, no key and no stub. */
   const engineNow = async () => (corpus ? assistEngine(app.llmGateway, stub) : null);
+  /**
+   * A conversation that is not the caller's — missing, somebody else's,
+   * purged — is ONE answer on every route: `404 conversation_not_found`
+   * (invariant 6: nothing tells them apart).
+   */
+  const missing = (reply: FastifyReply) => reply.code(404).send({ error: "conversation_not_found" });
+  /** The data tools' client of the API, with the question's own token (ADR-080 §8). */
+  const api = (authorization: string) => injectedApi(app, authorization, config.WEB_URL);
 
   app.get("/app/api/assist/availability", { preHandler: requireAssist }, async (): Promise<AssistAvailability> => {
     const engine = await engineNow();
@@ -62,10 +71,15 @@ export async function assistPlugin(app: FastifyInstance, opts: { config: AppConf
     const engine = await engineNow();
     if (!corpus || !engine) return reply.code(409).send({ error: "llm_not_configured" });
     try {
-      return await ask({ db: app.db, gateway: app.llmGateway, corpus, engine }, user, body.data, now);
+      const link = (path: string) => `${config.WEB_URL}${path}`;
+      return await ask({ db: app.db, gateway: app.llmGateway, corpus, engine, api, link }, user, body.data, now);
     } catch (error) {
-      // Missing, somebody else's, or purged while the model answered: the same 404.
-      if (error instanceof ConversationNotFound) return reply.code(404).send({ error: "conversation_not_found" });
+      // Missing, somebody else's, or purged while the model answered: the same
+      // 404. In the last case the model's requests were made and logged; the
+      // panel asks again in a new conversation, so that rare race is charged
+      // twice — a few cents, rather than an exchange written into a
+      // conversation its owner just deleted.
+      if (error instanceof ConversationNotFound) return missing(reply);
       if (error instanceof LlmError) {
         const { status, body: failure } = llmFailure(error);
         return reply.code(status).send(failure);
@@ -88,12 +102,12 @@ export async function assistPlugin(app: FastifyInstance, opts: { config: AppConf
 
   app.get("/app/api/assist/conversations/:id", { preHandler: requireAssist }, async (req, reply) => {
     const params = IdParam.safeParse(req.params);
-    if (!params.success) return notFound(reply);
+    if (!params.success) return missing(reply);
     const user = req.user!;
     const own = await findConversation(app.db, params.data.id, user.id);
     if (own) return conversationDetail(app.db, own);
     const other = readsEveryone(req) ? await findConversation(app.db, params.data.id, null) : null;
-    if (!other) return notFound(reply);
+    if (!other) return missing(reply);
     await trace(req, "assist.read", "assist_conversation", other.id, { owner: other.userId });
     return conversationDetail(app.db, other);
   });
@@ -101,9 +115,9 @@ export async function assistPlugin(app: FastifyInstance, opts: { config: AppConf
   /** The owner's alone (ADR-080 §6): an administrator reads another's, never deletes it. */
   app.delete("/app/api/assist/conversations/:id", { preHandler: requireAssist }, async (req, reply) => {
     const params = IdParam.safeParse(req.params);
-    if (!params.success) return notFound(reply);
+    if (!params.success) return missing(reply);
     const own = await findConversation(app.db, params.data.id, req.user!.id);
-    if (!own) return notFound(reply);
+    if (!own) return missing(reply);
     await deleteConversation(app.db, own.id);
     return reply.code(204).send();
   });

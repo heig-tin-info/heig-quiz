@@ -6,6 +6,8 @@
  * Nothing behind the panel is inert and focus is not trapped: the page stays
  * readable and usable. Escape, the button or the panel's own close (the
  * `close` handed to `children`) closes it, and focus returns to the button.
+ * The panel is named by its own heading: `children` get the `titleId` to
+ * put on it (`aria-labelledby`).
  * The wrapper is a tool dock (`data-tool-dock`): the toasts rise above it
  * (`--tool-dock-h`). `offset` is the CSS length the dock sits above (a
  * footer or a bottom bar); `keepMounted` keeps the panel's state across a
@@ -21,7 +23,6 @@ export function ToolDock({
   icon: Icon,
   openLabel,
   closeLabel,
-  title,
   offset,
   panelClassName,
   keepMounted = false,
@@ -32,8 +33,6 @@ export function ToolDock({
   icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
   openLabel: string;
   closeLabel: string;
-  /** The panel's accessible name. */
-  title: string;
   /** What the dock sits above, a CSS length (`var(--player-footer-h,0px)`). */
   offset: string;
   /** The panel's width and height. */
@@ -43,13 +42,18 @@ export function ToolDock({
   onOpen?: () => void;
   /** Extra attributes on the wrapper (a `data-*` a stylesheet reads). */
   dockProps?: Record<`data-${string}`, string | boolean>;
-  children: (close: () => void) => ReactNode;
+  /** The panel's content; the element with id `titleId` names it. */
+  children: (close: () => void, titleId: string) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const panelId = useId();
+  const titleId = useId();
+  // The latest `onOpen`, kept outside render; the effect below runs after this one.
   const onOpenRef = useRef(onOpen);
-  onOpenRef.current = onOpen;
+  useEffect(() => {
+    onOpenRef.current = onOpen;
+  });
 
   useEffect(() => {
     if (open) onOpenRef.current?.();
@@ -67,7 +71,7 @@ export function ToolDock({
           id={panelId}
           role="dialog"
           aria-modal="false"
-          aria-label={title}
+          aria-labelledby={titleId}
           hidden={!open}
           onKeyDown={(e) => {
             if (e.key !== "Escape") return;
@@ -84,7 +88,7 @@ export function ToolDock({
             Z.tool,
           )}
         >
-          {children(close)}
+          {children(close, titleId)}
         </section>
       ) : null}
       <button

@@ -224,7 +224,11 @@ the pools fill with near-duplicates.
   its owner can read. The tools expose no student data beyond what
   `get_course` (staff names) and `get_evaluation` return; the question
   statistics of `get_pool_question_stats` are anonymous aggregates of ten
-  answers or more.
+  answers or more. *Amended by ADR-080's P2 amendment (2026-10-08): the
+  in-app assistant's results reader (`get_classroom_results`, students'
+  names and final grades) is wired through the same in-process chain but is
+  NOT in this catalogue, so an existing OAuth grant or personal token never
+  gains it; exposing it over MCP would be a decision of its own.*
 
 ## Rejected alternatives
 

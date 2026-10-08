@@ -11,7 +11,7 @@ import { z } from "zod";
 
 import { MCP_PROTOCOL_VERSIONS, McpMessage, McpToolCall, type JsonRpcId } from "@quiz/contracts";
 
-import { ApiError, ToolRefusal, toolByName, toolDescriptors, type Api } from "./tools.js";
+import { runTool, toolByName, toolDescriptors, type Api } from "./tools.js";
 
 /** JSON-RPC 2.0 error codes. */
 export const RPC = {
@@ -65,28 +65,22 @@ async function callTool(api: Api, params: unknown, log: (err: unknown) => void) 
   if (!call.success) return { error: "Invalid tools/call params" };
   const tool = toolByName.get(call.data.name);
   if (!tool) return { error: `Unknown tool: ${call.data.name}` };
-  const args = tool.input.safeParse(call.data.arguments);
-  if (!args.success) {
-    return {
-      result: toolResult({
-        error: "invalid_arguments",
-        issues: args.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
-      }, true),
-    };
-  }
-  try {
-    return { result: toolResult(await tool.run(api, args.data)) };
-  } catch (error) {
-    if (error instanceof ApiError) {
+  const outcome = await runTool(api, tool, call.data.arguments);
+  if (outcome.ok) return { result: toolResult(outcome.value) };
+  const failure = outcome.error;
+  switch (failure.kind) {
+    case "invalid_arguments":
+      return { result: toolResult({ error: "invalid_arguments", issues: failure.issues }, true) };
+    case "refused": {
       // 404 is also "you may not reach it" (invariant 6): say both.
-      const hint = error.status === 404 ? "Not found, or not accessible to this teacher." : undefined;
-      return { result: toolResult({ error: "refused", status: error.status, body: error.body, hint }, true) };
+      const hint = failure.status === 404 ? "Not found, or not accessible to this teacher." : undefined;
+      return { result: toolResult({ error: "refused", status: failure.status, body: failure.body, hint }, true) };
     }
-    if (error instanceof ToolRefusal) {
-      return { result: toolResult({ error: error.message, details: error.details }, true) };
-    }
-    log(error);
-    return { result: toolResult({ error: "internal_error" }, true) };
+    case "tool_refusal":
+      return { result: toolResult({ error: failure.message, details: failure.details }, true) };
+    case "internal":
+      log(failure.cause);
+      return { result: toolResult({ error: "internal_error" }, true) };
   }
 }
 

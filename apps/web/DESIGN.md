@@ -2084,17 +2084,21 @@ placement over an `offset` and `Z.tool`.
   Escape or the cross closes it and focus returns to the button.
 - **Inside**: a header (the 15 px bold title, a `zinc` badge when the
   development stub answers, then History, New and Close as small icon
-  buttons); the conversation; the composer, pinned at the bottom. A
+  buttons); the conversation; the data notice, one 12 px `fg-faint` line
+  above the composer, always there (what the assistant reads, students'
+  names and results included, goes to Anthropic); the composer, pinned at
+  the bottom. A
   question is a `surface-2` bubble on the right, at 14 px; an answer is
   plain 14 px text on the surface (the help drawer's Markdown: paragraphs,
-  bullet and numbered lists, bold, code; a link only when it is http(s)),
+  bullet and numbered lists, bold, code; a link only when it leads to the
+  app's own origin — any other stays text, ADR-080 P2),
   never a bubble, so the reading weight is on the answer. The send button
   is a 36 px ink disc with an up arrow, dimmed while empty or waiting.
   Enter sends, Shift+Enter breaks the line.
-- **States**: empty — a muted bubble icon, "Ask about this screen" and the
-  notice that an AI model (Anthropic) reads the question, kept 30 days and
+- **States**: empty — a muted bubble icon, "Ask about this screen" and
+  what it answers (the screen, the teacher's own data), kept 30 days and
   readable by an administrator; waiting — the question shown at once and a
-  spinner "Looking it up in the documentation…"; refused or failed — a
+  spinner "Looking it up…"; refused or failed — a
   `danger` `Alert` under the conversation, the draft kept; history — the
   retention line, then one row per conversation (its first question, its
   relative time, a danger icon button that deletes through `useConfirm`).

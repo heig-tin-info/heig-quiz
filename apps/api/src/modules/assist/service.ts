@@ -1,20 +1,32 @@
 /**
  * The teacher assistant (ADR-080, F-LLM-07): a question about the platform,
- * asked from any teacher screen, answered from the documentation by the
- * gateway's `converse()` with one read-only tool, `read_guide` — or, in
+ * or about the teacher's own data on it, asked from any teacher screen,
+ * answered by the gateway's `converse()` with read-only tools — `read_guide`
+ * over the documentation and the data tools of `./tools.ts` — or, in
  * development without a model, by the stub (`LLM_PROVIDER=stub`).
  *
  * What reaches the model is the corpus, the route PATTERN, the help topic,
- * the UI language and what the teacher typed: never an entity, never a name
- * the platform holds (ADR-080 §2). The conversations are stored, 30 days a
- * message (§6), and read by their owner and by the administrators.
+ * the UI language, the ids of the screen's entities (a closed list of
+ * kinds), what the teacher typed, and what the data tools read AS THE
+ * TEACHER — names and final results of the teacher's own classrooms
+ * included (ADR-080 §8 and its P2 amendment). The data tools run under a
+ * token of that one question, deleted when it ends. What is stored is the
+ * question and the answer, never a tool call nor its result, 30 days an
+ * exchange (§6), read by their owner and by the administrators.
  */
 import { randomUUID } from "node:crypto";
 
 import { and, asc, desc, eq, lt, notExists, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type { AssistContext, AssistConversation, AssistConversationSummary, AssistExchange, AssistReply } from "@quiz/contracts";
+import {
+  assistScreenOf,
+  type AssistContext,
+  type AssistConversation,
+  type AssistConversationSummary,
+  type AssistExchange,
+  type AssistReply,
+} from "@quiz/contracts";
 import {
   ASSIST_CAP_SHARE,
   ASSIST_HISTORY_EXCHANGES,
@@ -24,15 +36,18 @@ import {
   assistScreen,
   assistSystem,
   readGuide,
-  stubAnswer,
+  stubReply,
   type AssistCorpus,
   type AssistRole,
 } from "@quiz/domain";
 
+import { dropAssistToken, mintAssistToken } from "../../auth/tokens.js";
 import type { Db } from "../../db/client.js";
 import { assistConversations, assistExchanges } from "../../db/schema.js";
 import type { ConverseTurn, LlmGateway, ReadOnlyTool } from "../llm/service.js";
 import { STUB_MODEL } from "../llm/service.js";
+import type { Api } from "../mcp/service.js";
+import { assistDataTools, classroomResults } from "./tools.js";
 
 /** How the assistant answers on this server: the gateway's model, the development stub, or not at all. */
 export type AssistEngine = "model" | "stub" | null;
@@ -150,13 +165,47 @@ export interface AskDeps {
   gateway: LlmGateway;
   corpus: AssistCorpus;
   engine: Exclude<AssistEngine, null>;
+  /** The in-process client of the API acting with a bearer `authorization` header (`injectedApi`). */
+  api: (authorization: string) => Api;
+  /** The web app's URL of a screen (`Api.link`). */
+  link: (path: string) => string;
+}
+
+/**
+ * Runs `fn` with an API client acting as `userId` under a token of this ONE
+ * question (ADR-080 §8), minted LAZILY on the first data-tool call — a
+ * question the documentation answers writes no token — and deleted when the
+ * question ends, whatever happens; one a crash leaves behind expires and
+ * `assist.purge` deletes it.
+ */
+async function asTheTeacher<T>(deps: AskDeps, userId: string, now: Date, fn: (api: Api) => Promise<T>): Promise<T> {
+  let minted: Promise<{ id: string; token: string }> | null = null;
+  const client = async () => {
+    minted ??= mintAssistToken(deps.db, userId, now);
+    return deps.api(`Bearer ${(await minted).token}`);
+  };
+  const refuse = () => Promise.reject(new Error("The help assistant reads only."));
+  const lazy: Api = {
+    get: async (path, query) => (await client()).get(path, query),
+    post: refuse,
+    put: refuse,
+    patch: refuse,
+    link: deps.link,
+  };
+  try {
+    return await fn(lazy);
+  } finally {
+    const token = minted ? await (minted as Promise<{ id: string }>).catch(() => null) : null;
+    if (token) await dropAssistToken(deps.db, token.id);
+  }
 }
 
 /**
  * One question (ADR-080 §5): the conversation's last exchanges and the new
- * question go to the model with the stable prompt, the screen and the tool;
- * the question and its answer are stored as ONE exchange once the answer came, so
- * a failed call leaves nothing behind and the teacher simply asks again.
+ * question go to the model with the stable prompt, the screen and the tools;
+ * the question and its answer are stored as ONE exchange once the answer
+ * came — never the tool calls nor their results —, so a failed call leaves
+ * nothing behind and the teacher simply asks again.
  * Throws `ConversationNotFound` or the gateway's `LlmError`.
  */
 export async function ask(
@@ -183,20 +232,24 @@ export async function ask(
   ]);
   history.push({ role: "user", text: question.message });
 
-  const { text, model } =
+  const { text, model } = await asTheTeacher(deps, asker.id, now, (api) =>
     deps.engine === "model"
-      ? await deps.gateway.converse({
+      ? deps.gateway.converse({
           purpose: "assist",
           userId: asker.id,
           system: { stable: assistSystem(corpus, role), volatile: assistScreen(corpus, role, question.context) },
           history,
-          tools: [readGuideTool(corpus, role, question.context.locale)],
+          tools: [readGuideTool(corpus, role, question.context.locale), ...assistDataTools(api)],
           maxTokens: ASSIST_MAX_TOKENS,
           maxSteps: ASSIST_MAX_STEPS,
           effort: "low",
           share: ASSIST_CAP_SHARE,
         })
-      : { text: stubAnswer(corpus, role, question.message, question.context), model: STUB_MODEL };
+      : stubReply(corpus, role, question.message, question.context, (id) => classroomResults(api, id)).then((t) => ({
+          text: t,
+          model: STUB_MODEL,
+        })),
+  );
 
   return db.transaction(async (tx) => {
     const conversationId = existing?.id ?? randomUUID();
@@ -219,7 +272,8 @@ export async function ask(
         createdAt: now,
         question: question.message,
         answer: text,
-        context: question.context,
+        // The screen, never its ids: they served this question only.
+        context: assistScreenOf(question.context),
         model,
         corpusVersion: corpus.version,
       })
