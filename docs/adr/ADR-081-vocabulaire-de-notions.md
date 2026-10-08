@@ -341,8 +341,9 @@ where named.
    (matrice)"). The admin, curator of the vocabulary (§7), is not bound when
    creating or editing a concept (`POST` and `PATCH /concepts`, and the
    picker's preview); a question write — the editor, the bulk bar, an MCP
-   tool — stays bound for everyone. An edit is refused only when it puts a
-   side onto the list; a concept already there may still be edited.
+   tool — stays bound for everyone. An edit is refused only when it changes
+   a side's key and leaves it on the list; a side already there whose key
+   stays (a concept older than the drop) may still be edited.
    Creating a question with a `tags` field (a client of before the
    cut-over) is a `400 validation`, through the MCP tool as through the
    route, rather than a question silently without its tags.
