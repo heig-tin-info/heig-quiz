@@ -92,6 +92,7 @@ function viewOf(e: MockEvaluation, seed: number): AttemptView {
           type: item.type,
           milestone: item.milestone,
           bonus: item.bonus,
+          intro: item.intro,
           student: studentView(q, frozenConfig(q)),
           answer: null,
           revision: 0,

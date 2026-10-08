@@ -32,7 +32,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
-import type { EvaluationDetail, ItemRow } from "@quiz/contracts";
+import type { EvaluationDetail, ItemPatch, ItemRow } from "@quiz/contracts";
+import type { z } from "zod";
 import { bonusTotal, type ItemListLock } from "@quiz/domain";
 
 import { api } from "../api";
@@ -58,7 +59,9 @@ import { BonusLabel } from "../BonusLabel";
 import { AddQuestionsSheet } from "./AddQuestionsSheet";
 import type { EditTarget } from "./editTarget";
 import { useTargetRefresh } from "./editTarget";
+import { IntroBand, IntroEditor } from "./ItemIntro";
 import { ItemPreviewSheet } from "./ItemPreviewSheet";
+import { useConfirm } from "../confirm";
 
 /**
  * Step 1 of the novice flow (docs/spec/08 §8.2): WHICH questions, in WHICH
@@ -81,6 +84,11 @@ import { ItemPreviewSheet } from "./ItemPreviewSheet";
  * separator belongs to the item above it: dragging that item takes its
  * separator along, which is the only reading that survives a reorder.
  *
+ * A TEXT before an item (ADR-084) reads the other way round: a recessed band
+ * at the top of the row it precedes, and the same gap offers "+ Text" for
+ * the row below it (the first row's stands on the card's top edge). The text
+ * belongs to the item below, so a drag takes it along with that item.
+ *
  * The points field commits on blur, not on every keystroke: typing "12" over
  * a "1" must not first save a "1". Beside it, a toggle makes the item a BONUS
  * (ADR-052): its points leave the total and can only lift a student. It is
@@ -91,6 +99,9 @@ import { ItemPreviewSheet } from "./ItemPreviewSheet";
  * caller's to compute (a template has none), and a row flagged
  * `poolUnlinked` — only a template's rows carry the flag — says so.
  */
+
+/** What `PATCH …/items/:itemId` accepts, as the client writes it. */
+type ItemPatchBody = z.input<typeof ItemPatch>;
 
 /** A row of either list: a template's rows also say when their pool left the course. */
 type Row = ItemRow & { poolUnlinked?: boolean };
@@ -178,26 +189,50 @@ function MilestoneBand({
   );
 }
 
+/** One "+" of a gap: what it adds, and the accessible name that says where. */
+interface GapAction {
+  label: string;
+  ariaLabel: string;
+  onClick: () => void;
+}
+
 /**
- * The "+" that names a GAP. It sits on the bottom hairline of its row and is
- * revealed by a hover on that row or by its own focus, so a list of thirty
- * questions is not thirty permanent buttons — while the keyboard still
+ * The "+"s that name a GAP: "+ Milestone" (after the row above) and "+ Text"
+ * (before the row below, ADR-084). They sit on a hairline and are revealed
+ * by a hover on their row (`reveal`) or by their own focus, so a list of
+ * thirty questions is not sixty permanent buttons — while the keyboard still
  * reaches every one of them in order. A COARSE pointer has no hover to give,
- * so there it is simply always on: a control a finger cannot reveal is a
+ * so there they are simply always on: a control a finger cannot reveal is a
  * control a finger does not have.
  */
-function MilestoneGap({ name, onAdd, t }: { name: string; onAdd: () => void; t: TFunction }) {
+function ItemGap({
+  actions,
+  reveal = "group-hover/row:opacity-100",
+}: {
+  actions: GapAction[];
+  /** The hover that reveals them; a literal class, so Tailwind sees it. */
+  reveal?: string;
+}) {
+  if (actions.length === 0) return null;
   return (
     <div className="relative z-10 h-0">
-      <button
-        type="button"
-        onClick={onAdd}
-        aria-label={t("eval.questions.milestone.addAfter", { name })}
-        className="absolute top-0 left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-full border border-line-strong bg-surface px-2 py-0.5 text-[11px] font-medium text-fg-muted opacity-0 transition-opacity duration-150 group-hover/row:opacity-100 hover:border-accent hover:text-accent focus-visible:opacity-100 pointer-coarse:opacity-100"
-      >
-        <Plus className="size-3" />
-        {t("eval.questions.milestone.add")}
-      </button>
+      <div className="absolute top-0 left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5">
+        {actions.map((action) => (
+          <button
+            key={action.ariaLabel}
+            type="button"
+            onClick={action.onClick}
+            aria-label={action.ariaLabel}
+            className={cx(
+              "flex items-center gap-1 rounded-full border border-line-strong bg-surface px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-fg-muted opacity-0 transition-opacity duration-150 hover:border-accent hover:text-accent focus-visible:opacity-100 pointer-coarse:opacity-100",
+              reveal,
+            )}
+          >
+            <Plus className="size-3" />
+            {action.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -284,6 +319,9 @@ function ItemCard({
   onRemove,
   onPreview,
   onEdit,
+  onEditIntro,
+  onRemoveIntro,
+  addTextBelow,
 }: {
   item: Row;
   index: number;
@@ -299,6 +337,11 @@ function ItemCard({
   onRemove: () => void;
   onPreview: () => void;
   onEdit: () => void;
+  /** ADR-084: opens the editor of this item's intro. */
+  onEditIntro: () => void;
+  onRemoveIntro: () => void;
+  /** "+ Text" for the NEXT item, drawn in the gap under this row; null when it has one. */
+  addTextBelow: GapAction | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
@@ -315,6 +358,16 @@ function ItemCard({
         isDragging && "z-20 shadow-overlay ring-1 ring-line-strong",
       )}
     >
+      {item.intro !== null ? (
+        <IntroBand
+          intro={item.intro}
+          name={item.internalName}
+          locked={locked}
+          onEdit={onEditIntro}
+          onRemove={onRemoveIntro}
+          t={t}
+        />
+      ) : null}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-3 py-3 pr-3 pl-1.5">
         {/*
          * A BUTTON and nothing else: that is what the keyboard sensor listens
@@ -410,8 +463,22 @@ function ItemCard({
           onRemove={() => onMilestone(false)}
           t={t}
         />
-      ) : !last && !locked ? (
-        <MilestoneGap name={item.internalName} onAdd={() => onMilestone(true)} t={t} />
+      ) : null}
+      {!last && !locked ? (
+        <ItemGap
+          actions={[
+            ...(item.milestone
+              ? []
+              : [
+                  {
+                    label: t("eval.questions.milestone.add"),
+                    ariaLabel: t("eval.questions.milestone.addAfter", { name: item.internalName }),
+                    onClick: () => onMilestone(true),
+                  },
+                ]),
+            ...(addTextBelow ? [addTextBelow] : []),
+          ]}
+        />
       ) : null}
     </li>
   );
@@ -448,6 +515,9 @@ export function ItemsStep({
   const [adding, setAdding] = useState(false);
   /** The row whose Preview sheet is open (#127). */
   const [previewing, setPreviewing] = useState<string | null>(null);
+  /** The row whose intro editor is open (ADR-084). */
+  const [writingIntro, setWritingIntro] = useState<string | null>(null);
+  const confirm = useConfirm();
   const editable = new Set(detail.editableQuestionIds);
   // The server's rule (issue #79), computed by the caller: every control
   // below is disabled instead of failing with a 409.
@@ -475,14 +545,31 @@ export function ItemsStep({
   }, [detail.items, pendingOrder]);
 
   const invalidate = useTargetRefresh(target);
-  const patch = useMutation({
-    mutationFn: (v: { itemId: string; body: Record<string, unknown> }) =>
-      api(`${target.base}/items/${v.itemId}`, {
-        method: "PATCH",
-        body: JSON.stringify(v.body),
-      }),
-    onSuccess: invalidate,
+  /** THE item write, its body typed by the route's own schema (invariant 7). */
+  const writeItem = (v: { itemId: string; body: ItemPatchBody }) =>
+    api(`${target.base}/items/${v.itemId}`, {
+      method: "PATCH",
+      body: JSON.stringify(v.body),
+    });
+  const patch = useMutation({ mutationFn: writeItem, onSuccess: invalidate });
+  // The intro editor's own write (ADR-084): its pending state and its error
+  // belong to the dialog, which closes once the text is saved.
+  const saveIntro = useMutation({
+    mutationFn: writeItem,
+    onSuccess: async () => {
+      setWritingIntro(null);
+      await invalidate();
+    },
   });
+  const removeIntro = async (item: ItemRow) => {
+    const ok = await confirm({
+      title: t("eval.questions.intro.removeConfirm"),
+      confirmLabel: t("eval.questions.intro.removeAction"),
+      cancelLabel: t("common.cancel"),
+      danger: true,
+    });
+    if (ok) patch.mutate({ itemId: item.id, body: { intro: null } });
+  };
   const reorder = useMutation({
     mutationFn: (itemIds: string[]) =>
       api(`${target.base}/items/order`, {
@@ -546,6 +633,13 @@ export function ItemsStep({
   const bonusPoints = bonusTotal(items);
   // Read off the live list: a row removed meanwhile closes its sheet.
   const previewed = items.find((i) => i.id === previewing) ?? null;
+  const introItem = items.find((i) => i.id === writingIntro) ?? null;
+  /** The "+ Text" that opens the editor of `item`'s intro (ADR-084). */
+  const addTextBefore = (item: Row): GapAction => ({
+    label: t("eval.questions.intro.add"),
+    ariaLabel: t("eval.questions.intro.addBefore", { name: item.internalName }),
+    onClick: () => setWritingIntro(item.id),
+  });
 
   return (
     <div className="space-y-4">
@@ -598,45 +692,60 @@ export function ItemsStep({
         </Card>
       ) : (
         <>
-          <Card className="overflow-hidden">
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              modifiers={[restrictToVerticalAxis]}
-              onDragEnd={onDragEnd}
-            >
-              <SortableContext
-                items={items.map((i) => i.id)}
-                strategy={verticalListSortingStrategy}
+          {/* The first gap — before question 1 — has no row above it: it
+              stands on the card's top edge, outside the clipped card, and a
+              hover anywhere on the list reveals it. */}
+          <div className="group/list relative">
+            {!locked && items[0] && items[0].intro === null ? (
+              <ItemGap reveal="group-hover/list:opacity-100" actions={[addTextBefore(items[0])]} />
+            ) : null}
+            <Card className="overflow-hidden">
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                modifiers={[restrictToVerticalAxis]}
+                onDragEnd={onDragEnd}
               >
-                <ul className="divide-y divide-line">
-                  {items.map((item, index) => (
-                    <ItemCard
-                      key={item.id}
-                      item={item}
-                      index={index}
-                      stale={stale.has(item.id)}
-                      locked={locked}
-                      last={index === items.length - 1}
-                      t={t}
-                      onPoints={(points) => patch.mutate({ itemId: item.id, body: { points } })}
-                      onBonus={(bonus) => patch.mutate({ itemId: item.id, body: { bonus } })}
-                      onMilestone={(milestone) =>
-                        patch.mutate({ itemId: item.id, body: { milestone } })
-                      }
-                      onUpdate={() => updateVersions.mutate([item.id])}
-                      onRemove={() => removeItem(item)}
-                      canEdit={editable.has(item.questionId)}
-                      onPreview={() => setPreviewing(item.id)}
-                      onEdit={() =>
-                        navigate({ view: "question", id: item.questionId, ...target.questionFrom })
-                      }
-                    />
-                  ))}
-                </ul>
-              </SortableContext>
-            </DndContext>
-          </Card>
+                <SortableContext
+                  items={items.map((i) => i.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <ul className="divide-y divide-line">
+                    {items.map((item, index) => (
+                      <ItemCard
+                        key={item.id}
+                        item={item}
+                        index={index}
+                        stale={stale.has(item.id)}
+                        locked={locked}
+                        last={index === items.length - 1}
+                        t={t}
+                        onPoints={(points) => patch.mutate({ itemId: item.id, body: { points } })}
+                        onBonus={(bonus) => patch.mutate({ itemId: item.id, body: { bonus } })}
+                        onMilestone={(milestone) =>
+                          patch.mutate({ itemId: item.id, body: { milestone } })
+                        }
+                        onUpdate={() => updateVersions.mutate([item.id])}
+                        onRemove={() => removeItem(item)}
+                        canEdit={editable.has(item.questionId)}
+                        onPreview={() => setPreviewing(item.id)}
+                        onEdit={() =>
+                          navigate({ view: "question", id: item.questionId, ...target.questionFrom })
+                        }
+                        onEditIntro={() => setWritingIntro(item.id)}
+                        onRemoveIntro={() => void removeIntro(item)}
+                        addTextBelow={
+                          items[index + 1] && items[index + 1]!.intro === null
+                            ? addTextBefore(items[index + 1]!)
+                            : null
+                        }
+                      />
+                    ))}
+                  </ul>
+                </SortableContext>
+              </DndContext>
+            </Card>
+          </div>
           <p className="text-[13px] text-fg-muted">
             {t("eval.questions.total", {
               n: items.length,
@@ -646,6 +755,20 @@ export function ItemsStep({
           </p>
         </>
       )}
+
+      {introItem ? (
+        <IntroEditor
+          name={introItem.internalName}
+          initial={introItem.intro ?? ""}
+          saving={saveIntro.isPending}
+          error={saveIntro.error}
+          onSave={(intro) => saveIntro.mutate({ itemId: introItem.id, body: { intro } })}
+          onClose={() => {
+            saveIntro.reset();
+            setWritingIntro(null);
+          }}
+        />
+      ) : null}
 
       {previewed ? (
         <ItemPreviewSheet

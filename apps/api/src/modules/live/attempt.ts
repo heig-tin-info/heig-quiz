@@ -881,6 +881,9 @@ function attemptItems(
       type: entry.question.type,
       milestone: entry.item.milestone,
       bonus: entry.item.bonus,
+      // ADR-084: the teacher's passage before the item — an item property,
+      // like the two flags above, carried by the one builder of the attempt.
+      intro: entry.item.intro,
       student: studentView({
         type: entry.question.type,
         version,

@@ -234,8 +234,8 @@ export async function templateDetail(
  * Everything of a template whose change is a new revision — its whole
  * content but the title: the configuration, read through the same parsers
  * as everywhere (so a stored row missing a defaulted key equals the same row
- * with it), and the items with their versions, points, order, milestones
- * and bonus flags (ADR-052).
+ * with it), and the items with their versions, points, order, milestones,
+ * bonus flags (ADR-052) and intros (ADR-084).
  */
 async function contentOf(db: DbOrTx, row: EvaluationRecord) {
   return {
@@ -253,6 +253,7 @@ async function contentOf(db: DbOrTx, row: EvaluationRecord) {
         points: evaluationItems.points,
         milestone: evaluationItems.milestone,
         bonus: evaluationItems.bonus,
+        intro: evaluationItems.intro,
       })
       .from(evaluationItems)
       .where(eq(evaluationItems.evaluationId, row.id))
@@ -399,6 +400,7 @@ const pullItem = (j: JoinedItem): TemplatePullItem => ({
   points: j.item.points,
   milestone: j.item.milestone,
   bonus: j.item.bonus,
+  intro: j.item.intro,
 });
 
 /**

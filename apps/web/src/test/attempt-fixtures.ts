@@ -31,6 +31,7 @@ export function makeAttemptItem(
     type: "mcq",
     milestone: false,
     bonus: false,
+    intro: null,
     student: ADDRESS_MCQ,
     answer: null,
     revision: 0,

@@ -26,7 +26,8 @@ export function PlayerRail({
   segments: Segment[];
   onSelect: (id: string) => void;
   label: string;
-  points: number;
+  /** Absent while the passage before the question is up (ADR-084): nothing to score yet. */
+  points?: number;
   children?: ReactNode;
 }) {
   const t = useT();
@@ -40,14 +41,16 @@ export function PlayerRail({
         className="-mx-1 mt-2 min-h-0 flex-1"
       />
       {/* The current question's own line, under the list it closes. */}
-      <div className="border-t border-line pt-4">
-        <p className="text-[13px] text-fg-muted">
-          <span className="font-semibold text-fg">{t("player.question", { n: index + 1 })}</span>
-          {" · "}
-          {pointsLabel(t, points)}
-        </p>
-        {children ? <div className="mt-3 flex flex-col items-start gap-1">{children}</div> : null}
-      </div>
+      {points === undefined ? null : (
+        <div className="border-t border-line pt-4">
+          <p className="text-[13px] text-fg-muted">
+            <span className="font-semibold text-fg">{t("player.question", { n: index + 1 })}</span>
+            {" · "}
+            {pointsLabel(t, points)}
+          </p>
+          {children ? <div className="mt-3 flex flex-col items-start gap-1">{children}</div> : null}
+        </div>
+      )}
     </>
   );
 }

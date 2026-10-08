@@ -404,6 +404,8 @@ export const ItemRow = z.object({
    * they can only lift a student; its score is floored at 0.
    */
   bonus: z.boolean(),
+  /** ADR-084: the text shown to the student before this item; null for none. */
+  intro: z.string().nullable(),
   questionId: z.uuid(),
   questionVersionId: z.uuid(),
   type: z.string(),
@@ -578,12 +580,25 @@ export type EvaluationDelete = z.infer<typeof EvaluationDelete>;
 export const ItemsAdd = z.object({ questionIds: z.array(z.uuid()).min(1).max(200) });
 export type ItemsAdd = z.infer<typeof ItemsAdd>;
 
+/** ADR-084: the longest intro an item may carry, in characters. */
+export const ITEM_INTRO_MAX = 10_000;
+
 export const ItemPatch = z
   .object({
     points: z.number().min(0).max(1000).optional(),
     milestone: z.boolean().optional(),
     /** ADR-052; locked with the points (`assertItemListEditable`). */
     bonus: z.boolean().optional(),
+    /**
+     * ADR-084: the passage before the item, markdown; `null` or a blank
+     * text removes it. Locked with the points.
+     */
+    intro: z
+      .string()
+      .max(ITEM_INTRO_MAX)
+      .nullable()
+      .transform((v) => (v === null || v.trim() === "" ? null : v))
+      .optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: "Nothing to update" });
 export type ItemPatch = z.infer<typeof ItemPatch>;
@@ -732,6 +747,8 @@ export const TemplatePullItem = TemplateItemRef.extend({
   points: z.number(),
   milestone: z.boolean(),
   bonus: z.boolean(),
+  /** ADR-084: a different intro makes the item `changed`. */
+  intro: z.string().nullable(),
 });
 export type TemplatePullItem = z.infer<typeof TemplatePullItem>;
 
@@ -739,7 +756,7 @@ export type TemplatePullItem = z.infer<typeof TemplatePullItem>;
  * `GET /evaluations/:id/pull-template` — what pulling the template's current
  * revision would do to the evaluation's QUESTIONS, the only thing a pull
  * replaces: items `added` (in the template only), `removed` (in the
- * evaluation only), `changed` (another version, points, milestone or bonus),
+ * evaluation only), `changed` (another version, points, milestone, bonus or intro),
  * whether the order moves, and "rev. `from` → `to`". `unlinkedItems` would
  * refuse the pull (`422 template_pool_unlinked`); `deprecatedItems` only warn.
  */

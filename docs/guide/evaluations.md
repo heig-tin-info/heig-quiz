@@ -41,6 +41,12 @@ A milestone is a line drawn across the list. For the student, everything above t
 
 Hover the space between two rows and click **Add a milestone** to put one there. A milestone belongs to the row above it and travels with that row when you drag it. The **×** on the separator removes it. Milestones only act when the navigation is set to **Milestones** in the advanced options (below); otherwise they are drawn but not enforced.
 
+### A text before a question
+
+Some evaluations need words that are not a question: the instructions at the start ("read chapters 8 and 9 of the handout, then answer"), a transition ("end of part 1: the next questions are code"), a passage to memorise. Hover the space between two rows (or the top of the list, for the first question) and click **Text** to write one in markdown. It is shown to the student as a page of its own just before that question, with a **Continue** button; it adds no question and no points. The text belongs to the question below it and travels with it when you drag it; its band in the list has a pencil to edit it and a **×** to remove it.
+
+Under **Free** navigation the student can read the text again from the question (**Read the text again**). Under **Forward only** and **Milestones**, once they press Continue the text cannot be reopened from the player, which is what a "memorise this, then answer" needs: put a milestone on the question before and the text on the question after. One limit: the player remembers the passage only while the page is open, so a student who reloads before answering that question sees the text again. The text is copied with the questions by a duplicate and a template, frozen with them once the evaluation is opened, and never shown in grading, results or feedback.
+
 ### Bonus questions
 
 The candy button beside a row's points makes that question a **bonus**: the row says `bonus`, and its points no longer count in the evaluation's total. They can only lift a student: someone with every point of an 18-point test plus a 3-point bonus reads `21 / 18`, and the grade is still capped at 6. Under negative marking a bonus question is scored like the others — a wrong tick still lowers its score — but its score never goes below 0. The student sees **Bonus question** on the question, in the player and on the feedback page. Like the points, the flag is fixed once the evaluation is opened or somebody has started, and an evaluation whose every question is a bonus cannot be opened: at least one question must count.

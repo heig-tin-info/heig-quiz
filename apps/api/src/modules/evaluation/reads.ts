@@ -412,6 +412,7 @@ export async function itemRowsOf(db: DbOrTx, joined: readonly JoinedItem[]): Pro
     points: j.item.points,
     milestone: j.item.milestone,
     bonus: j.item.bonus,
+    intro: j.item.intro,
     questionId: j.question.id,
     questionVersionId: j.version.id,
     type: j.question.type,

@@ -15,6 +15,7 @@ const item = (position: number, questionId: string, extra: Partial<PullItem> = {
   points: 1,
   milestone: false,
   bonus: false,
+  intro: null,
   ...extra,
 });
 
@@ -66,6 +67,14 @@ describe("itemListDiff", () => {
   it("sees a bonus flag that changed (ADR-052)", () => {
     const diff = itemListDiff([item(0, "a")], [item(0, "a", { bonus: true })]);
     expect(diff.changed.map((c) => c.to.bonus)).toEqual([true]);
+  });
+
+  it("sees an intro added, edited or removed as a change of the item (ADR-084)", () => {
+    const read = item(0, "a", { intro: "Read chapter 8." });
+    expect(itemListDiff([item(0, "a")], [read]).changed).toHaveLength(1);
+    expect(itemListDiff([read], [item(0, "a", { intro: "Read chapter 9." })]).changed).toHaveLength(1);
+    expect(itemListDiff([read], [item(0, "a")]).changed).toHaveLength(1);
+    expect(isEmptyDiff(itemListDiff([read], [{ ...read }]))).toBe(true);
   });
 
   it("sees a change of order among the questions both sides hold", () => {

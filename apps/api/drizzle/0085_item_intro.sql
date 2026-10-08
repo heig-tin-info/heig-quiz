@@ -1,0 +1,1 @@
+ALTER TABLE "evaluation_items" ADD COLUMN "intro" text;

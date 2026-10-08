@@ -574,7 +574,11 @@ const scenes = [
   // the editor opened from a row with its way back to the evaluation.
   { name: "eval-config-item-preview", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByRole("button", { name: /^preview /i }).first().click() },
   { name: "eval-config-item-preview-answers", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: async (p) => { await p.getByRole("button", { name: /^preview /i }).nth(1).click(); await p.getByRole("button", { name: /show answers|afficher les réponses/i }).click(); await p.waitForTimeout(600); } },
-  { name: "eval-config-item-edit", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByRole("button", { name: /^edit /i }).first().click() },
+  { name: "eval-config-item-edit", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByRole("button", { name: /^edit (?!the text)/i }).first().click() },
+  // ADR-084: a hovered row reveals its gap's "+ Milestone" and "+ Text", and
+  // the text before an item is written in a dialog from its band.
+  { name: "eval-config-intro-gap", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByText("filtre-capteur-rc", { exact: true }).first().hover() },
+  { name: "eval-config-intro-editor", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByRole("button", { name: /^edit the text before/i }).first().click() },
   { name: "eval-config-picker", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { name: /add questions/i }).first().click() },
   // The picker with a question looked at (issue #207): docked beside the list
   // from 1280 px, in place of the list below.
@@ -864,6 +868,10 @@ const scenes = [
   // Issue #89: the question list with its four states at once — answered,
   // left unanswered, flagged, nothing yet — on the flagged empty question.
   { name: "player-marks", role: "student", path: `${TAKE}?scene=marks` },
+  // ADR-084: the teacher's text before question 1, then the question with
+  // its "Read the text again" (free navigation).
+  { name: "player-intro", role: "student", path: `${TAKE}?scene=intro` },
+  { name: "player-intro-continued", role: "student", path: `${TAKE}?scene=intro`, act: (p) => p.getByRole("button", { name: /^continue$/i }).click() },
   // The same list, the student having left the question unanswered: the flag
   // in the card's corner and "Leave unanswered" under it, both pressed.
   { name: "player-marks-skipped", role: "student", path: `${TAKE}?scene=marks`, act: async (p) => { await p.getByRole("button", { name: /^leave unanswered$/i }).click(); await p.getByRole("button", { name: /^leave unanswered$/i, pressed: true }).waitFor(); } },

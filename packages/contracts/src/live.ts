@@ -79,6 +79,11 @@ export const AttemptItem = z.object({
   milestone: z.boolean(),
   /** ADR-052: shown as "Bonus question"; an item's property, not question content. */
   bonus: z.boolean(),
+  /**
+   * ADR-084: the teacher's markdown shown as a passage screen before the
+   * item; null for none. An item's property, not question content.
+   */
+  intro: z.string().nullable(),
   student: z.unknown(),
   answer: z.unknown().nullable(),
   revision: z.number().int(),
