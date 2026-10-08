@@ -4248,7 +4248,7 @@ serves now (16a), and what waits for the group repositories (16b).
   Caddy log mask, backups, `deployment.md` §3; no resize (owner's decision,
   2026-10-08).
 - **As delivered (part 2: slices and backup)** (branch
-  `merge/M6-05-slices-backup`; the repository side only, the VM steps are
+  `merge/M6-05-slices-backup`, #606; the repository side only, the VM steps are
   the owner's). Decisions in ADR-016's M6-05 amendment; procedures in
   `deployment.md` §3 (The slices; Backup and restore of the codespace data).
   - **Slices** `infra/engine/quiz-runner.slice` (CPU/IO weight 1000,
