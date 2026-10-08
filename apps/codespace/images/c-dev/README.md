@@ -13,7 +13,7 @@ invariants 1 and 3 of [CLAUDE.md](../../CLAUDE.md).
 | File | Role |
 | --- | --- |
 | `Containerfile` | image `codespace/c-dev` |
-| `entrypoint.sh` | copies the machine settings into the tmpfs `user-data-dir`, then `code-server` |
+| `entrypoint.sh` | copies the machine settings into the tmpfs `user-data-dir`, trusts the return URL's origin, then `code-server` |
 | `settings.json` | machine settings, installed as `/etc/code-server/settings.json` |
 | `resolv.conf` | empty resolver, installed as `/etc/resolv.conf` |
 | `extension/` | source of `heig.codespace-statusbar`, packaged into a `.vsix` at build time |
@@ -87,7 +87,7 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
   - § 4 the root filesystem is read-only, `CapEff` is zero, `NoNewPrivs` is 1, the seccomp filter is loaded and the AppArmor label is the `codespace` profile (skipped with a note on a host without AppArmor);
   - § 5 uid 1000 inside, host UID outside 0–65535, and two containers side by side get different host UIDs;
   - § 6 a fork bomb is capped by `--pids-limit 256`, the host and the neighbouring container are intact;
-  - § 7 code-server: machine settings copied, `extensions.allowed`, the settings found in the embedded package, the font-prompt chain, neutralised gallery, no uncaught exception, toolchain binaries and man pages present;
+  - § 7 code-server: machine settings copied, `extensions.allowed`, the settings found in the embedded package, the font-prompt chain, the colour-scheme detection and its two bundled themes, the return URL's origin trusted (and nothing trusted without one), neutralised gallery, no uncaught exception, toolchain binaries and man pages present;
   - § 8 `/etc/resolv.conf` comes from the image, with no nameserver, and resolution fails in under two seconds;
   - § 9 the container carries the seven portal variables and nothing else, the git identity works without a configuration file, and the VS Code server inherits the environment.
   - § 10 the seccomp profile is the runner's plus `ptrace`: `unshare -r true` fails, and raw `unshare(CLONE_NEWUSER)` and `mount(2)` answer `ENOSYS`.
@@ -130,6 +130,7 @@ Verification done by running `code-server --help` inside the built image.
 | `--extensions-dir` | yes |
 | `--user-data-dir` | yes |
 | `--install-extension`, `--list-extensions`, `--force` | yes (build) |
+| `--link-protection-trusted-domains` | yes (`string[]`, `out/node/cli.js`; see § Return link trusted) |
 
 `EXTENSIONS_GALLERY='{"serviceUrl":"","itemUrl":"","resourceUrlTemplate":""}'`
 is taken into account: the start-up log shows `Using custom extensions
@@ -303,6 +304,66 @@ upstream default, the unconditional import of the sticky scroll, the call in
 the addon, and the complete list of the files of the package that mention
 `queryLocalFonts` — any new family of files makes the test fail
 rather than making the prompt reappear.
+
+### Theme: the browser's colour scheme (2026-10-08)
+
+Feedback from production on 2026-10-08: the editor opened light while the
+student's Quiz was dark.
+
+```json
+"window.autoDetectColorScheme": true,
+"workbench.preferredDarkColorTheme": "Dark 2026",
+"workbench.preferredLightColorTheme": "Light 2026"
+```
+
+Why it opened light, from the embedded package: the default of
+`workbench.colorTheme` is `Bt?Gc.COLOR_THEME_LIGHT:Gc.COLOR_THEME_DARK`, where
+`Bt` is `isWeb` in the minified platform module, and
+`COLOR_THEME_LIGHT="Light 2026"`, `COLOR_THEME_DARK="Dark 2026"`. In a
+browser, VS Code 1.137.0 is light by default whatever the system says.
+
+With `window.autoDetectColorScheme` the theme service picks
+`preferredDarkColorTheme` or `preferredLightColorTheme` from the host colour
+service, which on the web is `matchMedia("(prefers-color-scheme: …)")` and
+listens to its changes. The two values are the upstream defaults of those
+keys, written out so that a version bump that renames them fails `test.sh` § 7
+(both ids are checked in `extensions/theme-defaults/package.json`) instead of
+silently falling back.
+
+Where it takes effect: the key declares no `scope`, hence `WINDOW`. The
+`Machine/settings.json` copy is the remote user configuration, whose accepted
+scopes in the bundle are `[2,4,5,6,7]` (MACHINE, WINDOW, RESOURCE,
+LANGUAGE_OVERRIDABLE, MACHINE_OVERRIDABLE): it is honoured there, and in the
+`User/settings.json` copy, which honours every scope.
+
+**Quiz follows the same signal unless overridden.** `apps/web/src/theme.ts`
+defaults to "system" (`prefers-color-scheme: dark`); an explicit light or dark
+choice lives in the Quiz origin's `localStorage` (`quiz-theme`), which
+code-server, on another origin, cannot read. So both match by default, and
+differ when the student forced Quiz's theme against the system's.
+
+**A theme the student picks does not survive the container.** The
+`user-data-dir` is the `/run` tmpfs: the choice lasts the container's life,
+and the next start begins from these settings again.
+
+## Return link trusted (2026-10-08)
+
+The "Close" button opens `CODESPACE_RETURN_URL` with
+`vscode.env.openExternal`, and VS Code's link protection asked "Do you want
+code-server to open the external website?" for it. `entrypoint.sh` now
+passes `--link-protection-trusted-domains <scheme>://<host[:port]>` of that
+URL to code-server; the portal derives the URL from `PLATFORM_URL` (a session
+from a launch token) or `PUBLIC_URL`, so there is one source and no new
+variable in `CONTAINER_ENV_KEYS`. Without the variable, or with a value that
+is not `http(s)://` followed by a host in `[A-Za-z0-9.:-]`, no domain is
+trusted.
+
+code-server 4.137.0 appends the flag's values to the product's
+`linkProtectionTrustedDomains` (beside its own `https://open-vsx.org`), in
+the format VS Code matches (scheme and authority, any path). `test.sh` § 7
+reads code-server's command line in both containers and finds
+`linkProtectionTrustedDomains&quot;:[&quot;<origin>&quot;` in the workbench
+page served to the browser.
 
 ## Status bar extension `heig.codespace-statusbar`
 
@@ -727,6 +788,13 @@ listed here.
   as it is to the extension's `git commit`, and `test.sh` § 9 measures the commit on
   the command line. The "Commit" button of the interface, on the other hand, requires a
   browser; to be observed at the next real session.
+
+- `TODO(verify)` **VS Code 1.137.0** — `window.autoDetectColorScheme`: the
+  key, the media query and both theme ids are collected from the package and
+  replayed by `test.sh` § 7; the editor opening dark under a dark system, and
+  switching live, requires a browser. Likewise the Close button opening the
+  platform without the link-protection prompt: the trusted origin is in the
+  served page, the absence of the dialog is to be observed.
 
 ## What P1 does not cover
 

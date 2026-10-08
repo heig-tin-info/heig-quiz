@@ -28,6 +28,24 @@ export EXTENSIONS_GALLERY
 
 [ -d /work ] || mkdir -p /work
 
+# The "Close" button of heig.codespace-statusbar opens CODESPACE_RETURN_URL
+# (the platform, set by the portal from PLATFORM_URL) through
+# vscode.env.openExternal, which asks "Do you want code-server to open the
+# external website?" for any origin not trusted. Trust exactly that origin,
+# scheme://host[:port], and nothing when the variable is absent or is not a
+# plain http(s) URL (a value outside the host charset trusts nothing).
+set --
+case "${CODESPACE_RETURN_URL:-}" in
+  http://* | https://*)
+    RETURN_HOST=${CODESPACE_RETURN_URL#*://}
+    RETURN_HOST=${RETURN_HOST%%/*}
+    case "$RETURN_HOST" in
+      '' | *[!A-Za-z0-9.:-]*) ;;
+      *) set -- --link-protection-trusted-domains "${CODESPACE_RETURN_URL%%://*}://${RETURN_HOST}" ;;
+    esac
+    ;;
+esac
+
 exec code-server \
   --auth none \
   --bind-addr 0.0.0.0:8080 \
@@ -38,4 +56,5 @@ exec code-server \
   --disable-getting-started-override \
   --extensions-dir /opt/code-server/extensions \
   --user-data-dir /run/code-server \
+  "$@" \
   /work

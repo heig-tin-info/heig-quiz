@@ -405,7 +405,10 @@ for f in /run/code-server/User/settings.json /run/code-server/Machine/settings.j
            '"workbench.secondarySideBar.defaultVisibility": "hidden"' \
            '"keyboard.dispatch": "keyCode"' \
            '"terminal.integrated.stickyScroll.enabled": false' \
-           '"terminal.integrated.fontLigatures.enabled": false'; do
+           '"terminal.integrated.fontLigatures.enabled": false' \
+           '"window.autoDetectColorScheme": true' \
+           '"workbench.preferredDarkColorTheme": "Dark 2026"' \
+           '"workbench.preferredLightColorTheme": "Light 2026"'; do
     cexec "grep -qF '$k' $f" >/dev/null 2>&1 || fail "setting missing from $f: $k"
   done
 done
@@ -464,8 +467,50 @@ cexec "grep -qF 'Vhe=Ogo' $WB" >/dev/null 2>&1 \
   || echo "  note the second caller's isElectron guard was not found as such (minification changed)"
 ok "queryLocalFonts is called only by the ligatures addon and by a path guarded by isElectron"
 
-podman_remote logs "$CTR_A" 2>&1 | grep -q 'Using custom extensions gallery' \
-  || fail "code-server did not take EXTENSIONS_GALLERY (default gallery active)"
+# The theme follows the browser's prefers-color-scheme (see README): the key
+# exists, the web host colour service reads the media query, and both theme
+# ids set are contributed by the bundled theme-defaults extension.
+cexec "grep -qF '\"window.autoDetectColorScheme\":' $WB" >/dev/null 2>&1 \
+  || fail "window.autoDetectColorScheme unknown to the bundled VS Code package"
+cexec "grep -qF 'matchMedia(\"(prefers-color-scheme: light)\")' $WB" >/dev/null 2>&1 \
+  || fail "the web host colour service no longer reads prefers-color-scheme: the proof is stale"
+for theme in 'Dark 2026' 'Light 2026'; do
+  cexec "grep -qF '\"id\":\"$theme\"' /usr/lib/code-server/lib/vscode/extensions/theme-defaults/package.json" >/dev/null 2>&1 \
+    || fail "theme \"$theme\" is not contributed by the bundled theme-defaults extension"
+done
+ok "window.autoDetectColorScheme exists, reads prefers-color-scheme, and both themes set are bundled"
+
+# The return URL's origin is a trusted link-protection domain (no "open the
+# external website?" prompt on Close): container A, which carries
+# CODESPACE_RETURN_URL, gets the flag with its origin; container B, without
+# it, gets no flag at all. And the workbench page served to the browser
+# carries it in the product's linkProtectionTrustedDomains.
+CMD_A=$(cexec "tr '\\0' ' ' < /proc/1/cmdline" 2>&1)
+case "$CMD_A" in
+  *"--link-protection-trusted-domains ${ENV_RETURN_URL%/} "*) : ;;
+  *) fail "code-server (container A) was not started with the return URL's origin as trusted domain" "$CMD_A" ;;
+esac
+CMD_B=$(podman_remote exec "$CTR_B" bash -lc "tr '\\0' ' ' < /proc/1/cmdline" 2>&1)
+case "$CMD_B" in
+  *link-protection*) fail "code-server (container B, no return URL) trusts a domain" "$CMD_B" ;;
+  *code-server*) : ;;
+  *) fail "could not read code-server's command line in container B" "$CMD_B" ;;
+esac
+WB_PAGE=$(cexec 'curl -sS -L -m 5 http://localhost:8080/' 2>&1)
+case "$WB_PAGE" in
+  *"linkProtectionTrustedDomains&quot;:[&quot;${ENV_RETURN_URL%/}&quot;"*) : ;;
+  *) fail "the served workbench does not list the return URL's origin in linkProtectionTrustedDomains" \
+          "$(printf '%s' "$WB_PAGE" | grep -o 'linkProtectionTrustedDomains[^]]*]')" ;;
+esac
+ok "Close's origin trusted: --link-protection-trusted-domains ${ENV_RETURN_URL%/} (A), none without a return URL (B)"
+
+# Captured first: under pipefail, `grep -q` closing the pipe early makes a long
+# log (the workbench page above was served) fail with SIGPIPE.
+LOGS_A=$(podman_remote logs "$CTR_A" 2>&1)
+case "$LOGS_A" in
+  *'Using custom extensions gallery'*) : ;;
+  *) fail "code-server did not take EXTENSIONS_GALLERY (default gallery active)" ;;
+esac
 ok "EXTENSIONS_GALLERY taken into account: 'Using custom extensions gallery'"
 
 ERRS=$(podman_remote logs "$CTR_A" 2>&1 | grep -c 'Uncaught exception')
