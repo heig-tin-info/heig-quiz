@@ -38,7 +38,9 @@ function viewIn(state: EvaluationState, rows = 3, items = 4): DashboardView {
 
 function setup(view: DashboardView, over: Partial<Parameters<typeof StudentGrid>[0]> = {}) {
   const handlers = {
+    onCell: vi.fn(),
     onInspect: vi.fn(),
+    onQuestion: vi.fn(),
     onExtend: vi.fn(),
     onClose: vi.fn(),
     onReopen: vi.fn(),
@@ -271,7 +273,7 @@ describe("StudentGrid — the row actions per state", () => {
   it("offers inspect, extend and close on a running attempt while the quiz runs", () => {
     setup(viewIn("running", 1, 2));
     expect(actionsOf("Nadia Roux 0")).toEqual([
-      "Open the answers",
+      "Open the whole paper",
       "+5 minutes for this student",
       "Close this attempt",
     ]);
@@ -280,7 +282,7 @@ describe("StudentGrid — the row actions per state", () => {
   it("keeps the same three while the quiz is only paused", () => {
     setup(viewIn("paused", 1, 2));
     expect(actionsOf("Nadia Roux 0")).toEqual([
-      "Open the answers",
+      "Open the whole paper",
       "+5 minutes for this student",
       "Close this attempt",
     ]);
@@ -292,7 +294,7 @@ describe("StudentGrid — the row actions per state", () => {
     setup(view);
     // Reopening there would hand back a paper the server refuses every write
     // to (#95); a make-up session is another feature.
-    expect(actionsOf("Nadia Roux 0")).toEqual(["Open the answers"]);
+    expect(actionsOf("Nadia Roux 0")).toEqual(["Open the whole paper"]);
   });
 
   it("keeps close, and only close, on an attempt still open in a finished evaluation", () => {
@@ -301,7 +303,7 @@ describe("StudentGrid — the row actions per state", () => {
       const view = viewIn(state, 1, 2);
       view.rows[0] = { ...view.rows[0]!, state: "in_progress" };
       const { unmount } = setup(view);
-      expect(actionsOf("Nadia Roux 0")).toEqual(["Open the answers", "Close this attempt"]);
+      expect(actionsOf("Nadia Roux 0")).toEqual(["Open the whole paper", "Close this attempt"]);
       unmount();
     }
   });
@@ -313,7 +315,7 @@ describe("StudentGrid — the row actions per state", () => {
     view.evaluation.reopenable = false;
     view.rows[0] = { ...view.rows[0]!, state: "submitted", attemptCount: 3 };
     setup(view);
-    expect(actionsOf("Nadia Roux 0")).toEqual(["Open the answers"]);
+    expect(actionsOf("Nadia Roux 0")).toEqual(["Open the whole paper"]);
     expect(within(rowOf("Nadia Roux 0")).getByText("attempt 3")).toBeInTheDocument();
     // One attempt: no badge.
     expect(within(rowOf("Nadia Roux 1")).queryByText(/attempt \d/)).toBeNull();
@@ -324,7 +326,7 @@ describe("StudentGrid — the row actions per state", () => {
       const view = viewIn(state, 1, 2);
       view.rows[0] = { ...view.rows[0]!, state: "expired" };
       const { unmount } = setup(view);
-      expect(actionsOf("Nadia Roux 0")).toEqual(["Open the answers", "Reopen this attempt"]);
+      expect(actionsOf("Nadia Roux 0")).toEqual(["Open the whole paper", "Reopen this attempt"]);
       unmount();
     }
 
@@ -332,7 +334,7 @@ describe("StudentGrid — the row actions per state", () => {
     released.rows[0] = { ...released.rows[0]!, state: "submitted" };
     setup(released);
     // Giving the paper back would contradict a grade already published.
-    expect(actionsOf("Nadia Roux 0")).toEqual(["Open the answers"]);
+    expect(actionsOf("Nadia Roux 0")).toEqual(["Open the whole paper"]);
   });
 
   it("offers nothing at all on a row with no attempt", () => {
@@ -369,7 +371,7 @@ describe("StudentGrid — the row actions per state", () => {
     const view = viewIn("running", 2, 3);
     const { onInspect } = setup(view);
     await userEvent.click(
-      within(rowOf("Nadia Roux 1")).getByRole("button", { name: "Open the answers" }),
+      within(rowOf("Nadia Roux 1")).getByRole("button", { name: "Open the whole paper" }),
     );
     expect(onInspect).toHaveBeenCalledTimes(1);
     expect(onInspect.mock.calls[0]![1]).toBe(view.items[0]!.id);
@@ -381,16 +383,26 @@ describe("StudentGrid — the row actions per state", () => {
       selected: { attemptId: id("attempt", 0), itemId: view.items[2]!.id },
     });
     await userEvent.click(
-      within(rowOf("Nadia Roux 1")).getByRole("button", { name: "Open the answers" }),
+      within(rowOf("Nadia Roux 1")).getByRole("button", { name: "Open the whole paper" }),
     );
     expect(onInspect.mock.calls[0]![1]).toBe(view.items[2]!.id);
   });
 
-  it("inspects the cell that was clicked", async () => {
+  it("opens the one answer of the cell that was clicked, not the paper (#353)", async () => {
     const view = viewIn("running", 2, 3);
-    const { onInspect } = setup(view);
+    const { onCell, onInspect } = setup(view);
     await userEvent.click(screen.getByRole("button", { name: "Nadia Roux 1 · Question 3" }));
-    expect(onInspect.mock.calls[0]![1]).toBe(view.items[2]!.id);
+    expect(onCell.mock.calls[0]![0]).toMatchObject({ attemptId: id("attempt", 1) });
+    expect(onCell.mock.calls[0]![1]).toBe(view.items[2]!.id);
+    expect(onInspect).not.toHaveBeenCalled();
+  });
+
+  it("opens a question for the whole class from its column header (#353)", async () => {
+    const view = viewIn("running", 2, 3);
+    const { onQuestion, onCell } = setup(view);
+    await userEvent.click(screen.getByRole("button", { name: "Open question 2 for every student" }));
+    expect(onQuestion).toHaveBeenCalledWith(view.items[1]!.id);
+    expect(onCell).not.toHaveBeenCalled();
   });
 });
 

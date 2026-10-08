@@ -102,6 +102,7 @@ export {
 export {
   dashboardView,
   attemptInspect,
+  itemAnswers,
 } from "./dashboard.js";
 export {
   expireDueAttempts,

@@ -48,8 +48,8 @@ vi.mock("./AnswerTip", async (importOriginal) => {
 /*
  * The dashboard, from the three angles the work package cares about: the grid
  * renders 30 x 12 WITHOUT fetching a single cell, the keyboard is the real
- * interface (`n`/`r`/`s`, Space), and a click on a cell opens the whole of
- * one student's paper in a modal.
+ * interface (`n`/`r`/`s`, Space), and what a click opens is what was clicked:
+ * one answer for a cell, the paper for the row's eye, the class for a header.
  *
  * `EventSource` is stubbed away: the query cache is seeded directly, which is
  * what a snapshot does anyway, and the stream itself is tested in
@@ -389,33 +389,57 @@ describe("LiveDashboard — inspection", () => {
     serverNow: new Date().toISOString(),
   });
 
-  it("opens every answer of that student in a modal, and closes it with Escape", async () => {
-    const user = userEvent.setup();
-    setup(makeDashboard(3, 4), {
-      [`GET /app/api/evaluations/${EVALUATION_ID}/attempts/${id("attempt", 1)}`]: ok(attempt(1)),
+  const paperOf = (index: number) => ({
+    [`GET /app/api/evaluations/${EVALUATION_ID}/attempts/${id("attempt", index)}`]: ok(attempt(index)),
+  });
+  const eyeOf = (name: string) =>
+    within(screen.getByText(name).closest("tr") as HTMLElement).getByRole("button", {
+      name: "Open the whole paper",
     });
 
+  it("opens only that answer from a cell, and closes it with Escape (#353)", async () => {
+    const user = userEvent.setup();
+    setup(makeDashboard(3, 4), paperOf(1));
+
     await user.click(await screen.findByRole("button", { name: /Nadia Roux 1 · Question 2/ }));
-    const dialog = await screen.findByRole("dialog", { name: /answers of nadia roux 1/i });
-    // The whole paper, not one cell: the footer walks to the next STUDENT.
-    expect(within(dialog).getByRole("button", { name: /next student/i })).toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog", { name: "Nadia Roux 1 · Question 2" });
+    // One answer, not the paper: no walk to the next student.
+    expect(within(dialog).queryByRole("button", { name: /next student/i })).toBeNull();
 
     await act(async () => {
       await user.keyboard("{Escape}");
     });
     await waitFor(() =>
-      expect(screen.queryByRole("dialog", { name: /answers of nadia roux 1/i })).not.toBeInTheDocument(),
+      expect(screen.queryByRole("dialog", { name: "Nadia Roux 1 · Question 2" })).not.toBeInTheDocument(),
     );
+  });
+
+  it("goes from one answer to the whole paper, in the same one query", async () => {
+    const user = userEvent.setup();
+    const { calls } = setup(makeDashboard(3, 4), paperOf(1));
+    await user.click(await screen.findByRole("button", { name: /Nadia Roux 1 · Question 2/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Nadia Roux 1 · Question 2" });
+    await user.click(within(dialog).getByRole("button", { name: "See the whole paper" }));
+    expect(await screen.findByRole("dialog", { name: /answers of nadia roux 1/i })).toBeInTheDocument();
+    expect(calls.filter((c) => c.url.includes("/attempts/"))).toHaveLength(1);
+  });
+
+  it("opens every answer of that student from the row's eye", async () => {
+    const user = userEvent.setup();
+    setup(makeDashboard(3, 4), paperOf(1));
+    await screen.findByText("Nadia Roux 1");
+    await user.click(eyeOf("Nadia Roux 1"));
+    const dialog = await screen.findByRole("dialog", { name: /answers of nadia roux 1/i });
+    // The whole paper: the footer walks to the next STUDENT.
+    expect(within(dialog).getByRole("button", { name: /next student/i })).toBeInTheDocument();
   });
 
   it("walks to the next student with the right arrow, in one query each", async () => {
     const user = userEvent.setup();
-    const { calls } = setup(makeDashboard(3, 4), {
-      [`GET /app/api/evaluations/${EVALUATION_ID}/attempts/${id("attempt", 1)}`]: ok(attempt(1)),
-      [`GET /app/api/evaluations/${EVALUATION_ID}/attempts/${id("attempt", 2)}`]: ok(attempt(2)),
-    });
+    const { calls } = setup(makeDashboard(3, 4), { ...paperOf(1), ...paperOf(2) });
 
-    await user.click(await screen.findByRole("button", { name: /Nadia Roux 1 · Question 2/ }));
+    await screen.findByText("Nadia Roux 1");
+    await user.click(eyeOf("Nadia Roux 1"));
     await screen.findByRole("dialog", { name: /answers of nadia roux 1/i });
     await user.keyboard("{ArrowRight}");
     await screen.findByRole("dialog", { name: /answers of nadia roux 2/i });
@@ -425,13 +449,51 @@ describe("LiveDashboard — inspection", () => {
 
   it("names the anonymous student in the modal too", async () => {
     const user = userEvent.setup();
-    setup(makeDashboard(3, 4), {
-      [`GET /app/api/evaluations/${EVALUATION_ID}/attempts/${id("attempt", 1)}`]: ok(attempt(1)),
-    });
+    setup(makeDashboard(3, 4), paperOf(1));
     await screen.findByText("Nadia Roux 1");
     await user.keyboard("n");
     await user.click(await screen.findByRole("button", { name: /Student 1 · Question 2/ }));
-    expect(await screen.findByRole("dialog", { name: /answers of student 1/i })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Student 1 · Question 2" })).toBeInTheDocument();
+  });
+});
+
+describe("LiveDashboard — one question for the class (F-DASH-07, #353)", () => {
+  const answersUrl = `/app/api/evaluations/${EVALUATION_ID}/items/${id("item", 1)}/answers`;
+  const snapshot = {
+    [`GET ${answersUrl}`]: ok({
+      item: { id: id("item", 1), position: 1, points: 1, type: "short", internalName: "Question 2" },
+      answers: [],
+      serverNow: new Date().toISOString(),
+    }),
+  };
+
+  it("reads the class's answers once, names each student and refreshes on demand", async () => {
+    const user = userEvent.setup();
+    const { calls } = setup(makeDashboard(3, 4), snapshot);
+    await user.click(await screen.findByRole("button", { name: "Open question 2 for every student" }));
+    const dialog = await screen.findByRole("dialog", { name: "Question 2 · the whole class" });
+    expect(within(dialog).getByRole("list", { name: /where the class stands/i })).toBeInTheDocument();
+    // Started after the reading: said, under the grid's own name.
+    expect(await within(dialog).findByText("Nadia Roux 2")).toBeInTheDocument();
+    expect(calls.filter((c) => c.url === answersUrl)).toHaveLength(1);
+
+    await user.click(within(dialog).getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(calls.filter((c) => c.url === answersUrl)).toHaveLength(2));
+  });
+
+  it("follows the switches: no answer fetched while they are hidden, numbers for names", async () => {
+    const user = userEvent.setup();
+    const { calls } = setup(
+      makeDashboard(3, 4),
+      snapshot,
+      JSON.stringify({ names: false, answers: false, results: false }),
+    );
+    await user.click(await screen.findByRole("button", { name: "Open question 2 for every student" }));
+    const dialog = await screen.findByRole("dialog", { name: "Question 2 · the whole class" });
+    expect(within(dialog).getByText(/answers are hidden/i)).toBeInTheDocument();
+    expect(within(dialog).getByText("Student 1")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/Nadia Roux/)).toBeNull();
+    expect(calls.filter((c) => c.url === answersUrl)).toHaveLength(0);
   });
 });
 

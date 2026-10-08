@@ -11,6 +11,7 @@ import {
   attemptInspect,
   dashboardView,
   evaluationOr404,
+  itemAnswers,
   makeRows,
   toEvaluation,
 } from "./evaluation";
@@ -72,6 +73,9 @@ on("POST", "/app/api/evaluations/:id/extend", (m, body) => {
 });
 on("GET", "/app/api/evaluations/:id/attempts/:attemptId", (m) =>
   attemptInspect(evaluationOr404(m.groups!.id!), m.groups!.attemptId!),
+);
+on("GET", "/app/api/evaluations/:id/items/:itemId/answers", (m) =>
+  itemAnswers(evaluationOr404(m.groups!.id!), m.groups!.itemId!),
 );
 on("POST", "/app/api/evaluations/:id/attempts/:attemptId/close", (m) => {
   const e = evaluationOr404(m.groups!.id!);

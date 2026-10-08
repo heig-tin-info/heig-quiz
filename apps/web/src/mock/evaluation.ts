@@ -1088,6 +1088,33 @@ export const attemptInspect = (e: MockEvaluation, attemptId: string) => {
   };
 };
 
+/**
+ * F-DASH-07: one question's answers for the class, read from the same papers
+ * the inspector reads — so a card says what the cell and its paper say.
+ */
+export const itemAnswers = (e: MockEvaluation, itemId: string) => {
+  const item = e.items.find((i) => i.id === itemId);
+  if (!item) throw new MockError(404, "Item not found");
+  const answers = e.rows.flatMap((row) => {
+    if (row.attemptId === null) return [];
+    const entry = attemptInspect(e, row.attemptId).items.find((i) => i.item.id === itemId);
+    if (!entry) return [];
+    const { item: _item, markedDone: _done, ...answer } = entry;
+    return [{ attemptId: row.attemptId, ...answer }];
+  });
+  return {
+    item: {
+      id: item.id,
+      position: item.position,
+      points: item.points,
+      type: item.type,
+      internalName: item.internalName,
+    },
+    answers,
+    serverNow: iso(0),
+  };
+};
+
 // --- Routes: evaluations --------------------------------------------------
 
 on("GET", "/app/api/classrooms/:id/evaluations", (m) =>

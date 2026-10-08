@@ -22,6 +22,7 @@ import {
   ExtendBody,
   FlagBody,
   IdParam,
+  ItemParam,
   MarkDoneBody,
   PositionBody,
   RunBody,
@@ -560,6 +561,20 @@ export async function livePlugin(app: FastifyInstance) {
     teacher({ params: AttemptParam, load: staffEvaluationAttempt }, ({ now, scope }) =>
       service.attemptInspect(app.db, scope.evaluation, scope.attempt, now),
     ),
+  );
+
+  /**
+   * F-DASH-07: one question for the whole class. The evaluation is loaded
+   * through the staff predicate first; an item that is not one of its own
+   * answers the same 404 as a missing one.
+   */
+  app.get(
+    "/app/api/evaluations/:id/items/:itemId/answers",
+    { preHandler: requireTeacher },
+    teacher({ params: ItemParam, load: staffEvaluation }, async ({ reply, now, params, scope }) => {
+      const view = await service.itemAnswers(app.db, scope.evaluation, params.itemId, now);
+      return view ?? notFound(reply);
+    }),
   );
 
   /** Closing ONE student (F-LIVE-11) — the grid keeps running for everybody else. */

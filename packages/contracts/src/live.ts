@@ -788,3 +788,31 @@ export const AttemptInspect = z.object({
   serverNow: z.iso.datetime(),
 });
 export type AttemptInspect = z.infer<typeof AttemptInspect>;
+
+/**
+ * `GET /evaluations/:id/items/:itemId/answers` (F-DASH-07): one question of
+ * the live grid opened for the whole class — every student's answer to it,
+ * on the attempt the grid shows (the latest, F-EVAL-15), staff only.
+ *
+ * No name travels: the dashboard joins each answer to its row by
+ * `attemptId` and names it as the grid does (F-DASH-02), so the screen's
+ * "names hidden" holds without the server having to know about it.
+ * `studentConfig` and `solution` are per attempt, like the inspector's:
+ * a parameterized question draws one instance per student (ADR-056).
+ */
+export const ItemAnswers = z.object({
+  item: AttemptInspect.shape.items.element.shape.item,
+  answers: z.array(
+    z.object({
+      attemptId: z.uuid(),
+      studentConfig: z.unknown(),
+      answer: z.unknown().nullable(),
+      revision: z.number().int(),
+      skipped: z.boolean(),
+      flagged: z.boolean(),
+      solution: z.unknown(),
+    }),
+  ),
+  serverNow: z.iso.datetime(),
+});
+export type ItemAnswers = z.infer<typeof ItemAnswers>;

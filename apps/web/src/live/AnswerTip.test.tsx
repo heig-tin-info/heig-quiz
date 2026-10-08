@@ -276,7 +276,7 @@ describe("AnswerTip (#94)", () => {
     expect(inspectCalls(calls)).toBe(1);
   });
 
-  it("still opens the student's paper on a click, sharing the cached query", async () => {
+  it("still opens the answer on a click, sharing the cached query", async () => {
     const user = userEvent.setup();
     const { calls } = setup(() => "42");
     const cell = await cellButton();
@@ -286,7 +286,7 @@ describe("AnswerTip (#94)", () => {
     // Generous timeouts: the modal is the heaviest render of the file, and
     // under a full parallel run the default second is about the machine.
     expect(
-      await screen.findByRole("dialog", { name: /answers of nadia roux 1/i }, { timeout: 10_000 }),
+      await screen.findByRole("dialog", { name: "Nadia Roux 1 · Question 2" }, { timeout: 10_000 }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("tooltip")).toBeNull();
     // The modal read the paper the tooltip had already fetched.
@@ -341,7 +341,10 @@ describe("InspectModal under live frames", () => {
     const user = flowingClock();
     let held: Held = { text: "first draft", revision: 1 };
     const { calls, queryClient } = setup(() => held);
+    // The row's eye, onto the question of the cell that was last opened.
     await user.click(await cellButton());
+    const answer = await screen.findByRole("dialog", { name: "Nadia Roux 1 · Question 2" }, { timeout: 10_000 });
+    await user.click(within(answer).getByRole("button", { name: "See the whole paper" }));
     const dialog = await screen.findByRole("dialog", { name: /answers of nadia roux 1/i }, { timeout: 10_000 });
     // The list of questions: the first list of the dialog (a type may hold its own).
     const list = (await within(dialog).findAllByRole("list"))[0]!;

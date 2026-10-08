@@ -4,7 +4,6 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import type { DashboardRow } from "@quiz/contracts";
 
 import { useT } from "../i18n";
-import { QuestionReviewHost, typeLabel } from "../questionTypes";
 import type { GridState } from "../realtime/grid";
 import {
   Badge,
@@ -15,9 +14,8 @@ import {
   Modal,
   QueryError,
   Skeleton,
-  VerdictCell,
 } from "../ui";
-import { cellState } from "./cells";
+import { AnswerCard } from "./AnswerCard";
 import { useAttemptInspect } from "./useAttemptInspect";
 
 /**
@@ -38,11 +36,10 @@ import { useAttemptInspect } from "./useAttemptInspect";
  * the arrows do the same from the keyboard, because a teacher going down a
  * class of twenty-four should not have to aim at a chevron twenty-four times.
  *
- * Each answer is rendered by the question type's own `Review` through
- * `QuestionReviewHost`, `audience` "teacher": the host injects the French
- * strings AND `MarkdownView` in its inline form, so a prompt with backticks,
- * bold or a formula reads here exactly as the student read it, and this file
- * never learns what any type's answer looks like.
+ * Each answer is drawn by `AnswerCard`, the type's own `Review` — the same
+ * card one cell (`AnswerModal`) and one question (`QuestionModal`) show, so
+ * this file never learns what any type's answer looks like. This is what the
+ * row's eye opens; a cell opens that one answer only (issue #353).
  */
 export function InspectModal({
   evaluationId,
@@ -192,41 +189,17 @@ export function InspectModal({
                   if (el) anchors.current.set(entry.item.id, el);
                   else anchors.current.delete(entry.item.id);
                 }}
-                className="scroll-mt-2 rounded-card border border-line bg-surface-2/40 p-4"
+                className="scroll-mt-2"
               >
-                <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-line pb-2">
-                  <span className="text-[13px] font-semibold">
-                    {t("live.grid.question", { n: index + 1 })}
-                  </span>
-                  <Badge tone="zinc">{typeLabel(t, entry.item.type)}</Badge>
-                  {cell ? (
-                    <span className="w-9">
-                      <VerdictCell state={cellState(cell, true)} />
-                    </span>
-                  ) : null}
-                  {/* Only a score that EXISTS is printed here: the type's
-                      own review already ends on a "Score — / n" line, and
-                      "graded once the evaluation is closed" repeated under
-                      every question of ten is a paragraph nobody reads. */}
-                  {cell?.points == null ? null : (
-                    <span className="ml-auto text-xs tabular-nums text-fg-muted">
-                      {t("live.inspect.points", { points: cell.points, max: entry.item.points })}
-                    </span>
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <QuestionReviewHost
-                    t={t}
-                    type={entry.item.type}
-                    student={entry.studentConfig}
-                    answer={entry.answer}
-                    solution={entry.solution}
-                    details={null}
-                    points={cell?.points ?? null}
-                    maxPoints={entry.item.points}
-                    audience="teacher"
-                  />
-                </div>
+                <AnswerCard
+                  heading={t("live.grid.question", { n: index + 1 })}
+                  type={entry.item.type}
+                  cell={cell}
+                  maxPoints={entry.item.points}
+                  studentConfig={entry.studentConfig}
+                  answer={entry.answer}
+                  solution={entry.solution}
+                />
               </li>
             );
           })}
