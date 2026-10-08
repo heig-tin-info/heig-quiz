@@ -92,6 +92,7 @@ export function useEditorShortcuts({
       : [
           {
             id: "question:publish",
+            effect: "write" as const,
             label: t("palette.publish"),
             icon: CloudUpload,
             group: "action" as const,
@@ -101,6 +102,7 @@ export function useEditorShortcuts({
         ]),
     {
       id: "question:preview",
+      effect: "none",
       label: t("palette.preview"),
       icon: Eye,
       group: "action",
@@ -109,6 +111,7 @@ export function useEditorShortcuts({
     },
     {
       id: "question:try",
+      effect: "none",
       label: t("question.tab.try"),
       icon: Play,
       group: "action",

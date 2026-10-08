@@ -1,6 +1,13 @@
 import { useEffect } from "react";
 
-import type { Command } from "./commands";
+import type { Command, CommandEffect } from "./commands";
+
+/**
+ * A command a mounted screen lends: its `effect` is REQUIRED (ADR-080 P2b),
+ * so a new screen command is classified when it is written — the assistant
+ * runs only those of effect `none`.
+ */
+export type ScreenCommand = Command & { effect: CommandEffect };
 
 /**
  * The ONE registry of "the commands of the mounted screen"
@@ -19,10 +26,10 @@ import type { Command } from "./commands";
  * One slot and not a set of sources: exactly one screen is mounted under the
  * palette at a time, and two of them would mean two "Publish" entries.
  */
-let current: Command[] = [];
+let current: ScreenCommand[] = [];
 
 /** Registers `commands` for as long as the calling component is mounted. */
-export function useScreenCommands(commands: Command[]): void {
+export function useScreenCommands(commands: ScreenCommand[]): void {
   // No dependency array: the commands close over the screen's current state
   // (the selected category, the draft being published, the live controls),
   // and re-registering them on every render is one assignment.
@@ -35,6 +42,6 @@ export function useScreenCommands(commands: Command[]): void {
 }
 
 /** What `buildCommands` folds into the global list. */
-export function screenCommands(): Command[] {
+export function screenCommands(): ScreenCommand[] {
   return current;
 }

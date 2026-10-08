@@ -11,14 +11,27 @@
  * names and results included — goes to Anthropic (ADR-080 P2), and an
  * answer's links are clickable only into the app itself. The conversation
  * open in this tab survives a reload
- * (`sessionStorage`); the server keeps it 30 days. One that is gone — purged,
+ * (`sessionStorage`); the server keeps it 30 days. An answer may open a
+ * screen or run an effect-free command of this one (P2b, `actions.ts`):
+ * the panel stays open across the navigation and says, under the answer,
+ * what it opened. One that is gone — purged,
  * or deleted in another tab — is forgotten, and the question starts a new one.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, History, MessageCircleQuestion, SquarePen, Trash2, X } from "lucide-react";
+import {
+  ArrowUp,
+  CircleAlert,
+  CornerDownRight,
+  History,
+  MessageCircleQuestion,
+  SquarePen,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import type {
+  AssistAction,
   AssistAsk,
   AssistAvailability,
   AssistConversation,
@@ -36,6 +49,7 @@ import { Markdown } from "../markdown";
 import { assistAvailabilityKey, assistConversationKey, assistConversationsKey } from "../queryKeys";
 import { parsePath, type Navigate, type Route } from "../router";
 import { Alert, Badge, cx, IconButton, QueryError, RelativeTime, Spinner, ToolDock } from "../ui";
+import { runAssistActions, type ActionOutcome } from "./actions";
 import { assistContext, assistVisible } from "./context";
 
 const CONVERSATION_KEY = "quiz-assist-conversation";
@@ -151,6 +165,16 @@ function Chat({
   const [draft, setDraft] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLDivElement>(null);
+  // The UI actions of the last answer (ADR-080 P2b), run once it is on
+  // screen; what each did, by exchange, for this tab only (never stored).
+  const [pending, setPending] = useState<{ exchangeId: string; actions: AssistAction[] } | null>(null);
+  const [outcomes, setOutcomes] = useState<Record<string, ActionOutcome[]>>({});
+  useEffect(() => {
+    if (!pending) return;
+    setPending(null);
+    const done = runAssistActions(pending.actions, navigate, t);
+    setOutcomes((o) => ({ ...o, [pending.exchangeId]: done }));
+  }, [pending, navigate, t]);
 
   const conversation = useQuery({
     queryKey: assistConversationKey(conversationId ?? ""),
@@ -184,6 +208,7 @@ function Chat({
       void qc.invalidateQueries({ queryKey: assistConversationsKey, exact: true });
       onConversation(reply.conversationId);
       setDraft("");
+      if (reply.actions.length > 0) setPending({ exchangeId: reply.exchange.id, actions: reply.actions });
     },
     onError: (error, q) => {
       // Purged while the page stood open: the question goes on in a new conversation.
@@ -225,7 +250,7 @@ function Chat({
         {exchanges.map((e) => (
           <div key={e.id} className="space-y-4">
             <Question text={e.question} />
-            <Answer text={e.answer} navigate={navigate} />
+            <Answer text={e.answer} navigate={navigate} outcomes={outcomes[e.id]} />
           </div>
         ))}
         {ask.isPending ? (
@@ -272,7 +297,15 @@ function Question({ text }: { text: string }) {
   return <p className="ml-8 rounded-card bg-surface-2 px-3 py-2 text-sm whitespace-pre-wrap text-fg">{text}</p>;
 }
 
-function Answer({ text, navigate }: { text: string; navigate: Navigate | undefined }) {
+function Answer({
+  text,
+  navigate,
+  outcomes,
+}: {
+  text: string;
+  navigate: Navigate | undefined;
+  outcomes: ActionOutcome[] | undefined;
+}) {
   // An in-app link is a path of this origin (`linkTarget`): its page, through the router.
   // A `Route` holds no query string, so a link carrying one (`?tab=roster`) is a
   // full load: the router would land on the page without its tab.
@@ -287,6 +320,12 @@ function Answer({ text, navigate }: { text: string; navigate: Navigate | undefin
     <div className="space-y-2 text-sm leading-relaxed text-fg">
       {/* Same-origin links only: an answer may echo text others wrote (ADR-080 P2, item 8). */}
       <Markdown source={text} links="same-origin" onNavigate={onNavigate} />
+      {outcomes?.map((o, i) => (
+        <p key={i} className={cx("flex items-center gap-1.5 text-[12px]", o.ok ? "text-fg-muted" : "text-danger")}>
+          {o.ok ? <CornerDownRight className="size-3.5" aria-hidden /> : <CircleAlert className="size-3.5" aria-hidden />}
+          {o.text}
+        </p>
+      ))}
     </div>
   );
 }

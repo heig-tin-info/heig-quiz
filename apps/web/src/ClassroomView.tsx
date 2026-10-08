@@ -260,6 +260,8 @@ export function ClassroomView({
       ? [
           {
             id: "classroom-github-connect",
+            // Opens the connect sheet; connecting is the sheet's own step.
+            effect: "none",
             label: t("github.connectTitle"),
             icon: GithubIcon,
             group: "action",

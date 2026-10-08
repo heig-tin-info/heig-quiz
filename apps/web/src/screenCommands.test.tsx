@@ -2,9 +2,9 @@ import { render } from "@testing-library/react";
 import { Eye } from "lucide-react";
 import { describe, expect, it, vi } from "vitest";
 
-import { buildCommands, groupCommands, type Command, type CommandContext } from "./commands";
+import { buildCommands, groupCommands, type CommandContext } from "./commands";
 import type { TFunction } from "./i18n";
-import { screenCommands, useScreenCommands } from "./screenCommands";
+import { screenCommands, useScreenCommands, type ScreenCommand } from "./screenCommands";
 import { makeMe } from "./test/fixtures";
 
 /*
@@ -14,7 +14,7 @@ import { makeMe } from "./test/fixtures";
  * nobody is looking at — and that `buildCommands`, the single list the
  * palette walks, is where they land.
  */
-function Screen({ commands }: { commands: Command[] }) {
+function Screen({ commands }: { commands: ScreenCommand[] }) {
   useScreenCommands(commands);
   return null;
 }
@@ -22,8 +22,8 @@ function Screen({ commands }: { commands: Command[] }) {
 describe("useScreenCommands", () => {
   it("registers while mounted and clears on unmount", () => {
     const run = vi.fn();
-    const commands: Command[] = [
-      { id: "question:publish", label: "Publish this question", icon: Eye, group: "action", run },
+    const commands: ScreenCommand[] = [
+      { id: "question:publish", label: "Publish this question", icon: Eye, group: "action", effect: "write", run },
     ];
     const { unmount } = render(<Screen commands={commands} />);
     expect(screenCommands().map((c) => c.id)).toEqual(["question:publish"]);
@@ -34,8 +34,8 @@ describe("useScreenCommands", () => {
   });
 
   it("keeps the latest registration when the screen re-renders", () => {
-    const first: Command[] = [{ id: "a", label: "A", icon: Eye, group: "action", run: vi.fn() }];
-    const second: Command[] = [{ id: "b", label: "B", icon: Eye, group: "action", run: vi.fn() }];
+    const first: ScreenCommand[] = [{ id: "a", label: "A", icon: Eye, group: "action", effect: "write", run: vi.fn() }];
+    const second: ScreenCommand[] = [{ id: "b", label: "B", icon: Eye, group: "action", effect: "write", run: vi.fn() }];
     const { rerender } = render(<Screen commands={first} />);
     rerender(<Screen commands={second} />);
     expect(screenCommands().map((c) => c.id)).toEqual(["b"]);
@@ -63,8 +63,8 @@ const context = (): CommandContext => ({
 
 describe("buildCommands and the mounted screen", () => {
   it("puts the screen's commands first within their group, before the generic ones", () => {
-    const commands: Command[] = [
-      { id: "question:publish", label: "Publish", icon: Eye, group: "action", run: vi.fn() },
+    const commands: ScreenCommand[] = [
+      { id: "question:publish", label: "Publish", icon: Eye, group: "action", effect: "write", run: vi.fn() },
     ];
     const { unmount } = render(<Screen commands={commands} />);
     const actions = groupCommands(buildCommands(context())).find((g) => g.group === "action");

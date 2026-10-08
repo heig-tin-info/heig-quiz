@@ -3,7 +3,24 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SEB_QUIT_PATH, encodeJournalPath, safeJournalPath } from "@quiz/contracts";
 
 /** The classroom's sections that live in `?tab=`; the others are routes of their own. */
-export type ClassroomQueryTab = "roster" | "evaluations" | "drill";
+export const CLASSROOM_QUERY_TABS = ["evaluations", "roster", "drill"] as const;
+export type ClassroomQueryTab = (typeof CLASSROOM_QUERY_TABS)[number];
+
+/*
+ * The `?tab=` (or `?step=`) values of the screens that read one off the
+ * query string, kept here beside the routes so a screen and the assistant's
+ * catalogue (`assist/screens.ts`, ADR-080 P2b) read the same list.
+ */
+/** The pool screen's tabs (`?tab=`); `review` while the platform has a model. */
+export const POOL_TABS = ["questions", "tags", "review"] as const;
+/** The question editor's tabs (`?tab=`). */
+export const QUESTION_TABS = ["edit", "try", "versions"] as const;
+/** The results' tabs (`?tab=`). */
+export const RESULTS_TABS = ["students", "questions"] as const;
+/** The evaluation configuration's steps (`?step=`). */
+export const EVALUATION_STEPS = ["questions", "timing", "launch"] as const;
+/** The template editor's tabs (`?tab=`). */
+export const TEMPLATE_TABS = ["questions", "settings"] as const;
 
 /**
  * The tabs of a course's page (F-ORG-12), each a path of its own
@@ -685,7 +702,28 @@ export function parsePath(path: string): Route {
  * finished retake attempt, which goes to the score) must not be a Back
  * target that bounces the student forward again.
  */
-export type Navigate = (r: Route, options?: { replace?: boolean }) => void;
+export type Navigate = (r: Route, options?: NavigateOptions) => void;
+
+export interface NavigateOptions {
+  replace?: boolean;
+  /**
+   * Query parameters the route itself does not carry, added to its address
+   * (the pool's search `?q=`, a results tab): the assistant's way to open a
+   * screen already filtered (ADR-080 P2b). The screen reads them with
+   * `useSearchParam`, as it reads its own.
+   */
+  query?: Readonly<Record<string, string>>;
+}
+
+/** `path` with `query` merged into its own query string; a parameter the path sets already is kept. */
+export function withQuery(path: string, query: Readonly<Record<string, string>> | undefined): string {
+  if (!query || Object.keys(query).length === 0) return path;
+  const url = new URL(path, "http://app");
+  for (const [name, value] of Object.entries(query)) {
+    if (!url.searchParams.has(name)) url.searchParams.set(name, value);
+  }
+  return url.pathname + url.search;
+}
 
 /**
  * What asks before the app leaves a screen that holds unsaved work (the
@@ -753,7 +791,7 @@ export function useRoute(): [Route, Navigate] {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
   const navigate = useCallback<Navigate>((r, options) => {
-    const path = routeToPath(r);
+    const path = withQuery(routeToPath(r), options?.query);
     const go = () => {
       // The whole address, query included: a click on the page on view
       // drops its `?tab=` too, and lands where the route says.

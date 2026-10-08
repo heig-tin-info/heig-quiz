@@ -931,6 +931,15 @@ describe("PoolView", () => {
       );
       expect(calls.some((c) => c.url === "/app/api/pools/p1/questions?limit=25")).toBe(false);
     });
+
+    it("seeds the search box from ?q on arrival (the assistant opens a pool searched, ADR-080 P2b)", async () => {
+      const { calls } = mockFetch(tagRoutes());
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?q=tag%3Apointeurs" });
+      await screen.findByText("ptr-arith-01");
+      expect(screen.getByDisplayValue("tag:pointeurs")).toBeVisible();
+      expect(calls.some((c) => c.url === "/app/api/pools/p1/questions?tag=pointeurs&limit=25")).toBe(true);
+      expect(calls.some((c) => c.url === "/app/api/pools/p1/questions?limit=25")).toBe(false);
+    });
   });
 });
 

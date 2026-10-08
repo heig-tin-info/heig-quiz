@@ -1644,6 +1644,19 @@ const scenes = [
       await p.keyboard.press("Enter");
       await p.waitForTimeout(800);
     } },
+  // P2b (ADR-080 amendment of 2026-10-08): asked from the pools list, the
+  // stub opens the pool it names, searched by its tag; the panel stays open.
+  { name: "assist-p2b-pool-opened", role: "teacher", path: "/pools", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("button", { name: /^(ask the help assistant|demander à l'assistant d'aide)$/i }).click();
+      await p.getByRole("button", { name: /^(new conversation|nouvelle conversation)$/i }).click();
+      await p.getByRole("textbox", { name: /question/i }).fill("Montre-moi les questions de la banque Programmation C, seulement tag:pointeurs");
+      await p.keyboard.press("Enter");
+      await p.waitForURL(/\/pools\/p1\?q=tag%3Apointeurs/);
+      await p.waitForTimeout(1200);
+      // The pool's first-visit tour would open over it; a returning teacher has none.
+      await skipCoach(p);
+    } },
   { name: "assist-history", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
       await skipCoach(p);
       await p.getByRole("button", { name: /^(ask the help assistant|demander à l'assistant d'aide)$/i }).click();

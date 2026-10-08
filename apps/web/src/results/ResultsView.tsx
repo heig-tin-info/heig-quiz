@@ -25,7 +25,7 @@ import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
-import { useSearchParam } from "../router";
+import { useSearchParam, type RESULTS_TABS } from "../router";
 import { Trail, useEvaluationCrumbs } from "../Trail";
 import { useScreenCommands } from "../screenCommands";
 import {
@@ -52,7 +52,7 @@ import { Summary } from "./Summary";
 import { useIsCourseOwner } from "../course/parts";
 import { evaluationKey, resultsByQuestionKey, resultsKey, resultsViewKey } from "../queryKeys";
 
-type Tab = "students" | "questions";
+type Tab = (typeof RESULTS_TABS)[number];
 
 const NO_ROWS: ResultRow[] = [];
 
@@ -165,6 +165,7 @@ export function ResultsView({
   useScreenCommands([
     {
       id: "results:grading",
+      effect: "none",
       label: t("palette.openGrading"),
       icon: ClipboardCheck,
       group: "navigate",
@@ -174,6 +175,7 @@ export function ResultsView({
       ? [
           {
             id: "results:release",
+            effect: "write" as const,
             label: t(view?.released ? "results.release.again" : "results.release"),
             icon: Send,
             group: "action" as const,

@@ -7,7 +7,7 @@ import { api } from "../api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { tryAdapterFor } from "../questionTypes";
-import { QUESTION_ORIGIN_PARAMS, routeToPath, useSearchParam, type Route } from "../router";
+import { QUESTION_ORIGIN_PARAMS, routeToPath, useSearchParam, type QUESTION_TABS, type Route } from "../router";
 import { PageError, PageSkeleton, TabPanel, Tabs } from "../ui";
 import { PublishDialog } from "./PublishDialog";
 import { EditorExpandChrome } from "./EditorExpandLayer";
@@ -148,7 +148,7 @@ function useQuestionCrumbs(origin: Origin | null, poolId: string | undefined, po
  *   the same place.
  */
 
-type Tab = "edit" | "try" | "versions";
+type Tab = (typeof QUESTION_TABS)[number];
 
 export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Route) => void }) {
   const t = useT();

@@ -22,7 +22,7 @@ import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
-import { routeToPath, useSearchParam } from "../router";
+import { EVALUATION_STEPS, routeToPath, useSearchParam } from "../router";
 import { Trail, useEvaluationCrumbs } from "../Trail";
 import {
   Badge,
@@ -76,7 +76,7 @@ import { classroomKey, evaluationKey, evaluationsKey } from "../queryKeys";
  * whole evaluation, in a tab of its own, answerable and graded at the end.
  */
 
-const STEPS = ["questions", "timing", "launch"] as const;
+const STEPS = EVALUATION_STEPS;
 type Step = (typeof STEPS)[number];
 
 function isStep(value: string): value is Step {

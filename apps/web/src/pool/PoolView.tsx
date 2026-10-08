@@ -16,7 +16,7 @@ import { useToast } from "../notify";
 import { useT } from "../i18n";
 import { QUESTION_TYPE_IDS, typeIcon, typeLabel } from "../questionTypes";
 import type { Route } from "../router";
-import { useSearchParam } from "../router";
+import { useSearchParam, type POOL_TABS } from "../router";
 import { Trail, useRootCrumb } from "../Trail";
 import { useScreenCommands } from "../screenCommands";
 import { useShortcuts } from "../shortcuts";
@@ -65,7 +65,7 @@ import { poolKey, poolQuestionStatsKey, poolQuestionsKey } from "../queryKeys";
 import { ReviewTab } from "./ReviewTab";
 import { TagsTab } from "./TagsTab";
 
-type PoolTab = "questions" | "tags" | "review";
+type PoolTab = (typeof POOL_TABS)[number];
 
 /**
  * The filters once `?tag=` moved from `was` to `tag`: `tag` as the one tag
@@ -214,16 +214,26 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   // stays mounted — an in-app link to `/pools/:id?tag=…` from this very pool
   // (the router's `SEARCH_PARAM_EVENT`) — where the `useState` seed above
   // would not run again: the chip follows the new value.
+  // `?q=` is the search box as typed (`searchSyntax.ts`), kept in the
+  // address the same way: a reload keeps it, and the assistant opens the
+  // pool already searched (`tag:printf`, ADR-080 P2b).
   const [tagParam, setTagParam] = useSearchParam("tag", "");
-  const [filters, setFilters] = useState<QuestionFilters>(() => withTag(EMPTY_FILTERS, tagParam));
+  const [qParam, setQParam] = useSearchParam("q", "");
+  const [filters, setFilters] = useState<QuestionFilters>(() => ({ ...withTag(EMPTY_FILTERS, tagParam), q: qParam }));
   const [seenTag, setSeenTag] = useState(tagParam);
+  const [seenQ, setSeenQ] = useState(qParam);
   if (seenTag !== tagParam) {
     setSeenTag(tagParam);
     setFilters((f) => withTag(f, tagParam, seenTag));
   }
+  if (seenQ !== qParam) {
+    setSeenQ(qParam);
+    setFilters((f) => ({ ...f, q: qParam }));
+  }
   const applyFilters = (next: QuestionFilters) => {
     setFilters(next);
     setTagParam(next.tags.length === 1 ? next.tags[0]! : "");
+    setQParam(next.q);
   };
   const [categoryParam, setCategory] = useSearchParam("category", "");
   // The "LLM review" tab (ADR-060), offered while the platform has a model.
@@ -254,6 +264,8 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
     mayWrite
       ? QUESTION_TYPE_IDS.map((typeId) => ({
           id: `question:new:${typeId}`,
+          // Opens the creation sheet; nothing exists until the teacher saves it.
+          effect: "none" as const,
           label: t("palette.newQuestion", { type: typeLabel(t, typeId) }),
           icon: typeIcon(typeId),
           group: "action" as const,

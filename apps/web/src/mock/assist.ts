@@ -3,12 +3,14 @@
  * answer, so the button and the panel can be looked at without a server.
  * One stored conversation, to show the history; a question opens a new one
  * or continues the one it names. A student is refused, as by the server. The
- * stub's results path (ADR-080 P2) reads the mock gradebook.
+ * stub's results path (ADR-080 P2) reads the mock gradebook; its "show me
+ * the pool …" (P2b) opens one of the mock's pools.
  */
 import type { AssistContext, AssistConversation, AssistExchange } from "@quiz/contracts";
-import { assistResults, buildCorpus, stubReply } from "@quiz/domain";
+import { assistResults, buildCorpus, stubTurn } from "@quiz/domain";
 
 import { staffGradebookOf } from "./gradebook";
+import { pools } from "./pool";
 import { H, iso, MockError, on, role } from "./runtime";
 
 const conversations: AssistConversation[] = [
@@ -82,13 +84,13 @@ on("POST", "/app/api/assist/ask", async (_m, body) => {
   const conversation = named ?? { id: uuid(), createdAt: now, updatedAt: now, exchanges: [] };
   if (!named) conversations.push(conversation);
   const question = String(body.message);
-  const exchange: AssistExchange = {
-    id: uuid(),
-    question,
-    answer: await stubReply(CORPUS, "teacher", question, body.context as AssistContext, readResults),
-    createdAt: now,
-  };
+  // ADR-080 P2b: "show me the pool …" opens it, as the server's stub does.
+  const turn = await stubTurn(CORPUS, "teacher", question, body.context as AssistContext, {
+    results: readResults,
+    pools: () => Promise.resolve(pools),
+  });
+  const exchange: AssistExchange = { id: uuid(), question, answer: turn.text, createdAt: now };
   conversation.exchanges.push(exchange);
   conversation.updatedAt = now;
-  return { conversationId: conversation.id, exchange };
+  return { conversationId: conversation.id, exchange, actions: turn.actions };
 });

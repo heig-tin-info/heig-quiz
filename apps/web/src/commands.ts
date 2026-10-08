@@ -55,8 +55,19 @@ export interface Command {
   group: CommandGroupId;
   /** Extra text the fuzzy match sees but the row does not show. */
   keywords?: string;
+  /**
+   * What running it does to the platform's data (ADR-080 P2b): `none` — it
+   * opens, shows, selects, focuses, previews or downloads, and changes
+   * nothing — or `write`. Absent is `write`. Only a screen command
+   * (`useScreenCommands`) of effect `none` is offered to the assistant and
+   * run on its behalf; its `label` is sent to the model with its id, so a
+   * screen command's label never embeds an entity's name or content.
+   */
+  effect?: CommandEffect;
   run: () => void;
 }
+
+export type CommandEffect = "none" | "write";
 
 /** Everything a command needs to exist and to run, gathered by the Shell. */
 export interface CommandContext {

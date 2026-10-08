@@ -2,10 +2,9 @@ import { Clock, MonitorPlay, Pause, Play, Square } from "lucide-react";
 
 import type { EvaluationState } from "@quiz/contracts";
 
-import type { Command } from "../commands";
 import type { TFunction } from "../i18n";
 import type { Route } from "../router";
-import { useScreenCommands } from "../screenCommands";
+import { useScreenCommands, type ScreenCommand } from "../screenCommands";
 import type { LiveControls } from "./LiveHeader";
 
 /**
@@ -31,10 +30,11 @@ export function useLiveCommands(input: {
   id: string;
 }): void {
   const { t, state, controls, navigate, id } = input;
-  const commands: Command[] = [];
+  const commands: ScreenCommand[] = [];
   if (state === "lobby" || state === "scheduled") {
     commands.push({
       id: "live:start",
+      effect: "write",
       label: t("live.start"),
       icon: Play,
       group: "action",
@@ -45,6 +45,7 @@ export function useLiveCommands(input: {
     if (controls.canPause || state === "paused") {
       commands.push({
         id: "live:pause",
+        effect: "write",
         label: state === "paused" ? t("live.resume") : t("live.pause"),
         icon: state === "paused" ? Play : Pause,
         group: "action",
@@ -54,6 +55,7 @@ export function useLiveCommands(input: {
     commands.push(
       {
         id: "live:extend",
+        effect: "write",
         label: t("live.extendMinutes", { n: 5 }),
         hint: t("live.extendAll"),
         icon: Clock,
@@ -62,6 +64,7 @@ export function useLiveCommands(input: {
       },
       {
         id: "live:close",
+        effect: "write",
         label: t("live.closeAll"),
         icon: Square,
         group: "action",
@@ -71,6 +74,7 @@ export function useLiveCommands(input: {
   }
   commands.push({
     id: "live:configure",
+    effect: "none",
     label: t("eval.configure"),
     icon: MonitorPlay,
     group: "navigate",

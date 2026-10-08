@@ -10,7 +10,7 @@ import { useErrorToast, useToast } from "../notify";
 import { templateKey } from "../queryKeys";
 import type { CourseTab, Route } from "../router";
 import { Trail, useTemplateCrumbs } from "../Trail";
-import { useSearchParam } from "../router";
+import { TEMPLATE_TABS, useSearchParam } from "../router";
 import {
   Actions,
   Alert,
@@ -95,7 +95,7 @@ export function TemplateEditor({ id, navigate }: { id: string; navigate: (r: Rou
   return <Editor data={detail.data} navigate={navigate} />;
 }
 
-const TABS = ["questions", "settings"] as const;
+const TABS = TEMPLATE_TABS;
 type Tab = (typeof TABS)[number];
 const isTab = (v: string): v is Tab => (TABS as readonly string[]).includes(v);
 
