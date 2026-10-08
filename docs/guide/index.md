@@ -45,6 +45,8 @@ Administrator
 3. Open the waiting room, start, watch the grid, pause or extend if needed, and let the server close it: [Running an evaluation](live.md).
 4. Validate the proposed gradings, publish the results, export the CSV: [Grading and results](grading.md).
 
+For what to do with these in a course — peer instruction with a poll, an exercise before the lesson, the drill, programming question patterns and how to write a good question — see [Teaching recipes](recipes.md).
+
 ```mermaid
 flowchart LR
   A[Draft] --> B[Questions added]

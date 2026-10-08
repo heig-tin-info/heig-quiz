@@ -78,8 +78,9 @@ What gets built:
   students already claimed, and Léa's time accommodation so the extra-time
   path is always exercised;
 - the pool **Programmation C**, attached to PRG1, three categories,
-  thirteen published questions (multiple choice, short answer, cloze, code,
-  code image, essay, categorize);
+  fifteen published questions (multiple choice, short answer, cloze, code,
+  code image, essay, categorize, diagram), among them the Parsons problem of
+  [Teaching recipes](../guide/recipes.md#parsons-problems);
 - the pool **Électronique**, attached to PRG1 too, five published questions
   (a circuit among them), shared with the admin persona as a contributor so
   the demo shows a pool from the colleague's side too;
