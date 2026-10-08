@@ -4,7 +4,9 @@
 
 Accepted (2026-10-08) by the product owner, in a design discussion; the
 points listed in [open question 54](../spec/06-questions-ouvertes.md) remain
-open. Not implemented: the work is tracked by a parent issue that groups #557
+open. Amended the same day by the [addendum](#addendum-2026-10-08-transition-resolution-and-storage)
+(transition, resolution of a typed label, storage, rights), settled with the
+product owner before step 3 of #599. Not implemented: the work is tracked by a parent issue that groups #557
 and #578.
 
 Scope: what a question is classified by, who may create and change that
@@ -172,3 +174,61 @@ a model, which teachers cannot change, and the free text of today.
 - **A closed "kind of task" facet** (read, write, trace, debug code…), the
   third axis found in the production tags. Rejected by the product owner
   (2026-10-08): only real concepts are kept.
+
+## Addendum 2026-10-08: transition, resolution and storage
+
+Settled with the product owner after the challenge of step 3 of #599. It
+amends §6, §7 and §11 where named; the rest stands.
+
+1. **Transition in four merges, production coherent after each.**
+   (a) The registry alone, connected to nothing: tags stay the source of
+   truth. (b) The sorting of the existing tags, proposed by the model and
+   reviewed by the admin in production, stored keyed by **(pool, tag)**, not
+   as a global map, so a homonym (`pile`) can go to two concepts. (c) One
+   **cut-over**: the question links are filled from the reviewed sorting
+   (tags added since are listed, never silently dropped); questions, the MCP
+   tools, the pool filter and Tags tab, move and copy, polls and the drill
+   switch to concepts together; `question_tags` and `pool_tags` are frozen.
+   (d) The two tables are dropped one release later. Until (c) no question
+   write creates a concept, so the dropped labels (§1) never reach the
+   vocabulary. This orders §11.
+2. **Resolving a typed label (amends §6).** An id, or a label written with
+   its qualifier (`adresse (mémoire)`), resolves directly. One exact match
+   (same key, through a label or an alias of a concept that is not merged)
+   resolves. **Several exact matches** — homonyms, or an alias shared by two
+   concepts — are refused with the candidates (`422 concept_ambiguous`). A
+   **close match only** is refused with the "did you mean" candidates
+   (`422 concept_unknown`), unless the caller explicitly asks to create a
+   new concept. No match, with creation asked: a `proposed` concept. The
+   same rule serves the web picker and the MCP tools.
+3. **Storage.** A concept has a label, a qualifier and a description per
+   language; a `proposed` concept may have one language only (the creator's
+   interface language; the model fills the other later, never inside a
+   question write). Uniqueness is on the **key** (`conceptKey`) of label and
+   qualifier, per language, among concepts that are not merged, enforced by
+   a database index, so two teachers creating `pointeur` and `Pointeurs` at
+   the same time cannot both succeed. A stored key is recomputed by a
+   migration when the key rule changes. Aliases are not unique across
+   concepts; a collision falls under the ambiguity rule. A merged concept is
+   kept with `merged_into`, always pointing at the final concept; an old id
+   follows it.
+4. **Ownership.** The `concept` module owns the concepts, their aliases and
+   relations, and the links to questions and courses, since a merge rewrites
+   them in one transaction. The pool module sets a question's concepts by
+   calling the concept service inside its transaction, and reads by join.
+5. **Rights (settles open question 54 (c)).** Any teacher (and an MCP token
+   acting as one) creates a `proposed` concept; its creator and the admin
+   edit it while it is proposed; once validated, only the admin edits it.
+   Validate, alias, merge and relations are the admin's. Every teacher reads
+   the whole vocabulary, proposed concepts included, so as not to recreate
+   one; a usage count is computed over the pools the reader can reach
+   (ADR-013), never instance-wide. Creating and editing a concept are
+   audited.
+6. **A pool editor no longer documents a tag.** The description of a
+   validated concept is the admin's; the product owner accepts losing the
+   per-pool tag description (`PATCH /pools/:id/tags/:tag`) at the cut-over.
+   [ADR-017 §5](ADR-017-deplacement-de-question.md) ("the vocabulary is
+   taught" to the target pool) becomes obsolete at the same moment.
+7. **The MCP tools' descriptions** say that concepts are what a question
+   exercises — not organisational labels nor kinds of task — so that an LLM
+   client does not recreate what §1 dropped.
