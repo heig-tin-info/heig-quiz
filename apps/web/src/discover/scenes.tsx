@@ -522,11 +522,7 @@ export function ClassroomScene() {
   const raw = useStep(900, 10, inView);
   const step = raw === STILL ? 9 : raw;
   const pages = ["discover.scene.week1", "discover.scene.week2", "discover.scene.week3"] as const;
-  const commits = [
-    { msg: "Add parser skeleton", who: "lmoreau" },
-    { msg: "Fix off-by-one in tokenizer", who: "ekeller" },
-    { msg: "Tests: edge cases", who: "lmoreau" },
-  ];
+  const commits = ["discover.scene.commit1", "discover.scene.commit2", "discover.scene.commit3"] as const;
   return (
     <div ref={ref} className="grid gap-4 sm:grid-cols-2">
       <Frame title={t("discover.scene.journalTitle")}>
@@ -552,13 +548,13 @@ export function ClassroomScene() {
         <div className="space-y-2 p-4">
           {commits.map((c, i) =>
             step > 2 + i * 2 ? (
-              <div key={c.msg} className="slide-in flex items-center gap-2 text-[12px]">
+              <div key={c} className="slide-in flex items-center gap-2 text-[12px]">
                 <GithubIcon className="size-3.5 shrink-0 text-fg-muted" />
-                <span className="truncate text-fg">{c.msg}</span>
+                <span className="truncate text-fg">{t(c)}</span>
                 <Check className="ml-auto size-3.5 shrink-0 text-success" />
               </div>
             ) : (
-              <div key={c.msg} className="h-4.5 rounded bg-surface-3 opacity-50" />
+              <div key={c} className="h-4.5 rounded bg-surface-3 opacity-50" />
             ),
           )}
           <div className="flex items-center justify-between border-t border-line pt-2 text-[11px] text-fg-faint">
@@ -596,7 +592,7 @@ export function AssistantScene() {
                 {created.map((k, i) =>
                   step > 3 + i * 2 ? (
                     <div key={k} className="pop-in flex items-center gap-2 rounded-field border border-line bg-surface px-2.5 py-1.5 text-[12px]">
-                      <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-semibold text-warning">
+                      <span className="rounded-full bg-success-soft px-2 py-0.5 text-[10px] font-semibold text-success">
                         {t("discover.scene.draft")}
                       </span>
                       <span className="truncate">{t(k)}</span>

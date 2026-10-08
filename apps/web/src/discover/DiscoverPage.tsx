@@ -366,7 +366,11 @@ const TAB_MS = 9000;
 function Features() {
   const { t } = useI18n();
   const [active, setActive] = useState(0);
-  const [paused, setPaused] = useState(false);
+  // Hovering pauses the rotation for a while; choosing a tab, a key press or
+  // focus inside stops it for good (WCAG 2.2.2), and so does reduced motion.
+  const [hovered, setHovered] = useState(false);
+  const [chosen, setChosen] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const paused = hovered || chosen;
   const [ref, inView] = useInView<HTMLElement>();
   const [revealRef, reveal] = useReveal<HTMLDivElement>();
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -378,7 +382,7 @@ function Features() {
   }, [running, active]);
   const select = useCallback((i: number, focus = false) => {
     setActive(i);
-    setPaused(true);
+    setChosen(true);
     if (focus) tabs.current[i]?.focus();
   }, []);
   const tab = TABS[active]!;
@@ -391,9 +395,17 @@ function Features() {
           role="tablist"
           aria-label={t("discover.feat.title")}
           className="mt-12 flex gap-1 overflow-x-auto border-b border-line"
+          onFocus={() => setChosen(true)}
           onKeyDown={(e) => {
-            if (e.key === "ArrowRight") select((active + 1) % TABS.length, true);
-            if (e.key === "ArrowLeft") select((active + TABS.length - 1) % TABS.length, true);
+            const next = {
+              ArrowRight: (active + 1) % TABS.length,
+              ArrowLeft: (active + TABS.length - 1) % TABS.length,
+              Home: 0,
+              End: TABS.length - 1,
+            }[e.key];
+            if (next === undefined) return;
+            e.preventDefault();
+            select(next, true);
           }}
         >
           {TABS.map((x, i) => (
@@ -433,8 +445,9 @@ function Features() {
           role="tabpanel"
           aria-labelledby={`feat-tab-${tab.key}`}
           className="mt-10 grid items-center gap-10 lg:grid-cols-[1.15fr_1fr]"
-          onPointerEnter={() => setPaused(true)}
-          onPointerLeave={() => setPaused(false)}
+          onFocus={() => setChosen(true)}
+          onPointerEnter={() => setHovered(true)}
+          onPointerLeave={() => setHovered(false)}
         >
           <div key={tab.key} className="pop-in">
             {tab.scene()}
