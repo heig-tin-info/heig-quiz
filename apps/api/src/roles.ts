@@ -250,17 +250,7 @@ async function storeRole(
  * again at their first login anyway).
  */
 export async function syncUserRole(db: Db, config: AppConfig, email: string): Promise<number> {
-  const normalized = normalizeEmail(email);
-  const owners = await ownersOf(db, normalized);
-  if (owners.length === 0) {
-    // An account from before the address set: its login address, and only
-    // when the IdP verified it.
-    const legacy = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(and(eq(users.email, normalized), eq(users.emailVerified, true)));
-    owners.push(...legacy.map((u) => u.id));
-  }
+  const owners = await ownersOf(db, email);
   for (const userId of owners) {
     await storeRole(db, userId, (await roleForUser(db, config, userId)).role);
   }

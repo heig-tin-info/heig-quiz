@@ -152,18 +152,15 @@ describe("roleForIdentity, the reason", () => {
 });
 
 describe("syncUserRole, account without an address set", () => {
-  async function legacy(email: string, emailVerified: boolean) {
-    const id = randomUUID();
-    await db.insert(users).values({ id, oidcSub: `u-${id}`, email, emailVerified });
-    return syncUserRole(db, config, email);
-  }
-
-  it("does not reach an account whose login address is unverified", async () => {
-    expect(await legacy("claimed@heig.test", false)).toBe(0);
-  });
-
-  it("reaches it once verified", async () => {
-    expect(await legacy("verified@heig.test", true)).toBe(1);
+  // Every login fills the address set, so `users.email` alone reaches no
+  // one, verified or not (#410).
+  it("does not reach it, even with a verified login address", async () => {
+    for (const emailVerified of [false, true]) {
+      const id = randomUUID();
+      const email = `legacy-${id.slice(0, 8)}@heig.test`;
+      await db.insert(users).values({ id, oidcSub: `u-${id}`, email, emailVerified });
+      expect(await syncUserRole(db, config, email)).toBe(0);
+    }
   });
 });
 
