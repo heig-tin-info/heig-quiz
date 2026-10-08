@@ -14,6 +14,7 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { COMMON_FORBIDDEN_STUDENT_KEYS } from "@quiz/core/server";
+import { drillDayBounds } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
@@ -616,11 +617,13 @@ describe("a review (F-DRILL-02, ADR-041 §4)", () => {
 describe("the confidence stated beside a review (ADR-085)", () => {
   /**
    * Two students answer the same question the same way, after the same time
-   * on screen; one states a confidence, the other none. Everything the
-   * schedule holds must come out identical: the confidence is stored, never
-   * read.
+   * on screen; one states a confidence, the other none. The rating and the
+   * FSRS state must come out identical: the confidence never reaches them.
+   * Only a confident error's due date is capped to tomorrow (ADR-085 §4,
+   * amended 2026-10-08). `mature` makes both cards a long-known one first
+   * (stability 270 days, last reviewed 270 days ago, due now).
    */
-  async function twin(answer: string, confidence: number) {
+  async function twin(answer: string, confidence: number, mature = false) {
     const app = await appAt();
     const seed = await world(app, { mode: "exercise", students: 2 });
     await sit(app, seed);
@@ -628,6 +631,13 @@ describe("the confidence stated beside a review (ADR-085)", () => {
     const review = async (userId: string, input: { confidence?: number }) => {
       const card = (await cardsOf({ userId })).find((c) => c.questionId === seed.questionIds[0])!;
       app.clock.set(T0);
+      if (mature) {
+        const lastReviewAt = new Date(Date.parse(T0) - 270 * 86_400_000);
+        await db
+          .update(drillCards)
+          .set({ stability: 270, difficulty: 5, reps: 6, lapses: 0, lastReviewAt, dueAt: app.clock.now() })
+          .where(eq(drillCards.id, card.id));
+      }
       await drill.serveCard(db, userId, card.id, app.clock.now());
       app.clock.advance(12_000);
       const result = await drill.answerCard(db, userId, card.id, { answer, deviceClass: "fine", ...input }, app.clock.now());
@@ -638,23 +648,45 @@ describe("the confidence stated beside a review (ADR-085)", () => {
     return { a: await review(stated, { confidence }), b: await review(silent, {}) };
   }
 
-  const schedule = (r: Awaited<ReturnType<typeof twin>>["a"]) => ({
+  const fsrsState = (r: Awaited<ReturnType<typeof twin>>["a"]) => ({
     rating: r.result.rating,
-    dueAt: r.result.dueAt,
     activeMs: r.result.activeMs,
     stability: r.row.stability,
     difficulty: r.row.difficulty,
     reps: r.row.reps,
     lapses: r.row.lapses,
+    lastReviewAt: r.row.lastReviewAt,
   });
+  const schedule = (r: Awaited<ReturnType<typeof twin>>["a"]) => ({ ...fsrsState(r), dueAt: r.result.dueAt });
+  // The first instant of the day after T0, Zurich time: tomorrow's session.
+  const tomorrow = drillDayBounds(new Date(T0)).end;
 
-  it("rates and schedules a confident error exactly as the same error stated with nothing", async () => {
+  it("rates a confident error as the same error stated with nothing, and brings it back tomorrow", async () => {
     const { a, b } = await twin("wrong", 4);
     expect(a.result.correctness).toBe("wrong");
     expect(a.result.rating).toBe(1);
-    expect(schedule(a)).toEqual(schedule(b));
+    expect(fsrsState(a)).toEqual(fsrsState(b));
+    // A new card answered wrong is due tomorrow anyway; the cap only moves
+    // it to the first instant of that day.
+    expect(a.result.dueAt).toBe(tomorrow.toISOString());
+    expect(a.row.dueAt).toEqual(tomorrow);
+    expect(new Date(b.result.dueAt) < drillDayBounds(tomorrow).end).toBe(true);
     expect(a.stored.confidence).toBe(4);
     expect(b.stored.confidence).toBeNull();
+  });
+
+  it("brings a mature card's confident error back tomorrow, not in the days Again gives", async () => {
+    const { a, b } = await twin("wrong", 3, true);
+    expect(fsrsState(a)).toEqual(fsrsState(b));
+    expect(a.row.lapses).toBe(1);
+    expect(a.result.dueAt).toBe(tomorrow.toISOString());
+    // Again alone sends the mature card days away.
+    expect(Date.parse(b.result.dueAt) - Date.parse(T0)).toBeGreaterThan(5 * 86_400_000);
+  });
+
+  it("schedules an error stated fairly sure exactly as the same error stated with nothing", async () => {
+    const { a, b } = await twin("wrong", 2, true);
+    expect(schedule(a)).toEqual(schedule(b));
   });
 
   it("never upgrades a lucky right answer", async () => {
@@ -662,6 +694,11 @@ describe("the confidence stated beside a review (ADR-085)", () => {
     expect(a.result.correctness).toBe("right");
     expect(schedule(a)).toEqual(schedule(b));
     expect(a.stored.confidence).toBe(0);
+  });
+
+  it("schedules a right answer stated certain exactly as the same answer stated with nothing", async () => {
+    const { a, b } = await twin("answer-q0", 4, true);
+    expect(schedule(a)).toEqual(schedule(b));
   });
 
   it("stores an explicit null as not given", async () => {

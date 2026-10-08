@@ -26,7 +26,10 @@ import { and, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from "drizzl
 import type { DrillDeviceClass, DrillReviewResult, DrillServed, DrillSession } from "@quiz/contracts";
 import {
   composeDrillSession,
+  drillConfidenceDue,
+  drillConfidenceOutcome,
   drillCorrectness,
+  type DrillConfidence,
   drillDayBounds,
   DRILL_NEW_PER_DAY,
   DRILL_SESSION_BUDGET_MS,
@@ -480,7 +483,9 @@ export async function reportShown(
  * strategy A against the reference time of the device class, the card
  * rescheduled by FSRS — reset first when the answer key changed since it
  * was last scheduled (ADR-041 §7) — and the key shown. The confidence the
- * student stated, if any, is only stored (ADR-085).
+ * student stated, if any, is stored, and brings a confident error back
+ * tomorrow at the latest; it never changes the rating nor the FSRS state
+ * (ADR-085 §2, §4).
  */
 export async function answerCard(
   db: Db,
@@ -534,7 +539,15 @@ export async function answerCard(
     const rating = drillRating({ correctness, activeMs, referenceMs });
     const keyHash = keyHashOf(row.type, question.version);
     const before = keyHash === card.keyHash ? stateOf(card) : newDrillCard(now);
-    const next = reviewDrillCard(before, rating, now);
+    // The contract bounds it to 0..4 or nothing.
+    const confidence = (input.confidence ?? null) as DrillConfidence | null;
+    const scheduled = reviewDrillCard(before, rating, now);
+    // FSRS's state as computed; only a confident error's due date is capped
+    // to tomorrow (ADR-085 §4, amended 2026-10-08).
+    const next = {
+      ...scheduled,
+      dueAt: drillConfidenceDue(drillConfidenceOutcome(correctness, confidence), scheduled.dueAt, now),
+    };
     await tx.insert(drillReviews).values({
       id: randomUUID(),
       cardId,
@@ -545,9 +558,9 @@ export async function answerCard(
       reviewedAt: now,
       answerPayload: answer,
       values: instance.stored,
-      // Stored beside the review, read by nothing above: the rating and the
-      // schedule are computed without it (ADR-085 §2).
-      confidence: input.confidence ?? null,
+      // Stored beside the review: the rating and the FSRS state are computed
+      // without it (ADR-085 §2).
+      confidence,
     });
     await tx
       .update(drillCards)
