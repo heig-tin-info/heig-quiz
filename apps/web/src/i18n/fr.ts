@@ -3351,7 +3351,7 @@ export const fr: Record<keyof Dict, string> = {
   "live.question.summary": "Où en est la classe sur cette question",
   "live.question.snapshot": "Réponses lues à l'ouverture",
   "live.question.refresh": "Actualiser",
-  "live.question.hidden": "Les réponses sont masquées, comme sur la grille. Activez « Réponses » (R) pour les lire ici.",
+  "live.answersHidden": "Les réponses sont masquées, comme sur la grille. Activez « Réponses » (R) pour les lire ici.",
   "live.question.none": "Aucun étudiant n'a encore commencé.",
   "live.question.blank": "Sans réponse ({n}) :",
   "live.question.later": "a commencé après cette lecture ; actualisez pour voir la réponse.",

@@ -447,6 +447,23 @@ describe("LiveDashboard — inspection", () => {
     expect(calls.filter((c) => c.url.includes("/attempts/"))).toHaveLength(2);
   });
 
+  it("keeps a cell's answer hidden while the answers are, the paper one step away", async () => {
+    const user = userEvent.setup();
+    const { calls } = setup(
+      makeDashboard(3, 4),
+      paperOf(1),
+      JSON.stringify({ names: true, answers: false, results: false }),
+    );
+    await user.click(await screen.findByRole("button", { name: /Nadia Roux 1 · Question 2/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Nadia Roux 1 · Question 2" });
+    expect(within(dialog).getByText(/answers are hidden/i)).toBeInTheDocument();
+    // Projected: nothing of the answer is even fetched.
+    expect(calls.filter((c) => c.url.includes("/attempts/"))).toHaveLength(0);
+    await user.click(within(dialog).getByRole("button", { name: "See the whole paper" }));
+    expect(await screen.findByRole("dialog", { name: /answers of nadia roux 1/i })).toBeInTheDocument();
+    expect(calls.filter((c) => c.url.includes("/attempts/"))).toHaveLength(1);
+  });
+
   it("names the anonymous student in the modal too", async () => {
     const user = userEvent.setup();
     setup(makeDashboard(3, 4), paperOf(1));
@@ -469,9 +486,13 @@ describe("LiveDashboard — one question for the class (F-DASH-07, #353)", () =>
 
   it("reads the class's answers once, names each student and refreshes on demand", async () => {
     const user = userEvent.setup();
-    const { calls } = setup(makeDashboard(3, 4), snapshot);
+    const view = makeDashboard(3, 4);
+    // A teacher's own test seat (ADR-018): in no column statistic, so in no card either.
+    view.rows[0] = { ...view.rows[0]!, staff: true, displayName: "Prof Test" };
+    const { calls } = setup(view, snapshot);
     await user.click(await screen.findByRole("button", { name: "Open question 2 for every student" }));
     const dialog = await screen.findByRole("dialog", { name: "Question 2 · the whole class" });
+    expect(within(dialog).queryByText("Prof Test")).toBeNull();
     expect(within(dialog).getByRole("list", { name: /where the class stands/i })).toBeInTheDocument();
     // Started after the reading: said, under the grid's own name.
     expect(await within(dialog).findByText("Nadia Roux 2")).toBeInTheDocument();

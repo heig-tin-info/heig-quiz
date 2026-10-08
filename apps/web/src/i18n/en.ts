@@ -3358,7 +3358,7 @@ export const en = {
   "live.question.summary": "Where the class stands on this question",
   "live.question.snapshot": "Answers as read on opening",
   "live.question.refresh": "Refresh",
-  "live.question.hidden": "Answers are hidden, as on the grid. Turn on “Answers” (R) to read them here.",
+  "live.answersHidden": "Answers are hidden, as on the grid. Turn on “Answers” (R) to read them here.",
   "live.question.none": "No student has started yet.",
   "live.question.blank": "No answer ({n}):",
   "live.question.later": "started after this reading; refresh to see the answer.",

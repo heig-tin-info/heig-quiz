@@ -1,10 +1,11 @@
-import { FileQuestion } from "lucide-react";
+import { EyeOff, FileQuestion } from "lucide-react";
 
 import type { DashboardRow } from "@quiz/contracts";
 
 import { useT } from "../i18n";
-import { Button, EmptyState, Modal, QueryError, Skeleton } from "../ui";
+import { Alert, Button, EmptyState, Modal, QueryError, Skeleton, VerdictCell } from "../ui";
 import { AnswerCard } from "./AnswerCard";
+import { cellState } from "./cells";
 import { useAttemptInspect } from "./useAttemptInspect";
 
 /**
@@ -19,6 +20,11 @@ import { useAttemptInspect } from "./useAttemptInspect";
  * The paper is fetched whole and one item of it is shown: at the size of a
  * paper that is cheaper than a second endpoint and a second cache to keep
  * fresh.
+ *
+ * It obeys the "Answers" switch like the grid and the question view: the
+ * dashboard is often projected (F-DASH-02), so with the answers hidden it
+ * fetches nothing and shows the cell's state and how to show the answers.
+ * The whole paper, a deliberate step, keeps showing everything.
  */
 export function AnswerModal({
   evaluationId,
@@ -26,6 +32,8 @@ export function AnswerModal({
   itemId,
   number,
   name,
+  showAnswers,
+  showResults,
   onPaper,
   onClose,
 }: {
@@ -36,12 +44,14 @@ export function AnswerModal({
   number: number;
   /** The row's name as the grid shows it (F-DASH-02). */
   name: string;
+  showAnswers: boolean;
+  showResults: boolean;
   /** Open the student's whole paper instead. */
   onPaper: () => void;
   onClose: () => void;
 }) {
   const t = useT();
-  const inspect = useAttemptInspect(evaluationId, row.attemptId);
+  const inspect = useAttemptInspect(evaluationId, row.attemptId, showAnswers);
   const entry = inspect.data?.items.find((i) => i.item.id === itemId);
   const cell = row.cells.find((c) => c.itemId === itemId) ?? null;
 
@@ -62,7 +72,16 @@ export function AnswerModal({
         </span>
       }
     >
-      {inspect.isLoading ? (
+      {!showAnswers ? (
+        <div className="space-y-4">
+          {cell ? (
+            <span className="block w-9">
+              <VerdictCell state={cellState(cell, showResults)} flagged={cell.flagged} />
+            </span>
+          ) : null}
+          <Alert icon={EyeOff}>{t("live.answersHidden")}</Alert>
+        </div>
+      ) : inspect.isLoading ? (
         <div className="space-y-4">
           <Skeleton className="h-4 w-3/4" />
           <Skeleton className="h-28 w-full" />

@@ -490,6 +490,8 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
               itemId={selected.itemId}
               number={openedIndex + 1}
               name={nameOf(selectedRow)}
+              showAnswers={toggles.answers}
+              showResults={toggles.results}
               onPaper={() => setOpened({ ...selected, view: "paper" })}
               onClose={close}
             />

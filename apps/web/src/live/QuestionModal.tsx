@@ -65,7 +65,10 @@ export function QuestionModal({
     gcTime: 0,
     queryFn: () => api(`/app/api/evaluations/${evaluationId}/items/${item.id}/answers`),
   });
-  const started = rows.filter((r) => r.attemptId !== null);
+  // The CLASS, like every column statistic of the grid: a teacher's own test
+  // seat (ADR-018) is in neither the counts nor the cards.
+  const classRows = rows.filter((r) => !r.staff);
+  const started = classRows.filter((r) => r.attemptId !== null);
   const cellOf = (row: DashboardRow) => row.cells.find((c) => c.itemId === item.id) ?? null;
 
   return (
@@ -101,14 +104,14 @@ export function QuestionModal({
     >
       <div className="space-y-4">
         <Summary
-          states={rows.filter((r) => !r.staff).map((r) => cellOf(r)).flatMap((c) => (c ? [c] : []))}
+          states={classRows.map((r) => cellOf(r)).flatMap((c) => (c ? [c] : []))}
           showResults={showResults}
         />
         {started.length === 0 ? (
           <EmptyState icon={Users} title={t("live.question.none")} className="py-8" />
         ) : !showAnswers ? (
           <>
-            <Alert icon={EyeOff}>{t("live.question.hidden")}</Alert>
+            <Alert icon={EyeOff}>{t("live.answersHidden")}</Alert>
             <ul className="grid gap-x-4 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
               {started.map((row) => {
                 const cell = cellOf(row);
