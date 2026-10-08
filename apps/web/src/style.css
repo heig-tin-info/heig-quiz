@@ -99,9 +99,23 @@
      ADR-069), 3 rem, with its 1 rem of air: its panel and the toasts rise
      above it. */
   --tool-dock-h: 0px;
+  /* The phone's floating action button (`ui/fab.tsx`, #450), 3.5 rem with its
+     1 rem of air: the toasts, the docked tools and the page's end spacer
+     rise by it. Zero unless a FAB is up. */
+  --fab-h: 0px;
 }
 :root:has([data-tool-dock]) {
   --tool-dock-h: 4rem;
+}
+/* The FAB steps aside while a list's selection bar is up: the bar spans the
+   bottom edge, and the selection is the task of the moment. */
+@variant max-lg {
+  :root:has([data-fab]):not(:has([data-bulk-bar])) {
+    --fab-h: 4.5rem;
+  }
+  :root:has([data-bulk-bar]) [data-fab] {
+    display: none;
+  }
 }
 /* The assistant's button (ADR-080) steps aside while the pool's bulk bar is
    up on a screen too narrow for both: the bar spans the bottom edge there. */

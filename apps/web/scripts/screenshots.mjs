@@ -1438,6 +1438,24 @@ const scenes = [
     fold: true,
     act: (p) => p.getByText(/students joined PRG1-2026|étudiants ont rejoint PRG1-2026/).waitFor({ timeout: 5000 }),
   },
+  // The phone's floating action button (#450): take them at --width=390, the
+  // FAB exists under `lg` only. Extended at the top, a circle once scrolled,
+  // and a toast standing above it.
+  { name: "fab-home", role: "teacher", path: "/", fold: true },
+  { name: "fab-home-scrolled", role: "teacher", path: "/", fold: true, act: (p) => p.evaluate(() => window.scrollTo(0, 400)) },
+  { name: "fab-pools", role: "teacher", path: "/pools", fold: true },
+  { name: "fab-pool", role: "teacher", path: "/pools/p1", fold: true },
+  // While the bulk bar is up, the FAB steps aside.
+  { name: "fab-pool-selection", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("checkbox").nth(1).check() },
+  { name: "fab-course-classrooms", role: "teacher", path: "/courses/c1", fold: true },
+  { name: "fab-course-classrooms-scrolled", role: "teacher", path: "/courses/c1", fold: true, act: (p) => p.evaluate(() => window.scrollTo(0, 400)) },
+  {
+    name: "fab-toast",
+    role: "teacher",
+    path: "/?notify=1",
+    fold: true,
+    act: (p) => p.getByText(/students joined PRG1-2026|étudiants ont rejoint PRG1-2026/).waitFor({ timeout: 5000 }),
+  },
   { name: "settings-avatar", role: "teacher", path: "/settings", act: (p) => p.getByRole("button", { name: /change picture/i }).first().click() },
   { name: "settings-tokens-empty", role: "teacher", path: "/settings?empty=1" },
   // ADR-023: the consent page an assistant sends the teacher to.

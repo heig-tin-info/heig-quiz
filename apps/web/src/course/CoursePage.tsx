@@ -1,5 +1,5 @@
 import { FileStack, FolderTree, Library, ListChecks, Plus, School, Settings as SettingsIcon, UserPlus, Users } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 
 import type { CourseSummary } from "@quiz/contracts";
 import type { CourseTab } from "@quiz/domain";
@@ -16,6 +16,7 @@ import {
   type MenuItem,
   PageError,
   PageHeader,
+  type PagePrimary,
   type Person,
   PersonCard,
   Skeleton,
@@ -120,33 +121,19 @@ function Course({
 
   // The open tab's one primary action. New template and Add condition are
   // every member's (ADR-068 §3); the other three are the owners', and an
-  // assistant gets none there.
-  const memberPrimary: Partial<Record<CourseTab, ReactNode>> = {
-    templates: (
-      <Button onClick={() => setCreatingTemplate(true)}>
-        <Plus /> {t("templates.new")}
-      </Button>
-    ),
-    conditions: (
-      <Button onClick={() => setAddingCondition(true)}>
-        <Plus /> {t("courses.conditions.add")}
-      </Button>
-    ),
+  // assistant gets none there. Each creates, so it is the header's
+  // `primary` (the FAB on a phone, #450) — except Link a pool, a menu,
+  // which stays in the action row.
+  const memberPrimary: Partial<Record<CourseTab, PagePrimary>> = {
+    templates: { icon: Plus, label: t("templates.new"), onClick: () => setCreatingTemplate(true) },
+    conditions: { icon: Plus, label: t("courses.conditions.add"), onClick: () => setAddingCondition(true) },
   };
-  const ownerPrimary: Partial<Record<CourseTab, ReactNode>> = {
-    classrooms: (
-      <Button onClick={actions.newClassroom}>
-        <Plus /> {t("classrooms.new")}
-      </Button>
-    ),
-    pools: <LinkPoolMenu course={course} />,
-    members: (
-      <Button onClick={actions.addStaff}>
-        <UserPlus /> {t("courses.staffAdd")}
-      </Button>
-    ),
+  const ownerPrimary: Partial<Record<CourseTab, PagePrimary>> = {
+    classrooms: { icon: Plus, label: t("classrooms.new"), onClick: actions.newClassroom },
+    members: { icon: UserPlus, label: t("courses.staffAdd"), onClick: actions.addStaff },
   };
-  const primary = memberPrimary[tab] ?? (isOwner ? ownerPrimary[tab] : null);
+  const primary = memberPrimary[tab] ?? (isOwner ? ownerPrimary[tab] : undefined);
+  const linkPool = tab === "pools" && isOwner ? <LinkPoolMenu course={course} /> : undefined;
 
   return (
     <div className="space-y-6">
@@ -162,7 +149,8 @@ function Course({
             <HiddenBadge course={course} />
           </span>
         }
-        actions={primary}
+        actions={linkPool}
+        primary={primary}
       />
 
       <div className="space-y-4">

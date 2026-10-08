@@ -115,16 +115,14 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
         title={t("courses.title")}
         description={t("courses.subtitle")}
         help="courses"
-        actions={
+        primary={
           // Not while the list is empty: the empty state below carries the
           // same action, and two accent fills of the SAME action on one
           // screen is noise, not emphasis (W19). One button, in the place
           // the reader is already looking.
-          all.length > 0 ? (
-            <Button data-coach="home.new-course" onClick={() => setCreating(true)}>
-              <Plus /> {t("courses.new")}
-            </Button>
-          ) : undefined
+          all.length > 0
+            ? { icon: Plus, label: t("courses.new"), onClick: () => setCreating(true), coach: "home.new-course" }
+            : undefined
         }
       />
 
