@@ -252,7 +252,8 @@ export type DrillConfidenceSplit = z.infer<typeof DrillConfidenceSplit>;
  * cards, the 2×2 of the stated reviews of its student seats, an opt-out
  * cutting as in the activity. AGGREGATED ONLY, never one student's
  * statement; a question is absent unless `students` — the distinct students
- * who stated a confidence on it — reaches `DRILL_CONFIDENCE_MIN_STUDENTS`,
+ * behind its cells, who stated a confidence with a right or wrong answer —
+ * reaches `DRILL_CONFIDENCE_MIN_STUDENTS`,
  * a cut made on the server so a smaller group never travels.
  */
 export const DrillQuestionConfidence = z.object({

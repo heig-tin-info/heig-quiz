@@ -171,9 +171,12 @@ could see.
   which the questions are sorted, highest first.
 - **The threshold**: a question appears only when its statements come from
   at least `DRILL_CONFIDENCE_MIN_STUDENTS` (**10**, the
-  `QUESTION_STATS_MIN_N` of N-DATA-06) **distinct students**, a cut made on
-  the server so a smaller group never travels. Distinct students, not
-  reviews: ten reviews of one student are that student's statements.
+  `QUESTION_STATS_MIN_N` of N-DATA-06) **distinct students** behind its
+  cells — counted over exactly the rows the 2×2 counts, stated and right or
+  wrong, so students who gave only partial answers cannot carry another
+  one's statements over the line — a cut made on the server so a smaller
+  group never travels. Distinct students, not reviews: ten reviews of one
+  student are that student's statements.
   Unlike the per-tag mastery (06, question 28 (l): no minimum within a
   classroom, because the per-student view shows it anyway), the teacher
   never sees an individual confidence, so a small aggregate would hand one

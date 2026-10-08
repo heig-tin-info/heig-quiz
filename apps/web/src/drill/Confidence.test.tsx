@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DrillCalibrationLevel, DrillQuestionConfidence } from "@quiz/contracts";
 
-import { mockFetch, ok, renderWithProviders } from "../test/render";
+import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { ConfidencePerQuestion, DrillCalibration } from "./Confidence";
 
 /*
@@ -35,6 +35,14 @@ describe("the student's calibration", () => {
     expect(screen.getByText("When you said “Certain”: not enough answers yet")).toBeVisible();
     expect(screen.getByText("1 answer")).toBeVisible();
     expect(screen.getByText("8 answers")).toBeVisible();
+  });
+
+  it("draws nothing, not an error card, when the read fails", async () => {
+    const { calls } = mockFetch({ "GET /app/api/drill/calibration": fail(500) });
+    const { container } = renderWithProviders(<DrillCalibration />);
+    await vi.waitFor(() => expect(calls.length).toBeGreaterThan(0));
+    await vi.waitFor(() => expect(container.querySelector("[role=status], [aria-busy]")).toBeNull());
+    expect(container.textContent).toBe("");
   });
 
   it("is not drawn before the student has stated a confidence once", async () => {

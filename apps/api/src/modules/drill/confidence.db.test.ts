@@ -98,7 +98,7 @@ beforeAll(async () => {
     teacherId: teacher.id,
     studentIds: students.map((s) => s.id),
     mode: "exercise",
-    questions: 2,
+    questions: 3,
   });
   // Alice and Bob sit a second, small classroom.
   other = await seedLive(server.app.db, {
@@ -132,6 +132,11 @@ beforeAll(async () => {
   // q1: nine students, one of them many times — nine students, below ten.
   for (const s of students.slice(1, 9)) await review(seed, s, 1, "wrong", 4);
   for (let i = 0; i < 5; i++) await review(seed, alice, 1, "wrong", 3);
+
+  // q2: ten students stating, but nine of them only partially — the 2×2
+  // would be Alice's one statement: absent.
+  for (const s of students.slice(1, 10)) await review(seed, s, 2, "partial", 2);
+  await review(seed, alice, 2, "wrong", 0);
 
   // The small classroom: Alice and Bob, each stating.
   await review(other, alice, 0, "right", 4);
@@ -180,6 +185,11 @@ describe("the teacher's confidence per question: the aggregate", () => {
     expect(res.json()).toEqual([]);
   });
 
+  it("counts the students behind the cells only: partial-only students do not reach the threshold", async () => {
+    const rows = await confidence(seed);
+    expect(rows.some((r) => r.questionId === seed.questionIds[2])).toBe(false);
+  });
+
   it("carries no student's identity", async () => {
     const res = await get(confidenceUrl(seed), teacher);
     for (const s of students) expect(res.body).not.toContain(s.id);
@@ -190,9 +200,10 @@ describe("the student's calibration", () => {
   it("holds the student's own stated reviews only, every classroom pooled", async () => {
     const levels = await calibration(students[0]!);
     expect(levels.map((l) => l.confidence)).toEqual([0, 1, 2, 3, 4]);
-    // Alice: Certain right twice (both classrooms), Sure wrong five times; her unstated review is out.
+    // Alice: Certain right twice (both classrooms), Sure wrong five times,
+    // No idea wrong once; her unstated review is out.
     expect(levels).toEqual([
-      { confidence: 0, answers: 0, right: 0 },
+      { confidence: 0, answers: 1, right: 0 },
       { confidence: 1, answers: 0, right: 0 },
       { confidence: 2, answers: 0, right: 0 },
       { confidence: 3, answers: 5, right: 0 },
@@ -201,11 +212,11 @@ describe("the student's calibration", () => {
   });
 
   it("is another student's own, partial answers counted as not right", async () => {
-    // Bob: Certain right on q0, Certain wrong on q1, Fairly sure partial in the small classroom.
+    // Bob: Certain right on q0, Certain wrong on q1, Fairly sure partial on q2 and in the small classroom.
     expect(await calibration(students[1]!)).toEqual([
       { confidence: 0, answers: 0, right: 0 },
       { confidence: 1, answers: 0, right: 0 },
-      { confidence: 2, answers: 1, right: 0 },
+      { confidence: 2, answers: 2, right: 0 },
       { confidence: 3, answers: 0, right: 0 },
       { confidence: 4, answers: 2, right: 1 },
     ]);

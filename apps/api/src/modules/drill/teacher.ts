@@ -20,7 +20,7 @@
  *     their reviews with it (the cascade of 28 (a));
  *   - each read is a bounded number of queries, whatever the class size.
  */
-import { and, eq, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 
 import type { DrillProgress, DrillQuestionConfidence, DrillStudentActivity, DrillTagMastery } from "@quiz/contracts";
 import {
@@ -230,42 +230,43 @@ export async function classroomMastery(db: Db, classroomId: string, now: Date): 
  * Per question, the 2×2 of the classroom's stated reviews (ADR-085 §8):
  * right or wrong × sure or unsure, over the same visible reviews as the
  * activity. AGGREGATED ONLY: a question whose statements come from fewer
- * than `DRILL_CONFIDENCE_MIN_STUDENTS` distinct students is dropped here,
- * so its counts never leave the server. Two queries; the most confident
- * errors among the wrong answers first.
+ * than `DRILL_CONFIDENCE_MIN_STUDENTS` distinct students with a right or
+ * wrong stated answer is dropped here, so its counts never leave the
+ * server. One query; the most confident errors among the wrong answers
+ * first.
  */
 export async function classroomConfidence(db: Db, classroomId: string): Promise<DrillQuestionConfidence[]> {
   const v = visibleReviews(db, classroomId);
-  const stated = isNotNull(v.confidence);
-  const [counts, perQuestion] = await Promise.all([
-    db
-      .select({
-        questionId: v.questionId,
-        confidence: v.confidence,
-        correctness: v.correctness,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(v)
-      .where(stated)
-      .groupBy(v.questionId, v.confidence, v.correctness),
-    db
-      .select({
-        questionId: v.questionId,
-        name: questions.internalName,
-        students: sql<number>`count(distinct ${v.userId})::int`,
-      })
-      .from(v)
-      .innerJoin(questions, eq(questions.id, v.questionId))
-      .where(stated)
-      .groupBy(v.questionId, questions.internalName),
-  ]);
-  return perQuestion
-    .filter((q) => drillConfidenceShown(q.students))
+  // ONE query over exactly the rows the 2×2 counts — stated, right or wrong
+  // (a partial answer is in no cell) — so the students behind the threshold
+  // are the students behind the cells. Grouping sets give, per question,
+  // a row per (level, correctness) and one total row (`total`) carrying the
+  // distinct students.
+  const rows = await db
+    .select({
+      questionId: v.questionId,
+      name: questions.internalName,
+      confidence: v.confidence,
+      correctness: v.correctness,
+      count: sql<number>`count(*)::int`,
+      students: sql<number>`count(distinct ${v.userId})::int`,
+      total: sql<boolean>`grouping(${v.confidence}) = 1`,
+    })
+    .from(v)
+    .innerJoin(questions, eq(questions.id, v.questionId))
+    .where(and(isNotNull(v.confidence), ne(v.correctness, "partial")))
+    .groupBy(
+      sql`grouping sets ((${v.questionId}, ${questions.internalName}, ${v.confidence}, ${v.correctness}), (${v.questionId}, ${questions.internalName}))`,
+    );
+  return rows
+    .filter((q) => q.total && drillConfidenceShown(q.students))
     .map((q) => ({
-      ...q,
+      questionId: q.questionId,
+      name: q.name,
+      students: q.students,
       split: drillConfidenceSplit(
-        counts
-          .filter((c) => c.questionId === q.questionId)
+        rows
+          .filter((c) => !c.total && c.questionId === q.questionId)
           .map((c) => ({ ...c, confidence: c.confidence as DrillConfidence })),
       ),
     }))

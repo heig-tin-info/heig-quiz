@@ -4733,7 +4733,6 @@ export const en = {
   "drill.calibration.answers": "{n} answers",
   "drill.calibration.answers.one": "{n} answer",
   "drill.calibration.help": "A level shows its rate from {n} answers. A partial answer counts as not right. Well calibrated, the surer you say you are, the more often you are right.",
-  "drill.calibration.loadFailed": "Could not load your calibration",
   "drill.confidenceSplit.title": "Confidence per question",
   "drill.confidenceSplit.desc": "Right or wrong, given sure (Sure, Certain) or unsure. Wrong answers given sure point to a misconception, unsure ones to a gap. Most confident errors first.",
   "drill.confidenceSplit.counts": "{n} stated answers · {students} students",

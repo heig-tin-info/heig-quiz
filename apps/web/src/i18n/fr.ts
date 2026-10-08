@@ -4727,7 +4727,6 @@ export const fr: Record<keyof Dict, string> = {
   "drill.calibration.answers": "{n} réponses",
   "drill.calibration.answers.one": "{n} réponse",
   "drill.calibration.help": "Un degré affiche son taux à partir de {n} réponses. Une réponse partielle compte comme non juste. Bien calibré, plus vous vous dites sûr, plus souvent vous avez juste.",
-  "drill.calibration.loadFailed": "Impossible de charger votre calibration",
   "drill.confidenceSplit.title": "Certitude par question",
   "drill.confidenceSplit.desc": "Juste ou faux, donné sûr (Sûr, Certain) ou pas sûr. Les erreurs données sûres signalent une idée fausse, les autres une lacune. Les erreurs les plus sûres d'abord.",
   "drill.confidenceSplit.counts": "{n} réponses avec certitude · {students} étudiants",

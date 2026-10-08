@@ -34,19 +34,10 @@ export function DrillCalibration() {
   const t = useT();
   const calibration = useDrillCalibration();
   if (calibration.isLoading) return <Skeleton className="h-48 w-full" />;
-  if (calibration.isError || !calibration.data) {
-    return (
-      <QueryError
-        title={t("drill.calibration.loadFailed")}
-        error={calibration.error}
-        onRetry={() => void calibration.refetch()}
-        retrying={calibration.isFetching}
-        fallback={t("error.server")}
-      />
-    );
-  }
-  // Never stated: the card's "How sure are you?" is where it starts.
-  if (calibration.data.every((l) => l.answers === 0)) return null;
+  // A secondary read: failed, it leaves the page as it was rather than put
+  // an error card under the day's one action. Never stated: the card's
+  // "How sure are you?" is where it starts.
+  if (!calibration.data || calibration.data.every((l) => l.answers === 0)) return null;
   return (
     <section className="space-y-3">
       <SectionHeading icon={Gauge} title={t("drill.calibration.title")} description={t("drill.calibration.desc")} />
