@@ -15,9 +15,10 @@ import { newPeriodDraft, PeriodFields, periodBody, periodInvalid } from "../Clas
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { invalidateHint } from "../realtime/hints";
+import { IconField } from "../pool/IconField";
 import { PoolIconPicker } from "../pool/PoolIconPicker";
 import { DEFAULT_COURSE_ICON } from "../pool/poolIcons";
-import { Field, FieldLabel, FormDialog, FormError, Segmented, Tip } from "../ui";
+import { Field, FieldLabel, FormDialog, FormError, Segmented } from "../ui";
 import { coursesKey } from "../queryKeys";
 import { CourseIcon } from "./CourseIcon";
 
@@ -73,7 +74,7 @@ export function EditCourseModal({ course, onClose }: { course: CourseSummary; on
 
 /** What an edit changes, field by field: only that is sent. */
 const patchOf = (course: CourseSummary, next: CourseCreate): CoursePatch => {
-  const keys = ["name", "code", "icon", "color"] as const;
+  const keys = Object.keys(CourseCreate.shape) as (keyof CourseCreate)[];
   return Object.fromEntries(keys.filter((k) => next[k] !== course[k]).map((k) => [k, next[k]])) as CoursePatch;
 };
 
@@ -81,7 +82,7 @@ const patchOf = (course: CourseSummary, next: CourseCreate): CoursePatch => {
  * The one form of a course, its name, its code and its icon, for its creation
  * and its edit. The icon is picked as a pool's is (`PoolFormModal`): the tile
  * beside the name opens the picker in the same dialog, picking comes back.
- * `CourseCreate` trims and upper-cases the code, so what `changed` and `CourseCreate` trims and upper-cases the code, so what `changed` and
+ * `CourseCreate` trims and upper-cases the code, so what `changed` and
  * `save` receive is what the server will store, and what the preview shows as
  * the sidebar will.
  */
@@ -145,20 +146,7 @@ function CourseFormModal({
       canSubmit={parsed.success && changed(parsed.data)}
       error={<FormError error={mutation.error} fallback={fallback} />}
     >
-      <div className="flex items-end gap-3">
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-medium text-fg">{t("pools.icon")}</span>
-          <Tip label={t("pools.icon.change")}>
-            <button
-              type="button"
-              onClick={() => setPicking(true)}
-              aria-label={t("pools.icon.change")}
-              className="inline-flex size-8.5 items-center justify-center rounded-field border border-line-strong bg-surface text-fg-muted transition-colors hover:border-fg-faint hover:text-fg"
-            >
-              <CourseIcon course={form} className="size-4.5" />
-            </button>
-          </Tip>
-        </div>
+      <IconField onPick={() => setPicking(true)} icon={<CourseIcon course={form} className="size-4.5" />}>
         <Field
           label={t("courses.name")}
           required
@@ -169,7 +157,7 @@ function CourseFormModal({
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
         />
-      </div>
+      </IconField>
       <Field
         label={t("courses.code")}
         required

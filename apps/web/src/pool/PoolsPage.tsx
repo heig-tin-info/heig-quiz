@@ -55,6 +55,7 @@ import {
   usePersistentChoice,
   useSortableTable,
 } from "../ui";
+import { IconField } from "./IconField";
 import { PoolIcon } from "./PoolIcon";
 import { PoolIconPicker } from "./PoolIconPicker";
 import { PoolShareSheet } from "./PoolShareSheet";
@@ -316,22 +317,7 @@ export function PoolFormModal({
       dense
       error={<FormError error={save.error} fallback={t("pools.createFailed")} />}
     >
-      <div className="flex items-end gap-3">
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-medium text-fg">{t("pools.icon")}</span>
-          {/* The tile IS the trigger: the icon a pool will wear, and one
-              click from the shelf it comes off. */}
-          <Tip label={t("pools.icon.change")}>
-            <button
-              type="button"
-              onClick={() => setStep("icon")}
-              aria-label={t("pools.icon.change")}
-              className="inline-flex size-8.5 items-center justify-center rounded-field border border-line-strong bg-surface text-fg-muted transition-colors hover:border-fg-faint hover:text-fg"
-            >
-              <PoolIcon icon={icon} color={color} className="size-4.5" />
-            </button>
-          </Tip>
-        </div>
+      <IconField onPick={() => setStep("icon")} icon={<PoolIcon icon={icon} color={color} className="size-4.5" />}>
         <Field
           label={t("pools.name")}
           className="min-w-0"
@@ -341,7 +327,7 @@ export function PoolFormModal({
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-      </div>
+      </IconField>
     </FormDialog>
   );
 }
