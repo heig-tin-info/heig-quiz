@@ -311,6 +311,9 @@ describe("PATCH /concepts and the stop list", () => {
     expect(ok.statusCode, ok.body).toBe(200);
     const byAdmin = await patch(admin, id, { en: { label: "Lecture de code" } });
     expect(byAdmin.statusCode, byAdmin.body).toBe(200);
+    // Already on the list, the side may not move to another dropped key for the creator.
+    const moved = await patch(teacher, id, { en: { label: "C01" } });
+    expect(moved.statusCode, moved.body).toBe(422);
   });
 
   it("lets a qualifier-only edit pass on a concept whose label is dropped elsewhere", async () => {

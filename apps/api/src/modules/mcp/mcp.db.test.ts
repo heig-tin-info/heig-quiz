@@ -378,6 +378,9 @@ describe("an authoring session", () => {
       variables: null,
     });
     expect(plain.publishedVersion).toBe(2);
+    // A client still holding the tool of before the cut-over: its `tags` are refused, never ignored.
+    const stale = await call("update_question", { questionId: q.questionId, tags: ["boucles"] });
+    expect(stale.data).toMatchObject({ error: "invalid_arguments" });
     expect(JSON.stringify(await ok("list_questions", { poolId: pool.id }))).toContain('"randomizable":false');
   });
 

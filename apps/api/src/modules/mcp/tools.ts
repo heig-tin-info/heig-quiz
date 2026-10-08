@@ -527,7 +527,9 @@ export const TOOLS: Tool[] = [
       concepts: Concepts,
       createMissing: CreateMissing,
       publish: z.boolean().default(true),
-    }),
+    })
+    // As `create_question`: a stale client's `tags` are refused, not ignored.
+    .strict(),
     annotations: WRITE,
     run: async (api, a) => {
       const current = await api.get(`/questions/${a.questionId}`);

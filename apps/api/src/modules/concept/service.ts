@@ -26,9 +26,10 @@ import {
 import {
   cleanConceptLabel,
   cleanConceptQualifier,
+  conceptToCreate,
   droppedReason,
+  qualifiedConceptKey,
   resolveConceptLabel,
-  splitQualifiedLabel,
 } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
@@ -77,8 +78,10 @@ export async function listConcepts(db: Db): Promise<Concept[]> {
  * keys itself). One result per input, in order, each concept labelled in
  * the reader's language. An input that designates no concept and whose key
  * is a dropped tag's is `dropped` (third addendum §4), so a client can
- * refuse it before writing anything — never for the admin, whom the stop
- * list does not bind ({@link stopList}).
+ * refuse it before writing anything. It previews the picker's
+ * `POST /concepts`, not a question write: the admin, whom the stop list does
+ * not bind there ({@link stopList}), never sees `dropped`, though a question
+ * write of theirs naming that label is still refused.
  */
 export async function resolveLabels(
   db: Db,
@@ -95,9 +98,8 @@ export async function resolveLabels(
   return inputs.map((input): ConceptResolution => {
     const outcome = resolveConceptLabel(input, vocabulary);
     if (outcome.kind === "resolved") return { input, kind: "resolved", concept: concept(outcome.id) };
-    const split = splitQualifiedLabel(input);
-    const reason =
-      outcome.kind === "unknown" ? droppedReason(split?.label ?? input, split?.qualifier ?? "", dropped) : null;
+    const fresh = outcome.kind === "unknown" ? conceptToCreate(input) : null;
+    const reason = fresh && droppedReason(fresh, dropped);
     if (reason !== null) return { input, kind: "dropped", reason };
     return { input, kind: outcome.kind, candidates: outcome.candidates.map(concept) };
   });
@@ -125,7 +127,7 @@ async function stopList(db: Db | Tx, caller: Pick<Caller, "role">): Promise<Map<
 export async function createConcept(db: Db, ctx: ConceptContext, body: ConceptCreate): Promise<Concept> {
   const label = cleanConceptLabel(body.label);
   const qualifier = cleanConceptQualifier(body.qualifier ?? "");
-  const reason = droppedReason(label, qualifier, await stopList(db, ctx.caller));
+  const reason = droppedReason({ label, qualifier }, await stopList(db, ctx.caller));
   if (reason !== null) throw refuseInputs([{ input: body.label, error: "concept_dropped", reason }]);
   const who = { createdBy: ctx.caller.id, actor: ctx.actor, now: ctx.now };
   const input = { label, qualifier, description: body.description ?? "" };
@@ -147,11 +149,11 @@ export async function createConcept(db: Db, ctx: ConceptContext, body: ConceptCr
  * always (addendum §5); anyone else a 403 `concept_forbidden`. A merged
  * concept is no longer edited (409 `concept_merged`), a missing one is a
  * 404. A language left with a qualifier or a description but no label is a
- * 422 `concept_label_missing`. An edit that puts a side on the stop list
- * — an unqualified label whose key is a dropped tag's, when it was not
- * there before — is a 422 `concept_dropped` for the creator; the admin is
- * not bound ({@link stopList}). A side already on it (a concept older than
- * the drop) may still be edited.
+ * 422 `concept_label_missing`. An edit that changes a side's key and
+ * leaves it on the stop list — unqualified, its label's key a dropped
+ * tag's — is a 422 `concept_dropped` for the creator; the admin is not
+ * bound ({@link stopList}). A side already on it whose key stays (a concept
+ * older than the drop, a description edit) may still be edited.
  */
 export async function patchConcept(db: Db, ctx: ConceptContext, id: string, patch: ConceptPatch): Promise<Concept> {
   let keys = perLang<string | null>(() => null);
@@ -179,12 +181,13 @@ export async function patchConcept(db: Db, ctx: ConceptContext, id: string, patc
       });
       keys = perLang((lang) => sides[lang].key);
       const dropped = await stopList(tx, ctx.caller);
-      const stopped = (s: { label: string | null; qualifier: string }) =>
-        s.label === null ? null : droppedReason(s.label, s.qualifier, dropped);
+      const keyOf = (s: { label: string | null; qualifier: string }) =>
+        s.label === null ? null : qualifiedConceptKey(s.label, s.qualifier);
       const refused = CONCEPT_LANGS.flatMap((lang) => {
-        const reason = stopped(sides[lang]);
-        if (reason === null || stopped(sideOf(current, lang)) !== null) return [];
-        return [{ input: sides[lang].label!, error: "concept_dropped" as const, reason }];
+        const { label, qualifier } = sides[lang];
+        if (label === null || keyOf(sides[lang]) === keyOf(sideOf(current, lang))) return [];
+        const reason = droppedReason({ label, qualifier }, dropped);
+        return reason === null ? [] : [{ input: label, error: "concept_dropped" as const, reason }];
       });
       if (refused.length > 0) throw refuseInputs(refused);
 

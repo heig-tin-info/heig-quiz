@@ -164,9 +164,9 @@ describe("conceptToCreate", () => {
 
 describe("droppedReason", () => {
   it("names the reason of a dropped key, null otherwise", () => {
-    expect(droppedReason("Prog C", "", dropped)).toBe("organisational");
-    expect(droppedReason("Prog C", "langage", dropped)).toBeNull();
-    expect(droppedReason("pointeur", "", dropped)).toBeNull();
+    expect(droppedReason({ label: "Prog C", qualifier: "" }, dropped)).toBe("organisational");
+    expect(droppedReason({ label: "Prog C", qualifier: "langage" }, dropped)).toBeNull();
+    expect(droppedReason({ label: "pointeur", qualifier: "" }, dropped)).toBeNull();
   });
 });
 
