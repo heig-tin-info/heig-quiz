@@ -1,4 +1,4 @@
-import { Copy, Eye, Save, ScanSearch, Trash2 } from "lucide-react";
+import { Copy, Eye, Save, Trash2 } from "lucide-react";
 
 import type { QuestionDetail } from "@quiz/contracts";
 import { reviewPill } from "@quiz/domain";
@@ -28,7 +28,6 @@ export function QuestionHeader({
   onPublish,
   onDuplicate,
   onDelete,
-  onReviewNow,
 }: {
   id: string;
   data: QuestionDetail;
@@ -40,8 +39,6 @@ export function QuestionHeader({
   onPublish: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
-  /** "Review now" (ADR-060), in the menu; undefined when it is not offered. */
-  onReviewNow?: (() => void) | undefined;
 }) {
   const t = useT();
   const latest = data.latestPublished;
@@ -122,7 +119,6 @@ export function QuestionHeader({
                 icon: Copy,
                 onSelect: onDuplicate,
               },
-              ...(onReviewNow ? [{ label: t("review.now"), icon: ScanSearch, onSelect: onReviewNow }] : []),
               {
                 label: t("question.delete"),
                 icon: Trash2,

@@ -2716,8 +2716,12 @@ on("PUT", "/app/api/questions/:id/draft", (m, body) => {
 // types' own, tested in `qt-*`. An MCQ's empty rows get a canned distractor
 // so the screenshots show something; every type an empty explanation written.
 // `types` is a hand copy of the server's generator list: `contract.test`
-// checks its shape, not its content.
-on("GET", "/app/api/generate/availability", () => ({ available: true, types: ["mcq", "short", "rich", "categorize", "code", "codeimage"] }));
+// checks its shape, not its content. `?nollm=1`: no model at all.
+on("GET", "/app/api/generate/availability", () =>
+  flags.nollm
+    ? { available: false, types: [] }
+    : { available: true, types: ["mcq", "short", "rich", "categorize", "code", "codeimage"] },
+);
 on("POST", "/app/api/questions/:id/generate", (m, body) => {
   questionOr404(m.groups!.id!);
   const config = { ...((body.config ?? {}) as Record<string, unknown>) };
@@ -2767,7 +2771,21 @@ on("POST", "/app/api/questions/:id/review", (m) => {
   const q = questionOr404(m.groups!.id!);
   const number = q.versions.at(-1)?.number;
   if (number === undefined) throw new MockError(400, "not_published");
-  const review: QuestionReview = { versionNumber: number, state: "clean", reviewedAt: iso(0), findings: [] };
+  // Always a remark, so "Review now" in the editor's AI card (ADR-082) has a
+  // result to show; the clean line is the stored review of `ptr-arith-01`.
+  const review: QuestionReview = {
+    versionNumber: number,
+    state: "findings",
+    reviewedAt: iso(0),
+    findings: [
+      {
+        severity: "notice",
+        path: "explanation",
+        message: "L'explication ne dit pas pourquoi les autres réponses sont fausses.",
+        fix: null,
+      },
+    ],
+  };
   reviews.set(q.id, review);
   return review;
 });

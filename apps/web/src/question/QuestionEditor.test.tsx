@@ -882,3 +882,163 @@ describe("QuestionEditor — opened from an evaluation (#127)", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "pool", id: "p1" });
   });
 });
+
+/*
+ * ADR-082: the LLM actions of a question — Generate answers (ADR-059) and
+ * Review now (ADR-060) — in one card of the aside, above Properties. Absent
+ * (not disabled) when neither applies; read-only findings.
+ */
+describe("QuestionEditor — the AI card (ADR-082)", () => {
+  const MODEL = { "GET /app/api/generate/availability": ok({ available: true, types: ["mcq", "code"] }) };
+  const NO_MODEL = { "GET /app/api/generate/availability": ok({ available: false, types: [] }) };
+  const V1 = {
+    number: 1,
+    publishedAt: "2026-09-10T08:00:00.000Z",
+    publishedBy: "u-me",
+    changeNote: null,
+    deprecatedAt: null,
+    deprecationNote: null,
+  };
+  const published = (review: QuestionDetail["review"] = null) =>
+    mcqDetail({ versions: [V1], latestPublished: V1, review });
+  const FINDINGS: NonNullable<QuestionDetail["review"]> = {
+    versionNumber: 1,
+    state: "findings",
+    reviewedAt: "2026-10-07T02:00:00.000Z",
+    findings: [
+      {
+        severity: "warn",
+        path: "prompt",
+        message: "The statement does not say whether p is local.",
+        fix: { from: "déclaré", to: "déclaré localement" },
+      },
+    ],
+  };
+  const card = async () => {
+    const aside = await screen.findByRole("complementary", { name: "Question details" });
+    await within(aside).findByRole("heading", { name: "AI" });
+    return aside;
+  };
+  /** The availability answered and the screen settled on it. */
+  const settled = async (calls: { url: string }[]) => {
+    await screen.findByRole("heading", { name: "Properties" });
+    await waitFor(() => expect(calls.some((c) => c.url === "/app/api/generate/availability")).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  };
+
+  it("sits above Properties, with Generate answers once the statement is written", async () => {
+    mockFetch(routes(mcqDetail(), MODEL));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    const aside = await card();
+    const headings = within(aside).getAllByRole("heading").map((h) => h.textContent);
+    expect(headings.indexOf("AI")).toBeLessThan(headings.indexOf("Properties"));
+    expect(within(aside).getByRole("button", { name: "Generate answers" })).toBeEnabled();
+    expect(screen.queryByText(/Write the statement first/)).toBeNull();
+    // Not published: nothing to review yet.
+    expect(screen.queryByRole("button", { name: "Review now" })).toBeNull();
+  });
+
+  it("says why there is no Generate answers while the statement is empty", async () => {
+    const base = mcqDetail();
+    const blank = { ...base, draft: { ...base.draft, config: { ...(base.draft.config as object), prompt: "  " } } };
+    mockFetch(routes(blank, MODEL));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    const aside = await card();
+    expect(within(aside).getByText(/Write the statement first/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Generate answers" })).toBeNull();
+  });
+
+  it("lands the proposal in the draft, with its Undo in the card", async () => {
+    const user = userEvent.setup();
+    const base = mcqDetail();
+    const proposed = { ...(base.draft.config as object), choices: [{ text: "Une adresse", correct: false }] };
+    const { calls } = mockFetch(
+      routes(base, { ...MODEL, "POST /app/api/questions/q1/generate": ok({ config: proposed, explanation: "Parce que." }) }),
+    );
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    const aside = await card();
+    await user.click(within(aside).getByRole("button", { name: "Generate answers" }));
+    expect(await within(aside).findByText("Answers suggested by the AI")).toBeInTheDocument();
+    expect(calls.some((c) => c.method === "POST" && c.url.endsWith("/generate"))).toBe(true);
+    await user.click(within(aside).getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(within(aside).queryByText("Answers suggested by the AI")).toBeNull());
+  }, 20_000);
+
+  it("is absent without a model", async () => {
+    const { calls } = mockFetch(routes(published(FINDINGS), NO_MODEL));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    await settled(calls);
+    expect(screen.queryByRole("heading", { name: "AI" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review now" })).toBeNull();
+  });
+
+  it("is absent for a reader", async () => {
+    const { calls } = mockFetch(
+      routes(published(FINDINGS), { ...MODEL, "GET /app/api/pools/p1": ok({ ...POOL, role: "reader" as const }) }),
+    );
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    await screen.findByText("Read-only — shared with you as reader");
+    await settled(calls);
+    expect(screen.queryByRole("heading", { name: "AI" })).toBeNull();
+  });
+
+  it("offers Review now in the card, and no longer in the … menu", async () => {
+    const user = userEvent.setup();
+    mockFetch(routes(published(), MODEL));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    const aside = await card();
+    expect(within(aside).getByRole("button", { name: "Review now" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Actions" }));
+    expect(await screen.findByRole("menuitem", { name: "Duplicate" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Review now" })).toBeNull();
+  });
+
+  it("reads a clean review as one line", async () => {
+    mockFetch(
+      routes(published({ versionNumber: 1, state: "clean", reviewedAt: FINDINGS.reviewedAt, findings: [] }), MODEL),
+    );
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    const aside = await card();
+    expect(within(aside).getByText("Reviewed, nothing to report (v1).")).toBeInTheDocument();
+  });
+
+  it("lists the findings, read-only, with the way to the pool's LLM review", async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    mockFetch(routes(published(FINDINGS), MODEL));
+    renderWithProviders(<QuestionEditor id="q1" navigate={navigate} />);
+    const aside = await card();
+    expect(within(aside).getByText("Remarks on version 1")).toBeInTheDocument();
+    expect(within(aside).getByText("The statement does not say whether p is local.")).toBeInTheDocument();
+    expect(within(aside).getByText("déclaré localement")).toBeInTheDocument();
+    // Fix and Ignore are the tab's: the route writes the server's draft.
+    expect(within(aside).queryByRole("button", { name: "Fix" })).toBeNull();
+    expect(within(aside).queryByRole("button", { name: "Ignore" })).toBeNull();
+    const link = within(aside).getByRole("link", { name: "Fix them in the pool's LLM review" });
+    expect(link).toHaveAttribute("href", "/pools/p1?tab=review");
+    await user.click(link);
+    expect(navigate).toHaveBeenCalledWith({ view: "pool", id: "p1", tab: "review" });
+  });
+
+  it("says when the review failed, Review now being the retry", async () => {
+    mockFetch(
+      routes(published({ versionNumber: 1, state: "failed", reviewedAt: FINDINGS.reviewedAt, findings: [] }), MODEL),
+    );
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    const aside = await card();
+    expect(within(aside).getByText(/The review of version 1 failed/)).toBeInTheDocument();
+    expect(within(aside).getByRole("button", { name: "Review now" })).toBeEnabled();
+  });
+
+  it("shows the result of Review now as soon as it lands, without a toast", async () => {
+    const user = userEvent.setup();
+    mockFetch(routes(published(), { ...MODEL, "POST /app/api/questions/q1/review": ok(FINDINGS) }));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    const aside = await card();
+    expect(within(aside).queryByText("Remarks on version 1")).toBeNull();
+    await user.click(within(aside).getByRole("button", { name: "Review now" }));
+    // The refetch still answers `review: null`: what shows is the call's own result.
+    expect(await within(aside).findByText("Remarks on version 1")).toBeInTheDocument();
+    expect(screen.queryByText(/The AI made remarks/)).toBeNull();
+  });
+});

@@ -20,6 +20,9 @@ generators of `qt-mcq`, `qt-short`, `qt-rich`, `qt-categorize` and
 Amends docs/spec/08 §8.2 ("the proposals appear highlighted, with accept or
 reject"): see §3.
 
+§6 amended by [ADR-082](ADR-082-carte-ia-de-l-editeur.md): "Generate
+answers" is in the editor's AI card, offered once the statement is written.
+
 ## Context
 
 A teacher writes a statement and has to produce what makes it a question:
@@ -131,7 +134,8 @@ wand: a stored key, and the types that have a generator.
 ### 6. The screen
 
 "Generate answers" (the magic wand) is a secondary button above the type's
-form: Publish stays the one primary action (invariant 2). The per-choice
+form (amended: it is in the AI card of the aside, ADR-082): Publish stays
+the one primary action (invariant 2). The per-choice
 wand appears on an EMPTY choice row of an MCQ only.
 
 ### 7. The types, in waves

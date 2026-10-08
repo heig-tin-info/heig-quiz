@@ -1,0 +1,144 @@
+import { CircleCheck, CircleX, PenLine, ScanSearch, Sparkles, Undo2, WandSparkles } from "lucide-react";
+
+import type { QuestionDetail, QuestionReview } from "@quiz/contracts";
+
+import { AppLink } from "../AppLink";
+import { useT } from "../i18n";
+import { FindingRow } from "../pool/ReviewTab";
+import type { Navigate } from "../router";
+import { Button, Card, cx, RelativeTime, SectionHeading, textLink } from "../ui";
+import type { Wand } from "./generate";
+import { useReviewNow } from "./reviewNow";
+
+/**
+ * The LLM actions of a question, in one card of the editor's aside, above
+ * "Properties" (ADR-082): "Generate answers" (ADR-059) with its Undo, and
+ * "Review now" (ADR-060) with the review of the latest published version,
+ * read-only — Fix and Ignore stay in the pool's "LLM review" tab.
+ *
+ * Absent, not disabled, when neither action applies: no model, a reader, a
+ * type without a generator that has no review either. Every button is
+ * `secondary`: Publish stays the screen's one primary action.
+ */
+export function AiCard({
+  data,
+  wand,
+  readOnly,
+  navigate,
+}: {
+  data: QuestionDetail;
+  wand: Wand;
+  readOnly: boolean;
+  navigate: Navigate;
+}) {
+  const t = useT();
+  const review = useReviewNow(data, readOnly);
+  if (!wand.enabled && !review) return null;
+
+  return (
+    <Card className="space-y-4 p-4">
+      <SectionHeading icon={Sparkles} title={t("question.ai")} />
+
+      {wand.enabled ? (
+        <div className="space-y-2">
+          {wand.ready ? (
+            <>
+              <Button variant="secondary" className="w-full" loading={wand.pending} onClick={wand.run}>
+                {wand.pending ? null : <WandSparkles />} {t("question.generate")}
+              </Button>
+              <p className="text-xs text-fg-muted">{t("question.generate.hint")}</p>
+            </>
+          ) : (
+            // Why there is no button yet: the model completes a question, it never invents one.
+            <p className="flex items-start gap-2 text-[13px] text-fg-muted">
+              <PenLine className="mt-0.5 size-4 shrink-0 text-fg-faint" aria-hidden />
+              {t("question.ai.needsStatement")}
+            </p>
+          )}
+          {wand.undo ? (
+            <div role="status" className="space-y-1 rounded-field bg-surface-2 p-3 text-[13px]">
+              <p className="flex items-center gap-1.5 font-semibold">
+                <WandSparkles className="size-4 shrink-0 text-fg-muted" aria-hidden />
+                {t("question.generate.done.title")}
+              </p>
+              <p className="text-fg-muted">{t("question.generate.done.body")}</p>
+              {wand.incomplete ? (
+                <p className="text-fg-muted">{t(`question.generate.incomplete.${wand.incomplete}`)}</p>
+              ) : null}
+              <Button variant="ghost" size="sm" onClick={wand.undo}>
+                <Undo2 /> {t("question.generate.undo")}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {review ? (
+        <div className={cx("space-y-3", wand.enabled && "border-t border-line pt-4")}>
+          {review.review ? (
+            <ReviewOutcome review={review.review} poolId={data.meta.poolId} navigate={navigate} />
+          ) : null}
+          <Button variant="secondary" className="w-full" loading={review.pending} onClick={review.run}>
+            {review.pending ? null : <ScanSearch />} {t("review.now")}
+          </Button>
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+/**
+ * The review of the latest published version, as the pool's pill reads it
+ * (`reviewPill`, ADR-060 §3): one line when clean or ignored, one line when
+ * the call failed — "Review now" is the retry —, the findings listed
+ * otherwise, with the way to the tab where they are fixed.
+ */
+function ReviewOutcome({
+  review,
+  poolId,
+  navigate,
+}: {
+  review: QuestionReview;
+  poolId: string;
+  navigate: Navigate;
+}) {
+  const t = useT();
+  const n = review.versionNumber;
+  if (review.state === "clean" || review.state === "ignored") {
+    return (
+      <p className="flex items-start gap-2 text-[13px] text-fg-muted">
+        <CircleCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
+        {t("question.ai.review.clean", { n })}
+      </p>
+    );
+  }
+  if (review.state === "failed") {
+    return (
+      <p className="flex items-start gap-2 text-[13px] text-fg-muted">
+        <CircleX className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden />
+        {t("question.ai.review.failed", { n })}
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <p className="text-[13px] text-fg-muted">
+        <span className="font-medium text-fg">{t("question.ai.review.findings", { n })}</span>
+        {" · "}
+        <RelativeTime iso={review.reviewedAt} />
+      </p>
+      <ul className="space-y-2">
+        {review.findings.map((finding, index) => (
+          <FindingRow key={index} finding={finding} />
+        ))}
+      </ul>
+      <AppLink
+        route={{ view: "pool", id: poolId, tab: "review" }}
+        navigate={navigate}
+        className={cx("inline-block text-[13px] text-fg-muted underline", textLink)}
+      >
+        {t("question.ai.review.open")}
+      </AppLink>
+    </div>
+  );
+}
