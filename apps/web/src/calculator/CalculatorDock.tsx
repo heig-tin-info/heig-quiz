@@ -30,16 +30,17 @@ export function CalculatorDock({ kind }: { kind: CalculatorKind }) {
       icon={CalculatorIcon}
       openLabel={t("calc.open")}
       closeLabel={t("calc.close")}
-      title={t("calc.open")}
       offset="var(--player-footer-h,0px)"
       panelClassName={`overflow-y-auto p-3 ${kind === "scientific" ? "w-[22rem]" : "w-[18rem]"}`}
       keepMounted
       onOpen={() => keypad.current?.focus()}
     >
-      {(close) => (
+      {(close, titleId) => (
         <>
           <div className="mb-2 flex items-center gap-2 pl-1">
-            <h2 className="text-[13px] font-semibold">{t("calc.open")}</h2>
+            <h2 id={titleId} className="text-[13px] font-semibold">
+              {t("calc.open")}
+            </h2>
             <span className="text-[12px] text-fg-faint">
               {t(`calc.${kind}`)}
               {rpn ? ` · ${t("calc.rpn")}` : ""}

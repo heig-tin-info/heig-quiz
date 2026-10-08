@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  ASSIST_READ_LIMIT,
   ASSIST_REFUSAL,
+  ASSIST_TOOL_RESULT_CHARS,
+  ASSIST_TRUNCATED,
+  assistResults,
+  capToolResult,
+  stubResultsAnswer,
+  wantsResults,
+  type ResultsSource,
   assistIndex,
   assistScreen,
   assistSystem,
@@ -206,10 +212,83 @@ describe("readGuide", () => {
   });
 
   it("cuts a page longer than the limit", () => {
-    const long = buildCorpus([{ id: "guide/long", locale: "en", text: `# L\n\n${"word ".repeat(ASSIST_READ_LIMIT)}` }]);
+    const long = buildCorpus([{ id: "guide/long", locale: "en", text: `# L\n\n${"word ".repeat(ASSIST_TOOL_RESULT_CHARS)}` }]);
     const read = readGuide(long, "teacher", "en", { page: "guide/long" });
-    expect(read.length).toBeLessThan(ASSIST_READ_LIMIT + 100);
-    expect(read).toContain("[The page continues");
+    expect(read.length).toBeLessThan(ASSIST_TOOL_RESULT_CHARS + 120);
+    expect(read.endsWith(`${ASSIST_TRUNCATED}: read one of the page's sections.]`)).toBe(true);
+  });
+});
+
+describe("capToolResult (ADR-080 P2, item 7)", () => {
+  it("keeps a short result whole and cuts a long one with the narrow-your-request marker", () => {
+    expect(capToolResult("short")).toBe("short");
+    const exact = "x".repeat(ASSIST_TOOL_RESULT_CHARS);
+    expect(capToolResult(exact)).toBe(exact);
+    const cut = capToolResult(`${exact}TAIL`);
+    expect(cut.startsWith(exact)).toBe(true);
+    expect(cut).not.toContain("TAIL");
+    expect(cut).toContain("Narrow your request");
+  });
+});
+
+describe("assistScreen's entities (ADR-080 P2, item 3)", () => {
+  it("lists the ids on the screen in the closed order of kinds, and nothing when there are none", () => {
+    const screen = assistScreen(corpus, "teacher", {
+      route: "/classrooms/:id",
+      helpTopic: null,
+      locale: "en",
+      entities: { classroom: "c-1", course: "k-1" },
+    });
+    expect(screen).toContain("- On screen: course k-1, classroom c-1");
+    expect(assistScreen(corpus, "teacher", { route: "/", helpTopic: null, locale: "en" })).not.toContain("On screen");
+  });
+});
+
+describe("the results reader (ADR-080 P2, items 1–2)", () => {
+  const cell = (grade: number | null, kind: "grade" | "absent" | "empty" = grade === null ? "empty" : "grade") => ({
+    kind,
+    grade,
+  });
+  const table: ResultsSource = {
+    classroomId: "room",
+    columns: [
+      { activityId: "e1", mode: "exam", title: "E1", date: "2026-10-01T08:00:00.000Z", released: true, weight: 1, counts: true },
+      { activityId: "live", mode: "exam", title: "Running", date: "2026-10-08T08:00:00.000Z", released: false, weight: 1, counts: true },
+    ],
+    rows: [
+      { nom: "Doe", prenom: "Ada", cells: { e1: cell(5), live: cell(2.5) }, mean: 5 },
+      { nom: "Roe", prenom: "Bo", cells: { e1: cell(1, "absent"), live: cell(null) }, mean: 1 },
+    ],
+  };
+
+  it("keeps the released columns only: no running or unreleased score, not even a staff mark there", () => {
+    const results = assistResults(table);
+    expect(results.columns.map((c) => c.title)).toEqual(["E1"]);
+    expect(results.students).toEqual([
+      { name: "Ada Doe", grades: [5], mean: 5 },
+      { name: "Bo Roe", grades: ["absent"], mean: 1 },
+    ]);
+    expect(results.unreleasedColumns).toBe(1);
+    expect(JSON.stringify(results)).not.toContain("2.5");
+    expect(JSON.stringify(results)).not.toContain("Running");
+  });
+
+  it("asks the results reader only for a question about results, in either language", () => {
+    expect(wantsResults("Quelle est la moyenne de la classe ?")).toBe(true);
+    expect(wantsResults("Show me the results")).toBe(true);
+    expect(wantsResults("How do I share a pool?")).toBe(false);
+  });
+
+  it("says it is a stub and lists each student's final grades, or why there are none", () => {
+    const answer = stubResultsAnswer({ results: assistResults(table) }, "en");
+    expect(answer).toContain("Development stub, not a model");
+    expect(answer).toContain("- **Ada Doe** — mean 5.0 (E1 5.0)");
+    expect(answer).toContain("- **Bo Roe** — mean 1.0 (E1 a1.0)");
+    expect(answer).toContain("1 column(s) not released are left out");
+    const none = stubResultsAnswer({ results: assistResults({ ...table, columns: [] }) }, "fr");
+    expect(none).toContain("Aucun résultat publié");
+    expect(stubResultsAnswer({ noClassroom: true }, "en")).toContain("Open a classroom first");
+    expect(stubResultsAnswer({ refused: "no seat" }, "fr")).toContain("a refusé : no seat");
   });
 });
 

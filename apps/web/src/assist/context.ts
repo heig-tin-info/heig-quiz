@@ -1,10 +1,13 @@
 /**
- * What the teacher assistant knows of the screen (ADR-080 §2): the route
- * PATTERN, the screen's help topic — the one its `PageHelpButton` opens,
- * read from that button's slot (`currentHelpTopic`) — and the UI language;
- * never an id, a title or a name. And where it is offered at all (§3).
+ * What the teacher assistant knows of the screen (ADR-080 §2, amended for
+ * P2): the route PATTERN, the screen's help topic — the one its
+ * `PageHelpButton` opens, read from that button's slot
+ * (`currentHelpTopic`) —, the UI language, and the ids of the entities on
+ * it from a closed list of kinds; never a title, a name, nor a student's,
+ * a user's or an attempt's id. And where it is offered at all (§3).
  */
-import { AssistContext, type Me } from "@quiz/contracts";
+import { AssistContext, AssistEntities, type Me } from "@quiz/contracts";
+import type { AssistEntityKind } from "@quiz/domain";
 
 import type { Locale } from "../i18n";
 import { routeToPath, type Route } from "../router";
@@ -29,8 +32,57 @@ export function routePattern(route: Route): string {
   return AssistContext.shape.route.safeParse(pattern).success ? pattern : "/";
 }
 
+/** One id, as the contract checks it. */
+const UUID = AssistEntities.shape.classroom;
+
+/**
+ * Which entity a view's `id` names (ADR-080 P2 amendment, item 3). A view
+ * absent here gives none; the list of kinds is closed by the contract
+ * (`AssistEntities`), so a project, a group set, an attempt or a student is
+ * never sent, whatever its route carries.
+ */
+const ID_KIND: Partial<Record<Route["view"], AssistEntityKind>> = {
+  course: "course",
+  template: "template",
+  classroom: "classroom",
+  classroomSettings: "classroom",
+  classroomJournal: "classroom",
+  classroomGrades: "classroom",
+  classroomGroups: "classroom",
+  pool: "pool",
+  poolCategories: "pool",
+  question: "question",
+  evaluation: "evaluation",
+  live: "evaluation",
+};
+
+/**
+ * The ids of what the screen shows, by kind: the view's `id` by
+ * {@link ID_KIND}, a `classroomId` or an `evaluationId` field as such. An
+ * id that is not a uuid (the browser mock's `r1`) is left out rather than
+ * refused with the whole question.
+ */
+export function routeEntities(route: Route): AssistEntities {
+  const fields = route as Partial<Record<"id" | "classroomId" | "evaluationId", string>>;
+  const kind = ID_KIND[route.view];
+  const found: Partial<Record<AssistEntityKind, string | undefined>> = {
+    ...(kind ? { [kind]: fields.id } : {}),
+    ...(fields.classroomId ? { classroom: fields.classroomId } : {}),
+    ...(fields.evaluationId ? { evaluation: fields.evaluationId } : {}),
+  };
+  return Object.fromEntries(
+    Object.entries(found).filter(([, id]) => id !== undefined && UUID.safeParse(id).success),
+  ) as AssistEntities;
+}
+
 export function assistContext(route: Route, locale: Locale): AssistContext {
-  return { route: routePattern(route), helpTopic: currentHelpTopic(), locale };
+  const entities = routeEntities(route);
+  return {
+    route: routePattern(route),
+    helpTopic: currentHelpTopic(),
+    locale,
+    ...(Object.keys(entities).length > 0 ? { entities } : {}),
+  };
 }
 
 /**

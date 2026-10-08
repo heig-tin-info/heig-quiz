@@ -45,12 +45,15 @@ const usageOf = (usage: Anthropic.Usage): LlmUsageCount => ({
   outputTokens: usage.output_tokens,
 });
 
-/** A tool's answer to one call; an unknown tool or a refused input is an error the model reads. */
-function runTool(tools: readonly ReadOnlyTool[], call: Anthropic.ToolUseBlock): Anthropic.ToolResultBlockParam {
+/**
+ * A tool's answer to one call; an unknown tool — any name outside the
+ * request's own list — or a refused input is an error the model reads.
+ */
+async function runTool(tools: readonly ReadOnlyTool[], call: Anthropic.ToolUseBlock): Promise<Anthropic.ToolResultBlockParam> {
   const tool = tools.find((t) => t.name === call.name);
   try {
     if (!tool) throw new Error(`No tool named ${call.name}.`);
-    return { type: "tool_result", tool_use_id: call.id, content: tool.run(call.input) };
+    return { type: "tool_result", tool_use_id: call.id, content: await tool.run(call.input) };
   } catch (err) {
     const message = err instanceof Error ? err.message : "The tool failed.";
     return { type: "tool_result", tool_use_id: call.id, content: message, is_error: true };
@@ -133,7 +136,8 @@ export const anthropicProvider: LlmProvider = {
         return { text, model, steps: step };
       }
       messages.push({ role: "assistant", content: message.content });
-      messages.push({ role: "user", content: calls.map((call) => runTool(req.tools, call)) });
+      // Every result of the turn's calls in ONE user message, in the calls' order.
+      messages.push({ role: "user", content: await Promise.all(calls.map((call) => runTool(req.tools, call))) });
     }
   },
 };

@@ -2,11 +2,14 @@
  * Section 11 — the teacher assistant (ADR-080): the development stub's
  * answer, so the button and the panel can be looked at without a server.
  * One stored conversation, to show the history; a question opens a new one
- * or continues the one it names. A student is refused, as by the server.
+ * or continues the one it names. A student is refused, as by the server. A
+ * question about results on a classroom is answered by the results reader
+ * over the mock gradebook (ADR-080 P2).
  */
 import type { AssistContext, AssistConversation, AssistExchange } from "@quiz/contracts";
-import { buildCorpus, stubAnswer } from "@quiz/domain";
+import { assistResults, buildCorpus, stubAnswer, stubResultsAnswer, wantsResults } from "@quiz/domain";
 
+import { staffGradebookOf } from "./gradebook";
 import { H, iso, MockError, on, role } from "./runtime";
 
 const conversations: AssistConversation[] = [
@@ -41,6 +44,27 @@ const CORPUS = buildCorpus([
   { id: "guide/pools", locale: "en", text: "# Question pools\n\n## Sharing a pool\n\nShare a pool with a colleague." },
 ]);
 
+/**
+ * The stub's answer, as the server's (`stubReply` of `modules/assist`): a
+ * question about results is answered by the results reader over the
+ * classroom's staff gradebook — the mock's own route —, any other from the
+ * documentation. The mock's ids are not uuids (`r1`), so the client sends
+ * no entity for them: the classroom is read from the address bar instead.
+ */
+function stubReply(question: string, context: AssistContext): string {
+  if (!wantsResults(question)) return stubAnswer(CORPUS, "teacher", question, context);
+  const classroomId = context.entities?.classroom ?? /\/classrooms\/([^/?#]+)/.exec(window.location.pathname)?.[1];
+  if (!classroomId) return stubResultsAnswer({ noClassroom: true }, context.locale);
+  try {
+    return stubResultsAnswer({ results: assistResults(staffGradebookOf(classroomId)) }, context.locale);
+  } catch {
+    return stubResultsAnswer(
+      { refused: "Not found: the user holds no seat on the course this belongs to, or it does not exist." },
+      context.locale,
+    );
+  }
+}
+
 on("GET", "/app/api/assist/availability", () => {
   teacherOnly();
   return { available: true, stub: true };
@@ -55,12 +79,12 @@ on("GET", "/app/api/assist/conversations", () => {
 on("GET", "/app/api/assist/conversations/:id", (m) => {
   teacherOnly();
   const found = conversations.find((c) => c.id === m.groups!.id);
-  if (!found) throw new MockError(404, "not_found");
+  if (!found) throw new MockError(404, "conversation_not_found");
   return found;
 });
 on("DELETE", "/app/api/assist/conversations/:id", (m) => {
   const at = conversations.findIndex((c) => c.id === m.groups!.id);
-  if (at < 0) throw new MockError(404, "not_found");
+  if (at < 0) throw new MockError(404, "conversation_not_found");
   conversations.splice(at, 1);
   return undefined;
 });
@@ -75,7 +99,7 @@ on("POST", "/app/api/assist/ask", (_m, body) => {
   const exchange: AssistExchange = {
     id: uuid(),
     question,
-    answer: stubAnswer(CORPUS, "teacher", question, body.context as AssistContext),
+    answer: stubReply(question, body.context as AssistContext),
     createdAt: now,
   };
   conversation.exchanges.push(exchange);

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { ASSIST_LOCALES, ASSIST_MAX_MESSAGE_CHARS } from "@quiz/domain";
+import { ASSIST_LOCALES, ASSIST_MAX_MESSAGE_CHARS, type AssistEntityKind } from "@quiz/domain";
 
 /**
  * The teacher assistant (ADR-080, F-LLM-07), under `/app/api/assist`:
@@ -8,11 +8,29 @@ import { ASSIST_LOCALES, ASSIST_MAX_MESSAGE_CHARS } from "@quiz/domain";
  */
 
 /**
- * Where the teacher stands, and nothing else (ADR-080 §2): the route
+ * The ids of what is on the screen (ADR-080 P2 amendment, item 3), from the
+ * CLOSED list of kinds `ASSIST_ENTITY_KINDS`: `strict`, so a `student`, a
+ * `user`, an `enrollment` or an `attempt` is refused, never ignored.
+ */
+export const AssistEntities = z
+  .object({
+    course: z.uuid().optional(),
+    classroom: z.uuid().optional(),
+    pool: z.uuid().optional(),
+    question: z.uuid().optional(),
+    evaluation: z.uuid().optional(),
+    template: z.uuid().optional(),
+  } satisfies Record<AssistEntityKind, z.ZodOptional<z.ZodUUID>>)
+  .strict();
+export type AssistEntities = z.infer<typeof AssistEntities>;
+
+/**
+ * Where the teacher stands (ADR-080 §2, amended for P2): the route
  * PATTERN, every id a `:param` (`/pools/:id`, `/admin?tab=llm`), the
- * screen's help topic and the UI language. The pattern admits literal
- * lower-case segments and parameters only, so an id, a title or a name
- * cannot ride along.
+ * screen's help topic, the UI language, and the ids of the entities on
+ * the screen from the closed list above. The pattern admits literal
+ * lower-case segments and parameters only, so a title or a name cannot
+ * ride along; the stored exchange keeps the pattern, never the ids.
  */
 export const AssistContext = z
   .object({
@@ -25,9 +43,13 @@ export const AssistContext = z
       .regex(/^[a-z][a-z0-9-]{0,59}$/)
       .nullable(),
     locale: z.enum(ASSIST_LOCALES),
+    entities: AssistEntities.optional(),
   })
   .strict();
 export type AssistContext = z.infer<typeof AssistContext>;
+
+/** The context as an exchange stores it (`assist_exchanges.context`): the screen, never an id. */
+export const assistScreenOf = ({ route, helpTopic, locale }: AssistContext) => ({ route, helpTopic, locale });
 
 /** `POST /app/api/assist/ask`: a question, in a conversation of the asker's or in a new one. */
 export const AssistAsk = z

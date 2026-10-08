@@ -35,16 +35,18 @@ export interface ProviderReply<T> extends LlmUsageCount {
 
 /**
  * A tool the model may call during a conversation (ADR-080 §5, amending
- * ADR-058 §1): READ-ONLY by contract — it reads what the server already
- * holds in memory and changes nothing. `run` validates its own input and
- * answers a text; a refusal is a text too, so the model can try again.
+ * ADR-058 §1): READ-ONLY by contract — it reads the corpus in memory, or
+ * the API as the asker through GET routes only (ADR-080 §8), and changes
+ * nothing. `run` validates its own input and answers a text, at most about
+ * 8k tokens; a refusal is a thrown error the model reads, so it can try
+ * again.
  */
 export interface ReadOnlyTool {
   name: string;
   description: string;
   /** The input's JSON schema, an object with `additionalProperties: false`. */
   inputSchema: { type: "object"; properties: Record<string, unknown>; required: string[]; additionalProperties: false };
-  run(input: unknown): string;
+  run(input: unknown): string | Promise<string>;
 }
 
 /** A conversation turn as stored: plain text, the model's reasoning never kept. */

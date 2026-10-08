@@ -22,6 +22,7 @@ import { testServer, type Payload, type TestServer } from "../../test/http.js";
 import type { ConverseReply, ConverseRequest, LlmProvider, Metered } from "../llm/provider.js";
 import { LlmError, LlmGateway } from "../llm/service.js";
 import { purgeAssist } from "./service.js";
+import { ASSIST_DATA_TOOLS } from "./tools.js";
 
 const SECRET = "test-llm-master-key-0123456789abcdef";
 const KEY = "sk-ant-api03-test-key-0123456789-WXYZ";
@@ -169,11 +170,15 @@ describe("the development stub", () => {
 describe("a conversation is its owner's (ADR-080 §6)", () => {
   it("is a 404 for another teacher, to read, to continue and to delete", async () => {
     const { conversationId } = AssistReply.parse((await askAs(teacher, "Où sont les tags ?")).json());
-    expect((await call(colleague, "GET", `/app/api/assist/conversations/${conversationId}`)).statusCode).toBe(404);
+    const other = await call(colleague, "GET", `/app/api/assist/conversations/${conversationId}`);
+    expect(other.statusCode).toBe(404);
+    // One code for a conversation that is not the caller's, on every route.
+    expect(other.json()).toEqual({ error: "conversation_not_found" });
     const cont = await askAs(colleague, "Et ensuite ?", conversationId);
     expect(cont.statusCode).toBe(404);
     expect(cont.json()).toEqual({ error: "conversation_not_found" });
-    expect((await call(colleague, "DELETE", `/app/api/assist/conversations/${conversationId}`)).statusCode).toBe(404);
+    const removed = await call(colleague, "DELETE", `/app/api/assist/conversations/${conversationId}`);
+    expect([removed.statusCode, removed.json()]).toEqual([404, { error: "conversation_not_found" }]);
     expect((await call(colleague, "GET", `/app/api/assist/conversations?userId=${teacher.id}`)).statusCode).toBe(404);
     const mine = (await call(colleague, "GET", "/app/api/assist/conversations")).json() as unknown[];
     expect(mine.map((c) => AssistConversationSummary.parse(c).id)).not.toContain(conversationId);
@@ -232,7 +237,7 @@ describe("the model, through the gateway", () => {
     expect(req.system.volatile).toContain("Route: /pools/:id");
     expect(req.system.volatile).toContain("help/pool");
     expect(req.history.at(-1)).toEqual({ role: "user", text: "À quoi sert l'option Grouper ?" });
-    expect(req.tools.map((t) => t.name)).toEqual(["read_guide"]);
+    expect(req.tools.map((t) => t.name)).toEqual(["read_guide", ...ASSIST_DATA_TOOLS]);
     expect(req.maxSteps).toBe(ASSIST_MAX_STEPS);
     expect(JSON.stringify(req)).not.toContain(teacher.id);
     expect(JSON.stringify(req)).not.toContain("@heig.test");

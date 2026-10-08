@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { AssistContext, type Me } from "@quiz/contracts";
 
 import { ROUTE_VIEWS, type Route } from "../router";
-import { assistContext, assistVisible, routePattern } from "./context";
+import { assistContext, assistVisible, routeEntities, routePattern } from "./context";
 
 const ID = "0b6f6a52-6c7e-4a0d-9e8e-3a3f1e2b4c5d";
 const portal = { kind: "portal" } as Me["session"];
@@ -39,7 +39,38 @@ describe("assistContext", () => {
       route: "/pools/:id",
       helpTopic: null,
       locale: "fr",
+      entities: { pool: ID },
     });
+    expect(assistContext({ view: "home" }, "en")).toEqual({ route: "/", helpTopic: null, locale: "en" });
+  });
+});
+
+describe("routeEntities — a closed list of kinds (ADR-080 P2, item 3)", () => {
+  const OTHER = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f";
+
+  it("names the screen's course, classroom, pool, question, evaluation or template", () => {
+    expect(routeEntities({ view: "course", id: ID, tab: "pools" })).toEqual({ course: ID });
+    expect(routeEntities({ view: "classroomGrades", id: ID })).toEqual({ classroom: ID });
+    expect(routeEntities({ view: "question", id: ID, from: OTHER })).toEqual({ question: ID });
+    expect(routeEntities({ view: "grading", evaluationId: ID, item: OTHER })).toEqual({ evaluation: ID });
+    expect(routeEntities({ view: "groupSet", classroomId: ID, id: OTHER })).toEqual({ classroom: ID });
+    expect(routeEntities({ view: "template", id: ID })).toEqual({ template: ID });
+  });
+
+  it("never names an attempt, a project or anything outside the list, and drops what is not a uuid", () => {
+    expect(routeEntities({ view: "feedback", attemptId: ID })).toEqual({});
+    expect(routeEntities({ view: "project", id: ID })).toEqual({});
+    expect(routeEntities({ view: "join", code: "ABCD" })).toEqual({});
+    expect(routeEntities({ view: "classroom", id: "r1" })).toEqual({});
+  });
+
+  it("gives every view a context the server accepts", () => {
+    for (const view of ROUTE_VIEWS) {
+      const route = { view, id: ID, classroomId: ID, evaluationId: ID, attemptId: ID, code: "ABCD" } as unknown as Route;
+      const context = assistContext(route, "en");
+      expect(AssistContext.safeParse(context).success, view).toBe(true);
+      expect(JSON.stringify(context.entities ?? {}), view).not.toContain("attempt");
+    }
   });
 });
 

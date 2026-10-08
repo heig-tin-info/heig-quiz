@@ -266,6 +266,12 @@ function staffBook(id: string) {
   return { room, book: book ?? { meanPublished: false, columns: [], marks: new Map() } satisfies MockBook };
 }
 
+/** The staff table of a classroom, as its GET answers: what the assistant's results reader reads (`assist.ts`). */
+export function staffGradebookOf(id: string): GradebookStaff {
+  const { room, book } = staffBook(id);
+  return staffTable(room, book);
+}
+
 const writable = (room: (typeof rooms)[number]) => {
   if (room.archivedAt) throw refuse(409, "classroom_archived", "The classroom is archived: its gradebook is read-only");
 };
@@ -283,10 +289,7 @@ const lineOr404 = (room: (typeof rooms)[number], eid: string): string => {
   return eid;
 };
 
-on("GET", "/app/api/classrooms/:id/gradebook", (m) => {
-  const { room, book } = staffBook(m.groups!.id!);
-  return staffTable(room, book);
-});
+on("GET", "/app/api/classrooms/:id/gradebook", (m) => staffGradebookOf(m.groups!.id!));
 
 on("PATCH", "/app/api/classrooms/:id/gradebook", (m, raw) => {
   const { room, book } = staffBook(m.groups!.id!);

@@ -73,7 +73,7 @@ interface ToolAnnotations {
   openWorldHint?: boolean;
 }
 
-interface Tool<S extends z.ZodObject = z.ZodObject> {
+export interface Tool<S extends z.ZodObject = z.ZodObject> {
   name: string;
   title: string;
   description: string;
