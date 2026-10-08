@@ -15,8 +15,9 @@ rules (`missingTimingFields`, `pastTiming`), and the live controls that move
 `closesAt` (`extendTime`, `resumeEvaluation`).
 
 Relations: amends F-EVAL-04 (an exam may be closed by the teacher when it
-has a safety deadline), F-EVAL-06 (the waiting room is a Live setting) and
-F-LIVE-12 (a late student's limit is cut at the window's end); the deadlines
+has a safety deadline), F-EVAL-05 (the extra time is added after the cut),
+F-EVAL-06 (the waiting room is a Live setting) and F-LIVE-12 (a late
+student's limit is cut at the end); the deadlines
 it adds are swept by the ticker of [ADR-006](ADR-006-deadline-ticker.md),
 whose rule (server clock, `deadline + 3 s`, `410 attempt_closed`) is
 unchanged. Replaces the two named presets of the step (docs/spec/08 §8.2,
@@ -59,20 +60,21 @@ settings mean.
 | Scheduled, no limit | `deadline` | `skip` | start, end |
 | Scheduled, with limit | `duration` | `skip` | start, end, minutes |
 | Live, no limit | `manual` | `manual` | date (a hint), safety deadline |
-| Live, with limit | `duration` | `manual` | date (a hint), minutes |
+| Live, with limit | `duration` | `manual` | date (a hint), safety deadline, minutes |
 
-Live's waiting room may be `auto`, or `skip` without a limit, from the
-advanced options; it is kept when the mode stays Live. `duration` + `skip`
-is Scheduled with a limit (the store cannot tell it from a waiting-room-less
-Live with a limit, so Live does not offer that pair). A pair outside the
-table (`deadline` with a waiting room) reads as Live without a limit and is
-rewritten by the next choice. Picking a mode writes the clock only: the
-navigation, the presentation, the shuffles and the feedback keep what the
-creation preset (`exam`, `exercise`) or the teacher set — except that the
-feedback falls back to `on_release` in the same patch when a waiting room
-appears (F-EVAL-11, #78). A limit turned on with no duration stored starts
-at 45 minutes; an end the new choice does not show is cleared, since the
-ticker would still close on it.
+Every choice shows the end (`closesAt`): the ticker closes on it whatever
+the timing, so an end the screen hid would still be enforced, and a stored
+one is always visible and clearable. Live's waiting room may be `auto`, or
+`skip` without a limit, from the advanced options; it is kept when the mode
+stays Live. `duration` + `skip` is Scheduled with a limit (the store cannot
+tell it from a waiting-room-less Live with a limit, so Live does not offer
+that pair). A pair outside the table (`deadline` with a waiting room) reads
+as Live without a limit and is rewritten by the next choice. Picking a mode
+writes the clock only: the dates stay the teacher's, and the navigation, the
+presentation, the shuffles and the feedback keep what the creation preset
+(`exam`, `exercise`) or the teacher set — except that the feedback falls back
+to `on_release` in the same patch when a waiting room appears (F-EVAL-11,
+#78). A limit turned on with no duration stored starts at 45 minutes.
 
 ### 2. A safety deadline in Live
 
@@ -85,21 +87,33 @@ refuses a write after `closesAt + 3 s` with `410 attempt_closed`, and a
 timing (`anchoredOnClosesAt`). An **exam** in `manual` timing needs one —
 F-EVAL-04's "an exam must end by itself" — so `missingTimingFields` asks for
 `closesAt` instead of refusing the timing (the `timing` missing field is
-gone from `TransitionRefusal`). An exercise may omit it.
+gone from `TransitionRefusal`). An exercise may omit it. Live with a limit
+may carry one too (`duration` with a waiting room and a `closesAt`): it then
+cuts the minutes as §3 says.
 
 A past `closesAt` refuses to schedule or open whatever the timing
-(`pastTiming`, #178): the ticker closes on it whatever the timing.
+(`pastTiming`, #178): the ticker closes on it whatever the timing. Before the
+start, "+N min" to everybody moves `closesAt` whatever the timing — the way
+out of a waiting room whose end went by — and the dashboard says so whatever
+the timing.
 
-### 3. A limit is cut at the end of a Scheduled window
+### 3. A limit is cut at the end
 
-In `duration` timing with a `closesAt`, an attempt's deadline is the
-earlier of its own (start + duration + accommodation + extra time) and
-`closesAt` + its own extra time: a student who starts ten minutes before the
-end has ten minutes. The accommodation does not push the window's end — it
-applies to the minutes — while a "+N min" given to that student alone, or
-a pause they sat through, does. Before this record the window's end did not
-cut the attempt (the ticker waited for the last attempt's own deadline);
-an existing `duration` evaluation with a `closesAt` is now cut there.
+In `duration` timing with a `closesAt`, an attempt's nominal end (start +
+duration) is cut at `closesAt`, and the accommodation and the attempt's own
+extra time are added after the cut: a student who starts ten minutes before
+the end has ten minutes, plus their roster extra time (F-EVAL-05), which
+carries them past `closesAt` exactly as in `deadline` timing. A pause the
+student sat through is part of their extra time and pushes their end; a
+pause before they started does not, since they had not begun. While the
+evaluation runs, "+N min" to everybody goes to each attempt and does not
+move `closesAt` (the end of a Scheduled window stays where it was
+announced); before the start, it moves `closesAt` instead and carries the
+minutes alone, never both, so a student cut at the end is not given them
+twice. Before this record the end did not cut the attempt (the ticker waited
+for the last attempt's own deadline): an existing `duration` evaluation with
+a `closesAt` is now cut there, and an attempt reopened after the deploy has
+its deadline recomputed under this rule.
 
 ### 4. The Live date is a hint; Scheduled is what schedules
 
@@ -113,28 +127,22 @@ action is **Open**. An evaluation already `scheduled` with a waiting room,
 from before this record, keeps opening it at `opensAt`, and **Back to
 draft** still unschedules it.
 
-### 5. The mode's words
-
-The three-way timing control and the preset cards leave the screen; the
-refusals and missing-field notes are worded in the mode's vocabulary ("its
-end has passed", "enter when it opens", "an exam must end by itself: enter
-when it closes at the latest"), in English and French.
-
 ## Consequences
 
-- One question a newcomer can answer, and the traps gone: a mode shows only
-  its fields, and an end it does not show is not stored.
+- One question a newcomer can answer, and fewer traps: every mode shows the
+  end the server enforces, and only the fields its mode means.
 - A teacher-led exam is possible, with an end the server enforces; a
   teacher-led exercise gets an optional backstop.
-- Cutting the limit at the window's end changes the deadline of existing
-  `duration` evaluations that carry a `closesAt` and were sat late in their
-  window. The student is told: the conditions list the closing instant
-  beside the duration (`imposedConditions`), whatever the timing.
+- Cutting the limit at the end changes the deadline of existing `duration`
+  evaluations that carry a `closesAt` and were sat late in their window;
+  the student is told, the conditions listing the closing instant beside the
+  duration (`imposedConditions`).
 - The presets' pedagogic side effects (shuffling and continuous layout for
   homework, immediate feedback) are no longer one click on step 2; the
   creation preset still sets them.
 - The rule is read in one place on both sides: `clockMode.ts` and
   `deadline.ts` in `@quiz/domain`, unit-tested row by row and round trip.
+
 
 ## Alternatives considered
 

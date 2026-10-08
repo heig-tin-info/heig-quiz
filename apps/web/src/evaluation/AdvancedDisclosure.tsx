@@ -11,6 +11,8 @@ import {
   feedbackWhenFor,
   isInClass,
   liveLobbies,
+  type FeedbackWhen,
+  type LobbyName,
 } from "@quiz/domain";
 
 import { usePublicConfig } from "../api";
@@ -18,6 +20,21 @@ import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import { Button, Card, Segmented, Select, SettingRow, Switch } from "../ui";
 import type { ConfigPatch, ConfigView } from "./editTarget";
+
+/**
+ * `body`, a patch that sets the waiting room, with the feedback brought back
+ * in the SAME patch when that room forbids the policy in force: a waiting
+ * room makes the evaluation sat in class, where `immediate` is not allowed
+ * (#78), and the server refuses the pair rather than fixing it. The one
+ * writer of a lobby change, here and in the clock mode (`ConfigSettings`).
+ */
+export function withFeedbackFallback<B extends { settings: { lobby: LobbyName } }>(
+  config: Pick<ConfigView, "mode" | "feedbackPolicy">,
+  body: B,
+): B & { feedbackPolicy?: { when: FeedbackWhen } } {
+  const when = feedbackWhenFor({ mode: config.mode, lobby: body.settings.lobby }, config.feedbackPolicy.when);
+  return when === config.feedbackPolicy.when ? body : { ...body, feedbackPolicy: { when } };
+}
 
 /**
  * Everything docs/spec/08 §8.2 puts under "Options avancées": the eight
@@ -135,14 +152,7 @@ export function AdvancedDisclosure({
               value={settings.lobby}
               disabled={disabled}
               onChange={(lobby) => {
-                // A waiting room makes the evaluation sat in class, where
-                // `immediate` is not allowed (#78): the policy falls back in
-                // the SAME patch, since the server refuses the pair otherwise.
-                const when = feedbackWhenFor({ mode, lobby }, feedbackPolicy.when);
-                patch.mutate({
-                  settings: { lobby },
-                  ...(when === feedbackPolicy.when ? {} : { feedbackPolicy: { when } }),
-                });
+                patch.mutate(withFeedbackFallback(config, { settings: { lobby } }));
               }}
               options={liveLobbies(clock.limited).map((value) => ({
                 value,

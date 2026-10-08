@@ -7,9 +7,9 @@ An evaluation is an ordered list of questions taken from the pools of a course, 
 Open the classroom and its **Evaluations** tab (see [Classrooms](classrooms.md)), then click **New evaluation**. Give it a **Title** and pick a **Mode**:
 
 - **Exam**: graded, taken in one sitting, no feedback before you release the results.
-- **Exercise**: practice at home, with a deadline and feedback as soon as a question is validated.
+- **Exercise**: practice, with feedback as soon as a question is validated; it starts Live, open until you close it, and **Scheduled** gives it a deadline.
 
-The mode is not a lock. It picks the starting preset and decides which feedback timings are offered, and everything else stays yours to change. Click **Create evaluation**: the new evaluation opens in `draft` on its first step.
+The mode is not a lock. It picks the starting settings and decides which feedback timings are offered, and everything else stays yours to change. Click **Create evaluation**: the new evaluation opens in `draft` on its first step.
 
 The configuration screen has three tabs, **Questions**, **Time and mode** and **Launch**. They are tabs, not a wizard: you can come back to any of them, and the step is part of the address (`?step=timing`), so a bookmark or a shared link lands on the right one. The title in the header renames itself: click it, type, press Enter.
 
@@ -77,13 +77,13 @@ The bin at the end of a row takes the item out of this evaluation. The question 
 Two cards carry this step ([ADR-086](../adr/ADR-086-planifiee-ou-en-direct.md)). The card in force sums up what is set; the other says what it means.
 
 - **Scheduled**: the platform opens the evaluation at **Opens at** and closes it at **Closes at**, by itself. Students enter and work without you; there is no waiting room. Without a time limit, everybody works until **Closes at**: an exercise series, homework.
-- **Live**: you open the waiting room and press **Start**; the evaluation ends when you close it from the dashboard. **Planned for** only places it in the calendar: nothing opens by itself at that time. Without a time limit, **Closes at the latest** is an optional safety deadline at which the platform closes it whatever happens; an exam must have one, since an exam must end by itself.
+- **Live**: you open the waiting room and press **Start**; the evaluation ends when you close it from the dashboard. **Planned for** only places it in the calendar: nothing opens by itself at that time. **Closes at the latest** is an optional safety deadline at which the platform closes it whatever happens, with or without a time limit; an exam without a time limit must have one, since an exam must end by itself.
 
 ### Time limit per student
 
-One switch under the cards. On, each student gets the same number of **Minutes**, counted from their own start; a late student gets the full limit. In a **Scheduled** evaluation the limit is cut at **Closes at**: a student who starts ten minutes before the end has ten minutes, whatever the limit says. Turning the limit on in **Live** removes the safety deadline.
+One switch under the cards. On, each student gets the same number of **Minutes**, counted from their own start; a late student gets the full limit. The limit is cut at the end — **Closes at**, or a live safety deadline: a student who starts ten minutes before the end has ten minutes, whatever the limit says.
 
-Extra time granted on the roster (see [Students](students.md)) applies on top of the minutes: a student with `+25 % time` gets 56 minutes out of 45. Without a limit, in **Scheduled**, their own end is pushed past **Closes at**; a live safety deadline is the same for everybody.
+Extra time granted on the roster (see [Students](students.md)) applies on top of the minutes: a student with `+25 % time` gets 56 minutes out of 45. Their extra time also goes past the end that cuts the limit, and past a scheduled **Closes at**; only the safety deadline of a live evaluation without a limit is the same for everybody.
 
 What the two answers store:
 
@@ -92,7 +92,7 @@ What the two answers store:
 | Scheduled, no limit | common end | none | **Opens at**, **Closes at** |
 | Scheduled, with a limit | per student | none | **Opens at**, **Closes at**, **Minutes** |
 | Live, no limit | closed by you | **You start** | **Planned for**, **Closes at the latest** |
-| Live, with a limit | per student | **You start** | **Planned for**, **Minutes** |
+| Live, with a limit | per student | **You start** | **Planned for**, **Closes at the latest**, **Minutes** |
 
 Picking a mode changes the time and the waiting room only; the feedback falls back to **On release** when a waiting room appears, since an evaluation sat together never gives feedback right away.
 

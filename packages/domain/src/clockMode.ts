@@ -2,17 +2,20 @@
  * Who drives the clock (ADR-086, #555): the one question the timing step
  * asks, mapped onto the stored `timing` and `lobby` with no migration.
  *
- * | Choice                | `timing`   | `lobby`         | Fields                             |
- * |-----------------------|------------|-----------------|------------------------------------|
- * | Scheduled, no limit   | `deadline` | `skip`          | start, end                         |
- * | Scheduled, with limit | `duration` | `skip`          | start, end, minutes                |
- * | Live, no limit        | `manual`   | `manual`*       | date (a hint), safety deadline     |
- * | Live, with limit      | `duration` | `manual`*       | date (a hint), minutes             |
+ * | Choice                | `timing`   | `lobby`   | Fields                                  |
+ * |-----------------------|------------|-----------|-----------------------------------------|
+ * | Scheduled, no limit   | `deadline` | `skip`    | start, end                              |
+ * | Scheduled, with limit | `duration` | `skip`    | start, end, minutes                     |
+ * | Live, no limit        | `manual`   | `manual`* | date (a hint), safety deadline          |
+ * | Live, with limit      | `duration` | `manual`* | date (a hint), safety deadline, minutes |
  *
  * (*) `auto`, or `skip` without a limit, from the advanced options. Live
  * with a limit and no waiting room is `duration` + `skip`, which IS
  * Scheduled with a limit: the store cannot tell them apart, so the mode
  * reads it as Scheduled and Live never offers that pair.
+ *
+ * Every mode shows the end (`closesAt`): the ticker closes on it whatever
+ * the timing, so an end the screen hid would still be enforced.
  *
  * The mode is never stored: it is read back from the two settings every
  * time ({@link clockChoiceOf}), so an evaluation or a template saved before
@@ -37,7 +40,7 @@ export interface ClockSettings {
   lobby: LobbyName;
 }
 
-/** A field of the timing a mode shows, in screen order. */
+/** A field of the timing a choice shows, in screen order. */
 export type ClockField = "opensAt" | "closesAt" | "durationS";
 
 /** The limit a choice turning it on starts from: a HEIG-VD period, minus sitting down. */
@@ -69,34 +72,24 @@ export function clockSettingsFor(choice: ClockChoice, current: ClockSettings): C
   return { timing: choice.limited ? "duration" : "manual", lobby: keeps ? current.lobby : "manual" };
 }
 
-/** The fields `choice` shows. */
+/**
+ * The fields `choice` shows: the start (Live: a calendar hint) and the end
+ * (Live: the optional safety deadline) always, the minutes with a limit.
+ */
 export function clockFields(choice: ClockChoice): readonly ClockField[] {
-  if (choice.mode === "scheduled") {
-    return choice.limited ? ["opensAt", "closesAt", "durationS"] : ["opensAt", "closesAt"];
-  }
-  return choice.limited ? ["opensAt", "durationS"] : ["opensAt", "closesAt"];
+  return choice.limited ? ["opensAt", "closesAt", "durationS"] : ["opensAt", "closesAt"];
 }
 
-/** What choosing a mode writes: the settings, and the fields it fills or clears. */
+/** What choosing a mode writes: the settings, and the limit it starts from. */
 export interface ClockPatch {
   settings: ClockSettings;
   durationS?: number;
-  closesAt?: null;
 }
 
-/**
- * The patch that moves `current` to `choice`. A limit turned on with none
- * stored starts from {@link DEFAULT_LIMIT_S}; an end the choice no longer
- * shows is cleared, since the ticker would still close on it (ADR-086 §3).
- * `current.closesAt` is absent on a template, which has no dates.
- */
-export function clockPatch(
-  choice: ClockChoice,
-  current: ClockSettings & { durationS: number | null; closesAt?: string | null },
-): ClockPatch {
+/** The patch that moves `current` to `choice`; a limit turned on with none stored starts from {@link DEFAULT_LIMIT_S}. */
+export function clockPatch(choice: ClockChoice, current: ClockSettings & { durationS: number | null }): ClockPatch {
   return {
     settings: clockSettingsFor(choice, current),
     ...(choice.limited && current.durationS === null ? { durationS: DEFAULT_LIMIT_S } : {}),
-    ...(current.closesAt != null && !clockFields(choice).includes("closesAt") ? { closesAt: null } : {}),
   };
 }

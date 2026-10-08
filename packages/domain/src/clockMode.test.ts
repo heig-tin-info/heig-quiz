@@ -17,7 +17,7 @@ const TABLE: readonly [ClockChoice, ClockSettings, readonly string[]][] = [
   [{ mode: "scheduled", limited: false }, { timing: "deadline", lobby: "skip" }, ["opensAt", "closesAt"]],
   [{ mode: "scheduled", limited: true }, { timing: "duration", lobby: "skip" }, ["opensAt", "closesAt", "durationS"]],
   [{ mode: "live", limited: false }, { timing: "manual", lobby: "manual" }, ["opensAt", "closesAt"]],
-  [{ mode: "live", limited: true }, { timing: "duration", lobby: "manual" }, ["opensAt", "durationS"]],
+  [{ mode: "live", limited: true }, { timing: "duration", lobby: "manual" }, ["opensAt", "closesAt", "durationS"]],
 ];
 
 const ALL_SETTINGS: ClockSettings[] = (["duration", "deadline", "manual"] as const).flatMap((timing) =>
@@ -82,10 +82,14 @@ describe("the clock modes (ADR-086)", () => {
     expect(liveLobbies(true)).toEqual(["manual", "auto"]);
     expect(liveLobbies(false)).toEqual(["manual", "auto", "skip"]);
   });
+
+  it("shows the end in every choice: the ticker closes on it whatever the timing", () => {
+    for (const choice of ALL_CHOICES) expect(clockFields(choice)).toContain("closesAt");
+  });
 });
 
 describe("clockPatch", () => {
-  const scheduled = { timing: "deadline", lobby: "skip", durationS: null, closesAt: "2026-10-09T16:00:00.000Z" } as const;
+  const scheduled = { timing: "deadline", lobby: "skip", durationS: null } as const;
 
   it("starts a limit turned on from the default, and keeps one already stored", () => {
     expect(clockPatch({ mode: "scheduled", limited: true }, scheduled)).toEqual({
@@ -97,20 +101,8 @@ describe("clockPatch", () => {
     });
   });
 
-  it("clears an end the choice no longer shows, since the ticker would still close on it", () => {
+  it("writes only the clock: the dates are the teacher's", () => {
     expect(clockPatch({ mode: "live", limited: true }, { ...scheduled, durationS: 600 })).toEqual({
-      settings: { timing: "duration", lobby: "manual" },
-      closesAt: null,
-    });
-    // Live without a limit keeps it as its safety deadline.
-    expect(clockPatch({ mode: "live", limited: false }, scheduled)).toEqual({
-      settings: { timing: "manual", lobby: "manual" },
-    });
-  });
-
-  it("clears nothing on a template, which has no dates", () => {
-    const { closesAt: _, ...template } = scheduled;
-    expect(clockPatch({ mode: "live", limited: true }, { ...template, durationS: 600 })).toEqual({
       settings: { timing: "duration", lobby: "manual" },
     });
   });

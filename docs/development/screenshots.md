@@ -150,8 +150,8 @@ for the pinned rail and the wide code question (ADR-066); `player-run` and
 | `try-mcq-graded` | teacher | `/questions/10eb3127-c30a-4cde-b8be-05197fa76a8c?tab=try` | seeded | Chose the first answer, clicked “Grade my answer”. | 1440×900 |
 | `try-code` | teacher | `/questions/637aca79-7782-4acc-ab32-907876fedddb?tab=try` | seeded | Clicked “Run” on the visible cases, then “Grade my answer”, with the template as it is. | 1440×900, full page |
 | `eval-questions` | teacher | `/evaluations/ec1186d0-1d86-49e2-9d65-989a6a002dc7?step=questions` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `eval-timing` | teacher | `/evaluations/ec1186d0-1d86-49e2-9d65-989a6a002dc7?step=timing` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `eval-launch` | teacher | `/evaluations/ec1186d0-1d86-49e2-9d65-989a6a002dc7?step=launch` | seeded | Nothing: the page as it loads. | 1440×900 |
+| `eval-timing` | teacher | `/evaluations/18756045-182f-4e4a-9541-a45243d41f15?step=timing` | seeded | Nothing: the page as it loads. | 1440×900 |
+| `eval-launch` | teacher | `/evaluations/18756045-182f-4e4a-9541-a45243d41f15?step=launch` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `eval-scheduled` | teacher | `/evaluations/f259b01d-cdb0-4bc5-9484-4e74c186745a` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `live-lobby` | teacher | `/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live` | lobby | Nothing: the page as it loads. | 1440×900 |
 | `live-running` | teacher | `/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live` | running | Nothing: the page as it loads. | 1440×900 |

@@ -24,9 +24,9 @@ import { toLocalInput } from "./timing";
 
 /*
  * The three-step flow of docs/spec/08 §8.2, asserted where it touches the
- * server: adding questions, applying a preset, and opening the waiting room.
+ * server: adding questions, choosing who drives the clock, and opening the waiting room.
  * Everything else on these screens is a control bound to `PATCH`, which the
- * preset test covers once for all of them.
+ * clock tests cover once for all of them.
  */
 
 const CLASSROOM = id("classroom", 1);
@@ -158,13 +158,30 @@ describe("EvaluationConfig", () => {
       expect(body).toEqual({ settings: { timing: "duration", lobby: "skip" } });
     });
 
-    it("turning the limit on in Live clears the safety deadline the ticker would still close on", async () => {
+    it("turning the limit on in Live keeps the safety deadline, which then cuts the minutes", async () => {
       const future = new Date(Date.now() + 3_600_000).toISOString();
       const user = userEvent.setup();
       const body = await firstPatch(withClock({ timing: "manual", lobby: "manual" }, { closesAt: future }), async () => {
         await user.click(await screen.findByRole("switch", { name: /time limit per student/i }));
       });
-      expect(body).toEqual({ settings: { timing: "duration", lobby: "manual" }, closesAt: null });
+      expect(body).toEqual({ settings: { timing: "duration", lobby: "manual" } });
+    });
+
+    it("shows a stored end of a Live evaluation with a limit, so it can be seen and cleared (ADR-086)", async () => {
+      const future = new Date(Date.now() + 3_600_000).toISOString();
+      const detail = withClock({ timing: "duration", lobby: "manual" }, { closesAt: future });
+      const { calls } = mockFetch(routes(detail, { [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(detail) }));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      const backstop = await screen.findByLabelText(/^closes at the latest$/i);
+      expect(backstop).toHaveValue(toLocalInput(future));
+      expect(screen.getByLabelText(/^minutes$/i)).toBeInTheDocument();
+      fireEvent.change(backstop, { target: { value: "" } });
+      fireEvent.blur(backstop);
+      await waitFor(() =>
+        expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ closesAt: null }),
+      );
     });
 
     it("brings the feedback back to 'on release' in the same patch that adds a waiting room (#78)", async () => {
@@ -498,7 +515,7 @@ describe("EvaluationConfig", () => {
         route: "/evaluations/x?step=timing",
       });
       await user.click(await screen.findByRole("button", { name: /^go to launch$/i }));
-      // No waiting room in this preset: the one action opens the evaluation (#152).
+      // Scheduled, its start passed: the one action opens the evaluation (#152).
       expect(await screen.findByRole("button", { name: /^open$/i })).toBeEnabled();
     });
 

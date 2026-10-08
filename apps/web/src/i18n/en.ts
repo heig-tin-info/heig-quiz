@@ -3425,7 +3425,7 @@ export const en = {
   "eval.clock.desc.live": "You start it from the waiting room, and it ends when you close it.",
   "eval.limit": "Time limit per student",
   "eval.limit.desc.scheduled": "Counted from each student's own start, and cut at the end of the window.",
-  "eval.limit.desc.live": "Counted from each student's start; a late student still gets all of it.",
+  "eval.limit.desc.live": "Counted from each student's own start, and cut at the safety deadline when there is one.",
   "eval.limit.off.scheduled": "No limit: students work until the end.",
   "eval.limit.off.live": "No limit: students work until you close it.",
   "eval.liveDate": "Planned for",

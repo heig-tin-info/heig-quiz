@@ -9,7 +9,6 @@ import {
   CLOCK_MODES,
   conditionsAllowedFor,
   configLock,
-  feedbackWhenFor,
   isConfigFieldWritable,
   type ClockChoice,
   type ClockMode,
@@ -35,7 +34,7 @@ import {
   Switch,
   type IconType,
 } from "../ui";
-import { AdvancedDisclosure } from "./AdvancedDisclosure";
+import { AdvancedDisclosure, withFeedbackFallback } from "./AdvancedDisclosure";
 import { clockSummary } from "./clockSummary";
 import { ConditionsSetting } from "./ConditionsSetting";
 import type { ConfigPatch, ConfigView } from "./editTarget";
@@ -212,16 +211,13 @@ export function ConfigSettings({
   /** The timing fields the launch still needs (#76); none on arrival. */
   missing?: ReadonlySet<TimingField>;
   dates: (choice: ClockChoice) => ReactNode;
-  /**
-   * The run's end: the conditions' deadline line (ADR-079), and what a mode
-   * that no longer shows it clears (`clockPatch`). A template has none.
-   */
+  /** The run's end, for the conditions' deadline line (ADR-079); a template has none. */
   closesAt?: string | null;
   /** An item is a `categorize` question: its policy row is shown (ADR-036). */
   holdsCategorize?: boolean;
 }) {
   const t = useT();
-  const { settings, durationS, mode, feedbackPolicy } = config;
+  const { settings, durationS, mode } = config;
   const choice = clockChoiceOf(settings);
   // Empty while nothing is stored: a "45" the server does not have was a
   // duration the teacher believed set, and the waiting room then refused to
@@ -234,16 +230,11 @@ export function ConfigSettings({
   }, [durationS]);
 
   /*
-   * One patch per choice: the two settings, the limit it starts from, the
-   * end it clears. A waiting room gained makes the evaluation sat in class,
-   * where `immediate` is not allowed (#78): the policy falls back in the
-   * SAME patch, since the server refuses the pair otherwise.
+   * One patch per choice: the two settings and the limit it starts from,
+   * with the feedback fallback a waiting room gained needs (#78).
    */
-  const choose = (next: ClockChoice) => {
-    const body = clockPatch(next, { ...settings, durationS, closesAt });
-    const when = feedbackWhenFor({ mode, lobby: body.settings.lobby }, feedbackPolicy.when);
-    patch.mutate(when === feedbackPolicy.when ? body : { ...body, feedbackPolicy: { when } });
-  };
+  const choose = (next: ClockChoice) =>
+    patch.mutate(withFeedbackFallback(config, clockPatch(next, { ...settings, durationS })));
 
   return (
     <>
@@ -372,8 +363,9 @@ export function TimingStep({
   /*
    * The dates of the mode in force (ADR-086 §1). Scheduled: the window the
    * platform opens and closes. Live: a date for the calendar only — nothing
-   * opens by itself — and, without a limit, the optional safety deadline the
-   * ticker closes on (required for an exam: it must end by itself).
+   * opens by itself — and the optional safety deadline the
+   * ticker closes on (required for an exam without a limit: it must end by
+   * itself).
    */
   const dates = (choice: ClockChoice) => {
     const live = choice.mode === "live";
@@ -403,7 +395,7 @@ export function TimingStep({
                 "closesAt",
                 closesAt,
                 t("eval.safetyDeadline"),
-                t(mode === "exam" ? "eval.safetyDeadline.descExam" : "eval.safetyDeadline.desc"),
+                t(mode === "exam" && !choice.limited ? "eval.safetyDeadline.descExam" : "eval.safetyDeadline.desc"),
               )
             : date("closesAt", closesAt, t("eval.closesAt"))
           : null}

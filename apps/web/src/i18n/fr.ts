@@ -3418,7 +3418,7 @@ export const fr: Record<keyof Dict, string> = {
   "eval.clock.desc.live": "Vous la démarrez depuis la salle d'attente, et elle se termine quand vous la clôturez.",
   "eval.limit": "Limite de temps par étudiant",
   "eval.limit.desc.scheduled": "Comptée depuis le début de chaque étudiant, et coupée à la fin de la fenêtre.",
-  "eval.limit.desc.live": "Comptée depuis le début de chaque étudiant ; un retardataire la reçoit entière.",
+  "eval.limit.desc.live": "Comptée depuis le début de chaque étudiant, et coupée à l'échéance de sécurité s'il y en a une.",
   "eval.limit.off.scheduled": "Sans limite : les étudiants travaillent jusqu'à la fin.",
   "eval.limit.off.live": "Sans limite : les étudiants travaillent jusqu'à ce que vous clôturiez.",
   "eval.liveDate": "Prévue le",

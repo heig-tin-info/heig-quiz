@@ -102,9 +102,10 @@ export function anchoredOnClosesAt(timing: EvaluationTiming): boolean {
  * a timing whose reference instant is missing.
  *
  * - `duration`: the student's own start plus the duration, the accommodation
- *   and the extra time; with a `closesAt`, cut at the window's end even if
- *   time remains (ADR-086 §3). Only what this student was given alone
- *   (`extraS`) pushes that end, never the accommodation.
+ *   and the extra time; with a `closesAt`, the nominal end is cut at the
+ *   window's end even if time remains (ADR-086 §3), and the accommodation
+ *   and the extra time are added after the cut: a student's extra time
+ *   pushes the window's end for them, as in `deadline` timing.
  * - `deadline`: `closesAt` plus the accommodation and the extra time.
  * - `manual`: the safety deadline `closesAt` plus the extra time (ADR-086
  *   §2); no accommodation (`bonusSeconds` is 0), nothing nominal being
@@ -114,9 +115,9 @@ export function attemptDeadline(input: DeadlineInput): Date | null {
   const extraMs = (bonusSeconds(input) + input.extraS) * 1000;
   if (input.timing === "duration") {
     if (input.durationS === null) return null;
-    const own = input.startedAt.getTime() + input.durationS * 1000 + extraMs;
-    if (input.closesAt === null) return new Date(own);
-    return new Date(Math.min(own, input.closesAt.getTime() + input.extraS * 1000));
+    const nominal = input.startedAt.getTime() + input.durationS * 1000;
+    const cut = input.closesAt === null ? nominal : Math.min(nominal, input.closesAt.getTime());
+    return new Date(cut + extraMs);
   }
   if (input.closesAt === null) return null;
   return new Date(input.closesAt.getTime() + extraMs);

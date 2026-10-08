@@ -821,6 +821,34 @@ describe("teacher controls (F-LIVE-11, F-LIVE-12)", () => {
     expect((await service.attemptById(db, attempt.id))!.state).toBe("expired");
   });
 
+  it("moves a live evaluation's safety deadline by the pause, never the attempt's extra time (ADR-086 §2)", async () => {
+    const closesAt = new Date(clock.now().getTime() + 3_600_000);
+    const { evaluation, attempt } = await running({ settings: { timing: "manual" }, durationS: null, closesAt });
+    const paused = await service.pauseEvaluation(db, evaluation, clock.now());
+    clock.advance(10 * 60_000);
+    const resumed = await service.resumeEvaluation(db, paused, clock.now());
+    const end = closesAt.getTime() + 10 * 60_000;
+    expect(resumed.closesAt!.getTime()).toBe(end);
+    const after = (await service.attemptById(db, attempt.id))!;
+    expect(after.deadlineAt!.getTime()).toBe(end);
+    expect(after.extraS).toBe(0);
+    // Closed, so the later tests' ticker passes never meet it.
+    await service.closeEvaluation(db, resumed, clock.now());
+  });
+
+  it("moves a passed end of a limited live evaluation by +N before the start (#178, ADR-086)", async () => {
+    // A stored `duration` + waiting room + `closes_at`: Live with a limit and a safety deadline.
+    const seed = await seedLive(db, {
+      settings: { timing: "duration", lobby: "manual" },
+      closesAt: new Date(clock.now().getTime() - 60_000),
+    });
+    const lobby = await applyState(db, await reload(db, seed.evaluationId), "lobby", clock.now());
+    await service.extendTime(db, lobby, { minutes: 10 }, clock.now());
+    const moved = await reload(db, seed.evaluationId);
+    // From now, since the end had passed.
+    expect(moved.closesAt!.getTime()).toBe(clock.now().getTime() + 10 * 60_000);
+  });
+
   it("cuts a time limit at the window's end even with time left (ADR-086 §3)", async () => {
     // 30 minutes each, but the window closes in 10.
     const closesAt = new Date(clock.now().getTime() + 10 * 60_000);

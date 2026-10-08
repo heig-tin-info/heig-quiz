@@ -192,6 +192,10 @@ function Checklist({
 
   const error = open.error ?? schedule.error ?? unschedule.error;
   const openLabel = toSchedule ? t("launch.openNow") : skip ? t("launch.open") : t("eval.launch.openLobby");
+  // The one primary action: Schedule while a Scheduled start is to come, the opening otherwise.
+  const primary = toSchedule
+    ? { action: schedule, icon: <CalendarClock />, label: t("eval.launch.schedule") }
+    : { action: open, icon: <Rocket />, label: openLabel };
 
   // What the class will see (#152, variant C's preview): beside the list on
   // a wide screen, a row opening a sheet below that. An evaluation with no
@@ -263,27 +267,15 @@ function Checklist({
               <span className="max-sm:sr-only">{openLabel}</span>
             </Button>
           ) : null}
-          {toSchedule ? (
-            <Button
-              size="lg"
-              className="max-sm:flex-1"
-              disabled={blocked}
-              loading={schedule.isPending}
-              onClick={() => schedule.mutate()}
-            >
-              {schedule.isPending ? null : <CalendarClock />} {t("eval.launch.schedule")}
-            </Button>
-          ) : (
-            <Button
-              size="lg"
-              className="max-sm:flex-1"
-              disabled={blocked}
-              loading={open.isPending}
-              onClick={() => open.mutate()}
-            >
-              {open.isPending ? null : <Rocket />} {openLabel}
-            </Button>
-          )}
+          <Button
+            size="lg"
+            className="max-sm:flex-1"
+            disabled={blocked}
+            loading={primary.action.isPending}
+            onClick={() => primary.action.mutate()}
+          >
+            {primary.action.isPending ? null : primary.icon} {primary.label}
+          </Button>
         </div>
       </div>
 

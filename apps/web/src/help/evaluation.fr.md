@@ -39,14 +39,14 @@ plateforme l'ouvre et la ferme d'elle-même entre **Ouverture** et
 **Fermeture** ; les étudiants travaillent sans vous, sans salle d'attente.
 **En direct** : vous ouvrez la salle d'attente et donnez le départ ; elle se
 termine quand vous la clôturez, ou à **Ferme au plus tard**, une échéance de
-sécurité facultative (obligatoire pour un examen). La date **Prévue le**
+sécurité facultative (obligatoire pour un examen sans limite de temps). La date **Prévue le**
 d'une évaluation en direct la place seulement dans le calendrier : rien ne
 s'ouvre de soi-même.
 
 Puis un interrupteur, **Limite de temps par étudiant** : les **Minutes** se
-comptent depuis le début de chaque étudiant. Planifiée, elles sont coupées à
-la fin de la fenêtre même s'il reste du temps. Le temps supplémentaire de la
-liste s'ajoute aux minutes.
+comptent depuis le début de chaque étudiant, coupées à la fin (celle de la fenêtre, ou
+l'échéance de sécurité) même s'il reste du temps. Le temps supplémentaire de la
+liste s'ajoute, au-delà de cette fin aussi.
 
 Le reste vit sous **Options avancées** : navigation, présentation, mélange,
 barre de progression, retour à l'étudiant, et la salle d'attente d'une

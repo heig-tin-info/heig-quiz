@@ -36,13 +36,13 @@ One question carries this step: who drives the clock? **Scheduled**: the
 platform opens and closes it by itself between **Opens at** and **Closes
 at**; students work without you, and there is no waiting room. **Live**: you
 open the waiting room and start it; it ends when you close it, or at
-**Closes at the latest**, an optional safety deadline (required for an
-exam). Live's **Planned for** date only places it in the calendar: nothing
+**Closes at the latest**, an optional safety deadline (required for an exam
+without a time limit). Live's **Planned for** date only places it in the calendar: nothing
 opens by itself.
 
 Then one switch, **Time limit per student**: the **Minutes** count from each
-student's own start. Scheduled, they are cut at the end of the window even if
-time remains. Extra time from the roster applies on top of the minutes.
+student's own start, cut at the end (the window's, or the safety deadline) even if
+time remains. Extra time from the roster applies on top, past that end too.
 
 The rest lives under **Advanced options**: navigation, presentation,
 shuffling, progress bar, feedback, and Live's waiting room (you start, it

@@ -254,13 +254,19 @@ export async function extendTime(
   // In `deadline` timing, and in `manual` timing with a safety deadline
   // (ADR-086 §2), the attempts hang off `closes_at` (§5.2): extending
   // everybody without moving it would hand the minutes out and let the
-  // ticker take them back at the old instant.
+  // ticker take them back at the old instant. In `duration` timing the end
+  // only cuts the attempts, so a running evaluation keeps it (each attempt
+  // gets the minutes); before the start the end moves instead — the way out
+  // of a waiting room whose end went by (#178) — and carries the minutes
+  // alone, as everywhere it moves: on the attempts as well, a student cut
+  // at the end would get them twice (ADR-086 §3).
+  const started = evaluation.state !== "lobby" && evaluation.state !== "scheduled";
   const movesEnd =
-    target === undefined && anchoredOnClosesAt(settingsOf(evaluation).timing) && evaluation.closesAt !== null;
+    target === undefined &&
+    evaluation.closesAt !== null &&
+    (anchoredOnClosesAt(settingsOf(evaluation).timing) || !started);
   if (movesEnd) {
-    // Before the start, from now if the end has passed: the way out of a
-    // waiting room whose common end went by (#178).
-    const started = evaluation.state !== "lobby" && evaluation.state !== "scheduled";
+    // Before the start, from now if the end has passed (#178).
     const committed = await extendClosesAt(db, evaluation.id, seconds, now, !started);
     // The dashboard and the players read the new end from this frame — the
     // row as committed, not `evaluation`, which a concurrent pause or resume
