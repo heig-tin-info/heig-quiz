@@ -143,8 +143,8 @@ Content-Security-Policy.
 Code questions run in a separate, hardened service, best on its own
 machine with rootful Podman ([deployment §3](deployment.md#3-the-runner-vm-optquiz-runner)
 and [`apps/runner/README.md`](https://github.com/heig-tin-info/heig-quiz/blob/main/apps/runner/README.md)).
-In `apps/runner/deploy/Caddyfile`, set your runner's host name (line 19)
-and your application server's address (line 28, `remote_ip`). Then, in
+In `apps/runner/deploy/Caddyfile`, set your runner's host name (the site
+address) and your application server's addresses (`remote_ip`). Then, in
 `.env.prod`: `RUNNER_MODE=http`, `RUNNER_URL=https://<runner-host>:8443`
 and the same `RUNNER_TOKEN` (`openssl rand -hex 32`) as the runner's
 `/etc/quiz-runner/env`.

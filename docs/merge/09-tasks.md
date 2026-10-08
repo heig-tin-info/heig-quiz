@@ -4256,20 +4256,12 @@ serves now (16a), and what waits for the group repositories (16b).
   (forced command, cookie tokens blanked) and `scripts/engine-backup/`
   (`srv`'s daily pull, 14 kept); monitoring deferred, checked by hand.
   Remaining: host nft `input` policy, the restore drill, the acceptance runs.
-- **As delivered (part 3: host nft)** (#613;
-  repository only, applying it is the owner's). `infra/engine/host.nft`,
-  `table inet host`, input policy drop, the flows of `deployment.md` §3
-  (The host firewall), runner clients in two named sets; never
-  `flush ruleset`. `infra/engine/nft-apply.sh`: `nft -c`, a 180 s
-  rollback to the previous table (`systemd-run`), `confirm` writes
-  `/etc/nftables.conf` (an include), the `nftables.service` drop-in (stop
-  deletes this table only) and drops the empty `inet filter`;
-  `reload_host_nft` makes production deploys reload a changed file behind
-  the same rollback, auto-confirmed only if tcp/22 is still admitted.
-  `infra/engine/nft-check.sh outside|app|vm`. Verified locally: `nft -c`
-  and loads in a user namespace beside `codespace.nft`, apply / rollback /
-  confirm / deploy with stubbed systemd, shellcheck. Remaining: the first
-  apply on the VM, the restore drill, the acceptance runs.
+- **As delivered (part 3: host nft)** (#613; repository only):
+  `infra/engine/host.nft`, `nft-apply.sh`, `nft-check.sh`; a deploy only
+  warns on drift. `deployment.md` §3, The host firewall. Verified locally
+  in a user namespace (stubbed systemd), shellcheck. Remaining, the
+  owner's: the first apply and confirm on the VM, the restore drill, the
+  acceptance runs.
 
 ### M6-06 — Quiz `codespace` module
 - **Depends on**: M6-03, M3-02.

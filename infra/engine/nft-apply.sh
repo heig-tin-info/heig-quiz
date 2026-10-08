@@ -1,30 +1,17 @@
 #!/usr/bin/env bash
 # Applies infra/engine/host.nft on the engine VM behind a dead man's switch
-# (M6-05 part 3; deployment.md §3, The host firewall). As root, from the
-# production checkout (/opt/quiz-runner):
+# (M6-05 part 3). As root, from the production checkout; the procedure is
+# deployment.md §3, The host firewall. Never run by a deploy.
 #
-#   nft-apply.sh [apply]   check the file, arm a rollback in 180 s, load it,
-#                          print the checks to run from outside
-#   nft-apply.sh confirm   stop the rollback and make the table permanent:
-#                          /etc/quiz-engine/host.nft, an /etc/nftables.conf
-#                          that includes it (no `flush ruleset`), a drop-in
-#                          so that stopping nftables.service removes this
-#                          table only, the service enabled, the old empty
-#                          `inet filter` table removed
-#   nft-apply.sh deploy    what a production deploy runs (reload_host_nft):
-#                          nothing until a first confirm, nothing while the
-#                          checkout's file equals the confirmed copy;
-#                          otherwise apply, check that the loaded chain still
-#                          admits SSH, confirm (or leave the rollback armed
-#                          and fail)
+#   nft-apply.sh [apply]   check the file, arm a rollback in 180 s, load it
+#   nft-apply.sh confirm   stop the rollback and make the table permanent
 #
 # The rollback reloads the table as it was before the apply (deletes it
-# after a first apply), and the files under /etc change at confirm only: a
-# reboot inside the window boots the last confirmed version.
+# after a first apply). /etc changes at confirm only, so a reboot inside the
+# window boots the last confirmed version.
 set -euo pipefail
 
-ENGINE_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
-CANDIDATE="$ENGINE_DIR/host.nft"
+CANDIDATE="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)/host.nft"
 ACTIVE=/etc/quiz-engine/host.nft
 RUN=/run/quiz-host-nft
 UNIT=quiz-host-nft-rollback
@@ -50,7 +37,12 @@ apply() {
 	systemd-run --quiet --unit="$UNIT" --on-active="$DELAY" \
 		--timer-property=AccuracySec=1s /usr/sbin/nft -f "$RUN/rollback.nft"
 	nft -f "$RUN/pending.nft"
-	echo "nft-apply: table inet host loaded; rolled back in ${DELAY}s unless confirmed."
+	cat <<-EOF
+		nft-apply: table inet host loaded; rolled back in ${DELAY}s unless confirmed.
+		Keep this session open; from other terminals run the three checks:
+		  infra/engine/nft-check.sh outside | app | vm
+		All green: $0 confirm. Otherwise do nothing.
+	EOF
 }
 
 confirm() {
@@ -59,7 +51,11 @@ confirm() {
 	install -d -m 0755 "$(dirname "$ACTIVE")"
 	install -m 0644 "$RUN/pending.nft" "$ACTIVE"
 	if ! grep -qF "$MARK" "$CONF" 2>/dev/null; then
-		[ -e "$CONF" ] && cp -n "$CONF" "$CONF.before-quiz"
+		# The packaged file, kept without its `flush ruleset`, which would
+		# wipe the codespace and netavark tables if restored as is.
+		if [ -e "$CONF" ] && [ ! -e "$CONF.before-quiz" ]; then
+			sed 's/^\([[:space:]]*flush ruleset\)/# \1 (disabled by quiz)/' "$CONF" >"$CONF.before-quiz"
+		fi
 		cat >"$CONF" <<-EOF
 			#!/usr/sbin/nft -f
 			$MARK confirm.
@@ -86,36 +82,9 @@ confirm() {
 	echo "nft-apply: confirmed; $CONF includes $ACTIVE and nftables.service is enabled."
 }
 
-checks() {
-	cat <<-EOF
-		Within ${DELAY}s, from OTHER terminals (keep this session open):
-		  workstation:     infra/engine/nft-check.sh outside
-		  application VM:  infra/engine/nft-check.sh app
-		  this VM:         infra/engine/nft-check.sh vm
-		All green: $0 confirm. Otherwise do nothing: the table rolls back.
-	EOF
-}
-
 [ "$(id -u)" -eq 0 ] || die "run as root"
 case "${1:-apply}" in
-	apply) apply && checks ;;
+	apply) apply ;;
 	confirm) confirm ;;
-	deploy)
-		if [ ! -f "$ACTIVE" ]; then
-			echo "deploy: host nft not applied yet: run infra/engine/nft-apply.sh once (deployment.md §3)" >&2
-		elif ! cmp -s "$CANDIDATE" "$ACTIVE"; then
-			if pending; then
-				echo "deploy: host nft changed, but a rollback is armed: not reloaded" >&2
-			else
-				apply
-				# The one lockout a deploy could cause: SSH no longer admitted.
-				if nft list chain inet host input | grep -qE '^[[:space:]]*tcp dport 22 accept'; then
-					confirm
-				else
-					die "the new table does not admit tcp/22: it rolls back in ${DELAY}s"
-				fi
-			fi
-		fi
-		;;
-	*) die "usage: $0 [apply | confirm | deploy]" ;;
+	*) die "usage: $0 [apply | confirm]" ;;
 esac

@@ -96,11 +96,10 @@ volumes are read live (a repository may need its `shadow.git`), one
 provider, the app VM's small disk, a key that reads all workspace data, and
 monitoring by hand (not in ADR-055's status). (d) Destination B, restic to
 S3 from the engine VM, before a real class. Procedures: `deployment.md` §3.
-(e) Part 3: the host's input policy drops by default, in its own table
-`inet host` that never flushes the codespace and netavark tables; the first
-apply is manual behind a 180 s rollback, later production deploys reload a
-changed file behind the same rollback and confirm it only if SSH is still
-admitted (`infra/engine/host.nft`, `nft-apply.sh`).
+(e) The host's input policy drops by default, in its own table
+`inet host`, never with `flush ruleset` (the codespace and netavark tables
+belong to their owners); it is applied by hand behind a timed rollback,
+never by a deploy.
 
 ## Context
 

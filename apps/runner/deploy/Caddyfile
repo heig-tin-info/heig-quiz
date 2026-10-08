@@ -12,10 +12,11 @@
 # shared RUNNER_TOKEN, which the runner itself checks. Losing either one
 # leaves the other.
 #
-# The allowlist is the quiz VM's address, 128.140.71.35 since 2026-09-25. When
-# the quiz VM moves, add the new address here AND in
-# /etc/caddy/conf.d/quiz-runner.caddy on the code VM before the switch, then
-# drop the old one.
+# The allowlist is the quiz VM's addresses, 128.140.71.35 since 2026-09-25
+# (and its IPv6, for the day code.chevallier.io gets an AAAA). When the quiz
+# VM moves, add the new address here, in the sets of infra/engine/host.nft
+# AND in /etc/caddy/conf.d/quiz-runner.caddy on the code VM before the
+# switch, then drop the old one.
 https://code.chevallier.io:8443 {
 	encode gzip
 
@@ -25,7 +26,7 @@ https://code.chevallier.io:8443 {
 		-Server
 	}
 
-	@quiz remote_ip 128.140.71.35
+	@quiz remote_ip 128.140.71.35 2a01:4f8:1c19:1164::1
 	handle @quiz {
 		reverse_proxy 127.0.0.1:3200
 	}
