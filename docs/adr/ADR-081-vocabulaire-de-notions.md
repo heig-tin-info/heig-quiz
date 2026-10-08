@@ -45,7 +45,11 @@ a model, which teachers cannot change, and the free text of today.
    home: the difficulty (F-QST-01), the usage history of a question in
    evaluations (ADR-038), the pool's categories, the course's templates
    (ADR-031). A need that none of these covers is a missing feature to
-   discuss, not a reason to keep a second free vocabulary.
+   discuss, not a reason to keep a second free vocabulary. The same goes
+   for the **kind of task** (`lecture-de-code`, `écriture-de-code`,
+   `vocabulaire`, `trace`, `débogage`…), which a fifth of today's tag links
+   carry (measured 2026-10-08, #599): it is not a concept, and the product
+   owner chose to drop it rather than keep it as a separate facet.
 
 2. **A concept is a node, not a string**, after the SKOS model. It has a
    stable id; a preferred label in French and in English; aliases; a one-line
@@ -117,8 +121,8 @@ a model, which teachers cannot change, and the free text of today.
     students is decided with #578, by its own ADR.
 
 11. **Migration of the existing tags.** A one-off pass sorts every distinct
-    tag into: a concept (an existing one, or a new `proposed` one), metadata
-    already held elsewhere (difficulty, category), or noise. The model
+    tag into: a concept (an existing one, or a new `proposed` one), or a tag
+    that is dropped (organisational label, kind of task, noise). The model
     proposes the sorting; the admin reviews it on the curation screen before
     anything is written. `question_tags` and `pool_tags` are then dropped,
     and a pool tag's description becomes the concept's description when it
@@ -165,3 +169,6 @@ a model, which teachers cannot change, and the free text of today.
   longer suffices; no pgvector until then.
 - **Keeping organisational labels beside concepts.** Rejected for now (§1):
   each known use has a better home.
+- **A closed "kind of task" facet** (read, write, trace, debug code…), the
+  third axis found in the production tags. Rejected by the product owner
+  (2026-10-08): only real concepts are kept.
