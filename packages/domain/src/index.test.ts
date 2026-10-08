@@ -19,6 +19,8 @@ describe("@quiz/domain public surface", () => {
       "attemptDeadline",
       "clozeStudentTemplate",
       "compareOutput",
+      "diffOutput",
+      "whitespaceSpans",
       "cooldownMs",
       "composeDrillSession",
       "isDrillEligible",

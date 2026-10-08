@@ -216,6 +216,13 @@ export interface CodePlayerStrings {
   truncated: string;
   exitMismatch: string;
   outputMismatch: string;
+  outputSideBySide: string;
+  outputDiff: string;
+  outputView: string;
+  showWhitespace: string;
+  outputDiffHeader: string;
+  noFinalNewline: string;
+  truncatedDiff: string;
   compileFailed: string;
   compileOk: string;
   allOrNothing: string;
@@ -268,6 +275,13 @@ export const PLAYER_STRINGS: CodePlayerStrings = {
   truncated: "Output truncated",
   exitMismatch: "exit {got} ≠ {want}",
   outputMismatch: "Output differs",
+  outputSideBySide: "Side by side",
+  outputDiff: "Diff",
+  outputView: "Output view",
+  showWhitespace: "Show whitespace",
+  outputDiffHeader: "Expected (−) and got (+)",
+  noFinalNewline: "No newline at the end",
+  truncatedDiff: "Compared up to where the output was cut.",
   compileFailed: "Compilation failed",
   compileOk: "Compiled",
   allOrNothing: "All cases must pass to score.",
@@ -300,6 +314,12 @@ export interface CodeReviewStrings {
   crashed: string;
   exitMismatch: string;
   outputMismatch: string;
+  outputSideBySide: string;
+  outputDiff: string;
+  outputView: string;
+  showWhitespace: string;
+  outputDiffHeader: string;
+  noFinalNewline: string;
   points: string;
   hiddenSummary: string;
   hiddenCase: string;
@@ -329,6 +349,12 @@ export const REVIEW_STRINGS: CodeReviewStrings = {
   crashed: "Crashed",
   exitMismatch: "exit {got} ≠ {want}",
   outputMismatch: "Output differs",
+  outputSideBySide: "Side by side",
+  outputDiff: "Diff",
+  outputView: "Output view",
+  showWhitespace: "Show whitespace",
+  outputDiffHeader: "Expected (−) and got (+)",
+  noFinalNewline: "No newline at the end",
   points: "Points",
   hiddenSummary: "Hidden cases: {passed} of {count} passed.",
   hiddenCase: "Hidden case",

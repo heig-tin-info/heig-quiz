@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { finalizeRunnerCode, studentDetails } from "./grade.js";
@@ -75,6 +75,32 @@ describe("CodeReview", () => {
     expect(screen.getByText("Hidden case")).toBeInTheDocument();
     // Even then, the expected output of a hidden case stays closed.
     expect(screen.queryByText("5 (hidden-expected-marker)")).toBeNull();
+  });
+
+  it("draws a diff for a visible case only, never for a hidden one (#553)", () => {
+    const { container } = render(
+      <CodeReview
+        student={student}
+        answer={answer}
+        solution={null}
+        details={studentDetails(graded.details, { showHiddenCaseNames: true })}
+        points={graded.points}
+        maxPoints={10}
+        audience="student"
+        showHiddenCaseNames
+      />,
+    );
+    try {
+      fireEvent.click(screen.getByRole("radio", { name: "Diff" }));
+      // The failing visible case: its expected line removed, "nope" added.
+      const ops = [...container.querySelectorAll("[data-op]")].map((e) => e.getAttribute("data-op"));
+      expect(ops).toEqual(["removed", "added"]);
+      // The hidden case gains no diff: its expected output stays closed.
+      expect(screen.getByText("negative-values")).toBeInTheDocument();
+      expect(screen.queryByText("5 (hidden-expected-marker)")).toBeNull();
+    } finally {
+      localStorage.clear();
+    }
   });
 
   it("shows everything to a teacher", () => {

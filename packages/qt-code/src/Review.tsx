@@ -7,13 +7,29 @@
  * filtering itself happened server-side in `studentDetails`; this component
  * renders what it was given and never reconstructs a key.
  */
+import { useId, useState } from "react";
+
 import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
 import type { MarkdownRenderer, ReviewProps } from "@quiz/core/client";
 
 import type { CodeAnswer, CodeCaseDetail, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
 import { CompileFailure, ReferenceSolutionCard, ScoreLine } from "./ProgramReview.js";
 import { REVIEW_STRINGS, type CodeReviewStrings } from "./strings.js";
-import { badge, breakdownOf, cx, hint, markdown, reviewPrompt, table, Verdict, verdictTone } from "@quiz/ui";
+import {
+  badge,
+  breakdownOf,
+  cx,
+  hint,
+  markdown,
+  OutputCells,
+  OutputControls,
+  OutputHeads,
+  reviewPrompt,
+  table,
+  useOutputMode,
+  Verdict,
+  verdictTone,
+} from "@quiz/ui";
 import { caseVerdict } from "./verdict.js";
 
 interface CodeReviewProps
@@ -89,6 +105,12 @@ export function CodeReview({
 }: CodeReviewProps) {
   const s = resolveStrings(REVIEW_STRINGS, strings);
   const reveal = audience === "teacher" || showHiddenCaseNames === true;
+  /** How the cases' outputs are read: side by side or as a diff (#553). */
+  const [outputMode, setOutputMode] = useOutputMode();
+  const [showWhitespace, setShowWhitespace] = useState(false);
+  const controlsName = useId();
+  // The grade's comparison options: the key's when it travelled, the student view's otherwise.
+  const compare = solution?.compare ?? student.compare;
 
   /* The statement, so a verdict is never read without the question it judges —
      unless the reader chose to hide it (#109). The cases table stays either
@@ -126,6 +148,19 @@ export function CodeReview({
 
       <CompileFailure compile={breakdown.compile} s={s} />
 
+      {shown.some((c) => c.expected !== undefined && c.actual !== undefined) ? (
+        <div className="flex justify-end">
+          <OutputControls
+            name={controlsName}
+            mode={outputMode}
+            onMode={setOutputMode}
+            showWhitespace={showWhitespace}
+            onShowWhitespace={setShowWhitespace}
+            strings={s}
+          />
+        </div>
+      ) : null}
+
       {shown.length === 0 ? null : (
         <div className="overflow-x-auto">
           <table className={table.table}>
@@ -138,12 +173,7 @@ export function CodeReview({
                 <th scope="col" className={table.th}>
                   {s.args}
                 </th>
-                <th scope="col" className={table.th}>
-                  {s.expected}
-                </th>
-                <th scope="col" className={table.th}>
-                  {s.got}
-                </th>
+                <OutputHeads mode={outputMode} strings={s} className={table.th} />
                 <th scope="col" className={table.th}>
                   {s.verdict}
                 </th>
@@ -168,12 +198,17 @@ export function CodeReview({
                       ? s.noArgs
                       : spec.args.join(" ")}
                   </td>
-                  <td className={cx(table.td, "whitespace-pre-wrap font-mono")}>
-                    {detail.expected ?? "—"}
-                  </td>
-                  <td className={cx(table.td, "whitespace-pre-wrap font-mono")}>
-                    {detail.actual ?? "—"}
-                  </td>
+                  <OutputCells
+                    mode={outputMode}
+                    expected={detail.expected ?? null}
+                    expectedFallback="—"
+                    actual={detail.actual ?? null}
+                    ok={detail.ok}
+                    compare={compare}
+                    showWhitespace={showWhitespace}
+                    strings={s}
+                    className={cx(table.td, "whitespace-pre-wrap font-mono")}
+                  />
                   <td className={table.td}>
                     <Verdict tone={verdictTone(detail.ok)}>
                       {verdictOf(detail, spec, solution?.compare, s)}

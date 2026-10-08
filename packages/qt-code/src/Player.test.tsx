@@ -103,6 +103,39 @@ describe("CodePlayer", () => {
     expect(screen.queryByText("negative-values")).toBeNull();
   });
 
+  it("makes a whitespace-only difference visible, and offers a diff (#553)", async () => {
+    // "empty array" expects "0\n"; a leading space fails it and is invisible.
+    const { container } = render(
+      <CodePlayer
+        student={student}
+        answer={null}
+        onChange={() => {}}
+        readOnly={false}
+        monaco={false}
+        onRun={async () => outcome([{ stdout: "6\n" }, { stdout: " 0\n" }])}
+      />,
+    );
+    // Before a run there is nothing to compare: no view control.
+    expect(screen.queryByRole("radiogroup", { name: "Output view" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));
+    await screen.findByText("Output differs");
+
+    // The glyphs came on by themselves, on the failed case only.
+    const marks = [...container.querySelectorAll("[data-ws]")];
+    expect(marks.map((m) => m.textContent)).toEqual([" "]);
+    expect(screen.getByRole("columnheader", { name: "Expected" })).toBeInTheDocument();
+
+    try {
+      fireEvent.click(screen.getByRole("radio", { name: "Diff" }));
+      expect(screen.getByRole("columnheader", { name: "Expected (−) and got (+)" })).toBeInTheDocument();
+      expect(screen.queryByRole("columnheader", { name: "Expected" })).toBeNull();
+      const ops = [...container.querySelectorAll("[data-op]")].map((e) => e.getAttribute("data-op"));
+      expect(ops).toEqual(["removed", "added"]);
+    } finally {
+      localStorage.clear();
+    }
+  });
+
   it("marks a case that timed out or ran out of memory as such", async () => {
     setup({
       onRun: async () => outcome([{ timedOut: true }, { oom: true }]),

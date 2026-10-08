@@ -52,9 +52,13 @@ import {
   hint,
   isLocked,
   lockedBlock,
+  OutputCells,
+  OutputControls,
+  OutputHeads,
   sectionTitle,
   table,
   textareaClass,
+  useOutputMode,
   Verdict,
   verdictTone,
 } from "@quiz/ui";
@@ -182,6 +186,9 @@ export function CodePlayer({
   /** Which of Compile / Run the tests spoke last: its status is the one under the toolbar. */
   const [lastAction, setLastAction] = useState<"compile" | "tests">("tests");
   const cooldown = useCooldown(student.cooldown, student.runtime, student.runsPerMinute);
+  /** How the visible cases' outputs are read: side by side or as a diff (#553). */
+  const [outputMode, setOutputMode] = useOutputMode();
+  const [showWhitespace, setShowWhitespace] = useState(false);
 
   const regions = regionsOf(student, answer);
 
@@ -383,7 +390,21 @@ export function CodePlayer({
       ) : null}
 
       <section className={cx(card, "flex flex-col gap-3 p-4")}>
-        <h3 className={sectionTitle}>{s.visibleCases}</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className={sectionTitle}>{s.visibleCases}</h3>
+          {/* Only once there is an output to look at; secondary, never the
+              screen's action (invariant 2). */}
+          {outcome !== null && student.visibleCases.length > 0 ? (
+            <OutputControls
+              name={`${ids}-output`}
+              mode={outputMode}
+              onMode={setOutputMode}
+              showWhitespace={showWhitespace}
+              onShowWhitespace={setShowWhitespace}
+              strings={s}
+            />
+          ) : null}
+        </div>
 
         {student.visibleCases.length === 0 ? (
           <p className={hint}>{s.noVisibleCases}</p>
@@ -398,12 +419,7 @@ export function CodePlayer({
                   <th scope="col" className={table.th}>
                     {s.stdin}
                   </th>
-                  <th scope="col" className={table.th}>
-                    {s.expected}
-                  </th>
-                  <th scope="col" className={table.th}>
-                    {s.got}
-                  </th>
+                  <OutputHeads mode={outputMode} strings={s} className={table.th} />
                   <th scope="col" className={table.th}>
                     {s.verdict}
                   </th>
@@ -434,17 +450,18 @@ export function CodePlayer({
                         {visibleCase.stdin ||
                           ((visibleCase.args ?? []).length > 0 ? null : s.noStdin)}
                       </td>
-                      <td className={cx(table.td, "whitespace-pre-wrap font-mono")}>
-                        {visibleCase.compareStdout === false
-                          ? s.expectedAnyOutput
-                          : visibleCase.expected || "—"}
-                      </td>
-                      <td className={cx(table.td, "whitespace-pre-wrap font-mono")}>
-                        {result === undefined ? "—" : result.stdout || "—"}
-                        {result?.truncated ? (
-                          <span className={badge("warning", "ml-1")}>{s.truncated}</span>
-                        ) : null}
-                      </td>
+                      <OutputCells
+                        mode={outputMode}
+                        expected={visibleCase.compareStdout === false ? null : visibleCase.expected}
+                        expectedFallback={s.expectedAnyOutput}
+                        actual={result === undefined ? null : result.stdout}
+                        ok={verdict.ok}
+                        compare={student.compare}
+                        truncated={result?.truncated}
+                        showWhitespace={showWhitespace}
+                        strings={s}
+                        className={cx(table.td, "whitespace-pre-wrap font-mono")}
+                      />
                       <td className={table.td}>
                         <Verdict tone={verdictTone(verdict.ok)}>{verdict.label}</Verdict>
                       </td>
