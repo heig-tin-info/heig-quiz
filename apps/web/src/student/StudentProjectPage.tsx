@@ -184,7 +184,7 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
         actions={
           action || inSeb ? (
             <>
-              {/* ADR-027: SEB's own Quit button is hidden; its quit link is here. */}
+              {/* ADR-027 */}
               {inSeb ? <SebQuitButton variant="secondary" /> : null}
               {action ? (
                 <span className="block w-full sm:w-auto" data-coach="sproj.action">

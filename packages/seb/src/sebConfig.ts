@@ -21,12 +21,7 @@ import { array, bool, data, dict, int, str, type SebDict, type SebValue } from "
 export interface SebConfigInput {
   /** The absolute URL SEB opens first. Its host is always allowed. */
   readonly startUrl: string;
-  /**
-   * The quit link: SEB quits, without asking, when it is about to navigate
-   * there (`quitURL`, `quitURLConfirm` false; what Moodle's "link to quit
-   * SEB" sets). The file hides SEB's task bar, and with it the Quit button,
-   * so this link is how the student leaves once the activity is over.
-   */
+  /** The quit link: SEB quits, without asking, on navigating there (ADR-027). */
   readonly quitUrl: string;
   /**
    * Hosts the URL filter allows beside the start URL's (a project's

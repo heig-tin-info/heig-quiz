@@ -79,7 +79,7 @@ import { OfflineBanner } from "./OfflineBanner";
 import { PausedOverlay, ScreenOverlay } from "./PausedOverlay";
 import { useStationAttestation } from "../kiosk/useStationAttestation";
 import { PlayerActions } from "./PlayerActions";
-import { PlayerEnd } from "./PlayerEnd";
+import { PlayerEnd, type Confinement } from "./PlayerEnd";
 import { PlayerQuestion, QuestionHeading } from "./PlayerQuestion";
 import { PlayerRail } from "./PlayerRail";
 import { PlayerShell } from "./PlayerShell";
@@ -140,17 +140,14 @@ export function Player({
   onHome,
   onResults,
   onExitStudentView,
-  station = false,
-  seb = false,
+  confinement,
 }: {
   initial: AttemptView;
   onHome: () => void;
   /** WP10: opens the student's own feedback on this attempt. */
   onResults: OnResults;
-  /** Sat on a kiosk station (ADR-051 §7): the end returns to the station's screen by itself. */
-  station?: boolean;
-  /** Sat in Safe Exam Browser (ADR-027): the end's one action is quitting it. */
-  seb?: boolean;
+  /** The trusted client it is sat in (ADR-051 §7, ADR-027): see {@link PlayerEnd}. */
+  confinement?: Confinement | undefined;
   /**
    * Given only to a TEACHER walking their own test attempt (ADR-018
    * addendum): the exam screen carries no teacher chrome — that is the point
@@ -224,7 +221,7 @@ export function Player({
     [attemptId],
   );
   // ADR-051 §6: on a station, the page re-attests on its own, and before the submit.
-  const attestation = useStationAttestation(station);
+  const attestation = useStationAttestation(confinement === "kiosk");
   const { submit } = attempt;
   const { guardSubmit } = attestation;
   const guardedSubmit = useCallback(() => guardSubmit(submit), [guardSubmit, submit]);
@@ -247,8 +244,7 @@ export function Player({
         onHome={() => void leave()}
         homeBusy={leaving}
         onResults={onResults}
-        station={station}
-        seb={seb}
+        confinement={confinement}
         {...(onExitStudentView ? { onExitStudentView } : {})}
       />
     </>
@@ -266,8 +262,7 @@ export function PlayerView({
   homeLabel,
   tools,
   homeBusy = false,
-  station = false,
-  seb = false,
+  confinement,
 }: {
   initial: AttemptView;
   session: PlayerSession;
@@ -287,10 +282,8 @@ export function PlayerView({
    * the list, under the question otherwise.
    */
   tools?: ReactNode;
-  /** Sat on a kiosk station: see {@link PlayerEnd}. */
-  station?: boolean;
-  /** Sat in Safe Exam Browser: see {@link PlayerEnd}. */
-  seb?: boolean;
+  /** The trusted client it is sat in: see {@link PlayerEnd}. */
+  confinement?: Confinement | undefined;
 }) {
   const t = useT();
   const { state, dispatch, sync: saverSync, closed, paused } = session;
@@ -369,8 +362,7 @@ export function PlayerView({
         initial={initial}
         onHome={onHome}
         onResults={onResults}
-        station={station}
-        seb={seb}
+        confinement={confinement}
       />
     );
   }

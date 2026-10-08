@@ -105,7 +105,7 @@ CI.
 
 1. `packages/seb`, pure: typed plist, SEB-JSON rules, Config Key,
    `expectedHash`, `hashesEqual`, `absoluteRequestUrl`,
-   `buildSebConfig({startUrl, allowedHosts, examKeySalt?})`, the Moodle
+   `buildSebConfig({startUrl, quitUrl, allowedHosts, examKeySalt?})`, the Moodle
    vectors and Quiz's 201-key vector. Quiz's `auth/seb.ts` moves onto it
    with **byte-identical output** (snapshot).
 2. **The platform builds every `.seb`**, evaluations and projects:
@@ -183,8 +183,10 @@ the staging portal, with `SEB_CONFIG_KEY_ENFORCE=0` (audit-only) on Quiz and
    the configuration tool, then press the button. **Expected**: SEB closes
    at once, without a confirmation or a password. Open the file again
    (new download), sit an evaluation that requires SEB to the end: its
-   closed screen's *Quit Safe Exam Browser* closes SEB too, and so does
-   the shortcut its line names (Ctrl+Q on Windows, ⌘Q on macOS).
+   closed screen's *Quit Safe Exam Browser* closes SEB too. The shortcut
+   its line names (Ctrl+Q on Windows, ⌘Q on Mac) closes SEB as well, after
+   a confirmation SEB may ask for. The workspace (on the portal) has no
+   quit button: there, only the shortcut leaves SEB.
 9. Record the versions, the outcome of each step and the logs in the card
    M6-07; only then turn `SEB_CONFIG_KEY_ENFORCE` on and open SEB projects
    to students.

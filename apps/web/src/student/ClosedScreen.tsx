@@ -15,6 +15,7 @@ import type { AttemptClosed } from "@quiz/contracts";
 
 import { useT, type Dict } from "../i18n";
 import { Button, Card, EmptyState, type IconType } from "../ui";
+import type { Confinement } from "./PlayerEnd";
 import { SebQuitButton, SebQuitKeys } from "./SebQuit";
 
 const COPY: Record<
@@ -48,7 +49,7 @@ export function ClosedScreen({
   onResults,
   actionsHeld = false,
   note,
-  seb = false,
+  confinement,
 }: {
   reason: AttemptClosed["reason"];
   /** The evaluation's own title, so the page still says what ended. */
@@ -69,14 +70,11 @@ export function ClosedScreen({
   actionsHeld?: boolean;
   /** One more sentence under the body: what happens next on its own (a kiosk station's return). */
   note?: string;
-  /**
-   * Sat in Safe Exam Browser (ADR-027): nothing else of Quiz is reachable
-   * from there, so the one way out is quitting SEB — the file's quit link,
-   * and the keyboard shortcut under the body.
-   */
-  seb?: boolean;
+  /** In Safe Exam Browser the one action is quitting it (ADR-027). */
+  confinement?: Confinement | undefined;
 }) {
   const t = useT();
+  const seb = confinement === "seb";
   const copy = COPY[reason];
   return (
     <main className="mx-auto w-full max-w-160 px-4 py-16 sm:px-6">

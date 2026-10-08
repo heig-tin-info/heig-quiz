@@ -17,6 +17,9 @@ import { STATION_END_MS } from "../kiosk/navigation";
 import { ClosedScreen } from "./ClosedScreen";
 import type { OnResults } from "./Player";
 
+/** A trusted client an attempt is sat in (ADR-051, ADR-027). */
+export type Confinement = "kiosk" | "seb";
+
 /**
  * What the player becomes once the attempt is over — handed in, its time
  * up, or the evaluation closed. The session decided it, from the server;
@@ -34,30 +37,29 @@ export function PlayerEnd({
   initial,
   onHome,
   onResults,
-  station = false,
-  seb = false,
+  confinement,
 }: {
   reason: AttemptClosed["reason"];
   initial: AttemptView;
   onHome: () => void;
   onResults?: OnResults | undefined;
   /**
-   * Sat on a kiosk station (ADR-051 §7): its session ended with the attempt,
-   * so nothing more can be read from here. The closed screen stays a few
-   * seconds, drawn from what the page already holds, then `onHome` takes the
-   * station back to its own screen.
+   * The trusted client the attempt was sat in. A kiosk station (ADR-051 §7):
+   * its session ended with the attempt, so nothing more can be read from
+   * here; the closed screen stays a few seconds, drawn from what the page
+   * already holds, then `onHome` takes the station back to its own screen.
+   * Safe Exam Browser (ADR-027): the rest of Quiz is out of its reach, so
+   * the one action is quitting SEB.
    */
-  station?: boolean;
-  /**
-   * Sat in Safe Exam Browser (ADR-027): the rest of Quiz is out of its
-   * reach, so neither the results nor the home are offered; quitting SEB is.
-   */
-  seb?: boolean;
+  confinement?: Confinement | undefined;
 }) {
   const t = useT();
+  const station = confinement === "kiosk";
+  // Neither the results nor a retake are reachable from a trusted client.
+  const confined = confinement !== undefined;
   const preview = initial.attempt.preview;
   const retakes =
-    !preview && !station && !seb && retakesOn(initial.evaluation.mode, retakesOf(initial.evaluation.settings));
+    !preview && !confined && retakesOn(initial.evaluation.mode, retakesOf(initial.evaluation.settings));
   const toResults =
     retakes && onResults !== undefined && (reason === "submitted" || reason === "deadline");
   const forwarded = useRef(false);
@@ -71,8 +73,7 @@ export function PlayerEnd({
   // to show (`immediate`). The page's own route answers, so the rule stays
   // the server's one; the answer also warms the page it leads to. A teacher
   // preview has no attempt of its own, so nothing is asked for it.
-  // In SEB the feedback page is out of reach: the one action is quitting it.
-  const asked = !preview && !station && !seb && onResults !== undefined && !toResults;
+  const asked = !preview && !confined && onResults !== undefined && !toResults;
   const feedback = useQuery<StudentFeedback>({
     queryKey: attemptFeedbackKey(initial.attempt.id),
     queryFn: () => api(`/app/api/attempts/${initial.attempt.id}/feedback`),
@@ -95,7 +96,7 @@ export function PlayerEnd({
       reason={reason}
       title={initial.evaluation.title}
       onHome={onHome}
-      seb={seb}
+      confinement={confinement}
       {...(station ? { note: t("kiosk.returning") } : {})}
       // Held until the answer settles; an error leaves Back to home alone.
       actionsHeld={asked && feedback.isLoading}

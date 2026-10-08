@@ -5,7 +5,7 @@ import { LogOut } from "lucide-react";
 import type { KioskStation, Me } from "@quiz/contracts";
 
 import { api, useMe, usePublicConfig } from "./api";
-import { SebQuitButton, SebQuitKeys, SebQuitPage } from "./student/SebQuit";
+import { inSebBrowser, SebQuitButton, SebQuitKeys, SebQuitPage } from "./student/SebQuit";
 import { toKiosk, useStationSessionWatch } from "./kiosk/navigation";
 import { kioskStationKey } from "./queryKeys";
 import { Logo } from "./Header";
@@ -138,6 +138,7 @@ function Landing() {
   const t = useT();
   const search = new URLSearchParams(window.location.search);
   const refused = REFUSALS.find(([param]) => search.has(param))?.[1] ?? null;
+  const seb = refused === "seb.invalid" && inSebBrowser();
   // The one unauthenticated endpoint. A failure is not an error state here:
   // the OIDC button is the real door and it is always there.
   const config = usePublicConfig();
@@ -157,30 +158,36 @@ function Landing() {
             {t(refused)}
           </ErrorText>
         ) : null}
-        {/* A refused launch is inside SEB, whose Quit button the file hides. */}
-        {refused === "seb.invalid" ? (
-          <div className="mt-4">
-            <SebQuitButton variant="secondary" />
-          </div>
-        ) : null}
-        <LinkButton href="/app/auth/login" variant="primary" size="lg" className="mt-8 w-full">
-          {t("landing.signin")}
-        </LinkButton>
-        {config.data?.devLogin ? (
+        {/* ADR-027: inside SEB, signing in is out of its URL filter's reach. */}
+        {seb ? (
           <>
-            <Button
-              variant="secondary"
-              size="lg"
-              className="mt-3 w-full"
-              onClick={() => {
-                window.location.href = "/app/auth/dev";
-              }}
-            >
-              {t("landing.devSignin")}
-            </Button>
-            <p className="mt-2 text-xs text-fg-faint">{t("landing.devHint")}</p>
+            <SebQuitButton size="lg" className="mt-8 w-full" />
+            <p className="text-sm">
+              <SebQuitKeys />
+            </p>
           </>
-        ) : null}
+        ) : (
+          <>
+            <LinkButton href="/app/auth/login" variant="primary" size="lg" className="mt-8 w-full">
+              {t("landing.signin")}
+            </LinkButton>
+            {config.data?.devLogin ? (
+              <>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  className="mt-3 w-full"
+                  onClick={() => {
+                    window.location.href = "/app/auth/dev";
+                  }}
+                >
+                  {t("landing.devSignin")}
+                </Button>
+                <p className="mt-2 text-xs text-fg-faint">{t("landing.devHint")}</p>
+              </>
+            ) : null}
+          </>
+        )}
       </div>
       <p className="mt-12 text-xs text-fg-faint">{t("landing.footer")}</p>
     </main>
@@ -454,10 +461,10 @@ function StationOrLanding() {
 
 /**
  * ADR-027, ADR-051 §7: what a confined session (`seb`, `kiosk`) shows outside
- * its evaluation — after the submit, or on leaving the waiting room. The one
- * action is quitting Safe Exam Browser (the `.seb`'s quit link: its task bar
- * is hidden); going back to the exam is the second. A kiosk station has nothing to show outside its exam:
- * it goes back to its own screen.
+ * its evaluation — after the submit, or on leaving the waiting room. In SEB
+ * the one action is quitting it, going back to the exam the second. A kiosk
+ * station has nothing to show outside its exam: it goes back to its own
+ * screen.
  */
 function ConfinedElsewhere({ kiosk, onBack }: { kiosk: boolean; onBack: () => void }) {
   useEffect(() => {
@@ -521,10 +528,10 @@ export default function App() {
       </Suspense>
     );
   }
-  // ADR-051 §7: a kiosk station has no session to wait for; it attests
-  // itself and shows its code.
   // ADR-027: the `.seb`'s quit link, reached outside SEB (inside, SEB quits first).
   if (route.view === "sebQuit") return <SebQuitPage />;
+  // ADR-051 §7: a kiosk station has no session to wait for; it attests
+  // itself and shows its code.
   if (route.view === "kiosk") {
     return (
       <Suspense fallback={<Spinner className="py-24" />}>

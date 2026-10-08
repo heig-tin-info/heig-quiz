@@ -12,58 +12,42 @@ import { SEB_QUIT_PATH } from "@quiz/contracts";
 import { useT } from "../i18n";
 import { Card, EmptyState, LinkButton } from "../ui";
 
+/**
+ * Whether this browser is Safe Exam Browser, from its user agent (SEB adds
+ * `SEB/<version>` to it): for a page with no session, such as a refused
+ * launch, which a copied file opened in another browser reaches too.
+ */
+export const inSebBrowser = (): boolean =>
+  typeof navigator !== "undefined" && /\bSEB\b/.test(navigator.userAgent);
+
 /** The quit link, as a button: a plain navigation, which SEB intercepts. */
-export function SebQuitButton({ variant = "primary" }: { variant?: "primary" | "secondary" }) {
+export function SebQuitButton({
+  variant = "primary",
+  size = "md",
+  className = "",
+}: {
+  variant?: "primary" | "secondary";
+  size?: "md" | "lg";
+  className?: string;
+}) {
   const t = useT();
   return (
-    <LinkButton href={SEB_QUIT_PATH} variant={variant}>
+    <LinkButton href={SEB_QUIT_PATH} variant={variant} size={size} className={className}>
       <LogOut /> {t("seb.quit")}
     </LinkButton>
   );
 }
 
-type QuitPlatform = "windows" | "mac" | null;
-
-interface NavigatorLike {
-  readonly userAgent: string;
-  readonly platform?: string;
-  readonly userAgentData?: { readonly platform?: string };
-}
-
-/**
- * The student's desktop, for SEB's own quit shortcut (SEB's manuals: Ctrl+Q
- * on Windows, ⌘Q on macOS). The client hint first, then the legacy
- * `platform`, then the user agent (SEB's carries the system's); null when
- * none says, and both shortcuts are then shown.
- */
-export function quitPlatform(nav: NavigatorLike): QuitPlatform {
-  for (const hint of [nav.userAgentData?.platform, nav.platform, nav.userAgent]) {
-    if (!hint) continue;
-    if (/^win|windows/i.test(hint)) return "windows";
-    if (/^mac|macintosh|mac os x/i.test(hint)) return "mac";
-  }
-  return null;
-}
-
-const KEYS: Record<Exclude<QuitPlatform, null>, string> = {
-  windows: "Ctrl+Q",
-  mac: "⌘Q",
-};
-
-/** The keyboard way out, one line under the button. */
+/** SEB's own quit shortcut, one line under the button (SEB's manuals). */
 export function SebQuitKeys() {
   const t = useT();
-  const platform = typeof navigator === "undefined" ? null : quitPlatform(navigator as NavigatorLike);
-  return (
-    <span className="mt-2 block text-fg-faint">
-      {platform === null ? t("seb.quit.keys.both") : t("seb.quit.keys", { keys: KEYS[platform] })}
-    </span>
-  );
+  return <span className="mt-2 block text-fg-faint">{t("seb.quit.keys")}</span>;
 }
 
 /**
  * `/seb/quit` outside Safe Exam Browser (inside, SEB quits before the
  * request): someone followed the link elsewhere, and there is nothing to do.
+ * The shortcut line covers a SEB build that ignores its quit link.
  */
 export function SebQuitPage() {
   const t = useT();
@@ -81,6 +65,7 @@ export function SebQuitPage() {
           }
         >
           {t("seb.quitPage.body")}
+          <SebQuitKeys />
         </EmptyState>
       </Card>
     </main>

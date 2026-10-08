@@ -91,10 +91,7 @@ export function sebAllowedHosts(
   return [...portal, ...config.SEB_EXTRA_ALLOWED_HOSTS];
 }
 
-/**
- * The configuration of one launch: Quiz's host, then `allowedHosts`. The quit
- * link is on the start URL's host (`PUBLIC_URL`'s), which the filter allows.
- */
+/** The configuration of one launch: Quiz's host, then `allowedHosts`; the quit link on Quiz's host. */
 export const sebConfig = (startUrl: string, allowedHosts: readonly string[] = []): SebValue =>
   buildSebConfig({ startUrl, quitUrl: new URL(SEB_QUIT_PATH, startUrl).href, allowedHosts });
 

@@ -170,11 +170,7 @@ export type Route =
    * it. Drawn with no session and without waiting on `/me` (App.tsx).
    */
   | { view: "kiosk" }
-  /**
-   * The quit link of every `.seb` (ADR-027, `SEB_QUIT_PATH`): Safe Exam
-   * Browser quits before it gets here. Anywhere else it is a page saying the
-   * window may be closed, drawn with no session.
-   */
+  /** The `.seb`'s quit link outside SEB, drawn with no session (ADR-027). */
   | { view: "sebQuit" }
   /**
    * The phone's half of the pairing (ADR-051 §7): the code of the station in

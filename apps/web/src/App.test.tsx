@@ -152,6 +152,11 @@ describe("a Safe Exam Browser session (ADR-027)", () => {
     // Leaving the waiting room leads nowhere but back.
     await userEvent.click(screen.getByRole("button", { name: "Leave" }));
     expect(await screen.findByText("You have left the exam")).toBeVisible();
+    // SEB's task bar is hidden: its quit link is the one primary action.
+    const quit = screen.getByRole("link", { name: "Quit Safe Exam Browser" });
+    expect(quit).toHaveAttribute("href", "/seb/quit");
+    expect(quit.className).toMatch(/bg-accent/);
+    expect(screen.getByText("Or press Ctrl+Q (Windows) or ⌘Q (Mac).")).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Back to the exam" }));
     expect(await screen.findByText("Quiz 3 — Pointers")).toBeVisible();
   });
@@ -167,6 +172,38 @@ describe("a Safe Exam Browser session (ADR-027)", () => {
     await waitFor(() => expect(calls.some((c) => c.url === `/app/api/student/projects/${PROJECT}`)).toBe(true));
     expect(calls.every((c) => !c.url.includes("4444"))).toBe(true);
     expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
+  });
+});
+
+describe("a refused Safe Exam Browser launch (ADR-027)", () => {
+  const SEB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 SEB/3.8";
+
+  it("inside SEB, offers quitting it and not a sign-in its URL filter cannot reach", async () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue(SEB_UA);
+    mockFetch({ "GET /app/api/me": fail(401, { error: "unauthorized" }) });
+    renderWithProviders(<App />, { route: "/?seb=invalid" });
+    const quit = await screen.findByRole("link", { name: "Quit Safe Exam Browser" });
+    expect(quit.className).toMatch(/bg-accent/);
+    expect(screen.getByText("Or press Ctrl+Q (Windows) or ⌘Q (Mac).")).toBeVisible();
+    expect(screen.queryByRole("link", { name: /sign in/i })).toBeNull();
+    vi.restoreAllMocks();
+  });
+
+  it("in another browser, keeps the sign-in and offers no quit", async () => {
+    mockFetch({ "GET /app/api/me": fail(401, { error: "unauthorized" }) });
+    renderWithProviders(<App />, { route: "/?seb=invalid" });
+    expect(await screen.findByRole("link", { name: /sign in/i })).toBeVisible();
+    expect(screen.queryByRole("link", { name: "Quit Safe Exam Browser" })).toBeNull();
+  });
+});
+
+describe("the quit link outside SEB (ADR-027)", () => {
+  it("says the window may be closed, with no session asked for", async () => {
+    const { calls } = mockFetch({});
+    renderWithProviders(<App />, { route: "/seb/quit" });
+    expect(await screen.findByRole("heading", { name: "You can close this window" })).toBeVisible();
+    expect(screen.getByText("Or press Ctrl+Q (Windows) or ⌘Q (Mac).")).toBeVisible();
+    expect(calls).toHaveLength(0);
   });
 });
 
