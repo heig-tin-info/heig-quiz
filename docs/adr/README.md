@@ -76,6 +76,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-040 — Frequency-domain stimuli for circuit](ADR-040-stimulus-frequentiel-de-circuit.md)
 - [ADR-046 — Diagram: one editor engine, one question type, eight notations](ADR-046-type-diagramme.md)
 - [ADR-056 — Parameterized questions: variables drawn per attempt](ADR-056-questions-parametrees.md)
+- [ADR-081 — Concepts replace tags: one instance-wide, bilingual vocabulary, curated by the admin](ADR-081-vocabulaire-de-notions.md)
 
 ### Evaluations, grading and practice
 

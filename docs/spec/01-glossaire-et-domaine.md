@@ -14,7 +14,8 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Roster | The list of the students of a classroom, with their accommodations. Fed by the teacher only, by CSV import or by hand; a student's line is claimed at sign-in on a matching address (ADR-053). |
 | Pool | A collection of questions. Private to a teacher, or shared with roles. A global public pool is readable by every teacher. |
 | Category | A hierarchical folder in a pool. Used for filing, not for permissions. |
-| Tag | A free keyword attached to a question. Used for search, statistics and quiz generation. |
+| Tag | A free keyword attached to a question. Used for search, statistics and quiz generation. Being replaced by concepts (ADR-081, accepted, not implemented). |
+| Concept | What a question exercises, from one vocabulary shared by the whole instance (ADR-081): a stable id, a label and a description in French and in English, curated aliases, broader and related concepts. A course declares the concepts of its syllabus. Created by a teacher as `proposed`, consolidated by the admin. |
 | Question | A stable entity of the pool, identified by an id. Carries the type, the internal name, the tags, the difficulty. Its content lives in its versions. |
 | Question version | The content of a question at a point in time: statement, configuration, answer key, explanation. Numbered 1, 2, 3. Immutable once published. |
 | Draft | The version being edited, unnumbered, never usable in an evaluation. Publishing creates the next version. |
