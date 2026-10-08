@@ -1,58 +1,36 @@
 # classroom.chevallier.io after the cutover (merge task M8-03, step C6 of
-# docs/merge/06 §6.5; one block per row of §6.6). It replaces the maintenance
-# fragment on the application VM:
+# docs/merge/06 §6.5). It replaces the maintenance fragment on the
+# application VM:
 #   cp infra/caddy/classroom-redirect.caddy /etc/caddy/conf.d/classroom.caddy \
 #     && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile \
 #     && sudo systemctl reload caddy
 # Checked by infra/caddy/check-classroom-redirects.sh.
 #
-# Rule: redirect what humans click, 410 what machines call. Every redirect is
-# a 302 until the point of no return (phase D): browsers cache 301 and 308.
-# The id mapping lives in Quiz (`GET /legacy/classroom/*`, M8-02), not here.
+# Caddy answers the machines; every row a human clicks (§6.6) is Quiz's
+# resolver's (`GET /legacy/classroom/*`, `legacyRule` in @quiz/domain),
+# never repeated here. Every redirect is a 302 until the point of no return
+# (phase D): browsers cache 301 and 308.
 # CLASSROOM_SITE only exists to test the fragment on a local port; production
 # leaves it unset.
 {$CLASSROOM_SITE:classroom.chevallier.io} {
-	# Paths the resolver maps to a Quiz entity (classroom, project, groups,
-	# journal page, the old `.seb` startURL, the avatar: 302 or 410 there).
-	# `{uri}` keeps the query: the resolver ignores it, but the login round
-	# trip it may start comes back to the URL as clicked. The avatar sits here,
-	# before the `/app/api/*` 410 below would swallow it.
-	@resolve path /classrooms/* /app/codespace/start/* /app/api/users/*/avatar
-	handle @resolve {
-		redir https://quiz.chevallier.io/legacy/classroom{uri} 302
+	# Dead machine paths: GitHub's webhook, any method (classroom's App is
+	# idle, Quiz's has its own URL; GitHub follows no redirect), the old API,
+	# journal assets included (journal ids are not kept, D03), the SSE stream,
+	# Keycloak, the probes. The avatar is a human's and goes to the resolver.
+	@gone {
+		path /webhooks/github /app/api/* /app/events /kc/* /healthz /metrics
+		not path /app/api/users/*/avatar
 	}
-
-	# Dead machine paths: GitHub's webhook (classroom's App is idle, Quiz's has
-	# its own URL; GitHub follows no redirect), the old API, journal assets
-	# included (journal ids are not kept, D03), the SSE stream, Keycloak, probes.
-	@gone path /webhooks/github /app/api/* /app/events /kc/* /healthz /metrics
 	handle @gone {
 		header Content-Type application/json
 		respond `{"error":"moved","to":"https://quiz.chevallier.io/"}` 410
 	}
 
-	# Fixed rows. A `redir` to a fixed URL drops the query on purpose: the
-	# OAuth `code`/`state` of classroom's App and an unsubscribe token mean
-	# nothing to Quiz and must not land in its logs.
-	# A GitHub link in progress on classroom's App restarts on Quiz's.
-	handle /app/auth/github/callback {
-		redir https://quiz.chevallier.io/settings 302
-	}
-	# Old unsubscribe links: Quiz's notification settings (sign-in first).
-	handle /app/email/unsub {
-		redir https://quiz.chevallier.io/settings 302
-	}
-	handle /settings {
-		redir https://quiz.chevallier.io/settings 302
-	}
-	@admin path /admin /admin/*
-	handle @admin {
-		redir https://quiz.chevallier.io/admin 302
-	}
-
-	# Everything else, `/`, `/app/auth/*` (edu-ID) and `/setup/github/installed`
-	# (an installation of classroom's App is a mistake now) among them: Quiz's home.
-	handle {
-		redir https://quiz.chevallier.io/ 302
+	# Everything else, to the resolver: the path as sent (percent-encoding
+	# kept, `{path}` would decode it), the query dropped (classroom's OAuth
+	# `code`, an unsubscribe token: nothing of it may reach Quiz).
+	@any vars_regexp raw {uri} ^([^?]*)
+	handle @any {
+		redir https://quiz.chevallier.io/legacy/classroom{re.raw.1} 302
 	}
 }

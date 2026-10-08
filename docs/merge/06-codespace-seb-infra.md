@@ -279,11 +279,11 @@ Caddy.
 | `/app/api/users/:uid/avatar` | Quiz equivalent | 302 via the resolver, else 410 |
 | `code.chevallier.io/*` | same host | unchanged |
 
-The fragment is `infra/caddy/classroom-redirect.caddy` (M8-03): the
-three resolver prefixes (the avatar before the `/app/api/*` 410), the 410s,
-the fixed 302s, then Quiz's home for every other path.
-`infra/caddy/check-classroom-redirects.sh` asserts each row's status and
-`Location`.
+The fragment is `infra/caddy/classroom-redirect.caddy` (M8-03): Caddy
+answers the 410 rows (the avatar excepted) and sends every other path to
+`/legacy/classroom<path>`, which owns the rows; the query is dropped, the
+path's percent-encoding kept. `infra/caddy/check-classroom-redirects.sh`
+asserts each row's status and `Location`.
 
 ## 6.7 Rollback
 

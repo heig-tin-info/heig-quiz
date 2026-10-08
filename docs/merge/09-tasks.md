@@ -4995,25 +4995,25 @@ serves now (16a), and what waits for the group repositories (16b).
 - **Acceptance**: `caddy validate`; the script asserts status and
   `Location` of every pattern.
 - **As delivered** (branch `merge/M8-03-caddy-fragments`):
-  `infra/caddy/classroom-maintenance.caddy` (step C1: every path a 503
-  with `Retry-After: 3600` and `Cache-Control: no-store`, an inline
-  bilingual page, `/webhooks/github` a JSON 503),
-  `infra/caddy/classroom-redirect.caddy` (step C6, every row of §6.6) and
-  `infra/caddy/check-classroom-redirects.sh BASE_URL` (`--maintenance`,
-  `--resolve HOST:PORT:ADDR`; prints every row, exits 1 on a mismatch).
-  `/classrooms/*`, `/app/codespace/start/*` and
-  `/app/api/users/*/avatar` (first, before the `/app/api/*` 410) go to
-  `/legacy/classroom{uri}`, query kept (the resolver ignores it; a login
-  round trip returns to the URL as clicked). The fixed rows (GitHub
-  callback and unsubscribe to `/settings`, `/settings`, `/admin[/*]`)
-  redirect to a fixed URL, query dropped (classroom's OAuth `code` and
-  unsubscribe token must not reach Quiz's logs); every other path,
-  `/app/auth/*` and `/setup/github/installed` among them, to Quiz's home,
-  as `legacyRule` does. The 410 is any method on `/webhooks/github`
-  (GitHub follows no redirect), `/app/api/*` (journal assets included),
-  `/app/events`, `/kc/*`, `/healthz`, `/metrics`. Every redirect is a 302
-  (phase D). The site address is `{$CLASSROOM_SITE:classroom.chevallier.io}`:
-  unset in production, an `http://:port` to test locally. M8-03b not built.
+  - `infra/caddy/classroom-maintenance.caddy` (C1),
+    `infra/caddy/classroom-redirect.caddy` (C6),
+    `infra/caddy/check-classroom-redirects.sh [--maintenance] [--resolve
+    HOST:PORT:ADDR] BASE_URL` (curl >= 7.84).
+  - The redirect fragment answers only the 410 rows (any method on
+    `/webhooks/github`; the avatar excluded in the matcher) and sends every
+    other path to `/legacy/classroom<path>` with one 302: `legacyRule` owns
+    the human rows. The query is dropped for every row (classroom's OAuth
+    `code`, unsubscribe tokens); the path keeps its percent-encoding
+    (`{path}` would decode it, so the path is cut from the raw `{uri}` by
+    `vars_regexp`). The site address `{$CLASSROOM_SITE:classroom.chevallier.io}`
+    is unset in production, `http://:port` locally. M8-03b not built.
+  - Validation (Caddy 2.10.2): `caddy validate --adapter caddyfile --config
+    <fragment>` and `caddy fmt --diff` on both;
+    `CLASSROOM_SITE=http://:18480 caddy run --adapter caddyfile --config
+    infra/caddy/classroom-redirect.caddy`, then
+    `infra/caddy/check-classroom-redirects.sh http://127.0.0.1:18480`; the
+    same with the maintenance fragment and `--maintenance`. Each mode fails
+    against the other fragment.
 
 ### M8-04 — Codespace identity remap (if M6 is in scope)
 - **Acceptance**: on a copy of the portal DB and volumes, one real session
