@@ -4235,6 +4235,41 @@ serves now (16a), and what waits for the group repositories (16b).
   seccomp convergence (keep `ptrace`); `deployment.md` §3.
 - **Acceptance**: grading stays within `RUNNER_TIMEOUT_MS` with N sessions
   live; one restore performed; gdb breaks and steps; `unshare -r` fails.
+- **As delivered (part 1: seccomp)** (branch `merge/M6-05-seccomp`; the
+  rest of the card — resize, slices, host nft, Caddy log mask, backups,
+  `deployment.md` §3 — is still to do).
+  - `apps/codespace/infra/seccomp/codespace.json` is now
+    `apps/runner/infra/seccomp/runner.json` plus ONE rule allowing `ptrace`
+    (gdb), right after the main allow list. Removed from what the workspace
+    allowed: `unshare`, `setns` (but its `CAP_SYS_ADMIN` rule, never met
+    under `--cap-drop=ALL`), `mount`, `umount`, `umount2`, `pivot_root`,
+    `fsopen`, `fsmount`, `fsconfig`, `fspick`, `move_mount`, `open_tree`,
+    `mount_setattr`, `keyctl`, `name_to_handle_at`; `clone` only without a
+    `CLONE_NEW*` flag (mask `0x7E020000`); `clone3` answers `ENOSYS`.
+    Nothing else was needed: `personality(ADDR_NO_RANDOMIZE)` and
+    `process_vm_readv` were already in the runner's profile.
+  - One source of truth: `apps/codespace/src/engine/seccomp.test.ts`
+    removes the `ptrace` rule and deep-compares the rest with the runner's
+    file (unit suite, CI), and checks that no namespace or mount syscall is
+    allowed unconditionally. The file stays committed, not generated: the
+    deploy installs it as it is (`deploy/lib.sh`), and the test makes a
+    drift a red CI rather than a deploy-time step.
+  - `images/c-dev/test.sh` § 10: `unshare -r true` and `unshare -U true`
+    fail with `ENOSYS`, `mount -t tmpfs` fails, raw `unshare(CLONE_NEWUSER)`
+    and `mount(2)` answer `ENOSYS`, and gdb (`break main`, `run`, `next`,
+    `step`, `bt`) stops in `main`, steps into a call and backtraces. Run on
+    the WSL2 workstation (rootful socket, `APPARMOR=`): 51 assertions green.
+    The same probes under the previous profile: `unshare -r true`
+    succeeded, `mount(2)` answered `EPERM`. Also checked under the new
+    profile: clangd `--check`, a pty (`script`), git commit and gc, Node
+    worker threads. Not checked: the extension host and the terminal in a
+    real browser session (test.sh has no browser).
+  - Docs: `images/c-dev/README.md` (the profile section; the P1 profile kept
+    as history), `apps/codespace/CLAUDE.md`, `deploy/RUNBOOK.md`,
+    `apps/runner/README.md` (a change there is copied here).
+  - On the VM: the next codespace deploy installs the profile; a session
+    container keeps the filter it was created with until it is created
+    again. AppArmor `codespace` is unchanged.
 
 ### M6-06 — Quiz `codespace` module
 - **Depends on**: M6-03, M3-02.

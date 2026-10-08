@@ -77,6 +77,34 @@ cat > "${VOL_BASE}/a/work/hello.c" <<'EOF'
 int main(void) { printf("&main=%p\n", (void *)main); return 0; }
 EOF
 
+# § 10: one statement per line, so that `next` and `step` land on known lines.
+cat > "${VOL_BASE}/a/work/steps.c" <<'EOF'
+#include <stdio.h>
+static int square(int x) { return x * x; }
+int main(void) {
+  int a = 3;
+  int b = square(a);
+  printf("%d\n", b);
+  return 0;
+}
+EOF
+
+# § 10: the raw syscalls, so that the answer is the seccomp filter's (ENOSYS)
+# and not a refusal by util-linux or AppArmor before the call.
+cat > "${VOL_BASE}/a/work/nsprobe.c" <<'EOF'
+#define _GNU_SOURCE
+#include <errno.h>
+#include <sched.h>
+#include <stdio.h>
+#include <sys/mount.h>
+int main(void) {
+  int u = unshare(CLONE_NEWUSER) == 0 ? 0 : errno;
+  int m = mount("none", "/tmp", "tmpfs", 0, NULL) == 0 ? 0 : errno;
+  printf("unshare=%d mount=%d ENOSYS=%d\n", u, m, ENOSYS);
+  return 0;
+}
+EOF
+
 echo "P1: hardened student image, working gdb"
 echo "image   : ${IMAGE}"
 echo "seccomp : ${REPO_ROOT}/infra/seccomp/codespace.json"
@@ -577,6 +605,44 @@ if cexec 'test -e /tmp/codespace-statusbar.json' >/dev/null 2>&1; then
   fail "the activation witness exists before any connection: it comes from the image"
 fi
 ok "no activation witness in the image (it only appears when the editor is opened)"
+
+# --------------------------------------------------------------------------
+head2 "10. seccomp: the runner's profile plus ptrace (M6-05)"
+# --------------------------------------------------------------------------
+# infra/seccomp/codespace.json is apps/runner/infra/seccomp/runner.json plus
+# one rule allowing ptrace (src/engine/seccomp.test.ts): no user namespace, no
+# mount, and gdb still breaks and steps.
+for cmd in 'unshare -r true' 'unshare -U true'; do
+  OUT=$(cexec "$cmd" 2>&1) && fail "$cmd succeeded inside the container" "$OUT"
+  case "$OUT" in
+    *"Function not implemented"*) : ;;
+    *) fail "$cmd failed, but not on the seccomp filter (ENOSYS expected)" "$OUT" ;;
+  esac
+  ok "$cmd fails: Function not implemented"
+done
+
+OUT=$(cexec 'mkdir -p /tmp/m && mount -t tmpfs none /tmp/m' 2>&1) \
+  && fail "mount -t tmpfs succeeded inside the container" "$OUT"
+ok "mount -t tmpfs none /tmp/m fails"
+
+OUT=$(cexec 'cd /work && gcc -o nsprobe nsprobe.c && ./nsprobe' 2>&1) \
+  || fail "the namespace probe did not build or run" "$OUT"
+case "$OUT" in
+  "unshare=38 mount=38 ENOSYS=38") ok "raw unshare(CLONE_NEWUSER) and mount(2) answer ENOSYS: $OUT" ;;
+  *) fail "unshare(2) or mount(2) did not answer ENOSYS" "$OUT" ;;
+esac
+
+OUT=$(cexec "cd /work && gcc -g -O0 -o steps steps.c && gdb -batch -ex 'break main' -ex run -ex next -ex step -ex bt ./steps" 2>&1) \
+  || fail "gdb break/run/next/step/bt failed" "$OUT"
+case "$OUT" in
+  *"Breakpoint 1, main ()"*) : ;;
+  *) fail "gdb did not stop on the breakpoint in main" "$OUT" ;;
+esac
+case "$OUT" in
+  *"#0  square (x=3)"*"#1 "*"in main ()"*) : ;;
+  *) fail "next then step did not land in square, called from main" "$OUT" ;;
+esac
+ok "gdb: break main, run, next, step into square (x=3), bt shows main below it"
 
 printf '\n%d assertions, all green.\n' "$NTEST"
 printf 'MESURE_DEMARRAGE_SECONDES=%s\n' "$BOOT"

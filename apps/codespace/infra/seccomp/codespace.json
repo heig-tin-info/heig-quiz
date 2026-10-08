@@ -123,8 +123,6 @@
         "clock_gettime64",
         "clock_nanosleep",
         "clock_nanosleep_time64",
-        "clone",
-        "clone3",
         "close",
         "close_range",
         "connect",
@@ -169,11 +167,7 @@
         "flock",
         "fork",
         "fremovexattr",
-        "fsconfig",
         "fsetxattr",
-        "fsmount",
-        "fsopen",
-        "fspick",
         "fstat",
         "fstat64",
         "fstatat64",
@@ -235,7 +229,6 @@
         "ioprio_get",
         "ioprio_set",
         "ipc",
-        "keyctl",
         "kill",
         "landlock_add_rule",
         "landlock_create_ruleset",
@@ -268,9 +261,6 @@
         "mlockall",
         "mmap",
         "mmap2",
-        "mount",
-        "mount_setattr",
-        "move_mount",
         "mprotect",
         "mq_getsetattr",
         "mq_notify",
@@ -289,11 +279,9 @@
         "munlock",
         "munlockall",
         "munmap",
-        "name_to_handle_at",
         "nanosleep",
         "newfstatat",
         "open",
-        "open_tree",
         "openat",
         "openat2",
         "pause",
@@ -302,7 +290,6 @@
         "pidfd_send_signal",
         "pipe",
         "pipe2",
-        "pivot_root",
         "pkey_alloc",
         "pkey_free",
         "pkey_mprotect",
@@ -319,7 +306,6 @@
         "process_vm_writev",
         "pselect6",
         "pselect6_time64",
-        "ptrace",
         "pwrite64",
         "pwritev",
         "pwritev2",
@@ -390,7 +376,6 @@
         "setgroups",
         "setgroups32",
         "setitimer",
-        "setns",
         "setpgid",
         "setpriority",
         "setregid",
@@ -454,12 +439,9 @@
         "truncate64",
         "ugetrlimit",
         "umask",
-        "umount",
-        "umount2",
         "uname",
         "unlink",
         "unlinkat",
-        "unshare",
         "utime",
         "utimensat",
         "utimensat_time64",
@@ -476,6 +458,72 @@
       "comment": "",
       "includes": {},
       "excludes": {}
+    },
+    {
+      "names": [
+        "ptrace"
+      ],
+      "action": "SCMP_ACT_ALLOW",
+      "args": [],
+      "comment": "gdb in the student's workspace: the ONE divergence from apps/runner/infra/seccomp/runner.json (M6-05, asserted by src/engine/seccomp.test.ts)",
+      "includes": {},
+      "excludes": {}
+    },
+    {
+      "names": [
+        "clone"
+      ],
+      "action": "SCMP_ACT_ALLOW",
+      "args": [
+        {
+          "index": 0,
+          "value": 2114060288,
+          "valueTwo": 0,
+          "op": "SCMP_CMP_MASKED_EQ"
+        }
+      ],
+      "comment": "clone without any CLONE_NEW* flag: no new namespace (Docker's default profile)",
+      "includes": {},
+      "excludes": {
+        "arches": [
+          "s390",
+          "s390x"
+        ]
+      }
+    },
+    {
+      "names": [
+        "clone"
+      ],
+      "action": "SCMP_ACT_ALLOW",
+      "args": [
+        {
+          "index": 1,
+          "value": 2114060288,
+          "valueTwo": 0,
+          "op": "SCMP_CMP_MASKED_EQ"
+        }
+      ],
+      "comment": "s390 parameter ordering for clone is different",
+      "includes": {
+        "arches": [
+          "s390",
+          "s390x"
+        ]
+      },
+      "excludes": {}
+    },
+    {
+      "names": [
+        "clone3"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "args": [],
+      "comment": "flags live in a struct seccomp cannot inspect: ENOSYS makes glibc fall back to clone",
+      "includes": {},
+      "excludes": {},
+      "errnoRet": 38,
+      "errno": "ENOSYS"
     },
     {
       "names": [
