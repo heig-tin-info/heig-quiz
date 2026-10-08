@@ -18,6 +18,9 @@
     "heig.codespace-statusbar": true
   },
   "workbench.startupEditor": "none",
+  "window.autoDetectColorScheme": true,
+  "workbench.preferredDarkColorTheme": "Dark 2026",
+  "workbench.preferredLightColorTheme": "Light 2026",
   "security.workspace.trust.enabled": false,
   "clangd.path": "/usr/bin/clangd",
   "clangd.checkUpdates": false,

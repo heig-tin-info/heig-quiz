@@ -405,7 +405,10 @@ for f in /run/code-server/User/settings.json /run/code-server/Machine/settings.j
            '"workbench.secondarySideBar.defaultVisibility": "hidden"' \
            '"keyboard.dispatch": "keyCode"' \
            '"terminal.integrated.stickyScroll.enabled": false' \
-           '"terminal.integrated.fontLigatures.enabled": false'; do
+           '"terminal.integrated.fontLigatures.enabled": false' \
+           '"window.autoDetectColorScheme": true' \
+           '"workbench.preferredDarkColorTheme": "Dark 2026"' \
+           '"workbench.preferredLightColorTheme": "Light 2026"'; do
     cexec "grep -qF '$k' $f" >/dev/null 2>&1 || fail "setting missing from $f: $k"
   done
 done
@@ -464,12 +467,42 @@ cexec "grep -qF 'Vhe=Ogo' $WB" >/dev/null 2>&1 \
   || echo "  note the second caller's isElectron guard was not found as such (minification changed)"
 ok "queryLocalFonts is called only by the ligatures addon and by a path guarded by isElectron"
 
-podman_remote logs "$CTR_A" 2>&1 | grep -q 'Using custom extensions gallery' \
-  || fail "code-server did not take EXTENSIONS_GALLERY (default gallery active)"
+# Both theme ids set (see README) are contributed by the bundled
+# theme-defaults extension: a rename fails here, not silently in a browser.
+for theme in 'Dark 2026' 'Light 2026'; do
+  cexec "grep -qF '\"id\":\"$theme\"' /usr/lib/code-server/lib/vscode/extensions/theme-defaults/package.json" >/dev/null 2>&1 \
+    || fail "theme \"$theme\" is not contributed by the bundled theme-defaults extension"
+done
+ok "both preferred themes are bundled: Dark 2026, Light 2026"
+
+# The return URL's origin is a trusted link-protection domain (no "open the
+# external website?" prompt on Close): the workbench page served by container
+# A, which carries CODESPACE_RETURN_URL, lists it; container B, without it,
+# starts code-server with no such flag.
+TRUSTED=$(cexec 'curl -sS -L -m 5 http://localhost:8080/' 2>&1 | grep -o 'linkProtectionTrustedDomains[^]]*]')
+case "$TRUSTED" in
+  *"&quot;${ENV_RETURN_URL%/}&quot;"*) : ;;
+  *) fail "the served workbench does not list the return URL's origin in linkProtectionTrustedDomains" "$TRUSTED" ;;
+esac
+CMD_B=$(podman_remote exec "$CTR_B" bash -lc "tr '\\0' ' ' < /proc/1/cmdline" 2>&1)
+case "$CMD_B" in
+  *link-protection*) fail "code-server (container B, no return URL) trusts a domain" "$CMD_B" ;;
+  *code-server*) : ;;
+  *) fail "could not read code-server's command line in container B" "$CMD_B" ;;
+esac
+ok "Close's origin ${ENV_RETURN_URL%/} trusted in the served workbench (A), no flag without a return URL (B)"
+
+# Captured once: under pipefail, `grep -q` closing the pipe early makes a long
+# log (the workbench page above was served) fail with SIGPIPE.
+LOGS_A=$(podman_remote logs "$CTR_A" 2>&1)
+case "$LOGS_A" in
+  *'Using custom extensions gallery'*) : ;;
+  *) fail "code-server did not take EXTENSIONS_GALLERY (default gallery active)" ;;
+esac
 ok "EXTENSIONS_GALLERY taken into account: 'Using custom extensions gallery'"
 
-ERRS=$(podman_remote logs "$CTR_A" 2>&1 | grep -c 'Uncaught exception')
-[ "$ERRS" = "0" ] || fail "code-server logged $ERRS uncaught exception(s)" "$(podman_remote logs "$CTR_A" 2>&1 | tail -20)"
+ERRS=$(printf '%s\n' "$LOGS_A" | grep -c 'Uncaught exception')
+[ "$ERRS" = "0" ] || fail "code-server logged $ERRS uncaught exception(s)" "$(printf '%s\n' "$LOGS_A" | tail -20)"
 ok "no uncaught exception at code-server start-up"
 
 cexec 'test -x /usr/bin/clangd && test -x /usr/bin/gdb && test -x /usr/bin/gcc && test -x /usr/bin/make && test -x /usr/bin/git' >/dev/null 2>&1 \
