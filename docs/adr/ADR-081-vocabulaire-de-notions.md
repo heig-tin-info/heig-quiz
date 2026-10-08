@@ -11,7 +11,7 @@ product owner before step 3 of #599, and by the
 (sorting the existing tags) and the
 [third addendum](#third-addendum-2026-10-08-the-cut-over) (the cut-over). The work is tracked by #599, under a parent issue that groups #557
 and #578. Steps (a) and (b) of the transition (addendum §1) are implemented;
-the **cut-over, step (c), is implemented** by the cut-over PR of #599 (#TBD):
+the **cut-over, step (c), is implemented** by the cut-over PR of #599 (#648):
 questions, the pool's filter and Notions tab, the bulk bar, move and copy,
 polls, the drill, the MCP tools, the teacher assistant and the seed read and
 write concepts. Step (d), dropping `question_tags` and `pool_tags`, comes
