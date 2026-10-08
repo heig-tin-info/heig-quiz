@@ -1,8 +1,8 @@
 /**
  * The vocabulary of concepts (ADR-081, addendum 2026-10-08): one for the
- * whole instance, owned by the `concept` module. Nothing links to it yet
- * (addendum §1a): the tags of the `pool` module stay the source of truth
- * until the cut-over.
+ * whole instance, owned by the `concept` module, with its links to
+ * questions. Nothing reads or writes the links yet (third addendum §1): the
+ * tags of the `pool` module stay the source of truth until the cut-over.
  *
  * Uniqueness lives in the indexes, because only the database can enforce it
  * under concurrency (addendum §3): two teachers creating `pointeur` and
@@ -38,7 +38,7 @@ import {
 } from "@quiz/contracts";
 
 import { users } from "./auth.js";
-import { pools } from "./pool.js";
+import { pools, questions } from "./pool.js";
 
 /**
  * A concept: a label, a qualifier and a description per language. A
@@ -161,4 +161,25 @@ export const conceptSortRuns = pgTable(
     check("concept_sort_runs_finished_ck", sql`(${t.state} = 'running') = (${t.finishedAt} is null)`),
     check("concept_sort_runs_error_ck", sql`(${t.state} = 'failed') = (${t.error} is not null)`),
   ],
+);
+
+/**
+ * The concepts a question exercises (ADR-081 §2, third addendum §1), owned
+ * by the `concept` module (addendum §4): the pool module sets them by
+ * calling the concept service inside its own transaction and reads them by
+ * join. A question's links go with the question; a concept a question uses
+ * cannot be deleted (RESTRICT: it is merged, never deleted, third addendum
+ * §7). No order: "a question's first concept" is the smallest id.
+ */
+export const questionConcepts = pgTable(
+  "question_concepts",
+  {
+    questionId: uuid("question_id")
+      .notNull()
+      .references(() => questions.id, { onDelete: "cascade" }),
+    conceptId: uuid("concept_id")
+      .notNull()
+      .references(() => concepts.id, { onDelete: "restrict" }),
+  },
+  (t) => [primaryKey({ columns: [t.questionId, t.conceptId] }), index("question_concepts_concept_idx").on(t.conceptId)],
 );

@@ -8,7 +8,8 @@ open. Amended the same day by the [addendum](#addendum-2026-10-08-transition-res
 (transition, resolution of a typed label, storage, rights), settled with the
 product owner before step 3 of #599, and by the
 [second addendum](#second-addendum-2026-10-08-sorting-the-existing-tags)
-(sorting the existing tags). Not implemented: the work is tracked by a parent issue that groups #557
+(sorting the existing tags) and the
+[third addendum](#third-addendum-2026-10-08-the-cut-over) (the cut-over). Not implemented: the work is tracked by a parent issue that groups #557
 and #578.
 
 Scope: what a question is classified by, who may create and change that
@@ -284,3 +285,56 @@ Settled with the product owner before step (b) of the transition
    "Concepts" in English. The admin screen is a "Notions" / "Concepts" tab
    of the administration; its one primary action is accepting the selected
    decisions.
+
+## Third addendum 2026-10-08: the cut-over
+
+Settled with the product owner after the sorting was completed in
+production (686 pairs, 219 validated concepts) and before step (c). It
+amends addendum §2, §1(c) and (d), second addendum §2 and the Consequences
+where named.
+
+1. **One cut-over PR, prepared by inert ones.** A dual write of tags and
+   concepts is not coherent: a typed tag would either create a concept
+   (which §1 forbids before the cut-over) or be lost. So the link table, the
+   write resolution and the picker land first, connected to nothing; then
+   one PR switches every reader and writer together — pool list, filter,
+   question editor, bulk bar, move and copy, polls, the drill, the MCP tools,
+   the teacher assistant (ADR-080), the seed, the user guide.
+2. **The fill is a SQL data migration** of the cut-over: every live
+   question gets the concepts its (pool, tag) pairs were accepted into
+   (following `merged_into`). Pairs worn only by deleted questions are not
+   carried over.
+3. **Late tags are listed, never lost (amends §1(c), (d)).** The Notions
+   tab keeps listing the pairs worn by a question with no accepted decision;
+   accepting one after the cut-over adds its links to the questions still
+   wearing that tag. Rows already accepted become read-only at the cut-over,
+   so re-applying a decision never overwrites a teacher's later edits.
+   `question_tags` and `pool_tags` are dropped only once no pair is pending.
+4. **Creation is explicit, and dropped labels stay dropped (amends
+   addendum §2 and the Consequences).** A label that matches no concept is
+   refused (`422 concept_unknown`) unless the caller asks to create; the
+   MCP tools take an explicit flag, false by default. A label whose key is
+   the key of a tag the admin dropped in the sorting is refused even when
+   creation is asked (`422 concept_dropped`), so neither a teacher nor an
+   LLM client recreates `c01`, `lecture-de-code` or `prog-c`. Renaming a
+   concept's label onto such a key is refused too, the admin included (a
+   qualifier-only edit is not a rename). The
+   Consequences' "creating a proposed concept for an unknown one" no longer
+   holds.
+5. **The question editor's picker creates** a `proposed` concept from the
+   cut-over on: a label in the interface language and an optional
+   qualifier; the concepts already used in the pool first (§5). The model's
+   fill of the other language and "Suggest concepts" come later (#557).
+6. **The pool's Tags tab becomes a read-only "Notions" tab**: the concepts
+   used in the pool, with their question counts, each opening the filter.
+   No description editing (addendum §6). The bulk bar adds a concept.
+7. **Filter and links.** A typed `#word` resolves to every concept it may
+   designate (both languages, aliases, the qualified form) and filters on
+   any of them; the URL carries concept ids, and an old `?tag=` is resolved
+   once like a typed word. A concept used by a question is never deleted,
+   only merged; an unused one may still be deleted by the admin (amends
+   second addendum §2, which forbade any deletion after the cut-over).
+8. **The drill** interleaves by the question's first concept id (no
+   alphabetical meaning left) and reads mastery per concept, labelled in the
+   reader's language; past reviews are regrouped under today's
+   classification (§9).

@@ -278,8 +278,9 @@ describe("accepting decisions", () => {
     await server.app.db.insert(conceptTagSortings).values({ poolId: alpha, tag: "boucle", proposal });
     expect((await list()).find((r) => r.tag === "boucle")!.sorting).toMatchObject({ decision: null, decidedAt: null, proposal });
 
-    await accepted([{ poolId: alpha, tag: "boucle", decision: { kind: "drop", reason: "task_kind" } }]);
+    // Proposed first: once `boucle` is dropped, the stop list refuses to create it (third addendum §4).
     const loop = await propose({ lang: "fr", label: "boucle" });
+    await accepted([{ poolId: alpha, tag: "boucle", decision: { kind: "drop", reason: "task_kind" } }]);
     server.clock.advance(60_000);
     const changed = await accepted([{ poolId: alpha, tag: "boucle", decision: { kind: "concept", conceptId: loop.id } }]);
     expect(changed.rows[0]!.sorting).toMatchObject({
