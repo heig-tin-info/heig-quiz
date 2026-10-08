@@ -130,7 +130,7 @@ Verification done by running `code-server --help` inside the built image.
 | `--extensions-dir` | yes |
 | `--user-data-dir` | yes |
 | `--install-extension`, `--list-extensions`, `--force` | yes (build) |
-| `--link-protection-trusted-domains` | yes (`string[]`, `out/node/cli.js`; see § Return link trusted) |
+| `--link-protection-trusted-domains` | yes (`string[]`; see § Return link trusted) |
 
 `EXTENSIONS_GALLERY='{"serviceUrl":"","itemUrl":"","resourceUrlTemplate":""}'`
 is taken into account: the start-up log shows `Using custom extensions
@@ -307,63 +307,14 @@ rather than making the prompt reappear.
 
 ### Theme: the browser's colour scheme (2026-10-08)
 
-Feedback from production on 2026-10-08: the editor opened light while the
-student's Quiz was dark.
-
-```json
-"window.autoDetectColorScheme": true,
-"workbench.preferredDarkColorTheme": "Dark 2026",
-"workbench.preferredLightColorTheme": "Light 2026"
-```
-
-Why it opened light, from the embedded package: the default of
-`workbench.colorTheme` is `Bt?Gc.COLOR_THEME_LIGHT:Gc.COLOR_THEME_DARK`, where
-`Bt` is `isWeb` in the minified platform module, and
-`COLOR_THEME_LIGHT="Light 2026"`, `COLOR_THEME_DARK="Dark 2026"`. In a
-browser, VS Code 1.137.0 is light by default whatever the system says.
-
-With `window.autoDetectColorScheme` the theme service picks
-`preferredDarkColorTheme` or `preferredLightColorTheme` from the host colour
-service, which on the web is `matchMedia("(prefers-color-scheme: …)")` and
-listens to its changes. The two values are the upstream defaults of those
-keys, written out so that a version bump that renames them fails `test.sh` § 7
-(both ids are checked in `extensions/theme-defaults/package.json`) instead of
-silently falling back.
-
-Where it takes effect: the key declares no `scope`, hence `WINDOW`. The
-`Machine/settings.json` copy is the remote user configuration, whose accepted
-scopes in the bundle are `[2,4,5,6,7]` (MACHINE, WINDOW, RESOURCE,
-LANGUAGE_OVERRIDABLE, MACHINE_OVERRIDABLE): it is honoured there, and in the
-`User/settings.json` copy, which honours every scope.
-
-**Quiz follows the same signal unless overridden.** `apps/web/src/theme.ts`
-defaults to "system" (`prefers-color-scheme: dark`); an explicit light or dark
-choice lives in the Quiz origin's `localStorage` (`quiz-theme`), which
-code-server, on another origin, cannot read. So both match by default, and
-differ when the student forced Quiz's theme against the system's.
-
-**A theme the student picks does not survive the container.** The
-`user-data-dir` is the `/run` tmpfs: the choice lasts the container's life,
-and the next start begins from these settings again.
-
-## Return link trusted (2026-10-08)
-
-The "Close" button opens `CODESPACE_RETURN_URL` with
-`vscode.env.openExternal`, and VS Code's link protection asked "Do you want
-code-server to open the external website?" for it. `entrypoint.sh` now
-passes `--link-protection-trusted-domains <scheme>://<host[:port]>` of that
-URL to code-server; the portal derives the URL from `PLATFORM_URL` (a session
-from a launch token) or `PUBLIC_URL`, so there is one source and no new
-variable in `CONTAINER_ENV_KEYS`. Without the variable, or with a value that
-is not `http(s)://` followed by a host in `[A-Za-z0-9.:-]`, no domain is
-trusted.
-
-code-server 4.137.0 appends the flag's values to the product's
-`linkProtectionTrustedDomains` (beside its own `https://open-vsx.org`), in
-the format VS Code matches (scheme and authority, any path). `test.sh` § 7
-reads code-server's command line in both containers and finds
-`linkProtectionTrustedDomains&quot;:[&quot;<origin>&quot;` in the workbench
-page served to the browser.
+The editor opened light under a dark Quiz: in a browser, VS Code 1.137.0
+defaults to the "Light 2026" theme. `window.autoDetectColorScheme: true`
+makes it follow the browser's `prefers-color-scheme`, as Quiz's default
+"system" choice does, between `workbench.preferredDarkColorTheme` and
+`workbench.preferredLightColorTheme`. Those two are written out as the
+upstream defaults ("Dark 2026", "Light 2026") so that a version which renames
+them fails `test.sh` § 7 instead of silently falling back. A theme the student
+picks dies with the container: the `user-data-dir` is a tmpfs.
 
 ## Status bar extension `heig.codespace-statusbar`
 
@@ -385,6 +336,14 @@ Two items on the right of the status bar:
    `vscode.env.openExternal`.
 
 French as soon as `vscode.env.language` starts with `fr`, English otherwise.
+
+### Return link trusted (2026-10-08)
+
+VS Code's link protection asked before opening the "Close" URL.
+`entrypoint.sh` passes the origin of `CODESPACE_RETURN_URL` (from
+`PLATFORM_URL`) to code-server's `--link-protection-trusted-domains`, which
+adds it to the product's trusted domains; no new container variable.
+`test.sh` § 7 finds it in the served workbench page.
 
 ### What it reads
 

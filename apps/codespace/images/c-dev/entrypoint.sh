@@ -31,19 +31,13 @@ export EXTENSIONS_GALLERY
 # The "Close" button of heig.codespace-statusbar opens CODESPACE_RETURN_URL
 # (the platform, set by the portal from PLATFORM_URL) through
 # vscode.env.openExternal, which asks "Do you want code-server to open the
-# external website?" for any origin not trusted. Trust exactly that origin,
-# scheme://host[:port], and nothing when the variable is absent or is not a
-# plain http(s) URL (a value outside the host charset trusts nothing).
+# external website?" for any origin not trusted. Trust that origin; nothing
+# when the variable is absent or not http(s).
+# The portal's rootUrl() (src/sessions/manager.ts) guarantees an origin plus
+# "/"; the value stays one quoted argv element, never read as a flag.
 set --
 case "${CODESPACE_RETURN_URL:-}" in
-  http://* | https://*)
-    RETURN_HOST=${CODESPACE_RETURN_URL#*://}
-    RETURN_HOST=${RETURN_HOST%%/*}
-    case "$RETURN_HOST" in
-      '' | *[!A-Za-z0-9.:-]*) ;;
-      *) set -- --link-protection-trusted-domains "${CODESPACE_RETURN_URL%%://*}://${RETURN_HOST}" ;;
-    esac
-    ;;
+  http://* | https://*) set -- --link-protection-trusted-domains "${CODESPACE_RETURN_URL%/}" ;;
 esac
 
 exec code-server \

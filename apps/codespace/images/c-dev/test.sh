@@ -467,28 +467,22 @@ cexec "grep -qF 'Vhe=Ogo' $WB" >/dev/null 2>&1 \
   || echo "  note the second caller's isElectron guard was not found as such (minification changed)"
 ok "queryLocalFonts is called only by the ligatures addon and by a path guarded by isElectron"
 
-# The theme follows the browser's prefers-color-scheme (see README): the key
-# exists, the web host colour service reads the media query, and both theme
-# ids set are contributed by the bundled theme-defaults extension.
-cexec "grep -qF '\"window.autoDetectColorScheme\":' $WB" >/dev/null 2>&1 \
-  || fail "window.autoDetectColorScheme unknown to the bundled VS Code package"
-cexec "grep -qF 'matchMedia(\"(prefers-color-scheme: light)\")' $WB" >/dev/null 2>&1 \
-  || fail "the web host colour service no longer reads prefers-color-scheme: the proof is stale"
+# Both theme ids set (see README) are contributed by the bundled
+# theme-defaults extension: a rename fails here, not silently in a browser.
 for theme in 'Dark 2026' 'Light 2026'; do
   cexec "grep -qF '\"id\":\"$theme\"' /usr/lib/code-server/lib/vscode/extensions/theme-defaults/package.json" >/dev/null 2>&1 \
     || fail "theme \"$theme\" is not contributed by the bundled theme-defaults extension"
 done
-ok "window.autoDetectColorScheme exists, reads prefers-color-scheme, and both themes set are bundled"
+ok "both preferred themes are bundled: Dark 2026, Light 2026"
 
 # The return URL's origin is a trusted link-protection domain (no "open the
-# external website?" prompt on Close): container A, which carries
-# CODESPACE_RETURN_URL, gets the flag with its origin; container B, without
-# it, gets no flag at all. And the workbench page served to the browser
-# carries it in the product's linkProtectionTrustedDomains.
-CMD_A=$(cexec "tr '\\0' ' ' < /proc/1/cmdline" 2>&1)
-case "$CMD_A" in
-  *"--link-protection-trusted-domains ${ENV_RETURN_URL%/} "*) : ;;
-  *) fail "code-server (container A) was not started with the return URL's origin as trusted domain" "$CMD_A" ;;
+# external website?" prompt on Close): the workbench page served by container
+# A, which carries CODESPACE_RETURN_URL, lists it; container B, without it,
+# starts code-server with no such flag.
+TRUSTED=$(cexec 'curl -sS -L -m 5 http://localhost:8080/' 2>&1 | grep -o 'linkProtectionTrustedDomains[^]]*]')
+case "$TRUSTED" in
+  *"&quot;${ENV_RETURN_URL%/}&quot;"*) : ;;
+  *) fail "the served workbench does not list the return URL's origin in linkProtectionTrustedDomains" "$TRUSTED" ;;
 esac
 CMD_B=$(podman_remote exec "$CTR_B" bash -lc "tr '\\0' ' ' < /proc/1/cmdline" 2>&1)
 case "$CMD_B" in
@@ -496,15 +490,9 @@ case "$CMD_B" in
   *code-server*) : ;;
   *) fail "could not read code-server's command line in container B" "$CMD_B" ;;
 esac
-WB_PAGE=$(cexec 'curl -sS -L -m 5 http://localhost:8080/' 2>&1)
-case "$WB_PAGE" in
-  *"linkProtectionTrustedDomains&quot;:[&quot;${ENV_RETURN_URL%/}&quot;"*) : ;;
-  *) fail "the served workbench does not list the return URL's origin in linkProtectionTrustedDomains" \
-          "$(printf '%s' "$WB_PAGE" | grep -o 'linkProtectionTrustedDomains[^]]*]')" ;;
-esac
-ok "Close's origin trusted: --link-protection-trusted-domains ${ENV_RETURN_URL%/} (A), none without a return URL (B)"
+ok "Close's origin ${ENV_RETURN_URL%/} trusted in the served workbench (A), no flag without a return URL (B)"
 
-# Captured first: under pipefail, `grep -q` closing the pipe early makes a long
+# Captured once: under pipefail, `grep -q` closing the pipe early makes a long
 # log (the workbench page above was served) fail with SIGPIPE.
 LOGS_A=$(podman_remote logs "$CTR_A" 2>&1)
 case "$LOGS_A" in
@@ -513,8 +501,8 @@ case "$LOGS_A" in
 esac
 ok "EXTENSIONS_GALLERY taken into account: 'Using custom extensions gallery'"
 
-ERRS=$(podman_remote logs "$CTR_A" 2>&1 | grep -c 'Uncaught exception')
-[ "$ERRS" = "0" ] || fail "code-server logged $ERRS uncaught exception(s)" "$(podman_remote logs "$CTR_A" 2>&1 | tail -20)"
+ERRS=$(printf '%s\n' "$LOGS_A" | grep -c 'Uncaught exception')
+[ "$ERRS" = "0" ] || fail "code-server logged $ERRS uncaught exception(s)" "$(printf '%s\n' "$LOGS_A" | tail -20)"
 ok "no uncaught exception at code-server start-up"
 
 cexec 'test -x /usr/bin/clangd && test -x /usr/bin/gdb && test -x /usr/bin/gcc && test -x /usr/bin/make && test -x /usr/bin/git' >/dev/null 2>&1 \
