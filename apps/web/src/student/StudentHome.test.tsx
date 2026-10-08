@@ -128,7 +128,7 @@ describe("the student home", () => {
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByRole("heading", { name: "Autorisé" })).toBeInTheDocument();
     expect(within(dialog).getByText("Une feuille A4 recto-verso")).toBeInTheDocument();
-    expect(within(dialog).getByText("Passée dans Safe Exam Browser")).toBeInTheDocument();
+    expect(within(dialog).getByText("Toute autre application que Safe Exam Browser")).toBeInTheDocument();
     const download = within(dialog).getByRole("button", { name: "Télécharger le fichier d'examen" });
     expect(
       within(dialog).getByText("Une feuille A4 recto-verso").compareDocumentPosition(download) &
