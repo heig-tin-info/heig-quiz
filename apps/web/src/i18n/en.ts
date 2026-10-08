@@ -453,6 +453,11 @@ export const en = {
   "classrooms.datesInvalid": "Give both months, the last not before the first.",
   "classrooms.periodPlaceholder": "2026-A",
   "classrooms.empty": "No classroom in this course yet.",
+  "classrooms.rightNow": "The classrooms running now, by course.",
+  "classrooms.rightNowEmpty": "No classroom running now",
+  "classrooms.rightNowEmptyBody":
+    "A classroom shows here while its period covers today. Every classroom is on its course's page.",
+  "classrooms.openCourses": "Open courses",
   "classrooms.students": "{n} students",
   "classrooms.students.one": "{n} student",
   "classrooms.archive": "Archive",
@@ -850,6 +855,8 @@ export const en = {
 
   "settings.title": "Settings",
   "settings.profile": "Profile",
+  "settings.adminHint": "People, system status, tasks and models of the platform.",
+  "settings.viewHint": "See the portal exactly as a student does.",
   "settings.changePicture": "Change picture",
   "avatar.title": "Profile picture",
   "avatar.choose": "Choose an image",

@@ -450,6 +450,11 @@ export const fr: Record<keyof Dict, string> = {
   "classrooms.datesInvalid": "Indiquez les deux mois, le dernier pas avant le premier.",
   "classrooms.periodPlaceholder": "2026-A",
   "classrooms.empty": "Aucune classe dans ce cours.",
+  "classrooms.rightNow": "Les classes en cours, par cours.",
+  "classrooms.rightNowEmpty": "Aucune classe en cours",
+  "classrooms.rightNowEmptyBody":
+    "Une classe apparaît ici tant que sa période couvre la date du jour. Toutes les classes sont sur la page de leur cours.",
+  "classrooms.openCourses": "Ouvrir les cours",
   "classrooms.students": "{n} étudiants",
   "classrooms.students.one": "{n} étudiant",
   "classrooms.archive": "Archiver",
@@ -848,6 +853,8 @@ export const fr: Record<keyof Dict, string> = {
 
   "settings.title": "Réglages",
   "settings.profile": "Profil",
+  "settings.adminHint": "Personnes, état du système, tâches et modèles de la plateforme.",
+  "settings.viewHint": "Voir le portail exactement comme un étudiant.",
   "settings.changePicture": "Changer l'image",
   "avatar.title": "Photo de profil",
   "avatar.choose": "Choisir une image",

@@ -1,11 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { GraduationCap, School, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { ChevronRight, GraduationCap, School, ShieldCheck, SlidersHorizontal } from "lucide-react";
 
 import { ApiTokensCard, ConnectionsCard } from "./ApiTokensCard";
 import { AvatarEditor } from "./AvatarEditor";
 import { api, useMePatch } from "./api";
 import { GithubAccountCard } from "./github/AccountCard";
+import { ViewModeToggle } from "./Header";
 import { useI18n, useT, LOCALES } from "./i18n";
 import {
   DATE_FORMATS,
@@ -17,6 +18,7 @@ import {
 import { NotificationSettingsSection } from "./notifications/NotificationSettings";
 import { useToast } from "./notify";
 import { meKey } from "./queryKeys";
+import type { Route } from "./router";
 import { SuperPowersSection } from "./SuperPowers";
 import { setThemeChoice, useThemeChoice } from "./theme";
 import {
@@ -195,7 +197,64 @@ function PreferencesCard({ me }: { me: Me }) {
   );
 }
 
-export function SettingsPage({ me }: { me: Me }) {
+/**
+ * What the phone's bottom bar puts under Profile (#449), above everything
+ * else and under `lg` only, where the sidebar that holds them is gone:
+ * Administration for an admin in the teacher UI, and the student-view
+ * switch for whoever has one. Nothing when neither applies.
+ */
+function PhoneRows({
+  admin,
+  studentView,
+  onToggleStudentView,
+}: {
+  admin: ((r: Route) => void) | null;
+  studentView: boolean;
+  onToggleStudentView?: () => void;
+}) {
+  const t = useT();
+  if (!admin && !onToggleStudentView) return null;
+  return (
+    <Card className="divide-y divide-line overflow-hidden lg:hidden">
+      {admin ? (
+        <button
+          type="button"
+          onClick={() => admin({ view: "admin" })}
+          className="flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-surface-2"
+        >
+          <ShieldCheck aria-hidden className="size-5 shrink-0 text-fg-faint" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium">{t("nav.admin")}</span>
+            <span className="mt-0.5 block text-[13px] text-fg-muted">{t("settings.adminHint")}</span>
+          </span>
+          <ChevronRight aria-hidden className="size-4 shrink-0 text-fg-faint" />
+        </button>
+      ) : null}
+      {onToggleStudentView ? (
+        <SettingRow title={t("view.label")} desc={t("settings.viewHint")} className="px-5">
+          <ViewModeToggle studentView={studentView} onToggle={onToggleStudentView} />
+        </SettingRow>
+      ) : null}
+    </Card>
+  );
+}
+
+export function SettingsPage({
+  me,
+  navigate,
+  teacherUi = false,
+  studentView = false,
+  onToggleStudentView,
+}: {
+  me: Me;
+  /** Where the Administration row leads; without it, the row is not drawn. */
+  navigate?: (r: Route) => void;
+  /** The teacher UI is on: an admin's Administration row shows on a phone. */
+  teacherUi?: boolean;
+  studentView?: boolean;
+  /** Defined for a teacher and an admin only, as the frame's switch. */
+  onToggleStudentView?: () => void;
+}) {
   const { t } = useI18n();
   const [editingAvatar, setEditingAvatar] = useState(false);
 
@@ -205,6 +264,11 @@ export function SettingsPage({ me }: { me: Me }) {
   return (
     <div className="max-w-3xl space-y-8">
       <PageHeader title={t("settings.title")} />
+      <PhoneRows
+        admin={me.role === "admin" && teacherUi ? (navigate ?? null) : null}
+        studentView={studentView}
+        onToggleStudentView={onToggleStudentView}
+      />
 
       <section className="space-y-3">
         <SectionHeading title={t("settings.profile")} />

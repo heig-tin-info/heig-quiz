@@ -90,9 +90,9 @@
      the window. Zero without one; the banner sets it on the frame it wraps,
      and every sticky bar and full-height column under it offsets by it. */
   --banner-h: 0px;
-  /* The phone top bar's height (`Shell.tsx`), and the student bottom bar's
+  /* The phone top bar's height (`Shell.tsx`), and the bottom bar's
      (`BottomNav.tsx`, #191): zero unless that bar is in the page under `lg`.
-     DESIGN.md, "The student's bottom bar". */
+     DESIGN.md, "The bottom bar (phone)". */
   --topbar-h: 3.5rem;
   --bottom-nav-h: 0px;
   /* The round button of a tool docked on the player (the calculator,

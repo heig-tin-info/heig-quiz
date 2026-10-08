@@ -16,7 +16,7 @@ import {
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import type { CourseSummary, Me, PoolSummary } from "@quiz/contracts";
-import { displayName, isCurrent } from "@quiz/domain";
+import { displayName } from "@quiz/domain";
 
 import { api } from "./api";
 import { CommandPalette } from "./CommandPalette";
@@ -24,12 +24,7 @@ import { Logo, UserMenu, useSignOut, ViewModeToggle } from "./Header";
 import { helpTopics, useHelp } from "./help";
 import { useI18n, useT } from "./i18n";
 import { bottomSlotOf, sectionOf, type Route } from "./router";
-import {
-  activeCourseOf,
-  CourseNavTree,
-  inNavigation,
-  useCourseNavState,
-} from "./CourseNav";
+import { CourseNavTree, rightNowClassrooms, useCourseNavState } from "./CourseNav";
 import type { NavCycle } from "./navTree";
 import { PoolNavTree, usePoolNavState } from "./pool/PoolNav";
 import { ShortcutKeys, useActiveShortcuts, useGlobalShortcuts } from "./shortcuts";
@@ -51,8 +46,8 @@ import {
 } from "./ui";
 import { usePaletteProjects } from "./paletteProjects";
 import { coursesKey, poolsKey } from "./queryKeys";
-import { BottomNav, SLOT_LOOK } from "./student/BottomNav";
-import { bottomNavShown, sidebarSlots } from "./student/bottomNavSlots";
+import { BottomNav } from "./BottomNav";
+import { bottomNavShown, sidebarSlots } from "./bottomNavSlots";
 import { useDrillAvailability, type DrillAvailability } from "./drill/api";
 import { AvailableDot } from "./drill/AvailableDot";
 
@@ -238,27 +233,16 @@ function Nav({
   // The row lit for the page on screen, read from the route table: a
   // teacher's by section, a student's by the bottom bar's slot.
   const section = teacherUi ? sectionOf(route) : null;
-  const studentSlot = teacherUi ? null : bottomSlotOf(route);
+  const studentSlot = teacherUi ? null : bottomSlotOf(route, false);
   // Folded by default and not persisted: thirty classrooms turn the sidebar
   // into a scrolling wall, and the teacher who wants them all says so once.
   const [showAll, setShowAll] = useState(false);
   // The sidebar lists CLASSROOMS, flattened out of the courses: that is what
   // a teacher navigates to. The course each one belongs to is in the row's
-  // tip, not a second label on it nor a second level of folding.
-  // It is the "right now" list: the server already leaves the archived out,
-  // the courses the teacher hid are left out as everywhere in the navigation
-  // (#155), and a dated classroom shows only while its period covers today —
-  // the browser's local date, a display rule and not a deadline (#156). The
-  // classroom being read stays, ended or not: the current page is never
-  // missing from its own navigation. The course tree above and the course
-  // cards keep every classroom.
-  const list = courses.data ?? [];
-  const activeCourse = activeCourseOf(list, route);
-  const today = new Date();
-  const allRooms = list
-    .filter((c) => inNavigation(c, activeCourse))
-    .flatMap((c) => c.classrooms)
-    .filter((r) => r.id === currentRoom || isCurrent(r.periodStart, r.periodEnd, today));
+  // tip, not a second label on it nor a second level of folding. It is the
+  // "right now" list (`rightNowClassrooms`), the phone's Classrooms page too.
+  // The course tree above and the course cards keep every classroom.
+  const allRooms = rightNowClassrooms(courses.data ?? [], route);
   const shownRooms = showAll
     ? allRooms
     : cappedClassrooms(allRooms, currentRoom, SIDEBAR_CLASSROOM_CAP);
@@ -327,20 +311,17 @@ function Nav({
           // account menu below): one list, one lit row (the route's
           // `bottomSlot`). Drill only once a classroom has it on (ADR-041);
           // its dot is "today's drill is available".
-          sidebarSlots(drill.shown).map((slot) => {
-            const look = SLOT_LOOK[slot.id];
-            return (
-              <NavItem
-                key={slot.id}
-                icon={look.icon}
-                label={t(look.label)}
-                active={slot.id === studentSlot}
-                onClick={() => go(slot.route)}
-                trailing={slot.id === "drill" && drill.available ? <AvailableDot /> : null}
-                folded={folded}
-              />
-            );
-          })
+          sidebarSlots(drill.shown).map((slot) => (
+            <NavItem
+              key={slot.id}
+              icon={slot.icon}
+              label={t(slot.label)}
+              active={slot.id === studentSlot}
+              onClick={() => go(slot.route)}
+              trailing={slot.id === "drill" && drill.available ? <AvailableDot /> : null}
+              folded={folded}
+            />
+          ))
         )}
         {/* Settings is not a section of the product: it lives in the account
             menu at the bottom of this sidebar, and in the palette. */}
@@ -522,15 +503,15 @@ export function Shell({
       {mark}
     </button>
   );
-  // Where the student's bottom bar shows, the top bar does not repeat it:
-  // DESIGN.md, "The student's bottom bar" (#191).
+  // Where the bottom bar shows, the top bar does not repeat it: DESIGN.md,
+  // "The bottom bar (phone)" (#191, #449).
   const bottomNav = bottomNavShown(route, teacherUi);
   // The student's drill (#317): the sidebar row and the bottom slot, both
   // drawn only once a classroom has it on, with today's badge.
   const drill = useDrillAvailability(!teacherUi);
   // Where the account menu is drawn: the full sidebar row (also the
   // drawer's), the folded sidebar's avatar, or the phone top bar's avatar —
-  // the one place the student's bottom bar already holds Settings.
+  // the one place the bottom bar already holds Settings (its Profile slot).
   const userMenu = (place: "sidebar" | "folded" | "topbar") => (
     <UserMenu
       me={me}
@@ -689,7 +670,7 @@ export function Shell({
         >
           {children}
         </main>
-        {bottomNav ? <BottomNav route={route} navigate={navigate} drill={drill} /> : null}
+        {bottomNav ? <BottomNav route={route} navigate={navigate} teacherUi={teacherUi} drill={drill} /> : null}
       </div>
 
       {/* Mounted only while open: nothing of it — the key listener of its

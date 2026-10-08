@@ -612,9 +612,12 @@ describe("Shell sidebar category names", () => {
   });
 });
 
+/** A teacher screen with no bottom bar (#449): the phone keeps its drawer there. */
+const NO_BAR: Route = { view: "live", id: "e1" };
+
 describe("Shell mobile drawer", () => {
   it("opens and closes from the top bar, as a modal dialog", async () => {
-    renderShell();
+    renderShell({ route: NO_BAR });
     const open = screen.getByRole("button", { name: "Open menu" });
     expect(open).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -630,7 +633,7 @@ describe("Shell mobile drawer", () => {
   });
 
   it("closes on Escape and after a navigation", async () => {
-    const { navigate } = renderShell();
+    const { navigate } = renderShell({ route: NO_BAR });
     await userEvent.click(screen.getByRole("button", { name: "Open menu" }));
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -881,7 +884,7 @@ describe("Shell shortcut strip", () => {
   });
 
   it("keeps the strip out of the mobile drawer", async () => {
-    renderShell({ children: <ScreenWithShortcuts /> });
+    renderShell({ route: NO_BAR, children: <ScreenWithShortcuts /> });
     await userEvent.click(screen.getByRole("button", { name: "Open menu" }));
     const drawer = screen.getByRole("dialog", { name: "Quiz" });
     expect(within(drawer).queryByText("Shortcuts")).toBeNull();
@@ -1167,8 +1170,8 @@ describe("Shell student bottom bar (#191)", () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it("stays out of the teacher's frame, and the drawer stays", () => {
-    renderShell();
+  it("stays off a teacher screen the route table gives no slot, and the drawer stays there", () => {
+    renderShell({ route: NO_BAR });
     expect(bar()).toBeNull();
     expect(screen.getByRole("button", { name: "Open menu" })).toBeInTheDocument();
   });
@@ -1217,5 +1220,45 @@ describe("Shell student bottom bar (#191)", () => {
     expect(navigate).toHaveBeenLastCalledWith({ view: "studentCourses" });
     await userEvent.click(within(bar()!).getByRole("link", { name: "Profile" }));
     expect(navigate).toHaveBeenLastCalledWith({ view: "settings" });
+  });
+});
+
+describe("Shell teacher bottom bar (#449)", () => {
+  const bar = () => screen.queryByRole("navigation", { name: "Main navigation" });
+
+  it("gives the teacher five slots, Poll in the middle, Courses lit on the home", () => {
+    renderShell();
+    const nav = within(bar()!);
+    expect(nav.getAllByRole("link").map((a) => a.textContent)).toEqual([
+      "Activities",
+      "Courses",
+      "Poll",
+      "Classrooms",
+      "Profile",
+    ]);
+    expect(nav.getByRole("link", { name: "Courses" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("does not repeat itself in the top bar: no drawer, no Settings in the avatar", async () => {
+    renderShell({ route: { view: "polls" } });
+    expect(screen.queryByRole("button", { name: "Open menu" })).toBeNull();
+    const avatars = screen.getAllByRole("button", { name: "User menu" });
+    await userEvent.click(avatars[avatars.length - 1]!);
+    expect(screen.queryByRole("menuitem", { name: "Settings" })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: "Sign out" })).toBeInTheDocument();
+  });
+
+  it("lights Classrooms on a classroom, and leads there", async () => {
+    const { navigate } = renderShell({ route: { view: "classroom", id: "c1" } });
+    const classrooms = within(bar()!).getByRole("link", { name: "Classrooms" });
+    expect(classrooms).toHaveAttribute("aria-current", "page");
+    await userEvent.click(within(bar()!).getByRole("link", { name: "Poll" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "polls" });
+  });
+
+  it("keeps the desktop sidebar's Administration row for an admin", () => {
+    renderShell({ me: makeMe({ role: "admin" }), route: { view: "settings" } });
+    expect(within(sidebar()).getByRole("button", { name: "Administration" })).toBeInTheDocument();
+    expect(within(bar()!).getByRole("link", { name: "Profile" })).toHaveAttribute("aria-current", "page");
   });
 });

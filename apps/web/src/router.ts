@@ -47,6 +47,12 @@ export type Route =
    * classroom opens on its evaluations.
    */
   | { view: "classroom"; id: string; tab?: ClassroomQueryTab }
+  /**
+   * The teacher's "right now" classrooms (#449): the list the sidebar holds
+   * under its Classrooms heading, as a page of its own for the phone, whose
+   * bottom bar leaves no drawer to hold it.
+   */
+  | { view: "classrooms" }
   /*
    * The pages of the classroom merge (ADR-035, `docs/merge/05-web.md` §5.2),
    * each behind `CLASSROOM_PAGES` (below) until its screen ships.
@@ -218,10 +224,13 @@ export type RouteOf<V extends Route["view"]> = Extract<Route, { view: V }>;
 export type NavSection = "home" | "activities" | "pools" | "polls" | "admin";
 
 /**
- * The slots of the student's bottom bar on a phone (`student/bottomNavSlots.ts`,
- * #191), which the student's desktop sidebar mirrors.
+ * The slots of the bottom bar on a phone (`bottomNavSlots.ts`): the
+ * student's (#191), which the student's desktop sidebar mirrors, and the
+ * teacher's (#449), Polls in the middle.
  */
-export type BottomSlotId = "activities" | "courses" | "drill" | "grades" | "profile";
+export type StudentSlotId = "activities" | "courses" | "drill" | "grades" | "profile";
+export type TeacherSlotId = "activities" | "courses" | "polls" | "classrooms" | "profile";
+export type BottomSlotId = StudentSlotId | TeacherSlotId;
 
 /**
  * Everything the app knows about one view, in one place: how it is written
@@ -241,10 +250,11 @@ export interface RouteSpec<V extends Route["view"]> {
   /** The sidebar row lit while this view is up; absent when none is. */
   section?: NavSection;
   /**
-   * The student bottom bar's slot lit while this view is up. A view without
-   * one has no bar (DESIGN.md, "The student's bottom bar").
+   * The bottom bar's slot lit while this view is up, in each UI. A view
+   * without one for the UI on screen has no bar there (DESIGN.md, "The
+   * bottom bar (phone)").
    */
-  bottomSlot?: BottomSlotId;
+  bottomSlot?: { student?: StudentSlotId; teacher?: TeacherSlotId };
   /**
    * Present on the teacher screens of ONE evaluation that link to each other
    * (the palette's "grading" and "results" entries): the evaluation's id.
@@ -310,7 +320,7 @@ type EvaluationTailView =
 function evaluationTail<V extends EvaluationTailView>(
   tail: string,
   make: (id: string) => RouteOf<V>,
-  extra: NoInfer<Pick<RouteSpec<V>, "section" | "evaluationId">> = {},
+  extra: NoInfer<Pick<RouteSpec<V>, "section" | "evaluationId" | "bottomSlot">> = {},
 ): RouteSpec<V> {
   return {
     path: (route) => `/evaluations/${evaluationIdOf(route)}/${tail}`,
@@ -345,13 +355,18 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     match: () => null,
     studentSafe: true,
     section: "home",
-    bottomSlot: "activities",
+    bottomSlot: { student: "activities", teacher: "courses" },
   },
-  settings: { ...fixed("settings", { view: "settings" }, true), bottomSlot: "profile" },
+  settings: {
+    ...fixed("settings", { view: "settings" }, true),
+    bottomSlot: { student: "profile", teacher: "profile" },
+  },
+  // On a phone, Administration is a row of the settings (#449).
   admin: {
     ...fixed("admin", { view: "admin" }),
     path: (r) => `/admin${r.tab ? `?tab=${r.tab}` : ""}`,
     section: "admin",
+    bottomSlot: { teacher: "profile" },
   },
   course: {
     path: (r) => `/courses/${r.id}${r.tab && r.tab !== "classrooms" ? `/${r.tab}` : ""}`,
@@ -364,12 +379,14 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
         : null,
     studentSafe: false,
     section: "home",
+    bottomSlot: { teacher: "courses" },
   },
   template: {
     path: (r) => `/templates/${r.id}`,
     match: ([head, id]) => (head === "templates" && id ? { view: "template", id } : null),
     studentSafe: false,
     section: "home",
+    bottomSlot: { teacher: "courses" },
   },
   // F-ORG-14 (D07): `/courses` alone, the student's classrooms. A teacher's
   // Courses is the home; `/courses/:id` is one course (above). A student's
@@ -378,11 +395,14 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     path: () => "/courses",
     match: ([head, id]) => (head === "courses" && !id ? { view: "studentCourses" } : null),
     studentSafe: true,
-    bottomSlot: "courses",
+    bottomSlot: { student: "courses", teacher: "courses" },
   },
   // F-ORG-14, F-RES-04: the student's finished work, every classroom's. A
   // teacher's UI has no page of its own here; it gets the home.
-  studentGrades: { ...fixed("grades", { view: "studentGrades" }, true), bottomSlot: "grades" },
+  studentGrades: {
+    ...fixed("grades", { view: "studentGrades" }, true),
+    bottomSlot: { student: "grades", teacher: "courses" },
+  },
   // The classroom's tabs that are routes (§5.2). Before `classroom`, which
   // takes any tail after the id.
   classroomSettings: {
@@ -390,6 +410,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     match: ([head, id, tail]) =>
       head === "classrooms" && id && tail === "settings" ? { view: "classroomSettings", id } : null,
     studentSafe: false,
+    bottomSlot: { teacher: "classrooms" },
   },
   // M3-10: "New ▾ › Project" on a connected classroom, M3-11's form. In
   // every build since M3-12 shipped the page it lands on.
@@ -400,6 +421,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
         ? { view: "projectNew", classroomId: id }
         : null,
     studentSafe: false,
+    bottomSlot: { teacher: "classrooms" },
   },
   classroomJournal: {
     path: (r) => `/classrooms/${r.id}/journal${r.path ? `/${encodeJournalPath(r.path)}` : ""}`,
@@ -409,7 +431,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
       return path === undefined ? { view: "classroomJournal", id } : { view: "classroomJournal", id, path };
     },
     studentSafe: true,
-    bottomSlot: "courses",
+    bottomSlot: { student: "courses", teacher: "classrooms" },
   },
   // ADR-070 (M3-16a): a group set, then the Groups tab that lists them, in
   // every build. A set's page is the staff's: a student's UI gets the home.
@@ -421,20 +443,21 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     match: ([head, classroomId, tail, id]) =>
       head === "classrooms" && classroomId && tail === "groups" && id ? { view: "groupSet", classroomId, id } : null,
     studentSafe: false,
+    bottomSlot: { teacher: "classrooms" },
   },
   classroomGroups: {
     path: (r) => `/classrooms/${r.id}/groups`,
     match: ([head, id, tail, leaf]) =>
       head === "classrooms" && id && tail === "groups" && leaf === undefined ? { view: "classroomGroups", id } : null,
     studentSafe: true,
-    bottomSlot: "courses",
+    bottomSlot: { student: "courses", teacher: "classrooms" },
   },
   classroomGrades: {
     path: (r) => `/classrooms/${r.id}/grades`,
     match: ([head, id, tail]) =>
       head === "classrooms" && id && tail === "grades" ? { view: "classroomGrades", id } : null,
     studentSafe: true,
-    bottomSlot: "courses",
+    bottomSlot: { student: "courses", teacher: "classrooms" },
   },
   // Role-dispatched (F-ORG-15): the teacher's classroom, or the student's page
   // of it (M5-02), whose Activities tab it is.
@@ -442,7 +465,15 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     path: (r) => `/classrooms/${r.id}${r.tab ? `?tab=${r.tab}` : ""}`,
     match: ([head, id]) => (head === "classrooms" && id ? { view: "classroom", id } : null),
     studentSafe: true,
-    bottomSlot: "courses",
+    bottomSlot: { student: "courses", teacher: "classrooms" },
+  },
+  // #449: `/classrooms` alone, the teacher's "right now" list. A student's
+  // classrooms are their Courses (`/courses`): their UI gets the home.
+  classrooms: {
+    path: () => "/classrooms",
+    match: ([head, id]) => (head === "classrooms" && !id ? { view: "classrooms" } : null),
+    studentSafe: false,
+    bottomSlot: { teacher: "classrooms" },
   },
   // F-PROJ-13 (M3-12): the staff's project page, in every build. One
   // address, two pages (F-PROJ-15, M3-13): a student, a teacher in the
@@ -454,14 +485,21 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
       head === "projects" && id && tail === undefined ? { view: "project", id } : null,
     studentSafe: true,
     section: "activities",
-    bottomSlot: "courses",
+    bottomSlot: { student: "courses", teacher: "activities" },
   },
-  activities: { ...fixed("activities", { view: "activities" }), section: "activities" },
+  activities: {
+    ...fixed("activities", { view: "activities" }),
+    section: "activities",
+    bottomSlot: { teacher: "activities" },
+  },
+  // The phone's bar has no Pools slot: pools are reached from a course, and
+  // light its slot (#449). The question editor has no bar at all.
   pools: {
     path: () => "/pools",
     match: ([head, id]) => (head === "pools" && !id ? { view: "pools" } : null),
     studentSafe: false,
     section: "pools",
+    bottomSlot: { teacher: "courses" },
   },
   // Before `pool`, which takes any tail after the id.
   poolCategories: {
@@ -470,14 +508,16 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
       head === "pools" && id && tail === "categories" ? { view: "poolCategories", id } : null,
     studentSafe: false,
     section: "pools",
+    bottomSlot: { teacher: "courses" },
   },
   pool: {
     path: (r) => `/pools/${r.id}${r.tab ? `?tab=${r.tab}` : ""}`,
     match: ([head, id]) => (head === "pools" && id ? { view: "pool", id } : null),
     studentSafe: false,
     section: "pools",
+    bottomSlot: { teacher: "courses" },
   },
-  polls: { ...fixed("polls", { view: "polls" }), section: "polls" },
+  polls: { ...fixed("polls", { view: "polls" }), section: "polls", bottomSlot: { teacher: "polls" } },
   // `/questions/:id/preview` is the student preview; every other tail is the
   // editor itself (its tab lives in the query string, not in the path).
   question: {
@@ -565,20 +605,25 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
         ? { view: "feedback", attemptId }
         : null,
     studentSafe: true,
-    bottomSlot: "grades",
+    bottomSlot: { student: "grades" },
   },
   // ADR-041 (#317): the student's drill, the centre slot of the bottom bar.
   drill: {
     ...fixed("drill", { view: "drill" }, true),
-    bottomSlot: "drill",
+    bottomSlot: { student: "drill" },
   },
   // WP8 + WP10: ONE place decides what follows an evaluation id, so a new
   // tail is an entry here and nowhere else.
   live: evaluationTail("live", (id) => ({ view: "live", id }), { evaluationId: evaluationIdOf }),
   evaluationPreview: evaluationTail("preview", (id) => ({ view: "evaluationPreview", id })),
   // The projection IS the poll: the launcher's row stays lit while it is up.
+  // It is drawn on the whole screen (App.tsx), so no bottom bar shows on it;
+  // its moderation board, inside the frame, lights the Polls slot.
   poll: evaluationTail("poll", (id) => ({ view: "poll", id }), { section: "polls" }),
-  pollModerate: evaluationTail("moderate", (id) => ({ view: "pollModerate", id }), { section: "polls" }),
+  pollModerate: evaluationTail("moderate", (id) => ({ view: "pollModerate", id }), {
+    section: "polls",
+    bottomSlot: { teacher: "polls" },
+  }),
   grading: {
     ...evaluationTail("grading", (evaluationId) => ({ view: "grading", evaluationId }), {
       evaluationId: evaluationIdOf,
@@ -588,6 +633,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   },
   results: evaluationTail("results", (evaluationId) => ({ view: "results", evaluationId }), {
     evaluationId: evaluationIdOf,
+    bottomSlot: { teacher: "activities" },
   }),
   // The results' Questions tab on a beamer: like the poll, it links to none
   // of the screens above.
@@ -623,9 +669,13 @@ export function routeToPath(r: Route): string {
   return specOf(r.view).path(r);
 }
 
-/** The bottom bar's slot `route` lights, or `null` when the view has no bar. */
-export function bottomSlotOf(route: Route): BottomSlotId | null {
-  return specOf(route.view).bottomSlot ?? null;
+/**
+ * The bottom bar's slot `route` lights in the UI on screen (the teacher's or
+ * the student's), or `null` when the view has no bar there.
+ */
+export function bottomSlotOf(route: Route, teacherUi: boolean): BottomSlotId | null {
+  const slot = specOf(route.view).bottomSlot;
+  return (teacherUi ? slot?.teacher : slot?.student) ?? null;
 }
 
 /** The sidebar section `route` belongs to, or `null` when it lights no row. */

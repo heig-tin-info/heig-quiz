@@ -89,7 +89,7 @@ describe("the classroom merge's routes, CLASSROOM_PAGES on", () => {
   it("opens the classroom to a student, and lights Courses on the student's classroom pages", () => {
     expect(ROUTES.classroom.studentSafe).toBe(true);
     for (const path of ["/courses", "/classrooms/c-1", "/classrooms/c-1/journal/a.md", "/classrooms/c-1/grades"]) {
-      expect(bottomSlotOf(parsePath(path))).toBe("courses");
+      expect(bottomSlotOf(parsePath(path), false)).toBe("courses");
     }
   });
 });

@@ -184,7 +184,7 @@ export function UserMenu({
    * the start in the sidebar, folded or not (left edge).
    */
   align?: "start" | "end";
-  /** Absent where Settings is reached otherwise (the student's bottom bar, #191). */
+  /** Absent where Settings is reached otherwise (the phone's bottom bar, #191, #449). */
   onOpenSettings?: () => void;
   studentView?: boolean;
   onToggleStudentView?: () => void;
