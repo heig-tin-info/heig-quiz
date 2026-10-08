@@ -67,23 +67,29 @@ const PORTAL_TIMEOUT_MS = 10_000;
 // ---------------------------------------------------------------- grants (ADR-047 §4)
 
 /**
- * The workspace grant of an account: the `teacher_grants` rows of any of its
- * VERIFIED addresses — its verified ones (`knownEmails`, GH-11, as the role
- * rule reads them) and its sign-in address when the identity provider
- * verified it — the most permissive winning, as the role rule does. Null without a row: no grant, the
- * default quota. The administrator holds no row (their address cannot be
- * granted), so they are not granted either: an administrator acts on a
- * course as its owner (ADR-054), never past the grant.
+ * The workspace grant of an account, THE one read of it (the mode switch,
+ * the staff's view and the quota sent to the portal all ask it): the
+ * `teacher_grants` rows of any of its VERIFIED addresses — its verified ones
+ * (`knownEmails`, GH-11, as the role rule reads them) and its sign-in
+ * address when the identity provider verified it — the most permissive
+ * winning, as the role rule does. Null without a row: no grant, the default
+ * quota. An administrator (`users.role = 'admin'`, the account role the role
+ * rule gives `SUPER_ADMIN_EMAIL`, with or without active Super Powers)
+ * ALWAYS holds the grant, with at least the default quota (ADR-047,
+ * amendment of 2026-10-08): their address cannot hold a row.
  */
 export async function grantOf(db: Db | Tx, userId: string): Promise<TeacherCodespaceGrant | null> {
-  const [user] = await db.select({ email: users.email, verified: users.emailVerified }).from(users).where(eq(users.id, userId));
+  const [user] = await db.select({ email: users.email, verified: users.emailVerified, role: users.role }).from(users).where(eq(users.id, userId));
   const signIn = user?.verified ? [user.email] : [];
   const emails = [...new Set([...(await knownEmails(db, userId)), ...signIn].map(normalizeEmail))].filter((e) => e !== "");
-  if (emails.length === 0) return null;
-  const rows = await db
-    .select({ enabled: teacherGrants.codespaceEnabled, maxActiveSessions: teacherGrants.codespaceMaxActiveSessions })
-    .from(teacherGrants)
-    .where(inArray(teacherGrants.email, emails));
+  const rows: TeacherCodespaceGrant[] =
+    emails.length === 0
+      ? []
+      : await db
+          .select({ enabled: teacherGrants.codespaceEnabled, maxActiveSessions: teacherGrants.codespaceMaxActiveSessions })
+          .from(teacherGrants)
+          .where(inArray(teacherGrants.email, emails));
+  if (user?.role === "admin") rows.push({ enabled: true, maxActiveSessions: DEFAULT_MAX_ACTIVE_SESSIONS });
   if (rows.length === 0) return null;
   return {
     enabled: rows.some((r) => r.enabled),

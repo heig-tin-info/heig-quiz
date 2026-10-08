@@ -12,6 +12,20 @@ sizes the VM, and from M6-07 it launches `online_seb` from a `seb`
 session; no SEB project opens to students before proof B is recorded. See
 [merge progress](../merge/PROGRESS.md).
 
+**Amended (2026-10-08, product owner): an administrator always holds the
+workspace grant.** Scope: amendment "M6-06" (B)'s last sentence, and (C)
+for an administrator. An account whose role is `admin` (`users.role`, the
+role rule's `SUPER_ADMIN_EMAIL`, whether or not a Super Powers session is
+active) is granted with at least the default quota
+(`DEFAULT_MAX_ACTIVE_SESSIONS`, 2), the most permissive of that and any
+row its addresses hold. `grantOf` (`modules/codespace/service.ts`) is the
+one place that says so, so the mode switch, the staff's view and the quota
+sent to the portal (an administrator holding the quota as creator or
+oldest owner) give one answer. The owner check is unchanged: an
+administrator sets a mode on a course where they hold an owner seat, or
+under Super Powers (ADR-054). The administration lists no grant row for
+them and needs no switch.
+
 **Amended (2026-10-07, M6-07, D21 points 2–5): Safe Exam Browser for a
 project.** Scope: amendment "M6-06" (A)'s `online_seb` clauses and point 7.
 Quiz builds the project's `.seb` (`GET /app/api/projects/:id/seb`, a
@@ -87,7 +101,8 @@ An account's grant is read on its VERIFIED addresses only (its verified
 ones, and its sign-in address when the identity provider verified it), the
 most permissive row winning, as the role rule does; the administrator, whose address cannot hold a grant, is not
 granted (an administrator acts as an owner under Super Powers, ADR-054,
-never past the grant).
+never past the grant) — superseded 2026-10-08: an administrator is always
+granted (amendment above).
 (C) *Whose quota.* The quota an online project consumes is carried by its
 **creator while they still hold an owner seat** on the course, otherwise by
 the **oldest owner seat** (`quotaHolder`, `@quiz/domain`); it is sent to

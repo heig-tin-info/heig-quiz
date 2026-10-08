@@ -7,7 +7,8 @@
  * - the work mode: an owner with the grant only (an assistant `403
  *   owner_required`, an owner without the grant `403
  *   codespace_not_granted`), never a group project, frozen once a
- *   workspace was launched; the invitation's permission by mode;
+ *   workspace was launched; an administrator always granted, with the
+ *   default quota (amendment 2026-10-08); the invitation's permission by mode;
  * - the sync: the PUT the portal receives (a service token it verifies, a
  *   `CodespaceAssignmentSync`, the quota of the holder of decision C), a
  *   failure recorded, the staff's *Resync*;
@@ -25,6 +26,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 
 import {
   CodespaceAssignmentSync,
+  DEFAULT_MAX_ACTIVE_SESSIONS,
   LAUNCH_AUDIENCE,
   LaunchTokenClaims,
   ProjectSummary,
@@ -299,6 +301,31 @@ describe("the work mode (ADR-047 as amended 2026-10-07)", () => {
     expect(back).toMatchObject({ allowed: ["free", "online"], refusal: "codespace_not_granted" });
     const audits = await server.app.db.select().from(auditLog).where(and(eq(auditLog.action, "codespace.work_mode"), eq(auditLog.subjectId, lab.id)));
     expect(audits.map((a) => a.payload)).toEqual([{ from: "free", to: "online" }]);
+  });
+
+  it("is always granted to an administrator, with the default quota (amendment 2026-10-08)", async () => {
+    const room = await connectedClassroom([]);
+    const admin = await server.signIn("admin", `a-${randomUUID().slice(0, 8)}@heig.test`);
+    await seat(room, admin.id, "owner");
+    const unlisted = await grantedTeacher(null);
+    await seat(room, unlisted.id, "owner");
+    const lab = await project(room, "Admin lab", { by: admin });
+
+    // No `teacher_grants` row for the administrator, and no Super Powers: the role alone.
+    const read = ProjectWorkspace.parse((await call("GET", `/app/api/projects/${lab.id}/workspace`, admin.headers)).json());
+    expect(read).toMatchObject({ allowed: ["free", "online", "online_seb"], refusal: null });
+    const online = await setMode(lab.id, "online", admin);
+    expect(online.statusCode, online.body).toBe(200);
+    // The administrator created the project and holds an owner seat: their quota, the default one.
+    expect(CodespaceAssignmentSync.parse(portal.calls.at(-1)!.body)).toMatchObject({
+      teacher: { id: admin.id },
+      quota: { maxActiveSessions: DEFAULT_MAX_ACTIVE_SESSIONS },
+    });
+    expect((await setMode(lab.id, "online_seb", admin)).statusCode).toBe(200);
+
+    // A teacher without a grant is still refused.
+    const refused = await setMode(lab.id, "online", unlisted);
+    expect([refused.statusCode, refused.json().error]).toEqual([403, "codespace_not_granted"]);
   });
 
   it("keeps a group project in the students' own tools, both ways", async () => {

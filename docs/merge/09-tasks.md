@@ -4328,7 +4328,9 @@ serves now (16a), and what waits for the group repositories (16b).
     (`409 work_mode_group`, both ways).
   - Grant lookup: the verified addresses only (`knownEmails`, plus the
     sign-in address when verified), the most permissive row; the
-    administrator holds no row and is not granted.
+    administrator holds no row and is not granted (superseded 2026-10-08:
+    an administrator is always granted, the default quota at least,
+    ADR-047).
   - Single sources: `WORK_MODES`, `WORK_MODE_REFUSALS`,
     `WORKSPACE_START_REFUSALS` and `syncsToPortal` live in `@quiz/domain`
     (`workMode.ts`), re-exported by the contracts. The staff's sessions
