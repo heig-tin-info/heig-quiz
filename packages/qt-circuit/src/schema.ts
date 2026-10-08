@@ -174,7 +174,7 @@ export const TranAnalysis = z.object({
 export type TranAnalysis = z.infer<typeof TranAnalysis>;
 
 /**
- * A small-signal AC sweep (ADR-040): the Bode plot of `v(out)` against the
+ * A small-signal AC sweep (ADR-083): the Bode plot of `v(out)` against the
  * source's EMF, linearised around the DC bias of a `dc` source, at
  * `pointsPerDecade` log-spaced frequencies from `fStartHz` to `fStopHz`.
  */
@@ -273,7 +273,7 @@ export const GradingMode = z.enum(["manual", "simulation", "llm"]);
 export type GradingMode = z.infer<typeof GradingMode>;
 
 /**
- * The envelope an AC stimulus is judged by (ADR-040, `compareBode`). It lives
+ * The envelope an AC stimulus is judged by (ADR-083, `compareBode`). It lives
  * in the grading block and never in the analysis: the analysis travels to the
  * student, the pass rule does not (invariant 4).
  */

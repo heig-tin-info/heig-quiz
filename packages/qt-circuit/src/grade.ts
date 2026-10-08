@@ -218,7 +218,7 @@ export function wrapDegrees(delta: number): number {
 }
 
 /**
- * The envelope rule of an AC stimulus (ADR-040): does the student's Bode plot
+ * The envelope rule of an AC stimulus (ADR-083): does the student's Bode plot
  * stay inside a band around the reference's, at EVERY frequency?
  *
  * The floor is RELATIVE: `floorDb` under the reference's own peak, so the rule

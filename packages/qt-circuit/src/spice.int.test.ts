@@ -365,7 +365,7 @@ describe.skipIf(!available)("the emitted decks on a real ngspice", () => {
 });
 
 // ---------------------------------------------------------------------------
-// The AC sweep (ADR-040)
+// The AC sweep (ADR-083)
 // ---------------------------------------------------------------------------
 
 /** A Bode stimulus: a 0 V bias, the unit AC source, 20 points per decade. */

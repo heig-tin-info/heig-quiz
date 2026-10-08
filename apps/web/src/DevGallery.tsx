@@ -233,7 +233,7 @@ function circuitSeries(gain: number, slew: number): CircuitSeries {
 const CIRCUIT_SERIES = circuitSeries(-2, 0.35);
 const CIRCUIT_EXPECTED = circuitSeries(-2, 0);
 
-/** Four decades of an inverting amplifier of gain −10 with a pole at `cornerHz` (ADR-044). */
+/** Four decades of an inverting amplifier of gain −10 with a pole at `cornerHz` (ADR-083). */
 function circuitBode(cornerHz: number): CircuitSeries {
   const f: number[] = [];
   const magDb: number[] = [];
