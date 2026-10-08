@@ -42,7 +42,7 @@ export function SelectionBar({
   return (
     <div
       data-bulk-bar
-      className={`fixed inset-x-0 bottom-4 mx-auto flex w-[min(54rem,calc(100%-2rem))] flex-col gap-2 ${Z.popover}`}
+      className={`fixed inset-x-0 bottom-[calc(1rem+var(--bottom-nav-h))] mx-auto flex w-[min(54rem,calc(100%-2rem))] flex-col gap-2 ${Z.popover}`}
     >
       {notices ? <div className="flex flex-col gap-2 rounded-card bg-surface shadow-overlay">{notices}</div> : null}
       <div

@@ -1,6 +1,6 @@
-import { screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { SettingsPage } from "./SettingsPage";
 import { makeMe } from "./test/fixtures";
@@ -79,5 +79,48 @@ describe("SettingsPage — RPN calculator", () => {
     mockFetch({});
     renderWithProviders(<SettingsPage me={makeMe({ rpnCalculator: true })} />);
     expect(screen.getByRole("switch", { name: "RPN calculator" })).toBeChecked();
+  });
+});
+
+/*
+ * #449: on a phone the bottom bar's Profile slot leads here, and the sidebar
+ * that held Administration and the view switch is gone. Both rows sit at the
+ * top of the page, under `lg` only (CSS: jsdom draws them at any width).
+ */
+describe("SettingsPage — the phone's rows", () => {
+  it("leads an admin in the teacher UI to the Administration", async () => {
+    const user = userEvent.setup();
+    mockFetch({});
+    const navigate = vi.fn();
+    renderWithProviders(<SettingsPage me={makeMe({ role: "admin" })} navigate={navigate} teacherUi />);
+    await user.click(screen.getByRole("button", { name: /Administration/ }));
+    expect(navigate).toHaveBeenCalledWith({ view: "admin" });
+  });
+
+  it("offers no Administration row to a plain teacher, nor to an admin in the student view", () => {
+    mockFetch({});
+    renderWithProviders(<SettingsPage me={makeMe({ role: "teacher" })} navigate={vi.fn()} teacherUi />);
+    expect(screen.queryByRole("button", { name: /Administration/ })).toBeNull();
+    cleanup();
+    renderWithProviders(<SettingsPage me={makeMe({ role: "admin" })} navigate={vi.fn()} teacherUi={false} />);
+    expect(screen.queryByRole("button", { name: /Administration/ })).toBeNull();
+  });
+
+  it("carries the student-view switch for whoever has one", async () => {
+    const user = userEvent.setup();
+    mockFetch({});
+    const toggle = vi.fn();
+    renderWithProviders(
+      <SettingsPage me={makeMe()} navigate={vi.fn()} teacherUi onToggleStudentView={toggle} />,
+    );
+    await user.click(screen.getByRole("radio", { name: "Student" }));
+    expect(toggle).toHaveBeenCalled();
+  });
+
+  it("draws neither row for a student", () => {
+    mockFetch({});
+    renderWithProviders(<SettingsPage me={makeMe({ role: "student" })} navigate={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /Administration/ })).toBeNull();
+    expect(screen.queryByText("View as")).toBeNull();
   });
 });

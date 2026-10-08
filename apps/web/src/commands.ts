@@ -31,7 +31,7 @@ import { LOCALES, type Locale, type TFunction } from "./i18n";
 import type { PaletteProject } from "./paletteProjects";
 import { evaluationInView, type Route } from "./router";
 import { screenCommands } from "./screenCommands";
-import { homeLook } from "./student/BottomNav";
+import { homeLook } from "./bottomNavSlots";
 import type { Theme, ThemeChoice } from "./theme";
 import type { IconType } from "./ui";
 

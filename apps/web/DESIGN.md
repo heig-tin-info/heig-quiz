@@ -425,7 +425,7 @@ over it, not as one more card in it.
   target wears a 2 px accent ring 6 px out, with two ripples. `Z.coach` sits
   over the page and its sticky bars, under every dialog.
 - Bottom docks: a bar docked on the window's bottom edge and marked
-  `data-bottom-dock` (the student's bottom bar, the launch step's phone dock)
+  `data-bottom-dock` (the phone's bottom bar, the launch step's phone dock)
   takes its height out of the window the coach places in (`visibleBottom`).
   The bubble stays above it, the target is scrolled to the middle of what is
   left, the ring is clipped where the bar starts, and a target wholly behind
@@ -868,7 +868,7 @@ live in `ui/state.ts`, each written once.
   What a pick does — close, stay open for another tag — is the call site's.
   It exists because three comboboxes wrote the pattern out by hand and had
   started to disagree on the panel and the highlighted row.
-- Toast: bottom-right, above the student's bottom bar when it is up
+- Toast: bottom-right, above the phone's bottom bar when it is up
   (`--bottom-nav-h`), `surface` + hairline + overlay shadow. Tones
   `success` / `error` / `warning`, plus `progress` (a neutral spinner) for
   "this has started", which is the only report an action taken from a menu
@@ -1767,32 +1767,50 @@ Sentence case everywhere. Buttons start with a verb ("Create question",
 "Publish"). Status words are lowercase in badges. Every surface, teacher and
 student alike, goes through `t()` with an `en` and an `fr` entry (N-I18N-01).
 
-## The student's bottom bar (phone)
+## The bottom bar (phone)
 
 A student opens the app on a phone far more often than a teacher does, and
 reaches for it with a thumb (#191, the product owner's decision of
-2026-09-29). So under `lg` — the frame's own breakpoint, where the sidebar
-gives way to the top bar; between `lg` and `xl` the sidebar only folds to
-its icons — the STUDENT UI gets a bar
-at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
+2026-09-29); a teacher's real use of a phone is launching or following a
+poll (#449, 2026-10-08). So under `lg` — the frame's own breakpoint, where
+the sidebar gives way to the top bar; between `lg` and `xl` the sidebar only
+folds to its icons — both UIs get a bar at the bottom: ONE component
+(`BottomNav.tsx`, rules in `bottomNavSlots.ts`), two sets of slots.
 
-- **Student UI only.** A student, or a teacher in student view, who is looking
-  at exactly what a student gets. The teacher UI is desktop first and keeps its
-  top bar and drawer on a phone.
+- **The student's slots** for a student, or a teacher in student view, who
+  is looking at exactly what a student gets; **the teacher's slots** in the
+  teacher UI (#449, superseding the "teacher" half of #191).
 - **Navigation, never an action.** No slot wears the accent fill; the current
   one is the sidebar's selection (an `accent` icon on an `accent-soft`
   pill), so the screen's one primary button is still the one
   red FILL on it (invariant 2).
 - **Slots**, each an icon alone (24 px; the label is for a screen reader,
   `sr-only`, the product owner's decision of 2026-10-01: four or five icons
-  a student meets every day need no caption, and the captions made the bar
-  heavy), sharing the width equally: Activities (the home, "Open now"), Courses (the student's
+  met every day need no caption, and the captions made the bar heavy),
+  sharing the width equally.
+- **The student's**: Activities (the home, "Open now"), Courses (the student's
   classrooms, `/courses`, and lit on a classroom's pages — F-ORG-14, D07),
   Grades (the student's finished work, `/grades`, and lit on a feedback
   page), Profile (the settings), and Drill (#317, `/drill`) in the MIDDLE.
   Every slot is a route: the last anchor of the home (Grades, `/#past`)
   became the Grades page on 2026-10-01, and the home lost its Past section
   to it.
+- **The teacher's** (#449), with the teacher sidebar's icons: Activities
+  (`/activities`, lit on a project and on an evaluation's results too),
+  Courses (the home, lit on a course, a template and the pools, which a
+  phone reaches from a course: there is no Pools slot), **Polls** in the
+  MIDDLE (`/polls`, the launcher, lit on a brainstorm's moderation board),
+  Classrooms (`/classrooms`, the sidebar's "right now" list as a page of its
+  own, `course/ClassroomsPage.tsx`, lit on every page of a classroom) and
+  Profile (the settings). Polls is a navigation slot, never "New poll": the
+  launcher's own "Launch" stays the one accent fill of its screen
+  (invariant 2), and the slot is drawn like the others.
+- **Administration lives under Profile on a phone.** For an admin in the
+  teacher UI, the settings page opens on an "Administration" row (under
+  `lg` only) leading to `/admin`, which lights Profile; the desktop sidebar
+  keeps its Administration row. Admin on a phone is rare, and five slots
+  are the most a bar holds. The Teacher | Student switch is a row there
+  too, beside the top bar's: it is about the person, like the theme.
 - **Drill is drawn only when it leads somewhere**: for a student with at
   least one classroom whose drill is on (`visibleSlots`); the four others
   share the width otherwise. Its label is the page's title, `nav.drill`, in
@@ -1823,21 +1841,27 @@ at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
   drawn a little heavier. `--bottom-nav-h` is the whole band it covers
   (pill, gap and 8 px of air) while it is in the page (pure CSS,
   `:root:has(nav[data-bottom-dock])` under `lg`; zero otherwise): a spacer
-  under the page and the toast stack
-  read it, so neither the end of a page nor a toast is ever behind the bar.
+  under the page, the toast stack and a list's floating selection bar (the
+  pool's bulk actions, `SelectionBar`) read it, so neither the end of a page,
+  a toast nor the bulk bar is ever behind the bar.
   An anchor (a journal heading) lands under the sticky top bar through one
   `scroll-padding-top` on the root, from `--topbar-h`.
 - **Where it is drawn: an allowlist**, the views the route table gives a
-  `bottomSlot` (`router.ts`: the home, the Grades page, a feedback page, the settings, the
-  drill, the Courses and a classroom's pages) and nothing else. Hidden on the
-  attempt (lobby and player), the poll join page, every projection and
+  `bottomSlot` for the UI on screen (`router.ts`, `{ student, teacher }`;
+  the student's: the home, the Grades page, a feedback page, the settings,
+  the drill, the Courses and a classroom's pages) and nothing else. Hidden on
+  the attempt (lobby and player), the poll join page, every projection and
   preview, a SEB-confined page, and any screen with a sticky bottom bar of its
   own (the player's, PollJoin's "Send", the launch step's dock): two bars at
   the bottom fight for the thumb, and the one that is the screen's action must
-  win. A new student page does not get the bar until its route has a slot.
-- **No repeats.** Where the bar shows, the top bar loses the drawer's trigger
-  (the drawer held the home, which the bar and the wordmark both reach) and
-  the avatar menu loses Settings (the Profile slot). The avatar stays, for
+  win. In the teacher UI, also hidden on its full-screen working surfaces:
+  the live dashboard, the question editor (its own sticky save bar), the
+  evaluation's configuration (whose last step is the launch dock) and the
+  grading screen. A new page does not get the bar until its route has a slot
+  for its UI; a teacher screen without one keeps the drawer.
+- **No repeats.** Where the bar shows, in either UI, the top bar loses the
+  drawer's trigger (the drawer held the home, which the bar and the wordmark
+  both reach) and the avatar menu loses Settings (the Profile slot). The avatar stays, for
   what is about the person: the inbox, the theme, signing out.
 - A `<nav>` named "Main navigation", `aria-current="page"` on the lit slot,
   real links (a long press or a modified click opens the address).

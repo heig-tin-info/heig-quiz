@@ -1663,6 +1663,17 @@ const scenes = [
       await p.getByRole("button", { name: /^(past conversations|conversations précédentes)$/i }).click();
       await p.waitForTimeout(400);
     } },
+  // The bottom bar on a phone (#449): the teacher's slots, Polls in the
+  // middle, on the pages they lead to; the settings with and without the
+  // Administration row; the student's bar, unchanged. Take them with
+  // `--width=390 --only=bnav-`.
+  { name: "bnav-teacher-home", role: "teacher", path: "/", fold: true },
+  { name: "bnav-teacher-polls", role: "teacher", path: "/polls", fold: true, act: gotIt },
+  { name: "bnav-teacher-classrooms", role: "teacher", path: "/classrooms", fold: true },
+  { name: "bnav-teacher-pools", role: "teacher", path: "/pools", fold: true, act: gotIt },
+  { name: "bnav-teacher-settings", role: "teacher", path: "/settings", fold: true },
+  { name: "bnav-admin-settings", role: "admin", path: "/settings", fold: true },
+  { name: "bnav-student-home", role: "student", path: "/", fold: true },
 ];
 
 /**
@@ -1700,6 +1711,15 @@ async function openRowMenu(page, triggerName, item) {
  * Dismisses the first-visit coach mark when it is up: on a laptop-height
  * window it sits over the grading header's step picker.
  */
+/** A single coach bubble (not a tour) closed by its "Got it", when it shows. */
+async function gotIt(page) {
+  const button = page.getByRole("button", { name: /^(Got it|Compris)$/ }).locator("visible=true").first();
+  if (await button.waitFor({ timeout: 3000 }).then(() => true, () => false)) {
+    await button.click({ timeout: 3000, force: true }).catch(() => {});
+    await page.waitForTimeout(300);
+  }
+}
+
 async function skipCoach(page) {
   const skip = page.getByRole("button", { name: /^(Skip|Passer)$/ }).locator("visible=true").first();
   // It shows a moment after the page settles, or not at all.

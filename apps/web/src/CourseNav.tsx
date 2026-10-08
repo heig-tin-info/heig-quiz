@@ -1,6 +1,7 @@
 import type { UseQueryResult } from "@tanstack/react-query";
 
 import type { ClassroomSummary, CourseSummary } from "@quiz/contracts";
+import { isCurrent } from "@quiz/domain";
 
 import { useT } from "./i18n";
 import { NavTree, navRowClass, useNavCycle, type NavCycle } from "./navTree";
@@ -58,6 +59,28 @@ export function activeCourseOf(courses: CourseSummary[], route: Route): string |
  */
 export function inNavigation(course: CourseSummary, activeId?: string | null): boolean {
   return !course.hidden || course.id === activeId;
+}
+
+/**
+ * THE "right now" list of classrooms: the sidebar's Classrooms section and
+ * the phone's Classrooms page (#449). The server already leaves the archived
+ * out, the courses the teacher hid are left out as everywhere in the
+ * navigation (#155), and a dated classroom shows only while its period
+ * covers today — the browser's local date, a display rule and not a
+ * deadline (#156). The classroom being read stays, ended or not: the current
+ * page is never missing from its own navigation.
+ */
+export function rightNowClassrooms(
+  courses: CourseSummary[],
+  route: Route,
+  today: Date = new Date(),
+): ClassroomSummary[] {
+  const activeCourse = activeCourseOf(courses, route);
+  const currentRoom = route.view === "classroom" ? route.id : null;
+  return courses
+    .filter((c) => inNavigation(c, activeCourse))
+    .flatMap((c) => c.classrooms)
+    .filter((r) => r.id === currentRoom || isCurrent(r.periodStart, r.periodEnd, today));
 }
 
 /**

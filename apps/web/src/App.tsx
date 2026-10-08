@@ -58,6 +58,9 @@ const TemplateEditor = lazy(() =>
 const ClassroomView = lazy(() =>
   import("./ClassroomView").then((m) => ({ default: m.ClassroomView })),
 );
+const ClassroomsPage = lazy(() =>
+  import("./course/ClassroomsPage").then((m) => ({ default: m.ClassroomsPage })),
+);
 // F-PROJ-01 (M3-11): the new project; F-PROJ-13 (M3-12): the project page.
 const NewProjectPage = lazy(() =>
   import("./project/NewProjectPage").then((m) => ({ default: m.NewProjectPage })),
@@ -237,6 +240,10 @@ interface PageContext {
   navigate: Navigate;
   /** The teacher UI is on: a teacher or an admin, not in student view. */
   teacherUi: boolean;
+  /** A teacher in their own student view (ADR-018). */
+  studentView?: boolean;
+  /** The frame's Teacher | Student switch, for a teacher and an admin only. */
+  onToggleStudentView?: () => void;
 }
 
 type Page<V extends Route["view"]> = (route: RouteOf<V>, ctx: PageContext) => ReactNode;
@@ -257,7 +264,16 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
       // WP9: student player — the student home is their evaluations.
       <StudentHome me={c.me} navigate={c.navigate} />
     ),
-  settings: (_, c) => <SettingsPage me={c.me} />,
+  // #449: on a phone, the bottom bar's Profile also holds Administration and the view switch.
+  settings: (_, c) => (
+    <SettingsPage
+      me={c.me}
+      navigate={c.navigate}
+      teacherUi={c.teacherUi}
+      studentView={c.studentView}
+      onToggleStudentView={c.onToggleStudentView}
+    />
+  ),
   // WP10: the student's own feedback page, reachable in either UI — a teacher
   // checking the student view opens the same page a student does. It is the
   // ONE student results page: WP9's `/results/:id` is gone.
@@ -288,6 +304,8 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
     ) : (
       <StudentClassroom id={r.id} tab="activities" navigate={c.navigate} />
     ),
+  // #449: the teacher's "right now" classrooms, the phone bar's Classrooms slot.
+  classrooms: (_, c) => <ClassroomsPage navigate={c.navigate} />,
   // F-ORG-14: the student's classrooms. A teacher's Courses is the home.
   studentCourses: (_, c) =>
     c.teacherUi ? <TeacherHome navigate={c.navigate} /> : <StudentCourses navigate={c.navigate} />,
@@ -632,14 +650,20 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
     );
   }
   const shown: Route = onTeacherRoute ? { view: "home" } : route;
-  const page = (
-    <Suspense fallback={<Spinner className="py-24" />}>
-      {renderPage(shown, { me: me.data, navigate, teacherUi })}
-    </Suspense>
-  );
   const toggleView = teacher
     ? () => toggleStudentView(inStudentView, route, navigate)
     : undefined;
+  const page = (
+    <Suspense fallback={<Spinner className="py-24" />}>
+      {renderPage(shown, {
+        me: me.data,
+        navigate,
+        teacherUi,
+        studentView: inStudentView,
+        onToggleStudentView: toggleView,
+      })}
+    </Suspense>
+  );
   if (FULL_SCREEN.has(shown.view)) {
     // The attempt has no frame, and so no Teacher | Student switch: the
     // banner carries the way back, which leaves the attempt open (ADR-018).

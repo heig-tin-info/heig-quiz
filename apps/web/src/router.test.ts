@@ -42,7 +42,12 @@ describe("routeToPath / parsePath", () => {
   it("falls back to home on unknown or partial paths", () => {
     expect(parsePath("/")).toEqual({ view: "home" });
     expect(parsePath("/nope")).toEqual({ view: "home" });
-    expect(parsePath("/classrooms")).toEqual({ view: "home" });
+  });
+
+  it("parses the teacher's \"right now\" classrooms, `/classrooms` alone (#449)", () => {
+    expect(parsePath("/classrooms")).toEqual({ view: "classrooms" });
+    expect(parsePath("/classrooms/c-1")).toEqual({ view: "classroom", id: "c-1" });
+    expect(ROUTES.classrooms.studentSafe).toBe(false);
   });
 
   it("parses the student's Courses in every build, since M5-02 (F-ORG-14)", () => {
@@ -82,7 +87,7 @@ describe("routeToPath / parsePath", () => {
     expect(parsePath("/classrooms/c-1/grades")).toEqual({ view: "classroomGrades", id: "c-1" });
     // One address, two pages, under the Courses slot.
     expect(ROUTES.classroomGrades.studentSafe).toBe(true);
-    expect(ROUTES.classroomGrades.bottomSlot).toBe("courses");
+    expect(ROUTES.classroomGrades.bottomSlot).toEqual({ student: "courses", teacher: "classrooms" });
   });
 
   it("parses the classroom's Groups and a group set in every build, since M3-16a (ADR-070)", () => {
@@ -101,7 +106,7 @@ describe("routeToPath / parsePath", () => {
     expect(ROUTES.groupSet.studentSafe).toBe(false);
     // The Groups tab is one address, two pages (F-PROJ-22, M3-17), under the Courses slot.
     expect(ROUTES.classroomGroups.studentSafe).toBe(true);
-    expect(ROUTES.classroomGroups.bottomSlot).toBe("courses");
+    expect(ROUTES.classroomGroups.bottomSlot).toEqual({ student: "courses", teacher: "classrooms" });
   });
 
   it("parses the project page and the new project in every build, since M3-12 (F-PROJ-13)", () => {
@@ -227,6 +232,7 @@ describe("ROUTES", () => {
     course: { view: "course", id: "k-1" },
     template: { view: "template", id: "t-1" },
     classroom: { view: "classroom", id: "c-1" },
+    classrooms: { view: "classrooms" },
     studentCourses: { view: "studentCourses" },
     studentGrades: { view: "studentGrades" },
     classroomSettings: { view: "classroomSettings", id: "c-1" },
@@ -331,6 +337,8 @@ describe("ROUTES", () => {
         "attempt",
         "classroom",
         "classroomGrades",
+        // The phone's "right now" page (#449): the desktop has the sidebar list.
+        "classrooms",
         "classroomGroups",
         "classroomJournal",
         "classroomSettings",
