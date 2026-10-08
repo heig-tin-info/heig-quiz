@@ -281,7 +281,7 @@ export const CLASSROOM_PAGES =
 export const routeEnabled = (view: Route["view"]): boolean => !ROUTES[view].preview || CLASSROOM_PAGES;
 
 /** The tabs of the Administration page, in their order (`AdminPanel.tsx`). */
-export const ADMIN_TABS = ["people", "system", "tasks", "llm"] as const;
+export const ADMIN_TABS = ["people", "system", "tasks", "llm", "concepts"] as const;
 export type AdminTab = (typeof ADMIN_TABS)[number];
 
 /** A view whose path is one fixed segment (`/settings`, `/polls`, …), whatever follows it. */

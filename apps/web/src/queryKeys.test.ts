@@ -22,6 +22,8 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["generateAvailabilityKey", keys.generateAvailabilityKey, ["generate-availability"]],
     ["poolReviewsKey", keys.poolReviewsKey("p1"), ["pool", "p1", "reviews"]],
     ["adminLlmUsageKey", keys.adminLlmUsageKey, ["admin-teachers", "llm-usage"]],
+    ["adminConceptSortingKey", keys.adminConceptSortingKey, ["admin-teachers", "concept-sorting"]],
+    ["conceptsKey", keys.conceptsKey, ["concepts"]],
     ["adminKioskKey", keys.adminKioskKey, ["admin-kiosk-devices"]],
     ["kioskStationKey", keys.kioskStationKey, ["kiosk-station"]],
     ["pairPreviewKey", keys.pairPreviewKey("BCDF-GHJK"), ["pair-preview", "BCDF-GHJK"]],

@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Loader2, Search } from "lucide-react";
+import { Check, ChevronDown, Loader2, Minus, Search } from "lucide-react";
 import { useId } from "react";
 import type { ReactNode } from "react";
 
@@ -342,17 +342,31 @@ export function ToggleChip({
   );
 }
 
-/** Checkbox with the accent tick, label on the right. */
+/**
+ * Checkbox with the accent tick, label on the right. `indeterminate` is the
+ * box of a group some of whose members are ticked: a dash on the accent
+ * fill, and the native `indeterminate` state, which a screen reader
+ * announces as "mixed". A click still sends `onChange`, as for any box.
+ */
 export function Checkbox({
   label,
+  indeterminate = false,
   className = "",
   ...props
-}: React.InputHTMLAttributes<HTMLInputElement> & { label: ReactNode }) {
+}: React.InputHTMLAttributes<HTMLInputElement> & { label: ReactNode; indeterminate?: boolean }) {
   return (
     <label className={cx("inline-flex cursor-pointer items-center gap-2.5 text-sm", props.disabled && "opacity-50", className)}>
       <span className="relative inline-flex size-4 shrink-0">
-        <input type="checkbox" {...props} className="peer size-4 appearance-none rounded-[5px] border border-line-strong bg-surface transition-colors checked:border-accent checked:bg-accent" />
-        <Check className="pointer-events-none absolute inset-0 m-auto size-3 text-on-fill opacity-0 peer-checked:opacity-100" strokeWidth={3} />
+        <input
+          type="checkbox"
+          {...props}
+          ref={(el) => {
+            if (el) el.indeterminate = indeterminate;
+          }}
+          className="peer size-4 appearance-none rounded-[5px] border border-line-strong bg-surface transition-colors checked:border-accent checked:bg-accent indeterminate:border-accent indeterminate:bg-accent"
+        />
+        <Check className="pointer-events-none absolute inset-0 m-auto size-3 text-on-fill opacity-0 peer-checked:opacity-100 peer-indeterminate:opacity-0" strokeWidth={3} />
+        <Minus className="pointer-events-none absolute inset-0 m-auto size-3 text-on-fill opacity-0 peer-indeterminate:opacity-100" strokeWidth={3} />
       </span>
       {label}
     </label>
