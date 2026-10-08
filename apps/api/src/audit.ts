@@ -57,10 +57,19 @@ export type AuditAction =
    * created a `proposed` concept (subject the concept; `payload.lang`,
    * `payload.label`, `payload.qualifier`). `edit`: its creator or the admin
    * changed a label, qualifier or description (`payload`: the patch, per
-   * language).
+   * language). `delete`: the admin deleted a concept nothing referred to,
+   * before the cut-over (second addendum §2; `payload.status`,
+   * `payload.labels`). `sort`: the admin accepted or changed sorting
+   * decisions of existing tags (second addendum §5; subject the POOL, one
+   * row per pool of the batch; `payload.decisions`: `tag`, `decision`,
+   * `conceptId`, `reason`). `validate`: the admin validated a concept, or
+   * created one validated while sorting (`payload.created`; `payload.labels`).
    */
+  | "concept.delete"
   | "concept.edit"
   | "concept.propose"
+  | "concept.sort"
+  | "concept.validate"
   | "course.create"
   | "course.delete"
   | "course.staff_add"

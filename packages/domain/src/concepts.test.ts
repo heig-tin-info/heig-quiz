@@ -5,9 +5,12 @@ import {
   closeConcepts,
   conceptKey,
   editDistance,
+  groupNewConcepts,
+  groupTagsByConceptKey,
   qualifiedConceptKey,
   resolveConceptLabel,
   splitQualifiedLabel,
+  tagGroupKey,
   type ResolvableConcept,
 } from "./concepts.js";
 
@@ -359,5 +362,119 @@ describe("resolveConceptLabel", () => {
       kind: "resolved",
       id: "lifo",
     });
+  });
+});
+
+describe("groupTagsByConceptKey", () => {
+  it("groups the spellings of one key across pools, most worn first", () => {
+    const groups = groupTagsByConceptKey([
+      { poolId: "p2", tag: "boucle", count: 9 },
+      { poolId: "p1", tag: "pointeur", count: 3 },
+      { poolId: "p2", tag: "Pointeurs", count: 4 },
+      { poolId: "p1", tag: "pointeurs", count: 4 },
+      { poolId: "p1", tag: "c++", count: 1 },
+      { poolId: "p1", tag: "c", count: 1 },
+    ]);
+    expect(groups.map((g) => [g.key, g.count])).toEqual([
+      ["pointeur", 11],
+      ["boucle", 9],
+      ["c", 1],
+      ["c++", 1],
+    ]);
+    expect(groups[0]!.pairs.map((p) => `${p.poolId}:${p.tag}`)).toEqual([
+      "p2:Pointeurs",
+      "p1:pointeurs",
+      "p1:pointeur",
+    ]);
+  });
+
+  it("keeps the caller's fields and does not depend on the input order", () => {
+    const rows = [
+      { poolId: "b", tag: "pile", count: 2, extra: 1 },
+      { poolId: "a", tag: "pile", count: 2, extra: 2 },
+      { poolId: "a", tag: "piles", count: 5, extra: 3 },
+    ];
+    const once = groupTagsByConceptKey(rows);
+    expect(groupTagsByConceptKey([...rows].reverse())).toEqual(once);
+    expect(once[0]!.pairs.map((p) => p.extra)).toEqual([3, 2, 1]);
+  });
+
+  it("keys a tag with no letter nor digit by itself", () => {
+    expect(tagGroupKey("???")).toBe("???");
+    expect(tagGroupKey("Pointeurs")).toBe("pointeur");
+    expect(groupTagsByConceptKey([])).toEqual([]);
+  });
+});
+
+describe("groupNewConcepts", () => {
+  const pointer = {
+    fr: { label: " Pointeur ", description: "" },
+    en: { label: "Pointer" },
+  };
+
+  it("makes one concept of the requests with the same keys, the first description per language kept", () => {
+    const grouping = groupNewConcepts([
+      { item: 1, ...pointer },
+      {
+        item: 2,
+        fr: { label: "pointeurs", description: "Une adresse." },
+        en: { label: "pointers", description: "An address." },
+      },
+      {
+        item: 3,
+        fr: { label: "adresse", qualifier: "  mémoire  vive " },
+        en: { label: "address" },
+      },
+    ]);
+    expect(grouping).toEqual({
+      kind: "ok",
+      concepts: [
+        {
+          items: [1, 2],
+          sides: {
+            fr: {
+              label: "Pointeur",
+              qualifier: "",
+              description: "Une adresse.",
+              key: "pointeur",
+            },
+            en: {
+              label: "Pointer",
+              qualifier: "",
+              description: "An address.",
+              key: "pointer",
+            },
+          },
+        },
+        {
+          items: [3],
+          sides: {
+            fr: {
+              label: "adresse",
+              qualifier: "mémoire vive",
+              description: "",
+              key: "adress|memoire-vive",
+            },
+            en: {
+              label: "address",
+              qualifier: "",
+              description: "",
+              key: "address",
+            },
+          },
+        },
+      ],
+    });
+  });
+
+  it("names every item of two concepts that share one language's key only", () => {
+    expect(
+      groupNewConcepts([
+        { item: "a", ...pointer },
+        { item: "b", fr: { label: "boucle" }, en: { label: "loop" } },
+        { item: "c", fr: { label: "pointeurs" }, en: { label: "Address" } },
+        { item: "d", ...pointer },
+      ]),
+    ).toEqual({ kind: "clash", items: ["a", "d", "c"] });
   });
 });

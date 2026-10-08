@@ -11,6 +11,17 @@
  * - `PATCH /app/api/concepts/:id`: 403 `concept_forbidden`, 409
  *   `concept_merged` or `concept_exists`, 422 `concept_label_missing`, 404
  *   for an unknown id.
+ *
+ * The admin's, with the admin role alone — no Super Powers (ADR-081 second
+ * addendum §4, an exception to ADR-054 §2 for the sorting only):
+ *
+ * - `GET /app/api/admin/concept-sorting`: every (pool, tag) pair to sort.
+ * - `POST /app/api/admin/concept-sorting/accept`: the decisions, in one
+ *   transaction; 409 `concept_exists` (with `conflicts`), 422 `tag_unknown`,
+ *   `concept_not_found` or `concept_batch_conflict` (with `items`).
+ * - `POST /app/api/admin/concepts/:id/validate`: 422
+ *   `concept_label_missing`, 409 `concept_merged`, 404.
+ * - `DELETE /app/api/admin/concepts/:id`: 204; 409 `concept_in_use`, 404.
  */
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
@@ -21,15 +32,19 @@ import {
   ConceptResolveRequest,
   type ConceptResolveResponse,
   IdParam,
+  TagSortingAccept,
+  type TagSortingAcceptResponse,
+  type TagSortingList,
 } from "@quiz/contracts";
 
 import { actorOf } from "../../audit.js";
-import { callerOf, teacherGuard } from "../guards.js";
+import { adminGuard, callerOf, teacherGuard } from "../guards.js";
 import { invalid, notFound, sendFailure } from "../http.js";
 import * as service from "./service.js";
 
 export async function conceptPlugin(app: FastifyInstance) {
   const requireTeacher = teacherGuard(app);
+  const requireAdmin = adminGuard(app);
   const context = (req: FastifyRequest, now: Date): service.ConceptContext => ({
     caller: callerOf(req),
     actor: actorOf(req),
@@ -65,6 +80,45 @@ export async function conceptPlugin(app: FastifyInstance) {
     if (!body.success) return invalid(reply, body.error);
     try {
       return await service.patchConcept(app.db, context(req, now), params.data.id, body.data);
+    } catch (error) {
+      return sendFailure(reply, error, now);
+    }
+  });
+
+  app.get("/app/api/admin/concept-sorting", { preHandler: requireAdmin }, async () => {
+    return { rows: await service.listTagSortings(app.db) } satisfies TagSortingList;
+  });
+
+  app.post("/app/api/admin/concept-sorting/accept", { preHandler: requireAdmin }, async (req, reply) => {
+    const now = app.clock.now();
+    const body = TagSortingAccept.safeParse(req.body);
+    if (!body.success) return invalid(reply, body.error);
+    try {
+      const ctx = { userId: callerOf(req).id, actor: actorOf(req), now };
+      return (await service.acceptTagSortings(app.db, ctx, body.data.items)) satisfies TagSortingAcceptResponse;
+    } catch (error) {
+      return sendFailure(reply, error, now);
+    }
+  });
+
+  app.post("/app/api/admin/concepts/:id/validate", { preHandler: requireAdmin }, async (req, reply) => {
+    const now = app.clock.now();
+    const params = IdParam.safeParse(req.params);
+    if (!params.success) return notFound(reply);
+    try {
+      return await service.validateConcept(app.db, { actor: actorOf(req), now }, params.data.id);
+    } catch (error) {
+      return sendFailure(reply, error, now);
+    }
+  });
+
+  app.delete("/app/api/admin/concepts/:id", { preHandler: requireAdmin }, async (req, reply) => {
+    const now = app.clock.now();
+    const params = IdParam.safeParse(req.params);
+    if (!params.success) return notFound(reply);
+    try {
+      await service.deleteConcept(app.db, { actor: actorOf(req), now }, params.data.id);
+      return reply.code(204).send();
     } catch (error) {
       return sendFailure(reply, error, now);
     }

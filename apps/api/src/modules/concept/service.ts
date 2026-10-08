@@ -14,7 +14,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { asc, eq, ne, sql } from "drizzle-orm";
 
 import {
   CONCEPT_LANGS,
@@ -24,15 +24,17 @@ import {
   type ConceptPatch,
   type ConceptResolution,
 } from "@quiz/contracts";
-import { cleanConceptLabel, qualifiedConceptKey, resolveConceptLabel } from "@quiz/domain";
+import { cleanConceptLabel, cleanConceptQualifier, resolveConceptLabel } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
-import { isUniqueViolation, type Db } from "../../db/client.js";
+import { isForeignKeyViolation, isUniqueViolation, type Db } from "../../db/client.js";
 import { concepts } from "../../db/schema.js";
 import type { Caller } from "../guards.js";
 import { DomainError } from "../http.js";
+import { columnsOf, COLUMNS, holdersOf, perLang, side, sideOf, toConcept } from "./row.js";
 
-type ConceptRow = typeof concepts.$inferSelect;
+export { toConcept } from "./row.js";
+export { acceptTagSortings, listTagSortings, type SortingContext } from "./sorting.js";
 
 /** Who writes: the caller for the rights, the actor for the audit, the server's instant. */
 export interface ConceptContext {
@@ -41,99 +43,19 @@ export interface ConceptContext {
   now: Date;
 }
 
-/** The columns of one language, and the unique index of its key. */
-const COLUMNS = {
-  fr: {
-    label: "labelFr",
-    qualifier: "qualifierFr",
-    description: "descriptionFr",
-    key: "keyFr",
-    index: "concepts_key_fr_uq",
-  },
-  en: {
-    label: "labelEn",
-    qualifier: "qualifierEn",
-    description: "descriptionEn",
-    key: "keyEn",
-    index: "concepts_key_en_uq",
-  },
-} as const satisfies Record<
-  ConceptLang,
-  {
-    label: keyof ConceptRow;
-    qualifier: keyof ConceptRow;
-    description: keyof ConceptRow;
-    key: keyof ConceptRow;
-    index: string;
-  }
->;
-
-/** What one language of a concept holds. */
-interface Side {
-  label: string | null;
-  qualifier: string;
-  description: string;
-  key: string | null;
-}
-
-/** One value per language. */
-function perLang<T>(f: (lang: ConceptLang) => T): Record<ConceptLang, T> {
-  return { fr: f("fr"), en: f("en") };
-}
-
-function sideOf(row: ConceptRow, lang: ConceptLang): Side {
-  const c = COLUMNS[lang];
-  return { label: row[c.label], qualifier: row[c.qualifier], description: row[c.description], key: row[c.key] };
-}
-
-/** The columns a side is written to. */
-function columnsOf(lang: ConceptLang, side: Side): Partial<typeof concepts.$inferInsert> {
-  const c = COLUMNS[lang];
-  return { [c.label]: side.label, [c.qualifier]: side.qualifier, [c.description]: side.description, [c.key]: side.key };
-}
-
-/** A side as typed, cleaned, with its key: none without a label. */
-function side(label: string | null, qualifier: string, description: string): Side {
-  return { label, qualifier, description, key: label === null ? null : qualifiedConceptKey(label, qualifier) };
-}
-
-/** A qualifier is trimmed and its inner spaces collapsed; nothing else is touched. */
-const cleanQualifier = (qualifier: string) => qualifier.trim().replace(/\s+/g, " ");
-
-export function toConcept(row: ConceptRow): Concept {
-  const sides = perLang((lang) => sideOf(row, lang));
-  return {
-    id: row.id,
-    status: row.status,
-    mergedInto: row.mergedInto,
-    labels: perLang((lang) => sides[lang].label),
-    qualifiers: perLang((lang) => sides[lang].qualifier),
-    descriptions: perLang((lang) => sides[lang].description),
-    createdBy: row.createdBy,
-    createdAt: row.createdAt.toISOString(),
-  };
-}
-
 /**
  * A write that hit a key's unique index: the 409 `concept_exists` naming the
  * concept that holds the key. Anything else is rethrown as it came.
  */
 async function conflictOr(db: Db, error: unknown, keys: Record<ConceptLang, string | null>): Promise<unknown> {
-  for (const lang of CONCEPT_LANGS) {
+  const violated = perLang((lang) => {
     const key = keys[lang];
-    if (key === null || !isUniqueViolation(error, COLUMNS[lang].index)) continue;
-    const [holder] = await db
-      .select()
-      .from(concepts)
-      .where(and(eq(concepts[COLUMNS[lang].key], key), ne(concepts.status, "merged")))
-      .limit(1);
-    if (holder) {
-      return new DomainError("concept_exists", 409, "A concept with this label already exists", {
-        concept: toConcept(holder),
-      });
-    }
-  }
-  return error;
+    return key !== null && isUniqueViolation(error, COLUMNS[lang].index) ? [key] : [];
+  });
+  const [holder] = await holdersOf(db, violated);
+  return holder
+    ? new DomainError("concept_exists", 409, "A concept with this label already exists", { concept: toConcept(holder) })
+    : error;
 }
 
 /** Every concept that is not merged, by label. The vocabulary is small: it is loaded whole. */
@@ -182,7 +104,7 @@ export async function createConcept(db: Db, ctx: ConceptContext, body: ConceptCr
   const id = randomUUID();
   const sides = perLang((lang) =>
     lang === body.lang
-      ? side(cleanConceptLabel(body.label), cleanQualifier(body.qualifier ?? ""), body.description ?? "")
+      ? side(cleanConceptLabel(body.label), cleanConceptQualifier(body.qualifier ?? ""), body.description ?? "")
       : side(null, "", ""),
   );
   try {
@@ -242,7 +164,7 @@ export async function patchConcept(db: Db, ctx: ConceptContext, id: string, patc
         const p = patch[lang] ?? {};
         const next = side(
           p.label === undefined ? was.label : cleanConceptLabel(p.label),
-          p.qualifier === undefined ? was.qualifier : cleanQualifier(p.qualifier),
+          p.qualifier === undefined ? was.qualifier : cleanConceptQualifier(p.qualifier),
           p.description ?? was.description,
         );
         if (next.label === null && (next.qualifier || next.description)) {
@@ -263,5 +185,71 @@ export async function patchConcept(db: Db, ctx: ConceptContext, id: string, patc
     return toConcept(row);
   } catch (error) {
     throw await conflictOr(db, error, keys);
+  }
+}
+
+/**
+ * Validates a `proposed` concept (ADR-081 §7, the admin's): a validated
+ * concept has both labels, so a missing one is a 422
+ * `concept_label_missing` naming the language. A validated concept is
+ * answered as it is; a merged one is a 409 `concept_merged`; a missing one
+ * a 404. The route is the admin's.
+ */
+export async function validateConcept(db: Db, ctx: Omit<ConceptContext, "caller">, id: string): Promise<Concept> {
+  const row = await db.transaction(async (tx) => {
+    const [current] = await tx.select().from(concepts).where(eq(concepts.id, id)).for("update");
+    if (!current) throw new DomainError("not_found", 404, "No such concept");
+    if (current.status === "merged") throw new DomainError("concept_merged", 409, "A merged concept is not validated");
+    if (current.status === "validated") return current;
+    for (const lang of CONCEPT_LANGS) {
+      if (sideOf(current, lang).label === null) {
+        throw new DomainError("concept_label_missing", 422, "A validated concept has both labels", { lang });
+      }
+    }
+    const [row] = await tx
+      .update(concepts)
+      .set({ status: "validated", updatedAt: ctx.now })
+      .where(eq(concepts.id, id))
+      .returning();
+    await audit(tx, {
+      ...ctx.actor,
+      action: "concept.validate",
+      subjectType: "concept",
+      subjectId: id,
+      payload: { labels: perLang((lang) => sideOf(current, lang).label) },
+    });
+    return row!;
+  });
+  return toConcept(row);
+}
+
+/**
+ * Deletes a concept nothing refers to (ADR-081 second addendum §2): a
+ * sorting decision that maps to it, or a concept merged into it, makes the
+ * foreign key refuse, answered 409 `concept_in_use`; a missing one is a 404.
+ * Before the cut-over this is the only deletion; afterwards a concept is
+ * merged, never deleted.
+ */
+export async function deleteConcept(db: Db, ctx: Omit<ConceptContext, "caller">, id: string): Promise<void> {
+  try {
+    await db.transaction(async (tx) => {
+      const [gone] = await tx.delete(concepts).where(eq(concepts.id, id)).returning();
+      if (!gone) throw new DomainError("not_found", 404, "No such concept");
+      await audit(tx, {
+        ...ctx.actor,
+        action: "concept.delete",
+        subjectType: "concept",
+        subjectId: id,
+        payload: { status: gone.status, labels: perLang((lang) => sideOf(gone, lang).label) },
+      });
+    });
+  } catch (error) {
+    if (
+      isForeignKeyViolation(error, "concept_tag_sortings_concept_id_concepts_id_fk") ||
+      isForeignKeyViolation(error, "concepts_merged_into_fk")
+    ) {
+      throw new DomainError("concept_in_use", 409, "A sorting decision or a merge refers to this concept");
+    }
+    throw error;
   }
 }
