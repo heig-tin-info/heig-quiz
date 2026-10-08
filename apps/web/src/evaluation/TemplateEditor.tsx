@@ -30,8 +30,7 @@ import {
 } from "../ui";
 import { templateTarget } from "./editTarget";
 import { ItemsStep } from "./ItemsStep";
-import { presetSettings } from "./presets";
-import { presetSummary } from "./presetSummary";
+import { clockSummary } from "./clockSummary";
 import { ConfigSettings } from "./TimingStep";
 import { UseTemplateDialog, useTemplateActions } from "./templates";
 import { useConfigPatch } from "./usePatch";
@@ -42,7 +41,7 @@ import { useConfigPatch } from "./usePatch";
  * template's own routes.
  *
  * It is a thin page over the evaluation editor's own blocks — `ItemsStep`
- * with its picker and preview, `ConfigSettings` with its presets, retakes
+ * with its picker and preview, `ConfigSettings` with its clock mode, retakes
  * and advanced options — handed a `templateTarget` instead of an
  * evaluation's. What a run has and a template does not is simply not passed:
  * no dates (a sentence stands in their place), no IP list, no launch step,
@@ -221,12 +220,11 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
               config={template}
               courseId={template.courseId}
               patch={patch}
-              presetOf={(preset) => presetSettings(preset, template.mode)}
-              summary={presetSummary(template, t, isoDateTime)}
+              summary={clockSummary(template, t, isoDateTime)}
               holdsCategorize={data.items.some((i) => i.type === "categorize")}
-              dates={
+              dates={() => (
                 <p className="self-center text-[13px] text-fg-muted">{t("templates.datesLater")}</p>
-              }
+              )}
             />
           </div>
         )}

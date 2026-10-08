@@ -2,7 +2,16 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { CategorizePolicy, categorizePolicyOf, kioskOf, McqPolicy, negativeMarkingOf, safeExamBrowserOf, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
-import { allowedFeedbackWhen, CALCULATOR_MODES, calculatorAllowedFor, calculatorOn, feedbackWhenFor, isInClass } from "@quiz/domain";
+import {
+  allowedFeedbackWhen,
+  CALCULATOR_MODES,
+  calculatorAllowedFor,
+  calculatorOn,
+  clockChoiceOf,
+  feedbackWhenFor,
+  isInClass,
+  liveLobbies,
+} from "@quiz/domain";
 
 import { usePublicConfig } from "../api";
 import type { Dict } from "../i18n";
@@ -54,6 +63,7 @@ export function AdvancedDisclosure({
   const set = (next: Partial<EvaluationSettings>) => patch.mutate({ settings: next });
   const feedback = (next: Partial<FeedbackPolicy>) => patch.mutate({ feedbackPolicy: next });
   const inClass = isInClass({ mode, lobby: settings.lobby });
+  const clock = clockChoiceOf(settings);
   const calculator = calculatorOn(mode, settings.calculator);
   // ADR-026: negative marking replaces both policies below; each row says so
   // while it is on, so a teacher never tunes a policy nothing reads.
@@ -113,31 +123,34 @@ export function AdvancedDisclosure({
           />
         </SettingRow>
 
-        <SettingRow
-          title={t("eval.lobby")}
-          desc={t(`eval.lobby.desc.${settings.lobby}` as keyof Dict)}
-        >
-          <Segmented
-            name="lobby"
-            value={settings.lobby}
-            disabled={disabled}
-            onChange={(lobby) => {
-              // A waiting room makes the evaluation sat in class, where
-              // `immediate` is not allowed (#78): the policy falls back in
-              // the SAME patch, since the server refuses the pair otherwise.
-              const when = feedbackWhenFor({ mode, lobby }, feedbackPolicy.when);
-              patch.mutate({
-                settings: { lobby },
-                ...(when === feedbackPolicy.when ? {} : { feedbackPolicy: { when } }),
-              });
-            }}
-            options={[
-              { value: "skip", label: t("eval.lobby.skip") },
-              { value: "auto", label: t("eval.lobby.auto") },
-              { value: "manual", label: t("eval.lobby.manual") },
-            ]}
-          />
-        </SettingRow>
+        {/* ADR-086: a Live evaluation's waiting room; a Scheduled one has
+            none, its mode says so. */}
+        {clock.mode === "live" ? (
+          <SettingRow
+            title={t("eval.lobby")}
+            desc={t(`eval.lobby.desc.${settings.lobby}` as keyof Dict)}
+          >
+            <Segmented
+              name="lobby"
+              value={settings.lobby}
+              disabled={disabled}
+              onChange={(lobby) => {
+                // A waiting room makes the evaluation sat in class, where
+                // `immediate` is not allowed (#78): the policy falls back in
+                // the SAME patch, since the server refuses the pair otherwise.
+                const when = feedbackWhenFor({ mode, lobby }, feedbackPolicy.when);
+                patch.mutate({
+                  settings: { lobby },
+                  ...(when === feedbackPolicy.when ? {} : { feedbackPolicy: { when } }),
+                });
+              }}
+              options={liveLobbies(clock.limited).map((value) => ({
+                value,
+                label: t(`eval.lobby.${value}`),
+              }))}
+            />
+          </SettingRow>
+        ) : null}
 
         <SettingRow title={t("eval.shuffleItems")} desc={t("eval.shuffleItems.desc")}>
           <Switch

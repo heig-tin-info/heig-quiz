@@ -8,7 +8,7 @@ import {
   type DashboardRow,
   type EvaluationDetail,
 } from "@quiz/contracts";
-import { trustedClientsOf } from "@quiz/domain";
+import { anchoredOnClosesAt, trustedClientsOf } from "@quiz/domain";
 
 import { ApiError, api, usePublicConfig } from "../api";
 import { useConfirm } from "../confirm";
@@ -388,7 +388,9 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
         deadlineAt={deadline}
         endPassed={
           lobby &&
-          detail.data?.evaluation.settings.timing === "deadline" &&
+          timing !== undefined &&
+          // An end "+N min" moves: a common end or a safety deadline (ADR-086).
+          anchoredOnClosesAt(timing) &&
           view.evaluation.closesAt !== null &&
           Date.parse(view.evaluation.closesAt) <= serverNow()
         }

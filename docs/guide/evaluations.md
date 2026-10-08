@@ -67,33 +67,34 @@ The bin at the end of a row takes the item out of this evaluation. The question 
 ## Step 2: Time and mode
 
 <figure markdown="span">
-  ![The Time and mode step with the in-class preset selected](../assets/screenshots/eval-timing-light.png#only-light)
-  ![The Time and mode step with the in-class preset selected](../assets/screenshots/eval-timing-dark.png#only-dark)
-  <figcaption>Step 2 opens on two presets; the settings they wrote stay visible and editable underneath.</figcaption>
+  ![The Time and mode step of a live evaluation with a time limit](../assets/screenshots/eval-timing-light.png#only-light)
+  ![The Time and mode step of a live evaluation with a time limit](../assets/screenshots/eval-timing-dark.png#only-dark)
+  <figcaption>Step 2 asks who drives the clock, then whether each student has a time limit.</figcaption>
 </figure>
 
-### The two presets
+### Who drives the clock?
 
-Two cards carry this step. Clicking one writes a handful of settings at once; you can then change any of them individually, and the card stays highlighted as long as its two defining choices (the timing and the waiting room) hold.
+Two cards carry this step ([ADR-086](../adr/ADR-086-planifiee-ou-en-direct.md)). The card in force sums up what is set; the other says what it means.
 
-| Preset | Time | Waiting room | Feedback | Navigation and layout |
-| --- | --- | --- | --- | --- |
-| **In-class evaluation** | 45 minutes per student | **You start** | **On release**, key and explanation shown | Free, one question per screen, questions and choices shuffled, progress bar |
-| **Homework exercise** | Common end, one week from now | **None** | **Right away**, key and explanation shown | Free, continuous scrolling, choices shuffled, progress bar |
+- **Scheduled**: the platform opens the evaluation at **Opens at** and closes it at **Closes at**, by itself. Students enter and work without you; there is no waiting room. Without a time limit, everybody works until **Closes at**: an exercise series, homework.
+- **Live**: you open the waiting room and press **Start**; the evaluation ends when you close it from the dashboard. **Planned for** only places it in the calendar: nothing opens by itself at that time. Without a time limit, **Closes at the latest** is an optional safety deadline at which the platform closes it whatever happens; an exam must have one, since an exam must end by itself.
 
-An **Exam** never gives feedback right away, whatever the preset says: the server keeps it at **On release**.
+### Time limit per student
 
-### Timing
+One switch under the cards. On, each student gets the same number of **Minutes**, counted from their own start; a late student gets the full limit. In a **Scheduled** evaluation the limit is cut at **Closes at**: a student who starts ten minutes before the end has ten minutes, whatever the limit says. Turning the limit on in **Live** removes the safety deadline.
 
-The **Time** row offers three modes, each explained by a sentence under the label:
+Extra time granted on the roster (see [Students](students.md)) applies on top of the minutes: a student with `+25 % time` gets 56 minutes out of 45. Without a limit, in **Scheduled**, their own end is pushed past **Closes at**; a live safety deadline is the same for everybody.
 
-- **Per student**: each student gets the same number of **Minutes**, counted from their own start. A late student gets the full duration.
-- **Common end**: everybody stops at the instant in **Closes at**, whenever they started.
-- **I close it**: no deadline at all; the evaluation ends when you close it from the dashboard.
+What the two answers store:
 
-**Opens at** is the moment a scheduled evaluation opens by itself (see Step 3). An exam needs a duration or a common end.
+| Choice | Stored timing | Waiting room | Fields |
+| --- | --- | --- | --- |
+| Scheduled, no limit | common end | none | **Opens at**, **Closes at** |
+| Scheduled, with a limit | per student | none | **Opens at**, **Closes at**, **Minutes** |
+| Live, no limit | closed by you | **You start** | **Planned for**, **Closes at the latest** |
+| Live, with a limit | per student | **You start** | **Planned for**, **Minutes** |
 
-Extra time granted on the roster (see [Students](students.md)) applies on top: a student with `+25 % time` gets 56 minutes out of 45 in **Per student** mode, and in **Common end** mode their own end is pushed past the common one.
+Picking a mode changes the time and the waiting room only; the feedback falls back to **On release** when a waiting room appears, since an evaluation sat together never gives feedback right away.
 
 ### Several attempts (exercises)
 
@@ -112,7 +113,7 @@ Everything else lives behind **Advanced options**, folded by default. A novice n
 
 - **Navigation**: **Free** (the student moves between questions as they like), **Forward only** (a validated question is never reopened) or **Milestones** (going past a milestone locks everything before it).
 - **Presentation**: **One by one** (one question per screen), **Continuous** (a single scrolling page) or **Free choice** (the student picks). **Free choice** is only offered with free navigation.
-- **Waiting room**: **None** (a student who opens the evaluation starts straight away), **Automatic** (everybody waits, and it starts by itself once the whole roster is there) or **You start** (everybody waits on the ring until you press **Start**).
+- **Waiting room** (Live only): **You start** (everybody waits on the ring until you press **Start**), **Automatic** (everybody waits, and it starts by itself once the whole roster is there) or, without a time limit, **None** (a student who opens the evaluation starts straight away).
 - **Shuffle the questions**: a different order per student, stable across reloads.
 - **Shuffle the choices**: applies to the question types that allow it.
 - **Show the progress bar**: the student sees which questions are done, seen and empty.
@@ -126,7 +127,7 @@ Everything else lives behind **Advanced options**, folded by default. A novice n
 - **Kiosk stations** (exams only, where the platform has stations): the students may sit the exam on one of the school's Chromebooks locked on the exam. See below.
 
 !!! note
-    The waiting room and the feedback policy are part of what the presets decide, but their controls sit under **Advanced options**, not on the main card. Open the disclosure to change them.
+    A Live evaluation's waiting room and the feedback policy sit under **Advanced options**, not on the main card. Open the disclosure to change them.
 
 ### Safe Exam Browser
 
@@ -172,10 +173,10 @@ On the dashboard, a student on a station is shown with the station's name beside
   <figcaption>Step 3 sums the evaluation up and offers one action: open the waiting room now, or schedule it.</figcaption>
 </figure>
 
-The summary shows four figures: **Questions**, **Points**, **Time** and **Feedback**. Read them once; if one surprises you, the tab to fix it is one click away. Below, one primary action and one alternative:
+The summary shows four figures: **Questions**, **Points**, **Time** and **Feedback**. Read them once; if one surprises you, the tab to fix it is one click away. Below, one primary action, which depends on who drives the clock:
 
-- **Open the waiting room** moves the evaluation to `lobby` right now and takes you to the dashboard. Students see it on their home page and gather on the ring. With the waiting room set to **None**, they start as soon as they enter.
-- **Schedule it** moves it to `scheduled`. Fill **Opens at** on the previous step first: at that instant the server opens the waiting room by itself, or starts the evaluation straight away if there is no waiting room, without anyone logged in. A common end in **Closes at** is enforced the same way. **Back to draft** unschedules it.
+- **Live**: **Open the waiting room** moves the evaluation to `lobby` right now and takes you to the dashboard. Students see it on their home page and gather on the ring. With the waiting room set to **None**, the button is **Open** and they start as soon as they enter. A Live evaluation is never scheduled: its date is for the calendar.
+- **Scheduled**, while **Opens at** is still to come: **Schedule** moves it to `scheduled`. At that instant the server starts it by itself, without anyone logged in, and closes it at **Closes at** the same way. **Open now** beside it opens it at once instead. Once **Opens at** has passed, the one action is **Open**. **Back to draft** unschedules a scheduled evaluation.
 
 An evaluation with no question cannot be opened or scheduled.
 

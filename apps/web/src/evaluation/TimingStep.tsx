@@ -1,12 +1,23 @@
-import { Check, Lock, MonitorPlay, Timer } from "lucide-react";
+import { CalendarClock, Check, Lock, MonitorPlay, Radio, Timer } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { TransitionRefusal, type EvaluationDetail, type EvaluationPatch } from "@quiz/contracts";
-import { conditionsAllowedFor, configLock, isConfigFieldWritable } from "@quiz/domain";
+import {
+  clockChoiceOf,
+  clockFields,
+  clockPatch,
+  CLOCK_MODES,
+  conditionsAllowedFor,
+  configLock,
+  feedbackWhenFor,
+  isConfigFieldWritable,
+  type ClockChoice,
+  type ClockMode,
+  type EvaluationTiming,
+} from "@quiz/domain";
 
 import { ApiError } from "../api";
 import { EvaluationDrillSetting } from "../drill/EvaluationDrillSetting";
-import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import {
   Alert,
@@ -20,15 +31,15 @@ import {
   FormError,
   isoDateTime,
   SectionHeading,
-  Segmented,
   SettingRow,
+  Switch,
+  type IconType,
 } from "../ui";
 import { AdvancedDisclosure } from "./AdvancedDisclosure";
+import { clockSummary } from "./clockSummary";
 import { ConditionsSetting } from "./ConditionsSetting";
 import type { ConfigPatch, ConfigView } from "./editTarget";
 import { RetakesSetting } from "./RetakesSetting";
-import { matchPreset, presetPatch, type PresetId } from "./presets";
-import { presetSummary } from "./presetSummary";
 import {
   fromLocalInput,
   missingTiming,
@@ -43,40 +54,47 @@ import type { ConfigWriter } from "./usePatch";
 /**
  * Step 2 of the novice flow: WHEN, and under what rules.
  *
- * Two named presets carry the whole screen (docs/spec/08 §8.2). They are
- * cards and not a segmented control: each one needs a sentence to be picked
- * without guessing, and a sentence does not fit in a pill. Everything a
- * preset decided stays visible and editable underneath — a preset is a
- * starting point, never a mode.
+ * One question carries the time (ADR-086, #555): who drives the clock?
+ * Scheduled — the platform opens and closes it between two dates — or Live —
+ * the teacher starts it from the waiting room and closes it. Then one
+ * switch: a time limit per student, or none. The stored `timing` and `lobby`
+ * are derived from the two answers (`clockPatch`, `@quiz/domain`) and read
+ * back from them (`clockChoiceOf`), so nothing new is stored. The two modes
+ * are cards and not a segmented control: each needs a sentence to be picked
+ * without guessing, and a sentence does not fit in a pill.
  *
  * The step is two layers. `ConfigSettings` is the configuration an
- * evaluation and a template share — the presets, the timing kind and the
- * duration, the retakes, the conditions (ADR-079), the advanced options — and `TimingStep` wraps it
- * with what only a run has: its dates, the locks of a
- * started evaluation and the fields the launch still needs. A template's
- * editor wraps the same `ConfigSettings` with none of that (F-EVAL-25).
+ * evaluation and a template share — the mode, the limit, the retakes, the
+ * conditions (ADR-079), the advanced options — and `TimingStep` wraps it
+ * with what only a run has: its dates, the locks of a started evaluation
+ * and the fields the launch still needs. A template's editor wraps the same
+ * `ConfigSettings` with none of that (F-EVAL-25).
  */
 
+const MODE_ICON: Record<ClockMode, IconType> = { scheduled: CalendarClock, live: Radio };
+
 /**
- * One preset. The card in force says what IS set — `summary`, built from the
- * values below it (#87) — and the others what picking them would set.
+ * One mode. The card in force says what IS set — `summary`, built from the
+ * values below it (#87) — and the other what picking it means.
  */
-function PresetCard({
-  id,
+function ModeCard({
+  mode,
   active,
   summary,
   onPick,
   disabled,
 }: {
-  id: PresetId;
+  mode: ClockMode;
   active: boolean;
   summary: string;
   onPick: () => void;
   disabled: boolean;
 }) {
   const t = useT();
-  // A real <button> and not a `Card` made clickable: a preset is an action,
-  // it needs Enter and Space and a pressed state, and `Card` takes neither.
+  const Icon = active ? Check : MODE_ICON[mode];
+  // A real <button> and not a `Card` made clickable: picking a mode is an
+  // action, it needs Enter and Space and a pressed state, and `Card` takes
+  // neither.
   return (
     <button
       type="button"
@@ -93,11 +111,11 @@ function PresetCard({
       )}
     >
       <span className="flex items-center gap-2 font-semibold">
-        {active ? <Check className="size-4 text-accent" /> : null}
-        {t(`eval.preset.${id}` as keyof Dict)}
+        <Icon className={cx("size-4", active ? "text-accent" : "text-fg-faint")} aria-hidden />
+        {t(`eval.clock.${mode}`)}
       </span>
       <span className="mt-1 block text-[13px] text-fg-muted">
-        {active ? summary : t(`eval.preset.desc.${id}` as keyof Dict)}
+        {active ? summary : t(`eval.clock.desc.${mode}`)}
       </span>
     </button>
   );
@@ -108,11 +126,11 @@ function PresetCard({
  * tried to go on to the launch step, then one sentence that says what to
  * enter, tied to the control by `aria-describedby` (`FieldError`).
  */
-function MissingNote({ field }: { field: TimingField }) {
+function MissingNote({ field, timing }: { field: TimingField; timing: EvaluationTiming }) {
   const t = useT();
   return (
     <FieldError id={TIMING_FIELD_ID[field]} className="max-w-52">
-      {t(missingTimingKey(field))}
+      {t(missingTimingKey(field, timing))}
     </FieldError>
   );
 }
@@ -168,13 +186,13 @@ export function DateField({
 
 /**
  * The configuration an evaluation and a template share. What a run adds is
- * handed in: `dates` sits in the timing card beside the duration.
+ * handed in: `dates` sits in the timing card beside the minutes, and gets the
+ * mode in force so it shows that mode's fields (ADR-086 §1).
  */
 export function ConfigSettings({
   config,
   courseId,
   patch,
-  presetOf,
   summary,
   disabled = false,
   feedbackDisabled = disabled,
@@ -187,23 +205,24 @@ export function ConfigSettings({
   /** The course of the evaluation or the template: its catalog of conditions (F-ORG-16). */
   courseId: string;
   patch: ConfigPatch;
-  /** The body a preset card sends: an evaluation's carries dates, a template's cannot. */
-  presetOf: (id: PresetId) => Parameters<ConfigPatch["mutate"]>[0];
-  /** What the matched preset's card says is in force (#87). */
+  /** What the card of the mode in force says (#87). */
   summary: string;
   disabled?: boolean;
   feedbackDisabled?: boolean;
   /** The timing fields the launch still needs (#76); none on arrival. */
   missing?: ReadonlySet<TimingField>;
-  dates?: ReactNode;
-  /** The run's common end, for the conditions' deadline line (ADR-079); a template has none. */
+  dates: (choice: ClockChoice) => ReactNode;
+  /**
+   * The run's end: the conditions' deadline line (ADR-079), and what a mode
+   * that no longer shows it clears (`clockPatch`). A template has none.
+   */
   closesAt?: string | null;
   /** An item is a `categorize` question: its policy row is shown (ADR-036). */
   holdsCategorize?: boolean;
 }) {
   const t = useT();
-  const { settings, durationS, mode } = config;
-  const preset = matchPreset(settings);
+  const { settings, durationS, mode, feedbackPolicy } = config;
+  const choice = clockChoiceOf(settings);
   // Empty while nothing is stored: a "45" the server does not have was a
   // duration the teacher believed set, and the waiting room then refused to
   // open for want of it (#76). The 45 stays, as a placeholder.
@@ -214,55 +233,59 @@ export function ConfigSettings({
     if (durationS !== null) setMinutes(String(Math.round(durationS / 60)));
   }, [durationS]);
 
+  /*
+   * One patch per choice: the two settings, the limit it starts from, the
+   * end it clears. A waiting room gained makes the evaluation sat in class,
+   * where `immediate` is not allowed (#78): the policy falls back in the
+   * SAME patch, since the server refuses the pair otherwise.
+   */
+  const choose = (next: ClockChoice) => {
+    const body = clockPatch(next, { ...settings, durationS, closesAt });
+    const when = feedbackWhenFor({ mode, lobby: body.settings.lobby }, feedbackPolicy.when);
+    patch.mutate(when === feedbackPolicy.when ? body : { ...body, feedbackPolicy: { when } });
+  };
+
   return (
     <>
-      <div className="flex flex-wrap gap-3">
-        {(["classroom", "homework"] as const).map((id) => (
-          <PresetCard
-            key={id}
-            id={id}
-            active={preset === id}
-            summary={summary}
-            disabled={disabled}
-            onPick={() => patch.mutate(presetOf(id))}
-          />
-        ))}
+      {/* The question itself, said once above its two answers. */}
+      <div role="group" aria-labelledby="eval-clock" className="space-y-2">
+        <p id="eval-clock" className="text-sm font-medium">
+          {t("eval.clock")}
+        </p>
+        <div className="flex flex-wrap gap-3">
+          {CLOCK_MODES.map((m) => (
+            <ModeCard
+              key={m}
+              mode={m}
+              active={choice.mode === m}
+              summary={summary}
+              disabled={disabled}
+              onPick={() => {
+                if (choice.mode !== m) choose({ mode: m, limited: choice.limited });
+              }}
+            />
+          ))}
+        </div>
       </div>
 
       <Card className="divide-y divide-line px-4">
         <SettingRow
-          title={t("eval.timing")}
-          desc={
-            <>
-              {t(`eval.timing.desc.${settings.timing}` as keyof Dict)}
-              {missing.has("timing") ? (
-                <span id={`${TIMING_FIELD_ID.timing}-error`} className="mt-0.5 block text-danger">
-                  {t(missingTimingKey("timing"))}
-                </span>
-              ) : null}
-            </>
-          }
+          title={t("eval.limit")}
+          desc={t(choice.limited ? `eval.limit.desc.${choice.mode}` : `eval.limit.off.${choice.mode}`)}
         >
-          <div id={TIMING_FIELD_ID.timing}>
-            <Segmented
-              name="timing"
-              value={settings.timing}
-              disabled={disabled}
-              onChange={(timing) => patch.mutate({ settings: { timing } })}
-              options={[
-                { value: "duration", label: t("eval.timing.duration") },
-                { value: "deadline", label: t("eval.timing.deadline") },
-                { value: "manual", label: t("eval.timing.manual") },
-              ]}
-            />
-          </div>
+          <Switch
+            checked={choice.limited}
+            disabled={disabled}
+            label={t("eval.limit")}
+            onChange={(limited) => choose({ mode: choice.mode, limited })}
+          />
         </SettingRow>
 
-        {/* The dates and the duration share one labelled row: inside a
-            settings row they would repeat the row's own title, and a
-            segmented control plus a field do not fit a phone's width. */}
+        {/* The minutes and the dates share one row: inside a settings row
+            they would repeat the row's own title, and a field per row does
+            not fit a phone's width. */}
         <div className="flex flex-wrap gap-4 py-3">
-          {settings.timing === "duration" ? (
+          {clockFields(choice).includes("durationS") ? (
             <div className="flex flex-col gap-1">
               <Field
                 id={TIMING_FIELD_ID.durationS}
@@ -285,10 +308,10 @@ export function ConfigSettings({
                 }}
                 className="text-right tabular-nums"
               />
-              {missing.has("durationS") ? <MissingNote field="durationS" /> : null}
+              {missing.has("durationS") ? <MissingNote field="durationS" timing={settings.timing} /> : null}
             </div>
           ) : null}
-          {dates}
+          {dates(choice)}
         </div>
       </Card>
 
@@ -337,14 +360,56 @@ export function TimingStep({
   // in `editable`, the domain says which fields stay writable.
   const locked = !detail.editable;
   const lock = configLock(state, detail.attemptCount);
-  const summary = presetSummary(detail.evaluation, t, isoDateTime);
+  const summary = clockSummary(detail.evaluation, t, isoDateTime);
   const missing = new Set(showMissing ? missingTiming(detail.evaluation) : []);
   // A refused date (#178, #254) in the teacher's words; any other error is FormError's.
   const refusal = TransitionRefusal.safeParse(
     patch.error instanceof ApiError ? patch.error.body : undefined,
   ).success
-    ? transitionErrorMessage(patch.error, t)
+    ? transitionErrorMessage(patch.error, t, settings.timing)
     : null;
+
+  /*
+   * The dates of the mode in force (ADR-086 §1). Scheduled: the window the
+   * platform opens and closes. Live: a date for the calendar only — nothing
+   * opens by itself — and, without a limit, the optional safety deadline the
+   * ticker closes on (required for an exam: it must end by itself).
+   */
+  const dates = (choice: ClockChoice) => {
+    const live = choice.mode === "live";
+    const date = (field: "opensAt" | "closesAt", value: string | null, label: string, description?: string) => (
+      <div className="flex flex-col gap-1">
+        <DateField
+          key={value ?? ""}
+          id={TIMING_FIELD_ID[field]}
+          {...invalid(missing, field)}
+          label={label}
+          description={description}
+          disabled={locked}
+          value={value}
+          onCommit={(next, reset) => patch.mutate({ [field]: next }, { onError: reset })}
+        />
+        {missing.has(field) ? <MissingNote field={field} timing={settings.timing} /> : null}
+      </div>
+    );
+    return (
+      <>
+        {live
+          ? date("opensAt", opensAt, t("eval.liveDate"), t("eval.liveDate.desc"))
+          : date("opensAt", opensAt, t("eval.opensAt"))}
+        {clockFields(choice).includes("closesAt")
+          ? live
+            ? date(
+                "closesAt",
+                closesAt,
+                t("eval.safetyDeadline"),
+                t(mode === "exam" ? "eval.safetyDeadline.descExam" : "eval.safetyDeadline.desc"),
+              )
+            : date("closesAt", closesAt, t("eval.closesAt"))
+          : null}
+      </>
+    );
+  };
 
   return (
     <div className="space-y-5">
@@ -385,43 +450,13 @@ export function TimingStep({
         config={detail.evaluation}
         courseId={detail.courseId}
         patch={patch}
-        presetOf={(id) => presetPatch(id, mode)}
         summary={summary}
         disabled={locked}
         feedbackDisabled={!isConfigFieldWritable(lock, "feedbackPolicy")}
         holdsCategorize={detail.items.some((i) => i.type === "categorize")}
         missing={missing}
         closesAt={closesAt}
-        dates={
-          <>
-            <div className="flex flex-col gap-1">
-              <DateField
-                key={opensAt ?? ""}
-                id={TIMING_FIELD_ID.opensAt}
-                {...invalid(missing, "opensAt")}
-                label={t("eval.opensAt")}
-                disabled={locked}
-                value={opensAt}
-                onCommit={(value, reset) => patch.mutate({ opensAt: value }, { onError: reset })}
-              />
-              {missing.has("opensAt") ? <MissingNote field="opensAt" /> : null}
-            </div>
-            {settings.timing !== "manual" ? (
-              <div className="flex flex-col gap-1">
-                <DateField
-                  key={closesAt ?? ""}
-                  id={TIMING_FIELD_ID.closesAt}
-                  {...invalid(missing, "closesAt")}
-                  label={t("eval.closesAt")}
-                  disabled={locked}
-                  value={closesAt}
-                  onCommit={(value, reset) => patch.mutate({ closesAt: value }, { onError: reset })}
-                />
-                {missing.has("closesAt") ? <MissingNote field="closesAt" /> : null}
-              </div>
-            ) : null}
-          </>
-        }
+        dates={dates}
       />
 
       {/* ADR-041 §2 (#317): its own writer, editable until the release —

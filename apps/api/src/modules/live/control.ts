@@ -7,6 +7,7 @@ import type { FastifyInstance } from "fastify";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { ClosedBy } from "@quiz/contracts";
+import { anchoredOnClosesAt } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { attempts, enrollments } from "../../db/schema.js";
@@ -132,12 +133,13 @@ export async function resumeEvaluation(
   const next = await db.transaction(async (tx) => {
     let next = await tryApplyState(tx, evaluation, "running", now);
     if (next === null) return null;
-    // In `deadline` timing the common end moves with the pause, exactly as a
-    // `+N min` for everybody moves it (`extendTime`): the ticker closes on it,
-    // the teacher's countdown reads it, and a student who arrives after the
+    // When the attempts hang off `closes_at` — a common end, a safety
+    // deadline (ADR-086 §2) — it moves with the pause, exactly as a `+N min`
+    // for everybody moves it (`extendTime`): the ticker closes on it, the
+    // teacher's countdown reads it, and a student who arrives after the
     // resume gets "until the common end" (F-LIVE-12) — none of them may lose
     // the time the evaluation stood still (#77).
-    const movesEnd = pausedFor > 0 && settingsOf(next).timing === "deadline";
+    const movesEnd = pausedFor > 0 && anchoredOnClosesAt(settingsOf(next).timing) && next.closesAt !== null;
     if (movesEnd) {
       next = (await extendClosesAt(tx, next.id, pausedFor / 1000, now)) ?? next;
     }
@@ -249,11 +251,12 @@ export async function extendTime(
   }
   const seconds = input.minutes * 60;
   const target = input.attemptId;
-  // In `deadline` timing the attempts hang off `closes_at` (§5.2): extending
+  // In `deadline` timing, and in `manual` timing with a safety deadline
+  // (ADR-086 §2), the attempts hang off `closes_at` (§5.2): extending
   // everybody without moving it would hand the minutes out and let the
   // ticker take them back at the old instant.
   const movesEnd =
-    target === undefined && settingsOf(evaluation).timing === "deadline" && evaluation.closesAt !== null;
+    target === undefined && anchoredOnClosesAt(settingsOf(evaluation).timing) && evaluation.closesAt !== null;
   if (movesEnd) {
     // Before the start, from now if the end has passed: the way out of a
     // waiting room whose common end went by (#178).
@@ -279,8 +282,9 @@ export async function extendTime(
     .update(attempts)
     .set({
       ...(movesEnd ? {} : { extraS: sql`${attempts.extraS} + ${seconds}` }),
-      // A `manual` attempt has no deadline to move; the extra time is still
-      // recorded, so a later switch of timing mode is consistent.
+      // A `manual` attempt without a safety deadline has no deadline to
+      // move; the extra time is still recorded, so a later switch of timing
+      // mode is consistent.
       deadlineAt: sql`case when ${attempts.deadlineAt} is null then null else ${attempts.deadlineAt} + make_interval(secs => ${seconds}) end`,
       updatedAt: now,
     })

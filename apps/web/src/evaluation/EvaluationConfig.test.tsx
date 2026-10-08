@@ -120,31 +120,80 @@ describe("EvaluationConfig", () => {
     );
   });
 
-  it("a preset writes the settings it names", async () => {
-    const user = userEvent.setup();
-    const exercise = makeEvaluationDetail({
-      evaluation: { ...makeEvaluationDetail().evaluation, mode: "exercise" },
-    });
-    const { calls } = mockFetch(
-      routes(exercise, {
-        [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(exercise),
-      }),
-    );
-    renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
-      route: "/evaluations/x?step=timing",
+  /*
+   * ADR-086: one question, who drives the clock, and one switch, the limit.
+   * Each writes the stored pair the table maps it to, and nothing else.
+   */
+  describe("who drives the clock (ADR-086)", () => {
+    const withClock = (
+      settings: { timing: "duration" | "deadline" | "manual"; lobby: "skip" | "manual" },
+      over: { closesAt?: string | null; when?: "on_release" | "immediate" } = {},
+    ) => {
+      const base = makeEvaluationDetail().evaluation;
+      return makeEvaluationDetail({
+        evaluation: {
+          ...base,
+          mode: "exercise",
+          settings: { ...base.settings, ...settings },
+          closesAt: over.closesAt ?? null,
+          feedbackPolicy: { ...base.feedbackPolicy, when: over.when ?? "on_release" },
+        },
+      });
+    };
+    const firstPatch = async (detail: ReturnType<typeof makeEvaluationDetail>, click: () => Promise<void>) => {
+      const { calls } = mockFetch(routes(detail, { [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(detail) }));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      await click();
+      await waitFor(() => expect(calls.find((c) => c.method === "PATCH")).toBeDefined());
+      return calls.find((c) => c.method === "PATCH")!.body;
+    };
+
+    it("picking Scheduled keeps the limit and drops the waiting room", async () => {
+      const user = userEvent.setup();
+      const body = await firstPatch(withClock({ timing: "duration", lobby: "manual" }), async () => {
+        await user.click(await screen.findByRole("button", { name: /^scheduled/i }));
+      });
+      expect(body).toEqual({ settings: { timing: "duration", lobby: "skip" } });
     });
 
-    await user.click(await screen.findByRole("button", { name: /homework exercise/i }));
-    await waitFor(() => {
-      const patch = calls.find((c) => c.method === "PATCH");
-      expect(patch?.body).toMatchObject({
-        settings: { timing: "deadline", lobby: "skip" },
-        durationS: null,
-        feedbackPolicy: { when: "immediate" },
+    it("turning the limit on in Live clears the safety deadline the ticker would still close on", async () => {
+      const future = new Date(Date.now() + 3_600_000).toISOString();
+      const user = userEvent.setup();
+      const body = await firstPatch(withClock({ timing: "manual", lobby: "manual" }, { closesAt: future }), async () => {
+        await user.click(await screen.findByRole("switch", { name: /time limit per student/i }));
       });
-      // A common end needs its opening time (#76): the preset writes both.
-      expect(patch?.body).toHaveProperty("opensAt", expect.any(String));
-      expect(patch?.body).toHaveProperty("closesAt", expect.any(String));
+      expect(body).toEqual({ settings: { timing: "duration", lobby: "manual" }, closesAt: null });
+    });
+
+    it("brings the feedback back to 'on release' in the same patch that adds a waiting room (#78)", async () => {
+      const user = userEvent.setup();
+      const body = await firstPatch(withClock({ timing: "deadline", lobby: "skip" }, { when: "immediate" }), async () => {
+        await user.click(await screen.findByRole("button", { name: /^live/i }));
+      });
+      expect(body).toEqual({
+        settings: { timing: "manual", lobby: "manual" },
+        feedbackPolicy: { when: "on_release" },
+      });
+    });
+
+    it("shows a Scheduled window, and a Live date for the calendar with its safety deadline", async () => {
+      mockFetch(routes(withClock({ timing: "deadline", lobby: "skip" })));
+      const { unmount } = renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      expect(await screen.findByLabelText(/^opens at$/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/^closes at$/i)).toBeInTheDocument();
+      expect(screen.queryByLabelText(/^minutes$/i)).toBeNull();
+      unmount();
+
+      mockFetch(routes(withClock({ timing: "manual", lobby: "manual" })));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      expect(await screen.findByLabelText(/^planned for$/i)).toHaveAccessibleDescription(/calendar only/i);
+      expect(screen.getByLabelText(/^closes at the latest$/i)).toHaveAccessibleDescription(/optional/i);
     });
   });
 
@@ -171,17 +220,17 @@ describe("EvaluationConfig", () => {
       route: "/evaluations/x?step=timing",
     });
 
-    const opensAt = await screen.findByLabelText(/^opens at$/i);
+    const opensAt = await screen.findByLabelText(/^planned for$/i);
     for (const value of ["0002-10-01T10:00", "0020-10-01T10:00", "2020-10-01T10:00"]) {
       fireEvent.change(opensAt, { target: { value } });
     }
     expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(0);
     fireEvent.blur(opensAt);
-    expect(await screen.findByText(/this time has passed/i)).toBeInTheDocument();
+    expect(await screen.findByText(/its start has passed/i)).toBeInTheDocument();
     expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1);
     // #254: the refused time does not stay on screen as if it were saved.
     await waitFor(() => expect(opensAt).toHaveValue(toLocalInput(scheduled.evaluation.opensAt)));
-    expect(screen.getByText(/this time has passed/i)).toBeInTheDocument();
+    expect(screen.getByText(/its start has passed/i)).toBeInTheDocument();
   });
 
   it("puts a cleared time back when the server keeps it, and says why (#254)", async () => {
@@ -203,7 +252,7 @@ describe("EvaluationConfig", () => {
       route: "/evaluations/x?step=timing",
     });
 
-    const opensAt = await screen.findByLabelText(/^opens at$/i);
+    const opensAt = await screen.findByLabelText(/^planned for$/i);
     expect(opensAt).toHaveValue(toLocalInput(opens));
     fireEvent.change(opensAt, { target: { value: "" } });
     fireEvent.blur(opensAt);
@@ -211,19 +260,18 @@ describe("EvaluationConfig", () => {
     await waitFor(() => expect(opensAt).toHaveValue(toLocalInput(opens)));
   });
 
-  it("the matched preset's card says the values in force, the other what it would set (#87)", async () => {
+  it("the card of the mode in force says the values in force, the other what it means (#87)", async () => {
     const base = makeEvaluationDetail();
     mockFetch(routes({ ...base, evaluation: { ...base.evaluation, durationS: 30 * 60 } }));
     renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
       route: "/evaluations/x?step=timing",
     });
-    const inClass = await screen.findByRole("button", { name: /in-class evaluation/i });
-    expect(inClass).toHaveAttribute("aria-pressed", "true");
-    expect(inClass).toHaveTextContent(/^In-class evaluation30 minutes each, waiting room opened by you/);
-    expect(inClass).not.toHaveTextContent(/45/);
-    expect(screen.getByRole("button", { name: /homework exercise/i })).toHaveTextContent(
-      /Sets a common deadline/,
-    );
+    const live = await screen.findByRole("button", { name: /^live/i });
+    expect(live).toHaveAttribute("aria-pressed", "true");
+    expect(live).toHaveTextContent(/^Live30 minutes each, waiting room opened by you/);
+    expect(live).not.toHaveTextContent(/45/);
+    expect(screen.getByRole("button", { name: /^scheduled/i })).toHaveTextContent(/opens and closes by itself/i);
+    expect(screen.getByRole("switch", { name: /time limit per student/i })).toBeChecked();
   });
 
   /*
@@ -256,24 +304,6 @@ describe("EvaluationConfig", () => {
     expect(screen.getByText(/not offered in class/i)).toBeInTheDocument();
   });
 
-  it("the take-home preset asks an exam for feedback on release, never right away (#78)", async () => {
-    const user = userEvent.setup();
-    const { calls } = mockFetch(
-      routes(makeEvaluationDetail(), {
-        [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(makeEvaluationDetail()),
-      }),
-    );
-    renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
-      route: "/evaluations/x?step=timing",
-    });
-    await user.click(await screen.findByRole("button", { name: /homework exercise/i }));
-    await waitFor(() =>
-      expect(calls.find((c) => c.method === "PATCH")?.body).toMatchObject({
-        feedbackPolicy: { when: "on_release" },
-      }),
-    );
-  });
-
   /*
    * #78: "in class" is not only the exam mode. An exercise given a waiting
    * room starts everybody together, and immediate feedback would reach the
@@ -285,7 +315,8 @@ describe("EvaluationConfig", () => {
         evaluation: {
           ...makeEvaluationDetail().evaluation,
           mode: "exercise",
-          settings: { ...makeEvaluationDetail().evaluation.settings, lobby },
+          // Live, closed by the teacher: its waiting room is an advanced option (ADR-086).
+          settings: { ...makeEvaluationDetail().evaluation.settings, timing: "manual", lobby },
           feedbackPolicy: { ...makeEvaluationDetail().evaluation.feedbackPolicy, when },
         },
       });
@@ -438,10 +469,24 @@ describe("EvaluationConfig", () => {
 
       expect(screen.queryByRole("button", { name: /open the waiting room/i })).toBeNull();
       expect(opensAt).toHaveAttribute("aria-invalid", "true");
-      expect(opensAt).toHaveAccessibleDescription(/enter the opening time/i);
+      expect(opensAt).toHaveAccessibleDescription(/enter when it opens/i);
       expect(opensAt).toHaveFocus();
       // The closing time is set: only the missing field is marked.
       expect(screen.getByLabelText(/^closes at$/i)).not.toHaveAttribute("aria-invalid");
+    });
+
+    it("asks a live exam without a limit for its safety deadline (ADR-086 §2)", async () => {
+      const user = userEvent.setup();
+      const base = makeEvaluationDetail().evaluation;
+      mockFetch(routes(makeEvaluationDetail({ evaluation: { ...base, settings: { ...base.settings, timing: "manual" } } })));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      const backstop = await screen.findByLabelText(/^closes at the latest$/i);
+      await user.click(screen.getByRole("button", { name: /^go to launch$/i }));
+      expect(backstop).toHaveAttribute("aria-invalid", "true");
+      expect(backstop).toHaveAccessibleDescription(/an exam must end by itself: enter when it closes at the latest/i);
+      expect(backstop).toHaveFocus();
     });
 
     it("goes to the launch step once the timing is complete", async () => {
@@ -463,9 +508,10 @@ describe("EvaluationConfig", () => {
         route: "/evaluations/x?step=launch",
       });
       expect(await screen.findByRole("status")).toHaveTextContent(/finish the timing in time and mode/i);
-      expect(screen.getByText(/enter the opening time/i)).toBeInTheDocument();
+      expect(screen.getByText(/enter when it opens/i)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /^open$/i })).toBeDisabled();
-      expect(screen.getByRole("button", { name: /schedule/i })).toBeDisabled();
+      // No start to come: nothing to schedule, only the opening (ADR-086).
+      expect(screen.queryByRole("button", { name: /^schedule$/i })).toBeNull();
     });
 
     it("translates the server's refusal instead of printing it", async () => {
@@ -485,7 +531,7 @@ describe("EvaluationConfig", () => {
       });
       await user.click(await screen.findByRole("button", { name: /open the waiting room/i }));
       expect(await screen.findByText(/did not change state/i)).toBeInTheDocument();
-      expect(screen.getByText(/enter the opening time/i)).toBeInTheDocument();
+      expect(screen.getByText(/enter when it opens/i)).toBeInTheDocument();
       expect(screen.queryByText(/F-EVAL-04/)).toBeNull();
     });
   });
@@ -536,8 +582,9 @@ describe("EvaluationConfig", () => {
       expect(await screen.findByText(/locked until it closes/i)).toBeInTheDocument();
       expect(screen.getByText(/use the live dashboard/i)).toBeInTheDocument();
       expect(screen.queryByText(/the structure is frozen/i)).toBeNull();
-      expect(screen.getByRole("button", { name: /in-class evaluation/i })).toBeDisabled();
-      expect(screen.getByRole("button", { name: /homework exercise/i })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /^live(?! dashboard)/i })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /^scheduled/i })).toBeDisabled();
+      expect(screen.getByRole("switch", { name: /time limit per student/i })).toBeDisabled();
       expect(screen.getByLabelText(/^minutes$/i)).toBeDisabled();
 
       await user.click(screen.getByRole("button", { name: /^advanced options$/i }));

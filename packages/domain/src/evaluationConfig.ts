@@ -13,12 +13,8 @@ import type { EvaluationStateName } from "./itemList.js";
 /** The evaluation modes of F-EVAL-01, spelled as on the wire. */
 export type EvaluationModeName = "exam" | "exercise" | "poll";
 
-/**
- * A field the timing still needs. `timing` itself is the answer for an exam
- * set to `manual`: nothing can be filled in to fix it, another timing must be
- * chosen.
- */
-export type TimingField = "durationS" | "opensAt" | "closesAt" | "timing";
+/** A field the timing still needs. */
+export type TimingField = "durationS" | "opensAt" | "closesAt";
 
 export interface TimingInput {
   mode: EvaluationModeName;
@@ -38,7 +34,7 @@ export interface TimingInput {
  *   base of the accommodation in this timing: a student's extra time is
  *   `(closesAt − opensAt) × bonus` (decision D8), which has no value without it.
  * - `manual`: nothing to fill, but an `exam` must announce when it ends
- *   (F-EVAL-04), so an exam cannot use it.
+ *   (F-EVAL-04): it needs its safety deadline (ADR-086 §2).
  */
 export function missingTimingFields(input: TimingInput): TimingField[] {
   switch (input.timing) {
@@ -51,7 +47,7 @@ export function missingTimingFields(input: TimingInput): TimingField[] {
       return missing;
     }
     case "manual":
-      return input.mode === "exam" ? ["timing"] : [];
+      return input.mode === "exam" && input.closesAt == null ? ["closesAt"] : [];
   }
 }
 
@@ -60,21 +56,23 @@ export type PastTiming = "closes_at_past" | "opens_at_past";
 
 /**
  * Whether a move from `from` to `to` would start from a time already past on
- * the SERVER's clock (#178): a common end reached before the evaluation opens
+ * the SERVER's clock (#178): an end reached before the evaluation opens
  * would close it at the ticker's next pass, and a schedule for a past instant
- * would open it there. `paused → running` is not a start: the resume moves
- * the common end by the pause itself. Also what a patch of a scheduled
- * evaluation, and the ticker's own openings, are held to.
+ * would open it there. The ticker closes on `closesAt` whatever the timing —
+ * a common end, the end of a window, a safety deadline (ADR-086) — so the
+ * rule reads it whatever the timing too. `paused → running` is not a start:
+ * the resume moves the end by the pause itself. Also what a patch of a
+ * scheduled evaluation, and the ticker's own openings, are held to.
  */
 export function pastTiming(
-  input: { timing: EvaluationTiming; opensAt: Date | string | null; closesAt: Date | string | null },
+  input: { opensAt: Date | string | null; closesAt: Date | string | null },
   from: EvaluationStateName,
   to: EvaluationStateName,
   now: Date,
 ): PastTiming | null {
   if (from === "paused" || (to !== "scheduled" && to !== "lobby" && to !== "running")) return null;
   const past = (at: Date | string | null) => at !== null && new Date(at).getTime() <= now.getTime();
-  if (input.timing === "deadline" && past(input.closesAt)) return "closes_at_past";
+  if (past(input.closesAt)) return "closes_at_past";
   if (to === "scheduled" && past(input.opensAt)) return "opens_at_past";
   return null;
 }

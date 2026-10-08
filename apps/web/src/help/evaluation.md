@@ -32,15 +32,21 @@ the question itself stays in its pool.
 
 ## Time and mode
 
-Two presets carry this step. **In-class evaluation**: 45 minutes per
-student, a waiting room you open yourself, results published afterwards.
-**Homework exercise**: open until a common deadline, feedback as soon as a
-question is validated, no waiting room.
+One question carries this step: who drives the clock? **Scheduled**: the
+platform opens and closes it by itself between **Opens at** and **Closes
+at**; students work without you, and there is no waiting room. **Live**: you
+open the waiting room and start it; it ends when you close it, or at
+**Closes at the latest**, an optional safety deadline (required for an
+exam). Live's **Planned for** date only places it in the calendar: nothing
+opens by itself.
 
-Everything a preset decided stays visible and editable underneath — timing
-(per student, common end, or you close it), the waiting room, feedback. The
-rest lives under **Advanced options**: navigation, presentation, shuffling,
-progress bar. Extra time from the roster applies on top of the duration.
+Then one switch, **Time limit per student**: the **Minutes** count from each
+student's own start. Scheduled, they are cut at the end of the window even if
+time remains. Extra time from the roster applies on top of the minutes.
+
+The rest lives under **Advanced options**: navigation, presentation,
+shuffling, progress bar, feedback, and Live's waiting room (you start, it
+starts once everyone is in, or none).
 
 While the evaluation is running or paused, this step is locked until it
 closes: only the title and the feedback still change — the feedback so that
@@ -51,8 +57,9 @@ after the close, until the results are released.
 
 ## Launch
 
-A summary, then one action: open the waiting room, or schedule it. Once the
-class is in, pausing, extending and closing all happen on the dashboard.
+A summary, then one action: open the waiting room (Live), or schedule it
+(Scheduled, while its start is to come; **Open now** opens it at once). Once
+the class is in, pausing, extending and closing all happen on the dashboard.
 
 ## Renaming it
 

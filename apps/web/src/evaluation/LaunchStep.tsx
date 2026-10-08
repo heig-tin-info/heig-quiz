@@ -13,27 +13,16 @@ import {
 import { useState } from "react";
 
 import type { Evaluation, EvaluationDetail } from "@quiz/contracts";
+import { clockChoiceOf } from "@quiz/domain";
 
 import { api, usePublicConfig } from "../api";
 import { useT } from "../i18n";
 import type { Route } from "../router";
-import {
-  Alert,
-  Button,
-  Card,
-  cx,
-  ErrorText,
-  Field,
-  FormDialog,
-  isoDateTime,
-  LEVEL_ICON,
-  useNow,
-  type IconType,
-} from "../ui";
+import { Alert, Button, Card, cx, isoDateTime, LEVEL_ICON, useNow, type IconType } from "../ui";
 import { launchChecks, lobbyKey, readiness, type LaunchCheck } from "./launchChecks";
 import { LobbyPreviewColumn, LobbyPreviewRow } from "./LobbyPreview";
 import { PullTemplateDialog } from "./templatePull";
-import { fromLocalInput, toLocalInput, transitionErrorMessage } from "./timing";
+import { transitionErrorMessage } from "./timing";
 import { evaluationKey } from "../queryKeys";
 
 /** The two steps a row of the checklist can lead back to. */
@@ -45,7 +34,8 @@ export type FixStep = "questions" | "timing";
  *
  * Which action that is depends on the state, and there is never more than
  * one: a draft opens the waiting room — or, with no waiting room at all
- * (`lobby: skip`), opens the evaluation itself — a lobby or a running
+ * (`lobby: skip`), opens the evaluation itself; a Scheduled draft whose start
+ * is to come is scheduled instead (ADR-086) — a lobby or a running
  * evaluation sends the teacher to the dashboard, which is where every live
  * control lives. Nothing here pauses or closes anything — a screen that
  * could start a quiz AND close it is a screen where the wrong button is one
@@ -119,7 +109,6 @@ function Checklist({
   const { evaluation } = detail;
   const id = evaluation.id;
   const now = useNow();
-  const [scheduling, setScheduling] = useState(false);
   const [pulling, setPulling] = useState(false);
   // ADR-051: while the public configuration is unknown, no kiosk warning.
   const kioskAvailable = usePublicConfig().data?.kiosk !== null;
@@ -127,6 +116,17 @@ function Checklist({
   const { blockers, warnings } = readiness(checks);
   const blocked = blockers > 0;
   const skip = evaluation.settings.lobby === "skip";
+  /*
+   * ADR-086: a Scheduled evaluation whose start is still to come is opened
+   * by the platform, so scheduling it is THE action, and opening it at once
+   * the secondary one. Live has no Schedule: its date is for the calendar
+   * only, and the teacher opens the waiting room.
+   */
+  const toSchedule =
+    clockChoiceOf(evaluation.settings).mode === "scheduled" &&
+    evaluation.state === "draft" &&
+    evaluation.opensAt !== null &&
+    Date.parse(evaluation.opensAt) > now;
   const invalidate = () => qc.invalidateQueries({ queryKey: evaluationKey(id) });
 
   /*
@@ -147,14 +147,10 @@ function Checklist({
           }),
     onSuccess: invalidate,
   });
-  const unschedule = useMutation({
-    mutationFn: () =>
-      api<Evaluation>(`/app/api/evaluations/${id}/state`, {
-        method: "POST",
-        body: JSON.stringify({ to: "draft" }),
-      }),
-    onSuccess: invalidate,
-  });
+  const moveTo = (to: "draft" | "scheduled") =>
+    api<Evaluation>(`/app/api/evaluations/${id}/state`, { method: "POST", body: JSON.stringify({ to }) });
+  const schedule = useMutation({ mutationFn: () => moveTo("scheduled"), onSuccess: invalidate });
+  const unschedule = useMutation({ mutationFn: () => moveTo("draft"), onSuccess: invalidate });
   const updateVersions = useMutation({
     mutationFn: () =>
       api(`/app/api/evaluations/${id}/items/update-versions`, {
@@ -179,9 +175,11 @@ function Checklist({
   const blocker = checks.find((c) => c.level === "blocker");
   const status = blocker
     ? (blocker.status ?? blocker.detail)
-    : (evaluation.state === "scheduled" && evaluation.opensAt !== null
+    : evaluation.state === "scheduled" && evaluation.opensAt !== null
       ? t("launch.status.scheduled", { date: isoDateTime(evaluation.opensAt) })
-      : `${t("launch.when.now")} ${t(lobbyKey(evaluation.settings.lobby))}`);
+      : toSchedule
+        ? t("launch.status.toSchedule", { date: isoDateTime(evaluation.opensAt!) })
+        : `${t("launch.when.now")} ${t(lobbyKey(evaluation.settings.lobby))}`;
 
   const fix = (check: LaunchCheck) => {
     if (!check.fix) return;
@@ -192,7 +190,8 @@ function Checklist({
     else updateVersions.mutate();
   };
 
-  const error = open.error ?? unschedule.error;
+  const error = open.error ?? schedule.error ?? unschedule.error;
+  const openLabel = toSchedule ? t("launch.openNow") : skip ? t("launch.open") : t("eval.launch.openLobby");
 
   // What the class will see (#152, variant C's preview): beside the list on
   // a wide screen, a row opening a sheet below that. An evaluation with no
@@ -223,7 +222,7 @@ function Checklist({
 
       {error ? (
         <Alert tone="danger" title={t("eval.launch.failed")}>
-          {transitionErrorMessage(error, t)}
+          {transitionErrorMessage(error, t, evaluation.settings.timing)}
         </Alert>
       ) : null}
 
@@ -250,28 +249,41 @@ function Checklist({
               {unschedule.isPending ? null : <CalendarX2 />}
               <span className="max-sm:sr-only">{t("eval.launch.unschedule")}</span>
             </Button>
-          ) : (
+          ) : toSchedule ? (
             <Button
               variant="secondary"
               size="lg"
               className="max-sm:w-10 max-sm:px-0"
-              aria-label={t("eval.launch.schedule")}
+              aria-label={openLabel}
               disabled={blocked}
-              onClick={() => setScheduling(true)}
+              loading={open.isPending}
+              onClick={() => open.mutate()}
             >
-              <CalendarClock />
-              <span className="max-sm:sr-only">{t("eval.launch.schedule")}</span>
+              {open.isPending ? null : <Rocket />}
+              <span className="max-sm:sr-only">{openLabel}</span>
+            </Button>
+          ) : null}
+          {toSchedule ? (
+            <Button
+              size="lg"
+              className="max-sm:flex-1"
+              disabled={blocked}
+              loading={schedule.isPending}
+              onClick={() => schedule.mutate()}
+            >
+              {schedule.isPending ? null : <CalendarClock />} {t("eval.launch.schedule")}
+            </Button>
+          ) : (
+            <Button
+              size="lg"
+              className="max-sm:flex-1"
+              disabled={blocked}
+              loading={open.isPending}
+              onClick={() => open.mutate()}
+            >
+              {open.isPending ? null : <Rocket />} {openLabel}
             </Button>
           )}
-          <Button
-            size="lg"
-            className="max-sm:flex-1"
-            disabled={blocked}
-            loading={open.isPending}
-            onClick={() => open.mutate()}
-          >
-            {open.isPending ? null : <Rocket />} {skip ? t("launch.open") : t("eval.launch.openLobby")}
-          </Button>
         </div>
       </div>
 
@@ -280,20 +292,6 @@ function Checklist({
           evaluationId={id}
           classroomId={evaluation.classroomId}
           onClose={() => setPulling(false)}
-        />
-      ) : null}
-      {scheduling ? (
-        <ScheduleDialog
-          evaluation={evaluation}
-          onClose={() => setScheduling(false)}
-          onTiming={() => {
-            setScheduling(false);
-            onStep("timing");
-          }}
-          onDone={() => {
-            setScheduling(false);
-            void invalidate();
-          }}
         />
       ) : null}
     </div>
@@ -384,101 +382,5 @@ function CheckRow({
       ) : null}
       <ChevronRight className="mt-0.5 size-4 shrink-0 text-fg-faint sm:hidden" aria-hidden />
     </button>
-  );
-}
-
-/**
- * "Schedule…": one field, the opening time (#152). The ticker opens a
- * scheduled evaluation at `opensAt` and at nothing else, and the server now
- * refuses a schedule without one — so the dialog asks for it rather than
- * switching the state silently. With a common end, the opening time is part
- * of the timing (decision D8: extra time is counted from it) and is edited
- * there; the dialog shows it and links to it instead of offering a second
- * place to change it.
- */
-function ScheduleDialog({
-  evaluation,
-  onClose,
-  onTiming,
-  onDone,
-}: {
-  evaluation: Evaluation;
-  onClose: () => void;
-  onTiming: () => void;
-  onDone: () => void;
-}) {
-  const t = useT();
-  const now = useNow();
-  const deadline = evaluation.settings.timing === "deadline";
-  const [value, setValue] = useState(() => toLocalInput(evaluation.opensAt));
-  const opensAt = deadline ? evaluation.opensAt : fromLocalInput(value);
-  // A convenience only: the server refuses a past opening by its own clock (#178).
-  const past = opensAt !== null && Date.parse(opensAt) <= now;
-
-  const schedule = useMutation({
-    mutationFn: async () => {
-      // Compared as the field shows it, to the minute: an untouched field
-      // writes nothing.
-      if (!deadline && value !== toLocalInput(evaluation.opensAt)) {
-        await api(`/app/api/evaluations/${evaluation.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ opensAt }),
-        });
-      }
-      return api<Evaluation>(`/app/api/evaluations/${evaluation.id}/state`, {
-        method: "POST",
-        body: JSON.stringify({ to: "scheduled" }),
-      });
-    },
-    onSuccess: onDone,
-  });
-
-  return (
-    <FormDialog
-      title={t("launch.schedule.title")}
-      onClose={onClose}
-      onSubmit={() => schedule.mutate()}
-      submitLabel={t("launch.schedule.submit")}
-      submitting={schedule.isPending}
-      canSubmit={opensAt !== null && !past}
-      error={
-        schedule.error ? (
-          <ErrorText>{transitionErrorMessage(schedule.error, t)}</ErrorText>
-        ) : null
-      }
-    >
-      {deadline ? (
-        <div className="space-y-1.5">
-          <p className="text-[13px] font-medium">{t("eval.opensAt")}</p>
-          <p className="text-sm tabular-nums">
-            {evaluation.opensAt ? isoDateTime(evaluation.opensAt) : "—"}
-          </p>
-          <p className="text-[13px] text-fg-muted">
-            {t("launch.schedule.deadline")}{" "}
-            <button
-              type="button"
-              onClick={onTiming}
-              className="font-medium text-fg underline decoration-line-strong underline-offset-4 hover:decoration-fg"
-            >
-              {t("launch.schedule.change")}
-            </button>
-          </p>
-        </div>
-      ) : (
-        <Field
-          label={t("eval.opensAt")}
-          type="datetime-local"
-          width="w-60"
-          min={toLocalInput(new Date(now).toISOString())}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          autoFocus
-        />
-      )}
-      {past ? <ErrorText>{t("launch.schedule.past")}</ErrorText> : null}
-      <p className="text-sm text-fg-muted">
-        {t("launch.when.scheduled")} {t(lobbyKey(evaluation.settings.lobby))}
-      </p>
-    </FormDialog>
   );
 }

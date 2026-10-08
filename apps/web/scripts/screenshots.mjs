@@ -65,6 +65,8 @@ const ATTEMPT_OPEN = "22222222-2222-4222-8222-222222222222";
 const ATTEMPT_PAST = "22222222-2222-4222-8222-222222222223";
 /** The mock's draft made from a template that has moved since (F-EVAL-26). */
 const TEMPLATE_INSTANCE = "eeeeeeee-0000-4000-8000-000000000026";
+/** The mock's Scheduled draft exercise, its window to come (ADR-086). */
+const SCHEDULED_DRAFT = "eeeeeeee-0000-4000-8000-000000000016";
 /** The journal page the editor scenes open (M4-06). */
 const JOURNAL_EDIT = "/classrooms/r1/journal/10-semaine-1/10-pointeurs.md";
 /** The student persona's projects (M3-13, `STUDENT_PROJECT_*` of `mock/student.ts`), one per state. */
@@ -633,10 +635,10 @@ const scenes = [
       await p.waitForTimeout(300);
     },
   },
-  { name: "eval-config-launch-schedule", role: "teacher", path: "/evaluations/draft?step=launch", fold: true, act: async (p) => {
-      await skipCoach(p);
-      await p.getByRole("button", { name: /^schedule…$|^planifier…$/i }).first().click();
-    } },
+  // ADR-086: a Scheduled exercise with a limit, its window to come — the
+  // timing step's two dates and minutes, and Schedule as the launch action.
+  { name: "eval-config-timing-scheduled", role: "teacher", path: `/evaluations/${SCHEDULED_DRAFT}?step=timing` },
+  { name: "eval-config-launch-schedule", role: "teacher", path: `/evaluations/${SCHEDULED_DRAFT}?step=launch` },
   // The waiting-room preview: a side column from `lg` up (in the scenes
   // above), a row opening a sheet on a phone.
   { name: "eval-config-launch-preview-sheet", role: "teacher", path: "/evaluations/draft?step=launch", fold: true, act: async (p) => {

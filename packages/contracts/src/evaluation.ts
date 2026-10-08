@@ -50,7 +50,13 @@ export type Presentation = z.infer<typeof Presentation>;
 const LobbyMode = z.enum(["skip", "auto", "manual"]);
 type LobbyMode = z.infer<typeof LobbyMode>;
 
-/** F-EVAL-04. `manual` has no deadline at all: only the teacher closes. */
+/**
+ * F-EVAL-04. `manual`: the teacher closes, or the ticker at `closesAt` when
+ * one is set, the optional safety deadline (ADR-086 §2). `duration` with a
+ * `closesAt`: each student's minutes are cut at the window's end (§3). The
+ * screen asks "who drives the clock?" and derives this with `lobby`
+ * (`clockChoiceOf`, `@quiz/domain`).
+ */
 export const Timing = z.enum(["duration", "deadline", "manual"]);
 export type Timing = z.infer<typeof Timing>;
 
@@ -804,10 +810,10 @@ export type EvaluationStateBody = z.infer<typeof EvaluationStateBody>;
  * `opens_at_missing` refuses `→ scheduled` without an opening time: the
  * ticker opens a scheduled evaluation at `opensAt`, and without one it would
  * stay scheduled forever (#152). `closes_at_past` refuses to schedule or open
- * an evaluation whose common end has passed, and `opens_at_past` a schedule
- * for a time already past, both against the server's clock (#178).
- * `no_graded_points` refuses to open an exam or an exercise whose total —
- * bonus items left out — is 0 (ADR-052).
+ * an evaluation whose `closesAt` has passed, whatever its timing (ADR-086),
+ * and `opens_at_past` a schedule for a time already past, both against the
+ * server's clock (#178). `no_graded_points` refuses to open an exam or an
+ * exercise whose total — bonus items left out — is 0 (ADR-052).
  */
 export const TransitionRefusal = z.object({
   error: z.literal("illegal_transition"),
@@ -822,7 +828,7 @@ export const TransitionRefusal = z.object({
       "opens_at_past",
     ])
     .optional(),
-  missing: z.array(z.enum(["durationS", "opensAt", "closesAt", "timing"])).optional(),
+  missing: z.array(z.enum(["durationS", "opensAt", "closesAt"])).optional(),
 });
 export type TransitionRefusal = z.infer<typeof TransitionRefusal>;
 

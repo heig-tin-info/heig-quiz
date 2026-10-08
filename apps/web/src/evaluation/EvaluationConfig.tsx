@@ -193,13 +193,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
       return;
     }
     setTimingChecked(true);
-    const target = document.getElementById(TIMING_FIELD_ID[missing[0]!]);
-    // The timing row is a radio group: the focus goes to the choice in force.
-    const control =
-      target instanceof HTMLInputElement
-        ? target
-        : target?.querySelector<HTMLInputElement>("input:checked");
-    control?.focus();
+    document.getElementById(TIMING_FIELD_ID[missing[0]!])?.focus();
   };
 
   /**

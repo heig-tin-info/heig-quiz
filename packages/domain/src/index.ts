@@ -37,6 +37,7 @@ export {
   type AnnotationLike,
   type ScoreParse,
 } from "./ciScore.js";
+export * from "./clockMode.js";
 export * from "./cloze.js";
 export * from "./concepts.js";
 export * from "./conceptSorting.js";

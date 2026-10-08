@@ -32,7 +32,7 @@ With the waiting room set to **Automatic**, the evaluation starts by itself once
 
 Once the evaluation runs, the ring becomes a grid: one row per student on the roster, one column per question, headed `Q1`, `Q2`... (hover a header for the question's type). The **Student** column stays fixed while the questions scroll. Each row is one line: the presence dot, the name, and the student's state (`handed in`, `closed`, the extra-time chip). The dot is green when connected; a Wi-Fi-off icon beside the name means the page dropped, and a greyed name a student who has not opened the evaluation (hover the dot for the word). **Progress** gives how far each student has got, `3/5` and `60 %`. **Score** appears once there is a score to show. The **Class** row at the bottom gives the completion rate of each question, then its success rate once the grading exists.
 
-The time left is the big countdown in the header, beside **Pause**. A row shows its own countdown, at the end of the name, only when its deadline is not everybody's: an extension given to that student, extra time, or a late start in **Per student** mode.
+The time left is the big countdown in the header, beside **Pause**. A row shows its own countdown, at the end of the name, only when its deadline is not everybody's: an extension given to that student, extra time, or a late start with a **time limit per student**.
 
 The rows shrink to fit the whole class on the screen, down to a readable minimum; past that the page scrolls.
 
@@ -105,7 +105,7 @@ A write that reaches the server after the deadline plus three seconds of grace i
 A student who loses the network loses nothing. Answers are sent as they type and acknowledged; the player shows an unsaved or offline state while the link is down, and on reload or reconnection the student finds exactly their answers and their position. The row's presence dot goes `offline` in the meantime, which is your signal, not theirs.
 
 !!! note
-    A student who never connected has no attempt and no countdown. If they arrive late in **Per student** mode, they start with the full duration from their own start; in **Common end** mode they stop with everybody else, and **+5 minutes for this student** is how you make it up to them.
+    A student who never connected has no attempt and no countdown. If they arrive late with a **time limit per student**, they start with the full limit from their own start (cut at **Closes at** in a scheduled evaluation); without one they stop with everybody else, and **+5 minutes for this student** is how you make it up to them.
 
 ## After the close
 

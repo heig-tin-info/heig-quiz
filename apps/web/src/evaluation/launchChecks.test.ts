@@ -149,6 +149,17 @@ describe("launchChecks: the blockers are the server's", () => {
     expect(scheduled.fix).toBeUndefined();
   });
 
+  it("blocks a past safety deadline and a past window end too, as the ticker closes on either (ADR-086)", () => {
+    for (const timing of ["manual", "duration"] as const) {
+      expect(one(checks(detailWith({ closesAt: at(-HOUR) }, {}, { timing })), "timing").title).toBe("launch.timing.past");
+    }
+  });
+
+  it("asks a live exam without a limit for its safety deadline, in the mode's words (ADR-086 §2)", () => {
+    expect(one(checks(detailWith({}, {}, { timing: "manual" })), "timing").detail).toBe("eval.missing.closesAt.live");
+    expect(one(checks(detailWith({ closesAt: at(HOUR) }, {}, { timing: "manual" })), "timing").level).toBe("ok");
+  });
+
   it("treats a common end exactly now as past, and one a millisecond ahead as fine", () => {
     const deadline = (closesAt: string) =>
       one(checks(detailWith({ opensAt: at(-HOUR), closesAt, durationS: null }, {}, { timing: "deadline" })), "timing");
