@@ -282,6 +282,9 @@ export const attemptInspectKey = (evaluationId: string, attemptId: string | null
 /** Every student paper cached for one evaluation, for a blanket invalidation. */
 export const attemptInspectPrefix = (evaluationId: string) =>
   ["attempt-inspect", evaluationId] as const;
+/** One question's answers for the whole class (F-DASH-07): a snapshot, refreshed by hand. */
+export const itemAnswersKey = (evaluationId: string, itemId: string) =>
+  ["item-answers", evaluationId, itemId] as const;
 
 // --- Grading and results -------------------------------------------------------
 

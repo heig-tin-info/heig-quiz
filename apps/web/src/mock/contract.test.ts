@@ -38,6 +38,7 @@ import {
   LlmSettings,
   LlmUsage,
   AttemptInspect,
+  ItemAnswers,
   AttemptOrLobby,
   ByQuestion,
   CourseCondition,
@@ -400,6 +401,13 @@ const CHECKED: Case[] = [
     "/app/api/evaluations/:id/attempts/:attemptId",
     `/app/api/evaluations/${runningId}/attempts/${attemptId}`,
     AttemptInspect,
+  ),
+  ...runningItems.map((itemId) =>
+    one(
+      "/app/api/evaluations/:id/items/:itemId/answers",
+      `/app/api/evaluations/${runningId}/items/${itemId}/answers`,
+      ItemAnswers,
+    ),
   ),
   ...gradedIds.flatMap((id, i) => [
     one("/app/api/evaluations/:id/grading", `/app/api/evaluations/${id}/grading`, GradingQueue),

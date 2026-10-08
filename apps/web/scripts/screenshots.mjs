@@ -677,7 +677,12 @@ const scenes = [
   { name: "live-kiosk-assign", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live?kiosk=1&seb=1", fold: true, act: (p) => p.getByRole("button", { name: "Assign a station" }).first().dispatchEvent("click") },
   { name: "live-lobby", role: "teacher", path: "/evaluations/lobby/live" },
   { name: "live-closed", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/closed/live" },
-  { name: "live-inspect", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", act: (p) => p.getByRole("button", { name: /· Question 1$/ }).first().click() },
+  // #353: what a click opens is what was clicked — the row's eye the whole
+  // paper, a cell that one answer, a column header the question for the class.
+  { name: "live-inspect", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: "Open the whole paper" }).first().click() },
+  { name: "live-answer", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /· Question 1$/ }).first().click() },
+  { name: "live-question", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: "Open question 6 for every student" }).click() },
+  { name: "live-question-hidden", role: "teacher", path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: "Open question 1 for every student" }).click() },
   // #94: the complete answer of one cell, on hover (fetched on demand).
   { name: "live-tip-code", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Rochat, Louis · Question 1( · flagged.*)?$/ }).hover() },
   { name: "live-tip-cloze", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Favre, Ethan · Question 5$/ }).hover() },

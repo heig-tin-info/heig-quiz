@@ -4,7 +4,14 @@
  */
 import { and, asc, desc, eq, gt, inArray } from "drizzle-orm";
 
-import type { AttemptInspect, AttemptState, DashboardAccess, DashboardView, Verdict } from "@quiz/contracts";
+import type {
+  AttemptInspect,
+  AttemptState,
+  DashboardAccess,
+  DashboardView,
+  ItemAnswers,
+  Verdict,
+} from "@quiz/contracts";
 import { shuffle } from "@quiz/core/rng";
 import {
   TRUSTED_CLIENTS,
@@ -382,42 +389,103 @@ export async function attemptInspect(
       submittedAt: isoOrNull(attempt.submittedAt),
     },
     items: items.map((entry) => {
-      // The student's own instance of a parameterized question (ADR-056).
-      const { version } = itemInstance(entry, attempt);
-      const answer = answered.get(entry.item.id) ?? null;
+      const answer = answered.get(entry.item.id);
       return {
-        item: {
-          id: entry.item.id,
-          position: entry.item.position,
-          points: entry.item.points,
-          type: entry.question.type,
-          internalName: entry.question.internalName,
-        },
-        // The teacher's order, as the grid cell and its tooltip letter the
-        // answer: "A" in the inspection is the "A" of the cell, whatever
-        // order this student was served (ADR-033, addendum 2026-10-01).
-        studentConfig: studentView({
-          type: entry.question.type,
-          version,
-          seed: attempt.seed,
-          itemId: entry.item.id,
-          shuffle: false,
-          defaults: gradeDefaults(evaluation),
-        }),
-        answer: answer?.payload ?? null,
-        revision: answer?.revision ?? 0,
+        item: itemHead(entry),
+        ...staffAnswer(evaluation, entry, attempt, answer),
         markedDone: answer?.markedDone ?? false,
-        skipped: answer?.skipped ?? false,
-        flagged: answer?.flagged ?? false,
-        solution: solutionView({
-          type: entry.question.type,
-          version,
-          seed: attempt.seed,
-          itemId: entry.item.id,
-        }),
       };
     }),
     events: journal.map((e) => ({ kind: e.kind, at: iso(e.at), details: e.details })),
     serverNow: iso(now),
+  };
+}
+
+/**
+ * F-DASH-07: one question of the grid opened for the whole class — every
+ * student's answer to it, on the attempt the grid shows (the latest,
+ * F-EVAL-15). Null when the item is not one of this evaluation's: the route
+ * answers the 404 of a missing item (invariant 6). One query for the
+ * attempts, one for their answers to this item: never one per student.
+ */
+export async function itemAnswers(
+  db: Db,
+  evaluation: EvaluationRecord,
+  itemId: string,
+  now: Date,
+): Promise<ItemAnswers | null> {
+  const entry = (await joinedItems(db, evaluation.id)).find((e) => e.item.id === itemId);
+  if (!entry) return null;
+  // First attempt first, so the map ends on each student's latest one — the
+  // dashboard's own rule (`dashboardView`).
+  const attemptRows = await db
+    .select()
+    .from(attempts)
+    .where(eq(attempts.evaluationId, evaluation.id))
+    .orderBy(asc(attempts.attemptNumber));
+  const latest = [...new Map(attemptRows.map((a) => [a.userId ?? a.id, a])).values()];
+  const answerRows =
+    latest.length === 0
+      ? []
+      : await db
+          .select()
+          .from(answers)
+          .where(and(eq(answers.itemId, itemId), inArray(answers.attemptId, latest.map((a) => a.id))));
+  const byAttempt = new Map(answerRows.map((a) => [a.attemptId, a]));
+  return {
+    item: itemHead(entry),
+    answers: latest.map((attempt) => ({
+      attemptId: attempt.id,
+      ...staffAnswer(evaluation, entry, attempt, byAttempt.get(attempt.id)),
+    })),
+    serverNow: iso(now),
+  };
+}
+
+/** An item as the staff's readers name it. */
+function itemHead(entry: JoinedItem) {
+  return {
+    id: entry.item.id,
+    position: entry.item.position,
+    points: entry.item.points,
+    type: entry.question.type,
+    internalName: entry.question.internalName,
+  };
+}
+
+/**
+ * One student's answer to one item, as the staff read it: the student's own
+ * instance (ADR-056), their answer and the key — the one shape of the
+ * inspector and of the question view.
+ */
+function staffAnswer(
+  evaluation: EvaluationRecord,
+  entry: JoinedItem,
+  attempt: AttemptRecord,
+  answer: AnswerRecord | undefined,
+) {
+  const { version } = itemInstance(entry, attempt);
+  return {
+    // The teacher's order, as the grid cell and its tooltip letter the
+    // answer: "A" in the inspection is the "A" of the cell, whatever order
+    // this student was served (ADR-033, addendum 2026-10-01).
+    studentConfig: studentView({
+      type: entry.question.type,
+      version,
+      seed: attempt.seed,
+      itemId: entry.item.id,
+      shuffle: false,
+      defaults: gradeDefaults(evaluation),
+    }),
+    answer: answer?.payload ?? null,
+    revision: answer?.revision ?? 0,
+    skipped: answer?.skipped ?? false,
+    flagged: answer?.flagged ?? false,
+    solution: solutionView({
+      type: entry.question.type,
+      version,
+      seed: attempt.seed,
+      itemId: entry.item.id,
+    }),
   };
 }

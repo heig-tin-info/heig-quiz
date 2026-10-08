@@ -60,7 +60,9 @@ export function StudentGrid({
   showAnswers,
   showResults,
   selected,
+  onCell,
   onInspect,
+  onQuestion,
   onExtend,
   onClose,
   onReopen,
@@ -82,7 +84,12 @@ export function StudentGrid({
   showAnswers: boolean;
   showResults: boolean;
   selected: { attemptId: string; itemId: string } | null;
+  /** A cell: that student's answer to that question (F-DASH-05). */
+  onCell: (row: DashboardRow, itemId: string) => void;
+  /** The row's eye: that student's whole paper. */
   onInspect: (row: DashboardRow, itemId: string) => void;
+  /** A column header: that question for every student (F-DASH-07). */
+  onQuestion: (itemId: string) => void;
   onExtend: (row: DashboardRow) => void;
   /** With the name the row shows, for the confirmation that asks first. */
   onClose: (row: DashboardRow, name: string) => void;
@@ -172,8 +179,19 @@ export function StudentGrid({
                   // "12" need 56 of the 64 px.
                   className={cx(T.th, COL, "px-1! text-center")}
                 >
-                  <span className="inline-flex items-center justify-center gap-1 whitespace-nowrap">
-                    <span className="font-mono text-[11px] font-semibold text-fg">Q{index + 1}</span>
+                  {/* The header opens the question for the whole class
+                      (F-DASH-07). A BUTTON inside the header, not a click
+                      on the header: F-DASH-03 may one day sort by column,
+                      and that would be the header's own affordance. */}
+                  <button
+                    type="button"
+                    aria-label={t("live.question.open", { n: index + 1 })}
+                    onClick={() => onQuestion(item.id)}
+                    className="group/q inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-key px-0.5 py-0.5 hover:bg-surface-2"
+                  >
+                    <span className="font-mono text-[11px] font-semibold text-fg underline decoration-fg-faint decoration-dotted underline-offset-4 group-hover/q:decoration-solid">
+                      Q{index + 1}
+                    </span>
                     {/* The legend under the grid names the flag. */}
                     {flagged > 0 ? (
                       <span
@@ -184,7 +202,7 @@ export function StudentGrid({
                         {flagged}
                       </span>
                     ) : null}
-                  </span>
+                  </button>
                   {flagged > 0 ? (
                     <span className="sr-only">
                       {flagged === 1
@@ -228,6 +246,7 @@ export function StudentGrid({
               clock={clock}
               showAnswers={showAnswers}
               showResults={showResults}
+              onCell={onCell}
               onInspect={onInspect}
               onExtend={onExtend}
               onClose={onClose}

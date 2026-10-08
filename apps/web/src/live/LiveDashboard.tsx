@@ -32,10 +32,12 @@ import {
 } from "../ui";
 import { AssignStationDialog } from "./AssignStation";
 import { anonymousNumbers, commonDeadline } from "./cells";
+import { AnswerModal } from "./AnswerModal";
 import { InspectModal } from "./InspectModal";
 import { Legend } from "./Legend";
 import { LobbyPanel } from "./LobbyPanel";
 import { LiveHeader, type LiveControls } from "./LiveHeader";
+import { QuestionModal } from "./QuestionModal";
 import { StudentGrid } from "./StudentGrid";
 import { useLiveToggles } from "./toggles";
 import { useDashboard } from "./useDashboard";
@@ -55,10 +57,16 @@ import { dashboardKey, evaluationKey } from "../queryKeys";
  *     `r` hides the answers, `s` shows the results, `f` goes full screen. All
  *     of them are written under the grid, because a shortcut nobody can see
  *     does not exist;
- *   - reading ONE student is a modal over the grid and not a panel beside it
- *     (`InspectModal`): it holds every answer of that student at once, which
- *     is what the teacher opened it for, and the grid is one Escape away.
+ *   - reading is a modal over the grid and not a panel beside it, and what
+ *     opens is what was clicked (issue #353): a cell opens that one answer
+ *     (`AnswerModal`), the row's eye the student's whole paper
+ *     (`InspectModal`), a column header the question for the whole class
+ *     (`QuestionModal`). The grid is one Escape away from each.
  */
+
+type Opened =
+  | { view: "answer" | "paper"; attemptId: string; seatId: string; itemId: string }
+  | { view: "question"; itemId: string };
 
 export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Route) => void }) {
   const t = useT();
@@ -69,9 +77,13 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   // The display switches (F-DASH-02), remembered per browser (#80).
   const [toggles, setToggles] = useLiveToggles();
   const [fullscreen, toggleFullscreen] = useFullscreen();
-  const [selected, setSelected] = useState<{ attemptId: string; seatId: string; itemId: string } | null>(
-    null,
-  );
+  /**
+   * What is open over the grid, one at a time (issue #353): one answer (a
+   * cell), one student's whole paper (the row's eye), or one question for
+   * the class (a column header).
+   */
+  const [opened, setOpened] = useState<Opened | null>(null);
+  const selected = opened?.view === "question" ? null : opened;
 
   // The row a station is being assigned to (ADR-051 §7), with the name it showed.
   const [assigning, setAssigning] = useState<{ userId: string; name: string } | null>(null);
@@ -253,10 +265,16 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
     onChanged: refresh,
   });
 
-  const selectCell = useCallback((row: DashboardRow, itemId: string) => {
-    if (row.attemptId === null) return;
-    setSelected({ attemptId: row.attemptId, seatId: row.seatId, itemId });
-  }, []);
+  const openOn = useCallback(
+    (view: "answer" | "paper") => (row: DashboardRow, itemId: string) => {
+      if (row.attemptId === null) return;
+      setOpened({ view, attemptId: row.attemptId, seatId: row.seatId, itemId });
+    },
+    [],
+  );
+  const selectCell = useMemo(() => openOn("answer"), [openOn]);
+  const selectPaper = useMemo(() => openOn("paper"), [openOn]);
+  const selectQuestion = useCallback((itemId: string) => setOpened({ view: "question", itemId }), []);
 
   // The row actions, stable: the grid's rows are memoised, and a callback
   // rebuilt on every render would re-render all of them.
@@ -312,7 +330,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
     // `controls` is rebuilt on every render; the handler reads the state it
     // needs through the closure, which is refreshed by the same render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pausable, evaluationState, selected, toggleFullscreen]);
+  }, [pausable, evaluationState, opened, toggleFullscreen]);
 
   // The same keys in the sidebar strip. Reactive to the state: Space only
   // means something while the quiz runs, and Escape only while a cell is open.
@@ -324,7 +342,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
       ? [{ keys: "Space", label: evaluationState === "paused" ? t("live.resume") : t("live.pause") }]
       : []),
     { keys: "F", label: t("live.fullscreen") },
-    ...(selected ? [{ keys: "Esc", label: t("live.inspect.close") }] : []),
+    ...(opened ? [{ keys: "Esc", label: t("live.inspect.close") }] : []),
   ]);
 
   if (isPoll) {
@@ -349,6 +367,8 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   const counts = presence(state);
   const selectedRow =
     selected === null ? null : (view.rows.find((r) => r.seatId === selected.seatId) ?? null);
+  const openedIndex = opened === null ? -1 : view.items.findIndex((i) => i.id === opened.itemId);
+  const close = () => setOpened(null);
   const lobby = evaluationState === "lobby" || evaluationState === "scheduled";
   // The one clock of the screen, for the header and for every row that
   // compares its own deadline against it. No clock while the evaluation's
@@ -431,7 +451,9 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
                 showAnswers={toggles.answers}
                 showResults={toggles.results}
                 selected={selected}
-                onInspect={selectCell}
+                onCell={selectCell}
+                onInspect={selectPaper}
+                onQuestion={selectQuestion}
                 onExtend={extendRow}
                 onClose={closeRow}
                 onReopen={reopenRow}
@@ -451,15 +473,44 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
               }}
             />
           ) : null}
-          {selectedRow && selected ? (
+          {selectedRow && selected?.view === "paper" ? (
             <InspectModal
               evaluationId={id}
               state={state}
               row={selectedRow}
               itemId={selected.itemId}
               nameOf={nameOf}
-              onSelect={selectCell}
-              onClose={() => setSelected(null)}
+              onSelect={selectPaper}
+              onClose={close}
+            />
+          ) : selectedRow && selected?.view === "answer" && openedIndex >= 0 ? (
+            <AnswerModal
+              evaluationId={id}
+              row={selectedRow}
+              itemId={selected.itemId}
+              number={openedIndex + 1}
+              name={nameOf(selectedRow)}
+              showAnswers={toggles.answers}
+              showResults={toggles.results}
+              onPaper={() => setOpened({ ...selected, view: "paper" })}
+              onClose={close}
+            />
+          ) : opened?.view === "question" && openedIndex >= 0 ? (
+            <QuestionModal
+              evaluationId={id}
+              item={view.items[openedIndex]!}
+              number={openedIndex + 1}
+              // Names hidden, the cards follow the numbers the room hears
+              // ("Student 1, 2, 3…"), not the hidden roster order.
+              rows={
+                toggles.names
+                  ? view.rows
+                  : [...view.rows].sort((a, b) => (numbers.get(a.seatId) ?? 0) - (numbers.get(b.seatId) ?? 0))
+              }
+              nameOf={nameOf}
+              showAnswers={toggles.answers}
+              showResults={toggles.results}
+              onClose={close}
             />
           ) : null}
         </>

@@ -139,6 +139,7 @@ export const GridRow = memo(function GridRow({
   clock,
   showAnswers,
   showResults,
+  onCell,
   onInspect,
   onExtend,
   onClose,
@@ -168,6 +169,9 @@ export const GridRow = memo(function GridRow({
   clock: () => number;
   showAnswers: boolean;
   showResults: boolean;
+  /** A cell: that one answer (F-DASH-05, issue #353). */
+  onCell: (row: DashboardRow, itemId: string) => void;
+  /** The row's eye: the whole paper, opened on `inspectItemId`. */
   onInspect: (row: DashboardRow, itemId: string) => void;
   onExtend: (row: DashboardRow) => void;
   /** With the name the row shows, for the confirmation that asks first. */
@@ -323,7 +327,7 @@ export const GridRow = memo(function GridRow({
                     label={label}
                     describedBy={describedBy}
                     onClick={
-                      row.attemptId === null ? undefined : () => onInspect(row, item.id)
+                      row.attemptId === null ? undefined : () => onCell(row, item.id)
                     }
                   />
                 )}

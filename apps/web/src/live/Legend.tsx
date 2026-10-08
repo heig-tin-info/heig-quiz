@@ -18,7 +18,7 @@ import { VerdictCell, type VerdictState } from "../ui";
  * question types it can grade without the runner. The legend says so in one
  * line rather than letting the teacher wonder whether a green cell is final.
  */
-const SHOWN = [
+export const LEGEND_STATES = [
   ["blank", "verdict.blank"],
   ["inProgress", "verdict.inProgress"],
   ["answered", "verdict.answered"],
@@ -37,7 +37,7 @@ export function Legend({ showResults = false }: { showResults?: boolean }) {
         aria-label={t("live.legend")}
         className="flex flex-wrap items-center gap-x-4 gap-y-2"
       >
-        {SHOWN.map(([state, key]) => (
+        {LEGEND_STATES.map(([state, key]) => (
           <li key={state} className="flex items-center gap-1.5">
             <span className="w-8">
               <VerdictCell state={state} />
