@@ -31,3 +31,4 @@ export * from "./llm.js";
 export * from "./assist.js";
 export * from "./codespace.js";
 export * from "./legacy.js";
+export * from "./concept.js";

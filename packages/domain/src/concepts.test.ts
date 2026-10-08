@@ -5,6 +5,10 @@ import {
   closeConcepts,
   conceptKey,
   editDistance,
+  qualifiedConceptKey,
+  resolveConceptLabel,
+  splitQualifiedLabel,
+  type ResolvableConcept,
 } from "./concepts.js";
 
 /**
@@ -197,5 +201,163 @@ describe("closeConcepts", () => {
   it("matches nothing for an empty input or a far word", () => {
     expect(closeConcepts("  # ", vocabulary)).toEqual([]);
     expect(closeConcepts("inductance", vocabulary)).toEqual([]);
+  });
+});
+
+describe("qualifiedConceptKey", () => {
+  it("is the label's key without a qualifier", () => {
+    expect(qualifiedConceptKey("Pointeurs")).toBe("pointeur");
+    expect(qualifiedConceptKey("Pointeurs", "  ")).toBe("pointeur");
+  });
+
+  it("appends the qualifier's key after a separator no key contains", () => {
+    expect(qualifiedConceptKey("Adresse", "mémoire")).toBe("adress|memoire");
+    expect(qualifiedConceptKey("adresses", "Mémoires")).toBe("adress|memoire");
+    expect(qualifiedConceptKey("adresse mémoire")).not.toBe(
+      qualifiedConceptKey("adresse", "mémoire"),
+    );
+  });
+});
+
+describe("splitQualifiedLabel", () => {
+  it("splits a trailing parenthesised qualifier", () => {
+    expect(splitQualifiedLabel(" adresse (mémoire) ")).toEqual({
+      label: "adresse",
+      qualifier: "mémoire",
+    });
+    expect(splitQualifiedLabel("pile(LIFO)")).toEqual({
+      label: "pile",
+      qualifier: "LIFO",
+    });
+  });
+
+  it("is null without one", () => {
+    expect(splitQualifiedLabel("adresse")).toBeNull();
+    expect(splitQualifiedLabel("(mémoire)")).toBeNull();
+    expect(splitQualifiedLabel("adresse ()")).toBeNull();
+    expect(splitQualifiedLabel("f(x) + 1")).toBeNull();
+  });
+});
+
+describe("resolveConceptLabel", () => {
+  const concept = (
+    id: string,
+    labels: [string, string?][],
+    aliases: string[] = [],
+    mergedInto: string | null = null,
+  ): ResolvableConcept => ({
+    id,
+    mergedInto,
+    labels: labels.map(([label, qualifier = ""]) => ({ label, qualifier })),
+    aliases,
+  });
+  const vocabulary = [
+    concept("ptr", [["pointeur"], ["pointer"]]),
+    concept("mem", [
+      ["adresse", "mémoire"],
+      ["address", "memory"],
+    ]),
+    concept("post", [["adresse", "postale"]]),
+    concept("ovf", [["dépassement"]], ["overflow"]),
+    concept("old", [["pointeurs bruts"]], [], "ptr"),
+  ];
+
+  it("resolves a concept's id, and a merged one's to its final concept", () => {
+    expect(resolveConceptLabel("ptr", vocabulary)).toEqual({
+      kind: "resolved",
+      id: "ptr",
+    });
+    expect(resolveConceptLabel("old", vocabulary)).toEqual({
+      kind: "resolved",
+      id: "ptr",
+    });
+  });
+
+  it("resolves one exact match through a label or an alias, in either language", () => {
+    expect(resolveConceptLabel("Pointeurs", vocabulary)).toEqual({
+      kind: "resolved",
+      id: "ptr",
+    });
+    expect(resolveConceptLabel("pointers", vocabulary)).toEqual({
+      kind: "resolved",
+      id: "ptr",
+    });
+    expect(resolveConceptLabel("Overflow", vocabulary)).toEqual({
+      kind: "resolved",
+      id: "ovf",
+    });
+  });
+
+  it("refuses homonyms as ambiguous, and resolves the qualified form", () => {
+    expect(resolveConceptLabel("adresse", vocabulary)).toEqual({
+      kind: "ambiguous",
+      candidates: ["mem", "post"],
+    });
+    expect(resolveConceptLabel("Adresse (Mémoire)", vocabulary)).toEqual({
+      kind: "resolved",
+      id: "mem",
+    });
+    expect(resolveConceptLabel("address (memory)", vocabulary)).toEqual({
+      kind: "resolved",
+      id: "mem",
+    });
+  });
+
+  it("is ambiguous when a qualified key is one concept's French and another's English", () => {
+    const crossed = [
+      concept("fr", [["pile", "lifo"]]),
+      concept("en", [["empilement"], ["pile", "LIFO"]]),
+    ];
+    expect(resolveConceptLabel("pile (LIFO)", crossed)).toEqual({
+      kind: "ambiguous",
+      candidates: ["fr", "en"],
+    });
+  });
+
+  it("treats an alias two concepts share as ambiguous", () => {
+    const shared = [
+      concept("a", [["pile"]], ["stack"]),
+      concept("b", [["empilement"]], ["stack"]),
+    ];
+    expect(resolveConceptLabel("stack", shared)).toEqual({
+      kind: "ambiguous",
+      candidates: ["a", "b"],
+    });
+  });
+
+  it("gives close matches as candidates, never as a resolution", () => {
+    expect(resolveConceptLabel("Poiners", vocabulary)).toEqual({
+      kind: "unknown",
+      candidates: ["ptr"],
+    });
+  });
+
+  it("is unknown without candidates when nothing is near", () => {
+    expect(resolveConceptLabel("récursivité", vocabulary)).toEqual({
+      kind: "unknown",
+      candidates: [],
+    });
+    expect(resolveConceptLabel("adresse (IP)", vocabulary).kind).toBe(
+      "unknown",
+    );
+    expect(resolveConceptLabel("#", vocabulary)).toEqual({
+      kind: "unknown",
+      candidates: [],
+    });
+  });
+
+  it("never matches a merged concept by its labels", () => {
+    expect(resolveConceptLabel("pointeurs bruts", vocabulary)).toEqual({
+      kind: "unknown",
+      candidates: [],
+    });
+  });
+
+  it("matches a label that really contains parentheses as typed", () => {
+    const parens = [concept("lifo", [["pile (LIFO)"]])];
+    expect(resolveConceptLabel("Pile (LIFO)", parens)).toEqual({
+      kind: "resolved",
+      id: "lifo",
+    });
   });
 });

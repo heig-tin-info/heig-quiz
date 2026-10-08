@@ -181,3 +181,112 @@ export function closeConcepts(
     (x, y) => x.distance - y.distance || x.name.localeCompare(y.name),
   );
 }
+
+/**
+ * What separates the label's key from the qualifier's in a stored key. A
+ * {@link conceptKey} never contains it, so `adresse` + `mémoire` cannot meet
+ * a label that happens to read `adresse memoire`.
+ */
+const QUALIFIER_SEPARATOR = "|";
+
+/**
+ * The key a concept is unique by, per language (ADR-081 §5, addendum §3):
+ * the label's {@link conceptKey}, then, when the concept has a qualifier,
+ * the separator and the qualifier's key. `adresse (mémoire)` is
+ * `adress|memoire`; `pointeurs` is `pointeur`. The one rule both the stored
+ * column and the lookup of a qualified input go through.
+ */
+export function qualifiedConceptKey(label: string, qualifier = ""): string {
+  const qualifierKey = conceptKey(qualifier);
+  const labelKey = conceptKey(label);
+  return qualifierKey
+    ? `${labelKey}${QUALIFIER_SEPARATOR}${qualifierKey}`
+    : labelKey;
+}
+
+/**
+ * A label written with its qualifier, `adresse (mémoire)`: the bare label
+ * and the qualifier, or null when the input does not end with one
+ * parenthesised group after some text.
+ */
+export function splitQualifiedLabel(
+  input: string,
+): { label: string; qualifier: string } | null {
+  const match = /^(.*?\S)\s*\(([^()]*\S[^()]*)\)\s*$/u.exec(input.trim());
+  if (!match) return null;
+  return { label: match[1]!, qualifier: match[2]!.trim() };
+}
+
+/**
+ * Every concept of the vocabulary as the resolver sees it, merged ones
+ * included. Its keys are computed here, from its labels and qualifiers
+ * ({@link qualifiedConceptKey}): a caller hands over what the concept says,
+ * never a stored key, which only serves the database's unique index.
+ */
+export interface ResolvableConcept {
+  id: string;
+  /** The concept it was merged into, always the final one (addendum §3); null when not merged. */
+  mergedInto: string | null;
+  /** Its label and qualifier in each language that has a label. */
+  labels: readonly { label: string; qualifier: string }[];
+  /** Other names it answers to, bare (curated aliases, ADR-081 §6); none by default. */
+  aliases?: readonly string[];
+}
+
+/**
+ * What a typed label designates (ADR-081 addendum §2): one concept, several
+ * (homonyms, or an alias shared by two concepts) or none, with the "did you
+ * mean" candidates. Ids, best first.
+ */
+export type LabelResolution =
+  | { kind: "resolved"; id: string }
+  | { kind: "ambiguous"; candidates: string[] }
+  | { kind: "unknown"; candidates: string[] };
+
+/**
+ * Resolves what a teacher, a picker or an MCP client typed (ADR-081 §6 as
+ * amended by addendum §2):
+ *
+ * 1. a concept's id resolves to it, a merged one to the concept it was
+ *    merged into (one hop: `merged_into` always names the final concept);
+ * 2. a label written with its qualifier resolves to the concept whose
+ *    qualified key it equals;
+ * 3. otherwise the input is matched against the bare labels and aliases of
+ *    the concepts that are not merged: one exact match resolves; several
+ *    are ambiguous; close matches only are unknown, with them as
+ *    candidates; nothing is unknown without candidates.
+ *
+ * A qualified input that names no qualified concept falls to step 3 as
+ * typed, so a label that really contains parentheses still matches.
+ */
+export function resolveConceptLabel(
+  input: string,
+  concepts: readonly ResolvableConcept[],
+): LabelResolution {
+  const direct = concepts.find((c) => c.id === input.trim());
+  if (direct) return { kind: "resolved", id: direct.mergedInto ?? direct.id };
+
+  const live = concepts.filter((c) => !c.mergedInto);
+  const qualified = splitQualifiedLabel(input);
+  if (qualified) {
+    const key = qualifiedConceptKey(qualified.label, qualified.qualifier);
+    const hits = live.filter((c) =>
+      c.labels.some((l) => qualifiedConceptKey(l.label, l.qualifier) === key),
+    );
+    if (hits.length === 1) return { kind: "resolved", id: hits[0]!.id };
+    // One language's key may equal another concept's key in the other language.
+    if (hits.length > 1)
+      return { kind: "ambiguous", candidates: hits.map((c) => c.id) };
+  }
+
+  const names: ConceptNames[] = live.map((c) => ({
+    id: c.id,
+    names: [...c.labels.map((l) => l.label), ...(c.aliases ?? [])],
+  }));
+  const matches = closeConcepts(input, names);
+  const exact = matches.filter((m) => m.kind === "exact");
+  if (exact.length === 1) return { kind: "resolved", id: exact[0]!.id };
+  if (exact.length > 1)
+    return { kind: "ambiguous", candidates: exact.map((m) => m.id) };
+  return { kind: "unknown", candidates: matches.map((m) => m.id) };
+}

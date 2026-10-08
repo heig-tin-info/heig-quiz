@@ -30,6 +30,7 @@ import { adminGuard } from "./modules/guards.js";
 import { avatarPlugin } from "./modules/avatar.js";
 import { registerCodespaceJobs } from "./modules/codespace/jobs.js";
 import { codespacePlugin } from "./modules/codespace/routes.js";
+import { conceptPlugin } from "./modules/concept/routes.js";
 import { codespaceOn } from "./modules/codespace/service.js";
 import { drillPlugin } from "./modules/drill/routes.js";
 import { registerDrillHooks } from "./modules/drill/service.js";
@@ -233,6 +234,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(gradingPlugin);
   await app.register(resultsPlugin);
   await app.register(statsPlugin);
+  // The vocabulary of concepts (ADR-081): the registry alone, connected to nothing yet.
+  await app.register(conceptPlugin);
   await app.register(drillPlugin);
   // The drill listens to the release and to the end of an attempt (ADR-041
   // §1): wired here, once, never by an import's side effect.

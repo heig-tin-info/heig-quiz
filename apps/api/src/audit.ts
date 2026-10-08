@@ -52,6 +52,15 @@ export type AuditAction =
   | "classroom.delete"
   | "classroom.rename"
   | "classroom.unarchive"
+  /**
+   * The vocabulary of concepts (ADR-081, addendum §5). `propose`: a teacher
+   * created a `proposed` concept (subject the concept; `payload.lang`,
+   * `payload.label`, `payload.qualifier`). `edit`: its creator or the admin
+   * changed a label, qualifier or description (`payload`: the patch, per
+   * language).
+   */
+  | "concept.edit"
+  | "concept.propose"
   | "course.create"
   | "course.delete"
   | "course.staff_add"
