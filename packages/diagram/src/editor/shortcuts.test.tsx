@@ -52,24 +52,28 @@ const root = (): HTMLElement => screen.getByRole("group", { name: "Diagram" });
  * it took the key, whether it changed the scene, which tool is armed. A key
  * the editor ignores leaves it as it was, so the editor is remounted only
  * after a key it took (a remount per press runs past the CI timeout).
+ *
+ * The ~190 presses look the editor up once per mount, and read the armed
+ * tool by attribute: a `getByRole` walks the accessibility tree of the whole
+ * canvas, and one per press ran this test past 5 s under coverage on CI.
  */
 let onChange = vi.fn();
-let fresh = false;
+let editor: HTMLElement | null = null;
 function press(key: string, ctrlKey: boolean, shiftKey: boolean): string {
-  if (!fresh) {
+  if (!editor) {
     cleanup();
     onChange = vi.fn();
     render(<Host onChange={onChange} />);
-    fireEvent.keyDown(root(), { key: "a", ctrlKey: true });
-    fireEvent.keyDown(root(), { key: "Delete" });
-    fireEvent.keyDown(root(), { key: "1" });
-    fresh = true;
+    editor = root();
+    fireEvent.keyDown(editor, { key: "a", ctrlKey: true });
+    fireEvent.keyDown(editor, { key: "Delete" });
+    fireEvent.keyDown(editor, { key: "1" });
   }
   const before = onChange.mock.calls.length;
-  const taken = !fireEvent.keyDown(root(), { key, ctrlKey, shiftKey });
+  const taken = !fireEvent.keyDown(editor, { key, ctrlKey, shiftKey });
   if (!taken) return "";
-  fresh = false;
-  const armed = screen.queryAllByRole("button", { pressed: true }).map((b) => b.getAttribute("aria-label"));
+  const armed = [...document.querySelectorAll('button[aria-pressed="true"]')].map((b) => b.getAttribute("aria-label"));
+  editor = null;
   const changed = onChange.mock.calls.length > before ? JSON.stringify(onChange.mock.lastCall) : "";
   return `taken|${changed}|${armed.join()}`;
 }
@@ -79,8 +83,11 @@ describe("the diagram editor's shortcut lines", () => {
     const tools = Math.min(9, KINDS.class.tools.length + KINDS.class.links.length);
     expect(claimedKeys(SHORTCUT_LINES, UNLISTED_KEYS, tools)).toEqual(boundKeys(press));
     cleanup();
-    fresh = false;
-  });
+    editor = null;
+    // ~190 presses and ~20 mounts by design (one probe per key, both ways):
+    // under coverage instrumentation on a loaded CI runner that is seconds,
+    // not milliseconds, so this one test gets more than the default 5 s.
+  }, 15_000);
 
   it("are lent while the editor has the focus, and not when it is read-only", () => {
     const publish = vi.fn();
