@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 
 /**
  * Minimal Markdown renderer for the help panels and the assistant's answers
@@ -31,7 +31,26 @@ export function linkTarget(href: string, policy: LinkPolicy): { href: string; ex
   return { href: `${url.pathname}${url.search}${url.hash}`, external: false };
 }
 
-function inline(text: string, keyBase: string, policy: LinkPolicy): ReactNode[] {
+/** How the links of a text behave: which ones may be links, and how an in-app one moves the app. */
+interface LinkOptions {
+  policy: LinkPolicy;
+  /** Moves the app to an in-app path without a reload; absent, the browser follows the link. */
+  onNavigate?: ((path: string) => void) | undefined;
+}
+
+/**
+ * An in-app link's click, through the app's router: a plain left click only.
+ * A modified or middle click (a new tab, a new window) keeps the browser's own.
+ */
+function inAppClick(href: string, onNavigate: (path: string) => void) {
+  return (e: MouseEvent<HTMLAnchorElement>) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    onNavigate(href);
+  };
+}
+
+function inline(text: string, keyBase: string, { policy, onNavigate }: LinkOptions): ReactNode[] {
   const nodes: ReactNode[] = [];
   const re = /(\*\*([^*]+)\*\*)|(`([^`]+)`)|(\[([^\]]+)\]\(([^)]+)\))/g;
   let last = 0;
@@ -58,7 +77,11 @@ function inline(text: string, keyBase: string, policy: LinkPolicy): ReactNode[] 
         <a
           key={`${keyBase}-${i}`}
           href={target.href}
-          {...(target.external ? { target: "_blank", rel: "noreferrer" } : {})}
+          {...(target.external
+            ? { target: "_blank", rel: "noreferrer" }
+            : onNavigate
+              ? { onClick: inAppClick(target.href, onNavigate) }
+              : {})}
           className="text-accent hover:underline"
         >
           {m[6]}
@@ -72,8 +95,18 @@ function inline(text: string, keyBase: string, policy: LinkPolicy): ReactNode[] 
   return nodes;
 }
 
-export function Markdown({ source, links = "web" }: { source: string; links?: LinkPolicy }) {
+export function Markdown({
+  source,
+  links = "web",
+  onNavigate,
+}: {
+  source: string;
+  links?: LinkPolicy;
+  /** For `same-origin` links: how a click moves the app (its router), instead of a reload. */
+  onNavigate?: (path: string) => void;
+}) {
   const blocks = source.trim().split(/\n{2,}/);
+  const opts: LinkOptions = { policy: links, onNavigate };
   return (
     <>
       {blocks.map((block, bi) => {
@@ -81,7 +114,7 @@ export function Markdown({ source, links = "web" }: { source: string; links?: Li
         if (trimmed.startsWith("## ")) {
           return (
             <h3 key={bi} className="text-sm font-semibold text-fg">
-              {inline(trimmed.slice(3), `h${bi}`, links)}
+              {inline(trimmed.slice(3), `h${bi}`, opts)}
             </h3>
           );
         }
@@ -94,7 +127,7 @@ export function Markdown({ source, links = "web" }: { source: string; links?: Li
           return (
             <ul key={bi} className="list-disc space-y-1 pl-5">
               {items.map((it, ii) => (
-                <li key={ii}>{inline(it, `l${bi}-${ii}`, links)}</li>
+                <li key={ii}>{inline(it, `l${bi}-${ii}`, opts)}</li>
               ))}
             </ul>
           );
@@ -104,12 +137,12 @@ export function Markdown({ source, links = "web" }: { source: string; links?: Li
           return (
             <ol key={bi} className="list-decimal space-y-1 pl-5">
               {items.map((it, ii) => (
-                <li key={ii}>{inline(it, `o${bi}-${ii}`, links)}</li>
+                <li key={ii}>{inline(it, `o${bi}-${ii}`, opts)}</li>
               ))}
             </ol>
           );
         }
-        return <p key={bi}>{inline(trimmed.replace(/\n/g, " "), `p${bi}`, links)}</p>;
+        return <p key={bi}>{inline(trimmed.replace(/\n/g, " "), `p${bi}`, opts)}</p>;
       })}
     </>
   );

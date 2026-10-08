@@ -632,7 +632,7 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
         returned above and never gets a bubble. */}
     <CoachLayer me={me.data} view={shown.view} teacherUi={teacherUi} />
     {/* The teacher assistant (ADR-080): inside the frame only, like the coach. */}
-    <AssistDock me={me.data} route={shown} teacherUi={teacherUi} />
+    <AssistDock me={me.data} route={shown} teacherUi={teacherUi} navigate={navigate} />
     </ImpersonationBanner>
     </SuperPowersBanner>
   );

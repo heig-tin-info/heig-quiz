@@ -9,7 +9,16 @@ import type { FastifyInstance } from "fastify";
 import { INTERNAL_CALL_HEADER } from "../../auth/plugin.js";
 import { ApiError, type Api } from "./tools.js";
 
-export { ApiError, ToolRefusal, toolByName, type Api, type Tool } from "./tools.js";
+export {
+  ApiError,
+  inputJsonSchema,
+  runTool,
+  ToolRefusal,
+  toolByName,
+  type Api,
+  type Tool,
+  type ToolFailure,
+} from "./tools.js";
 
 /**
  * The in-process client of `/app/api`, acting with a bearer token

@@ -36,9 +36,7 @@ import {
   assistScreen,
   assistSystem,
   readGuide,
-  stubAnswer,
-  stubResultsAnswer,
-  wantsResults,
+  stubReply,
   type AssistCorpus,
   type AssistRole,
 } from "@quiz/domain";
@@ -49,7 +47,7 @@ import { assistConversations, assistExchanges } from "../../db/schema.js";
 import type { ConverseTurn, LlmGateway, ReadOnlyTool } from "../llm/service.js";
 import { STUB_MODEL } from "../llm/service.js";
 import type { Api } from "../mcp/service.js";
-import { assistDataTools, classroomResults, readOnly, refusal } from "./tools.js";
+import { assistDataTools, classroomResults } from "./tools.js";
 
 /** How the assistant answers on this server: the gateway's model, the development stub, or not at all. */
 export type AssistEngine = "model" | "stub" | null;
@@ -169,36 +167,36 @@ export interface AskDeps {
   engine: Exclude<AssistEngine, null>;
   /** The in-process client of the API acting with a bearer `authorization` header (`injectedApi`). */
   api: (authorization: string) => Api;
+  /** The web app's URL of a screen (`Api.link`). */
+  link: (path: string) => string;
 }
 
 /**
  * Runs `fn` with an API client acting as `userId` under a token of this ONE
- * question (ADR-080 §8): minted here, deleted when the question ends,
- * whatever happens; one a crash leaves behind expires and `assist.purge`
- * deletes it.
+ * question (ADR-080 §8), minted LAZILY on the first data-tool call — a
+ * question the documentation answers writes no token — and deleted when the
+ * question ends, whatever happens; one a crash leaves behind expires and
+ * `assist.purge` deletes it.
  */
 async function asTheTeacher<T>(deps: AskDeps, userId: string, now: Date, fn: (api: Api) => Promise<T>): Promise<T> {
-  const { id, token } = await mintAssistToken(deps.db, userId, now);
+  let minted: Promise<{ id: string; token: string }> | null = null;
+  const client = async () => {
+    minted ??= mintAssistToken(deps.db, userId, now);
+    return deps.api(`Bearer ${(await minted).token}`);
+  };
+  const refuse = () => Promise.reject(new Error("The help assistant reads only."));
+  const lazy: Api = {
+    get: async (path, query) => (await client()).get(path, query),
+    post: refuse,
+    put: refuse,
+    patch: refuse,
+    link: deps.link,
+  };
   try {
-    return await fn(readOnly(deps.api(`Bearer ${token}`)));
+    return await fn(lazy);
   } finally {
-    await dropAssistToken(deps.db, id);
-  }
-}
-
-/**
- * The development stub (ADR-080 §5, P2): a question about results on a
- * classroom's screen is answered by the results reader, through the same
- * token and routes as the model's tool; any other from the documentation.
- */
-async function stubReply(api: Api, corpus: AssistCorpus, role: AssistRole, message: string, context: AssistContext) {
-  if (!wantsResults(message)) return stubAnswer(corpus, role, message, context);
-  const classroomId = context.entities?.classroom;
-  if (!classroomId) return stubResultsAnswer({ noClassroom: true }, context.locale);
-  try {
-    return stubResultsAnswer({ results: await classroomResults(api, classroomId) }, context.locale);
-  } catch (error) {
-    return stubResultsAnswer({ refused: refusal(error).message }, context.locale);
+    const token = minted ? await (minted as Promise<{ id: string }>).catch(() => null) : null;
+    if (token) await dropAssistToken(deps.db, token.id);
   }
 }
 
@@ -247,7 +245,10 @@ export async function ask(
           effort: "low",
           share: ASSIST_CAP_SHARE,
         })
-      : stubReply(api, corpus, role, question.message, question.context).then((t) => ({ text: t, model: STUB_MODEL })),
+      : stubReply(corpus, role, question.message, question.context, (id) => classroomResults(api, id)).then((t) => ({
+          text: t,
+          model: STUB_MODEL,
+        })),
   );
 
   return db.transaction(async (tx) => {

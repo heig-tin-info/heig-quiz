@@ -71,7 +71,8 @@ export async function assistPlugin(app: FastifyInstance, opts: { config: AppConf
     const engine = await engineNow();
     if (!corpus || !engine) return reply.code(409).send({ error: "llm_not_configured" });
     try {
-      return await ask({ db: app.db, gateway: app.llmGateway, corpus, engine, api }, user, body.data, now);
+      const link = (path: string) => `${config.WEB_URL}${path}`;
+      return await ask({ db: app.db, gateway: app.llmGateway, corpus, engine, api, link }, user, body.data, now);
     } catch (error) {
       // Missing, somebody else's, or purged while the model answered: the same
       // 404. In the last case the model's requests were made and logged; the

@@ -34,7 +34,7 @@ import { useConfirm } from "../confirm";
 import { useI18n } from "../i18n";
 import { Markdown } from "../markdown";
 import { assistAvailabilityKey, assistConversationKey, assistConversationsKey } from "../queryKeys";
-import type { Route } from "../router";
+import { parsePath, type Navigate, type Route } from "../router";
 import { Alert, Badge, cx, IconButton, QueryError, RelativeTime, Spinner, ToolDock } from "../ui";
 import { assistContext, assistVisible } from "./context";
 
@@ -57,7 +57,18 @@ function storeConversation(id: string | null): void {
   }
 }
 
-export function AssistDock({ me, route, teacherUi }: { me: Me; route: Route; teacherUi: boolean }) {
+export function AssistDock({
+  me,
+  route,
+  teacherUi,
+  navigate,
+}: {
+  me: Me;
+  route: Route;
+  teacherUi: boolean;
+  /** The app's router: an answer's in-app link moves the app without a reload. */
+  navigate?: Navigate;
+}) {
   const visible = assistVisible({ teacherUi, me, view: route.view });
   const availability = useQuery({
     queryKey: assistAvailabilityKey,
@@ -67,10 +78,10 @@ export function AssistDock({ me, route, teacherUi }: { me: Me; route: Route; tea
     retry: false,
   });
   if (!visible || !availability.data?.available) return null;
-  return <Dock route={route} stub={availability.data.stub} />;
+  return <Dock route={route} stub={availability.data.stub} navigate={navigate} />;
 }
 
-function Dock({ route, stub }: { route: Route; stub: boolean }) {
+function Dock({ route, stub, navigate }: { route: Route; stub: boolean; navigate: Navigate | undefined }) {
   const { t } = useI18n();
   const [showHistory, setShowHistory] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(storedConversation);
@@ -116,7 +127,7 @@ function Dock({ route, stub }: { route: Route; stub: boolean }) {
           {showHistory ? (
             <HistoryList current={conversationId} onOpen={select} />
           ) : (
-            <Chat route={route} conversationId={conversationId} onConversation={select} />
+            <Chat route={route} conversationId={conversationId} onConversation={select} navigate={navigate} />
           )}
         </>
       )}
@@ -128,10 +139,12 @@ function Chat({
   route,
   conversationId,
   onConversation,
+  navigate,
 }: {
   route: Route;
   conversationId: string | null;
   onConversation: (id: string | null) => void;
+  navigate: Navigate | undefined;
 }) {
   const { t, locale } = useI18n();
   const qc = useQueryClient();
@@ -212,7 +225,7 @@ function Chat({
         {exchanges.map((e) => (
           <div key={e.id} className="space-y-4">
             <Question text={e.question} />
-            <Answer text={e.answer} />
+            <Answer text={e.answer} navigate={navigate} />
           </div>
         ))}
         {ask.isPending ? (
@@ -259,11 +272,13 @@ function Question({ text }: { text: string }) {
   return <p className="ml-8 rounded-card bg-surface-2 px-3 py-2 text-sm whitespace-pre-wrap text-fg">{text}</p>;
 }
 
-function Answer({ text }: { text: string }) {
+function Answer({ text, navigate }: { text: string; navigate: Navigate | undefined }) {
+  // An in-app link is a path of this origin (`linkTarget`): its page, through the router.
+  const onNavigate = navigate ? (path: string) => navigate(parsePath(new URL(path, window.location.origin).pathname)) : undefined;
   return (
     <div className="space-y-2 text-sm leading-relaxed text-fg">
       {/* Same-origin links only: an answer may echo text others wrote (ADR-080 P2, item 8). */}
-      <Markdown source={text} links="same-origin" />
+      <Markdown source={text} links="same-origin" onNavigate={onNavigate} />
     </div>
   );
 }

@@ -222,9 +222,11 @@ assistant").
   `api_key`, and **Super Powers never pass through the assistant**
   (F-ADMIN-05 confirmed): a token carries none, so an administrator's
   assistant reaches what the administrator's own seats reach.
-- **The identity, as built.** Each question mints a token of the asking
-  teacher (`mintAssistToken`, `auth/tokens.ts`) with the dedicated audience
-  `urn:quiz:assist` and a 15-minute expiry. The auth hook accepts it only on
+- **The identity, as built.** A question mints, on its first data-tool call
+  only (a question the documentation answers writes no token), a token of
+  the asking teacher (`mintAssistToken`, `auth/tokens.ts`) with the
+  dedicated audience `urn:quiz:assist` and a 15-minute expiry; its later
+  calls reuse it. The auth hook accepts it only on
   an in-process call that carries the boot-time internal secret
   (`INTERNAL_CALL_HEADER`) and refuses it on the public MCP path, so it is
   worth nothing outside the process. It is never listed on the teacher's
@@ -236,7 +238,7 @@ assistant").
   deleted by the daily `assist.purge` task. It resolves like every token —
   the teacher's current role and seats, `callerFor(user, null)`, so `reach`
   is `seats` and never `all` — and the tools reach the API through the MCP
-  tools' own chain (`injectedApi`, `app.inject`), so access loading
+  tools' own chain (`injectedApi`, `app.inject`, `runTool`), so access loading
   (invariant 6), the contracts (invariant 7) and the audit are a normal
   request's. A 404 is handed to the model as "the user holds no seat on the
   course this belongs to, or it does not exist", which it says plainly; it

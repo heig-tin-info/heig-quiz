@@ -6,6 +6,7 @@ import {
   ASSIST_TRUNCATED,
   assistResults,
   capToolResult,
+  stubReply,
   stubResultsAnswer,
   wantsResults,
   type ResultsSource,
@@ -289,6 +290,18 @@ describe("the results reader (ADR-080 P2, items 1–2)", () => {
     expect(none).toContain("Aucun résultat publié");
     expect(stubResultsAnswer({ noClassroom: true }, "en")).toContain("Open a classroom first");
     expect(stubResultsAnswer({ refused: "no seat" }, "fr")).toContain("a refusé : no seat");
+  });
+
+  it("stubReply reads results only for a results question with a classroom on the screen", async () => {
+    const screen = { route: "/classrooms/:id", helpTopic: null, locale: "en" as const };
+    const read = (id: string) => Promise.resolve(assistResults({ ...table, classroomId: id }));
+    const never = () => Promise.reject(new Error("not asked"));
+    expect(await stubReply(corpus, "teacher", "How do I share a pool?", screen, never)).toContain("Sharing a pool");
+    expect(await stubReply(corpus, "teacher", "The results?", screen, never)).toContain("Open a classroom first");
+    const onRoom = { ...screen, entities: { classroom: "room" } };
+    expect(await stubReply(corpus, "teacher", "The results?", onRoom, read)).toContain("**Ada Doe**");
+    expect(await stubReply(corpus, "teacher", "The results?", onRoom, never)).toContain("refused: not asked");
+    expect(await stubReply(corpus, "teacher", "The grades?", onRoom, () => Promise.reject("plain"))).toContain("refused: plain");
   });
 });
 

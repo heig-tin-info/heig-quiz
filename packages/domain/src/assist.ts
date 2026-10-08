@@ -520,3 +520,27 @@ export function stubResultsAnswer(
   if (results.unreleasedColumns > 0) lines.push(`${results.unreleasedColumns} ${text.unreleased}`);
   return [intro, ...lines].join("\n\n");
 }
+
+/**
+ * The development stub's whole answer (ADR-080 §5, P2), shared by the API
+ * and the browser mock: a question about results, with a classroom on the
+ * screen, is answered from `readResults` — the API's results reader, or the
+ * mock's gradebook —, whose thrown message is the refusal shown; any other
+ * question from the documentation.
+ */
+export async function stubReply(
+  corpus: AssistCorpus,
+  role: AssistRole,
+  question: string,
+  screen: AssistScreen,
+  readResults: (classroomId: string) => Promise<AssistResults>,
+): Promise<string> {
+  if (!wantsResults(question)) return stubAnswer(corpus, role, question, screen);
+  const classroomId = screen.entities?.classroom;
+  if (!classroomId) return stubResultsAnswer({ noClassroom: true }, screen.locale);
+  try {
+    return stubResultsAnswer({ results: await readResults(classroomId) }, screen.locale);
+  } catch (error) {
+    return stubResultsAnswer({ refused: error instanceof Error ? error.message : String(error) }, screen.locale);
+  }
+}

@@ -42,6 +42,22 @@ describe("Markdown links", () => {
     expect(document.body.innerHTML).not.toContain("evil.example");
   });
 
+  it("moves the app through its router on a plain click of an in-app link, and lets a modified click be", () => {
+    const went: string[] = [];
+    render(<Markdown links="same-origin" onNavigate={(path) => went.push(path)} source={`Open [the pool](${here}/pools/p1).`} />);
+    const link = screen.getByRole("link", { name: "the pool" });
+    const plain = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    link.dispatchEvent(plain);
+    expect(plain.defaultPrevented).toBe(true);
+    expect(went).toEqual(["/pools/p1"]);
+    for (const init of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { button: 1 }]) {
+      const modified = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0, ...init });
+      link.dispatchEvent(modified);
+      expect(modified.defaultPrevented, JSON.stringify(init)).toBe(false);
+    }
+    expect(went).toEqual(["/pools/p1"]);
+  });
+
   it("keeps the help's external links, in a new tab", () => {
     render(<Markdown source="Read [the docs](https://heig-vd.ch/docs)." />);
     const link = screen.getByRole("link", { name: "the docs" });

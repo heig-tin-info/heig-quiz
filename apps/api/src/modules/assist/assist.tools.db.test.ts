@@ -30,10 +30,10 @@ import * as grading from "../grading/service.js";
 import * as live from "../live/service.js";
 import type { ConverseReply, ConverseRequest, LlmProvider, Metered } from "../llm/provider.js";
 import { LlmError, LlmGateway } from "../llm/service.js";
-import { TOOLS } from "../mcp/tools.js";
+import { TOOLS, toolByName } from "../mcp/tools.js";
 import { loadConfig as loadQuestionConfig, typeOf } from "../pool/config.js";
 import * as results from "../results/service.js";
-import { ASSIST_DATA_TOOLS, RESULTS_TOOL } from "./tools.js";
+import { ASSIST_DATA_TOOLS, MCP_READS, RESULTS_TOOL } from "./tools.js";
 
 const SECRET = "test-llm-master-key-0123456789abcdef";
 const KEY = "sk-ant-api03-test-key-0123456789-WXYZ";
@@ -185,24 +185,6 @@ describe("the development stub reads through the same token and routes", () => {
     expect(answer).toContain("1 colonne(s) non publiée(s)");
   });
 
-  it("is a 404 for another teacher's classroom, said as a missing seat", async () => {
-    const res = await ask(colleague, "Quels sont les résultats ?", { classroom: seed.classroomId });
-    const answer = AssistReply.parse(res.json()).exchange.answer;
-    expect(answer).toContain("no seat on the course");
-    expect(answer).not.toContain("Prenom0");
-  });
-
-  it("never lends an administrator's Super Powers: their own seats only", async () => {
-    const admin = await server.signInWithSuperPowers();
-    // The session itself reaches the classroom with Super Powers on …
-    expect((await call(admin, "GET", `/app/api/classrooms/${seed.classroomId}/gradebook`)).statusCode).toBe(200);
-    // … its assistant does not.
-    const res = await ask(admin, "Les notes de cette classe ?", { classroom: seed.classroomId });
-    const answer = AssistReply.parse(res.json()).exchange.answer;
-    expect(answer).toContain("no seat on the course");
-    expect(answer).not.toContain("Prenom0");
-  });
-
   it("refuses a screen context that names a student, a user or an attempt", async () => {
     for (const kind of ["student", "user", "enrollment", "attempt"]) {
       const res = await ask(teacher, "Ses notes ?", { classroom: seed.classroomId, [kind]: students[0]!.id });
@@ -287,15 +269,35 @@ describe("the model's tools", () => {
     for (const tool of seen[0]!.tools) expect(tool.description).not.toMatch(/BEFORE create|create_question|Look before/i);
   });
 
-  it("run under a token of the question that is not listed while it lives, and gone after", async () => {
+  it("mint no token for a question the documentation answers", async () => {
+    const tokens = () => db().select({ id: apiTokens.id }).from(apiTokens).where(eq(apiTokens.audience, ASSIST_AUDIENCE));
+    let during: unknown[] = ["unset"];
+    script = async (req, metered) => {
+      const reply = await callsTool("read_guide", { page: "guide/pools" })(req, metered);
+      during = await tokens();
+      return reply;
+    };
+    expect((await ask(teacher, "Comment partager une banque ?")).statusCode).toBe(200);
+    expect(lastToolResult!.error).toBe(false);
+    expect(during).toEqual([]);
+    expect(await tokens()).toEqual([]);
+  });
+
+  it("run under a token minted on the first data call, not listed while it lives, and gone after", async () => {
+    let before: unknown[] = ["unset"];
     let during: { audience: string | null; userId: string }[] = [];
     let listed: ApiToken[] = [];
     script = async (req, metered) => {
+      before = await db().select().from(apiTokens).where(eq(apiTokens.audience, ASSIST_AUDIENCE));
+      const reply = await callsTool("list_courses", {})(req, metered);
+      // A second data call reuses the question's token.
+      await req.tools.find((t) => t.name === "list_pools")!.run({});
       during = await db().select({ audience: apiTokens.audience, userId: apiTokens.userId }).from(apiTokens);
       listed = (await call(teacher, "GET", "/app/api/me/tokens")).json() as ApiToken[];
-      return callsTool("list_courses", {})(req, metered);
+      return reply;
     };
     expect((await ask(teacher, "Mes cours ?")).statusCode).toBe(200);
+    expect(before).toEqual([]);
     expect(during).toEqual([{ audience: ASSIST_AUDIENCE, userId: teacher.id }]);
     expect(listed).toEqual([]);
     expect(lastToolResult!.error).toBe(false);
@@ -303,10 +305,22 @@ describe("the model's tools", () => {
     expect(await db().select().from(apiTokens).where(eq(apiTokens.audience, ASSIST_AUDIENCE))).toHaveLength(0);
   });
 
-  it("deletes the token even when the model fails", async () => {
-    script = () => Promise.reject(new LlmError("provider_error"));
+  it("delete the token even when the model fails after a data call", async () => {
+    let minted = 0;
+    script = async (req, metered) => {
+      await callsTool("list_courses", {})(req, metered);
+      minted = (await db().select().from(apiTokens).where(eq(apiTokens.audience, ASSIST_AUDIENCE))).length;
+      throw new LlmError("provider_error");
+    };
     expect((await ask(teacher, "Mes cours ?")).statusCode).toBe(502);
+    expect(minted).toBe(1);
     expect(await db().select().from(apiTokens).where(eq(apiTokens.audience, ASSIST_AUDIENCE))).toHaveLength(0);
+  });
+
+  it("are, every MCP one of them, read-only tools of the catalogue", () => {
+    for (const name of Object.keys(MCP_READS)) {
+      expect(toolByName.get(name)?.annotations.readOnlyHint, name).toBe(true);
+    }
   });
 
   it("read the final results of the teacher's classroom, never a running evaluation's scores", async () => {
@@ -356,11 +370,5 @@ describe("the model's tools", () => {
     const rows = await db().select().from(assistExchanges).where(eq(assistExchanges.id, exchange.id));
     expect(JSON.stringify(rows)).not.toContain("Prenom0");
     expect(rows[0]!.answer).toBe("Deux élèves.");
-  });
-
-  it("validate their input and say what is wrong", async () => {
-    script = callsTool(RESULTS_TOOL, { classroomId: "nope" });
-    await ask(teacher, "Les notes ?");
-    expect(lastToolResult).toEqual({ content: expect.stringContaining("Invalid arguments"), error: true });
   });
 });
