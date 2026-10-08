@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
-import type { TeacherCandidate, TeacherCandidates } from "@quiz/contracts";
+import type { TeacherCandidate, TeacherCandidates, TeacherChoice } from "@quiz/contracts";
 
 import { api } from "./api";
 import { useT } from "./i18n";
@@ -44,9 +44,6 @@ export function nameOf(candidate: TeacherCandidate): string {
   return `${candidate.givenName} ${candidate.familyName}`.trim() || candidate.email;
 }
 
-/** Whom the form names: the account picked, or a typed address, or nobody yet. */
-export type TeacherChoice = { userId: string } | { email: string } | null;
-
 /**
  * The state of a form that names one colleague: what is typed, what was
  * picked, and what the request carries (`choice`, null while neither a pick
@@ -56,7 +53,8 @@ export function useTeacherPick() {
   const [text, setText] = useState("");
   const [selected, setSelected] = useState<TeacherCandidate | null>(null);
   const typed = text.trim();
-  const choice: TeacherChoice = selected
+  // Whom the form names (the contract's `TeacherChoice`), or nobody yet.
+  const choice: TeacherChoice | null = selected
     ? { userId: selected.userId }
     : LOOKS_LIKE_EMAIL.test(typed)
       ? { email: typed.toLowerCase() }

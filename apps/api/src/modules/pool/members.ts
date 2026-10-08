@@ -1,5 +1,5 @@
 /** The people of a pool (F-POOL-05): members, candidates, audience, succession. */
-import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, notInArray, or, sql } from "drizzle-orm";
 
 import type { TeacherCandidates, PoolMember, PoolMembers, PoolRole } from "@quiz/contracts";
 import { displayName } from "@quiz/domain";
@@ -12,15 +12,6 @@ import { notify, notifyMany } from "../notifications/service.js";
 import { accessRevoked, userTopic } from "../realtime/bus.js";
 import { poolPeopleChanged } from "./events.js";
 import { type PoolRow } from "./shared.js";
-
-/*
- * The accounts that may hold a pool seat, and so hear of a pool, are staff
- * (`isStaff`, `directory.ts`). A deliberate demotion deletes the seats
- * (`vacateSeats`), but a LOGIN that stores `student` keeps them (ADR-013,
- * rule 5), and a demoted owner nobody could inherit from keeps
- * `pools.owner_id`: such an account holds a claim, never the rights nor the
- * news.
- */
 
 /**
  * The people of a pool: the `pools.owner_id` account FIRST, then the members
@@ -123,10 +114,11 @@ export async function listCandidates(db: Db, pool: PoolRow, q: string): Promise<
   return searchTeachers(
     db,
     q,
-    and(
-      sql`${users.id} <> ${pool.ownerId}`,
-      sql`NOT EXISTS (SELECT 1 FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${pool.id} AND ${qualified(poolMembers.userId)} = ${qualified(users.id)})`,
-    )!,
+    ne(users.id, pool.ownerId),
+    notInArray(
+      users.id,
+      db.select({ userId: poolMembers.userId }).from(poolMembers).where(eq(poolMembers.poolId, pool.id)),
+    ),
   );
 }
 

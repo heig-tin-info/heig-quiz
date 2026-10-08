@@ -126,3 +126,29 @@ export type TeacherCandidate = z.infer<typeof TeacherCandidate>;
 
 export const TeacherCandidates = z.array(TeacherCandidate);
 export type TeacherCandidates = z.infer<typeof TeacherCandidates>;
+
+/**
+ * Whom a seat goes to: the account picked among the candidates (`userId`),
+ * or one named by an address the picker does not list — one of the two,
+ * never both.
+ */
+const teacherChoiceShape = {
+  userId: z.uuid().optional(),
+  email: z.string().trim().toLowerCase().email().max(200).optional(),
+};
+const oneOfTheTwo = (b: { userId?: string | undefined; email?: string | undefined }) =>
+  (b.userId === undefined) !== (b.email === undefined);
+
+export const TeacherChoice = z.object(teacherChoiceShape).refine(oneOfTheTwo, {
+  message: "Either userId or email",
+});
+export type TeacherChoice = z.infer<typeof TeacherChoice>;
+
+/** A `TeacherChoice` with more fields beside it (the role of the seat). */
+export function teacherChoiceWith<S extends z.ZodRawShape>(shape: S) {
+  return z
+    .object({ ...teacherChoiceShape, ...shape })
+    .refine((b) => oneOfTheTwo(b as { userId?: string; email?: string }), {
+      message: "Either userId or email",
+    });
+}

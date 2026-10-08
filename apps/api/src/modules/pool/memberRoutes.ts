@@ -9,6 +9,7 @@ import {
   PoolMemberPatch,
 } from "@quiz/contracts";
 
+import { findTeacherById } from "../../directory.js";
 import { requirePoolRole } from "../guards.js";
 import { notify } from "../notifications/service.js";
 import { poolChanged, poolPeopleChanged } from "./events.js";
@@ -62,7 +63,7 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
       async ({ req, reply, body, scope: pool }) => {
         const invitee =
           body.userId !== undefined
-            ? await service.findTeacherById(app.db, body.userId)
+            ? await findTeacherById(app.db, body.userId)
             : await service.findTeacherByEmail(app.db, body.email!);
         if (!invitee) {
           return reply.code(404).send({

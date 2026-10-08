@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { CourseSummary } from "@quiz/contracts";
 
+import { candidatesFor } from "../test/candidates";
 import { flowingClock } from "../test/clock";
 import { makeClassroomSummary, makeCourseSummary, makeMe } from "../test/fixtures";
 import { fail, mockFetch, noContent, ok, renderWithProviders } from "../test/render";
@@ -48,14 +49,7 @@ const CONDITIONS = [
   { id: "k0", kind: "info", text: "Bring your student card", archivedAt: "2026-02-01T08:00:00.000Z" },
 ];
 
-/** The picker asks after every keystroke: one stub per prefix of what is typed. */
-function staffCandidatesFor(typed: string, rows: unknown[]) {
-  const stubs: Record<string, ReturnType<typeof ok>> = {};
-  for (let i = 0; i <= typed.length; i += 1) {
-    stubs[`GET /app/api/courses/c1/staff/candidates?q=${encodeURIComponent(typed.slice(0, i))}`] = ok(rows);
-  }
-  return stubs;
-}
+const STAFF_CANDIDATES = "/app/api/courses/c1/staff/candidates";
 
 function world(templates: unknown[] = [TEMPLATE]) {
   return {
@@ -294,7 +288,7 @@ describe("CoursePage", () => {
     const { calls } = mockFetch({
       ...world(),
       [`GET ${COURSES}`]: ok([makeCourseSummary({ staff })]),
-      ...staffCandidatesFor("Anne.Roux@heig-vd.ch", []),
+      ...candidatesFor(STAFF_CANDIDATES, "Anne.Roux@heig-vd.ch", []),
       "POST /app/api/courses/c1/staff": ok({ userId: "u-3", role: "assistant" }),
       "PATCH /app/api/courses/c1/staff/u-2": ok({ userId: "u-2", role: "owner" }),
       "DELETE /app/api/courses/c1/staff/u-2": noContent(),
@@ -344,7 +338,7 @@ describe("CoursePage", () => {
     const grace = { userId: "t2", email: "grace.hopper@heig-vd.ch", givenName: "Grace", familyName: "Hopper" };
     const { calls } = mockFetch({
       ...world(),
-      ...staffCandidatesFor("gra", [grace]),
+      ...candidatesFor(STAFF_CANDIDATES, "gra", [grace]),
       "POST /app/api/courses/c1/staff": ok({ userId: "t2", role: "owner" }),
     });
     renderWithProviders(<CoursePage id="c1" tab="members" navigate={vi.fn()} />);
@@ -376,7 +370,7 @@ describe("CoursePage", () => {
     const user = flowingClock();
     mockFetch({
       ...world(),
-      ...staffCandidatesFor("marie.dupont@heig-vd.ch", []),
+      ...candidatesFor(STAFF_CANDIDATES, "marie.dupont@heig-vd.ch", []),
       "POST /app/api/courses/c1/staff": fail(409, { error: code, message: "x" }),
     });
     renderWithProviders(<CoursePage id="c1" tab="members" navigate={vi.fn()} />);

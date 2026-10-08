@@ -46,7 +46,6 @@ import { accessRevoked } from "../realtime/bus.js";
 import { rosterRefusal } from "./errors.js";
 
 export { claimEnrollments, claimLines, type ClaimMatch } from "./roster.js";
-export { findTeacherById } from "../../directory.js";
 export {
   conditionOfCourse,
   conditionView,
@@ -294,11 +293,6 @@ export async function setCourseHidden(
 // --- Course staff -----------------------------------------------------------
 
 /**
- * Gives an account a seat on the staff, with its role. True when the seat
- * is new; false when the account already held one, which is left as it was
- * (the route answers 409 `already_staff`; a role changes by `changeStaffSeat`).
- */
-/**
  * The teachers and admins who hold no seat on the course's staff yet,
  * matched on name or address: what the picker of "Add a person" offers.
  */
@@ -313,6 +307,11 @@ export async function staffCandidates(db: Db, courseId: string, q: string): Prom
   );
 }
 
+/**
+ * Gives an account a seat on the staff, with its role. True when the seat
+ * is new; false when the account already held one, which is left as it was
+ * (the route answers 409 `already_staff`; a role changes by `changeStaffSeat`).
+ */
 export async function addStaff(
   db: Db,
   courseId: string,

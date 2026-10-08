@@ -11,7 +11,7 @@ import { z } from "zod";
 import { QUESTION_TYPE_IDS } from "@quiz/core/contract";
 import { POOL_ROLES, POOL_VISIBILITIES } from "@quiz/domain";
 
-import { BoolFlag, IntList, PersonRef, StringList, ZodIssueLite, pageOf } from "./common.js";
+import { BoolFlag, IntList, PersonRef, StringList, ZodIssueLite, pageOf, teacherChoiceWith } from "./common.js";
 import { ConceptRef } from "./concept.js";
 import { NamedValues, ParametersDraft } from "./parameters.js";
 import { QuestionReview, ReviewPill } from "./review.js";
@@ -148,15 +148,7 @@ export type PoolMembers = z.infer<typeof PoolMembers>;
  * (`userId`), or named by an address the picker does not list — one of the
  * two, never both. Either way it must be a teacher.
  */
-export const PoolMemberInvite = z
-  .object({
-    userId: z.uuid().optional(),
-    email: z.string().trim().toLowerCase().email().max(200).optional(),
-    role: PoolRole.default("reader"),
-  })
-  .refine((b) => (b.userId === undefined) !== (b.email === undefined), {
-    message: "Either userId or email",
-  });
+export const PoolMemberInvite = teacherChoiceWith({ role: PoolRole.default("reader") });
 export type PoolMemberInvite = z.infer<typeof PoolMemberInvite>;
 
 /** `PATCH /pools/:id/members/:userId`. */

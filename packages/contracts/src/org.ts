@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { COURSE_ROLES } from "@quiz/domain";
 
-import { PersonRef } from "./common.js";
+import { PersonRef, teacherChoiceWith } from "./common.js";
 import { ConditionKind, EvaluationCondition } from "./evaluation.js";
 import { PoolColor, PoolIcon } from "./pool.js";
 
@@ -154,15 +154,7 @@ export type CourseRole = z.infer<typeof CourseRole>;
  * (`userId`, a teacher or an admin), or named by an address the picker does
  * not list — one of the two, never both. An assistant unless said otherwise.
  */
-export const StaffAdd = z
-  .object({
-    userId: z.uuid().optional(),
-    email: z.email().optional(),
-    role: CourseRole.default("assistant"),
-  })
-  .refine((b) => (b.userId === undefined) !== (b.email === undefined), {
-    message: "Either userId or email",
-  });
+export const StaffAdd = teacherChoiceWith({ role: CourseRole.default("assistant") });
 export type StaffAdd = z.infer<typeof StaffAdd>;
 
 /** `PATCH /courses/:id/staff/:uid`. */

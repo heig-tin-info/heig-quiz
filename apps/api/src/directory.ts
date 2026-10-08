@@ -4,6 +4,12 @@
  * Teachers knowing their colleagues is institutionally fine; a student never
  * appears here. The modules decide who is already seated; this file only
  * knows who is staff and how a search is matched.
+ *
+ * A picked account (`findTeacherById`) is resolved the same way for both.
+ * An address typed instead is NOT, on purpose: the pool resolves it among
+ * staff accounts only (`findTeacherByEmail`, 404 `teacher_not_found`), the
+ * course among every account that signed in (`ownersOf`, 409
+ * `unknown_account` / `ambiguous_account`).
  */
 import { and, asc, eq, inArray, sql, type SQL } from "drizzle-orm";
 
@@ -13,8 +19,12 @@ import { likeContains, type Db } from "./db/client.js";
 import { STAFF_ROLES, users } from "./db/schema.js";
 
 /**
- * The accounts that may hold a seat: the stored role, as `decideRole`
- * (`roles.ts`) computed it, is staff.
+ * The accounts that may hold a seat, and so hear of a pool: the stored role,
+ * as `decideRole` (`roles.ts`) computed it, is staff. A deliberate demotion
+ * deletes the pool seats (`vacateSeats`), but a LOGIN that stores `student`
+ * keeps them (ADR-013, rule 5), and a demoted pool owner nobody could
+ * inherit from keeps `pools.owner_id`: such an account holds a claim, never
+ * the rights nor the news.
  */
 export const isStaff = inArray(users.role, [...STAFF_ROLES]);
 
@@ -39,7 +49,7 @@ export async function findTeacherById(db: Db, userId: string) {
  * rules out (the caller's "already holds a seat here"). Ten rows at most —
  * a picker is searched, not browsed — in family-name order.
  */
-export async function searchTeachers(db: Db, q: string, unseated: SQL): Promise<TeacherCandidates> {
+export async function searchTeachers(db: Db, q: string, ...unseated: SQL[]): Promise<TeacherCandidates> {
   const needle = likeContains(q.trim().toLowerCase());
   return db
     .select({
@@ -52,7 +62,7 @@ export async function searchTeachers(db: Db, q: string, unseated: SQL): Promise<
     .where(
       and(
         isStaff,
-        unseated,
+        ...unseated,
         sql`lower(${users.givenName} || ' ' || ${users.familyName} || ' ' || ${users.email}) LIKE ${needle}`,
       ),
     )
