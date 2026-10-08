@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { LogOut } from "lucide-react";
+import { ArrowRight, LogOut } from "lucide-react";
 
 import type { KioskStation, Me } from "@quiz/contracts";
 
@@ -189,6 +189,14 @@ function Landing() {
           </>
         )}
       </div>
+      {/* Anyone who reaches the door without an account sees what is behind it. */}
+      <a
+        href="/discover"
+        className="group mt-8 inline-flex items-center gap-1.5 text-sm font-medium text-fg-muted transition-colors hover:text-fg"
+      >
+        {t("landing.discover")}
+        <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+      </a>
       <p className="mt-12 text-xs text-fg-faint">{t("landing.footer")}</p>
     </main>
   );
@@ -211,6 +219,9 @@ const TeamsTabPage = lazy(() =>
   import("./notifications/TeamsTabPage").then((m) => ({ default: m.TeamsTabPage })),
 );
 // ADR-051 §7: the station's screen (drawn with no session) and the phone's pairing page.
+const DiscoverPage = lazy(() =>
+  import("./discover/DiscoverPage").then((m) => ({ default: m.DiscoverPage })),
+);
 const KioskPage = lazy(() => import("./kiosk/KioskPage").then((m) => ({ default: m.KioskPage })));
 const PairPage = lazy(() => import("./pair/PairPage").then((m) => ({ default: m.PairPage })));
 const ActivitiesPage = lazy(() =>
@@ -262,6 +273,7 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   teamsTab: () => null,
   kiosk: () => null,
   sebQuit: () => null,
+  discover: () => null,
   pair: (_, c) => <PairPage me={c.me} navigate={c.navigate} />,
   // Invariant 3: the gallery exists in development only. The
   // route parses in every build; this is what refuses to render it.
@@ -536,6 +548,14 @@ export default function App() {
     return (
       <Suspense fallback={<Spinner className="py-24" />}>
         <KioskPage />
+      </Suspense>
+    );
+  }
+  // The public discovery page: the same for everyone, signed in or not.
+  if (route.view === "discover") {
+    return (
+      <Suspense fallback={null}>
+        <DiscoverPage />
       </Suspense>
     );
   }

@@ -250,6 +250,7 @@ describe("ROUTES", () => {
     teamsTab: { view: "teamsTab" },
     kiosk: { view: "kiosk" },
     sebQuit: { view: "sebQuit" },
+    discover: { view: "discover" },
     pair: { view: "pair" },
     feedback: { view: "feedback", attemptId: "a-1" },
     drill: { view: "drill" },
@@ -286,6 +287,7 @@ describe("ROUTES", () => {
       // F-PROJ-22 (M3-17): the student's Groups tab.
       "classroomGroups",
       "classroomJournal",
+      "discover",
       "drill",
       "feedback",
       "home",
@@ -336,6 +338,7 @@ describe("ROUTES", () => {
         "devUi",
         // The student's pages: the student sidebar is lit by the bottom
         // bar's slot (`bottomSlotOf`), never by a section.
+        "discover",
         "drill",
         "evaluation",
         "evaluationPreview",
