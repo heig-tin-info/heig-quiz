@@ -4247,6 +4247,15 @@ serves now (16a), and what waits for the group repositories (16b).
   created with until it is created again. Remaining: slices, host nft,
   Caddy log mask, backups, `deployment.md` §3; no resize (owner's decision,
   2026-10-08).
+- **As delivered (part 2: slices and backup)** (#606; repository only, the
+  VM rollout is the owner's). ADR-016's M6-05 amendment; `deployment.md` §3.
+  Slices `infra/engine/{quiz-runner,codespace}.slice` (`install_slices`),
+  `Slice=` in the quadlets and the shadow unit; `RUNNER_CGROUP_PARENT` and
+  `CODESPACE_CGROUP_PARENT` add `--cgroup-parent` (tests in `engine.test.ts`,
+  `config.test.ts`, `engine/args.test.ts`). Backup A: `backup-export.sh`
+  (forced command, cookie tokens blanked) and `scripts/engine-backup/`
+  (`srv`'s daily pull, 14 kept); monitoring deferred, checked by hand.
+  Remaining: host nft `input` policy, the restore drill, the acceptance runs.
 
 ### M6-06 — Quiz `codespace` module
 - **Depends on**: M6-03, M3-02.

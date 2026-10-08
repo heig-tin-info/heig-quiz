@@ -21,6 +21,7 @@ pull_retag "$image" "$tag" latest
 # into the service so that its startup check sees the same file).
 install -m 0644 apps/runner/infra/seccomp/runner.json /etc/quiz-runner/seccomp.json
 install -m 0644 apps/runner/deploy/quiz-runner.container /etc/containers/systemd/quiz-runner.container
+install_slices
 install -m 0644 apps/runner/deploy/Caddyfile /etc/caddy/conf.d/quiz-runner.caddy
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
 systemctl daemon-reload

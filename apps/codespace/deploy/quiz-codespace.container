@@ -67,8 +67,13 @@ Tmpfs=/tmp
 NoNewPrivileges=true
 DropCapability=ALL
 PodmanArgs=--memory=512m
+# The portal and its session containers in codespace.slice (M6-05,
+# infra/engine/codespace.slice): below the runner's weight, under one memory
+# ceiling for both instances.
+Environment=CODESPACE_CGROUP_PARENT=codespace.slice
 
 [Service]
+Slice=codespace.slice
 Restart=always
 RestartSec=3
 TimeoutStartSec=120

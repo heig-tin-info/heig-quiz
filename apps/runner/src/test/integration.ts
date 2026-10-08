@@ -109,6 +109,7 @@ export async function integrationEngine(host: IntegrationHost): Promise<Engine> 
     seccompProfile: host.config.RUNNER_SECCOMP,
     usernsAuto: probed.capabilities.usernsAuto,
     runtime: probed.capabilities.runtime,
+    cgroupParent: host.config.RUNNER_CGROUP_PARENT,
     capabilities: probed.capabilities,
   });
 }

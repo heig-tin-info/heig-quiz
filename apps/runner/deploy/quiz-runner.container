@@ -38,8 +38,13 @@ Tmpfs=/tmp
 NoNewPrivileges=true
 DropCapability=ALL
 PodmanArgs=--memory=512m
+# The sandbox containers join this service in quiz-runner.slice (M6-05,
+# infra/engine/quiz-runner.slice): grading's CPU and IO weight, its memory
+# protected from the workspace sessions'.
+Environment=RUNNER_CGROUP_PARENT=quiz-runner.slice
 
 [Service]
+Slice=quiz-runner.slice
 Restart=always
 RestartSec=3
 TimeoutStartSec=120

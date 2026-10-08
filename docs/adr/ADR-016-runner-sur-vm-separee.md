@@ -81,6 +81,22 @@ staging portal mounts the rootful Podman socket, which is root-equivalent.
 The app VM separates staging by account; this VM cannot, short of a
 staging engine of its own.
 
+**Amended (2026-10-08, M6-05 part 2): capacity and backups of the engine
+VM.** Scope: the addendum's resize and slices; the backups this VM lacked.
+(a) No resize while the workspace is test-only (owner); a real class needs it.
+(b) Two slices, `quiz-runner.slice` above `codespace.slice` in CPU and IO
+weight, the runner's memory protected, the workspace's capped (values and
+sizing: `infra/engine/*.slice`); containers join theirs through
+`--cgroup-parent`, an addition to invariant 12's list, set by the quadlets.
+(c) Backup, destination A as a stopgap: a root forced command (`restrict`,
+`from=`) streams each instance's SQLite `.backup` and volumes; `srv` on the
+app VM pulls it daily. No credential travels: env files stay in the vault
+(ADR-010), session cookie tokens are blanked in the copy. Accepted limits:
+volumes are read live (a repository may need its `shadow.git`), one
+provider, the app VM's small disk, a key that reads all workspace data, and
+monitoring by hand (not in ADR-055's status). (d) Destination B, restic to
+S3 from the engine VM, before a real class. Procedures: `deployment.md` §3.
+
 ## Context
 
 `docs/spec/05-architecture.md` (5.5 and 5.9) and ADR-009 put the runner in the

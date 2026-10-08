@@ -99,6 +99,7 @@ podman --remote --url unix://<socket> run -d
   --pids-limit 64
   --memory <limits.memoryMb>m --memory-swap <same>   # no swap, or a memory bomb pages instead of dying
   --cpus 1
+  [--cgroup-parent=<slice>]           # RUNNER_CGROUP_PARENT: quiz-runner.slice on the engine VM (M6-05)
   --ulimit core=0:0                   # no core dump
   --pull=never                        # images are built on the host, never fetched
   --network none
@@ -107,7 +108,13 @@ podman --remote --url unix://<socket> run -d
   quiz-runner-<lang>:latest sleep <ttl>
 ```
 
-`src/engine.test.ts` asserts that list flag for flag, that no `-v`/`--mount`
+`--cgroup-parent` is an addition, never a relaxation: it places the
+container in a systemd slice (its CPU and IO weight, its protected memory)
+while `--memory`, `--cpus` and `--pids-limit` stay per container. Unset, the
+flag is absent and the engine's default applies.
+
+`src/engine.test.ts` asserts that list flag for flag (the slice included, at
+its place), that no `-v`/`--mount`
 is ever produced, that the environment is exactly those two variables, and —
 against a `podman` that records its argv — that every command the engine sends
 carries `--remote --url unix://<socket>` (invariant 13).
@@ -374,6 +381,7 @@ Everything is in `src/config.ts`, validated at startup.
 | `RUNNER_SECCOMP` | the profile shipped here | Resolved by the Podman server (above). |
 | `RUNNER_USERNS_AUTO` | auto | Probed once at startup. |
 | `RUNNER_RUNTIME` | auto | `runsc` when the host has gVisor. |
+| `RUNNER_CGROUP_PARENT` | empty | A slice unit name (`quiz-runner.slice`, set by the quadlet): `--cgroup-parent=<slice>`; empty, no flag. |
 | `RUNNER_MAX_OUTPUT_KB` | 256 | Ceiling on `limits.outputKb`, per stream and per case. |
 | `RUNNER_MAX_MEMORY_MB` | 512 | Ceiling on `limits.memoryMb`, per container. |
 | `RUNNER_MAX_TIME_MS` | 20 000 | Ceiling on `limits.timeMs`, per case. |

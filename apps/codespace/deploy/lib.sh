@@ -46,8 +46,9 @@ cs_instance() {
 }
 
 # Host-level pieces, shared by both instances: the network scripts and the
-# nftables table, the AppArmor profile, the shadow snapshot script and the
-# systemd templates. Written by bootstrap.sh and by a PRODUCTION deploy
+# nftables table, the AppArmor profile, the shadow snapshot and backup export
+# scripts, the systemd templates and the VM's two slices (shared with the
+# runner's deploy). Written by bootstrap.sh and by a PRODUCTION deploy
 # only, so that an ordinary staging deploy cannot change what production's
 # containers run under by accident. Not a security boundary: the staging
 # key is root on this VM (ADR-016, M6-04 amendment).
@@ -55,10 +56,14 @@ cs_install_host() {
 	install -d -m 0755 "$CS_LIB/infra/net" "$CS_LIB/infra/nft"
 	install -m 0755 "$CS_APP"/infra/net/{common,setup,teardown,test}.sh "$CS_LIB/infra/net/"
 	install -m 0644 "$CS_APP"/infra/nft/*.nft "$CS_LIB/infra/nft/"
-	install -m 0755 "$CS_APP/deploy/shadow-snapshot.sh" "$CS_LIB/shadow-snapshot.sh"
+	install -m 0755 "$CS_APP/deploy/shadow-snapshot.sh" "$CS_APP/deploy/backup-export.sh" "$CS_LIB/"
 	install -m 0644 "$CS_APP/deploy/quiz-codespace-net@.service" \
 		"$CS_APP/deploy/quiz-codespace-shadow@.service" \
 		"$CS_APP/deploy/quiz-codespace-shadow@.timer" /etc/systemd/system/
+	install_slices
+	# The backup export's one dependency (deployment.md §3, Backup).
+	command -v sqlite3 >/dev/null 2>&1 \
+		|| echo "deploy: warning: no sqlite3 (apt install sqlite3): backup-export.sh cannot run" >&2
 	# The table is the same for both bridges; `nft -f` replaces it atomically
 	# (the file deletes and recreates it), so a rule change ships with the
 	# deploy rather than at the next boot.

@@ -23,6 +23,8 @@ The values (names, ports, platform URLs) are in `deploy/lib.sh`
 | SQLite, volumes | `/srv/quiz-codespace/<i>/var`, `/srv/quiz-codespace/<i>/volumes` |
 | Network, anchor, nftables | `quiz-codespace-net@<i>.service` |
 | Shadow snapshots | `quiz-codespace-shadow@<i>.timer` |
+| Slice (both instances, sessions, snapshots, backup) | `codespace.slice`, from `infra/engine/codespace.slice` (M6-05) |
+| Backup export (both instances) | `/usr/local/lib/quiz-codespace/backup-export.sh`, pulled daily by the application VM |
 | Caddy site, access log | `/etc/caddy/conf.d/quiz-codespace-<i>.caddy`, `/var/log/caddy/quiz-codespace-<i>.log` |
 | Host-level copies (both instances) | `/usr/local/lib/quiz-codespace/`, `/etc/apparmor.d/codespace`, `/etc/systemd/system/quiz-codespace-*@.*` |
 | Session containers | `cs-<i>-<session>`, label `heig-codespace.instance=<i>` |
@@ -306,6 +308,18 @@ a named refusal; nothing is lost.
 
 ### Capacity
 
-2 vCPU and 3.7 GB for two portals (512 MB cap each), the runner (512 MB) and
-student containers at `CODESPACE_MEMORY` each; staging sessions take
-production's memory. Resizing, slices and the off-VM backup are M6-05's.
+2 vCPU and 3.8 GB, not resized (owner, 2026-10-08). The two portals, their
+sessions, the shadow snapshots and the backup export share `codespace.slice`,
+below `quiz-runner.slice` (values: `infra/engine/*.slice`; deployment.md §3,
+The slices). Staging and prod draw on the same slice: with
+`CODESPACE_MEMORY=1536m` it holds **one session** at a time, with **768m**
+(the template's value while test-only; an existing env file keeps its own) two. A second
+1536m session pushes the slice to its ceiling: the kernel kills a session's
+process, never a grading run. A real class needs the resize first (§6.2 of
+`docs/merge/06-codespace-seb-infra.md`).
+
+### Backup and restore
+
+Both instances are exported daily by `backup-export.sh` and pulled by `srv`
+on the application VM: deployment.md §3, Backup and restore of the codespace data.
+The export's messages are in `srv`'s journal there (`journalctl --user -u quiz-engine-backup`), not in this VM's.

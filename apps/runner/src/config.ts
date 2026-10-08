@@ -29,6 +29,12 @@ export function defaultSeccompPath(): string {
   return fileURLToPath(new URL("../infra/seccomp/runner.json", import.meta.url));
 }
 
+/**
+ * A systemd slice unit name, e.g. `quiz-runner.slice`: no `/`, no leading `-`.
+ * Keep in sync with `SLICE_PATTERN` in apps/codespace/src/engine/index.ts.
+ */
+export const SLICE_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,200}\.slice$/;
+
 const EnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   /**
@@ -85,6 +91,21 @@ const EnvSchema = z.object({
   RUNNER_USERNS_AUTO: z.enum(["auto", "true", "false"]).default("auto"),
   /** An alternative OCI runtime, e.g. `runsc` (gVisor). Empty = the host default, probed at startup. */
   RUNNER_RUNTIME: z.enum(["auto", "none", "runsc"]).default("auto"),
+  /**
+   * The systemd slice the sandbox containers are created in, passed as
+   * `--cgroup-parent=<slice>` (M6-05: `quiz-runner.slice` on the engine VM,
+   * set by the quadlet, so that workspace sessions cannot starve grading).
+   * Empty (default) = no flag: the engine's own default, `machine.slice`
+   * rootful. A slice unit name only, never a path.
+   */
+  RUNNER_CGROUP_PARENT: z
+    .string()
+    .trim()
+    .default("")
+    .refine((value) => value === "" || SLICE_PATTERN.test(value), {
+      message: "a systemd slice unit name ending in .slice, or empty",
+    })
+    .transform((value) => value || null),
 
   /**
    * The three ceilings on what ONE request may ask for.

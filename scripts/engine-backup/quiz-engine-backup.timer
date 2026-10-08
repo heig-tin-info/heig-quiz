@@ -1,0 +1,13 @@
+# Once a day, at a random minute between 03:00 and 05:00 (the VM's local
+# time), outside teaching hours; a run missed while the VM was down is caught
+# up at boot (Persistent).
+[Unit]
+Description=quiz — daily pull of the engine VM's codespace backup
+
+[Timer]
+OnCalendar=*-*-* 03:00
+RandomizedDelaySec=2h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -46,6 +46,13 @@ export const INSTANCE_LABEL = "heig-codespace.instance";
  */
 export const INSTANCE_PATTERN = /^[a-z][a-z0-9]{0,15}$/;
 
+/**
+ * `CODESPACE_CGROUP_PARENT`: a systemd slice unit name such as
+ * `codespace.slice` — no `/`, no leading `-` — since it enters the argv.
+ * Keep in sync with `SLICE_PATTERN` in apps/runner/src/config.ts.
+ */
+export const SLICE_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,200}\.slice$/;
+
 /** The `podman ps` arguments that list one instance's session containers. */
 export function sessionListArgs(instance: string): string[] {
   return [
@@ -90,6 +97,13 @@ export interface EngineOptions {
   pidsLimit: number;
   /** `crun` by default; `runsc` (gVisor) remains a parameter, cf. analyse.md D2. */
   runtime?: string;
+  /**
+   * `--cgroup-parent=<slice>` (`CODESPACE_CGROUP_PARENT`, M6-05:
+   * `codespace.slice` on the engine VM, below the runner's weight). Validated
+   * as a slice unit name by `loadConfig`. **Empty or absent = no flag**: the
+   * engine's default (`machine.slice` rootful).
+   */
+  cgroupParent?: string;
   log?: { info: (o: object, m: string) => void; warn: (o: object, m: string) => void };
 }
 
@@ -241,6 +255,7 @@ export function createEngine(opts: EngineOptions): Engine {
       opts.memory,
       "--cpus",
       opts.cpus,
+      ...(opts.cgroupParent ? [`--cgroup-parent=${opts.cgroupParent}`] : []),
       ...(opts.runtime ? ["--runtime", opts.runtime] : []),
       // --- closed network, invariant 2 -------------------------------------
       "--network",

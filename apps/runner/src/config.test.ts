@@ -64,6 +64,20 @@ describe("loadConfig", () => {
     );
   });
 
+  it("takes a slice unit name as the cgroup parent, and nothing else", () => {
+    const base = { PODMAN_SOCKET: "/tmp/x.sock", RUNNER_SECCOMP: SECCOMP };
+    expect(loadConfig(base).RUNNER_CGROUP_PARENT).toBeNull();
+    expect(loadConfig({ ...base, RUNNER_CGROUP_PARENT: " " }).RUNNER_CGROUP_PARENT).toBeNull();
+    expect(
+      loadConfig({ ...base, RUNNER_CGROUP_PARENT: "quiz-runner.slice" }).RUNNER_CGROUP_PARENT,
+    ).toBe("quiz-runner.slice");
+    for (const bad of ["/sys/fs/cgroup/x", "quiz-runner", "-x.slice", "a b.slice", "a/b.slice"]) {
+      expect(() => loadConfig({ ...base, RUNNER_CGROUP_PARENT: bad }), bad).toThrow(
+        /RUNNER_CGROUP_PARENT/,
+      );
+    }
+  });
+
   it("refuses a configuration it cannot make sense of", () => {
     expect(() =>
       loadConfig({ PORT: "not-a-port", PODMAN_SOCKET: "/tmp/x.sock", RUNNER_SECCOMP: SECCOMP }),

@@ -134,6 +134,13 @@ export interface EngineOptions {
   seccompProfile: string;
   usernsAuto: boolean;
   runtime: string | null;
+  /**
+   * `--cgroup-parent=<slice>` (`RUNNER_CGROUP_PARENT`), validated as a slice
+   * unit name by `loadConfig`; `null` = no flag. An addition to the
+   * hardening, never a substitute for a limit: `--memory`, `--cpus` and
+   * `--pids-limit` stay per container.
+   */
+  cgroupParent: string | null;
   capabilities: EngineCapabilities;
   /**
    * Identifies the containers of THIS process, so that `pruneOrphans()` can
@@ -299,6 +306,9 @@ export function createEngine(options: EngineOptions): Engine {
       `${create.memoryMb}m`,
       "--cpus",
       String(create.cpus),
+      // The engine VM's slice for grading (M6-05): its CPU and IO weight and
+      // its protected memory are the slice's, shared with nothing else.
+      ...(options.cgroupParent === null ? [] : [`--cgroup-parent=${options.cgroupParent}`]),
       // No core dump: a crashing program must not write its memory anywhere.
       "--ulimit",
       "core=0:0",
