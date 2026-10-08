@@ -18,7 +18,7 @@ The launcher is often open on the beamer, so it opens on what shows nothing of y
 
 **Who answers** sits above the tabs and applies to all of them:
 
-- **Anyone with the code (anonymous)**, the default: no sign-in is needed, and no name is ever shown. The poll belongs to no classroom; you find it again in your own poll history.
+- **Anyone with the code (anonymous)**, the default: no sign-in is needed, and no name is ever shown. The poll belongs to no classroom, so it appears in no evaluation list; its question stays in your **Recent polls**.
 - **A classroom**: its students sign in and answer by name, and anyone else is turned away. Choose it each time: the launcher never remembers a classroom from one poll to the next.
 
 Three tabs follow, because there are three ways to have a question.
@@ -86,7 +86,7 @@ Switch the control at the top right to **Reveal answer**, or press `R`. On the w
   <figcaption>The reveal on the wall; as above, the fourth choice sits just below the visible area at this window height.</figcaption>
 </figure>
 
-The phones follow within a few seconds. The question and its **Send** button stay — the poll is still open — and the correct answer appears under them, without telling anyone whether their own answer was right. Once you end the poll, the phone replaces the question with the key and says whether the participant's answer was right; for a short-answer question, the accepted answers and whether the participant's text was among them.
+The phones follow within a few seconds. The question and its **Send** button stay — the poll is still open — and the correct answer appears under them, without telling anyone whether their own answer was right. Once the poll has ended with the answer revealed, the phone replaces the question with the key and says whether the participant's answer was right; for a short-answer question, the accepted answers and whether the participant's text was among them.
 
 <figure markdown="span">
   ![The phone after the reveal: the correct choice highlighted in green, the others greyed out](../assets/screenshots/join-revealed-phone-light.png#only-light){ width="390" }

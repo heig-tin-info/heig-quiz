@@ -13,12 +13,12 @@ Eric Mazur's format: a concept question, a first vote, two minutes of discussion
 3. Ask the room to convince a neighbour who answered differently, for two minutes.
 4. Press **Run again**: the same question, an empty tally and a new code, so the room scans the new QR code. End it, then show the votes and reveal the answer.
 
-The shift between the two votes is the point: a share of right answers that rises from 40 % to 80 % means the discussion did the teaching; one that stays low means the concept needs another explanation. Mazur's rule of thumb is to run the discussion when the first vote has between about 30 % and 70 % right answers, and to explain again below that. The platform does not show the two votes side by side yet: note the first share before running again, or reopen each poll's projection afterwards (a classroom poll stays in the classroom's evaluation list, an anonymous one in your poll history). The ring in **Recent polls** sums up the question's last runs together, not each one.
+The shift between the two votes is the point: a share of right answers that rises from 40 % to 80 % means the discussion did the teaching; one that stays low means the concept needs another explanation. The platform does not show the two votes side by side yet. A classroom poll can be reopened from the classroom's evaluation list; for an anonymous poll, note the first vote's share before **Run again**. The ring in **Recent polls** combines the question's last five runs into one ring.
 
 <figure markdown="span">
   ![The projection of an ended poll, with Run again as the primary action](../assets/screenshots/poll-ended-light.png#only-light)
   ![The projection of an ended poll, with Run again as the primary action](../assets/screenshots/poll-ended-dark.png#only-dark)
-  <figcaption>After the first vote: End poll, the discussion, then Run again for the second vote.</figcaption>
+  <figcaption>The second vote ended: reveal the answer now.</figcaption>
 </figure>
 
 ### Just-in-Time Teaching with an exercise
@@ -27,7 +27,7 @@ The students read before the lesson and answer two or three comprehension questi
 
 - Create an [exercise](evaluations.md) in the classroom with the **Homework exercise** preset, and set its **Closes at** to the evening before the lesson, so you have the answers in time.
 - An evaluation has no introduction text yet: put the reading instructions in the statement of the first question, with a link to the reading or a few paragraphs.
-- Ask two or three short questions, multiple choice or short answer, that a student who did the reading can answer and one who skimmed cannot. An optional essay question, "What was least clear?", gives you the students' own words; essays are graded by hand, so you read them in the [grading panel](grading.md).
+- Ask two or three short questions, multiple choice or short answer, that a student who did the reading can answer and one who skimmed cannot.
 - The grade of such an exercise means little; its answers are what you need. On the [results page](grading.md#questions), the **Questions** tab shows the success rate of each question and what the class answered: the share of each choice, the values typed. Start the lesson with the question that went worst, and **Present** puts the same blocks on the beamer once the exercise is closed.
 
 The pool's question statistics count exams only, so an exercise does not appear there: read it on its results page.
@@ -40,10 +40,10 @@ The pool's question statistics count exams only, so an exercise does not appear 
 
 ### The drill as weekly practice
 
-The drill is spaced practice: each day, a few questions from a student's past evaluations come back, about ten minutes' worth, a question often failed sooner than one always right. A weekly exercise is the natural way to feed it.
+The drill is spaced practice: each day, a few questions from a student's past evaluations come back, about ten minutes' worth; a question often failed comes back sooner. A weekly exercise is the natural way to feed it.
 
 - Turn the drill on in the classroom's [settings](classrooms.md#settings-rename-drill-github-archive-delete). Students are in by default and may opt out; they are told that you see their activity.
-- Give one short exercise a week on that week's material. **Allow drill**, on the **Time and mode** step, is on by default for an exercise, and its questions become drill cards when each student hands in. An exam has it off by default; turned on, its questions become cards at the release of the results.
+- Give one short exercise a week on that week's material. **Allow drill**, on the **Time and mode** step, is on by default for an exercise, and its questions become drill cards when each student hands in. A card is served only once the exercise's feedback shows the key, so keep **Show the expected answer** on. An exam has it off by default; turned on, its questions become cards at the release of the results.
 - Only multiple choice, short answer, fill in the blanks and categorize questions become cards, and only when they are graded automatically: code, essays, diagrams and circuits stay out.
 - The students see the key after each review, and the drill serves the latest published version of each question. A question you plan to reuse in an exam will have been practised, key included: keep the exam's questions out of the drill.
 - The classroom's **Drill** tab shows, per student, the **Recall, 30 days** and the sessions, and **Mastery per tag** shows which topics are fading.
@@ -61,11 +61,11 @@ A Parsons problem gives the lines of a correct program, shuffled; the student pu
 - one line per card, written as inline code, and a few wrong lines left in the tray as distractors, each one a real mistake (a missing `&`, a value instead of an address). The student is told that a card may belong to no column;
 - keep **Shuffle cards** on, and **Shuffle columns** off, so the blocks stay in reading order.
 
-A card holds no indentation: the student orders lines, and the nesting is not graded. Avoid two cards with the same text in one column (two `}`): the key gives each its own rank, and a student who swaps them is marked wrong. The development seed has an example, `prg1-parsons-echanger`, in the pool **Programmation C**: the body of a swap function through pointers and the body of the `main` that calls it, with two wrong lines. Like every categorize question, it can be drilled.
+A card holds no indentation: the student orders lines, and the nesting is not graded. The rank is absolute: a distractor dropped into a column, or a missing line, shifts every card below it off its rank. For the same reason, avoid two cards with the same text in one column (two `}`): the key gives each its own rank, and a student who swaps them is marked wrong. The development seed has an example, `prg1-parsons-echanger`, in the pool **Programmation C**: the body of a swap function through pointers and the body of the `main` that calls it, with two wrong lines.
 
 ### What does this print?
 
-Show a short program in the statement and ask for its exact output, as a [short answer](question-types.md#short-answer) with **Expected answer** set to **Text** and an **Exact text** accepted answer. Keep **Trim** on; runs of spaces are collapsed anyway. Choose a program whose output fits on one line, since the student's field is one line.
+Show a short program in the statement and ask for its exact output, as a [short answer](question-types.md#short-answer) with **Expected answer** set to **Text** and an **Exact text** accepted answer. Keep **Trim** on; runs of spaces are collapsed anyway. **Lowercase** is on by default: turn it off when case matters in the output. Choose a program whose output fits on one line, since the student's field is one line.
 
 The question tests one rule at a time when the program is built around it: integer division, operator precedence, a post-increment, a pointer passed by value. A student who knows the rule answers in seconds; one who does not cannot guess. For a numeric output, a **Number** accepted answer accepts `3` and `3.0` alike.
 
@@ -89,7 +89,7 @@ A **Code image** question asks for a program whose output is a picture: one valu
 
 A [parameterized question](parameterized-questions.md) draws its own numbers for every attempt: students sitting next to each other read different values, each graded against their own key. Multiple choice, short answer with a number key and fill in the blanks take variables; code and categorize do not, and a poll refuses a parameterized question.
 
-"What does this print?" works well this way: `int a = [[a]], b = [[b]]; printf("%d\n", a / b);` with `a` and `b` drawn by `randint`, and `q` = `floor(a/b)` in the **Integer** format as the key. A `[[…]]` inside code adds no variable row by itself: add `a`, `b` and `q` with **Add a variable**. Publication asks for a tolerance of at least half the key's step, 0.5 for an integer; tick **Integer** on the field, and a non-integer answer is wrong whatever the tolerance. In a multiple-choice version, a distractor is the formula of the mistake: `[[a/b]]` for the forgotten integer division.
+"What does this print?" works well this way: `int a = [[a]], b = [[b]]; printf("%d\n", a / b);` with `a` and `b` drawn by `randint` over positive ranges (for a negative quotient, `floor` and C's truncation differ), and `q` = `floor(a/b)` in the **Integer** format. Set **Expected answer** to **Number** and use a **Number** accepted answer of value `[[q]]`. A `[[…]]` inside code adds no variable row by itself: add `a`, `b` and `q` with **Add a variable**. Publication asks for a tolerance of at least half the key's step, 0.5 for an integer; tick **Integer** on the field, and a non-integer answer is wrong whatever the tolerance. In a multiple-choice version, a distractor is the formula of the mistake: `[[a/b]]` for the forgotten integer division. When `b` divides `a`, that distractor equals the key and the draw is made again; the condition `a % b != 0` rules those draws out from the start.
 
 ## Writing good questions
 
@@ -98,8 +98,6 @@ A [parameterized question](parameterized-questions.md) draws its own numbers for
 A question tests one concept. When a student fails it, you should know what they did not understand; a question that mixes two rules tells you only that one of them is missing. Split it in two.
 
 Write the stem so that a student who knows the answer could give it before reading the choices. A stem such as "Which statement is true?" is not a question, only a list of true-or-false items. If the stem stands alone, ask whether it should be a [short answer](question-types.md#short-answer): producing an answer is harder, and more telling, than recognising it.
-
-The **Difficulty** in the properties panel is your estimate, from 1 to 5. The measured one is the **Success rate** of the statistics, below.
 
 ### Distractors are misconceptions
 
