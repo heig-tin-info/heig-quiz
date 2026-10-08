@@ -425,8 +425,9 @@ over it, not as one more card in it.
   target wears a 2 px accent ring 6 px out, with two ripples. `Z.coach` sits
   over the page and its sticky bars, under every dialog.
 - Bottom docks: a bar docked on the window's bottom edge and marked
-  `data-bottom-dock` (the phone's bottom bar, the launch step's phone dock)
-  takes its height out of the window the coach places in (`visibleBottom`).
+  `data-bottom-dock` (the phone's bottom bar, the launch step's phone dock,
+  the floating action button, whose wrapper reaches the edge) takes its
+  height out of the window the coach places in (`visibleBottom`).
   The bubble stays above it, the target is scrolled to the middle of what is
   left, the ring is clipped where the bar starts, and a target wholly behind
   the bar hides the bubble until it is scrolled back: a bubble never covers
@@ -869,7 +870,8 @@ live in `ui/state.ts`, each written once.
   It exists because three comboboxes wrote the pattern out by hand and had
   started to disagree on the panel and the highlighted row.
 - Toast: bottom-right, above the phone's bottom bar when it is up
-  (`--bottom-nav-h`), `surface` + hairline + overlay shadow. Tones
+  (`--bottom-nav-h`), the floating action button (`--fab-h`) and a docked
+  tool (`--tool-dock-h`), `surface` + hairline + overlay shadow. Tones
   `success` / `error` / `warning`, plus `progress` (a neutral spinner) for
   "this has started", which is the only report an action taken from a menu
   can get. A failed mutation reports through `useErrorToast()` (`notify.tsx`):
@@ -1843,7 +1845,8 @@ folds to its icons — both UIs get a bar at the bottom: ONE component
   `:root:has(nav[data-bottom-dock])` under `lg`; zero otherwise): a spacer
   under the page, the toast stack and a list's floating selection bar (the
   pool's bulk actions, `SelectionBar`) read it, so neither the end of a page,
-  a toast nor the bulk bar is ever behind the bar.
+  a toast nor the bulk bar is ever behind the bar. On a page with a floating
+  action button the spacer grows by `--fab-h` too (below).
   An anchor (a journal heading) lands under the sticky top bar through one
   `scroll-padding-top` on the root, from `--topbar-h`.
 - **Where it is drawn: an allowlist**, the views the route table gives a
@@ -1865,6 +1868,56 @@ folds to its icons — both UIs get a bar at the bottom: ONE component
   what is about the person: the inbox, the theme, signing out.
 - A `<nav>` named "Main navigation", `aria-current="page"` on the lit slot,
   real links (a long press or a modified click opens the address).
+
+## The floating action button (phone)
+
+On a phone the header's action row is at the top, out of the thumb's reach.
+So a screen's one primary action, WHEN IT CREATES something on a list page,
+moves to a floating action button at the bottom right under `lg` (#450, the
+product owner's decisions of 2026-10-08). `ui/fab.tsx`.
+
+- **One mechanism.** `PageHeader` takes a singular `primary` (`{ icon,
+  label, onClick, coach? }`): from `lg` it is the accent button of the
+  action row (after `actions`, before "?" and "…"); under `lg` the header
+  leaves it out and renders the `Fab` (a portal) instead. A screen cannot
+  have two. `coach` is the `data-coach` target, carried by whichever is drawn,
+  so a tour finds it on either.
+- **Where.** Teacher screens only (a student has no creation primary): the
+  courses home (New course), the pools (New pool), a pool's questions (New
+  question) and a course's tabs whose primary creates (New classroom, New
+  template, Add condition, Add a staff member). Link a pool is a menu and
+  stays in the row. Never on a form or a flow (save, submit, launch: the
+  sticky bottom action bar), never a destructive action, never a primary
+  that is not a creation — the polls launcher's "Launch" stays in its header.
+  On the courses home and the pools, while the list is empty, the screen
+  passes no `primary` at all: the empty state's button is the one action,
+  and there is no FAB. A pool's FAB is on its Questions tab only.
+- **Shape.** A 56 px `rounded-full` in the `accent` fill (it IS the screen's
+  primary, the one red fill), `on-fill` ink, the overlay shadow: a floating
+  layer. 16 px from the right edge, 16 px above the bottom bar
+  (`bottom: calc(var(--bottom-nav-h) + 16px)`), on `Z.tool`: over the page
+  and its sticky bars, under the coach and every dialog.
+- **Extended, then a circle.** At the top of the page it shows the 24 px
+  icon and its label (15 px semibold), so the action reads in words; once
+  the page scrolls (past 8 px) the label folds away (200 ms, the panel
+  easing; no animation under `prefers-reduced-motion`) and the circle
+  stays. Scrolled back to the top, the label returns. The `aria-label` is
+  always the label.
+- **Focus order.** The FAB is a portal at the end of `body`: a keyboard or a
+  screen reader reaches it last, after the page and the bottom bar.
+- **Collisions.** `--fab-h` (3.5 rem and its 1 rem of air) is set only while
+  a FAB is up (`style.css`, `:root:has([data-fab])`, under `lg`), as
+  `--bottom-nav-h` is for the bar:
+  - the toasts rise above it;
+  - the help assistant's button (a tool dock) sits ABOVE it, and its panel
+    with it: the primary keeps the place nearest the thumb;
+  - the page's end spacer grows by it, so the last row's actions are never
+    behind it;
+  - the coach treats it as a bottom dock (`data-bottom-dock` on a wrapper
+    that reaches the window's edge): no bubble covers it;
+  - while a list's selection bar is up (`data-bulk-bar`, the pool's bulk
+    actions), the FAB steps aside and `--fab-h` falls back to zero: the bar
+    spans the bottom edge there and the selection is the task of the moment.
 
 ## The student's "Coming up", by day
 
@@ -2110,7 +2163,8 @@ owns the button, the non-modal panel, Escape and the focus's return, the
 placement over an `offset` and `Z.tool`.
 
 - **The button**: 48 px round, bottom right, 16 px from the edges (24 from
-  `sm`), above the bottom bar through `--bottom-nav-h`. `surface`, hairline,
+  `sm`), above the bottom bar through `--bottom-nav-h`, and above the
+  floating action button where one is up (`--fab-h`). `surface`, hairline,
   popover shadow; a speech bubble with a question mark, which says "ask"
   without the help drawer's bare "?". Open, it takes the ink fill
   (`bg-fg`), never the accent: the screen's primary action keeps the one

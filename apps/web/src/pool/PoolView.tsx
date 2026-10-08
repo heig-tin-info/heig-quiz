@@ -442,11 +442,18 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
             <Badge tone="zinc" icon={Eye}>
               {t("pool.readOnly")}
             </Badge>
-          ) : (
-            <Button data-coach="pool.new-question" onClick={() => setCreating({ type: null })}>
-              <Plus /> {t("pool.newQuestion")}
-            </Button>
-          )
+          ) : undefined
+        }
+        primary={
+          // The questions' list only: the tags and the review tabs create nothing.
+          readOnly || tab !== "questions"
+            ? undefined
+            : {
+                icon: Plus,
+                label: t("pool.newQuestion"),
+                onClick: () => setCreating({ type: null }),
+                coach: "pool.new-question",
+              }
         }
       />
 

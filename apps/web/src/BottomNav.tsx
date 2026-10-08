@@ -36,7 +36,7 @@ export function BottomNav({
 
   return (
     <>
-      <div aria-hidden className="h-(--bottom-nav-h)" />
+      <div aria-hidden className="h-[calc(var(--bottom-nav-h)+var(--fab-h))]" />
       <nav
         data-bottom-dock=""
         aria-label={t("bnav.label")}

@@ -71,7 +71,7 @@ import {
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useLentCanvasShortcuts } from "../shortcuts";
-import { Button, Card, Modal, useMinWidth } from "../ui";
+import { Button, Card, LG_PX, Modal, useMinWidth } from "../ui";
 import { ConditionsList } from "./ConditionsList";
 import { ExpandChrome, type ExpandChromeValue } from "./ExpandLayer";
 import { IntroPassage, RereadButton } from "./IntroPassage";
@@ -310,7 +310,7 @@ export function PlayerView({
   const desktop = useMinWidth(640);
   // Wider still, the question list and the points stand in a column beside
   // the question rather than over it.
-  const railScreen = useMinWidth(1024);
+  const railScreen = useMinWidth(LG_PX);
   const segments = useMemo(() => segmentsOf(state, isAnswered), [state]);
   const unanswered = state.items.filter(
     (i) => !isAnswered(i.type, state.answers[i.id] ?? null),

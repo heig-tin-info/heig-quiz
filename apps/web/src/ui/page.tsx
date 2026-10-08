@@ -2,7 +2,10 @@ import { PenLine } from "lucide-react";
 import { Fragment, isValidElement, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 
-import { cx, HelpIcon, PageHelpButton, Tip, type IconType } from "./layers";
+import { buttonClass } from "@quiz/ui";
+
+import { Fab, type PagePrimary } from "./fab";
+import { cx, HelpIcon, LG_PX, PageHelpButton, Tip, useMinWidth, type IconType } from "./layers";
 import { rovingIndex } from "./menu";
 
 // Surfaces and page structure.
@@ -114,9 +117,14 @@ export function NotePanel({
 
 /**
  * Title row of a page: one h1, an optional line under it, the actions right.
- * The row on the right always ends the same way: the page's actions, then
- * the help of the page, then its overflow menu — so "…" stays the last thing
- * on the line and "?" is found in one place on every page.
+ * The row on the right always ends the same way: the page's actions, its
+ * primary, then the help of the page, then its overflow menu — so "…" stays
+ * the last thing on the line and "?" is found in one place on every page.
+ *
+ * `primary` is the screen's ONE primary action when it creates something
+ * (#450): the accent button of the row from `lg`, the floating action button
+ * under it (`Fab`), never both. A primary that is not a creation (save,
+ * launch, a menu) stays in `actions`.
  */
 export function PageHeader({
   eyebrow,
@@ -124,6 +132,7 @@ export function PageHeader({
   description,
   help,
   actions,
+  primary,
   menu,
   className = "",
 }: {
@@ -133,16 +142,20 @@ export function PageHeader({
   /** Help topic (`src/help/<topic>.md`) opened by the "?" of the action row. */
   help?: string;
   actions?: ReactNode;
+  /** The screen's primary action, when it creates: a button, or the FAB on a phone. */
+  primary?: PagePrimary | undefined;
   /** The page's overflow `Menu`, placed after the help. */
   menu?: ReactNode;
   className?: string;
 }) {
-  const right = actions || help || menu;
+  const desktop = useMinWidth(LG_PX);
+  const button = primary && desktop ? <PrimaryButton {...primary} /> : null;
+  const right = actions || button || help || menu;
   // A page whose whole action row is ONE control: on a phone that row takes
   // the full width under the title, so a `w-full` control reads as the
   // button of a student's card does (the student's project page). A row of
   // several controls, or one with help or a menu, keeps its intrinsic width.
-  const soleAction = isValidElement(actions) && actions.type !== Fragment && !help && !menu;
+  const soleAction = isValidElement(actions) && actions.type !== Fragment && !button && !help && !menu;
   return (
     <header className={cx("flex flex-wrap items-end justify-between gap-x-6 gap-y-3", className)}>
       <div className="min-w-0">
@@ -153,6 +166,7 @@ export function PageHeader({
       {right ? (
         <div className={cx("flex flex-wrap items-center gap-2", soleAction && "max-sm:w-full")}>
           {actions}
+          {button}
           {/* "?" and "…" wrap as one: on a phone the row breaks before them,
               never between them, so "…" is not left alone on a line. */}
           {help || menu ? (
@@ -163,7 +177,16 @@ export function PageHeader({
           ) : null}
         </div>
       ) : null}
+      {primary && !desktop ? <Fab {...primary} /> : null}
     </header>
+  );
+}
+
+function PrimaryButton({ icon: Icon, label, onClick, coach }: PagePrimary) {
+  return (
+    <button type="button" data-coach={coach} onClick={onClick} className={buttonClass("primary", "md")}>
+      <Icon /> {label}
+    </button>
   );
 }
 

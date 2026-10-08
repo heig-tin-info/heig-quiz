@@ -16,7 +16,10 @@
 //   feedback  Spinner, Skeleton, Progress, Kbd, Badge, Alert, EmptyState.
 //   page      surfaces and page structure: Card, PageHeader, Tabs…
 //             The six above are on layers and import no other sibling,
-//             except page, which reads rovingIndex from menu.
+//             except page, which reads rovingIndex from menu and Fab from
+//             fab.
+//   fab       the screen's creating primary as a floating button on a
+//             phone (Fab), rendered by PageHeader's `primary`, on layers.
 //   meta      the small facts under a title (MetaItem, MetaLine), on layers.
 //   breadcrumb the trail of ancestors of a page (Breadcrumb), on controls.
 //   actions   the actions of one record: icon buttons or a menu, decided
@@ -51,6 +54,7 @@ export * from "./identity";
 export * from "./dates";
 export * from "./feedback";
 export * from "./page";
+export type { PagePrimary } from "./fab";
 export * from "./meta";
 export * from "./breadcrumb";
 export * from "./actions";

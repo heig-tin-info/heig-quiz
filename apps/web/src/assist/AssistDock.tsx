@@ -121,8 +121,8 @@ function Dock({
       icon={MessageCircleQuestion}
       openLabel={t("assist.open")}
       closeLabel={t("assist.close")}
-      offset="var(--bottom-nav-h)"
-      panelClassName="flex h-[min(36rem,calc(100dvh-var(--banner-h)-var(--bottom-nav-h)-var(--tool-dock-h)-5rem))] w-[24rem] flex-col"
+      offset="calc(var(--bottom-nav-h) + var(--fab-h))"
+      panelClassName="flex h-[min(36rem,calc(100dvh-var(--banner-h)-var(--bottom-nav-h)-var(--fab-h)-var(--tool-dock-h)-5rem))] w-[24rem] flex-col"
       dockProps={{ "data-assist-dock": true }}
     >
       {(close, titleId) => (

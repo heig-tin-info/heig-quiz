@@ -110,6 +110,12 @@ function useMediaQuery(query: string): boolean {
 }
 
 /**
+ * Tailwind's `lg`, the frame's breakpoint: under it the phone layout (top
+ * bar, bottom bar, floating action button), from it the sidebar.
+ */
+export const LG_PX = 1024;
+
+/**
  * True from `px` wide up, following the window as it resizes. False where
  * `matchMedia` does not exist (a test), so a component defaults to its
  * phone layout there — the one that also renders inside a narrow window.

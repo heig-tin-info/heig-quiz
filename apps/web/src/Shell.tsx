@@ -34,6 +34,7 @@ import {
   Button,
   cx,
   IconButton,
+  LG_PX,
   modKey,
   pageColumnVars,
   Tip,
@@ -52,7 +53,7 @@ import { useDrillAvailability, type DrillAvailability } from "./drill/api";
 import { AvailableDot } from "./drill/AvailableDot";
 
 /** The viewport widths (Tailwind's `lg`, `xl`) where the sidebar shows, folded, and unfolds. */
-const SIDEBAR_FOLDED = 1024;
+const SIDEBAR_FOLDED = LG_PX;
 const SIDEBAR_FULL = 1280;
 
 /**

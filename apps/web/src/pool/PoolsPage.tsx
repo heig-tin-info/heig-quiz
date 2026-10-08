@@ -537,14 +537,12 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
         help="pools"
         title={t("pools.title")}
         description={t("pools.subtitle")}
-        actions={
+        primary={
           // Not while the list is empty: the empty state below carries the
           // same action, and two accent fills of one action is noise.
-          rows.length > 0 ? (
-            <Button data-coach="pools.new" onClick={() => setCreating(true)}>
-              <Plus /> {t("pools.new")}
-            </Button>
-          ) : undefined
+          rows.length > 0
+            ? { icon: Plus, label: t("pools.new"), onClick: () => setCreating(true), coach: "pools.new" }
+            : undefined
         }
       />
 
