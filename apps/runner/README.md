@@ -70,7 +70,7 @@ C++, Python, Node, Rust, ngspice) passes under it, and CI runs it (below).
 
 Since M6-05 the online workspace's profile, `apps/codespace/infra/seccomp/codespace.json`,
 is this file plus one rule allowing `ptrace` (gdb), and
-`apps/codespace/src/engine/seccomp.test.ts` fails on any other difference:
+`apps/codespace/src/seccomp.test.ts` fails on any other difference:
 a change here is copied there, with that rule.
 
 What was deliberately *not* carried over:

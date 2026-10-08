@@ -465,7 +465,7 @@
       ],
       "action": "SCMP_ACT_ALLOW",
       "args": [],
-      "comment": "gdb in the student's workspace: the ONE divergence from apps/runner/infra/seccomp/runner.json (M6-05, asserted by src/engine/seccomp.test.ts)",
+      "comment": "gdb in the student's workspace: the ONE divergence from apps/runner/infra/seccomp/runner.json (M6-05, asserted by src/seccomp.test.ts)",
       "includes": {},
       "excludes": {}
     },

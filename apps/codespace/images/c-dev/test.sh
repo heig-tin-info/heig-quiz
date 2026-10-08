@@ -74,18 +74,12 @@ PY
 
 cat > "${VOL_BASE}/a/work/hello.c" <<'EOF'
 #include <stdio.h>
-int main(void) { printf("&main=%p\n", (void *)main); return 0; }
-EOF
-
-# § 10: one statement per line, so that `next` and `step` land on known lines.
-cat > "${VOL_BASE}/a/work/steps.c" <<'EOF'
-#include <stdio.h>
 static int square(int x) { return x * x; }
 int main(void) {
   int a = 3;
   int b = square(a);
-  printf("%d\n", b);
-  return 0;
+  printf("&main=%p\n", (void *)main);
+  return b - 9;
 }
 EOF
 
@@ -165,13 +159,13 @@ case "$OUT" in
 esac
 ok "gcc -g -O0 hello.c then gdb -batch -ex run -ex bt: no Operation not permitted"
 
-OUT=$(cexec 'cd /work && gdb -batch -ex "break main" -ex run -ex bt ./a.out' 2>&1) \
+OUT=$(cexec 'cd /work && gdb -batch -ex "break main" -ex run -ex next -ex step -ex bt ./a.out' 2>&1) \
   || fail "gdb with a breakpoint failed" "$OUT"
 case "$OUT" in
-  *"#0"*main*) : ;;
-  *) fail "bt did not produce a stack containing main" "$OUT" ;;
+  *"Breakpoint 1, main ()"*"#0  square (x=3)"*"#1 "*"in main ()"*) : ;;
+  *) fail "gdb did not break in main, then next and step into square" "$OUT" ;;
 esac
-ok "bt on a breakpoint in main produces a stack"
+ok "gdb breaks in main, steps over a line and into square (x=3), bt shows main below it"
 
 # --------------------------------------------------------------------------
 head2 "2. ASLR can be disabled: personality(ADDR_NO_RANDOMIZE) passes the seccomp profile"
@@ -610,20 +604,13 @@ ok "no activation witness in the image (it only appears when the editor is opene
 head2 "10. seccomp: the runner's profile plus ptrace (M6-05)"
 # --------------------------------------------------------------------------
 # infra/seccomp/codespace.json is apps/runner/infra/seccomp/runner.json plus
-# one rule allowing ptrace (src/engine/seccomp.test.ts): no user namespace, no
-# mount, and gdb still breaks and steps.
-for cmd in 'unshare -r true' 'unshare -U true'; do
-  OUT=$(cexec "$cmd" 2>&1) && fail "$cmd succeeded inside the container" "$OUT"
-  case "$OUT" in
-    *"Function not implemented"*) : ;;
-    *) fail "$cmd failed, but not on the seccomp filter (ENOSYS expected)" "$OUT" ;;
-  esac
-  ok "$cmd fails: Function not implemented"
-done
-
-OUT=$(cexec 'mkdir -p /tmp/m && mount -t tmpfs none /tmp/m' 2>&1) \
-  && fail "mount -t tmpfs succeeded inside the container" "$OUT"
-ok "mount -t tmpfs none /tmp/m fails"
+# one rule allowing ptrace (src/seccomp.test.ts): no user namespace, no mount
+# (gdb breaking and stepping is § 1).
+OUT=$(cexec 'unshare -r true' 2>&1) && fail "unshare -r true succeeded inside the container" "$OUT"
+case "$OUT" in
+  *"Function not implemented"*) ok "unshare -r true fails: Function not implemented" ;;
+  *) fail "unshare -r true failed, but not on the seccomp filter (ENOSYS expected)" "$OUT" ;;
+esac
 
 OUT=$(cexec 'cd /work && gcc -o nsprobe nsprobe.c && ./nsprobe' 2>&1) \
   || fail "the namespace probe did not build or run" "$OUT"
@@ -631,18 +618,6 @@ case "$OUT" in
   "unshare=38 mount=38 ENOSYS=38") ok "raw unshare(CLONE_NEWUSER) and mount(2) answer ENOSYS: $OUT" ;;
   *) fail "unshare(2) or mount(2) did not answer ENOSYS" "$OUT" ;;
 esac
-
-OUT=$(cexec "cd /work && gcc -g -O0 -o steps steps.c && gdb -batch -ex 'break main' -ex run -ex next -ex step -ex bt ./steps" 2>&1) \
-  || fail "gdb break/run/next/step/bt failed" "$OUT"
-case "$OUT" in
-  *"Breakpoint 1, main ()"*) : ;;
-  *) fail "gdb did not stop on the breakpoint in main" "$OUT" ;;
-esac
-case "$OUT" in
-  *"#0  square (x=3)"*"#1 "*"in main ()"*) : ;;
-  *) fail "next then step did not land in square, called from main" "$OUT" ;;
-esac
-ok "gdb: break main, run, next, step into square (x=3), bt shows main below it"
 
 printf '\n%d assertions, all green.\n' "$NTEST"
 printf 'MESURE_DEMARRAGE_SECONDES=%s\n' "$BOOT"

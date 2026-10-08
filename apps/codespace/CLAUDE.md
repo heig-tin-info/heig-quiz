@@ -97,7 +97,7 @@ Everything else of 10–13 holds: the closed environment list
 (`CONTAINER_ENV_KEYS`, tested), the hardening flags from the first run
 (with two additions, not relaxations: `apparmor=codespace` and a tmpfs in
 `mode=1777`), the runner's seccomp profile with one rule added, `ptrace` for
-gdb (`infra/seccomp/codespace.json`, held to it by `src/engine/seccomp.test.ts`,
+gdb (`infra/seccomp/codespace.json`, held to it by `src/seccomp.test.ts`,
 M6-05), `podman --remote` on the rootful socket. Exam mode seeds from the teacher's template, in the spirit
 of 14. The freeze-and-collect exam mode of M6-08 (ADR-075) drops the git
 channel divergence for its containers.
