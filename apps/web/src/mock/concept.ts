@@ -14,19 +14,26 @@
  * Accepting a NEW concept whose label is already taken (`Pointeur`, say)
  * answers `409 concept_exists`, as the server does.
  *
+ * The question editor's concept picker (third addendum §5) creates a
+ * `proposed` concept: `409 concept_exists` with the holder when its key is
+ * taken, `422 concept_dropped` when it is the key of a tag the admin dropped
+ * (`c01`, dropped as a chapter label, is one from the start).
+ *
  * `?empty=1`: no question wears a tag.
  */
-import type {
-  Concept,
-  ConceptSortRun,
-  TagPair,
-  TagSorting,
-  TagSortingAcceptResponse,
-  TagSortingChoice,
-  TagSortingItem,
-  TagSortingRow,
+import {
+  ConceptCreate,
+  type Concept,
+  type ConceptExists,
+  type ConceptSortRun,
+  type TagPair,
+  type TagSorting,
+  type TagSortingAcceptResponse,
+  type TagSortingChoice,
+  type TagSortingItem,
+  type TagSortingRow,
 } from "@quiz/contracts";
-import { groupNewConcepts, groupTagsByConceptKey, qualifiedConceptKey, tagGroupKey } from "@quiz/domain";
+import { conceptKey, groupNewConcepts, groupTagsByConceptKey, qualifiedConceptKey, tagGroupKey } from "@quiz/domain";
 
 import { D, flags, H, iso, MockPayload, on, refuse } from "./runtime";
 
@@ -38,7 +45,7 @@ const ADMIN = "aaaaaaaa-0000-4000-8000-000000000001";
 let conceptSeq = 0;
 const concept = (
   status: Concept["status"],
-  fr: [string, string?, string?],
+  fr: [string | null, string?, string?],
   en: [string | null, string?, string?],
 ): Concept => ({
   id: `c0c0c0c0-0000-4000-8000-${String((conceptSeq += 1)).padStart(12, "0")}`,
@@ -118,7 +125,7 @@ const pairs: Pair[] = flags.empty
       pair(POO, "todo", 2),
     ];
 
-// One pair already decided: the array tag mapped.
+// Two pairs already decided: the array tag mapped, the chapter label dropped.
 const decided = (choice: TagSortingChoice, conceptOf: Concept | null): TagSorting => ({
   decision: choice.kind === "drop" ? "drop" : "concept",
   concept: conceptOf,
@@ -129,6 +136,7 @@ const decided = (choice: TagSortingChoice, conceptOf: Concept | null): TagSortin
 });
 for (const p of pairs) {
   if (p.tag === "tableaux") p.sorting = decided({ kind: "concept", conceptId: concepts[1]!.id }, concepts[1]!);
+  if (p.tag === "c01") p.sorting = decided({ kind: "drop", reason: "organisational" }, null);
 }
 
 // The model's proposals: what a pass of `sort` left on the undecided pairs.
@@ -197,6 +205,29 @@ on("GET", "/app/api/admin/concept-sorting", () => ({
 /** The key a concept holds in `lang`, or null when it has no label there. */
 const keyOf = (c: Concept, lang: "fr" | "en") =>
   c.labels[lang] === null ? null : qualifiedConceptKey(c.labels[lang]!, c.qualifiers[lang]);
+
+/** The teacher's new concept: `proposed`, in their language only. */
+on("POST", "/app/api/concepts", (_m, raw): Concept => {
+  const body = ConceptCreate.safeParse(raw);
+  if (!body.success) throw new MockPayload(400, { error: "validation", message: body.error.message });
+  const { lang, label, qualifier = "", description = "" } = body.data;
+  const drop = pairs.find((p) => p.sorting?.decision === "drop" && conceptKey(p.tag) === conceptKey(label));
+  if (drop) {
+    // `ConceptWriteRefusal`, as the server answers a label on the stop list.
+    throw refuse(422, "concept_dropped", "This label was dropped from the vocabulary", {
+      errors: [{ input: label, error: "concept_dropped", reason: drop.sorting!.dropReason }],
+    });
+  }
+  const holder = concepts.find((c) => c.status !== "merged" && keyOf(c, lang) === qualifiedConceptKey(label, qualifier));
+  if (holder) {
+    const exists: ConceptExists = { error: "concept_exists", message: "A concept with this label already exists", concept: holder };
+    throw new MockPayload(409, exists);
+  }
+  const side: [string, string, string] = [label, qualifier, description];
+  const created = concept("proposed", lang === "fr" ? side : [null], lang === "en" ? side : [null]);
+  concepts.push(created);
+  return created;
+});
 
 on("POST", "/app/api/admin/concept-sorting/accept", (_m, body): TagSortingAcceptResponse => {
   const items = (body.items ?? []) as TagSortingItem[];

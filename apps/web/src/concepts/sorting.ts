@@ -60,10 +60,26 @@ export function groupRows(rows: readonly TagSortingRow[]): { key: string; rows: 
 export const byUse = (pairs: readonly TagSortingRow[]) => [...pairs].sort((a, b) => b.count - a.count);
 
 /** The label in the reader's language, else the other, with its qualifier: `Adresse (mémoire)`. */
+/**
+ * A concept in the reader's language: its label and qualifier there, else in
+ * the other language (a `proposed` concept may have one only), with `lang`
+ * the language they are in; its description in the reader's language, else
+ * the other one.
+ */
+export function conceptSide(c: Concept, locale: Locale) {
+  const other: Locale = locale === "fr" ? "en" : "fr";
+  const lang = c.labels[locale] !== null ? locale : other;
+  return {
+    lang,
+    label: c.labels[lang] ?? "",
+    qualifier: c.qualifiers[lang],
+    description: c.descriptions[locale] || c.descriptions[other],
+  };
+}
+
 export function conceptName(c: Concept, locale: Locale): string {
-  const lang = c.labels[locale] !== null ? locale : locale === "fr" ? "en" : "fr";
-  const qualifier = c.qualifiers[lang];
-  return qualifier ? `${c.labels[lang]} (${qualifier})` : (c.labels[lang] ?? "");
+  const { label, qualifier } = conceptSide(c, locale);
+  return qualifier ? `${label} (${qualifier})` : label;
 }
 
 /** What a pending decision reads as. */

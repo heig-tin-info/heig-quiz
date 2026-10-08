@@ -362,3 +362,14 @@ export const ConceptNotFound = z.object({
   ids: z.array(z.uuid()).min(1),
 });
 export type ConceptNotFound = z.infer<typeof ConceptNotFound>;
+
+/**
+ * The 409 of `POST` and `PATCH /concepts`: the key asked for is taken, and
+ * `concept` is the one holding it, so a picker can pick it instead.
+ */
+export const ConceptExists = z.object({
+  error: z.literal("concept_exists"),
+  message: z.string().optional(),
+  concept: Concept,
+});
+export type ConceptExists = z.infer<typeof ConceptExists>;
