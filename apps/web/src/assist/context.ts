@@ -4,13 +4,15 @@
  * `PageHelpButton` opens, read from that button's slot
  * (`currentHelpTopic`) —, the UI language, and the ids of the entities on
  * it from a closed list of kinds; never a title, a name, nor a student's,
- * a user's or an attempt's id. And where it is offered at all (§3).
+ * a user's or an attempt's id; and the screen's palette commands (P2b).
+ * And where it is offered at all (§3).
  */
-import { AssistContext, AssistEntities, type Me } from "@quiz/contracts";
-import type { AssistEntityKind } from "@quiz/domain";
+import { AssistContext, AssistEntities, AssistScreenCommand, type Me } from "@quiz/contracts";
+import { ASSIST_MAX_SCREEN_COMMANDS, type AssistEntityKind } from "@quiz/domain";
 
 import type { Locale } from "../i18n";
 import { routeToPath, type Route } from "../router";
+import { screenCommands } from "../screenCommands";
 import { currentHelpTopic } from "../ui";
 
 /** The route fields that name an entity: each becomes `:<field>` in the pattern. */
@@ -75,13 +77,29 @@ export function routeEntities(route: Route): AssistEntities {
   ) as AssistEntities;
 }
 
+/**
+ * The mounted screen's palette commands (ADR-080 P2b): id, label and
+ * effect, the server offering the model the effect-free ones only. Screen
+ * chrome — a screen command's label never embeds an entity's name
+ * (`ScreenCommand`) —; one the contract would refuse is left out rather
+ * than refused with the whole question.
+ */
+export function screenCommandsContext(): AssistScreenCommand[] {
+  return screenCommands()
+    .map(({ id, label, effect }) => ({ id, label, effect }))
+    .filter((c) => AssistScreenCommand.safeParse(c).success)
+    .slice(0, ASSIST_MAX_SCREEN_COMMANDS);
+}
+
 export function assistContext(route: Route, locale: Locale): AssistContext {
   const entities = routeEntities(route);
+  const commands = screenCommandsContext();
   return {
     route: routePattern(route),
     helpTopic: currentHelpTopic(),
     locale,
     ...(Object.keys(entities).length > 0 ? { entities } : {}),
+    ...(commands.length > 0 ? { commands } : {}),
   };
 }
 

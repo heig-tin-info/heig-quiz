@@ -2,10 +2,11 @@ import { FileStack, FolderTree, Library, ListChecks, Plus, School, Settings as S
 import { useState, type ReactNode } from "react";
 
 import type { CourseSummary } from "@quiz/contracts";
+import type { CourseTab } from "@quiz/domain";
 
 import { CourseTemplates, useCourseTemplates } from "../evaluation/templates";
 import { useT } from "../i18n";
-import type { CourseTab, Route } from "../router";
+import type { Route } from "../router";
 import { Trail, useRootCrumb } from "../Trail";
 import {
   Badge,

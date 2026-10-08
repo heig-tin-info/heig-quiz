@@ -9,6 +9,7 @@ import {
   type TeacherCodespaceGrantPatch,
   type TeacherGrantCreate,
 } from "@quiz/contracts";
+import { ADMIN_TABS, type AdminTab } from "@quiz/domain";
 
 import { api, apiErrorMessage } from "./api";
 import { useConfirm } from "./confirm";
@@ -45,7 +46,7 @@ import { KioskSection } from "./AdminKiosk";
 import { UsersSection } from "./AdminUsers";
 import { ConceptsSection } from "./concepts/ConceptsSection";
 import { adminTeachersKey } from "./queryKeys";
-import { ADMIN_TABS, useSearchParam, type AdminTab } from "./router";
+import { useSearchParam } from "./router";
 
 type SortKey = "email" | "name" | "lastLoginAt" | "courses" | "grantedAt";
 

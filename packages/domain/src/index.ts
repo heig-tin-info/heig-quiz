@@ -71,6 +71,7 @@ export * from "./kioskAttestation.js";
 export * from "./kioskPairing.js";
 export * from "./llm.js";
 export * from "./assist.js";
+export * from "./assistScreens.js";
 export * from "./maskNames.js";
 export * from "./review.js";
 export * from "./lockedTemplate.js";

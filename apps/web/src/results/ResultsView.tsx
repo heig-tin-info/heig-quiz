@@ -17,6 +17,7 @@ import type {
   ReleaseResponse,
   ResultsView as ResultsPayload,
 } from "@quiz/contracts";
+import type { RESULTS_TABS } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -52,7 +53,7 @@ import { Summary } from "./Summary";
 import { useIsCourseOwner } from "../course/parts";
 import { evaluationKey, resultsByQuestionKey, resultsKey, resultsViewKey } from "../queryKeys";
 
-type Tab = "students" | "questions";
+type Tab = (typeof RESULTS_TABS)[number];
 
 const NO_ROWS: ResultRow[] = [];
 
@@ -165,6 +166,7 @@ export function ResultsView({
   useScreenCommands([
     {
       id: "results:grading",
+      effect: "none",
       label: t("palette.openGrading"),
       icon: ClipboardCheck,
       group: "navigate",
@@ -174,6 +176,7 @@ export function ResultsView({
       ? [
           {
             id: "results:release",
+            effect: "write" as const,
             label: t(view?.released ? "results.release.again" : "results.release"),
             icon: Send,
             group: "action" as const,

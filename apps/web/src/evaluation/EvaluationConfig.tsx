@@ -14,7 +14,7 @@ import {
 import { useState } from "react";
 
 import { EvaluationPatch, type ClassroomDetail, type EvaluationDetail } from "@quiz/contracts";
-import { itemListLock } from "@quiz/domain";
+import { EVALUATION_STEPS, itemListLock } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -76,11 +76,10 @@ import { classroomKey, evaluationKey, evaluationsKey } from "../queryKeys";
  * whole evaluation, in a tab of its own, answerable and graded at the end.
  */
 
-const STEPS = ["questions", "timing", "launch"] as const;
-type Step = (typeof STEPS)[number];
+type Step = (typeof EVALUATION_STEPS)[number];
 
 function isStep(value: string): value is Step {
-  return (STEPS as readonly string[]).includes(value);
+  return (EVALUATION_STEPS as readonly string[]).includes(value);
 }
 
 export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: Route) => void }) {

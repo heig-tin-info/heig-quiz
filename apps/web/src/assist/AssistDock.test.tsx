@@ -1,7 +1,11 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { Eye } from "lucide-react";
+import type { ReactNode } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { useLeaveGuard, useRoute } from "../router";
+import { useScreenCommands, type ScreenCommand } from "../screenCommands";
 import { makeMe } from "../test/fixtures";
 import { fail, mockFetch, noContent, ok, renderWithProviders } from "../test/render";
 import { PageHeader } from "../ui";
@@ -15,7 +19,10 @@ const exchange = (id: string, question: string, answer: string) => ({ id, questi
 const AVAILABLE = { "GET /app/api/assist/availability": ok({ available: true, stub: false }) };
 const OPEN = { name: "Ask the help assistant" };
 
-beforeEach(() => sessionStorage.clear());
+beforeEach(() => {
+  sessionStorage.clear();
+  window.history.replaceState(null, "", "/");
+});
 
 describe("the assistant's button (ADR-080 §3)", () => {
   it("is on a teacher screen when the assistant answers, in the neutral ink", async () => {
@@ -51,6 +58,7 @@ describe("the chat", () => {
       "POST /app/api/assist/ask": ok({
         conversationId: CID,
         exchange: exchange("e1", "What is the Group option for?", "It groups the rows by **category**."),
+        actions: [],
       }),
     });
     renderWithProviders(
@@ -92,7 +100,7 @@ describe("the chat", () => {
     const { calls } = mockFetch({
       ...AVAILABLE,
       [`GET /app/api/assist/conversations/${CID}`]: fail(404, { error: "not_found" }),
-      "POST /app/api/assist/ask": ok({ conversationId: NEW, exchange: exchange("e2", "Again?", "Yes.") }),
+      "POST /app/api/assist/ask": ok({ conversationId: NEW, exchange: exchange("e2", "Again?", "Yes."), actions: [] }),
     });
     renderWithProviders(<AssistDock me={makeMe()} route={{ view: "home" }} teacherUi />);
     await userEvent.click(await screen.findByRole("button", OPEN));
@@ -110,7 +118,7 @@ describe("the chat", () => {
       "POST /app/api/assist/ask": (call) =>
         (call.body as { conversationId?: string }).conversationId
           ? fail(404, { error: "conversation_not_found" })
-          : ok({ conversationId: NEW, exchange: exchange("e3", "Still there?", "A new one.") }),
+          : ok({ conversationId: NEW, exchange: exchange("e3", "Still there?", "A new one."), actions: [] }),
     });
     renderWithProviders(<AssistDock me={makeMe()} route={{ view: "home" }} teacherUi />);
     await userEvent.click(await screen.findByRole("button", OPEN));
@@ -143,5 +151,144 @@ describe("the chat", () => {
     await userEvent.click(within(confirm).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(calls.some((c) => c.method === "DELETE")).toBe(true));
     await waitFor(() => expect(sessionStorage.getItem("quiz-assist-conversation")).toBeNull());
+  });
+});
+
+/** The dock on the app's own router, as `App.tsx` mounts it, beside the screen `children`. */
+function WithRouter({ children }: { children?: ReactNode }) {
+  const [route, navigate] = useRoute();
+  return (
+    <>
+      {children}
+      <span data-testid="view">{route.view}</span>
+      <AssistDock me={makeMe()} route={route} teacherUi navigate={navigate} />
+    </>
+  );
+}
+
+function Commands({ commands }: { commands: ScreenCommand[] }) {
+  useScreenCommands(commands);
+  return null;
+}
+
+function Dirty({ ask }: { ask: () => Promise<boolean> }) {
+  useLeaveGuard(true, ask);
+  return null;
+}
+
+/** The model's answer, with its UI actions (ADR-080 P2b). */
+const replying = (actions: unknown[]) =>
+  ok({ conversationId: CID, exchange: exchange("e9", "Montre-moi Sandbox", "C'est ouvert."), actions });
+const OPEN_POOL = { kind: "open_screen", screen: "pool", ids: { id: POOL }, params: { q: "tag:printf" } };
+
+async function askInDock(question: string) {
+  await userEvent.click(await screen.findByRole("button", OPEN));
+  const panel = screen.getByRole("dialog", { name: "Help assistant" });
+  await userEvent.type(within(panel).getByRole("textbox"), `${question}{Enter}`);
+  await within(panel).findByText("C'est ouvert.");
+  return panel;
+}
+
+describe("the assistant drives the interface (ADR-080 P2b)", () => {
+  it("opens the screen the answer names, searched, says so, and stays open across the navigation", async () => {
+    mockFetch({ ...AVAILABLE, "POST /app/api/assist/ask": replying([OPEN_POOL]) });
+    renderWithProviders(<WithRouter />);
+    const panel = await askInDock("Montre-moi les printf de Sandbox");
+    await waitFor(() => expect(window.location.pathname).toBe(`/pools/${POOL}`));
+    expect(new URLSearchParams(window.location.search).get("q")).toBe("tag:printf");
+    expect(screen.getByTestId("view")).toHaveTextContent("pool");
+    expect(await within(panel).findByText("Opened: Question pool")).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Help assistant" })).toBe(panel);
+  });
+
+  it("opens a classroom on its tab", async () => {
+    mockFetch({
+      ...AVAILABLE,
+      "POST /app/api/assist/ask": replying([{ kind: "open_screen", screen: "classroom", ids: { id: POOL }, params: { tab: "roster" } }]),
+    });
+    renderWithProviders(<WithRouter />);
+    await askInDock("The roster");
+    await waitFor(() => expect(window.location.pathname + window.location.search).toBe(`/classrooms/${POOL}?tab=roster`));
+  });
+
+  it("does nothing but say so for a screen off the catalogue, ids that are not a segment, or an unknown param", async () => {
+    mockFetch({
+      ...AVAILABLE,
+      "POST /app/api/assist/ask": replying([
+        { kind: "open_screen", screen: "attempt", ids: { evaluationId: POOL }, params: {} },
+        { kind: "open_screen", screen: "pool", ids: { id: "../admin" }, params: {} },
+        { kind: "open_screen", screen: "pool", ids: { id: POOL }, params: { evil: "1" } },
+        { kind: "open_screen", screen: "constructor", ids: {}, params: {} },
+      ]),
+    });
+    renderWithProviders(<WithRouter />);
+    const panel = await askInDock("Open it");
+    expect(await within(panel).findAllByText("Could not open this screen.")).toHaveLength(4);
+    expect(window.location.pathname).toBe("/");
+  });
+
+  it("runs an effect-free command of the screen, re-checked when it runs; never one that writes", async () => {
+    const tryIt = vi.fn();
+    const publish = vi.fn();
+    const commands: ScreenCommand[] = [
+      { id: "question:try", label: "Try it", icon: Eye, group: "action", effect: "none", run: tryIt },
+      { id: "question:publish", label: "Publish this question", icon: Eye, group: "action", effect: "write", run: publish },
+    ];
+    const { calls } = mockFetch({
+      ...AVAILABLE,
+      "POST /app/api/assist/ask": replying([
+        { kind: "run_command", id: "question:try" },
+        { kind: "run_command", id: "question:publish" },
+        { kind: "run_command", id: "question:gone" },
+      ]),
+    });
+    renderWithProviders(
+      <WithRouter>
+        <Commands commands={commands} />
+      </WithRouter>,
+    );
+    const panel = await askInDock("Try it");
+    expect(await within(panel).findByText("Done: Try it")).toBeVisible();
+    expect(tryIt).toHaveBeenCalledTimes(1);
+    expect(publish).not.toHaveBeenCalled();
+    expect(within(panel).getAllByText("This command is no longer available here.")).toHaveLength(2);
+    // The screen's commands ride with the question, each with its effect; the server offers the `none` ones.
+    expect((calls.find((c) => c.method === "POST")?.body as { context: { commands: unknown } }).context.commands).toEqual([
+      { id: "question:try", label: "Try it", effect: "none" },
+      { id: "question:publish", label: "Publish this question", effect: "write" },
+    ]);
+  });
+
+  it("offers a command that needs a real gesture (a new tab) as a button, run on the teacher's click", async () => {
+    const preview = vi.fn();
+    const commands: ScreenCommand[] = [
+      { id: "question:preview", label: "Preview", icon: Eye, group: "action", effect: "none", gesture: true, run: preview },
+    ];
+    mockFetch({ ...AVAILABLE, "POST /app/api/assist/ask": replying([{ kind: "run_command", id: "question:preview" }]) });
+    renderWithProviders(
+      <WithRouter>
+        <Commands commands={commands} />
+      </WithRouter>,
+    );
+    const panel = await askInDock("Preview it");
+    const button = await within(panel).findByRole("button", { name: "Preview" });
+    expect(preview).not.toHaveBeenCalled();
+    await userEvent.click(button);
+    expect(preview).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks before leaving unsaved work, and stays when the teacher says no", async () => {
+    const ask = vi.fn(() => Promise.resolve(false));
+    mockFetch({ ...AVAILABLE, "POST /app/api/assist/ask": replying([OPEN_POOL]) });
+    renderWithProviders(
+      <WithRouter>
+        <Dirty ask={ask} />
+      </WithRouter>,
+    );
+    const panel = await askInDock("Montre-moi Sandbox");
+    await waitFor(() => expect(ask).toHaveBeenCalled());
+    expect(await within(panel).findByText("Stayed on this screen.")).toBeVisible();
+    expect(within(panel).queryByText(/^Opened/)).toBeNull();
+    expect(window.location.pathname).toBe("/");
   });
 });

@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { EvaluationDetail, TemplateDetail } from "@quiz/contracts";
+import type { QUESTION_TABS } from "@quiz/domain";
 
 import { api } from "../api";
 import { useT } from "../i18n";
@@ -148,7 +149,7 @@ function useQuestionCrumbs(origin: Origin | null, poolId: string | undefined, po
  *   the same place.
  */
 
-type Tab = "edit" | "try" | "versions";
+type Tab = (typeof QUESTION_TABS)[number];
 
 export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Route) => void }) {
   const t = useT();

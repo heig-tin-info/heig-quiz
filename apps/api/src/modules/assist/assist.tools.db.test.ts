@@ -243,7 +243,8 @@ describe("the model's tools", () => {
     script = callsTool("list_courses", {});
     expect((await ask(teacher, "Mes cours ?")).statusCode).toBe(200);
     const names = seen[0]!.tools.map((t) => t.name);
-    expect(names).toEqual(["read_guide", ...ASSIST_DATA_TOOLS]);
+    // The UI tools (ADR-080 P2b) run nothing on the server: `assist.ui.db.test.ts`.
+    expect(names).toEqual(["read_guide", ...ASSIST_DATA_TOOLS, "open_screen", "run_screen_command"]);
     expect(names).toEqual([
       "read_guide",
       "list_courses",
@@ -259,6 +260,8 @@ describe("the model's tools", () => {
       "get_evaluation",
       "list_templates",
       "get_classroom_results",
+      "open_screen",
+      "run_screen_command",
     ]);
     // Every MCP write is out of reach, whatever its name; the results reader is not in the MCP catalogue.
     const writes = TOOLS.filter((t) => t.annotations.readOnlyHint !== true).map((t) => t.name);

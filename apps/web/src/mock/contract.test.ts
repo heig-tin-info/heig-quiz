@@ -34,6 +34,7 @@ import {
   AssistAvailability,
   AssistConversation,
   AssistConversationSummary,
+  AssistReply,
   ReviewList,
   LlmSettings,
   LlmUsage,
@@ -956,5 +957,22 @@ describe("the mock's gradebook (M5-04)", () => {
     expect(t.archived).toBe(true);
     const refused = await send(`/app/api/classrooms/${ARCHIVED_ROOM}/gradebook`, "PATCH", { meanPublished: true });
     expect([refused.status, refusal(refused.body)]).toEqual([409, "classroom_archived"]);
+  });
+});
+
+describe("the mock's assistant drives the interface (ADR-080 P2b)", () => {
+  it("answers 'show me the questions of the pool …' with the pool to open, searched", async () => {
+    const res = await fetch("/app/api/assist/ask", {
+      method: "POST",
+      body: JSON.stringify({
+        message: "Montre-moi les questions de la banque Programmation C, seulement tag:pointeurs",
+        context: { route: "/", helpTopic: null, locale: "fr" },
+      }),
+    });
+    expect(res.status).toBe(200);
+    const reply = (await res.json()) as AssistReply;
+    expect(issuesOf(AssistReply, reply)).toEqual([]);
+    expect(reply.actions).toEqual([{ kind: "open_screen", screen: "pool", ids: { id: "p1" }, params: { q: "tag:pointeurs" } }]);
+    expect(reply.exchange.answer).toContain("**Programmation C**");
   });
 });

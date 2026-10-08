@@ -15,6 +15,7 @@ import {
 import { useEffect, useState } from "react";
 
 import { ClassroomPatch, type ClassroomDetail, type EvaluationSummary } from "@quiz/contracts";
+import type { ClassroomQueryTab } from "@quiz/domain";
 
 import { NewActivity } from "./activities/NewActivity";
 import { api, useMe } from "./api";
@@ -35,7 +36,7 @@ import { useErrorToast, useToast } from "./notify";
 import { ProjectGroup } from "./project/ProjectGroup";
 import { RosterImport } from "./RosterImport";
 import { RosterTable } from "./RosterTable";
-import { useSearchParam, type ClassroomQueryTab, type Navigate, type Route } from "./router";
+import { useSearchParam, type Navigate, type Route } from "./router";
 import { useScreenCommands } from "./screenCommands";
 import {
   Badge,
@@ -260,6 +261,8 @@ export function ClassroomView({
       ? [
           {
             id: "classroom-github-connect",
+            // Opens the connect sheet; connecting is the sheet's own step.
+            effect: "none",
             label: t("github.connectTitle"),
             icon: GithubIcon,
             group: "action",

@@ -12,7 +12,10 @@
  * included (ADR-080 §8 and its P2 amendment). The data tools run under a
  * token of that one question, deleted when it ends. What is stored is the
  * question and the answer, never a tool call nor its result, 30 days an
- * exchange (§6), read by their owner and by the administrators.
+ * exchange (§6), read by their owner and by the administrators. The
+ * answer may carry UI actions (P2b amendment): a screen to open, an
+ * effect-free command to run, checked here and run by the browser; they
+ * are not stored.
  */
 import { randomUUID } from "node:crypto";
 
@@ -35,8 +38,9 @@ import {
   ASSIST_RETENTION_DAYS,
   assistScreen,
   assistSystem,
+  AssistUiTurn,
   readGuide,
-  stubReply,
+  stubTurn,
   type AssistCorpus,
   type AssistRole,
 } from "@quiz/domain";
@@ -47,7 +51,7 @@ import { assistConversations, assistExchanges } from "../../db/schema.js";
 import type { ConverseTurn, LlmGateway, ReadOnlyTool } from "../llm/service.js";
 import { STUB_MODEL } from "../llm/service.js";
 import type { Api } from "../mcp/service.js";
-import { assistDataTools, classroomResults } from "./tools.js";
+import { assistDataTools, assistUiTools, classroomResults, userPools } from "./tools.js";
 
 /** How the assistant answers on this server: the gateway's model, the development stub, or not at all. */
 export type AssistEngine = "model" | "stub" | null;
@@ -232,24 +236,30 @@ export async function ask(
   ]);
   history.push({ role: "user", text: question.message });
 
-  const { text, model } = await asTheTeacher(deps, asker.id, now, (api) =>
-    deps.engine === "model"
-      ? deps.gateway.converse({
-          purpose: "assist",
-          userId: asker.id,
-          system: { stable: assistSystem(corpus, role), volatile: assistScreen(corpus, role, question.context) },
-          history,
-          tools: [readGuideTool(corpus, role, question.context.locale), ...assistDataTools(api)],
-          maxTokens: ASSIST_MAX_TOKENS,
-          maxSteps: ASSIST_MAX_STEPS,
-          effort: "low",
-          share: ASSIST_CAP_SHARE,
-        })
-      : stubReply(corpus, role, question.message, question.context, (id) => classroomResults(api, id)).then((t) => ({
-          text: t,
-          model: STUB_MODEL,
-        })),
-  );
+  // The UI actions of this answer (ADR-080 P2b): checked here, run by the browser, never stored.
+  const turn = new AssistUiTurn(role, question.context.commands);
+  const { text, model } = await asTheTeacher(deps, asker.id, now, async (api) => {
+    if (deps.engine === "model") {
+      return deps.gateway.converse({
+        purpose: "assist",
+        userId: asker.id,
+        system: { stable: assistSystem(corpus, role), volatile: assistScreen(corpus, role, question.context) },
+        history,
+        tools: [readGuideTool(corpus, role, question.context.locale), ...assistDataTools(api), ...assistUiTools(turn)],
+        maxTokens: ASSIST_MAX_TOKENS,
+        maxSteps: ASSIST_MAX_STEPS,
+        effort: "low",
+        share: ASSIST_CAP_SHARE,
+      });
+    }
+    const reply = await stubTurn(corpus, role, question.message, question.context, {
+      results: (id) => classroomResults(api, id),
+      pools: () => userPools(api),
+    });
+    // The stub's actions (it only opens a screen) pass the same check as a model's.
+    for (const action of reply.actions) if (action.kind === "open_screen") turn.open(action);
+    return { text: reply.text, model: STUB_MODEL };
+  });
 
   return db.transaction(async (tx) => {
     const conversationId = existing?.id ?? randomUUID();
@@ -278,7 +288,7 @@ export async function ask(
         corpusVersion: corpus.version,
       })
       .returning();
-    return { conversationId, exchange: toExchange(exchange!) };
+    return { conversationId, exchange: toExchange(exchange!), actions: turn.actions };
   });
 }
 

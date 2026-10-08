@@ -19,7 +19,7 @@
  */
 import { z } from "zod";
 
-import { assistResults, capToolResult, type AssistResults, type ResultsSource } from "@quiz/domain";
+import { assistResults, capToolResult, type AssistResults, type AssistUiTurn, type ResultsSource } from "@quiz/domain";
 
 import type { ReadOnlyTool } from "../llm/service.js";
 import { inputJsonSchema, runTool, ToolRefusal, toolByName, type Api, type Tool, type ToolFailure } from "../mcp/service.js";
@@ -122,6 +122,58 @@ function assistTool(tool: Tool, description: string, api: Api): ReadOnlyTool {
 /** The final results of a classroom, read by the results reader; an `Error` in the model's words when refused. */
 export async function classroomResults(api: Api, classroomId: string): Promise<AssistResults> {
   return (await call(api, resultsReader, { classroomId })) as AssistResults;
+}
+
+/** The pools the user reaches, for the stub's "show me the pool …" (ADR-080 P2b). */
+export async function userPools(api: Api): Promise<{ id: string; name: string }[]> {
+  return (await call(api, toolByName.get("list_pools")!, {})) as { id: string; name: string }[];
+}
+
+/**
+ * The two UI tools (ADR-080 P2b): the server runs NOTHING for them. Each
+ * call is checked against the screen catalogue or the screen's effect-free
+ * commands and recorded in `turn` (`AssistUiTurn` of `@quiz/domain`), whose
+ * actions go back to the browser with the answer; the model reads a short
+ * "done by the browser", or the refusal. Stable definitions: the catalogue
+ * is in the cached system prompt, the commands in the screen part.
+ */
+export function assistUiTools(turn: AssistUiTurn): ReadOnlyTool[] {
+  return [
+    {
+      name: "open_screen",
+      description:
+        "Opens one of the app's screens in the user's browser, after your answer: `screen` is a screen of the list " +
+        "in the system prompt, `ids` its ids (from your tools), `params` its optional parameters. At most one per answer.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          screen: { type: "string", description: "A screen of the list, such as pool or classroom." },
+          ids: { type: "object", description: "The screen's ids, such as { \"id\": \"<pool id>\" }.", additionalProperties: { type: "string" } },
+          params: {
+            type: "object",
+            description: "Optional: the screen's parameters, such as { \"q\": \"tag:printf\" } or { \"tab\": \"roster\" }.",
+            additionalProperties: { type: "string" },
+          },
+        },
+        required: ["screen"],
+        additionalProperties: false,
+      },
+      run: (input) => turn.open(input),
+    },
+    {
+      name: "run_screen_command",
+      description:
+        "Runs one of the commands the current screen lists (they open, show or select; none changes anything), in " +
+        "the user's browser after your answer. `id` is the command's id.",
+      inputSchema: {
+        type: "object",
+        properties: { id: { type: "string", description: "A command id the current screen lists." } },
+        required: ["id"],
+        additionalProperties: false,
+      },
+      run: (input) => turn.run(input),
+    },
+  ];
 }
 
 /** The assistant's data tools over `api`, which carries the question's token; reads only. */

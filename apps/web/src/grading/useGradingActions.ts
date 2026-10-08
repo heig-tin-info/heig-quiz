@@ -98,6 +98,7 @@ export function useGradingActions({
   useScreenCommands([
     {
       id: "grading:results",
+      effect: "none",
       label: t("palette.openResults"),
       icon: BarChart3,
       group: "navigate",
@@ -105,6 +106,7 @@ export function useGradingActions({
     },
     {
       id: "grading:run",
+      effect: "write",
       label: t("grading.run"),
       icon: CheckCheck,
       group: "action",
@@ -114,6 +116,7 @@ export function useGradingActions({
       ? [
           {
             id: "grading:regrade",
+            effect: "write" as const,
             label: t("grading.regrade"),
             icon: RefreshCcw,
             group: "action" as const,

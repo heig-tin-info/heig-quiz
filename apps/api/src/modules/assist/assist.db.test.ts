@@ -237,7 +237,7 @@ describe("the model, through the gateway", () => {
     expect(req.system.volatile).toContain("Route: /pools/:id");
     expect(req.system.volatile).toContain("help/pool");
     expect(req.history.at(-1)).toEqual({ role: "user", text: "À quoi sert l'option Grouper ?" });
-    expect(req.tools.map((t) => t.name)).toEqual(["read_guide", ...ASSIST_DATA_TOOLS]);
+    expect(req.tools.map((t) => t.name)).toEqual(["read_guide", ...ASSIST_DATA_TOOLS, "open_screen", "run_screen_command"]);
     expect(req.maxSteps).toBe(ASSIST_MAX_STEPS);
     expect(JSON.stringify(req)).not.toContain(teacher.id);
     expect(JSON.stringify(req)).not.toContain("@heig.test");
