@@ -26,6 +26,7 @@ nav = [
     { "Running an evaluation" = "guide/live.md" },
     { "Grading and results" = "guide/grading.md" },
     { "Live polls" = "guide/polls.md" },
+    { "Teaching recipes" = "guide/recipes.md" },
     { "Connecting GitHub" = "guide/github.md" },
     { "Projects" = "guide/projects.md" },
     { "Groups" = "guide/groups.md" },

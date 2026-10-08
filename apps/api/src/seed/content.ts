@@ -664,6 +664,47 @@ const C_POOL: PoolSpec = {
       },
     },
     {
+      // A Parsons problem (docs/guide/recipes.md): `categorize` with "Order
+      // matters", one column per block of code, and wrong lines as
+      // distractors. Ids are hand-written and opaque, as above.
+      internalName: "prg1-parsons-echanger",
+      type: "categorize",
+      category: POINTERS,
+      difficulty: 2,
+      tags: ["pointeurs", "fonctions"],
+      explanation:
+        "`echanger` reçoit des adresses : l'appel passe `&x` et `&y`, et la fonction lit " +
+        "et écrit les valeurs par `*a` et `*b`, avec une variable temporaire. `echanger(x, y)` " +
+        "passerait des copies des valeurs, et `int tmp = a;` copierait une adresse dans un " +
+        "entier. Le programme affiche `2 1`.",
+      config: {
+        configVersion: 1,
+        prompt:
+          "La fonction `void echanger(int *a, int *b)` échange les deux entiers dont elle " +
+          "reçoit les adresses. Remettez dans l'ordre les lignes de son corps, puis celles du " +
+          "corps de `main`, qui l'appelle et affiche `2 1`. Deux lignes sont fausses : " +
+          "laissez-les de côté.",
+        columns: [
+          { id: "w4j9ta2e", label: "Corps de echanger", cards: ["r2x7ma4q", "g5c1wy9t", "n6e4pz2h"] },
+          { id: "e7p3nq8v", label: "Corps de main", cards: ["s3h8ov1x", "y1d6lc7m", "o4t9re3j"] },
+        ],
+        cards: [
+          { id: "r2x7ma4q", text: "`int tmp = *a;`" },
+          { id: "g5c1wy9t", text: "`*a = *b;`" },
+          { id: "n6e4pz2h", text: "`*b = tmp;`" },
+          { id: "s3h8ov1x", text: "`int x = 1, y = 2;`" },
+          { id: "y1d6lc7m", text: "`echanger(&x, &y);`" },
+          { id: "o4t9re3j", text: "`printf(\"%d %d\\n\", x, y);`" },
+          { id: "k7a5gm0w", text: "`echanger(x, y);`" },
+          { id: "z0q8vi6d", text: "`int tmp = a;`" },
+        ],
+        ordered: true,
+        shuffleCards: true,
+        shuffleColumns: false,
+        policy: "inherit",
+      },
+    },
+    {
       internalName: "prg1-organigramme-somme",
       type: "diagram",
       category: TYPES,
