@@ -931,20 +931,24 @@ live in `ui/state.ts`, each written once.
   12 px muted facts. The card is ONE button (the door) with the overflow menu
   beside it, never inside it, and the cards of a row are a flex column each
   so the "Updated …" strip lands at the same height on all of them. The icon
-  is a lucide NAME stored on the pool (`src/pool/poolIcons.ts` holds the
-  curated shelf of about thirty school and technical subjects) and drawn by
+  is a NAME stored on the pool — lucide's, or one of the languages, tools
+  and engineering glyphs lucide lacks, drawn on its grid in
+  `src/pool/customIcons.ts` (`src/pool/poolIcons.ts` holds the curated
+  shelf, about 120 icons in twelve domain groups) — and drawn by
   `PoolIcon.tsx`, which takes two paths: a STATIC map for the curated names,
   because those are the ones on every card and they must be there in the
   first frame, and lucide's `DynamicIcon`, loaded lazily, for a pool wearing
   one of the other 1500. The split is measured, not a preference —
   `DynamicIcon` alone put 250 kB (62 kB gzipped) of lazy-import map inside
   the pools page chunk and rendered nothing until an `import()` resolved,
-  where thirty real imports cost about 3 kB and paint at once. Visibility
+  where the shelf's real imports cost about 15 kB gzipped and paint at once. Visibility
   is a `Badge`: zinc for `private` and `shared with n`, amber for `public` —
   the one state where a stranger reads your questions is the one worth a
   second glance, and neither may take the accent, which belongs to "New pool".
-- Icon picker: one dialog, two steps — the curated shelf, then the whole
-  lucide catalogue behind a search box (`fuzzyFilter`, 120 results drawn,
+- Icon picker: one dialog, two steps — the curated shelf, its groups under
+  12 px uppercase `fg-faint` headings in a body that scrolls under the title
+  and the footer, then the whole lucide catalogue (and the custom icons,
+  first, also found by their keywords: `octocat`) behind a search box (`fuzzyFilter`, 120 results drawn,
   scrolled), which is a `lazy()` module of its own so the catalogue is
   downloaded by the teacher who asks for it and by nobody else. Not a second
   window: "more" is the same decision seen wider.

@@ -6,11 +6,13 @@ import { useT } from "../i18n";
 import { Button, Modal, Spinner } from "../ui";
 import { IconTile } from "./IconTile";
 import { PoolColorSwatches } from "./PoolColorSwatches";
-import { POOL_ICONS } from "./poolIcons";
+import { POOL_ICON_GROUPS } from "./poolIcons";
 
 /**
  * Picking the icon of a pool, in ONE dialog with two steps: the curated shelf
- * (`poolIcons.ts`), and the whole lucide catalogue behind a search box.
+ * (`poolIcons.ts`), one headed group per domain under the default tile, and
+ * the whole lucide catalogue behind a search box. The body scrolls under the
+ * title and the footer: a hundred tiles are taller than a laptop screen.
  *
  * Two steps and not two windows: the second step replaces the body of the
  * same dialog, because "more" is the same decision seen wider, not a new one.
@@ -57,6 +59,7 @@ export function PoolIconPicker({
     <Modal
       title={all ? t("pools.icon.all") : t("pools.icon.title")}
       subtitle={all ? t("pools.icon.allHint") : t("pools.icon.hint")}
+      scroll
       onClose={onClose}
       footer={
         all ? (
@@ -77,25 +80,39 @@ export function PoolIconPicker({
       ) : (
         <div className="space-y-5">
           <PoolColorSwatches value={color} onChange={onColor} />
-          <div className="grid grid-cols-5 gap-2 sm:grid-cols-8">
-            <IconTile
-              label={t("pools.icon.default")}
-              icon={null}
-              color={color}
-              selected={value === null}
-              onPick={() => onPick(null)}
-            />
-            {POOL_ICONS.map((name) => (
-              <IconTile
-                key={name}
-                label={name}
-                icon={name}
-                color={color}
-                selected={value === name}
-                onPick={() => onPick(name)}
-              />
-            ))}
-          </div>
+          <IconTile
+            label={t("pools.icon.default")}
+            icon={null}
+            color={color}
+            selected={value === null}
+            onPick={() => onPick(null)}
+          />
+          {POOL_ICON_GROUPS.map((group) => (
+            <section
+              key={group.id}
+              aria-labelledby={`pool-icons-${group.id}`}
+              className="space-y-2"
+            >
+              <h3
+                id={`pool-icons-${group.id}`}
+                className="text-xs font-semibold uppercase tracking-wide text-fg-faint"
+              >
+                {t(`pools.icon.group.${group.id}`)}
+              </h3>
+              <div className="grid grid-cols-5 gap-2 sm:grid-cols-8">
+                {group.icons.map((name) => (
+                  <IconTile
+                    key={name}
+                    label={name}
+                    icon={name}
+                    color={color}
+                    selected={value === name}
+                    onPick={() => onPick(name)}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
       )}
     </Modal>

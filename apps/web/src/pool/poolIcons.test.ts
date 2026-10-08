@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest";
 
 import { searchIcons } from "./IconCatalogue";
 import { POOL_ICON_COMPONENTS } from "./PoolIcon";
-import { DEFAULT_POOL_ICON, ICON_SEARCH_LIMIT, POOL_ICONS } from "./poolIcons";
+import { CUSTOM_ICON_KEYWORDS, CUSTOM_ICON_NAMES } from "./customIcons";
+import { DEFAULT_POOL_ICON, ICON_SEARCH_LIMIT, POOL_ICON_GROUPS, POOL_ICONS } from "./poolIcons";
 
 /*
  * The curated shelf is a list of STRINGS drawn by a static map, so nothing
@@ -15,8 +16,8 @@ import { DEFAULT_POOL_ICON, ICON_SEARCH_LIMIT, POOL_ICONS } from "./poolIcons";
  */
 
 describe("poolIcons", () => {
-  it("offers only icons this lucide actually ships", () => {
-    const catalogue = new Set<string>(iconNames);
+  it("offers only icons this lucide ships or Quiz draws", () => {
+    const catalogue = new Set<string>([...iconNames, ...CUSTOM_ICON_NAMES]);
     expect([...POOL_ICONS, DEFAULT_POOL_ICON].filter((n) => !catalogue.has(n))).toEqual([]);
   });
 
@@ -30,9 +31,18 @@ describe("poolIcons", () => {
     expect(POOL_ICONS).not.toContain(DEFAULT_POOL_ICON);
   });
 
-  it("stays a shelf, not a catalogue", () => {
-    expect(POOL_ICONS.length).toBeGreaterThanOrEqual(24);
-    expect(POOL_ICONS.length).toBeLessThanOrEqual(40);
+  it("puts every custom icon on the shelf, under a name lucide does not use", () => {
+    const lucide = new Set<string>([...iconNames, ...Object.keys(aliases)]);
+    expect(CUSTOM_ICON_NAMES.filter((n) => lucide.has(n))).toEqual([]);
+    expect(CUSTOM_ICON_NAMES.filter((n) => !POOL_ICONS.includes(n))).toEqual([]);
+    expect(
+      Object.keys(CUSTOM_ICON_KEYWORDS).filter((n) => !CUSTOM_ICON_NAMES.includes(n as never)),
+    ).toEqual([]);
+  });
+
+  it("stays a shelf of groups a teacher scans, not a catalogue", () => {
+    expect(new Set(POOL_ICON_GROUPS.map((g) => g.id)).size).toBe(POOL_ICON_GROUPS.length);
+    for (const group of POOL_ICON_GROUPS) expect(group.icons.length).toBeLessThanOrEqual(24);
   });
 
   it("searches the whole catalogue and caps what it returns", () => {
@@ -40,6 +50,12 @@ describe("poolIcons", () => {
     expect(searchIcons("")).toHaveLength(ICON_SEARCH_LIMIT);
     expect(searchIcons("zzzqqq")).toEqual([]);
     expect(searchIcons("a", 5)).toHaveLength(5);
+  });
+
+  it("finds a custom icon by its name and by its keywords", () => {
+    expect(searchIcons("python")[0]).toBe("python");
+    expect(searchIcons("octocat")).toContain("github");
+    expect(searchIcons("ladder")).toContain("plc");
   });
 });
 
