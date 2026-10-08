@@ -219,16 +219,34 @@ async function filesContaining(dir: string, needle: string): Promise<string[]> {
 }
 
 describe("the token during a relay (ADR-078 §3)", () => {
-  /** A local "forge" that refuses every credential (401), and records the headers it was sent. */
-  async function refusingForge() {
+  /** A request the local forge holds open: git is blocked on it, alive, until `release()`. */
+  type HeldRequest = { headers: IncomingHttpHeaders; release: () => void };
+
+  /**
+   * A local "forge" that refuses every credential (401), and records the headers it was sent.
+   * With `hold`, each request stays open until the test calls `release()` on what
+   * `nextHeld()` hands it: the push is then known to be in flight while the test looks.
+   */
+  async function refusingForge(opts: { hold?: boolean } = {}) {
     const seen: IncomingHttpHeaders[] = [];
+    const queued: HeldRequest[] = [];
+    const waiters: ((held: HeldRequest) => void)[] = [];
     const server: Server = createServer((req, res) => {
       seen.push(req.headers);
-      setTimeout(() => res.writeHead(401, { "www-authenticate": 'Basic realm="x"' }).end(), 300);
+      const refuse = () => void res.writeHead(401, { "www-authenticate": 'Basic realm="x"' }).end();
+      if (!opts.hold) return refuse();
+      const held: HeldRequest = { headers: req.headers, release: refuse };
+      const waiter = waiters.shift();
+      if (waiter) waiter(held);
+      else queued.push(held);
     });
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
     const port = (server.address() as { port: number }).port;
-    return { seen, server, port, url: `http://127.0.0.1:${port}/org/lab-kid.git` };
+    const nextHeld = () => {
+      const held = queued.shift();
+      return held ? Promise.resolve(held) : new Promise<HeldRequest>((r) => waiters.push(r));
+    };
+    return { seen, server, port, nextHeld, url: `http://127.0.0.1:${port}/org/lab-kid.git` };
   }
 
   it("is in no argv, file, SQLite row, last_error nor log line; sent to the push URL's origin only; dropped when refused", async () => {
@@ -237,7 +255,7 @@ describe("the token during a relay (ADR-078 §3)", () => {
     const s = await scenario("portal.sqlite");
     const logs: string[] = [];
     const log = { info: (o: object, m: string) => logs.push(`${m} ${JSON.stringify(o)}`), warn: (o: object, m: string) => logs.push(`${m} ${JSON.stringify(o)}`) };
-    const local = await refusingForge();
+    const local = await refusingForge({ hold: true });
     const invalidated: string[] = [];
     const settled: string[] = [];
     // The quiz forge's header shape, on a local forge (GitHub is never reached in a test).
@@ -253,17 +271,29 @@ describe("the token during a relay (ADR-078 §3)", () => {
     await recordPush({ store: s.store }, SESSION, [{ ref: "refs/heads/main", oldSha: null, sha: s.src.sha }]);
     const worker = createRelayWorker({ store: s.store, forge, targets: stagingTargets(s.volumesRoot, s.repoOf), backoffMs: () => 0, log });
     const inFlight = worker.runOnce();
+    const finished = inFlight.then(() => null);
+    // Each request git sends is held open by the forge; while it is, the push
+    // process (and its remote helper) is alive, and every cmdline is read.
     const argv: string[] = [];
-    let sawPush = false;
-    for (let i = 0; i < 10; i += 1) {
-      await new Promise((r) => setTimeout(r, 50));
+    let sampled = 0;
+    let sampledWithPush = 0;
+    let sampledWithHeader = 0;
+    for (;;) {
+      const held = await Promise.race([local.nextHeld(), finished]);
+      if (!held) break;
+      sampled += 1;
       argv.push(...(await cmdlinesContaining(SECRET_TOKEN)), ...(await cmdlinesContaining(header.split(" ")[1]!)));
-      if ((await cmdlinesContaining(`127.0.0.1:${local.port}`)).length > 0) sawPush = true;
+      if ((await cmdlinesContaining(`127.0.0.1:${local.port}`)).length > 0) sampledWithPush += 1;
+      if (held.headers.authorization === header) sampledWithHeader += 1;
+      held.release();
     }
     expect((await inFlight).retried).toBe(1);
     local.server.close();
 
-    expect(sawPush).toBe(true);
+    // Sampled while the push, carrying the credential, was in flight — every time.
+    expect(sampled).toBeGreaterThan(0);
+    expect(sampledWithPush).toBe(sampled);
+    expect(sampledWithHeader).toBeGreaterThan(0);
     expect(argv).toEqual([]);
     // The header reached the push URL's origin, as git's basic credential.
     expect(local.seen.some((h) => h.authorization === header)).toBe(true);
