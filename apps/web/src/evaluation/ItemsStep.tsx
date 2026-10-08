@@ -224,7 +224,7 @@ function ItemGap({
             onClick={action.onClick}
             aria-label={action.ariaLabel}
             className={cx(
-              "flex items-center gap-1 rounded-full border border-line-strong bg-surface px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-fg-muted opacity-0 transition-opacity duration-150 hover:border-accent hover:text-accent focus-visible:opacity-100 pointer-coarse:opacity-100",
+              "flex items-center gap-1 rounded-full border border-line-strong bg-surface px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-fg-muted opacity-0 transition-opacity duration-150 hover:border-accent hover:text-accent focus-visible:opacity-100 hover-reveal",
               reveal,
             )}
           >

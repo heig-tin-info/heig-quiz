@@ -101,7 +101,7 @@ export function JournalStrip({
 
   return (
     <nav aria-label={t("journal.nav")}>
-      <ul ref={strip} className="flex gap-1 overflow-x-auto overflow-y-hidden p-0.5" style={fade}>
+      <ul ref={strip} className="flex gap-1 overflow-x-auto overflow-y-hidden p-0.5 pointer-coarse:py-2" style={fade}>
         {homePath !== null ? (
           <Entry selected={current === homePath}>
             {link(homePath, t("journal.home"), current === homePath, {
@@ -148,10 +148,14 @@ export function JournalStrip({
   );
 }
 
-/** One control of the strip, 28 px tall at 13 px; inside the chip it takes the chip's colours. */
+/**
+ * One control of the strip, 28 px tall at 13 px; inside the chip it takes the
+ * chip's colours. A finger gets 44 px (`touch-hit`), inside the strip's
+ * padding, which grows under a coarse pointer so the scroller does not clip it.
+ */
 const entry = (selected: boolean) =>
   cx(
-    "inline-flex h-7 items-center gap-1.5 rounded-field px-2.5 text-[13px] whitespace-nowrap transition-colors",
+    "touch-hit inline-flex h-7 items-center gap-1.5 rounded-field px-2.5 text-[13px] whitespace-nowrap transition-colors",
     !selected && "text-fg-muted hover:bg-surface-2 hover:text-fg",
   );
 /** A long title is cut, never wrapped: the full one is in the entry's `title`. */

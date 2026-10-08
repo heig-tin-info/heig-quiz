@@ -421,9 +421,9 @@ function PoolRow({
     <tr
       {...pressable(() => navigate({ view: "pool", id: pool.id }), "row")}
       onClick={() => navigate({ view: "pool", id: pool.id })}
-      className={cx(T.row, T.rowHover, "cursor-pointer")}
+      className={cx(T.row, T.rowHover, T.stack.row, "cursor-pointer")}
     >
-      <td className={T.td}>
+      <td className={cx(T.td, T.stack.main)}>
         <span className="flex min-w-0 items-center gap-2.5">
           <PoolIcon
             icon={pool.icon}
@@ -433,9 +433,13 @@ function PoolRow({
           <span className="min-w-0 truncate font-semibold">{pool.name}</span>
         </span>
       </td>
-      <td className={`${T.td} text-right tabular-nums`}>{pool.questionCount}</td>
+      {/* On a card the count stands alone on its line, so it says what it counts. */}
+      <td className={cx(T.td, T.stack.sub, "text-right tabular-nums @max-md:pl-9.5 @max-md:text-fg-muted")}>
+        <span className="@md:hidden">{t("pools.questions", { n: pool.questionCount })}</span>
+        <span className="hidden @md:inline">{pool.questionCount}</span>
+      </td>
       <td className={`${T.td} ${T.colMid} text-right tabular-nums`}>{pool.usedCount}</td>
-      <td className={T.td}>
+      <td className={cx(T.td, T.stack.sub)}>
         <VisibilityBadge pool={pool} />
       </td>
       <td className={`${T.td} ${T.colMid}`}>
@@ -454,7 +458,7 @@ function PoolRow({
       <td className={`${T.td} ${T.colHigh} whitespace-nowrap text-fg-muted`}>
         <RelativeTime iso={pool.updatedAt} />
       </td>
-      <td className={`${T.td} ${T.stickyEnd} w-10 text-right`}>
+      <td className={cx(T.td, T.stickyEnd, T.stack.end, "w-10 text-right")}>
         {items.length > 0 ? <Menu label={t("common.actions")} items={items} /> : null}
         {dialogs}
       </td>
@@ -514,10 +518,10 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
     null,
   );
   const columns: Column<PoolSort>[] = [
-    { key: "name", label: t("pools.name") },
-    { key: "questions", label: t("pools.questionsColumn"), right: true },
+    { key: "name", label: t("pools.name"), stack: "main" },
+    { key: "questions", label: t("pools.questionsColumn"), right: true, stack: "sub" },
     { key: "used", label: t("pools.usedColumn"), right: true, className: T.colMid },
-    { key: "visibility", label: t("pools.visibility") },
+    { key: "visibility", label: t("pools.visibility"), stack: "sub" },
     { key: "owner", label: t("pools.owner"), className: T.colMid },
     { key: "role", label: t("pools.role"), className: T.colLow },
     { key: "updated", label: t("pools.updatedColumn"), className: T.colHigh },
@@ -527,6 +531,7 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
       sortable: false,
       srOnly: true,
       className: "w-10",
+      stack: "end",
     },
   ];
 
@@ -589,7 +594,7 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
       ) : view === "list" ? (
         <Card className="overflow-hidden">
           <div className={cx(T.container, "overflow-x-auto")}>
-            <table className={T.table}>
+            <table className={cx(T.table, T.stack.table)}>
               <TableHead columns={columns} sort={sort} onToggle={toggle} />
               <tbody>
                 {sorted.map((pool) => (

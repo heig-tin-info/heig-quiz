@@ -195,7 +195,7 @@ function CategoryName(props: RowProps) {
       <span className="truncate">{node.name}</span>
       <Pencil
         aria-hidden
-        className="size-3.5 shrink-0 text-fg-faint opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+        className="hover-reveal size-3.5 shrink-0 text-fg-faint opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
       />
     </button>
   );

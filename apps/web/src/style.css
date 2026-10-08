@@ -393,6 +393,55 @@ html.dark {
 .sheet-panel {
   animation: sheet-in 0.26s var(--ease-out-emphasized);
 }
+/* Touch (DESIGN.md › Touch). A finger needs a 44 px target: `touch-hit`
+   widens the HIT AREA of a small control to 44 × 44 around its centre with
+   an invisible `::before`, and leaves its drawn size alone. Only under a
+   coarse pointer, so a desktop is untouched. In the components layer, so a
+   control positioned by a utility (`absolute`) keeps its position. */
+@layer components {
+  @media (pointer: coarse) {
+    .touch-hit {
+      position: relative;
+    }
+    .touch-hit::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      transform: translate(-50%, -50%);
+    }
+  }
+}
+/* What a hover reveals (row actions, a pencil, a sort arrow) is simply on
+   where there is no hover to give: a control a finger cannot reveal is a
+   control a finger does not have. Unlayered, so it beats `opacity-0` and
+   `invisible`. */
+@media (hover: none) {
+  .hover-reveal {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+/* Under `lg` the sheet is a bottom sheet (`Sheet` in ui/layers.tsx): it rises
+   from the bottom edge instead of sliding in from the right. */
+@keyframes sheet-up {
+  from {
+    transform: translateY(48px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@variant max-lg {
+  .sheet-panel {
+    animation-name: sheet-up;
+  }
+}
 .menu-panel {
   transform-origin: top right;
   transform: translateX(var(--menu-x, 0));

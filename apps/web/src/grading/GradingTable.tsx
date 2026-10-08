@@ -338,7 +338,7 @@ function AnswerRow({
             "inline-flex items-center gap-1",
             // Hidden, not removed: the column keeps its width, so a row
             // hovered never pushes its neighbours sideways.
-            action === null && !current && "invisible group-hover:visible group-focus-within:visible",
+            action === null && !current && "hover-reveal invisible group-hover:visible group-focus-within:visible",
           )}
           onClick={(e) => e.stopPropagation()}
         >

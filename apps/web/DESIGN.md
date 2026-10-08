@@ -700,8 +700,13 @@ live in `ui/state.ts`, each written once.
 - Help of a whole page (`PageHeader`'s `help`, `PageHelpButton`): a round
   34 px button outlined like a secondary one, in the header's action row,
   after the page's actions and before the overflow "…" — never beside the
-  h1. "?" and "…" wrap together on a phone, never apart. The title is renamed in place, carries badges and wraps on a phone; a
-  "?" riding it never sat right, the action row does not move.
+  h1. "?" and "…" stay together. The title is renamed in place, carries
+  badges and wraps; a "?" riding it never sat right, the action row does not
+  move. Under `lg` the header is a two-column grid (#450): the title block on
+  the left, "?" and "…" at its top right, the other actions on a row of their
+  own under both — so once the primary has left for the FAB, the "?" no
+  longer stands alone on a line under the description. From `lg`, one action
+  row as before.
 - Help "?" (`HelpIcon`): **16 px**, `fg-faint` at rest, accent on hover, the
   same beside a 16 px section heading, a dialog title and a 13 px field
   label — it is a mark next to a word, not an action of its own, and one size
@@ -782,6 +787,15 @@ live in `ui/state.ts`, each written once.
   itself (never the page) to the selected tab, so a route that opens on a
   fourth tab shows it.
 - Sheet: right drawer, 560 px, for every form longer than three fields.
+  Under `lg` the same `Sheet` is a BOTTOM sheet (#450): full width, rising
+  from the bottom edge (`sheet-up`, 48 px with the panel easing), as tall as
+  its content up to the window less 2.5 rem of the page behind it, the top
+  corners `rounded-sheet`, a hairline on top, `shadow-overlay`, and the iOS
+  home-indicator inset kept clear under its footer. Header and footer stay
+  put and the body scrolls, as in the drawer; Escape, the X, the focus trap
+  and "never the backdrop" are unchanged. No drag handle: the sheet does not
+  close by a swipe, and a handle would promise one. One change in the
+  primitive — no screen chooses its direction.
   Dialog: centered, ≤ 480 px, for confirmations and one-field forms.
   A sheet never opens another sheet; a dialog may open over a sheet.
   A sheet may dock ONE reading pane on its left edge (`Sheet aside`), part
@@ -1516,6 +1530,43 @@ Applied today: the pool table (version, updated, tags), the roster (last
 sign-in, accommodation, e-mail), the evaluation list (attempts, points,
 questions) and the grade table (duration, e-mail).
 
+`T.container` is also `relative`. An `sr-only` label is `absolute`, and with
+no positioned ancestor inside the scroller it was placed against the page,
+past the scroller's clip: on a phone the pool and grading tables widened the
+whole page by their hidden labels, and the page scrolled sideways.
+
+### Row cards (phone)
+
+A teacher's list that cannot shed enough columns to fit a phone — the pool's
+questions, the pools, the courses in list view — turns into ROW CARDS under a
+28 rem container (`@max-md`), with `T.stack` (`ui/table.tsx`). The `<table>`
+takes `T.stack.table`, every row `T.stack.row`, and each visible cell its
+role:
+
+| Role | Where it goes on the card |
+| --- | --- |
+| `lead` | the tick box, first on the first line |
+| `main` | the identity, the rest of the first line (it truncates) |
+| `end` | the row's actions, last on the first line — always reachable |
+| `sub` | the status and the one number that matter, on a second line, 12 px |
+
+`subIndent` is the second line's first cell under a row that has a `lead`,
+aligned on the identity. A full-width band (a group label) takes
+`T.stack.band`. The cells the column priority hid stay hidden; a cell that is
+hidden on a narrow desktop but is the card's status may come back with
+`@max-md:block` (the pool's version). The head declares the roles on its
+`Column`s (`stack`), so `TableHead` keeps the select-all box and the main
+sort on the card's head line and drops the `sub` headers. A number that
+stands alone on the second line says what it counts ("11 questions", not
+"11"). From 28 rem the classes do nothing: the desktop table is untouched.
+
+Per table: the pool's questions, the pools and the courses (list view) are
+row cards. The grading table and the gradebook are inherently wide (one
+column per answer part, one per evaluation): they keep the sideways scroll
+INSIDE their card, under a sticky first column (the verdict and the name;
+the student). The roster, the evaluation list and the results' grade table
+already fit 390 px through their priorities.
+
 A table a STUDENT reads on a phone does not scroll sideways: under 32 rem of
 container (`@lg`) its rows collapse into a divided list of small cards — the
 identity bold with kind and date under it, the figure that matters (the
@@ -1540,6 +1591,29 @@ The threshold is not the count, it is the question "would a teacher SCAN these
 or EDIT them?". A list you scan stays a table however many columns it has to
 drop. A list you edit field by field becomes panels as soon as a row needs
 more than one line.
+
+## Touch
+
+A phone has no hover and a finger is not a cursor. Two classes in
+`style.css` hold the rules, so no screen writes its own media query:
+
+- `hover-reveal` goes on whatever a hover reveals (`opacity-0` /
+  `invisible` + `group-hover:`): under `@media (hover: none)` it is simply on.
+  Applied: the grading row's Validate / Adjust, the category's rename pencil,
+  the title's rename pencil, the sort arrow, the gaps of the evaluation's
+  items.
+- `touch-hit` gives a small control a 44 × 44 px HIT AREA around its centre
+  (an invisible `::before`) under `@media (pointer: coarse)`, without
+  changing its drawn size. Built into `IconButton`, `IconLink`, the page's
+  "?" and `Checkbox`; on the journal strip's entries, whose strip grows
+  8 px of padding under a coarse pointer so its scroller does not clip the
+  area. Neighbouring areas may overlap; the later one wins the overlap and
+  each control keeps at least its own disc.
+
+Drag handles stay a pointer affordance: every drag has a menu or button
+twin (the group set's →, the category's "Move to…", the pool's bulk Move).
+
+`screenshots.mjs --touch` renders a scene as a touch screen.
 
 ## The grading table (ADR-044)
 
