@@ -26,6 +26,14 @@ install_slices() {
 	install -m 0644 "$ENGINE_DIR/quiz-runner.slice" "$ENGINE_DIR/codespace.slice" /etc/systemd/system/
 }
 
+# warn_host_nft: a deploy never touches the host firewall; it only says when
+# the checkout's host.nft differs from the applied copy (or none is applied
+# yet). Applying stays manual (nft-apply.sh, deployment.md §3).
+warn_host_nft() {
+	cmp -s "$ENGINE_DIR/host.nft" /etc/quiz-engine/host.nft \
+		|| echo "deploy: warning: infra/engine/host.nft differs from the applied copy: run nft-apply.sh (deployment.md §3)" >&2
+}
+
 # drop_old_sha_tags <repository> <sha to keep>: untags every other 40-hex
 # tag of the repository. An image that keeps another tag (:latest, :prod,
 # :staging) stays; one left with none and unused is deleted. Never a global

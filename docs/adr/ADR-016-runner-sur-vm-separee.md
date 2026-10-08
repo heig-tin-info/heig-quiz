@@ -96,6 +96,10 @@ volumes are read live (a repository may need its `shadow.git`), one
 provider, the app VM's small disk, a key that reads all workspace data, and
 monitoring by hand (not in ADR-055's status). (d) Destination B, restic to
 S3 from the engine VM, before a real class. Procedures: `deployment.md` §3.
+(e) The host's input policy drops by default, in its own table
+`inet host`, never with `flush ruleset` (the codespace and netavark tables
+belong to their owners); it is applied by hand behind a timed rollback,
+never by a deploy.
 
 ## Context
 

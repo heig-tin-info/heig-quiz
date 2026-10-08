@@ -4256,6 +4256,12 @@ serves now (16a), and what waits for the group repositories (16b).
   (forced command, cookie tokens blanked) and `scripts/engine-backup/`
   (`srv`'s daily pull, 14 kept); monitoring deferred, checked by hand.
   Remaining: host nft `input` policy, the restore drill, the acceptance runs.
+- **As delivered (part 3: host nft)** (#613; repository only):
+  `infra/engine/host.nft`, `nft-apply.sh`, `nft-check.sh`; a deploy only
+  warns on drift. `deployment.md` §3, The host firewall. Verified locally
+  in a user namespace (stubbed systemd), shellcheck. Remaining, the
+  owner's: the first apply and confirm on the VM, the restore drill, the
+  acceptance runs.
 
 ### M6-06 — Quiz `codespace` module
 - **Depends on**: M6-03, M3-02.

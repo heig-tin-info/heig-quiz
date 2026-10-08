@@ -318,6 +318,13 @@ The slices). Staging and prod draw on the same slice: with
 process, never a grading run. A real class needs the resize first (§6.2 of
 `docs/merge/06-codespace-seb-infra.md`).
 
+### Host firewall
+
+The VM's input policy (`table inet host`, beside this portal's
+`inet codespace`) and its checks are deployment.md §3, The host firewall.
+A new port the portal must serve is a line in `infra/engine/host.nft`
+first; `CS_INSTANCE=<i> …/infra/net/test.sh` stays the network's test.
+
 ### Backup and restore
 
 Both instances are exported daily by `backup-export.sh` and pulled by `srv`
