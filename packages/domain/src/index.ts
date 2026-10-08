@@ -23,10 +23,22 @@ export {
   type TrigFn,
   type UnaryFn,
 } from "./calculator.js";
-export { displayRpn, initialRpn, levelsRpn, pressRpn, type RpnState } from "./rpn.js";
+export {
+  displayRpn,
+  initialRpn,
+  levelsRpn,
+  pressRpn,
+  type RpnState,
+} from "./rpn.js";
 export * from "./categorizeScore.js";
-export { extractScore, SCORE_ANNOTATION_TITLE, type AnnotationLike, type ScoreParse } from "./ciScore.js";
+export {
+  extractScore,
+  SCORE_ANNOTATION_TITLE,
+  type AnnotationLike,
+  type ScoreParse,
+} from "./ciScore.js";
 export * from "./cloze.js";
+export * from "./concepts.js";
 export * from "./compareOutput.js";
 export * from "./cooldown.js";
 export * from "./correction.js";
@@ -78,7 +90,11 @@ export {
   type Format,
 } from "./parameterNames.js";
 // Which `[[name]]` a draft's texts hold, read without mathjs (ADR-056, addendum of 2026-10-01).
-export { identifiersIn, namesMentioned, referencedNames } from "./parameters/references.js";
+export {
+  identifiersIn,
+  namesMentioned,
+  referencedNames,
+} from "./parameters/references.js";
 export * from "./period.js";
 export * from "./pollOutcome.js";
 export * from "./pollTally.js";
