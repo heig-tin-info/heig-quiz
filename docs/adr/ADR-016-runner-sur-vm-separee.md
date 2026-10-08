@@ -82,34 +82,20 @@ The app VM separates staging by account; this VM cannot, short of a
 staging engine of its own.
 
 **Amended (2026-10-08, M6-05 part 2): capacity and backups of the engine
-VM.** Scope: the addendum's "resized before a real class" and its slices,
-and the backups this VM never had.
-(a) *No resize for now* (owner, 2026-10-08): 2 vCPU, 3.8 GB, while the
-workspace is test-only; a real class still needs the resize first.
-(b) *Two slices* (`infra/engine/quiz-runner.slice`, `codespace.slice`),
-installed by the runner's deploy and by a codespace bootstrap or `prod`
-deploy. `quiz-runner.slice` (CPU and IO weight 1000, `MemoryLow` sized for
-`RUNNER_CONCURRENCY` containers at `RUNNER_MAX_MEMORY_MB` plus the service,
-`MemoryMax` a little above) holds the runner service and its sandbox
-containers; `codespace.slice` (weight 100, `MemoryHigh`/`MemoryMax` what the
-runner's protected memory and the host leave) holds both portals, their
-session containers, the shadow snapshots and the backup export. The
-containers reach their slice through `--cgroup-parent=<slice>`
-(`RUNNER_CGROUP_PARENT`, `CODESPACE_CGROUP_PARENT`, set by the quadlets,
-validated as slice unit names; empty, no flag): an addition to invariant
-12's list, never a substitute for a per-container limit. With 1536 MB
-sessions the codespace slice holds one session; 768 MB while test-only.
-(c) *Backup, destination A as a stopgap:* the engine VM exports, through a
-root forced command (`restrict`, `from=` the app VM), one `zstd` tar of
-each instance's online SQLite `.backup` and its volumes with numeric owners;
-`srv` on the app VM pulls it daily with a user timer and keeps 14 archives.
-No secret travels (the env files stay in the vault, ADR-010). Accepted
-because it costs nothing and the data is test data; its limits are the app
-VM's small disk, a root key whose only power is to read all workspace data,
-and both copies within one provider.
-(d) *Destination B, later:* `restic` to an S3 bucket from the engine VM
-(encrypted, deduplicated, off-provider), decided before a real class.
-Procedures: `docs/development/deployment.md` §3.
+VM.** Scope: the addendum's resize and slices; the backups this VM lacked.
+(a) No resize while the workspace is test-only (owner); a real class needs it.
+(b) Two slices, `quiz-runner.slice` above `codespace.slice` in CPU and IO
+weight, the runner's memory protected, the workspace's capped (values and
+sizing: `infra/engine/*.slice`); containers join theirs through
+`--cgroup-parent`, an addition to invariant 12's list, set by the quadlets.
+(c) Backup, destination A as a stopgap: a root forced command (`restrict`,
+`from=`) streams each instance's SQLite `.backup` and volumes; `srv` on the
+app VM pulls it daily. No credential travels: env files stay in the vault
+(ADR-010), session cookie tokens are blanked in the copy. Accepted limits:
+volumes are read live (a repository may need its `shadow.git`), one
+provider, the app VM's small disk, a key that reads all workspace data, and
+monitoring by hand (not in ADR-055's status). (d) Destination B, restic to
+S3 from the engine VM, before a real class. Procedures: `deployment.md` §3.
 
 ## Context
 

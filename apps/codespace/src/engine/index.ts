@@ -49,6 +49,7 @@ export const INSTANCE_PATTERN = /^[a-z][a-z0-9]{0,15}$/;
 /**
  * `CODESPACE_CGROUP_PARENT`: a systemd slice unit name such as
  * `codespace.slice` — no `/`, no leading `-` — since it enters the argv.
+ * Keep in sync with `SLICE_PATTERN` in apps/runner/src/config.ts.
  */
 export const SLICE_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,200}\.slice$/;
 

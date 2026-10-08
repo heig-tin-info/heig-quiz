@@ -29,7 +29,10 @@ export function defaultSeccompPath(): string {
   return fileURLToPath(new URL("../infra/seccomp/runner.json", import.meta.url));
 }
 
-/** A systemd slice unit name, e.g. `quiz-runner.slice`: no `/`, no leading `-`. */
+/**
+ * A systemd slice unit name, e.g. `quiz-runner.slice`: no `/`, no leading `-`.
+ * Keep in sync with `SLICE_PATTERN` in apps/codespace/src/engine/index.ts.
+ */
 export const SLICE_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,200}\.slice$/;
 
 const EnvSchema = z.object({
@@ -101,7 +104,8 @@ const EnvSchema = z.object({
     .default("")
     .refine((value) => value === "" || SLICE_PATTERN.test(value), {
       message: "a systemd slice unit name ending in .slice, or empty",
-    }),
+    })
+    .transform((value) => value || null),
 
   /**
    * The three ceilings on what ONE request may ask for.
@@ -133,15 +137,10 @@ const EnvSchema = z.object({
   RUNNER_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(600_000).default(120_000),
 });
 
-export type RunnerConfig = Omit<
-  z.infer<typeof EnvSchema>,
-  "PODMAN_SOCKET" | "RUNNER_SECCOMP" | "RUNNER_CGROUP_PARENT"
-> & {
+export type RunnerConfig = Omit<z.infer<typeof EnvSchema>, "PODMAN_SOCKET" | "RUNNER_SECCOMP"> & {
   /** Resolved: the configured socket, the detected one, or `null` for the local CLI. */
   PODMAN_SOCKET: string | null;
   RUNNER_SECCOMP: string;
-  /** `null` when unset: no `--cgroup-parent` flag. */
-  RUNNER_CGROUP_PARENT: string | null;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): RunnerConfig {
@@ -172,7 +171,5 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RunnerConfig {
     ...data,
     RUNNER_TOKEN: token,
     PODMAN_SOCKET: data.PODMAN_REMOTE === "false" ? null : socket,
-    RUNNER_SECCOMP: seccomp,
-    RUNNER_CGROUP_PARENT: data.RUNNER_CGROUP_PARENT === "" ? null : data.RUNNER_CGROUP_PARENT,
-  };
+    RUNNER_SECCOMP: seccomp,  };
 }

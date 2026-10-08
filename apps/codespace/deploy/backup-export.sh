@@ -1,34 +1,16 @@
 #!/usr/bin/env bash
 #
-# The engine VM's backup export (M6-05; ADR-016, M6-05 amendment): the SQLite
-# and the volumes of every portal instance, as ONE zstd-compressed tar on
-# stdout, which the application VM pulls once a day
-# (scripts/engine-backup/pull.sh). Installed by cs_install_host as
-# /usr/local/lib/quiz-codespace/backup-export.sh; root's authorized_keys pins
-# the pulling key to it (deployment.md §3, Backup):
-#   command="/usr/local/lib/quiz-codespace/backup-export.sh",restrict,from="128.140.71.35,2a01:4f8:1c19:1164::1" ssh-ed25519 AAAA… quiz-engine-backup@portal
-# The client's command line is ignored: there is nothing to parse.
-#
-# The archive, for each instance <i> under /srv/quiz-codespace:
-#   <i>/var-backup/codespace.sqlite    an online `.backup`, integrity-checked
-#   <i>/volumes/<assignment>/<user>/{work,staging.git,shadow.git}
-# with numeric owners and extended attributes: the volumes belong to the uid
-# ranges --userns=auto drew. Never in it: /etc/quiz-codespace (the env files
-# and their secrets), the live SQLite file and its -wal, the images.
-#
-# The volumes are read live. A file that changes during the read is taken as
-# it is (tar's exit 1 is accepted, its exit 2 is not): the restore's
-# `git fsck` says whether a repository came back whole, and shadow.git holds
-# the work tree of three minutes earlier.
-#
-# Root, because only root reads every mapped uid's files. In codespace.slice
-# at idle IO priority: it competes with the sessions, never with grading.
-# Needs sqlite3 and zstd (apt install sqlite3 zstd).
+# The engine VM's backup export (M6-05): every portal instance's SQLite and
+# volumes as one zstd tar on stdout, pulled daily by the application VM.
+# root's forced command for the backup key; what it holds, the key line and
+# the restore: docs/development/deployment.md §3, Backup and restore of the
+# codespace data.
 set -euo pipefail
 
-# Overridable for a test only; sshd passes the client no environment.
-ROOT="${CODESPACE_DATA_ROOT:-/srv/quiz-codespace}"
+ROOT=/srv/quiz-codespace
 
+# Into codespace.slice, at idle IO priority: beside the sessions, never in
+# grading's way. A forced command starts in the SSH session's scope.
 if [ -z "${QUIZ_BACKUP_SCOPED:-}" ]; then
 	export QUIZ_BACKUP_SCOPED=1
 	exec systemd-run --quiet --scope --collect --slice=codespace.slice \
@@ -39,8 +21,7 @@ for tool in sqlite3 zstd; do
 	command -v "$tool" >/dev/null 2>&1 || { echo "backup-export: $tool is missing (apt install $tool)" >&2; exit 1; }
 done
 
-# On /srv itself: the copy never crosses a filesystem, and a dot name keeps it
-# out of the instance glob below.
+# On /srv itself; the dot name keeps it out of the instance glob.
 stage="$(mktemp -d "$ROOT/.backup-export.XXXXXX")"
 trap 'rm -rf "$stage"' EXIT
 
@@ -49,14 +30,18 @@ instances=0
 shopt -s nullglob
 for dir in "$ROOT"/*/; do
 	i="$(basename "$dir")"
-	# The portal's own instance charset (INSTANCE_PATTERN): nothing else is ours.
+	# The portal's instance charset (INSTANCE_PATTERN): nothing else is ours.
 	[[ "$i" =~ ^[a-z][a-z0-9]{0,15}$ ]] || continue
 	db="${dir}var/codespace.sqlite"
 	if [ -f "$db" ]; then
 		install -d -m 0700 "$stage/$i/var-backup"
 		copy="$stage/$i/var-backup/codespace.sqlite"
-		# `.backup` is SQLite's online copy: consistent while the portal writes.
+		# SQLite's online copy: consistent while the portal writes.
 		sqlite3 -cmd '.timeout 30000' "$db" ".backup '$copy'"
+		# The cs_session bearer of every open session leaves nothing: an empty
+		# token matches no cookie (checkCookie), so a restored session needs
+		# a new launch. VACUUM drops the old values from the free pages.
+		sqlite3 "$copy" "UPDATE sessions SET cookie_token = ''; VACUUM;"
 		check="$(sqlite3 "$copy" 'PRAGMA integrity_check')"
 		if [ "$check" != ok ]; then
 			echo "backup-export: $i: integrity_check of the copy: $check" >&2
@@ -74,6 +59,8 @@ if [ "${#members[@]}" -eq 0 ]; then
 	exit 1
 fi
 
+# The volumes are read live: tar's exit 1 (a file changed while read) is
+# accepted, its exit 2 is not.
 set +e
 tar --numeric-owner --xattrs --xattrs-include='*' \
 	--warning=no-file-changed --warning=no-file-removed \

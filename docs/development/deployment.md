@@ -268,27 +268,26 @@ RUNNER_TOKEN="$(sed -n 's/^RUNNER_TOKEN=//p' .env.prod)" \
 
 ### The slices: grading before sessions (M6-05)
 
-The VM is not resized (owner, 2026-10-08: 2 vCPU, 3.8 GB). The runner and
-the workspace portals share it in two systemd slices
-(`infra/engine/*.slice`), so that an exam's sessions cannot starve grading:
+The VM is not resized (owner, 2026-10-08). The runner and the workspace
+portals share it in two systemd slices, so that an exam's sessions cannot
+starve grading. Their weights and memory lines, and why those values, are
+in the unit files themselves, the only place they are written:
 
-| Slice | Holds | CPU / IO weight | Memory |
-| --- | --- | --- | --- |
-| `quiz-runner.slice` | `quiz-runner.service` (`Slice=`) and every sandbox container (`RUNNER_CGROUP_PARENT`, `--cgroup-parent`) | 1000 / 1000 | `MemoryLow=1536M` (two containers at 512 MB plus the service), `MemoryMax=1792M` |
-| `codespace.slice` | both portals (`Slice=`), their session containers (`CODESPACE_CGROUP_PARENT`), the shadow snapshots, the backup export | 100 / 100 | `MemoryHigh=1792M`, `MemoryMax=2048M` |
+| Slice | Holds | Values and sizing |
+| --- | --- | --- |
+| `quiz-runner.slice` | `quiz-runner.service` (`Slice=`) and every sandbox container (`RUNNER_CGROUP_PARENT`, `--cgroup-parent`) | [`infra/engine/quiz-runner.slice`](https://github.com/heig-tin-info/heig-quiz/blob/main/infra/engine/quiz-runner.slice) |
+| `codespace.slice` | both portals (`Slice=`), their session containers (`CODESPACE_CGROUP_PARENT`), the shadow snapshots, the backup export | [`infra/engine/codespace.slice`](https://github.com/heig-tin-info/heig-quiz/blob/main/infra/engine/codespace.slice) |
 
 Both variables are set by the quadlets, not by the env files; empty, no
 flag is passed and a container lands in `machine.slice`, as before M6-05. A
 slice a unit names before its file exists is created empty by systemd, so
 the order of the deploys does not matter. The runner's deploy installs both
 files (`install_slices`, `infra/engine/lib.sh`), as does a codespace
-bootstrap or `prod` deploy; never a codespace staging deploy. The per-container
-limits (`--memory`, `--cpus`, `--pids-limit`) stay what they were: a slice
-adds a shared budget, it replaces none. The sizing comments are in the two
-files: raising `RUNNER_CONCURRENCY` or `RUNNER_MAX_MEMORY_MB` raises
-`quiz-runner.slice`'s two memory lines. A container keeps the cgroup it was
-created in: a session started before the rollout stays in `machine.slice`
-until it is created again.
+bootstrap or `prod` deploy; never a codespace staging deploy. The
+per-container limits (`--memory`, `--cpus`, `--pids-limit`) stay what they
+were: a slice adds a shared budget, it replaces none. A container keeps the
+cgroup it was created in: a session started before the rollout stays in
+`machine.slice` until it is created again.
 
 ```bash
 systemctl show quiz-runner.slice codespace.slice -p CPUWeight,IOWeight,MemoryLow,MemoryHigh,MemoryMax
@@ -302,30 +301,46 @@ The runner holds nothing to back up (its images rebuild from
 `apps/runner/images/`, its environment file is the token the vault copy of
 `.env.prod` also holds). The portals do: per instance
 `/srv/quiz-codespace/<i>/var/codespace.sqlite` (sessions, push events,
-assignments) and `/srv/quiz-codespace/<i>/volumes/<assignment>/<user>/`
+assignments, users) and `/srv/quiz-codespace/<i>/volumes/<assignment>/<user>/`
 (`work`, `staging.git`, `shadow.git`), owned by the uid ranges
-`--userns=auto` drew. The secrets (`/etc/quiz-codespace/<i>/env`) go
-through the vault, never through a backup (ADR-010).
+`--userns=auto` drew.
 
 **Destination A, a stopgap while the workspace is test-only** (ADR-016's
 M6-05 amendment): the application VM pulls one archive a day over SSH.
 
-- *Engine side:* `backup-export.sh` (installed by a bootstrap or a `prod`
-  deploy) writes to stdout a `zstd` tar of, per instance, an online SQLite
-  `.backup` (integrity-checked) and the volumes, with numeric owners and
-  extended attributes; in `codespace.slice`, nice 10, idle IO; nothing of
-  `/etc`. It needs `sqlite3` and `zstd` on the VM. A volume is read live:
-  tar's "file changed as we read it" is accepted, and the restore's
-  `git fsck` says whether a repository came back whole.
-- *Application side:* `srv`'s user timer `quiz-engine-backup.timer` (daily,
+- *Runner VM:* `apps/codespace/deploy/backup-export.sh`, installed in
+  `/usr/local/lib/quiz-codespace/` by a bootstrap or a `prod` deploy,
+  writes to stdout one `zstd` tar holding, per instance,
+  `<i>/var-backup/codespace.sqlite` (an online SQLite `.backup`) and
+  `<i>/volumes/`, with numeric owners and extended attributes. It runs in
+  `codespace.slice`, nice 10, idle IO, and needs `sqlite3` and `zstd`.
+- *No credential in it.* The env files (`/etc/quiz-codespace/<i>/env`, the
+  launch and cookie secrets) stay out: they go through the vault (ADR-010).
+  The copy's `sessions.cookie_token` (the `cs_session` bearer of each open
+  session) is blanked, then the copy is vacuumed and integrity-checked: an
+  empty token matches no cookie, so a restored session needs a new launch.
+  The rest of the schema holds no credential: `launch_tokens_used` keeps
+  spent `jti`s, `push_events.last_error` is redacted, `users` holds
+  identities, and `assignments.beks` holds Browser Exam Keys, which the
+  platform resends on every sync and which are empty until exams use the
+  portal (M6-07). Tokens never reach the volumes (root invariant 15); what
+  a student writes into `work/` is the student's.
+- *Live read.* The volumes are read while sessions run: tar's "file changed
+  as we read it" is accepted, so a repository written during the read can
+  come back incomplete. The restore's `git fsck` says so, and `shadow.git`
+  holds the work tree of at most three minutes earlier.
+- *Application VM:* `srv`'s user timer `quiz-engine-backup.timer` (daily,
   03:00 plus up to 2 h, `Persistent`) runs
   `scripts/engine-backup/pull.sh`: the stream lands in a temporary file,
   `zstd -t` must read it to the end, then it becomes
   `/srv/quiz-engine-backups/codespace-<UTC date>.tar.zst` (mode 600) and the
-  newest 14 are kept. A failure fails the unit:
-  `journalctl --user -u quiz-engine-backup` as `srv`, or
-  `systemctl --user list-units --failed`. Watch the small disk: the
-  script prints what is left after each run.
+  newest 14 are kept. The export's own messages travel back over SSH into
+  the same journal.
+- *Monitoring is by hand for now:* the System status and `/healthz` read
+  the database dump's report only (ADR-055); a failed pull fails the unit,
+  nothing alerts. Check `systemctl --user list-units --failed` and
+  `ls -lh /srv/quiz-engine-backups` as `srv`; the script prints the disk
+  space left after each run (the VM's disk is small).
 
 Setting it up, once:
 
@@ -349,8 +364,8 @@ command="/usr/local/lib/quiz-codespace/backup-export.sh",restrict,from="128.140.
 ```
 
 The key can only run the export: `restrict` forbids a terminal and every
-forwarding, `from=` the application VM's addresses only, and the client's
-command is ignored. A first run by hand, then the timer's:
+forwarding, `from=` admits the application VM's addresses only, and the
+client's command is ignored. A first run by hand, then the timer's:
 
 ```bash
 systemctl --user start quiz-engine-backup.service; journalctl --user -u quiz-engine-backup -n 20 --no-pager
@@ -365,12 +380,13 @@ key cannot write):
 
 ```bash
 f=/root/codespace-<date>.tar.zst; i=staging     # the instance to restore
+pd() { podman --remote --url unix:///run/podman/podman.sock "$@"; }
 r=/root/restore-$(date +%F) && install -d -m 0700 "$r"
 zstd -dc "$f" | tar --numeric-owner --xattrs --xattrs-include='*' -xpf - -C "$r"
 
-# 1. the database
-sqlite3 "$r/$i/var-backup/codespace.sqlite" 'PRAGMA integrity_check'                  # ok
-sqlite3 "$r/$i/var-backup/codespace.sqlite" 'SELECT count(*) FROM sessions'
+# 1. the database (and no session bearer in it)
+sqlite3 "$r/$i/var-backup/codespace.sqlite" 'PRAGMA integrity_check'                       # ok
+sqlite3 "$r/$i/var-backup/codespace.sqlite" "SELECT count(*) FROM sessions WHERE cookie_token <> ''"   # 0
 # 2. every repository
 for g in "$r/$i"/volumes/*/*/{staging,shadow}.git; do
   git -c safe.directory='*' --git-dir="$g" fsck --no-dangling --no-progress >/dev/null 2>&1 || echo "fsck FAILED: $g"
@@ -379,9 +395,9 @@ done
 stat -c '%u:%g %n' "$r/$i"/volumes/*/*/work | head
 zstd -dc "$f" | tar --numeric-owner -tvf - "$i/volumes" | awk '{print $2}' | sort | uniq -c
 
-# 4. the swap: the instance stopped, the current data kept aside
+# 4. the swap: the instance stopped, its containers gone, the current data kept aside
 systemctl stop "quiz-codespace-shadow@$i.timer" "quiz-codespace-$i.service"
-podman --remote ps -a --filter "label=heig-codespace.instance=$i" --format '{{.Names}}'   # remove any: podman --remote rm -f
+pd ps -a --filter "label=heig-codespace.instance=$i" --format '{{.Names}}' | xargs -r pd rm -f
 d=/srv/quiz-codespace/$i && mv "$d/var" "$d/var.before-restore" && mv "$d/volumes" "$d/volumes.before-restore"
 install -d -m 0750 "$d/var" && install -m 0640 "$r/$i/var-backup/codespace.sqlite" "$d/var/codespace.sqlite"
 mv "$r/$i/volumes" "$d/volumes"
@@ -391,10 +407,10 @@ systemctl start "quiz-codespace-$i.service" "quiz-codespace-shadow@$i.timer"
 node /opt/quiz-runner/apps/codespace/deploy/smoke.mjs staging --port 3120 --launch
 ```
 
-A session reopened after the restore gets its container recreated on the
-restored `work/` (`:U` rechowns it to the new range). Once it is checked,
-delete `*.before-restore` and `$r`. The restore drill is part of M6-05's
-acceptance; record its date in the card.
+A student reopens a workspace through a new launch from Quiz; its container
+is recreated on the restored `work/` (`:U` rechowns it to the new range).
+Once it is checked, delete `*.before-restore` and `$r`. The restore drill is
+part of M6-05's acceptance; record its date in the card.
 
 **Destination B, later:** `restic` to an S3 bucket from the runner VM
 itself (encrypted, deduplicated, its own retention), which removes the

@@ -1,29 +1,24 @@
 #!/usr/bin/env bash
-# Pull the engine VM's codespace backup onto the application VM (M6-05;
-# ADR-016, M6-05 amendment: destination A, a stopgap while the online
-# workspace is test-only). Run as `srv` by its user timer
-# quiz-engine-backup.timer, from the production checkout:
+# Pull the engine VM's codespace backup onto the application VM (M6-05). Run
+# as `srv` by its user timer quiz-engine-backup.timer, from the production
+# checkout. The engine VM's key line runs backup-export.sh whatever is asked,
+# so nothing is sent. Setup, checks and the restore:
+# docs/development/deployment.md §3, Backup and restore of the codespace data.
 #
-#   /srv/quiz/scripts/engine-backup/pull.sh
-#
-# The engine VM's root key line runs apps/codespace/deploy/backup-export.sh
-# whatever is asked, so this script sends no command: it streams the archive
-# into a temporary name, checks that zstd can read it to the end, renames it
-# codespace-<UTC date>.tar.zst and keeps the newest KEEP. Any failure exits
-# non-zero: the unit fails and says why in srv's journal
+# Any failure exits non-zero: the unit fails, and says why in srv's journal
 # (journalctl --user -u quiz-engine-backup).
 set -euo pipefail
 
-DEST="${QUIZ_ENGINE_BACKUP_DIR:-/srv/quiz-engine-backups}"
-KEEP="${QUIZ_ENGINE_BACKUP_KEEP:-14}"
-HOST="${QUIZ_ENGINE_BACKUP_HOST:-root@code.chevallier.io}"
-KEY="${QUIZ_ENGINE_BACKUP_KEY:-$HOME/.ssh/engine-backup}"
+DEST=/srv/quiz-engine-backups
+KEEP=14
+HOST=root@code.chevallier.io
+KEY="$HOME/.ssh/engine-backup"
 
 install -d -m 0700 "$DEST"
 part="$DEST/.codespace.tar.zst.part"
 trap 'rm -f "$part"' EXIT
 
-ssh -i "$KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=30 \
+ssh -T -i "$KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=30 \
   -o ServerAliveInterval=30 "$HOST" > "$part"
 # A truncated stream (a dropped connection, a full disk) fails here.
 zstd -q -t "$part"

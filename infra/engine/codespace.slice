@@ -9,8 +9,8 @@
 #
 # Memory, for the VM of 2026-10-08 (3.8 GB, no resize): what the runner's
 # MemoryLow (1.5 GB) and the host (Caddy, Podman, systemd, ~0.3 GB) leave.
-# Two portals (~150 MB each in use) and the sessions at CODESPACE_MEMORY each:
-# at 1536m that is ONE session; at 768m, two (RUNBOOK.md, Capacity). Above
+# Two portals (~150 MB each in use) and the sessions at CODESPACE_MEMORY each
+# (how many that makes: apps/codespace/deploy/RUNBOOK.md, Capacity). Above
 # MemoryHigh the slice is throttled and reclaimed; MemoryMax is the OOM line,
 # which takes a session, never a grading run.
 [Unit]

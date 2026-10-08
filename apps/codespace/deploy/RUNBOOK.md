@@ -308,25 +308,18 @@ a named refusal; nothing is lost.
 
 ### Capacity
 
-2 vCPU and 3.8 GB, not resized (owner, 2026-10-08). Since M6-05 the two
-portals, their sessions, the shadow snapshots and the backup export share
-`codespace.slice` (CPU and IO weight 100, `MemoryHigh=1792M`,
-`MemoryMax=2048M`), below `quiz-runner.slice` (weight 1000, 1.5 GB
-protected for grading); deployment.md §3, The slices. Both instances draw
-from the same 2 GB: the portals use about 150 MB each, so with
-`CODESPACE_MEMORY=1536m` the slice holds **one session** at a time, staging
-and prod together, and a second one pushes the slice to its ceiling (the
-kernel kills a session's process, never a grading run). **While the
-workspace is test-only, set `CODESPACE_MEMORY=768m`** in both
-`/etc/quiz-codespace/<i>/env` (then restart the instance): two sessions. A
-real class needs the resize first (§6.2 of `docs/merge/06-codespace-seb-infra.md`).
+2 vCPU and 3.8 GB, not resized (owner, 2026-10-08). The two portals, their
+sessions, the shadow snapshots and the backup export share `codespace.slice`,
+below `quiz-runner.slice` (values: `infra/engine/*.slice`; deployment.md §3,
+The slices). Staging and prod draw on the same slice: with
+`CODESPACE_MEMORY=1536m` it holds **one session** at a time, with **768m**
+(the template's value while test-only; an existing env file keeps its own) two. A second
+1536m session pushes the slice to its ceiling: the kernel kills a session's
+process, never a grading run. A real class needs the resize first (§6.2 of
+`docs/merge/06-codespace-seb-infra.md`).
 
 ### Backup and restore
 
-The SQLite and the volumes of both instances are exported once a day by
-`backup-export.sh` (root's forced command for the application VM's backup
-key) and pulled by `srv` on the application VM, 14 archives kept. Setup,
-checks and the restore procedure (staging first): deployment.md §3, Backup
-and restore of the codespace data. The export's messages travel back over
-SSH: they are in `srv`'s journal (`journalctl --user -u quiz-engine-backup`
-on the application VM), not in this VM's.
+Both instances are exported daily by `backup-export.sh` and pulled by `srv`
+on the application VM: deployment.md §3, Backup and restore of the codespace data.
+The export's messages are in `srv`'s journal there (`journalctl --user -u quiz-engine-backup`), not in this VM's.
