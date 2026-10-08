@@ -104,7 +104,7 @@ export async function seedLive(db: Db, options: SeedOptions = {}): Promise<Seede
     ));
 
   const courseId = randomUUID();
-  await db.insert(courses).values({ id: courseId, name: "Programmation C", code: `PRG-${courseId.slice(0, 6)}` });
+  await db.insert(courses).values({ id: courseId, name: "Programmation C", code: `PRG-${courseId}` });
   await db.insert(courseStaff).values({ courseId, userId: teacherId });
 
   const classroomId = randomUUID();
