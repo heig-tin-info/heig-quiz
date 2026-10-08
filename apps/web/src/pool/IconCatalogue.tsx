@@ -7,11 +7,13 @@ import type { PoolColor } from "@quiz/contracts";
 import { fuzzyFilter } from "../fuzzy";
 import { useT } from "../i18n";
 import { SearchInput } from "../ui";
-import { ICON_SEARCH_LIMIT } from "./poolIcons";
+import { CUSTOM_ICON_KEYWORDS, CUSTOM_ICON_NAMES } from "./customIcons";
+import { ICON_SEARCH_LIMIT, type PoolIconName } from "./poolIcons";
 import { IconTile } from "./IconTile";
 
 /**
- * The second step of the icon picker: the whole lucide catalogue, searched.
+ * The second step of the icon picker: the whole lucide catalogue, and the
+ * icons drawn for Quiz, searched.
  *
  * Its own module, and loaded with `lazy()` by the picker, because importing
  * `iconNames` means importing `dynamicIconImports` — 1500 lazy imports, about
@@ -22,16 +24,25 @@ import { IconTile } from "./IconTile";
  */
 
 /** An alias (`bar-chart-3`) is listed under its canonical name (`chart-column`). */
-const canonicalIcon = (name: IconName): IconName => aliases[name] ?? name;
+const canonicalIcon = (name: PoolIconName): PoolIconName => aliases[name as IconName] ?? name;
+
+/** The custom icons first: they are the subjects lucide lacks, so a search for one finds it on top. */
+const CATALOGUE: PoolIconName[] = [...CUSTOM_ICON_NAMES, ...iconNames];
+
+/** A custom icon also answers to its keywords (`octocat` finds `github`). */
+const searchKey = (name: PoolIconName) =>
+  name in CUSTOM_ICON_KEYWORDS
+    ? `${name} ${CUSTOM_ICON_KEYWORDS[name as keyof typeof CUSTOM_ICON_KEYWORDS]}`
+    : name;
 
 /**
  * The whole catalogue filtered by the app's fuzzy matcher, capped, one name
  * per glyph. Aliases still match (a teacher typing `bar-chart` finds
  * `chart-column`), but each result is a canonical name, listed once.
  */
-export function searchIcons(query: string, limit = ICON_SEARCH_LIMIT): IconName[] {
-  const names = new Set<IconName>();
-  for (const name of fuzzyFilter(query, [...iconNames], (n) => n)) {
+export function searchIcons(query: string, limit = ICON_SEARCH_LIMIT): PoolIconName[] {
+  const names = new Set<PoolIconName>();
+  for (const name of fuzzyFilter(query, CATALOGUE, searchKey)) {
     if (names.size === limit) break;
     names.add(canonicalIcon(name));
   }
@@ -50,7 +61,7 @@ export default function IconCatalogue({
   const t = useT();
   const [query, setQuery] = useState("");
   const results = useMemo(() => searchIcons(query), [query]);
-  const selected = value && canonicalIcon(value as IconName);
+  const selected = value && canonicalIcon(value as PoolIconName);
 
   return (
     <div className="space-y-3">
