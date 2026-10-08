@@ -15,7 +15,7 @@ import {
 const POOL = "6f0c3a8e-2b1d-4c5e-9f7a-1b2c3d4e5f60";
 const CATEGORY = "7a1d4b9f-3c2e-4d6f-8a0b-2c3d4e5f6071";
 const COMMANDS: AssistScreenCommand[] = [
-  { id: "question:preview", label: "Preview", effect: "none" },
+  { id: "question:preview", label: "Preview", effect: "none", gesture: true },
   { id: "question:try", label: "Try it", effect: "none" },
   { id: "question:publish", label: "Publish this question", effect: "write" },
   { id: "grading:results", label: "Open the results", effect: "none" },
@@ -94,12 +94,14 @@ describe("checkOpenScreen", () => {
 });
 
 describe("the screen's commands", () => {
-  it("lists the effect-free ones only, in the screen part of the prompt", () => {
-    expect(assistCommandList(COMMANDS)).toContain("  - question:preview — Preview");
-    expect(assistCommandList(COMMANDS)).not.toContain("publish");
-    expect(assistCommandList(undefined)).toBe("- Commands you may run here: none.");
+  it("lists every one in the screen part of the prompt, saying which is a gesture and which writes (ADR-080 P3)", () => {
+    const list = assistCommandList(COMMANDS);
+    expect(list).toContain("  - question:try — Try it\n");
+    expect(list).toContain("  - question:preview — Preview (opens a new tab: offered as a button the user clicks)");
+    expect(list).toContain("  - question:publish — Publish this question (changes data: the user is shown a card and it runs only if they confirm)");
+    expect(assistCommandList(undefined)).toBe("- Commands of this screen (run_screen_command): none.");
     const screen = assistScreen(corpus, "teacher", { route: "/questions/:id", helpTopic: null, locale: "en", commands: COMMANDS });
-    expect(screen).toContain("Commands you may run here (run_screen_command)");
+    expect(screen).toContain("Commands of this screen (run_screen_command)");
   });
 });
 
@@ -111,18 +113,49 @@ describe("AssistUiTurn", () => {
     expect(turn.actions).toEqual([{ kind: "open_screen", screen: "pool", ids: { id: POOL }, params: {} }]);
   });
 
-  it("runs effect-free commands of the screen, never one that writes nor an unknown one, before any navigation", () => {
+  it("runs effect-free commands, offers a gesture as a button, never an unknown one, before any navigation", () => {
     const turn = new AssistUiTurn("teacher", COMMANDS);
-    expect(turn.run({ id: "question:preview" })).toBe('Done: the user\'s browser runs "Preview" after your answer.');
-    expect(() => turn.run({ id: "question:publish" })).toThrow('No command "question:publish" you may run');
+    expect(turn.run({ id: "question:try" })).toBe('Done: the user\'s browser runs "Try it" after your answer.');
+    expect(turn.run({ id: "question:preview" })).toMatch(/^Offered: "Preview" opens a new tab/);
     expect(() => turn.run({ id: "live:close" })).toThrow('No command "live:close"');
     expect(() => turn.run(null)).toThrow('No command "undefined"');
-    turn.run({ id: "question:try" });
     turn.run({ id: "grading:results" });
     expect(() => turn.run({ id: "grading:run" })).toThrow(`At most ${ASSIST_MAX_COMMANDS} commands per answer.`);
     turn.open({ screen: "activities" });
-    expect(() => turn.run({ id: "question:preview" })).toThrow("A screen is being opened");
+    expect(() => turn.run({ id: "question:try" })).toThrow("A screen is being opened");
     expect(turn.actions.map((a) => a.kind)).toEqual(["run_command", "run_command", "run_command", "open_screen"]);
+  });
+
+  it("proposes a write command behind a confirmation, never as run, and opens no screen after it (ADR-080 P3)", () => {
+    const turn = new AssistUiTurn("teacher", COMMANDS);
+    expect(turn.run({ id: "question:publish" })).toMatch(/^Proposed: .* runs only if they confirm it\. Say so; never say it is done\.$/);
+    expect(turn.actions).toEqual([{ kind: "confirm_command", id: "question:publish", label: "Publish this question" }]);
+    expect(() => turn.open({ screen: "activities" })).toThrow(/proposes something on the current screen/);
+    expect(turn.writing).toBe(false);
+  });
+
+  it("records one editor proposal, at most three writes, and ends the turn once a write is prepared", () => {
+    const turn = new AssistUiTurn("teacher", COMMANDS);
+    const edit = {
+      kind: "edit_question" as const,
+      questionId: POOL,
+      base: { config: {}, explanation: "" },
+      config: {},
+      explanation: "x",
+      fields: [{ path: "explanation", label: "explanation" as const, n: null, before: null, after: "x" }],
+    };
+    expect(turn.propose(edit)).toMatch(/^Proposed: .*1 field\(s\) with an Apply button/);
+    expect(() => turn.propose(edit)).toThrow("One proposal per answer");
+    const write = (id: string) => ({ kind: "pending_write" as const, id, tool: "create_category" as const, lines: [], expiresAt: "2026-10-08T10:10:00.000Z" });
+    expect(turn.prepare(write("a"))).toMatch(/^Prepared, NOT done/);
+    expect(turn.writing).toBe(true);
+    turn.prepare(write("b"));
+    turn.prepare(write("c"));
+    expect(turn.mayPrepare).toBe(false);
+    expect(() => turn.prepare(write("d"))).toThrow("At most 3 writes per answer.");
+    const opening = new AssistUiTurn("teacher", COMMANDS);
+    opening.open({ screen: "activities" });
+    expect(() => opening.propose(edit)).toThrow("A screen is being opened");
   });
 
   it("knows no command when the screen sent none", () => {

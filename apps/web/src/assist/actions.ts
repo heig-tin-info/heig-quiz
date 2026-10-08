@@ -12,6 +12,9 @@
  * - `run_command` runs a command of the mounted screen only while it is
  *   still registered AND effect-free; one that needs a real gesture (a new
  *   tab) is offered as a button the teacher clicks instead.
+ * - The proposals of P3 — a write command, an editor proposal, a prepared
+ *   write — are not run here: the panel shows each as a card
+ *   (`AssistCards.tsx`), and only the teacher's Confirm or Apply acts.
  */
 import type { AssistAction } from "@quiz/contracts";
 import { checkOpenScreen, type AssistRole } from "@quiz/domain";
@@ -59,7 +62,23 @@ function runCommand(id: string): boolean {
   return true;
 }
 
-/** Runs `actions` in order and says what each did. */
+/**
+ * A WRITE command of the mounted screen, run on the teacher's Confirm
+ * (ADR-080 P3, decision 5) — only while it is still registered and still a
+ * write; false otherwise. Its own confirmation dialog, if any, still asks.
+ */
+export function runConfirmedCommand(id: string): boolean {
+  const command = screenCommands().find((c) => c.id === id);
+  if (!command || command.effect !== "write") return false;
+  command.run();
+  return true;
+}
+
+/** The actions the panel shows as cards rather than runs (ADR-080 P3). */
+export const isProposal = (action: AssistAction): action is Exclude<AssistAction, { kind: "open_screen" | "run_command" }> =>
+  action.kind === "confirm_command" || action.kind === "edit_question" || action.kind === "pending_write";
+
+/** Runs `actions` in order and says what each did; the proposals are left to their cards. */
 export async function runAssistActions(
   actions: readonly AssistAction[],
   navigate: Navigate | undefined,
@@ -68,6 +87,7 @@ export async function runAssistActions(
 ): Promise<ActionOutcome[]> {
   const outcomes: ActionOutcome[] = [];
   for (const action of actions) {
+    if (isProposal(action)) continue;
     if (action.kind === "run_command") {
       const command = screenCommands().find((c) => c.id === action.id);
       if (!command || command.effect !== "none") outcomes.push({ ok: false, text: t("assist.runFailed") });

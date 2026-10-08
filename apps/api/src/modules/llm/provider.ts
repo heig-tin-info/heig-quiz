@@ -71,6 +71,13 @@ export interface ConverseRequest {
   maxTokens: number;
   maxSteps: number;
   effort?: "low" | "medium" | "high";
+  /**
+   * Asked after each step's tool calls ran: true makes the next request the
+   * last, which may not call a tool — the teacher assistant's turn ends once
+   * a write was prepared (ADR-080 P3, decision 7), so the model only says
+   * what it prepared.
+   */
+  endAfter?: () => boolean;
 }
 
 /** One provider request of a conversation, as the gateway meters it. */

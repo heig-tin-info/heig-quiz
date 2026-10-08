@@ -5,6 +5,7 @@ import type { EvaluationDetail, TemplateDetail } from "@quiz/contracts";
 import type { QUESTION_TABS } from "@quiz/domain";
 
 import { api } from "../api";
+import { editorSlot, useAssistEditor } from "../assist/editor";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { tryAdapterFor } from "../questionTypes";
@@ -222,6 +223,8 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
     onPreview: openPreview,
     onTry: openTry,
   });
+  // The teacher assistant reads and proposes edits to this draft (ADR-080 P3): the slot, while mounted.
+  useAssistEditor(editorSlot({ questionId: id, draft, readOnly, setDraft, flush }));
 
   useEffect(() => {
     if (!followToPanel.current) return;

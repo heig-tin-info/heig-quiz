@@ -363,6 +363,17 @@ export const teacherGrants = pgTable("teacher_grants", {
 });
 
 /**
+ * Who an audit entry names as acting: a person through a session (`user`),
+ * through a personal or OAuth token (`api_key`, ADR-022), the teacher
+ * assistant running a write its teacher confirmed (`assistant`, ADR-080 P3,
+ * the teacher as `actor_user_id`), or nobody (`system`). A closed list
+ * (invariant 9); the column is text, so the list is the schema's, not a
+ * database enum.
+ */
+export const AUDIT_ACTOR_TYPES = ["user", "system", "api_key", "assistant"] as const;
+export type AuditActorType = (typeof AUDIT_ACTOR_TYPES)[number];
+
+/**
  * Append-only audit log (NFR-05, AU-42), platform-wide: it belongs to no
  * single module, and `src/audit.ts` is the only writer. In production the
  * application SQL role has neither UPDATE nor DELETE on it.
@@ -376,7 +387,7 @@ export const auditLog = pgTable(
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
     actorUserId: uuid("actor_user_id"),
-    actorType: text("actor_type", { enum: ["user", "system", "api_key"] }).notNull(),
+    actorType: text("actor_type", { enum: AUDIT_ACTOR_TYPES }).notNull(),
     action: text("action").notNull(),
     subjectType: text("subject_type").notNull(),
     subjectId: text("subject_id").notNull(),

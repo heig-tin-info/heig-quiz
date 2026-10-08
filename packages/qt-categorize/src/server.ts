@@ -162,4 +162,12 @@ export const categorizeServer: QuestionTypeServer<
     [config.prompt, ...config.columns.map((c) => c.label), ...config.cards.map((c) => c.text)].join("\n"),
 
   generator: categorizeGenerator,
+  // ADR-080 P3: the statement, the columns' labels and the cards' texts; never an id nor a placement.
+  assistText: {
+    fields: [
+      { path: "prompt", label: "statement" },
+      { path: "columns.*.label", label: "column" },
+      { path: "cards.*.text", label: "card" },
+    ],
+  },
 };

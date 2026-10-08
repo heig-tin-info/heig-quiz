@@ -164,4 +164,7 @@ export const clozeServer: QuestionTypeServer<
   searchText: (config) => config.text,
 
   toCanonical,
+
+  // ADR-080 P3: the text, whose `{{…}}` blanks (the key) the assistant keeps verbatim.
+  assistText: { fields: [{ path: "text", label: "statement" }] },
 };

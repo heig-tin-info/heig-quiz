@@ -1694,6 +1694,30 @@ const scenes = [
       // The pool's first-visit tour would open over it; a returning teacher has none.
       await skipCoach(p);
     } },
+  // P3 (ADR-080 amendment of 2026-10-08): in the question editor, the stub
+  // proposes the statement tidied — the diff card, Apply in the dock's ink —;
+  // on a pool, it prepares a quoted category behind a confirmation card.
+  { name: "assist-p3-edit", role: "teacher", path: "/questions/q2", fold: true, act: async (p) => {
+      await skipCoach(p);
+      // A hasty statement, for the stub to tidy (`stubRewrite`).
+      await p.getByText("déclaré dans une fonction").first().click();
+      await p.keyboard.press("ControlOrMeta+a");
+      await p.keyboard.type("soit p un pointeur déclaré dans une fonction,  sans initialisation. que vaut p");
+      await p.waitForTimeout(800);
+      await p.getByRole("button", { name: /^(ask the help assistant|demander à l'assistant d'aide)$/i }).click();
+      await p.getByRole("button", { name: /^(new conversation|nouvelle conversation)$/i }).click();
+      await p.getByRole("textbox", { name: /question/i }).fill("Reformule l'énoncé proprement");
+      await p.keyboard.press("Enter");
+      await p.waitForTimeout(1200);
+    } },
+  { name: "assist-p3-confirm", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("button", { name: /^(ask the help assistant|demander à l'assistant d'aide)$/i }).click();
+      await p.getByRole("button", { name: /^(new conversation|nouvelle conversation)$/i }).click();
+      await p.getByRole("textbox", { name: /question/i }).fill("Crée la catégorie « Pointeurs »");
+      await p.keyboard.press("Enter");
+      await p.waitForTimeout(1200);
+    } },
   { name: "assist-history", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
       await skipCoach(p);
       await p.getByRole("button", { name: /^(ask the help assistant|demander à l'assistant d'aide)$/i }).click();

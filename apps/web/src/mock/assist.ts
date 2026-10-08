@@ -4,10 +4,23 @@
  * One stored conversation, to show the history; a question opens a new one
  * or continues the one it names. A student is refused, as by the server. The
  * stub's results path (ADR-080 P2) reads the mock gradebook; its "show me
- * the pool …" (P2b) opens one of the mock's pools.
+ * the pool …" (P2b) opens one of the mock's pools; in the question editor,
+ * "rewrite …" proposes the statement tidied, and on a pool, "create the
+ * category «…»" prepares it behind a confirmation card (P3). The mock has no
+ * server registry: it lends the assistant `DEFAULT_ASSIST_TEXT` (the
+ * statement) for every type.
  */
-import type { AssistContext, AssistConversation, AssistExchange } from "@quiz/contracts";
-import { assistResults, buildCorpus, stubTurn } from "@quiz/domain";
+import type { AssistAction, AssistContext, AssistConversation, AssistEditorDraft, AssistExchange } from "@quiz/contracts";
+import {
+  assistResults,
+  assistTextFields,
+  buildCorpus,
+  DEFAULT_ASSIST_TEXT,
+  proposeQuestionEdit,
+  STUB_TEXT,
+  stubTurn,
+  type AssistEditInput,
+} from "@quiz/domain";
 
 import { staffGradebookOf } from "./gradebook";
 import { pools } from "./pool";
@@ -84,13 +97,62 @@ on("POST", "/app/api/assist/ask", async (_m, body) => {
   const conversation = named ?? { id: uuid(), createdAt: now, updatedAt: now, exchanges: [] };
   if (!named) conversations.push(conversation);
   const question = String(body.message);
-  // ADR-080 P2b: "show me the pool …" opens it, as the server's stub does.
-  const turn = await stubTurn(CORPUS, "teacher", question, body.context as AssistContext, {
+  const context = body.context as AssistContext;
+  const editor = body.editor as AssistEditorDraft | undefined;
+  // The mock's ids are not uuids, so the client names no entity: the open pool is the mock's first.
+  const screen = {
+    ...context,
+    ...(context.route === "/pools/:id" ? { entities: { pool: pools[0]!.id } } : {}),
+    ...(editor ? { editor: { texts: assistTextFields(editor.config, DEFAULT_ASSIST_TEXT), explanation: editor.explanation } } : {}),
+  };
+  // ADR-080 P2b: "show me the pool …" opens it, as the server's stub does; P3: its calls, as the server runs them.
+  const turn = await stubTurn(CORPUS, "teacher", question, screen, {
     results: readResults,
     pools: () => Promise.resolve(pools),
   });
-  const exchange: AssistExchange = { id: uuid(), question, answer: turn.text, createdAt: now };
+  let text = turn.text;
+  const actions: AssistAction[] = [...turn.actions];
+  try {
+    for (const call of turn.calls ?? []) actions.push(mockCall(call, editor));
+  } catch (error) {
+    text = `${STUB_TEXT[context.locale].intro}\n\n${STUB_TEXT[context.locale].refused} ${(error as Error).message}`;
+  }
+  const exchange: AssistExchange = { id: uuid(), question, answer: text, createdAt: now };
   conversation.exchanges.push(exchange);
   conversation.updatedAt = now;
-  return { conversationId: conversation.id, exchange, actions: turn.actions };
+  return { conversationId: conversation.id, exchange, actions };
+});
+
+/** The mock's run of a stub call (ADR-080 P3): an editor proposal, or a prepared category. */
+function mockCall(call: { tool: string; input: unknown }, editor: AssistEditorDraft | undefined): AssistAction {
+  if (call.tool === "propose_question_edit" && editor) {
+    const base = { config: editor.config, explanation: editor.explanation };
+    return proposeQuestionEdit(editor.questionId, base, DEFAULT_ASSIST_TEXT, call.input as AssistEditInput);
+  }
+  const { poolId, name } = call.input as { poolId: string; name: string };
+  const pool = pools.find((p) => p.id === poolId);
+  const id = uuid();
+  prepared.add(id);
+  return {
+    kind: "pending_write",
+    id,
+    tool: "create_category",
+    lines: [
+      { field: "pool", values: [pool?.name ?? poolId] },
+      { field: "name", values: [name] },
+    ],
+    expiresAt: iso(10 * 60_000),
+  };
+}
+
+/** The mock's prepared writes: confirmed or cancelled once. */
+const prepared = new Set<string>();
+on("POST", "/app/api/assist/writes/:id/confirm", (m) => {
+  teacherOnly();
+  if (!prepared.delete(m.groups!.id!)) throw new MockError(404, "write_not_found");
+  return { path: `/pools/${pools[0]!.id}/categories` };
+});
+on("POST", "/app/api/assist/writes/:id/cancel", (m) => {
+  prepared.delete(m.groups!.id!);
+  return undefined;
 });

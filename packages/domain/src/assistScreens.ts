@@ -11,6 +11,8 @@
  * title the English label of the screen.
  */
 import type { AssistEntityKind, AssistRole } from "./assist.js";
+import type { AssistEditQuestion } from "./assistEdits.js";
+import { ASSIST_MAX_WRITES, type AssistPendingWrite } from "./assistWrites.js";
 
 // --- The tabs a screen reads off its address ----------------------------------
 
@@ -108,18 +110,36 @@ export interface AssistRunCommand {
   id: string;
 }
 
-export type AssistAction = AssistOpenScreen | AssistRunCommand;
+/**
+ * A command of the current screen that WRITES (ADR-080 P3, decision 5): the
+ * panel shows a card naming it, and the browser runs it only on the
+ * teacher's Confirm, while it is still registered.
+ */
+export interface AssistConfirmCommand {
+  kind: "confirm_command";
+  id: string;
+  label: string;
+}
+
+export type AssistAction =
+  | AssistOpenScreen
+  | AssistRunCommand
+  | AssistConfirmCommand
+  | AssistEditQuestion
+  | AssistPendingWrite;
 
 /** A command of the current screen, as the client describes it (`AssistContext.commands`). */
 export interface AssistScreenCommand {
   id: string;
   label: string;
   effect: "none" | "write";
+  /** It needs the teacher's own click (a new tab): offered as a button, never run on its own. */
+  gesture?: boolean | undefined;
 }
 
 /** The longest free-text parameter (the pool's search). */
 export const ASSIST_TEXT_PARAM_CHARS = 200;
-/** The most commands one answer may run. */
+/** The most commands one answer may run or propose. */
 export const ASSIST_MAX_COMMANDS = 3;
 /** The most commands the client describes for one screen. */
 export const ASSIST_MAX_SCREEN_COMMANDS = 40;
@@ -226,28 +246,36 @@ export function checkOpenScreen(input: unknown, role: AssistRole, isId: (s: stri
   return { kind: "open_screen", screen: name, ids, params };
 }
 
-/**
- * The commands of the current screen the model may run: the effect-free
- * ones only (ADR-080 P2b, decision 2). A command that writes is never
- * offered, nor runnable, whatever the model names.
- */
-const runnableCommands = (commands: readonly AssistScreenCommand[] | undefined): AssistScreenCommand[] =>
-  (commands ?? []).filter((c) => c.effect === "none");
-
-/** The commands of the screen, as the prompt's screen part lists them. */
-export function assistCommandList(commands: readonly AssistScreenCommand[] | undefined): string {
-  const runnable = runnableCommands(commands);
-  return runnable.length === 0
-    ? "- Commands you may run here: none."
-    : `- Commands you may run here (run_screen_command):\n${runnable.map((c) => `  - ${c.id} — ${c.label}`).join("\n")}`;
+/** How a command of the screen is listed to the model, its kind said, so the answer's wording is right. */
+function commandLine(c: AssistScreenCommand): string {
+  if (c.effect === "write") return `  - ${c.id} — ${c.label} (changes data: the user is shown a card and it runs only if they confirm)`;
+  if (c.gesture) return `  - ${c.id} — ${c.label} (opens a new tab: offered as a button the user clicks)`;
+  return `  - ${c.id} — ${c.label}`;
 }
 
 /**
- * The UI actions of ONE answer: what the two tools record, and their
- * bounds — one screen per answer, at most {@link ASSIST_MAX_COMMANDS}
- * commands, and no command once a screen is being opened (the commands are
- * the CURRENT screen's, which the navigation leaves). Each call answers the
- * model a short "done by the browser" text, or throws the refusal it reads.
+ * The commands of the screen, as the prompt's screen part lists them
+ * (ADR-080 P2b, and its P3 amendment, decision 5): each with what naming it
+ * means — run after the answer, offered as a button (a new tab), or
+ * proposed behind the teacher's confirmation (a write).
+ */
+export function assistCommandList(commands: readonly AssistScreenCommand[] | undefined): string {
+  const listed = commands ?? [];
+  return listed.length === 0
+    ? "- Commands of this screen (run_screen_command): none."
+    : `- Commands of this screen (run_screen_command):\n${listed.map(commandLine).join("\n")}`;
+}
+
+/**
+ * The actions of ONE answer: what the UI tools record, and their bounds —
+ * one screen per answer; at most {@link ASSIST_MAX_COMMANDS} commands run or
+ * proposed, and none once a screen is being opened (the commands are the
+ * CURRENT screen's, which the navigation leaves); one editor proposal, and
+ * no screen opened after it nor after a proposed command (they need this
+ * screen); at most {@link ASSIST_MAX_WRITES} prepared writes. Each call
+ * answers the model a short text, or throws the refusal it reads. A
+ * prepared write ENDS the turn (`writing`): the model then says what it
+ * prepared, nothing more.
  */
 export class AssistUiTurn {
   readonly actions: AssistAction[] = [];
@@ -261,8 +289,20 @@ export class AssistUiTurn {
     return this.actions.find((a): a is AssistOpenScreen => a.kind === "open_screen");
   }
 
+  private count(kind: AssistAction["kind"]): number {
+    return this.actions.filter((a) => a.kind === kind).length;
+  }
+
+  /** A write was prepared: the gateway ends the turn after this step. */
+  get writing(): boolean {
+    return this.count("pending_write") > 0;
+  }
+
   open(input: unknown): string {
     if (this.opening) throw new Error(`One screen per answer: ${this.opening.screen} is already being opened.`);
+    if (this.count("edit_question") + this.count("confirm_command") > 0) {
+      throw new Error("This answer proposes something on the current screen: open another screen in a later answer.");
+    }
     const action = checkOpenScreen(input, this.role);
     this.actions.push(action);
     const { title } = ASSIST_SCREENS[action.screen as AssistScreenName];
@@ -271,11 +311,45 @@ export class AssistUiTurn {
 
   run(input: unknown): string {
     const id = typeof input === "object" && input !== null ? (input as { id?: unknown }).id : undefined;
-    const command = runnableCommands(this.commands).find((c) => c.id === id);
-    if (!command) throw new Error(`No command "${String(id)}" you may run on this screen. Run only one the current screen lists.`);
+    const command = (this.commands ?? []).find((c) => c.id === id);
+    if (!command) throw new Error(`No command "${String(id)}" on this screen. Name only one the current screen lists.`);
     if (this.opening) throw new Error("A screen is being opened: the current screen's commands no longer apply.");
-    if (this.actions.length >= ASSIST_MAX_COMMANDS) throw new Error(`At most ${ASSIST_MAX_COMMANDS} commands per answer.`);
+    if (this.count("run_command") + this.count("confirm_command") >= ASSIST_MAX_COMMANDS) {
+      throw new Error(`At most ${ASSIST_MAX_COMMANDS} commands per answer.`);
+    }
+    if (command.effect === "write") {
+      this.actions.push({ kind: "confirm_command", id: command.id, label: command.label });
+      return `Proposed: the user is shown a card naming "${command.label}"; it runs only if they confirm it. Say so; never say it is done.`;
+    }
     this.actions.push({ kind: "run_command", id: command.id });
-    return `Done: the user's browser runs "${command.label}" after your answer.`;
+    return command.gesture
+      ? `Offered: "${command.label}" opens a new tab, so it is shown as a button the user clicks under your answer. Say so; never say it is open.`
+      : `Done: the user's browser runs "${command.label}" after your answer.`;
+  }
+
+  /** An editor proposal the caller checked (`proposeQuestionEdit`): one per answer, on the current screen. */
+  propose(edit: AssistEditQuestion): string {
+    if (this.opening) throw new Error("A screen is being opened: the editor's draft no longer applies.");
+    if (this.count("edit_question") > 0) throw new Error("One proposal per answer: put every change in one call.");
+    this.actions.push(edit);
+    return (
+      `Proposed: the user sees a before/after diff of ${edit.fields.length} field(s) with an Apply button; nothing changes ` +
+      "until they apply it, and it is never published. Say so in one or two sentences; do not repeat the texts."
+    );
+  }
+
+  /** A write the caller froze as pending: at most a few per answer, and the turn ends after it. */
+  prepare(write: AssistPendingWrite): string {
+    if (this.count("pending_write") >= ASSIST_MAX_WRITES) throw new Error(`At most ${ASSIST_MAX_WRITES} writes per answer.`);
+    this.actions.push(write);
+    return (
+      "Prepared, NOT done: the user is shown a confirmation card, and it is written only if they confirm it. " +
+      "End your answer now: say in one or two sentences what you prepared and that nothing happens until they confirm."
+    );
+  }
+
+  /** Whether one more write may be prepared in this answer (checked before any work is done for it). */
+  get mayPrepare(): boolean {
+    return this.count("pending_write") < ASSIST_MAX_WRITES;
   }
 }

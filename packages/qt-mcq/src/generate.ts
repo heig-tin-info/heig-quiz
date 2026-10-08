@@ -5,7 +5,7 @@
  */
 import { z } from "zod";
 
-import type { AnswerGenerator } from "@quiz/core/server";
+import { sameItemText as same, type AnswerGenerator } from "@quiz/core/server";
 
 import { MCQ_MAX_CHOICES, type McqChoice, type McqConfig } from "./schema.js";
 
@@ -18,7 +18,6 @@ type McqProposal = z.infer<typeof McqProposal>;
 const blank = (text: string | undefined) => (typeof text === "string" ? text : "").trim() === "";
 /** A draft's choices, whatever the draft holds (D16). */
 const choicesOf = (config: McqConfig): McqChoice[] => (Array.isArray(config.choices) ? config.choices : []);
-const same = (text: string) => text.trim().toLowerCase().replace(/\s+/g, " ");
 
 /**
  * The ticks a proposed choice may carry: in `single` mode, one correct

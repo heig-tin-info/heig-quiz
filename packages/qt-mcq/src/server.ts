@@ -19,6 +19,7 @@ import {
   correctIndices,
   emptyMcqDraft,
   MCQ_CONFIG_VERSION,
+  MCQ_MAX_CHOICES,
   McqAnswerSchema,
   McqConfigSchema,
   McqKeylessConfigSchema,
@@ -220,4 +221,12 @@ export const mcqServer: QuestionTypeServer<
   toCanonical,
 
   generator: mcqGenerator,
+  // ADR-080 P3: the statement and the choices' texts; "add N choices" appends unticked ones.
+  assistText: {
+    fields: [
+      { path: "prompt", label: "statement" },
+      { path: "choices.*.text", label: "choice" },
+    ],
+    append: { list: "choices", field: "text", item: { correct: false }, max: MCQ_MAX_CHOICES },
+  },
 };

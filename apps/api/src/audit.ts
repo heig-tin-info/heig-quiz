@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import type { Db, Tx } from "./db/client.js";
+import type { AuditActorType } from "./db/auth.js";
 import { auditLog } from "./db/schema.js";
 
 /**
@@ -542,7 +543,7 @@ export async function audit(
   db: Db | Tx,
   entry: {
     actorUserId?: string | null;
-    actorType: "user" | "system" | "api_key";
+    actorType: AuditActorType;
     action: AuditAction;
     subjectType: string;
     subjectId: string;
@@ -565,7 +566,7 @@ export async function audit(
 /** Who an audit entry names as acting: a person (through a session or a token), or the system. */
 export interface AuditActor {
   actorUserId: string | null;
-  actorType: "user" | "system" | "api_key";
+  actorType: AuditActorType;
 }
 
 /** The ticker, a job, a webhook: nobody asked. */
@@ -574,13 +575,23 @@ export const SYSTEM_ACTOR: AuditActor = { actorUserId: null, actorType: "system"
 /**
  * The actor of an HTTP request, for a service that audits for itself: the
  * person acting, who is not the user when a session was delegated (ADR-027),
- * `api_key` when they asked through a personal API token (ADR-022).
+ * `api_key` when they asked through a personal API token (ADR-022),
+ * `assistant` when the teacher assistant runs a write its teacher confirmed
+ * (ADR-080 P3, decision 8; the teacher is the actor user).
  */
 export function actorOf(req: FastifyRequest): AuditActor {
   return {
     actorUserId: req.auth?.actorUserId ?? req.user?.id ?? null,
-    actorType: req.authVia === "token" ? "api_key" : "user",
+    actorType: req.authVia === "token" ? "api_key" : req.authVia === "assistant" ? "assistant" : "user",
   };
+}
+
+/** A payload with the assistant's tool beside it, when the request is the assistant's (ADR-080 P3, decision 8). */
+function withAssistTool(req: FastifyRequest, payload: unknown): unknown {
+  if (req.authVia !== "assistant" || !req.assistTool) return payload;
+  if (payload === undefined || payload === null) return { assistTool: req.assistTool };
+  if (typeof payload === "object" && !Array.isArray(payload)) return { ...payload, assistTool: req.assistTool };
+  return payload;
 }
 
 /** What {@link tracer} hands a route module: one line per audited write. */
@@ -606,12 +617,14 @@ type Trace = (
  * the column is nullable and a public route could one day be audited.
  */
 export function tracer(app: FastifyInstance): Trace {
-  return (req, action, subjectType, subjectId, payload) =>
-    audit(app.db, {
+  return (req, action, subjectType, subjectId, payload) => {
+    const recorded = withAssistTool(req, payload);
+    return audit(app.db, {
       ...actorOf(req),
       action,
       subjectType,
       subjectId,
-      ...(payload === undefined ? {} : { payload }),
+      ...(recorded === undefined ? {} : { payload: recorded }),
     });
+  };
 }

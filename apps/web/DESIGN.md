@@ -484,7 +484,10 @@ live in `ui/state.ts`, each written once.
   copy of something (a classroom whose Quiz-mode journal holds pages, that
   journal itself: F-ORG-09, F-JRN-04) asks for the classroom's name in the
   same dialog (`useConfirm({ typeToConfirm })`): one field under the
-  message, the `danger` button off until the name matches.
+  message, the `danger` button off until the name matches. `ink` (`fg`
+  fill, surface text): the primary of a neutral tool's own layer — the
+  assistant's Confirm and Apply (ADR-069, ADR-080 P3) — never on the page
+  itself, where `primary` is the one accent.
   Sizes `sm` 28 px, `md` 34 px, `lg` 40 px.
   Pressed to 0.97. The class list is `buttonClass` in `@quiz/ui`, which the
   app's `Button` and `LinkButton` and the question types all wear.
@@ -2199,6 +2202,21 @@ placement over an `offset` and `Z.tool`.
   needs the teacher's own click (the preview's new tab) is a small
   `secondary` button under the answer instead. Nothing else moves: no
   toast, no focus change, the composer keeps the focus.
+- **Proposals** (ADR-080 P3): a card under the answer for each — a
+  hairline `rounded-card` on the surface, a 13 px semibold title with a
+  muted icon. An editor proposal lists each field: its label (Statement,
+  Choice 2, Explanation) in 12 px muted, the text before on a pale
+  `danger-soft` struck through, the text after on a pale `success-soft`; a
+  prepared write lists what the server read back as a two-column list
+  (label muted, value in ink; several values as bullets), then its notes
+  ("created as a draft", "the course's whole staff becomes contributor")
+  and "Nothing is written until you confirm." in `fg-faint`. Its actions
+  sit right-aligned at the bottom: **Cancel** `secondary`, then **Confirm**
+  or **Apply to the draft**, an `ink` button (never the accent: the
+  screen's primary keeps the one red). Acted on, the buttons give way to
+  one 12 px line — muted with a corner arrow ("Done.", "Applied to the
+  draft…" with a ghost **Undo**, "Cancelled: nothing was done."), or
+  `danger` with an alert icon ("no longer applies", "expired").
 - **States**: empty — a muted bubble icon, "Ask about this screen" and
   what it answers (the screen, the teacher's own data), kept 30 days and
   readable by an administrator; waiting — the question shown at once and a

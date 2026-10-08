@@ -78,15 +78,16 @@ export function routeEntities(route: Route): AssistEntities {
 }
 
 /**
- * The mounted screen's palette commands (ADR-080 P2b): id, label and
- * effect, the server offering the model the effect-free ones only. Screen
+ * The mounted screen's palette commands (ADR-080 P2b): id, label, effect
+ * and whether it needs a gesture — the server lists them all to the model,
+ * a write one proposed behind the teacher's confirmation (P3). Screen
  * chrome — a screen command's label never embeds an entity's name
  * (`ScreenCommand`) —; one the contract would refuse is left out rather
  * than refused with the whole question.
  */
 export function screenCommandsContext(): AssistScreenCommand[] {
   return screenCommands()
-    .map(({ id, label, effect }) => ({ id, label, effect }))
+    .map(({ id, label, effect, gesture }) => ({ id, label, effect, ...(gesture ? { gesture: true } : {}) }))
     .filter((c) => AssistScreenCommand.safeParse(c).success)
     .slice(0, ASSIST_MAX_SCREEN_COMMANDS);
 }
