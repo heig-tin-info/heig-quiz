@@ -779,6 +779,7 @@ live in `ui/state.ts`, each written once.
   lets the chips fall on a second row, and the track then takes the card
   radius, since a pill two rows tall is a lens. One component, in
   `@quiz/ui`, for the app and the question editors alike.
+- ViewSwitch: the icon-only `Segmented` between pictures of one list (cards, list, schedule, heat), at the list's top right.
 - Switch: `success` when on (a state, not an action, so not the accent),
   `line-strong` when off.
 - Tabs: text tabs with a 2 px ink (`fg`) underline, counts in `fg-faint`; red
@@ -1532,7 +1533,9 @@ then takes `T.stickyEnd` (`sticky right-0` on the row's own fill, hover
 included), because a row whose actions are off screen is a row you cannot
 act on, and that was the bug the priorities were added for.
 
-Every table sorts by its column labels, through one motif. A head is
+Every table head is `TableHead`, sorting or not (a table that does not sort
+leaves out `sort` and `onToggle`: the same labels, no button). A sortable
+table sorts by its column labels, through one motif. A head is
 declared as DATA — one `Column` per column, carrying its label, its
 priority class and its width — and `TableHead` (`ui/table.tsx`) draws it, so
 the head and the priorities can no longer disagree and every table of the

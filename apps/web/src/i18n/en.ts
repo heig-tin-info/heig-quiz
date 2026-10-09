@@ -1588,7 +1588,6 @@ export const en = {
   "pool.tab.concepts": "Concepts",
   "pool.concepts.filter": "Filter concepts",
   "pool.concepts.view": "Show the concepts as",
-  "pool.concepts.view.heat": "Heat",
   "pool.concepts.count": "{n} concepts",
   "pool.concepts.count.one": "1 concept",
   "pool.concepts.countOf": "{n} of {total} concepts",
@@ -4268,6 +4267,7 @@ export const en = {
   // Two readings of one list (the courses), the tabs of a classroom, and the
   // teacher taking a seat in their own class.
   "view.cards": "Cards",
+  "view.heat": "Heat",
   "view.list": "List",
   "view.schedule": "Schedule",
   "classrooms.tabs": "Classroom sections",

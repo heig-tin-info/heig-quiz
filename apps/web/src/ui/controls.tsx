@@ -1,4 +1,4 @@
-import { CalendarRange, Check, ChevronDown, LayoutGrid, List, Loader2, Minus, Search } from "lucide-react";
+import { CalendarRange, Check, ChevronDown, LayoutDashboard, LayoutGrid, List, Loader2, Minus, Search } from "lucide-react";
 import { useId } from "react";
 import type { ReactNode } from "react";
 
@@ -476,7 +476,7 @@ export { Segmented };
  * (`title`) and the reader (`sr-only`). A pair of words beside the icons
  * would weigh more than the switch.
  */
-export function iconOption<T extends string>(value: T, icon: ReactNode, label: string) {
+function iconOption<T extends string>(value: T, icon: ReactNode, label: string) {
   return {
     value,
     label: (
@@ -489,12 +489,18 @@ export function iconOption<T extends string>(value: T, icon: ReactNode, label: s
 }
 
 /** The pictures a list can be drawn as, each with its icon. */
-export type ViewName = "cards" | "list" | "schedule";
-const VIEW_ICONS: Record<ViewName, IconType> = { cards: LayoutGrid, list: List, schedule: CalendarRange };
+export type ViewName = "cards" | "list" | "schedule" | "heat";
+const VIEW_ICONS: Record<ViewName, IconType> = {
+  cards: LayoutGrid,
+  list: List,
+  schedule: CalendarRange,
+  heat: LayoutDashboard,
+};
 
 /**
- * The switch between pictures of the same list (cards, a table, a schedule),
- * in the order given: icons only (`iconOption`), at the list's top right.
+ * The switch between pictures of the same list (cards, a table, a schedule,
+ * a heat map), in the order given: icons only (`iconOption`), at the list's
+ * top right. `label` names the group when no caption does.
  */
 export function ViewSwitch<V extends ViewName>({
   name,
@@ -502,12 +508,14 @@ export function ViewSwitch<V extends ViewName>({
   value,
   onChange,
   size,
+  label,
 }: {
   name: string;
   views: readonly V[];
   value: V;
   onChange: (view: V) => void;
   size?: "sm" | "md";
+  label?: string;
 }) {
   const t = useT();
   // Literal keys, so the unused-keys test still sees them.
@@ -515,14 +523,17 @@ export function ViewSwitch<V extends ViewName>({
     cards: t("view.cards"),
     list: t("view.list"),
     schedule: t("view.schedule"),
+    heat: t("view.heat"),
   };
   return (
     <Segmented
       name={name}
       size={size}
+      label={label}
       value={value}
       onChange={onChange}
       options={views.map((view) => {
+        // Annotated: indexed by the generic `V`, the icon's props do not resolve in JSX.
         const Icon: IconType = VIEW_ICONS[view];
         return iconOption(view, <Icon className="size-4" />, labels[view]);
       })}
