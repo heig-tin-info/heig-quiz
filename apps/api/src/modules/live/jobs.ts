@@ -9,12 +9,13 @@
  * The period is the ticker's own (`TICK_MS`, one second by default), which is
  * what "closed within a second of `deadline + 3 s`" needs.
  */
-import type { TickTask } from "../../ticker.js";
+import type { ScheduledTask, TickTask } from "../../ticker.js";
 import {
   autoCloseDue,
   autoOpenScheduled,
   autoStartFullLobbies,
   expireDueAttempts,
+  purgeAbandonedIntegrityJournal,
   sweepPresence,
 } from "./service.js";
 
@@ -54,5 +55,20 @@ export const LIVE_TASKS: TickTask[] = [
     run: async (app) => {
       sweepPresence(app.clock.now(), PRESENCE_IDLE_MS);
     },
+  },
+];
+
+/**
+ * The minutes-scale task of the module (D10, ADR-088): the backstop of the
+ * integrity journal's retention, for the evaluations closed six months ago
+ * and never released. Once a day; a condition re-read at every pass, so a
+ * missed day is caught up by the next.
+ */
+export const LIVE_SCHEDULED_TASKS: ScheduledTask[] = [
+  {
+    key: "integrity.purge",
+    defaultIntervalMinutes: 24 * 60,
+    run: async (app) =>
+      `${await purgeAbandonedIntegrityJournal(app.db, app.clock.now())} integrity journal rows deleted`,
   },
 ];

@@ -30,6 +30,7 @@ import {
   SkipBody,
   StartBody,
   SubmitBody,
+  isIntegrityEventKind,
   type ExtendResponse,
   type FlagResponse,
   type ResetAttemptResponse,
@@ -384,6 +385,11 @@ export async function livePlugin(app: FastifyInstance) {
       async ({ req, reply, now, body, scope }) => {
         // The journal follows the attempt: once it is over, it stops growing.
         service.assertOpen(scope.evaluation, scope.attempt, now);
+        // ADR-088: an integrity event the evaluation or the session does not
+        // keep is answered like a stored one, and dropped.
+        if (isIntegrityEventKind(body.kind) && !service.storesIntegrityEvent(scope.evaluation, req.auth)) {
+          return reply.code(204).send();
+        }
         const used = await service.countRecentEvents(
           app.db,
           scope.attempt.id,

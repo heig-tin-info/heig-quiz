@@ -14,8 +14,8 @@
  *     and the shuffles are left out: they are not the student's to act on.
  *     So is `requireFullscreen`: no player asks for full screen nor records
  *     leaving it yet, and a line saying so would state what is not true.
- *     Visibility changes are journalled (F-EVAL-13), so `logVisibility`
- *     says so.
+ *     Leaving the page is journalled (F-EVAL-13, ADR-088), so
+ *     `logVisibility` says so.
  *
  * {@link imposedConditions} is the one derivation: the server sends its
  * result to the student (the waiting room, the ready screen, the attempt),
@@ -30,6 +30,7 @@ import type { EvaluationTiming } from "./deadline.js";
 import {
   calculatorAllowedFor,
   calculatorOn,
+  integrityJournalOn,
   negativeMarkingOn,
   trustedClientsOf,
   type CalculatorMode,
@@ -148,7 +149,8 @@ const DERIVE: { [K in ImposedConditionKey]: (input: ConditionsInput) => Line<K> 
     isLocked(navigation) ? { key: "navigation", kind: "info", navigation } : null,
   negative_marking: ({ mode, settings }) =>
     negativeMarkingOn(mode, settings.negativeMarking) ? { key: "negative_marking", kind: "info" } : null,
-  visibility_logged: ({ settings }) => (settings.logVisibility ? { key: "visibility_logged", kind: "info" } : null),
+  visibility_logged: ({ mode, settings }) =>
+    integrityJournalOn(mode, settings.logVisibility) ? { key: "visibility_logged", kind: "info" } : null,
   autosave: () => ({ key: "autosave", kind: "info" }),
 };
 

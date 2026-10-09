@@ -108,7 +108,7 @@ import {
   type PairKey,
   type StudentAttempts,
 } from "../grading/service.js";
-import { answeredBy } from "../live/service.js";
+import { answeredBy, purgeIntegrityJournal } from "../live/service.js";
 import { solutionView, stripKeys, studentSolutionView, studentView } from "../live/studentView.js";
 import { typeOf } from "../pool/config.js";
 import { exampleInstance, explanationOrNull, isParameterized, itemInstance } from "../pool/service.js";
@@ -338,7 +338,8 @@ export function onResultsReleased(listener: ReleasedListener): void {
 
 /**
  * The release, in ONE transaction: the frozen snapshot and the instant are
- * written together, and the state moves to `released`. Idempotent — releasing
+ * written together, the state moves to `released`, and the integrity
+ * journal is deleted (ADR-088; `journalPurged` counts its rows). Idempotent — releasing
  * an already released evaluation recomputes the snapshot, clears
  * `modified_after_release` and keeps the ORIGINAL `released_at`, which is the
  * date the students were told about.
@@ -347,7 +348,7 @@ export async function releaseResults(
   db: Db,
   evaluation: EvaluationRecord,
   now: Date,
-): Promise<{ releasedAt: Date; rows: number }> {
+): Promise<{ releasedAt: Date; rows: number; journalPurged: number }> {
   if (!isOver(evaluation)) {
     throw new NotReleasable("an evaluation is released once it is closed");
   }
@@ -372,7 +373,12 @@ export async function releaseResults(
         perItem: r.perItem,
       })),
   };
-  await setRelease(db, evaluation.id, { releasedAt, releasedGrades: snapshot }, now);
+  // ADR-088: the integrity journal has served the correction; it goes with
+  // the release, in its transaction. A re-release finds nothing left.
+  const journalPurged = await db.transaction(async (tx) => {
+    await setRelease(tx, evaluation.id, { releasedAt, releasedGrades: snapshot }, now);
+    return purgeIntegrityJournal(tx, evaluation.id);
+  });
   // ADR-041 §1: an exam's questions become drill cards at the release, never
   // before — the drill module listens here. Best-effort like the
   // notification below.
@@ -415,7 +421,7 @@ export async function releaseResults(
       console.error(`results: telling the students of the release of ${evaluation.id} failed`, err);
     }
   }
-  return { releasedAt, rows: snapshot.rows.length };
+  return { releasedAt, rows: snapshot.rows.length, journalPurged };
 }
 
 /**

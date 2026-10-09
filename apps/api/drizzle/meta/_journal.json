@@ -659,6 +659,13 @@
       "when": 1791539394958,
       "tag": "0093_changelog",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1791552100980,
+      "tag": "0094_integrity_journal_off_purge",
+      "breakpoints": true
     }
   ]
 }

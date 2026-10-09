@@ -766,6 +766,8 @@ export const en = {
   "admin.task.llm.review.desc": "Between 1 and 6 a.m., reviews the latest version of the questions of the pools that asked, within a quarter of the day's AI cap.",
   "admin.task.assist.purge": "Help assistant retention",
   "admin.task.assist.purge.desc": "Deletes the help assistant's messages older than 30 days, and its expired per-question access tokens.",
+  "admin.task.integrity.purge": "Exam journal retention",
+  "admin.task.integrity.purge.desc": "Deletes the record of leaving the page of the evaluations closed six months ago whose grades were never released.",
   "admin.kiosk": "Kiosk stations",
   "admin.kiosk.hint":
     "The school's Chromebooks that attested themselves. Name a station to let students pair with it; retire one to take it out of service.",

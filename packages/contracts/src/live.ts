@@ -65,6 +65,25 @@ export const AttemptEventKind = z.enum([
 ]);
 export type AttemptEventKind = z.infer<typeof AttemptEventKind>;
 
+/**
+ * The integrity journal (ADR-088): the client kinds that say the student
+ * left the page (pasting from outside it joins with ADR-088's paste step). THE list, read by
+ * three rules: the server stores them only while `logVisibility` is on and
+ * the session is not a delegated one (`POST /attempts/:id/events`),
+ * and it deletes them at the release of the grades or, for an evaluation
+ * never released, six months after it closed. `reconnect` is not one of
+ * them: it is the network's record, not the student's behaviour, and the
+ * server's kinds (`run` carries the Run rate limit) are never touched.
+ */
+export const INTEGRITY_EVENT_KINDS = [
+  ClientEventKind.enum.visibility,
+  ClientEventKind.enum.focus,
+] as const satisfies readonly ClientEventKind[];
+export type IntegrityEventKind = (typeof INTEGRITY_EVENT_KINDS)[number];
+
+export const isIntegrityEventKind = (kind: AttemptEventKind): kind is IntegrityEventKind =>
+  (INTEGRITY_EVENT_KINDS as readonly AttemptEventKind[]).includes(kind);
+
 // --- Student side ---------------------------------------------------------
 
 /**

@@ -203,7 +203,12 @@ export const EvaluationSettings = z.object({
   shuffleChoices: z.boolean().default(true),
   timing: Timing.default("duration"),
   showProgressBar: z.boolean().default(true),
-  /** F-EVAL-13: tab visibility changes are journalled, never blocked. */
+  /**
+   * F-EVAL-13, ADR-088: the integrity journal (`INTEGRITY_EVENT_KINDS`
+   * of `live.ts`) is kept, never blocking. A creation sets
+   * it by mode (`logVisibilityDefault`, `@quiz/domain`); this default only
+   * fills a stored row that predates the field.
+   */
   logVisibility: z.boolean().default(true),
   requireFullscreen: z.boolean().default(false),
   /**

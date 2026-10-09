@@ -764,6 +764,8 @@ export const fr: Record<keyof Dict, string> = {
   "admin.task.llm.review.desc": "Entre 1 h et 6 h, relit la dernière version des questions des pools qui l'ont demandé, dans la limite d'un quart du plafond d'IA du jour.",
   "admin.task.assist.purge": "Rétention de l'assistant d'aide",
   "admin.task.assist.purge.desc": "Supprime les messages de l'assistant d'aide de plus de 30 jours, et ses jetons d'accès par question expirés.",
+  "admin.task.integrity.purge": "Rétention du journal d'examen",
+  "admin.task.integrity.purge.desc": "Supprime l'historique des sorties de page des évaluations fermées depuis six mois dont les notes n'ont jamais été publiées.",
   "admin.kiosk": "Postes kiosque",
   "admin.kiosk.hint":
     "Les Chromebooks de l'école qui se sont attestés. Nommez un poste pour que les étudiants puissent s'y appairer ; retirez-le pour le mettre hors service.",
