@@ -2,61 +2,47 @@
 
 ## Status
 
-Accepted (2026-10-01, decided by the product owner after a challenge of the
-proposal). Implemented with migration `0051_parameterized_questions`, the
-shared instantiation path in `apps/api/src/modules/pool/instance.ts`, and
-the editor. The attempt, regrade and student-view behavior is covered by
-`live/parameters.db.test.ts`; drill persistence by `drill/drill.db.test.ts`.
-The extensions listed in §10 remain deferred. It replaces the design of the "Random values"
-section (§4.3 of docs/spec/04) and rewrites F-QST-10 (docs/spec/02). It
-amends decision D19 of `docs/PLAN-MVP.md`: drawn values are stored, while
-permutations are still recomputed. It also amends
-[ADR-044](ADR-044-grille-de-correction.md) (the pinned key row),
-[ADR-033](ADR-033-projection-de-la-correction.md) (how answers are grouped),
-[ADR-043](ADR-043-analyse-des-distracteurs.md) (random distractors)
-and [ADR-014](ADR-014-sondages-en-direct.md) (polls refuse such a question).
+Accepted (2026-10-01, decided by the product owner after a challenge of the proposal). The two addenda
+of 2026-10-01 — Try, and the text declares its variables (product owner, after testing the editor;
+amends §3 and §8) — are folded into §3, §6 and §8 (2026-10-09). Amended 2026-10-09: the Rollback
+section is removed (the runbook owns operational procedures). The extensions of §10 remain deferred.
 
-Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
+Relations: replaces the design of the "Random values" section (§4.3 of docs/spec/04) and rewrites
+F-QST-10 (docs/spec/02). Amends decision D19 of `docs/PLAN-MVP.md`: drawn values are stored, while
+permutations are still recomputed. Also amends [ADR-044](ADR-044-grille-de-correction.md) (the pinned
+key row), [ADR-033](ADR-033-projection-de-la-correction.md) (how answers are grouped),
+[ADR-043](ADR-043-analyse-des-distracteurs.md) (random distractors) and
+[ADR-014](ADR-014-sondages-en-direct.md) (polls refuse such a question).
 
 ## Context
 
-A question is static: one statement, one key. A teacher who asks "a ball
-dropped from a 10 m cliff, how long is the fall?" asks every student the
-same thing. To vary it, the teacher writes ten near-copies of the question
-by hand. Neighbours in an exam end up with the same numbers.
+A question is static: one statement, one key. A teacher who asks "a ball dropped
+from a 10 m cliff, how long is the fall?" asks every student the same thing. To
+vary it, the teacher writes ten near-copies of the question by hand. Neighbours
+in an exam end up with the same numbers.
 
-The spec planned for random values from the start, but nothing was built.
-What exists:
+The spec planned for random values from the start, but nothing was built. What
+exists: F-QST-10 (P2) and §4.3, with variables written as
+`{ min, max, step, unit }`, used in the text as `{{R1}}`, and a "restricted
+arithmetic evaluator"; the optional `randomize?(config, seed)` hook of
+`QuestionType` (`packages/core/src/contract.ts`), which no type implements; the
+`questions.randomizable` column, which nothing reads; one seed per attempt, and
+`streamSeed(seed, itemId, purpose)` for every random choice
+(`packages/core/src/rng.ts`).
 
-- F-QST-10 (P2) and §4.3, with variables written as
-  `{ min, max, step, unit }`, used in the text as `{{R1}}`, and a
-  "restricted arithmetic evaluator".
-- The optional `randomize?(config, seed)` hook of `QuestionType`
-  (`packages/core/src/contract.ts`), which no type implements.
-- The `questions.randomizable` column, which nothing reads.
-- One seed per attempt, and `streamSeed(seed, itemId, purpose)` for every
-  random choice (`packages/core/src/rng.ts`).
+The design of §4.3 cannot be built as written. `{{…}}` is already the blank of
+`cloze`: inside it, `{{2*Newton}}` means weight 2 and `{{=a|b}}` means a
+dropdown, and C prompts also contain `int m[2][2] = {{1,2},{3,4}};`. Ranges with
+a step cannot express `choice([3.71, 9.81, 24.79])`, nor a value derived from
+another one. No evaluator was chosen.
 
-The design of §4.3 cannot be built as written:
-
-- `{{…}}` is already the blank of `cloze`. Inside it, `{{2*Newton}}` means
-  weight 2 and `{{=a|b}}` means a dropdown. C prompts also contain
-  `int m[2][2] = {{1,2},{3,4}};`.
-- Ranges with a step cannot express `choice([3.71, 9.81, 24.79])`, nor a
-  value derived from another one.
-- No evaluator was chosen.
-
-Teachers think of these variables as one-liners:
-`h = randint(1, 100)`, `g = choice([...])`, `t = sqrt(2*h/g)`.
-
-Systems that already do this were studied:
-
-- **Numbas** (Newcastle University): a table of variables in its JME
-  language, and a condition that rejects a draw, retried up to `maxRuns`.
-- **PrairieLearn**: a Python `generate(data)` fills `params` and the
-  correct answers, with every random generator seeded by the variant's
-  seed.
-- **Moodle Formulas**: sets such as `{1:10:2}`.
+Teachers think of these variables as one-liners: `h = randint(1, 100)`,
+`g = choice([...])`, `t = sqrt(2*h/g)`. Systems that already do this were
+studied: **Numbas** (Newcastle University: a table of variables in its JME
+language, and a condition that rejects a draw, retried up to `maxRuns`);
+**PrairieLearn** (a Python `generate(data)` fills `params` and the correct
+answers, with every random generator seeded by the variant's seed); **Moodle
+Formulas** (sets such as `{1:10:2}`).
 
 ## Decision
 
@@ -132,6 +118,14 @@ literal brackets. In a parameterized question, `[[` that does not parse, or
 that names an unknown variable, is a publication error, and the message
 gives the position. A Bash `[[ -f x ]]` in a parameterized prompt is
 therefore caught when the teacher publishes, never when a student sees it.
+
+*Folded from the addendum of 2026-10-01 (Try):* the rich editor stores `[[…]]` verbatim (the
+`paramExpr` mark: no `\[`, `\*` or `\_` inside). The escaped spelling it used to write (`\[\[h\]\]`)
+is read back as the reference and repaired on the next save of the field. Nothing is rewritten on the
+server: a version already PUBLISHED with that spelling shows `[[h]]` literally until it is re-edited
+and republished. The read-only renderer keeps a `[[…]]` left after interpolation literal, so no
+emphasis pairs across two of them; a link's `[[1]](…)` stays a link in both. The walk is one function,
+`referenceSpans`, shared by the interpolation and the editor; a closed `\[[…]]` is literal as a whole.
 
 ### 4. Instantiation is one pass, through one choke point
 
@@ -210,7 +204,11 @@ A variable IS its formatted value: `g` formatted `.2` is 9.81, and every
 expression that reads `g` reads 9.81. The format column offers `int`, a
 number of decimals (`.1` … `.6`) and a number of significant figures
 (`3s`). If it is empty, the value is shown with up to 6 significant figures
-and computed with all of them.
+and computed with all of them. *Folded from the addendum of 2026-10-01:* the
+editor offers the format as a kind and a count — Automatic, Integer, Decimals or
+Significant figures, the last two with n from 1 to 6. The stored strings do not
+change; `parseFormat` and `writeFormat` (`@quiz/domain`) are the one reading of
+them.
 
 Rounding is half away from zero, done on the decimal representation, not
 with `toFixed` (which turns 1.005 into "1.00"). A value is displayed with a
@@ -260,7 +258,48 @@ A "Variables" section is shared by the editors of `mcq`, `short` and
 `cloze`. It is the same table for all three: name, expression, format, and
 the condition below it. A preview shows five instances, computed by an API
 route that runs the same pass, so the browser evaluates nothing and the
-editor shows exactly what students will get.
+editor shows exactly what students will get. The editor's Try tab (preview, its
+solution, and the graded try) plays the first of the five gated draws,
+`draw(params, 0)`: exactly "Draw 1", and the config it grades is the one it
+shows *(addendum of 2026-10-01, Try)*.
+
+**Rows the text declares** *(addendum of 2026-10-01, product owner after testing
+the editor: declaring a variable in the table, then writing it in the text, asked
+for the same name twice; the editor now reads the text and builds the table's
+rows)*:
+
+1. **A `[[name]]` adds its row, always.** When a closed `[[name]]` appears in any
+   string of the draft's configuration or in its explanation, and `name` is a
+   free identifier (`isVariableName`: no function, no constant, no reserved
+   word) that no row declares, the editor adds the row
+   `{ name, expr: "", format: "" }`. Only a bare name counts: `[[h*w]]` declares
+   nothing, an unclosed `[[hei` nothing either, and `\[[h]]` is text. A `[[…]]`
+   inside markdown code (an inline span, a fenced or an indented block) declares
+   nothing: code is where `[[` is most often literal. The extraction is
+   `referencedNames` (`@quiz/domain`, mathjs-free so the browser runs it); the
+   editor blanks the code first with the markdown lexer it already renders with
+   (marked), waits for the text to rest before it acts, and does not act on the
+   text as it opened it — opening a question never edits it.
+2. **It holds on a static question too.** §3 still holds: interpolation is
+   active only when the question declares variables. The editor makes the
+   question parameterized by adding a row, visibly, in the "Random values"
+   section that opens on it; nothing is interpolated behind the teacher's back.
+3. **A row starts with an empty expression, and that blocks publication.** The
+   issue has its own code, `empty_expression` ("No expression yet — for example
+   randint(1, 10).", under the row), instead of the generic `parse_error`. A row
+   added with "Add a variable" starts the same way.
+4. **Removal.** When its reference leaves the text, a row the editor created and
+   whose expression is still empty is removed. A row with an expression is kept:
+   deleting a formula is the teacher's act. The editor remembers which rows it
+   created for as long as it is open; after a reload, every row is the
+   teacher's. No stored field records it.
+5. **An unused row is a warning, not an issue.** A row that no `[[…]]` of the
+   texts, no other row and not the condition mentions says "h is not used
+   anywhere". It does not block publication. The editor reads the mentions
+   lexically (`namesMentioned`, `identifiersIn`), without mathjs: a superset of
+   what an expression reads, which can only silence the warning, never raise a
+   false one.
+6. **The format is a kind and a count** (§6).
 
 The question list shows a **Parameterized** pill ("Paramétrée"). The word is
 not "Generated", which already names the LLM actions (docs/spec/08,
@@ -348,6 +387,10 @@ values, because they read the stored instance.
 - `[[` changes meaning only in parameterized questions. Existing content is
   untouched.
 - One more dependency, mathjs, pinned, on the server side only.
+- Implemented with migration `0051_parameterized_questions`, the shared
+  instantiation path `apps/api/src/modules/pool/instance.ts` and the editor; the
+  attempt, regrade and student-view behavior is covered by
+  `live/parameters.db.test.ts`, drill persistence by `drill/drill.db.test.ts`.
 
 ### Residual risk
 
@@ -360,84 +403,35 @@ otherwise.
 
 ## Alternatives considered
 
-- **Python on the serve path** (runner, Pyodide, Skulpt, Brython). This is
-  the teachers' language, but it means a whole interpreter, or a round trip
-  to the runner, for every student and every question when an exam opens,
-  and an exam that breaks if the runner is down. Python is kept for the
-  script mode, at authoring time.
-- **expr-eval.** Unmaintained, with two critical CVEs in 2025
-  (CVE-2025-12735, remote code execution through the evaluation context,
-  and CVE-2025-13204).
-- **A language of our own.** It would be one more parser to secure and
-  document. Numbas JME is a good model but is not distributed as a separate
-  library.
-- **`{{…}}`, as §4.3 wrote it.** It collides with every `cloze` blank and
-  with C initializers. Changing the blank syntax instead would break
-  published questions.
-- **Recompute from the seed, as D19 does for permutations.** That would
-  require freezing mathjs, the draw order and the retry cap forever. Stored
-  values cost one jsonb per answered item.
-- **One seed per student and evaluation**, as first proposed. A retake
-  would replay the same numbers.
-- **Variables in each type's configuration.** That means three migrations,
-  and the explanation would still need a separate pass.
+- **Python on the serve path** (runner, Pyodide, Skulpt, Brython). The teachers'
+  language, but a whole interpreter, or a round trip to the runner, for every
+  student and every question when an exam opens, and an exam that breaks if the
+  runner is down. Python is kept for the script mode, at authoring time.
+- **expr-eval.** Unmaintained, with two critical CVEs in 2025 (CVE-2025-12735,
+  remote code execution through the evaluation context, and CVE-2025-13204).
+- **A language of our own.** One more parser to secure and document. Numbas JME
+  is a good model but is not distributed as a separate library.
+- **`{{…}}`, as §4.3 wrote it.** It collides with every `cloze` blank and with C
+  initializers; changing the blank syntax instead would break published
+  questions.
+- **Recompute from the seed, as D19 does for permutations.** That would require
+  freezing mathjs, the draw order and the retry cap forever. Stored values cost
+  one jsonb per answered item.
+- **One seed per student and evaluation**, as first proposed. A retake would
+  replay the same numbers.
+- **Variables in each type's configuration.** Three migrations, and the
+  explanation would still need a separate pass.
 
-## Addendum (2026-10-01): Try
+## Correspondence of old references
 
-The editor's Try tab (preview, its solution, and the graded try) plays the
-first of the five gated draws, `draw(params, 0)`: exactly "Draw 1" of §8,
-and the config it grades is the one it shows. The rich editor stores
-`[[…]]` verbatim (the `paramExpr` mark: no `\[`, `\*` or `\_` inside). The
-escaped spelling it used to write (`\[\[h\]\]`) is read back as the
-reference and repaired on the next save of the field. Nothing is rewritten
-on the server: a version already PUBLISHED with that spelling shows `[[h]]`
-literally until it is re-edited and republished. The read-only renderer
-keeps a `[[…]]` left after interpolation literal, so no emphasis pairs
-across two of them; a link's `[[1]](…)` stays a link in both. The walk is
-one function, `referenceSpans`, shared by the interpolation and the editor;
-a closed `\[[…]]` is literal as a whole.
+§1–§10 keep their numbers. The two addenda of 2026-10-01, which code cites as "ADR-056, addendum of
+2026-10-01", are folded:
 
-## Addendum (2026-10-01): the text declares its variables
+<a id="addendum-2026-10-01-try"></a><a id="addendum-2026-10-01-the-text-declares-its-variables"></a>
 
-Decided by the product owner after testing the editor. Declaring a variable
-in the table, then writing it in the text, asked for the same name twice;
-the editor now reads the text and builds the table's rows. This amends §3
-and §8.
-
-1. **A `[[name]]` adds its row, always.** When a closed `[[name]]` appears
-   in any string of the draft's configuration or in its explanation, and
-   `name` is a free identifier (`isVariableName`: no function, no constant,
-   no reserved word) that no row declares, the editor adds the row
-   `{ name, expr: "", format: "" }`. Only a bare name counts: `[[h*w]]`
-   declares nothing, an unclosed `[[hei` nothing either, and `\[[h]]` is
-   text. A `[[…]]` inside markdown code (an inline span, a fenced or an
-   indented block) declares nothing: code is where `[[` is most often
-   literal. The extraction is `referencedNames` (`@quiz/domain`, mathjs-free
-   so the browser runs it); the editor blanks the code first with the
-   markdown lexer it already renders with (marked), waits for the text to
-   rest before it acts, and does not act on the text as it opened it —
-   opening a question never edits it.
-2. **It holds on a static question too.** §3 still holds: interpolation is
-   active only when the question declares variables. The editor makes the
-   question parameterized by adding a row, visibly, in the "Random values"
-   section that opens on it; nothing is interpolated behind the teacher's
-   back.
-3. **A row starts with an empty expression, and that blocks publication.**
-   The issue has its own code, `empty_expression` ("No expression yet —
-   for example randint(1, 10).", under the row), instead of the generic
-   `parse_error`. A row added with "Add a variable" starts the same way.
-4. **Removal.** When its reference leaves the text, a row the editor
-   created and whose expression is still empty is removed. A row with an
-   expression is kept: deleting a formula is the teacher's act. The editor
-   remembers which rows it created for as long as it is open; after a
-   reload, every row is the teacher's. No stored field records it.
-5. **An unused row is a warning, not an issue.** A row that no `[[…]]` of
-   the texts, no other row and not the condition mentions says "h is not
-   used anywhere". It does not block publication. The editor reads the
-   mentions lexically (`namesMentioned`, `identifiersIn`), without mathjs:
-   a superset of what an expression reads, which can only silence the
-   warning, never raise a false one.
-6. **The format is a kind and a count**: Automatic, Integer, Decimals or
-   Significant figures, the last two with n from 1 to 6. The stored strings
-   of §6 do not change; `parseFormat` and `writeFormat`
-   (`@quiz/domain`) are the one reading of them.
+| Old reference | Now |
+| --- | --- |
+| Addendum (2026-10-01): Try — the Try tab plays draw 0 | [§8](#8-editor-preview-and-list) |
+| Addendum (2026-10-01): Try — `paramExpr`, the escaped spelling, the renderer, `referenceSpans` | [§3](#3-expr-interpolates-everywhere) |
+| Addendum (2026-10-01): the text declares its variables, items 1–5 | [§8](#8-editor-preview-and-list), "Rows the text declares" 1–5 |
+| Addendum (2026-10-01): the text declares its variables, item 6 (format kind and count) | [§6](#6-values-are-rounded-at-the-source) |
