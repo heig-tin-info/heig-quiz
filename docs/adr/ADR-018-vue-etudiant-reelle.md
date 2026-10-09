@@ -139,71 +139,21 @@ allowed on a structurally frozen evaluation.
 
 ## Historical section references
 
-Original numbered decisions and addenda are historical. These compatibility
-anchors lead to their full text; apply the consolidated decision above.
+Original numbered decisions and addenda are historical; apply the consolidated
+decision above. Their full text is the [historical record](history/ADR-018-vue-etudiant-reelle.md). A citation
+in code or another record ("ADR-018 §3", "ADR-018, sixth addendum") lives here
+now:
 
-Where an old number cited in code or another record now lives:
+<a id="adr-018-the-real-student-view-and-the-teachers-own-test-attempt"></a><a id="reading-map"></a><a id="consequences"></a><a id="what-this-adr-does-not-decide"></a><a id="rejected-alternatives"></a><a id="addendum-2026-09-22-the-switch-belongs-to-the-frame-and-to-the-window"></a><a id="context_1"></a><a id="decision_1"></a><a id="consequences_1"></a><a id="rejected-alternatives_1"></a><a id="addendum-2026-09-22-second-the-page-button-goes-the-frame-switch-stays"></a><a id="addendum-2026-09-24-third-the-way-back-from-the-attempt-itself"></a><a id="addendum-2026-09-25-fourth-a-stateless-preview-of-the-whole-evaluation"></a><a id="context_2"></a><a id="decision_2"></a><a id="what-it-does-not-exercise"></a><a id="rejected-alternatives_2"></a><a id="addendum-2026-09-27-fifth-the-waiting-room-previewed-from-the-launch-step"></a><a id="context_3"></a><a id="decision_3"></a><a id="rejected-alternatives_3"></a><a id="addendum-2026-09-29-sixth-fixing-a-question-without-losing-the-walk"></a><a id="context_4"></a><a id="decision_4"></a><a id="rejected-alternatives_4"></a><a id="addendum-2026-10-01-seventh-the-preview-is-a-mode-not-a-notice"></a><a id="context_5"></a><a id="decision_5"></a>
 
-| Old reference | Current section |
-| --- | --- |
-| §1 the walk; §2 where it was entered from; §7 the student path; first to third addenda | [Real student view and return](#real-student-view-and-return) |
-| §3 shown and badged; §4 counts in nothing; §5 CSV drops the row; §6 own reset | [Staff attempts](#staff-attempts) |
-| Fourth addendum (stateless preview) | [Stateless evaluation preview](#stateless-evaluation-preview) |
-| Fifth addendum (waiting room); sixth (fixing a question); seventh (preview is a mode) | [Editing during preview and previewing the lobby](#editing-during-preview-and-previewing-the-lobby) |
+| Old reference | Current section | Full text |
+| --- | --- | --- |
+| §1 the walk; §2 where it was entered from; §7 the student path; first to third addenda | [Real student view and return](#real-student-view-and-return) | [first](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-09-22-the-switch-belongs-to-the-frame-and-to-the-window), [second](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-09-22-second-the-page-button-goes-the-frame-switch-stays), [third](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-09-24-third-the-way-back-from-the-attempt-itself) |
+| §3 shown and badged; §4 counts in nothing; §5 CSV drops the row; §6 own reset | [Staff attempts](#staff-attempts) | [§1–§7](history/ADR-018-vue-etudiant-reelle.md#decision) |
+| Fourth addendum (stateless preview) | [Stateless evaluation preview](#stateless-evaluation-preview) | [fourth](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-09-25-fourth-a-stateless-preview-of-the-whole-evaluation) |
+| Fifth addendum (waiting room); sixth (fixing a question); seventh (preview is a mode) | [Editing during preview and previewing the lobby](#editing-during-preview-and-previewing-the-lobby) | [fifth](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-09-27-fifth-the-waiting-room-previewed-from-the-launch-step), [sixth](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-09-29-sixth-fixing-a-question-without-losing-the-walk), [seventh](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-10-01-seventh-the-preview-is-a-mode-not-a-notice) |
 
-<a id="adr-018-the-real-student-view-and-the-teachers-own-test-attempt"></a>
-- [ADR-018 — The real student view, and the teacher's own test attempt](history/ADR-018-vue-etudiant-reelle.md#adr-018-the-real-student-view-and-the-teachers-own-test-attempt)
-<a id="reading-map"></a>
-- [Reading map](history/ADR-018-vue-etudiant-reelle.md#reading-map)
-<a id="consequences"></a>
-- [Consequences](history/ADR-018-vue-etudiant-reelle.md#consequences)
-<a id="what-this-adr-does-not-decide"></a>
-- [What this ADR does NOT decide](history/ADR-018-vue-etudiant-reelle.md#what-this-adr-does-not-decide)
-<a id="rejected-alternatives"></a>
-- [Rejected alternatives](history/ADR-018-vue-etudiant-reelle.md#rejected-alternatives)
-<a id="addendum-2026-09-22-the-switch-belongs-to-the-frame-and-to-the-window"></a>
-- [Addendum (2026-09-22) — the switch belongs to the frame, and to the window](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-09-22-the-switch-belongs-to-the-frame-and-to-the-window)
-<a id="context_1"></a>
-- [Context](history/ADR-018-vue-etudiant-reelle.md#context_1)
-<a id="decision_1"></a>
-- [Decision](history/ADR-018-vue-etudiant-reelle.md#decision_1)
-<a id="consequences_1"></a>
-- [Consequences](history/ADR-018-vue-etudiant-reelle.md#consequences_1)
-<a id="rejected-alternatives_1"></a>
-- [Rejected alternatives](history/ADR-018-vue-etudiant-reelle.md#rejected-alternatives_1)
-<a id="addendum-2026-09-22-second-the-page-button-goes-the-frame-switch-stays"></a>
-- [Addendum (2026-09-22, second) — the page button goes, the frame switch stays](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-09-22-second-the-page-button-goes-the-frame-switch-stays)
-<a id="addendum-2026-09-24-third-the-way-back-from-the-attempt-itself"></a>
-- [Addendum (2026-09-24, third) — the way back from the attempt itself](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-09-24-third-the-way-back-from-the-attempt-itself)
-<a id="addendum-2026-09-25-fourth-a-stateless-preview-of-the-whole-evaluation"></a>
-- [Addendum (2026-09-25, fourth) — a stateless preview of the whole evaluation](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-09-25-fourth-a-stateless-preview-of-the-whole-evaluation)
-<a id="context_2"></a>
-- [Context](history/ADR-018-vue-etudiant-reelle.md#context_2)
-<a id="decision_2"></a>
-- [Decision](history/ADR-018-vue-etudiant-reelle.md#decision_2)
-<a id="what-it-does-not-exercise"></a>
-- [What it does not exercise](history/ADR-018-vue-etudiant-reelle.md#what-it-does-not-exercise)
-<a id="rejected-alternatives_2"></a>
-- [Rejected alternatives](history/ADR-018-vue-etudiant-reelle.md#rejected-alternatives_2)
-<a id="addendum-2026-09-27-fifth-the-waiting-room-previewed-from-the-launch-step"></a>
-- [Addendum (2026-09-27, fifth) — the waiting room previewed from the launch step](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-09-27-fifth-the-waiting-room-previewed-from-the-launch-step)
-<a id="context_3"></a>
-- [Context](history/ADR-018-vue-etudiant-reelle.md#context_3)
-<a id="decision_3"></a>
-- [Decision](history/ADR-018-vue-etudiant-reelle.md#decision_3)
-<a id="rejected-alternatives_3"></a>
-- [Rejected alternatives](history/ADR-018-vue-etudiant-reelle.md#rejected-alternatives_3)
-<a id="addendum-2026-09-29-sixth-fixing-a-question-without-losing-the-walk"></a>
-- [Addendum (2026-09-29, sixth) — fixing a question without losing the walk](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-09-29-sixth-fixing-a-question-without-losing-the-walk)
-<a id="context_4"></a>
-- [Context](history/ADR-018-vue-etudiant-reelle.md#context_4)
-<a id="decision_4"></a>
-- [Decision](history/ADR-018-vue-etudiant-reelle.md#decision_4)
-<a id="rejected-alternatives_4"></a>
-- [Rejected alternatives](history/ADR-018-vue-etudiant-reelle.md#rejected-alternatives_4)
-<a id="addendum-2026-10-01-seventh-the-preview-is-a-mode-not-a-notice"></a>
-- [Addendum (2026-10-01, seventh) — the preview is a mode, not a notice](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-10-01-seventh-the-preview-is-a-mode-not-a-notice)
-<a id="context_5"></a>
-- [Context](history/ADR-018-vue-etudiant-reelle.md#context_5)
-<a id="decision_5"></a>
-- [Decision](history/ADR-018-vue-etudiant-reelle.md#decision_5)
+Amended 2026-10-09: the list of compatibility anchors into the historical
+record was reduced to this table (the references that code and records cite)
+and bare compatibility anchors, so old links still land here; the full text
+stays in [history/ADR-018](history/ADR-018-vue-etudiant-reelle.md).

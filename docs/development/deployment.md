@@ -696,12 +696,31 @@ manual deploy above with that sha. The sha tags stay on GHCR, so every past
 commit remains deployable.
 
 Most migrations are additive, so an older image runs against a newer
-schema. Three are not: `0008_schema_audit.sql` (drops `enrollments.status` and
-three unused tables), `0022_teams_uploaded_app.sql` (drops `teams_links`) and
-`0041_drop_join_code.sql` (drops `classrooms.join_code` and
-`join_code_enabled`, ADR-053). A rollback to an image older than any of them
-needs that migration's pre-migration dump restored first (§6); when in doubt,
-restore it anyway. A rollback holds until the next approved promotion.
+schema. Among those that are not (each drops or changes something an older
+image reads):
+
+- `0007_poll_guests.sql`: drops `guest_participants.display_name` and `token`;
+- `0008_schema_audit.sql`: drops `enrollments.status` and three unused tables;
+- `0015_exercise_retakes.sql`: drops the one-attempt index, so an older
+  image's `ON CONFLICT (evaluation_id, user_id)` matches no index (ADR-025);
+- `0019_evaluation_templates.sql`: an older image reads a course template as
+  an owned poll (ADR-031);
+- `0022_teams_uploaded_app.sql`: drops `teams_links`;
+- `0023_teams_graph_activity.sql`: drops the Teams links' `conversation_id`
+  and `service_url`;
+- `0041_drop_join_code.sql`: drops `classrooms.join_code` and
+  `join_code_enabled` (ADR-053);
+- `0059_project_deadline.sql`: drops `projects.frozen_at` and two due indexes;
+- `0060_project_review.sql`: drops `projects.review_dispatched_at`;
+- `0064_group_sets.sql`: drops `projects.group_max_size`;
+- `0072_project_sync.sql`: drops `project_repos.sync_pr_number` and
+  `sync_pr_state`;
+- `0089_gradebook_weight_percent.sql`: rescales `gradebook_columns.weight`
+  to a whole percentage, which an older image reads as a coefficient.
+
+A rollback to an image older than any of them, or than any other migration
+that is not additive, needs that migration's pre-migration dump restored
+first (§6); when in doubt, restore it anyway. A rollback holds until the next approved promotion.
 
 !!! warning "Never build on the application VM"
 
@@ -1209,7 +1228,7 @@ configuration.
 | `LOGIN_ALLOWLIST` | unset (staging: the testers' addresses) | when set, only these addresses and the super administrator may sign in |
 | `SEB_CONFIG_KEY_ENFORCE` | unset (`0`) until proof B, then `1` | the Config Key header on every request of a Safe Exam Browser session ([ADR-051](../adr/ADR-051-postes-kiosque-attestes.md) §3): off, a mismatch is only audited (`auth.seb_config_key_mismatch`); on, the request is anonymous. The launch refuses a bad header either way |
 | `SEB_EXTRA_ALLOWED_HOSTS` | unset (empty) | hosts every `.seb` lets SEB reach beside Quiz (and, for a project, the workspace portal): comma-separated host names, `*` wildcards, no scheme (D21, M6-07). Empty keeps an evaluation's file as ADR-027 pinned it |
-| `KIOSK_ATTESTATION` | unset (`off`) until the stations are set up, then `google` | the attested kiosk stations ([ADR-051](../adr/ADR-051-postes-kiosque-attestes.md), [setup](../kiosk.md)): `off`, the kiosk routes answer 404 and exams are not offered the setting; `mock`, the development fixture, is refused: the process does not start |
+| `KIOSK_ATTESTATION` | unset (`off`) until the stations are set up, then `google` | the attested kiosk stations ([ADR-051](../adr/ADR-051-postes-kiosque-attestes.md), [setup](kiosk.md)): `off`, the kiosk routes answer 404 and exams are not offered the setting; `mock`, the development fixture, is refused: the process does not start |
 | `KIOSK_VA_KEY_FILE` | `secrets/verified-access-key.json` | the Chrome Verified Access service account's JSON key, in the read-only `./secrets` mount; with `google`, an unreadable file is refused |
 | `KIOSK_GOOGLE_CUSTOMER_ID`, `KIOSK_ENROLLMENT_DOMAIN`, `KIOSK_EXTENSION_ID` | the Workspace's customer id, the stations' enrollment domain, the companion extension's id | with `google`, each one missing is refused, all of them named in one error |
 | `SESSION_TTL_HOURS` | `12` | idle timeout with sliding expiry, at most 720 |

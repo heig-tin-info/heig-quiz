@@ -206,7 +206,7 @@ student's laptop cannot run SEB, the exam fallback is a kiosk station
   claim, `frame-ancestors` and the close message.
 - The extension and its `externally_connectable` stay limited to Quiz's
   origins. The Admin console's URL allowlist gains the portal's origin;
-  `docs/kiosk.md` changes when this ships, not before.
+  `docs/development/kiosk.md` changes when this ships, not before.
 - Same-site exposure: code-server's `/proxy/<port>` serves student content
   on the portal's host, same-site with Quiz. This is already true on the
   SEB path; Quiz's double-submit CSRF and the confinement of the session to

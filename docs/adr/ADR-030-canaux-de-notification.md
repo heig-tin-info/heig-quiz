@@ -352,69 +352,26 @@ Teams designs and why their tenant/operational requirements failed.
 
 ## Historical section references
 
-Original numbered decisions and addenda are historical. These compatibility
-anchors lead to their full text; apply the consolidated decision above.
+Original numbered decisions, the lettered points of the 2026-09-28 addendum and
+the implementation steps are historical; apply the consolidated decision above.
+Their full text is the [historical record](history/ADR-030-canaux-de-notification.md). A citation in code or
+another record ("ADR-030 §h", "ADR-030, addendum §c; #198 step 5") lives here
+now:
 
-Where an old number cited in code or another record now lives:
+<a id="adr-030-notification-channels-the-bell-e-mail-and-microsoft-teams"></a><a id="reading-map"></a><a id="1-notify-stays-the-one-entry-external-channels-are-jobs"></a><a id="2-the-message-is-rendered-when-the-job-runs-in-the-recipients-language"></a><a id="3-e-mail-heig-classrooms-mailer-unchanged-in-substance"></a><a id="4-teams-activity-feed-notifications-through-microsoft-graph"></a><a id="5-preferences-a-sparse-table-defaults-in-the-contracts"></a><a id="6-results_released"></a><a id="consequences"></a><a id="rollback"></a><a id="alternatives-considered"></a><a id="addendum-2026-09-28-one-system-per-kind-defaults-eight-new-kinds-198"></a><a id="a-the-app-channel-is-the-bell-plus-the-toast"></a><a id="b-defaults-per-kind"></a><a id="c-the-kinds"></a><a id="d-deadline_approaching-keyed-on-closesat-alone"></a><a id="e-aggregation"></a><a id="f-fan-out-teams-order-of-the-work"></a><a id="g-out-of-scope"></a><a id="h-decisions-of-2026-09-28-evening"></a><a id="step-4-fold-writes-and-teams-manifest"></a><a id="step-5-grading-ready-and-pool-publication"></a><a id="step-6-scheduled-and-available-activities"></a><a id="step-7-deadline-reminders"></a><a id="step-8-results-updated"></a>
 
-| Old reference | Current section |
-| --- | --- |
-| §1 `notify` the one entry; §f fan-out after commit; §h best-effort after commit | [One entry, after commit](#one-entry-after-commit) |
-| §2 rendering and locale; §5 preferences; §b defaults | [Preferences, audiences and payloads](#preferences-audiences-and-payloads) |
-| §a bell and toast; §e aggregation; §h.2 quiet pages and throttle; Step 4 | [App aggregation and live toasts](#app-aggregation-and-live-toasts) |
-| §c the kinds; §6 `results_released`; §h.1 `activity_scheduled`; §h.3 take-home only; Step 6 | [Events and trigger boundaries](#events-and-trigger-boundaries) |
-| §d `deadline_approaching`; Step 7 | [Deadline reminders](#deadline-reminders) |
-| Step 5 (`grading_ready`); §h.4–5 and Step 8 (`results_updated`) | [Grading-ready and changed results](#grading-ready-and-changed-results) |
-| §3 e-mail; §4 Teams; §f manifest | [External transports and identity](#external-transports-and-identity) |
-| §g out of scope; Rollback; Alternatives considered | [Consequences and alternatives](#consequences-and-alternatives) |
+| Old reference | Current section | Full text |
+| --- | --- | --- |
+| §1 `notify` the one entry; §f fan-out after commit; §h best-effort after commit | [One entry, after commit](#one-entry-after-commit) | [§f](history/ADR-030-canaux-de-notification.md#f-fan-out-teams-order-of-the-work), [§h](history/ADR-030-canaux-de-notification.md#h-decisions-of-2026-09-28-evening) |
+| §2 rendering and locale; §5 preferences; §b defaults | [Preferences, audiences and payloads](#preferences-audiences-and-payloads) | [§1–§6](history/ADR-030-canaux-de-notification.md#decision), [§b](history/ADR-030-canaux-de-notification.md#b-defaults-per-kind) |
+| §a bell and toast; §e aggregation; §h.2 quiet pages and throttle; Step 4 | [App aggregation and live toasts](#app-aggregation-and-live-toasts) | [§a](history/ADR-030-canaux-de-notification.md#a-the-app-channel-is-the-bell-plus-the-toast), [§e](history/ADR-030-canaux-de-notification.md#e-aggregation), [§h](history/ADR-030-canaux-de-notification.md#h-decisions-of-2026-09-28-evening), [Step 4](history/ADR-030-canaux-de-notification.md#step-4-fold-writes-and-teams-manifest) |
+| §c the kinds; §6 `results_released`; §h.1 `activity_scheduled`; §h.3 take-home only; Step 6; the addenda of 2026-09-30 (project kinds, ADR-035; the admin kind, ADR-055) | [Events and trigger boundaries](#events-and-trigger-boundaries), [Status](#status) | [§c](history/ADR-030-canaux-de-notification.md#c-the-kinds), [§h](history/ADR-030-canaux-de-notification.md#h-decisions-of-2026-09-28-evening), [Step 6](history/ADR-030-canaux-de-notification.md#step-6-scheduled-and-available-activities), [2026-09-30](history/ADR-030-canaux-de-notification.md#status) |
+| §d `deadline_approaching`; Step 7 | [Deadline reminders](#deadline-reminders) | [§d](history/ADR-030-canaux-de-notification.md#d-deadline_approaching-keyed-on-closesat-alone), [Step 7](history/ADR-030-canaux-de-notification.md#step-7-deadline-reminders) |
+| Step 5 (`grading_ready`); §h.4–5 and Step 8 (`results_updated`) | [Grading-ready and changed results](#grading-ready-and-changed-results) | [Step 5](history/ADR-030-canaux-de-notification.md#step-5-grading-ready-and-pool-publication), [§h](history/ADR-030-canaux-de-notification.md#h-decisions-of-2026-09-28-evening), [Step 8](history/ADR-030-canaux-de-notification.md#step-8-results-updated) |
+| §3 e-mail; §4 Teams; §f manifest | [External transports and identity](#external-transports-and-identity) | [§4](history/ADR-030-canaux-de-notification.md#4-teams-activity-feed-notifications-through-microsoft-graph), [§f](history/ADR-030-canaux-de-notification.md#f-fan-out-teams-order-of-the-work), [Step 4](history/ADR-030-canaux-de-notification.md#step-4-fold-writes-and-teams-manifest) |
+| §g out of scope; Rollback; Alternatives considered | [Consequences and alternatives](#consequences-and-alternatives) | [archive](history/ADR-030-canaux-de-notification.md) |
 
-<a id="adr-030-notification-channels-the-bell-e-mail-and-microsoft-teams"></a>
-- [ADR-030 — Notification channels: the bell, e-mail and Microsoft Teams](history/ADR-030-canaux-de-notification.md#adr-030-notification-channels-the-bell-e-mail-and-microsoft-teams)
-<a id="reading-map"></a>
-- [Reading map](history/ADR-030-canaux-de-notification.md#reading-map)
-<a id="1-notify-stays-the-one-entry-external-channels-are-jobs"></a>
-- [1. `notify` stays the one entry; external channels are jobs](history/ADR-030-canaux-de-notification.md#1-notify-stays-the-one-entry-external-channels-are-jobs)
-<a id="2-the-message-is-rendered-when-the-job-runs-in-the-recipients-language"></a>
-- [2. The message is rendered when the job runs, in the recipient's language](history/ADR-030-canaux-de-notification.md#2-the-message-is-rendered-when-the-job-runs-in-the-recipients-language)
-<a id="3-e-mail-heig-classrooms-mailer-unchanged-in-substance"></a>
-- [3. E-mail: heig-classroom's mailer, unchanged in substance](history/ADR-030-canaux-de-notification.md#3-e-mail-heig-classrooms-mailer-unchanged-in-substance)
-<a id="4-teams-activity-feed-notifications-through-microsoft-graph"></a>
-- [4. Teams: activity-feed notifications through Microsoft Graph](history/ADR-030-canaux-de-notification.md#4-teams-activity-feed-notifications-through-microsoft-graph)
-<a id="5-preferences-a-sparse-table-defaults-in-the-contracts"></a>
-- [5. Preferences: a sparse table, defaults in the contracts](history/ADR-030-canaux-de-notification.md#5-preferences-a-sparse-table-defaults-in-the-contracts)
-<a id="6-results_released"></a>
-- [6. `results_released`](history/ADR-030-canaux-de-notification.md#6-results_released)
-<a id="consequences"></a>
-- [Consequences](history/ADR-030-canaux-de-notification.md#consequences)
-<a id="rollback"></a>
-- [Rollback](history/ADR-030-canaux-de-notification.md#rollback)
-<a id="alternatives-considered"></a>
-- [Alternatives considered](history/ADR-030-canaux-de-notification.md#alternatives-considered)
-<a id="addendum-2026-09-28-one-system-per-kind-defaults-eight-new-kinds-198"></a>
-- [Addendum (2026-09-28): one system, per-kind defaults, eight new kinds (#198)](history/ADR-030-canaux-de-notification.md#addendum-2026-09-28-one-system-per-kind-defaults-eight-new-kinds-198)
-<a id="a-the-app-channel-is-the-bell-plus-the-toast"></a>
-- [a. The App channel is the bell plus the toast](history/ADR-030-canaux-de-notification.md#a-the-app-channel-is-the-bell-plus-the-toast)
-<a id="b-defaults-per-kind"></a>
-- [b. Defaults per kind](history/ADR-030-canaux-de-notification.md#b-defaults-per-kind)
-<a id="c-the-kinds"></a>
-- [c. The kinds](history/ADR-030-canaux-de-notification.md#c-the-kinds)
-<a id="d-deadline_approaching-keyed-on-closesat-alone"></a>
-- [d. `deadline_approaching`: keyed on `closesAt` alone](history/ADR-030-canaux-de-notification.md#d-deadline_approaching-keyed-on-closesat-alone)
-<a id="e-aggregation"></a>
-- [e. Aggregation](history/ADR-030-canaux-de-notification.md#e-aggregation)
-<a id="f-fan-out-teams-order-of-the-work"></a>
-- [f. Fan-out, Teams, order of the work](history/ADR-030-canaux-de-notification.md#f-fan-out-teams-order-of-the-work)
-<a id="g-out-of-scope"></a>
-- [g. Out of scope](history/ADR-030-canaux-de-notification.md#g-out-of-scope)
-<a id="h-decisions-of-2026-09-28-evening"></a>
-- [h. Decisions of 2026-09-28 (evening)](history/ADR-030-canaux-de-notification.md#h-decisions-of-2026-09-28-evening)
-<a id="step-4-fold-writes-and-teams-manifest"></a>
-- [Step 4: Fold writes and Teams manifest](history/ADR-030-canaux-de-notification.md#step-4-fold-writes-and-teams-manifest)
-<a id="step-5-grading-ready-and-pool-publication"></a>
-- [Step 5: Grading ready and pool publication](history/ADR-030-canaux-de-notification.md#step-5-grading-ready-and-pool-publication)
-<a id="step-6-scheduled-and-available-activities"></a>
-- [Step 6: Scheduled and available activities](history/ADR-030-canaux-de-notification.md#step-6-scheduled-and-available-activities)
-<a id="step-7-deadline-reminders"></a>
-- [Step 7: Deadline reminders](history/ADR-030-canaux-de-notification.md#step-7-deadline-reminders)
-<a id="step-8-results-updated"></a>
-- [Step 8: Results updated](history/ADR-030-canaux-de-notification.md#step-8-results-updated)
+Amended 2026-10-09: the list of compatibility anchors into the historical
+record was reduced to this table (the references that code and records cite)
+and bare compatibility anchors, so old links still land here; the full text
+stays in [history/ADR-030](history/ADR-030-canaux-de-notification.md).

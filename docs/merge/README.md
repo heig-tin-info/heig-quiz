@@ -20,7 +20,7 @@ written so that **any session can pick the work up** — read this page, then
 | [`07-incompatibilities.md`](07-incompatibilities.md) | Every known incompatibility and risk, with its resolution and the task that carries it. |
 | [`08-decisions.md`](08-decisions.md) | The decisions that belong to the product owner, with a suggested answer each. |
 | [`measures-2026-09-28.md`](measures-2026-09-28.md) | Production counts (M0-02): identity overlap, classroom content, classes present in both apps. |
-| [`09-tasks.md`](09-tasks.md) | The task cards: one PR each, with dependencies, files, tests, acceptance, and the brief to hand to an agent. |
+| [`09-tasks.md`](09-tasks.md) | The open task cards: one PR each, with dependencies, files, tests, acceptance, and the brief to hand to an agent. The cards of the tasks `done` or `dropped`, with their "As delivered" notes, are in [`history/09-tasks-delivered.md`](history/09-tasks-delivered.md). |
 | [`10-cutover-runbook.md`](10-cutover-runbook.md) | The cutover as the operator runs it: checklist, open decisions, commands, checks, rollback, observation, decommission (M8-05). |
 
 ## Sources

@@ -8,11 +8,11 @@
  * lists them together.
  *
  * A member lands with the first task that calls it through `KINDS`
- * (`docs/merge/09-tasks.md`, M1-03 "As delivered"): the student's cards with
- * M5-01 (the home too since M3-09a), the gradebook entries with M5-03, the
- * deadlines with M3-05. A method that takes a classroom id is reached only
- * after the route has loaded the classroom (`staffAccess` or
- * `readableClassroom`, invariant 6).
+ * (`docs/merge/history/09-tasks-delivered.md`, M1-03 "As delivered"): the
+ * student's cards with M5-01 (the home too since M3-09a), the gradebook
+ * entries with M5-03, the deadlines with M3-05. A method that takes a
+ * classroom id is reached only after the route has loaded the classroom
+ * (`staffAccess` or `readableClassroom`, invariant 6).
  */
 import type {
   ActivityKindName,

@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (2026-10-04, issue #458); acceptance by the product owner pending.
+Accepted (2026-10-09, product owner; proposed 2026-10-04, issue #458).
 §9–§14, the AI assistance, were accepted by the product owner on 2026-10-04
 as ADR-072, folded here on 2026-10-09
 ([correspondence table](#correspondence-with-adr-072)).

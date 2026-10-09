@@ -2,7 +2,10 @@
 
 The single source of truth for where the merge stands. Update it **in the
 PR of the task** (claim in the first commit, close in the last), never in a
-separate commit on `main`. Protocol: [`README.md`](README.md).
+separate commit on `main`. Protocol: [`README.md`](README.md). A "card"
+cited below is in [`09-tasks.md`](09-tasks.md) while its task is open, and in
+[`history/09-tasks-delivered.md`](history/09-tasks-delivered.md) once it is
+`done` or `dropped`.
 
 ## Now
 

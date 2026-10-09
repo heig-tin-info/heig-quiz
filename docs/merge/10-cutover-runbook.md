@@ -41,7 +41,8 @@ Open decisions for the owner (each blocks the step named):
 D20 and D22 are settled (08-decisions.md); only their date (O1) and their
 inputs (O2, the mapping) remain.
 
-**The M8-03b threshold** is set here, and 06 and the M8-03 card point to
+**The M8-03b threshold** is set here, and 06 and the
+[M8-03 card](history/09-tasks-delivered.md#m8-03-caddy-fragments) point to
 it. If M8-06 measures a freeze from C1 to C8 longer than **2 h**, build
 M8-03b (a read-only flag in classroom) before T0. C3 alone is not the
 criterion.

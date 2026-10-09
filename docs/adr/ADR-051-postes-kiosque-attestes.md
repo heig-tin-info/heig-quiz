@@ -220,7 +220,7 @@ is deprecated):
 What the attestation proves: a Chromebook of the school's Workspace, in
 verified boot mode, holds the key. What it does not prove by itself: that
 the station is in kiosk mode. That is the device policy of its
-organizational unit (`docs/kiosk.md`), and the naming step of an admin.
+organizational unit (`docs/development/kiosk.md`), and the naming step of an admin.
 Google's separate kiosk-mode check (a USER key, `expectedIdentity:
 "KIOSK_MODE"`) is not used in v1: it does not return the device id, and it
 would double every attestation.
@@ -376,7 +376,7 @@ Each step is one pull request:
 5. the extension;
 6. pairing and the two pages;
 7. re-attestation, suspension and the supervisor's view;
-8. the end-to-end tests with the mock attestation, and `docs/kiosk.md`.
+8. the end-to-end tests with the mock attestation, and `docs/development/kiosk.md`.
 
 Step 0, done by hand on real hardware, gates steps 3 and 4 (not their
 code, their switches):

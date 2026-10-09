@@ -53,7 +53,8 @@ project asks for it.
 
 ## 1.3 Phases
 
-Task ids are `M<phase>-<nn>`; the cards are in [`09-tasks.md`](09-tasks.md).
+Task ids are `M<phase>-<nn>`; the open cards are in [`09-tasks.md`](09-tasks.md),
+the delivered ones in [`history/09-tasks-delivered.md`](history/09-tasks-delivered.md).
 "Prod-safe" = can reach production before the data migration without
 changing what an existing student sees.
 

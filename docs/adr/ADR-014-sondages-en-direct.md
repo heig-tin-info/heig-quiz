@@ -5,7 +5,7 @@
 Accepted (2026-09-21), consolidated from the amendments through 2026-10-01.
 [ADR-053](ADR-053-retrait-des-codes-d-entree.md) removes non-poll access codes;
 [ADR-056](ADR-056-questions-parametrees.md) excludes parameterized questions.
-[ADR-071](ADR-071-sondage-brainstorm.md) (proposed) adds the `brainstorm` type and a moderation switch.
+[ADR-071](ADR-071-sondage-brainstorm.md) adds the `brainstorm` type and a moderation switch.
 This consolidation changes no decision. The [historical record](history/ADR-014-sondages-en-direct.md)
 preserves incidents, alternatives, migration details and original section numbering.
 Amended 2026-10-04: the launcher's defaults are safe for a projected screen
@@ -163,37 +163,21 @@ rejected. Nothing about a poll justifies releasing grades to absent roster membe
 
 ## Historical section references
 
-Original numbered decisions and addenda are historical. These compatibility
-anchors lead to their full text; apply the consolidated decision above.
+Original numbered decisions and addenda are historical; apply the consolidated
+decision above. Their full text is the [historical record](history/ADR-014-sondages-en-direct.md). A citation
+in code or another record ("ADR-014 §8", "ADR-014, addendum 2026-09-27") lives
+here now:
 
-Where an old number cited in code or another record now lives:
+<a id="adr-014-live-polls-an-evaluation-of-one-question-a-code-and-participants-without-a-roster"></a><a id="reading-map"></a><a id="consequences"></a><a id="rejected-alternatives"></a><a id="addendum-2026-09-23-a-question-written-in-the-launcher-is-not-saved"></a><a id="addendum-2026-09-27-the-votes-are-hidden-until-the-teacher-shows-them-157"></a><a id="addendum-2026-09-27-recent-polls-lists-every-question-the-teacher-ran"></a><a id="addendum-2026-09-27-the-audience-of-a-poll-anonymous-in-no-classroom-or-a-classrooms-by-name"></a><a id="addendum-2026-09-27-from-pools-a-poll-borrows-from-any-pool-the-teacher-reaches"></a><a id="addendum-2026-09-28-a-poll-left-without-answers-for-12-hours-ends-on-its-own-190"></a><a id="addendum-2026-09-29-only-end-closes-the-vote-votes-and-reveal-are-independent-switches"></a>
 
-| Old reference | Current section |
-| --- | --- |
-| §1 a poll is an evaluation; §2 session code; §4 participants; §5 guest cookie; §6 public routes; §10 login return; §11 `WEB_URL`; audience addendum (2026-09-27) | [Evaluation and audience](#evaluation-and-audience) |
-| §3 personal pool; inline, Recent polls (§1–2) and From pools addenda | [Questions and retrieval](#questions-and-retrieval) |
-| §7 reveal; §8 End does not release; votes-hidden, 12-hour expiry and independent switches addenda | [Display, answers and ending](#display-answers-and-ending) |
-| §9 tally; Recent polls §3 (outcomes) | [Tally, history and visibility](#tally-history-and-visibility) |
+| Old reference | Current section | Full text |
+| --- | --- | --- |
+| §1 a poll is an evaluation; §2 session code; §4 participants; §5 guest cookie; §6 public routes; §10 login return; §11 `WEB_URL`; audience addendum (2026-09-27) | [Evaluation and audience](#evaluation-and-audience) | [§1–§11](history/ADR-014-sondages-en-direct.md#decision), [audience](history/ADR-014-sondages-en-direct.md#addendum-2026-09-27-the-audience-of-a-poll-anonymous-in-no-classroom-or-a-classrooms-by-name) |
+| §3 personal pool; inline (2026-09-23), Recent polls (§1–2) and From pools addenda | [Questions and retrieval](#questions-and-retrieval) | [inline](history/ADR-014-sondages-en-direct.md#addendum-2026-09-23-a-question-written-in-the-launcher-is-not-saved), [Recent polls](history/ADR-014-sondages-en-direct.md#addendum-2026-09-27-recent-polls-lists-every-question-the-teacher-ran), [From pools](history/ADR-014-sondages-en-direct.md#addendum-2026-09-27-from-pools-a-poll-borrows-from-any-pool-the-teacher-reaches) |
+| §7 reveal; §8 End does not release; votes-hidden (2026-09-27), 12-hour expiry (2026-09-28) and independent switches (2026-09-29) addenda | [Display, answers and ending](#display-answers-and-ending) | [votes hidden](history/ADR-014-sondages-en-direct.md#addendum-2026-09-27-the-votes-are-hidden-until-the-teacher-shows-them-157), [12 hours](history/ADR-014-sondages-en-direct.md#addendum-2026-09-28-a-poll-left-without-answers-for-12-hours-ends-on-its-own-190), [switches](history/ADR-014-sondages-en-direct.md#addendum-2026-09-29-only-end-closes-the-vote-votes-and-reveal-are-independent-switches) |
+| §9 tally; Recent polls §3 (outcomes) | [Tally, history and visibility](#tally-history-and-visibility) | [§9](history/ADR-014-sondages-en-direct.md#decision), [Recent polls §3](history/ADR-014-sondages-en-direct.md#addendum-2026-09-27-recent-polls-lists-every-question-the-teacher-ran) |
 
-<a id="adr-014-live-polls-an-evaluation-of-one-question-a-code-and-participants-without-a-roster"></a>
-- [ADR-014 — Live polls: an evaluation of one question, a code, and participants without a roster](history/ADR-014-sondages-en-direct.md#adr-014-live-polls-an-evaluation-of-one-question-a-code-and-participants-without-a-roster)
-<a id="reading-map"></a>
-- [Reading map](history/ADR-014-sondages-en-direct.md#reading-map)
-<a id="consequences"></a>
-- [Consequences](history/ADR-014-sondages-en-direct.md#consequences)
-<a id="rejected-alternatives"></a>
-- [Rejected alternatives](history/ADR-014-sondages-en-direct.md#rejected-alternatives)
-<a id="addendum-2026-09-23-a-question-written-in-the-launcher-is-not-saved"></a>
-- [Addendum (2026-09-23): a question written in the launcher is not saved](history/ADR-014-sondages-en-direct.md#addendum-2026-09-23-a-question-written-in-the-launcher-is-not-saved)
-<a id="addendum-2026-09-27-the-votes-are-hidden-until-the-teacher-shows-them-157"></a>
-- [Addendum (2026-09-27): the votes are hidden until the teacher shows them (#157)](history/ADR-014-sondages-en-direct.md#addendum-2026-09-27-the-votes-are-hidden-until-the-teacher-shows-them-157)
-<a id="addendum-2026-09-27-recent-polls-lists-every-question-the-teacher-ran"></a>
-- [Addendum (2026-09-27): "Recent polls" lists every question the teacher ran](history/ADR-014-sondages-en-direct.md#addendum-2026-09-27-recent-polls-lists-every-question-the-teacher-ran)
-<a id="addendum-2026-09-27-the-audience-of-a-poll-anonymous-in-no-classroom-or-a-classrooms-by-name"></a>
-- [Addendum (2026-09-27): the audience of a poll — anonymous in no classroom, or a classroom's by name](history/ADR-014-sondages-en-direct.md#addendum-2026-09-27-the-audience-of-a-poll-anonymous-in-no-classroom-or-a-classrooms-by-name)
-<a id="addendum-2026-09-27-from-pools-a-poll-borrows-from-any-pool-the-teacher-reaches"></a>
-- [Addendum (2026-09-27): "From pools" — a poll borrows from any pool the teacher reaches](history/ADR-014-sondages-en-direct.md#addendum-2026-09-27-from-pools-a-poll-borrows-from-any-pool-the-teacher-reaches)
-<a id="addendum-2026-09-28-a-poll-left-without-answers-for-12-hours-ends-on-its-own-190"></a>
-- [Addendum (2026-09-28): a poll left without answers for 12 hours ends on its own (#190)](history/ADR-014-sondages-en-direct.md#addendum-2026-09-28-a-poll-left-without-answers-for-12-hours-ends-on-its-own-190)
-<a id="addendum-2026-09-29-only-end-closes-the-vote-votes-and-reveal-are-independent-switches"></a>
-- [Addendum (2026-09-29): only End closes the vote; votes and reveal are independent switches](history/ADR-014-sondages-en-direct.md#addendum-2026-09-29-only-end-closes-the-vote-votes-and-reveal-are-independent-switches)
+Amended 2026-10-09: the list of compatibility anchors into the historical
+record was reduced to this table (the references that code and records cite)
+and bare compatibility anchors, so old links still land here; the full text
+stays in [history/ADR-014](history/ADR-014-sondages-en-direct.md).
