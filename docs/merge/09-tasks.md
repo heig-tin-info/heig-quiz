@@ -5078,10 +5078,10 @@ serves now (16a), and what waits for the group repositories (16b).
   - M8-04 is dropped, so C4 is too.
 
 ### M8-06 — Rehearsal
-- **Depends on**: M8-01…05, D22, and the import's runtime (runbook §1.6,
-  O6).
+- **Depends on**: M8-01…05, D22, and #655 (the import in the production
+  image, runbook O6) deployed.
 - **Goal**: on staging (`srvstg`) with the staging App and a fresh
-  production dump of both databases: the whole of §6.5 C, timed.
+  production dump of both databases: the whole of the runbook's §2, timed.
 - **Steps**: [`10-cutover-runbook.md`](10-cutover-runbook.md) §7.
 - **Acceptance**: parity report clean; timings recorded in `PROGRESS.md`;
   go/no-go written; §2's target times filled in the runbook.

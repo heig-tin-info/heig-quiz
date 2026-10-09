@@ -204,8 +204,6 @@ slug is its own (classroom's is `hgc-prod`).
   `change-me`.
 - Mail sender name: Quiz already has `MAIL_*`/`SCW_*` on the same Scaleway
   project; choose one.
-- Optional `LEGACY_CLASSROOM_COOKIE_SECRET` (honour old unsubscribe links
-  for 90 days).
 - Not needed: Keycloak, classroom's `OIDC_*`, `COOKIE_SECRET`.
 - Engine VM `/etc/codespace/env`: `PLATFORM_URL` = Quiz; issuer
   `heig-quiz` accepted.
@@ -239,7 +237,7 @@ Caddy.
 | `/setup/github/installed?…` | Quiz `/` | 302 (an installation of classroom's App after the cutover is a mistake: Quiz's App is the one to install) |
 | `/app/auth/*` (edu-ID) | Quiz `/` | 302; keep the classroom redirect URI registered until decommission |
 | `/app/codespace/start/:aid` (Start, **old `.seb` startURL**) | Quiz project start route | 302 via the resolver; old `.seb` files still fail (their filter does not allow Quiz): redistribute |
-| `/app/email/unsub?…`, `List-Unsubscribe` | Quiz notification settings | 302 (sign-in), or honour the HMAC with the legacy secret for 90 days |
+| `/app/email/unsub?…`, `List-Unsubscribe` | Quiz notification settings | 302 (sign-in) |
 | `/classrooms/:id[/assignments/:aid[/groups]]`, `/classrooms/:cid/journal/<path>` | the Quiz classroom, project, groups, journal page | 302 via the resolver |
 | `/settings`, `/admin`, `/` | Quiz equivalents | 302 |
 | `/app/api/*`, `/app/events`, `/kc/*`, `/healthz`, `/metrics` | — | 410 |

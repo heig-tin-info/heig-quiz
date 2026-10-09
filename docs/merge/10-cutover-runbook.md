@@ -30,12 +30,12 @@ Open decisions for the owner (each blocks the step named):
 
 | # | Decision | Blocks | Suggested |
 | --- | --- | --- | --- |
-| O1 | **T0 date and window.** D20's target week (2026-10-05) has passed. Pick a weekday morning, at least 7 days out, that passes §1.4. | the announcement (T-7) | a Tuesday or Wednesday, 07:00–09:00 Europe/Zurich |
-| O2 | **Organizations.** Which classroom organizations still need Quiz's App installed and a Quiz classroom connected (§1.2)? | the dry run (T-5) | install it on every organization of a live classroom; drop the archived and test classrooms in the mapping |
+| O1 | **T0 date and window.** D20's target week (2026-10-05) has passed. Pick a morning that passes §1.4, with normal notice (7 days) or short notice (2 days, see the timeline below). Example under consideration: Sunday 2026-10-11, 09:00 Europe/Zurich, at short notice. | the announcement | a morning with no deadline before that evening |
+| O2 | **Organizations.** Which classroom organizations still need Quiz's App installed and a Quiz classroom connected (§1.2)? | the rehearsal (M8-06) | install it on every organization of a live classroom; drop the archived and test classrooms in the mapping |
 | O3 | **One final import or two.** D26 plans a first import while classroom still runs, then a `--final` one. Between the two runs, both Apps act on the same repositories: Quiz's ticker on what was imported, classroom's on everything (the M8-01 note "from M3-04"). | C3 | **one** `--final` import at T0, if M8-06's measured freeze C1→C8 stays within the M8-03b threshold (below) |
 | O4 | **Staff-seat repositories.** ADR-077 asks the dry run to count the repositories classroom let its teachers accept. The import does not count them, so §1.3 gives the SQL. Import them (badged "Teacher") or leave them out? | the mapping (T-3) | import them: they are counted nowhere |
-| O5 | **Deadline window.** The `--final` pre-flight refuses a live assignment whose deadline plus grace falls within 24 h of the run (`--window-hours`, default 24). | T0 | keep 24 h |
-| O6 | **The import's runtime.** The production image must run the import (§1.6). | M8-06 | in progress (a code PR) |
+| O5 | **Deadline window.** The `--final` pre-flight refuses a live assignment whose deadline (plus grace) falls within `--window-hours` of the run, 24 by default. The window only has to cover the freeze and the catch-up (C1→C8, ≤ 2 h by the M8-03b threshold) with a margin. When the next classroom deadline falls the same evening, 24 h would refuse a morning T0 for nothing: pass `--window-hours 12` at C3, and use `W=12` in §1.4. | T0 | 24 h; 12 h when the next deadline is the same evening, at least 12 h after T0 |
+| O6 | **The import's runtime.** The production image runs the import as `node dist/import-classroom.js` (#655, §1.6). | M8-06 | #655 merged and deployed |
 | O7 | **The point of no return.** D lasts one to two weeks. | E | T0 + 7 days if C8 and D's checks are clean |
 
 D20 and D22 are settled (08-decisions.md); only their date (O1) and their
@@ -46,14 +46,16 @@ it. If M8-06 measures a freeze from C1 to C8 longer than **2 h**, build
 M8-03b (a read-only flag in classroom) before T0. C3 alone is not the
 criterion.
 
-**The sequence:**
+**The sequence.** Each step has two dates: normal notice, then short
+notice in brackets. At short notice the rehearsal (M8-06) is the staging
+dry run, the day before T0.
 
-- [ ] **P**: O6 merged; M8-06 rehearsed (§7), go written in `PROGRESS.md`
-- [ ] **T-7**: T0 chosen (O1) and checked with §1.4; announcement 1 sent (appendix A)
-- [ ] **T-7**: the organization list (§1.2); teachers asked to install Quiz's App and connect their classrooms
-- [ ] **T-5**: a staging dry run on fresh dumps (§1.3), its personal-data copies deleted the same day (§5.1)
-- [ ] **T-3**: rosters fixed by hand (`lists.missingStudents`, `lists.skippedAssistants`); mapping validated (D22); O3 and O4 settled
-- [ ] **T-1**: a production dry run (§1.3), clean; §1.4 re-run; secrets checked (§1.5); backups checked and image tags recorded (§1.7); **Quiz deploys frozen** until C8 (§1.7); announcement 2 sent
+- [ ] **P**: #655 (O6) deployed to production
+- [ ] **T-7 [T-2]**: T0 chosen (O1) and checked with §1.4; announcement 1 sent (appendix A)
+- [ ] **T-7 [T-2]**: the organization list (§1.2); teachers asked to install Quiz's App and connect their classrooms
+- [ ] **T-5 [T-1]**: M8-06 rehearsed on fresh dumps (§7), go written in `PROGRESS.md`; its personal-data copies deleted the same day (§5.1)
+- [ ] **T-3 [T-1]**: rosters fixed by hand (`lists.missingStudents`, `lists.skippedAssistants`); mapping validated (D22); O3, O4 and O5 settled
+- [ ] **T-1 [T-1]**: a production dry run (§1.3), clean; §1.4 re-run; secrets checked (§1.5); backups checked and image tags recorded (§1.7); **Quiz deploys frozen** until C8 (§1.7); announcement 2 sent
 - [ ] **T-1 h**: §1.4 re-run
 - [ ] **T0 C1**: maintenance fragment, uptime probe paused, classroom deploys disabled, classroom app stopped
 - [ ] **C2**: classroom dump, Quiz pre-migration dump, scratch database restored
@@ -74,7 +76,6 @@ export DOCKER_HOST=${DOCKER_HOST:-unix:///run/user/$(id -u)/docker.sock}
 q() { (cd /srv/quiz && docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image "$@"); }   # Quiz
 h() { (cd /srv/heig-classroom && docker compose -f compose.prod.yml --env-file .env.prod "$@"); }                # classroom
 install -d -m 700 /srv/quiz/merge     # every cutover file: dumps, mapping, reports (they name people), §5.1
-ACTOR=$(grep '^SUPER_ADMIN_EMAIL=' /srv/quiz/.env.prod | cut -d= -f2-)   # the import's --actor, an admin
 ```
 
 As `srvstg` (owner: `sudo machinectl shell srvstg@`):
@@ -83,38 +84,37 @@ As `srvstg` (owner: `sudo machinectl shell srvstg@`):
 export DOCKER_HOST=${DOCKER_HOST:-unix:///run/user/$(id -u)/docker.sock}
 s() { (cd ~/quiz-staging && docker compose -f compose.staging.yml --env-file .env.staging --env-file .env.image "$@"); }
 install -d -m 700 ~/merge
-ACTOR=$(grep '^SUPER_ADMIN_EMAIL=' ~/quiz-staging/.env.staging | cut -d= -f2-)
 ```
 
-The import, in both shells. Its first argument is the compose helper
-(`q` or `s`), its second the cutover directory on the host, and the rest
-are the import's flags:
+The import (#655), in both shells. Its first argument is the compose
+helper (`q` as srv, `s` as srvstg), its second the cutover directory on the
+host (`/srv/quiz/merge` or `~/merge`), and the rest are the import's flags:
 
 ```bash
-# PLACEHOLDER (O6): the O6 PR gives the command that runs the compiled
-# import with plain `node` in the image; set IMPORT_CMD to it. The source
-# database is named, never given as a URL with its password.
-IMPORT_CMD=()   # e.g. (node <path from the O6 PR>)
 imp() {
   local c=$1 dir=$2; shift 2
   # --user 0: under rootless Docker, container root is the host account
   # itself (srv or srvstg), the only one that may read and write the 700
   # cutover directory. The image's `node` maps to a sub-uid that cannot.
-  "$c" run --rm --no-deps -T --user 0 -v "$dir:/merge" app \
-    "${IMPORT_CMD[@]:?IMPORT_CMD: set it from the O6 PR}" \
-    --source-db hgc_cutover --mapping /merge/mapping.json --actor "$ACTOR" "$@"
+  # --source-db names a database on DATABASE_URL's server: no password on
+  # argv. $SUPER_ADMIN_EMAIL (the --actor, an admin) is expanded by the
+  # container's shell, from the environment's env file.
+  "$c" run --rm --no-deps -T --user 0 -v "$dir:/merge" app sh -c \
+    'exec node dist/import-classroom.js --source-db hgc_cutover \
+       --mapping /merge/mapping.json --actor "$SUPER_ADMIN_EMAIL" "$@"' sh "$@"
 }
 ```
 
-## 1. Before T0 (T-7 to T-1)
+## 1. Before T0 (T-7 to T-1, or T-2 to T-1 at short notice)
 
 ### 1.1 Rehearsal
 
 M8-06 (§7) runs §2 on staging with fresh dumps of both databases and times
-every step. It must pass before T-7: no T0 is announced without a timed
-rehearsal whose parity report is clean.
+every step. It needs #655 deployed. Its go comes before the production dry
+run: at normal notice by T-5, at short notice the day before T0. A no-go
+postpones T0, and a "postponed" note goes out.
 
-### 1.2 Organizations still used by classroom (T-7, agent (srv))
+### 1.2 Organizations still used by classroom (T-7 [T-2], agent (srv))
 
 ```bash
 h exec -T postgres psql -U hgc hgc <<'SQL'
@@ -161,7 +161,7 @@ events, compared with the table in
 Rollback: none needed. Installing Quiz's App changes nothing for classroom
 (D23).
 
-### 1.3 Dry runs (T-5 on staging, T-1 in production)
+### 1.3 Dry runs (on staging with M8-06, then T-1 in production)
 
 **The mapping** (owner, D22). Write `/srv/quiz/merge/mapping.json` in the
 shape of `apps/api/scripts/import-classroom/mapping.ts`: one row per
@@ -169,7 +169,7 @@ classroom, archived ones included, each either `target: {course, classroom}`
 or `drop: true`. The first dry run prints every source classroom with its
 organization under *Mapping*: that output is the list to start from.
 
-**Staging dry run** (T-5). Both dumps go through the inbox. First, as srv
+**Staging dry run** (M8-06, §7). Both dumps go through the inbox. First, as srv
 (agent):
 
 ```bash
@@ -236,24 +236,26 @@ SQL
 Rollback: none needed. A dry run commits nothing; the scratch database
 stays until E (§5.1).
 
-### 1.4 Choosing T0 (T-7, re-run at T-1 and T-1 h; agent (srv))
+### 1.4 Choosing T0 (T-7 [T-2], re-run at T-1 and T-1 h; agent (srv))
 
-Run on the VM with the helpers of §0:
+Run on the VM with the helpers of §0. `W` is the `--window-hours` that C3
+will pass (O5):
 
 ```bash
-T0='2026-10-14 07:00 Europe/Zurich'      # the candidate (O1)
+T0='YYYY-MM-DD HH:MM Europe/Zurich'      # the candidate (O1)
+W=24                                     # or 12 (O5)
 h exec -T postgres psql -U hgc hgc <<SQL
--- (1) classroom: live, unfrozen assignments with a deadline before T0 + 24 h (the --final pre-flight)
+-- (1) classroom: live, unfrozen assignments with a deadline before T0 + W (the --final pre-flight)
 select c.name as classroom, a.name, a.deadline_at at time zone 'Europe/Zurich' as deadline, a.grace_minutes,
        a.deadline_at + make_interval(mins => a.grace_minutes) > now() as grace_ahead
 from assignments a join classrooms c on c.id = a.classroom_id
 where a.state = 'published' and a.archived_at is null and a.frozen_at is null
-  and a.deadline_at <= timestamptz '$T0' + interval '24 hours'
+  and a.deadline_at <= timestamptz '$T0' + make_interval(hours => $W)
 order by a.deadline_at;
--- (2) classroom: review checkpoints due in [T0, T0 + 24 h] (informative)
+-- (2) classroom: review checkpoints due in [T0, T0 + W] (informative)
 select a.name, m.name as checkpoint, m.due_at at time zone 'Europe/Zurich' as due
 from assignment_milestones m join assignments a on a.id = m.assignment_id
-where m.dispatched_at is null and m.due_at between timestamptz '$T0' and timestamptz '$T0' + interval '24 hours';
+where m.dispatched_at is null and m.due_at between timestamptz '$T0' and timestamptz '$T0' + make_interval(hours => $W);
 SQL
 q exec -T postgres psql -U quiz quiz <<SQL
 -- (3) evaluations that may be live in [T0, T0 + 2 h]
@@ -282,7 +284,8 @@ SQL
 **The date passes when:**
 
 - no row of (1) has `grace_ahead = t`. Such a row blocks the date: move
-  T0;
+  T0, or, when the deadline is that evening at least 12 h after T0, set
+  `W=12` (O5);
 - every row of (1) with `grace_ahead = f` (already past, waiting for
   classroom's ticker to freeze it) is gone by T-1 h, or C3 will refuse
   `deadlines`;
@@ -308,10 +311,11 @@ Nothing is staged at T0.
 
 ### 1.6 The import's runtime (prerequisite, O6)
 
-O6 (another PR) compiles the import into the production image: it runs
-with plain `node`, and the source database is resolved against
-`DATABASE_URL`, so no password goes on argv. M8-06 proves it on staging
-with the image production runs, and `IMPORT_CMD` (§0) takes its command.
+PR #655 compiles the import into the production image. It runs as
+`node dist/import-classroom.js`, and `--source-db <name>` names a database
+on `DATABASE_URL`'s server, so no password goes on argv. `--help` exits 0.
+M8-06 waits until #655 is deployed, then proves `imp` (§0) on staging with
+the image production runs.
 
 ### 1.7 Backups and the deploy freeze (T-1)
 
@@ -335,7 +339,7 @@ with the image production runs, and `IMPORT_CMD` (§0) takes its command.
 
 ### 1.8 Communication (owner)
 
-Send appendix A one week before (T-7) and one day before (T-1), to
+Send appendix A at T-7 (or T-2 at short notice) and one day before (T-1), to
 classroom's teachers and students (classroom's e-mail list, Teams, the
 course pages). The teachers also get the mapping lines of their classrooms
 and the lists of §1.3 to fix (D22).
@@ -416,7 +420,7 @@ task run or a webhook received within the last 10 minutes as a live
 classroom (`QUIET_MINUTES`).
 
 ```bash
-imp q /srv/quiz/merge --apply --final --report-json /merge/final.json | tee /srv/quiz/merge/final.txt; echo "exit ${PIPESTATUS[0]}"
+imp q /srv/quiz/merge --apply --final --window-hours "$W" --report-json /merge/final.json | tee /srv/quiz/merge/final.txt; echo "exit ${PIPESTATUS[0]}"   # W as in §1.4 (O5)
 ```
 
 | Exit | Report's first line | Meaning | Next |
@@ -672,12 +676,19 @@ the account boundaries protect it.
 | production cutover directory | `/srv/quiz/merge` (dumps, mapping, reports) | agent (srv) | E, step 3, once the encrypted final dump is verified (it keeps what must be kept) | `rm -rf /srv/quiz/merge` |
 
 The staging import also wrote classroom's data into staging's own Quiz
-database. It goes with the next `staging-refresh.sh`, which the owner runs
-the same day.
+database. Two steps remove it the same day:
+
+1. The agent (srv) runs `/srv/quiz/scripts/staging-export.sh`, so that
+   the inbox holds a fresh production copy without the import.
+2. The owner (srvstg) runs `~/quiz-staging/scripts/staging-refresh.sh`.
 
 ## 6. Appendix A: announcements
 
-**One week before (fr)**
+The first announcement goes out at T-7, or at T-2 at short notice. Fill in
+the placeholders: `<jour> <date>, <heure>` (T0), `<échéance>` / `<deadline>` (the day the
+teachers must be connected by: T-3, or T-1 at short notice).
+
+**First announcement (fr)**
 
 > Objet : Classroom déménage dans Quiz le <jour> <date>, <heure>
 >
@@ -695,9 +706,9 @@ the same day.
 >
 > Enseignant·es : installez l'application GitHub de Quiz sur votre
 > organisation et connectez vos classes Quiz (Classe → Paramètres → GitHub)
-> avant le <T-3>, puis validez la table de correspondance que vous recevrez.
+> avant le <échéance>, puis validez la table de correspondance que vous recevrez.
 
-**One week before (en)**
+**First announcement (en)**
 
 > Subject: Classroom moves into Quiz on <day> <date>, <time>
 >
@@ -714,7 +725,7 @@ the same day.
 > afterwards.
 >
 > Teachers: install Quiz's GitHub App on your organization and connect your
-> Quiz classrooms (Classroom → Settings → GitHub) before <T-3>, then
+> Quiz classrooms (Classroom → Settings → GitHub) before <deadline>, then
 > validate the correspondence table you will receive.
 
 **One day before**: the same text, headed "Rappel : demain" / "Reminder:
@@ -724,14 +735,15 @@ on."
 
 ## 7. M8-06: the rehearsal on staging
 
-§2 on staging, timed, with a fresh dump of both databases and the image
-production runs. Owner as `srvstg` unless noted.
+This is §2 on staging, timed, with a fresh dump of both databases and the
+image production runs. It needs PR #655 deployed. At short notice it runs
+the day before T0. The owner works as `srvstg` unless a step says otherwise.
 
 1. Agent (srv): the dumps and the mapping into the inbox (§1.3, *Staging
    dry run*, first block). Note the time: it stands for C1.
 2. `staging-refresh.sh`, then `hgc_cutover` restored (§1.3, second block,
    up to `pg_restore`). Time it as C2.
-3. `imp s ~/merge --dry-run`, then `imp s ~/merge --apply --final`. Time
+3. `imp s ~/merge --dry-run`, then `imp s ~/merge --apply --final --window-hours "$W"` (O5). Time
    both. The dump comes from a running classroom, so the STATE checks see
    a live source frozen in the copy:
    - `source-stopped` passes once the copy is 10 minutes old;
