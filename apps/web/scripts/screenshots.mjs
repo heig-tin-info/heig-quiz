@@ -601,6 +601,9 @@ const scenes = [
   // the editor opened from a row with its way back to the evaluation.
   { name: "eval-config-item-preview", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByRole("button", { name: /^preview /i }).first().click() },
   { name: "eval-config-item-preview-answers", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: async (p) => { await p.getByRole("button", { name: /^preview /i }).nth(1).click(); await p.getByRole("button", { name: /show answers|afficher les réponses/i }).click(); await p.waitForTimeout(600); } },
+  // A cloze with its key: each expected answer sits inside its own field.
+  // A cloze with its key: each expected answer sits inside its own field.
+  { name: "eval-config-picker-preview-cloze-answers", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: async (p) => { await p.getByRole("button", { name: /add questions/i }).first().click(); await p.getByRole("dialog").getByRole("button", { name: /^(Preview|Aperçu de) malloc-tableau/ }).first().click(); await p.getByRole("button", { name: /show answers|afficher les réponses/i }).click(); await p.waitForTimeout(600); } },
   { name: "eval-config-item-edit", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByRole("button", { name: /^edit (?!the text)/i }).first().click() },
   // ADR-084: a hovered row reveals its gap's "+ Milestone" and "+ Text", and
   // the text before an item is written in a dialog from its band.

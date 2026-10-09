@@ -91,19 +91,29 @@ describe("ClozePlayer", () => {
     expect(screen.getByRole("combobox", { name: "Blank 4" })).toHaveValue("0");
   });
 
-  it("keeps every field and writes the expected answer after it, given a key (#554)", () => {
-    render(
+  it("writes the expected answer inside each field, given a key (#554)", () => {
+    const { container } = render(
       <ClozePlayer
         student={student}
         answer={{ blanks: ["Newt", null, null, null, null] }}
         onChange={() => {}}
         readOnly={false}
-        answerKey={{ blanks: [{ index: 0, expected: "Newton" }] }}
+        answerKey={{
+          blanks: [
+            { index: 0, expected: "Newton" },
+            { index: 3, expected: "newton" },
+          ],
+        }}
       />,
     );
     expect(screen.getAllByRole("textbox")).toHaveLength(4);
-    expect(screen.getByRole("textbox", { name: "Blank 1" })).toHaveValue("Newt");
-    expect(screen.getByText("Expected").parentElement).toHaveTextContent("Expected Newton");
+    const first = screen.getByRole("textbox", { name: "Blank 1" });
+    expect(first).toHaveValue("Newt");
+    expect(first).toHaveAttribute("placeholder", "Newton");
+    expect(first).toHaveAttribute("title", "Expected: Newton");
+    expect(screen.getByRole("combobox", { name: "Blank 4" })).toHaveDisplayValue("newton");
+    // Nothing is added beside a field: the layout is the one without the key.
+    expect(container.textContent).not.toContain("Newton");
   });
 
   it("is read-only once the attempt is closed", () => {

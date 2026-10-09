@@ -7,15 +7,17 @@
  * order on screen never changes what was stored.
  *
  * With an `answerKey` (a teacher's preview, "Show answers", #554) each blank
- * keeps its field and gets its expected answer right after it, so the text
- * keeps the layout it has without the key.
+ * shows its expected answer inside its own field, in the success tone: as the
+ * placeholder of a text field, as the empty option of a dropdown. Nothing is
+ * added around the field, so the text (a table above all) keeps the layout it
+ * has without the key.
  */
 import type { PlayerProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
 import type { ClozeAnswer, ClozeSolution, ClozeStudent } from "./schema.js";
 import { clozePlayerStrings, type ClozePlayerStringKey } from "./strings.js";
 import { ClozeFallbackText, type ClozeTextRenderer } from "./text.js";
-import { caption, cx, inputClass, isLocked, Verdict } from "@quiz/ui";
+import { caption, cx, inputClass, isLocked } from "@quiz/ui";
 
 type ClozePlayerProps = PlayerProps<ClozeStudent, ClozeAnswer, ClozeSolution> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
@@ -53,37 +55,31 @@ export function ClozePlayer({
   const count = student.blanks.length;
   const expected = new Map(answerKey?.blanks.map((blank) => [blank.index, blank.expected]) ?? []);
 
-  const renderBlank = (index: number) => {
-    const field = renderField(index);
-    const key = expected.get(index);
-    if (field === null || key === undefined) return field;
-    return (
-      <>
-        {field}
-        <Verdict tone="success" className="mx-0.5 font-mono">
-          <span className="sr-only">{s.expected} </span>
-          {key}
-        </Verdict>
-      </>
-    );
-  };
-
   const renderField = (index: number) => {
     const blank = student.blanks.find((b) => b.index === index);
     if (blank === undefined) return null;
     const label = `${s.blank} ${index + 1}`;
     const value = given[index] ?? "";
+    const key = expected.get(index);
+    const title = key === undefined ? undefined : `${s.expected}: ${key}`;
+    const keyClass = key !== undefined && "!border-success/60 placeholder:font-mono placeholder:!text-success";
 
     if (blank.kind === "select") {
       return (
         <select
           aria-label={label}
-          className={cx(inputClass, "mx-0.5 h-8 align-baseline")}
+          title={title}
+          className={cx(
+            inputClass,
+            "mx-0.5 h-8 align-baseline",
+            keyClass,
+            key !== undefined && value === "" && "font-mono !text-success",
+          )}
           value={value}
           disabled={locked}
           onChange={(e) => onChange(withBlank(given, count, index, e.target.value))}
         >
-          <option value="">{s.choose}</option>
+          <option value="">{key ?? s.choose}</option>
           {blank.options.map((option) => (
             <option key={option.id} value={String(option.id)}>
               {option.label}
@@ -100,9 +96,11 @@ export function ClozePlayer({
         inputMode={blank.numeric ? "decimal" : undefined}
         autoComplete="off"
         spellCheck={false}
-        size={Math.max(6, value.length + 2)}
+        size={Math.max(6, value.length + 2, (key?.length ?? 0) + 2)}
         maxLength={200}
-        className={cx(inputClass, "mx-0.5 h-8 align-baseline")}
+        placeholder={key}
+        title={title}
+        className={cx(inputClass, "mx-0.5 h-8 align-baseline", keyClass)}
         value={value}
         disabled={locked}
         onChange={(e) => onChange(withBlank(given, count, index, e.target.value))}
@@ -115,7 +113,7 @@ export function ClozePlayer({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3">
-        <Text template={student.template} renderBlank={renderBlank} />
+        <Text template={student.template} renderBlank={renderField} />
       </div>
       <p className={caption}>{s.hint}</p>
     </div>
