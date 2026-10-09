@@ -49,6 +49,7 @@ import { journalAssetUrl } from "./assets.js";
 import { asBoolean, oneLine, splitFrontMatter } from "./frontMatter.js";
 import { escapeHtml, highlight } from "./highlight.js";
 import { relativeHref, resolveRelative } from "./journalTree.js";
+import { taskTally } from "./tasks.js";
 
 export interface RenderContext {
   /** The classroom whose copy the page belongs to: asset URLs are scoped to it (D03). */
@@ -305,6 +306,27 @@ export function renderPage(source: string, ctx: RenderContext): RenderedPage {
         if (!url) return inner;
         return `<a href="${escapeHtml(url + hash)}"${titleAttr}>${inner}</a>`;
       },
+
+      /**
+       * A task item wears its DERIVED state (`tasks.ts`): the native checkbox
+       * stays, for what a screen reader announces, ticked when the item is
+       * done; a parent shows how many of its leaves are covered. The label
+       * sits beside the box, what follows it (a nested list) runs under it.
+       */
+      listitem(this: Renderer, item: Tokens.ListItem) {
+        if (!item.task) return false;
+        const { state, done, total } = taskTally(item);
+        const cut = item.tokens.findIndex((t) => t.type === "list");
+        const head = cut === -1 ? item.tokens : item.tokens.slice(0, cut);
+        const tail = cut === -1 ? [] : item.tokens.slice(cut);
+        const box = `<input type="checkbox" class="md-check-box" disabled${state === "done" ? " checked" : ""}>`;
+        const count = total ? `<span class="md-check-count">${done}/${total}</span>` : "";
+        const label = `<div class="md-check-label">${this.parser.parse(head)}${count}</div>`;
+        return `<li class="md-check md-check-${state}">${box}${label}${this.parser.parse(tail)}</li>\n`;
+      },
+
+      /** The item draws its own box (above). */
+      checkbox: () => "",
     },
     extensions: [
       {

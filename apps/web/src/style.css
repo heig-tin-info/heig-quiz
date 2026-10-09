@@ -666,6 +666,79 @@ html.dark {
 .md-body.md-doc > :first-child { margin-top: 0; }
 .md-body.md-doc > :last-child { margin-bottom: 0; }
 
+/* A journal's task list, read as a course plan (`packages/docrender/src/tasks.ts`).
+   The box is the marker, so the bullet goes. Three tones for a state the
+   renderer DERIVED: not covered (neutral, the label a step quieter), in
+   progress (warning, a dot), covered (success, a tick). A parent carries the
+   count of its covered leaves; its children hang from a guide under its box.
+   The box is the disabled native checkbox, redrawn, so a screen reader still
+   hears ticked or not. */
+.md-body li.md-check {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  column-gap: 10px;
+  margin: 2px 0;
+}
+.md-body ul:has(> li.md-check) { padding-left: 0; }
+.md-body li.md-check > :not(.md-check-box, .md-check-label) { grid-column: 1 / -1; }
+.md-body li.md-check > ul:has(> li.md-check) {
+  /* The guide runs under the parent's box; a child's box lands under the parent's text. */
+  margin: 0 0 0 8px;
+  padding-left: 19px;
+  border-left: 1px solid var(--line);
+}
+.md-body .md-check-box {
+  appearance: none;
+  position: relative;
+  width: 18px;
+  height: 18px;
+  margin: calc((1lh - 18px) / 2) 0 0;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--surface);
+  opacity: 1;
+}
+.md-body .md-check-box::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+.md-body .md-check-doing > .md-check-box { border-color: var(--warning); background: var(--warning-soft); }
+.md-body .md-check-doing > .md-check-box::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--warning);
+}
+.md-body .md-check-done > .md-check-box { border-color: var(--success); background: var(--success); }
+.md-body .md-check-done > .md-check-box::before {
+  width: 12px;
+  height: 12px;
+  background: var(--on-fill);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2 5 8.6l4.6-5.2' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.md-body .md-check-todo > .md-check-label { color: var(--fg-muted); }
+/* A parent is a chapter of the plan: one weight up. */
+.md-body li.md-check:has(> ul > li.md-check) > .md-check-label { font-weight: 600; }
+.md-body .md-check-label > :last-child { margin-bottom: 0; }
+.md-body .md-check-count {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+  vertical-align: 1px;
+  color: var(--fg-faint);
+  background: var(--surface-2);
+}
+.md-body .md-check-doing > .md-check-label > .md-check-count { color: var(--warning); background: var(--warning-soft); }
+.md-body .md-check-done > .md-check-label > .md-check-count { color: var(--success); background: var(--success-soft); }
+
 /* WP9: student player. `.md-inline` is the variant that renders INSIDE a host
    element which already is a paragraph or a label — a question prompt, one
    choice of an mcq. It is an inline box with no block margins of its own; the

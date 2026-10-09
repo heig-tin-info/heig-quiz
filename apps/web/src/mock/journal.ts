@@ -146,6 +146,25 @@ interface Fixture {
 
 const heading = (depth: number, id: string, text: string) => `<h${depth} id="${id}">${text}</h${depth}>`;
 
+/** A course plan as a task list: the renderer derives each chapter's state from its topics. */
+const PLAN = renderPage(
+  [
+    "- [ ] Numération",
+    "  - [x] Bases (décimal, hexadécimal, octal, binaire)",
+    "  - [ ] Conversion de bases",
+    "  - [x] Complément à deux",
+    "- [ ] Processus de développement",
+    "  - [ ] Outils",
+    "    - [ ] Compilateur (gcc)",
+    "    - [ ] Éditeur (VS Code)",
+    "- [ ] Types et variables",
+    "  - [x] Entiers signés et non signés",
+    "  - [x] Flottants (IEEE 754)",
+    "",
+  ].join("\n"),
+  { classroomId: "r1", pagePath: "README.md", fallbackTitle: null, pages: new Set(), assets: new Set() },
+).html;
+
 const PAGES: Fixture[] = [
   {
     path: "README.md",
@@ -155,6 +174,8 @@ const PAGES: Fixture[] = [
       "<p>Bienvenue dans le journal du cours. Chaque semaine a sa page : ce qui a été vu, les exercices, les liens.</p>",
       heading(2, "organisation", "Organisation"),
       '<p>Les semaines sont dans la navigation. Commencez par <a href="./10-semaine-1/README.md">la semaine 1</a>, puis lisez <a href="./10-semaine-1/10-pointeurs.md#arithmetique">l\'arithmétique des pointeurs</a>.</p>',
+      heading(2, "plan", "Plan de cours"),
+      PLAN,
       heading(2, "evaluation", "Évaluation"),
       "<p>Deux tests écrits et un projet en groupe. Les tests se passent sur Quiz, en salle, avec Safe Exam Browser.</p>",
       heading(3, "tests", "Tests"),
@@ -165,6 +186,7 @@ const PAGES: Fixture[] = [
     toc: [
       { id: "programmation-1", depth: 1, text: "Programmation 1" },
       { id: "organisation", depth: 2, text: "Organisation" },
+      { id: "plan", depth: 2, text: "Plan de cours" },
       { id: "evaluation", depth: 2, text: "Évaluation" },
       { id: "tests", depth: 3, text: "Tests" },
       { id: "ressources", depth: 2, text: "Ressources" },
