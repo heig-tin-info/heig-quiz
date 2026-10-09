@@ -16,8 +16,9 @@ import { questionType } from "@quiz/registry/server";
 
 import type { LlmGateway } from "../llm/service.js";
 
-/** Why a wand cannot run, before any model is asked. */
+/** Why a wand cannot run, before any model is asked: `400 { error: code }`. */
 export class GenerateRefusal extends Error {
+  readonly status = 400;
   constructor(readonly code: "generate_unsupported" | "statement_empty" | "item_not_empty") {
     super(code);
     this.name = "GenerateRefusal";

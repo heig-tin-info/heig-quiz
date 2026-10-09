@@ -76,7 +76,7 @@ import {
   questionVersions,
   questions,
 } from "../../db/schema.js";
-import { DomainError, type Refusal } from "../http.js";
+import { refusalClass, type Refusal } from "../http.js";
 import {
   byId,
   createPollEvaluation,
@@ -114,14 +114,7 @@ const REFUSALS = {
   internal_error: [500],
 } satisfies Record<string, Refusal>;
 
-/** What this module refuses (`DomainError`, sent by `sendFailure`): `{ error: code, message, ...details }`. */
-export class PollError extends DomainError {
-  constructor(code: keyof typeof REFUSALS, message?: string) {
-    const [status, fixed]: Refusal = REFUSALS[code];
-    super(code, status, message ?? fixed ?? code);
-    this.name = "PollError";
-  }
-}
+export class PollError extends refusalClass("PollError", REFUSALS) {}
 
 /** The question types a poll runs: the contract's `PollQuestionType`. */
 const POLLABLE_TYPES: readonly PollType[] = PollQuestionType.options;

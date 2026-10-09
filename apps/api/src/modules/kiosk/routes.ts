@@ -45,7 +45,7 @@ import type { AppConfig } from "../../config.js";
 import { delegated, endStationSessions } from "../../auth/session.js";
 import { users } from "../../db/schema.js";
 import { adminGuard, loadEvaluation, teacherGuard } from "../guards.js";
-import { csrfRefused, emptyBody, invalid, notFound, sendFailure, teacherRoute } from "../http.js";
+import { csrfRefused, emptyBody, invalid, notFound, rateLimited, sendFailure, teacherRoute } from "../http.js";
 import { AttestationUnavailable } from "./attestation.js";
 import { FixedWindowLimiter } from "../../limiter.js";
 import { PairRateLimited, approvePairing, issuePairing, pollPairing, previewPairing } from "./pairing.js";
@@ -94,7 +94,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
   const throttled = (req: FastifyRequest, reply: FastifyReply) => {
     const retryAfterS = attempts.hit(req.ip, app.clock.now().getTime());
     if (retryAfterS === null) return null;
-    return reply.header("retry-after", String(retryAfterS)).code(429).send({ error: "rate_limited" });
+    return rateLimited(reply, retryAfterS);
   };
 
   /** What a station did, audited with no actor: a station is not a person. */
@@ -268,12 +268,9 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
   const pairingNotFound = (reply: FastifyReply) =>
     reply.code(404).send({ error: "pairing_not_found" });
 
-  const rateLimited = (reply: FastifyReply, err: unknown) => {
+  const pairThrottled = (reply: FastifyReply, err: unknown) => {
     if (!(err instanceof PairRateLimited)) throw err;
-    return reply
-      .header("retry-after", String(err.retryAfterS))
-      .code(429)
-      .send({ error: "rate_limited" });
+    return rateLimited(reply, err.retryAfterS);
   };
 
   app.get("/app/api/pair/:code", { preHandler: phone }, async (req, reply) => {
@@ -281,14 +278,14 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
     if (!params.success) return pairingNotFound(reply);
     const retryAfterS = previews.hit(req.user!.id, app.clock.now().getTime());
     if (retryAfterS !== null) {
-      return reply.header("retry-after", String(retryAfterS)).code(429).send({ error: "rate_limited" });
+      return rateLimited(reply, retryAfterS);
     }
     try {
       const found = await previewPairing(app.db, req.user!.id, params.data.code, app.clock.now());
       if (!found) return pairingNotFound(reply);
       return { station: { label: found.label }, evaluations: found.evaluations } satisfies PairPreview;
     } catch (err) {
-      return rateLimited(reply, err);
+      return pairThrottled(reply, err);
     }
   });
 
@@ -312,7 +309,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
       });
       return { station: { label: outcome.label } } satisfies PairApproved;
     } catch (err) {
-      return rateLimited(reply, err);
+      return pairThrottled(reply, err);
     }
   });
 
@@ -359,7 +356,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
           });
           return { station: { label: outcome.label } } satisfies PairApproved;
         } catch (err) {
-          return rateLimited(reply, err);
+          return pairThrottled(reply, err);
         }
       },
     ),

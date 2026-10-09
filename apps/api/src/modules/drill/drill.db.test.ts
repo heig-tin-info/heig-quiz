@@ -51,6 +51,8 @@ beforeAll(async () => {
 afterAll(() => restore());
 
 const T0 = "2026-10-05T07:00:00.000Z";
+/** A card out of reach: indistinguishable from a missing one. */
+const cardNotFound = { name: "DrillError", code: "not_found" };
 
 async function appAt(at = T0) {
   const app = await testApp(db);
@@ -305,7 +307,7 @@ describe("today's session (F-DRILL-03)", () => {
     const { seed, userId, right } = await oneStudent(app);
     await org.setArchived(db, seed.classroomId, true);
     expect((await drill.drillSession(db, userId, "fine", app.clock.now())).cards).toEqual([]);
-    await expect(drill.serveCard(db, userId, right.id, app.clock.now())).rejects.toBeInstanceOf(drill.DrillCardNotFound);
+    await expect(drill.serveCard(db, userId, right.id, app.clock.now())).rejects.toMatchObject(cardNotFound);
     // Kept for the retention period (06, question 28 (g)).
     expect(await cardsOf({ userId })).toHaveLength(2);
 
@@ -348,9 +350,7 @@ describe("today's session (F-DRILL-03)", () => {
     await drill.serveCard(db, userId, tenth, app.clock.now());
     await drill.answerCard(db, userId, tenth, { answer: "wrong", deviceClass: "fine" }, app.clock.now());
     const eleventh = (await cardsOf({ userId })).find((c) => c.lastReviewAt === null)!;
-    await expect(drill.serveCard(db, userId, eleventh.id, app.clock.now())).rejects.toBeInstanceOf(
-      drill.DrillCardNotFound,
-    );
+    await expect(drill.serveCard(db, userId, eleventh.id, app.clock.now())).rejects.toMatchObject(cardNotFound);
 
     // The next day, the cap is whole again (the budget of ten minutes holds ten unknown cards).
     app.clock.advance(86_400_000);
@@ -476,7 +476,7 @@ describe("a review (F-DRILL-02, ADR-041 §4)", () => {
     try {
       await expect(
         drill.answerCard(db, userId, right.id, { answer: "answer-q0", deviceClass: "fine" }, app.clock.now()),
-      ).rejects.toBeInstanceOf(drill.DrillCardNotFound);
+      ).rejects.toMatchObject(cardNotFound);
     } finally {
       proposing();
     }
@@ -493,11 +493,9 @@ describe("a review (F-DRILL-02, ADR-041 §4)", () => {
     const { userId, right } = await oneStudent(app);
     await expect(
       drill.answerCard(db, userId, right.id, { answer: "x", deviceClass: "fine" }, app.clock.now()),
-    ).rejects.toBeInstanceOf(drill.DrillNotServed);
+    ).rejects.toMatchObject({ code: "drill_not_served" });
     const stranger = (await oneStudent(app)).userId;
-    await expect(drill.serveCard(db, stranger, right.id, app.clock.now())).rejects.toBeInstanceOf(
-      drill.DrillCardNotFound,
-    );
+    await expect(drill.serveCard(db, stranger, right.id, app.clock.now())).rejects.toMatchObject(cardNotFound);
   });
 
   it("counts the time on screen by the server's clock, the hidden time excluded", async () => {
@@ -552,13 +550,9 @@ describe("a review (F-DRILL-02, ADR-041 §4)", () => {
 
     // Not twice in a day: a card reviewed today is not today's to serve again,
     // nor one not due before the day ends.
-    await expect(drill.serveCard(db, userId, right.id, app.clock.now())).rejects.toBeInstanceOf(
-      drill.DrillCardNotFound,
-    );
+    await expect(drill.serveCard(db, userId, right.id, app.clock.now())).rejects.toMatchObject(cardNotFound);
     app.clock.advance(86_400_000);
-    await expect(drill.serveCard(db, userId, right.id, app.clock.now())).rejects.toBeInstanceOf(
-      drill.DrillCardNotFound,
-    );
+    await expect(drill.serveCard(db, userId, right.id, app.clock.now())).rejects.toMatchObject(cardNotFound);
 
     // The student's own previous time is the reference now: much faster is Easy.
     app.clock.set(card!.dueAt);
@@ -830,7 +824,7 @@ describe("the third round (ADR-041 §13)", () => {
       await drill.serveCard(db, userId, cardId, app.clock.now());
       return true;
     } catch (error) {
-      if (error instanceof drill.DrillCardNotFound) return false;
+      if (error instanceof drill.DrillError && error.code === "not_found") return false;
       throw error;
     }
   };
@@ -880,7 +874,7 @@ describe("the third round (ADR-041 §13)", () => {
     expect((await drill.drillSession(db, userId, "fine", app.clock.now())).cards).toEqual([]);
     await expect(
       drill.answerCard(db, userId, card!.id, { answer: "x", deviceClass: "fine" }, app.clock.now()),
-    ).rejects.toBeInstanceOf(drill.DrillCardNotFound);
+    ).rejects.toMatchObject(cardNotFound);
 
     const closed = await live.closeEvaluation(db, await reload(db, seed.evaluationId), app.clock.now());
     await releaseResults(db, closed, app.clock.now());
@@ -952,7 +946,7 @@ describe("the third round (ADR-041 §13)", () => {
     expect((await drill.drillSession(db, none.userId, "fine", app.clock.now())).cards).toEqual([]);
     await expect(
       drill.answerCard(db, none.userId, none.card.id, { answer: "x", deviceClass: "fine" }, app.clock.now()),
-    ).rejects.toBeInstanceOf(drill.DrillCardNotFound);
+    ).rejects.toMatchObject(cardNotFound);
   });
 
   it("suspends an exam's cards while its release is withdrawn, and serves them again at the next", async () => {

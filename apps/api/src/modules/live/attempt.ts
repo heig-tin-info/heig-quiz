@@ -45,7 +45,7 @@ import {
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { answers, attempts, enrollments, evaluations, guestParticipants } from "../../db/schema.js";
-import { DomainError, rateLimited, type FailureArms, type Refusal } from "../http.js";
+import { rateLimited, refusalClass, type FailureArms, type Refusal } from "../http.js";
 import {
   feedbackOf,
   gradeDefaults,
@@ -123,7 +123,8 @@ const REFUSALS = {
   // ADR-091: a question a partial retake carried over is the previous
   // attempt's, as it stood: no write of any kind reaches it.
   item_acquired: [409, "this question was acquired in the previous attempt and is kept as it is"],
-  // `RetakesEnabled`.
+  // An exercise that allows several attempts reopens none (ADR-025): the
+  // student starts another attempt instead, which is what retakes are for.
   retakes_enabled: [409, "this exercise allows retakes: the student starts a new attempt"],
   // ADR-050: a reopened student would rewrite their answers with the
   // correction in hand.
@@ -155,14 +156,7 @@ const REFUSALS = {
 
 export type LiveErrorCode = keyof typeof REFUSALS;
 
-/** What this module refuses (`DomainError`, sent by `sendFailure`): `{ error: code, message, ...details }`. */
-export class LiveError extends DomainError {
-  constructor(code: LiveErrorCode, message?: string, details?: Readonly<Record<string, unknown>>) {
-    const [status, fixed]: Refusal = REFUSALS[code];
-    super(code, status, message ?? fixed ?? code, details);
-    this.name = "LiveError";
-  }
-}
+export class LiveError extends refusalClass("LiveError", REFUSALS) {}
 
 /** The 410 of §4.7. The body carries the reason AND the server's clock. */
 export class AttemptClosedError extends LiveError {
@@ -190,16 +184,6 @@ export class AttemptClosedError extends LiveError {
 export class RetakeRefused extends LiveError {
   constructor(readonly reason: RetakeRefusal) {
     super("retake_refused", `retake refused: ${reason}`, { reason });
-  }
-}
-
-/**
- * An exercise that allows several attempts reopens none (ADR-025): the
- * student starts another attempt instead, which is what retakes are for.
- */
-export class RetakesEnabled extends LiveError {
-  constructor() {
-    super("retakes_enabled");
   }
 }
 
@@ -1446,7 +1430,7 @@ export async function reopenAttempt(
   }
   if (attempt.state === "in_progress") return attempt;
   const refused = reopenRefusal(evaluation);
-  if (refused === "retakes_enabled") throw new RetakesEnabled();
+  if (refused === "retakes_enabled") throw new LiveError("retakes_enabled");
   if (refused === "correction_published") throw new LiveError("correction_published");
   const participant = await participantOfAttempt(db, evaluation, attempt);
   const { deadlineAt, bonusS } = deadlineFor(evaluation, {

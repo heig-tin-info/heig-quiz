@@ -124,6 +124,26 @@ export class DomainError extends Error {
  */
 export type Refusal = readonly [status: number, message?: string];
 
+/**
+ * A module's refusal class over its table: `new LiveError(code, message?,
+ * details?)` takes its status from the table, its message from the call or
+ * else the table or else the code, and sends as
+ * `{ error: code, message, ...details }` through `sendFailure`. The codes are
+ * the table's keys, a closed union: a typo at a throw site does not compile.
+ *
+ * `export class LiveError extends refusalClass("LiveError", REFUSALS) {}`
+ */
+export function refusalClass<C extends string>(name: string, table: Readonly<Record<C, Refusal>>) {
+  return class extends DomainError {
+    declare readonly code: C;
+    constructor(code: C, message?: string, details?: Readonly<Record<string, unknown>>) {
+      const [status, fixed] = table[code];
+      super(code, status, message ?? fixed ?? code, details);
+      this.name = name;
+    }
+  };
+}
+
 /** The 404 a service throws for an entity that went missing under it: `No such <what>`. */
 export const notFoundError = (what: string) => new DomainError("not_found", 404, `No such ${what}`);
 

@@ -29,7 +29,7 @@ import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
 import type { AppConfig } from "../../config.js";
 import { callerOf, ownSessionGuard, teacherGuard } from "../guards.js";
 import { invalid, notFound, rateLimited } from "../http.js";
-import { LlmError, llmFailure } from "../llm/service.js";
+import { llmArms } from "../llm/service.js";
 import { injectedApi } from "../mcp/service.js";
 import { loadCorpus } from "./corpus.js";
 import {
@@ -97,10 +97,8 @@ export async function assistPlugin(app: FastifyInstance, opts: { config: AppConf
       // twice — a few cents, rather than an exchange written into a
       // conversation its owner just deleted.
       if (error instanceof ConversationNotFound) return missing(reply);
-      if (error instanceof LlmError) {
-        const { status, body: failure } = llmFailure(error);
-        return reply.code(status).send(failure);
-      }
+      const refused = llmArms(reply, error, now);
+      if (refused) return refused;
       throw error;
     }
   });

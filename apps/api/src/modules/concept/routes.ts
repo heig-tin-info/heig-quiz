@@ -52,7 +52,7 @@ import {
 import { actorOf } from "../../audit.js";
 import { adminGuard, callerOf, teacherGuard } from "../guards.js";
 import { invalid, notFound, readerLang, sendFailure } from "../http.js";
-import { LlmError, llmFailure } from "../llm/service.js";
+import { llmArms } from "../llm/service.js";
 import * as service from "./service.js";
 
 export async function conceptPlugin(app: FastifyInstance) {
@@ -121,11 +121,7 @@ export async function conceptPlugin(app: FastifyInstance) {
       const run = await service.startSortRun(app, { userId: callerOf(req).id, actor: actorOf(req), now });
       return reply.code(202).send({ run } satisfies ConceptSortRunStatus);
     } catch (error) {
-      if (error instanceof LlmError) {
-        const { status, body } = llmFailure(error);
-        return reply.code(status).send(body);
-      }
-      return sendFailure(reply, error, now);
+      return sendFailure(reply, error, now, llmArms);
     }
   });
 

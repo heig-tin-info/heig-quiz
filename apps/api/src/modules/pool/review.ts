@@ -30,11 +30,24 @@ import { draftOf, putDraft } from "./questionWrite.js";
 import { nightCandidates, reviewJson, saveFindings, saveReview } from "./reviewStore.js";
 import type { QuestionRecord } from "./shared.js";
 
-/** Why a review cannot run or a fix cannot apply, before or after any model. */
+type ReviewRefusalCode = "not_published" | "review_unsupported" | "no_review" | "no_fix" | "fix_stale";
+
+/** A fix that no longer applies is a conflict; the rest, a request that cannot be served. */
+const REVIEW_REFUSAL_STATUS: Record<ReviewRefusalCode, number> = {
+  not_published: 400,
+  review_unsupported: 400,
+  no_review: 400,
+  no_fix: 400,
+  fix_stale: 409,
+};
+
+/** Why a review cannot run or a fix cannot apply, before or after any model: `{ error: code }`. */
 export class ReviewRefusal extends Error {
-  constructor(readonly code: "not_published" | "review_unsupported" | "no_review" | "no_fix" | "fix_stale") {
+  readonly status: number;
+  constructor(readonly code: ReviewRefusalCode) {
     super(code);
     this.name = "ReviewRefusal";
+    this.status = REVIEW_REFUSAL_STATUS[code];
   }
 }
 

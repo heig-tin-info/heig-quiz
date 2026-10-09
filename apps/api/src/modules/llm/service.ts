@@ -21,6 +21,7 @@ import {
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import { llmCalls, llmSettings, users } from "../../db/schema.js";
+import type { FailureArms } from "../http.js";
 import { decryptKey, encryptKey } from "./crypto.js";
 import { LlmError, type LlmUsageCount } from "./provider.js";
 
@@ -30,7 +31,8 @@ export { STUB_MODEL } from "./stub.js";
 
 /**
  * How a failed model call answers a screen (the wand, ADR-059; Review now,
- * ADR-060; the assistant, ADR-080): the gateway's code, worded by the client.
+ * ADR-060; the assistant, ADR-080): the gateway's code, worded by the client,
+ * as a route's failure arm (`{ error, reason }`, no message).
  */
 const LLM_FAILURES: Partial<Record<LlmErrorCode, [number, string]>> = {
   not_configured: [409, "llm_not_configured"],
@@ -38,9 +40,10 @@ const LLM_FAILURES: Partial<Record<LlmErrorCode, [number, string]>> = {
   budget_exhausted: [429, "llm_budget_exhausted"],
   rate_limited: [429, "rate_limited"],
 };
-export const llmFailure = (error: LlmError): { status: number; body: { error: string; reason: string } } => {
+export const llmArms: FailureArms = (reply, error) => {
+  if (!(error instanceof LlmError)) return null;
   const [status, code] = LLM_FAILURES[error.code] ?? [502, "llm_failed"];
-  return { status, body: { error: code, reason: error.code } };
+  return reply.code(status).send({ error: code, reason: error.code });
 };
 
 type SettingsRow = typeof llmSettings.$inferSelect;

@@ -401,7 +401,7 @@ describe("the supersede chain (F-GRADE-05)", () => {
         rows[0]!.userId!,
         app.clock.now(),
       ),
-    ).rejects.toThrow(service.CommentRequired);
+    ).rejects.toMatchObject({ code: "comment_required" });
   });
 
   it("holds the partial unique index: two validated gradings cannot coexist", async () => {

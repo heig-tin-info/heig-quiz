@@ -148,7 +148,7 @@ export async function registerConceptJobs(app: FastifyInstance, queue: JobQueue)
 
 /**
  * The admin's start: 409 `llm_not_configured` (through the caller's
- * `llmFailure`) without a usable gateway, 409 `concept_sort_running` while a
+ * `llmArms`) without a usable gateway, 409 `concept_sort_running` while a
  * run is alive; otherwise the row is claimed, the start audited, and the job
  * sent — or, without a queue, the pass started in this process, not awaited.
  */

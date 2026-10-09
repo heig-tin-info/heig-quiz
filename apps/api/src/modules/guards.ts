@@ -219,7 +219,7 @@ export async function isCourseOwner(db: Db, courseId: string, user: Pick<Caller,
  */
 export function withRoleStep<P, S>(
   load: (req: FastifyRequest, reply: FastifyReply, params: P) => Promise<S | null>,
-  role: ((req: FastifyRequest, reply: FastifyReply, scope: S) => Promise<unknown>) | undefined,
+  role: ((req: FastifyRequest, reply: FastifyReply, scope: S) => Promise<boolean>) | undefined,
 ) {
   if (!role) return load;
   return async (req: FastifyRequest, reply: FastifyReply, params: P): Promise<S | null> => {
@@ -236,7 +236,10 @@ export function withCourseRole<P, S>(
   courseIdOf: (scope: S) => string,
   needed: CourseRole | undefined,
 ) {
-  return withRoleStep(load, needed && ((req, reply, scope) => requireCourseRole(app, req, reply, courseIdOf(scope), needed)));
+  return withRoleStep(
+    load,
+    needed && (async (req, reply, scope) => (await requireCourseRole(app, req, reply, courseIdOf(scope), needed)) !== null),
+  );
 }
 
 /**

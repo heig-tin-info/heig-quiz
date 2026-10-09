@@ -39,7 +39,6 @@ export {
   RateLimited,
   RunnerDown,
   RetakeRefused,
-  RetakesEnabled,
   liveFailureArms,
   participantOf,
   sebSeat,

@@ -71,7 +71,7 @@ import {
   enrollments,
   gradings,
 } from "../../db/schema.js";
-import { DomainError, type Refusal } from "../http.js";
+import { refusalClass, type Refusal } from "../http.js";
 import {
   applyState,
   byId,
@@ -133,14 +133,7 @@ const REFUSALS = {
   correction_not_open: [409, "only a running exercise publishes its correction early"],
 } satisfies Record<string, Refusal>;
 
-/** What this module refuses (`DomainError`, sent by `sendFailure`): `{ error: code, message, ...details }`. */
-export class ResultsError extends DomainError {
-  constructor(code: keyof typeof REFUSALS, message?: string, details?: Readonly<Record<string, unknown>>) {
-    const [status, fixed]: Refusal = REFUSALS[code];
-    super(code, status, message ?? fixed ?? code, details);
-    this.name = "ResultsError";
-  }
-}
+export class ResultsError extends refusalClass("ResultsError", REFUSALS) {}
 
 export class NotReleasable extends ResultsError {
   constructor(message: string) {

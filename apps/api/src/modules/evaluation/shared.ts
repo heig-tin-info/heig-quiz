@@ -7,7 +7,7 @@ import { EVALUATION_STATES, itemListLock, type EvaluationStateName, type PastTim
 
 import type { Db, Tx } from "../../db/client.js";
 import { evaluationItems, evaluations } from "../../db/schema.js";
-import { DomainError, type Refusal } from "../http.js";
+import { refusalClass, type Refusal } from "../http.js";
 
 export type EvaluationRecord = typeof evaluations.$inferSelect;
 
@@ -85,14 +85,7 @@ const REFUSALS = {
 
 export type EvaluationErrorCode = keyof typeof REFUSALS;
 
-/** What this module refuses (`DomainError`, sent by `sendFailure`): `{ error: code, message, ...details }`. */
-export class EvaluationError extends DomainError {
-  constructor(code: EvaluationErrorCode, message?: string, details?: Readonly<Record<string, unknown>>) {
-    const [status, fixed]: Refusal = REFUSALS[code];
-    super(code, status, message ?? fixed ?? code, details);
-    this.name = "EvaluationError";
-  }
-}
+export class EvaluationError extends refusalClass("EvaluationError", REFUSALS) {}
 
 export class IllegalTransition extends EvaluationError {
   constructor(

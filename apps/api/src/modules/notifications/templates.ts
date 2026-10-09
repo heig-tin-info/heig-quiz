@@ -20,6 +20,8 @@
  */
 import type { NotificationKind, NotificationPayload, TeamsNotificationKind } from "@quiz/contracts";
 
+import { escapeHtml } from "../../html.js";
+
 export type MailLocale = "en" | "fr";
 
 const en = {
@@ -349,15 +351,6 @@ export function serverText(locale: MailLocale): Record<Key, string> {
   return DICTS[locale];
 }
 
-/** The five characters that matter in text and in a quoted attribute. */
-export function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
 
 /** `{name}` placeholders; `encode` is applied to the template AND each value. */
 function fill(

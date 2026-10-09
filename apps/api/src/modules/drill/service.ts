@@ -46,9 +46,8 @@ export {
   removeEvaluationCards,
 } from "./lifecycle.js";
 export {
-  DrillCardNotFound,
-  DrillNotServed,
   answerCard,
+  DrillError,
   drillSession,
   reportShown,
   serveCard,

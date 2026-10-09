@@ -47,7 +47,7 @@ import {
 import { iso } from "../../clock.js";
 import type { Db, Tx } from "../../db/client.js";
 import { answers, attempts, gradings, questionVersions, users } from "../../db/schema.js";
-import { DomainError, type Refusal } from "../http.js";
+import { refusalClass, type Refusal } from "../http.js";
 import {
   flagReleasedEvaluationsOf,
   joinedItem,
@@ -94,7 +94,7 @@ const NEWEST_FIRST = [
  * refusal reads the same wherever it is thrown, its message.
  */
 const REFUSALS = {
-  // `CommentRequired`.
+  // F-GRADE-05: overriding a correction without saying why is not allowed.
   comment_required: [422, "a manual override must carry a comment"],
   // F-GRADE-05 (ADR-026): a manual score outside what the item can be worth —
   // `[0, max]`, or `[-max, max]` for a choice question under negative marking.
@@ -106,21 +106,7 @@ const REFUSALS = {
   variables_changed: [409, "the version declares other variables than the item's"],
 } satisfies Record<string, Refusal>;
 
-/** What this module refuses (`DomainError`, sent by `sendFailure`): `{ error: code, message }`. */
-export class GradingError extends DomainError {
-  constructor(code: keyof typeof REFUSALS, message?: string) {
-    const [status, fixed]: Refusal = REFUSALS[code];
-    super(code, status, message ?? fixed ?? code);
-    this.name = "GradingError";
-  }
-}
-
-/** F-GRADE-05: overriding a correction without saying why is not allowed. */
-export class CommentRequired extends GradingError {
-  constructor() {
-    super("comment_required");
-  }
-}
+export class GradingError extends refusalClass("GradingError", REFUSALS) {}
 
 // --- Keys -----------------------------------------------------------------
 
@@ -778,7 +764,7 @@ export async function manualOverride(
   userId: string,
   now: Date,
 ): Promise<GradingRecord> {
-  if (input.comment.trim().length === 0) throw new CommentRequired();
+  if (input.comment.trim().length === 0) throw new GradingError("comment_required");
   return writeGrading(db, {
     attemptId: target.attemptId,
     itemId: target.itemId,

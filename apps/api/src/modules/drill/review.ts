@@ -66,7 +66,7 @@ import {
   questions,
 } from "../../db/schema.js";
 import { gradeDefaults, type DbOrTx, type EvaluationRecord } from "../evaluation/service.js";
-import { DomainError, type Refusal } from "../http.js";
+import { refusalClass, type Refusal } from "../http.js";
 import { drawSeed, isShuffleable, studentSolutionView, studentView } from "../live/service.js";
 import { ParameterError } from "@quiz/domain/parameters";
 
@@ -84,34 +84,16 @@ import { currentVersions, drillGradeContext, keyHashOf } from "./lifecycle.js";
 
 /** Everything this module refuses, by code: its status and, where it has one, its message. */
 const REFUSALS = {
+  // A card that is not the caller's, not active, or not in today's session:
+  // indistinguishable from a missing one.
   not_found: [404],
+  // An answer to a card that was not served (or already answered).
   drill_not_served: [409, "serve the card before answering it"],
   // The answer does not satisfy the type's own schema.
   answer_invalid: [422],
 } satisfies Record<string, Refusal>;
 
-/** What this module refuses (`DomainError`, sent by `sendFailure`): `{ error: code, message }`. */
-export class DrillError extends DomainError {
-  constructor(code: keyof typeof REFUSALS) {
-    const [status, fixed]: Refusal = REFUSALS[code];
-    super(code, status, fixed ?? code);
-    this.name = "DrillError";
-  }
-}
-
-/** A card that is not the caller's, not active, or not in today's session: indistinguishable from a missing one. */
-export class DrillCardNotFound extends DrillError {
-  constructor() {
-    super("not_found");
-  }
-}
-
-/** An answer to a card that was not served (or already answered). */
-export class DrillNotServed extends DrillError {
-  constructor() {
-    super("drill_not_served");
-  }
-}
+export class DrillError extends refusalClass("DrillError", REFUSALS) {}
 
 /** The cards the drill may reach, with what the session needs to know of them. */
 function activeCards(db: DbOrTx, where: SQL | undefined) {
@@ -152,7 +134,7 @@ type Day = { start: Date; end: Date };
 
 async function ownActiveCard(db: DbOrTx, userId: string, cardId: string): Promise<ActiveRow> {
   const [row] = await activeCards(db, and(eq(drillCards.id, cardId), eq(drillCards.userId, userId)));
-  if (!row) throw new DrillCardNotFound();
+  if (!row) throw new DrillError("not_found");
   return row;
 }
 
@@ -296,9 +278,9 @@ function viewOf(row: ActiveRow, version: StaticVersion, seed: number) {
 async function servable(db: DbOrTx, userId: string, cardId: string, now: Date) {
   const row = await ownActiveCard(db, userId, cardId);
   const day = drillDayBounds(now);
-  if (!servableToday(row.card, day, await introducedToday(db, userId, day))) throw new DrillCardNotFound();
+  if (!servableToday(row.card, day, await introducedToday(db, userId, day))) throw new DrillError("not_found");
   const question = questionOf(row, await loadContext(db, userId, [row]));
-  if (!question?.open) throw new DrillCardNotFound();
+  if (!question?.open) throw new DrillError("not_found");
   return { row, question };
 }
 
@@ -491,7 +473,7 @@ export async function reportShown(
     )
     .where(and(eq(drillCards.id, cardId), isNotNull(drillCards.serveSeed)))
     .returning({ id: drillCards.id });
-  if (!row) throw new DrillNotServed();
+  if (!row) throw new DrillError("drill_not_served");
 }
 
 /**
@@ -518,10 +500,10 @@ export async function answerCard(
       .from(drillCards)
       .where(and(eq(drillCards.id, cardId), eq(drillCards.userId, userId)))
       .for("update");
-    if (!locked) throw new DrillCardNotFound();
+    if (!locked) throw new DrillError("not_found");
     // Under the lock: the card as it stands, still in today's session.
     const { row, question } = await servable(tx, userId, cardId, now);
-    if (locked.serveSeed === null) throw new DrillNotServed();
+    if (locked.serveSeed === null) throw new DrillError("drill_not_served");
     const type = typeOf(row.type);
     let answer: unknown = null;
     if (input.answer !== null && input.answer !== undefined) {
@@ -550,7 +532,7 @@ export async function answerCard(
     // A review has nobody to wait for (ADR-041 §3): a grading that is not
     // final — an edit that made the question wait for an LLM or a teacher —
     // is refused, and nothing is written.
-    if (!isDrillEligible(row.type, result) || result.kind !== "graded") throw new DrillCardNotFound();
+    if (!isDrillEligible(row.type, result) || result.kind !== "graded") throw new DrillError("not_found");
     const correctness = drillCorrectness(result.points, result.maxPoints);
     const activeMs = card.activeMs + Number(locked.credit);
     const rating = drillRating({ correctness, activeMs, referenceMs });
