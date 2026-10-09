@@ -47,6 +47,7 @@ import {
   Button,
   Card,
   cx,
+  Dash,
   EmptyState,
   FormError,
   IconButton,
@@ -433,7 +434,7 @@ function ItemCard({
         {/* The literal `@` classes of the list's container (`@container` on the ul). */}
         <span className="hidden w-48 shrink-0 @4xl:block">
           {concepts.length === 0 ? (
-            <span className="text-sm text-fg-faint">—</span>
+            <Dash className="text-sm" />
           ) : (
             <ConceptNames concepts={concepts} />
           )}
@@ -607,7 +608,6 @@ export function ItemsStep({
     const ok = await confirm({
       title: t("eval.questions.intro.removeConfirm"),
       confirmLabel: t("eval.questions.intro.removeAction"),
-      cancelLabel: t("common.cancel"),
       danger: true,
     });
     if (ok) patch.mutate({ itemId: item.id, body: { intro: null } });

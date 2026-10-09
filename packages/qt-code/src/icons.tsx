@@ -41,19 +41,13 @@ export const TerminalIcon = (): ReactNode => (
   </Icon>
 );
 
-/** Remove a row. */
-export const TrashIcon = (): ReactNode => (
+/**
+ * The padlock of the template editor's lock button, closed or open: lucide's
+ * `Lock` and `LockOpen`.
+ */
+export const LockIcon = ({ open = false }: { open?: boolean }): ReactNode => (
   <Icon>
-    <path d="M3 6h18" />
-    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-  </Icon>
-);
-
-/** Add a row. */
-export const PlusIcon = (): ReactNode => (
-  <Icon>
-    <path d="M5 12h14" />
-    <path d="M12 5v14" />
+    <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+    <path d={open ? "M7 11V7a5 5 0 0 1 9.9-1" : "M7 11V7a5 5 0 0 1 10 0v4"} />
   </Icon>
 );

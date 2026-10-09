@@ -193,12 +193,7 @@ export function PullTemplateDialog({
           <Skeleton className="h-16 w-full" />
         </div>
       ) : preview.isError || !data ? (
-        <QueryError
-          title={t("templatePull.loadFailed")}
-          error={preview.error}
-          onRetry={() => void preview.refetch()}
-          retrying={preview.isFetching}
-        />
+        <QueryError title={t("templatePull.loadFailed")} query={preview} />
       ) : (
         <>
           <p className="text-sm">

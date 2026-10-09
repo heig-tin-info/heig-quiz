@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -866,6 +866,17 @@ describe("RichText — the blank card", () => {
     renderWithProviders(<Host initial="" holes onValue={onValue} />);
     await userEvent.click(insert());
     await fill("Answer 1", "z{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Blank" })).not.toBeInTheDocument();
+    await waitFor(() => expect(surface().querySelector(".rt-hole")).toBeNull());
+  });
+
+  // Escape is the layer's (`useLayer`), wherever the focus is in the card:
+  // here on a mode, not in a text field.
+  it("Escape from a mode closes the card too", async () => {
+    renderWithProviders(<Host initial="" holes />);
+    await userEvent.click(insert());
+    await userEvent.click(within(card()).getAllByRole("radio")[1]!);
+    await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("dialog", { name: "Blank" })).not.toBeInTheDocument();
     await waitFor(() => expect(surface().querySelector(".rt-hole")).toBeNull());
   });

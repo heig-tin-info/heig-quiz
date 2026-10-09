@@ -81,13 +81,7 @@ export function StudentCopy({
           <Skeleton className="h-40 w-full" />
         </div>
       ) : copy.isError || !data ? (
-        <QueryError
-          title={t("results.copy.loadFailed")}
-          error={copy.error}
-          onRetry={() => void copy.refetch()}
-          retrying={copy.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("results.copy.loadFailed")} query={copy} />
       ) : (
         <div className="space-y-5">
           <PendingLine count={data.pendingCount} />

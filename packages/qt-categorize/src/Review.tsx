@@ -15,7 +15,7 @@
  */
 import type { ReviewProps, StringOverrides } from "@quiz/core/client";
 import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
-import { breakdownOf, caption, cx, markdown, reviewPrompt, ScoreHeader } from "@quiz/ui";
+import { breakdownOf, caption, CloseIcon, cx, markdown, reviewPrompt, ScoreHeader } from "@quiz/ui";
 
 import { ColumnFrame, columnGrid, trayFrame } from "./Board.js";
 import { keyOf, normalizePlacement, trayOf } from "./placement.js";
@@ -26,7 +26,7 @@ import type {
   CategorizeStudent,
 } from "./schema.js";
 import { categorizeReviewStrings, type CategorizeReviewStringKey } from "./strings.js";
-import { cardClass, cardTone, CheckIcon, CloseIcon, Rank } from "./ui.js";
+import { cardClass, cardTone, CheckIcon, Rank } from "./ui.js";
 
 type CategorizeReviewProps = ReviewProps<
   CategorizeStudent,

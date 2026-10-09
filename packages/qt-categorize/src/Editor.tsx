@@ -24,6 +24,7 @@ import {
   AsideSection,
   buttonClass,
   CheckboxField,
+  CloseIcon,
   cx,
   gripClass,
   GripIcon,
@@ -33,6 +34,7 @@ import {
   IssueList,
   label,
   markdown,
+  PlusIcon,
   PromptField,
   sectionClass,
   sectionTitle,
@@ -53,7 +55,7 @@ import {
   type CategorizeQuestionPolicy,
 } from "./schema.js";
 import { categorizeEditorStrings, type CategorizeEditorStringKey } from "./strings.js";
-import { CloseIcon, iconButtonClass, PlusIcon, Rank } from "./ui.js";
+import { iconButtonClass, Rank } from "./ui.js";
 
 type CategorizeEditorProps = EditorProps<CategorizeConfig> & {
   strings?: StringOverrides<CategorizeEditorStringKey>;

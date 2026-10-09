@@ -1,8 +1,13 @@
 import { CircleCheck, CircleHelp, CircleX, Loader2, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { badge, type BadgeTone } from "@quiz/ui";
+
 import { useT } from "../i18n";
 import { cx, type IconType } from "./layers";
+
+/** An empty cell: `@quiz/ui`'s faint em dash, which the question types draw too. */
+export { Dash } from "@quiz/ui";
 
 // Feedback: loading, key caps, status and notices.
 
@@ -142,12 +147,13 @@ export function LevelIcon({ level, label, className }: { level: CheckLevel; labe
   );
 }
 
-const TONES: Record<Tone, string> = {
-  green: "bg-success-soft text-success",
-  amber: "bg-warning-soft text-warning",
-  red: "bg-danger-soft text-danger",
-  zinc: "bg-surface-3 text-fg-muted",
-  accent: "bg-accent-soft text-accent",
+/** The app's tone names over `@quiz/ui`'s, where the pill's class list lives. */
+const BADGE_TONES: Record<Tone, BadgeTone> = {
+  green: "success",
+  amber: "warning",
+  red: "danger",
+  zinc: "neutral",
+  accent: "accent",
 };
 
 /** Status pill. A status is a badge; a plain count is text. */
@@ -163,13 +169,7 @@ export function Badge({
   className?: string;
 }) {
   return (
-    <span
-      className={cx(
-        "inline-flex h-5.5 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 text-xs font-medium",
-        TONES[tone],
-        className,
-      )}
-    >
+    <span className={badge(BADGE_TONES[tone], className)}>
       {Icon ? <Icon className="size-3" /> : null}
       {children}
     </span>

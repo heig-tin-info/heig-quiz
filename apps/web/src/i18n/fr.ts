@@ -1584,7 +1584,6 @@ export const fr: Record<keyof Dict, string> = {
   "pool.tab.concepts": "Notions",
   "pool.concepts.filter": "Filtrer les notions",
   "pool.concepts.view": "Afficher les notions en",
-  "pool.concepts.view.heat": "Carte",
   "pool.concepts.count": "{n} notions",
   "pool.concepts.count.one": "1 notion",
   "pool.concepts.countOf": "{n} notions sur {total}",
@@ -4267,6 +4266,7 @@ export const fr: Record<keyof Dict, string> = {
   "palette.openResults": "Ouvrir les résultats",
 
   "view.cards": "Cartes",
+  "view.heat": "Carte",
   "view.list": "Liste",
   "view.schedule": "Planning",
   "classrooms.tabs": "Sections de la classe",

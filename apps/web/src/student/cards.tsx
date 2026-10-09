@@ -565,13 +565,7 @@ export function ClassroomList({ navigate }: { navigate: (r: Route) => void }) {
       {rooms.isLoading ? (
         <Skeleton className="h-20 w-full" />
       ) : rooms.isError ? (
-        <QueryError
-          title={t("shome.classrooms")}
-          error={rooms.error}
-          onRetry={() => void rooms.refetch()}
-          retrying={rooms.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("shome.classrooms")} query={rooms} />
       ) : (rooms.data ?? []).length === 0 ? (
         <Card>
           <EmptyState icon={GraduationCap} title={t("shome.rooms.empty.title")}>

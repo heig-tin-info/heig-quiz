@@ -214,7 +214,6 @@ export function useTemplateActions(
           title: t("templates.delete"),
           message: t("templates.deleteConfirm", { name: template.title }),
           confirmLabel: t("common.delete"),
-          cancelLabel: t("common.cancel"),
           danger: true,
         })
       ) {
@@ -315,12 +314,7 @@ export function CourseTemplates({
       {list.isLoading ? (
         <Skeleton className="h-6 w-64" />
       ) : list.isError ? (
-        <QueryError
-          title={t("templates.title")}
-          error={list.error}
-          onRetry={() => void list.refetch()}
-          retrying={list.isFetching}
-        />
+        <QueryError title={t("templates.title")} query={list} />
       ) : templates.length === 0 ? (
         <EmptyState
           icon={FileStack}

@@ -3,7 +3,7 @@ import type { GroupSetUse } from "@quiz/contracts";
 import { AppLink } from "../AppLink";
 import { useT } from "../i18n";
 import type { Navigate } from "../router";
-import { Badge, textLink } from "../ui";
+import { Badge, Dash, textLink } from "../ui";
 
 /**
  * The projects that name a set (ADR-070 §4), each a link to its page: an
@@ -12,7 +12,7 @@ import { Badge, textLink } from "../ui";
  */
 export function SetUses({ uses, navigate }: { uses: Pick<GroupSetUse, "id" | "name" | "archived" | "follows">[]; navigate: Navigate }) {
   const t = useT();
-  if (uses.length === 0) return <span className="text-fg-faint">—</span>;
+  if (uses.length === 0) return <Dash />;
   return (
     <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
       {uses.map((use) => (

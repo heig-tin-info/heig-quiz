@@ -157,13 +157,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   if (detail.isError || !detail.data) {
     return (
       <div style={pageBox(null)}>
-      <PageError
-        title={t("eval.notFound")}
-        error={detail.error}
-        onRetry={() => void detail.refetch()}
-        retrying={detail.isFetching}
-        fallback={t("error.server")}
-      />
+      <PageError title={t("eval.notFound")} query={detail} />
       </div>
     );
   }
@@ -314,7 +308,6 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
                             title: t("eval.resetAttempt.title"),
                             message: t("eval.resetAttempt.message"),
                             confirmLabel: t("eval.resetAttempt.confirm"),
-                            cancelLabel: t("common.cancel"),
                             danger: true,
                           })
                         ) {
@@ -334,7 +327,6 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
                     await confirm({
                       title: t("eval.deleteConfirm", { name: evaluation.title }),
                       confirmLabel: t("common.delete"),
-                      cancelLabel: t("common.cancel"),
                       danger: true,
                     })
                   ) {

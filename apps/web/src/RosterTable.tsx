@@ -25,7 +25,9 @@ import {
   Alert,
   Badge,
   Button,
+  type Column,
   cx,
+  Dash,
   ErrorText,
   GithubIcon,
   IconButton,
@@ -38,7 +40,6 @@ import {
   T,
   TableHead,
   useSortableTable,
-  type Column,
 } from "./ui";
 import { classroomKey } from "./queryKeys";
 
@@ -242,7 +243,7 @@ function Row({
           {entry.timeBonusPercent > 0 ? (
             <span className="font-semibold text-accent">+{entry.timeBonusPercent}%</span>
           ) : (
-            <span className="text-fg-faint">—</span>
+            <Dash />
           )}
         </td>
         <td className={cx(T.td, "whitespace-nowrap text-fg-muted", T.colLow)}>
@@ -283,7 +284,6 @@ function Row({
                             title: t("roster.revokeConfirm", { name: fullName }),
                             message: t("roster.revokeBody"),
                             confirmLabel: t("roster.revoke"),
-                            cancelLabel: t("common.cancel"),
                           })
                         ) {
                           unclaim.mutate();
@@ -304,7 +304,6 @@ function Row({
                       title: t("roster.removeConfirm", { name: fullName }),
                       message: t("roster.removeBody"),
                       confirmLabel: t("roster.remove"),
-                      cancelLabel: t("common.cancel"),
                       danger: true,
                     })
                   ) {

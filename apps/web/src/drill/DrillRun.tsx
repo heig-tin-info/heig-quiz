@@ -200,12 +200,7 @@ function DrillCard({
     if (served.isError || !served.data) {
       return (
         <div className="space-y-3">
-          <QueryError
-            title={t("drill.serveFailed")}
-            error={served.error}
-            onRetry={() => void served.refetch()}
-            retrying={served.isFetching}
-          />
+          <QueryError title={t("drill.serveFailed")} query={served} />
           <div className="flex justify-end">
             <Button variant="secondary" onClick={() => onNext("skipped")}>
               {t("drill.skip")}

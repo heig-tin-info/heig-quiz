@@ -176,12 +176,7 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
     return (
       <div className="space-y-6">
         {header}
-        <QueryError
-          title={t("project.sourcesFailed")}
-          error={sources.error}
-          onRetry={() => void sources.refetch()}
-          retrying={sources.isFetching}
-        />
+        <QueryError title={t("project.sourcesFailed")} query={sources} />
       </div>
     );
   }

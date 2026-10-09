@@ -38,7 +38,9 @@ import type { Route } from "../router";
 import {
   Badge,
   Card,
+  type Column,
   cx,
+  Dash,
   EmptyState,
   isoDateParts,
   PageHeader,
@@ -48,7 +50,6 @@ import {
   SectionHeading,
   T,
   TableHead,
-  type Column,
   type Tone,
 } from "../ui";
 import { MODE_KEY, PendingLine } from "./cards";
@@ -76,13 +77,7 @@ export function StudentGrades({ navigate }: { navigate: (r: Route) => void }) {
     <div className="space-y-6">
       <PageHeader title={t("bnav.grades")} description={t("sgrades.subtitle")} />
       {grades.isError ? (
-        <QueryError
-          title={t("bnav.grades")}
-          error={grades.error}
-          onRetry={() => void grades.refetch()}
-          retrying={grades.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("bnav.grades")} query={grades} />
       ) : groups.length === 0 ? (
         <Card>
           <EmptyState icon={Trophy} title={t("sgrades.empty.title")}>
@@ -135,17 +130,17 @@ function GradeTable({ rows, open }: { rows: GradeRow[]; open: Opener }) {
   // No sorting: the rows come newest first, the one order a student reads
   // finished work in.
   const columns: Column<string>[] = [
-    { key: "title", label: t("sgrades.col.activity"), sortable: false },
-    { key: "mode", label: t("sgrades.col.kind"), sortable: false, className: cx(T.colMid, "w-32") },
-    { key: "date", label: t("sgrades.col.date"), sortable: false, className: cx(T.colHigh, "w-32") },
-    { key: "points", label: t("results.col.points"), sortable: false, right: true, className: "w-24" },
-    { key: "grade", label: t("results.col.grade"), sortable: false, right: true, className: "w-20" },
-    { key: "status", label: t("sgrades.col.status"), sortable: false, className: "w-44" },
-    { key: "open", label: t("shome.review"), sortable: false, srOnly: true, className: "w-10" },
+    { key: "title", label: t("sgrades.col.activity") },
+    { key: "mode", label: t("sgrades.col.kind"), className: cx(T.colMid, "w-32") },
+    { key: "date", label: t("sgrades.col.date"), className: cx(T.colHigh, "w-32") },
+    { key: "points", label: t("results.col.points"), right: true, className: "w-24" },
+    { key: "grade", label: t("results.col.grade"), right: true, className: "w-20" },
+    { key: "status", label: t("sgrades.col.status"), className: "w-44" },
+    { key: "open", label: t("shome.review"), srOnly: true, className: "w-10" },
   ];
   return (
     <table className={cx(T.table, "hidden table-fixed @lg:table")}>
-      <TableHead columns={columns} sort={null} onToggle={() => {}} />
+      <TableHead columns={columns} />
       <tbody>
         {rows.map((row) => {
           const go = open(row);
@@ -275,4 +270,3 @@ function StatusBadge({ status }: { status: GradeStatus }) {
   return <Badge tone={STATUS[status].tone}>{t(STATUS[status].label)}</Badge>;
 }
 
-const Dash = () => <span className="text-fg-faint">—</span>;

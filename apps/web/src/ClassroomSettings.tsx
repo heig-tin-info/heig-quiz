@@ -186,7 +186,6 @@ function LifecycleSection({ room, navigate }: { room: ClassroomDetail; navigate:
                         }
                       : {}),
                     confirmLabel: t("common.delete"),
-                    cancelLabel: t("common.cancel"),
                     danger: true,
                   })
                 ) {

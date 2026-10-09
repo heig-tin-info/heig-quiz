@@ -18,7 +18,21 @@ import { HelpIcon } from "../help";
 import { useT, type TFunction } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { questionInstancesKey } from "../queryKeys";
-import { Alert, Button, Card, cx, ErrorText, Field, IconButton, inputClass, inputSize, Select, Skeleton, T } from "../ui";
+import {
+  Alert,
+  Button,
+  Card,
+  cx,
+  ErrorText,
+  Field,
+  IconButton,
+  inputClass,
+  inputSize,
+  Select,
+  Skeleton,
+  T,
+  TableHead,
+} from "../ui";
 import { issueMessage } from "./issues";
 import { PlayedQuestion } from "./PreviewedQuestion";
 
@@ -471,20 +485,15 @@ function Draws({
       <div className={cx("space-y-3 transition-opacity", (stale || query.isFetching) && "opacity-60")}>
         <div className={cx(T.container, "overflow-x-auto")}>
           <table className={T.table}>
-            <thead className={T.head}>
-              <tr>
-                <th className={T.th}>{t("param.draws.draw")}</th>
-                {own.map((name) => (
-                  <th key={name} className={cx(T.th, "text-right font-mono")}>
-                    {name}
-                  </th>
-                ))}
-                {rest ? <th className={T.th}>{t("param.draws.others")}</th> : null}
-                <th className={T.th}>
-                  <span className="sr-only">{t("common.actions")}</span>
-                </th>
-              </tr>
-            </thead>
+            <TableHead
+              columns={[
+                { key: "draw", label: t("param.draws.draw") },
+                // A variable's name is the teacher's: prefixed, so it never meets a fixed key.
+                ...own.map((name) => ({ key: `var:${name}`, label: name, right: true, className: "font-mono" })),
+                ...(rest ? [{ key: "others", label: t("param.draws.others") }] : []),
+                { key: "actions", label: t("common.actions"), srOnly: true },
+              ]}
+            />
             <tbody>
               {instances.map((instance, index) => (
                 <DrawRow

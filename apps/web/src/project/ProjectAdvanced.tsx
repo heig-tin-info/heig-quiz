@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 import type { ProjectSourceDetail } from "@quiz/contracts";
 
 import { GroupSetPicker } from "../group/GroupSetPicker";
@@ -17,19 +15,6 @@ import {
 } from "../ui";
 import { chosenBranches, chosenProtected, FIELD_ID, type ProjectDraft, type ProjectField } from "./newProject";
 import { ProtectedFiles } from "./ProtectedFiles";
-
-/** A setting whose control is a list, laid under its title rather than beside it. */
-function StackedRow({ title, desc, children }: { title: ReactNode; desc?: ReactNode; children: ReactNode }) {
-  return (
-    <div className="space-y-2.5 py-3">
-      <div>
-        <p className="text-sm font-medium text-fg">{title}</p>
-        {desc ? <p className="mt-0.5 text-[13px] text-fg-muted">{desc}</p> : null}
-      </div>
-      {children}
-    </div>
-  );
-}
 
 /**
  * A setting that is a count: the row's title names the input, its unit
@@ -119,7 +104,7 @@ export function ProjectAdvanced({
   return (
     <>
       {detail ? (
-        <StackedRow title={t("project.branches")} desc={t("project.branches.desc", { branch: branches[0]! })}>
+        <SettingRow stacked title={t("project.branches")} desc={t("project.branches.desc", { branch: branches[0]! })}>
           <div className="flex flex-wrap gap-2">
             {detail.branches.map((b) => (
               <ToggleChip
@@ -131,7 +116,7 @@ export function ProjectAdvanced({
               />
             ))}
           </div>
-        </StackedRow>
+        </SettingRow>
       ) : null}
 
       <SettingRow title={t("project.sourceStrategy")} desc={t(`project.sourceStrategy.desc.${draft.sourceStrategy}`)}>
@@ -228,13 +213,13 @@ export function ProjectAdvanced({
       ) : null}
 
       {detail && detail.suggestedProtected.length > 0 ? (
-        <StackedRow title={t("project.protected")}>
+        <SettingRow stacked title={t("project.protected")}>
           <ProtectedFiles
             suggested={detail.suggestedProtected}
             value={chosenProtected(draft, detail)}
             onChange={(protectedFiles) => update({ protectedFiles })}
           />
-        </StackedRow>
+        </SettingRow>
       ) : null}
 
       {/* Group work (ADR-070 §7): the classroom's group sets, or a new one.
@@ -246,7 +231,7 @@ export function ProjectAdvanced({
         <Switch checked={draft.groupMode} label={t("project.groups")} onChange={(groupMode) => update({ groupMode })} />
       </SettingRow>
       {draft.groupMode ? (
-        <StackedRow title={t("project.groupSet")} desc={t("project.groupSet.desc")}>
+        <SettingRow stacked title={t("project.groupSet")} desc={t("project.groupSet.desc")}>
           <GroupSetPicker
             id={FIELD_ID.groupSet}
             classroomId={classroomId}
@@ -254,7 +239,7 @@ export function ProjectAdvanced({
             onChange={(groupSetId) => update({ groupSetId })}
             message={message("groupSet")}
           />
-        </StackedRow>
+        </SettingRow>
       ) : null}
     </>
   );

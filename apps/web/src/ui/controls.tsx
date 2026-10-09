@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Loader2, Minus, Search } from "lucide-react";
+import { CalendarRange, Check, ChevronDown, LayoutDashboard, LayoutGrid, List, Loader2, Minus, Search } from "lucide-react";
 import { useId } from "react";
 import type { ReactNode } from "react";
 
@@ -15,6 +15,7 @@ import {
   type ButtonVariant,
 } from "@quiz/ui";
 
+import { useT } from "../i18n";
 import { HelpIcon, type IconType } from "./layers";
 
 // --- Buttons ---
@@ -93,12 +94,12 @@ export function LinkButton({
 
 /*
  * The field chrome (`inputClass`, no width and no height of its own), the two
- * control heights (`inputSize`) and the multi-line field (`textareaClass`)
- * are written once, in `@quiz/ui`: the editors and players of the question
- * types wear them too, so a field in a question editor is the field of every
- * other form of the app.
+ * control heights (`inputSize`) and the multi-line field (`textareaClass`,
+ * which `Textarea` wears) are written once, in `@quiz/ui`: the editors and
+ * players of the question types wear them too, so a field in a question
+ * editor is the field of every other form of the app.
  */
-export { inputClass, inputSize, textareaClass };
+export { inputClass, inputSize };
 type InputSize = keyof typeof inputSize;
 
 /**
@@ -475,7 +476,7 @@ export { Segmented };
  * (`title`) and the reader (`sr-only`). A pair of words beside the icons
  * would weigh more than the switch.
  */
-export function iconOption<T extends string>(value: T, icon: ReactNode, label: string) {
+function iconOption<T extends string>(value: T, icon: ReactNode, label: string) {
   return {
     value,
     label: (
@@ -485,6 +486,59 @@ export function iconOption<T extends string>(value: T, icon: ReactNode, label: s
       </span>
     ),
   };
+}
+
+/** The pictures a list can be drawn as, each with its icon. */
+export type ViewName = "cards" | "list" | "schedule" | "heat";
+const VIEW_ICONS: Record<ViewName, IconType> = {
+  cards: LayoutGrid,
+  list: List,
+  schedule: CalendarRange,
+  heat: LayoutDashboard,
+};
+
+/**
+ * The switch between pictures of the same list (cards, a table, a schedule,
+ * a heat map), in the order given: icons only (`iconOption`), at the list's
+ * top right. `label` names the group when no caption does.
+ */
+export function ViewSwitch<V extends ViewName>({
+  name,
+  views,
+  value,
+  onChange,
+  size,
+  label,
+}: {
+  name: string;
+  views: readonly V[];
+  value: V;
+  onChange: (view: V) => void;
+  size?: "sm" | "md";
+  label?: string;
+}) {
+  const t = useT();
+  // Literal keys, so the unused-keys test still sees them.
+  const labels: Record<ViewName, string> = {
+    cards: t("view.cards"),
+    list: t("view.list"),
+    schedule: t("view.schedule"),
+    heat: t("view.heat"),
+  };
+  return (
+    <Segmented
+      name={name}
+      size={size}
+      label={label}
+      value={value}
+      onChange={onChange}
+      options={views.map((view) => {
+        // Annotated: indexed by the generic `V`, the icon's props do not resolve in JSX.
+        const Icon: IconType = VIEW_ICONS[view];
+        return iconOption(view, <Icon className="size-4" />, labels[view]);
+      })}
+    />
+  );
 }
 export { ErrorText } from "@quiz/ui";
 
@@ -508,21 +562,41 @@ export function FieldError({ id, className, children }: { id: string; className?
 /**
  * Settings row: label + a description of the CURRENT choice on the left
  * (one dynamic line, not one per option), the control on the right.
+ * `stacked`: a control that is a list (branches, protected files) lies under
+ * the title rather than beside it.
  */
 export function SettingRow({
   title,
   desc,
   help,
+  stacked = false,
   children,
   className = "",
 }: {
   title: ReactNode;
   desc?: ReactNode;
   help?: string;
+  stacked?: boolean;
   children?: ReactNode;
   className?: string;
 }) {
-  const id = useId();
+  const text = (
+    <div className={stacked ? undefined : "min-w-0 flex-1 basis-56"}>
+      <span className="flex items-center gap-1 text-sm font-medium text-fg">
+        {title}
+        {help ? <HelpIcon topic={help} /> : null}
+      </span>
+      {desc ? <p className="mt-0.5 text-[13px] text-fg-muted">{desc}</p> : null}
+    </div>
+  );
+  if (stacked) {
+    return (
+      <div className={cx("space-y-2.5 py-3", className)}>
+        {text}
+        {children}
+      </div>
+    );
+  }
   return (
     // The row wraps rather than squeezing: the text keeps a 14 rem floor, so a
     // wide control (segmented, select) drops to its own line on a phone while a
@@ -533,13 +607,7 @@ export function SettingRow({
         className,
       )}
     >
-      <div className="min-w-0 flex-1 basis-56">
-        <span id={id} className="flex items-center gap-1 text-sm font-medium text-fg">
-          {title}
-          {help ? <HelpIcon topic={help} /> : null}
-        </span>
-        {desc ? <p className="mt-0.5 text-[13px] text-fg-muted">{desc}</p> : null}
-      </div>
+      {text}
       {children ? <div className="flex shrink-0 items-center gap-2">{children}</div> : null}
     </div>
   );

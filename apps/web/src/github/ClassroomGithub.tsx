@@ -82,13 +82,7 @@ export function ClassroomGithub({
   let body;
   if (github.isError || !github.data) {
     body = (
-      <QueryError
-        title={t("github.loadFailed")}
-        error={github.error}
-        onRetry={() => void github.refetch()}
-        retrying={github.isFetching}
-        fallback={t("error.server")}
-      />
+      <QueryError title={t("github.loadFailed")} query={github} />
     );
   } else if (github.data.link === null) {
     body = (
@@ -136,7 +130,6 @@ function Connected({ room, github }: { room: ClassroomDetail; github: GithubClas
         title: t("github.disconnectConfirm", { name: room.name, login: link.org.login }),
         message: t("github.disconnectBody"),
         confirmLabel: t("github.disconnect"),
-        cancelLabel: t("common.cancel"),
         danger: true,
       })
     ) {
@@ -263,13 +256,7 @@ function ConnectSheet({
           {orgs.isLoading ? (
             <Skeleton className="h-24 w-full" />
           ) : orgs.isError ? (
-            <QueryError
-              title={t("github.orgsFailed")}
-              error={orgs.error}
-              onRetry={() => void orgs.refetch()}
-              retrying={orgs.isFetching}
-              fallback={t("error.server")}
-            />
+            <QueryError title={t("github.orgsFailed")} query={orgs} />
           ) : ordered.length === 0 ? (
             <Card>
               <EmptyState icon={GithubIcon} title={t("github.orgsEmpty")} className="py-8" />

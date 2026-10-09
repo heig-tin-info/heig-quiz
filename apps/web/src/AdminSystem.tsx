@@ -121,13 +121,7 @@ export function SystemSection({ onOpenTasks }: { onOpenTasks: () => void }) {
   }
   if (status.isError || !status.data) {
     return (
-      <QueryError
-        title={t("admin.tab.system")}
-        error={status.error}
-        onRetry={() => void status.refetch()}
-        retrying={status.isFetching}
-        fallback={t("error.server")}
-      />
+      <QueryError title={t("admin.tab.system")} query={status} />
     );
   }
 

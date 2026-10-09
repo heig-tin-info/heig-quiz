@@ -11,7 +11,7 @@ import type {
 import { api } from "../api";
 import { formatSpan, useT, type Dict, type TFunction } from "../i18n";
 import { evaluationIncidentsKey } from "../queryKeys";
-import { Badge, Button, cx, EmptyState, Modal, QueryError, SectionHeading, Skeleton, T } from "../ui";
+import { Badge, Button, cx, EmptyState, Modal, QueryError, SectionHeading, Skeleton, T, TableHead } from "../ui";
 
 /**
  * The integrity journal as a teacher reads it (ADR-088 §7): a hint for the
@@ -91,13 +91,13 @@ function IncidentTable({ entries, named }: { entries: Entry[]; named: boolean })
   return (
     <div className={T.container}>
       <table className={T.table}>
-        <thead className={T.head}>
-          <tr>
-            <th className={T.th}>{t("live.integrity.col.time")}</th>
-            {named ? <th className={T.th}>{t("live.integrity.col.student")}</th> : null}
-            <th className={T.th}>{t("live.integrity.col.kind")}</th>
-          </tr>
-        </thead>
+        <TableHead
+          columns={[
+            { key: "time", label: t("live.integrity.col.time") },
+            ...(named ? [{ key: "student", label: t("live.integrity.col.student") }] : []),
+            { key: "kind", label: t("live.integrity.col.kind") },
+          ]}
+        />
         <tbody>
           {entries.map(({ key, incident, name, onOpen }) => (
             <tr key={key} className={T.row}>
@@ -206,13 +206,7 @@ export function IncidentsModal({
           <Skeleton className="h-4 w-3/5" />
         </div>
       ) : query.isError || !query.data ? (
-        <QueryError
-          title={t("live.integrity.failed")}
-          error={query.error}
-          onRetry={() => void query.refetch()}
-          retrying={query.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("live.integrity.failed")} query={query} />
       ) : (
         <IncidentTable named entries={entries} />
       )}

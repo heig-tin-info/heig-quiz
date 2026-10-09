@@ -61,13 +61,7 @@ export function ReviewTab({
   if (reviews.isLoading) return <Skeleton className="h-48 w-full" />;
   if (reviews.isError || !reviews.data) {
     return (
-      <QueryError
-        title={t("review.title")}
-        error={reviews.error}
-        onRetry={() => void reviews.refetch()}
-        retrying={reviews.isFetching}
-        fallback={t("error.server")}
-      />
+      <QueryError title={t("review.title")} query={reviews} />
     );
   }
   const list = reviews.data;

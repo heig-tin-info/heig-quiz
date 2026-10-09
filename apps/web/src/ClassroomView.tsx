@@ -282,13 +282,7 @@ export function ClassroomView({
   }
   if (room.isError || !room.data) {
     return (
-      <QueryError
-        title={t("classrooms.notFound")}
-        error={room.error}
-        onRetry={() => void room.refetch()}
-        retrying={room.isFetching}
-        fallback={t("error.server")}
-      />
+      <QueryError title={t("classrooms.notFound")} query={room} />
     );
   }
 

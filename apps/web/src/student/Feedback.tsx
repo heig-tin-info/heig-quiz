@@ -254,13 +254,7 @@ export function Feedback({
   if (feedback.isError || !feedback.data) {
     return (
       <div className="mx-auto max-w-180">
-        <QueryError
-          title={t("feedback.loadFailed")}
-          error={feedback.error}
-          onRetry={() => void feedback.refetch()}
-          retrying={feedback.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("feedback.loadFailed")} query={feedback} />
       </div>
     );
   }

@@ -87,7 +87,6 @@ export function QuestionStatsSheet({
       title: t("pool.stats.resetTitle", { name: row.internalName }),
       message: t("pool.stats.resetBody"),
       confirmLabel: t("pool.stats.resetConfirm"),
-      cancelLabel: t("common.cancel"),
       danger: true,
     });
     if (ok) reset.mutate();

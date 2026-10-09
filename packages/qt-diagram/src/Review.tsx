@@ -12,13 +12,13 @@
  * The text is derived by the kind's serialiser (`toText`, pure, the one of
  * `@quiz/diagram/server`) and never stored; `free` has no text form.
  */
-import { useId, useState, type ReactNode } from "react";
+import { useId, useState } from "react";
 
 import type { ReviewProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings, showsSection } from "@quiz/core/client";
 import { DiagramView, type DiagramStrings } from "@quiz/diagram/client";
 import { isEmptyScene, toText } from "@quiz/diagram/server";
-import { caption, markdown, reviewPrompt, ScoreHeader, Segmented } from "@quiz/ui";
+import { caption, markdown, NotePanel, reviewPrompt, ScoreHeader, Segmented } from "@quiz/ui";
 
 import { countsOf } from "./grading.js";
 import type { DiagramAnswer, DiagramDetails, DiagramSolution, DiagramStudent } from "./schema.js";
@@ -28,19 +28,6 @@ type DiagramReviewProps = ReviewProps<DiagramStudent, DiagramAnswer, DiagramSolu
   strings?: StringOverrides<DiagramReviewStringKey>;
   canvasStrings?: Partial<DiagramStrings>;
 };
-
-/** A labelled panel: `outlined` for what the student drew, `soft` for the teacher's guide (the `rich` review's). */
-function Panel({ title, aside, tone, children }: { title: string; aside?: ReactNode; tone: "soft" | "outlined"; children: ReactNode }) {
-  return (
-    <section className={tone === "soft" ? "rounded-field bg-surface-2 p-3" : "rounded-field border border-line-strong bg-surface p-3"}>
-      <p className="flex items-baseline justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-fg-faint">
-        <span>{title}</span>
-        {aside}
-      </p>
-      <div className="mt-2 text-sm text-fg">{children}</div>
-    </section>
-  );
-}
 
 export function DiagramReview({
   student,
@@ -70,35 +57,36 @@ export function DiagramReview({
   const shownText = texts === null || texts.reference === null ? null : tab === "student" ? texts.student : texts.reference;
 
   return (
-    <div className="flex flex-col gap-3">
+    // `text-sm text-fg`: the body of the panels; the other blocks set their own.
+    <div className="flex flex-col gap-3 text-sm text-fg">
       {showsSection(sections, "prompt") ? <div className={reviewPrompt}>{markdown(renderMarkdown, student.prompt)}</div> : null}
 
       {details?.reason === "kind_mismatch" ? <p className="text-[13px] text-warning">{s.kindMismatch}</p> : null}
 
-      <Panel
-        title={s.answer}
+      <NotePanel
+        eyebrow={s.answer}
         tone="outlined"
-        aside={drawn && scene ? <span className="font-normal normal-case tracking-normal tabular-nums">{countsOf(scene, s)}</span> : null}
+        aside={drawn && scene ? countsOf(scene, s) : null}
       >
         {drawn && scene ? (
           <DiagramView kind={student.kind} value={scene} strings={canvasStrings} aria-label={s.answer} />
         ) : (
           <span className={caption}>{s.noAnswer}</span>
         )}
-      </Panel>
+      </NotePanel>
 
       {guide === null ? null : (
         <>
-          <Panel
-            title={s.reference}
+          <NotePanel
+            eyebrow={s.reference}
             tone="soft"
-            aside={<span className="font-normal normal-case tracking-normal tabular-nums">{countsOf(guide.reference, s)}</span>}
+            aside={countsOf(guide.reference, s)}
           >
             <DiagramView kind={student.kind} value={guide.reference} strings={canvasStrings} aria-label={s.reference} />
-          </Panel>
+          </NotePanel>
 
           {shownText === null ? null : (
-            <Panel title={s.text} tone="soft">
+            <NotePanel eyebrow={s.text} tone="soft">
               <div className="flex flex-col gap-2">
                 <Segmented<"student" | "reference">
                   name={`${id}-text`}
@@ -119,13 +107,13 @@ export function DiagramReview({
                   </pre>
                 )}
               </div>
-            </Panel>
+            </NotePanel>
           )}
 
           {guide.rubric === undefined ? null : (
-            <Panel title={s.rubric} tone="soft">
+            <NotePanel eyebrow={s.rubric} tone="soft">
               {guide.rubric.trim() === "" ? <span className={caption}>{s.noRubric}</span> : markdown(renderMarkdown, guide.rubric)}
-            </Panel>
+            </NotePanel>
           )}
         </>
       )}

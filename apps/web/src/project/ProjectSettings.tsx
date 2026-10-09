@@ -123,11 +123,7 @@ export function ProjectSettings({
           />
         </SettingRow>
 
-        <div className="space-y-2.5 py-3">
-          <div>
-            <p className="text-sm font-medium text-fg">{t("project.protected")}</p>
-            <p className="mt-0.5 text-[13px] text-fg-muted">{t("project.protected.desc")}</p>
-          </div>
+        <SettingRow stacked title={t("project.protected")} desc={t("project.protected.desc")}>
           {can("protectedFiles") ? (
             <fieldset disabled={busy} className="min-w-0">
               <ProtectedFiles
@@ -145,7 +141,7 @@ export function ProjectSettings({
           ) : (
             <p className="text-[13px] text-fg-muted">{t("project.protected.none")}</p>
           )}
-        </div>
+        </SettingRow>
 
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3 py-4 sm:grid-cols-4">
           <Fact label={t("project.source")}>

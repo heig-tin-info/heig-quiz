@@ -186,7 +186,6 @@ export function TryPanel({
           error={grade.error}
           onRetry={() => grade.mutate()}
           retrying={grade.isPending}
-          fallback={t("error.server")}
         />
       ) : result === undefined ? (
         <Card>

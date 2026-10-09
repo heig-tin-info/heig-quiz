@@ -1,4 +1,4 @@
-import { LayoutDashboard, List, SearchX, Tags } from "lucide-react";
+import { SearchX, Tags } from "lucide-react";
 import { useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 
 import type { PoolConcept } from "@quiz/contracts";
@@ -13,13 +13,12 @@ import {
   type Column,
   cx,
   EmptyState,
-  iconOption,
   SearchInput,
-  Segmented,
   T,
   TableHead,
   usePersistentChoice,
   useSortableTable,
+  ViewSwitch,
 } from "../ui";
 import { squarify } from "./treemap";
 
@@ -115,16 +114,13 @@ export function ConceptsTab({
               ? t(total === 1 ? "pool.concepts.count.one" : "pool.concepts.count", { n: total })
               : t("pool.concepts.countOf", { n: shown.length, total })}
           </span>
-          <Segmented
+          <ViewSwitch
             name="pool-concepts-view"
             size="sm"
             label={t("pool.concepts.view")}
+            views={["list", "heat"]}
             value={view}
             onChange={setView}
-            options={[
-              iconOption("list", <List className="size-4" />, t("view.list")),
-              iconOption("heat", <LayoutDashboard className="size-4" />, t("pool.concepts.view.heat")),
-            ]}
           />
         </div>
       </div>

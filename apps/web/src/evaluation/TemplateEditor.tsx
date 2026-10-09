@@ -91,13 +91,7 @@ export function TemplateEditor({ id, navigate }: { id: string; navigate: (r: Rou
   }
   if (detail.isError || !detail.data) {
     return boxed(
-      <PageError
-        title={t("templates.editor")}
-        error={detail.error}
-        onRetry={() => void detail.refetch()}
-        retrying={detail.isFetching}
-        fallback={t("error.server")}
-      />,
+      <PageError title={t("templates.editor")} query={detail} />,
     );
   }
   return <Editor data={detail.data} navigate={navigate} />;

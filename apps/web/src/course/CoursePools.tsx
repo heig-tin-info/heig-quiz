@@ -113,7 +113,6 @@ export function LinkedPools({ course, navigate }: { course: CourseSummary; navig
       title: t("pools.unlink"),
       message: t("pools.unlinkConfirm", { name: pool.name, course: course.name }),
       confirmLabel: t("pools.unlink"),
-      cancelLabel: t("common.cancel"),
     });
     if (ok) unlink(pool.id);
   };
@@ -156,12 +155,7 @@ function PoolList({
     <Skeleton className="mt-2 h-6 w-48" />
   ) : detail.isError ? (
     <div className="mt-2">
-      <QueryError
-        title={t("pools.link")}
-        error={detail.error}
-        onRetry={() => void detail.refetch()}
-        retrying={detail.isFetching}
-      />
+      <QueryError title={t("pools.link")} query={detail} />
     </div>
   ) : linked.length === 0 ? (
     <p className="mt-1 text-[13px] text-fg-muted">{t("pools.linkNone")}</p>

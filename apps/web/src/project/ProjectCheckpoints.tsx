@@ -180,12 +180,7 @@ export function ProjectCheckpoints({ project }: { project: ProjectDetail }) {
       {list.isLoading ? (
         <Skeleton className="h-12" />
       ) : list.isError ? (
-        <QueryError
-          title={t("project.checkpoints.failed")}
-          error={list.error}
-          onRetry={() => void list.refetch()}
-          retrying={list.isFetching}
-        />
+        <QueryError title={t("project.checkpoints.failed")} query={list} />
       ) : list.data!.length === 0 ? (
         <p className="text-sm text-fg-muted">{t("project.checkpoints.empty")}</p>
       ) : (

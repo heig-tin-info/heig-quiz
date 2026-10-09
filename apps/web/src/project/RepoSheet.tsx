@@ -18,7 +18,7 @@ import { DateField } from "../evaluation/TimingStep";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { projectKey, projectRunsKey } from "../queryKeys";
-import { Badge, Button, Fact, FieldError, fieldErrorProps, isoDateTime, RelativeTime, Sheet } from "../ui";
+import { Badge, Button, Dash, Fact, FieldError, fieldErrorProps, isoDateTime, RelativeTime, Sheet } from "../ui";
 import { CiBadge, MemberList, RepoLink, SyncBadge } from "./parts";
 import { actionable, refusalMessage, repoEntryOf, repoFlags, shortSha } from "./projectPage";
 import { RunHistory } from "./RunHistory";
@@ -184,7 +184,7 @@ export function RepoSheet({
                   {repo.lastCommit.at ? <RelativeTime iso={repo.lastCommit.at} className="text-xs text-fg-muted" /> : null}
                 </span>
               ) : (
-                <span className="text-fg-faint">—</span>
+                <Dash />
               )}
             </Fact>
             <Fact label={t("project.col.ci")}>
@@ -223,7 +223,7 @@ export function RepoSheet({
               ) : repo.deadlineAppliedAt ? (
                 t("project.frozen.provisional")
               ) : (
-                <span className="text-fg-faint">—</span>
+                <Dash />
               )}
             </Fact>
             <Fact label={t("project.col.state")}>

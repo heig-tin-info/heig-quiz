@@ -245,7 +245,7 @@ function PreviewWalk({
   // Restarting and leaving both throw the paper away. Only a paper with
   // something on it has something to lose.
   const mayDiscard = async (title: string, message: string, confirmLabel: string) =>
-    !touched || (await confirm({ title, message, confirmLabel, cancelLabel: t("common.cancel") }));
+    !touched || (await confirm({ title, message, confirmLabel }));
   const askRestart = async () => {
     const ok = await mayDiscard(
       t("preview.restart.title"),

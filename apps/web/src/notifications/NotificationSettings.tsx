@@ -221,12 +221,7 @@ export function NotificationSettingsSection() {
           <Skeleton className="h-4 w-3/5" />
         </Card>
       ) : settings.isError || !settings.data ? (
-        <QueryError
-          title={t("settings.notifications")}
-          error={settings.error}
-          onRetry={() => void settings.refetch()}
-          retrying={settings.isFetching}
-        />
+        <QueryError title={t("settings.notifications")} query={settings} />
       ) : (
         <>
           <Card>

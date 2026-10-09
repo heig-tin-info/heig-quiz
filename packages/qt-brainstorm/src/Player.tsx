@@ -8,7 +8,7 @@ import { useState } from "react";
 import type { PlayerProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
 import { BRAINSTORM_IDEA_MAX, ideaKey } from "@quiz/domain";
-import { buttonClass, caption, cx, inputClass, inputSize, isLocked, label, markdown } from "@quiz/ui";
+import { buttonClass, caption, CloseIcon, cx, inputClass, inputSize, isLocked, label, markdown } from "@quiz/ui";
 
 import type { BrainstormAnswer, BrainstormStudent } from "./schema.js";
 import { brainstormPlayerStrings, type BrainstormPlayerStringKey } from "./strings.js";
@@ -91,9 +91,7 @@ export function BrainstormPlayer({
                   aria-label={`${s.remove} ${idea}`}
                   onClick={() => onChange({ ideas: ideas.filter((_, j) => j !== i) })}
                 >
-                  <svg viewBox="0 0 16 16" className="size-3.5" aria-hidden="true">
-                    <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                  </svg>
+                  <CloseIcon />
                 </button>
               )}
             </li>

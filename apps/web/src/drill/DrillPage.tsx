@@ -72,12 +72,7 @@ export function DrillPage({ navigate }: { navigate: (r: Route) => void }) {
     const failed = rooms.isError ? rooms : session.isError ? session : null;
     if (failed) {
       return (
-        <QueryError
-          title={t("drill.loadFailed")}
-          error={failed.error}
-          onRetry={() => void failed.refetch()}
-          retrying={failed.isFetching}
-        />
+        <QueryError title={t("drill.loadFailed")} query={failed} />
       );
     }
     if (!hasRooms) {

@@ -14,30 +14,40 @@ import { PageHeader } from "./ui/page";
  * importing them from `./ui`.
  */
 
+/** The part of a query result a failure reads: TanStack Query's shape. */
+type FailedQuery = { error: unknown; refetch: () => unknown; isFetching: boolean };
+
 /**
- * A query that failed: what could not be loaded, what the server said, and
- * the one thing that helps — asking again. `onRetry` is optional: some
- * failures (a one-shot list inside a form) have nothing to retry from here.
+ * What failed and how to ask again: either one `query` (its error, its
+ * refetch, its fetching flag, so the three can never come from two queries),
+ * or the three spelled out, for a mutation or an error that is not a
+ * query's own.
  */
-export function QueryError({
-  title,
-  error,
-  onRetry,
-  retrying,
-  fallback,
-}: {
+type Failure =
+  | { query: FailedQuery; error?: never; onRetry?: never; retrying?: never }
+  | { query?: never; error: unknown; onRetry?: () => void; retrying?: boolean };
+
+type QueryErrorProps = Failure & {
   title: string;
-  error: unknown;
-  onRetry?: () => void;
-  retrying?: boolean;
   /**
    * Shown when the server sent no message of its own. It defaults to the
    * translated `error.server`: an English literal here was a French screen
    * one forgotten prop away (W9).
    */
   fallback?: string;
-}) {
+};
+
+/**
+ * A query that failed: what could not be loaded, what the server said, and
+ * the one thing that helps — asking again. `onRetry` is optional: some
+ * failures (a one-shot list inside a form) have nothing to retry from here.
+ */
+export function QueryError({ title, fallback, ...failure }: QueryErrorProps) {
   const t = useT();
+  const query = failure.query;
+  const { error, onRetry, retrying } = query
+    ? { error: query.error, onRetry: () => void query.refetch(), retrying: query.isFetching }
+    : failure;
   return (
     <Alert
       tone="danger"
@@ -63,17 +73,7 @@ export function QueryError({
  * So the page keeps a heading — what could not be loaded — and the alert
  * underneath says what went wrong and offers the retry.
  */
-export function PageError({
-  title,
-  ...rest
-}: {
-  /** The `<h1>`: what the page was, not what the server said. */
-  title: string;
-  error: unknown;
-  onRetry?: () => void;
-  retrying?: boolean;
-  fallback?: string;
-}) {
+export function PageError({ title, ...rest }: QueryErrorProps) {
   const t = useT();
   return (
     <div className="space-y-6">

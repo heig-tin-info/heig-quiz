@@ -170,13 +170,7 @@ export function InspectModal({
           <Skeleton className="h-28 w-full" />
         </div>
       ) : inspect.isError || !inspect.data ? (
-        <QueryError
-          title={t("live.inspect.failed")}
-          error={inspect.error}
-          onRetry={() => void inspect.refetch()}
-          retrying={inspect.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("live.inspect.failed")} query={inspect} />
       ) : (
         <div className="space-y-8">
           {/* ADR-088 §7: the incidents first, where the row's badge lands —

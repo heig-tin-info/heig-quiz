@@ -49,19 +49,20 @@ import {
   Badge,
   Card,
   cx,
+  Dash,
   EmptyState,
   Menu,
-  QueryError,
-  Skeleton,
-  SettingRow,
-  Switch,
-  Tip,
-  T,
   type MenuItem,
+  QueryError,
+  SettingRow,
+  Skeleton,
+  Switch,
+  T,
+  Tip,
 } from "../ui";
 import { gradebookRefusalMessage, useGradebookWrites, useStaffGradebook } from "./api";
 import { ScoreDialog, WeightDialog } from "./dialogs";
-import { AbsentSigil, Dash, fullName, GradeOrDash, MODE_LABEL } from "./cells";
+import { AbsentSigil, fullName, GradeOrDash, MODE_LABEL } from "./cells";
 
 /**
  * The mean stays in view while the grades scroll under it, once the card has
@@ -90,13 +91,7 @@ export function StaffGradebook({ classroomId }: { classroomId: string }) {
   }
   if (table.isError || !table.data) {
     return (
-      <QueryError
-        title={t("gbook.loadError")}
-        error={table.error}
-        onRetry={() => void table.refetch()}
-        retrying={table.isFetching}
-        fallback={t("error.server")}
-      />
+      <QueryError title={t("gbook.loadError")} query={table} />
     );
   }
   return <Matrix classroomId={classroomId} data={table.data} />;

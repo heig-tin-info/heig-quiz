@@ -132,13 +132,7 @@ export function QuestionModal({
             <Skeleton className="h-28 w-full" />
           </div>
         ) : answers.isError || !answers.data ? (
-          <QueryError
-            title={t("live.question.failed")}
-            error={answers.error}
-            onRetry={() => void answers.refetch()}
-            retrying={answers.isFetching}
-            fallback={t("error.server")}
-          />
+          <QueryError title={t("live.question.failed")} query={answers} />
         ) : (
           <AnswerList
             rows={started}

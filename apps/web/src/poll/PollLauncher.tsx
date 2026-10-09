@@ -319,13 +319,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
               ))}
             </div>
           ) : picks.isError || !picks.data ? (
-            <QueryError
-              title={t("poll.questionsFailed")}
-              error={picks.error}
-              onRetry={() => void picks.refetch()}
-              retrying={picks.isFetching}
-              fallback={t("error.server")}
-            />
+            <QueryError title={t("poll.questionsFailed")} query={picks} />
           ) : picks.data.length === 0 ? (
             <EmptyState
               icon={FileQuestion}

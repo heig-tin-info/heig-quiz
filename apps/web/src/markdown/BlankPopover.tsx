@@ -204,13 +204,6 @@ export function BlankPopover({ anchor, body, onApply, onCancel }: BlankPopoverPr
         Z.popover,
       )}
       style={below ? { top: anchor.bottom + 6, left } : { bottom: window.innerHeight - anchor.top + 6, left }}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          e.stopPropagation();
-          onCancel();
-        }
-      }}
     >
       <div
         role="radiogroup"

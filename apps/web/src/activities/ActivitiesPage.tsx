@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarRange, LayoutGrid, List, Radio, SearchX, Square } from "lucide-react";
+import { CalendarRange, Radio, SearchX, Square } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
 import type { ActivitySummary, EvaluationActivitySummary } from "@quiz/contracts";
@@ -14,19 +14,18 @@ import {
   Button,
   Card,
   EmptyState,
-  iconOption,
   isoDateParts,
   PageHeader,
   QueryError,
   RelativeTime,
   SectionHeading,
-  Segmented,
   Skeleton,
   Tabs,
   ToggleChip,
   useMinWidth,
   useNow,
   usePersistentChoice,
+  ViewSwitch,
 } from "../ui";
 import { endable, useEndPoll } from "./actions";
 import {
@@ -141,13 +140,7 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
     body = <Skeleton className="h-64 w-full" />;
   } else if (list.isError || !list.data) {
     body = (
-      <QueryError
-        title={t("activities.loadFailed")}
-        error={list.error}
-        onRetry={() => void list.refetch()}
-        retrying={list.isFetching}
-        fallback={t("error.server")}
-      />
+      <QueryError title={t("activities.loadFailed")} query={list} />
     );
   } else if (ordered.length === 0) {
     body = (
@@ -246,16 +239,7 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
             </>
           ) : null}
           <span className="flex-1" />
-          <Segmented
-            name="activities-view"
-            value={view}
-            onChange={setView}
-            options={[
-              iconOption("list", <List className="size-4" />, t("view.list")),
-              iconOption("cards", <LayoutGrid className="size-4" />, t("view.cards")),
-              iconOption("schedule", <CalendarRange className="size-4" />, t("view.schedule")),
-            ]}
-          />
+          <ViewSwitch name="activities-view" views={["list", "cards", "schedule"]} value={view} onChange={setView} />
         </div>
       ) : null}
 

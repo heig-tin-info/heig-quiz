@@ -1,7 +1,7 @@
 /**
- * Two blocks of the editors' layout (audit P-01k and P-01g): the settings
- * section a host may take into its right column, and the teacher's "try the
- * reference" row with the state machine behind it.
+ * Panels: the settings section a host may take into its right column and
+ * the teacher's "try the reference" row with the state machine behind it
+ * (audit P-01k and P-01g), and the note set inside a card (`NotePanel`).
  */
 import { useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -29,6 +29,44 @@ export function AsideSection({
     <section className={cx(aside ? cx(card, "p-4") : "", "flex flex-col gap-3")}>{children}</section>
   );
   return aside ? createPortal(section, aside) : section;
+}
+
+/**
+ * A note set inside a card: a 12 px uppercase eyebrow naming it ("Explanation",
+ * "Comment", "Reference solution") over its body, in a field-radius panel
+ * with 12 px of padding and 4 px between the eyebrow and the body.
+ *
+ * `soft` (a `surface-2` recess) is for what the product says — an
+ * explanation, a key; `outlined` (a `line-strong` hairline on `surface`) is
+ * for what a person wrote to this reader — a teacher's comment, a student's
+ * answer. `aside` sits at the end of the eyebrow's line, in the body's
+ * case and figures (a count). DESIGN.md › Components › NotePanel.
+ */
+export function NotePanel({
+  eyebrow,
+  aside,
+  tone = "soft",
+  children,
+}: {
+  eyebrow: ReactNode;
+  aside?: ReactNode;
+  tone?: "soft" | "outlined";
+  children: ReactNode;
+}): ReactNode {
+  return (
+    <div
+      className={cx(
+        "rounded-field p-3",
+        tone === "soft" ? "bg-surface-2" : "border border-line-strong bg-surface",
+      )}
+    >
+      <p className="flex items-baseline justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-fg-faint">
+        <span>{eyebrow}</span>
+        {aside == null ? null : <span className="font-normal normal-case tracking-normal tabular-nums">{aside}</span>}
+      </p>
+      <div className="mt-1">{children}</div>
+    </div>
+  );
 }
 
 /** What the last try said, in one line; `danger` only for a real failure. */

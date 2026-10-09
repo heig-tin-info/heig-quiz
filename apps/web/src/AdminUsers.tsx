@@ -141,13 +141,7 @@ export function UsersSection() {
       {users.isLoading ? (
         <Skeleton className="h-64 w-full" />
       ) : users.isError ? (
-        <QueryError
-          title={t("admin.users")}
-          error={users.error}
-          onRetry={() => void users.refetch()}
-          retrying={users.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("admin.users")} query={users} />
       ) : sorted.length === 0 ? (
         <Card>
           <EmptyState

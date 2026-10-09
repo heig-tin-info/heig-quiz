@@ -6,7 +6,7 @@ import type { GradeRunList, GradeRunView } from "@quiz/contracts";
 import { api } from "../api";
 import { useT, type Dict } from "../i18n";
 import { projectRunsKey } from "../queryKeys";
-import { Badge, EmptyState, QueryError, RelativeTime, Skeleton, T } from "../ui";
+import { Badge, EmptyState, QueryError, RelativeTime, Skeleton, T, TableHead } from "../ui";
 import { Points } from "./parts";
 import { shortSha } from "./projectPage";
 
@@ -60,12 +60,7 @@ export function RunHistory({ projectId, repoId }: { projectId: string; repoId: s
   }
   if (runs.isError) {
     return (
-      <QueryError
-        title={t("project.runs.failed")}
-        error={runs.error}
-        onRetry={() => void runs.refetch()}
-        retrying={runs.isFetching}
-      />
+      <QueryError title={t("project.runs.failed")} query={runs} />
     );
   }
   const list = runs.data!;
@@ -79,22 +74,14 @@ export function RunHistory({ projectId, repoId }: { projectId: string; repoId: s
   return (
     <div className={`${T.container} -mx-6 overflow-x-auto`}>
       <table className={T.table}>
-        <thead className={T.head}>
-          <tr>
-            <th scope="col" className={`${T.th} pl-6`}>
-              {t("project.col.when")}
-            </th>
-            <th scope="col" className={T.th}>
-              {t("project.col.run")}
-            </th>
-            <th scope="col" className={`${T.th} text-right`}>
-              {t("project.col.result")}
-            </th>
-            <th scope="col" className={`${T.th} pr-6`}>
-              {t("project.col.state")}
-            </th>
-          </tr>
-        </thead>
+        <TableHead
+          columns={[
+            { key: "when", label: t("project.col.when"), className: "pl-6" },
+            { key: "run", label: t("project.col.run") },
+            { key: "result", label: t("project.col.result"), right: true },
+            { key: "state", label: t("project.col.state"), className: "pr-6" },
+          ]}
+        />
         <tbody>
           {list.runs.map((run) => {
             const slot = slotOf(run, list);

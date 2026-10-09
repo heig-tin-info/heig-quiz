@@ -155,13 +155,7 @@ function VersionPicker({
           <Skeleton className="h-14 w-full" />
         </div>
       ) : state.isError ? (
-        <QueryError
-          title={t("grading.regrade.versionsFailed")}
-          error={state.error}
-          onRetry={() => void state.refetch()}
-          retrying={state.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("grading.regrade.versionsFailed")} query={state} />
       ) : data ? (
         <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line">
           {data.versions.map((v) => (

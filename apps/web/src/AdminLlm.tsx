@@ -48,13 +48,7 @@ export function LlmSection() {
         {settings.isLoading ? (
           <Skeleton className="h-64 w-full" />
         ) : settings.isError ? (
-          <QueryError
-            title={t("admin.llm.title")}
-            error={settings.error}
-            onRetry={() => void settings.refetch()}
-            retrying={settings.isFetching}
-            fallback={t("error.server")}
-          />
+          <QueryError title={t("admin.llm.title")} query={settings} />
         ) : settings.data ? (
           <SettingsForm settings={settings.data} />
         ) : null}
@@ -195,7 +189,6 @@ function SettingsForm({ settings }: { settings: LlmSettings }) {
                     await confirm({
                       title: t("admin.llm.key.removeConfirm"),
                       confirmLabel: t("admin.llm.key.remove"),
-                      cancelLabel: t("common.cancel"),
                       danger: true,
                     })
                   ) {
@@ -243,13 +236,7 @@ function UsageSection({ settings }: { settings: LlmSettings | null }) {
       {usage.isLoading ? (
         <Skeleton className="h-40 w-full" />
       ) : usage.isError ? (
-        <QueryError
-          title={t("admin.llm.usage")}
-          error={usage.error}
-          onRetry={() => void usage.refetch()}
-          retrying={usage.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("admin.llm.usage")} query={usage} />
       ) : usage.data ? (
         <>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -272,15 +259,13 @@ function UsageSection({ settings }: { settings: LlmSettings | null }) {
               <table className={cx(T.table, "min-w-160")}>
                 <TableHead
                   columns={[
-                    { key: "person", label: t("admin.col.person"), sortable: false },
-                    { key: "calls", label: t("admin.llm.col.calls"), sortable: false, right: true },
-                    { key: "errors", label: t("admin.llm.col.errors"), sortable: false, right: true },
-                    { key: "input", label: t("admin.llm.col.input"), sortable: false, right: true },
-                    { key: "output", label: t("admin.llm.col.output"), sortable: false, right: true },
-                    { key: "cost", label: t("admin.llm.col.cost"), sortable: false, right: true },
+                    { key: "person", label: t("admin.col.person") },
+                    { key: "calls", label: t("admin.llm.col.calls"), right: true },
+                    { key: "errors", label: t("admin.llm.col.errors"), right: true },
+                    { key: "input", label: t("admin.llm.col.input"), right: true },
+                    { key: "output", label: t("admin.llm.col.output"), right: true },
+                    { key: "cost", label: t("admin.llm.col.cost"), right: true },
                   ]}
-                  sort={null}
-                  onToggle={() => {}}
                 />
                 <tbody>
                   {usage.data.rows.map((r) => {

@@ -1,7 +1,26 @@
 import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { AsideSection, TryPanel, tryStatusOf, useReferenceTry } from "./panels.js";
+import { AsideSection, NotePanel, TryPanel, tryStatusOf, useReferenceTry } from "./panels.js";
+
+describe("NotePanel", () => {
+  it("puts the aside at the end of the eyebrow's line, in the body's case", () => {
+    render(
+      <NotePanel eyebrow="Answer" aside="12 words" tone="outlined">
+        <p>The body</p>
+      </NotePanel>,
+    );
+    const eyebrow = screen.getByText("Answer").parentElement;
+    expect(eyebrow?.textContent).toBe("Answer12 words");
+    expect(screen.getByText("12 words").className).toContain("normal-case");
+  });
+
+  it("is the eyebrow alone over the body without an aside", () => {
+    render(<NotePanel eyebrow="Explanation">Because.</NotePanel>);
+    expect(screen.getByText("Explanation").parentElement?.childElementCount).toBe(1);
+    expect(screen.getByText("Because.").className).toBe("mt-1");
+  });
+});
 
 describe("AsideSection", () => {
   it("renders in place, undressed, without an aside", () => {

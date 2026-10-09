@@ -185,8 +185,8 @@ export function ClampedCode({
 }
 
 /** An empty cell, or a key with nothing to show: a faint em dash, never a verdict. */
-export function Dash(): ReactNode {
-  return <span className="text-fg-faint">—</span>;
+export function Dash({ className }: { className?: string | undefined }): ReactNode {
+  return <span className={cx("text-fg-faint", className)}>—</span>;
 }
 
 /**

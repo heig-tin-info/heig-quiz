@@ -2,6 +2,8 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
+import { table } from "@quiz/ui";
+
 import { cx } from "./layers";
 
 // Sortable tables: one motif for every hand-rolled table.
@@ -99,11 +101,9 @@ const stack = {
  * DESIGN.md › Tables.
  */
 export const T = {
-  table: "w-full text-[13px]",
-  head: "text-left text-xs text-fg-muted",
-  th: "px-3 py-2 font-medium",
-  td: "px-3 py-2.5 align-middle",
-  row: "border-t border-line transition-colors",
+  // The cells are `@quiz/ui`'s, which the question types' tables wear too.
+  ...table,
+  row: `${table.row} transition-colors`,
   rowHover: "group hover:bg-surface-2/70",
   /**
    * On the wrapper that scrolls: turns it into the query container. It is
@@ -151,7 +151,7 @@ export const T = {
  * `aria-sort` on the `<th>` is the same answer for a screen reader, which
  * cannot see the arrow at all.
  */
-export function SortHeader<K extends string>({
+function SortHeader<K extends string>({
   k,
   sort,
   onToggle,
@@ -247,7 +247,8 @@ export function TableBand({
  * that decide where it goes when the table narrows.
  *
  * A column that does not sort (`sortable: false`) is a tick box or an actions
- * cell: its `key` is then only a name, never handed to `onToggle`.
+ * cell: its `key` is then only a name, never handed to `onToggle`. In a
+ * table that does not sort at all (no `onToggle`), every key is a name.
  */
 export type Column<K extends string> = {
   label: ReactNode;
@@ -268,18 +269,25 @@ export type Column<K extends string> = {
  * written twice, once in the `<th>` and once in the `<td>`. Declared here,
  * a table says its columns ONCE, the head and the priority classes can no
  * longer disagree, and every table of the app sorts the same way: click the
- * label, click it again to flip it.
+ * label, click it again to flip it. A table that does not sort leaves out
+ * `sort` and `onToggle`, and its head is the same labels, scoped the same
+ * way, with no button.
  */
 export function TableHead<K extends string>({
   columns,
-  sort,
+  sort = null,
   onToggle,
 }: {
   columns: Column<K>[];
-  /** `null`: the rows stand in the order they arrived in. */
-  sort: SortState<K> | null;
-  onToggle: (k: K) => void;
-}) {
+} & (
+  | {
+      /** `null`: the rows stand in the order they arrived in. */
+      sort: SortState<K> | null;
+      onToggle: (k: K) => void;
+    }
+  // A table that does not sort: no column is a button.
+  | { sort?: never; onToggle?: never }
+)) {
   const stacked = columns.some((c) => c.stack !== undefined);
   const role = (c: Column<K>) =>
     c.stack === undefined ? undefined : c.stack === "sub" ? stack.subHead : stack[c.stack];
@@ -289,7 +297,7 @@ export function TableHead<K extends string>({
     <thead role="rowgroup" className={T.head}>
       <tr role="row" className={stacked ? stack.row : undefined}>
         {columns.map((c) =>
-          c.sortable === false ? (
+          c.sortable === false || onToggle === undefined ? (
             <th
               key={c.key}
               scope="col"

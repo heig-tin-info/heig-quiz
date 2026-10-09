@@ -28,6 +28,7 @@ import {
   Segmented,
   Skeleton,
   T,
+  TableHead,
   type Tone,
 } from "../ui";
 import { refusalMessage } from "./projectPage";
@@ -101,13 +102,7 @@ export function ProjectWorkspace({ projectId, archived }: { projectId: string; a
       {workspace.isLoading ? (
         <Skeleton className="h-24 w-full" />
       ) : workspace.isError || !ws ? (
-        <QueryError
-          title={t("project.workspace")}
-          error={workspace.error}
-          onRetry={() => void workspace.refetch()}
-          retrying={workspace.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("project.workspace")} query={workspace} />
       ) : (
         <>
           <Card className="divide-y divide-line px-4">
@@ -174,13 +169,7 @@ function WorkspaceSessions({ projectId }: { projectId: string }) {
   if (sessions.isLoading) return <Skeleton className="h-16 w-full" />;
   if (sessions.isError || !sessions.data) {
     return (
-      <QueryError
-        title={t("project.workspace.sessions")}
-        error={sessions.error}
-        onRetry={() => void sessions.refetch()}
-        retrying={sessions.isFetching}
-        fallback={t("error.server")}
-      />
+      <QueryError title={t("project.workspace.sessions")} query={sessions} />
     );
   }
   const { reachable, sessions: rows } = sessions.data;
@@ -199,14 +188,14 @@ function WorkspaceSessions({ projectId }: { projectId: string }) {
       {title}
       <Card className="overflow-x-auto">
         <table className={cx(T.table, "min-w-140")}>
-          <thead className={T.head}>
-            <tr>
-              <th className={T.th}>{t("project.workspace.col.student")}</th>
-              <th className={T.th}>{t("project.workspace.col.state")}</th>
-              <th className={T.th}>{t("project.workspace.col.lastSeen")}</th>
-              <th className={T.th}>{t("project.workspace.col.lastPush")}</th>
-            </tr>
-          </thead>
+          <TableHead
+            columns={[
+              { key: "student", label: t("project.workspace.col.student") },
+              { key: "state", label: t("project.workspace.col.state") },
+              { key: "lastSeen", label: t("project.workspace.col.lastSeen") },
+              { key: "lastPush", label: t("project.workspace.col.lastPush") },
+            ]}
+          />
           <tbody>
             {rows.map((s) => (
               <tr key={s.sessionId} className={T.row}>

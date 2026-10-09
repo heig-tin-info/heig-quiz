@@ -71,12 +71,7 @@ export function CoursePage({
   }
   if (courses.isError) {
     return (
-      <PageError
-        title={t("courses.title")}
-        error={courses.error}
-        onRetry={() => void courses.refetch()}
-        retrying={courses.isFetching}
-      />
+      <PageError title={t("courses.title")} query={courses} />
     );
   }
   const course = courses.data?.find((c) => c.id === id);

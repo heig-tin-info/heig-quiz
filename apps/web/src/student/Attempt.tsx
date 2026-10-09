@@ -132,13 +132,7 @@ export function AttemptPage({
     }
     return (
       <main className="mx-auto w-full max-w-160 px-4 py-16">
-        <QueryError
-          title={t("player.loadFailed")}
-          error={entry.error}
-          onRetry={() => void entry.refetch()}
-          retrying={entry.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("player.loadFailed")} query={entry} />
       </main>
     );
   }

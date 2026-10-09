@@ -9,16 +9,17 @@ import { typeIcon, typeLabel } from "../questionTypes";
 import {
   Badge,
   Checkbox,
+  type Column,
   cx,
+  Dash,
   IconButton,
   RelativeTime,
   Skeleton,
+  type SortState,
   T,
   TableBand,
   TableHead,
   Tip,
-  type Column,
-  type SortState,
 } from "../ui";
 import type { QuestionGroup } from "./QuestionGroups";
 import type { QuestionSort, SortDir } from "./filters";
@@ -296,7 +297,7 @@ export function QuestionTable({
                 </td>
                 <td role="cell" className={cx(T.td, "max-w-56", T.colHigh)}>
                   {row.concepts.length === 0 ? (
-                    <span className="text-fg-faint">—</span>
+                    <Dash />
                   ) : (
                     <ConceptNames concepts={row.concepts} />
                   )}

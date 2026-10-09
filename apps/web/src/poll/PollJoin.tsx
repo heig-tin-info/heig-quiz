@@ -219,12 +219,7 @@ export function PollJoin({
         <h1 className="mb-4 text-lg font-bold tracking-tight">
           {t("join.loadFailed")}
         </h1>
-        <QueryError
-          title={t("error.title")}
-          error={poll.error}
-          onRetry={() => void poll.refetch()}
-          retrying={poll.isFetching}
-        />
+        <QueryError title={t("error.title")} query={poll} />
       </GateFrame>
     );
   }

@@ -392,7 +392,7 @@ function HistoryList({ current, onOpen }: { current: string | null; onOpen: (id:
   if (list.isError) {
     return (
       <div className="p-4">
-        <QueryError title={t("assist.history.error")} error={list.error} onRetry={() => void list.refetch()} />
+        <QueryError title={t("assist.history.error")} query={list} />
       </div>
     );
   }

@@ -25,6 +25,7 @@ import {
   SelectionBar,
   Skeleton,
   T,
+  TableHead,
 } from "../ui";
 import { DropDialog, MapDialog, NewConceptSheet } from "./dialogs";
 import { ProposeAction } from "./ProposeAction";
@@ -77,13 +78,7 @@ export function ConceptsSection() {
       {list.isLoading ? (
         <Skeleton className="h-80 w-full" />
       ) : list.isError ? (
-        <QueryError
-          title={t("admin.concepts")}
-          error={list.error}
-          onRetry={() => void list.refetch()}
-          retrying={list.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("admin.concepts")} query={list} />
       ) : rows.length === 0 ? (
         <Card>
           <EmptyState icon={Tags} title={t("admin.concepts.empty.title")}>
@@ -133,15 +128,15 @@ export function ConceptsSection() {
           ) : (
             <Card className={cx("overflow-x-auto", T.container)}>
               <table className={T.table}>
-                <thead className={T.head}>
-                  <tr>
-                    <th className={cx(T.th, "w-10")} />
-                    <th className={T.th}>{t("admin.concepts.col.tag")}</th>
-                    <th className={cx(T.th, T.colHigh)}>{t("admin.concepts.col.pool")}</th>
-                    <th className={cx(T.th, T.colHigh, "text-right")}>{t("admin.concepts.col.questions")}</th>
-                    <th className={T.th}>{t("admin.concepts.col.decision")}</th>
-                  </tr>
-                </thead>
+                <TableHead
+                  columns={[
+                    { key: "tick", label: null, className: "w-10" },
+                    { key: "tag", label: t("admin.concepts.col.tag") },
+                    { key: "pool", label: t("admin.concepts.col.pool"), className: T.colHigh },
+                    { key: "questions", label: t("admin.concepts.col.questions"), right: true, className: T.colHigh },
+                    { key: "decision", label: t("admin.concepts.col.decision") },
+                  ]}
+                />
                 {s.groups.map((g) => {
                   const keys = g.rows.map(keyOf);
                   const ticked = keys.filter((k) => s.selected.has(k)).length;

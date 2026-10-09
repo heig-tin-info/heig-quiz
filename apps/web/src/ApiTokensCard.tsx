@@ -31,6 +31,7 @@ import {
   Select,
   Skeleton,
   T,
+  TableHead,
   cx,
   inputClass,
 } from "./ui";
@@ -179,12 +180,7 @@ export function ConnectionsCard() {
   } else if (connections.isError) {
     body = (
       <div className="p-5">
-        <QueryError
-          title={t("connections.loadError")}
-          error={connections.error}
-          onRetry={() => void connections.refetch()}
-          retrying={connections.isFetching}
-        />
+        <QueryError title={t("connections.loadError")} query={connections} />
       </div>
     );
   } else if (connections.data.length === 0) {
@@ -193,16 +189,14 @@ export function ConnectionsCard() {
     body = (
       <div className={cx(T.container, "overflow-x-auto")}>
         <table className={T.table}>
-          <thead className={T.head}>
-            <tr>
-              <th className={T.th}>{t("connections.assistant")}</th>
-              <th className={cx(T.th, T.colHigh)}>{t("connections.since")}</th>
-              <th className={cx(T.th, T.colMid)}>{t("tokens.lastUsed")}</th>
-              <th className={T.th}>
-                <span className="sr-only">{t("common.actions")}</span>
-              </th>
-            </tr>
-          </thead>
+          <TableHead
+            columns={[
+              { key: "assistant", label: t("connections.assistant") },
+              { key: "since", label: t("connections.since"), className: T.colHigh },
+              { key: "lastUsed", label: t("tokens.lastUsed"), className: T.colMid },
+              { key: "actions", label: t("common.actions"), srOnly: true },
+            ]}
+          />
           <tbody>
             {connections.data.map((c) => (
               <tr key={c.id} className={cx(T.row, T.rowHover)}>
@@ -228,7 +222,6 @@ export function ConnectionsCard() {
                               title: t("connections.revokeConfirm", { name: c.clientName }),
                               message: t("connections.revokeHint"),
                               confirmLabel: t("connections.revoke"),
-                              cancelLabel: t("common.cancel"),
                               danger: true,
                             })
                           ) {
@@ -296,12 +289,7 @@ export function ApiTokensCard() {
   } else if (tokens.isError) {
     body = (
       <div className="p-5">
-        <QueryError
-          title={t("tokens.loadError")}
-          error={tokens.error}
-          onRetry={() => void tokens.refetch()}
-          retrying={tokens.isFetching}
-        />
+        <QueryError title={t("tokens.loadError")} query={tokens} />
       </div>
     );
   } else if (tokens.data.length === 0) {
@@ -314,17 +302,15 @@ export function ApiTokensCard() {
     body = (
       <div className={cx(T.container, "overflow-x-auto")}>
         <table className={T.table}>
-          <thead className={T.head}>
-            <tr>
-              <th className={T.th}>{t("tokens.name")}</th>
-              <th className={cx(T.th, T.colHigh)}>{t("tokens.lastUsed")}</th>
-              <th className={cx(T.th, T.colMid)}>{t("tokens.expires")}</th>
-              <th className={T.th}>{t("tokens.status")}</th>
-              <th className={T.th}>
-                <span className="sr-only">{t("common.actions")}</span>
-              </th>
-            </tr>
-          </thead>
+          <TableHead
+            columns={[
+              { key: "name", label: t("tokens.name") },
+              { key: "lastUsed", label: t("tokens.lastUsed"), className: T.colHigh },
+              { key: "expires", label: t("tokens.expires"), className: T.colMid },
+              { key: "status", label: t("tokens.status") },
+              { key: "actions", label: t("common.actions"), srOnly: true },
+            ]}
+          />
           <tbody>
             {tokens.data.map((token) => {
               const status = statusOf(token);
@@ -358,7 +344,6 @@ export function ApiTokensCard() {
                                   title: t("tokens.revokeConfirm", { name: token.name }),
                                   message: t("tokens.revokeHint"),
                                   confirmLabel: t("tokens.revoke"),
-                                  cancelLabel: t("common.cancel"),
                                   danger: true,
                                 })
                               ) {

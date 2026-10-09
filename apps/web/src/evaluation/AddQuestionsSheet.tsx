@@ -305,25 +305,13 @@ export function AddQuestionsSheet({
               ))}
             </div>
           ) : pools.isError ? (
-            <QueryError
-              title={t("picker.noPool.title")}
-              error={pools.error}
-              onRetry={() => void pools.refetch()}
-              retrying={pools.isFetching}
-              fallback={t("error.server")}
-            />
+            <QueryError title={t("picker.noPool.title")} query={pools} />
           ) : (pools.data ?? []).length === 0 ? (
             <EmptyState icon={Library} title={t("picker.noPool.title")}>
               {t("picker.noPool.body")}
             </EmptyState>
           ) : questions.isError ? (
-            <QueryError
-              title={t("picker.empty.title")}
-              error={questions.error}
-              onRetry={() => void questions.refetch()}
-              retrying={questions.isFetching}
-              fallback={t("error.server")}
-            />
+            <QueryError title={t("picker.empty.title")} query={questions} />
           ) : rows.length === 0 ? (
             <EmptyState icon={Search} title={t("picker.empty.title")}>
               {t("picker.empty.body")}

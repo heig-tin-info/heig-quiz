@@ -197,7 +197,6 @@ export function BulkBar({
       title: t("pool.bulk.delete"),
       message: t("pool.bulk.deleteConfirm", { n: ids.length }),
       confirmLabel: t("common.delete"),
-      cancelLabel: t("common.cancel"),
       danger: true,
     });
     if (ok) await runAll((id) => api(`/app/api/questions/${id}`, { method: "DELETE" }));

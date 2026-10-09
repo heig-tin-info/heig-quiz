@@ -2,7 +2,7 @@ import { PenLine } from "lucide-react";
 import { Fragment, isValidElement, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 
-import { buttonClass } from "@quiz/ui";
+import { buttonClass, card, NotePanel } from "@quiz/ui";
 
 import { Fab, type PagePrimary } from "./fab";
 import { cx, HelpIcon, LG_PX, PageHelpButton, Tip, useMinWidth, type IconType } from "./layers";
@@ -75,7 +75,7 @@ export function Card({
     <div
       {...rest}
       className={cx(
-        "rounded-card border border-line bg-surface",
+        card,
         interactive && "cursor-pointer transition-colors duration-150 hover:border-line-strong hover:bg-surface-2/40",
         className,
       )}
@@ -84,36 +84,10 @@ export function Card({
 }
 
 /**
- * A note set inside a card: a 12 px uppercase eyebrow naming it ("Explanation",
- * "Comment", "Reference solution") over its body, in a field-radius panel
- * with 12 px of padding and 4 px between the eyebrow and the body.
- *
- * `soft` (a `surface-2` recess) is for what the product says — an
- * explanation, a key; `outlined` (a `line-strong` hairline on `surface`) is
- * for what a person wrote to this reader — a teacher's comment. DESIGN.md ›
- * Components › NotePanel.
+ * The note set inside a card (`NotePanel`) is written once, in `@quiz/ui`:
+ * the reviews of the question types draw the same one.
  */
-export function NotePanel({
-  eyebrow,
-  tone = "soft",
-  children,
-}: {
-  eyebrow: ReactNode;
-  tone?: "soft" | "outlined";
-  children: ReactNode;
-}) {
-  return (
-    <div
-      className={cx(
-        "rounded-field p-3",
-        tone === "soft" ? "bg-surface-2" : "border border-line-strong bg-surface",
-      )}
-    >
-      <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">{eyebrow}</p>
-      <div className="mt-1">{children}</div>
-    </div>
-  );
-}
+export { NotePanel };
 
 /**
  * Title row of a page: one h1, an optional line under it, the actions right.

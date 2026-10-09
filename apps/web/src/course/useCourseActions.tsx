@@ -136,7 +136,6 @@ export function useCourseActions(
                 { name: course.name, n: templates },
               ),
         confirmLabel: t("common.delete"),
-        cancelLabel: t("common.cancel"),
         danger: true,
       })
     ) {
@@ -185,7 +184,6 @@ export function useCourseActions(
                     ? t("courses.leaveConfirm", { course: course.name })
                     : t("courses.staffRemoveConfirm", { name, course: course.name }),
                   confirmLabel: t(self ? "courses.leave" : "courses.staffRemove"),
-                  cancelLabel: t("common.cancel"),
                 })
               ) {
                 removeStaff.mutate(person.userId);
