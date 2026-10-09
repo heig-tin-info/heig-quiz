@@ -2171,7 +2171,13 @@ The phone's page, `/pair`, is an ordinary gate page (`GateFrame`, 460 px):
 the code field (mono, formatted as it is typed), then the station's name in
 a `surface-2` panel at 20 px bold — the thing to check against the screen —
 and the exams as one radio group. ONE primary action at a time: Continue
-while there is only a code, then "Start on this station".
+while there is only a code, then "Start on this station". Under the field,
+where the browser can open a camera, "Scan with camera" (`ScanQrCode`) is a
+secondary button: it opens the rear camera inline in the card — a square
+video, one muted line ("Point the camera…", amber when a QR is not a
+station's), one Cancel — never a modal. A station's code fills the field
+and goes the way of Continue; a camera refused or missing closes the video
+and leaves one muted line, "Camera unavailable — type the code".
 
 The supervisor's side (ADR-051 §6–8) lives in the live grid, not on a page
 of its own:
