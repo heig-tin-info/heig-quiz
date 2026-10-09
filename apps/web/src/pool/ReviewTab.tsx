@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Pencil, ScanSearch, Sparkles, Undo2, Wand2 } from "lucide-react";
 
-import type { QuestionReview, ReviewFinding, ReviewFixBody, ReviewList, ReviewToggle } from "@quiz/contracts";
+import type { PoolRole, QuestionReview, ReviewFinding, ReviewFixBody, ReviewList, ReviewToggle } from "@quiz/contracts";
+import { poolRoleAllows } from "@quiz/domain";
 
 import { api } from "../api";
 import { MarkdownView } from "../markdown/MarkdownView";
@@ -25,7 +26,7 @@ export function ReviewTab({
   navigate,
 }: {
   poolId: string;
-  role: "reader" | "contributor" | "owner";
+  role: PoolRole;
   navigate: (r: Route) => void;
 }) {
   const t = useT();
@@ -65,7 +66,7 @@ export function ReviewTab({
     );
   }
   const list = reviews.data;
-  const mayAct = role !== "reader";
+  const mayAct = poolRoleAllows(role, "contributor");
 
   return (
     <div className="space-y-5">

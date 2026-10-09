@@ -1,5 +1,6 @@
 
 import type { PoolSummary } from "@quiz/contracts";
+import { poolRoleAllows } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import type { Route } from "../router";
@@ -56,7 +57,7 @@ function PoolRow({
       categoryId: null,
       label: drag.label,
     });
-  const drop = useQuestionDrop(onDrop, pool.role !== "reader");
+  const drop = useQuestionDrop(onDrop, poolRoleAllows(pool.role, "contributor"));
   return (
     <button
       type="button"

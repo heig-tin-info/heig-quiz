@@ -3,6 +3,7 @@ import { Eye, EyeOff, LogOut, Trash2, UserCog, UserMinus, UserPlus } from "lucid
 import { useState, type ReactNode } from "react";
 
 import type { CourseRole, CourseSummary, EvaluationTemplate, StaffPatch } from "@quiz/contracts";
+import { staffChangeRefusal, type StaffChange } from "@quiz/domain";
 
 import { api, useMe } from "../api";
 import { useConfirm } from "../confirm";
@@ -156,12 +157,13 @@ export function useCourseActions(
    */
   const staffActions = (person: StaffMember): MenuItem[] => {
     const self = person.userId === meId;
-    const soleOwner = person.role === "owner" && owners <= 1;
+    const refused = (change: StaffChange) =>
+      staffChangeRefusal({ owners, targetRole: person.role, next: change }) !== null;
     if (!isOwner && !self) return [];
     const name = `${person.givenName} ${person.familyName}`;
     const next: CourseRole = person.role === "owner" ? "assistant" : "owner";
     const roleChange: MenuItem[] =
-      !isOwner || soleOwner
+      !isOwner || refused(next)
         ? []
         : [
             {
@@ -170,7 +172,7 @@ export function useCourseActions(
               onSelect: () => setRole.mutate({ userId: person.userId, role: next }),
             },
           ];
-    const removal: MenuItem[] = soleOwner
+    const removal: MenuItem[] = refused("remove")
       ? []
       : [
           {

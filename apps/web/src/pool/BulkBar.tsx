@@ -3,6 +3,7 @@ import { FolderInput, FolderSymlink, Star, StarOff, Tag, Trash2 } from "lucide-r
 import { useState } from "react";
 
 import type { Category, CategoryNode, QuestionRow } from "@quiz/contracts";
+import { poolRoleAllows } from "@quiz/domain";
 
 import { api } from "../api";
 import { ConceptPicker } from "../concepts/ConceptPicker";
@@ -90,7 +91,7 @@ export function BulkBar({
   // The pools the teacher may WRITE to, this one excluded: a move to the pool
   // the questions are already in is what the category dialog above is for.
   const pools = usePools({ enabled: dialog === "pool" });
-  const targets = (pools.data ?? []).filter((p) => p.id !== poolId && p.role !== "reader");
+  const targets = (pools.data ?? []).filter((p) => p.id !== poolId && poolRoleAllows(p.role, "contributor"));
   // The chosen pool's folders, on the key its own screen uses.
   const target = usePool(targetPoolId || null, { enabled: dialog === "pool" });
 
