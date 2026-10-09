@@ -9,7 +9,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import type { ComponentType, ReactNode, RefCallback, RefObject } from "react";
+import type { ComponentProps, ComponentType, ReactNode, RefCallback, RefObject } from "react";
 import { createPortal } from "react-dom";
 
 import { cx } from "@quiz/ui";
@@ -1028,4 +1028,16 @@ export function Pane({
       </LayerColumn>
     </aside>
   );
+}
+
+/**
+ * A `Pane` beside the list when the screen docks one (`pane`, its CSS width),
+ * a `Sheet` over it otherwise: the same content either way.
+ */
+export function PaneOrSheet({
+  pane,
+  width,
+  ...props
+}: Omit<ComponentProps<typeof Sheet>, "flush" | "aside"> & { pane: string | null }) {
+  return pane ? <Pane width={pane} {...props} /> : <Sheet width={width} {...props} />;
 }

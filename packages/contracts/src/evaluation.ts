@@ -422,7 +422,7 @@ export const ItemRow = z.object({
   latestVersionNumber: z.number().int().nullable(),
   deprecated: z.boolean(),
   /** The question's difficulty, 1 to 5 — the question's, not the version's. */
-  difficulty: z.number().int(),
+  difficulty: z.number().int().min(1).max(5),
 });
 export type ItemRow = z.infer<typeof ItemRow>;
 
@@ -445,14 +445,17 @@ export const EvaluationSelf = z.object({
 });
 export type EvaluationSelf = z.infer<typeof EvaluationSelf>;
 
+/**
+ * The concepts of each item's question, by question id, labelled in the
+ * reader's language: a column of the item list beside the difficulty.
+ */
+export const ItemConcepts = z.record(z.string(), z.array(ConceptRef));
+export type ItemConcepts = z.infer<typeof ItemConcepts>;
+
 export const EvaluationDetail = z.object({
   evaluation: Evaluation,
   items: z.array(ItemRow),
-  /**
-   * The concepts of each item's question, by question id, labelled in the
-   * reader's language: a column of the item list beside the difficulty.
-   */
-  concepts: z.record(z.string(), z.array(ConceptRef)),
+  concepts: ItemConcepts,
   totalPoints: z.number(),
   /** Item ids whose frozen version is not the latest published one. */
   staleItems: z.array(z.uuid()),
@@ -703,11 +706,7 @@ export const TemplateDetail = z.object({
     durationS: z.number().int().nullable(),
   }),
   items: z.array(TemplateItemRow),
-  /**
-   * The concepts of each item's question, by question id, labelled in the
-   * reader's language: a column of the item list beside the difficulty.
-   */
-  concepts: z.record(z.string(), z.array(ConceptRef)),
+  concepts: ItemConcepts,
   totalPoints: z.number(),
   /** Item ids whose frozen version is not the latest published one. */
   staleItems: z.array(z.uuid()),

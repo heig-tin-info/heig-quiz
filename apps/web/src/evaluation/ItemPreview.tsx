@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Eye } from "lucide-react";
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 
 import type { ItemPreview as ItemPreviewData, ItemRow, PreviewSolution } from "@quiz/contracts";
 
@@ -9,7 +9,7 @@ import { useT } from "../i18n";
 import { itemPreviewKey } from "../queryKeys";
 import type { EditTarget } from "./editTarget";
 import { typeLabel } from "../questionTypes";
-import { Alert, ASIDE_MIN_WIDTH, IconButton, Pane, pageBox, Sheet, useMinWidth } from "../ui";
+import { Alert, ASIDE_MIN_WIDTH, IconButton, pageBox, PaneOrSheet, useMinWidth } from "../ui";
 import { PreviewedQuestion } from "../question/PreviewedQuestion";
 
 /** The docked preview's width; the page widens by it (`pageBox`), as the pool's does. */
@@ -30,6 +30,12 @@ export function useItemPane() {
     pane: docked ? PANE_WIDTH : null,
     /** The page's box: widened while a docked preview is open on `active` (its tab). */
     box: (active: boolean) => pageBox(active && shown !== null && docked ? PANE_WIDTH : null),
+    /** Escape closes the preview from anywhere in the list or in it. */
+    closeOnEscape: (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || shown === null) return;
+      e.preventDefault();
+      setShown(null);
+    },
   };
 }
 export type ItemPane = ReturnType<typeof useItemPane>;
@@ -79,46 +85,48 @@ export function ItemPreview({
     staleTime: Infinity,
   });
 
-  const frame = {
-    title: item.internalName,
-    subtitle: t("eval.questions.preview.subtitle", {
-      type: typeLabel(t, item.type),
-      n: item.versionNumber,
-    }),
-    onClose,
-    actions: (
-      <>
-        <IconButton label={t("eval.questions.preview.prev")} disabled={!onMove.prev} onClick={onMove.prev}>
-          <ArrowUp />
-        </IconButton>
-        <IconButton label={t("eval.questions.preview.next")} disabled={!onMove.next} onClick={onMove.next}>
-          <ArrowDown />
-        </IconButton>
-      </>
-    ),
-  };
-  const body = (
-    <div className="space-y-4">
-      <Alert icon={Eye} title={t("eval.questions.preview.banner")}>
-        {t("eval.questions.preview.bannerBody")}
-      </Alert>
-      <PreviewedQuestion
-        key={item.id}
-        query={preview}
-        solution={{
-          queryKey: [...key, "solution"],
-          queryFn: () => api<PreviewSolution>(`${target.base}/preview/items/${item.id}/solution`),
-        }}
-      />
-    </div>
-  );
-  return pane ? (
-    <Pane width={pane} {...frame}>
-      {body}
-    </Pane>
-  ) : (
-    <Sheet width="lg" {...frame}>
-      {body}
-    </Sheet>
+  return (
+    <PaneOrSheet
+      pane={pane}
+      width="lg"
+      title={item.internalName}
+      subtitle={t("eval.questions.preview.subtitle", {
+        type: typeLabel(t, item.type),
+        n: item.versionNumber,
+      })}
+      onClose={onClose}
+      actions={
+        <>
+          <IconButton
+            label={t("eval.questions.preview.prev")}
+            disabled={!onMove.prev}
+            onClick={onMove.prev}
+          >
+            <ArrowUp />
+          </IconButton>
+          <IconButton
+            label={t("eval.questions.preview.next")}
+            disabled={!onMove.next}
+            onClick={onMove.next}
+          >
+            <ArrowDown />
+          </IconButton>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Alert icon={Eye} title={t("eval.questions.preview.banner")}>
+          {t("eval.questions.preview.bannerBody")}
+        </Alert>
+        <PreviewedQuestion
+          key={item.id}
+          query={preview}
+          solution={{
+            queryKey: [...key, "solution"],
+            queryFn: () => api<PreviewSolution>(`${target.base}/preview/items/${item.id}/solution`),
+          }}
+        />
+      </div>
+    </PaneOrSheet>
   );
 }

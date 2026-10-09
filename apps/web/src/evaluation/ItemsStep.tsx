@@ -30,7 +30,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 
 import type { ConceptRef, EvaluationDetail, ItemPatch, ItemRow } from "@quiz/contracts";
 import type { z } from "zod";
@@ -369,13 +369,8 @@ function ItemCard({
       ref={setNodeRef}
       style={style}
       aria-current={shown || undefined}
-      onClick={(e: MouseEvent) => {
-        // A control of the row keeps its own click; the row's is a look.
-        if ((e.target as Element).closest("button, input, label, a, textarea")) return;
-        onPreview();
-      }}
       className={cx(
-        "group/row relative cursor-pointer bg-surface aria-[current=true]:bg-accent-soft",
+        "group/row relative bg-surface aria-[current=true]:bg-accent-soft",
         isDragging && "z-20 shadow-overlay ring-1 ring-line-strong",
       )}
     >
@@ -389,7 +384,15 @@ function ItemCard({
           t={t}
         />
       ) : null}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-3 py-3 pr-3 pl-1.5">
+      {/* The item's own line is the look; its bands (text, milestone) are not. */}
+      <div
+        onClick={(e: MouseEvent) => {
+          // A control of the row keeps its own click; the row's is a look.
+          if ((e.target as Element).closest("button, input, label, a, textarea")) return;
+          onPreview();
+        }}
+        className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-3 py-3 pr-3 pl-1.5"
+      >
         {/*
          * A BUTTON and nothing else: that is what the keyboard sensor listens
          * to, and what gives the gesture an accessible name.
@@ -674,11 +677,10 @@ export function ItemsStep({
     const to = items[at];
     return to ? () => pane.setShown(to.id) : undefined;
   };
-  const closeOnEscape = (e: KeyboardEvent) => {
-    if (e.key !== "Escape" || e.defaultPrevented || !previewed) return;
-    e.preventDefault();
-    pane.setShown(null);
-  };
+  // A row removed while shown closes its preview, and the page narrows back.
+  useEffect(() => {
+    if (pane.shown !== null && previewedAt < 0) pane.setShown(null);
+  }, [pane.shown, pane.setShown, previewedAt]);
   const introItem = items.find((i) => i.id === writingIntro) ?? null;
   /** The "+ Text" that opens the editor of `item`'s intro (ADR-084). */
   const addTextBefore = (item: Row): GapAction => ({
@@ -699,7 +701,7 @@ export function ItemsStep({
 
   return (
     // Escape closes the docked preview from anywhere in the list or in it.
-    <div className="flex items-start" style={{ gap: PANE_GAP }} onKeyDown={closeOnEscape}>
+    <div className="flex items-start" style={{ gap: PANE_GAP }} onKeyDown={pane.closeOnEscape}>
     <div className="min-w-0 flex-1 space-y-4">
       <SectionHeading
         icon={ListOrdered}
