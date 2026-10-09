@@ -1,13 +1,17 @@
 /**
- * Mounts the question type's own `Player` for one item.
+ * Mounts the question type's own `Player` for one item: the ONE player host,
+ * for a student's attempt and for every teacher surface that shows a
+ * question as a student gets it (the Try tab, the grading panel's statement,
+ * the previews).
  *
  * Three things happen here and nowhere else:
  *   - the component comes from the CLIENT registry and is `React.lazy`, so
  *     Monaco enters the bundle only on a route that shows a code question
  *     (N-PERF-05);
- *   - the host injects what a `qt-*` package cannot own: the French strings
- *     (`questionStrings.ts`) and `MarkdownView`, the ONE renderer of
- *     untrusted content a student sees (invariant 4 and DESIGN.md);
+ *   - the host injects what a `qt-*` package cannot own: the strings of
+ *     `i18n/` (built once in `questionTypes.tsx`) and `MarkdownView`, the ONE
+ *     renderer of untrusted content a student sees (invariant 4 and
+ *     DESIGN.md);
  *   - `onRun` comes from `src/runner/`, which decides between the backend
  *     runner and the browser one and owns the fallback between them
  *     (ADR-015); `POST /attempts/:id/run` is the backend half of it.
@@ -15,21 +19,38 @@
  * The registry types every player as `ComponentType<PlayerProps<…>>`, which
  * is the shape of the contract and not of the host's extras (deviation W2-3
  * added `strings` / `renderMarkdown` / `renderText` as OPTIONAL props on each
- * component). One cast, here, names that fact instead of spreading it.
+ * component). One cast, here, names that fact instead of spreading it. A
+ * player ignores the extras it does not declare, so they are passed to every
+ * type alike.
  */
 import { Suspense, type ComponentType, type ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 
 import type { PlayerProps } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
+import type { ClozeTextRenderer } from "@quiz/qt-cloze/client";
 import { questionTypeClient } from "@quiz/registry/client";
 
 import { useT } from "../i18n";
 import { ClozeMarkdownText } from "../markdown/ClozeMarkdownText";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { Alert, ScrollableCode, Spinner } from "../ui";
-import { canvasStringsProp, LazyRichText, questionType, type PlayerHostProps } from "../questionTypes";
-import { playerStringsFor } from "./questionStrings";
+import { canvasStringsProp, LazyRichText, playerStrings, questionType } from "../questionTypes";
+
+type RunResult = Promise<RunnerOutcome | "unavailable" | "rate_limited">;
+
+/** What every shipped player accepts on top of the core contract. */
+type PlayerHostProps = PlayerProps<unknown, unknown> & {
+  strings?: unknown;
+  /** `circuit` and `diagram`: the canvas ships a dictionary of its own. */
+  canvasStrings?: unknown;
+  /** `cloze`: its text with the blanks in place (`ClozeMarkdownText`). */
+  renderText?: ClozeTextRenderer;
+  onRun?: (answer: unknown, options?: unknown) => RunResult;
+  allowManualRun?: boolean;
+  testsPrimary?: boolean;
+  onSimulate?: (answer: unknown) => RunResult;
+};
 
 /*
  * `inline`, because every place a question type calls this is already a
@@ -83,6 +104,7 @@ export function QuestionHost({
   readOnly,
   onRun,
   allowManualRun,
+  testsPrimary,
   onSimulate,
   onUnsent,
   Expand,
@@ -95,16 +117,18 @@ export function QuestionHost({
   onChange: (next: unknown) => void;
   readOnly: boolean;
   /** Present only for a type that has something to run. */
-  onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
+  onRun?: (answer: unknown, options?: unknown) => RunResult;
   /** `code` only: whether the free stdin box has a runner that will take it. */
   allowManualRun?: boolean;
+  /** `code` only: false where the host has its own primary action (the Try tab's "Run the tests"). */
+  testsPrimary?: boolean;
   /**
    * `circuit` only: the simulation of `POST /attempts/:id/simulate`. It sits
    * beside `onRun` rather than inside it because the two answer different
    * questions — a program's output against a case, a circuit's waveform
    * against a stimulus — and neither has a browser half to fall back on here.
    */
-  onSimulate?: (answer: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
+  onSimulate?: (answer: unknown) => RunResult;
   /** Where something is saved as one types: see `PlayerProps.onUnsent`. */
   onUnsent?: (unsent: boolean) => void;
   /** The attempt's expand layer (`PlayerProps.Expand`); a player that needs no room ignores it. */
@@ -115,16 +139,15 @@ export function QuestionHost({
   answerKey?: unknown;
 }) {
   const t = useT();
-  let Player: ComponentType<PlayerHostProps>;
-  try {
-    Player = questionTypeClient(type).Player as unknown as ComponentType<PlayerHostProps>;
-  } catch {
+  const client = questionType(type);
+  if (!client) {
     return (
       <Alert tone="danger" icon={AlertTriangle} title={t("player.loadFailed")}>
         {type}
       </Alert>
     );
   }
+  const Player = client.Player as unknown as ComponentType<PlayerHostProps>;
   return (
     // `qt-code` shows the provided, locked part of the program in `<pre>`
     // blocks that scroll sideways at 390 px. A scroll container holding
@@ -137,13 +160,14 @@ export function QuestionHost({
           answer={answer}
           onChange={onChange}
           readOnly={readOnly}
-          strings={playerStringsFor(type, t)}
-          {...canvasStringsProp(type, t)}
+          strings={playerStrings[client.id](t)}
+          {...canvasStringsProp(client.id, t)}
           renderMarkdown={renderMarkdown}
-          {...(type === "cloze" ? { renderText: ClozeMarkdownText } : {})}
+          renderText={ClozeMarkdownText}
           RichText={LazyRichText}
           {...(onRun ? { onRun } : {})}
           {...(allowManualRun === undefined ? {} : { allowManualRun })}
+          {...(testsPrimary === undefined ? {} : { testsPrimary })}
           {...(onSimulate ? { onSimulate } : {})}
           {...(onUnsent ? { onUnsent } : {})}
           {...(Expand ? { Expand } : {})}

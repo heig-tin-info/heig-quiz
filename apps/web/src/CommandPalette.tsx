@@ -10,7 +10,7 @@ import {
   type Command,
   type CommandContext,
 } from "./commands";
-import type { TFunction } from "./i18n";
+import { useT } from "./i18n";
 import { ComboboxOption, cx, Kbd, useCombobox, useLayer, useScrollLock, Z } from "./ui";
 
 /** The palette's list is open for as long as the palette is. */
@@ -35,16 +35,17 @@ const ALWAYS_OPEN: [boolean, (open: boolean) => void] = [true, () => {}];
  * the palette builds the global list from it. The zen player hands over a
  * FIXED list instead: during an attempt there is no sidebar, no theme switch
  * and no other page to jump to, and the four things a student can do from
- * here are the four things the palette offers (W15). It still needs `t`, for
- * its own chrome.
+ * here are the four things the palette offers (W15). Either way the palette
+ * translates through `useT()`, its own chrome and the global list alike.
  */
 type CommandPaletteProps = { open: boolean; onClose: () => void } & (
-  | ({ commands?: undefined } & CommandContext)
-  | { commands: Command[]; t: TFunction }
+  | ({ commands?: undefined } & Omit<CommandContext, "t">)
+  | { commands: Command[] }
 );
 
 export function CommandPalette(props: CommandPaletteProps) {
-  const { open, onClose, t } = props;
+  const { open, onClose } = props;
+  const t = useT();
   const [query, setQuery] = useState("");
   const panel = useRef<HTMLDivElement>(null);
   const uid = useId();
@@ -65,7 +66,7 @@ export function CommandPalette(props: CommandPaletteProps) {
     props.commands ??
     // The union above guarantees the context is there when `commands` is not;
     // TypeScript cannot narrow a rest-free union by an absent property.
-    buildCommands(props as unknown as CommandContext);
+    buildCommands({ ...(props as unknown as Omit<CommandContext, "t">), t });
   const groups = groupCommands(capClassrooms(filterCommands(query, all), query));
   // The list the arrows walk is the one the eye walks: the groups in their
   // fixed order, not the score order the filter returned.

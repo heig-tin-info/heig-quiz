@@ -67,7 +67,6 @@ export function AnswerCard({
       </div>
       <div className="min-w-0">
         <QuestionReviewHost
-          t={t}
           type={type}
           student={studentConfig}
           answer={answer}

@@ -111,7 +111,6 @@ export function QuestionEditTab({
         <Card className="p-5">
           {draft ? (
             <QuestionEditorHost
-              t={t}
               type={data.meta.type}
               config={draft.config}
               onChange={(config) => setDraft({ ...draft, config })}

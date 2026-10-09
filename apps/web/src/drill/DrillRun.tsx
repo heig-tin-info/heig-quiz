@@ -229,7 +229,6 @@ function DrillCard({
             </div>
             <ConfidenceLine correctness={result.correctness} confidence={confidence} />
             <QuestionReviewHost
-              t={t}
               type={served.data.type}
               student={student}
               answer={isAnswered(card.type, answer) ? answer : null}

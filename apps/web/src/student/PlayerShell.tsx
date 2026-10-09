@@ -329,7 +329,7 @@ export function PlayerShell({
         <p className="sr-only">{t("player.shortcuts")}</p>
       )}
       {palette && commands ? (
-        <CommandPalette open onClose={() => setPalette(false)} t={t} commands={commands} />
+        <CommandPalette open onClose={() => setPalette(false)} commands={commands} />
       ) : null}
     </div>
   );

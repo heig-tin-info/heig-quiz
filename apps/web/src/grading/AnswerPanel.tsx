@@ -12,7 +12,8 @@ import { useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { formatLabel } from "../question/VariablesSection";
 import { useToast } from "../notify";
-import { emptyAnswerOf, QuestionPlayerHost, QuestionReviewHost, typeLabel } from "../questionTypes";
+import { QuestionReviewHost, typeLabel } from "../questionTypes";
+import { emptyAnswerOf, QuestionHost } from "../student/QuestionHost";
 import {
   Button,
   ErrorText,
@@ -189,14 +190,13 @@ function ExpectedBody({ item, columns, student, parameters, explanation }: Panel
   return (
     <div className="space-y-6">
       <Section title={t("grading.panel.statement")}>
-        <QuestionPlayerHost
-          t={t}
+        {/* No expand layer: a statement with nothing to draw. */}
+        <QuestionHost
           type={item.type}
           student={student}
           answer={emptyAnswerOf(item.type, student)}
           onChange={() => {}}
           readOnly
-          expandable={false}
         />
       </Section>
       {parameters ? <VariablesList parameters={parameters} /> : null}
@@ -319,7 +319,6 @@ function EntryPanel({
           <p className="text-sm italic text-fg-faint">{t("grading.noAnswer")}</p>
         ) : null}
         <QuestionReviewHost
-          t={t}
           type={item.type}
           student={entry.student}
           answer={entry.answer}

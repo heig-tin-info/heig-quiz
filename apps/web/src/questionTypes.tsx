@@ -4,9 +4,10 @@
  * `@quiz/registry/client` holds the static registry; this module is what the
  * pool and the editor talk to. It does four things and nothing else:
  *
- * 1. mounts a type's `Editor` / `Player` / `Review` behind `Suspense`, so the
- *    chunk of a type (Monaco included, N-PERF-05) is fetched only by a screen
- *    that shows that type;
+ * 1. mounts a type's `Editor` / `Review` behind `Suspense`, so the chunk of a
+ *    type (Monaco included, N-PERF-05) is fetched only by a screen that shows
+ *    that type (its `Player` has one host, `student/QuestionHost.tsx`, for the
+ *    student and the teacher alike);
  * 2. hands each component the French (or English) strings of `i18n/`
  *    through its `strings` prop — a `qt-*` package may not import the app, so
  *    the host translates (N-I18N-01, deviation W2-3);
@@ -15,7 +16,7 @@
  * 4. picks the editor's "try it yourself" adapter for a type
  *    (`tryAdapterFor`), so the editor screen never branches on a type id.
  *
- * The cast on the three components is deliberate: the registry erases five
+ * The cast on the components is deliberate: the registry erases five
  * type parameters (`AnyQuestionTypeClient`), so the props a concrete type
  * adds to the contract's — `strings`, `onTry`, `renderText` — are not
  * visible through it. Every value passed below is still built from that
@@ -28,7 +29,6 @@ import type { TryResult } from "@quiz/contracts";
 import type {
   ConfigIssue,
   EditorProps,
-  PlayerProps,
   ReviewProps,
   ReviewSections,
   RichTextComponent,
@@ -116,7 +116,7 @@ import {
 
 import { ApiError, api } from "./api";
 import { HelpIcon } from "./help";
-import type { Dict, TFunction } from "./i18n";
+import { useT, type Dict, type TFunction } from "./i18n";
 import { ClozeMarkdownText } from "./markdown/ClozeMarkdownText";
 import { MarkdownView } from "./markdown/MarkdownView";
 import { EditorExpandLayer } from "./question/EditorExpandLayer";
@@ -281,8 +281,8 @@ export const diagramCanvasStrings = (t: TFunction): DiagramStrings =>
 /**
  * The canvas dictionary a type's surfaces take beside their `strings`
  * (`canvasStrings`), for the types that have a canvas. Every host — the
- * editor, the player and the review here, the student's `QuestionHost` —
- * reads this one table.
+ * editor and the review here, the player's `QuestionHost` — reads this one
+ * table.
  */
 export const CANVAS_STRINGS_OF: Partial<Record<QuestionTypeId, (t: TFunction) => unknown>> = {
   circuit: circuitCanvasStrings,
@@ -581,7 +581,7 @@ type EditorHostProps = EditorProps<unknown> & {
   /** `circuit` only: the component names, keyed by kind (`qt.circuit.kind.*`). */
   kindLabels?: unknown;
   onTry?: (config: unknown) => Promise<TryOutcome>;
-  /** `code` only: `CodeEditorProps.onTryInBrowser`. */
+  /** `code`: `CodeEditorProps.onTryInBrowser`, called only beside `onTry`. */
   onTryInBrowser?: (config: CodeConfig) => Promise<RunnerOutcome | "unavailable">;
 };
 
@@ -589,10 +589,11 @@ type EditorHostProps = EditorProps<unknown> & {
  * The app's sanitised renderer, injected into every type's components.
  *
  * Two shapes, because the hosts differ: an editor places the preview in a
- * block of its own, while a player and a review render the statement INSIDE a
- * `<p>` (`qt-mcq/Review.tsx`, and the same pattern in the others). A `<div>`
- * there is invalid HTML and React says so, so those two get the span variant;
- * the sanitising, the KaTeX pass and the `asset:` resolution are identical.
+ * block of its own, while a review renders the statement INSIDE a `<p>`
+ * (`qt-mcq/Review.tsx`, and the same pattern in the others). A `<div>` there
+ * is invalid HTML and React says so, so the review gets the span variant; the
+ * sanitising, the KaTeX pass and the `asset:` resolution are identical. (The
+ * player's own renderer is `QuestionHost`'s.)
  */
 const renderBlock = (source: string) => <MarkdownView source={source} />;
 const renderInline = (source: string) => <MarkdownView as="span" size="sm" source={source} />;
@@ -605,7 +606,6 @@ const renderInline = (source: string) => <MarkdownView as="span" size="sm" sourc
 const renderHelp = (topic: string) => <HelpIcon topic={topic} />;
 
 export function QuestionEditorHost({
-  t,
   type,
   config,
   onChange,
@@ -618,7 +618,6 @@ export function QuestionEditorHost({
   onTry,
   onGenerateItem,
 }: {
-  t: TFunction;
   type: string;
   config: unknown;
   onChange: (next: unknown) => void;
@@ -649,6 +648,7 @@ export function QuestionEditorHost({
 }) {
   // A focused canvas (the reference, the starter) lends its keys to the
   // sidebar strip, on top of the page's, like a rich-text field (issue #549).
+  const t = useT();
   const [canvasKeys, onCanvasShortcuts] = useLentCanvasShortcuts();
   useShortcuts(canvasKeys ?? [], canvasKeys !== null);
   const client = questionType(type);
@@ -674,9 +674,7 @@ export function QuestionEditorHost({
         {...(published === undefined ? {} : { published })}
         {...(onTry === undefined ? {} : { onTry })}
         {...(onGenerateItem === undefined ? {} : { onGenerateItem })}
-        {...(onTry !== undefined && client.id === "code"
-          ? { onTryInBrowser: tryReferenceInBrowser }
-          : {})}
+        onTryInBrowser={tryReferenceInBrowser}
         // Every editor host lends the layer; the save state in its bar is the
         // question editor's (`EditorExpandChrome`), absent elsewhere.
         Expand={EditorExpandLayer}
@@ -686,95 +684,14 @@ export function QuestionEditorHost({
   );
 }
 
-/** What every shipped player accepts on top of the core contract; `student/QuestionHost.tsx` mounts one too. */
-export type PlayerHostProps = PlayerProps<unknown, unknown> & {
-  strings?: unknown;
-  /** `circuit` and `diagram`: the canvas ships a dictionary of its own. */
-  canvasStrings?: unknown;
-  /** `cloze` only: its text with the blanks in place (`ClozeMarkdownText`). */
-  renderText?: ClozeTextRenderer;
-  onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
-  allowManualRun?: boolean;
-  testsPrimary?: boolean;
-  onSimulate?: (answer: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
-};
-
-export function QuestionPlayerHost({
-  t,
-  type,
-  student,
-  answer,
-  onChange,
-  readOnly,
-  onRun,
-  allowManualRun,
-  testsPrimary,
-  onSimulate,
-  expandable = true,
-}: {
-  t: TFunction;
-  type: string;
-  student: unknown;
-  answer: unknown;
-  onChange: (next: unknown) => void;
-  readOnly: boolean;
-  /** `code` only: the run the type's player offers, from `src/runner/`. */
-  onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
-  allowManualRun?: boolean;
-  /** `code` only: false where the host has its own primary action (the try panel). */
-  testsPrimary?: boolean;
-  /**
-   * `circuit` only: the simulation its player offers. It has no browser half
-   * — a netlist is assembled server-side (invariant 14) — so it is one call,
-   * and its two words are the graceful paths (D14, N-SEC-07).
-   */
-  onSimulate?: (answer: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
-  /**
-   * Whether the player gets the teacher's expand layer (`PlayerProps.Expand`,
-   * `EditorExpandLayer`). Lent by default — the Try tab draws in it — and
-   * refused by the grading panel, which shows a statement with nothing to draw.
-   */
-  expandable?: boolean;
-}) {
-  const client = questionType(type);
-  if (!client) return <Unknown>{t("qt.unknown")}</Unknown>;
-  const Player = client.Player as unknown as ComponentType<PlayerHostProps>;
-  return (
-    // `qt-code` prints the provided, locked part of the program in `<pre>`
-    // blocks that scroll sideways on a phone; a student with no mouse could
-    // not read past the fold (W10).
-    <ScrollableCode label={t("markdown.codeBlock")}>
-      <Suspense fallback={<EditorSkeleton label={t("qt.loading")} />}>
-        <Player
-          student={student}
-          answer={answer}
-          onChange={onChange}
-          readOnly={readOnly}
-          strings={playerStrings[client.id](t)}
-          {...canvasStringsProp(client.id, t)}
-          renderMarkdown={renderInline}
-          {...(client.id === "cloze" ? { renderText: ClozeMarkdownText } : {})}
-          RichText={LazyRichText}
-          {...(onRun === undefined ? {} : { onRun })}
-          {...(allowManualRun === undefined ? {} : { allowManualRun })}
-          {...(testsPrimary === undefined ? {} : { testsPrimary })}
-          {...(onSimulate === undefined ? {} : { onSimulate })}
-          {...(expandable ? { Expand: EditorExpandLayer } : {})}
-        />
-      </Suspense>
-    </ScrollableCode>
-  );
-}
-
 type ReviewHostProps = ReviewProps<unknown, unknown, unknown, unknown> & {
   strings?: unknown;
   canvasStrings?: unknown;
-  /** `cloze` only: its text with the blanks in place (`ClozeMarkdownText`). */
+  /** `cloze`: its text with the blanks in place (`ClozeMarkdownText`). */
   renderText?: ClozeTextRenderer;
 };
 
 export function QuestionReviewHost({
-  t,
   type,
   student,
   answer,
@@ -785,7 +702,6 @@ export function QuestionReviewHost({
   audience = "teacher",
   sections,
 }: {
-  t: TFunction;
   type: string;
   student: unknown;
   answer: unknown;
@@ -797,6 +713,7 @@ export function QuestionReviewHost({
   /** The type's own parts to hide (#109); absent, everything is drawn. */
   sections?: ReviewSections;
 }) {
+  const t = useT();
   const client = questionType(type);
   if (!client) return <Unknown>{t("qt.unknown")}</Unknown>;
   const Review = client.Review as unknown as ComponentType<ReviewHostProps>;
@@ -818,15 +735,9 @@ export function QuestionReviewHost({
           strings={reviewStrings[client.id](t)}
           {...canvasStringsProp(client.id, t)}
           renderMarkdown={renderInline}
-          {...(client.id === "cloze" ? { renderText: ClozeMarkdownText } : {})}
+          renderText={ClozeMarkdownText}
         />
       </Suspense>
     </ScrollableCode>
   );
-}
-
-/** The empty answer of a type, for the try panel. */
-export function emptyAnswerOf(type: string, student: unknown): unknown {
-  const client = questionType(type);
-  return client ? client.emptyAnswer(student) : null;
 }

@@ -51,7 +51,6 @@ export function CopyItem({
       </div>
 
       <QuestionReviewHost
-        t={t}
         type={item.type}
         student={item.student}
         answer={item.answer}

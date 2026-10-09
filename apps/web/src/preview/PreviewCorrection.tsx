@@ -121,7 +121,6 @@ export function PreviewCorrectionView({
             ) : null}
 
             <QuestionReviewHost
-              t={t}
               type={item.type}
               student={item.student}
               answer={item.answer}

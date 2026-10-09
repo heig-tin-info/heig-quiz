@@ -682,7 +682,6 @@ export function Shell({
         <CommandPalette
           open
           onClose={() => setPalette(false)}
-          t={t}
           locale={locale}
           setLocale={setLocale}
           route={route}
