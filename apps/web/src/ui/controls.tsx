@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Loader2, Minus, Search } from "lucide-react";
+import { CalendarRange, Check, ChevronDown, LayoutGrid, List, Loader2, Minus, Search } from "lucide-react";
 import { useId } from "react";
 import type { ReactNode } from "react";
 
@@ -15,6 +15,7 @@ import {
   type ButtonVariant,
 } from "@quiz/ui";
 
+import { useT } from "../i18n";
 import { HelpIcon, type IconType } from "./layers";
 
 // --- Buttons ---
@@ -485,6 +486,48 @@ export function iconOption<T extends string>(value: T, icon: ReactNode, label: s
       </span>
     ),
   };
+}
+
+/** The pictures a list can be drawn as, each with its icon. */
+export type ViewName = "cards" | "list" | "schedule";
+const VIEW_ICONS: Record<ViewName, IconType> = { cards: LayoutGrid, list: List, schedule: CalendarRange };
+
+/**
+ * The switch between pictures of the same list (cards, a table, a schedule),
+ * in the order given: icons only (`iconOption`), at the list's top right.
+ */
+export function ViewSwitch<V extends ViewName>({
+  name,
+  views,
+  value,
+  onChange,
+  size,
+}: {
+  name: string;
+  views: readonly V[];
+  value: V;
+  onChange: (view: V) => void;
+  size?: "sm" | "md";
+}) {
+  const t = useT();
+  // Literal keys, so the unused-keys test still sees them.
+  const labels: Record<ViewName, string> = {
+    cards: t("view.cards"),
+    list: t("view.list"),
+    schedule: t("view.schedule"),
+  };
+  return (
+    <Segmented
+      name={name}
+      size={size}
+      value={value}
+      onChange={onChange}
+      options={views.map((view) => {
+        const Icon: IconType = VIEW_ICONS[view];
+        return iconOption(view, <Icon className="size-4" />, labels[view]);
+      })}
+    />
+  );
 }
 export { ErrorText } from "@quiz/ui";
 

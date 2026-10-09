@@ -1,5 +1,5 @@
-import { Eye, EyeOff, LayoutGrid, Library, List, Plus } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { Eye, EyeOff, Library, Plus } from "lucide-react";
+import { useState } from "react";
 
 import type { CourseSummary } from "@quiz/contracts";
 
@@ -16,7 +16,6 @@ import {
   EmptyState,
   PageHeader,
   QueryError,
-  Segmented,
   Skeleton,
   Spinner,
   T,
@@ -25,6 +24,7 @@ import {
   type Column,
   usePersistentChoice,
   useSortableTable,
+  ViewSwitch,
 } from "./ui";
 
 /**
@@ -95,21 +95,6 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
     { key: "actions", label: t("common.actions"), sortable: false, srOnly: true, className: "w-10", stack: "end" },
   ];
 
-  /**
-   * Two icons and no words: the choice is between two pictures of the same
-   * list, and a pair of labels beside them would weigh more than the switch
-   * itself. The name stays, for the pointer and for the screen reader.
-   */
-  const viewOption = (value: "cards" | "list", icon: ReactNode, label: string) => ({
-    value,
-    label: (
-      <span title={label} className="flex items-center">
-        {icon}
-        <span className="sr-only">{label}</span>
-      </span>
-    ),
-  });
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -142,15 +127,7 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
               onToggle={() => setShowHidden((v) => !v)}
             />
           ) : null}
-          <Segmented
-            name="courses-view"
-            value={view}
-            onChange={setView}
-            options={[
-              viewOption("cards", <LayoutGrid className="size-4" />, t("view.cards")),
-              viewOption("list", <List className="size-4" />, t("view.list")),
-            ]}
-          />
+          <ViewSwitch name="courses-view" views={["cards", "list"]} value={view} onChange={setView} />
         </div>
       ) : null}
 

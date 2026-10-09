@@ -1,10 +1,9 @@
-import { LayoutGrid, List } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { ConceptRef } from "@quiz/contracts";
 
 import { useT, type Dict } from "../i18n";
-import { GroupBySwitch, iconOption, Segmented } from "../ui";
+import { GroupBySwitch, ViewSwitch } from "../ui";
 import type { QuestionFilters, Vocabulary } from "./filters";
 import { GROUP_BY, type GroupBy } from "./QuestionGroups";
 import { QuestionSearchBar } from "./QuestionSearchBar";
@@ -103,16 +102,7 @@ export function FilterBar({
             </span>
           )}
           {actions}
-          <Segmented
-            name="pool-view"
-            size="sm"
-            value={view}
-            onChange={onView}
-            options={[
-              iconOption("cards", <LayoutGrid className="size-4" />, t("view.cards")),
-              iconOption("list", <List className="size-4" />, t("view.list")),
-            ]}
-          />
+          <ViewSwitch name="pool-view" size="sm" views={["cards", "list"]} value={view} onChange={onView} />
         </div>
       </div>
     </QuestionSearchBar>

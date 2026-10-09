@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Globe, History, LayoutGrid, Library, List, Lock, Plus, Users } from "lucide-react";
+import { Globe, History, Library, Lock, Plus, Users } from "lucide-react";
 import { useState } from "react";
 
 import type { Me, PoolSummary } from "@quiz/contracts";
@@ -14,19 +14,18 @@ import {
   type Column,
   cx,
   EmptyState,
-  iconOption,
   PageHeader,
   PersonAvatar,
   pressable,
   QueryError,
   RelativeTime,
-  Segmented,
   Skeleton,
   Spinner,
   T,
   TableHead,
   usePersistentChoice,
   useSortableTable,
+  ViewSwitch,
 } from "../ui";
 import { PoolFormModal } from "./PoolFormModal";
 import { PoolIcon } from "./PoolIcon";
@@ -284,15 +283,7 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
 
       {rows.length > 0 && !pools.isError ? (
         <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
-          <Segmented
-            name="pools-view"
-            value={view}
-            onChange={setView}
-            options={[
-              iconOption("cards", <LayoutGrid className="size-4" />, t("view.cards")),
-              iconOption("list", <List className="size-4" />, t("view.list")),
-            ]}
-          />
+          <ViewSwitch name="pools-view" views={["cards", "list"]} value={view} onChange={setView} />
         </div>
       ) : null}
 
