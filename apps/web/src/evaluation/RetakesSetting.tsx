@@ -18,7 +18,7 @@ import type { ConfigPatch } from "./editTarget";
  * The rule travels whole (`EvaluationSettingsPatch.retakes`): every change
  * sends its fields together.
  *
- * ADR-090: what a retake asks again — every question, or only those to
+ * ADR-091: what a retake asks again — every question, or only those to
  * review. The second needs free navigation (the server refuses the pair,
  * `422 retake_scope_navigation`): under another navigation the choice is
  * disabled and says why, and once it is on, the navigation row says why it

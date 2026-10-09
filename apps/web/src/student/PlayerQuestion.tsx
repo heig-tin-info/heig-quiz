@@ -129,7 +129,7 @@ export function QuestionHeading({
   /** A bonus question: its points are not in the total. */
   bonus?: boolean;
   validated: boolean;
-  /** ADR-090: carried over by a partial retake, kept as it was. */
+  /** ADR-091: carried over by a partial retake, kept as it was. */
   acquired?: boolean;
   mark: AnswerMark;
 }) {

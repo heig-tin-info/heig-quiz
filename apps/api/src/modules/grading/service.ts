@@ -1096,7 +1096,7 @@ export {
   type StudentAttempts,
 } from "./kept.js";
 
-// --- The partial retake (ADR-090) -------------------------------------------
+// --- The partial retake (ADR-091) -------------------------------------------
 
 /** The VALIDATED gradings of one attempt: what a partial retake reads, once. */
 export async function validatedOfAttempt(db: DbOrTx, attemptId: string): Promise<GradingRecord[]> {
@@ -1107,7 +1107,7 @@ export async function validatedOfAttempt(db: DbOrTx, attemptId: string): Promise
 }
 
 /**
- * Each item's standing in one attempt (ADR-090 §2), in the order of
+ * Each item's standing in one attempt (ADR-091 §2), in the order of
  * `items`, computed ONCE from that attempt's validated gradings
  * (`validatedOfAttempt`): the retake and the results page read it, and
  * `acquiredItems` / `partialRetakeRefusal` take it as it is.
@@ -1125,7 +1125,7 @@ export function standingsOf(
 
 /**
  * Copies validated gradings of attempt n onto the partial retake n + 1
- * (ADR-090 §3) — exactly the `rows` the retake read, inside its
+ * (ADR-091 §3) — exactly the `rows` the retake read, inside its
  * transaction, so no override can slip between the read and the copy. A
  * frozen snapshot: new ids, the copied answer (`answerIds`, item → the
  * copy's id, `null` for an item that had none), a chain of its own

@@ -725,7 +725,7 @@ function feedbackAvailable(
  * applies, so the results page offers exactly what the route would accept
  * (issues #120, #121).
  *
- * ADR-090: under the scope `to_review`, on the page of the LATEST attempt
+ * ADR-091: under the scope `to_review`, on the page of the LATEST attempt
  * once it is finished — the one a partial retake would follow — each
  * question's standing in the student's own order (`review`): an id, a rank
  * and a word, never a point, an answer or a key. Its presence is what offers
@@ -881,7 +881,7 @@ export async function studentFeedback(
     attempt.userId !== null && retakesOpen(evaluation)
       ? await retakeOffer(db, evaluation, attempt, attempt.userId, now)
       : null;
-  // ADR-090: the standings travel beside the retake, on both branches.
+  // ADR-091: the standings travel beside the retake, on both branches.
   const retake =
     offer === null
       ? {}

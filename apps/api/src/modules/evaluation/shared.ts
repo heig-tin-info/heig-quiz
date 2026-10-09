@@ -86,7 +86,7 @@ export class RetakesNotAllowed extends EvaluationError {
 }
 
 /**
- * ADR-090: a retake of the questions to review shows the acquired ones
+ * ADR-091: a retake of the questions to review shows the acquired ones
  * read-only between the others, which only `free` navigation does.
  */
 export class RetakeScopeNavigation extends EvaluationError {
@@ -94,7 +94,7 @@ export class RetakeScopeNavigation extends EvaluationError {
     super(
       "retake_scope_navigation",
       422,
-      "a retake of the questions to review needs free navigation (ADR-090)",
+      "a retake of the questions to review needs free navigation (ADR-091)",
     );
   }
 }

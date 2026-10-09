@@ -259,7 +259,7 @@ export async function patchEvaluation(
     if (retakesOf(settings).enabled && !retakesAllowedFor(row.mode)) {
       throw new RetakesNotAllowed(row.mode);
     }
-    // ADR-090: a partial retake needs free navigation; leaving either half
+    // ADR-091: a partial retake needs free navigation; leaving either half
     // inconsistent is refused, whichever moved.
     if (!retakeScopeFits(row.mode, retakesOf(settings), settings.navigation)) throw new RetakeScopeNavigation();
     // A poll is tallied, not graded (ADR-026): switching negative marking on

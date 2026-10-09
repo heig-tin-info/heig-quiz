@@ -10,7 +10,7 @@
  *     `last`. The results, the grade, the CSV, the release and the student's
  *     own card all use it, so they can never disagree on which attempt is the
  *     student's result;
- *   - {@link itemStanding} and {@link partialRetakeRefusal} (ADR-090): which
+ *   - {@link itemStanding} and {@link partialRetakeRefusal} (ADR-091): which
  *     questions of an attempt are acquired, and whether a retake may ask only
  *     the others.
  *
@@ -24,7 +24,7 @@ import type { NavigationMode } from "./questionProgress.js";
 export type RetakeKeep = "best" | "last";
 
 /**
- * What a retake asks again (ADR-090): every question (`all`, ADR-025), or
+ * What a retake asks again (ADR-091): every question (`all`, ADR-025), or
  * only the questions to review (`to_review`) — the acquired ones are carried
  * over from the previous attempt as they stand.
  */
@@ -36,17 +36,17 @@ export interface RetakePolicy {
   keep: RetakeKeep;
   /** The most attempts a student may take in all; `null` is unlimited. */
   maxAttempts: number | null;
-  /** ADR-090; absent is `all`: read it through {@link retakeScopeOf}. */
+  /** ADR-091; absent is `all`: read it through {@link retakeScopeOf}. */
   scope?: RetakeScope | undefined;
 }
 
-/** The scope of a retake rule: absent (every evaluation stored before ADR-090) is `all`. */
+/** The scope of a retake rule: absent (every evaluation stored before ADR-091) is `all`. */
 export function retakeScopeOf(policy: Pick<RetakePolicy, "scope">): RetakeScope {
   return policy.scope ?? "all";
 }
 
 /**
- * Whether a retake may ask only the questions to review (ADR-090): the
+ * Whether a retake may ask only the questions to review (ADR-091): the
  * exercise takes retakes and the teacher chose `to_review`.
  */
 export function partialRetakesOn(mode: EvaluationModeName, policy: RetakePolicy): boolean {
@@ -54,7 +54,7 @@ export function partialRetakesOn(mode: EvaluationModeName, policy: RetakePolicy)
 }
 
 /**
- * ADR-090 §1: a partial retake shows the acquired questions read-only and
+ * ADR-091 §1: a partial retake shows the acquired questions read-only and
  * lets the student move freely between the others, which only `free`
  * navigation does — a validated checkpoint carried over would close the
  * questions before it. The server refuses any other pairing while partial
@@ -71,7 +71,7 @@ export function retakeScopeFits(
 
 /**
  * Where a question of a finished attempt stands for a partial retake
- * (ADR-090 §2):
+ * (ADR-091 §2):
  *
  * - `acquired`: its validated points reach its maximum. A question worth
  *   nothing (maximum 0) is acquired whatever its grading — there is nothing
@@ -103,14 +103,14 @@ export interface StoodItem {
   standing: ItemStanding;
 }
 
-/** The ids of the acquired items among `items`, in their order (ADR-090 §2). */
+/** The ids of the acquired items among `items`, in their order (ADR-091 §2). */
 export function acquiredItems(items: readonly StoodItem[]): string[] {
   return items.filter((item) => item.standing === "acquired").map((item) => item.id);
 }
 
 /**
  * Why a partial retake is refused, checked after {@link retakeRefusal}
- * passed (ADR-090 §3): the teacher did not choose `to_review` (`scope_all`),
+ * passed (ADR-091 §3): the teacher did not choose `to_review` (`scope_all`),
  * or every question is already acquired (`nothing_to_review`) — "Redo
  * everything" is then the retake left. Two more {@link RetakeRefusal}s.
  */
@@ -175,7 +175,7 @@ export function retakesOn(mode: EvaluationModeName, policy: RetakePolicy): boole
  *   beside another attempt;
  * - `max_attempts`: the maximum is reached;
  * - `scope_all`, `nothing_to_review`: a retake of the questions to review
- *   only, refused by {@link partialRetakeRefusal} (ADR-090).
+ *   only, refused by {@link partialRetakeRefusal} (ADR-091).
  */
 export type RetakeRefusal =
   | "not_allowed"

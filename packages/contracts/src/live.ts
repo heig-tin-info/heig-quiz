@@ -124,7 +124,7 @@ export const AttemptItem = z.object({
   /** Navigation already forbids writing to this item (forward_only, milestones). */
   locked: z.boolean(),
   /**
-   * ADR-090: acquired in the previous attempt and carried over by a partial
+   * ADR-091: acquired in the previous attempt and carried over by a partial
    * retake, answer and grading as they stood. Shown read-only, still
    * reachable; every write to it is `409 item_acquired`.
    */
@@ -176,7 +176,7 @@ export type ImposedCondition = z.infer<typeof ImposedCondition>;
 export type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 const _imposedSame: Same<ImposedCondition, DomainImposedCondition> = true;
 void _imposedSame;
-// ADR-090: the scope and the standing of the wire are the domain's.
+// ADR-091: the scope and the standing of the wire are the domain's.
 true satisfies Same<RetakeScope, DomainRetakeScope>;
 
 /**
@@ -314,7 +314,7 @@ export type AttemptStartBody = z.infer<typeof AttemptStartBody>;
  * `POST /evaluations/:id/retake` refused (F-EVAL-15): the reason is
  * `retakeRefusal`'s in `@quiz/domain` — or, for a retake of the questions
  * to review, `partialRetakeRefusal`'s (`scope_all`, `nothing_to_review`,
- * ADR-090). The two unions are checked equal below. A success answers
+ * ADR-091). The two unions are checked equal below. A success answers
  * {@link AttemptOrLobby}.
  */
 export const RetakeRefusalReason = z.enum([
@@ -338,8 +338,8 @@ export const RetakeRefused = z.object({
 export type RetakeRefused = z.infer<typeof RetakeRefused>;
 
 /**
- * The body of `POST /evaluations/:id/retake` (ADR-090): redo every question
- * (`all`, the default, what a body-less request from before ADR-090 means),
+ * The body of `POST /evaluations/:id/retake` (ADR-091): redo every question
+ * (`all`, the default, what a body-less request from before ADR-091 means),
  * or only those to review — refused unless the teacher chose that scope.
  */
 export const RetakeBody = z.object({ scope: RetakeScope.default("all") });
@@ -533,7 +533,7 @@ const CardRetakes = z.object({
   keep: RetakeKeep,
   maxAttempts: z.number().int().nullable(),
   /**
-   * ADR-090: under `to_review` the card's retake opens the results page of
+   * ADR-091: under `to_review` the card's retake opens the results page of
    * the latest attempt, where the student chooses what to redo.
    */
   scope: RetakeScope,

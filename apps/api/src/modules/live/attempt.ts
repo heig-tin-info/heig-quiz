@@ -154,7 +154,7 @@ export class EvaluationFinished extends LiveError {
 /**
  * F-EVAL-15: a retake the rule refuses (`@quiz/domain#retakeRefusal`), or a
  * retake of the questions to review `partialRetakeRefusal` refuses
- * (ADR-090). The reason travels in the body, so the screens can say which.
+ * (ADR-091). The reason travels in the body, so the screens can say which.
  */
 export class RetakeRefused extends LiveError {
   constructor(readonly reason: RetakeRefusal) {
@@ -163,7 +163,7 @@ export class RetakeRefused extends LiveError {
 }
 
 /**
- * ADR-090: a question a partial retake carried over is the previous
+ * ADR-091: a question a partial retake carried over is the previous
  * attempt's, as it stood: no write of any kind reaches it.
  */
 export class ItemAcquired extends LiveError {
@@ -681,7 +681,7 @@ interface Carried {
 }
 
 /**
- * ADR-090 §3: what a partial retake carries over from `latest` — the
+ * ADR-091 §3: what a partial retake carries over from `latest` — the
  * acquired items in the evaluation's order, and their validated gradings,
  * read ONCE here and copied as read — refused (`409 retake_refused`,
  * `scope_all` or `nothing_to_review`) unless the teacher chose that scope
@@ -705,7 +705,7 @@ async function carriedFrom(
 }
 
 /**
- * ADR-090 §3: copies onto the new attempt `to` the answer of each carried
+ * ADR-091 §3: copies onto the new attempt `to` the answer of each carried
  * item from `from`, then the validated gradings `carried` read — new ids, the
  * same payload. The copy was shown when the original was (`firstShownAt`),
  * and has spent no time on screen in this attempt (dwell 0, ADR-039); a flag
@@ -761,7 +761,7 @@ async function carryAcquired(
  * retake waits for the flip and reads `closed`. A blank attempt can never
  * be left open on a closed evaluation, graded 0, and kept as the "last".
  *
- * ADR-090: with `scope: "to_review"`, the questions acquired in the latest
+ * ADR-091: with `scope: "to_review"`, the questions acquired in the latest
  * attempt are carried over in the same transaction ({@link carriedFrom},
  * {@link carryAcquired}):
  * the new attempt is still a whole one — its own number, seed and deadline,
@@ -773,7 +773,7 @@ export async function retakeAttempt(
   input: {
     evaluation: EvaluationRecord;
     participant: Participant;
-    /** ADR-090: every question (ADR-025's blank retake), or only those to review. */
+    /** ADR-091: every question (ADR-025's blank retake), or only those to review. */
     scope?: RetakeScope;
     now: Date;
   },
@@ -822,7 +822,7 @@ export async function retakeAttempt(
     });
     const seed = drawSeed();
     const drawn = await drawInstances(tx, evaluation, seed);
-    // ADR-090: an acquired question keeps the numbers it was acquired with;
+    // ADR-091: an acquired question keeps the numbers it was acquired with;
     // the others are drawn anew, like every retake's.
     for (const itemId of carried.itemIds) {
       const kept = latest.instances[itemId];
@@ -978,7 +978,7 @@ function attemptItems(
   ordered: readonly OrderedItem[],
   answered: ReadonlyMap<string, AnswerRecord>,
   locked: ReadonlySet<string>,
-  /** ADR-090: the items a partial retake carried over. */
+  /** ADR-091: the items a partial retake carried over. */
   acquired: ReadonlySet<string>,
   settings: EvaluationSettings,
   attempt: InstanceAttempt,
@@ -1155,7 +1155,7 @@ async function viewOf(
     timeBonusPercent: number;
     /** The attempt's stored values (ADR-056); `{}` for a preview, which draws them from `seed`. */
     instances: Readonly<Record<string, StoredInstance>>;
-    /** ADR-090: the items a partial retake carried over; none in a preview. */
+    /** ADR-091: the items a partial retake carried over; none in a preview. */
     acquired: readonly string[];
     items?: readonly JoinedItem[] | undefined;
     answered: ReadonlyMap<string, AnswerRecord>;

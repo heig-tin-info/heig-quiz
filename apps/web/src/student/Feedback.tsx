@@ -104,7 +104,7 @@ interface Offer {
 }
 
 /**
- * The retakes on offer, ranked (ADR-090). With the standings of the latest
+ * The retakes on offer, ranked (ADR-091). With the standings of the latest
  * attempt (`review`, only sent under the scope `to_review`): redo the
  * questions to review — the primary, counted from the list — and redo
  * everything, secondary; with every question acquired, redoing everything
@@ -194,7 +194,7 @@ const STANDING: Record<ItemStanding, { tone: Tone; icon: LucideIcon; label: keyo
 };
 
 /**
- * ADR-090: where each question of the attempt stands, in the order the
+ * ADR-091: where each question of the attempt stands, in the order the
  * student saw them — a word per question and nothing else, the server's
  * whole answer (`review`). A question awaiting a teacher is not "wrong".
  */
@@ -309,7 +309,7 @@ export function Feedback({
               ? { action: <RetakeOffer retake={data.retake} review={data.review} navigate={navigate} /> }
               : {})}
           >
-            {/* ADR-090: with the standings below, the score is not all the student reads. */}
+            {/* ADR-091: with the standings below, the score is not all the student reads. */}
             {t(data.review ? "feedback.pending.retakes_open.reviewBody" : PENDING_BODY[data.reason], {
               title: data.evaluation.title,
             })}
@@ -347,7 +347,7 @@ export function Feedback({
           <RetakeOffer retake={data.retake} review={data.review} navigate={navigate} />
         </div>
       ) : null}
-      {/* ADR-090: the offer of a partial retake never comes without its list. */}
+      {/* ADR-091: the offer of a partial retake never comes without its list. */}
       {data.review ? <ReviewList review={data.review} /> : null}
 
       {data.items.length === 0 ? (

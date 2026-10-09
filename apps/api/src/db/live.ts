@@ -101,7 +101,7 @@ export const attempts = pgTable(
      */
     instances: jsonb("instances").$type<Record<string, StoredInstance>>().notNull().default({}),
     /**
-     * ADR-090: the items a partial retake carried over from the previous
+     * ADR-091: the items a partial retake carried over from the previous
      * attempt — acquired there, copied here with their answer and validated
      * grading, read-only for the student (`409 item_acquired`). Written once,
      * at the creation of the attempt; `[]` for every other attempt. Stored

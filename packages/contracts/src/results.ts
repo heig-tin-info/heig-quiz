@@ -255,13 +255,13 @@ export const RetakeStatus = z.object({
   /** Attempts taken so far, the first included. */
   attemptCount: z.number().int(),
   refusal: RetakeRefusalReason.nullable(),
-  /** ADR-090: what a retake may ask again; `to_review` comes with `review` beside it. */
+  /** ADR-091: what a retake may ask again; `to_review` comes with `review` beside it. */
   scope: RetakeScope,
 });
 export type RetakeStatus = z.infer<typeof RetakeStatus>;
 
 /**
- * Where a question stands for a partial retake (ADR-090), `@quiz/domain`'s
+ * Where a question stands for a partial retake (ADR-091), `@quiz/domain`'s
  * `ItemStanding`: `acquired`, `to_review`, or `pending` (awaiting a
  * teacher's grading — asked again, but not wrong).
  */
@@ -271,7 +271,7 @@ true satisfies Same<ItemStanding, DomainItemStanding>;
 
 /**
  * One question of the attempt on the page, as a partial retake reads it
- * (ADR-090 §4): its id, its rank in the STUDENT's own order (0 is the first
+ * (ADR-091 §4): its id, its rank in the STUDENT's own order (0 is the first
  * question they saw) and its standing. Nothing else — no points, no answer,
  * no key — so it may travel under the policy `none`.
  */
@@ -307,7 +307,7 @@ const StudentResults = z.object({
    * page — the correction does not end the retakes.
    */
   retake: RetakeStatus.optional(),
-  /** As on the score-only page (ADR-090): each question's standing, latest attempt only. */
+  /** As on the score-only page (ADR-091): each question's standing, latest attempt only. */
   review: z.array(ReviewItem).optional(),
 });
 type StudentResults = z.infer<typeof StudentResults>;
@@ -338,7 +338,7 @@ export const FeedbackPending = z.object({
   /**
    * Only with `retakes_open`, under the scope `to_review`, and for the
    * student's latest finished attempt: each question's standing, in the
-   * student's order (ADR-090 §4) — whatever the feedback policy, `none`
+   * student's order (ADR-091 §4) — whatever the feedback policy, `none`
    * included. Its presence is what offers the retake of the questions to
    * review; their number is counted from it.
    */

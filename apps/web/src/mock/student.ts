@@ -65,7 +65,7 @@ import { studentRooms } from "./org";
 //   ?scene=lobby | ready | running | paused | closed | extend | single | marks
 //          | forward | exercise | intro | partial     (running by default)
 //
-// `partial` is a partial retake of an exercise (ADR-090): Q1 and Q4 were
+// `partial` is a partial retake of an exercise (ADR-091): Q1 and Q4 were
 // acquired in the previous attempt and come back read-only, marked
 // "Acquired"; the student stands on Q1.
 //
@@ -356,7 +356,7 @@ if (scene === "marks" || scene === "forward") {
   });
   studentPosition = studentItem(scene === "forward" ? 2 : 3);
 }
-/** ADR-090: the questions `?scene=partial` carried over from the previous attempt. */
+/** ADR-091: the questions `?scene=partial` carried over from the previous attempt. */
 const PARTIAL_ACQUIRED = new Set([1, 4]);
 if (scene === "partial") {
   studentAnswers.set(studentItem(1), { payload: { selected: [1] }, revision: 2, done: false });
@@ -400,7 +400,7 @@ const studentSettings = (): AttemptView["evaluation"]["settings"] => ({
   ...(flags.kiosk ? { kiosk: true } : {}),
   ...mockCalculator(),
   ...mockNotepad(),
-  // ADR-090: the exercise of `?scene=partial` retakes the questions to review.
+  // ADR-091: the exercise of `?scene=partial` retakes the questions to review.
   ...(scene === "partial"
     ? { retakes: { enabled: true, keep: "best", maxAttempts: 3, scope: "to_review" } as const }
     : {}),
@@ -617,7 +617,7 @@ const evaluationHome = (): EvaluationHome => {
         retakes: {
           keep: "best",
           maxAttempts: 3,
-          // ADR-090: the card opens the results page, where the choice is.
+          // ADR-091: the card opens the results page, where the choice is.
           scope: "to_review",
           attemptCount: 2,
           canRetake: true,
@@ -1045,10 +1045,10 @@ on("GET", `/app/api/attempts/${STUDENT_RETAKE_ATTEMPT}/feedback`, () => ({
     maxAttempts: 3,
     attemptCount: 2,
     refusal: null,
-    // ADR-090: redo the three questions to review, or everything.
+    // ADR-091: redo the three questions to review, or everything.
     scope: "to_review",
   },
-  // Where each question stands, in the student's order (ADR-090).
+  // Where each question stands, in the student's order (ADR-091).
   review: (["acquired", "to_review", "acquired", "acquired", "pending", "acquired", "to_review", "acquired"] as const).map(
     (standing, rank) => ({ itemId: `33333333-3333-4333-8333-33333333330${rank}`, rank, standing }),
   ),

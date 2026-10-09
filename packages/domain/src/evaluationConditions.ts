@@ -162,7 +162,7 @@ const DERIVE: { [K in ImposedConditionKey]: (input: ConditionsInput) => Line<K> 
     kind: "info",
     maxAttempts: retakes !== undefined && retakesOn(mode, retakes) ? retakes.maxAttempts : 1,
   }),
-  // ADR-090: a retake may ask only the questions to review.
+  // ADR-091: a retake may ask only the questions to review.
   partial_retake: ({ mode, settings: { retakes } }) =>
     retakes !== undefined && partialRetakesOn(mode, retakes) ? { key: "partial_retake", kind: "info" } : null,
   navigation: ({ settings: { navigation } }) =>

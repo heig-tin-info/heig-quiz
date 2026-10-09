@@ -182,7 +182,7 @@ function feedback(
       maxAttempts: 3,
       attemptCount: over.attemptCount ?? 1,
       refusal,
-      // ADR-090: standings given is the scope `to_review`.
+      // ADR-091: standings given is the scope `to_review`.
       scope: over.review === undefined ? "all" : "to_review",
     },
     ...(over.review ? { review: over.review } : {}),
@@ -407,7 +407,7 @@ describe("retakes on an exercise (issues #120, #121)", () => {
   });
 });
 
-describe("a retake of the questions to review (ADR-090)", () => {
+describe("a retake of the questions to review (ADR-091)", () => {
   const REVIEW: ReviewItem[] = [
     { itemId: ITEM, rank: 0, standing: "acquired" },
     { itemId: SECOND, rank: 1, standing: "to_review" },

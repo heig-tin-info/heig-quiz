@@ -85,7 +85,7 @@ export function AdvancedDisclosure({
   const clock = clockChoiceOf(settings);
   const calculator = calculatorOn(mode, settings.calculator);
   const notepad = notepadOn(mode, settings.notepad);
-  // ADR-090: a retake of the questions to review needs free navigation, so
+  // ADR-091: a retake of the questions to review needs free navigation, so
   // the navigation stays put while it is on (`422 retake_scope_navigation`).
   const partialRetake = partialRetakesOn(mode, retakesOf(settings));
   // ADR-026: negative marking replaces both policies below; each row says so

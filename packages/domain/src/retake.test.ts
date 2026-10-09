@@ -157,7 +157,7 @@ describe("gradableNow (ADR-067)", () => {
   });
 });
 
-describe("retake scope (ADR-090)", () => {
+describe("retake scope (ADR-091)", () => {
   const partial = { ...base.retakes, scope: "to_review" as const };
 
   it("reads an absent scope as `all`", () => {
@@ -182,7 +182,7 @@ describe("retake scope (ADR-090)", () => {
   });
 });
 
-describe("itemStanding / acquiredItems (ADR-090)", () => {
+describe("itemStanding / acquiredItems (ADR-091)", () => {
   it("is acquired at the maximum, to review below it", () => {
     expect(itemStanding({ maxPoints: 2, validatedPoints: 2 })).toBe("acquired");
     expect(itemStanding({ maxPoints: 2, validatedPoints: 1.5 })).toBe("to_review");
@@ -212,7 +212,7 @@ describe("itemStanding / acquiredItems (ADR-090)", () => {
   });
 });
 
-describe("partialRetakeRefusal (ADR-090)", () => {
+describe("partialRetakeRefusal (ADR-091)", () => {
   const partial = { ...base.retakes, scope: "to_review" as const };
   const items = [{ standing: "acquired" as const }, { standing: "to_review" as const }];
 

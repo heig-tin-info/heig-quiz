@@ -116,7 +116,7 @@ export const categorizePolicyOf = (settings: {
 export const RetakeKeep = z.enum(["best", "last"]);
 export type RetakeKeep = z.infer<typeof RetakeKeep>;
 
-/** ADR-090: a retake asks every question, or only the questions to review. */
+/** ADR-091: a retake asks every question, or only the questions to review. */
 export const RetakeScope = z.enum(["all", "to_review"]);
 export type RetakeScope = z.infer<typeof RetakeScope>;
 
@@ -131,7 +131,7 @@ export const RetakeSettings = z.object({
   keep: RetakeKeep.default("best"),
   maxAttempts: z.number().int().min(2).max(100).nullable().default(null),
   /**
-   * ADR-090: what a retake asks again. Absent on every rule stored before
+   * ADR-091: what a retake asks again. Absent on every rule stored before
    * it, and absent is `all`: read it through `retakeScopeOf`. `to_review`
    * needs `free` navigation (`422 retake_scope_navigation`).
    */

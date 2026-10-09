@@ -68,7 +68,7 @@ describe("RetakesSetting", () => {
     );
   });
 
-  it("chooses what a retake asks again, with the rest of the rule (ADR-090)", async () => {
+  it("chooses what a retake asks again, with the rest of the rule (ADR-091)", async () => {
     const detail = exercise({ enabled: true, keep: "best", maxAttempts: 3 });
     const { calls } = mockFetch({ [PATCH]: ok(detail) });
     renderWithProviders(<Harness detail={detail} />);
@@ -81,7 +81,7 @@ describe("RetakesSetting", () => {
     );
   });
 
-  it("keeps the scope at All, and says why, under a navigation that is not free (ADR-090)", () => {
+  it("keeps the scope at All, and says why, under a navigation that is not free (ADR-091)", () => {
     const detail = exercise({ enabled: true, keep: "best", maxAttempts: null });
     const locked = {
       ...detail,

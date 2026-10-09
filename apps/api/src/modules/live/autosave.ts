@@ -511,7 +511,7 @@ async function stateTarget(
   now: Date,
 ): Promise<{ joined: JoinedItem; current: AnswerRecord | null }> {
   assertWritable(evaluation, attempt, now);
-  // ADR-090: a question a partial retake carried over is attempt n's, as it
+  // ADR-091: a question a partial retake carried over is attempt n's, as it
   // stood — not the lock of a navigation, which a carried checkpoint would
   // extend to the questions before it.
   if (attempt.acquiredItemIds.includes(itemId)) throw new ItemAcquired();

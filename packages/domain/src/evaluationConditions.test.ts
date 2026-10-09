@@ -127,7 +127,7 @@ describe("imposedConditions (ADR-079)", () => {
     });
   });
 
-  it("states a partial retake right after the attempts, on an exercise only (ADR-090)", () => {
+  it("states a partial retake right after the attempts, on an exercise only (ADR-091)", () => {
     const retakes = { enabled: true, keep: "best" as const, maxAttempts: 3, scope: "to_review" as const };
     expect(keys(base({ mode: "exercise" }, { retakes }))).toEqual(["attempts", "partial_retake", "autosave"]);
     expect(keys(base({ mode: "exam" }, { retakes }))).not.toContain("partial_retake");

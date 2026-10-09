@@ -311,7 +311,7 @@ export function PlayerView({
   const passage = passageOf(state);
   const total = state.items.length;
   const locked = item ? isLocked(state, item.id) : true;
-  // ADR-090: a question a partial retake carried over is read, not written.
+  // ADR-091: a question a partial retake carried over is read, not written.
   const acquired = item?.acquired === true;
   const readOnly = locked || acquired || closed !== null || paused;
   // On a phone the three actions live in a sticky footer under the thumb;

@@ -1,5 +1,5 @@
 /**
- * The partial retake of an exercise (ADR-090) against the real migrations:
+ * The partial retake of an exercise (ADR-091) against the real migrations:
  * a retake of the questions to review carries the acquired ones over —
  * values, answer and validated grading — as a whole new attempt; the
  * student cannot write to them; the hand-in pass leaves them alone and a
@@ -133,7 +133,7 @@ const validatedOf = (attemptId: string) =>
     .from(gradings)
     .where(and(eq(gradings.attemptId, attemptId), eq(gradings.state, "validated")));
 
-describe("a partial retake (ADR-090)", () => {
+describe("a partial retake (ADR-091)", () => {
   it("is a whole new attempt that carries the acquired questions over", async () => {
     const { app, student, evaluation, items } = await exercise();
     const [q0, q1, q2] = items.map((i) => i.item.id) as [string, string, string];
@@ -279,7 +279,7 @@ describe("a partial retake (ADR-090)", () => {
   });
 });
 
-describe("the settings (ADR-090)", () => {
+describe("the settings (ADR-091)", () => {
   const NOW = new Date("2026-10-09T09:00:00.000Z");
   const retakes = { enabled: true, keep: "best" as const, maxAttempts: null, scope: "to_review" as const };
 
@@ -318,7 +318,7 @@ describe("the settings (ADR-090)", () => {
   });
 });
 
-describe("the results page under the scope to_review (ADR-090)", () => {
+describe("the results page under the scope to_review (ADR-091)", () => {
   it("states each question's standing in the student's order, and nothing else, under the policy none", async () => {
     const { app, student, evaluation, items } = await exercise();
     const [q0, q1, q2] = items.map((i) => i.item.id) as [string, string, string];
@@ -379,7 +379,7 @@ describe("the results page under the scope to_review (ADR-090)", () => {
   });
 });
 
-describe("POST /evaluations/:id/retake with a scope (ADR-090)", () => {
+describe("POST /evaluations/:id/retake with a scope (ADR-091)", () => {
   it("validates the body, carries the acquired questions over, and refuses writes to them", async () => {
     const student = await server.signIn("student");
     const seed = await seedLive(db, {
@@ -427,7 +427,7 @@ describe("POST /evaluations/:id/retake with a scope (ADR-090)", () => {
     const none = await call("POST", `/app/api/evaluations/${seed.evaluationId}/retake`, { scope: "to_review" });
     expect(none.statusCode).toBe(409);
     expect(none.json()).toMatchObject({ error: "retake_refused", reason: "nothing_to_review" });
-    // No body: Redo everything, as before ADR-090.
+    // No body: Redo everything, as before ADR-091.
     const blank = await call("POST", `/app/api/evaluations/${seed.evaluationId}/retake`);
     expect(blank.statusCode).toBe(200);
     expect((blank.json().view.items as { acquired: boolean }[]).every((i) => !i.acquired)).toBe(true);

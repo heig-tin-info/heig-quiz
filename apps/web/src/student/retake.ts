@@ -11,7 +11,7 @@
  *
  *   - under `keep: "last"`, ask first: a retake can LOWER the result, so the
  *     student is told before starting, not after (review of #116) — a retake
- *     of the questions to review (ADR-090) as much as a whole one;
+ *     of the questions to review (ADR-091) as much as a whole one;
  *   - on success, make the attempt route open the NEW attempt (issue #120).
  *     `/take/:id` reads `POST /evaluations/:id/attempt` through a cached
  *     query keyed on the evaluation; the entry cached from attempt n (a
@@ -52,7 +52,7 @@ function adoptRetake(qc: QueryClient, evaluationId: string, entry: AttemptOrLobb
 
 interface RetakeRequest {
   evaluationId: string;
-  /** ADR-090: every question, or only those to review. */
+  /** ADR-091: every question, or only those to review. */
   scope: RetakeScope;
 }
 

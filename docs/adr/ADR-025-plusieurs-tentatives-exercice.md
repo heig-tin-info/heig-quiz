@@ -15,7 +15,7 @@ Amended by [ADR-053](ADR-053-retrait-des-codes-d-entree.md): the evaluation acce
 removed, making §2's retake exemption moot. The network allowlist still
 applies on every entry.
 
-Amended 2026-10-09 by [ADR-090](ADR-090-reprise-partielle-d-un-exercice.md):
+Amended 2026-10-09 by [ADR-091](ADR-091-reprise-partielle-d-un-exercice.md):
 §2's blank retake becomes one choice of `settings.retakes.scope` — a retake
 may ask only the questions to review, carrying the acquired ones over — and
 §4's score-only view gains, under that scope, a per-question standing
@@ -87,7 +87,7 @@ student); the network allowlist is, like on every entry. *Moot since [ADR-053](A
 
 A retake is a new row with a new seed: a new item order and newly shuffled
 choices on the same frozen question versions, blank, started at once.
-*Amended by ADR-090 (2026-10-09): under `scope: "to_review"` a retake may
+*Amended by ADR-091 (2026-10-09): under `scope: "to_review"` a retake may
 carry the questions acquired in the previous attempt over; "Redo
 everything" remains this blank retake.*
 
@@ -147,7 +147,7 @@ the score stays. From then on every attempt is graded at hand-in, retakes
 or not. That the key of attempt n−1 may now help attempt n is accepted: the
 teacher chose to publish.*
 
-*Amended by ADR-090 (2026-10-09): under `scope: "to_review"` the student
+*Amended by ADR-091 (2026-10-09): under `scope: "to_review"` the student
 also reads, beside the score, each question's standing — acquired, to
 review, awaiting correction — and nothing else of it, whatever the policy.*
 

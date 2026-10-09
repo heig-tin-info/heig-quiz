@@ -1,4 +1,4 @@
-# ADR-090 — Partial retake of an exercise
+# ADR-091 — Partial retake of an exercise
 
 ## Status
 
@@ -6,7 +6,7 @@ Accepted (2026-10-09, product owner Yves Chevallier, on a student's report:
 "at 7/10 I must redo all ten questions to rework the three wrong ones").
 Implemented with `@quiz/domain` (`retake.ts`: `itemStanding`,
 `acquiredItems`, `partialRetakeRefusal`, `retakeScopeFits`), migration
-`0095_partial_retake.sql`, the ADR-090 section of
+`0095_partial_retake.sql`, the ADR-091 section of
 `apps/api/src/modules/grading/service.ts` and `retakeAttempt` (`apps/api/src/modules/live/attempt.ts`).
 
 Scope: what a retake of an `exercise` asks again, and what the student is

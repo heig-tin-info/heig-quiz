@@ -187,7 +187,7 @@ export async function livePlugin(app: FastifyInstance) {
    * retake_refused` with its reason. A success answers what entering does,
    * on the NEW attempt, so the player opens on it directly.
    *
-   * ADR-090: `{ scope: "to_review" }` asks only the questions to review and
+   * ADR-091: `{ scope: "to_review" }` asks only the questions to review and
    * carries the acquired ones over; `409 retake_refused` (`scope_all`, `nothing_to_review`) when the
    * teacher kept every question or nothing is left to review. No body is
    * `all`, as before.

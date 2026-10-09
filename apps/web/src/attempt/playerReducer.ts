@@ -40,7 +40,7 @@ export interface PlayerItem {
   /** The student's review flag (issue #89). */
   flagged: boolean;
   /**
-   * ADR-090: carried over from the previous attempt by a partial retake —
+   * ADR-091: carried over from the previous attempt by a partial retake —
    * read-only, still reachable (it is not a navigation lock), the server
    * refusing any write to it.
    */
