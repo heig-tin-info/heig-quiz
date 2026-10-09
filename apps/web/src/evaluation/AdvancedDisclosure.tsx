@@ -24,7 +24,7 @@ import type { ReactNode } from "react";
 import { usePublicConfig } from "../api";
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
-import { Disclosure, Segmented, Select, SettingRow, Switch } from "../ui";
+import { Disclosure, Section, Segmented, Select, SettingRow, Switch } from "../ui";
 import { AllowedDevices } from "./AllowedDevices";
 import type { ConfigPatch, ConfigView } from "./editTarget";
 
@@ -41,19 +41,6 @@ export function withFeedbackFallback<B extends { settings: { lobby: LobbyName } 
 ): B & { feedbackPolicy?: { when: FeedbackWhen } } {
   const when = feedbackWhenFor({ mode: config.mode, lobby: body.settings.lobby }, config.feedbackPolicy.when);
   return when === config.feedbackPolicy.when ? body : { ...body, feedbackPolicy: { when } };
-}
-
-/**
- * One titled group of the advanced options: a small eyebrow over its rows,
- * which keep their hairlines.
- */
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section aria-label={title} className="py-3">
-      <h3 className="pb-1 text-xs font-semibold uppercase tracking-wide text-fg-faint">{title}</h3>
-      <div className="divide-y divide-line">{children}</div>
-    </section>
-  );
 }
 
 /**
@@ -120,7 +107,7 @@ export function AdvancedDisclosure({
 
   return (
     <Disclosure title={t("eval.advanced")} desc={t("eval.advanced.desc")}>
-      <Section title={t("eval.adv.flow")}>
+      <Section title={t("eval.adv.flow")} className="py-3" divided>
         <SettingRow
           title={t("eval.navigation")}
           desc={
@@ -212,7 +199,7 @@ export function AdvancedDisclosure({
         </SettingRow>
       </Section>
 
-      <Section title={t("eval.adv.security")}>
+      <Section title={t("eval.adv.security")} className="py-3" divided>
         <SettingRow title={t("eval.logVisibility")} desc={t("eval.logVisibility.desc")}>
           <Switch
             checked={settings.logVisibility}
@@ -238,7 +225,7 @@ export function AdvancedDisclosure({
       </Section>
 
       {calculatorAllowedFor(mode) || notepadAllowedFor(mode) ? (
-        <Section title={t("eval.adv.aids")}>
+        <Section title={t("eval.adv.aids")} className="py-3" divided>
           {/* ADR-069: the calculator the student's screen provides. A poll has
               nothing to compute. */}
           {calculatorAllowedFor(mode) ? (
@@ -275,7 +262,7 @@ export function AdvancedDisclosure({
         </Section>
       ) : null}
 
-      <Section title={t("eval.adv.feedback")}>
+      <Section title={t("eval.adv.feedback")} className="py-3" divided>
         {/* F-EVAL-11 and #78: `immediate` is hidden, not disabled, for an
             evaluation sat in class (an exam, or an exercise with a waiting
             room) — the same treatment as `student_choice` above. The row
@@ -380,7 +367,7 @@ export function AdvancedDisclosure({
           </SettingRow>
         ) : null}
 
-          {feedbackExtra}
+        {feedbackExtra}
       </Section>
     </Disclosure>
   );

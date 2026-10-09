@@ -44,7 +44,7 @@ d'une évaluation en direct la place seulement dans le calendrier : rien ne
 s'ouvre de soi-même.
 
 Puis un interrupteur, **Limite de temps par étudiant** : la **Durée** (en minutes) se
-compte depuis le début de chaque étudiant, coupées à la fin (celle de la fenêtre, ou
+compte depuis le début de chaque étudiant, coupée à la fin (celle de la fenêtre, ou
 l'échéance de sécurité) même s'il reste du temps. Le temps supplémentaire de la
 liste s'ajoute, au-delà de cette fin aussi.
 

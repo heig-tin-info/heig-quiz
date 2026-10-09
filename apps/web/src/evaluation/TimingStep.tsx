@@ -33,6 +33,7 @@ import {
   cx,
   DateRangeField,
   FieldError,
+  fromLocalInput,
   fieldErrorProps,
   Field,
   FormError,
@@ -40,6 +41,7 @@ import {
   SectionHeading,
   SettingRow,
   Switch,
+  toLocalInput,
   type IconType,
 } from "../ui";
 import { AdvancedDisclosure, withFeedbackFallback } from "./AdvancedDisclosure";
@@ -48,11 +50,9 @@ import { ConditionsSetting } from "./ConditionsSetting";
 import type { ConfigPatch, ConfigView } from "./editTarget";
 import { RetakesSetting } from "./RetakesSetting";
 import {
-  fromLocalInput,
   missingTiming,
   missingTimingKey,
   TIMING_FIELD_ID,
-  toLocalInput,
   transitionErrorMessage,
   type TimingField,
 } from "./timing";
@@ -404,7 +404,7 @@ export function TimingStep({
     );
     if (!live) {
       // One calendar for the window the platform opens and closes (ADR-086 §1).
-      const end = (field: "opensAt" | "closesAt", value: string | null, label: string) => ({
+      const rangeEnd = (field: "opensAt" | "closesAt", value: string | null, label: string) => ({
         id: TIMING_FIELD_ID[field],
         label,
         value,
@@ -413,9 +413,10 @@ export function TimingStep({
       return (
         <div className="flex flex-col gap-1">
           <DateRangeField
+            key={`${opensAt ?? ""}|${closesAt ?? ""}`}
             label={t("eval.window")}
-            start={end("opensAt", opensAt, t("eval.opensAt"))}
-            end={end("closesAt", closesAt, t("eval.closesAt"))}
+            start={rangeEnd("opensAt", opensAt, t("eval.opensAt"))}
+            end={rangeEnd("closesAt", closesAt, t("eval.closesAt"))}
             disabled={locked}
             onCommit={(change, reset) =>
               patch.mutate(

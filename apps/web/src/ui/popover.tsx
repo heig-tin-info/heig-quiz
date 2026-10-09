@@ -39,13 +39,14 @@ export function Popover({
   className = "",
   height = PANEL_MAX_HEIGHT,
   onOpenChange,
+  disabled = false,
 }: {
   /** The element the card hangs from; it receives the ARIA state. */
   trigger: ReactElement;
   /** Accessible name of the card (`role="dialog"`). */
   label: string;
   /** A function gets `close`, for a card with its own "Done". */
-  children: ReactNode | ((close: () => void) => ReactNode);
+  children: ReactNode | ((close: () => void, opened: { keyboard: boolean }) => ReactNode);
   open?: "click" | "hover";
   align?: "start" | "end";
   className?: string;
@@ -53,6 +54,8 @@ export function Popover({
   height?: number;
   /** Called after the card opens or closes, whatever closed it (Escape, outside click, trigger). */
   onOpenChange?: (open: boolean) => void;
+  /** The card cannot be opened: a locked form's trigger, whatever part of it is clicked. */
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const notify = useRef(onOpenChange);
@@ -86,9 +89,16 @@ export function Popover({
     timer.current = null;
   };
 
+  /** The element inside the trigger that had the focus when the card opened. */
+  const opener = useRef<HTMLElement | null>(null);
+
   const close = useCallback((restoreFocus: boolean) => {
     setOpen(false);
-    if (restoreFocus) anchor.current?.querySelector<HTMLElement>("button, a")?.focus();
+    if (restoreFocus) {
+      // The part of the trigger that opened the card, else its first control.
+      const back = opener.current?.isConnected ? opener.current : anchor.current?.querySelector<HTMLElement>("button, a");
+      back?.focus();
+    }
   }, []);
 
   /** Where the panel goes for the trigger as it is NOW; null without one. */
@@ -104,6 +114,9 @@ export function Popover({
   }, [align, height]);
 
   const show = (withTrap: boolean) => {
+    if (disabled) return;
+    const active = document.activeElement;
+    opener.current = active instanceof HTMLElement && anchor.current?.contains(active) ? active : null;
     const placement = place();
     if (!placement) return;
     setPos(placement);
@@ -235,7 +248,7 @@ export function Popover({
               )}
               style={panelStyle(pos, align)}
             >
-              {typeof children === "function" ? children(() => close(true)) : children}
+              {typeof children === "function" ? children(() => close(true), { keyboard: trap }) : children}
             </div>,
             document.body,
           )

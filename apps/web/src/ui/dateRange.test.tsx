@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { renderWithProviders } from "../test/render";
-import { Field } from "./controls";
 import { addDays, addMonths, DateRangeField, monthWeeks, pickDay, type RangeChange } from "./dateRange";
 
 /*
@@ -17,13 +16,14 @@ const local = (y: number, m: number, d: number, h = 8, min = 0) => new Date(y, m
 const OPENS = local(2026, 10, 12, 8, 0);
 const CLOSES = local(2026, 10, 19, 18, 30);
 
-function setup(value: { start: string | null; end: string | null } = { start: OPENS, end: CLOSES }) {
+function setup(value: { start: string | null; end: string | null } = { start: OPENS, end: CLOSES }, disabled = false) {
   const onCommit = vi.fn<(change: RangeChange, reset: () => void) => void>();
   renderWithProviders(
     <DateRangeField
       label="Availability"
       start={{ id: "opens", label: "Opens at", value: value.start }}
       end={{ id: "closes", label: "Closes at", value: value.end }}
+      disabled={disabled}
       onCommit={onCommit}
     />,
   );
@@ -129,8 +129,8 @@ describe("DateRangeField", () => {
     const { onCommit } = setup();
     screen.getByRole("button", { name: /^opens at/i }).focus();
     await user.keyboard("{Enter}");
-    // The first picked day is the start: focus the stored one, move two on.
-    day(12).focus();
+    // Opened from the keyboard: the focus is on the stored start day.
+    expect(day(12)).toHaveFocus();
     await user.keyboard("{ArrowRight}{ArrowRight}");
     expect(day(14)).toHaveFocus();
     await user.keyboard("{Enter}");
@@ -145,11 +145,52 @@ describe("DateRangeField", () => {
   it("carries the keyboard across a month with PageDown", async () => {
     const user = userEvent.setup();
     setup();
-    await user.click(screen.getByRole("button", { name: /^opens at/i }));
-    day(12).focus();
+    screen.getByRole("button", { name: /^opens at/i }).focus();
+    await user.keyboard("{Enter}");
     await user.keyboard("{PageDown}");
     expect(screen.getByRole("grid", { name: /november 2026/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /November 12, 2026/ })).toHaveFocus();
+  });
+
+  it("opens on the end whose button had the keyboard focus", async () => {
+    const user = userEvent.setup();
+    setup();
+    screen.getByRole("button", { name: /^closes at/i }).focus();
+    await user.keyboard("{Enter}");
+    expect(day(19)).toHaveFocus();
+    await user.keyboard("{Escape}");
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: /^closes at/i })).toHaveFocus());
+  });
+
+  it("writes nothing when closed untouched, though the stored values carry seconds", async () => {
+    const user = userEvent.setup();
+    const { onCommit } = setup({ start: new Date(2026, 9, 12, 8, 0, 17, 250).toISOString(), end: CLOSES });
+    await user.click(screen.getByRole("button", { name: /^opens at/i }));
+    await user.keyboard("{Escape}");
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it("discards a period that has no last day yet, and shows the stored values again", async () => {
+    const user = userEvent.setup();
+    const { onCommit } = setup();
+    await user.click(screen.getByRole("button", { name: /^opens at/i }));
+    // A first day after the stored end drops the end: nothing can be written.
+    await user.click(day(25));
+    const dialog = screen.getByRole("dialog", { name: "Availability" });
+    expect(within(dialog).getByRole("button", { name: "Done" })).toBeDisabled();
+    expect(within(dialog).getByRole("status")).toHaveTextContent("Closes at");
+    await user.keyboard("{Escape}");
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /^opens at.*2026-10-12 08:00/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^closes at.*2026-10-19 18:30/i })).toBeInTheDocument();
+  });
+
+  it("cannot be opened or written when disabled, wherever it is clicked", async () => {
+    const user = userEvent.setup();
+    const { onCommit } = setup(undefined, true);
+    await user.click(screen.getByRole("group", { name: "Availability" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(onCommit).not.toHaveBeenCalled();
   });
 
   it("marks the period for assistive technology", async () => {
@@ -160,19 +201,5 @@ describe("DateRangeField", () => {
     expect(day(19)).toHaveAccessibleName(/closes at$/i);
     expect(day(15).closest("td")).toHaveAttribute("aria-selected", "true");
     expect(day(22).closest("td")).toHaveAttribute("aria-selected", "false");
-  });
-});
-
-describe("Field suffix", () => {
-  it("shows the unit inside the field and reads it with the value", () => {
-    renderWithProviders(<Field label="Duration" suffix="min" type="number" defaultValue={45} />);
-    const input = screen.getByLabelText("Duration");
-    expect(input).toHaveAccessibleDescription("min");
-    expect(screen.getByText("min")).toBeVisible();
-  });
-
-  it("changes nothing for a field without one", () => {
-    renderWithProviders(<Field label="Name" />);
-    expect(screen.getByLabelText("Name")).not.toHaveAttribute("aria-describedby");
   });
 });

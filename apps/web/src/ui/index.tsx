@@ -14,8 +14,6 @@
 //             (GithubIcon).
 //   dates     the account's date format, absolute and relative times, and a
 //             percentage in the interface language.
-//   dateRange a period picked on one month calendar (DateRangeField), on
-//             controls, dates and popover.
 //   feedback  Spinner, Skeleton, Progress, Kbd, Badge, Alert, EmptyState.
 //   page      surfaces and page structure: Card, PageHeader, Tabs…
 //             The six above are on layers and import no other sibling,
@@ -29,6 +27,8 @@
 //             by their number (Actions), on layers and menu.
 //   popover   the small floating card anchored on a trigger (Popover), on
 //             layers and menu (menuPosition).
+//   dateRange a period picked on one month calendar (DateRangeField), on
+//             controls, dates and popover.
 //   people    a person as a disc, its card, and a row of them (PersonPill,
 //             PersonCard, PeopleStack), on actions, popover and identity.
 //   live      the live primitives (PLAN-MVP §6.4).
@@ -59,7 +59,6 @@ export * from "./controls";
 export * from "./table";
 export * from "./identity";
 export * from "./dates";
-export * from "./dateRange";
 export * from "./feedback";
 export * from "./page";
 export type { PagePrimary } from "./fab";
@@ -67,6 +66,7 @@ export * from "./meta";
 export * from "./breadcrumb";
 export * from "./actions";
 export * from "./popover";
+export { DateRangeField, type RangeChange, type RangeEnd } from "./dateRange";
 export * from "./people";
 export * from "./live";
 export * from "./bar";

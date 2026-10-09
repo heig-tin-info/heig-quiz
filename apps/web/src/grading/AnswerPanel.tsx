@@ -23,6 +23,7 @@ import {
   NotePanel,
   PaneOrSheet,
   Textarea,
+  Section,
 } from "../ui";
 import { RowMarks } from "./GradingTable";
 import { GradingHistory } from "./GradingHistory";
@@ -122,15 +123,6 @@ export function AnswerPanel(props: PanelProps) {
     );
   }
   return <EntryPanel {...props} target={target} moves={moves} />;
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="space-y-2">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-faint">{title}</h3>
-      {children}
-    </section>
-  );
 }
 
 /**

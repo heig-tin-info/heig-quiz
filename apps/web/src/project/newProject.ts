@@ -17,9 +17,8 @@ import {
 import { SCHOOL_TIME_ZONE, type ProjectScaleKind } from "@quiz/domain";
 
 import { ApiError } from "../api";
-import { fromLocalInput } from "../evaluation/timing";
 import type { Dict } from "../i18n";
-import { localTimeZone } from "../ui";
+import { fromLocalInput, localTimeZone } from "../ui";
 
 /** What the teacher fills in. Strings where an input holds one: the form keeps what was typed. */
 export interface ProjectDraft {

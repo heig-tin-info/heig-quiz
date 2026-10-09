@@ -43,6 +43,21 @@ export function formatDateTimeAs(iso: string, f: DateFormat): string {
   return `${date} ${time}`;
 }
 
+/** A `datetime-local` value from an ISO instant, in the reader's own zone; "" for none. */
+export function toLocalInput(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
+
+/** The ISO instant of a `datetime-local` value, or null when it is empty or invalid. */
+export function fromLocalInput(value: string): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 /** The browser's time zone: where the reader's day begins and ends, and what a `datetime-local` means. */
 export const localTimeZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
 

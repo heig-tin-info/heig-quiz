@@ -39,21 +39,6 @@ export function missingTimingKey(field: TimingField, timing: EvaluationTiming): 
   return field === "closesAt" && timing === "manual" ? "eval.missing.closesAt.live" : `eval.missing.${field}`;
 }
 
-/** A `datetime-local` value from an ISO instant, in the reader's own zone. */
-export function toLocalInput(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
-}
-
-/** The ISO instant of a `datetime-local` value, or null when it is empty or invalid. */
-export function fromLocalInput(value: string): string | null {
-  if (!value) return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
-
 /**
  * What a refused state change says, in the teacher's language (#76). The
  * server's `message` is English for logs and API clients; the screen reads

@@ -1,9 +1,9 @@
 import { ArrowRight, CalendarRange, ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useRef, useState, type ReactElement } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
 
 import { useI18n, useT } from "../i18n";
-import { Button, FieldLabel } from "./controls";
-import { isoDateTime, weekStartsOn } from "./dates";
+import { Button, inputClass, inputSize } from "./controls";
+import { fromLocalInput, isoDateTime, toLocalInput, weekStartsOn } from "./dates";
 import { cx } from "./layers";
 import { Popover } from "./popover";
 
@@ -15,12 +15,20 @@ import { Popover } from "./popover";
  * Commit semantics are those of `DateField`: nothing is written while the
  * teacher moves about the calendar, the changed ends are written together
  * when the card closes (Escape, outside click, Done). A refused write puts
- * the stored values back through the `reset` the caller is handed.
+ * the stored values back through the `reset` the caller is handed. A draft
+ * that is not a whole period (an end missing) is never written: closing the
+ * card then discards it, and the trigger keeps showing the stored values —
+ * what is shown is what is sent. "Changed" is judged in the reader's minutes,
+ * as `DateField` does, so opening and closing the card writes nothing.
  *
  * The trigger is two buttons, one per end, inside one group: each keeps its
  * own DOM id so a "missing" marker and the focus of the launch check point at
  * the right end, and each opens the card on its own end.
  */
+
+/** The time a freshly picked first / last day gets: the evaluation's convention (open in the morning, close at the day's end). */
+const DEFAULT_START_TIME = "08:00";
+const DEFAULT_END_TIME = "23:59";
 
 /** A day as `YYYY-MM-DD` in the reader's zone: a plain string, ordered by `<`. */
 type Day = string;
@@ -70,18 +78,17 @@ interface Draft {
   endTime: string;
 }
 
-const split = (iso: string | null, fallbackTime: string): { day: Day | null; time: string } => {
-  if (!iso) return { day: null, time: fallbackTime };
-  const d = new Date(iso);
-  return { day: dayOf(d), time: `${pad(d.getHours())}:${pad(d.getMinutes())}` };
+/** The day and the `HH:mm` of an instant, in the reader's minutes (`toLocalInput`). */
+const parts = (iso: string | null, fallbackTime: string): { day: Day | null; time: string } => {
+  const local = toLocalInput(iso);
+  return { day: local.slice(0, 10) || null, time: local.slice(11) || fallbackTime };
 };
 
-/** The instant of a day and a `HH:mm`, in the reader's zone; null while either is missing. */
-const instant = (day: Day | null, time: string): string | null => {
-  if (!day || !time) return null;
-  const d = new Date(`${day}T${time}`);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-};
+/** The `datetime-local` value of a draft end; "" while the day or the time is missing. */
+const localOf = (day: Day | null, time: string): string => (day && time ? `${day}T${time}` : "");
+
+/** A draft is a whole period when both ends have a day and a time. */
+const complete = (d: Draft): boolean => !!localOf(d.startDay, d.startTime) && !!localOf(d.endDay, d.endTime);
 
 /**
  * What a click on `day` does to the draft. `picking` says which end the
@@ -117,14 +124,14 @@ export interface RangeChange {
 
 /** The trigger: receives the popover's ARIA state and lays it on both buttons. */
 function RangeTrigger({
-  label,
+  labelId,
   start,
   end,
   disabled,
   onEnter,
   ...aria
 }: {
-  label: string;
+  labelId: string;
   start: RangeEnd;
   end: RangeEnd;
   disabled: boolean;
@@ -153,7 +160,7 @@ function RangeTrigger({
   return (
     <div
       role="group"
-      aria-label={label}
+      aria-labelledby={labelId}
       className={cx(
         "flex items-stretch rounded-field border bg-surface",
         invalid ? "border-danger" : "border-line-strong",
@@ -166,14 +173,16 @@ function RangeTrigger({
   );
 }
 
+/**
+ * The period picker. Keyed by its caller on the stored values, so a write
+ * from elsewhere replaces what it shows (like `DateField`).
+ */
 export function DateRangeField({
   label,
   start,
   end,
   disabled = false,
   onCommit,
-  defaultStartTime = "08:00",
-  defaultEndTime = "23:59",
 }: {
   /** What the period is ("Availability"): the name of the group and the card. */
   label: string;
@@ -182,16 +191,10 @@ export function DateRangeField({
   disabled?: boolean;
   /** Writes the changed ends; `reset` is for a refusal, to show the stored values again. */
   onCommit: (change: RangeChange, reset: () => void) => void;
-  /** The time a freshly picked first / last day gets. */
-  defaultStartTime?: string;
-  defaultEndTime?: string;
 }) {
-  const t = useT();
-  const { locale } = useI18n();
+  const labelId = useId();
   // What the trigger shows: the stored values, and a write in flight until it is refused.
   const [shown, setShown] = useState({ start: start.value, end: end.value });
-  useEffect(() => setShown({ start: start.value, end: end.value }), [start.value, end.value]);
-
   // The draft lives in the card, which is mounted only while it is open; this
   // holds its latest value for the moment the card closes.
   const latest = useRef<Draft | null>(null);
@@ -200,13 +203,13 @@ export function DateRangeField({
   const commit = () => {
     const d = latest.current;
     latest.current = null;
-    if (!d) return;
-    const nextStart = instant(d.startDay, d.startTime);
-    const nextEnd = instant(d.endDay, d.endTime);
+    // An unfinished period is discarded whole, never half written.
+    if (!d || !complete(d)) return;
+    const startLocal = localOf(d.startDay, d.startTime);
+    const endLocal = localOf(d.endDay, d.endTime);
     const change: RangeChange = {};
-    // A cleared end (the first day moved past it) is not written as a clear.
-    if (nextStart && nextStart !== shown.start) change.start = nextStart;
-    if (nextEnd && nextEnd !== shown.end) change.end = nextEnd;
+    if (startLocal !== toLocalInput(shown.start)) change.start = fromLocalInput(startLocal);
+    if (endLocal !== toLocalInput(shown.end)) change.end = fromLocalInput(endLocal);
     if (change.start === undefined && change.end === undefined) return;
     const before = { ...shown };
     setShown({ start: change.start ?? shown.start, end: change.end ?? shown.end });
@@ -215,7 +218,7 @@ export function DateRangeField({
 
   const trigger: ReactElement = (
     <RangeTrigger
-      label={label}
+      labelId={labelId}
       start={{ ...start, value: shown.start }}
       end={{ ...end, value: shown.end }}
       disabled={disabled}
@@ -227,28 +230,29 @@ export function DateRangeField({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <FieldLabel>{label}</FieldLabel>
+      <span id={labelId} className="text-[13px] font-medium text-fg">
+        {label}
+      </span>
       <Popover
         label={label}
         align="start"
         height={420}
+        disabled={disabled}
         onOpenChange={(isOpen) => {
           if (!isOpen) commit();
         }}
         trigger={trigger}
         className="w-[19.5rem] max-w-[calc(100vw-1rem)] p-3"
       >
-        {(close) => (
+        {(close, { keyboard }) => (
           <RangePanel
             shown={shown}
             entry={entry.current}
+            keyboard={keyboard}
             latest={latest}
             close={close}
             start={start.label}
             end={end.label}
-            locale={locale}
-            defaultStartTime={defaultStartTime}
-            defaultEndTime={defaultEndTime}
           />
         )}
       </Popover>
@@ -259,29 +263,27 @@ export function DateRangeField({
 function RangePanel({
   shown,
   entry,
+  keyboard,
   latest,
   close,
   start,
   end,
-  locale,
-  defaultStartTime,
-  defaultEndTime,
 }: {
   shown: { start: string | null; end: string | null };
   /** The end whose button opened the card: the one the first click is for. */
   entry: "start" | "end";
+  /** Opened from the keyboard: the focus goes to the day at once. */
+  keyboard: boolean;
   latest: { current: Draft | null };
   close: () => void;
   start: string;
   end: string;
-  locale: "en" | "fr";
-  defaultStartTime: string;
-  defaultEndTime: string;
 }) {
   const t = useT();
+  const { locale } = useI18n();
   const [draft, setDraft] = useState<Draft>(() => {
-    const s = split(shown.start, defaultStartTime);
-    const e = split(shown.end, defaultEndTime);
+    const s = parts(shown.start, DEFAULT_START_TIME);
+    const e = parts(shown.end, DEFAULT_END_TIME);
     return { startDay: s.day, startTime: s.time, endDay: e.day, endTime: e.time };
   });
   latest.current = draft;
@@ -290,23 +292,27 @@ function RangePanel({
     () => (entry === "end" ? draft.endDay : draft.startDay) ?? draft.startDay ?? draft.endDay ?? dayOf(new Date()),
   );
   const grid = useRef<HTMLTableElement>(null);
-  const moved = useRef(false);
+  // Set while a keyboard move is waiting for its day to be drawn.
+  const moved = useRef(keyboard);
   const weekStart = weekStartsOn();
   const today = dayOf(new Date());
   const weeks = monthWeeks(focus, weekStart);
 
-  const monthName = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(dateOf(focus));
-  const dayName = new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-  const weekdays = Array.from({ length: 7 }, (_, i) => {
-    // 2023-01-01 is a Sunday.
-    const d = new Date(2023, 0, 1 + ((i + weekStart) % 7), 12);
+  const { dayName, weekdays } = useMemo(() => {
+    const short = new Intl.DateTimeFormat(locale, { weekday: "short" });
+    const long = new Intl.DateTimeFormat(locale, { weekday: "long" });
     return {
-      short: new Intl.DateTimeFormat(locale, { weekday: "short" }).format(d),
-      long: new Intl.DateTimeFormat(locale, { weekday: "long" }).format(d),
+      dayName: new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+      weekdays: Array.from({ length: 7 }, (_, i) => {
+        // 2023-01-01 is a Sunday.
+        const d = new Date(2023, 0, 1 + ((i + weekStart) % 7), 12);
+        return { short: short.format(d).replace(/\.$/, "").slice(0, 3), long: long.format(d) };
+      }),
     };
-  });
+  }, [locale, weekStart]);
+  const monthName = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(dateOf(focus));
 
-  // Keyboard moves land the focus on the new day once it is drawn.
+  // Keyboard moves, and a keyboard opening, land the focus on the day once it is drawn.
   useEffect(() => {
     if (!moved.current) return;
     moved.current = false;
@@ -318,16 +324,7 @@ function RangePanel({
     setFocus(day);
   };
   const pick = (day: Day) => {
-    const next = pickDay(
-      {
-        ...draft,
-        // A day picked for the first time takes the default time of its end.
-        startTime: draft.startDay ? draft.startTime : defaultStartTime,
-        endTime: draft.endDay ? draft.endTime : defaultEndTime,
-      },
-      picking,
-      day,
-    );
+    const next = pickDay(draft, picking, day);
     setDraft(next.draft);
     setPicking(next.picking);
     setFocus(day);
@@ -353,7 +350,7 @@ function RangePanel({
         aria-label={t("ui.range.time", { label: name })}
         value={which === "start" ? draft.startTime : draft.endTime}
         onChange={(e) => setDraft({ ...draft, [which === "start" ? "startTime" : "endTime"]: e.target.value })}
-        className="h-7 w-full rounded-field border border-line-strong bg-surface px-2 text-sm tabular-nums text-fg focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20"
+        className={cx(inputClass, inputSize.sm, "w-full px-2 tabular-nums")}
       />
     </label>
   );
@@ -364,7 +361,7 @@ function RangePanel({
         <Button variant="ghost" size="sm" aria-label={t("ui.range.prev")} onClick={() => setFocus(addMonths(focus, -1))}>
           <ChevronLeft />
         </Button>
-        <p aria-live="polite" className="flex items-center gap-1.5 text-sm font-medium capitalize text-fg">
+        <p className="flex items-center gap-1.5 text-sm font-medium capitalize text-fg">
           <CalendarRange aria-hidden className="size-4 text-fg-faint" />
           {monthName}
         </p>
@@ -378,7 +375,7 @@ function RangePanel({
           <tr>
             {weekdays.map((w) => (
               <th key={w.long} scope="col" abbr={w.long} className="pb-1 text-xs font-medium capitalize text-fg-muted">
-                {w.short.replace(/\.$/, "").slice(0, 3)}
+                {w.short}
               </th>
             ))}
           </tr>
@@ -442,7 +439,7 @@ function RangePanel({
       </div>
 
       <div className="flex justify-end">
-        <Button size="sm" variant="secondary" onClick={close}>
+        <Button size="sm" variant="secondary" disabled={!complete(draft)} onClick={close}>
           {t("common.done")}
         </Button>
       </div>

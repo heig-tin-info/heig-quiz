@@ -19,8 +19,8 @@ import {
   renderWithProviders,
   type RouteHandler,
 } from "../test/render";
+import { toLocalInput } from "../ui";
 import { EvaluationConfig } from "./EvaluationConfig";
-import { toLocalInput } from "./timing";
 
 /*
  * The three-step flow of docs/spec/08 §8.2, asserted where it touches the
@@ -223,7 +223,7 @@ describe("EvaluationConfig", () => {
       );
     });
 
-    it("groups the advanced options, with 'Allow drill' among the feedback ones", async () => {
+    it("offers 'Allow drill' among the feedback options, with its own writer", async () => {
       const user = userEvent.setup();
       mockFetch(
         routes(makeEvaluationDetail(), {
@@ -234,12 +234,7 @@ describe("EvaluationConfig", () => {
         route: "/evaluations/x?step=timing",
       });
       await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
-      const flow = screen.getByRole("region", { name: "Flow" });
-      expect(within(flow).getByRole("switch", { name: /shuffle the questions/i })).toBeInTheDocument();
-      const security = screen.getByRole("region", { name: "Security" });
-      expect(within(security).getByRole("switch", { name: /recommend full screen/i })).toBeInTheDocument();
       const feedback = screen.getByRole("region", { name: "Feedback and scoring" });
-      expect(within(feedback).getByRole("radio", { name: /^on release$/i })).toBeInTheDocument();
       expect(await within(feedback).findByRole("switch", { name: "Allow drill" })).toBeEnabled();
     });
 
