@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import type { PollRevealBody, PollSettings, PollTeacherView } from "@quiz/contracts";
+import { isEvaluationOver } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import { Badge, Button, IconButton, Switch } from "../ui";
@@ -26,13 +27,9 @@ import { hasKey, joinHost, waitingOf } from "./pollTally";
  */
 export type ProjectionPhase = "live" | "ended";
 
-/** The states in which the poll is over and "Run again" is what is left. */
-function isEnded(state: string): boolean {
-  return state === "closed" || state === "grading" || state === "released";
-}
-
+/** Ended once the poll is over (`isEvaluationOver`): "Run again" is what is left. */
 export function projectionPhase(view: PollTeacherView): ProjectionPhase {
-  return isEnded(view.evaluation.state) ? "ended" : "live";
+  return isEvaluationOver(view.evaluation.state) ? "ended" : "live";
 }
 
 /** The two display switches of a poll, as the views carry them. */

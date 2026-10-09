@@ -44,6 +44,7 @@ import type { DistractorStats, PoolQuestionStats, TimeStats } from "@quiz/contra
 import {
   discrimination,
   evaluationDiscrimination,
+  FINISHED_ATTEMPT_STATES,
   itemStats,
   optionShares,
   sameAsLatest,
@@ -83,7 +84,7 @@ function countedAttempt(): SQL {
   return and(
     eq(evaluations.mode, "exam"),
     isNotNull(attempts.userId),
-    inArray(attempts.state, ["submitted", "expired"]),
+    inArray(attempts.state, [...FINISHED_ATTEMPT_STATES]),
     isNotNull(attempts.startedAt),
     // The reset compares the START of the attempt: a grading moves on a
     // regrade or a late validation, a submission is null on an expiry.

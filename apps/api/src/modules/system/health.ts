@@ -44,6 +44,7 @@ import {
   HEALTH_THRESHOLDS,
   jobsStatus,
   llmBudgetStatus,
+  OPEN_STATES,
   overdueStatus,
   serverErrorsStatus,
   SERVICE_NAMES,
@@ -225,7 +226,7 @@ async function liveEvaluationsCheck({ app }: CheckContext): Promise<CheckResult>
   const [row] = await app.db
     .select({ n: sql<number>`count(*)::int` })
     .from(evaluations)
-    .where(inArray(evaluations.state, ["lobby", "running", "paused"]));
+    .where(inArray(evaluations.state, [...OPEN_STATES]));
   const n = row?.n ?? 0;
   return { status: "ok", value: count(n), cause: n > 0 ? "evaluations.live" : null };
 }

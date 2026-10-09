@@ -48,8 +48,10 @@ export type EvaluationStateName = (typeof EVALUATION_STATES)[number];
  * before it (`not_over`, ADR-033), and the web offers them only then — one
  * rule, so a button never leads to a refusal.
  */
-export const isEvaluationOver = (state: EvaluationStateName): boolean =>
-  state === "closed" || state === "grading" || state === "released";
+export const OVER_STATES = ["closed", "grading", "released"] as const satisfies readonly EvaluationStateName[];
+
+/** Whether the evaluation is in one of {@link OVER_STATES}. */
+export const isEvaluationOver = (state: string): boolean => (OVER_STATES as readonly string[]).includes(state);
 
 /**
  * The states in which the evaluation is open to students: the waiting room,

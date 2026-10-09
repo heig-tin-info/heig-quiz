@@ -136,8 +136,11 @@ export type AttemptStateName = (typeof ATTEMPT_STATES)[number];
 export const ATTEMPT_CLOSERS = ["server", "student", "teacher"] as const;
 
 /** An attempt is finished once it is handed in or closed; only then may another start. */
-export function isFinishedAttempt(state: AttemptStateName): boolean {
-  return state === "submitted" || state === "expired";
+export const FINISHED_ATTEMPT_STATES = ["submitted", "expired"] as const satisfies readonly AttemptStateName[];
+
+/** Whether the attempt is in one of {@link FINISHED_ATTEMPT_STATES}. */
+export function isFinishedAttempt(state: string): boolean {
+  return (FINISHED_ATTEMPT_STATES as readonly string[]).includes(state);
 }
 
 /**

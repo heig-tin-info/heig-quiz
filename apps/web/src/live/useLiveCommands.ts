@@ -1,6 +1,7 @@
 import { Clock, MonitorPlay, Pause, Play, Square } from "lucide-react";
 
 import type { EvaluationState } from "@quiz/contracts";
+import { isLiveState } from "@quiz/domain";
 
 import type { TFunction } from "../i18n";
 import type { Route } from "../router";
@@ -41,7 +42,7 @@ export function useLiveCommands(input: {
       run: controls.start,
     });
   }
-  if (state === "running" || state === "paused") {
+  if (isLiveState(state)) {
     if (controls.canPause || state === "paused") {
       commands.push({
         id: "live:pause",

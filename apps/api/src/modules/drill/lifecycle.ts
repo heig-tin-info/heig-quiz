@@ -14,7 +14,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { GradeContext } from "@quiz/core/server";
-import { DRILL_TYPES, isDrillEligible } from "@quiz/domain";
+import { DRILL_TYPES, FINISHED_ATTEMPT_STATES, isDrillEligible } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import {
@@ -234,7 +234,7 @@ async function finishedTakers(db: Db, evaluationId: string): Promise<string[]> {
   const ended = await db
     .selectDistinct({ userId: attempts.userId })
     .from(attempts)
-    .where(and(eq(attempts.evaluationId, evaluationId), inArray(attempts.state, ["submitted", "expired"])));
+    .where(and(eq(attempts.evaluationId, evaluationId), inArray(attempts.state, [...FINISHED_ATTEMPT_STATES])));
   return ended.flatMap((a) => (a.userId === null ? [] : [a.userId]));
 }
 

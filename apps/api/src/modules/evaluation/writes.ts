@@ -31,6 +31,7 @@ import {
   isFeedbackAllowed,
   logVisibilityDefault,
   negativeMarkingAllowedFor,
+  OVER_STATES,
   retakesAllowedFor,
   retakeScopeFits,
 } from "@quiz/domain";
@@ -566,12 +567,6 @@ export async function flagReleasedEvaluationsOf(
 }
 
 /**
- * The states in which an evaluation's grading can be finished: after its
- * close. Also the states the migration `0033_grading_ready_claim` backfills.
- */
-const GRADED_STATES = ["closed", "grading", "released"] as const;
-
-/**
  * The claim of `grading_ready` (#286): true for exactly one caller per
  * completed grid. Refused before the close — a retake graded alone mid-run
  * (ADR-025) completes nothing — and read by the UPDATE
@@ -588,7 +583,8 @@ export async function claimGradingReady(db: DbOrTx, id: string, now: Date): Prom
       and(
         eq(evaluations.id, id),
         isNull(evaluations.gradingReadyAt),
-        inArray(evaluations.state, [...GRADED_STATES]),
+        // After the close (`OVER_STATES`): the states the migration `0033_grading_ready_claim` backfills.
+        inArray(evaluations.state, [...OVER_STATES]),
       ),
     )
     .returning({ id: evaluations.id });
