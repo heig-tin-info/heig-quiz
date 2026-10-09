@@ -3140,7 +3140,7 @@ export const en = {
   "conditions.calculator.standard": "A standard calculator",
   "conditions.calculator.scientific": "A scientific calculator",
   "conditions.calculator.body": "It opens from the button at the bottom right of the screen.",
-  "conditions.notepad": "Notepad provided, kept on this device only",
+  "conditions.notepad": "A notepad, kept on this device only",
   "conditions.notepad.body": "It opens from the button at the bottom right of the screen. Nothing you write in it is sent.",
   "conditions.notepad.noClipboard": "Copy and paste are disabled in the notepad",
   "conditions.duration": "{n} minutes from the moment you start",

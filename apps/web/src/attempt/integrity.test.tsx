@@ -1,7 +1,12 @@
-import { act, screen } from "@testing-library/react";
+import { act, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { mockFetch, noContent, renderWithProviders } from "../test/render";
+import type { Me } from "@quiz/contracts";
+
+import { meKey } from "../queryKeys";
+import { PlayerTools } from "../student/PlayerTools";
+import { makeMe } from "../test/fixtures";
+import { makeQueryClient, mockFetch, noContent, renderWithProviders } from "../test/render";
 import { NOTICE_INTERVAL_MS, useIntegrityJournal } from "./integrity";
 import { useJournal } from "./signals";
 
@@ -271,5 +276,38 @@ describe("the integrity journal, paste", () => {
     fire(field(""), "paste", OUTSIDE);
     expect(sent()).toHaveLength(1);
     expect(pasteToasts()).toHaveLength(0);
+  });
+
+  // ADR-090 §6: the notepad is part of the page for this check.
+  it("ignores a passage copied from the notepad into an answer, and journals an outside paste into the notepad", () => {
+    const attemptId = `a${++seq}`;
+    const { calls } = mockFetch({ [`POST /app/api/attempts/${attemptId}/events`]: noContent() });
+    const queryClient = makeQueryClient();
+    queryClient.setQueryData(meKey, makeMe({ role: "student", session: { kind: "portal" } as Me["session"] }));
+    renderWithProviders(
+      <>
+        <Probe attemptId={attemptId} flags={{ journaled: true, notify: true }} />
+        <PlayerTools
+          calculator="none"
+          notepad="provided"
+          attemptId={attemptId}
+          preview={false}
+          navigation="free"
+          items={[]}
+        />
+      </>,
+      { queryClient },
+    );
+    const sent = () => calls.filter((c) => c.url.endsWith("/events")).map((c) => c.body);
+    const notes = screen.getByRole("textbox", { name: "Page 1 of 1", hidden: true }) as HTMLTextAreaElement;
+    const scratch = "v = d / t = 120 / 4 = 30 m/s, keep for later";
+    fireEvent.change(notes, { target: { value: scratch } });
+    notes.focus();
+    notes.setSelectionRange(0, scratch.length);
+    fire(notes, "copy", scratch);
+    fire(field(""), "paste", scratch);
+    expect(sent()).toEqual([]);
+    fire(notes, "paste", OUTSIDE);
+    expect(sent()).toEqual([{ kind: "paste", details: { length: OUTSIDE.length } }]);
   });
 });

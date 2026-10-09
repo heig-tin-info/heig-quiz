@@ -33,7 +33,7 @@ Three facts constrain it:
   with no purpose (N-DATA).
 - Under `milestones` navigation a checkpoint closes every question before it
   (F-EVAL-07). Notes carried past it would hold the work of a closed section.
-- The integrity journal (ADR-088) will record a paste from outside the page;
+- The integrity journal (ADR-088 §4) records a paste from outside the page;
   a copy from the notepad into an answer is not from outside.
 
 ## Decision
@@ -46,8 +46,9 @@ Three facts constrain it:
    nothing to work out: the server refuses the setting there
    (`422 notepad_not_allowed`) and reads it as `none`. The teacher chooses it
    under the advanced options, beside "Calculator provided".
-2. **The conditions** (ADR-079): after the calculator's line, "Notepad
-   provided, kept on this device only" (not "until you hand in": under
+2. **The conditions** (ADR-079): after the calculator's line, "A notepad,
+   kept on this device only" (under the *Provided* heading, beside "A
+   scientific calculator"; not "until you hand in": under
    `milestones` a checkpoint empties it before that) and, for
    `provided_no_clipboard` only, "Copy and paste are disabled in the
    notepad", both of kind *provided*. The second line states only what is

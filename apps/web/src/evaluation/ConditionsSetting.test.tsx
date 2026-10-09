@@ -113,7 +113,7 @@ describe("ConditionsSetting", () => {
 
   it("previews the notepad, and its copy-paste line only when that is blocked (ADR-090)", async () => {
     const { unmount } = await renderOpen(<Harness detail={withSettings({ notepad: "provided" })} />);
-    expect(screen.getByText("Notepad provided, kept on this device only")).toBeInTheDocument();
+    expect(screen.getByText("A notepad, kept on this device only")).toBeInTheDocument();
     expect(screen.queryByText("Copy and paste are disabled in the notepad")).toBeNull();
     unmount();
     await renderOpen(<Harness detail={withSettings({ notepad: "provided_no_clipboard" })} />);

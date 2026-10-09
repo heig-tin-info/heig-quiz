@@ -3138,7 +3138,7 @@ export const fr: Record<keyof Dict, string> = {
   "conditions.calculator.standard": "Une calculatrice standard",
   "conditions.calculator.scientific": "Une calculatrice scientifique",
   "conditions.calculator.body": "Elle s'ouvre depuis le bouton en bas à droite de l'écran.",
-  "conditions.notepad": "Calepin fourni, conservé sur cet appareil seulement",
+  "conditions.notepad": "Un calepin, conservé sur cet appareil seulement",
   "conditions.notepad.body": "Il s'ouvre depuis le bouton en bas à droite de l'écran. Rien de ce que vous y écrivez n'est envoyé.",
   "conditions.notepad.noClipboard": "Copier-coller désactivé dans le calepin",
   "conditions.duration": "{n} minutes dès que vous commencez",
