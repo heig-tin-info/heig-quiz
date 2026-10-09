@@ -22,6 +22,10 @@ Amended 2026-10-09 by [ADR-088](ADR-088-journal-d-integrite.md): §2 only —
 a poll never shows the journal's line, and the line names leaving the page
 and pasting from outside it.
 
+Amended 2026-10-09 by [ADR-090](ADR-090-calepin-fourni.md): §2 only — two
+imposed lines after the calculator's, both *provided*: the notepad, and
+that copy and paste are disabled in it when they are.
+
 Scope: `EvaluationSettings.conditions`, the derivation `imposedConditions`
 (`packages/domain/src/evaluationConditions.ts`), the student views that carry
 `EvaluationConditions` (waiting room, ready screen, attempt, and for a

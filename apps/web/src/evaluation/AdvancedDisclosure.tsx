@@ -8,6 +8,9 @@ import {
   feedbackWhenFor,
   isInClass,
   liveLobbies,
+  NOTEPAD_MODES,
+  notepadAllowedFor,
+  notepadOn,
   type FeedbackWhen,
   type LobbyName,
 } from "@quiz/domain";
@@ -80,6 +83,7 @@ export function AdvancedDisclosure({
   const inClass = isInClass({ mode, lobby: settings.lobby });
   const clock = clockChoiceOf(settings);
   const calculator = calculatorOn(mode, settings.calculator);
+  const notepad = notepadOn(mode, settings.notepad);
   // ADR-026: negative marking replaces both policies below; each row says so
   // while it is on, so a teacher never tunes a policy nothing reads.
   const policyDesc = (desc: string) =>
@@ -201,6 +205,22 @@ export function AdvancedDisclosure({
             options={CALCULATOR_MODES.map((value) => ({
               value,
               label: t(`eval.calculator.${value}`),
+            }))}
+          />
+        </SettingRow>
+      ) : null}
+      {/* ADR-090: its sibling, the notepad — on the same modes. */}
+      {notepadAllowedFor(mode) ? (
+        <SettingRow title={t("eval.notepad")} desc={t(`eval.notepad.desc.${notepad}`)}>
+          <Segmented
+            name="notepad"
+            label={t("eval.notepad")}
+            value={notepad}
+            disabled={disabled}
+            onChange={(notepad) => set({ notepad })}
+            options={NOTEPAD_MODES.map((value) => ({
+              value,
+              label: t(`eval.notepad.${value}`),
             }))}
           />
         </SettingRow>

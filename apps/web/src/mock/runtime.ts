@@ -8,6 +8,7 @@
  */
 import type {
   CalculatorMode,
+  NotepadMode,
   EvaluationCondition,
   Me,
 } from "@quiz/contracts";
@@ -54,6 +55,8 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  *   owner (`mock/org.ts`, ADR-068).
  * `calculator`: the student's evaluation provides the scientific calculator
  *   (ADR-069); `stdcalc`: the standard one.
+ * `notepad`: it provides the notepad (ADR-090); `nocopy`: with copy and
+ *   paste disabled in it.
  * `provisioning`: the student's Accept of a project takes twenty seconds
  *   (`mock/student.ts`, M3-13); `refused`: it is refused `409
  *   repo_name_taken`; `stale`: `409 github_account_stale` (Relink GitHub).
@@ -102,6 +105,8 @@ export const FLAG_NAMES = [
   "assistant",
   "calculator",
   "stdcalc",
+  "notepad",
+  "nocopy",
   "provisioning",
   "refused",
   "stale",
@@ -130,6 +135,10 @@ for (const name of FLAG_NAMES) {
 /** ADR-069: the calculator the mock's evaluations provide, from `?calculator=1` or `?stdcalc=1`. */
 export const mockCalculator = (): { calculator?: CalculatorMode } =>
   flags.calculator ? { calculator: "scientific" } : flags.stdcalc ? { calculator: "standard" } : {};
+
+/** ADR-090: the notepad the mock's evaluations provide, from `?notepad=1` or `?nocopy=1`. */
+export const mockNotepad = (): { notepad?: NotepadMode } =>
+  flags.nocopy ? { notepad: "provided_no_clipboard" } : flags.notepad ? { notepad: "provided" } : {};
 
 /**
  * ADR-079: the conditions a teacher announced on the mock's student

@@ -81,14 +81,31 @@ export function lockedItems(
     for (const item of items) if (item.validated) locked.add(item.id);
     return locked;
   }
-  let furthest = -1;
-  items.forEach((item, rank) => {
-    if (item.milestone && item.validated) furthest = rank;
-  });
+  const furthest = furthestCheckpoint(navigation, items);
   items.forEach((item, rank) => {
     if (rank <= furthest) locked.add(item.id);
   });
   return locked;
+}
+
+/**
+ * The rank, in the STUDENT's order, of the furthest checkpoint crossed —
+ * a validated milestone item — or -1 when none is (and always under any
+ * navigation but `milestones`, which has no checkpoints). Ranks only grow
+ * within an attempt, so a larger rank is a further checkpoint: the
+ * notepad (ADR-090) keeps the rank it was written under and is emptied when
+ * the attempt shows a larger one.
+ */
+export function furthestCheckpoint(
+  navigation: NavigationMode,
+  items: readonly { milestone: boolean; validated: boolean }[],
+): number {
+  if (navigation !== "milestones") return -1;
+  let furthest = -1;
+  items.forEach((item, rank) => {
+    if (item.milestone && item.validated) furthest = rank;
+  });
+  return furthest;
 }
 
 /** The progress half of a dashboard cell (F-DASH-01). */

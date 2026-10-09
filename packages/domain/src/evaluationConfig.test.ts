@@ -9,6 +9,7 @@ import {
   isInClass,
   isLiveState,
   logVisibilityDefault,
+  notepadOn,
   missingTimingFields,
   pastTiming,
   type TimingInput,
@@ -136,6 +137,15 @@ describe("calculatorOn (ADR-069)", () => {
     expect(calculatorOn("exam", undefined)).toBe("none");
     expect(calculatorOn("exercise", "scientific")).toBe("scientific");
     expect(calculatorOn("poll", "standard")).toBe("none");
+  });
+});
+
+describe("notepadOn (ADR-090)", () => {
+  it("is none when absent, and always none on a poll", () => {
+    expect(notepadOn("exam", undefined)).toBe("none");
+    expect(notepadOn("exercise", "provided")).toBe("provided");
+    expect(notepadOn("exam", "provided_no_clipboard")).toBe("provided_no_clipboard");
+    expect(notepadOn("poll", "provided")).toBe("none");
   });
 });
 

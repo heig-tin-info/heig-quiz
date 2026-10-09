@@ -49,6 +49,10 @@ export function imposedText(line: ImposedCondition, t: TFunction): { title: stri
     }
     case "calculator":
       return { title: t(`conditions.calculator.${line.calculator}`), body: t("conditions.calculator.body") };
+    case "notepad":
+      return { title: t("conditions.notepad"), body: t("conditions.notepad.body") };
+    case "notepad_no_clipboard":
+      return { title: t("conditions.notepad.noClipboard") };
     case "duration":
       return {
         title: t("conditions.duration", { n: minutesWithBonus(line.durationS, line.bonusPercent) }),

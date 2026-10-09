@@ -347,6 +347,19 @@ describe("the zen player", () => {
     expect(calls.some((c) => c.method === "PUT")).toBe(false);
   });
 
+  it("deletes the attempt's notepad once the attempt is over, and no other's (ADR-090)", async () => {
+    const base = attemptView({ state: "expired" });
+    const view = { ...base, evaluation: { ...base.evaluation, settings: { ...base.evaluation.settings, notepad: "provided" as const } } };
+    const notes = JSON.stringify({ pages: ["x"], page: 0, checkpoint: -1, savedAt: Date.now() });
+    localStorage.setItem(`quiz.notepad.${ATTEMPT}`, notes);
+    localStorage.setItem("quiz.notepad.other-tab", notes);
+    stubs(view);
+    render(view);
+    expect(await screen.findByText("Temps écoulé")).toBeInTheDocument();
+    expect(localStorage.getItem(`quiz.notepad.${ATTEMPT}`)).toBeNull();
+    expect(localStorage.getItem("quiz.notepad.other-tab")).toBe(notes);
+  });
+
   it("names the progress strip and its segments for a screen reader", async () => {
     const view = attemptView();
     stubs(view);
@@ -670,6 +683,21 @@ describe("the zen player", () => {
       await screen.findByText("Question 3");
       expect(screen.getByRole("button", { name: "Laisser sans réponse" })).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /et continuer$/ })).toBeNull();
+    });
+
+    it("milestones: the checkpoint's confirmation says the notepad is emptied too, when there is one (ADR-090)", async () => {
+      const base = withNavigation(attemptView({ lastItemId: "i3" }), "milestones");
+      const view = {
+        ...base,
+        evaluation: { ...base.evaluation, settings: { ...base.evaluation.settings, notepad: "provided" as const } },
+        items: base.items.map((i) => ({ ...i, milestone: i.id === "i3" })),
+      };
+      stubs(view);
+      render(view);
+      await screen.findByText("Question 3");
+      await userEvent.click(screen.getByRole("button", { name: "Laisser vide et continuer" }));
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByText(/Le calepin est aussi vidé\./)).toBeInTheDocument();
     });
 
     it("keeps the question open when the latest answer failed to save (5xx, then validate)", async () => {

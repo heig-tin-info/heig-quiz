@@ -16,10 +16,10 @@ import { useRef } from "react";
 
 import { useMe } from "../api";
 import { useT } from "../i18n";
-import { IconButton, ToolDock } from "../ui";
+import { IconButton, ToolDock, type ToolDockSeat } from "../ui";
 import { Calculator, type CalculatorKind } from "./Calculator";
 
-export function CalculatorDock({ kind }: { kind: CalculatorKind }) {
+export function CalculatorDock({ kind, seat }: { kind: CalculatorKind; seat?: ToolDockSeat }) {
   const t = useT();
   // The user's setting: reverse Polish notation, on the same keys.
   const rpn = useMe().data?.rpnCalculator === true;
@@ -33,6 +33,7 @@ export function CalculatorDock({ kind }: { kind: CalculatorKind }) {
       offset="var(--player-footer-h,0px)"
       panelClassName={`overflow-y-auto p-3 ${kind === "scientific" ? "w-[22rem]" : "w-[18rem]"}`}
       keepMounted
+      {...seat}
       onOpen={() => keypad.current?.focus()}
     >
       {(close, titleId) => (

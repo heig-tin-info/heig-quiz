@@ -55,12 +55,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { ChevronRight, ShieldAlert } from "lucide-react";
 
 import type { AttemptView } from "@quiz/contracts";
-import { answerMark, calculatorOn, mayValidate } from "@quiz/domain";
+import { answerMark, calculatorOn, mayValidate, notepadOn } from "@quiz/domain";
 
 import { useIntegrityJournal } from "../attempt/integrity";
 import { postSimulate } from "../attempt/run";
 import { useAttempt, type UseAttempt } from "../attempt/useAttempt";
-import { CalculatorDock } from "../calculator/CalculatorDock";
 import {
   canReread,
   currentItem,
@@ -84,6 +83,7 @@ import { PlayerEnd, type Confinement } from "./PlayerEnd";
 import { PlayerQuestion, QuestionHeading } from "./PlayerQuestion";
 import { PlayerRail } from "./PlayerRail";
 import { PlayerShell } from "./PlayerShell";
+import { PlayerTools } from "./PlayerTools";
 import { isAnswered, isWide } from "./QuestionHost";
 import { FlagButton, QuestionTools } from "./QuestionTools";
 import { SubmitDialog } from "./SubmitDialog";
@@ -336,7 +336,17 @@ export function PlayerView({
     !readOnly &&
     !validated &&
     mayValidate(state.navigation, item);
-  const controls = usePlayerControls({ session, item, readOnly, canValidate, blank: !answered });
+  // ADR-069, ADR-090: the tools the evaluation provides, for the whole attempt.
+  const calculator = calculatorOn(initial.evaluation.mode, initial.evaluation.settings.calculator);
+  const notepad = notepadOn(initial.evaluation.mode, initial.evaluation.settings.notepad);
+  const controls = usePlayerControls({
+    session,
+    item,
+    readOnly,
+    canValidate,
+    blank: !answered,
+    notepad: notepad !== "none",
+  });
   const move = useCallback((delta: 1 | -1) => dispatch({ type: "move", delta }), [dispatch]);
 
   const previous = neighbour(state, -1);
@@ -395,9 +405,6 @@ export function PlayerView({
   const rail = railScreen && manyItems && item !== undefined;
   const selectSegment = (itemId: string) => dispatch({ type: "goto", itemId });
   const progressLabel = t("player.progress", { n: state.index + 1, total });
-  // ADR-069: the calculator the evaluation provides, for the whole attempt —
-  // outside the keyed question, so its number survives a move.
-  const calculator = calculatorOn(initial.evaluation.mode, initial.evaluation.settings.calculator);
   // The passage's one action stands where the question's go — the phone's
   // footer, under the text on a desktop — on the right, where Next would be.
   const actions =
@@ -550,7 +557,15 @@ export function PlayerView({
             ) : null}
           </>
         ) : null}
-        {calculator === "none" ? null : <CalculatorDock kind={calculator} />}
+        {/* Outside the keyed question: the number and the notes survive a move. */}
+        <PlayerTools
+          calculator={calculator}
+          notepad={notepad}
+          attemptId={initial.attempt.id}
+          preview={initial.attempt.preview === true}
+          navigation={state.navigation}
+          items={state.items}
+        />
       </PlayerShell>
       {conditionsOpen ? (
         <Modal title={t("conditions.title")} scroll onClose={() => setConditionsOpen(false)}>

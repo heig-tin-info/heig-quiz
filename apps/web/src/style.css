@@ -111,6 +111,27 @@
 :root:has([data-tool-dock]) {
   --tool-dock-h: 4rem;
 }
+/* The notepad's page (ADR-090): a hairline under every line of text, as on
+   a ruled pad. The rules scroll with the text (`local`) and start under the
+   textarea's top padding, so each sits on a baseline in both themes. */
+.notepad-ruled {
+  --rule: 1.5rem;
+  line-height: var(--rule);
+  padding-top: 0.25rem;
+  background-image: linear-gradient(
+    to bottom,
+    transparent calc(var(--rule) - 1px),
+    var(--line-strong) calc(var(--rule) - 1px)
+  );
+  background-size: 100% var(--rule);
+  background-position: 0 0.25rem;
+  background-attachment: local;
+}
+/* Two docks stacked (the calculator and the notepad, ADR-090): the second
+   button sits 3.5 rem higher, and the panels and the toasts rise with it. */
+:root:has([data-tool-dock-slot="1"]) {
+  --tool-dock-h: 7.5rem;
+}
 /* The FAB steps aside while a list's selection bar is up: the bar spans the
    bottom edge, and the selection is the task of the moment. */
 @variant max-lg {

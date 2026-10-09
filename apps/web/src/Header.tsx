@@ -17,6 +17,7 @@ import {
 import type { Me } from "@quiz/contracts";
 
 import { api } from "./api";
+import { purgeAllNotepads } from "./notepad/store";
 import quizLogo from "./assets/quiz.svg?raw";
 import { useT } from "./i18n";
 import {
@@ -76,7 +77,11 @@ export function useSignOut(): () => void {
     mutationFn: () => api("/app/auth/logout", { method: "POST" }),
     onSuccess: () => qc.setQueryData(meKey, null),
   });
-  return () => logout.mutate();
+  return () => {
+    // ADR-090: no student's notepad outlives their session on this device.
+    purgeAllNotepads();
+    logout.mutate();
+  };
 }
 
 /**

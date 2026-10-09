@@ -36,6 +36,8 @@ import type {
 } from "@quiz/contracts";
 
 import { api } from "../api";
+import { forgetNotepadCopy } from "../notepad/clipboard";
+import { purgeNotepad } from "../notepad/store";
 import { useEventStream } from "../realtime/useEventStream";
 import { useServerClock } from "../realtime/useServerClock";
 import { Autosave, type SyncState } from "./autosave";
@@ -166,6 +168,14 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
     [saver],
   );
   const pause = useCallback(() => setPaused(true), []);
+
+  // ADR-090: the notepad goes with the attempt, at every end seen here —
+  // submitted, deadline, evaluation closed — however it was learnt.
+  useEffect(() => {
+    if (closed === null) return;
+    purgeNotepad(attemptId);
+    forgetNotepadCopy();
+  }, [closed, attemptId]);
 
   // --- Adopting a fresh view ----------------------------------------------
   useEffect(() => {

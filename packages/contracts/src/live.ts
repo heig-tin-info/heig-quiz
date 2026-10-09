@@ -136,6 +136,8 @@ export const ImposedCondition = z.discriminatedUnion("key", [
     kind: z.literal("provided"),
     calculator: z.enum(PROVIDED_CALCULATORS),
   }),
+  z.object({ key: z.literal("notepad"), kind: z.literal("provided") }),
+  z.object({ key: z.literal("notepad_no_clipboard"), kind: z.literal("provided") }),
   z.object({
     key: z.literal("duration"),
     kind: z.literal("info"),

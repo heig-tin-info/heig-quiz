@@ -103,6 +103,13 @@ export class CalculatorNotAllowed extends EvaluationError {
   }
 }
 
+/** ADR-090: nor anything to work out on a notepad. */
+export class NotepadNotAllowed extends EvaluationError {
+  constructor(mode: string) {
+    super("notepad_not_allowed", 422, `an evaluation of mode "${mode}" provides no notepad (ADR-090)`);
+  }
+}
+
 /** ADR-079: a poll has no conditions to sit under. */
 export class ConditionsNotAllowed extends EvaluationError {
   constructor(mode: string) {

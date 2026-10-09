@@ -41,7 +41,7 @@
 //             (usePersistentChoice), isTyping, useFullscreen. Imports no
 //             sibling.
 //   toolDock  a tool docked at the bottom right (ToolDock: the calculator,
-//             the help assistant), on layers.
+//             the notepad, the help assistant), on layers.
 //   expand    the layer a question type's canvas expands into
 //             (ExpandPanel), on layers + controls.
 //   disclosure a folded card whose header row opens it (Disclosure), on

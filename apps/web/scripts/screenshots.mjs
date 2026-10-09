@@ -1698,6 +1698,16 @@ const scenes = [
       await p.getByRole("button", { name: /^(calculator|calculatrice)$/i }).click();
       await p.waitForTimeout(400);
     } },
+  // The notepad (ADR-090): stacked above the calculator, one panel at a
+  // time; the advanced setting; the waiting room's two lines.
+  { name: "notepad-dock", role: "student", path: `${TAKE}?calculator=1&notepad=1&scene=running`, fold: true },
+  { name: "notepad-dock-open", role: "student", path: `${TAKE}?calculator=1&nocopy=1&scene=running`, fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^(notepad|calepin)$/i }).click();
+      await p.getByRole("textbox", { name: /^page 1/i }).fill("F = m·a\nm = 2 kg, a = 3 m/s²\n→ F = 6 N\n\nTODO: check question 4 units");
+      await p.waitForTimeout(400);
+    } },
+  { name: "notepad-eval-advanced", role: "teacher", path: "/evaluations/draft?step=timing&notepad=1", act: (p) => p.getByRole("button", { name: /^advanced options$/i }).first().click() },
+  { name: "notepad-lobby", role: "student", path: `${TAKE}?scene=lobby&calculator=1&nocopy=1` },
   // The teacher assistant (ADR-080): its button at the bottom right, the
   // chat it opens (the mock answers as the development stub), its history.
   { name: "assist-closed", role: "teacher", path: "/pools/p1", fold: true, act: skipCoach },

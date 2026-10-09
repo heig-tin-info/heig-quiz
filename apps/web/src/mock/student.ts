@@ -30,6 +30,7 @@ import {
   flags,
   iso,
   mockCalculator,
+  mockNotepad,
   MOCK_CONDITIONS,
   now,
   on,
@@ -377,6 +378,7 @@ const studentSettings = (): AttemptView["evaluation"]["settings"] => ({
   ...(flags.seb ? { safeExamBrowser: true } : {}),
   ...(flags.kiosk ? { kiosk: true } : {}),
   ...mockCalculator(),
+  ...mockNotepad(),
 });
 
 /**

@@ -12,12 +12,26 @@
  * (`--tool-dock-h`). `offset` is the CSS length the dock sits above (a
  * footer or a bottom bar); `keepMounted` keeps the panel's state across a
  * close, as a calculator put down on the desk.
+ *
+ * Several tools on one screen (the player's calculator and notepad,
+ * ADR-090) form one group: each takes a `slot`, its button stacked 56 px
+ * above the previous one (`data-tool-dock-slot`, which raises
+ * `--tool-dock-h` for the whole stack), and the owner holds which one is
+ * open through `open`/`onOpenChange`, so one panel shows at a time. Every
+ * panel rises above the whole stack.
  */
 import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from "react";
 
 import { cx } from "@quiz/ui";
 
 import { Z } from "./layers";
+
+/** A dock's place in a group (ADR-090): what the group's owner hands each tool. */
+export interface ToolDockSeat {
+  slot: number;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
 
 export function ToolDock({
   icon: Icon,
@@ -26,6 +40,9 @@ export function ToolDock({
   offset,
   panelClassName,
   keepMounted = false,
+  slot = 0,
+  open: controlled,
+  onOpenChange,
   onOpen,
   dockProps,
   children,
@@ -38,6 +55,11 @@ export function ToolDock({
   /** The panel's width and height. */
   panelClassName: string;
   keepMounted?: boolean;
+  /** Its place in a stack of docks, 0 at the bottom. */
+  slot?: number;
+  /** Controlled: whether the panel is open (one of a group at a time). Uncontrolled when absent. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   /** Once the panel is open: where the focus goes. */
   onOpen?: () => void;
   /** Extra attributes on the wrapper (a `data-*` a stylesheet reads). */
@@ -45,7 +67,12 @@ export function ToolDock({
   /** The panel's content; the element with id `titleId` names it. */
   children: (close: () => void, titleId: string) => ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const [own, setOwn] = useState(false);
+  const open = controlled ?? own;
+  const setOpen = (next: boolean) => {
+    if (controlled === undefined) setOwn(next);
+    onOpenChange?.(next);
+  };
   const trigger = useRef<HTMLButtonElement>(null);
   const panelId = useId();
   const titleId = useId();
@@ -65,7 +92,7 @@ export function ToolDock({
   };
 
   return (
-    <div data-tool-dock {...dockProps}>
+    <div data-tool-dock data-tool-dock-slot={slot} {...dockProps}>
       {open || keepMounted ? (
         <section
           id={panelId}
@@ -98,7 +125,7 @@ export function ToolDock({
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={() => (open ? close() : setOpen(true))}
-        style={{ bottom: `calc(${offset} + 1rem)` }}
+        style={{ bottom: `calc(${offset} + 1rem + ${slot * 3.5}rem)` }}
         className={cx(
           "fixed right-4 inline-flex size-12 items-center justify-center rounded-full border shadow-popover transition-[background-color,transform] duration-120 active:scale-[0.97] sm:right-6",
           // Open, the neutral ink fill of a pressed toggle (`ToggleChip`'s): never the accent.
