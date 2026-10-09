@@ -17,11 +17,14 @@
  *     but DISPLAYS the first one seen: "Paris", "paris " and "PARIS" are one
  *     line of three, written the way the first participant wrote it.
  */
+import type { QuestionTypeId } from "@quiz/core/server";
+
 import { brainstormBoard, brainstormCloud, type BrainstormBubble, type IdeaMark } from "./brainstorm.js";
 import { applyTextOptions, foldCase, normalizeInput } from "./short.js";
 
-/** The question types a poll may run (mirrors `PollQuestionType`). */
-export type PollType = "mcq" | "short" | "brainstorm";
+/** The question types a poll may run (`PollQuestionType`): `brainstorm` runs nowhere else (ADR-071). */
+export const POLL_TYPES = ["mcq", "short", "brainstorm"] as const satisfies readonly QuestionTypeId[];
+export type PollType = (typeof POLL_TYPES)[number];
 
 export interface PollChoiceCount {
   /** Canonical index into `config.choices`. */

@@ -24,6 +24,8 @@
  */
 import type { FastifyInstance } from "fastify";
 
+import { isLiveState } from "@quiz/domain";
+
 import { notifyMany } from "../notifications/service.js";
 import { byId, claimGradingReady, type EvaluationRecord } from "../evaluation/service.js";
 import { staffOf } from "./events.js";
@@ -52,7 +54,7 @@ export async function announceGradingReady(
     // runner job — is skipped.
     const current = await byId(app.db, evaluation.id);
     if (!current || current.gradingReadyAt !== null) return;
-    if (current.state === "running" || current.state === "paused") return;
+    if (isLiveState(current.state)) return;
     const progress = await progressOf(app.db, current.id);
     const proposed = progress.pending.runner + progress.pending.llm + progress.failed;
     if (progress.done + proposed < progress.total || proposed === 0) return;

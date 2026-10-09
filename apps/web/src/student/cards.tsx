@@ -30,7 +30,7 @@ import {
   Users,
 } from "lucide-react";
 
-import { formatPoints, groupByDay, type DayBucket, type StudentActivityGroup } from "@quiz/domain";
+import { formatPoints, groupByDay, isFinishedAttempt, type DayBucket, type StudentActivityGroup } from "@quiz/domain";
 import type {
   EvaluationCard as EvaluationCardData,
   StudentActivityCard,
@@ -112,7 +112,7 @@ function timeLeftMeta(card: EvaluationCardData, now: number, t: TFunction): Reac
 
 /** A finished attempt: handed in, or closed by time or by the teacher. */
 export const finished = (card: EvaluationCardData): boolean =>
-  card.attemptState === "submitted" || card.attemptState === "expired";
+  card.attemptState !== null && isFinishedAttempt(card.attemptState);
 
 /**
  * "n questions awaiting grading": the cells of an attempt with no validated

@@ -96,7 +96,8 @@ const blankMark = (key: string): IdeaMark => ({
   source: "teacher",
 });
 
-export type IdeaStatus = "pending" | "approved" | "hidden";
+export const IDEA_STATUSES = ["pending", "approved", "hidden"] as const;
+export type IdeaStatus = (typeof IDEA_STATUSES)[number];
 
 export interface BrainstormVariant {
   key: string;

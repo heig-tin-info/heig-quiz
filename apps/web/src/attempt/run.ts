@@ -9,11 +9,9 @@
 import { useCallback } from "react";
 
 import type { RunAccepted, RunnerResultEvent } from "@quiz/contracts";
-import type { RunnerOutcome } from "@quiz/core/server";
+import type { RunOutcome, RunnerOutcome } from "@quiz/core/server";
 
 import { ApiError, api } from "../api";
-
-export type RunResult = RunnerOutcome | "unavailable" | "rate_limited";
 
 export type RunFn = (
   itemId: string,
@@ -22,7 +20,7 @@ export type RunFn = (
   manual?: { args: string[]; stdin: string },
   /** `compileOnly`: the Compile button — build, run nothing, no input. */
   options?: { compileOnly?: boolean | undefined },
-) => Promise<RunResult>;
+) => Promise<RunOutcome>;
 
 /** The SSE result shape is not the runner's; the player speaks the latter. */
 export function toOutcome(result: RunnerResultEvent["result"]): RunnerOutcome | "unavailable" {
@@ -69,7 +67,7 @@ export function runBody(
  * (N-SEC-07), which tells the student to wait, not that running is off.
  * Anything else is a real failure the player shows in red.
  */
-async function withRefusals(call: () => Promise<RunResult>): Promise<RunResult> {
+async function withRefusals(call: () => Promise<RunOutcome>): Promise<RunOutcome> {
   try {
     return await call();
   } catch (error) {
@@ -83,7 +81,7 @@ const post = <T>(url: string, body: unknown) =>
   api<T>(url, { method: "POST", body: JSON.stringify(body) });
 
 /** `…/run`: a program against its cases, or the free try. */
-export const postRun = (url: string, body: unknown): Promise<RunResult> =>
+export const postRun = (url: string, body: unknown): Promise<RunOutcome> =>
   withRefusals(async () => toOutcome((await post<RunAccepted>(url, body)).result));
 
 /**
@@ -92,7 +90,7 @@ export const postRun = (url: string, body: unknown): Promise<RunResult> =>
  * of a `codeimage` "Run" (ADR-021). Only the server may turn a schematic into
  * a SPICE netlist (invariant 14), so its answer is already the runner's.
  */
-export const postSimulate = (url: string, body: unknown): Promise<RunResult> =>
+export const postSimulate = (url: string, body: unknown): Promise<RunOutcome> =>
   withRefusals(() => post<RunnerOutcome>(url, body));
 
 export function useAttemptRun(attemptId: string): RunFn {

@@ -64,6 +64,13 @@ export const RunnerOutcome = z.object({
 });
 export type RunnerOutcome = z.infer<typeof RunnerOutcome>;
 
+/**
+ * What a run gives back to a player or an editor: the runner's outcome, or
+ * why there is none — no engine answered (`unavailable`), or the caller's
+ * run budget is spent (`rate_limited`, a 429 of the API).
+ */
+export type RunOutcome = RunnerOutcome | "unavailable" | "rate_limited";
+
 export const RunnerHealth = z.object({
   ok: z.boolean(),
   /**

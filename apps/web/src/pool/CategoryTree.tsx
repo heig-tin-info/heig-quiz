@@ -2,6 +2,7 @@ import { ChevronRight, Layers, ListTree } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import type { CategoryNode } from "@quiz/contracts";
+import { poolRoleAllows } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import { useMoveQuestions, useQuestionDrop, type QuestionDrag } from "./move";
@@ -195,7 +196,7 @@ export function SidebarCategories({
   const move = useMoveQuestions();
   const detail = usePool(poolId);
   const onCategoriesPage = route.view === "poolCategories";
-  const readOnly = detail.data?.role === "reader";
+  const readOnly = detail.data !== undefined && !poolRoleAllows(detail.data.role, "contributor");
   const onDropQuestions = (drag: QuestionDrag, categoryId: string | null) =>
     void move({
       questionIds: drag.questionIds,

@@ -13,7 +13,7 @@ import { useEffect, useMemo, useState, type DragEvent, type KeyboardEvent } from
 
 
 import type { CategoryNode, PoolQuestionStats, QuestionPage, QuestionRow } from "@quiz/contracts";
-import type { POOL_TABS } from "@quiz/domain";
+import { poolRoleAllows, type POOL_TABS } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -286,7 +286,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const [group, setGroup] = usePersistentChoice<GroupBy>(GROUP_KEY, isGroupBy, "none");
 
   const pool = usePool(id);
-  const mayWrite = pool.data?.role !== "reader";
+  const mayWrite = pool.data === undefined || poolRoleAllows(pool.data.role, "contributor");
   const poolConceptIds = useMemo(() => (pool.data?.concepts ?? []).map((c) => c.concept.id), [pool.data]);
 
   // What this screen adds to the command palette while it is open
@@ -443,10 +443,8 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   }
 
   const detail = pool.data!;
-  // `reader` is the one role that may not write (F-POOL-05). An API that does
-  // not say (the mock of an older shape) is treated as the role it used to
-  // imply, so the screen never silently loses its actions.
-  const readOnly = detail.role === "reader";
+  // `reader` is the one role that may not write (F-POOL-05).
+  const readOnly = !poolRoleAllows(detail.role, "contributor");
 
   return (
     <div className="w-full space-y-6" style={pageBox(shown && docked ? PANE_WIDTH : null)}>

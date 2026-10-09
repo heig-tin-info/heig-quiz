@@ -19,6 +19,7 @@
  * The randomness and the clock are injected by the caller (`crypto`, the
  * server's clock): every function here is deterministic.
  */
+import type { Locale } from "./locales.js";
 import { slugify } from "./repoName.js";
 import { SCHOOL_TIME_ZONE, zoneOffset } from "./zone.js";
 
@@ -381,11 +382,8 @@ export const freeName = (base: string, taken: ReadonlySet<string>): string => fi
 /** `base`, else `base-2`, `base-3`… — the first not in `taken`. */
 export const freeSlug = (base: string, taken: ReadonlySet<string>): string => firstFree(taken, (k) => (k === 1 ? base : `${base}-${k}`));
 
-/** The languages a default name is written in: the creator's (ADR-070 §1, §2). */
-export type NameLocale = "en" | "fr";
-
 /** "Group k" (fr "Groupe k") with the first k whose name is not `taken` (ADR-070 §1). */
-export function defaultGroupName(taken: ReadonlySet<string>, locale: NameLocale): string {
+export function defaultGroupName(taken: ReadonlySet<string>, locale: Locale): string {
   const word = locale === "fr" ? "Groupe" : "Group";
   return firstFree(taken, (k) => `${word} ${k}`);
 }
@@ -394,7 +392,7 @@ export function defaultGroupName(taken: ReadonlySet<string>, locale: NameLocale)
  * A new set's name (ADR-070 §2): "Groups of 2026-10-04 14:30" (fr "Groupes
  * du 04.10.2026 14:30"), the instant on the school's wall clock.
  */
-export function defaultSetName(at: Date, locale: NameLocale, timeZone: string = SCHOOL_TIME_ZONE): string {
+export function defaultSetName(at: Date, locale: Locale, timeZone: string = SCHOOL_TIME_ZONE): string {
   const local = new Date(at.getTime() + zoneOffset(at, timeZone));
   const two = (n: number) => String(n).padStart(2, "0");
   const [y, m, d] = [local.getUTCFullYear(), two(local.getUTCMonth() + 1), two(local.getUTCDate())];
@@ -403,6 +401,6 @@ export function defaultSetName(at: Date, locale: NameLocale, timeZone: string = 
 }
 
 /** A copy's name for a duplicated set (fr "(copie)"), as a duplicated question's (`pool/questionWrite.ts`). */
-export function duplicateSetName(name: string, locale: NameLocale): string {
+export function duplicateSetName(name: string, locale: Locale): string {
   return `${name} (${locale === "fr" ? "copie" : "copy"})`;
 }

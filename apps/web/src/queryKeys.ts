@@ -250,6 +250,11 @@ export const questionPreviewKey = (id: string, source: "draft" | number | undefi
  */
 export const questionInstancesKey = (id: string, stamp: string) =>
   ["question", id, "instances", stamp] as const;
+/**
+ * The "Show answers" of a preview (a question's, an item's, a draw's): a
+ * request of its own, under the key of the view it reveals.
+ */
+export const solutionKey = <K extends readonly unknown[]>(view: K) => [...view, "solution"] as const;
 
 // --- Evaluations ---------------------------------------------------------------
 

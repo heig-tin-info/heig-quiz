@@ -12,8 +12,8 @@
  */
 import { char, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
-import { KIOSK_ATTESTATIONS, KIOSK_DEVICE_STATUSES } from "@quiz/contracts";
-import { KIOSK_WATCHES } from "@quiz/domain";
+import { KIOSK_DEVICE_STATUSES } from "@quiz/contracts";
+import { KIOSK_ATTESTATIONS, KIOSK_WATCHES, PAIRING_STATES } from "@quiz/domain";
 
 import { users } from "./auth.js";
 import { evaluations } from "./evaluation.js";
@@ -65,7 +65,7 @@ export const kioskPairings = pgTable(
       .references(() => kioskDevices.id, { onDelete: "cascade" }),
     deviceCodeHash: char("device_code_hash", { length: 64 }).notNull().unique(),
     userCodeHash: char("user_code_hash", { length: 64 }).notNull(),
-    state: text("state", { enum: ["pending", "approved", "consumed", "expired"] }).notNull(),
+    state: text("state", { enum: PAIRING_STATES }).notNull(),
     /** The student the station will sit as; null until approved. */
     userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
     evaluationId: uuid("evaluation_id").references(() => evaluations.id, { onDelete: "cascade" }),

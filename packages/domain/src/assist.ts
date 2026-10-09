@@ -7,10 +7,11 @@
  * gateway; this decides what is said.
  */
 import { assistCommandList, assistScreenCatalogue, type AssistAction, type AssistScreenCommand } from "./assistScreens.js";
+import { LOCALES, type Locale } from "./locales.js";
 
 /** The UI languages, and so the help topics' variants and the reply's fallback language. */
-export const ASSIST_LOCALES = ["en", "fr"] as const;
-export type AssistLocale = (typeof ASSIST_LOCALES)[number];
+export const ASSIST_LOCALES = LOCALES;
+export type AssistLocale = Locale;
 
 /** Who may ask: the teacher UI's two roles. A page for administrators only is filtered out for a teacher. */
 export type AssistRole = "teacher" | "admin";

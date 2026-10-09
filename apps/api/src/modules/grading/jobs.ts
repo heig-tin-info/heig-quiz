@@ -51,6 +51,9 @@ import {
   INSTANCE_WARNING_KEY,
   JUSTIFICATION_KEY,
   justificationOf,
+  type GradingConfidence,
+  type GradingSource,
+  type GradingState,
   type PassReason,
 } from "@quiz/contracts";
 import { RunnerBusy, RunnerUnavailable, isGraded, isPendingRunner } from "@quiz/core/server";
@@ -537,11 +540,11 @@ type GradeOutcome =
       kind: "written";
       grading: {
         points: number;
-        source: "auto" | "llm" | "manual";
-        state: "validated" | "proposed";
+        source: GradingSource;
+        state: Exclude<GradingState, "superseded">;
         details: unknown;
         comment?: string;
-        confidence?: "low" | "medium" | "high";
+        confidence?: GradingConfidence;
       };
     }
   | { kind: "runner"; request: RunnerRequest }

@@ -23,6 +23,7 @@
 import { sql } from "drizzle-orm";
 
 import { AttemptEventKind } from "@quiz/contracts";
+import { ATTEMPT_CLOSERS, ATTEMPT_STATES } from "@quiz/domain";
 import {
   boolean,
   check,
@@ -84,7 +85,7 @@ export const attempts = pgTable(
      */
     userId: uuid("user_id").references(() => users.id),
     guestId: uuid("guest_id").references(() => guestParticipants.id, { onDelete: "cascade" }),
-    state: text("state", { enum: ["not_started", "in_progress", "submitted", "expired"] })
+    state: text("state", { enum: ATTEMPT_STATES })
       .notNull()
       .default("not_started"),
     /**
@@ -119,7 +120,7 @@ export const attempts = pgTable(
     extraS: integer("extra_s").notNull().default(0),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     closedAt: timestamp("closed_at", { withTimezone: true }),
-    closedBy: text("closed_by", { enum: ["server", "student", "teacher"] }),
+    closedBy: text("closed_by", { enum: ATTEMPT_CLOSERS }),
     /** Where the student was, restored on reload (F-LIVE-06). */
     lastItemId: uuid("last_item_id"),
     /** Last sign of life; the presence map is in memory, this survives a restart. */

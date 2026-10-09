@@ -51,6 +51,7 @@ import {
   histogram,
   isDebriefOpen,
   isEvaluationOpen,
+  FINISHED_ATTEMPT_STATES,
   isEvaluationOver,
   isFinishedAttempt,
   latestAttempt,
@@ -495,7 +496,7 @@ export async function publishCorrection(
     .where(
       and(
         eq(attempts.evaluationId, evaluation.id),
-        inArray(attempts.state, ["submitted", "expired"]),
+        inArray(attempts.state, [...FINISHED_ATTEMPT_STATES]),
         notExists(
           db.select({ id: gradings.id }).from(gradings).where(eq(gradings.attemptId, attempts.id)),
         ),

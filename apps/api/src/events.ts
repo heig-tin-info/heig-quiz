@@ -25,24 +25,10 @@
  */
 import { EventEmitter } from "node:events";
 
-import type { ServerEvent, Topic } from "@quiz/contracts";
+import type { HintEvent, ServerEvent, Topic } from "@quiz/contracts";
 
-/** Refresh-hint families the client knows how to react to. */
-export type EventType =
-  | "courses"
-  | "classrooms"
-  | "roster"
-  | "pool"
-  | "evaluations"
-  | "results"
-  | "grading"
-  | "admin"
-  | "notifications"
-  | "journal"
-  | "projects"
-  | "groups"
-  | "gradebook"
-  | "mutation";
+/** Refresh-hint families the client knows how to react to (`HintEvent.kinds`). */
+export type EventType = HintEvent["kinds"][number];
 
 /**
  * Topic grammar: which audience a message is addressed to. The definition

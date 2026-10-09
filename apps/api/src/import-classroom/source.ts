@@ -10,6 +10,8 @@
  */
 import pg from "pg";
 
+import type { Locale } from "@quiz/domain";
+
 /** Runs one statement on the source and returns its rows. */
 export type SourceQuery = <T>(sql: string) => Promise<T[]>;
 
@@ -26,7 +28,7 @@ export interface SourceUser {
   githubLogin: string | null;
   githubLinkedAt: Date | null;
   lastLoginAt: Date | null;
-  locale: "en" | "fr" | null;
+  locale: Locale | null;
   dateFormat: "iso" | "eu" | "uk" | "us" | null;
   emailPrefs: Record<string, boolean> | null;
   anonymizedAt: Date | null;

@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
 
 import type { DraftSaved, ParametersDraft, QuestionDetail, ZodIssueLite } from "@quiz/contracts";
+import { poolRoleAllows } from "@quiz/domain";
 
 import { api } from "../api";
 import { questionKey, questionPreviewKey } from "../queryKeys";
@@ -52,7 +53,7 @@ export function useQuestionDraft(id: string) {
    * moment, and the server refuses anyway (`staffAccess` / the pool role) —
    * this is chrome, never the rule.
    */
-  const readOnly = pool.data?.role === "reader";
+  const readOnly = pool.data !== undefined && !poolRoleAllows(pool.data.role, "contributor");
 
   // `DraftSaved.updatedAt` of the last write THIS editor made. It is what
   // tells our own draft apart from a foreign one when the question query

@@ -41,6 +41,8 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+import { EVALUATION_CLOSERS, EVALUATION_MODES, EVALUATION_STATES, MCQ_SCORE_POLICIES } from "@quiz/domain";
+
 import { users } from "./auth.js";
 import { classrooms, courses } from "./org.js";
 import { questionVersions } from "./pool.js";
@@ -73,20 +75,9 @@ export const evaluations = pgTable(
     originRevision: integer("origin_revision"),
     title: text("title").notNull(),
     /** `poll` is stored but every route refuses it in the MVP (decision D7). */
-    mode: text("mode", { enum: ["exam", "exercise", "poll"] }).notNull(),
+    mode: text("mode", { enum: EVALUATION_MODES }).notNull(),
     /** The single state column of §5.1; `graded` is derived, never stored (D6). */
-    state: text("state", {
-      enum: [
-        "draft",
-        "scheduled",
-        "lobby",
-        "running",
-        "paused",
-        "closed",
-        "grading",
-        "released",
-      ],
-    })
+    state: text("state", { enum: EVALUATION_STATES })
       .notNull()
       .default("draft"),
     /** Validated by `EvaluationSettings` in `@quiz/contracts`, never read raw. */
@@ -99,9 +90,7 @@ export const evaluations = pgTable(
      * preference (`users.mcq_policy`) and then owned by the evaluation: the
      * grading pass hands it to the type through `GradeContext.defaults`.
      */
-    mcqPolicy: text("mcq_policy", {
-      enum: ["all_or_nothing", "true_false", "discordance", "symmetric", "ripkey"],
-    })
+    mcqPolicy: text("mcq_policy", { enum: MCQ_SCORE_POLICIES })
       .notNull()
       .default("all_or_nothing"),
     opensAt: timestamp("opens_at", { withTimezone: true }),
@@ -130,7 +119,7 @@ export const evaluations = pgTable(
      * way back to draft; null for what never closed. The Activities list
      * marks a run a person ended.
      */
-    closedBy: text("closed_by", { enum: ["server", "teacher"] }),
+    closedBy: text("closed_by", { enum: EVALUATION_CLOSERS }),
     /**
      * When the students were told that this exercise was scheduled
      * (`activity_scheduled`, ADR-030 §c and §h): at most once in its life,

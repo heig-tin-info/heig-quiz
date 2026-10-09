@@ -39,7 +39,7 @@ function toApiToken(row: TokenRow): ApiToken {
 }
 
 /** OAuth access tokens (ADR-023) live in the same table under their own prefix. */
-const OAUTH_ACCESS_PREFIX = "quiz_oat_";
+export const OAUTH_ACCESS_PREFIX = "quiz_oat_";
 /** And the help assistant's per-question tokens (ADR-080 §8), under theirs. */
 const ASSIST_PREFIX = "quiz_ast_";
 

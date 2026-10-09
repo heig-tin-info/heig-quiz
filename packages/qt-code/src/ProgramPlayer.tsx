@@ -14,7 +14,7 @@ import { fmt } from "@quiz/core/client";
 import { decayedUses, effectiveCooldownMs, type CooldownMode } from "@quiz/domain/cooldown";
 import { mainFileName } from "@quiz/domain/lockedTemplate";
 import type { MarkdownRenderer } from "@quiz/core/client";
-import type { RunnerOutcome } from "@quiz/core/server";
+import type { RunOutcome, RunnerOutcome } from "@quiz/core/server";
 
 import { parseDiagnostics } from "./diagnostics.js";
 import { LockedEditor } from "./LockedEditor.js";
@@ -56,9 +56,6 @@ export type RunState =
   | { status: "failed" }
   | { status: "done"; outcome: RunnerOutcome };
 
-/** What a host's run resolves with; the two words are the graceful paths. */
-export type ProgramRunResult = RunnerOutcome | "unavailable" | "rate_limited";
-
 /**
  * One run slot: its state and the function that fills it. The request, the
  * stages and the endings are the same for every run a player offers; only
@@ -70,11 +67,11 @@ export type ProgramRunResult = RunnerOutcome | "unavailable" | "rate_limited";
  */
 export function useRunSlot(): [
   RunState,
-  (start: (onStage: (stage: CodeRunStage) => void) => Promise<ProgramRunResult>) => Promise<void>,
+  (start: (onStage: (stage: CodeRunStage) => void) => Promise<RunOutcome>) => Promise<void>,
 ] {
   const [state, setState] = useState<RunState>({ status: "idle" });
   async function runInto(
-    start: (onStage: (stage: CodeRunStage) => void) => Promise<ProgramRunResult>,
+    start: (onStage: (stage: CodeRunStage) => void) => Promise<RunOutcome>,
   ) {
     setState({ status: "running", stage: "loading" });
     try {

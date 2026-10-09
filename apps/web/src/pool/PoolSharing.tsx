@@ -2,13 +2,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Globe, Lock, Trash2, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 
-import type {
-  Pool,
-  PoolCandidate,
-  PoolMember,
-  PoolMembers,
-  PoolRole,
+import {
   PoolVisibility,
+  type Pool,
+  type PoolCandidate,
+  type PoolMember,
+  type PoolMembers,
+  type PoolRole,
 } from "@quiz/contracts";
 
 import { api, ApiError, apiErrorMessage, isNotFound, refusedWith } from "../api";
@@ -212,7 +212,7 @@ export function PoolSharing({ pool }: { pool: Pool }) {
             value={visibility}
             disabled={setVisibility.isPending}
             onChange={(v) => setVisibility.mutate(v)}
-            options={(["private", "shared", "public"] as const).map((v) => {
+            options={PoolVisibility.options.map((v) => {
               const Icon = VISIBILITY_ICON[v];
               return {
                 value: v,

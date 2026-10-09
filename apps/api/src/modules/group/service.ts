@@ -60,7 +60,7 @@ import type {
   StudentGroupSetCard,
   StudentGroupSets,
 } from "@quiz/contracts";
-import { copyFollows, defaultGroupName, defaultSetName, duplicateSetName, formRandomGroups, type NameLocale } from "@quiz/domain";
+import { copyFollows, defaultGroupName, defaultSetName, duplicateSetName, formRandomGroups, type Locale } from "@quiz/domain";
 
 import { audit, type AuditAction, type AuditActor } from "../../audit.js";
 import { iso } from "../../clock.js";
@@ -78,7 +78,7 @@ type SetRow = typeof groupSets.$inferSelect;
 export interface WriteContext {
   actor: AuditActor;
   userId: string;
-  locale: NameLocale;
+  locale: Locale;
   now: Date;
   confirm?: string | undefined;
 }
@@ -405,7 +405,7 @@ async function groupsSoFar(tx: Tx, setId: string): Promise<{ names: Set<string>;
 }
 
 /** A new group of the set, last, named `name` or "Group k" in `locale` (`409 duplicate_name`). */
-async function insertGroup(tx: Tx, setId: string, name: string | undefined, locale: NameLocale, now: Date): Promise<{ groupId: string; name: string }> {
+async function insertGroup(tx: Tx, setId: string, name: string | undefined, locale: Locale, now: Date): Promise<{ groupId: string; name: string }> {
   const { names, next } = await groupsSoFar(tx, setId);
   const chosen = name ?? defaultGroupName(names, locale);
   if (names.has(chosen)) throw duplicateName(chosen);

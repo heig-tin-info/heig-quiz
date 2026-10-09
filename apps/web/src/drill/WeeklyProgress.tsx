@@ -16,11 +16,11 @@
 import type { DrillWeek } from "@quiz/contracts";
 import { DRILL_TARGET_RETENTION, drillRecallRate } from "@quiz/domain";
 
-import { useI18n, useT } from "../i18n";
+import { useI18n, useT, type Locale } from "../i18n";
 import { Bars, percent } from "../ui";
 
 /** "Oct 5", in the interface language; the date is a calendar date, read in UTC. */
-export function weekLabel(weekStart: string, locale: "en" | "fr"): string {
+export function weekLabel(weekStart: string, locale: Locale): string {
   return new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: "UTC" }).format(
     new Date(`${weekStart}T00:00:00Z`),
   );

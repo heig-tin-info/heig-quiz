@@ -28,8 +28,8 @@ import {
   serviceCheckKey,
   type CheckCause,
   type CheckDetail,
-  type CheckStatus,
   type CheckValue,
+  type HealthResponse,
   type SystemCheck,
   type SystemCheckKey,
   type SystemDeployment,
@@ -44,6 +44,7 @@ import {
   HEALTH_THRESHOLDS,
   jobsStatus,
   llmBudgetStatus,
+  OPEN_STATES,
   overdueStatus,
   serverErrorsStatus,
   SERVICE_NAMES,
@@ -52,6 +53,7 @@ import {
   taskAttention,
   tickerStatus,
   worstStatus,
+  type CheckStatus,
   type ServiceName,
 } from "@quiz/domain";
 
@@ -225,7 +227,7 @@ async function liveEvaluationsCheck({ app }: CheckContext): Promise<CheckResult>
   const [row] = await app.db
     .select({ n: sql<number>`count(*)::int` })
     .from(evaluations)
-    .where(inArray(evaluations.state, ["lobby", "running", "paused"]));
+    .where(inArray(evaluations.state, [...OPEN_STATES]));
   const n = row?.n ?? 0;
   return { status: "ok", value: count(n), cause: n > 0 ? "evaluations.live" : null };
 }
@@ -546,13 +548,8 @@ export const COARSE_TIMEOUT_MS = 1_000;
 export interface CoarseHealth {
   /** THE rule of the external probe's alarm (deployment.md §7): one place. */
   attention: boolean;
-  checks: {
-    ticker: "up" | "stale" | "none";
-    disk: "ok" | "low" | "unknown";
-    /** The dump's report and the off-site copy's: the worse of the two. */
-    backup: "ok" | "stale" | "unknown";
-    runner: "up" | "down" | "disabled";
-  };
+  /** `backup`: the dump's report and the off-site copy's, the worse of the two. */
+  checks: Pick<HealthResponse["checks"], "ticker" | "disk" | "backup" | "runner">;
 }
 
 /** The ticker, the disk, the two backup reports and the runner, reduced to words (ADR-055 §2). */

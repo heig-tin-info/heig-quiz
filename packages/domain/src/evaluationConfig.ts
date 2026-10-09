@@ -10,8 +10,16 @@
 import type { EvaluationTiming } from "./deadline.js";
 import type { EvaluationStateName } from "./itemList.js";
 
-/** The evaluation modes of F-EVAL-01, spelled as on the wire. */
-export type EvaluationModeName = "exam" | "exercise" | "poll";
+/** The evaluation modes of F-EVAL-01. `poll` is stored and refused by every evaluation route (decision D7). */
+export const EVALUATION_MODES = ["exam", "exercise", "poll"] as const;
+export type EvaluationModeName = (typeof EVALUATION_MODES)[number];
+
+/**
+ * Who ended a run: the ticker past its closing time (`server`), or the
+ * teacher's Close or End (`teacher`).
+ */
+export const EVALUATION_CLOSERS = ["server", "teacher"] as const;
+export type EvaluationCloser = (typeof EVALUATION_CLOSERS)[number];
 
 /** A field the timing still needs. */
 export type TimingField = "durationS" | "opensAt" | "closesAt";
@@ -79,19 +87,18 @@ export function pastTiming(
 
 // --- Feedback policy (F-EVAL-11, #78) --------------------------------------
 
-/** When the student sees the correction, as on the wire (`FeedbackPolicy.when`). */
-export type FeedbackWhen = "none" | "on_release" | "immediate";
+/** When the student sees the correction (`FeedbackPolicy.when`): every policy, in the order the screen offers them. */
+export const FEEDBACK_WHEN = ["none", "on_release", "immediate"] as const;
+export type FeedbackWhen = (typeof FEEDBACK_WHEN)[number];
 
 /** The waiting room setting of F-EVAL-06. */
-export type LobbyName = "skip" | "auto" | "manual";
+export const LOBBIES = ["skip", "auto", "manual"] as const;
+export type LobbyName = (typeof LOBBIES)[number];
 
 export interface FeedbackContext {
   mode: EvaluationModeName;
   lobby: LobbyName;
 }
-
-/** Every policy, in the order the screen offers them. */
-export const FEEDBACK_WHEN: readonly FeedbackWhen[] = ["none", "on_release", "immediate"];
 
 /** What an evaluation falls back to when its context stops allowing `immediate`. */
 export const IN_CLASS_FEEDBACK: FeedbackWhen = "on_release";
@@ -221,6 +228,11 @@ export type TrustedClient = (typeof TRUSTED_CLIENTS)[number];
 export const isTrustedClient = (kind: string): kind is TrustedClient =>
   (TRUSTED_CLIENTS as readonly string[]).includes(kind);
 
+/** Only an exam may require a trusted client: the settings screen offers the choice there alone. */
+export function trustedClientsAllowedFor(mode: EvaluationModeName): boolean {
+  return mode === "exam";
+}
+
 /**
  * The trusted clients an evaluation accepts (ADR-027, ADR-051 §2), in this
  * order: `seb`, then `kiosk`. Empty means the evaluation is sat in the
@@ -233,7 +245,7 @@ export function trustedClientsOf(
   mode: EvaluationModeName,
   settings: { safeExamBrowser?: boolean | undefined; kiosk?: boolean | undefined },
 ): TrustedClient[] {
-  if (mode !== "exam") return [];
+  if (!trustedClientsAllowedFor(mode)) return [];
   const on: Record<TrustedClient, boolean | undefined> = { seb: settings.safeExamBrowser, kiosk: settings.kiosk };
   return TRUSTED_CLIENTS.filter((client) => on[client] === true);
 }
@@ -249,8 +261,8 @@ export function drillAllowedOn(mode: EvaluationModeName, allowDrill: boolean | u
   return allowDrill ?? mode === "exercise";
 }
 
-/** A poll never feeds the drill: the half of both rules below and above. */
-const drillModeOf = (mode: EvaluationModeName): boolean => mode !== "poll";
+/** A poll never feeds the drill: the half of both rules below and above, and of the screen's drill setting. */
+export const drillModeOf = (mode: EvaluationModeName): boolean => mode !== "poll";
 
 /**
  * Whether "Allow drill" may still change (ADR-041 §10, item 3): until the
@@ -259,6 +271,14 @@ const drillModeOf = (mode: EvaluationModeName): boolean => mode !== "poll";
  */
 export function allowDrillWritable(mode: EvaluationModeName, state: EvaluationStateName): boolean {
   return drillModeOf(mode) && state !== "released";
+}
+
+/**
+ * Only an exam pauses (docs/spec/01 §1 glossary): the server refuses the
+ * transition on any other mode, and the dashboard offers Pause on an exam alone.
+ */
+export function pausableMode(mode: EvaluationModeName): boolean {
+  return mode === "exam";
 }
 
 // --- The integrity journal (F-EVAL-13, ADR-088) ------------------------------

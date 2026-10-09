@@ -12,12 +12,15 @@
  */
 import { z } from "zod";
 
+import { LLM_CONFIDENCES } from "@quiz/core/llm";
+import { GRADING_SOURCES, GRADING_STATES } from "@quiz/domain";
+
 import { IdParam, StaffItemRef } from "./common.js";
 import { NamedValues, ParametersDraft } from "./parameters.js";
 import { VersionRow } from "./pool.js";
 
 /** Who produced a grading. `llm` is phase 2 and only ever `proposed` in MVP. */
-export const GradingSource = z.enum(["auto", "llm", "manual"]);
+export const GradingSource = z.enum(GRADING_SOURCES);
 export type GradingSource = z.infer<typeof GradingSource>;
 
 /**
@@ -25,10 +28,10 @@ export type GradingSource = z.infer<typeof GradingSource>;
  * `superseded` is history. At most one `validated` grading per answer, held
  * by a partial unique index.
  */
-export const GradingState = z.enum(["proposed", "validated", "superseded"]);
+export const GradingState = z.enum(GRADING_STATES);
 export type GradingState = z.infer<typeof GradingState>;
 
-export const GradingConfidence = z.enum(["low", "medium", "high"]);
+export const GradingConfidence = z.enum(LLM_CONFIDENCES);
 export type GradingConfidence = z.infer<typeof GradingConfidence>;
 
 /*

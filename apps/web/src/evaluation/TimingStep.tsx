@@ -14,7 +14,9 @@ import {
   CLOCK_MODES,
   conditionsAllowedFor,
   configLock,
+  drillModeOf,
   isConfigFieldWritable,
+  retakesAllowedFor,
   type ClockChoice,
   type ClockMode,
   type EvaluationTiming,
@@ -317,7 +319,7 @@ export function ConfigSettings({
       </Card>
 
       {/* F-EVAL-15: an exercise only; an exam is one sitting. */}
-      {mode === "exercise" ? (
+      {retakesAllowedFor(mode) ? (
         <RetakesSetting mode={mode} settings={settings} patch={patch} disabled={disabled} />
       ) : null}
 
@@ -463,7 +465,7 @@ export function TimingStep({
 
       {/* ADR-041 §2 (#317): its own writer, editable until the release —
           not one of the settings `patch` saves, nor frozen with them. */}
-      {mode !== "poll" ? <EvaluationDrillSetting evaluation={detail.evaluation} /> : null}
+      {drillModeOf(mode) ? <EvaluationDrillSetting evaluation={detail.evaluation} /> : null}
     </div>
   );
 }

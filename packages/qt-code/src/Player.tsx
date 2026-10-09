@@ -26,7 +26,7 @@ import { useId, useState } from "react";
 
 import { fmt, plural, resolveStrings } from "@quiz/core/client";
 import type { PlayerProps } from "@quiz/core/client";
-import type { RunnerOutcome } from "@quiz/core/server";
+import type { RunOutcome, RunnerOutcome } from "@quiz/core/server";
 
 import { ArgsInput } from "./ArgsInput.js";
 import { HammerIcon, ListChecksIcon, TerminalIcon } from "./icons.js";
@@ -40,7 +40,6 @@ import {
   useCooldown,
   useRunSlot,
   type CodeRunStage,
-  type ProgramRunResult,
 } from "./ProgramPlayer.js";
 import type { CodeAnswer, CodeStudent } from "./schema.js";
 import { PLAYER_STRINGS, type CodePlayerStrings } from "./strings.js";
@@ -97,7 +96,7 @@ interface CodePlayerProps extends PlayerProps<CodeStudent, CodeAnswer> {
    * N-SEC-07, the tests' or the compilations') are graceful paths, not
    * failures.
    */
-  onRun?: ((answer: CodeAnswer, options?: CodeRunOptions) => Promise<ProgramRunResult>) | undefined;
+  onRun?: ((answer: CodeAnswer, options?: CodeRunOptions) => Promise<RunOutcome>) | undefined;
   /**
    * Whether the host can honour `CodeRunOptions.manual`. The student's player
    * can (both `POST /attempts/:id/run` and the browser runner take a free

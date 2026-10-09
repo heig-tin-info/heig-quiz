@@ -11,10 +11,10 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { AssistAvailability, AssistConversation, AssistConversationSummary, AssistReply } from "@quiz/contracts";
+import { AssistAvailability, AssistConversation, AssistConversationSummary, AssistReply, CSRF_COOKIE } from "@quiz/contracts";
 import { ASSIST_MAX_STEPS, ASSIST_TURNS_PER_MINUTE, ASSIST_WRITE_TOOLS } from "@quiz/domain";
 
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
 import { loadConfig } from "../../config.js";
 import { assistConversations, assistExchanges, auditLog, llmCalls } from "../../db/schema.js";

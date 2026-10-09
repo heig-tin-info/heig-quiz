@@ -20,9 +20,11 @@ import {
   reviewPill,
   truncateSelection,
   UNREVIEWED_TYPES,
+  poolRoleAllows,
 } from "@quiz/domain";
 import type {
   McqScorePolicy,
+  PoolRoleName,
 } from "@quiz/domain";
 /*
  * The `circuit` type's own extractor and parser, used here for the reason the
@@ -161,7 +163,7 @@ interface MockMember {
   email: string;
   givenName: string;
   familyName: string;
-  role: "reader" | "contributor" | "owner";
+  role: PoolRoleName;
   addedAt: string;
 }
 
@@ -2897,7 +2899,7 @@ on("GET", "/app/api/pools/:id/question-stats", (m) => {
 });
 on("POST", "/app/api/questions/:id/stats/reset", (m) => {
   const q = questionOr404(m.groups!.id!);
-  if (poolSummary(poolOr404(q.poolId)).role === "reader") throw new MockError(403, "Read-only access");
+  if (!poolRoleAllows(poolSummary(poolOr404(q.poolId)).role, "contributor")) throw new MockError(403, "Read-only access");
   questionStats.delete(q.id);
   return { since: iso(0) };
 });

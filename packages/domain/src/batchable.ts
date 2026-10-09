@@ -13,6 +13,15 @@
  * The API's batch (as SQL) and the panel's count (in the browser) both read
  * this rule, so the number on the button is the number the call validates.
  */
+/** Who produced a grading. `llm` is only ever `proposed`. */
+export const GRADING_SOURCES = ["auto", "llm", "manual"] as const;
+
+/**
+ * `validated` counts towards the grade; `proposed` waits for the teacher
+ * (the state this rule reads); `superseded` is history.
+ */
+export const GRADING_STATES = ["proposed", "validated", "superseded"] as const;
+
 export interface BatchCandidate {
   state: string;
   points: number;

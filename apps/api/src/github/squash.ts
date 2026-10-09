@@ -12,6 +12,8 @@ import { join } from "node:path";
 
 import type { Octokit } from "octokit";
 
+import type { SourceStrategy } from "@quiz/contracts";
+
 import { gitRunner, repoUrl } from "./git.js";
 import { pushWithRetry } from "./retry.js";
 import { applyStudentHandout } from "./studentize.js";
@@ -31,7 +33,7 @@ export async function createSquashedRepo(opts: {
   org: string;
   sourceRepo: string;
   targetRepo: string;
-  strategy: "whole" | "squash";
+  strategy: SourceStrategy;
   branches: string[];
   /**
    * Takes the repository for this caller BEFORE anything is pushed to it

@@ -22,6 +22,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
+  CSRF_COOKIE,
   Journal,
   JournalDeletedPage,
   JournalFileWritten,
@@ -32,7 +33,7 @@ import {
   type JournalStaff,
 } from "@quiz/contracts";
 
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { auditLog, classroomJournals, journalAssets, journalPageRevisions, journalPages } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";

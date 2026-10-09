@@ -12,9 +12,7 @@ import type { AnswerGenerator, RunnerOutcome, RunnerService } from "@quiz/core/s
 
 import { assembleCodeSource, buildRunnerRequest } from "./grade.js";
 import { referenceRegions } from "./reference.js";
-import { emptyCodeCase, type CodeCase, type CodeConfig, type ProgramConfig } from "./schema.js";
-
-const MAX_CASES = 30;
+import { CODE_MAX_CASES, emptyCodeCase, type CodeCase, type CodeConfig, type ProgramConfig } from "./schema.js";
 
 const blank = (text: unknown) => (typeof text === "string" ? text : "").trim() === "";
 const list = <T>(value: T[] | undefined): T[] => (Array.isArray(value) ? value : []);
@@ -65,7 +63,7 @@ export function mergeCode(config: CodeConfig, proposal: CodeProposal): CodeConfi
   const names = new Set(kept.map((c) => c.name.trim().toLowerCase()));
   const added: CodeCase[] = [];
   for (const proposed of proposal.cases) {
-    if (kept.length + added.length >= MAX_CASES) break;
+    if (kept.length + added.length >= CODE_MAX_CASES) break;
     const name = proposed.name.trim().slice(0, 60);
     if (!name || names.has(name.toLowerCase())) continue;
     names.add(name.toLowerCase());

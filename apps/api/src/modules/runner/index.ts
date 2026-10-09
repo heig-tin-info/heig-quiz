@@ -9,6 +9,7 @@
  * `POST /attempts/:id/run` (WP5) belong to their own modules and call this
  * service.
  */
+import type { HealthResponse } from "@quiz/contracts";
 import type { RunnerService } from "@quiz/core/server";
 
 import type { AppConfig } from "../../config.js";
@@ -19,7 +20,7 @@ export { HttpRunner } from "./http.js";
 export { UnavailableRunner } from "./unavailable.js";
 
 /** What `/healthz` says about the runner. `stub` is a choice, not a failure. */
-type RunnerCheck = "up" | "down" | "disabled";
+type RunnerCheck = HealthResponse["checks"]["runner"];
 
 export function createRunner(config: AppConfig, fetchImpl?: FetchLike): RunnerService {
   if (config.RUNNER_MODE === "http") {

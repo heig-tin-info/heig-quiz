@@ -4,12 +4,12 @@
  * the database: row by row for one pool (`guards.poolRoleOf`) and in bulk for
  * the pool list (`pool/service.listPools`). One definition, one order, one
  * unit test; the two call sites only differ in how they load the facts.
- *
- * The union is spelled out here rather than imported from `@quiz/contracts`
- * (the domain depends on nothing but `@quiz/core`); it is structurally the
- * same type as `PoolRole` there, so the two assign to each other.
  */
-export type PoolRoleName = "reader" | "contributor" | "owner";
+export const POOL_ROLES = ["reader", "contributor", "owner"] as const;
+export type PoolRoleName = (typeof POOL_ROLES)[number];
+
+/** Who reads a pool beyond its members: nobody, its courses' staff, every teacher. */
+export const POOL_VISIBILITIES = ["private", "shared", "public"] as const;
 
 /** What the database knows about one (pool, account) pair. */
 export interface PoolRoleFacts {

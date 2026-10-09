@@ -4,7 +4,7 @@
  * sort and the one primary action they leave. The components only draw what
  * these decide, so each rule is tested once, here.
  */
-import type { GradingConfidence, GradingEntry, GradingSource } from "@quiz/contracts";
+import type { GradingConfidence, GradingEntry, GradingSource, Verdict } from "@quiz/contracts";
 import { isRetryableReason, reasonOf } from "@quiz/contracts";
 import { isBatchable, outcomeOf } from "@quiz/domain";
 
@@ -44,7 +44,7 @@ export const canBatch = (e: GradingEntry) => e.grading !== null && isBatchable(e
  * placeholder that waits for a person (an essay). A negative score is
  * wrong, like zero; a missing answer is wrong whatever its grading says.
  */
-export type RowVerdict = "correct" | "partial" | "wrong" | "pending";
+export type RowVerdict = Verdict;
 
 /** Why a row is pending, for its tooltip. */
 export type PendingReason = "ungraded" | "byHand";

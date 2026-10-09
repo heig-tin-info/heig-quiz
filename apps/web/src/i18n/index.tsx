@@ -8,6 +8,8 @@ import {
   type ReactNode,
 } from "react";
 
+import type { Locale } from "@quiz/domain";
+
 import { api } from "../api";
 import { readStored, writeStored } from "../ui/state";
 import { setTranslator } from "./current";
@@ -40,13 +42,14 @@ import { type Dict, en } from "./en";
  * nodes and crashes the next render (#228), and an exam statement must read
  * as the teacher wrote it. `index.html` also forbids that translation outright.
  */
-export type Locale = "en" | "fr";
+export type { Locale };
 export type LocaleChoice = Locale | "browser";
 
-export const LOCALES: { code: Locale; label: string }[] = [
-  { code: "en", label: "English" },
-  { code: "fr", label: "Français" },
-];
+/**
+ * Each interface language named in itself. The list is the domain's
+ * `LOCALES`: a language added there does not compile until it is named here.
+ */
+export const LOCALE_LABELS: Record<Locale, string> = { en: "English", fr: "Français" };
 
 const STORE_KEY = "quiz-locale";
 

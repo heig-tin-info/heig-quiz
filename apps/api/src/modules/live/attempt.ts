@@ -30,7 +30,10 @@ import {
   evaluationTotal,
   attemptDeadline,
   bonusSeconds,
+  isEvaluationOpen,
+  isEvaluationOver,
   isFinishedAttempt,
+  isLiveState,
   isWritable,
   latestAttempt,
   acquiredItems,
@@ -991,12 +994,8 @@ function contentVisible(evaluation: EvaluationRecord, attempt: AttemptRecord): b
   // A live evaluation shows its questions to a STARTED attempt only: one that
   // entered during a pause waits in the lobby until the resume begins it,
   // or it would read the whole exam on a clock that has not started.
-  if (state === "running" || state === "paused") return attempt.state !== "not_started";
-  return (
-    state === "closed" ||
-    state === "grading" ||
-    state === "released"
-  );
+  if (isLiveState(state)) return attempt.state !== "not_started";
+  return isEvaluationOver(state);
 }
 
 /** A write is only ever accepted on a running evaluation and a live attempt. */
@@ -1242,8 +1241,7 @@ export async function enterEvaluation(
   // The room restriction (F-EVAL-12) is already settled: `sitRefusal`, in
   // the route's loader, refused an off-site request.
 
-  const open = evaluation.state === "lobby" || evaluation.state === "running" ||
-    evaluation.state === "paused";
+  const open = isEvaluationOpen(evaluation.state);
   const existing = await attemptOf(db, evaluation.id, participant);
   // A closed evaluation still hands back a finished attempt: the student
   // must be able to reopen the page and see what they submitted.

@@ -24,7 +24,7 @@ import { useMemo, useState } from "react";
 
 import { fmt, plural, resolveStrings } from "@quiz/core/client";
 import type { PlayerProps } from "@quiz/core/client";
-import type { RunnerOutcome } from "@quiz/core/server";
+import type { RunOutcome } from "@quiz/core/server";
 
 import { Plot, SchematicEditor, SchematicView, type CanvasStrings } from "./canvas/index.js";
 import { parseSimulation, type SimulationResult } from "./grade.js";
@@ -36,9 +36,6 @@ import { badge, buttonClass, card, cx, ExpandableCanvas, hint, isLocked, markdow
 
 import { strip } from "./styles.js";
 
-/** What the host answers "Simulate" with; the two words are graceful paths. */
-export type CircuitSimulateOutcome = RunnerOutcome | "unavailable" | "rate_limited";
-
 interface CircuitPlayerProps extends PlayerProps<CircuitStudent, CircuitAnswer> {
   /**
    * Runs the VISIBLE stimuli and resolves with the runner's outcome, whose
@@ -46,7 +43,7 @@ interface CircuitPlayerProps extends PlayerProps<CircuitStudent, CircuitAnswer> 
    * `POST /attempts/:id/simulate`, which assembles the netlist server-side
    * (invariant 14); nothing about the simulation is ever stored in the answer.
    */
-  onSimulate?: ((answer: CircuitAnswer) => Promise<CircuitSimulateOutcome>) | undefined;
+  onSimulate?: ((answer: CircuitAnswer) => Promise<RunOutcome>) | undefined;
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
   disabled?: boolean | undefined;
   strings?: Partial<CircuitPlayerStrings> | undefined;

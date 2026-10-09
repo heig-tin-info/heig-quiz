@@ -34,7 +34,7 @@
  */
 import { and, eq, inArray, isNotNull, lte, gt, ne, notExists, sql } from "drizzle-orm";
 
-import { DEADLINE_REMINDER_MS } from "@quiz/domain";
+import { DEADLINE_REMINDER_MS, FINISHED_ATTEMPT_STATES } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { attempts, deadlineReminders, enrollments, evaluations } from "../../db/schema.js";
@@ -82,7 +82,7 @@ export async function sendDeadlineReminders(
               and(
                 eq(attempts.evaluationId, evaluations.id),
                 eq(attempts.userId, enrollments.userId),
-                inArray(attempts.state, ["submitted", "expired"]),
+                inArray(attempts.state, [...FINISHED_ATTEMPT_STATES]),
               ),
             ),
         ),

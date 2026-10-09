@@ -17,6 +17,8 @@ import type { FastifyInstance } from "fastify";
 import { eq } from "drizzle-orm";
 import { escapeHtml } from "@quiz/docrender/highlight";
 
+import type { UserRole } from "@quiz/contracts";
+
 import { audit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import { users } from "../db/schema.js";
@@ -30,7 +32,7 @@ export interface Persona {
   givenName: string;
   familyName: string;
   email: string;
-  role: "student" | "teacher" | "admin";
+  role: UserRole;
 }
 
 /** The demo cast. `pnpm seed` builds a course and a classroom around it. */

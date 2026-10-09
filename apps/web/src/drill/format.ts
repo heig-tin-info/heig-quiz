@@ -4,7 +4,7 @@
  */
 import type { DrillSession, DrillSessionCard } from "@quiz/contracts";
 
-import type { Dict, TFunction } from "../i18n";
+import type { Dict, Locale, TFunction } from "../i18n";
 
 /** The confidence scale in the student's words, 0 No idea to 4 Certain (ADR-085). */
 export const CONFIDENCE = [
@@ -33,7 +33,7 @@ export function sessionCourses(cards: readonly DrillSessionCard[]): string {
  * in days (ADR-041 §12), and "in 17 hours" for tomorrow morning would read as
  * a countdown. Pure: the caller gives the clock.
  */
-export function dueIn(iso: string, now: number, locale: "en" | "fr"): string {
+export function dueIn(iso: string, now: number, locale: Locale): string {
   const day = (ms: number) => {
     const d = new Date(ms);
     return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000;

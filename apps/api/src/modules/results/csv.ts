@@ -5,12 +5,9 @@
  */
 import type { ResultsView } from "@quiz/contracts";
 
-import { csvFile, grade, line, points } from "../../csv.js";
+import { csvFile, grade, HEADER_MAX, line, points } from "../../csv.js";
 
 export { BOM, csvField, csvFilename } from "../../csv.js";
-
-/** A header built from `internal_name` is truncated to this (§4.6). */
-const HEADER_MAX = 30;
 
 /** What a bonus item's header ends with (ADR-052): its points are not in the total. */
 const BONUS_SUFFIX = " (bonus)";

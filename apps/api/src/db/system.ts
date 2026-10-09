@@ -18,7 +18,8 @@
  */
 import { boolean, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
-import { CHECK_STATUSES, SCHEDULED_TASK_STATUSES, SYSTEM_CHECK_KEYS } from "@quiz/contracts";
+import { SYSTEM_CHECK_KEYS } from "@quiz/contracts";
+import { CHECK_NOTIFIED, CHECK_STATUSES, SCHEDULED_TASK_STATUSES } from "@quiz/domain";
 
 export const scheduledTasks = pgTable("scheduled_tasks", {
   key: text("key").primaryKey(),
@@ -47,7 +48,7 @@ export const healthCheckStates = pgTable("health_check_states", {
   since: timestamp("since", { withTimezone: true }).notNull(),
   consecutive: integer("consecutive").notNull(),
   /** `fail`: an alert is outstanding; `ok`: its recovery was sent; null: nobody was told. */
-  notifiedStatus: text("notified_status", { enum: ["fail", "ok"] }),
+  notifiedStatus: text("notified_status", { enum: CHECK_NOTIFIED }),
   notifiedAt: timestamp("notified_at", { withTimezone: true }),
   checkedAt: timestamp("checked_at", { withTimezone: true }).notNull(),
 });

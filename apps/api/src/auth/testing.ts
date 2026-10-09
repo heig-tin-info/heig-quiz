@@ -13,9 +13,11 @@ import { expect } from "vitest";
 
 import { CONFIG_KEY_HEADER, absoluteRequestUrl, expectedHash } from "@quiz/seb";
 
+import { CSRF_COOKIE } from "@quiz/contracts";
+
 import { routesOf, type Method, type TestServer } from "../test/http.js";
 import { configKeyHeaderFor, launchConfigKey } from "./seb.js";
-import { CSRF_COOKIE, SESSION_COOKIE } from "./session.js";
+import { SESSION_COOKIE } from "./session.js";
 
 /** The routes that declare `SITTING` (ADR-027), and no others. */
 export const SITTING_ROUTES = new Set([

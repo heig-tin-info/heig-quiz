@@ -16,6 +16,7 @@ import {
   scoresNegatively,
   type AttemptTally,
 } from "@quiz/domain";
+import type { GradingConfidence, GradingSource, GradingState } from "@quiz/contracts";
 import type { AnyQuestionTypeServer, ItemAggregate } from "@quiz/core/server";
 import { clozeServer } from "@quiz/qt-cloze/server";
 import { mcqServer } from "@quiz/qt-mcq/server";
@@ -128,10 +129,10 @@ interface MockGrading {
   itemId: string;
   points: number;
   maxPoints: number;
-  source: "auto" | "llm" | "manual";
-  state: "proposed" | "validated" | "superseded";
+  source: GradingSource;
+  state: GradingState;
   details: unknown;
-  confidence: "low" | "medium" | "high" | null;
+  confidence: GradingConfidence | null;
   comment: string | null;
   gradedBy: string | null;
   gradedAt: string;

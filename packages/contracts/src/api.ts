@@ -6,10 +6,11 @@
 
 import { z } from "zod";
 
-import { TRUSTED_CLIENTS } from "@quiz/domain";
+import { LOCALES, TRUSTED_CLIENTS, type Locale } from "@quiz/domain";
 
 import { McqPolicy } from "./evaluation.js";
 import type { TeacherCodespaceGrant } from "./codespace.js";
+import type { UserRole } from "./admin.js";
 import type { CourseRole } from "./org.js";
 import type { PoolColor } from "./pool.js";
 
@@ -50,6 +51,13 @@ export interface PublicConfig {
 export const SESSION_KINDS = ["portal", "impersonation", ...TRUSTED_CLIENTS] as const;
 export type SessionKind = (typeof SESSION_KINDS)[number];
 
+/**
+ * The double-submit CSRF pair: the API sets the cookie at sign-in, the SPA
+ * copies its value into the header of every write (`apps/web/src/api.ts`).
+ */
+export const CSRF_COOKIE = "quiz_csrf";
+export const CSRF_HEADER = "x-csrf-token";
+
 /** The quit link of every `.seb` Quiz builds, on Quiz's own host (ADR-027). */
 export const SEB_QUIT_PATH = "/seb/quit";
 
@@ -58,11 +66,11 @@ export interface Me {
   email: string;
   givenName: string;
   familyName: string;
-  role: "teacher" | "student" | "admin";
+  role: UserRole;
   lastLoginAt: string | null;
   avatarUrl: string | null;
   hasUploadedAvatar: boolean;
-  locale: "en" | "fr" | null;
+  locale: Locale | null;
   dateFormat: DateFormat | null;
   /**
    * Default MCQ scoring policy for the evaluations this user creates; null
@@ -147,7 +155,7 @@ export type CoachSeenPatch = z.infer<typeof CoachSeenPatch>;
  */
 export const MePatch = z
   .object({
-    locale: z.enum(["en", "fr"]).nullable().optional(),
+    locale: z.enum(LOCALES).nullable().optional(),
     dateFormat: z.enum(DATE_FORMATS).nullable().optional(),
     mcqPolicy: McqPolicy.nullable().optional(),
     coachEnabled: z.boolean().nullable().optional(),

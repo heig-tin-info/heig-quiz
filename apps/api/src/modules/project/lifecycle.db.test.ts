@@ -20,6 +20,7 @@ import { and, eq, isNotNull } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  CSRF_COOKIE,
   ActivitySummary,
   ProjectActivitySummary,
   ProjectErrorCode,
@@ -29,7 +30,7 @@ import {
   StudentClassroomPage,
 } from "@quiz/contracts";
 
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import {
   auditLog,
   courseStaff,

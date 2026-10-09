@@ -76,6 +76,7 @@ export * from "./itemList.js";
 export * from "./kioskAttestation.js";
 export * from "./kioskPairing.js";
 export * from "./llm.js";
+export * from "./locales.js";
 export * from "./assist.js";
 export * from "./assistScreens.js";
 export * from "./assistEdits.js";

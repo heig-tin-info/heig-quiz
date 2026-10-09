@@ -63,12 +63,14 @@ export function correctionPublishRefusal(evaluation: {
  *   sitting it (an `immediate` exam is refused by the contracts, docs/06 #5,
  *   but a legacy row may still carry one).
  */
-export type FeedbackRefusal =
-  | "results_pending"
-  | "no_feedback"
-  | "attempt_open"
-  | "retakes_open"
-  | "exam_open";
+export const FEEDBACK_REFUSALS = [
+  "results_pending",
+  "no_feedback",
+  "attempt_open",
+  "retakes_open",
+  "exam_open",
+] as const;
+export type FeedbackRefusal = (typeof FEEDBACK_REFUSALS)[number];
 
 export type FeedbackGate = { ok: true } | { ok: false; reason: FeedbackRefusal };
 

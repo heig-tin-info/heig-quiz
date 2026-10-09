@@ -11,12 +11,14 @@ import { and, eq } from "drizzle-orm";
 import { registerForTests } from "@quiz/registry/server";
 import { CONFIG_KEY_HEADER, absoluteRequestUrl, expectedHash } from "@quiz/seb";
 
+import { CSRF_COOKIE } from "@quiz/contracts";
+
 import { auditLog, kioskDevices, sessions } from "../db/schema.js";
 import { subscribe, type BusMessage } from "../events.js";
 import { fakeShort } from "../test/fakeType.js";
 import { testServer, type TestServer } from "../test/http.js";
 import { seedLive } from "../test/live.js";
-import { CSRF_COOKIE, SESSION_COOKIE, createSession, deleteSession } from "./session.js";
+import { SESSION_COOKIE, createSession, deleteSession } from "./session.js";
 
 /** A Config Key as a launch stores it. */
 const KEY = "9d98ce221dd52eccf27cad6a01bcd49b14d3d718a9eeeb3be94f0e231a5787ae";

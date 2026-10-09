@@ -17,10 +17,10 @@
  * already keeps that history; an evaluation of a classroom stays, since its
  * classroom being archived is what retires it.
  */
-import { and, desc, eq, isNull, not, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, not, sql, type SQL } from "drizzle-orm";
 
 import type { EvaluationActivitySummary } from "@quiz/contracts";
-import { isTakeHome } from "@quiz/domain";
+import { isTakeHome, OVER_STATES } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -35,7 +35,7 @@ export async function listActivities(
   now: Date,
 ): Promise<EvaluationActivitySummary[]> {
   const cutoff = new Date(now.getTime() - OLD_POLL_DAYS * 86_400_000);
-  const oldPoll = sql`(${ownedPollSql()} and ${evaluations.state} in ('closed', 'grading', 'released') and coalesce(${evaluations.closedAt}, ${evaluations.createdAt}) < ${cutoff.toISOString()}::timestamptz)`;
+  const oldPoll = sql`(${ownedPollSql()} and ${inArray(evaluations.state, [...OVER_STATES])} and coalesce(${evaluations.closedAt}, ${evaluations.createdAt}) < ${cutoff.toISOString()}::timestamptz)`;
   const rows = await db
     .select({
       id: evaluations.id,

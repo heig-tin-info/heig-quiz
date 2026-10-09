@@ -15,6 +15,7 @@
  */
 import { isInClass, type EvaluationModeName, type LobbyName } from "./evaluationConfig.js";
 import { isEvaluationOpen, type EvaluationStateName } from "./itemList.js";
+import type { ProjectStateName } from "./projectView.js";
 
 /** A `scheduled` activity is live this long before it opens. */
 export const LIVE_LEAD_MS = 15 * 60_000;
@@ -55,8 +56,6 @@ export function isLiveNow(row: LiveFacts, now: Date | number): boolean {
   return false;
 }
 
-/** A project's states (F-PROJ), as `@quiz/contracts` lists them. */
-export type ProjectStateName = "draft" | "published" | "locked";
 
 /** The three ages of an activity, whatever its kind. */
 export type ActivityBucket = "upcoming" | "open" | "ended";

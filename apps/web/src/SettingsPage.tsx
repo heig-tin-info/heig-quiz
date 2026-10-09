@@ -2,12 +2,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { ChevronRight, GraduationCap, School, ShieldCheck, SlidersHorizontal } from "lucide-react";
 
+import { LOCALES } from "@quiz/domain";
+
 import { ApiTokensCard, ConnectionsCard } from "./ApiTokensCard";
 import { AvatarEditor } from "./AvatarEditor";
 import { api, useMePatch } from "./api";
 import { GithubAccountCard } from "./github/AccountCard";
 import { ViewModeToggle } from "./Header";
-import { useI18n, useT, LOCALES } from "./i18n";
+import { useI18n, useT, LOCALE_LABELS } from "./i18n";
 import {
   DATE_FORMATS,
   McqPolicy,
@@ -152,7 +154,7 @@ function PreferencesCard({ me }: { me: Me }) {
             onChange={setLocale}
             options={[
               { value: "browser", label: t("settings.language.browser") },
-              ...LOCALES.map((l) => ({ value: l.code, label: l.label })),
+              ...LOCALES.map((code) => ({ value: code, label: LOCALE_LABELS[code] })),
             ]}
           />
         </SettingRow>

@@ -21,7 +21,8 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import { DEFAULT_MAX_ACTIVE_SESSIONS, SESSION_KINDS } from "@quiz/contracts";
+import { DATE_FORMATS, DEFAULT_MAX_ACTIVE_SESSIONS, SESSION_KINDS, USER_ROLES } from "@quiz/contracts";
+import { LOCALES, MCQ_SCORE_POLICIES } from "@quiz/domain";
 
 import { bytea } from "./columns.js";
 import { evaluations } from "./evaluation.js";
@@ -46,22 +47,20 @@ export const users = pgTable(
     swissEduId: text("swiss_edu_id"),
     /** Avatar URL provided by the IdP (OIDC `picture` claim), if present. */
     pictureUrl: text("picture_url"),
-    role: text("role", { enum: ["student", "teacher", "admin"] })
+    role: text("role", { enum: USER_ROLES })
       .notNull()
       .default("student"),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
     /** Interface language chosen by the user; null falls back to English. */
-    locale: text("locale", { enum: ["en", "fr"] }),
+    locale: text("locale", { enum: LOCALES }),
     /** Date-time display format; null falls back to ISO (YYYY-MM-DD HH:mm). */
-    dateFormat: text("date_format", { enum: ["iso", "eu", "uk", "us"] }),
+    dateFormat: text("date_format", { enum: DATE_FORMATS }),
     /**
      * Default MCQ scoring policy of the evaluations this teacher creates
      * (docs/04 §4.4); null falls back to `all_or_nothing`. It is a SEED, read
      * once at creation: changing it never moves an existing evaluation.
      */
-    mcqPolicy: text("mcq_policy", {
-      enum: ["all_or_nothing", "true_false", "discordance", "symmetric", "ripkey"],
-    }),
+    mcqPolicy: text("mcq_policy", { enum: MCQ_SCORE_POLICIES }),
     /**
      * The coach marks (the bubbles that introduce a screen to a newcomer,
      * `apps/web/src/coach/`) are shown; null means yes. Turned off from the

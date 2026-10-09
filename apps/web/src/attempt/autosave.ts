@@ -33,14 +33,18 @@
 import type { AttemptClosed, AutosaveRequest, AutosaveResponse } from "@quiz/contracts";
 
 import { ApiError } from "../api";
+import type { SyncState as BadgeState } from "../ui";
 
 const DEBOUNCE_MS = 300;
 const OFFLINE_AFTER_MS = 3_000;
 const BACKOFF_BASE_MS = 500;
 const BACKOFF_MAX_MS = 5_000;
 
-/** The four states of `SyncBadge` (`ui/live.tsx`), which is this object's face. */
-export type SyncState = "saved" | "saving" | "offline" | "closed";
+/**
+ * The states of `SyncBadge` (`ui/live.tsx`), which is this object's face, but
+ * `unsaved`: an edit the server would refuse is the player's to report.
+ */
+export type SyncState = Exclude<BadgeState, "unsaved">;
 
 /** Posts one autosave. Rejecting with a `410` ApiError closes the attempt. */
 type AutosaveTransport = (itemId: string, body: AutosaveRequest) => Promise<AutosaveResponse>;

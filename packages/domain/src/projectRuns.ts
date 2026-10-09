@@ -5,6 +5,26 @@
  * and the receipts; these rules decide.
  */
 
+/** F-PROJ-09: a ruleset that blocks pushes, or one empty commit of the App per branch. */
+export const DEADLINE_STRATEGIES = ["lock", "commit"] as const;
+export type DeadlineStrategyName = (typeof DEADLINE_STRATEGIES)[number];
+
+/**
+ * Why a grade run has a score or none (F-PROJ-10, `extractScore`):
+ * `multiple` — several `GRADE` annotations, no score.
+ */
+export const GRADE_RUN_PARSE_STATUSES = ["ok", "no_annotation", "malformed", "multiple", "fallback"] as const;
+export type GradeRunParseStatusName = (typeof GRADE_RUN_PARSE_STATUSES)[number];
+
+/**
+ * What triggered a grade run: a push (`ci`, the indicative score) or the
+ * final review dispatched after the freeze (`review`, heig-classroom's
+ * `llm`; the import maps it). A `review` run never enters the selection of
+ * the current score: it fills the repository's review slot (F-PROJ-11).
+ */
+export const GRADE_RUN_KINDS = ["ci", "review"] as const;
+export type GradeRunKindName = (typeof GRADE_RUN_KINDS)[number];
+
 /** The workflow whose runs carry a score (a wire name, I16). */
 export const GRADING_WORKFLOW_PATH = ".github/workflows/grading.yml";
 
@@ -12,7 +32,7 @@ export const GRADING_WORKFLOW_PATH = ".github/workflows/grading.yml";
  * The review dispatched by Quiz (`grade-final`, `grade-milestone`) is a
  * `review` run; every other run is the indicative `ci` tier.
  */
-export function runKind(run: { event: string; path: string }): "ci" | "review" {
+export function runKind(run: { event: string; path: string }): GradeRunKindName {
   return run.event === "repository_dispatch" && run.path === GRADING_WORKFLOW_PATH ? "review" : "ci";
 }
 
@@ -36,7 +56,7 @@ export function effectiveDeadline(repo: { deadlineAt: Date | null }, project: { 
  */
 export function deadlineWantsLock(
   repo: { staffLock: boolean | null; deadlineAppliedAt: Date | null },
-  strategy: "lock" | "commit",
+  strategy: DeadlineStrategyName,
 ): boolean {
   return repo.staffLock ?? (repo.deadlineAppliedAt !== null && strategy === "lock");
 }
@@ -76,9 +96,9 @@ export function receivedLate(receivedAt: Date | null, deadline: Date, now: Date)
 /** What the selection reads of a stored run. */
 export interface ScoredRun {
   id: string;
-  kind: "ci" | "review";
+  kind: GradeRunKindName;
   afterDeadline: boolean;
-  parseStatus: "ok" | "no_annotation" | "malformed" | "multiple" | "fallback";
+  parseStatus: GradeRunParseStatusName;
   completedAt: Date;
   headSha: string;
 }

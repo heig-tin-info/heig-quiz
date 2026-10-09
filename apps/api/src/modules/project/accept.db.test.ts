@@ -23,9 +23,9 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ProjectAcceptance, ProjectAcceptErrorCode, ProjectSummary } from "@quiz/contracts";
+import { ProjectAcceptance, ProjectAcceptErrorCode, ProjectSummary, CSRF_COOKIE } from "@quiz/contracts";
 
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
 import {
   auditLog,

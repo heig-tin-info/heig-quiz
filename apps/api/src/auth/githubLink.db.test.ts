@@ -27,12 +27,12 @@ import {
 } from "../db/schema.js";
 import { testServer, type TestServer } from "../test/http.js";
 import { seedLive } from "../test/live.js";
-import { GITHUB_ACCOUNT_STALE, defaultProjectGradingScale } from "@quiz/contracts";
+import { GITHUB_ACCOUNT_STALE, defaultProjectGradingScale, CSRF_COOKIE } from "@quiz/contracts";
 
 import { createApiToken } from "./tokens.js";
 import { linkReturn } from "./githubLink.js";
 import { linkedLogin } from "./linkedLogin.js";
-import { CSRF_COOKIE, SESSION_COOKIE, createSession, type NewSession } from "./session.js";
+import { SESSION_COOKIE, createSession, type NewSession } from "./session.js";
 
 const CLIENT_ID = "Iv1.quiztest";
 const CLIENT_SECRET = "client-secret-of-the-test-app";

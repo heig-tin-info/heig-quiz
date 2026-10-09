@@ -8,10 +8,13 @@ import {
   feedbackWhenFor,
   isInClass,
   liveLobbies,
+  negativeMarkingAllowedFor,
+  negativeMarkingOn,
   NOTEPAD_MODES,
   notepadAllowedFor,
   notepadOn,
   partialRetakesOn,
+  trustedClientsAllowedFor,
   type FeedbackWhen,
   type LobbyName,
 } from "@quiz/domain";
@@ -91,7 +94,7 @@ export function AdvancedDisclosure({
   // ADR-026: negative marking replaces both policies below; each row says so
   // while it is on, so a teacher never tunes a policy nothing reads.
   const policyDesc = (desc: string) =>
-    negativeMarkingOf(settings) && mode !== "poll" ? `${desc} ${t("eval.policy.overridden")}` : desc;
+    negativeMarkingOn(mode, negativeMarkingOf(settings)) ? `${desc} ${t("eval.policy.overridden")}` : desc;
 
   return (
     <Disclosure title={t("eval.advanced")} desc={t("eval.advanced.desc")}>
@@ -327,7 +330,7 @@ export function AdvancedDisclosure({
       {/* ADR-026: negative marking, beside the policies it overrides. For
           the whole evaluation, never per question, and frozen with the
           rest of what decides a score. A poll has no score to penalise. */}
-      {mode === "poll" ? null : (
+      {negativeMarkingAllowedFor(mode) ? (
         <SettingRow title={t("eval.negativeMarking")} desc={t("eval.negativeMarking.desc")}>
           <Switch
             checked={negativeMarkingOf(settings)}
@@ -336,11 +339,11 @@ export function AdvancedDisclosure({
             onChange={(negativeMarking) => set({ negativeMarking })}
           />
         </SettingRow>
-      )}
+      ) : null}
 
       {/* ADR-027, ADR-051 §2: where an exam may be sat — its two trusted
           clients, chosen as one. */}
-      {mode === "exam" ? (
+      {trustedClientsAllowedFor(mode) ? (
         <AllowedDevices settings={settings} kioskOffered={kioskOffered} disabled={disabled} onChange={set} />
       ) : null}
     </Disclosure>

@@ -6,7 +6,7 @@ import type { FastifyInstance } from "fastify";
 
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
-import type { ClosedBy } from "@quiz/contracts";
+import type { ClosedBy, EvaluationClosedBy } from "@quiz/contracts";
 import { anchoredOnClosesAt } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
@@ -219,7 +219,7 @@ export async function tryCloseEvaluation(
 }
 
 /** Who closed the run, as the evaluation keeps it: the server, or a person. */
-const runCloser = (closedBy: ClosedBy): "server" | "teacher" =>
+const runCloser = (closedBy: ClosedBy): EvaluationClosedBy =>
   closedBy === "server" ? "server" : "teacher";
 
 /** What follows the flip to `closed`: the attempts, the frames, the grading. */

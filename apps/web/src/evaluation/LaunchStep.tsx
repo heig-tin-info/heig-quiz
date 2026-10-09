@@ -13,7 +13,7 @@ import {
 import { useState } from "react";
 
 import type { Evaluation, EvaluationDetail } from "@quiz/contracts";
-import { clockChoiceOf } from "@quiz/domain";
+import { clockChoiceOf, isEvaluationOpen, isEvaluationOver } from "@quiz/domain";
 
 import { api, usePublicConfig } from "../api";
 import { useT } from "../i18n";
@@ -59,8 +59,8 @@ export function LaunchStep({
   const t = useT();
   const { evaluation } = detail;
   const id = evaluation.id;
-  const live = evaluation.state === "lobby" || evaluation.state === "running" || evaluation.state === "paused";
-  const finished = evaluation.state === "closed" || evaluation.state === "grading" || evaluation.state === "released";
+  const live = isEvaluationOpen(evaluation.state);
+  const finished = isEvaluationOver(evaluation.state);
 
   if (live) {
     return (

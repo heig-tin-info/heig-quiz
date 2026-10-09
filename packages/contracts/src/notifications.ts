@@ -6,7 +6,11 @@
 
 import { z } from "zod";
 
+import { CHECK_NOTICES } from "@quiz/domain";
+
 import { ActivityKindName } from "./activity.js";
+import type { UserRole } from "./admin.js";
+import { PoolRole } from "./pool.js";
 import { SYSTEM_CHECK_KEYS } from "./health.js";
 
 /**
@@ -27,11 +31,8 @@ const classroomCount = {
   count: z.number().int().positive(),
 };
 
-/**
- * The notices of a `system_alert` (ADR-055 §5), named as `nextCheckState` of
- * `@quiz/domain` returns them (the domain mirrors this list).
- */
-export const SYSTEM_ALERT_STATES = ["failing", "still_failing", "recovered"] as const;
+/** The notices of a `system_alert` (ADR-055 §5), as `nextCheckState` of `@quiz/domain` returns them. */
+export const SYSTEM_ALERT_STATES = CHECK_NOTICES;
 
 /** The project a project kind is about: its id and its name, nothing else of it. */
 const projectRef = {
@@ -54,7 +55,7 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
     kind: z.literal("pool_shared"),
     poolId: z.uuid(),
     poolName: z.string(),
-    role: z.enum(["reader", "contributor", "owner"]),
+    role: PoolRole,
     /** Who shared it, as displayed. */
     byName: z.string(),
   }),
@@ -423,7 +424,7 @@ export function notificationKindsFor({
   courseSeat,
   github,
 }: {
-  role: "student" | "teacher" | "admin";
+  role: UserRole;
   /** A claimed student seat (`enrollments.staff = false`). */
   studentSeat: boolean;
   /** A seat on a course staff (`course_staff`). */

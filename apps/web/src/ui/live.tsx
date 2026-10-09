@@ -18,6 +18,8 @@ import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 import { prefersReducedMotion } from "@quiz/ui";
 
+import type { AnswerMark } from "@quiz/domain";
+
 import { useT, type TFunction } from "../i18n";
 import { cx, useNow, type IconType } from "./layers";
 import { rovingIndex } from "./menu";
@@ -276,7 +278,7 @@ export function Ring({
  * separate facts of the {@link Segment}, not further marks: a question can be
  * answered AND flagged AND the current one.
  */
-export type SegmentMark = "unanswered" | "answered" | "skipped";
+export type SegmentMark = AnswerMark;
 
 /**
  * Each mark is a SHAPE before it is a tint, so the three read apart in grey,
@@ -848,7 +850,7 @@ export function VerdictCell({
  */
 export type SyncState = "saved" | "saving" | "unsaved" | "offline" | "closed";
 
-type SyncKey = "sync.saved" | "sync.saving" | "sync.unsaved" | "sync.offline" | "sync.closed";
+type SyncKey = `sync.${SyncState}`;
 
 const SYNC: Record<SyncState, { icon: IconType; tone: string; key: SyncKey; spin?: boolean }> = {
   saved: { icon: Check, tone: "text-fg-muted [&_svg]:text-success", key: "sync.saved" },

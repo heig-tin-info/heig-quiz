@@ -28,11 +28,11 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { GradebookStaff, GradebookStudent, type FeedbackPolicy, type GradebookStaffCell } from "@quiz/contracts";
+import { GradebookStaff, GradebookStudent, CSRF_COOKIE, type FeedbackPolicy, type GradebookStaffCell } from "@quiz/contracts";
 import { gradebookMean, gradeFromPoints } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import type { Db } from "../../db/client.js";
 import {
   auditLog,

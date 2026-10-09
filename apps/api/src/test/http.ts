@@ -10,9 +10,12 @@ import { join } from "node:path";
 
 import type { FastifyInstance, InjectOptions } from "fastify";
 
+import { CSRF_COOKIE } from "@quiz/contracts";
+import type { UserRole } from "@quiz/contracts";
+
 import { buildApp } from "../app.js";
 import { TestClock } from "../clock.js";
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../auth/session.js";
+import { SESSION_COOKIE, createSession } from "../auth/session.js";
 import { loadConfig } from "../config.js";
 import { users } from "../db/schema.js";
 import { migratedPglite } from "./template.js";
@@ -32,7 +35,7 @@ export interface TestServer {
   clock: TestClock;
   /** Creates an account and returns the headers that authenticate it. */
   signIn: (
-    role: "student" | "teacher" | "admin",
+    role: UserRole,
     email?: string,
   ) => Promise<{ id: string; headers: Record<string, string> }>;
   /**

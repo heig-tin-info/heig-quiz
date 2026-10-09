@@ -6,6 +6,18 @@
  */
 import { projectGrade, type ProjectGrade, type ProjectScale } from "./projectGrade.js";
 
+/** F-PROJ-03: `draft` → `published` → `locked` (at the deadline). */
+export const PROJECT_STATES = ["draft", "published", "locked"] as const;
+export type ProjectStateName = (typeof PROJECT_STATES)[number];
+
+/** F-PROJ-01: `none` — no score shown and no review dispatched. */
+export const PROJECT_GRADING_MODES = ["auto", "none"] as const;
+export type ProjectGradingModeName = (typeof PROJECT_GRADING_MODES)[number];
+
+/** F-PROJ-03: publish by hand (now), or by the ticker at the start. */
+export const PUBLISH_MODES = ["manual", "scheduled"] as const;
+export type PublishModeName = (typeof PUBLISH_MODES)[number];
+
 /** A score's grade by the project's scale, or null when it has no maximum to read it against. */
 export function scoreGrade(points: number | null, max: number | null, scale: ProjectScale): ProjectGrade | null {
   return points !== null && max !== null && max > 0 ? projectGrade(points, max, scale) : null;
@@ -30,9 +42,9 @@ export const PROJECT_PRIMARY_ACTIONS = ["publish", "sync", "release", "none"] as
 export type ProjectPrimaryAction = (typeof PROJECT_PRIMARY_ACTIONS)[number];
 
 export interface PrimaryActionInput {
-  state: "draft" | "published" | "locked";
+  state: ProjectStateName;
   archived: boolean;
-  gradingMode: "auto" | "none";
+  gradingMode: ProjectGradingModeName;
   /** The source holds commits the distribution repository lacks (F-PROJ-12, M3-07). */
   sourceAhead: boolean;
   /** The repositories that take a deadline (provisioned, not deleted). */
@@ -104,7 +116,7 @@ export interface ProjectReviewState {
 }
 
 export interface ReviewStateInput {
-  gradingMode: "auto" | "none";
+  gradingMode: ProjectGradingModeName;
   frozenAt: Date | null;
   frozenGradeRunId: string | null;
   reviewGradeRunId: string | null;
@@ -137,8 +149,8 @@ export function reviewState(repo: ReviewStateInput): ProjectReviewState {
  * locked project is what it is stored as.
  */
 export function projectListDates<D>(p: {
-  state: "draft" | "published" | "locked";
-  publishMode: "manual" | "scheduled";
+  state: ProjectStateName;
+  publishMode: PublishModeName;
   durationMinutes: number | null;
   startAt: D;
   deadlineAt: D;

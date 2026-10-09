@@ -19,6 +19,7 @@ import { audit } from "../../audit.js";
 import type { Db } from "../../db/client.js";
 import { apiTokens, oauthClients, oauthGrants, oauthRequests } from "../../db/schema.js";
 import { hashToken, newToken } from "../session.js";
+import { OAUTH_ACCESS_PREFIX } from "../tokens.js";
 import { isLoopback, type OAuthClient } from "./clients.js";
 
 const REQUEST_TTL_MS = 10 * 60_000;
@@ -26,7 +27,6 @@ const CODE_TTL_MS = 60_000;
 const ACCESS_TTL_S = 3600;
 const REFRESH_TTL_MS = 90 * 86_400_000;
 
-const ACCESS_PREFIX = "quiz_oat_";
 const REFRESH_PREFIX = "quiz_ort_";
 
 /** An RFC 6749 §5.2 error: the token endpoint answers `400 { error, error_description }`. */
@@ -184,13 +184,13 @@ interface TokenResponse {
 }
 
 async function issueAccess(db: Db, grant: typeof oauthGrants.$inferSelect, clientName: string, now: Date) {
-  const token = `${ACCESS_PREFIX}${newToken()}`;
+  const token = `${OAUTH_ACCESS_PREFIX}${newToken()}`;
   await db.insert(apiTokens).values({
     id: randomUUID(),
     userId: grant.userId,
     name: clientName,
     tokenHash: hashToken(token),
-    prefix: token.slice(0, ACCESS_PREFIX.length + 6),
+    prefix: token.slice(0, OAUTH_ACCESS_PREFIX.length + 6),
     createdAt: now,
     expiresAt: new Date(now.getTime() + ACCESS_TTL_S * 1000),
     grantId: grant.id,

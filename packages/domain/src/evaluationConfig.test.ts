@@ -12,6 +12,8 @@ import {
   notepadOn,
   missingTimingFields,
   pastTiming,
+  pausableMode,
+  trustedClientsAllowedFor,
   type TimingInput,
 } from "./evaluationConfig.js";
 
@@ -122,6 +124,20 @@ describe("pastTiming (#178)", () => {
     expect(pastTiming(deadline, "paused", "running", now)).toBeNull();
     expect(pastTiming(deadline, "running", "closed", now)).toBeNull();
     expect(pastTiming(deadline, "scheduled", "draft", now)).toBeNull();
+  });
+});
+
+describe("the rules an exam alone has", () => {
+  it("pauses an exam only (docs/spec/01 §1)", () => {
+    expect(pausableMode("exam")).toBe(true);
+    expect(pausableMode("exercise")).toBe(false);
+    expect(pausableMode("poll")).toBe(false);
+  });
+
+  it("offers the trusted clients to an exam only (ADR-051 §2)", () => {
+    expect(trustedClientsAllowedFor("exam")).toBe(true);
+    expect(trustedClientsAllowedFor("exercise")).toBe(false);
+    expect(trustedClientsAllowedFor("poll")).toBe(false);
   });
 });
 

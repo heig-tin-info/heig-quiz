@@ -10,6 +10,7 @@ import { countsAsCompleted,
   missingTimingFields,
   pastTiming,
   parseCloze,
+  poolRoleAllows,
   round2,
   splitTemplate,
 } from "@quiz/domain";
@@ -1001,7 +1002,7 @@ const itemListFacts = (e: MockEvaluation) => ({
   // Like the server: the questions whose pool this reader may write (#127).
   editableQuestionIds: e.items.flatMap((i) => {
     const q = itemQuestion(i);
-    return q && q.poolId && poolSummary(poolOr404(q.poolId)).role !== "reader" ? [q.id] : [];
+    return q && q.poolId && poolRoleAllows(poolSummary(poolOr404(q.poolId)).role, "contributor") ? [q.id] : [];
   }),
 });
 
@@ -1829,7 +1830,7 @@ on("POST", "/app/api/questions/move", (_m, body) => {
   const ids = ((body.questionIds as string[]) ?? []).filter((id, i, all) => all.indexOf(id) === i);
   const moving = ids.map(questionOr404);
   const target = poolOr404(String(body.targetPoolId));
-  const writable = (poolId: string) => poolSummary(poolOr404(poolId)).role !== "reader";
+  const writable = (poolId: string) => poolRoleAllows(poolSummary(poolOr404(poolId)).role, "contributor");
   if (!writable(target.id) || moving.some((q) => !writable(q.poolId))) {
     throw new MockError(403, "Read-only access");
   }

@@ -1,7 +1,7 @@
 /** Portal API client: session cookies + double-submit CSRF header. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { Me, MePatch, PublicConfig } from "@quiz/contracts";
+import { CSRF_COOKIE, CSRF_HEADER, type Me, type MePatch, type PublicConfig } from "@quiz/contracts";
 
 import { connection } from "./realtime/connection";
 
@@ -13,8 +13,8 @@ function csrfToken(): string {
   return (
     document.cookie
       .split("; ")
-      .find((c) => c.startsWith("quiz_csrf="))
-      ?.slice("quiz_csrf=".length) ?? ""
+      .find((c) => c.startsWith(`${CSRF_COOKIE}=`))
+      ?.slice(CSRF_COOKIE.length + 1) ?? ""
   );
 }
 
@@ -64,7 +64,7 @@ export async function api<T>(
 ): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.method && init.method !== "GET") {
-    headers.set("x-csrf-token", csrfToken());
+    headers.set(CSRF_HEADER, csrfToken());
   }
   if (init.body instanceof Blob) {
     headers.set("content-type", init.body.type || "application/octet-stream");

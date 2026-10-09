@@ -3,6 +3,7 @@ import { Eye, ListTree, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import type { CategoryCountNode, PoolCategories } from "@quiz/contracts";
+import { poolRoleAllows } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -222,7 +223,7 @@ export function CategoriesPage({ id, navigate }: { id: string; navigate: (r: Rou
   }
 
   const detail = pool.data;
-  const readOnly = detail.role === "reader";
+  const readOnly = !poolRoleAllows(detail.role, "contributor");
   const total = countOf(tree);
   const empty = data.isSuccess && tree.length === 0;
   const newCategory = (

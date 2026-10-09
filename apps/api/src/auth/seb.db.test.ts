@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { and, eq } from "drizzle-orm";
-import { defaultProjectGradingScale } from "@quiz/contracts";
+import { defaultProjectGradingScale, CSRF_COOKIE } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 import { CONFIG_KEY_HEADER } from "@quiz/seb";
 
@@ -31,7 +31,7 @@ import {
   SITTING_ROUTES,
 } from "./testing.js";
 import { kioskStation } from "../test/kiosk.js";
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "./session.js";
+import { SESSION_COOKIE, createSession } from "./session.js";
 
 const key = appKey();
 const gh = fakeGithub();

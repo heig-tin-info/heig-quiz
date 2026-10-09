@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Clock, DoorOpen, Eye, GraduationCap, Monitor, MonitorCheck, RotateCcw, ShieldAlert, WifiOff } from "lucide-react";
 
 import type { DashboardRow, DashboardView } from "@quiz/contracts";
+import { isFinishedAttempt } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import { Badge, ClockCountdown, cx, Dash, IconButton, T, VerdictCell } from "../ui";
@@ -107,7 +108,7 @@ function presenceOf(
   if (row.state === "not_started") {
     return { tone: "bg-line-strong", label: t("live.row.never"), warn: false };
   }
-  if (row.state === "submitted" || row.state === "expired") {
+  if (isFinishedAttempt(row.state)) {
     const label = row.state === "submitted" ? t("live.row.submitted") : t("live.row.expired");
     return { tone: "bg-line-strong", label, warn: false };
   }
@@ -185,7 +186,7 @@ export const GridRow = memo(function GridRow({
   const presence = presenceOf(row, t);
   const progress = completionOf(row);
   const running = row.state === "in_progress";
-  const finished = row.state === "submitted" || row.state === "expired";
+  const finished = isFinishedAttempt(row.state);
   // The sticky cells must be OPAQUE: questions scroll under them.
   // The row's tints are translucent (`surface-2/70` on hover, and
   // `accent-soft` in dark mode), so they are painted here as a

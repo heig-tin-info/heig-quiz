@@ -19,6 +19,9 @@ import { round2, slugify } from "@quiz/domain";
 export const BOM = "﻿";
 export const SEPARATOR = ";";
 
+/** A column header built from a name (an item's, an activity's) is truncated to this (§4.6). */
+export const HEADER_MAX = 30;
+
 /**
  * RFC-4180 quoting, with the separator of these files. A field is quoted only
  * when it has to be, so a plain export stays diff-readable.

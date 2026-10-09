@@ -19,9 +19,9 @@ import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { Journal, JournalPage, type JournalPageStaff } from "@quiz/contracts";
+import { Journal, JournalPage, CSRF_COOKIE, type JournalPageStaff } from "@quiz/contracts";
 
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { loadConfig, type AppConfig } from "../../config.js";
 import {
   classroomJournals,

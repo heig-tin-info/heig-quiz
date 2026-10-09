@@ -33,9 +33,9 @@ import { and, eq } from "drizzle-orm";
 import type { Octokit } from "octokit";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ProjectRepoDeadlineState, ProjectSummary } from "@quiz/contracts";
+import { ProjectRepoDeadlineState, ProjectSummary, CSRF_COOKIE } from "@quiz/contracts";
 
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
 import { loadConfig } from "../../config.js";
 import {

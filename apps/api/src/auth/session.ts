@@ -16,8 +16,6 @@ import { kioskDevices, sessions, users } from "../db/schema.js";
 import * as bus from "../modules/realtime/bus.js";
 
 export const SESSION_COOKIE = "quiz_session";
-export const CSRF_COOKIE = "quiz_csrf";
-export const CSRF_HEADER = "x-csrf-token";
 
 export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");

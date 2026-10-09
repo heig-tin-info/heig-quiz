@@ -5,13 +5,15 @@
  */
 import { z } from "zod";
 
+import { DRILL_CORRECTNESSES, DRILL_DEVICE_CLASSES } from "@quiz/domain";
+
 import { ConceptRef } from "./concept.js";
 
 /** The pointer a review was made with (`useCoarsePointer`): `coarse` is a phone or a tablet. */
-export const DrillDeviceClass = z.enum(["coarse", "fine"]);
+export const DrillDeviceClass = z.enum(DRILL_DEVICE_CLASSES);
 export type DrillDeviceClass = z.infer<typeof DrillDeviceClass>;
 
-export const DrillCorrectness = z.enum(["right", "partial", "wrong"]);
+export const DrillCorrectness = z.enum(DRILL_CORRECTNESSES);
 export type DrillCorrectness = z.infer<typeof DrillCorrectness>;
 
 // --- Student ---------------------------------------------------------------

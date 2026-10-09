@@ -14,13 +14,15 @@
  */
 import { z } from "zod";
 
+import { IDEA_STATUSES, POLL_TYPES } from "@quiz/domain";
+
 import { pageOf } from "./common.js";
 import { ConceptRef } from "./concept.js";
 import { LLM_ERROR_CODES } from "./llm.js";
 import { QuestionSearch, QuestionTypeId } from "./pool.js";
 
 /** The question types a poll may run: `brainstorm` runs nowhere else (ADR-071). */
-export const PollQuestionType = z.enum(["mcq", "short", "brainstorm"]);
+export const PollQuestionType = z.enum(POLL_TYPES);
 export type PollQuestionType = z.infer<typeof PollQuestionType>;
 
 /**
@@ -287,6 +289,10 @@ export const PollTeacherView = z.object({
 });
 export type PollTeacherView = z.infer<typeof PollTeacherView>;
 
+/** Where a poll stands for its participants: still taking answers, or over. */
+export const PollState = z.enum(["running", "ended"]);
+export type PollState = z.infer<typeof PollState>;
+
 /**
  * What a participant reads at `/p/:code` — with or without a session.
  * `solution` is null while the key is not revealed; `me` says where THIS
@@ -297,7 +303,7 @@ export type PollTeacherView = z.infer<typeof PollTeacherView>;
  */
 export const PollPublicView = z.object({
   code: z.string(),
-  state: z.enum(["running", "ended"]),
+  state: PollState,
   settings: PollSettings,
   question: z.object({
     type: PollQuestionType,
@@ -441,7 +447,7 @@ export const PollIdeaBoard = z.object({
           /** The decision on it is the model's (ADR-072). */
           ai: z.boolean(),
           count: z.number().int(),
-          status: z.enum(["pending", "approved", "hidden"]),
+          status: z.enum(IDEA_STATUSES),
         }),
       ),
     }),

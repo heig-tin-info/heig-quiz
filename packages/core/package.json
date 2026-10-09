@@ -24,6 +24,14 @@
       "types": "./dist/runner.d.ts",
       "default": "./dist/runner.js"
     },
+    "./llm": {
+      "types": "./dist/llm.d.ts",
+      "default": "./dist/llm.js"
+    },
+    "./contract": {
+      "types": "./dist/contract.d.ts",
+      "default": "./dist/contract.js"
+    },
     "./reasons": {
       "types": "./dist/reasons.d.ts",
       "default": "./dist/reasons.js"

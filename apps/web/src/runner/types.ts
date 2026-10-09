@@ -7,7 +7,7 @@
  * which one served it. Grading is never one of them: it is the server's, on
  * the backend runner, always (ADR-015).
  */
-import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
+import type { RunOutcome, RunnerOutcome, RunnerRequest } from "@quiz/core/server";
 
 /** Where the student's trial run is executing, for the one line the player shows. */
 export type RunStage = "loading" | "compiling" | "running";
@@ -48,7 +48,7 @@ export interface ManualInput {
 export type BackendRun = (
   manual?: ManualInput,
   options?: BackendRunOptions,
-) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
+) => Promise<RunOutcome>;
 
 export interface BackendRunOptions {
   /**

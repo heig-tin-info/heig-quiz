@@ -27,9 +27,9 @@ import { Suspense, type ComponentType, type ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 
 import type { PlayerProps } from "@quiz/core/client";
+import type { RunOutcome } from "@quiz/core/server";
 import type { ClozeTextRenderer } from "@quiz/qt-cloze/client";
 
-import type { RunResult } from "../attempt/run";
 import { useT } from "../i18n";
 import { ClozeMarkdownText } from "../markdown/ClozeMarkdownText";
 import { MarkdownView } from "../markdown/MarkdownView";
@@ -43,10 +43,10 @@ type PlayerHostProps = PlayerProps<unknown, unknown> & {
   canvasStrings?: unknown;
   /** `cloze`: its text with the blanks in place (`ClozeMarkdownText`). */
   renderText?: ClozeTextRenderer;
-  onRun?: ((answer: unknown, options?: unknown) => Promise<RunResult>) | undefined;
+  onRun?: ((answer: unknown, options?: unknown) => Promise<RunOutcome>) | undefined;
   allowManualRun?: boolean | undefined;
   testsPrimary?: boolean | undefined;
-  onSimulate?: ((answer: unknown) => Promise<RunResult>) | undefined;
+  onSimulate?: ((answer: unknown) => Promise<RunOutcome>) | undefined;
 };
 
 /*
@@ -127,7 +127,7 @@ export function QuestionHost({
   onChange: (next: unknown) => void;
   readOnly: boolean;
   /** Present only for a type that has something to run. */
-  onRun?: ((answer: unknown, options?: unknown) => Promise<RunResult>) | undefined;
+  onRun?: ((answer: unknown, options?: unknown) => Promise<RunOutcome>) | undefined;
   /** `code` only: whether the free stdin box has a runner that will take it. */
   allowManualRun?: boolean | undefined;
   /** `code` only: false where the host has its own primary action (the Try tab's "Run the tests"). */
@@ -138,7 +138,7 @@ export function QuestionHost({
    * questions — a program's output against a case, a circuit's waveform
    * against a stimulus — and neither has a browser half to fall back on here.
    */
-  onSimulate?: ((answer: unknown) => Promise<RunResult>) | undefined;
+  onSimulate?: ((answer: unknown) => Promise<RunOutcome>) | undefined;
   /** Where something is saved as one types: see `PlayerProps.onUnsent`. */
   onUnsent?: (unsent: boolean) => void;
   /** The attempt's expand layer (`PlayerProps.Expand`); a player that needs no room ignores it. */

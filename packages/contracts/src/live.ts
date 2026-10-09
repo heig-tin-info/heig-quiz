@@ -13,13 +13,15 @@ import { z } from "zod";
 
 import {
   announcedConditionsOn,
+  ATTEMPT_CLOSERS,
+  ATTEMPT_STATES,
   imposedConditions,
   LOCKED_NAVIGATIONS,
+  PROGRESS_STATUSES,
   PROVIDED_CALCULATORS,
+  RETAKE_REFUSALS,
   type ConditionsInput,
   type ImposedCondition as DomainImposedCondition,
-  type RetakeRefusal as DomainRetakeRefusal,
-  type RetakeScope as DomainRetakeScope,
 } from "@quiz/domain";
 
 import {
@@ -33,13 +35,15 @@ import {
   RetakeScope,
   TrustedClient,
 } from "./evaluation.js";
+import { SESSION_KINDS } from "./api.js";
 import { StaffItemRef } from "./common.js";
+import { Verdict } from "./grading.js";
 import { IntegrityIncident } from "./integrity.js";
 
-export const AttemptState = z.enum(["not_started", "in_progress", "submitted", "expired"]);
+export const AttemptState = z.enum(ATTEMPT_STATES);
 export type AttemptState = z.infer<typeof AttemptState>;
 
-export const ClosedBy = z.enum(["server", "student", "teacher"]);
+export const ClosedBy = z.enum(ATTEMPT_CLOSERS);
 export type ClosedBy = z.infer<typeof ClosedBy>;
 
 /**
@@ -48,7 +52,7 @@ export type ClosedBy = z.infer<typeof ClosedBy>;
  * purpose ("I won't answer", issue #89), validated (`forward_only`, a
  * crossed checkpoint). Derived by `@quiz/domain#progressStatus`.
  */
-export const CellStatus = z.enum(["empty", "seen", "in_progress", "skipped", "done"]);
+export const CellStatus = z.enum(PROGRESS_STATUSES);
 export type CellStatus = z.infer<typeof CellStatus>;
 
 /**
@@ -174,11 +178,9 @@ export const ImposedCondition = z.discriminatedUnion("key", [
 export type ImposedCondition = z.infer<typeof ImposedCondition>;
 
 // The wire shape and the domain's are the same union, both ways.
-export type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 const _imposedSame: Same<ImposedCondition, DomainImposedCondition> = true;
 void _imposedSame;
-// ADR-091: the scope and the standing of the wire are the domain's.
-true satisfies Same<RetakeScope, DomainRetakeScope>;
 
 /**
  * The conditions a student reads (ADR-079, F-EVAL-33): what the teacher
@@ -315,21 +317,10 @@ export type AttemptStartBody = z.infer<typeof AttemptStartBody>;
  * `POST /evaluations/:id/retake` refused (F-EVAL-15): the reason is
  * `retakeRefusal`'s in `@quiz/domain` — or, for a retake of the questions
  * to review, `partialRetakeRefusal`'s (`scope_all`, `nothing_to_review`,
- * ADR-091). The two unions are checked equal below. A success answers
- * {@link AttemptOrLobby}.
+ * ADR-091). A success answers {@link AttemptOrLobby}.
  */
-export const RetakeRefusalReason = z.enum([
-  "not_allowed",
-  "not_open",
-  "closed",
-  "no_attempt",
-  "unfinished",
-  "max_attempts",
-  "scope_all",
-  "nothing_to_review",
-]);
+export const RetakeRefusalReason = z.enum(RETAKE_REFUSALS);
 export type RetakeRefusalReason = z.infer<typeof RetakeRefusalReason>;
-true satisfies Same<RetakeRefusalReason, DomainRetakeRefusal>;
 
 export const RetakeRefused = z.object({
   error: z.literal("retake_refused"),
@@ -645,7 +636,7 @@ export const DashboardCell = z.object({
    * if the evaluation closed now, for the deterministic types (ADR-020).
    * `provisional` says which of the two it is.
    */
-  verdict: z.enum(["correct", "partial", "wrong", "pending"]).nullable(),
+  verdict: Verdict.nullable(),
   /**
    * The verdict is a live preview, computed from the answer as it stands and
    * written nowhere. A validated or proposed grading is never provisional.
@@ -671,7 +662,7 @@ export type DashboardCell = z.infer<typeof DashboardCell>;
  * off a station. Staff only, like the whole dashboard.
  */
 export const DashboardAccess = z.object({
-  kind: z.enum(["portal", "seb", "kiosk"]),
+  kind: z.enum(SESSION_KINDS).exclude(["impersonation"]),
   station: z.string().nullable(),
   alert: z.enum(["suspended", "unavailable"]).nullable(),
 });

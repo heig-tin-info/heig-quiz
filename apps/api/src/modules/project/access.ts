@@ -45,6 +45,7 @@ import { and, eq, isNotNull, isNull, ne, notExists, sql } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
 import type { Octokit } from "octokit";
 
+import type { SentInvitation } from "@quiz/contracts";
 import { collaboratorPermission } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
@@ -223,7 +224,7 @@ export async function inviteAccount(
   repo: RepoRow,
   member: Omit<RepoMember, "staff"> & { account: NonNullable<RepoMember["account"]> },
   ctx: InviteContext,
-): Promise<{ login: string; invitation: "pending" | "accepted"; fresh: boolean } | NotRecorded> {
+): Promise<{ login: string; invitation: SentInvitation; fresh: boolean } | NotRecorded> {
   const login = await linkedLogin(db, octokit, member.userId, member.account).catch((err: unknown) => {
     ctx.log.warn({ err, repo: repo.id }, "GitHub login lookup failed");
     throw new ProjectError(ctx.failure, "GitHub cannot be reached: try again");
@@ -241,7 +242,7 @@ export async function inviteAccount(
   const grant = await recordGrant(db, repo, account, ctx.now);
   if (notRecorded(grant)) return grant;
   const { owner, repo: name } = ownerRepo(repo.fullName!);
-  let invitation: "pending" | "accepted";
+  let invitation: SentInvitation;
   try {
     invitation = await inviteCollaborator(octokit, owner, name, login, permission);
   } catch (err) {
@@ -296,7 +297,7 @@ export async function inviteAccount(
  * `invitation`: a student's own repository follows it; a group's is pending
  * while any member's is (the per-member follow-up is ADR-048's lot 3).
  */
-export async function followInvitation(db: Db, repo: Pick<RepoRow, "id" | "groupId">, invitation: "pending" | "accepted"): Promise<void> {
+export async function followInvitation(db: Db, repo: Pick<RepoRow, "id" | "groupId">, invitation: SentInvitation): Promise<void> {
   if (repo.groupId !== null && invitation === "accepted") return;
   await db.update(projectRepos).set({ invitationStatus: invitation }).where(and(eq(projectRepos.id, repo.id), ne(projectRepos.invitationStatus, invitation)));
 }
