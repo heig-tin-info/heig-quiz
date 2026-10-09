@@ -29,7 +29,7 @@ import {
   type ProviderRequest,
   type ProviderStep,
 } from "./provider.js";
-import { reserveCall, settingsRow, settleCall } from "./service.js";
+import { reserveCall, settingsRow, settleCall } from "./ledger.js";
 
 export interface CompleteRequest<T> extends Omit<ProviderRequest<T>, "apiKey" | "model"> {
   purpose: LlmPurpose;

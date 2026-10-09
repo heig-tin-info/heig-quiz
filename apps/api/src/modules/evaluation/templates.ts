@@ -43,36 +43,35 @@ import {
 import type { Db } from "../../db/client.js";
 import { evaluationItems, evaluations } from "../../db/schema.js";
 import type { Caller } from "../guards.js";
+import { EvaluationError, assertItemListEditable, type DbOrTx, type EvaluationRecord } from "./shared.js";
+import { assertReady } from "./stateMachine.js";
 import {
-  EvaluationError,
-  assertItemListEditable,
-  assertPoolsLinked,
-  assertReady,
   attemptCount,
   byId,
   classroomIdOf,
-  copyEvaluation,
-  coursePoolIds,
-  createEvaluation,
-  deprecatedRefs,
   editableQuestionIdsOf,
   feedbackOf,
-  itemCountsByEvaluation,
-  inLinkedPool,
   itemConcepts,
-  itemRef,
+  itemCountsByEvaluation,
   itemRowsOf,
   joinedItems,
-  replaceItems,
   scaleOf,
   settingsOf,
   staleOf,
   totalPointsByEvaluation,
-  unlinkedRefs,
-  type DbOrTx,
-  type EvaluationRecord,
   type JoinedItem,
-} from "./service.js";
+} from "./reads.js";
+import { createEvaluation } from "./writes.js";
+import {
+  assertPoolsLinked,
+  copyEvaluation,
+  coursePoolIds,
+  deprecatedRefs,
+  inLinkedPool,
+  itemRef,
+  replaceItems,
+  unlinkedRefs,
+} from "./items.js";
 
 /**
  * The template went between its load and the lock of a write. The routes

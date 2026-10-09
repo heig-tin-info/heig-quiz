@@ -12,7 +12,7 @@ import type { GradingProgressEvent } from "@quiz/contracts";
 import type { Db } from "../../db/client.js";
 import { isOwnedPoll } from "../../db/schema.js";
 import { classroomIdOf, type EvaluationRecord } from "../evaluation/service.js";
-import { classroomStaffIds } from "../org/service.js";
+import { classroomStaffIds } from "../guards.js";
 import * as bus from "../realtime/bus.js";
 
 /**

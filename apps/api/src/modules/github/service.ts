@@ -50,7 +50,7 @@ import {
 } from "../../github/app.js";
 import { DomainError } from "../http.js";
 import { notifyUsers } from "../notifications/service.js";
-import { classroomStaffIds } from "../org/service.js";
+import { classroomStaffIds } from "../guards.js";
 import { sniffImage } from "../pool/assets.js";
 import { installationChanged } from "./events.js";
 

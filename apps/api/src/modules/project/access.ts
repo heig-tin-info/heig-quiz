@@ -48,7 +48,7 @@ import type { Octokit } from "octokit";
 import { collaboratorPermission } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
-import { linkedLogin } from "../../auth/githubLink.js";
+import { linkedLogin } from "../../auth/linkedLogin.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import { enrollments, githubAccounts, projectGroupMembers, projectRepoAccess, projectRepos, projects } from "../../db/schema.js";

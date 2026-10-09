@@ -184,12 +184,14 @@ type Schema = z.ZodType;
 type Parsed<S> = S extends Schema ? z.output<S> : undefined;
 
 /** What a guarded handler receives: everything the preamble used to compute. */
-export interface RouteContext<P, B, Q, S> {
+export interface RouteContext<P, B, Q, S, R = undefined> {
   req: FastifyRequest;
   reply: FastifyReply;
   /** The server's clock, read once per request before anything else (invariant 5). */
   now: Date;
   params: P;
+  /** The whole path, by the spec's `path` schema; undefined without one. */
+  path: R;
   body: B;
   query: Q;
   scope: S;
@@ -200,9 +202,17 @@ export interface RouteSpec<
   S,
   B extends Schema | undefined,
   Q extends Schema | undefined,
+  R extends Schema | undefined = undefined,
 > {
   /** A schema from `@quiz/contracts` (invariant 7); a mismatch is a 404, like a miss. */
   params: P;
+  /**
+   * The whole path of a route on a sub-entity of its scope (`:userId`,
+   * `:number`), parsed AFTER the loader: a malformed one is the 404 of a
+   * miss, yet a caller the loader or its role step refuses gets that refusal
+   * first — a 404 or a 403 that never depends on the rest of the path.
+   */
+  path?: R;
   /** A schema from `@quiz/contracts`; a mismatch is `invalid()`. */
   body?: B;
   /**
@@ -240,9 +250,10 @@ function wrapper(order: Order) {
       S,
       B extends Schema | undefined = undefined,
       Q extends Schema | undefined = undefined,
+      R extends Schema | undefined = undefined,
     >(
-      spec: RouteSpec<P, S, B, Q>,
-      handler: (ctx: RouteContext<z.output<P>, Parsed<B>, Parsed<Q>, S>) => unknown,
+      spec: RouteSpec<P, S, B, Q, R>,
+      handler: (ctx: RouteContext<z.output<P>, Parsed<B>, Parsed<Q>, S, Parsed<R>>) => unknown,
     ) =>
       async (req: FastifyRequest, reply: FastifyReply): Promise<unknown> => {
         const now = app.clock.now();
@@ -271,6 +282,8 @@ function wrapper(order: Order) {
         }
         const scope = await spec.load(req, reply, params.data);
         if (scope === null) return reply;
+        const path = spec.path?.safeParse(req.params);
+        if (path && !path.success) return notFound(reply);
         if (order === "scope-first") {
           const refused = parseInputs();
           if (refused) return refused;
@@ -282,6 +295,7 @@ function wrapper(order: Order) {
             reply,
             now,
             params: params.data,
+            path: path?.data as Parsed<R>,
             body: body as Parsed<B>,
             query: query as Parsed<Q>,
             scope,
@@ -298,12 +312,13 @@ function wrapper(order: Order) {
 
 /**
  * `studentRoute(app, arms?)(spec, handler)` — params (404), body (400),
- * scope (the loader's 404), then the handler under `sendFailure`.
+ * scope (the loader's 404), path (404), then the handler under `sendFailure`.
  */
 export const studentRoute = wrapper("body-first");
 
 /**
  * `teacherRoute(app, arms?)(spec, handler)` — params (404), scope (the
- * loader's 404), body/query (400), then the handler under `sendFailure`.
+ * loader's 404 or its role step's 403), path (404), body/query (400), then
+ * the handler under `sendFailure`.
  */
 export const teacherRoute = wrapper("scope-first");

@@ -661,6 +661,17 @@ describe("a classroom's poll: its roster and its staff, signed in", () => {
     expect(refused.json().error).toBe("csrf");
   });
 
+  // The only unauthenticated write surface: nothing of a forged request is
+  // read, not even its code, on either write.
+  it("refuses a forged write before reading its code or its body", async () => {
+    const forged = { cookie: outsider.headers.cookie!, "x-csrf-token": "not-the-one" };
+    for (const url of ["/app/api/p/!!/join", "/app/api/p/!!/answer"]) {
+      const res = await post(url, forged, []);
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toEqual({ error: "csrf" });
+    }
+  });
+
   // The poll's title is its question's internal name (#305): no student road
   // may lead to the evaluation's own views.
   it("refuses a rostered student the evaluation's live streams, with the 404 of a missing one", async () => {

@@ -48,7 +48,7 @@ import { DEADLINE_REMINDER_MS } from "@quiz/domain";
 import type { Db } from "../../db/client.js";
 import { classrooms, enrollments, githubAccounts, projectGroupMembers, projectRepos, projects } from "../../db/schema.js";
 import { notifyUsers, type NotifyLog } from "../notifications/service.js";
-import { classroomStaffIds } from "../org/service.js";
+import { classroomStaffIds } from "../guards.js";
 import { LIVE, ts } from "./deadline.js";
 import { repoMembers } from "./groupRepos.js";
 

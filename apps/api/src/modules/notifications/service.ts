@@ -51,7 +51,7 @@ import {
   users,
   type FoldedKind,
 } from "../../db/schema.js";
-import { holdsCourseSeat } from "../org/service.js";
+import { holdsCourseSeat } from "../guards.js";
 import { hint, userTopic } from "../realtime/bus.js";
 import { createMailer } from "./mailer.js";
 import { enqueueDeliveries, teamsOpen, type ExternalChannel } from "./outbox.js";

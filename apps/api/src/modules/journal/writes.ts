@@ -35,7 +35,7 @@ import { journalRepoName } from "@quiz/docrender";
 import { displayName, repoName } from "@quiz/domain";
 
 import type { AuditAction } from "../../audit.js";
-import { linkedLogin } from "../../auth/githubLink.js";
+import { linkedLogin } from "../../auth/linkedLogin.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import {

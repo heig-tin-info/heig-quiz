@@ -10,7 +10,6 @@ import {
 } from "@quiz/contracts";
 
 import { requirePoolRole } from "../guards.js";
-import { invalid } from "../http.js";
 import { notify } from "../notifications/service.js";
 import { poolChanged, poolPeopleChanged } from "./events.js";
 import * as service from "./service.js";
@@ -100,28 +99,24 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
   app.patch(
     "/app/api/pools/:id/members/:userId",
     { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: inPool("owner") }, async ({ req, reply, scope: pool }) => {
-      const params = PoolMemberParam.safeParse(req.params);
-      if (!params.success) return reply.code(404).send({ error: "not_found" });
-      const body = PoolMemberPatch.safeParse(req.body);
-      if (!body.success) return invalid(reply, body.error);
-      if (params.data.userId === pool.ownerId) {
-        return reply.code(409).send({
-          error: "is_owner",
-          message: "The owner of the pool holds their seat by ownership",
-        });
-      }
-      const audience = await topicsOf(pool);
-      const done = await service.setMemberRole(app.db, pool.id, params.data.userId, body.data.role);
-      if (!done) return reply.code(404).send({ error: "not_found" });
-      await trace(req, "pool.member_update", "pool", pool.id, {
-        userId: params.data.userId,
-        role: body.data.role,
-      });
-      poolChanged(pool.id);
-      poolPeopleChanged(audience);
-      return service.listMembers(app.db, pool);
-    }),
+    teacher(
+      { params: IdParam, path: PoolMemberParam, body: PoolMemberPatch, load: inPool("owner") },
+      async ({ req, reply, path, body, scope: pool }) => {
+        if (path.userId === pool.ownerId) {
+          return reply.code(409).send({
+            error: "is_owner",
+            message: "The owner of the pool holds their seat by ownership",
+          });
+        }
+        const audience = await topicsOf(pool);
+        const done = await service.setMemberRole(app.db, pool.id, path.userId, body.role);
+        if (!done) return reply.code(404).send({ error: "not_found" });
+        await trace(req, "pool.member_update", "pool", pool.id, { userId: path.userId, role: body.role });
+        poolChanged(pool.id);
+        poolPeopleChanged(audience);
+        return service.listMembers(app.db, pool);
+      },
+    ),
   );
 
   /**
@@ -132,24 +127,19 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
   app.delete(
     "/app/api/pools/:id/members/:userId",
     { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: inPool() }, async ({ req, reply, scope: pool }) => {
-      const params = PoolMemberParam.safeParse(req.params);
-      if (!params.success) return reply.code(404).send({ error: "not_found" });
-      const leaving = params.data.userId === req.user!.id;
+    teacher({ params: IdParam, path: PoolMemberParam, load: inPool() }, async ({ req, reply, path, scope: pool }) => {
+      const leaving = path.userId === req.user!.id;
       if (!leaving && !(await requirePoolRole(app, req, reply, pool, "owner"))) return reply;
-      if (params.data.userId === pool.ownerId) {
+      if (path.userId === pool.ownerId) {
         return reply.code(409).send({
           error: "is_owner",
           message: "The owner of a pool cannot be removed from it",
         });
       }
       const audience = await topicsOf(pool);
-      const done = await service.removeMember(app.db, pool.id, params.data.userId);
+      const done = await service.removeMember(app.db, pool.id, path.userId);
       if (!done) return reply.code(404).send({ error: "not_found" });
-      await trace(req, "pool.unshare", "pool", pool.id, {
-        userId: params.data.userId,
-        left: leaving,
-      });
+      await trace(req, "pool.unshare", "pool", pool.id, { userId: path.userId, left: leaving });
       poolChanged(pool.id);
       poolPeopleChanged(audience);
       return reply.code(204).send();

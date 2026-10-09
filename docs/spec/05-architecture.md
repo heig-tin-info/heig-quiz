@@ -81,6 +81,28 @@ Each module lives in `apps/api/src/modules/<name>/` with `routes.ts` the HTTP ha
 | `mcp` | The MCP server's tool catalogue and the in-process client of `/app/api` its tools call through | |
 | `changelog` | What's new on the platform (ADR-087): the entries shipped in the build and what each reader has acknowledged | |
 
+**Measured divergences (madge, 2026-10-09).** The column above is the
+intended architecture. The code's module graph differs from it; each edge
+below is a mismatch to settle, either in the code or in this table by a
+decision, not a description of what is accepted. Measured: the other modules
+whose code a module's files import at run time (value imports; type-only
+imports, tests, the shared `guards.ts` and `http.ts`, and the packages
+aside); edges to `realtime`, through which every module publishes (rule 4),
+are left out.
+
+- Beyond the modules stated: `org` → `evaluation`, `github`, `journal`, `notifications`, `pool`, `project`; `pool` → `concept`, `live`, `llm`, `notifications`, `stats`; `concept` → `llm`; `evaluation` → `concept`, `live`, `notifications`; `live` → `auth`, `grading`, `pool`, `results`, `runner`; `preview` → `evaluation`, `pool`; `grading` → `evaluation`, `notifications`, `pool`, `results`; `results` → `evaluation`, `live`, `notifications`, `pool`; `stats` → `live`; `drill` → `concept`, `runner`; `github` → `notifications`, `pool`; `project` → `auth`, `codespace`, `notifications`; `journal` → `auth`, `pool`.
+- Where no dependency is stated: `auth` → `codespace`, `kiosk`, `live`, `org`, `project`; `system` → `assist`, `auth`, `drill`, `github`, `live`, `llm`, `notifications`, `poll`, `pool`, `project`, `runner`; `realtime` → `auth`, `live`; `activity` → `auth`, `evaluation`, `group`, `journal`, `live`, `org`, `project`, `results`; `poll` → `evaluation`, `live`, `llm`, `pool`; `notifications` → `auth`; `group` → `project`; `codespace` → `auth`, `github`, `project`; `kiosk` → `auth`, `live`; `assist` → `auth`, `llm`, `mcp`; `mcp` → `auth`, `pool`.
+
+The file-level cycles left are `grading`/`live`/`results` (audit 2026-10-03
+A1e), the four files of `system` (its health checks read the scheduled-task
+catalog that runs them) and the schema's lazy foreign keys. To regenerate
+the module graph: `madge` over `apps/api/src` with `skipTypeImports` and
+tests excluded (the madge API, `madge(path, { fileExtensions: ["ts"],
+tsConfig: "apps/api/tsconfig.json", detectiveOptions: { ts: { skipTypeImports:
+true } }, excludeRegExp: [/\.test\.ts$/] }).obj()`), each file mapped to its
+`modules/<name>/` (or `auth/`) directory; the plain cycle count is `npx
+madge --circular --extensions ts apps/api/src`.
+
 Rules:
 
 1. The Drizzle schema is split by module in `apps/api/src/db/<module>.ts` and re-exported by `db/schema.ts`. A table belongs to one module. Another module reads it by join if necessary, but never writes it.
