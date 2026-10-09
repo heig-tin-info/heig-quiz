@@ -33,6 +33,9 @@ import {
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
+import { LLM_CONFIDENCES } from "@quiz/core/server";
+import { GRADING_SOURCES, GRADING_STATES } from "@quiz/domain";
+
 import { users } from "./auth.js";
 import { evaluationItems } from "./evaluation.js";
 import { answers, attempts } from "./live.js";
@@ -53,11 +56,11 @@ export const gradings = pgTable(
     /** `numeric(6,2)`: two decimals survive a partial or penalised fraction (D13). */
     points: numeric("points", { precision: 6, scale: 2, mode: "number" }).notNull(),
     maxPoints: numeric("max_points", { precision: 6, scale: 2, mode: "number" }).notNull(),
-    source: text("source", { enum: ["auto", "llm", "manual"] }).notNull(),
-    state: text("state", { enum: ["proposed", "validated", "superseded"] }).notNull(),
+    source: text("source", { enum: GRADING_SOURCES }).notNull(),
+    state: text("state", { enum: GRADING_STATES }).notNull(),
     /** Exactly what `type.grade` returned; the panel and the feedback read it. */
     details: jsonb("details"),
-    confidence: text("confidence", { enum: ["low", "medium", "high"] }),
+    confidence: text("confidence", { enum: LLM_CONFIDENCES }),
     /** Mandatory on a manual override (F-GRADE-05); machine note otherwise. */
     comment: text("comment"),
     gradedBy: uuid("graded_by").references(() => users.id),

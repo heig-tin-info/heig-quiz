@@ -41,12 +41,17 @@ export interface CheckState {
    * outstanding (recovery owed), `ok` once its recovery was sent, `null`
    * when nobody was ever told.
    */
-  notified: "fail" | "ok" | null;
+  notified: CheckNotified | null;
   notifiedAt: Date | null;
 }
 
-/** Mirrors `SYSTEM_ALERT_STATES` of `@quiz/contracts` (the domain depends on no schema package). */
-export type CheckNotice = "failing" | "still_failing" | "recovered";
+/** The notices of a `system_alert` (ADR-055 §5), `SYSTEM_ALERT_STATES` on the wire. */
+export const CHECK_NOTICES = ["failing", "still_failing", "recovered"] as const;
+export type CheckNotice = (typeof CHECK_NOTICES)[number];
+
+/** The last notice sent about a check: an alert (`fail`) or its recovery (`ok`). */
+export const CHECK_NOTIFIED = ["fail", "ok"] as const;
+export type CheckNotified = (typeof CHECK_NOTIFIED)[number];
 
 /**
  * The next state of a check after one run, and the notice it calls for.
@@ -70,7 +75,7 @@ export function nextCheckState(
     notified: previous?.notified ?? null,
     notifiedAt: previous?.notifiedAt ?? null,
   };
-  const told = (notified: "fail" | "ok", notice: CheckNotice) => ({
+  const told = (notified: CheckNotified, notice: CheckNotice) => ({
     state: { ...state, notified, notifiedAt: now },
     notice,
   });

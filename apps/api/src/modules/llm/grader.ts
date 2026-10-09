@@ -6,7 +6,7 @@
  */
 import { z } from "zod";
 
-import type { LlmGradeOutcome, LlmGradeRequest } from "@quiz/core/server";
+import { LLM_CONFIDENCES, type LlmGradeOutcome, type LlmGradeRequest } from "@quiz/core/server";
 
 import type { LlmGateway } from "./gateway.js";
 import type { GradingLlm } from "./service.js";
@@ -30,7 +30,7 @@ export const GradeReply = z.object({
     )
     .max(CRITERIA_MAX),
   points: z.number(),
-  confidence: z.enum(["low", "medium", "high"]),
+  confidence: z.enum(LLM_CONFIDENCES),
   justification: z.string(),
 });
 

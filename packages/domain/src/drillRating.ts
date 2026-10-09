@@ -7,10 +7,12 @@ import type { DrillRating } from "./drillSchedule.js";
 import { quantile } from "./stats.js";
 
 /** What the grading said: every point, some points, or none (a blank included). */
-export type DrillCorrectness = "right" | "partial" | "wrong";
+export const DRILL_CORRECTNESSES = ["right", "partial", "wrong"] as const;
+export type DrillCorrectness = (typeof DRILL_CORRECTNESSES)[number];
 
 /** The pointer the review was made with, the test of `useCoarsePointer`: `coarse` is a phone or a tablet. */
-export type DrillDeviceClass = "coarse" | "fine";
+export const DRILL_DEVICE_CLASSES = ["coarse", "fine"] as const;
+export type DrillDeviceClass = (typeof DRILL_DEVICE_CLASSES)[number];
 
 /** Right, but slower than this multiple of the reference: Hard (ADR-041 §4). */
 export const DRILL_SLOW_FACTOR = 1.5;

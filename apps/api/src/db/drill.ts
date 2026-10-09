@@ -34,6 +34,8 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+import { DRILL_CORRECTNESSES, DRILL_DEVICE_CLASSES } from "@quiz/domain";
+
 import { users } from "./auth.js";
 import type { StoredInstance } from "./columns.js";
 import { evaluations } from "./evaluation.js";
@@ -113,10 +115,10 @@ export const drillReviews = pgTable(
     /** FSRS rating, 1 Again to 4 Easy (`drillRating`). */
     rating: smallint("rating").notNull(),
     /** What the grading said; `right` reviews make the reference times (`drillReferenceMs`). */
-    correctness: text("correctness", { enum: ["right", "partial", "wrong"] }).notNull(),
+    correctness: text("correctness", { enum: DRILL_CORRECTNESSES }).notNull(),
     /** The ACTIVE time, summed by the server with the idle cap (ADR-039, ADR-041 §4). */
     elapsedMs: integer("elapsed_ms").notNull(),
-    deviceClass: text("device_class", { enum: ["coarse", "fine"] }).notNull(),
+    deviceClass: text("device_class", { enum: DRILL_DEVICE_CLASSES }).notNull(),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }).notNull(),
     answerPayload: jsonb("answer_payload"),
     /** The values of a parameterized question the answer was given to (ADR-056 §5); null when static. */

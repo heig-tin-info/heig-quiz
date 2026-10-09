@@ -28,6 +28,7 @@ import type {
   GradingQuery,
   GradingQueue,
   GradingSteps,
+  GradingConfidence,
   GradingSource,
   GradingState,
   Verdict,
@@ -127,7 +128,7 @@ export interface WriteGradingInput {
   source: GradingSource;
   state: Exclude<GradingState, "superseded">;
   details?: unknown;
-  confidence?: "low" | "medium" | "high" | undefined;
+  confidence?: GradingConfidence | undefined;
   comment?: string | undefined;
   gradedBy?: string | undefined;
   regradeNote?: string | undefined;
@@ -824,7 +825,7 @@ function validationOf(
 interface BatchFilter {
   itemId?: string | undefined;
   source?: GradingSource | undefined;
-  confidence?: "low" | "medium" | "high" | undefined;
+  confidence?: GradingConfidence | undefined;
 }
 
 /**

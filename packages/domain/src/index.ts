@@ -59,6 +59,7 @@ export * from "./drillEligibility.js";
 export * from "./drillProgress.js";
 export * from "./drillRating.js";
 export * from "./drillSession.js";
+export * from "./enums.js";
 export * from "./evaluationConditions.js";
 export * from "./evaluationConfig.js";
 export * from "./finalScore.js";

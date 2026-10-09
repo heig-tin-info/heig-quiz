@@ -35,6 +35,10 @@ export interface LlmGradeRequest {
   maxPoints: number;
 }
 
+/** How sure a model says it is of a proposal, from the least to the most (F-GRADE-04). */
+export const LLM_CONFIDENCES = ["low", "medium", "high"] as const;
+export type LlmConfidence = (typeof LLM_CONFIDENCES)[number];
+
 export interface LlmGradeOutcome {
   /** On the item's scale; the pass clamps it to `[0, maxPoints]`. */
   points: number;
@@ -45,7 +49,7 @@ export interface LlmGradeOutcome {
    */
   justification: string;
   /** How sure the model says it is: what the batch and its filter read (F-GRADE-04). */
-  confidence: "low" | "medium" | "high";
+  confidence: LlmConfidence;
   /**
    * The points per criterion (F-GRADE-02): the model's reading of the
    * free-text rubric, or of the reference when the rubric is empty. The

@@ -6,6 +6,8 @@
 
 import { z } from "zod";
 
+import { CHECK_NOTICES } from "@quiz/domain";
+
 import { ActivityKindName } from "./activity.js";
 import type { UserRole } from "./admin.js";
 import { PoolRole } from "./pool.js";
@@ -29,11 +31,8 @@ const classroomCount = {
   count: z.number().int().positive(),
 };
 
-/**
- * The notices of a `system_alert` (ADR-055 §5), named as `nextCheckState` of
- * `@quiz/domain` returns them (the domain mirrors this list).
- */
-export const SYSTEM_ALERT_STATES = ["failing", "still_failing", "recovered"] as const;
+/** The notices of a `system_alert` (ADR-055 §5), as `nextCheckState` of `@quiz/domain` returns them. */
+export const SYSTEM_ALERT_STATES = CHECK_NOTICES;
 
 /** The project a project kind is about: its id and its name, nothing else of it. */
 const projectRef = {
