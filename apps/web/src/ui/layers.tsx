@@ -329,9 +329,7 @@ export type TipSide = "top" | "right";
  * tabindex) and Escape dismisses it (WCAG 1.4.13). A Tip INSIDE a popup
  * trigger whose panel is open (an ancestor with `aria-haspopup` and
  * `aria-expanded="true"`, a `Popover` or `Menu` trigger) stays shut: the
- * panel says more, and the two would overlap; so does a Tip AROUND a `Menu`
- * (the gradebook's column heads), whose trigger is inside it and whose
- * portalled panel still bubbles its focus up to it. A plain disclosure row does not
+ * panel says more, and the two would overlap. A plain disclosure row does not
  * silence it. A Tip wrapped AROUND its trigger (`IconButton`, the folded
  * sidebar's avatar) is dismissed by the click that opens the panel, caught
  * on the way down since the trigger keeps its click to itself.
@@ -390,8 +388,7 @@ export function Tip({
   const arm = (el: HTMLElement) => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      const openPopup = '[aria-haspopup][aria-expanded="true"]';
-      if ((!label && !media) || el.closest(openPopup) || el.querySelector(openPopup)) return;
+      if ((!label && !media) || el.closest('[aria-haspopup][aria-expanded="true"]')) return;
       const r = el.getBoundingClientRect();
       setTip({
         x: right ? r.right : Math.min(Math.max(r.left + r.width / 2, 16), window.innerWidth - 16),

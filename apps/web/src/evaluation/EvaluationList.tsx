@@ -19,7 +19,7 @@ import { templatePullable } from "@quiz/domain";
 import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { gradingLinks } from "../grading";
-import { useT, type TFunction } from "../i18n";
+import { useT, type Dict, type TFunction } from "../i18n";
 import type { Route } from "../router";
 import {
   Badge,
@@ -32,7 +32,7 @@ import {
   Menu,
   pressable,
   QueryError,
-  Segmented,
+  GroupBySwitch,
   Select,
   Skeleton,
   T,
@@ -193,39 +193,59 @@ function evaluationRank(
 type EvaluationGroupBy = "none" | "status" | "mode";
 const GROUP_BY: readonly EvaluationGroupBy[] = ["none", "status", "mode"];
 const GROUP_KEY = "quiz-evaluations-group";
+const GROUP_LABEL: Record<EvaluationGroupBy, keyof Dict> = {
+  none: "common.group.none",
+  status: "eval.group.status",
+  mode: "eval.mode",
+};
 
 interface EvaluationGroup {
   key: string;
   /** The band's words, or `null` for the single group of `none`. */
   label: string | null;
-  rows: EvaluationSummary[];
+  rows: readonly EvaluationSummary[];
 }
 
 /**
+ * Each grouping as data: its keys in the order the groups are drawn (the
+ * enum's — a state in lifecycle order, draft to released), the key of a
+ * row, and the band's words.
+ */
+const GROUPINGS: Record<
+  Exclude<EvaluationGroupBy, "none">,
+  {
+    keys: readonly string[];
+    of: (row: EvaluationSummary) => string;
+    label: (key: string, t: TFunction) => string;
+  }
+> = {
+  status: {
+    keys: EvaluationState.options,
+    of: (row) => row.state,
+    label: (key, t) => evaluationStateLabel(key as EvaluationState, t),
+  },
+  mode: {
+    keys: EvaluationMode.options,
+    of: (row) => row.mode,
+    label: (key, t) => t(`eval.mode.${key as EvaluationMode}`),
+  },
+};
+
+/**
  * The rows cut into groups, each keeping the order it was handed (the
- * server's, or the column the teacher sorted on). The groups follow the
- * order of the enums — a state in lifecycle order, draft to released — and
- * only the groups that hold a row are drawn.
+ * server's, or the column the teacher sorted on); only the groups that hold
+ * a row are drawn.
  */
 function groupEvaluations(
   rows: readonly EvaluationSummary[],
   by: EvaluationGroupBy,
   t: TFunction,
 ): EvaluationGroup[] {
-  if (by === "none") return [{ key: "all", label: null, rows: [...rows] }];
-  const groups =
-    by === "status"
-      ? EvaluationState.options.map((state) => ({
-          key: state,
-          label: evaluationStateLabel(state, t),
-          rows: rows.filter((row) => row.state === state),
-        }))
-      : EvaluationMode.options.map((mode) => ({
-          key: mode,
-          label: t(`eval.mode.${mode}`),
-          rows: rows.filter((row) => row.mode === mode),
-        }));
-  return groups.filter((group) => group.rows.length > 0);
+  if (by === "none") return [{ key: "all", label: null, rows }];
+  const { keys, of, label } = GROUPINGS[by];
+  return keys
+    .map((key) => ({ key, label: label(key, t), rows: rows.filter((row) => of(row) === key) }))
+    .filter((group) => group.rows.length > 0);
 }
 
 export function EvaluationList({
@@ -347,24 +367,14 @@ export function EvaluationList({
         </Card>
       ) : (
         <>
-          {/* A reader's habit, one size down, as on the pool (`FilterBar`):
-              the caption is also the radiogroup's name. One row has nothing
-              to group. */}
+          {/* The pool's control (`GroupBySwitch`). One row has nothing to group. */}
           {list.data.length < 2 ? null : (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-fg-faint">{t("pool.groupBy")}</span>
-              <Segmented
-                name="evaluations-group"
-                size="sm"
-                label={t("pool.groupBy")}
-                value={groupBy}
-                onChange={setGroupBy}
-                options={GROUP_BY.map((g) => ({
-                  value: g,
-                  label: t(g === "none" ? "pool.group.none" : g === "status" ? "eval.group.status" : "eval.mode"),
-                }))}
-              />
-            </div>
+            <GroupBySwitch
+              name="evaluations-group"
+              value={groupBy}
+              onChange={setGroupBy}
+              options={GROUP_BY.map((g) => ({ value: g, label: t(GROUP_LABEL[g]) }))}
+            />
           )}
           {/* The three counts leave in turn as the card narrows (`T` › column
               priority): the attempts first, then the points, then the number

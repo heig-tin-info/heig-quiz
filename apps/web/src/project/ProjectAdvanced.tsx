@@ -5,7 +5,6 @@ import type { ProjectSourceDetail } from "@quiz/contracts";
 import { GroupSetPicker } from "../group/GroupSetPicker";
 import { useT } from "../i18n";
 import {
-  Card,
   cx,
   FieldError,
   fieldErrorProps,
@@ -116,8 +115,9 @@ export function ProjectAdvanced({
     else if (branches.length > 1) update({ branches: branches.filter((b) => b !== branch) });
   };
 
+  // Rows only: the page's `Disclosure` is the card they sit in.
   return (
-    <Card className="divide-y divide-line px-4">
+    <>
       {detail ? (
         <StackedRow title={t("project.branches")} desc={t("project.branches.desc", { branch: branches[0]! })}>
           <div className="flex flex-wrap gap-2">
@@ -256,6 +256,6 @@ export function ProjectAdvanced({
           />
         </StackedRow>
       ) : null}
-    </Card>
+    </>
   );
 }

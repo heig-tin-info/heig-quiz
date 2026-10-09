@@ -114,9 +114,11 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
   const readOnly = data.archived;
   /*
    * The exercises left out of the mean are practice, and a classroom has
-   * many: folded away by default, a switch away, never persisted. An
-   * exercise the teacher gave a weight counts, and stays. Neither the mean
-   * nor the CSV changes: what is hidden never counted.
+   * many: folded away by default, a switch away, never persisted. Exercises
+   * only, as the owner asked — an exam or a project left out of the mean
+   * stays in sight, and an exercise the teacher gave a weight counts and
+   * stays. Neither the mean nor the CSV changes: what is hidden never
+   * counted.
    */
   const [showExercises, setShowExercises] = useState(false);
   const optional = (column: GradebookColumn) => column.mode === "exercise" && !column.counts;
@@ -329,8 +331,10 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
 function ColumnHead({ column, items }: { column: GradebookColumn; items: MenuItem[] | null }) {
   const t = useT();
   const kind = t(MODE_LABEL[column.mode]);
-  const body = (
-    <>
+  // The tooltip is inside the menu's trigger: `Tip` stays shut while the
+  // panel of a trigger around it is open.
+  const head = (
+    <Tip label={`${column.title} · ${kind}`} className="flex min-w-0 flex-col items-start gap-0.5">
       <span className="flex min-w-0 items-start gap-1 text-[13px] font-semibold text-fg">
         <span className="line-clamp-2 min-w-0 [overflow-wrap:anywhere]">
           {column.title}{" "}
@@ -341,7 +345,7 @@ function ColumnHead({ column, items }: { column: GradebookColumn; items: MenuIte
       <span className="text-[11px] font-normal text-fg-muted">
         {t(column.counts ? "gbook.weightShort" : "gbook.notCounted", { weight: String(column.weight) })}
       </span>
-    </>
+    </Tip>
   );
   return (
     <div className={cx(HEAD_WIDTH, "flex flex-col items-start gap-1")}>
@@ -352,27 +356,23 @@ function ColumnHead({ column, items }: { column: GradebookColumn; items: MenuIte
           </Badge>
         </Tip>
       )}
-      {/* Around the menu, not its trigger: the menu clones its trigger to
-          put the ARIA state on the real button. */}
-      <Tip label={`${column.title} · ${kind}`} className="flex min-w-0 max-w-full">
-        {items ? (
-          <Menu
-            align="start"
-            label={t("gbook.column.menu", { column: column.title })}
-            items={items}
-            trigger={
-              <button
-                type="button"
-                className="-mx-1.5 flex min-w-0 flex-col items-start gap-0.5 rounded-field px-1.5 py-0.5 text-left transition-colors hover:bg-surface-3"
-              >
-                {body}
-              </button>
-            }
-          />
-        ) : (
-          <div className="flex min-w-0 flex-col items-start gap-0.5">{body}</div>
-        )}
-      </Tip>
+      {items ? (
+        <Menu
+          align="start"
+          label={t("gbook.column.menu", { column: column.title })}
+          items={items}
+          trigger={
+            <button
+              type="button"
+              className="-mx-1.5 flex min-w-0 max-w-full rounded-field px-1.5 py-0.5 text-left transition-colors hover:bg-surface-3"
+            >
+              {head}
+            </button>
+          }
+        />
+      ) : (
+        head
+      )}
     </div>
   );
 }

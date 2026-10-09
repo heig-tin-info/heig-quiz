@@ -22,19 +22,32 @@ import { Card } from "./page";
  *
  * The body is the card's own: `children` are stacked under a hairline,
  * divided by hairlines, with the card's 16 px gutter.
+ *
+ * `open` and `onOpenChange` make it controlled, for a form that opens it
+ * itself when a field inside it is refused (the new project's advanced
+ * options); left out, the card keeps its own state.
  */
 export function Disclosure({
   title,
   desc,
   aside,
+  open: controlled,
+  onOpenChange,
   children,
 }: {
   title: ReactNode;
   desc?: ReactNode;
   aside?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const [own, setOwn] = useState(false);
+  const open = controlled ?? own;
+  const toggle = () => {
+    setOwn(!open);
+    onOpenChange?.(!open);
+  };
   const id = useId();
   return (
     <Card>
@@ -44,7 +57,7 @@ export function Disclosure({
         aria-controls={open ? `${id}-body` : undefined}
         aria-labelledby={`${id}-title`}
         aria-describedby={desc ? `${id}-desc` : undefined}
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         className={cx(
           "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-2/70",
           open ? "rounded-t-card" : "rounded-card",

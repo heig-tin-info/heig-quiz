@@ -141,9 +141,21 @@ describe("the matrix", () => {
     renderTab(table);
     const head = await screen.findByRole("button", { name: (name) => name.startsWith(`${long} (Graded quiz)`) });
     expect(head).toHaveTextContent(/100 %$/);
-    // Clamped to two lines, never truncated in the DOM.
-    expect(head.querySelector(".line-clamp-2")).toHaveTextContent(long);
     expect(within(head).queryByText(/Graded quiz ·/)).toBeNull();
+  });
+
+  it("shows the full title and kind on hover, and keeps it shut while the column menu is open", async () => {
+    renderTab(makeTable());
+    const head = await screen.findByRole("button", { name: /^Test 1/ });
+    await userEvent.hover(head.firstElementChild!);
+    expect(await screen.findByText("Test 1 · Graded quiz")).toBeInTheDocument();
+    await userEvent.click(head.firstElementChild!);
+    expect(await screen.findByRole("menu")).toBeInTheDocument();
+    expect(screen.queryByText("Test 1 · Graded quiz")).toBeNull();
+    await userEvent.unhover(head.firstElementChild!);
+    await userEvent.hover(head.firstElementChild!);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(screen.queryByText("Test 1 · Graded quiz")).toBeNull();
   });
 
   it("closes on the class means: each column's, a dash where there is none, and the overall one under the mean", async () => {

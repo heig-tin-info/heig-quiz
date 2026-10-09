@@ -46,6 +46,8 @@
 //             (ExpandPanel), on layers + controls.
 //   disclosure a folded card whose header row opens it (Disclosure), on
 //             layers + page.
+//   groupBy   the "Group by" caption and pills over a list (GroupBySwitch),
+//             on controls.
 //
 // `QueryError`, `PageError` and `FormError` come from the app side (they read an
 // `ApiError`), so that nothing under `ui/` imports the HTTP client.
@@ -71,5 +73,6 @@ export * from "./selection";
 export * from "./state";
 export * from "./expand";
 export * from "./disclosure";
+export * from "./groupBy";
 export * from "./toolDock";
 export { FormError, PageError, QueryError } from "../queryError";
