@@ -16,8 +16,10 @@ import { api, apiErrorMessage } from "../api";
 import { machineReason } from "../grading/labels";
 import { canRunManually, runCode, runCodeImage } from "../runner/codeRun";
 import { useT } from "../i18n";
-import { emptyAnswerOf, QuestionPlayerHost, QuestionReviewHost } from "../questionTypes";
+import { QuestionReviewHost } from "../questionTypes";
+import { emptyAnswerOf, QuestionHost } from "../student/QuestionHost";
 import { Alert, Button, Card, EmptyState, QueryError, SectionHeading, Skeleton } from "../ui";
+import { EditorExpandLayer } from "./EditorExpandLayer";
 import { questionPreviewQuery } from "./previewQuery";
 
 /**
@@ -26,9 +28,9 @@ import { questionPreviewQuery } from "./previewQuery";
  * grades in process and stores nothing.
  *
  * The panel plays the REAL student view (`POST /preview`, seed 0) through
- * the type's own `Player`, and shows the verdict through its `Review`: what
- * the teacher rehearses is what a student will get, not a second rendering
- * written for this screen.
+ * the student's own host (`QuestionHost`) and the type's own `Player`, and
+ * shows the verdict through its `Review`: what the teacher rehearses is what
+ * a student will get, not a second rendering written for this screen.
  *
  * `code` degrades instead of failing: with `RUNNER_MODE=stub` — the default
  * on a machine without a container engine (decision D14) — the answer comes
@@ -105,13 +107,14 @@ export function TryPanel({
          * below has no backend run. The teacher's own check is "Simulate the
          * reference" on the edit tab, which posts to `POST /questions/:id/try`.
          */}
-        <QuestionPlayerHost
-          t={t}
+        <QuestionHost
           type={type}
           student={student}
           answer={answer}
           onChange={setAnswer}
           readOnly={false}
+          // The teacher's expand layer: the Try tab draws in it.
+          Expand={EditorExpandLayer}
           {...(type === "code" && student !== undefined
             ? {
                 allowManualRun: canRunManually(student as CodeStudent),
@@ -214,7 +217,6 @@ export function TryPanel({
             <p className="text-[13px] text-warning">{machineReason(t, result.comment)}</p>
           ) : null}
           <QuestionReviewHost
-            t={t}
             type={type}
             student={student}
             answer={answer}

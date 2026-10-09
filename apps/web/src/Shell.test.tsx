@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CourseSummary, PoolDetail, PoolSummary } from "@quiz/contracts";
 import { circuitServer } from "@quiz/qt-circuit/server";
 
-import { useT } from "./i18n";
 import { QuestionEditorHost } from "./questionTypes";
 import { ModeBanner, Shell } from "./Shell";
 import { resetShortcuts, useShortcuts } from "./shortcuts";
@@ -845,14 +844,13 @@ describe("Shell shortcut strip", () => {
 
   /** The question editor's own four keys, and a circuit editor under them. */
   function CircuitEditorPage() {
-    const t = useT();
     useShortcuts([
       { keys: `${modKey()}+S`, label: "Save" },
       { keys: `${modKey()}+Enter`, label: "Try the question" },
       { keys: `${modKey()}+Shift+P`, label: "Publish" },
       { keys: `${modKey()}+Shift+M`, label: "Preview" },
     ]);
-    return <QuestionEditorHost t={t} type="circuit" config={circuitServer.emptyDraft()} onChange={vi.fn()} />;
+    return <QuestionEditorHost type="circuit" config={circuitServer.emptyDraft()} onChange={vi.fn()} />;
   }
 
   it("adds a focused canvas's lines on top of the page's, and every one of them fits", async () => {

@@ -374,7 +374,6 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
             <p className="mt-2 text-[13px] text-fg-muted">{t("poll.keyOptional")}</p>
           </fieldset>
           <QuestionEditorHost
-            t={t}
             type={type}
             config={config}
             onChange={(next) => setDrafts((all) => ({ ...all, [type]: next }))}

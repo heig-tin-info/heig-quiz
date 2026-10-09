@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 import { circuitServer } from "@quiz/qt-circuit/server";
 import type { DiagramConfig } from "@quiz/qt-diagram/client";
 
-import { useT } from "../i18n";
 import { QuestionEditorHost } from "../questionTypes";
 import { renderWithProviders } from "../test/render";
 import type { SyncState } from "../ui";
@@ -27,8 +26,7 @@ const config: DiagramConfig = {
 };
 
 function Editor({ type = "diagram", value = config as unknown }: { type?: string; value?: unknown }) {
-  const t = useT();
-  return <QuestionEditorHost t={t} type={type} config={value} onChange={vi.fn()} />;
+  return <QuestionEditorHost type={type} config={value} onChange={vi.fn()} />;
 }
 
 function renderEditor(sync?: SyncState) {

@@ -85,7 +85,6 @@ function renderPalette(
               setMounted(false);
               onClose();
             }}
-            t={i18n.t}
             locale={i18n.locale}
             setLocale={i18n.setLocale}
             route={{ view: "home" }}

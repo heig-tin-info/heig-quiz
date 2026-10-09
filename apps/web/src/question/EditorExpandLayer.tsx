@@ -6,9 +6,9 @@
  * question to move to.
  *
  * Lent as `EditorProps.Expand` by `QuestionEditorHost` (every editor host),
- * and as `PlayerProps.Expand` where a teacher plays a question: by
- * `QuestionPlayerHost` (the Try tab; the grading panel opts out) and by the
- * previews (`PlayedQuestion`, on the student's `QuestionHost`).
+ * and as `PlayerProps.Expand` where a teacher plays a question through the
+ * student's `QuestionHost`: by the Try tab and by the previews
+ * (`PlayedQuestion`); the grading panel opts out.
  *
  * The save state comes from {@link EditorExpandChrome}, which the question
  * editor provides around its Edit tab with the autosave's state. Elsewhere —

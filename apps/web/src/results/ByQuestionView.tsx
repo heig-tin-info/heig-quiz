@@ -85,7 +85,6 @@ export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
                 // so the type's own "no answer" line is the truth, and the
                 // label says whose reading it is.
                 <QuestionReviewHost
-                  t={t}
                   type={q.item.type}
                   student={q.student}
                   answer={null}
