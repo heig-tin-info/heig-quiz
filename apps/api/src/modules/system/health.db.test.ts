@@ -7,7 +7,7 @@
  * attempt counts only once ITS deadline (accommodation included) plus the
  * grace plus a minute has passed without the ticker closing it.
  */
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -159,8 +159,9 @@ describe("the registry where there is nothing to measure", () => {
     expect(await check("jobs")).toMatchObject({ status: "warn", cause: "jobs.down" });
   });
 
-  it("says the backup is not configured without a report file", async () => {
+  it("says the backup and its off-site copy are not configured without a report file", async () => {
     expect(await check("backup")).toMatchObject({ status: "unknown", cause: "backup.not_configured" });
+    expect(await check("offsite")).toMatchObject({ status: "unknown", cause: "offsite.not_configured" });
   });
 
   it("reads the backup report: fresh, stale, failed, missing", async () => {
@@ -195,6 +196,38 @@ describe("the registry where there is nothing to measure", () => {
     expect(await check("backup", cfg)).toMatchObject({ status: "fail", cause: "backup.failed" });
     // A half-written report is no report: /healthz raises its attention.
     await writeFile(file, '{"finished_at":');
+    expect(await check("backup", cfg)).toMatchObject({ status: "warn", cause: "backup.missing" });
+  });
+
+  it("reads the off-site report beside the dump's: fresh, stale, failed, missing", async () => {
+    const status = join(dir, "status");
+    await mkdir(status, { recursive: true });
+    const cfg = { ...config, BACKUP_STATUS_FILE: join(status, "last.json") };
+    const report = (hoursAgo: number, ok = true, exitCode = ok ? 0 : 2) =>
+      writeFile(
+        join(status, "offsite.json"),
+        JSON.stringify({
+          finished_at: new Date(Date.now() - hoursAgo * 3_600_000).toISOString(),
+          ok,
+          exit_code: exitCode,
+          file: "portal-2026-09-20T05:34",
+        }),
+      );
+    expect(await check("offsite", cfg)).toMatchObject({ status: "warn", cause: "offsite.missing" });
+    // borg's warning (rc 1, a file vanished mid-read) is a copy all the same.
+    await report(2, true, 1);
+    expect(await check("offsite", cfg)).toMatchObject({
+      status: "ok",
+      cause: null,
+      details: [{ subject: { kind: "name", name: "portal-2026-09-20T05:34" }, values: [] }],
+    });
+    await report(30);
+    expect(await check("offsite", cfg)).toMatchObject({ status: "warn", cause: "offsite.stale" });
+    await report(60);
+    expect(await check("offsite", cfg)).toMatchObject({ status: "fail", cause: "offsite.stale" });
+    await report(1, false);
+    expect(await check("offsite", cfg)).toMatchObject({ status: "fail", cause: "offsite.failed" });
+    // The dump's own report is another file: still missing.
     expect(await check("backup", cfg)).toMatchObject({ status: "warn", cause: "backup.missing" });
   });
 

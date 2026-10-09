@@ -66,6 +66,7 @@ describe("GET /app/api/admin/system", () => {
     expect(byKey.get("jobs")).toMatchObject({ status: "warn", cause: "jobs.down" });
     // Configured, but the backup service has not reported yet.
     expect(byKey.get("backup")).toMatchObject({ status: "warn", cause: "backup.missing" });
+    expect(byKey.get("offsite")).toMatchObject({ status: "warn", cause: "offsite.missing" });
     expect(status.deployment).toMatchObject({
       commitSha: "0123456789abcdef0123456789abcdef01234567",
       workerMode: "web",
@@ -198,5 +199,20 @@ describe("/healthz", () => {
     expect(Object.keys(body.checks).sort()).toEqual(
       ["backup", "database", "disk", "jobs", "runner", "ticker"],
     );
+  });
+
+  it("words the backup as the worse of the dump and its off-site copy", async () => {
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(join(dir, "backup-status"), { recursive: true });
+    const fresh = (file: string) =>
+      writeFile(file, JSON.stringify({ finished_at: new Date().toISOString(), ok: true, exit_code: 0 }));
+    const word = async () => HealthResponse.parse((await server.app.inject({ method: "GET", url: "/healthz" })).json());
+    const offsite = join(dir, "backup-status", "offsite.json");
+    await rm(offsite, { force: true });
+    await fresh(backupFile);
+    // A fresh dump, no off-site report yet: the probe is told.
+    expect(await word()).toMatchObject({ attention: true, checks: { backup: "stale" } });
+    await fresh(offsite);
+    expect(await word()).toMatchObject({ checks: { backup: "ok" } });
   });
 });

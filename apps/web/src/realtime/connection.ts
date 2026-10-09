@@ -89,7 +89,8 @@ export class ConnectionMonitor {
         });
         // A captive portal's HTML (even HTTP 200) is not a recovered API.
         if (response.ok) {
-          const health = HealthResponse.safeParse(await response.json());
+          // Only the status: a tab of a newer build still reads an older API.
+          const health = HealthResponse.pick({ status: true }).safeParse(await response.json());
           healthy = health.success && health.data.status === "ok";
         }
       }

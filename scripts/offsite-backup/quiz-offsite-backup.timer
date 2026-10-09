@@ -1,0 +1,14 @@
+# Once a day at 05:30 UTC, give or take a quarter of an hour: after every
+# night's dump (quiz 21:01, heig-classroom ~19:54, evaluation-tb 03:17 UTC)
+# and the engine pull (03:00–05:00); a run missed while the VM was down is
+# caught up at boot (Persistent).
+[Unit]
+Description=quiz — daily push of the backups to the off-site borg repository
+
+[Timer]
+OnCalendar=*-*-* 05:30:00 UTC
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

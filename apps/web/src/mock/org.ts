@@ -1055,6 +1055,9 @@ function systemStatus(): SystemStatus {
         bad ? "backup.stale" : null,
         [named("quiz-2026-09-30.dump", { kind: "bytes", n: 41_800_000 })],
       ),
+      check("offsite", "storage", "ok", { kind: "at", iso: iso(-3 * H) }, null, [
+        named("portal-2026-09-30T05:34"),
+      ]),
       // The services, as this process saw them: e-mail refused by the
       // provider for three quarters of an hour when degraded.
       bad

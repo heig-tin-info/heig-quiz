@@ -71,14 +71,12 @@ const SECTIONS: { key: SystemSection; icon: IconType; title: keyof Dict; hint?: 
 ];
 
 /**
- * What a row adds beyond its check, per check: a standing note, a link
- * shown while the check is not OK, and a row action. The one place a row
+ * What a row adds beyond its check, per check: a link shown while the
+ * check is not OK, and a row action. The one place a row
  * differs by its key.
  */
-type Extra = { note?: keyof Dict; link?: { label: keyof Dict; open: "tasks" }; action?: "testMail" };
+type Extra = { link?: { label: keyof Dict; open: "tasks" }; action?: "testMail" };
 const EXTRAS: Partial<Record<SystemCheckKey, Extra>> = {
-  // Open question 10 (docs/spec/06) stays open: the page says so.
-  backup: { note: "admin.system.backupNote" },
   tasks: { link: { label: "admin.system.openTasks", open: "tasks" } },
   "service.mail": { action: "testMail" },
 };
@@ -233,7 +231,6 @@ function CheckRow({ check, open }: { check: SystemCheck; open: Record<"tasks", (
             {t("admin.system.failingSince")} <RelativeTime iso={check.failingSince} />
           </p>
         ) : null}
-        {extra.note ? <p className="text-xs text-fg-faint">{t(extra.note)}</p> : null}
         {check.details.length > 0 ? (
           <ul className="space-y-0.5 pt-0.5">
             {check.details.map((d, i) => (
