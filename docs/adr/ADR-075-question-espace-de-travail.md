@@ -22,6 +22,11 @@ sessions, the signed-token exception) and
 `docs/spec/00-cadre-et-perimetre.md` §0.6 and F-PROJ-19. The `code` type
 ([ADR-015](ADR-015-execution-navigateur-correction-serveur.md)) is unchanged.
 
+See also [ADR-089](ADR-089-kiosque-pour-l-espace-de-travail.md)
+(proposed, 2026-10-09): kiosk stations for `online_seb` projects, which
+frame the portal from Quiz. §11 below still governs the kiosk for this
+question in evaluations.
+
 ## Context
 
 The `code` question (04 §4.7) is one Monaco editor over a locked template,

@@ -159,6 +159,8 @@ heig-classroom's `docs/`.
 
 **Amended (2026-10-07, [ADR-078](ADR-078-codespace-git-relay-tokens.md), product owner)**: the open question of the M6-03 amendment (a) and of the seeding note above is settled — no App key on the engine VM; the portal seeds and relays with installation tokens Quiz issues for one repository (forge `quiz`, merge task M6-10).
 
+**Amended (2026-10-09, [ADR-089](ADR-089-kiosque-pour-l-espace-de-travail.md), proposed)**: the M6-07 amendment's "`seb` claim only" — an `online_seb` project may also accept a kiosk station, whose launch token carries a `kiosk` claim instead.
+
 **Extended (2026-10-05, ADR-075, proposed)**: supervised evaluations may open the workspace through the `workspace` question type, without a git channel; the project rules below are unchanged.
 
 Status in heig-classroom: Accepted (2026-09-17, portal milestone 2).

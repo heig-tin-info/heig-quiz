@@ -5,6 +5,8 @@ Admin console and the platform's server. It sets up the attested kiosk
 stations of [ADR-051](adr/ADR-051-postes-kiosque-attestes.md): Chromebooks
 locked on `https://quiz.chevallier.io/kiosk`, where a student sits an exam
 without Safe Exam Browser, unlocked by scanning a code with their phone.
+Projects worked in the online workspace: see
+[ADR-089](adr/ADR-089-kiosque-pour-l-espace-de-travail.md) (proposed; nothing below changes yet).
 
 !!! warning "Google moves its menus"
     The Admin console paths below come from Google's help pages as of
