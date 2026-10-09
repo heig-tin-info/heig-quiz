@@ -7,7 +7,7 @@ Accepted (2026-10-07, product owner: option B below). Revised the same day after
 that last point (§7) confirmed by the product owner on 2026-10-07. Delivered by merge task M6-10
 ([task card](../merge/history/09-tasks-delivered.md#m6-10-git-relay-through-quiz-issued-scoped-tokens-adr-078),
 [progress](../merge/PROGRESS.md)). Amended 2026-10-09: deployment state left to PROGRESS.md (M6-10 done,
-staging checks pending), the quoted invariant 15 to `CLAUDE.md`, which carries it verbatim.
+staging checks pending).
 
 Scope: how the online workspace portal (`apps/codespace`, on the engine VM)
 reaches a student's GitHub repository — seeding a workspace from it and
@@ -402,12 +402,20 @@ installed it, until the key is rotated.
 - The relay and private seeding work in production without a GitHub
   credential at rest on the engine VM; the M6-06 note "a private
   distribution repository cannot seed a workspace" is lifted by M6-10.
-- **Root `CLAUDE.md`, invariant 15, gains** this record's rule for the portal, applied by the M6-10 PR,
-  not by this record; its closing sentences are the text this record proposed, word for word ("The online
-  workspace portal (`apps/codespace`) never holds an App credential: … not a defence against a
-  compromised portal, which holds the signing secret."). `apps/codespace/CLAUDE.md` replaces its
-  "Whether Quiz's own App key goes on the engine VM is **open**" with this ADR and names the `quiz`
-  forge.
+- **Root `CLAUDE.md`, invariant 15, gains** (to be applied by the M6-10
+  PR, not by this record; `CLAUDE.md` now carries it word for word): "The
+  online workspace portal (`apps/codespace`) never holds an App credential:
+  it obtains from Quiz, through the HS256 service route of ADR-078, an
+  installation token scoped to one repository (`contents` only), valid at
+  most an hour, which it keeps in memory only and hands to git through the
+  environment, never in a URL, argv or file; Quiz issues one only for a
+  repository of an online project the student launched, before its effective
+  deadline plus the grace, and audits each issuance without the token; an App
+  push counts as the student's only when the portal declared its head
+  beforehand — a rule that keeps Quiz's own commits from being misread, not a
+  defence against a compromised portal, which holds the signing secret."
+  `apps/codespace/CLAUDE.md` replaces its "Whether Quiz's own App key goes on
+  the engine VM is **open**" with this ADR and names the `quiz` forge.
 - Submission now depends on two services: Quiz must be up for a relay to
   proceed (a cached token covers up to 50 minutes of a Quiz outage). A Quiz
   outage at the deadline leaves pushes pending, recoverable by point 8.
