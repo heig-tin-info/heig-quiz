@@ -8,6 +8,7 @@
 import type {
   ProjectAcceptErrorCode,
   ProjectErrorCode,
+  SentInvitation,
   StudentProject,
   StudentProjectCard,
   StudentProjectStatus,
@@ -33,7 +34,7 @@ export interface ProjectFacts {
   startAt: string;
   githubLinked: boolean;
   /** `invitation` null: nobody is invited (an `online_seb` project, ADR-047 §2). */
-  repo: { state: "live"; url: string; invitation: "pending" | "accepted" | null } | { state: "deleted" } | null;
+  repo: { state: "live"; url: string; invitation: SentInvitation | null } | { state: "deleted" } | null;
 }
 
 export function factsOfCard(card: StudentProjectCard): ProjectFacts {

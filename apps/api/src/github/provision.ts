@@ -13,6 +13,8 @@ import { join } from "node:path";
 
 import type { Octokit } from "octokit";
 
+import type { InvitationStatus } from "@quiz/contracts";
+
 import { inviteCollaborator } from "./collaborators.js";
 import { gitRunner, repoUrl } from "./git.js";
 import { ensureRuleset } from "./lock.js";
@@ -78,7 +80,7 @@ export interface ProvisionResult {
    * `pending` if an invitation was created, `accepted` if already a
    * collaborator, `none` when the work mode invites nobody (ADR-047 §2).
    */
-  invitationStatus: "pending" | "accepted" | "none";
+  invitationStatus: InvitationStatus;
 }
 
 export async function provisionStudentRepo(opts: {

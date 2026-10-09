@@ -8,7 +8,11 @@ import {
   PROJECT_DEFAULTS,
   ProjectCreate,
   ProjectRefusal,
+  type DeadlineStrategy,
+  type ProjectGradingMode,
   type ProjectSourceDetail,
+  type PublishMode,
+  type SourceStrategy,
 } from "@quiz/contracts";
 import { SCHOOL_TIME_ZONE, type ProjectScaleKind } from "@quiz/domain";
 
@@ -23,7 +27,7 @@ export interface ProjectDraft {
   sourceRepo: string;
   /** In the order chosen, the first the students' default; null: the source's default branch. */
   branches: string[] | null;
-  publishMode: "manual" | "scheduled";
+  publishMode: PublishMode;
   /** A manual publication's deadline: a date, or a number of days counted from the publication. */
   deadlineKind: "date" | "duration";
   /** `datetime-local` values, in the browser's zone. */
@@ -31,9 +35,9 @@ export interface ProjectDraft {
   deadlineLocal: string;
   durationDays: string;
   graceMinutes: string;
-  sourceStrategy: "squash" | "whole";
-  deadlineStrategy: "lock" | "commit";
-  gradingMode: "auto" | "none";
+  sourceStrategy: SourceStrategy;
+  deadlineStrategy: DeadlineStrategy;
+  gradingMode: ProjectGradingMode;
   scaleKind: ProjectScaleKind;
   /** null: the source's suggestions (`suggestedProtected`), the default even while Advanced stays folded. */
   protectedFiles: string[] | null;

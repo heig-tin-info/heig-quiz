@@ -20,6 +20,7 @@ import {
   PROGRESS_STATUSES,
   PROVIDED_CALCULATORS,
   RETAKE_REFUSALS,
+  TRUSTED_CLIENTS,
   type ConditionsInput,
   type ImposedCondition as DomainImposedCondition,
 } from "@quiz/domain";
@@ -36,6 +37,7 @@ import {
   TrustedClient,
 } from "./evaluation.js";
 import { StaffItemRef } from "./common.js";
+import { Verdict } from "./grading.js";
 import { IntegrityIncident } from "./integrity.js";
 
 export const AttemptState = z.enum(ATTEMPT_STATES);
@@ -634,7 +636,7 @@ export const DashboardCell = z.object({
    * if the evaluation closed now, for the deterministic types (ADR-020).
    * `provisional` says which of the two it is.
    */
-  verdict: z.enum(["correct", "partial", "wrong", "pending"]).nullable(),
+  verdict: Verdict.nullable(),
   /**
    * The verdict is a live preview, computed from the answer as it stands and
    * written nowhere. A validated or proposed grading is never provisional.
@@ -660,7 +662,7 @@ export type DashboardCell = z.infer<typeof DashboardCell>;
  * off a station. Staff only, like the whole dashboard.
  */
 export const DashboardAccess = z.object({
-  kind: z.enum(["portal", "seb", "kiosk"]),
+  kind: z.enum(["portal", ...TRUSTED_CLIENTS]),
   station: z.string().nullable(),
   alert: z.enum(["suspended", "unavailable"]).nullable(),
 });

@@ -30,6 +30,7 @@ import {
   type CheckDetail,
   type CheckStatus,
   type CheckValue,
+  type HealthResponse,
   type SystemCheck,
   type SystemCheckKey,
   type SystemDeployment,
@@ -547,13 +548,8 @@ export const COARSE_TIMEOUT_MS = 1_000;
 export interface CoarseHealth {
   /** THE rule of the external probe's alarm (deployment.md §7): one place. */
   attention: boolean;
-  checks: {
-    ticker: "up" | "stale" | "none";
-    disk: "ok" | "low" | "unknown";
-    /** The dump's report and the off-site copy's: the worse of the two. */
-    backup: "ok" | "stale" | "unknown";
-    runner: "up" | "down" | "disabled";
-  };
+  /** `backup`: the dump's report and the off-site copy's, the worse of the two. */
+  checks: Pick<HealthResponse["checks"], "ticker" | "disk" | "backup" | "runner">;
 }
 
 /** The ticker, the disk, the two backup reports and the runner, reduced to words (ADR-055 §2). */

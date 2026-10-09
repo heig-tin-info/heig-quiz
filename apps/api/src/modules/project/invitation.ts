@@ -28,7 +28,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { Octokit } from "octokit";
 import type { FastifyBaseLogger } from "fastify";
 
-import type { ProjectInvitationResent } from "@quiz/contracts";
+import type { ProjectInvitationResent, SentInvitation } from "@quiz/contracts";
 
 import { audit, type AuditActor } from "../../audit.js";
 import { iso } from "../../clock.js";
@@ -92,7 +92,7 @@ export async function resendInvitation(
   });
 
   // GitHub's part: a failure here means the resend did not happen, and the minute is given back.
-  const invited: { login: string; invitation: "pending" | "accepted" }[] = [];
+  const invited: { login: string; invitation: SentInvitation }[] = [];
   try {
     const org = await projectInstallation(db, project.orgId);
     if (!org) throw new ProjectError("app_not_installed", "Quiz's GitHub App no longer acts on the project's organization");

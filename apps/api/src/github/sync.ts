@@ -15,6 +15,8 @@ import { cpSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import type { SourceStrategy } from "@quiz/contracts";
+
 import { type GitRunner, gitRunner, repoUrl } from "./git.js";
 import { pushWithRetry } from "./retry.js";
 import { applyStudentHandout } from "./studentize.js";
@@ -47,7 +49,7 @@ export async function updateSquashedRepo(opts: {
   org: string;
   sourceRepo: string;
   squashedRepo: string;
-  strategy: "whole" | "squash";
+  strategy: SourceStrategy;
   branches: string[];
 }): Promise<SquashedUpdate> {
   const { token, org, sourceRepo, squashedRepo, strategy, branches } = opts;

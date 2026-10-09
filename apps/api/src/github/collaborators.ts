@@ -6,6 +6,8 @@
  */
 import type { Octokit } from "octokit";
 
+import type { SentInvitation } from "@quiz/contracts";
+
 import { unless404 } from "./app.js";
 
 export type CollaboratorPermission = "push" | "pull";
@@ -48,7 +50,7 @@ export async function inviteCollaborator(
   repo: string,
   login: string,
   permission: CollaboratorPermission = "push",
-): Promise<"pending" | "accepted"> {
+): Promise<SentInvitation> {
   const res = await octokit.request("PUT /repos/{owner}/{repo}/collaborators/{username}", {
     owner,
     repo,

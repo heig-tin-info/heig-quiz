@@ -52,9 +52,13 @@ export type ProjectState = z.infer<typeof ProjectState>;
 export const SOURCE_STRATEGIES = ["squash", "whole"] as const;
 
 export const SourceStrategy = z.enum(SOURCE_STRATEGIES);
+export type SourceStrategy = z.infer<typeof SourceStrategy>;
 export const DeadlineStrategy = z.enum(DEADLINE_STRATEGIES);
+export type DeadlineStrategy = z.infer<typeof DeadlineStrategy>;
 export const ProjectGradingMode = z.enum(PROJECT_GRADING_MODES);
+export type ProjectGradingMode = z.infer<typeof ProjectGradingMode>;
 export const PublishMode = z.enum(PUBLISH_MODES);
+export type PublishMode = z.infer<typeof PublishMode>;
 
 /**
  * The defaults of a new project (F-PROJ-01), defined ONCE: the columns'
@@ -494,6 +498,10 @@ export const ProvisionStatus = z.enum(PROVISION_STATUSES);
 export type ProvisionStatus = z.infer<typeof ProvisionStatus>;
 export const InvitationStatus = z.enum(INVITATION_STATUSES);
 export type InvitationStatus = z.infer<typeof InvitationStatus>;
+
+/** An invitation that exists: waiting for the student, or accepted. */
+export const SentInvitation = InvitationStatus.exclude(["none"]);
+export type SentInvitation = z.infer<typeof SentInvitation>;
 
 /**
  * `POST /app/api/student/projects/:id/accept` (F-PROJ-05): the student's OWN
@@ -1203,7 +1211,7 @@ export type StudentProjectWork = z.infer<typeof StudentProjectWork>;
 export const StudentProjectRepo = StudentProjectWork.extend({
   fullName: z.string(),
   url: z.url(),
-  invitation: z.enum(["pending", "accepted"]).nullable(),
+  invitation: SentInvitation.nullable(),
   deleted: z.boolean(),
   locked: z.boolean(),
   run: StudentProjectRun.nullable(),
@@ -1241,7 +1249,7 @@ export const StudentProjectCard = z.object({
   startAt: z.iso.datetime(),
   deadlineAt: z.iso.datetime(),
   status: StudentProjectStatus,
-  invitation: z.enum(["pending", "accepted"]).nullable(),
+  invitation: SentInvitation.nullable(),
   githubLinked: z.boolean(),
   repoFullName: z.string().nullable(),
   repoUrl: z.url().nullable(),
