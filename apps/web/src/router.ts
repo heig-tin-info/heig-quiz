@@ -14,6 +14,8 @@ const isCourseTab = (s: string | undefined): s is CourseTab =>
 export type Route =
   | { view: "home" }
   | { view: "settings" }
+  /** What's new on the platform (ADR-087), every entry the reader may see. */
+  | { view: "whatsNew" }
   /**
    * `tab`: the Administration tab to open on (a system alert opens the
    * System status). Written into `?tab=` only: `parsePath` never reads it
@@ -259,6 +261,13 @@ export interface RouteSpec<V extends Route["view"]> {
    * that ships the screen.
    */
   preview?: true;
+  /**
+   * What's new may open its dialog over this view (ADR-087): the home and the
+   * lists a visit starts from. Absent everywhere else — an attempt, a live
+   * run, a poll, a drill, a correction, a preview, an editor is never
+   * interrupted, and a new view stays out until it says so.
+   */
+  whatsNew?: true;
 }
 
 /**
@@ -340,6 +349,7 @@ function evaluationIdOf(route: RouteOf<EvaluationTailView | "evaluation">): stri
  */
 export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   home: {
+    whatsNew: true,
     path: () => "/",
     match: () => null,
     studentSafe: true,
@@ -350,6 +360,10 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     ...fixed("settings", { view: "settings" }, true),
     bottomSlot: { student: "profile", teacher: "profile" },
   },
+  whatsNew: {
+    ...fixed("whats-new", { view: "whatsNew" }, true),
+    bottomSlot: { student: "profile", teacher: "profile" },
+  },
   // On a phone, Administration is a row of the settings (#449).
   admin: {
     ...fixed("admin", { view: "admin" }),
@@ -358,6 +372,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     bottomSlot: { teacher: "profile" },
   },
   course: {
+    whatsNew: true,
     path: (r) => `/courses/${r.id}${r.tab && r.tab !== "classrooms" ? `/${r.tab}` : ""}`,
     // An unknown tail is the course's classrooms, never the home. The
     // former Conditions tab is a section of the settings now (F-ORG-16):
@@ -385,6 +400,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   // Courses is the home; `/courses/:id` is one course (above). A student's
   // sidebar lights its Courses row through the slot.
   studentCourses: {
+    whatsNew: true,
     path: () => "/courses",
     match: ([head, id]) => (head === "courses" && !id ? { view: "studentCourses" } : null),
     studentSafe: true,
@@ -455,6 +471,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   // Role-dispatched (F-ORG-15): the teacher's classroom, or the student's page
   // of it (M5-02), whose Activities tab it is.
   classroom: {
+    whatsNew: true,
     path: (r) => `/classrooms/${r.id}${r.tab ? `?tab=${r.tab}` : ""}`,
     match: ([head, id]) => (head === "classrooms" && id ? { view: "classroom", id } : null),
     studentSafe: true,
@@ -463,6 +480,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   // #449: `/classrooms` alone, the teacher's "right now" list. A student's
   // classrooms are their Courses (`/courses`): their UI gets the home.
   classrooms: {
+    whatsNew: true,
     path: () => "/classrooms",
     match: ([head, id]) => (head === "classrooms" && !id ? { view: "classrooms" } : null),
     studentSafe: false,
@@ -488,6 +506,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   // The phone's bar has no Pools slot: pools are reached from a course, and
   // light its slot (#449). The question editor has no bar at all.
   pools: {
+    whatsNew: true,
     path: () => "/pools",
     match: ([head, id]) => (head === "pools" && !id ? { view: "pools" } : null),
     studentSafe: false,

@@ -15,6 +15,8 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["meKey", keys.meKey, ["me"]],
     ["notificationsKey", keys.notificationsKey, ["notifications"]],
     ["notificationSettingsKey", keys.notificationSettingsKey, ["notification-settings"]],
+    ["changelogKey", keys.changelogKey, ["changelog"]],
+    ["changelogUnseenKey", keys.changelogUnseenKey, ["changelog", "unseen"]],
     ["adminTeachersKey", keys.adminTeachersKey, ["admin-teachers"]],
     ["adminUsersKey", keys.adminUsersKey, ["admin-teachers", "users"]],
     ["adminTasksKey", keys.adminTasksKey, ["admin-teachers", "tasks"]],

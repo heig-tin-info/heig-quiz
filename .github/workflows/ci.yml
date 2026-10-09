@@ -125,14 +125,23 @@ jobs:
   # they were all skipped because a pull request changed prose only; a
   # failed, cancelled or unexpectedly skipped job fails it. It also refuses
   # two ADRs sharing a number (#342): a new ADR is a prose-only PR, which
-  # skips every job above, so the guard lives here, with no install.
+  # skips every job above, so the guard lives here, with no install. So does
+  # the changelog's (ADR-087): every entry of changes/ parses, and a pull
+  # request adds one and renames none — Dependabot's excepted. The PR's
+  # merge commit and its first parent (the base) are all the diff needs.
   checks:
     if: always()
     needs: [changes, build-typecheck, test-app, test-rest]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - run: node scripts/check-adr-numbers.mjs
+      - run: node --test scripts/*.test.mjs
+      - env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' && 'HEAD^1' || '' }}
+        run: node scripts/check-changes.mjs ${BASE:+--base "$BASE"}
       - env:
           CHANGES: ${{ needs.changes.result }}
           CODE: ${{ needs.changes.outputs.code }}

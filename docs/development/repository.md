@@ -43,7 +43,9 @@ infra/
   keycloak/   the development realm imported by docker-compose.dev.yml
   engine/     deploy.sh, the engine VM's deploy dispatcher (runner + codespace, M6-04)
 scripts/      smoke.sh, the end-to-end HTTP walk; staging-export.sh and
-              staging-refresh.sh
+              staging-refresh.sh; changes.mjs and check-changes.mjs, the
+              changelog's parser and guard (ADR-087)
+changes/      What's new: one entry per pull request (its README, ADR-087)
 ```
 
 This page owns the repository map; `CLAUDE.md` keeps the mandatory working

@@ -230,6 +230,7 @@ describe("ROUTES", () => {
   const sample: { [V in Route["view"]]: RouteOf<V> } = {
     home: { view: "home" },
     settings: { view: "settings" },
+    whatsNew: { view: "whatsNew" },
     admin: { view: "admin" },
     course: { view: "course", id: "k-1" },
     template: { view: "template", id: "t-1" },
@@ -312,7 +313,15 @@ describe("ROUTES", () => {
       "studentGrades",
       "teamsLink",
       "teamsTab",
+      // ADR-087: the history of What's new, for every account.
+      "whatsNew",
     ]);
+  });
+
+  it("lets What's new open on the home and the lists only (ADR-087)", () => {
+    expect(ROUTE_VIEWS.filter((v) => ROUTES[v].whatsNew).sort()).toEqual(
+      ["classroom", "classrooms", "course", "home", "pools", "studentCourses"],
+    );
   });
 
   it("lights the sidebar section of each view, and none for the others", () => {
@@ -369,6 +378,7 @@ describe("ROUTES", () => {
         "studentGrades",
         "teamsLink",
         "teamsTab",
+        "whatsNew",
       ].sort(),
     );
   });

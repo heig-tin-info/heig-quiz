@@ -72,7 +72,10 @@ Send `lean-reviewer` (design, footprint) and `invariant-reviewer`
 
 ## 5. Pull request
 
-Stage by path, commit, push the branch, `gh pr create`. The description
+Add the change's entry, `changes/<slug>.md` (audience `none` when no user
+sees it; `changes/README.md`), and check it with
+`node scripts/check-changes.mjs --base origin/main`. Stage by path, commit,
+push the branch, `gh pr create`. The description
 states: what the change does, the requirement IDs, the questions settled at
 step 1 and by whom, the reviewers' verdicts. Merging is the user's call
 unless they said otherwise.

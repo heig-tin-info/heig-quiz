@@ -14,7 +14,8 @@ import { useLiveUpdates } from "./live";
 import { useGithubLinkReturn } from "./github/linkReturn";
 import { AssistDock } from "./assist/AssistDock";
 import { CoachLayer } from "./coach/CoachLayer";
-import { useRoute, type Navigate, type Route, type RouteOf } from "./router";
+import { useWhatsNew } from "./changelog/useWhatsNew";
+import { ROUTES, useRoute, type Navigate, type Route, type RouteOf } from "./router";
 import { ImpersonationBanner, Shell, StudentViewBanner } from "./Shell";
 import { SuperPowersBanner } from "./SuperPowers";
 import {
@@ -110,6 +111,8 @@ const CorrectionProjection = lazy(() =>
   import("./results/CorrectionProjection").then((m) => ({ default: m.CorrectionProjection })),
 );
 const SettingsPage = lazy(() => import("./SettingsPage").then((m) => ({ default: m.SettingsPage })));
+const WhatsNewPage = lazy(() => import("./changelog/WhatsNew").then((m) => ({ default: m.WhatsNewPage })));
+const WhatsNewModal = lazy(() => import("./changelog/WhatsNew").then((m) => ({ default: m.WhatsNewModal })));
 const AdminPage = lazy(() => import("./AdminPanel").then((m) => ({ default: m.AdminPage })));
 // Development only, and absent from the production bundle: behind the
 // `import.meta.env.DEV` constant the dynamic import is dead code, so Rollup
@@ -274,6 +277,8 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
       onToggleStudentView={c.onToggleStudentView}
     />
   ),
+  // ADR-087: the history of What's new, from the account menu.
+  whatsNew: () => <WhatsNewPage />,
   // WP10: the student's own feedback page, reachable in either UI — a teacher
   // checking the student view opens the same page a student does. It is the
   // ONE student results page: WP9's `/results/:id` is gone.
@@ -635,6 +640,8 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
   const teacher = me.data?.role === "teacher" || me.data?.role === "admin";
   const inStudentView = teacher && studentView;
   const teacherUi = teacher && !inStudentView;
+  // ADR-087: what changed since the last visit, asked before any early return.
+  const whatsNew = useWhatsNew(me.data, inStudentView);
   // The student UI has a screen for the student-safe views only; every other
   // one is the student home. The address bar must name the page the reader
   // got: `replaceState` and not `navigate`, because there is nothing to go
@@ -706,7 +713,14 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
     </Shell>
     {/* Inside the frame only: a full-screen view (an exam, a projection)
         returned above and never gets a bubble. */}
-    <CoachLayer me={me.data} view={shown.view} teacherUi={teacherUi} />
+    {/* The coach waits while What's new has something to say (ADR-087). */}
+    <CoachLayer me={me.data} view={shown.view} teacherUi={teacherUi} paused={whatsNew.pending} />
+    {/* ADR-087: on the home and the lists only (`whatsNew` of ROUTES), never mid-task. */}
+    {whatsNew.entries.length > 0 && ROUTES[shown.view].whatsNew ? (
+      <Suspense fallback={null}>
+        <WhatsNewModal entries={whatsNew.entries} onClose={whatsNew.acknowledge} />
+      </Suspense>
+    ) : null}
     {/* The teacher assistant (ADR-080): inside the frame only, like the coach. */}
     <AssistDock me={me.data} route={shown} teacherUi={teacherUi} navigate={navigate} />
     </ImpersonationBanner>

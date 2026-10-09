@@ -16,6 +16,7 @@ import type { Route } from "../router";
 export const ASSIST_SCREEN_LABELS: { readonly [V in Route["view"]]: keyof Dict | null } = {
   home: "nav.courses",
   settings: "menu.settings",
+  whatsNew: null,
   admin: "nav.admin",
   course: "assist.screen.course",
   template: "assist.screen.template",

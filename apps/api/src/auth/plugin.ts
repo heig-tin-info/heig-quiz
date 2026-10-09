@@ -43,7 +43,7 @@ import {
 } from "./session.js";
 import { superPowersRoutes } from "./superPowers.js";
 import { isoOrNull } from "../clock.js";
-import { callerFor, callerOf, mayHoldSuperPowers, type Caller } from "../modules/guards.js";
+import { callerFor, callerOf, mayHoldSuperPowers, ownSessionGuard, type Caller } from "../modules/guards.js";
 
 const LOGIN_STASH_COOKIE = "quiz_login";
 const LOGOUT_PATH = "/app/auth/logout";
@@ -497,6 +497,15 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
       return { seen: row?.seen ?? [] };
     },
   );
+
+  // What's new acknowledged (ADR-087): every entry live until now is seen,
+  // on the database's clock, the one that dated the entries. The account's
+  // own portal session only: an impersonation is refused here in development
+  // too, not only by the read-only rule above.
+  app.post("/app/api/me/changelog", { preHandler: ownSessionGuard(app) }, async (req, reply) => {
+    await app.db.update(users).set({ changelogSeenAt: sql`now()` }).where(eq(users.id, req.user!.id));
+    return reply.code(204).send();
+  });
 }
 
 declare module "fastify" {

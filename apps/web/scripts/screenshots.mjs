@@ -1441,6 +1441,12 @@ const scenes = [
       await p.getByRole("menuitem", { name: /sign out|se déconnecter/i }).click();
     } },
 
+  // What's new (ADR-087): the dialog after an update, and the history page.
+  { name: "whats-new-dialog", role: "teacher", path: "/?whatsnew=1", fold: true },
+  { name: "whats-new-dialog-student", role: "student", path: "/?whatsnew=1", fold: true },
+  { name: "whats-new", role: "teacher", path: "/whats-new" },
+  { name: "whats-new-empty", role: "student", path: "/whats-new?empty=1" },
+
   // Settings and administration
   { name: "settings", role: "teacher", path: "/settings" },
   // F-GH-05 (M2-07): the GitHub card, linked and not.

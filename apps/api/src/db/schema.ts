@@ -29,3 +29,4 @@ export * from "./assist.js";
 export * from "./review.js";
 export * from "./importClassroom.js";
 export * from "./concept.js";
+export * from "./changelog.js";
