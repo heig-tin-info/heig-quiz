@@ -25,7 +25,9 @@ import {
   Alert,
   Badge,
   Button,
+  type Column,
   cx,
+  Dash,
   ErrorText,
   GithubIcon,
   IconButton,
@@ -38,7 +40,6 @@ import {
   T,
   TableHead,
   useSortableTable,
-  type Column,
 } from "./ui";
 import { classroomKey } from "./queryKeys";
 
@@ -242,7 +243,7 @@ function Row({
           {entry.timeBonusPercent > 0 ? (
             <span className="font-semibold text-accent">+{entry.timeBonusPercent}%</span>
           ) : (
-            <span className="text-fg-faint">—</span>
+            <Dash />
           )}
         </td>
         <td className={cx(T.td, "whitespace-nowrap text-fg-muted", T.colLow)}>

@@ -26,9 +26,9 @@ import { formatPoints } from "@quiz/domain";
 import type { GradebookStudent, GradebookStudentCell, GradebookStudentColumn } from "@quiz/contracts";
 
 import { useT, type TFunction } from "../i18n";
-import { Badge, Card, EmptyState, isoDateParts, QueryError, Skeleton } from "../ui";
+import { Badge, Card, Dash, EmptyState, isoDateParts, QueryError, Skeleton } from "../ui";
 import { useStudentGradebook } from "./api";
-import { AbsentSigil, Dash, GradeOrDash, MODE_LABEL } from "./cells";
+import { AbsentSigil, GradeOrDash, MODE_LABEL } from "./cells";
 
 export function StudentGradebook({ classroomId }: { classroomId: string }) {
   const t = useT();

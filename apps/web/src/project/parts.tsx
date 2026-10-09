@@ -10,7 +10,7 @@ import { GitPullRequest } from "lucide-react";
 import { Grade } from "../Grade";
 import { studentName } from "../group/groupRules";
 import { useT, type Dict } from "../i18n";
-import { Badge, cx, GithubIcon, type Tone } from "../ui";
+import { Badge, cx, Dash, GithubIcon, type Tone } from "../ui";
 import { repoHref, repoShortName, syncTag } from "./projectPage";
 
 /**
@@ -47,7 +47,7 @@ export function RepoLink({
 
 /** Points out of their maximum ("8/10", "9" without one), or a dash without points. */
 export function Points({ points, max }: { points: number | null; max: number | null }) {
-  if (points === null) return <span className="text-fg-faint">—</span>;
+  if (points === null) return <Dash />;
   return (
     <span className="tabular-nums">
       {points}
@@ -66,7 +66,7 @@ export const SCORE_SOURCE_KEY: Record<NonNullable<ProjectRepoView["scores"]["fin
 /** A final score as the table writes it: points out of their maximum, the grade, and where it comes from. */
 export function Score({ score }: { score: ProjectRepoView["scores"]["final"] }) {
   const t = useT();
-  if (!score) return <span className="text-fg-faint">—</span>;
+  if (!score) return <Dash />;
   return (
     <span className="inline-flex flex-wrap items-baseline justify-end gap-x-2">
       <Points points={score.points} max={score.max} />
@@ -112,7 +112,7 @@ const CI: Record<Exclude<ProjectRepoView["ciStatus"], "none">, { tone: Tone; key
 
 export function CiBadge({ status }: { status: ProjectRepoView["ciStatus"] }) {
   const t = useT();
-  if (status === "none") return <span className="text-fg-faint">—</span>;
+  if (status === "none") return <Dash />;
   return <Badge tone={CI[status].tone}>{t(CI[status].key)}</Badge>;
 }
 

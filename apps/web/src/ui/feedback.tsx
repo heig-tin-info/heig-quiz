@@ -3,6 +3,9 @@ import type { ReactNode } from "react";
 
 import { badge, type BadgeTone } from "@quiz/ui";
 
+/** An empty cell: `@quiz/ui`'s faint em dash, which the question types draw too. */
+export { Dash } from "@quiz/ui";
+
 import { useT } from "../i18n";
 import { cx, type IconType } from "./layers";
 

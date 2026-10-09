@@ -4,7 +4,7 @@ import type { CourseSummary } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import type { Route } from "../router";
-import { Actions, Card, cx, PeopleStack, SectionHeading, T } from "../ui";
+import { Actions, Card, cx, Dash, PeopleStack, SectionHeading, T } from "../ui";
 import { CourseIcon } from "./CourseIcon";
 import { CoursePools } from "./CoursePools";
 import { ArchivedClassrooms, ClassroomRow, HiddenBadge } from "./parts";
@@ -124,7 +124,7 @@ export function CourseRow({
       </td>
       <td role="cell" className={cx(T.td, T.stack.sub, "@max-md:-ml-1.5")}>
         {course.classrooms.length === 0 ? (
-          <span className="text-fg-faint">—</span>
+          <Dash />
         ) : (
           <span className="flex flex-wrap items-center gap-x-1 gap-y-1">
             {course.classrooms.map((room) => (
@@ -143,7 +143,7 @@ export function CourseRow({
       </td>
       <td role="cell" className={cx(T.td, T.stack.sub)}>
         {course.staff.length === 0 ? (
-          <span className="text-fg-faint">—</span>
+          <Dash />
         ) : (
           <PeopleStack people={course.staff} actions={staffActions} />
         )}

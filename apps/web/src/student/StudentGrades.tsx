@@ -38,7 +38,9 @@ import type { Route } from "../router";
 import {
   Badge,
   Card,
+  type Column,
   cx,
+  Dash,
   EmptyState,
   isoDateParts,
   PageHeader,
@@ -48,7 +50,6 @@ import {
   SectionHeading,
   T,
   TableHead,
-  type Column,
   type Tone,
 } from "../ui";
 import { MODE_KEY, PendingLine } from "./cards";
@@ -269,4 +270,3 @@ function StatusBadge({ status }: { status: GradeStatus }) {
   return <Badge tone={STATUS[status].tone}>{t(STATUS[status].label)}</Badge>;
 }
 
-const Dash = () => <span className="text-fg-faint">—</span>;

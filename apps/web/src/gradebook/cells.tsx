@@ -7,7 +7,7 @@ import type { GradebookColumnKind, GradebookStaffRow } from "@quiz/contracts";
 
 import { Grade } from "../Grade";
 import type { Dict } from "../i18n";
-import { cx, Tip } from "../ui";
+import { Dash, Tip } from "../ui";
 
 /** A column's kind, in words: an exam, an exercise or a project. */
 export const MODE_LABEL: Record<GradebookColumnKind, keyof Dict> = {
@@ -33,13 +33,6 @@ export function AbsentSigil({ why }: { why: string }) {
     </Tip>
   );
 }
-
-/** Nothing to show: a faint dash, never an empty cell. */
-export const Dash = ({ className }: { className?: string }) => (
-  <span className={cx("text-fg-faint", className)}>
-    —
-  </span>
-);
 
 /** A grade, or a dash where there is none (a null mean, an empty cell). */
 export const GradeOrDash = ({ value }: { value: number | null }) =>

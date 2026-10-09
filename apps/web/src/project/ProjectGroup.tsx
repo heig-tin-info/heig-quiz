@@ -12,6 +12,8 @@ import { classroomProjectsKey } from "../queryKeys";
 import type { Route } from "../router";
 import {
   Card,
+  type Column,
+  Dash,
   isoDateTime,
   QueryError,
   RelativeTime,
@@ -19,7 +21,6 @@ import {
   T,
   TableHead,
   useSortableTable,
-  type Column,
 } from "../ui";
 
 type SortKey = "title" | "start" | "deadline";
@@ -45,7 +46,6 @@ type SortKey = "title" | "start" | "deadline";
  * deadline says how far it is. The row ends with its two repositories on
  * GitHub, as links in sight (M3-14a, M3-14h).
  */
-const DASH = <span className="text-fg-faint">—</span>;
 export function ProjectGroup({
   classroomId,
   navigate,
@@ -106,10 +106,10 @@ export function ProjectGroup({
                       <StateBadge row={row} />
                     </span>
                   </td>
-                  <td className={`${T.td} ${T.colHigh} tabular-nums text-fg-muted`}>{row.startAt === null ? DASH : isoDateTime(row.startAt)}</td>
+                  <td className={`${T.td} ${T.colHigh} tabular-nums text-fg-muted`}>{row.startAt === null ? <Dash /> : isoDateTime(row.startAt)}</td>
                   <td className={`${T.td} tabular-nums text-fg-muted`}>
                     {row.deadlineAt === null ? (
-                      DASH
+                      <Dash />
                     ) : (
                       <span className="flex flex-wrap items-baseline gap-x-2">
                         {isoDateTime(row.deadlineAt)}

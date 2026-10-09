@@ -13,7 +13,9 @@ import { MoveRight, TrendingDown, TrendingUp } from "lucide-react";
 import { useI18n, useT } from "../i18n";
 import {
   Badge,
+  type Column,
   cx,
+  Dash,
   isoDateParts,
   percent,
   RelativeTime,
@@ -21,7 +23,6 @@ import {
   TableHead,
   Tip,
   useSortableTable,
-  type Column,
 } from "../ui";
 
 type SortKey = "name" | "recall" | "sessions" | "questionsSeen" | "reviews30" | "lastReviewAt";
@@ -124,7 +125,7 @@ export function DrillActivityTable({
                 <td className={cx(T.td, "text-right tabular-nums")}>
                   <span className="inline-flex items-center justify-end gap-1.5">
                     <TrendMark trend={drillRecallTrend(r.recall.last30, r.recall.previous30)} />
-                    {rate === null ? <span className="text-fg-faint">—</span> : percent(rate, locale)}
+                    {rate === null ? <Dash /> : percent(rate, locale)}
                   </span>
                 </td>
                 <td className={cx(T.td, "text-right tabular-nums", T.colHigh)}>{r.sessions || "—"}</td>

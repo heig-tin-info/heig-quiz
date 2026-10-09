@@ -4,7 +4,7 @@ import { Clock, DoorOpen, Eye, GraduationCap, Monitor, MonitorCheck, RotateCcw, 
 import type { DashboardRow, DashboardView } from "@quiz/contracts";
 
 import { useT } from "../i18n";
-import { Badge, ClockCountdown, cx, IconButton, T, VerdictCell } from "../ui";
+import { Badge, ClockCountdown, cx, Dash, IconButton, T, VerdictCell } from "../ui";
 import { AnswerTip } from "./AnswerTip";
 import { IncidentBadge } from "./Incidents";
 import { cellState, cellValue, completionOf, ownDeadline } from "./cells";
@@ -282,7 +282,7 @@ export const GridRow = memo(function GridRow({
       </th>
       <td className={cx(TD, PROGRESS, "whitespace-nowrap px-3 text-right tabular-nums")}>
         {row.attemptId === null ? (
-          <span className="text-fg-faint">—</span>
+          <Dash />
         ) : (
           <span
             title={t("live.row.progressLabel", { done: progress.done, total: progress.total })}
@@ -294,7 +294,7 @@ export const GridRow = memo(function GridRow({
       {showScore ? (
         <td className={cx(TD, "px-3 text-right tabular-nums")}>
           {row.points === null ? (
-            <span className="text-fg-faint">—</span>
+            <Dash />
           ) : (
             <span className="font-medium">
               {row.points} / {row.maxPoints}
@@ -308,7 +308,7 @@ export const GridRow = memo(function GridRow({
         return (
           <td key={item.id} className={cx(TD, COL, "px-1 text-center")}>
             {cell === undefined ? (
-              <span className="text-fg-faint">—</span>
+              <Dash />
             ) : (
               // The complete answer on hover or focus (#94), read
               // on demand: only while the answers are shown, and
