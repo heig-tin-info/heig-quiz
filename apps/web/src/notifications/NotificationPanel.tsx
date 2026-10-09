@@ -13,6 +13,7 @@ import {
   cx,
   EmptyState,
   menuPosition,
+  panelStyle,
   pressable,
   QueryError,
   RelativeTime,
@@ -381,15 +382,7 @@ export function NotificationPanel({
                 "menu-panel fixed flex w-88 max-w-[calc(100vw-2rem)] flex-col rounded-menu border border-line bg-surface shadow-popover focus:outline-none",
                 Z.popover,
               )}
-              style={
-                {
-                  top: pos.top,
-                  bottom: pos.bottom,
-                  left: pos.left,
-                  "--menu-x": align === "end" ? "-100%" : "0",
-                  transformOrigin: `${pos.up ? "bottom" : "top"} ${align === "end" ? "right" : "left"}`,
-                } as React.CSSProperties
-              }
+              style={panelStyle(pos, align)}
             >
               <div className="flex items-center gap-2 border-b border-line px-3 py-2">
                 <h2 id={titleId} className="min-w-0 flex-1 text-[13px] font-semibold">

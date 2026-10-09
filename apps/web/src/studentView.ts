@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 import { parsePath, ROUTE_VIEWS, ROUTES, routeToPath, type Route } from "./router";
+import { createSignal, readStored, removeStored, writeStored } from "./ui/state";
 
 /**
  * "View as student": the teacher UI switched off, so the app draws what a
@@ -25,27 +26,18 @@ import { parsePath, ROUTE_VIEWS, ROUTES, routeToPath, type Route } from "./route
  * the same reason: five surfaces read it (`App`, the frame's toggle, the
  * account menu, the command palette, the evaluation page) and a `useState` in
  * each would make four of them stale. Storage IS the state, so nothing goes
- * stale behind a test that clears `sessionStorage` either.
+ * stale behind a test that clears `sessionStorage` either. A window that
+ * refuses storage still enters and leaves the view (`readStored`).
  */
 
 const KEY = "quiz-view-as";
 const RETURN_KEY = "quiz-view-as-return";
 
-const listeners = new Set<() => void>();
-const emit = () => {
-  for (const listener of listeners) listener();
-};
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-}
+const { subscribe, emit } = createSignal();
 
 /** Whether the teacher is currently looking at the student UI, in THIS tab. */
 export function studentViewOn(): boolean {
-  return sessionStorage.getItem(KEY) === "student";
+  return readStored(KEY, "session") === "student";
 }
 
 /**
@@ -54,7 +46,7 @@ export function studentViewOn(): boolean {
  * for "I do not know where you came from".
  */
 export function studentViewReturn(): Route {
-  const path = sessionStorage.getItem(RETURN_KEY);
+  const path = readStored(RETURN_KEY, "session");
   return path === null ? { view: "home" } : parsePath(path);
 }
 
@@ -64,16 +56,16 @@ export function studentViewReturn(): Route {
  * the toggle was flipped on.
  */
 export function enterStudentView(returnTo: Route): void {
-  sessionStorage.setItem(KEY, "student");
-  sessionStorage.setItem(RETURN_KEY, routeToPath(returnTo));
+  writeStored(KEY, "student", "session");
+  writeStored(RETURN_KEY, routeToPath(returnTo), "session");
   emit();
 }
 
 /** Turns it off and answers where the teacher should land. */
 export function leaveStudentView(): Route {
   const back = studentViewReturn();
-  sessionStorage.setItem(KEY, "teacher");
-  sessionStorage.removeItem(RETURN_KEY);
+  writeStored(KEY, "teacher", "session");
+  removeStored(RETURN_KEY, "session");
   emit();
   return back;
 }

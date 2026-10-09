@@ -1,11 +1,13 @@
 import { HealthResponse } from "@quiz/contracts";
 
+import { createSignal } from "../ui/state";
+
 export type ConnectionState = "connected" | "reconnecting" | "updating";
 
 /** One recovery loop per tab. A failed operation is never replayed here. */
 export class ConnectionMonitor {
   private state: ConnectionState = "connected";
-  private listeners = new Set<() => void>();
+  private signal = createSignal();
   private active = false;
   private recovering = false;
   private generation = 0;
@@ -15,14 +17,11 @@ export class ConnectionMonitor {
   private controller: AbortController | undefined;
 
   getSnapshot = () => this.state;
-  subscribe = (listener: () => void) => {
-    this.listeners.add(listener);
-    return () => { this.listeners.delete(listener); };
-  };
+  subscribe = this.signal.subscribe;
   private publish(state: ConnectionState) {
     if (this.state === state) return;
     this.state = state;
-    for (const listener of this.listeners) listener();
+    this.signal.emit();
   }
 
   start = () => {

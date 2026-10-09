@@ -1,18 +1,9 @@
-import {
-  cloneElement,
-  isValidElement,
-  useCallback,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { cloneElement, isValidElement, useCallback, useEffect, useId, useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { cx, useLayer, Z } from "./layers";
-import { menuPosition, type MenuPlacement } from "./menu";
+import { menuPosition, panelStyle, usePanelClamp, type MenuPlacement } from "./menu";
 
 /**
  * A small card hung on a trigger: what a disc, a chip or an abbreviation
@@ -146,34 +137,7 @@ export function Popover({
     };
   }, [open, close, place]);
 
-  /*
-   * `menuPosition` anchors the panel on the trigger and knows nothing of its
-   * width, so a right-aligned trigger near the left edge put half the card off
-   * screen. Measured once it is laid out and nudged back in, like the menu's
-   * own clamp — and computed from `pos`, never from the rectangle, because the
-   * opening animation owns `transform` while it plays.
-   */
-  useLayoutEffect(() => {
-    const el = panel.current;
-    if (!open || !el || !pos) return;
-    const margin = 8;
-    const clamp = () => {
-      el.style.marginLeft = "";
-      const width = el.offsetWidth;
-      const left = align === "end" ? pos.left - width : pos.left;
-      const shift =
-        left < margin
-          ? margin - left
-          : left + width > window.innerWidth - margin
-            ? window.innerWidth - margin - (left + width)
-            : 0;
-      if (shift) el.style.marginLeft = `${shift}px`;
-    };
-    clamp();
-    const observer = new ResizeObserver(clamp);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [open, pos, align]);
+  usePanelClamp(panel, open, pos, align);
 
   const hoverIn = () => {
     if (mode !== "hover" || open) return;
@@ -255,19 +219,7 @@ export function Popover({
                 Z.popover,
                 className,
               )}
-              style={
-                {
-                  top: pos.top,
-                  bottom: pos.bottom,
-                  left: pos.left,
-                  // Not `transform`: `.menu-panel` animates that property on
-                  // open and owns it entirely while it plays, so the alignment
-                  // offset travels as a custom property the keyframes compose
-                  // in (style.css).
-                  "--menu-x": align === "end" ? "-100%" : "0",
-                  transformOrigin: `${pos.up ? "bottom" : "top"} ${align === "end" ? "right" : "left"}`,
-                } as React.CSSProperties
-              }
+              style={panelStyle(pos, align)}
             >
               {children}
             </div>,
