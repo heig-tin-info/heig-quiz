@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CircleCheck, MonitorSmartphone, TriangleAlert } from "lucide-react";
+import { CircleCheck, MonitorSmartphone, ScanQrCode, TriangleAlert } from "lucide-react";
 
 import type { Me, PairApprove, PairApproved, PairPreview, PairableEvaluation } from "@quiz/contracts";
 import { formatUserCode, normalizeUserCode } from "@quiz/domain";
@@ -12,11 +12,14 @@ import type { Navigate } from "../router";
 import { SignInGate } from "../SignInGate";
 import { ConditionsList } from "../student/ConditionsList";
 import { Alert, Button, Card, EmptyState, Field, GateFrame, QueryError, RadioRow, Skeleton, cx } from "../ui";
+import { CodeScanner } from "./CodeScanner";
+import { canScan } from "./scan";
 
 /**
  * `/pair` — the phone's half of a kiosk station's pairing (ADR-051 §7,
- * F-EVAL-28). The code comes from the station's QR (`?code=`) or is typed;
- * the page then shows the station's NAME, to compare with the screen in
+ * F-EVAL-28). The code comes from the station's QR (`?code=`), is typed, or
+ * is read by the page's own camera scanner (a secondary action under the
+ * field); the page then shows the station's NAME, to compare with the screen in
  * front of the student, and the exams they can start there. ONE primary
  * action at a time: Continue while there is only a code, then "Start on
  * this station".
@@ -51,6 +54,10 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
   const [code, setCode] = useState<string | null>(initial);
   const [malformed, setMalformed] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
+  const fieldId = useId();
+  const [scannable] = useState(canScan);
+  const [scanning, setScanning] = useState(false);
+  const [cameraFailed, setCameraFailed] = useState(false);
 
   const preview = useQuery<PairPreview>({
     queryKey: pairPreviewKey(code ?? ""),
@@ -75,9 +82,8 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
       }),
   });
 
-  const submitCode = (e: React.FormEvent) => {
-    e.preventDefault();
-    const canonical = normalizeUserCode(typed);
+  const lookUp = (value: string) => {
+    const canonical = normalizeUserCode(value);
     setMalformed(canonical === null);
     if (canonical === null) return;
     setPicked(null);
@@ -85,6 +91,25 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
     // The same code again, after a refusal: asked again, not read from the cache.
     if (canonical === code) void preview.refetch();
     else setCode(canonical);
+  };
+  const submitCode = (e: React.FormEvent) => {
+    e.preventDefault();
+    lookUp(typed);
+  };
+  const startScan = () => {
+    setCameraFailed(false);
+    setScanning(true);
+  };
+  // A scanned code goes the way of a typed one: into the field, then Continue.
+  const scanned = (value: string) => {
+    setScanning(false);
+    setTyped(value);
+    lookUp(value);
+  };
+  const scanFailed = () => {
+    setScanning(false);
+    setCameraFailed(true);
+    document.getElementById(fieldId)?.focus();
   };
   const changeCode = () => {
     setCode(null);
@@ -119,6 +144,7 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
               <Alert tone="danger">{t("pair.limited")}</Alert>
             ) : null}
             <Field
+              id={fieldId}
               label={t("pair.code.label")}
               fullWidth
               value={typed}
@@ -138,6 +164,20 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
             <p className={cx("-mt-1 text-[13px]", malformed ? "text-danger" : "text-fg-faint")}>
               {t(malformed ? "pair.code.malformed" : "pair.code.hint")}
             </p>
+            {scanning ? (
+              <CodeScanner
+                onCode={scanned}
+                onCancel={() => setScanning(false)}
+                onFail={scanFailed}
+              />
+            ) : cameraFailed ? (
+              <p className="text-[13px] text-fg-muted">{t("pair.scan.unavailable")}</p>
+            ) : scannable ? (
+              <Button variant="secondary" className="w-full" onClick={startScan}>
+                <ScanQrCode aria-hidden />
+                {t("pair.scan.start")}
+              </Button>
+            ) : null}
             <Button type="submit" variant="primary" size="lg" className="w-full">
               {t("pair.code.submit")}
             </Button>

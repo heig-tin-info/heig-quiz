@@ -236,7 +236,9 @@ Every change is audited (`kiosk.device_labeled`, `kiosk.device_retired`,
    the portal (or sign in on the way), check the station's name, pick the
    exam and press **Start on this station**. The station opens the exam
    within a few seconds. A code lasts 5 minutes and works once; the station
-   renews it by itself.
+   renews it by itself. A student already on `/pair` can also press **Scan
+   with camera** there: the page reads the station's QR in place, accepts
+   only this site's `/pair` link or a bare code, and fills the code for them.
 3. **After the hand-in** (or the close, or the deadline), the station
    returns to its start screen by itself, ready for the next student.
 

@@ -302,6 +302,9 @@ importers:
       hucre:
         specifier: ^1.1.0
         version: 1.1.0
+      jsqr:
+        specifier: 1.4.0
+        version: 1.4.0
       katex:
         specifier: ^0.18.7
         version: 0.18.7
@@ -2824,6 +2827,9 @@ packages:
   json-with-bigint@3.5.12:
     resolution: {integrity: sha512-uwbF/wSSuOgC7qqlq27Xp5B6a2MHVug3t0idZdTqu0JnlFvgJuH7ju+KAk/J06C7GfhoYy2gnb9wz2INqcne7w==}
 
+  jsqr@1.4.0:
+    resolution: {integrity: sha512-dxLob7q65Xg2DvstYkRpkYtmKm2sPJ9oFhrhmudT1dZvNFFTlroai3AWSpLey/w5vMcLBXRgOJsbXpdN9HzU/A==}
+
   katex@0.18.7:
     resolution: {integrity: sha512-h+UCwkZ+4Jz8WQ7MLGfj7UVFrRCizGb912fwF4luGdYsC5paYG1vx+jy+KRcC/XkpjGva/P7nAWuxNnPzRvzHw==}
     hasBin: true
@@ -5273,6 +5279,8 @@ snapshots:
   json-schema-traverse@1.0.0: {}
 
   json-with-bigint@3.5.12: {}
+
+  jsqr@1.4.0: {}
 
   katex@0.18.7:
     dependencies:

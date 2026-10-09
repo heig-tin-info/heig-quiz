@@ -1,11 +1,14 @@
-import { screen, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EvaluationConditions, Me, PairPreview } from "@quiz/contracts";
 
 import { fail, mockFetch, ok, renderWithProviders, type RouteHandler } from "../test/render";
 import { PairPage } from "./PairPage";
+import { loadDecoder, type Decode } from "./scan";
+
+vi.mock("./scan", async (actual) => ({ ...(await actual<typeof import("./scan")>()), loadDecoder: vi.fn() }));
 
 const me: Me = {
   id: "u1",
@@ -156,5 +159,95 @@ describe("the phone's pairing page (ADR-051 §7)", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Start on this station" }));
     const alert = await screen.findByText("This exam can no longer be started on a station. Ask the supervisor.");
     expect(within(alert.closest("div")!).getByText(/Ask the supervisor/)).toBeVisible();
+  });
+});
+
+describe("scanning the station's QR with the page's camera", () => {
+  const stop = vi.fn();
+  const getUserMedia = vi.fn();
+  const decode = vi.fn<Decode>();
+
+  beforeEach(() => {
+    stop.mockReset();
+    decode.mockReset().mockResolvedValue(null);
+    getUserMedia.mockReset().mockResolvedValue({ getTracks: () => [{ stop }] });
+    Object.defineProperty(navigator, "mediaDevices", { value: { getUserMedia }, configurable: true });
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    vi.mocked(loadDecoder).mockResolvedValue(decode);
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, "mediaDevices");
+    vi.restoreAllMocks();
+  });
+
+  const open = async () => {
+    await userEvent.click(screen.getByRole("button", { name: "Scan with camera" }));
+    await waitFor(() => expect(decode).toHaveBeenCalled());
+  };
+
+  it("is offered only where the browser can open a camera", () => {
+    Reflect.deleteProperty(navigator, "mediaDevices");
+    render({}, "/pair");
+    expect(screen.queryByRole("button", { name: "Scan with camera" })).toBeNull();
+  });
+
+  it("opens the rear camera inline, and lets it go on Cancel", async () => {
+    render({}, "/pair");
+    await open();
+    expect(getUserMedia).toHaveBeenCalledWith({ video: { facingMode: "environment" }, audio: false });
+    // Continue stays the one primary action.
+    expect(screen.getByRole("button", { name: "Continue" })).toBeVisible();
+    expect(stop).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(stop).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Scan with camera" })).toBeVisible();
+  });
+
+  it("lets the camera go when the page is left", async () => {
+    const { unmount } = render({}, "/pair");
+    await open();
+    unmount();
+    expect(stop).toHaveBeenCalled();
+  });
+
+  it("lets the camera go when the page is hidden, and offers the scan again", async () => {
+    render({}, "/pair");
+    await open();
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(stop).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Scan with camera" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+  });
+
+  it("names a QR that is not a station's, keeps scanning and sends nothing", async () => {
+    decode.mockResolvedValue("https://evil.example/pair?code=BCDF-GHJK");
+    const { calls } = render({}, "/pair");
+    await open();
+    expect(await screen.findByText("This QR code is not a station code.")).toBeVisible();
+    await waitFor(() => expect(decode.mock.calls.length).toBeGreaterThan(1));
+    expect(stop).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("fills the field with a station's code, lets the camera go and looks it up once", async () => {
+    decode.mockResolvedValue(`${window.location.origin}/pair?code=bcdf-ghjk`);
+    const { calls } = render({ "GET /app/api/pair/BCDF-GHJK": ok(preview()) }, "/pair");
+    await userEvent.click(screen.getByRole("button", { name: "Scan with camera" }));
+    expect(await screen.findByText("Poste de secours n° 7")).toBeVisible();
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(decode).toHaveBeenCalledTimes(1);
+    expect(calls.map((call) => call.url)).toEqual(["/app/api/pair/BCDF-GHJK"]);
+  });
+
+  it("falls back to typing when the camera is refused", async () => {
+    getUserMedia.mockRejectedValue(new DOMException("denied", "NotAllowedError"));
+    render({}, "/pair");
+    await userEvent.click(screen.getByRole("button", { name: "Scan with camera" }));
+    expect(await screen.findByText("Camera unavailable — type the code.")).toBeVisible();
+    expect(screen.getByLabelText("Code shown on the station")).toHaveFocus();
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
   });
 });
