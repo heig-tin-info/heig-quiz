@@ -1178,3 +1178,37 @@ describe("the text before a question (ADR-084)", () => {
     expect(screen.getByRole("button", { name: "Relire le texte" })).toBeInTheDocument();
   });
 });
+
+describe("the zen player's integrity journal (F-EVAL-13)", () => {
+  const withLog = (view: AttemptView, logVisibility: boolean): AttemptView => ({
+    ...view,
+    evaluation: { ...view.evaluation, settings: { ...view.evaluation.settings, logVisibility } },
+  });
+  /** The window loses the focus for real (not into an iframe); the check runs a tick later. */
+  const leave = () =>
+    act(async () => {
+      window.dispatchEvent(new Event("blur"));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+  const events = (calls: { url: string }[]) => calls.filter((c) => c.url.endsWith("/events"));
+
+  it("journals leaving the page when the evaluation logs it", async () => {
+    const view = attemptView();
+    const { calls } = stubs(view);
+    render(view);
+    await screen.findByText("Question 2");
+    await leave();
+    expect(events(calls)).toHaveLength(1);
+  });
+
+  it.each([
+    ["the evaluation does not log it", withLog(attemptView(), false)],
+    ["in the teacher's preview", attemptView({ preview: true })],
+  ])("journals nothing when %s", async (_, view) => {
+    const { calls } = stubs(view);
+    render(view);
+    await screen.findByText("Question 2");
+    await leave();
+    expect(events(calls)).toEqual([]);
+  });
+});

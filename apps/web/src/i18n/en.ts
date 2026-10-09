@@ -3304,6 +3304,7 @@ export const en = {
   "player.closed.home": "Back to home",
   "player.closed.results": "See my results",
   "player.loading": "Opening the evaluation…",
+  "player.integrity.focus": "You left the evaluation page. This event is recorded and visible to your teacher.",
   "player.loadFailed": "This evaluation could not be opened.",
   "player.notOpen": "This evaluation is not open.",
   "player.notAvailable": "This evaluation is not available to you.",

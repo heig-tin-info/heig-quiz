@@ -863,6 +863,8 @@ const scenes = [
   { name: "player-mcq", role: "student", path: `${TAKE}?scene=running` },
   // ADR-079: the conditions read before the start, reopened from the bar.
   { name: "player-conditions", role: "student", path: `${TAKE}?scene=running`, fold: true, act: (p) => p.getByRole("button", { name: /^(show the conditions|voir les conditions)$/i }).click() },
+  // F-EVAL-13: back on the page after leaving it, the integrity notice top right.
+  { name: "player-left-notice", role: "student", path: `${TAKE}?scene=running`, fold: true, act: leaveAndReturn },
   { name: "player-cloze", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 2) },
   { name: "player-short", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 3) },
   { name: "player-code", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 4) },
@@ -1778,6 +1780,14 @@ const scenes = [
  * their state in the accessible name, so the selector is the same one a
  * screen reader follows.
  */
+/** The window loses the focus for over a second, then gets it back (F-EVAL-13). */
+async function leaveAndReturn(page) {
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+  await page.waitForTimeout(1_200);
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.waitForTimeout(400);
+}
+
 async function openQuestion(page, n) {
   await page.getByRole("button", { name: new RegExp(`^Question ${n},`) }).click();
   await page.waitForTimeout(400);

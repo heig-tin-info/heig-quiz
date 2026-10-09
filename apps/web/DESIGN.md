@@ -905,6 +905,14 @@ live in `ui/state.ts`, each written once.
   dismisses the toast. Today it is Undo after a group set's move (ADR-070
   §6), for the toast's 6 s; `key` makes a toast replace the one standing
   with the same key, so only the latest move offers Undo.
+  The one exception to the corner is the exam player's integrity notice
+  (`attempt/integrity.ts`, F-EVAL-13): `corner: "top"` puts it top right,
+  0.5 rem under the page's top bar (`--banner-h` + `--bar-h`, which
+  `PlayerShell` publishes on the document, 0 elsewhere), in the `info` tone
+  (the `info` icon, nothing else colored). It informs, it never warns: the
+  bottom-right corner is the player's footer and its Hand in, which a notice
+  arriving as the student comes back must not cover. Each corner holds five
+  toasts at most, counted apart.
 - Group board (`group/GroupBoard.tsx`, M3-16a): a group set's students in
   no group and its groups, as the categorize board draws its tray and
   columns (`ColumnFrame`'s hairline card, the chip of a categorize card,

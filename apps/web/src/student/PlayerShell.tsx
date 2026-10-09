@@ -172,13 +172,20 @@ export function PlayerShell({
   const theme = useResolvedTheme();
   // The bar's own height, for the side column that sticks under it: it grows
   // with a subtitle or a larger text size, and the column must not slide
-  // under it. The footer's, for what floats above it (the calculator,
-  // ADR-069): on a phone the move buttons must stay in reach.
+  // under it. Published on the document (`--bar-h`, 0 without a player), so
+  // what floats outside the player — the top toasts — clears it too. The
+  // footer's, for what floats above it (the calculator, ADR-069): on a phone
+  // the move buttons must stay in reach.
   const docked = aside !== undefined;
   const [bar, setBar] = useState<HTMLElement | null>(null);
   const [foot, setFoot] = useState<HTMLElement | null>(null);
-  const barHeight = useHeight(docked ? bar : null);
+  const barHeight = useHeight(bar);
   const footerHeight = useHeight(foot);
+  useLayoutEffect(() => {
+    const root = document.documentElement.style;
+    root.setProperty("--bar-h", `${barHeight}px`);
+    return () => void root.removeProperty("--bar-h");
+  }, [barHeight]);
   const strip = docked ? [] : segments;
   const [palette, setPalette] = useState(false);
   const hasPalette = (commands?.length ?? 0) > 0;
@@ -198,7 +205,7 @@ export function PlayerShell({
   return (
     <div
       className="flex min-h-[calc(100dvh-var(--banner-h))] flex-col bg-canvas"
-      style={{ "--bar-h": `${barHeight}px`, "--player-footer-h": `${footerHeight}px` } as CSSProperties}
+      style={{ "--player-footer-h": `${footerHeight}px` } as CSSProperties}
     >
       <header ref={setBar} className="sticky top-(--banner-h) z-20 border-b border-line bg-surface">
         <div

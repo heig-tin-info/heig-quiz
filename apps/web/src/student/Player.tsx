@@ -57,6 +57,7 @@ import { ChevronRight, ShieldAlert } from "lucide-react";
 import type { AttemptView } from "@quiz/contracts";
 import { answerMark, calculatorOn, mayValidate } from "@quiz/domain";
 
+import { useIntegrityJournal } from "../attempt/integrity";
 import { postSimulate } from "../attempt/run";
 import { useAttempt, type UseAttempt } from "../attempt/useAttempt";
 import { CalculatorDock } from "../calculator/CalculatorDock";
@@ -162,6 +163,14 @@ export function Player({
   const t = useT();
   const confirm = useConfirm();
   const { flush, closed } = attempt;
+  // F-EVAL-13: leaving the page is journaled, and the student told so —
+  // except in SEB or on a station, which confine the student already: the
+  // journal runs there too, the toast does not.
+  const journaled =
+    initial.attempt.preview !== true &&
+    (attempt.view ?? initial).evaluation.settings.logVisibility &&
+    closed === null;
+  useIntegrityJournal(attemptId, attempt.report, { journaled, notify: journaled && confinement === undefined });
   // Issue #125: leaving unmounts the player, and its autosave with it. An
   // answer still waiting for its debounce — or on its way — must reach the
   // server first. The wait is bounded (a request may never answer), and
