@@ -5,8 +5,10 @@
 Accepted (2026-09-29, issue #317): §1–§4, the opt-in of §6 and §7–§8 are the product owner's first
 decision comment; §5 (FSRS-5, default weights, retention 0.9, `ts-fsrs`) and §6's session composition
 adopt the issue's own proposals (body, §2 and §3) that comment did not decide; §5's implementation
-details are this ADR's. Folded on 2026-10-09: the second round (former §10, 2026-09-29: every "to be
-confirmed" proposal accepted, one changed; question 28 of docs/spec/06 settled) and the third (former §13, the review of slice 2).
+details are this ADR's. Folded on 2026-10-09: the product owner's second round (former §10, 2026-09-29,
+issue #317, last comment: every "to be confirmed" proposal accepted, one changed; question 28 of
+docs/spec/06 settled) and third round (former §13, 2026-09-29, review of slice 2, all accepted as
+recommended).
 
 Relations: amends F-DRILL-01 to F-DRILL-04 and adds F-DRILL-06 (docs/spec/02);
 amends N-DATA-02, N-DATA-03 and N-DATA-07 (docs/spec/03), the question-type
@@ -17,13 +19,18 @@ exercise's key in §1), [ADR-056](ADR-056-questions-parametrees.md) §5
 [third addendum of ADR-081](ADR-081-vocabulaire-de-notions.md#third-addendum-2026-10-08-the-cut-over)
 §8 (concepts replace tags in §6's and §12's interleaving and §8's and §15's
 mastery, past reviews regrouped under today's classification); extended by
-[ADR-085](ADR-085-confiance-dans-l-entrainement.md) (a stated confidence, which
-§4 and §5 never read; since 2026-10-08 it caps a confident error's due date to
-the next day, FSRS's state untouched, §11). Amended 2026-10-09: the Rollback
-section is removed (the [deployment runbook](../development/deployment.md) owns
-recovery; its rule on student history is a Consequence), and §15 places the
-classroom's drill switch in the classroom's Settings (`ClassroomSettings.tsx`),
-not in the Drill tab (§14 described the earlier arrangement).
+[ADR-085](ADR-085-confiance-dans-l-entrainement.md): a review stores the
+confidence the student stated, which §4 and §5 never read; since ADR-085 §4's
+amendment of 2026-10-08, the due date §5 computes is capped to the next day for a
+confident error, FSRS's state untouched (§11).
+
+Amended 2026-10-09: the Rollback section is removed (the
+[deployment runbook](../development/deployment.md) owns recovery; its rule on
+student history is a Consequence); §15 places the classroom's drill switch in the
+classroom's Settings (`ClassroomSettings.tsx`), not in the Drill tab (§14 says
+where it sat first and where it is now); §11's "two inputs come from the browser"
+reads "these inputs", since the section lists three (the third, the stated
+confidence, came with ADR-085).
 
 ## Context
 
