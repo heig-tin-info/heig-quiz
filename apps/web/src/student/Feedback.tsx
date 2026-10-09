@@ -13,7 +13,7 @@ import { formatPoints } from "@quiz/domain";
 
 import { api } from "../api";
 import { Grade } from "../Grade";
-import { useT, type Dict } from "../i18n";
+import { useT, type Dict, type TFunction } from "../i18n";
 import type { Route } from "../router";
 import {
   Badge,
@@ -96,53 +96,77 @@ function AttemptCount({ retake }: { retake: RetakeStatus }) {
   );
 }
 
+/** One retake the results page offers: what it asks again, its tier, its words. */
+interface Offer {
+  scope: RetakeScope;
+  variant: "primary" | "secondary";
+  label: string;
+}
+
 /**
- * The one action of the results page between two attempts. Under the scope
- * `to_review` (ADR-090) it is two, ranked: redo the questions to review —
- * the primary, with their count — and redo everything, secondary. Both go
- * through the same `useRetake`, so the confirmation of `keep: "last"`
- * applies to either. With every question acquired, redoing everything is
- * the only retake left.
+ * The retakes on offer, ranked (ADR-090). With the standings of the latest
+ * attempt (`review`, only sent under the scope `to_review`): redo the
+ * questions to review — the primary, counted from the list — and redo
+ * everything, secondary; with every question acquired, redoing everything
+ * alone, and a line that says why. Without them, Try again.
+ */
+function offersOf(
+  review: readonly ReviewItem[] | undefined,
+  t: TFunction,
+): { offers: Offer[]; note: string | null } {
+  if (review === undefined) {
+    return { offers: [{ scope: "all", variant: "primary", label: t("shome.retake") }], note: null };
+  }
+  const toReview = review.filter((row) => row.standing !== "acquired").length;
+  if (toReview === 0) {
+    return {
+      offers: [{ scope: "all", variant: "primary", label: t("feedback.retake.all") }],
+      note: t("feedback.retake.allAcquired"),
+    };
+  }
+  return {
+    offers: [
+      { scope: "to_review", variant: "primary", label: t("feedback.retake.partial", { n: toReview }) },
+      { scope: "all", variant: "secondary", label: t("feedback.retake.all") },
+    ],
+    note: null,
+  };
+}
+
+/**
+ * The one action of the results page between two attempts — two, ranked,
+ * under the scope `to_review` ({@link offersOf}). Every offer goes through
+ * the same `useRetake`, so the confirmation of `keep: "last"` applies to each.
  */
 function RetakeOffer({
   retake,
+  review,
   navigate,
 }: {
   retake: RetakeStatus;
+  review: readonly ReviewItem[] | undefined;
   navigate: (r: Route) => void;
 }) {
   const t = useT();
   const start = useRetake(navigate);
   if (retake.refusal === null) {
-    const busy = (scope: RetakeScope) =>
-      start.pending?.evaluationId === retake.evaluationId && start.pending.scope === scope;
-    const run = (scope: RetakeScope) => void start.start(retake.evaluationId, retake.keep, scope);
-    if (retake.scope === "to_review" && retake.toReview !== null) {
-      if (retake.toReview === 0) {
-        return (
-          <div className="flex flex-col items-center gap-3">
-            <p className="text-sm text-fg-muted">{t("feedback.retake.allAcquired")}</p>
-            <Button variant="primary" loading={busy("all")} onClick={() => run("all")}>
-              <RotateCcw /> {t("feedback.retake.all")}
-            </Button>
-          </div>
-        );
-      }
-      return (
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <Button variant="primary" loading={busy("to_review")} onClick={() => run("to_review")}>
-            <RotateCcw /> {t("feedback.retake.partial", { n: retake.toReview })}
-          </Button>
-          <Button variant="secondary" loading={busy("all")} onClick={() => run("all")}>
-            {t("feedback.retake.all")}
-          </Button>
-        </div>
-      );
-    }
+    const { offers, note } = offersOf(review, t);
     return (
-      <Button variant="primary" loading={busy("all")} onClick={() => run("all")}>
-        <RotateCcw /> {t("shome.retake")}
-      </Button>
+      <div className="flex flex-col items-center gap-3">
+        {note ? <p className="text-sm text-fg-muted">{note}</p> : null}
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {offers.map((offer) => (
+            <Button
+              key={offer.scope}
+              variant={offer.variant}
+              loading={start.pending?.evaluationId === retake.evaluationId && start.pending.scope === offer.scope}
+              onClick={() => void start.start(retake.evaluationId, retake.keep, offer.scope)}
+            >
+              {offer.variant === "primary" ? <RotateCcw /> : null} {offer.label}
+            </Button>
+          ))}
+        </div>
+      </div>
     );
   }
   const why = REFUSAL[retake.refusal];
@@ -282,10 +306,13 @@ export function Feedback({
             icon={data.reason === "retakes_open" ? CheckCircle2 : Hourglass}
             title={t(PENDING_TITLE[data.reason])}
             {...(data.retake
-              ? { action: <RetakeOffer retake={data.retake} navigate={navigate} /> }
+              ? { action: <RetakeOffer retake={data.retake} review={data.review} navigate={navigate} /> }
               : {})}
           >
-            {t(PENDING_BODY[data.reason], { title: data.evaluation.title })}
+            {/* ADR-090: with the standings below, the score is not all the student reads. */}
+            {t(data.review ? "feedback.pending.retakes_open.reviewBody" : PENDING_BODY[data.reason], {
+              title: data.evaluation.title,
+            })}
           </EmptyState>
         </Card>
         {data.review ? <ReviewList review={data.review} /> : null}
@@ -317,9 +344,11 @@ export function Feedback({
       {data.retake ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <AttemptCount retake={data.retake} />
-          <RetakeOffer retake={data.retake} navigate={navigate} />
+          <RetakeOffer retake={data.retake} review={data.review} navigate={navigate} />
         </div>
       ) : null}
+      {/* ADR-090: the offer of a partial retake never comes without its list. */}
+      {data.review ? <ReviewList review={data.review} /> : null}
 
       {data.items.length === 0 ? (
         <Card>

@@ -1047,7 +1047,6 @@ on("GET", `/app/api/attempts/${STUDENT_RETAKE_ATTEMPT}/feedback`, () => ({
     refusal: null,
     // ADR-090: redo the three questions to review, or everything.
     scope: "to_review",
-    toReview: 3,
   },
   // Where each question stands, in the student's order (ADR-090).
   review: (["acquired", "to_review", "acquired", "acquired", "pending", "acquired", "to_review", "acquired"] as const).map(

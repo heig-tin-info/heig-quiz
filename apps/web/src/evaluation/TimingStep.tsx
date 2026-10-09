@@ -308,7 +308,7 @@ export function ConfigSettings({
 
       {/* F-EVAL-15: an exercise only; an exam is one sitting. */}
       {mode === "exercise" ? (
-        <RetakesSetting settings={settings} patch={patch} disabled={disabled} />
+        <RetakesSetting mode={mode} settings={settings} patch={patch} disabled={disabled} />
       ) : null}
 
       {/* ADR-079: an exam or an exercise announces its conditions; a poll has none. */}

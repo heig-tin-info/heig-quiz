@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { retakesOf, type EvaluationSettings, type RetakeSettings } from "@quiz/contracts";
-import { retakeScopeOf } from "@quiz/domain";
+import { retakeScopeFits, retakeScopeOf, type EvaluationModeName } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import { Card, cx, inputClass, inputSize, Segmented, SettingRow, Switch } from "../ui";
@@ -25,10 +25,13 @@ import type { ConfigPatch } from "./editTarget";
  * cannot move (`AdvancedDisclosure`).
  */
 export function RetakesSetting({
+  mode,
   settings,
   patch,
   disabled,
 }: {
+  /** The evaluation's mode: the rules read it (`retakeScopeFits`). */
+  mode: EvaluationModeName;
   settings: EvaluationSettings;
   patch: ConfigPatch;
   disabled: boolean;
@@ -36,8 +39,10 @@ export function RetakesSetting({
   const t = useT();
   const retakes = retakesOf(settings);
   const scope = retakeScopeOf(retakes);
-  // A partial retake needs free navigation; one already chosen can always be undone.
-  const scopeLocked = settings.navigation !== "free" && scope === "all";
+  // The server's pairing rule, asked of `to_review` under this navigation;
+  // a scope already at `to_review` can always be set back to `all`.
+  const scopeLocked =
+    scope === "all" && !retakeScopeFits(mode, { ...retakes, scope: "to_review" }, settings.navigation);
   const set = (next: Partial<RetakeSettings>) =>
     patch.mutate({ settings: { retakes: { ...retakes, ...next } } });
 

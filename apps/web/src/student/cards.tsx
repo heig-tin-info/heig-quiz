@@ -450,7 +450,8 @@ export function useCardActions(navigate: (r: Route) => void): {
       if (r.scope === "to_review" && card.attemptId !== null) {
         const attemptId = card.attemptId;
         return {
-          label: t("shome.retake"),
+          // The label says what the click does: it opens the results.
+          label: t("shome.retakeReview"),
           primary,
           onClick: () => navigate(feedbackLink(attemptId).route),
         };

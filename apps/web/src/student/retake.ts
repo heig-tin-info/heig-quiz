@@ -79,7 +79,7 @@ export function useRetake(navigate: (r: Route) => void): Retake {
       navigate({ view: "attempt", evaluationId });
     },
     onError: (error) => {
-      // The server refused (`retake_refused`, `partial_retake_refused`, with
+      // The server refused (`retake_refused`, with
       // its reason) or failed: the screens re-read their payload, which now
       // says why.
       toastError("shome.retakeFailed")(error);

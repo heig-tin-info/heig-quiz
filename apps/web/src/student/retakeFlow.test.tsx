@@ -169,7 +169,7 @@ const home = (c: EvaluationCard): StudentHomeData => ({
 
 function feedback(
   refusal: "max_attempts" | "closed" | "not_open" | "unfinished" | null,
-  over: { keep?: Keep; attemptCount?: number; toReview?: number; review?: ReviewItem[] } = {},
+  over: { keep?: Keep; attemptCount?: number; review?: ReviewItem[] } = {},
 ): StudentFeedback {
   return {
     available: false,
@@ -182,9 +182,8 @@ function feedback(
       maxAttempts: 3,
       attemptCount: over.attemptCount ?? 1,
       refusal,
-      // ADR-090: `toReview` given is the scope `to_review`.
-      scope: over.toReview === undefined ? "all" : "to_review",
-      toReview: over.toReview ?? null,
+      // ADR-090: standings given is the scope `to_review`.
+      scope: over.review === undefined ? "all" : "to_review",
     },
     ...(over.review ? { review: over.review } : {}),
   };
@@ -419,7 +418,7 @@ describe("a retake of the questions to review (ADR-090)", () => {
     const carried = view(SECOND, "in_progress", { answer: { selected: [0] } });
     carried.items[0]!.acquired = true;
     const { calls } = mockFetch({
-      [`GET /app/api/attempts/${FIRST}/feedback`]: ok(feedback(null, { toReview: 2, review: REVIEW })),
+      [`GET /app/api/attempts/${FIRST}/feedback`]: ok(feedback(null, { review: REVIEW })),
       [`POST /app/api/evaluations/${EVAL}/retake`]: ok(attempt(carried)),
       [`GET /app/api/attempts/${SECOND}`]: ok(attempt(carried)),
       ...playerRoutes(SECOND),
@@ -448,7 +447,7 @@ describe("a retake of the questions to review (ADR-090)", () => {
 
   it("sends Redo everything as a whole retake", async () => {
     const { calls } = mockFetch({
-      [`GET /app/api/attempts/${FIRST}/feedback`]: ok(feedback(null, { toReview: 2, review: REVIEW })),
+      [`GET /app/api/attempts/${FIRST}/feedback`]: ok(feedback(null, { review: REVIEW })),
       [`POST /app/api/evaluations/${EVAL}/retake`]: ok(attempt(view(SECOND, "in_progress"))),
       [`GET /app/api/attempts/${SECOND}`]: ok(attempt(view(SECOND, "in_progress"))),
       ...playerRoutes(SECOND),
@@ -460,7 +459,7 @@ describe("a retake of the questions to review (ADR-090)", () => {
   });
 
   it("leaves Redo everything alone once every question is acquired", async () => {
-    mockFetch({ [`GET /app/api/attempts/${FIRST}/feedback`]: ok(feedback(null, { toReview: 0 })) });
+    mockFetch({ [`GET /app/api/attempts/${FIRST}/feedback`]: ok(feedback(null, { review: [{ itemId: ITEM, rank: 0, standing: "acquired" }] })) });
     mount({ view: "feedback", attemptId: FIRST });
     expect(await screen.findByText("Toutes les questions sont acquises.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tout refaire" }).className).toBe(
@@ -474,10 +473,10 @@ describe("a retake of the questions to review (ADR-090)", () => {
     const { calls } = mockFetch({
       "GET /app/api/student/home": ok(home({ ...base, retakes: { ...base.retakes!, scope: "to_review" } })),
       "GET /app/api/student/classrooms": ok([]),
-      [`GET /app/api/attempts/${FIRST}/feedback`]: ok(feedback(null, { toReview: 2, review: REVIEW })),
+      [`GET /app/api/attempts/${FIRST}/feedback`]: ok(feedback(null, { review: REVIEW })),
     });
     const { routes } = mount({ view: "home" });
-    await userEvent.click(await screen.findByRole("button", { name: "Recommencer" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Voir mes résultats et recommencer" }));
     expect(routes.at(-1)).toEqual({ view: "feedback", attemptId: FIRST });
     expect(await screen.findByRole("button", { name: "Refaire les questions à revoir (2)" })).toBeInTheDocument();
     expect(calls.some((c) => c.url.endsWith("/retake"))).toBe(false);
