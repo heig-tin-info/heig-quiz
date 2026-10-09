@@ -16,9 +16,7 @@ export const API_TOKEN_TTL_DAYS = [30, 90, 365] as const;
 export const ApiTokenCreate = z.object({
   /** What the teacher calls it: "Claude Desktop", "laptop script". */
   name: z.string().trim().min(1).max(100),
-  expiresInDays: z
-    .union([z.literal(30), z.literal(90), z.literal(365), z.null()])
-    .default(90),
+  expiresInDays: z.literal(API_TOKEN_TTL_DAYS).nullable().default(90),
 });
 export type ApiTokenCreate = z.infer<typeof ApiTokenCreate>;
 

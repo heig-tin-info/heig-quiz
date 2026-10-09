@@ -19,12 +19,10 @@
  */
 import type { GradebookStaff, GradebookStaffCell } from "@quiz/contracts";
 
-import { csvFile, grade, line, type NumericField } from "../../csv.js";
+import { csvFile, grade, HEADER_MAX, line, type NumericField } from "../../csv.js";
 
 /** What a column header ends with while the column is not released: its grades are not in the mean. */
 const UNRELEASED_SUFFIX = " (unreleased)";
-/** A header built from an activity's title is truncated to this, as the results export's. */
-const HEADER_MAX = 30;
 
 const optionalGrade = (value: number | null): string | NumericField => (value === null ? "" : grade(value));
 

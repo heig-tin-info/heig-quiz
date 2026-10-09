@@ -180,6 +180,9 @@ export const programFields = {
  */
 export type ProgramConfig = z.infer<z.ZodObject<typeof programFields>>;
 
+/** The most test cases a question holds: the schema's cap, and where a generator's proposal stops. */
+export const CODE_MAX_CASES = 30;
+
 export const CodeConfig = z.object({
   configVersion: z.literal(CODE_CONFIG_VERSION),
   ...programFields,
@@ -187,7 +190,7 @@ export const CodeConfig = z.object({
   tests: z.object({
     mode: z.literal("io"), // "tap" is phase 3
     compare: CodeCompare.default(DEFAULT_COMPARE),
-    cases: z.array(CodeCase).min(1).max(30),
+    cases: z.array(CodeCase).min(1).max(CODE_MAX_CASES),
   }),
 });
 export type CodeConfig = z.infer<typeof CodeConfig>;

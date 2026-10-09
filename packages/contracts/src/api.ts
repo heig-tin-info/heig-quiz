@@ -51,6 +51,13 @@ export interface PublicConfig {
 export const SESSION_KINDS = ["portal", "impersonation", ...TRUSTED_CLIENTS] as const;
 export type SessionKind = (typeof SESSION_KINDS)[number];
 
+/**
+ * The double-submit CSRF pair: the API sets the cookie at sign-in, the SPA
+ * copies its value into the header of every write (`apps/web/src/api.ts`).
+ */
+export const CSRF_COOKIE = "quiz_csrf";
+export const CSRF_HEADER = "x-csrf-token";
+
 /** The quit link of every `.seb` Quiz builds, on Quiz's own host (ADR-027). */
 export const SEB_QUIT_PATH = "/seb/quit";
 

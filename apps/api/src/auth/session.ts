@@ -7,7 +7,7 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { and, eq, inArray, isNotNull, lt, lte, or, sql, type SQL } from "drizzle-orm";
 
-import type { SessionKind } from "@quiz/contracts";
+import { CSRF_COOKIE, CSRF_HEADER, type SessionKind } from "@quiz/contracts";
 import { TRUSTED_CLIENTS, isTrustedClient, type TrustedClient } from "@quiz/domain";
 
 import { audit } from "../audit.js";
@@ -16,8 +16,7 @@ import { kioskDevices, sessions, users } from "../db/schema.js";
 import * as bus from "../modules/realtime/bus.js";
 
 export const SESSION_COOKIE = "quiz_session";
-export const CSRF_COOKIE = "quiz_csrf";
-export const CSRF_HEADER = "x-csrf-token";
+export { CSRF_COOKIE, CSRF_HEADER };
 
 export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
