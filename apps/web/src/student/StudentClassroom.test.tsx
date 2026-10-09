@@ -8,10 +8,9 @@ import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { mostUrgent, StudentClassroom } from "./StudentClassroom";
 
 /*
- * The student's page of one classroom (F-ORG-15, M5-02), in a production
- * build: `CLASSROOM_PAGES` is off here. The Journal tab no longer waits for
- * it (M4-05): it shows exactly when the classroom has a journal, which a
- * platform without Quiz's App never reports. `StudentClassroom.journal.test.tsx`
+ * The student's page of one classroom (F-ORG-15, M5-02). The Journal tab
+ * shows exactly when the classroom has a journal (M4-05), which a platform
+ * without Quiz's App never reports. `StudentClassroom.journal.test.tsx`
  * covers the tab itself.
  */
 

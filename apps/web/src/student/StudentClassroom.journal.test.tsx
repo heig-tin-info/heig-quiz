@@ -9,7 +9,7 @@ import { StudentClassroom } from "./StudentClassroom";
 
 /*
  * The Journal tab of the student classroom page (F-ORG-15, F-JRN-07), in
- * every build since M4-05: no `CLASSROOM_PAGES` here.
+ * every build since M4-05.
  */
 
 const page = (hasJournal: boolean): StudentClassroomPage => ({

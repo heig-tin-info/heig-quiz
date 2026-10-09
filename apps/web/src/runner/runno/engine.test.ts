@@ -3,7 +3,7 @@
  * agree with.
  *
  * `RUNNO_LANGUAGES` (`@quiz/qt-code`) is what a teacher may choose
- * `runtime: "runno"` for and what `browserCanRun` answers on; `RUNTIME_ASSETS`
+ * `runtime: "runno"` for and what `browserCapable` answers on; `RUNTIME_ASSETS`
  * is what `fetch-runtimes.mjs` downloads and what the worker loads. A language
  * offered in the editor with no entry here is a player that says "Runs in your
  * browser" and then falls back to the backend on every run.

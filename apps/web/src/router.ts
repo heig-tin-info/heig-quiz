@@ -47,10 +47,7 @@ export type Route =
    * bottom bar leaves no drawer to hold it.
    */
   | { view: "classrooms" }
-  /*
-   * The pages of the classroom merge (ADR-035, `docs/merge/05-web.md` §5.2),
-   * each behind `CLASSROOM_PAGES` (below) until its screen ships.
-   */
+  /* The pages of the classroom merge (ADR-035, `docs/merge/05-web.md` §5.2). */
   /**
    * The student's Courses (F-ORG-14, D07): their classrooms, each card opening
    * the classroom's page. `/courses` alone; `/courses/:id` is a teacher's course.
@@ -255,13 +252,6 @@ export interface RouteSpec<V extends Route["view"]> {
    */
   evaluationId?(route: RouteOf<V>): string;
   /**
-   * A route of the classroom merge whose screen is not built yet, gated by
-   * `CLASSROOM_PAGES` (below): `parsePath` skips it while the flag is off, so
-   * a production address reads exactly as it did before it. Dropped by the PR
-   * that ships the screen.
-   */
-  preview?: true;
-  /**
    * What's new may open its dialog over this view (ADR-087): the home and the
    * lists a visit starts from. Absent everywhere else — an attempt, a live
    * run, a poll, a drill, a correction, a preview, an editor is never
@@ -269,28 +259,6 @@ export interface RouteSpec<V extends Route["view"]> {
    */
   whatsNew?: true;
 }
-
-/**
- * The gate of the classroom merge's routes (ADR-035, `docs/merge/05-web.md`
- * §5.1–§5.2) whose routes exist before their screens do. The last of them,
- * the classroom's Grades tab, shipped with M5-04. A screen that links to one asks
- * `routeEnabled` first, so production never shows a door to a page that
- * does not parse. The new project and the project page left it with M3-12,
- * the classroom's Groups and a group set's page were never in it (M3-16a).
- *
- * Off in a production build: the `preview` routes do not parse. On in the
- * browser mock (`VITE_MOCK=1`), and wherever `VITE_CLASSROOM_PAGES=1` is set
- * at build time. The student's Courses and classroom page left it with M5-02,
- * the classroom's Settings with M2-07, the Journal (route and both tabs)
- * with M4-05 — on a platform without Quiz's App its API answers 404 and no
- * Journal tab is drawn.
- */
-export const CLASSROOM_PAGES =
-  import.meta.env.VITE_MOCK === "1" || import.meta.env.VITE_CLASSROOM_PAGES === "1";
-
-/** Whether `view` parses in this build: not a `preview` route, or `CLASSROOM_PAGES` on. */
-export const routeEnabled = (view: Route["view"]): boolean => !ROUTES[view].preview || CLASSROOM_PAGES;
-
 
 /** A view whose path is one fixed segment (`/settings`, `/polls`, …), whatever follows it. */
 function fixed<V extends Route["view"]>(
@@ -734,7 +702,6 @@ function journalPathOf(segments: string[]): string | undefined {
 export function parsePath(path: string): Route {
   const parts = path.split("/").filter(Boolean);
   for (const view of ROUTE_VIEWS) {
-    if (ROUTES[view].preview && !CLASSROOM_PAGES) continue;
     const route = specOf(view).match(parts);
     if (route) return route;
   }

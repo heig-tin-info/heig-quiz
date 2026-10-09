@@ -14,7 +14,7 @@ import {
 import { useState } from "react";
 
 import { EvaluationMode, EvaluationState, type ClassroomDetail, type EvaluationSummary } from "@quiz/contracts";
-import { templatePullable } from "@quiz/domain";
+import { isEvaluationOver, templatePullable } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -46,7 +46,6 @@ import {
   evaluationHome,
   evaluationStateLabel,
   hasDashboard,
-  isGraded,
   stateTone,
 } from "./common";
 import { classroomKey, evaluationsKey } from "../queryKeys";
@@ -446,7 +445,7 @@ export function EvaluationList({
                             // teacher actually wants are the correction and the
                             // table — first in the menu, above the dashboard the
                             // row no longer opens by itself.
-                            ...(isGraded(row.state) && row.mode !== "poll"
+                            ...(isEvaluationOver(row.state) && row.mode !== "poll"
                               ? [
                                   {
                                     label: t("eval.grading"),

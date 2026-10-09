@@ -22,6 +22,7 @@
 import { assembleSource as assembleFromTemplate } from "@quiz/domain";
 import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
 import {
+  browserCapable,
   IMAGE_CASE,
   type CodeAnswer,
   type CodeConfig,
@@ -35,7 +36,7 @@ import {
   type ProgramStudent,
 } from "@quiz/qt-code/client";
 
-import { browserCanRun, runWithFallback } from "./index";
+import { runWithFallback } from "./index";
 import type { BackendRun, ManualInput } from "./types";
 
 type RunCase = RunnerRequest["cases"][number];
@@ -62,7 +63,7 @@ export function assembleSource(student: ProgramStudent, regions: readonly string
  * teacher's try panel, which has no run route at all, that needs the answer.
  */
 export function canRunManually(student: CodeStudent): boolean {
-  return student.runtime === "runno" && browserCanRun(student.language);
+  return student.runtime === "runno" && browserCapable(student.language);
 }
 
 /**

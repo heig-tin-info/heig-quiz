@@ -11,10 +11,11 @@ import {
 } from "lucide-react";
 
 import type { ActivitySummary, EvaluationActivitySummary, PollTeacherView, ProjectActivitySummary } from "@quiz/contracts";
+import { isEvaluationOver } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
-import { hasDashboard, isGraded } from "../evaluation/common";
+import { hasDashboard } from "../evaluation/common";
 import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
 import { useErrorToast } from "../notify";
@@ -135,7 +136,7 @@ function evaluationItems(
             : []),
         ]
       : [
-          ...(isGraded(row.state)
+          ...(isEvaluationOver(row.state)
             ? [
                 {
                   label: t("eval.grading"),

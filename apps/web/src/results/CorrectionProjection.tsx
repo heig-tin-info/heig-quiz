@@ -3,9 +3,9 @@ import { ArrowLeft, Eye, EyeOff, ListChecks, Maximize2, Minimize2, Moon, Sun } f
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ByQuestion, EvaluationDetail } from "@quiz/contracts";
+import { isEvaluationOpen } from "@quiz/domain";
 
 import { api } from "../api";
-import { isLive } from "../evaluation/common";
 import { useT } from "../i18n";
 import { evaluationKey, resultsByQuestionKey } from "../queryKeys";
 import type { Route } from "../router";
@@ -134,7 +134,7 @@ export function CorrectionProjection({
 
   const back = () => navigate({ view: "results", evaluationId });
   const title = evaluation.data?.evaluation.title;
-  const stillOpen = evaluation.data !== undefined && isLive(evaluation.data.evaluation.state);
+  const stillOpen = evaluation.data !== undefined && isEvaluationOpen(evaluation.data.evaluation.state);
   const handedIn = stillOpen ? (list[0]?.papers ?? 0) : null;
 
   if (questions.isLoading) {

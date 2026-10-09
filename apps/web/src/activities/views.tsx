@@ -50,16 +50,15 @@ export const TYPE_ICON: Record<ActivityType, IconType> = {
   project: FolderGit2,
 };
 
-/** What a click on a row does (its kind's `home`), or nothing where that page does not parse in this build. */
-export function openerOf(row: ActivitySummary, navigate: (r: Route) => void): (() => void) | undefined {
-  const home = kindOf(row).home(row);
-  return home ? () => navigate(home) : undefined;
+/** What a click on a row does: open its kind's `home`. */
+export function openerOf(row: ActivitySummary, navigate: (r: Route) => void): () => void {
+  return () => navigate(kindOf(row).home(row));
 }
 
-/** The click and the keyboard of a row that opens its activity ({@link openerOf}), or none at all. */
+/** The click and the keyboard of a row that opens its activity ({@link openerOf}). */
 export function openProps(row: ActivitySummary, navigate: (r: Route) => void, role?: string) {
   const open = openerOf(row, navigate);
-  return open ? { onClick: open, ...pressable(open, role) } : {};
+  return { onClick: open, ...pressable(open, role) };
 }
 
 export interface ViewProps {
@@ -155,11 +154,10 @@ export function ActivityTable({ rows, navigate, onEnd }: ViewProps) {
         <tbody>
           {sorted.map((row) => {
             const Icon = TYPE_ICON[typeOf(row)];
-            const opens = kindOf(row).home(row) !== null;
             return (
               <tr
                 key={row.id}
-                className={opens ? `${T.row} ${T.rowHover} cursor-pointer` : T.row}
+                className={`${T.row} ${T.rowHover} cursor-pointer`}
                 {...openProps(row, navigate, "row")}
               >
                 <td className={T.td}>
@@ -208,7 +206,7 @@ export function ActivityCards({ rows, navigate, onEnd }: ViewProps) {
         return (
           <Card
             key={row.id}
-            interactive={kindOf(row).home(row) !== null}
+            interactive
             {...openProps(row, navigate)}
             aria-label={row.title}
             className="flex flex-col gap-3 p-5"
@@ -314,10 +312,7 @@ export function ActivitySchedule({ rows, navigate, onEnd, now }: ViewProps & { n
                 <div
                   key={row.id}
                   {...openProps(row, navigate)}
-                  className={cx(
-                    "flex items-center gap-3 px-4 py-2.5 text-[13px] transition-colors hover:bg-surface-2/70",
-                    kindOf(row).home(row) !== null && "cursor-pointer",
-                  )}
+                  className="flex cursor-pointer items-center gap-3 px-4 py-2.5 text-[13px] transition-colors hover:bg-surface-2/70"
                 >
                   <span className="w-14 shrink-0 tabular-nums text-fg-muted">
                     {anchor ? (

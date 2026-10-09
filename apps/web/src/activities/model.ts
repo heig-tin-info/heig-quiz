@@ -85,12 +85,8 @@ export interface ActivityKindSpec<A extends ActivitySummary> {
   inRoom(a: A): boolean;
   /** Where it sits on the gantt; null for what has no date at all. */
   span(a: A, now: number): Span | null;
-  /**
-   * Where a click on its row leads; null for a kind whose page does not
-   * parse in this build (`routeEnabled`, none today): the row is then not
-   * clickable.
-   */
-  home(a: A): Route | null;
+  /** Where a click on its row leads. */
+  home(a: A): Route;
   stateLabel(a: A, t: TFunction): string;
   stateTone(a: A): Tone;
 }

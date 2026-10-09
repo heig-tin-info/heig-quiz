@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
 
-import { browserCanRun, runWithFallback } from "./index";
+import { runWithFallback } from "./index";
 import { BrowserRunnerUnavailable, type BrowserRunner } from "./types";
 
 const request = (language: string): RunnerRequest =>
@@ -37,14 +37,6 @@ function fakeRunner(
 ): BrowserRunner {
   return { id: "fake", supports: (l) => languages.includes(l), run: vi.fn(run) };
 }
-
-describe("browserCanRun", () => {
-  it("knows the two languages the browser runner ships", () => {
-    expect(browserCanRun("c")).toBe(true);
-    expect(browserCanRun("python")).toBe(true);
-    expect(browserCanRun("rust")).toBe(false);
-  });
-});
 
 describe("runWithFallback", () => {
   it("runs in the browser when the question asks for it", async () => {

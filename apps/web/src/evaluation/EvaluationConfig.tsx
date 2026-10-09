@@ -14,7 +14,7 @@ import {
 import { useState } from "react";
 
 import { EvaluationPatch, type ClassroomDetail, type EvaluationDetail } from "@quiz/contracts";
-import { EVALUATION_STEPS, itemListLock } from "@quiz/domain";
+import { EVALUATION_STEPS, isEvaluationOver, itemListLock } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -38,11 +38,7 @@ import {
   TabPanel,
   Tabs,
 } from "../ui";
-import {
-  evaluationStateLabel,
-  isGraded,
-  stateTone,
-} from "./common";
+import { evaluationStateLabel, stateTone } from "./common";
 import { evaluationTarget } from "./editTarget";
 import { useItemPane } from "./ItemPreview";
 import { ItemsStep } from "./ItemsStep";
@@ -255,7 +251,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
             </Button>
             {/* WP10: once it is closed, the correction is where this screen
                 leads — the configuration is history at that point. */}
-            {isGraded(evaluation.state) ? (
+            {isEvaluationOver(evaluation.state) ? (
               <Button variant="secondary" onClick={() => navigate(links.grading)}>
                 <ClipboardCheck /> {t("eval.grading")}
               </Button>
@@ -266,7 +262,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
           <Menu
             label={t("common.actions")}
             items={[
-              ...(isGraded(evaluation.state)
+              ...(isEvaluationOver(evaluation.state)
                 ? [
                     {
                       label: t("eval.results"),

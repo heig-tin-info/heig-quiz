@@ -41,21 +41,6 @@ export function evaluationStateLabel(state: EvaluationState, t: TFunction): stri
   return t(`eval.state.${state}` as keyof Dict);
 }
 
-/** Live means "there are students in it right now", which is what routes the row click. */
-export function isLive(state: EvaluationState): boolean {
-  return isEvaluationOpen(state);
-}
-
-/**
- * The states where the second half of an evaluation's life has something to
- * show: the grading panel has answers to correct, the results a table to
- * print. Before `closed` both would be empty by construction. The server's
- * own rule (`isEvaluationOver`): what it refuses as `not_over` before.
- */
-export function isGraded(state: EvaluationState): boolean {
-  return isEvaluationOver(state);
-}
-
 /**
  * Whether the correction (the Questions tab, its projection) can be read:
  * once the evaluation is over, or once an exercise's correction has been
@@ -83,8 +68,8 @@ export function hasDashboard(summary: Pick<EvaluationSummary, "state">): boolean
  */
 export function evaluationHome(row: { id: string; mode: EvaluationMode; state: EvaluationState }): Route {
   if (row.mode === "poll") return { view: "poll", id: row.id };
-  if (isLive(row.state)) return { view: "live", id: row.id };
-  if (!isGraded(row.state)) return { view: "evaluation", id: row.id };
+  if (isEvaluationOpen(row.state)) return { view: "live", id: row.id };
+  if (!isEvaluationOver(row.state)) return { view: "evaluation", id: row.id };
   const links = gradingLinks(row.id);
   return row.state === "released" ? links.results : links.grading;
 }

@@ -16,11 +16,12 @@ import { isCodeAnswered } from "./schema.js";
 import type { CodeAnswer, CodeConfig, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
 /*
  * Two VALUES escape to the host, and only these two: the list of languages the
- * browser runner ships, and nothing else from `schema.ts`. `apps/web` decides
- * where a run executes (`src/runner/index.ts`) and needs the same list the
- * editor offers the teacher — one list, not two that drift (ADR-015).
+ * browser runner ships and its predicate, nothing else from `schema.ts`.
+ * `apps/web` decides where a run executes (`src/runner/index.ts`) and needs
+ * the same list the editor offers the teacher — one list, not two that drift
+ * (ADR-015).
  */
-export { RUNNO_LANGUAGES } from "./schema.js";
+export { browserCapable, RUNNO_LANGUAGES } from "./schema.js";
 
 const CodeIcon = typeIcon(<path d="m16 18 6-6-6-6M8 6l-6 6 6 6" />);
 

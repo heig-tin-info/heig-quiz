@@ -22,8 +22,8 @@ import { LockedEditor } from "./LockedEditor.js";
 import { isLockedLineRange, lockedLineNumbers, lockLines, selectedLines, unlockLines } from "./lockEdit.js";
 import { CodeArea, monacoAvailable, type CodeLineDecoration } from "./MonacoHost.js";
 import {
+  browserCapable,
   CODE_LANGUAGES,
-  RUNNO_LANGUAGES,
   type CodeLanguage,
   type CodeCooldown,
   type CodeLimits,
@@ -104,10 +104,6 @@ export const PROGRAM_ADVANCED_PATHS = [
   "files",
   "configVersion",
 ] as const;
-
-/** The languages the browser runner can run; anything else is the server's. */
-export const browserCapable = (language: CodeLanguage): boolean =>
-  (RUNNO_LANGUAGES as readonly string[]).includes(language);
 
 /** The statement, and under it the language. */
 export function ProgramPromptSection({
