@@ -228,6 +228,11 @@ export type TrustedClient = (typeof TRUSTED_CLIENTS)[number];
 export const isTrustedClient = (kind: string): kind is TrustedClient =>
   (TRUSTED_CLIENTS as readonly string[]).includes(kind);
 
+/** Only an exam may require a trusted client: the settings screen offers the choice there alone. */
+export function trustedClientsAllowedFor(mode: EvaluationModeName): boolean {
+  return mode === "exam";
+}
+
 /**
  * The trusted clients an evaluation accepts (ADR-027, ADR-051 §2), in this
  * order: `seb`, then `kiosk`. Empty means the evaluation is sat in the
@@ -240,7 +245,7 @@ export function trustedClientsOf(
   mode: EvaluationModeName,
   settings: { safeExamBrowser?: boolean | undefined; kiosk?: boolean | undefined },
 ): TrustedClient[] {
-  if (mode !== "exam") return [];
+  if (!trustedClientsAllowedFor(mode)) return [];
   const on: Record<TrustedClient, boolean | undefined> = { seb: settings.safeExamBrowser, kiosk: settings.kiosk };
   return TRUSTED_CLIENTS.filter((client) => on[client] === true);
 }
@@ -256,8 +261,8 @@ export function drillAllowedOn(mode: EvaluationModeName, allowDrill: boolean | u
   return allowDrill ?? mode === "exercise";
 }
 
-/** A poll never feeds the drill: the half of both rules below and above. */
-const drillModeOf = (mode: EvaluationModeName): boolean => mode !== "poll";
+/** A poll never feeds the drill: the half of both rules below and above, and of the screen's drill setting. */
+export const drillModeOf = (mode: EvaluationModeName): boolean => mode !== "poll";
 
 /**
  * Whether "Allow drill" may still change (ADR-041 §10, item 3): until the
@@ -266,6 +271,14 @@ const drillModeOf = (mode: EvaluationModeName): boolean => mode !== "poll";
  */
 export function allowDrillWritable(mode: EvaluationModeName, state: EvaluationStateName): boolean {
   return drillModeOf(mode) && state !== "released";
+}
+
+/**
+ * Only an exam pauses (docs/spec/01 §1 glossary): the server refuses the
+ * transition on any other mode, and the dashboard offers Pause on an exam alone.
+ */
+export function pausableMode(mode: EvaluationModeName): boolean {
+  return mode === "exam";
 }
 
 // --- The integrity journal (F-EVAL-13, ADR-088) ------------------------------

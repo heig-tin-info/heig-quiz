@@ -10,6 +10,7 @@ import {
   lacksGradedPoints,
   missingTimingFields,
   pastTiming,
+  pausableMode,
   type PastTiming,
 } from "@quiz/domain";
 
@@ -69,7 +70,7 @@ export function guardTransition(
   if (!isLegalTransition(from, to)) throw new IllegalTransition(from, to);
   assertReady(row, to, ctx.items);
   refusePastTiming(from, to, pastTimingOf(row, to, ctx.now));
-  if (to === "paused" && row.mode !== "exam") {
+  if (to === "paused" && !pausableMode(row.mode)) {
     throw new IllegalTransition(from, to, "only an exam can be paused");
   }
   if (to === "draft" && ctx.attemptCount > 0) {
