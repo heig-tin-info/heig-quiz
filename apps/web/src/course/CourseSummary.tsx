@@ -51,7 +51,7 @@ export function CourseCard({
       <SectionHeading
         title={
           <span className="flex min-w-0 flex-wrap items-center gap-2">
-            <CourseIcon course={course} className="size-4 shrink-0 text-fg-faint" />
+            <CourseIcon course={course} className="size-8.75 shrink-0 text-fg-faint" />
             <CourseLink course={course} navigate={navigate} />
             <span className="text-[13px] font-normal text-fg-faint">{course.code}</span>
             <HiddenBadge course={course} />
