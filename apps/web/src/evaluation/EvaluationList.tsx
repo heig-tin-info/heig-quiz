@@ -1,24 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  BarChart3,
-  ClipboardCheck,
-  ClipboardList,
-  Copy,
-  FileStack,
-  FolderGit2,
-  MonitorPlay,
-  Plus,
-  Presentation,
-  Trash2,
-} from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { ClipboardList, Copy, FileStack, FolderGit2, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import { EvaluationMode, EvaluationState, type ClassroomDetail, type EvaluationSummary } from "@quiz/contracts";
-import { isEvaluationOver, templatePullable } from "@quiz/domain";
+import { EvaluationMode, EvaluationState, type EvaluationSummary } from "@quiz/contracts";
+import { templatePullable } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
-import { gradingLinks } from "../grading";
 import { useT, type Dict, type TFunction } from "../i18n";
 import type { Route } from "../router";
 import {
@@ -42,13 +30,8 @@ import {
   useSortableTable,
   type Column,
 } from "../ui";
-import {
-  evaluationHome,
-  evaluationStateLabel,
-  hasDashboard,
-  stateTone,
-} from "./common";
-import { classroomKey, evaluationsKey } from "../queryKeys";
+import { evaluationHome, evaluationLinkItems, evaluationStateLabel, stateTone } from "./common";
+import { evaluationsKey } from "../queryKeys";
 import { ModeChoice, type CreatedMode } from "./ModeChoice";
 import {
   InstantiateError,
@@ -58,6 +41,8 @@ import {
   useInstantiate,
 } from "./templates";
 import { PullTemplateDialog, TemplateBehindBadge } from "./templatePull";
+import { useClassroom } from "../course/parts";
+import { useEvaluations } from "./api";
 
 /**
  * The evaluations of one classroom, under its roster.
@@ -87,10 +72,7 @@ export function NewEvaluationModal({
    * the classroom names its course, the course lists its templates, and a
    * course with none leaves this dialog exactly as it was (08, novice path).
    */
-  const classroom = useQuery<ClassroomDetail>({
-    queryKey: classroomKey(classroomId),
-    queryFn: () => api(`/app/api/classrooms/${classroomId}`),
-  });
+  const classroom = useClassroom(classroomId);
   const templates = useCourseTemplates(classroom.data?.course.id ?? null).data ?? [];
   const [templateId, setTemplateId] = useState("");
   const template = templates.find((x) => x.id === templateId) ?? null;
@@ -270,15 +252,9 @@ export function EvaluationList({
   const [pulling, setPulling] = useState<string | null>(null);
   /** The row being saved as a template of the course (ADR-031). */
   const [savingTemplate, setSavingTemplate] = useState<EvaluationSummary | null>(null);
-  const classroom = useQuery<ClassroomDetail>({
-    queryKey: classroomKey(classroomId),
-    queryFn: () => api(`/app/api/classrooms/${classroomId}`),
-  });
+  const classroom = useClassroom(classroomId);
 
-  const list = useQuery<EvaluationSummary[]>({
-    queryKey: evaluationsKey(classroomId),
-    queryFn: () => api(`/app/api/classrooms/${classroomId}/evaluations`),
-  });
+  const list = useEvaluations(classroomId);
 
   /* No initial sort: the server hands the evaluations over in the order this
      classroom works through them — the drafts being written, then what is
@@ -426,51 +402,7 @@ export function EvaluationList({
                         <Menu
                           label={t("live.row.actions", { name: row.title })}
                           items={[
-                            ...(row.mode === "poll"
-                              ? [
-                                  {
-                                    label: t("poll.openProjection"),
-                                    icon: Presentation,
-                                    onSelect: () => navigate({ view: "poll", id: row.id }),
-                                  },
-                                ]
-                              : []),
-                            // WP10: once a quiz is closed, the two screens the
-                            // teacher actually wants are the correction and the
-                            // table — first in the menu, above the dashboard the
-                            // row no longer opens by itself.
-                            ...(isEvaluationOver(row.state) && row.mode !== "poll"
-                              ? [
-                                  {
-                                    label: t("eval.grading"),
-                                    icon: ClipboardCheck,
-                                    onSelect: () => navigate(gradingLinks(row.id).grading),
-                                  },
-                                  {
-                                    label: t("eval.results"),
-                                    icon: BarChart3,
-                                    onSelect: () => navigate(gradingLinks(row.id).results),
-                                  },
-                                ]
-                              : []),
-                            ...(hasDashboard(row) && row.mode !== "poll"
-                              ? [
-                                  {
-                                    label: t("eval.dashboard"),
-                                    icon: MonitorPlay,
-                                    onSelect: () => navigate({ view: "live", id: row.id }),
-                                  },
-                                ]
-                              : []),
-                            ...(row.mode === "poll"
-                              ? []
-                              : [
-                                  {
-                                    label: t("eval.configure"),
-                                    icon: ClipboardList,
-                                    onSelect: () => navigate({ view: "evaluation", id: row.id }),
-                                  },
-                                ]),
+                            ...evaluationLinkItems(row, t, navigate),
                             {
                               label: t("eval.duplicate"),
                               icon: Copy,

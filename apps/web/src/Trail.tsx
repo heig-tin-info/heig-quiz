@@ -11,12 +11,8 @@
  * spreads them and appends its own page. The last crumb is the current page:
  * the primitive ignores its route.
  */
-import { useQuery } from "@tanstack/react-query";
-import type { ClassroomDetail } from "@quiz/contracts";
-import { api } from "./api";
-import { useCourses } from "./course/parts";
+import { useClassroom, useCourses } from "./course/parts";
 import { useT, type Dict } from "./i18n";
-import { classroomKey } from "./queryKeys";
 import { routeToPath, type Route } from "./router";
 import { Breadcrumb } from "./ui";
 
@@ -64,12 +60,7 @@ export function useRootCrumb(section: keyof typeof SECTION_ROOTS): Crumb {
  */
 export function useClassroomCrumbs(classroomId: string | null | undefined): Crumb[] {
   const root = useRootCrumb("courses");
-  const room = useQuery<ClassroomDetail>({
-    queryKey: classroomKey(classroomId ?? null),
-    enabled: !!classroomId,
-    queryFn: () => api(`/app/api/classrooms/${classroomId}`),
-    retry: false,
-  });
+  const room = useClassroom(classroomId || null, { retry: false });
   if (!room.data) return [root];
   return [
     root,

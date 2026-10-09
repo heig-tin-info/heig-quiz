@@ -10,7 +10,7 @@ import {
 } from "@quiz/contracts";
 import { isEmptyDiff } from "@quiz/domain";
 
-import { api, ApiError } from "../api";
+import { api, ApiError, refusalCodeOf } from "../api";
 import { useT, type TFunction } from "../i18n";
 import { useToast } from "../notify";
 import { Badge, ErrorText, FormDialog, FormError, QueryError, Skeleton } from "../ui";
@@ -111,7 +111,7 @@ function refusalOf(error: unknown, t: TFunction): string | null {
   if (TransitionRefusal.safeParse(error.body).data?.reason === "no_graded_points") {
     return t("eval.launch.needGradedPoints");
   }
-  const code = (error.body as { error?: string } | null)?.error;
+  const code = refusalCodeOf(error);
   if (code === "template_moved") return t("templatePull.moved");
   if (code === "no_template") return t("templatePull.gone");
   if (code === "items_frozen" || code === "locked") return t("templatePull.frozen");

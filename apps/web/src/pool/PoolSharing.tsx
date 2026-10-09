@@ -11,7 +11,7 @@ import type {
   PoolVisibility,
 } from "@quiz/contracts";
 
-import { api, ApiError, apiErrorMessage } from "../api";
+import { api, ApiError, apiErrorMessage, refusedWith } from "../api";
 import { useConfirm } from "../confirm";
 import { useT, type TFunction } from "../i18n";
 import { useErrorToast } from "../notify";
@@ -59,8 +59,7 @@ const VISIBILITY_ICON = { private: Lock, shared: Users, public: Globe } as const
  */
 function inviteMessage(error: unknown, t: TFunction): string {
   if (error instanceof ApiError) {
-    const code = (error.body as { error?: string } | null)?.error;
-    if (code === "teacher_not_found" || error.status === 404) return t("share.notFound");
+    if (refusedWith(error, "teacher_not_found") || error.status === 404) return t("share.notFound");
     if (error.status === 409) return t("share.already");
   }
   return apiErrorMessage(error, t("error.save"));

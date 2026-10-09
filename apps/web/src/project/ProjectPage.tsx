@@ -3,7 +3,6 @@ import { AlertTriangle, Archive, ArchiveRestore, RefreshCw, Rocket, Send, Trash2
 import { useState } from "react";
 
 import type {
-  ClassroomDetail,
   ProjectDetail,
   ProjectPatch,
   ProjectReleaseResult,
@@ -11,13 +10,13 @@ import type {
   ProjectSyncAccepted,
 } from "@quiz/contracts";
 
-import { api, ApiError, refusedWith } from "../api";
+import { api, isNotFound, refusedWith } from "../api";
 import { AppLink } from "../AppLink";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useNoticeToasts } from "../notifications/notices";
 import { useToast } from "../notify";
-import { activitiesKey, classroomGroupSetsKey, classroomKey, classroomProjectsKey, projectKey } from "../queryKeys";
+import { activitiesKey, classroomGroupSetsKey, classroomProjectsKey, projectKey } from "../queryKeys";
 import type { Navigate } from "../router";
 import { Trail, useClassroomCrumbs } from "../Trail";
 import {
@@ -103,11 +102,6 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   });
   const classroomId = detail.data?.classroomId ?? null;
   const crumbs = useClassroomCrumbs(classroomId);
-  const room = useQuery<ClassroomDetail>({
-    queryKey: classroomKey(classroomId),
-    enabled: classroomId !== null,
-    queryFn: () => api(`/app/api/classrooms/${classroomId}`),
-  });
   // F-PROJ-21 (M3-09c): what each re-read found changed, counted per kind.
   useNoticeToasts(detail, (prev, next) => projectNotices(prev, next).map((n) => projectNoticeToast(n, t)));
 
@@ -190,7 +184,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   if (detail.isError) {
     // A project that does not exist, or is not the caller's (invariant 6:
     // the same 404), said as the classroom says it.
-    if (detail.error instanceof ApiError && detail.error.status === 404) {
+    if (isNotFound(detail.error)) {
       return (
         <QueryError title={t("project.notFound")} query={detail} />
       );

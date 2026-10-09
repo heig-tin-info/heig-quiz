@@ -16,7 +16,7 @@ import {
 } from "@quiz/contracts";
 import { groupSizes } from "@quiz/domain";
 
-import { ApiError, refusalCodeOf } from "../api";
+import { ApiError, isNotFound, refusalCodeOf } from "../api";
 import type { Dict, TFunction } from "../i18n";
 
 /** A student as the board writes them: family name first, like the roster and the project page. */
@@ -113,7 +113,7 @@ export class WriteHeld extends Error {
 }
 
 /** A group, a student or a set out of reach: the 404 of a missing one (another teacher deleted it, say). */
-export const gone = (error: unknown): boolean => error instanceof ApiError && error.status === 404;
+export const gone = isNotFound;
 
 /**
  * What a failed write of a set says, always in the reader's language: the

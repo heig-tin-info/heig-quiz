@@ -12,13 +12,7 @@ import {
 import { useEffect, useMemo, useState, type DragEvent, type KeyboardEvent } from "react";
 
 
-import type {
-  CategoryNode,
-  PoolDetail,
-  PoolQuestionStats,
-  QuestionPage,
-  QuestionRow,
-} from "@quiz/contracts";
+import type { CategoryNode, PoolQuestionStats, QuestionPage, QuestionRow } from "@quiz/contracts";
 import type { POOL_TABS } from "@quiz/domain";
 
 import { api } from "../api";
@@ -77,6 +71,7 @@ import { PoolSettings } from "./PoolSettings";
 import { ReviewTab } from "./ReviewTab";
 import { ConceptsTab } from "./ConceptsTab";
 import { useFilterVocabulary } from "./useFilterVocabulary";
+import { usePool } from "./api";
 
 type PoolTab = (typeof POOL_TABS)[number];
 
@@ -290,10 +285,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const [statsRow, setStatsRow] = useState<QuestionRow | null>(null);
   const [group, setGroup] = usePersistentChoice<GroupBy>(GROUP_KEY, isGroupBy, "none");
 
-  const pool = useQuery<PoolDetail>({
-    queryKey: poolKey(id),
-    queryFn: () => api(`/app/api/pools/${id}`),
-  });
+  const pool = usePool(id);
   const mayWrite = pool.data?.role !== "reader";
   const poolConceptIds = useMemo(() => (pool.data?.concepts ?? []).map((c) => c.concept.id), [pool.data]);
 

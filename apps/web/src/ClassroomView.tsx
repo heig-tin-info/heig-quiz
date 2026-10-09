@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
   ClipboardList,
@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { ClassroomPatch, type ClassroomDetail, type EvaluationSummary } from "@quiz/contracts";
+import { ClassroomPatch, type ClassroomDetail } from "@quiz/contracts";
 import type { ClassroomQueryTab } from "@quiz/domain";
 
 import { NewActivity, newProjectAction } from "./activities/NewActivity";
@@ -51,9 +51,11 @@ import {
   Skeleton,
   Tabs,
 } from "./ui";
-import { classroomKey, evaluationsKey } from "./queryKeys";
+import { classroomKey } from "./queryKeys";
 import { Trail, useClassroomCrumbs } from "./Trail";
 import { invalidateHint } from "./realtime/hints";
+import { useClassroom } from "./course/parts";
+import { useEvaluations } from "./evaluation/api";
 
 /**
  * One classroom: its roster, its evaluations, its drill and its settings,
@@ -207,20 +209,14 @@ export function ClassroomView({
   const noJournal = journal.data?.mode === null || githubAbsent(journal.error);
 
   const crumbs = useClassroomCrumbs(id);
-  const room = useQuery<ClassroomDetail>({
-    queryKey: classroomKey(id),
-    queryFn: () => api(`/app/api/classrooms/${id}`),
-  });
+  const room = useClassroom(id);
   /**
    * The evaluations, for the number on their tab. It is the query the list
    * itself runs, key included, so the count and the rows are one cache entry
    * and can never disagree — a count carried by the classroom payload would
    * still read "2" the moment after a third evaluation was created.
    */
-  const evaluations = useQuery<EvaluationSummary[]>({
-    queryKey: evaluationsKey(id),
-    queryFn: () => api(`/app/api/classrooms/${id}/evaluations`),
-  });
+  const evaluations = useEvaluations(id);
 
   /**
    * The teacher takes a (staff) seat in their own classroom, to walk the

@@ -45,8 +45,7 @@ export function PairPage({ me, navigate }: { me: Me | null; navigate?: Navigate 
   return <Pairing initial={initial} navigate={navigate} />;
 }
 
-const errorOf = (err: unknown) =>
-  err instanceof ApiError ? { status: err.status, code: (err.body as { error?: string } | null)?.error } : null;
+const errorOf = (err: unknown) => (err instanceof ApiError ? { status: err.status } : null);
 
 function Pairing({ initial, navigate }: { initial: string | null; navigate?: Navigate | undefined }) {
   const t = useT();

@@ -2,13 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RotateCw } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
-import type {
-  ClassroomDetail,
-  ProjectCreate,
-  ProjectSourceDetail,
-  ProjectSourceRepo,
-  ProjectSummary,
-} from "@quiz/contracts";
+import type { ProjectCreate, ProjectSourceDetail, ProjectSourceRepo, ProjectSummary } from "@quiz/contracts";
 
 import { api } from "../api";
 import { toLocalInput } from "../evaluation/timing";
@@ -17,7 +11,6 @@ import { useToast } from "../notify";
 import {
   activitiesKey,
   classroomGroupSetsKey,
-  classroomKey,
   classroomProjectsKey,
   projectSourceKey,
   projectSourcesKey,
@@ -87,10 +80,6 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
   const [reading, setReading] = useState(false);
 
   const crumbs = useClassroomCrumbs(classroomId);
-  const room = useQuery<ClassroomDetail>({
-    queryKey: classroomKey(classroomId),
-    queryFn: () => api(`/app/api/classrooms/${classroomId}`),
-  });
   const sources = useQuery<ProjectSourceRepo[]>({
     queryKey: projectSourcesKey(classroomId),
     queryFn: () => api(`/app/api/classrooms/${classroomId}/projects/sources`),

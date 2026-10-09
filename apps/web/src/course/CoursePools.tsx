@@ -1,8 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { FolderTree, Link2, Unlink } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { CourseSummary, PoolSummary } from "@quiz/contracts";
+import type { CourseSummary } from "@quiz/contracts";
 import { poolRoleAllows } from "@quiz/domain";
 
 import { api } from "../api";
@@ -11,8 +11,9 @@ import { useT } from "../i18n";
 import { useErrorToast } from "../notify";
 import type { Route } from "../router";
 import { Actions, Button, Card, Menu, QueryError, Skeleton } from "../ui";
-import { courseKey, poolsKey } from "../queryKeys";
+import { courseKey } from "../queryKeys";
 import { useCourseDetail, useIsCourseOwner } from "./parts";
+import { usePools } from "../pool/api";
 
 type LinkedPool = { id: string; name: string; questionCount: number };
 
@@ -71,10 +72,7 @@ function usePoolLinks(course: CourseSummary) {
 export function LinkPoolMenu({ course }: { course: CourseSummary }) {
   const t = useT();
   const { linked, link } = usePoolLinks(course);
-  const pools = useQuery<PoolSummary[]>({
-    queryKey: poolsKey,
-    queryFn: () => api("/app/api/pools"),
-  });
+  const pools = usePools();
   // Linking makes the whole staff contributors of the pool, so the server
   // refuses a pool the caller only reads (ADR-013): it is not offered.
   const available = (pools.data ?? []).filter(

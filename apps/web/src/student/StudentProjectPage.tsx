@@ -42,7 +42,7 @@ import {
   type StudentProjectRepo,
 } from "@quiz/contracts";
 
-import { api, ApiError, useMe } from "../api";
+import { api, isNotFound, useMe } from "../api";
 import { Grade } from "../Grade";
 import { useT } from "../i18n";
 import { useNoticeToasts } from "../notifications/notices";
@@ -83,8 +83,6 @@ import {
 import { SebLaunchModal } from "./SebLaunchModal";
 import { SebQuitButton } from "./SebQuit";
 import { studentProjectNotices, studentProjectNoticeToast } from "./studentProjectNotices";
-
-const isNotFound = (error: unknown) => error instanceof ApiError && error.status === 404;
 
 export function StudentProjectPage({ id, navigate }: { id: string; navigate: Navigate }) {
   const t = useT();

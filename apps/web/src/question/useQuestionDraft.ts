@@ -1,11 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
 
-import type { DraftSaved, ParametersDraft, PoolDetail, QuestionDetail, ZodIssueLite } from "@quiz/contracts";
+import type { DraftSaved, ParametersDraft, QuestionDetail, ZodIssueLite } from "@quiz/contracts";
 
 import { api } from "../api";
-import { poolKey, questionKey, questionPreviewKey } from "../queryKeys";
+import { questionKey, questionPreviewKey } from "../queryKeys";
 import { useAutosave } from "./autosave";
+import { usePool } from "../pool/api";
 
 /** The working copy of a question: what the type's editor, the explanation and the Variables section edit. */
 export interface Draft {
@@ -38,11 +39,7 @@ export function useQuestionDraft(id: string) {
     queryFn: () => api(`/app/api/questions/${id}`),
   });
   const poolId = detail.data?.meta.poolId;
-  const pool = useQuery<PoolDetail>({
-    queryKey: poolKey(poolId),
-    queryFn: () => api(`/app/api/pools/${poolId!}`),
-    enabled: poolId !== undefined,
-  });
+  const pool = usePool(poolId);
   /*
    * A pool shared with me as `reader` (`PoolDetail.role`, the same predicate
    * `PoolView` uses for its own list). The question is READABLE — that is the

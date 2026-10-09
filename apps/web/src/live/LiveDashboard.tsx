@@ -1,13 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ScrollText, Users, Wifi, WifiOff } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import {
-  TransitionRefusal,
-  type DashboardAlertEvent,
-  type DashboardRow,
-  type EvaluationDetail,
-} from "@quiz/contracts";
+import { TransitionRefusal, type DashboardAlertEvent, type DashboardRow } from "@quiz/contracts";
 import { trustedClientsOf } from "@quiz/domain";
 
 import { ApiError, api, usePublicConfig } from "../api";
@@ -47,6 +42,7 @@ import { useCorrectionControls } from "./useCorrectionControls";
 import { useLiveCommands } from "./useLiveCommands";
 import { useRowDensity } from "./useRowDensity";
 import { dashboardKey, evaluationKey } from "../queryKeys";
+import { useEvaluation } from "../evaluation/api";
 
 /**
  * The live dashboard (mockup 03, F-DASH, F-LIVE-11).
@@ -121,10 +117,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
 
   // The title and the classroom are the evaluation's, not the grid's read
   // model — one extra cached request, shared with the configuration screen.
-  const detail = useQuery<EvaluationDetail>({
-    queryKey: evaluationKey(id),
-    queryFn: () => api(`/app/api/evaluations/${id}`),
-  });
+  const detail = useEvaluation(id);
 
   /**
    * A poll has no grid: one question, no roster, and its screen is the

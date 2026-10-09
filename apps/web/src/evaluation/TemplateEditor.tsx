@@ -1,15 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
 import { CopyPlus, FileStack, Settings2, Unlink } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { TemplatePatch, type TemplateDetail } from "@quiz/contracts";
 import { TEMPLATE_TABS, type CourseTab } from "@quiz/domain";
 
-import { api, ApiError } from "../api";
+import { isNotFound } from "../api";
 import { useCourses } from "../course/parts";
 import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
-import { templateKey } from "../queryKeys";
 import type { Route } from "../router";
 import { Trail, useTemplateCrumbs } from "../Trail";
 import { useSearchParam } from "../router";
@@ -38,6 +36,7 @@ import { clockSummary } from "./clockSummary";
 import { ConfigSettings } from "./TimingStep";
 import { UseTemplateDialog, useTemplateActions } from "./templates";
 import { useConfigPatch } from "./usePatch";
+import { useTemplate } from "./api";
 
 /**
  * The editor of one evaluation template (F-EVAL-25, ADR-031 addendum c): its
@@ -69,13 +68,10 @@ import { useConfigPatch } from "./usePatch";
  */
 export function TemplateEditor({ id, navigate }: { id: string; navigate: (r: Route) => void }) {
   const t = useT();
-  const detail = useQuery<TemplateDetail>({
-    queryKey: templateKey(id),
-    queryFn: () => api(`/app/api/templates/${id}`),
-  });
+  const detail = useTemplate(id);
 
   if (detail.isLoading) return boxed(<PageSkeleton header="title-and-bar" />);
-  if (detail.error instanceof ApiError && detail.error.status === 404) {
+  if (isNotFound(detail.error)) {
     return boxed(
       <EmptyState
         icon={FileStack}

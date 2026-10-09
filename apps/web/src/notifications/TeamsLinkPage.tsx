@@ -5,7 +5,7 @@ import { CircleCheck, Link2, MessagesSquare, TriangleAlert } from "lucide-react"
 import { TeamsLinkToken, type Me, type NotificationSettings, type TeamsLinkPreview } from "@quiz/contracts";
 import { displayName } from "@quiz/domain";
 
-import { api, ApiError } from "../api";
+import { api, isNotFound } from "../api";
 import { useT } from "../i18n";
 import { notificationSettingsKey, teamsLinkKey } from "../queryKeys";
 import { SignInGate } from "../SignInGate";
@@ -110,8 +110,7 @@ function Confirm({ token, me, onSettings }: { token: string; me: Me; onSettings?
       </GateFrame>
     );
   }
-  const gone = (error: unknown) => error instanceof ApiError && error.status === 404;
-  if (gone(preview.error) || gone(link.error)) return <Invalid />;
+  if (isNotFound(preview.error) || isNotFound(link.error)) return <Invalid />;
   if (preview.isError) {
     return (
       <GateFrame>

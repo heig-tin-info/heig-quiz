@@ -3,7 +3,7 @@ import { Bot, Check, KeyRound, TriangleAlert, X } from "lucide-react";
 
 import type { Me, OAuthDecisionResult, OAuthRequestView } from "@quiz/contracts";
 
-import { api, ApiError } from "../api";
+import { api, isNotFound } from "../api";
 import { useT } from "../i18n";
 import { oauthRequestKey } from "../queryKeys";
 import { SignInGate } from "../SignInGate";
@@ -93,7 +93,7 @@ function Consent({ id, me }: { id: string; me: Me }) {
     );
   }
   if (request.isError) {
-    const gone = request.error instanceof ApiError && request.error.status === 404;
+    const gone = isNotFound(request.error);
     return (
       <GateFrame>
         <Card className="px-6 py-8 text-center">

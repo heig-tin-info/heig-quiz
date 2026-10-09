@@ -1,21 +1,16 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Archive, Copy, DoorClosed, DoorOpen, Plus, Ruler, Shuffle, Trash2, TriangleAlert, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 
-import {
-  GroupMaxSize,
-  type ClassroomDetail,
-  type GroupRandomForm,
-  type GroupSetDetail,
-} from "@quiz/contracts";
+import { GroupMaxSize, type GroupRandomForm, type GroupSetDetail } from "@quiz/contracts";
 
-import { api, ApiError } from "../api";
+import { api, isNotFound } from "../api";
 import { AppLink } from "../AppLink";
 import { useConfirm } from "../confirm";
 import { fromLocalInput, toLocalInput } from "../evaluation/timing";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { classroomGroupSetsKey, classroomKey, groupSetKey } from "../queryKeys";
+import { classroomGroupSetsKey, groupSetKey } from "../queryKeys";
 import { useSearchParam, type Navigate } from "../router";
 import { Trail, useClassroomCrumbs } from "../Trail";
 import {
@@ -104,10 +99,6 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
 
   const set = useGroupSet(id);
   const crumbs = useClassroomCrumbs(classroomId);
-  const room = useQuery<ClassroomDetail>({
-    queryKey: classroomKey(classroomId),
-    queryFn: () => api(`/app/api/classrooms/${classroomId}`),
-  });
   const { write, confirm: confirmWrite, cancel: cancelWrite } = useGroupSetWrites(id);
   /** A move waiting for the confirmation of its GitHub consequences (ADR-070 §6), the queue held meanwhile. */
   const [asked, setAsked] = useState<({ move: Move } & Asked) | null>(null);
@@ -206,7 +197,7 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
 
   if (set.isLoading) return <PageSkeleton />;
   if (set.isError || !set.data) {
-    if (set.error instanceof ApiError && set.error.status === 404) {
+    if (isNotFound(set.error)) {
       return (
         <QueryError title={t("groups.set.notFound")} query={set} />
       );

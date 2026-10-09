@@ -11,7 +11,7 @@ import {
   type WorkMode,
 } from "@quiz/contracts";
 
-import { api, ApiError } from "../api";
+import { api, isNotFound } from "../api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { projectKey, projectWorkspaceKey, projectWorkspaceSessionsKey } from "../queryKeys";
@@ -62,7 +62,7 @@ export function ProjectWorkspace({ projectId, archived }: { projectId: string; a
     queryKey: projectWorkspaceKey(projectId),
     queryFn: () => api(`/app/api/projects/${projectId}/workspace`),
     // The 404 of a platform without the portal is an answer, not a failure to retry.
-    retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 2,
+    retry: (count, error) => !isNotFound(error) && count < 2,
   });
   const failed = (error: unknown) => toast(refusalMessage(error, t), "error");
   const setMode = useMutation({
@@ -88,7 +88,7 @@ export function ProjectWorkspace({ projectId, archived }: { projectId: string; a
     onError: failed,
   });
 
-  if (workspace.error instanceof ApiError && workspace.error.status === 404) return null;
+  if (isNotFound(workspace.error)) return null;
   const ws = workspace.data;
   const changeable = ws !== undefined && !archived && ws.allowed.length > 1;
   const options = WORK_MODES.filter((m) => !changeable || ws!.allowed.includes(m)).map((value) => ({

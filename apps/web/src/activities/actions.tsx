@@ -1,22 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  BarChart3,
-  ClipboardCheck,
-  ClipboardList,
-  GitBranch,
-  MonitorPlay,
-  Presentation,
-  Square,
-  Users,
-} from "lucide-react";
+import { GitBranch, Square, Users } from "lucide-react";
 
-import type { ActivitySummary, EvaluationActivitySummary, PollTeacherView, ProjectActivitySummary } from "@quiz/contracts";
-import { isEvaluationOver } from "@quiz/domain";
+import type { ActivitySummary, PollTeacherView, ProjectActivitySummary } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
-import { hasDashboard } from "../evaluation/common";
-import { gradingLinks } from "../grading";
+import { evaluationLinkItems } from "../evaluation/common";
 import { useT } from "../i18n";
 import { useErrorToast } from "../notify";
 import { repoHref } from "../project/projectPage";
@@ -84,7 +73,12 @@ export function ActivityMenu({
 }) {
   const t = useT();
   if (row.kind === "project") return <ProjectRepoLinks row={row} />;
-  const items = evaluationItems(row, t, navigate, onEnd);
+  const items: MenuItem[] = [
+    ...evaluationLinkItems(row, t, navigate),
+    ...(endable(row)
+      ? [{ label: t("poll.end"), icon: Square, danger: true, separator: true, onSelect: () => onEnd?.(row) }]
+      : []),
+  ];
   return (
     // A click in the menu must not also open the row under it.
     <span onClick={(e) => e.stopPropagation()} className="inline-flex">
@@ -117,51 +111,3 @@ function ProjectRepoLinks({ row }: { row: ProjectActivitySummary }) {
   );
 }
 
-function evaluationItems(
-  row: EvaluationActivitySummary,
-  t: ReturnType<typeof useT>,
-  navigate: (r: Route) => void,
-  onEnd: ((row: ActivitySummary) => void) | undefined,
-): MenuItem[] {
-  return row.mode === "poll"
-      ? [
-          {
-            label: t("poll.openProjection"),
-            icon: Presentation,
-            onSelect: () => navigate({ view: "poll", id: row.id }),
-          },
-          ...(endable(row)
-            ? [{ label: t("poll.end"), icon: Square, danger: true, separator: true, onSelect: () => onEnd?.(row) }]
-            : []),
-        ]
-      : [
-          ...(isEvaluationOver(row.state)
-            ? [
-                {
-                  label: t("eval.grading"),
-                  icon: ClipboardCheck,
-                  onSelect: () => navigate(gradingLinks(row.id).grading),
-                },
-                {
-                  label: t("eval.results"),
-                  icon: BarChart3,
-                  onSelect: () => navigate(gradingLinks(row.id).results),
-                },
-              ]
-            : []),
-          ...(hasDashboard(row)
-            ? [
-                {
-                  label: t("eval.dashboard"),
-                  icon: MonitorPlay,
-                  onSelect: () => navigate({ view: "live", id: row.id }),
-                },
-              ]
-            : []),
-          {
-            label: t("eval.configure"),
-            icon: ClipboardList,
-            onSelect: () => navigate({ view: "evaluation", id: row.id }),
-          },
-        ];
-}

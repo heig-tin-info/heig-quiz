@@ -45,6 +45,19 @@ export function refusalCodeOf(error: unknown): string | null {
 /** Whether `error` is the API's refusal `code`. */
 export const refusedWith = (error: unknown, code: string): boolean => refusalCodeOf(error) === code;
 
+/** Whether `error` is a 404: something gone, or never the reader's (invariant 6). */
+export const isNotFound = (error: unknown): boolean => error instanceof ApiError && error.status === 404;
+
+/**
+ * What a screen may tune on a shared read (`useClassroom`, `useEvaluation`,
+ * `usePool`…): whether it runs now, and whether a failure is retried. The
+ * key, the URL and the type stay the hook's.
+ */
+export interface ReadOptions {
+  enabled?: boolean;
+  retry?: boolean;
+}
+
 export async function api<T>(
   path: string,
   init: RequestInit & { csv?: string } = {},

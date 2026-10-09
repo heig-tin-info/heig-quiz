@@ -10,13 +10,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import type {
-  ByQuestion,
-  ResultRow,
-  EvaluationDetail,
-  ReleaseResponse,
-  ResultsView as ResultsPayload,
-} from "@quiz/contracts";
+import type { ResultRow, ReleaseResponse, ResultsView as ResultsPayload } from "@quiz/contracts";
 import type { RESULTS_TABS } from "@quiz/domain";
 
 import { api } from "../api";
@@ -51,7 +45,8 @@ import { StudentCopy } from "./StudentCopy";
 import { StudentStats } from "./StudentStats";
 import { Summary } from "./Summary";
 import { useIsCourseOwner } from "../course/parts";
-import { evaluationKey, resultsByQuestionKey, resultsKey, resultsViewKey } from "../queryKeys";
+import { evaluationKey, resultsKey, resultsViewKey } from "../queryKeys";
+import { useEvaluation, useResultsByQuestion } from "../evaluation/api";
 
 type Tab = (typeof RESULTS_TABS)[number];
 
@@ -89,11 +84,7 @@ export function ResultsView({
     queryFn: () => api(`/app/api/evaluations/${evaluationId}/results`),
   });
 
-  const byQuestion = useQuery<ByQuestion[]>({
-    queryKey: resultsByQuestionKey(evaluationId),
-    enabled: tab === "questions",
-    queryFn: () => api(`/app/api/evaluations/${evaluationId}/results/by-question`),
-  });
+  const byQuestion = useResultsByQuestion(evaluationId, { enabled: tab === "questions" });
 
   const release = useMutation<ReleaseResponse, unknown, boolean>({
     mutationFn: (on) =>
@@ -143,11 +134,7 @@ export function ResultsView({
    * an aid, never an error state — the results render perfectly well without
    * it, and the eyebrow simply stays a label until it arrives.
    */
-  const evaluation = useQuery<EvaluationDetail>({
-    queryKey: evaluationKey(evaluationId),
-    queryFn: () => api(`/app/api/evaluations/${evaluationId}`),
-    retry: false,
-  });
+  const evaluation = useEvaluation(evaluationId, { retry: false });
   const classroomId = evaluation.data?.evaluation.classroomId ?? null;
   const crumbs = useEvaluationCrumbs(classroomId, evaluationId, evaluation.data?.evaluation.title);
   // The correction exists once the evaluation is over, or once an exercise's

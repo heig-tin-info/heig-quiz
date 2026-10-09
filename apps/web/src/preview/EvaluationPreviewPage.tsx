@@ -36,7 +36,7 @@ import {
   type PreviewCorrection,
 } from "@quiz/contracts";
 
-import { ApiError, api } from "../api";
+import { api, isNotFound } from "../api";
 import { currentItem } from "../attempt/playerReducer";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
@@ -148,7 +148,7 @@ export function EvaluationPreviewPage({
       />
     );
   } else if (start.isError) {
-    const missing = start.error instanceof ApiError && start.error.status === 404;
+    const missing = isNotFound(start.error);
     content = (
       <main className="mx-auto w-full max-w-160 px-4 py-16">
         {missing ? (
