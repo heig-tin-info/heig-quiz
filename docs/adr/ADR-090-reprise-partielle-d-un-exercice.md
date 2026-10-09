@@ -6,8 +6,8 @@ Accepted (2026-10-09, product owner Yves Chevallier, on a student's report:
 "at 7/10 I must redo all ten questions to rework the three wrong ones").
 Implemented with `@quiz/domain` (`retake.ts`: `itemStanding`,
 `acquiredItems`, `partialRetakeRefusal`, `retakeScopeFits`), migration
-`0095_partial_retake.sql`, `apps/api/src/modules/grading/carry.ts` and
-`retakeAttempt` (`apps/api/src/modules/live/attempt.ts`).
+`0095_partial_retake.sql`, the ADR-090 section of
+`apps/api/src/modules/grading/service.ts` and `retakeAttempt` (`apps/api/src/modules/live/attempt.ts`).
 
 Scope: what a retake of an `exercise` asks again, and what the student is
 told of each question between two attempts.
@@ -43,9 +43,10 @@ retakes; frozen with the rest of the settings.
 `to_review` needs `free` navigation. The acquired questions are shown
 read-only between the others; under `forward_only` or `milestones` a carried
 validation or checkpoint would close the questions around it. The server
-refuses the pair while retakes are on (`422 retake_scope_navigation`,
-`retakeScopeFits`), whichever half moved; the editor disables the choice
-and says why.
+refuses the pair while partial retakes are on (`422 retake_scope_navigation`,
+`retakeScopeFits`, built on `partialRetakesOn`, the one "partial is on"
+rule), whichever half moved; the editor asks the same predicate to disable
+the choice, and the navigation, and says why.
 
 ### 2. Acquired, to review, awaiting correction
 
@@ -61,15 +62,19 @@ and says why.
   "awaiting correction", never "wrong";
 - **to review**: validated, below its maximum.
 
-The word "mastery" is not used: it belongs to F-DRILL-05.
+The standings of an attempt are computed once (`standingsOf`, from one read
+of its validated gradings); `acquiredItems` and `partialRetakeRefusal`
+take them as they are. The word "mastery" is not used: it belongs to
+F-DRILL-05.
 
 ### 3. A partial retake is a whole attempt
 
 `POST /evaluations/:id/retake` takes a body `{ scope }` (`RetakeBody`,
 default `all`, so a body-less request means what it always did). With
 `to_review`, after the unchanged `retakeRefusal`, `partialRetakeRefusal`
-refuses with `409 partial_retake_refused` when the teacher kept `all`
-(`scope_all`) or every question is acquired (`nothing_to_review`). Under
+refuses with the usual `409 retake_refused`, with two more reasons: the
+teacher kept `all` (`scope_all`) or every question is acquired
+(`nothing_to_review`). Under
 `to_review` the student may still choose **Redo everything**, today's
 blank retake.
 
@@ -78,7 +83,9 @@ whole attempt — its own number (it consumes one of the maximum), a new
 seed (a new order, newly shuffled choices, new parameter values for the
 questions to review), its own deadline. Each acquired item's entry of
 `attempts.instances` is then overwritten by attempt n's, and its answer
-payload and validated grading are copied — new ids, the grading pointing at
+payload and validated grading are copied — the gradings exactly as the
+retake read them, once, inside the transaction, so no override slips
+between the read and the copy — new ids, the grading pointing at
 the copied answer, `supersedesId` null, `firstShownAt` kept, dwell 0, flag
 and validation not carried. A frozen snapshot.
 
@@ -107,14 +114,14 @@ query.
 
 ### 5. What the student reads between two attempts
 
-While retakes are open, under `to_review`, `FeedbackPending` carries beside
-`retake`:
-
-- `retake.scope` and `retake.toReview`: how many questions of the LATEST
-  finished attempt a partial retake would ask again — the "(n)" of its
-  button;
-- `review`: for the latest attempt only, one row per question — its id, its
-  rank in the STUDENT's order, its standing. No points per item, no answer,
+While retakes are open, under `to_review`, the results page of the
+student's LATEST finished attempt — the one a partial retake follows —
+carries beside `retake` (which says `scope`) a `review`: one row per
+question — its id, its rank in the STUDENT's order, its standing. It is
+sent on both branches of the page, score only (`FeedbackPending`) or beside
+a published correction (`StudentResults`, ADR-050), so the offer never
+comes without its list; the "(n)" of the button is counted from it. Any
+other attempt's page carries no `review` and offers the plain retake. No points per item, no answer,
   no key. It travels whatever the feedback policy, `none` included, like
   the score of ADR-025 §4: enabling a partial retake is the teacher's
   consent to that word per question. `results/service.ts` (`retakeOffer`)
@@ -124,8 +131,8 @@ While retakes are open, under `to_review`, `FeedbackPending` carries beside
 The results page keeps one primary action: **Redo the questions to review
 (n)**, with **Redo everything** secondary; with nothing to review, Redo
 everything alone. Under `keep: "last"` the existing confirmation applies to
-both. The home card's Try again opens that page instead of retaking
-blind. The conditions shown to students (ADR-079) gain the line
+both. The home card's action becomes **See my results and try again**
+and opens that page: the label says what the click does. The conditions shown to students (ADR-079) gain the line
 `partial_retake`, right after the number of attempts.
 
 ## Consequences
