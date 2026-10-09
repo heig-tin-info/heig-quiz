@@ -3458,6 +3458,8 @@ export const en = {
   "eval.questions.preview.subtitle": "{type} · version {n}, the one frozen in this list",
   "eval.questions.preview.banner": "Student preview — nothing is saved",
   "eval.questions.preview.bannerBody": "This is the version frozen in this list. Answer it if you like: nothing is stored and nothing is graded.",
+  "eval.questions.preview.prev": "Previous question",
+  "eval.questions.preview.next": "Next question",
   "eval.questions.reorder": "Reorder {name}",
   "eval.questions.reorderFailed": "The new order could not be saved.",
   "eval.questions.milestone.add": "Add a milestone",

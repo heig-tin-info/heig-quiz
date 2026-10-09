@@ -63,6 +63,7 @@ import {
 import {
   me,
 } from "./session";
+import { conceptRefs } from "./concept";
 
 // --- 3. Evaluations, live dashboard (WP8) ----------------------------------
 //
@@ -983,8 +984,14 @@ const rosterOf = (e: MockEvaluation) => {
   };
 };
 
+/** An item as the wire carries it: the question's difficulty beside it, like the server. */
+const itemRow = (i: MockItem) => ({ ...i, difficulty: itemQuestion(i)?.difficulty ?? 2 });
+
 /** What an item list says about itself, for an evaluation and a template alike. */
 const itemListFacts = (e: MockEvaluation) => ({
+  concepts: Object.fromEntries(
+    e.items.map((i) => [i.questionId, conceptRefs(itemQuestion(i)?.concepts ?? [])]),
+  ),
   totalPoints: totalPointsOf(e),
   staleItems: e.items
     .filter((i) => i.latestVersionNumber !== null && i.latestVersionNumber > i.versionNumber)
@@ -998,7 +1005,7 @@ const itemListFacts = (e: MockEvaluation) => ({
 
 const evaluationDetail = (e: MockEvaluation) => ({
   evaluation: toEvaluation(e),
-  items: e.items.map((i) => ({ ...i })),
+  items: e.items.map(itemRow),
   ...itemListFacts(e),
   attemptCount: attemptCountOf(e),
   editable: isConfigEditable(e.state, attemptCountOf(e)),
@@ -1328,7 +1335,7 @@ export const templateDetail = (x: MockTemplate) => {
       mcqPolicy: e.mcqPolicy,
       durationS: e.durationS,
     },
-    items: e.items.map((i) => ({ ...i, poolUnlinked: !inLinkedPool(i, x.courseId) })),
+    items: e.items.map((i) => ({ ...itemRow(i), poolUnlinked: !inLinkedPool(i, x.courseId) })),
     ...itemListFacts(e),
   };
 };

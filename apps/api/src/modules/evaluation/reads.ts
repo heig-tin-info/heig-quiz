@@ -5,6 +5,8 @@ import { alias } from "drizzle-orm/pg-core";
 import {
   DEFAULT_MCQ_POLICY,
   categorizePolicyOf,
+  type ConceptLang,
+  type ConceptRef,
   EvaluationSettings,
   FeedbackPolicy,
   GradingScale,
@@ -45,6 +47,7 @@ import {
   questions,
   users,
 } from "../../db/schema.js";
+import { conceptsOf } from "../concept/service.js";
 import { poolRolesOf } from "../pool/service.js";
 import type { EvaluationRecord, ItemRecord, DbOrTx } from "./shared.js";
 import type { Caller } from "../guards.js";
@@ -420,7 +423,18 @@ export async function itemRowsOf(db: DbOrTx, joined: readonly JoinedItem[]): Pro
     versionNumber: j.version.number ?? 0,
     latestVersionNumber: latest.get(j.question.id) ?? null,
     deprecated: j.version.deprecatedAt !== null,
+    difficulty: j.question.difficulty,
   }));
+}
+
+/** The concepts of the items' questions, by question id, labelled in `lang`. */
+export async function itemConcepts(
+  db: DbOrTx,
+  rows: readonly ItemRow[],
+  lang: ConceptLang,
+): Promise<Record<string, ConceptRef[]>> {
+  const refs = await conceptsOf(db, [...new Set(rows.map((r) => r.questionId))], lang);
+  return Object.fromEntries(refs);
 }
 
 export const staleOf = (rows: readonly ItemRow[]): string[] =>
@@ -587,12 +601,14 @@ export async function evaluationDetail(
   viewer: Caller,
   enrolled: number,
   courseId: string,
+  lang: ConceptLang,
 ): Promise<EvaluationDetail> {
   const items = await itemRows(db, row.id);
   const attemptsSoFar = await attemptCount(db, row.id);
   return {
     evaluation: toEvaluation(row),
     items,
+    concepts: await itemConcepts(db, items, lang),
     totalPoints: evaluationTotal(items),
     staleItems: staleOf(items),
     attemptCount: attemptsSoFar,

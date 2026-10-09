@@ -34,6 +34,7 @@ import {
   PageError,
   PageHeader,
   PageSkeleton,
+  pageBox,
   TabPanel,
   Tabs,
 } from "../ui";
@@ -43,6 +44,7 @@ import {
   stateTone,
 } from "./common";
 import { evaluationTarget } from "./editTarget";
+import { useItemPane } from "./ItemPreview";
 import { ItemsStep } from "./ItemsStep";
 import { LaunchStep } from "./LaunchStep";
 import { missingTiming, TIMING_FIELD_ID } from "./timing";
@@ -93,6 +95,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   /** The teacher tried "Go to launch" with the timing incomplete (#76). */
   const [timingChecked, setTimingChecked] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const pane = useItemPane();
 
   const detail = useQuery<EvaluationDetail>({
     queryKey: evaluationKey(id),
@@ -146,11 +149,18 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
     },
   });
 
+  // A wide route (`WIDE` in App.tsx): the page draws its own box, which the
+  // preview docked beside the question list widens (`useItemPane`).
   if (detail.isLoading) {
-    return <PageSkeleton header="title-and-bar" />;
+    return (
+      <div style={pageBox(null)}>
+        <PageSkeleton header="title-and-bar" />
+      </div>
+    );
   }
   if (detail.isError || !detail.data) {
     return (
+      <div style={pageBox(null)}>
       <PageError
         title={t("eval.notFound")}
         error={detail.error}
@@ -158,6 +168,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
         retrying={detail.isFetching}
         fallback={t("error.server")}
       />
+      </div>
     );
   }
 
@@ -214,7 +225,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   };
 
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-6" style={pane.box(step === "questions")}>
       <PageHeader
         eyebrow={
           classroomId ? (
@@ -363,6 +374,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
             // attempt OR once the evaluation has been opened.
             lock={itemListLock(evaluation.state, data.attemptCount)}
             navigate={navigate}
+            pane={pane}
           />
         ) : step === "timing" ? (
           <TimingStep

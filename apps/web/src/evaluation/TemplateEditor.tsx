@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { CopyPlus, FileStack, Settings2, Unlink } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { TemplatePatch, type TemplateDetail } from "@quiz/contracts";
 import { TEMPLATE_TABS, type CourseTab } from "@quiz/domain";
@@ -24,12 +25,14 @@ import {
   PageError,
   PageHeader,
   PageSkeleton,
+  pageBox,
   SectionHeading,
   TabPanel,
   Tabs,
   Tip,
 } from "../ui";
 import { templateTarget } from "./editTarget";
+import { useItemPane } from "./ItemPreview";
 import { ItemsStep } from "./ItemsStep";
 import { clockSummary } from "./clockSummary";
 import { ConfigSettings } from "./TimingStep";
@@ -59,6 +62,10 @@ import { useConfigPatch } from "./usePatch";
  * while the template holds none, where "Use in a classroom" would copy an
  * empty paper: then it is absent, and "Add questions" in the empty list is
  * the primary, as on a new evaluation.
+ *
+ * A wide route (`WIDE` in App.tsx) that draws its own box (`pageBox`), so
+ * that the preview docked beside the question list widens the page by its
+ * own width instead of squeezing the list.
  */
 export function TemplateEditor({ id, navigate }: { id: string; navigate: (r: Route) => void }) {
   const t = useT();
@@ -67,9 +74,9 @@ export function TemplateEditor({ id, navigate }: { id: string; navigate: (r: Rou
     queryFn: () => api(`/app/api/templates/${id}`),
   });
 
-  if (detail.isLoading) return <PageSkeleton header="title-and-bar" />;
+  if (detail.isLoading) return boxed(<PageSkeleton header="title-and-bar" />);
   if (detail.error instanceof ApiError && detail.error.status === 404) {
-    return (
+    return boxed(
       <EmptyState
         icon={FileStack}
         titleAs="h1"
@@ -79,22 +86,24 @@ export function TemplateEditor({ id, navigate }: { id: string; navigate: (r: Rou
             {t("courses.backToList")}
           </Button>
         }
-      />
+      />,
     );
   }
   if (detail.isError || !detail.data) {
-    return (
+    return boxed(
       <PageError
         title={t("templates.editor")}
         error={detail.error}
         onRetry={() => void detail.refetch()}
         retrying={detail.isFetching}
         fallback={t("error.server")}
-      />
+      />,
     );
   }
   return <Editor data={detail.data} navigate={navigate} />;
 }
+
+const boxed = (node: ReactNode) => <div style={pageBox(null)}>{node}</div>;
 
 type Tab = (typeof TEMPLATE_TABS)[number];
 const isTab = (v: string): v is Tab => (TEMPLATE_TABS as readonly string[]).includes(v);
@@ -131,11 +140,12 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
     });
   };
 
+  const pane = useItemPane();
   const unlinked = data.items.filter((i) => i.poolUnlinked).length;
   const filled = data.items.length > 0;
 
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-6" style={pane.box(tab === "questions")}>
       <PageHeader
         help="courses"
         eyebrow={
@@ -186,6 +196,7 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
             // A template has no attempt and is never opened: nothing freezes it.
             lock={null}
             navigate={navigate}
+            pane={pane}
             addVariant={filled ? "secondary" : "primary"}
             notices={
               unlinked > 0 ? (

@@ -3451,6 +3451,8 @@ export const fr: Record<keyof Dict, string> = {
   "eval.questions.preview.subtitle": "{type} · version {n}, celle figée dans cette liste",
   "eval.questions.preview.banner": "Aperçu étudiant — rien n'est enregistré",
   "eval.questions.preview.bannerBody": "C'est la version figée dans cette liste. Vous pouvez y répondre : rien n'est stocké et rien n'est corrigé.",
+  "eval.questions.preview.prev": "Question précédente",
+  "eval.questions.preview.next": "Question suivante",
   "eval.questions.reorder": "Déplacer {name}",
   "eval.questions.reorderFailed": "Le nouvel ordre n'a pas pu être enregistré.",
   "eval.questions.milestone.add": "Ajouter un jalon",
