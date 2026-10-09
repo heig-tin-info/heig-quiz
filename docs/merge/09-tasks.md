@@ -5055,27 +5055,72 @@ serves now (16a), and what waits for the group repositories (16b).
 ### M8-04 — Codespace identity remap (if M6 is in scope)
 - **Acceptance**: on a copy of the portal DB and volumes, one real session
   resumes with its files.
+- **Dropped** (product owner, 2026-10-09): classroom's portal never served
+  a real class, and it has been stopped and disabled since M6-04 (its
+  SQLite and volumes are archived in `/root/classroom-codespace` on the
+  engine VM). Quiz's portal started empty, so there is nothing to remap.
+  Step C4 of the runbook says so.
 
 ### M8-05 — Cutover runbook
 - **Goal**: `docs/development/deployment.md` gains the cutover chapter
   (§6.5, §6.7): T0 checklist, commands, rollback table, App steps, secrets,
   go/no-go criteria.
+- **As delivered** (branch `merge/M8-05-cutover-runbook`):
+  [`10-cutover-runbook.md`](10-cutover-runbook.md), in `docs/merge/` rather
+  than `deployment.md`, because it is a one-off operation. `deployment.md`
+  keeps the permanent operations and is only linked from the runbook. It
+  holds:
+  - a one-page checklist;
+  - the owner's open decisions O1–O7;
+  - T-7…T-1: the organization list (SQL on both sides, then the dry run's
+    mapping refusals), staging and production dry runs through a scratch
+    copy `hgc_cutover` of classroom's dump inside Quiz's PostgreSQL, the
+    ADR-077 count, the T0 SQL on both databases, the secrets of §6.4 with
+    their checks, backups and classroom's image;
+  - C1–C8 with commands, checks and rollbacks; C4 dropped (M8-04); C5
+    verify only; the import's exit codes and red lines;
+  - the rollback table;
+  - D's daily checks;
+  - E's steps in order;
+  - the fr/en announcements;
+  - M8-06's steps (§7).
+
+  Who runs what: the owner (Caddy fragments, GitHub, SWITCH, the uptime
+  service, `srvstg`, every go) or an agent as `srv` after the owner's go.
+  **Found**: the production image cannot run the import (no `tsx`,
+  `scripts/` not built). The runbook uses `npx tsx` as a stopgap, and a
+  code PR must land before M8-06 (O6).
+  `LEGACY_CLASSROOM_COOKIE_SECRET` is not used. The import writes nothing
+  on GitHub, so I57's bypass check moved to C8.
 
 ### M8-06 — Rehearsal
-- **Depends on**: M8-01…05, D22.
+- **Depends on**: M8-01…05, D22, and the import's runtime (runbook §1.6,
+  O6).
 - **Goal**: on staging (`srvstg`) with the staging App and a fresh
   production dump of both databases: the whole of §6.5 C, timed.
+- **Steps**: [`10-cutover-runbook.md`](10-cutover-runbook.md) §7:
+  1. the dumps and the mapping through `/srv/staging-inbox`;
+  2. `staging-refresh.sh` and the scratch `hgc_cutover`;
+  3. a dry run, then `--apply --final`, with the expected STATE refusals
+     recorded;
+  4. a second run (`nothing to do`);
+  5. the resolver on old ids;
+  6. the C8 rows that need no GitHub;
+  7. the re-scrub;
+  8. the timings and go/no-go in the *Rehearsal log*.
 - **Acceptance**: parity report clean; timings recorded in `PROGRESS.md`;
-  go/no-go written.
+  go/no-go written; §2's target times filled in the runbook.
 
 ### M8-07 — The cutover
-- **Who**: the product owner, with an agent following the runbook.
-- **Depends on**: M8-06 go, D20.
+- **Who**: the product owner, with an agent following the runbook
+  ([`10-cutover-runbook.md`](10-cutover-runbook.md) §2).
+- **Depends on**: M8-06 go, D20, the runbook's open decisions O1–O5.
 
 ## M9 — Decommission
 
 ### M9-01 — Point of no return and decommission
-- **Goal**: §6.5 E; redirects to 301; issue #143 closed.
+- **Goal**: §6.5 E; redirects to 308 (the runbook's §5: 308 keeps the
+  method, 301 may not); issue #143 closed.
 
 ## L — After the merge
 

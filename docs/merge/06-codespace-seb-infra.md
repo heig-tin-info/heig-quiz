@@ -213,6 +213,13 @@ slug is its own (classroom's is `hgc-prod`).
 
 ## 6.5 Cutover
 
+The commands, checks and owners are in
+[`10-cutover-runbook.md`](10-cutover-runbook.md) (M8-05). It follows
+production as of 2026-10-09. C2 has no codespace step and C4 is dropped:
+classroom's portal has been stopped since M6-04 (M8-04 dropped).
+`CODESPACE_*` are already set (C5). `LEGACY_CLASSROOM_COOKIE_SECRET` is
+not used. Redirects become 308 at E.
+
 **A — Ship.** The GitHub substrate and the journal are live with Quiz's
 own App (D23) since M2/M4; what remains dark sits behind its switch
 (`CODESPACE_URL` ⇒ routes 404, tasks no-op), through the normal pipeline.
