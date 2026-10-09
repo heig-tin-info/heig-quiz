@@ -48,6 +48,7 @@ function detail(over: Partial<TemplateDetail> = {}): TemplateDetail {
       durationS: e.durationS,
     },
     items,
+    concepts: {},
     totalPoints: items.length,
     staleItems: items.filter((i) => i.id === stale.id).map((i) => i.id),
     editableQuestionIds: items.map((i) => i.questionId),

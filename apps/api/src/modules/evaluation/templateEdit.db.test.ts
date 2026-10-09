@@ -23,10 +23,11 @@ import {
 } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
-import { auditLog, coursePools, courseStaff, questions } from "../../db/schema.js";
+import { auditLog, concepts, coursePools, courseStaff, questions } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { seedLive, type Seeded } from "../../test/live.js";
+import * as conceptService from "../concept/service.js";
 import * as poolService from "../pool/service.js";
 import * as service from "./service.js";
 import * as templates from "./templates.js";
@@ -360,6 +361,27 @@ describe("the item flags of the editor", () => {
     await server.app.db.delete(coursePools).where(eq(coursePools.courseId, seed.courseId));
     const unlinked = await detail(teacher, t.template.id);
     expect(unlinked.items.map((i) => i.poolUnlinked)).toEqual([true, true]);
+  });
+
+  it("carries each question's difficulty and concepts, in the reader's language", async () => {
+    const { teacher, seed } = await world();
+    const [first, second] = seed.questionIds as [string, string];
+    const conceptId = randomUUID();
+    await server.app.db.insert(concepts).values({
+      id: conceptId,
+      status: "validated",
+      labelFr: "Pointeur",
+      keyFr: "pointeur",
+      labelEn: "Pointer",
+      keyEn: "pointer",
+    });
+    await conceptService.setQuestionConcepts(server.app.db, first, [conceptId]);
+    await server.app.db.update(questions).set({ difficulty: 4 }).where(eq(questions.id, second));
+
+    const t = await savedTemplate(teacher, seed);
+    expect(t.items.map((i) => i.difficulty)).toEqual([2, 4]);
+    expect(t.concepts[first]!.map((c) => c.label)).toEqual(["Pointer"]);
+    expect(t.concepts[second]).toEqual([]);
   });
 });
 

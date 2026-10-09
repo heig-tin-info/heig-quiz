@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ComponentProps } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ItemPreview } from "@quiz/contracts";
@@ -7,8 +8,15 @@ import { itemListLock } from "@quiz/domain";
 
 import { EVALUATION_ID, makeEvaluationDetail, makeItemRow } from "../test/live-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
+import { viewport } from "../test/viewport";
 import { evaluationTarget } from "./editTarget";
-import { ItemsStep } from "./ItemsStep";
+import { useItemPane } from "./ItemPreview";
+import { ItemsStep as Step } from "./ItemsStep";
+
+/** The list with its preview state, which a page holds (`useItemPane`). */
+function ItemsStep(props: Omit<ComponentProps<typeof Step>, "pane">) {
+  return <Step {...props} pane={useItemPane()} />;
+}
 
 const target = evaluationTarget(EVALUATION_ID);
 
@@ -41,8 +49,9 @@ const previewUrl = `GET /app/api/evaluations/${EVALUATION_ID}/preview/items/${fr
 
 afterEach(() => vi.restoreAllMocks());
 
+/** The row of the list, not the docked preview's title of the same name. */
 function rowOf(name: string): HTMLElement {
-  return screen.getByText(name).closest("li")!;
+  return screen.getAllByText(name).map((e) => e.closest("li")).find(Boolean)!;
 }
 
 describe("ItemsStep — preview and edit (#127)", () => {
@@ -145,6 +154,55 @@ describe("ItemsStep — preview and edit (#127)", () => {
     expect(navigate).toHaveBeenCalledWith(expect.objectContaining({ from: EVALUATION_ID }));
     await user.click(within(row).getByRole("button", { name: /preview pointer-decl/i }));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+});
+
+describe("ItemsStep — the docked preview and the question's columns", () => {
+  const narrow = window.matchMedia;
+  afterEach(() => vi.stubGlobal("matchMedia", narrow));
+  const otherUrl = `GET /app/api/evaluations/${EVALUATION_ID}/preview/items/${other.id}`;
+  const detail = makeEvaluationDetail({
+    items: [frozen, { ...other, difficulty: 4 }],
+    concepts: {
+      [frozen.questionId]: [
+        { id: "00000000-0000-4000-8000-0000000000c1", label: "Pointers", qualifier: "", status: "validated" },
+      ],
+    },
+  });
+
+  it("docks beside the list on a click on the row, walks it with ↑/↓ and closes on Escape", async () => {
+    viewport(1600);
+    const user = userEvent.setup();
+    mockFetch({
+      [previewUrl]: ok(preview),
+      [otherUrl]: ok({ ...preview, itemId: other.id, versionNumber: 1 }),
+    });
+    renderWithProviders(<ItemsStep target={target} lock={null} detail={detail} navigate={vi.fn()} />);
+
+    await user.click(screen.getByText("pointer-decl"));
+    const pane = await screen.findByRole("complementary", { name: "pointer-decl" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(rowOf("pointer-decl")).toHaveAttribute("aria-current", "true");
+    expect(within(pane).getByRole("button", { name: /previous question/i })).toBeDisabled();
+
+    await user.click(within(pane).getByRole("button", { name: /next question/i }));
+    expect(await screen.findByRole("complementary", { name: "array-decay" })).toBeInTheDocument();
+    expect(rowOf("array-decay")).toHaveAttribute("aria-current", "true");
+
+    // A control of the row keeps its own click: the points field is no look.
+    await user.click(within(rowOf("pointer-decl")).getByRole("spinbutton"));
+    expect(screen.getByRole("complementary", { name: "array-decay" })).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("complementary")).not.toBeInTheDocument());
+  });
+
+  it("shows the question's concepts and difficulty on its row", () => {
+    mockFetch({});
+    renderWithProviders(<ItemsStep target={target} lock={null} detail={detail} navigate={vi.fn()} />);
+    expect(within(rowOf("pointer-decl")).getByText("Pointers")).toBeInTheDocument();
+    expect(within(rowOf("array-decay")).getByText("—")).toBeInTheDocument();
+    expect(within(rowOf("array-decay")).getByText(/difficulty 4/i)).toBeInTheDocument();
   });
 });
 

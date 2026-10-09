@@ -30,9 +30,9 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 
-import type { EvaluationDetail, ItemPatch, ItemRow } from "@quiz/contracts";
+import type { ConceptRef, EvaluationDetail, ItemPatch, ItemRow } from "@quiz/contracts";
 import type { z } from "zod";
 import { bonusTotal, type ItemListLock } from "@quiz/domain";
 
@@ -52,15 +52,18 @@ import {
   IconButton,
   inputClass,
   inputSize,
+  PANE_GAP,
   SectionHeading,
   Tip,
 } from "../ui";
 import { BonusLabel } from "../BonusLabel";
+import { ConceptNames } from "../concepts/refs";
+import { DifficultyDots } from "../pool/QuestionTable";
 import { AddQuestionsSheet } from "./AddQuestionsSheet";
 import type { EditTarget } from "./editTarget";
 import { useTargetRefresh } from "./editTarget";
 import { IntroBand, IntroEditor } from "./ItemIntro";
-import { ItemPreviewSheet } from "./ItemPreviewSheet";
+import { ItemPreview, type ItemPane } from "./ItemPreview";
 import { useConfirm } from "../confirm";
 
 /**
@@ -98,6 +101,13 @@ import { useConfirm } from "../confirm";
  * same code: the `target` names the routes and the caches, the `lock` is the
  * caller's to compute (a template has none), and a row flagged
  * `poolUnlinked` — only a template's rows carry the flag — says so.
+ *
+ * A click on a row (anywhere but a control) or its eye shows the item as a
+ * student sees it (`ItemPreview`): docked beside the list when the window has
+ * room, so another click swaps it, as in the pool. The row shown is tinted.
+ * Beside the name, the question's concepts and difficulty — read, never set
+ * here — are the first columns to go when the list narrows (concepts, then
+ * difficulty), measured on the list's own width, as `T`'s priorities are.
  */
 
 /** What `PATCH …/items/:itemId` accepts, as the client writes it. */
@@ -307,6 +317,8 @@ function EditButton({
 function ItemCard({
   item,
   index,
+  concepts,
+  shown,
   stale,
   locked,
   last,
@@ -325,6 +337,9 @@ function ItemCard({
 }: {
   item: Row;
   index: number;
+  concepts: readonly ConceptRef[];
+  /** This row is the one the preview shows. */
+  shown: boolean;
   stale: boolean;
   locked: boolean;
   last: boolean;
@@ -353,8 +368,9 @@ function ItemCard({
     <li
       ref={setNodeRef}
       style={style}
+      aria-current={shown || undefined}
       className={cx(
-        "group/row relative bg-surface",
+        "group/row relative bg-surface aria-[current=true]:bg-accent-soft",
         isDragging && "z-20 shadow-overlay ring-1 ring-line-strong",
       )}
     >
@@ -368,7 +384,15 @@ function ItemCard({
           t={t}
         />
       ) : null}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-3 py-3 pr-3 pl-1.5">
+      {/* The item's own line is the look; its bands (text, milestone) are not. */}
+      <div
+        onClick={(e: MouseEvent) => {
+          // A control of the row keeps its own click; the row's is a look.
+          if ((e.target as Element).closest("button, input, label, a, textarea")) return;
+          onPreview();
+        }}
+        className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-3 py-3 pr-3 pl-1.5"
+      >
         {/*
          * A BUTTON and nothing else: that is what the keyboard sensor listens
          * to, and what gives the gesture an accessible name.
@@ -402,6 +426,17 @@ function ItemCard({
             ) : null}
           </span>
           <span className="text-xs text-fg-faint">{typeLabel(t, item.type)}</span>
+        </span>
+        {/* The literal `@` classes of the list's container (`@container` on the ul). */}
+        <span className="hidden w-48 shrink-0 @4xl:block">
+          {concepts.length === 0 ? (
+            <span className="text-sm text-fg-faint">—</span>
+          ) : (
+            <ConceptNames concepts={concepts} />
+          )}
+        </span>
+        <span className="hidden w-14 shrink-0 @2xl:block">
+          <DifficultyDots value={item.difficulty} />
         </span>
         <VersionCell item={item} stale={stale} t={t} />
         <span className="flex shrink-0 items-center gap-1">
@@ -485,7 +520,10 @@ function ItemCard({
 }
 
 /** What the list reads off an evaluation's detail or a template's: both have these. */
-type ItemList = Pick<EvaluationDetail, "staleItems" | "editableQuestionIds" | "totalPoints"> & {
+type ItemList = Pick<
+  EvaluationDetail,
+  "staleItems" | "editableQuestionIds" | "totalPoints" | "concepts"
+> & {
   items: Row[];
 };
 
@@ -496,9 +534,12 @@ export function ItemsStep({
   navigate,
   addVariant = "primary",
   notices,
+  pane,
 }: {
   target: EditTarget;
   detail: ItemList;
+  /** The preview's state, held by the page it widens (`useItemPane`). */
+  pane: ItemPane;
   /** Why the list is frozen (issue #79), or null while it may change. */
   lock: ItemListLock | null;
   navigate: (r: Route) => void;
@@ -513,8 +554,6 @@ export function ItemsStep({
   const t = useT();
   const toast = useToast();
   const [adding, setAdding] = useState(false);
-  /** The row whose Preview sheet is open (#127). */
-  const [previewing, setPreviewing] = useState<string | null>(null);
   /** The row whose intro editor is open (ADR-084). */
   const [writingIntro, setWritingIntro] = useState<string | null>(null);
   const confirm = useConfirm();
@@ -631,8 +670,17 @@ export function ItemsStep({
   const failed = patch.error ?? remove.error ?? updateVersions.error;
   // The points the bonus items may add on top of the total (ADR-052).
   const bonusPoints = bonusTotal(items);
-  // Read off the live list: a row removed meanwhile closes its sheet.
-  const previewed = items.find((i) => i.id === previewing) ?? null;
+  // Read off the live list: a row removed meanwhile closes its preview.
+  const previewedAt = items.findIndex((i) => i.id === pane.shown);
+  const previewed = items[previewedAt] ?? null;
+  const show = (at: number) => {
+    const to = items[at];
+    return to ? () => pane.setShown(to.id) : undefined;
+  };
+  // A row removed while shown closes its preview, and the page narrows back.
+  useEffect(() => {
+    if (pane.shown !== null && previewedAt < 0) pane.setShown(null);
+  }, [pane.shown, pane.setShown, previewedAt]);
   const introItem = items.find((i) => i.id === writingIntro) ?? null;
   /** The "+ Text" that opens the editor of `item`'s intro (ADR-084). */
   const addTextBefore = (item: Row): GapAction => ({
@@ -641,8 +689,20 @@ export function ItemsStep({
     onClick: () => setWritingIntro(item.id),
   });
 
+  const preview = previewed ? (
+    <ItemPreview
+      target={target}
+      item={previewed}
+      pane={pane.pane}
+      onMove={{ prev: show(previewedAt - 1), next: show(previewedAt + 1) }}
+      onClose={() => pane.setShown(null)}
+    />
+  ) : null;
+
   return (
-    <div className="space-y-4">
+    // Escape closes the docked preview from anywhere in the list or in it.
+    <div className="flex items-start" style={{ gap: PANE_GAP }} onKeyDown={pane.closeOnEscape}>
+    <div className="min-w-0 flex-1 space-y-4">
       <SectionHeading
         icon={ListOrdered}
         title={t("eval.step.questions")}
@@ -710,12 +770,14 @@ export function ItemsStep({
                   items={items.map((i) => i.id)}
                   strategy={verticalListSortingStrategy}
                 >
-                  <ul className="divide-y divide-line">
+                  <ul className="divide-y divide-line @container">
                     {items.map((item, index) => (
                       <ItemCard
                         key={item.id}
                         item={item}
                         index={index}
+                        concepts={detail.concepts[item.questionId] ?? []}
+                        shown={item.id === pane.shown}
                         stale={stale.has(item.id)}
                         locked={locked}
                         last={index === items.length - 1}
@@ -728,7 +790,7 @@ export function ItemsStep({
                         onUpdate={() => updateVersions.mutate([item.id])}
                         onRemove={() => removeItem(item)}
                         canEdit={editable.has(item.questionId)}
-                        onPreview={() => setPreviewing(item.id)}
+                        onPreview={() => pane.setShown(item.id)}
                         onEdit={() =>
                           navigate({ view: "question", id: item.questionId, ...target.questionFrom })
                         }
@@ -770,14 +832,6 @@ export function ItemsStep({
         />
       ) : null}
 
-      {previewed ? (
-        <ItemPreviewSheet
-          target={target}
-          item={previewed}
-          onClose={() => setPreviewing(null)}
-        />
-      ) : null}
-
       {adding ? (
         <AddQuestionsSheet
           target={target}
@@ -785,6 +839,8 @@ export function ItemsStep({
           onClose={() => setAdding(false)}
         />
       ) : null}
+    </div>
+    {preview}
     </div>
   );
 }

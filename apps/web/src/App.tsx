@@ -409,9 +409,16 @@ const FULL_SCREEN: ReadonlySet<Route["view"]> = new Set([
  * margins (#93). The pool: it keeps the cap itself, and widens past it by the
  * width of the question pane when that pane docks beside the list. The
  * grading screen: the same, by the width of the answer pane beside its
- * table. Every other page keeps the cap.
+ * table; an evaluation's and a template's editor, by the item preview beside
+ * their question list. Every other page keeps the cap.
  */
-const WIDE: ReadonlySet<Route["view"]> = new Set(["live", "pool", "grading"]);
+const WIDE: ReadonlySet<Route["view"]> = new Set([
+  "live",
+  "pool",
+  "grading",
+  "evaluation",
+  "template",
+]);
 
 /**
  * The views where a notification arriving never toasts (ADR-030 §h): every

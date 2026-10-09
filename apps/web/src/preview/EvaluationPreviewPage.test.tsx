@@ -397,6 +397,7 @@ describe("EvaluationPreviewPage — fixing a question", () => {
     internalName: questionId,
     versionNumber: 1,
     latestVersionNumber: 1,
+    difficulty: 2,
     ...over,
     deprecated: false,
   });

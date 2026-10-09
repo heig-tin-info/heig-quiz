@@ -172,6 +172,7 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
         versionNumber: 1,
         latestVersionNumber: 1,
         deprecated: false,
+        difficulty: 2,
       },
       {
         id: "i2",
@@ -187,8 +188,10 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
         versionNumber: 1,
         latestVersionNumber: 1,
         deprecated: false,
+        difficulty: 2,
       },
     ],
+    concepts: {},
     totalPoints: 5,
     staleItems: [],
     attemptCount: 2,

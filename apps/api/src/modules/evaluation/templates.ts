@@ -16,6 +16,7 @@ import { isDeepStrictEqual } from "node:util";
 import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type {
+  ConceptLang,
   EvaluationMode,
   EvaluationTemplate,
   TemplateDetail,
@@ -44,6 +45,7 @@ import {
   feedbackOf,
   itemCountsByEvaluation,
   inLinkedPool,
+  itemConcepts,
   itemRef,
   itemRowsOf,
   joinedItems,
@@ -201,6 +203,7 @@ export async function templateDetail(
   db: Db,
   row: EvaluationRecord,
   viewer: Caller,
+  lang: ConceptLang,
 ): Promise<TemplateDetail> {
   const [joined, linked] = await Promise.all([
     joinedItems(db, row.id),
@@ -222,6 +225,7 @@ export async function templateDetail(
       durationS: row.durationS,
     },
     items,
+    concepts: await itemConcepts(db, rows, lang),
     totalPoints,
     staleItems: staleOf(rows),
     editableQuestionIds: await editableQuestionIdsOf(db, rows, viewer),

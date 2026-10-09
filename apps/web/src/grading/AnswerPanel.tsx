@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Check, PencilLine, RefreshCcw } from "lucide-react";
-import { useId, useState, type ComponentProps, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 
 import type { GradingColumn } from "@quiz/core/client";
 import { WandIcon } from "@quiz/ui";
@@ -20,8 +20,7 @@ import {
   FormError,
   IconButton,
   NotePanel,
-  Pane,
-  Sheet,
+  PaneOrSheet,
   Textarea,
 } from "../ui";
 import { RowMarks } from "./GradingTable";
@@ -92,7 +91,7 @@ export function AnswerPanel(props: PanelProps) {
   );
   if (target.kind === "expected") {
     return (
-      <Frame
+      <PaneOrSheet
         pane={props.pane}
         title={t("grading.panel.question", { n: props.number })}
         subtitle={
@@ -118,18 +117,10 @@ export function AnswerPanel(props: PanelProps) {
         }
       >
         <ExpectedBody {...props} />
-      </Frame>
+      </PaneOrSheet>
     );
   }
   return <EntryPanel {...props} target={target} moves={moves} />;
-}
-
-/** A `Pane` beside the table, or a `Sheet` over it: the same content either way. */
-function Frame({
-  pane,
-  ...props
-}: Omit<ComponentProps<typeof Sheet>, "width" | "flush" | "aside"> & { pane: string | null }) {
-  return pane ? <Pane width={pane} {...props} /> : <Sheet {...props} />;
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -286,7 +277,7 @@ function EntryPanel({
     : t("grading.entry.state.ungraded");
 
   return (
-    <Frame
+    <PaneOrSheet
       pane={pane}
       title={named ? whoOf(t, entry) : t("grading.panel.anonymous")}
       subtitle={
@@ -384,7 +375,7 @@ function EntryPanel({
           <GradingHistory history={entry.history} />
         </Section>
       </div>
-    </Frame>
+    </PaneOrSheet>
   );
 }
 

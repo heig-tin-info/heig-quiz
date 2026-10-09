@@ -137,6 +137,7 @@ export function makeItemRow(index: number, overrides: Partial<ItemRow> = {}): It
     versionNumber: 1,
     latestVersionNumber: 1,
     deprecated: false,
+    difficulty: 2,
     ...overrides,
   };
 }
@@ -188,6 +189,7 @@ export function makeEvaluationDetail(overrides: Partial<EvaluationDetail> = {}):
       ...overrides.evaluation,
     },
     items,
+    concepts: {},
     totalPoints: items.reduce((sum, i) => sum + i.points, 0),
     staleItems: [],
     attemptCount: 0,

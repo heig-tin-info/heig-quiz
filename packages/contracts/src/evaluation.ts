@@ -18,6 +18,8 @@ import {
   TRUSTED_CLIENTS,
 } from "@quiz/domain";
 
+import { ConceptRef } from "./concept.js";
+
 /** F-EVAL-01. `poll` is accepted by the column and refused by every route (decision D7). */
 export const EvaluationMode = z.enum(["exam", "exercise", "poll"]);
 export type EvaluationMode = z.infer<typeof EvaluationMode>;
@@ -419,6 +421,8 @@ export const ItemRow = z.object({
   versionNumber: z.number().int(),
   latestVersionNumber: z.number().int().nullable(),
   deprecated: z.boolean(),
+  /** The question's difficulty, 1 to 5 — the question's, not the version's. */
+  difficulty: z.number().int().min(1).max(5),
 });
 export type ItemRow = z.infer<typeof ItemRow>;
 
@@ -441,9 +445,17 @@ export const EvaluationSelf = z.object({
 });
 export type EvaluationSelf = z.infer<typeof EvaluationSelf>;
 
+/**
+ * The concepts of each item's question, by question id, labelled in the
+ * reader's language: a column of the item list beside the difficulty.
+ */
+export const ItemConcepts = z.record(z.string(), z.array(ConceptRef));
+export type ItemConcepts = z.infer<typeof ItemConcepts>;
+
 export const EvaluationDetail = z.object({
   evaluation: Evaluation,
   items: z.array(ItemRow),
+  concepts: ItemConcepts,
   totalPoints: z.number(),
   /** Item ids whose frozen version is not the latest published one. */
   staleItems: z.array(z.uuid()),
@@ -694,6 +706,7 @@ export const TemplateDetail = z.object({
     durationS: z.number().int().nullable(),
   }),
   items: z.array(TemplateItemRow),
+  concepts: ItemConcepts,
   totalPoints: z.number(),
   /** Item ids whose frozen version is not the latest published one. */
   staleItems: z.array(z.uuid()),

@@ -46,7 +46,7 @@ import {
   loadTemplate,
   teacherGuard,
 } from "../guards.js";
-import { notFound, teacherRoute } from "../http.js";
+import { notFound, readerLang, teacherRoute } from "../http.js";
 import * as live from "../live/service.js";
 import { evaluationChanged } from "./events.js";
 import * as service from "./service.js";
@@ -82,6 +82,7 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
       // The lobby ring's denominator, a rule of the `live` module (#152).
       await live.enrolledCount(app.db, row),
       courseId,
+      readerLang(req),
     );
 
   // F-EVAL-02: the type decides an item's default weight, from the config it
@@ -415,7 +416,7 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
   // has no classroom, hence no SSE topic: nothing is published.
 
   const templateDetail = (req: FastifyRequest, row: service.EvaluationRecord): Promise<TemplateDetail> =>
-    templates.templateDetail(app.db, row, callerOf(req));
+    templates.templateDetail(app.db, row, callerOf(req), readerLang(req));
 
   /** One audited write to a template; `change` says what the request did. */
   async function templateWrite(
