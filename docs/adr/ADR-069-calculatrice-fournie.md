@@ -11,6 +11,8 @@ engine in `packages/domain/src/calculator.ts`, `settings.calculator` in
 §3's announcement amended by [ADR-079](ADR-079-conditions-de-l-evaluation.md)
 (2026-10-07): the platform states only what it enforces, and the waiting
 room announces the calculator among the evaluation's conditions.
+Its sibling, the notepad provided, is [ADR-090](ADR-090-calepin-fourni.md):
+the two docks stack at the bottom right, one panel open at a time.
 
 ## Amendment — reverse Polish notation (2026-10-05)
 

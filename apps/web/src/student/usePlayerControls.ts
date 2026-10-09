@@ -26,6 +26,7 @@ export function usePlayerControls({
   readOnly,
   canValidate,
   blank,
+  notepad = false,
 }: {
   session: PlayerSession;
   item: PlayerItem | undefined;
@@ -34,6 +35,8 @@ export function usePlayerControls({
   canValidate: boolean;
   /** The question holds no answer: the confirmation says it closes empty. */
   blank: boolean;
+  /** The evaluation provides a notepad, which a checkpoint empties (ADR-090). */
+  notepad?: boolean;
 }) {
   const t = useT();
   const toast = useToast();
@@ -52,7 +55,7 @@ export function usePlayerControls({
       title: t("player.validate.title"),
       message:
         state.navigation === "milestones"
-          ? t("conditions.navigation.milestones.body")
+          ? t(notepad ? "conditions.navigation.milestones.bodyNotepad" : "conditions.navigation.milestones.body")
           : t(blank ? "player.validateBlank.body" : "player.validate.body"),
       confirmLabel: validateLabel,
       // Irreversible: Enter right after Ctrl+Enter must not validate for good.
@@ -67,7 +70,7 @@ export function usePlayerControls({
         "error",
       );
     }
-  }, [item, canValidate, blank, validateLabel, state.navigation, confirm, t, markDone, toast]);
+  }, [item, canValidate, blank, notepad, validateLabel, state.navigation, confirm, t, markDone, toast]);
 
   /** A write that may fail, for a question that is still open. */
   const onOpenItem = useCallback(

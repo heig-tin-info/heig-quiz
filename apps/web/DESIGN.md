@@ -2286,6 +2286,36 @@ A tool docked on the player when the evaluation provides one
   xʸ → ʸ√x, 10ˣ → 2ˣ, log → logᵧx, ln → eˣ) and the trigonometry to its
   inverses, as on Windows.
 
+## The notepad (ADR-090)
+
+The calculator's sibling on the player (`apps/web/src/notepad/`), on the
+same `ToolDock`.
+
+- **The dock group**: with both tools on, the two 48 px buttons stack at the
+  bottom right, 8 px apart — the calculator at the bottom (`slot` 0), the
+  notepad above (`slot` 1, one `--tool-dock-step` of 56 px higher). The
+  second slot raises `--tool-dock-h` by that step to 7.5 rem
+  (`data-tool-dock-slot`, `style.css`), so every
+  panel and the toasts rise above the whole stack, and the phone footer
+  (`--player-footer-h`) still lifts both. One panel at a time: the player
+  (`PlayerTools`) holds which is open through `ToolDock`'s `open` /
+  `onOpenChange`; opening one closes the other, and each keeps its state
+  (`keepMounted`). Alone, the notepad takes slot 0.
+- **The panel**: as wide as the scientific calculator's (352 px), 480 px
+  tall at most, the same layer, hairline and shadow. A header (13 px
+  semibold "Notepad", the faint "No copy-paste" when blocked, the cross),
+  the page, then one row of `sm` icon buttons: delete at the left, previous
+  · "Page x of y" (12 px muted, tabular) · next in the middle, new page at
+  the right (disabled at 20 pages, its tooltip saying why).
+- **The page**: plain text, no toolbar, nothing rendered. The field's chrome
+  (`inputClass`) in the code face at 13 px, with a 24 px line height and a
+  `line-strong` hairline under every line (`.notepad-ruled`), scrolling with
+  the text, in both themes through the token. Focused, its border turns to
+  the ink (`fg`) with no ring: the whole panel is this one field, and the
+  accent's red frame around it read as an error. Delete asks nothing: an
+  `info` toast with Undo (`notify.tsx`'s one action) puts the page back. A
+  write the device refuses shows one 12 px `warning` line under the page.
+
 ## The help assistant (ADR-080)
 
 A chat docked on every teacher screen (`apps/web/src/assist/`), the

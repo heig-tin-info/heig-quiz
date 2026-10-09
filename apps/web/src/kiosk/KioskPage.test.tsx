@@ -196,9 +196,12 @@ describe("the station's screen", () => {
       "GET /app/api/config": ok({ devLogin: false, kiosk: MOCK }),
       "POST /app/api/kiosk/token": fail(400, { error: "authorization_pending" }),
     });
+    // ADR-090: a shared station keeps no student's notepad.
+    localStorage.setItem("quiz.notepad.a1", "{}");
     renderWithProviders(<KioskPage />, { route: "/kiosk" });
     await advance();
     await advance();
+    expect(localStorage.getItem("quiz.notepad.a1")).toBeNull();
     expect(screen.getByRole("heading", { name: "Poste de secours n° 7" })).toBeVisible();
     expect(screen.getByText("BCDF-GHJK")).toBeVisible();
     expect(screen.getByText("New code in 5:00")).toBeVisible();

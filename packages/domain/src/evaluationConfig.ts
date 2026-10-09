@@ -293,6 +293,24 @@ export function calculatorOn(mode: EvaluationModeName, calculator: CalculatorMod
   return calculatorAllowedFor(mode) ? (calculator ?? "none") : "none";
 }
 
+// --- The notepad provided (ADR-090) -----------------------------------------
+
+/**
+ * What an evaluation provides (`settings.notepad`); absent is `none`.
+ * `provided_no_clipboard` is the same notepad with copy, cut, paste and drag
+ * blocked inside it — inside it only: the answer fields are untouched.
+ */
+export const NOTEPAD_MODES = ["none", "provided", "provided_no_clipboard"] as const;
+export type NotepadMode = (typeof NOTEPAD_MODES)[number];
+
+/** A poll has nothing to work out: the server refuses the setting there, as the calculator's. */
+export const notepadAllowedFor = calculatorAllowedFor;
+
+/** The notepad a student gets on this evaluation; a poll's is `none` whatever its row says. */
+export function notepadOn(mode: EvaluationModeName, notepad: NotepadMode | undefined): NotepadMode {
+  return notepadAllowedFor(mode) ? (notepad ?? "none") : "none";
+}
+
 /** Whether this evaluation scores its choice questions negatively. */
 export function negativeMarkingOn(
   mode: EvaluationModeName,

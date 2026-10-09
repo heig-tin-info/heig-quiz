@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   answerMark,
   countsAsCompleted,
+  furthestCheckpoint,
   lockedItems,
   mayValidate,
   maySkip,
@@ -83,5 +84,23 @@ describe("progressStatus", () => {
     expect(countsAsCompleted("done")).toBe(true);
     expect(countsAsCompleted("seen")).toBe(false);
     expect(countsAsCompleted("empty")).toBe(false);
+  });
+});
+
+describe("furthestCheckpoint (ADR-090)", () => {
+  const item = (milestone: boolean, validated: boolean) => ({ milestone, validated });
+
+  it("is the rank of the furthest validated milestone, -1 when none", () => {
+    expect(furthestCheckpoint("milestones", [item(false, false), item(true, false)])).toBe(-1);
+    expect(furthestCheckpoint("milestones", [item(true, true), item(false, false), item(true, true), item(true, false)])).toBe(2);
+  });
+
+  it("ignores a validated question that is not a milestone", () => {
+    expect(furthestCheckpoint("milestones", [item(false, true), item(true, true), item(false, true)])).toBe(1);
+  });
+
+  it("is -1 under any other navigation: no checkpoint to cross", () => {
+    expect(furthestCheckpoint("forward_only", [item(true, true)])).toBe(-1);
+    expect(furthestCheckpoint("free", [item(true, true)])).toBe(-1);
   });
 });

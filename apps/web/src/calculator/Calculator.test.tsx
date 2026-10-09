@@ -1,5 +1,6 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it } from "vitest";
 
 import { meKey } from "../queryKeys";
@@ -15,12 +16,18 @@ import { CalculatorDock } from "./CalculatorDock";
  */
 const display = () => screen.getByRole("status");
 
+/** The dock alone, holding its own seat as the player's tool group would. */
+function Dock({ kind }: { kind: "standard" | "scientific" }) {
+  const [open, setOpen] = useState(false);
+  return <CalculatorDock kind={kind} seat={{ slot: 0, open, onOpenChange: setOpen }} />;
+}
+
 async function openDock(kind: "standard" | "scientific") {
   const user = userEvent.setup();
   renderWithProviders(
     <>
       <input aria-label="Answer" />
-      <CalculatorDock kind={kind} />
+      <Dock kind={kind} />
     </>,
   );
   await user.click(screen.getByRole("button", { name: "Calculator" }));
@@ -109,7 +116,7 @@ describe("the calculator dock in reverse Polish notation", () => {
     const user = userEvent.setup();
     const queryClient = makeQueryClient();
     queryClient.setQueryData(meKey, makeMe({ role: "student", rpnCalculator: true }));
-    renderWithProviders(<CalculatorDock kind={kind} />, { queryClient });
+    renderWithProviders(<Dock kind={kind} />, { queryClient });
     await user.click(screen.getByRole("button", { name: "Calculator" }));
     return user;
   }

@@ -71,6 +71,18 @@ describe("imposedConditions (ADR-079)", () => {
     expect(keys(base())).not.toContain("calculator");
   });
 
+  it("states a provided notepad, and that copy-paste is off in it only when it is (ADR-090)", () => {
+    expect(keys(base({}, { notepad: "provided" }))).toContain("notepad");
+    expect(keys(base({}, { notepad: "provided" }))).not.toContain("notepad_no_clipboard");
+    expect(imposedConditions(base({}, { calculator: "standard", notepad: "provided_no_clipboard" })).slice(0, 3)).toEqual([
+      { key: "calculator", kind: "provided", calculator: "standard" },
+      { key: "notepad", kind: "provided" },
+      { key: "notepad_no_clipboard", kind: "provided" },
+    ]);
+    expect(keys(base({}, { notepad: "none" }))).not.toContain("notepad");
+    expect(keys(base({ mode: "poll" }, { notepad: "provided" }))).toEqual([]);
+  });
+
   it("states the duration with the student's bonus, or the deadline", () => {
     expect(imposedConditions(base({ durationS: 2700, timeBonusPercent: 25 }, { timing: "duration" }))).toContainEqual({
       key: "duration",
@@ -133,6 +145,7 @@ describe("imposedConditions (ADR-079)", () => {
         {
           safeExamBrowser: true,
           calculator: "scientific",
+          notepad: "provided_no_clipboard",
           timing: "duration",
           navigation: "forward_only",
           negativeMarking: true,
@@ -143,6 +156,8 @@ describe("imposedConditions (ADR-079)", () => {
     expect(all).toEqual([
       "trusted_client",
       "calculator",
+      "notepad",
+      "notepad_no_clipboard",
       "duration",
       "attempts",
       "navigation",

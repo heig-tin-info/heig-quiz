@@ -234,4 +234,30 @@ describe("an impersonation session (ADR-034)", () => {
     await userEvent.click(within(banner).getByRole("button", { name: "End" }));
     await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url === "/app/auth/logout")).toBe(true));
   });
+
+  it("leaves no notepad on the device after signing out (ADR-090)", async () => {
+    vi.stubGlobal("EventSource", FakeStream);
+    localStorage.setItem("quiz.notepad.a1", JSON.stringify({ pages: ["x"], page: 0, checkpoint: -1, savedAt: Date.now() }));
+    mockFetch({
+      "GET /app/api/me": ok(
+        makeMe({
+          role: "student",
+          session: {
+            kind: "impersonation",
+            evaluationId: null,
+            projectId: null,
+            readOnly: true,
+            superPowersUntil: null,
+            superPowersAvailable: false,
+          },
+        }),
+      ),
+      "GET /app/api/student/classrooms": ok([]),
+      "POST /app/auth/logout": ok(undefined),
+    });
+    renderWithProviders(<App />, { route: "/" });
+    const banner = await screen.findByRole("region", { name: /^Acting as/ });
+    await userEvent.click(within(banner).getByRole("button", { name: "End" }));
+    expect(localStorage.getItem("quiz.notepad.a1")).toBeNull();
+  });
 });

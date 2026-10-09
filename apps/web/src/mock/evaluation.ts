@@ -28,6 +28,7 @@ import {
   flags,
   iso,
   mockCalculator,
+  mockNotepad,
   MOCK_CONDITIONS,
   now,
   on,
@@ -431,6 +432,7 @@ const defaultEvaluationSettings = () => ({
   // grid offers "Assign a station".
   ...(flags.kiosk ? { kiosk: true } : {}),
   ...mockCalculator(),
+  ...mockNotepad(),
 });
 
 /**

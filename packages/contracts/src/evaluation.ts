@@ -14,6 +14,7 @@ import {
   CONDITION_KINDS,
   MAX_CONDITION_LENGTH,
   MAX_CONDITIONS,
+  NOTEPAD_MODES,
   ROUNDINGS,
   TRUSTED_CLIENTS,
 } from "@quiz/domain";
@@ -153,6 +154,14 @@ export { TRUSTED_CLIENTS };
 export const CalculatorMode = z.enum(CALCULATOR_MODES);
 export type CalculatorMode = z.infer<typeof CalculatorMode>;
 
+/**
+ * The notepad an evaluation provides on the student's screen (ADR-090). The
+ * list is `@quiz/domain`'s `NOTEPAD_MODES`; `notepadOn` computes an
+ * evaluation's, a poll's being `none`.
+ */
+export const NotepadMode = z.enum(NOTEPAD_MODES);
+export type NotepadMode = z.infer<typeof NotepadMode>;
+
 /** What a condition says about the thing it names (ADR-079): `@quiz/domain`'s `CONDITION_KINDS`. */
 export const ConditionKind = z.enum(CONDITION_KINDS);
 export type ConditionKind = z.infer<typeof ConditionKind>;
@@ -255,6 +264,13 @@ export const EvaluationSettings = z.object({
    * through `calculatorOn` (`@quiz/domain`), never raw.
    */
   calculator: CalculatorMode.optional(),
+  /**
+   * ADR-090: the notepad the student's screen provides — none, provided, or
+   * provided with copy and paste blocked inside it. Kept on the student's
+   * device only, never sent. Refused on a poll. Absent means `none`: read it
+   * through `notepadOn` (`@quiz/domain`), never raw.
+   */
+  notepad: NotepadMode.optional(),
   /**
    * ADR-079 (F-EVAL-33): the conditions the teacher announces — allowed,
    * forbidden, provided, or plain information — in their order. Refused on a
@@ -542,6 +558,7 @@ export const EvaluationSettingsPatch = z.object({
   safeExamBrowser: z.boolean().optional(),
   kiosk: z.boolean().optional(),
   calculator: CalculatorMode.optional(),
+  notepad: NotepadMode.optional(),
   /** Replaced whole, like `retakes`: the list travels in its order. */
   conditions: EvaluationConditionList.optional(),
   poll: EvaluationSettings.shape.poll,

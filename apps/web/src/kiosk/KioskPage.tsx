@@ -1,10 +1,12 @@
 import { CloudOff, MonitorX } from "lucide-react";
+import { useEffect } from "react";
 
 import type { KioskDeviceAuthorization } from "@quiz/contracts";
 
 import { usePublicConfig } from "../api";
 import { Logo } from "../Header";
 import { useT } from "../i18n";
+import { purgeAllNotepads } from "../notepad/store";
 import { PollQr } from "../poll/PollQr";
 import { Spinner, useNow } from "../ui";
 import { useKioskStation } from "./useKioskStation";
@@ -22,6 +24,8 @@ export function KioskPage() {
   const config = usePublicConfig();
   const phase = useKioskStation(config.data?.kiosk ?? null, !config.isLoading);
   const t = useT();
+  // ADR-090: a shared station keeps no student's notepad.
+  useEffect(() => purgeAllNotepads(), []);
 
   return (
     <main className="flex min-h-dvh flex-col bg-canvas px-6 py-6 sm:px-12 sm:py-8">

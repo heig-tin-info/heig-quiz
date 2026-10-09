@@ -22,6 +22,7 @@ import {
 import {
   allowDrillWritable,
   calculatorAllowedFor,
+  notepadAllowedFor,
   conditionsAllowedFor,
   CONFIG_LIVE_STATES,
   configLock,
@@ -50,6 +51,7 @@ import {
   RetakesNotAllowed,
   NegativeMarkingNotAllowed,
   CalculatorNotAllowed,
+  NotepadNotAllowed,
   ConditionsNotAllowed,
   KioskUnavailable,
   FeedbackNotAllowed,
@@ -263,6 +265,10 @@ export async function patchEvaluation(
     // Nor does a poll provide a calculator (ADR-069); switching it off passes.
     if ((settings.calculator ?? "none") !== "none" && !calculatorAllowedFor(row.mode)) {
       throw new CalculatorNotAllowed(row.mode);
+    }
+    // Nor a notepad (ADR-090); switching it off passes.
+    if ((settings.notepad ?? "none") !== "none" && !notepadAllowedFor(row.mode)) {
+      throw new NotepadNotAllowed(row.mode);
     }
     // Nor has it conditions to sit under (ADR-079); emptying them passes.
     if (conditionsOf(settings).length > 0 && !conditionsAllowedFor(row.mode)) {

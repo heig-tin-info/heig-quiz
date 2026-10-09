@@ -10,7 +10,8 @@
  *   - IMPOSED: derived here from the settings, and only from what the
  *     platform itself ENFORCES or records (ADR-069 §2, generalised by
  *     ADR-079). A calculator set to `none` says nothing — Quiz forbids no
- *     other calculator, only a trusted client can — and the network allowlist
+ *     other calculator, only a trusted client can (nor does a notepad set to
+ *     `none` forbid paper, ADR-090) — and the network allowlist
  *     and the shuffles are left out: they are not the student's to act on.
  *     So is `requireFullscreen`: no player asks for full screen nor records
  *     leaving it yet, and a line saying so would state what is not true.
@@ -33,8 +34,10 @@ import {
   calculatorOn,
   integrityJournalOn,
   negativeMarkingOn,
+  notepadOn,
   trustedClientsOf,
   type CalculatorMode,
+  type NotepadMode,
   type EvaluationModeName,
   type TrustedClient,
 } from "./evaluationConfig.js";
@@ -77,6 +80,8 @@ export function announcedConditionsOn<T>(mode: EvaluationModeName, conditions: r
 export type ImposedCondition =
   | { key: "trusted_client"; kind: "forbidden"; clients: TrustedClient[] }
   | { key: "calculator"; kind: "provided"; calculator: (typeof PROVIDED_CALCULATORS)[number] }
+  | { key: "notepad"; kind: "provided" }
+  | { key: "notepad_no_clipboard"; kind: "provided" }
   | { key: "duration"; kind: "info"; durationS: number; bonusPercent: number }
   | { key: "deadline"; kind: "info"; closesAt: string; bonusPercent: number }
   | { key: "attempts"; kind: "info"; maxAttempts: number | null }
@@ -99,6 +104,7 @@ export interface ConditionsInput {
     safeExamBrowser?: boolean | undefined;
     kiosk?: boolean | undefined;
     calculator?: CalculatorMode | undefined;
+    notepad?: NotepadMode | undefined;
   };
   durationS: number | null;
   /** An ISO instant, or null (a template has none). */
@@ -125,6 +131,15 @@ const DERIVE: { [K in ImposedConditionKey]: (input: ConditionsInput) => Line<K> 
     const calculator = calculatorOn(mode, settings.calculator);
     return calculator === "none" ? null : { key: "calculator", kind: "provided", calculator };
   },
+  // ADR-090: the notepad, then — only when it is enforced — that copy and
+  // paste are blocked IN it (the answer fields are untouched, so the line
+  // says nothing about them). Both "provided", so they read side by side.
+  notepad: ({ mode, settings }) =>
+    notepadOn(mode, settings.notepad) === "none" ? null : { key: "notepad", kind: "provided" },
+  notepad_no_clipboard: ({ mode, settings }) =>
+    notepadOn(mode, settings.notepad) === "provided_no_clipboard"
+      ? { key: "notepad_no_clipboard", kind: "provided" }
+      : null,
   duration: ({ settings, durationS, timeBonusPercent }) =>
     settings.timing === "duration" && durationS !== null && durationS > 0
       ? { key: "duration", kind: "info", durationS, bonusPercent: timeBonusPercent }
