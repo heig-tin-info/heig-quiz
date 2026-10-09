@@ -252,7 +252,8 @@ releases and exports it, over HTTP only.
 
 Four applications live under `apps/` (the API, the web app, the code
 runner, the online workspace) and the shared code under `packages/`
-(contracts, pure domain rules, one package per question type). The
+(contracts, pure domain rules, one package per question type, the diagram
+engine, the journal renderer). The
 [repository map](docs/development/repository.md) owns the layout;
 [`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](AGENTS.md) hold the invariants and
 the working rules every contributor, human or agent, follows.

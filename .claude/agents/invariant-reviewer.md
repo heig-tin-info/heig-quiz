@@ -61,7 +61,8 @@ which items you skipped.
    for a 403 that leaks existence where a missing entity's 404 is due.
    Blockers: an impersonation session receiving the staff payload, the
    student-view parameter widening the payload, a `seb` session reaching a
-   journal route.
+   journal route, a caller with neither a staff seat nor a claimed
+   enrollment who gets anything but the 404.
 7. **Contracts.** Every new body, query or params is a zod schema in
    `packages/contracts`, used by the route AND by the client.
 8. **Pure rules in `packages/domain`,** with unit tests, no DB access.
