@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -54,9 +54,9 @@ describe("the allowed-devices setting", () => {
     renderWithProviders(<Harness detail={withMode("exam")} />);
     await open();
     await screen.findByRole("radio", { name: KIOSK });
-    const group = screen.getByRole("group", { name: "Allowed devices" });
-    const radios = Array.from(group.querySelectorAll("input[type=radio]"));
-    expect(radios.map((r) => (r as HTMLInputElement).value)).toEqual(["any", "seb", "either", "kiosk"]);
+    const radios = within(screen.getByRole("group", { name: "Allowed devices" })).getAllByRole("radio");
+    expect(radios).toHaveLength(4);
+    [ANY, SEB, EITHER, KIOSK].forEach((name, i) => expect(radios[i]).toHaveAccessibleName(name));
   });
 
   it("hides the kiosk choices where the platform has no kiosk path", async () => {

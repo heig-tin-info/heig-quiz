@@ -5,31 +5,30 @@ import { useId } from "react";
 import { useT } from "../i18n";
 import { RadioRow } from "../ui";
 
+type Devices = Pick<EvaluationSettings, "safeExamBrowser" | "kiosk">;
+
 /**
  * The four ways the two trusted-client switches of an exam combine
- * (ADR-051 §2): both on means either client is accepted.
+ * (ADR-051 §2), in the order shown: both on means either client is accepted.
+ * The icons are decorative and the same weight for every level: the OR of
+ * `either` means the weaker path decides, so it shares SEB's half shield. No
+ * colour per level.
  */
-type Devices = "any" | "seb" | "either" | "kiosk";
+const CHOICES = [
+  { id: "any", icon: Shield, settings: { safeExamBrowser: false, kiosk: false } },
+  { id: "seb", icon: ShieldHalf, settings: { safeExamBrowser: true, kiosk: false } },
+  { id: "either", icon: ShieldHalf, settings: { safeExamBrowser: true, kiosk: true } },
+  { id: "kiosk", icon: ShieldCheck, settings: { safeExamBrowser: false, kiosk: true } },
+] as const satisfies readonly { id: string; icon: LucideIcon; settings: Devices }[];
 
-const SETTINGS: Record<Devices, Pick<EvaluationSettings, "safeExamBrowser" | "kiosk">> = {
-  any: { safeExamBrowser: false, kiosk: false },
-  seb: { safeExamBrowser: true, kiosk: false },
-  either: { safeExamBrowser: true, kiosk: true },
-  kiosk: { safeExamBrowser: false, kiosk: true },
-};
+type Choice = (typeof CHOICES)[number];
 
-/**
- * Decorative, and the same weight for every level: the OR of `either` means
- * the weaker path decides, so it shares SEB's half shield. No colour per level.
- */
-const ICON: Record<Devices, LucideIcon> = { any: Shield, seb: ShieldHalf, either: ShieldHalf, kiosk: ShieldCheck };
+const KEYS = ["safeExamBrowser", "kiosk"] as const satisfies readonly (keyof Devices)[];
 
-const ORDER: readonly Devices[] = ["any", "seb", "either", "kiosk"];
-
-const devicesOf = (settings: EvaluationSettings): Devices => {
-  const seb = safeExamBrowserOf(settings);
-  const kiosk = kioskOf(settings);
-  return seb ? (kiosk ? "either" : "seb") : kiosk ? "kiosk" : "any";
+/** The choice in force; the table covers every pair of the two booleans. */
+const choiceOf = (settings: EvaluationSettings): Choice => {
+  const now: Devices = { safeExamBrowser: safeExamBrowserOf(settings), kiosk: kioskOf(settings) };
+  return CHOICES.find((c) => KEYS.every((k) => c.settings[k] === now[k]))!;
 };
 
 /**
@@ -52,36 +51,33 @@ export function AllowedDevices({
 }) {
   const t = useT();
   const name = useId();
-  const current = devicesOf(settings);
-  const choices = ORDER.filter((d) => kioskOffered || !SETTINGS[d].kiosk || d === current);
+  const current = choiceOf(settings);
+  const choices = CHOICES.filter((c) => kioskOffered || !c.settings.kiosk || c === current);
 
-  const pick = (next: Devices) => {
-    const from = SETTINGS[current];
-    const to = SETTINGS[next];
-    const changed: Partial<EvaluationSettings> = {};
-    if (from.safeExamBrowser !== to.safeExamBrowser) changed.safeExamBrowser = to.safeExamBrowser;
-    if (from.kiosk !== to.kiosk) changed.kiosk = to.kiosk;
+  const pick = (next: Choice["id"]) => {
+    const to = CHOICES.find((c) => c.id === next)!.settings;
+    const changed: Partial<Devices> = Object.fromEntries(
+      KEYS.filter((k) => to[k] !== current.settings[k]).map((k) => [k, to[k]]),
+    );
     if (Object.keys(changed).length > 0) onChange(changed);
   };
 
   return (
-    <fieldset disabled={disabled} className="py-3">
-      <legend className="float-left mb-2 w-full text-sm font-medium text-fg">{t("eval.devices")}</legend>
-      <div className="clear-left divide-y divide-line overflow-hidden rounded-field border border-line">
-        {choices.map((d) => {
-          const Icon = ICON[d];
-          return (
-            <RadioRow key={d} name={name} value={d} checked={d === current} disabled={disabled} onPick={pick}>
-              <span className="flex items-start gap-2.5">
-                <Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-fg-muted" />
-                <span className="min-w-0">
-                  <span className="block font-medium text-fg">{t(`eval.devices.${d}`)}</span>
-                  <span className="mt-0.5 block text-[13px] text-fg-muted">{t(`eval.devices.${d}.desc`)}</span>
-                </span>
+    <fieldset disabled={disabled} className="space-y-2 py-3">
+      <legend className="sr-only">{t("eval.devices")}</legend>
+      <p aria-hidden className="text-sm font-medium text-fg">{t("eval.devices")}</p>
+      <div className="divide-y divide-line overflow-hidden rounded-field border border-line">
+        {choices.map(({ id, icon: Icon }) => (
+          <RadioRow key={id} name={name} value={id} checked={id === current.id} disabled={disabled} onPick={pick}>
+            <span className="flex items-start gap-2.5">
+              <Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-fg-muted" />
+              <span className="min-w-0">
+                <span className="block font-medium text-fg">{t(`eval.devices.${id}`)}</span>
+                <span className="mt-0.5 block text-[13px] text-fg-muted">{t(`eval.devices.${id}.desc`)}</span>
               </span>
-            </RadioRow>
-          );
-        })}
+            </span>
+          </RadioRow>
+        ))}
       </div>
     </fieldset>
   );

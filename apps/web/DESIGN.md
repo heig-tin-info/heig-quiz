@@ -766,7 +766,8 @@ live in `ui/state.ts`, each written once.
   because there are four options: a select hides the set until it is opened,
   which is the wrong trade for a control the reader sets once and then reads.
   When the labels are too long for a track at 390 px, the set is a vertical
-  list of `RadioRow`s in a bordered `fieldset`, each row a decorative icon
+  list of bordered `RadioRow`s in a `fieldset` (an `sr-only` legend, the
+  visible caption beside it, as in `concepts/dialogs.tsx`), each row a decorative icon
   (`fg-muted`, no colour per choice), a label and its one-line description
   (an exam's "Allowed devices", `evaluation/AllowedDevices.tsx`).
   A track with no visible caption takes `label`, which becomes the
