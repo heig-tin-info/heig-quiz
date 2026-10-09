@@ -2,11 +2,11 @@
 
 ## Status
 
-Accepted (2026-10-04, product owner); amended by the product owner on
-2026-10-05 (decisions 4, 5, 6 and 8) and 2026-10-06 (decision 2, ADR-077), see
-the amendments at the end of the Decision. Amended 2026-10-09: ADR-048 is
-folded into this record (decision 12, and the
-[correspondence table](#correspondence-with-adr-048) at the end).
+Accepted (2026-10-04, product owner); amended by the product owner on 2026-10-05 (decisions 4, 5, 6 and
+8: four amendments) and 2026-10-06 (decision 2, ADR-077). Amended 2026-10-09: ADR-048 is folded into this
+record (decision 12, and the [correspondence table](#correspondence-with-adr-048)), and the five
+amendments are folded into the decisions they change, each marked with its date and task (the
+[table of old references](#correspondence-of-old-references) maps them).
 
 Scope: where a classroom's groups of students live, who forms them and how,
 and how a group project uses them, including the GitHub side of a group
@@ -85,7 +85,12 @@ were settled by the product owner on 2026-10-04.
    Membership is by roster line, as in ADR-048 decision 3: a student is placed
    before they ever sign in. **The students of a set** are the classroom's
    roster lines, claimed or not, except staff seats (ADR-018), which are never
-   placed. The set's `max_size` replaces `projects.group_max_size`, which the
+   placed. *Amended 2026-10-06 (product owner, ADR-077):* a teacher's staff seat
+   may now accept an individual project to test it
+   ([ADR-077](ADR-077-depots-de-test-du-personnel.md)), but it is never placed
+   in a group: on a group project it answers `409 no_group`, whatever group
+   membership it kept from before it became a staff seat, and it is never
+   invited on a group's repository. The set's `max_size` replaces `projects.group_max_size`, which the
    migration drops. An archived classroom's sets are read-only
    (`409 classroom_archived`) and cannot be opened to its students.
 
@@ -133,11 +138,48 @@ were settled by the product owner on 2026-10-04.
      follows; in the copy a name or slug that clashes is disambiguated like a
      repository name (ADR-048).
    - **What stops.** After the deadline the copy no longer moves: a move in
-     December never changes who was graded in October. A copy that has
+     December never changes who was graded in October. *Amended 2026-10-05
+     (M3-15b-1):* a group of the copy stops following at the FIRST of its
+     deadlines: the project's (already `groups_stopped_at`) or, earlier, its
+     repository's own (ADR-064). A repository whose deadline is extended past
+     the project's does not keep its group following. Each copy group's stop is
+     stored (`project_groups.stopped_at`, M3-15b-2). A copy that has
      stopped does not follow again by itself — not when its deadline is moved
      later (F-PROJ-09), nor when the project is unarchived. The project page
      then shows that the set has drifted, and *Resync with the set* applies
      the whole difference through the confirmation of decision 6.
+   - ***Resync with the set*** *(amended 2026-10-05, M3-15b-2 and M3-15b-2b)*
+     is allowed after the deadline — its confirmation names every frozen
+     repository it touches — and refused once the project is released
+     (`409 released`).
+     - **R1, a deleted set group.** A stopped group with a repository whose
+       set group was since deleted is KEPT by *Resync*: its repository and its
+       frozen score stay; its members follow the set, each named as a `lose`
+       consequence; the repository may end with no member.
+     - **R2, the release waits.** The release is refused
+       (`409 group_sync_pending`) while a confirmed resync is not fully
+       applied.
+     - **How it is built** (orchestrator): the resync is a durable confirmed
+       target, not a fence — the keys of the consequences confirmed are stored
+       on the project (`projects.group_resync`, with `group_resync_at` and
+       `_by`); the `group.sync` job applies only those keys, computing the plan
+       with every stop lifted, and drops a key once done or no longer asked for
+       by the set: a set's write after the confirmation never extends it. What
+       touches no repository (renames, new groups, moves between groups without
+       one) is applied in the request's transaction. The resync is one-shot:
+       `stopped_at` and `groups_stopped_at` are never cleared, so the copy stays
+       stopped and drifts again at the next write of the set (alternative 5).
+       The **drift** is a non-empty plan with the stops lifted (the project's
+       and each group's) beyond what the job already owes; a following copy
+       with a group stopped on its repository's deadline drifts too, and is
+       resynced the same way. A confirmed resync's departure out of a frozen
+       group into another ends *moved*, never *left*, as far as the arrival was
+       confirmed; its departure marks survive a stop and a set's write. Its
+       GitHub writes are audited `via: "group.resync"`, the request
+       `project.group_resync`. A draft has nothing to resync (its copy
+       follows). Refused: an archived project (`project_archived`, the sync's
+       own refusal), a released one (`released`), an archived classroom
+       (`classroom_archived`).
    - **How it is applied.** A change that touches no repository is applied to
      the copy in the set's own transaction. A change that touches a
      repository is applied by a job (`group.sync`, pg-boss, one lease per
@@ -151,7 +193,18 @@ were settled by the product owner on 2026-10-04.
      reconciliation (M3-06). **An arrival waits only for the same student's
      pending departure**: it is written to the copy, then invited, or invited
      when they link their GitHub account (ADR-048). Each GitHub write is
-     audited.
+     audited. *How it is built (orchestrator, 2026-10-05, M3-15b-2a):* a move
+     touching a group with a repository is always the job's; the set's
+     transaction applies the rest, marks the departures on the copy
+     (`departing_at`, which no invitation passes) and the project due
+     (`group_sync_due_at`, a third lease `group_sync_job_at`). A failed pass
+     retries after a backoff doubling from 30 s up to an hour. An access is
+     revoked only once GitHub confirmed it (`project_repo_access.revoking_at`
+     while asking): a roster write meanwhile is refused
+     (`502 revoke_failed`), a crashed job's next pass asks again, and an
+     access GitHub kept on a group repository whose line is no longer its
+     member (a *stray grant*) is the job's to revoke and flags the repository
+     *access to revoke*.
    - **Whose repository.** A group repository is a student's only through
      the copy's membership, never through `project_repos.user_id`, which
      only records who created it (N-SEC-20; tested with the creator moved
@@ -175,6 +228,17 @@ were settled by the product owner on 2026-10-04.
    the repositories, runs and scores stay (F-PROJ-17). A seat whose account
    changes (unclaim, adoption, ADR-061) is a departure of the former
    account's GitHub login followed by an arrival of the new one.
+   *Amended 2026-10-05 (M3-15b-1), nothing to revoke:* when GitHub cannot be
+   asked — the App not installed or uninstalled, the organization or the
+   repository deleted on GitHub (`deleted_at`), the member never had an
+   account invited — there is nothing to revoke: the removal proceeds, and the
+   audit records the revocation as skipped with its reason. Only a refusal by
+   a repository GitHub can reach refuses the removal (`502 revoke_failed`:
+   roster, sets and copies unchanged). The account revoked is the one Quiz
+   INVITED, recorded at each invitation (`project_repo_access`), never the
+   user's link of today. The same revocation runs before an unclaim, an e-mail
+   change that detaches the seat's account, and a self-enroll that turns the
+   seat into a staff seat.
 
 6. **A membership write is guarded by its consequences, decided by the
    server** (product owner). Every membership write (add, move, remove,
@@ -188,6 +252,17 @@ were settled by the product owner on 2026-10-04.
    at once, and the page offers *Undo* (the reverse write, itself a write
    that may meet the 409) for a few seconds; a write with consequences opens
    a confirmation that names them. The client never guesses the consequences.
+   *Amended 2026-10-05 (M3-15b-2), what needs a confirmation:* every place or
+   unplace touching a following group that has a repository needs the
+   confirmation, even when GitHub will have nothing to do (no account invited,
+   the App gone): it changes whose repository and grade it is. The
+   `group.sync` job then audits the revocation skipped (decision 5). The
+   consequences confirmed are those the write ADDS to the ones already
+   waiting, by a SHA-256 digest of their sorted (project, group, roster line,
+   kind) (M3-15b-2a). *Amended 2026-10-05 (M3-15b-2b), R3, an arrival without
+   a repository:* a resync may move a student into a group without a
+   repository after the deadline: allowed, and its confirmation flags it (the
+   student will have no repository, Accept being closed).
 
 7. **The project form** offers, under group work, the classroom's sets
    (name, number of groups, students placed / not placed, date) and
@@ -217,6 +292,72 @@ were settled by the product owner on 2026-10-04.
    staff note. Tested like the other student views: a second classroom's set,
    a closed set, and another group's members after closing, searched for in
    every student response.
+   *Amended 2026-10-05 (M3-17), the students' side, settled before it was
+   built:*
+   - **S1, where.** The student's classroom page gets a *Groups* tab (fr
+     *Groupes*), at the same address as the staff's, `/classrooms/:id/groups`,
+     role-dispatched like `/classrooms/:id` (F-ORG-15). It is drawn only while
+     a set reaches the classroom's students (the page's `hasGroups`, like
+     `hasJournal`).
+   - **S2, which sets.** A student sees a set that is OPEN (its `open_until`
+     ahead by the server's clock, the classroom not archived), or one a
+     published project of the classroom that is not archived names. A closed
+     set no such project names is invisible.
+   - **S3, how they learn of it.** An open set is a row in *Open now* of the
+     student's Activities, on the classroom page and the home: "Form your group
+     until …" (fr "Formez votre groupe jusqu'au …"), leading to the tab. It
+     never takes the urgent accent, and nothing is notified.
+   - **S4, the unplaced.** While the set is open, the students also see the
+     students of the set in no group, by first and last name only.
+   - **The student view** (orchestrator, M3-17) is one service of the module
+     (`studentGroupSets`), each field picked by hand: `serverNow`, and per set
+     the set (`name`, `maxSize`, `openUntil`, `open`), `writable`, `myGroupId`,
+     the groups (`name`, `size`, members' names) and, while open, `unplaced`;
+     closed, the reader's own group alone. Never a roster line's id, a claim,
+     an e-mail, a GitHub login, the projects naming the set. `writable` is the
+     server's: open, no group of the set with a repository, the classroom not
+     archived, the reader's own portal session on a claimed student seat.
+   - **Routes.** `GET /app/api/classrooms/:id/group-sets/student` through
+     `readableClassroom`'s student branch, the student payload forced (a
+     teacher in the student view and an impersonation read it, `writable`
+     false); the writes `POST /app/api/group-sets/:id/student/groups` (create
+     and name, the creator moved in; the default name in the student's
+     language), `PUT|DELETE …/student/membership` (join by group id, leave),
+     `PATCH …/student/groups/:gid` (rename their own), each answering the
+     classroom's sets as its writer reads them (`{ serverNow, sets }`, the
+     read's own shape). A write takes the caller's own portal session on a
+     claimed student seat of a set that reaches them (`selfFormingSeat`, the
+     one rule the loader `studentGroupSet` and the read's `writable` share,
+     `guards.ts`): a teacher in the student view, a staff seat, a `seb` or
+     `kiosk` session, a token get the 404 of a missing set; an impersonation
+     the 404 in development, and the auth plugin's
+     `403 impersonation_read_only` elsewhere (ADR-034). Group ids only, never
+     a roster line's.
+   - **The checks**, under the set's lock (`writeSet`), BEFORE anything is
+     written or stepped: open by the server's clock (`409 set_closed`, no
+     grace); no group of the set with a repository in any project naming it,
+     stopped copies and archived projects included (`409 set_frozen`, the
+     same repository predicate as the copy's slug), so a student's write never
+     reaches `needs_confirmation`; `409 group_full` at the maximum or above
+     (a group the staff filled past it is full to the students), the lock
+     serialising the last seat. An emptied group stays; a student never
+     deletes one. The audit reuses `group.create`, `group.rename`,
+     `group.member_move` with `self: true` and the student's line.
+   - **The staff.** `GroupSetPatch.openUntil`: a date opens the set until then
+     (a date already past leaves it closed), null closes it, reopening is
+     allowed, an archived classroom refuses it (`409 classroom_archived`); the
+     set open after the write needs a maximum size (`422 max_size_required`,
+     also for clearing it while open). The summary and the detail say
+     `openUntil` and `open`; a duplicate is born closed. The set's page opens
+     it from its menu (a date and the maximum, the risk said: a published
+     project on an open set can be accepted once everyone is placed, and its
+     first repository freezes the set) and says until when it is open, with
+     *Close to students*.
+   - **Hints.** A write on a set that reaches the students, before or after it
+     (an opening, a closing), hints `groups` to the `user:` topic of every
+     claimed student of the classroom besides the course's staff; never
+     `classroom:`. Nothing ticks at the closing: the client reads the set again
+     when `openUntil` passes, by `serverNow`.
 
 9. **Who and what.** Every route of the staff is loaded through
    `staffAccess` (invariant 6): a set of a classroom one does not reach is a
@@ -234,16 +375,15 @@ were settled by the product owner on 2026-10-04.
     groups, `source_group_id` set. An imported project past its deadline has
     a stopped copy (decision 4).
 
-11. **Delivery.**
-    - **Lot 1** — M3-15a (API: sets, by hand, at random, a project's set and
-      its copy), M3-15b (the follow's job, ADR-048 lot 2's group
-      repositories, the revocation on leaving the roster) and M3-16 (web: the classroom's
-      *Groups* tab, a set's page with drag and drop and a keyboard
-      equivalent, the project form's choice).
-    - **Lot 2** — M3-17: self-formation (decision 8, F-PROJ-22), the
-      student's screen of it.
-    - ADR-048 lot 3 (per-member invitation follow-up, a per-member
-      adjustment of the group's score) is unchanged and still later.
+11. **Lots.** Lot 1 is sets, by hand, at random, a project's set and its copy
+    (M3-15a), the follow's job, ADR-048 lot 2's group repositories, the
+    revocation on leaving the roster (M3-15b) and the web screens — the
+    classroom's *Groups* tab, a set's page with drag and drop and a keyboard
+    equivalent, the project form's choice (M3-16). Lot 2 is self-formation
+    (decision 8, F-PROJ-22), the student's screen of it (M3-17). ADR-048 lot 3
+    (per-member invitation follow-up, a per-member adjustment of the group's
+    score) is unchanged and still later. Delivery is tracked in
+    `docs/merge/PROGRESS.md`.
 
 12. **The GitHub side, and the rules kept from ADR-048** (heig-classroom's
     ADR-014, imported as ADR-048 and folded here on 2026-10-09).
@@ -296,170 +436,6 @@ were settled by the product owner on 2026-10-04.
       of the invitations, and the staff's per-member adjustment of a group's
       score.
 
-### Amendment of 2026-10-05 (product owner, M3-15b-1)
-
-- **§4, the first deadline stops a group.** A group of the copy stops
-  following at the FIRST of its deadlines: the project's (already
-  `groups_stopped_at`) or, earlier, its repository's own (ADR-064). A
-  repository whose deadline is extended past the project's does not keep
-  its group following. (The per-group stop is stored by M3-15b-2.)
-- **§5, nothing to revoke.** When GitHub cannot be asked — the App not
-  installed or uninstalled, the organization or the repository deleted on
-  GitHub (`deleted_at`), the member never had an account invited — there is
-  nothing to revoke: the removal proceeds, and the audit records the
-  revocation as skipped with its reason. Only a refusal by a repository
-  GitHub can reach refuses the removal (`502 revoke_failed`: roster, sets
-  and copies unchanged). The account revoked is the one Quiz INVITED,
-  recorded at each invitation (`project_repo_access`), never the user's link
-  of today. The same revocation runs before an unclaim, an e-mail change
-  that detaches the seat's account, and a self-enroll that turns the seat
-  into a staff seat.
-- **Delivery split** (orchestrator): M3-15b-1 delivers the group
-  repositories at Accept, the record of invited accounts, the invitation on
-  a link and the synchronous revocations; until M3-15b-2 (the `group.sync`
-  job, the per-group stop, `needs_confirmation`, *access to revoke*,
-  *Resync*), a set's write whose step would reach a copy group with a
-  repository is refused whole, `409 has_repo`, and a rename still follows.
-
-### Second amendment of 2026-10-05 (product owner, M3-15b-2)
-
-- **§4, *Resync with the set*** is allowed after the deadline — its
-  confirmation names every frozen repository it touches — and refused once
-  the project is released (`409 released`). (Delivered by M3-15b-2b.)
-- **§6, what needs a confirmation.** Every place or unplace touching a
-  following group that has a repository needs the confirmation, even when
-  GitHub will have nothing to do (no account invited, the App gone): it
-  changes whose repository and grade it is. The `group.sync` job then audits
-  the revocation skipped (§5's P1).
-- **How it is built** (orchestrator, M3-15b-2a): a move touching a group
-  with a repository is always the job's; the set's transaction applies the
-  rest, marks the departures on the copy (`departing_at`, which no
-  invitation passes) and the project due (`group_sync_due_at`, a third
-  lease `group_sync_job_at`). The consequences confirmed are those the
-  write ADDS to the ones already waiting, by a SHA-256 digest of their
-  sorted (project, group, roster line, kind). A failed pass retries after a
-  backoff doubling from 30 s up to an hour. Each copy group's stop is
-  stored (`project_groups.stopped_at`). An access is revoked only once
-  GitHub confirmed it (`project_repo_access.revoking_at` while asking): a
-  roster write meanwhile is refused (`502 revoke_failed`), a crashed job's
-  next pass asks again, and an access GitHub kept on a group repository
-  whose line is no longer its member (a *stray grant*) is the job's to
-  revoke and flags the repository *access to revoke*.
-
-### Third amendment of 2026-10-05 (product owner, M3-17)
-
-Decision 8, the students' side, settled before it was built:
-
-- **S1, where.** The student's classroom page gets a *Groups* tab (fr
-  *Groupes*), at the same address as the staff's, `/classrooms/:id/groups`,
-  role-dispatched like `/classrooms/:id` (F-ORG-15). It is drawn only while
-  a set reaches the classroom's students (the page's `hasGroups`, like
-  `hasJournal`).
-- **S2, which sets.** A student sees a set that is OPEN (its `open_until`
-  ahead by the server's clock, the classroom not archived), or one a
-  published project of the classroom that is not archived names. A closed
-  set no such project names is invisible.
-- **S3, how they learn of it.** An open set is a row in *Open now* of the
-  student's Activities, on the classroom page and the home: "Form your group
-  until …" (fr "Formez votre groupe jusqu'au …"), leading to the tab. It
-  never takes the urgent accent, and nothing is notified.
-- **S4, the unplaced.** While the set is open, the students also see the
-  students of the set in no group, by first and last name only.
-
-How it is built (orchestrator, M3-17):
-
-- **The student view** is one service of the module (`studentGroupSets`),
-  each field picked by hand: `serverNow`, and per set the set (`name`,
-  `maxSize`, `openUntil`, `open`), `writable`, `myGroupId`, the groups (`name`,
-  `size`, members' names) and, while open, `unplaced`; closed, the reader's
-  own group alone. Never a roster line's id, a claim, an e-mail, a GitHub
-  login, the projects naming the set. `writable` is the server's: open, no
-  group of the set with a repository, the classroom not archived, the
-  reader's own portal session on a claimed student seat.
-- **Routes.** `GET /app/api/classrooms/:id/group-sets/student` through
-  `readableClassroom`'s student branch, the student payload forced (a
-  teacher in the student view and an impersonation read it, `writable`
-  false); the writes `POST /app/api/group-sets/:id/student/groups` (create
-  and name, the creator moved in; the default name in the student's
-  language), `PUT|DELETE …/student/membership` (join by group id, leave),
-  `PATCH …/student/groups/:gid` (rename their own), each answering the
-  classroom's sets as its writer reads them (`{ serverNow, sets }`, the
-  read's own shape). A write takes the caller's own portal session on a
-  claimed student seat of a set that reaches them (`selfFormingSeat`, the
-  one rule the loader `studentGroupSet` and the read's `writable` share,
-  `guards.ts`): a teacher in the student view, a staff seat, a `seb` or
-  `kiosk` session, a token get the 404 of a missing set; an impersonation
-  the 404 in development, and the auth plugin's `403
-  impersonation_read_only` elsewhere (ADR-034). Group ids only, never a
-  roster line's.
-- **The checks**, under the set's lock (`writeSet`), BEFORE anything is
-  written or stepped: open by the server's clock (`409 set_closed`, no
-  grace); no group of the set with a repository in any project naming it,
-  stopped copies and archived projects included (`409 set_frozen`, the
-  same repository predicate as the copy's slug), so a student's write never
-  reaches `needs_confirmation`; `409 group_full` at the maximum or above
-  (a group the staff filled past it is full to the students), the lock
-  serialising the last seat. An emptied group stays; a student never
-  deletes one. The audit reuses `group.create`, `group.rename`,
-  `group.member_move` with `self: true` and the student's line.
-- **The staff.** `GroupSetPatch.openUntil`: a date opens the set until then
-  (a date already past leaves it closed), null closes it, reopening is
-  allowed, an archived classroom refuses it (`409 classroom_archived`); the
-  set open after the write needs a maximum size (`422 max_size_required`,
-  also for clearing it while open). The summary and the detail say
-  `openUntil` and `open`; a duplicate is born closed. The set's page opens
-  it from its menu (a date and the maximum, the risk said: a published
-  project on an open set can be accepted once everyone is placed, and its
-  first repository freezes the set) and says until when it is open, with
-  *Close to students*.
-- **Hints.** A write on a set that reaches the students, before or after it
-  (an opening, a closing), hints `groups` to the `user:` topic of every
-  claimed student of the classroom besides the course's staff; never
-  `classroom:`. Nothing ticks at the closing: the client reads the set again
-  when `openUntil` passes, by `serverNow`.
-
-### Fourth amendment of 2026-10-05 (product owner, M3-15b-2b)
-
-- **R1, §4 — a deleted set group.** A stopped group with a repository whose
-  set group was since deleted is KEPT by *Resync*: its repository and its
-  frozen score stay; its members follow the set, each named as a `lose`
-  consequence; the repository may end with no member.
-- **R2, §4 — the release waits.** The release is refused (`409
-  group_sync_pending`) while a confirmed resync is not fully applied.
-- **R3, §6 — an arrival without a repository.** A resync may move a student
-  into a group without a repository after the deadline: allowed, and its
-  confirmation flags it (the student will have no repository, Accept being
-  closed).
-- **How it is built** (orchestrator): the resync is a durable confirmed
-  target, not a fence — the keys of the consequences confirmed are stored
-  on the project (`projects.group_resync`, with `group_resync_at` and
-  `_by`); the `group.sync` job applies only those keys, computing the plan
-  with every stop lifted, and drops a key once done or no longer asked for
-  by the set: a set's write after the confirmation never extends it. What
-  touches no repository (renames, new groups, moves between groups without
-  one) is applied in the request's transaction. The resync is one-shot:
-  `stopped_at` and `groups_stopped_at` are never cleared, so the copy stays
-  stopped and drifts again at the next write of the set (alternative 5).
-  The **drift** is a non-empty plan with the stops lifted (the project's and
-  each group's) beyond what the job already owes; a following copy with a
-  group stopped on its repository's deadline drifts too, and is resynced
-  the same way. A confirmed resync's departure out of a frozen group into
-  another ends *moved*, never *left*, as far as the arrival was confirmed;
-  its departure marks survive a stop and a set's write. Its GitHub writes
-  are audited `via: "group.resync"`, the request `project.group_resync`.
-  A draft has nothing to resync (its copy follows). Refused: an archived
-  project (`project_archived`, the sync's own refusal), a released one (`released`), an archived classroom
-  (`classroom_archived`).
-
-### Fifth amendment of 2026-10-06 (product owner, ADR-077)
-
-- **§2 — staff seats stay unplaced.** A teacher's staff seat (ADR-018) may
-  now accept an individual project to test it
-  ([ADR-077](ADR-077-depots-de-test-du-personnel.md)), but it is never placed
-  in a group: on a group project it answers `409 no_group`, whatever group
-  membership it kept from before it became a staff seat, and it is never
-  invited on a group's repository.
-
 ## Consequences
 
 - One teacher action serves the whole semester: a set formed once is named
@@ -487,34 +463,27 @@ How it is built (orchestrator, M3-17):
 
 ## Alternatives considered
 
-1. **Groups per project only** (ADR-048 as written, with *Copy from…*):
-   correct for one lab, wrong for a semester — a student who drops out is
-   removed project by project. Group sets keep its economy (a new set, or a
-   duplicated one, per lab) without that cost.
-2. **One list of groups per classroom**: the false invariant heig-classroom
-   rightly rejected; several named sets are its fix.
-3. **A frozen copy at publication** (the set is only a template): simpler,
-   and the semester case again needs one edit per project; rejected by the
-   product owner.
-4. **Projects that always read the set live**: a late move would rewrite who
-   was graded on a closed project.
-5. **A stopped copy that follows again on its own** after a reopen: the next
-   change would replay, without a word, every move made since the freeze;
-   the explicit *Resync* shows them first.
-6. **A synchronous, all-or-nothing membership change** (ADR-048 alternative 5
-   kept): impossible to keep atomic across several repositories; the copy
-   that loses a member only when GitHub has revoked them keeps its honesty
-   instead — the copy never claims a revocation that did not happen.
-7. **A confirmation on every drop**: safe and slow when forming ten groups by
-   hand; *Undo* covers a mistaken drop with no consequence, the confirmation
-   stays for a drop that reaches GitHub.
-8. **Unbalanced remainders** (10 by 4 as 4, 4, 2): one group carries the whole
-   shortfall; balanced sizes spread it.
-9. **"Team" (fr *équipe*) as the word**: the students' word, and a collision
-   with the course's staff in French and with Microsoft Teams in English.
-10. **GitHub teams for group repositories**: students are outside
-    collaborators, and a team only grants access to members of the
-    organization (ADR-048, lot 2).
+1. **Groups per project only** (ADR-048 as written, with *Copy from…*): right for one lab, wrong for a
+   semester — a dropout is removed project by project; sets keep its economy (a new or duplicated set per lab).
+2. **One list of groups per classroom**: the false invariant heig-classroom rightly rejected; several
+   named sets are its fix.
+3. **A frozen copy at publication** (the set is only a template): simpler, and the semester case again
+   needs one edit per project; rejected by the product owner.
+4. **Projects that always read the set live**: a late move would rewrite who was graded on a closed
+   project.
+5. **A stopped copy that follows again on its own** after a reopen: the next change would replay, without
+   a word, every move made since the freeze; the explicit *Resync* shows them first.
+6. **A synchronous, all-or-nothing membership change** (ADR-048 alternative 5 kept): impossible to keep
+   atomic across several repositories; a copy that loses a member only once GitHub has revoked them never
+   claims a revocation that did not happen.
+7. **A confirmation on every drop**: safe and slow when forming ten groups by hand; *Undo* covers a
+   mistaken drop with no consequence, the confirmation stays for a drop that reaches GitHub.
+8. **Unbalanced remainders** (10 by 4 as 4, 4, 2): one group carries the whole shortfall; balanced sizes
+   spread it.
+9. **"Team" (fr *équipe*) as the word**: the students' word, and a collision with the course's staff in
+   French and with Microsoft Teams in English.
+10. **GitHub teams for group repositories**: students are outside collaborators, and a team only grants
+    access to members of the organization (ADR-048, lot 2).
 
 ## Correspondence with ADR-048
 
@@ -536,3 +505,22 @@ documents that cite it resolve as follows.
 | Consequences (additive migration, `group_id` set null, staff routes, audit) | decisions 9 and 12 |
 | Rejected alternatives 1, 2 and 5 | replaced by decisions 2, 3, 4 and 8; Alternatives 1, 2 and 6 |
 | Rejected alternatives 3 (a hard maximum) and 4 (a repository at the group's creation) | still rejected: decision 3 (advisory for the staff), decision 12 (created at the first Accept) |
+
+## Correspondence of old references
+
+Decisions 1–12 keep their numbers. The five amendments are folded into them:
+
+<a id="amendment-of-2026-10-05-product-owner-m3-15b-1"></a><a id="second-amendment-of-2026-10-05-product-owner-m3-15b-2"></a><a id="third-amendment-of-2026-10-05-product-owner-m3-17"></a><a id="fourth-amendment-of-2026-10-05-product-owner-m3-15b-2b"></a><a id="fifth-amendment-of-2026-10-06-product-owner-adr-077"></a>
+
+| Old reference | Now |
+| --- | --- |
+| Amendment of 2026-10-05 (M3-15b-1): §4, the first deadline stops a group | decision 4, *What stops* |
+| Amendment of 2026-10-05 (M3-15b-1): §5, nothing to revoke | decision 5 |
+| Amendment of 2026-10-05 (M3-15b-1): delivery split | removed: an interim rule (until M3-15b-2, a set's write reaching a copy group with a repository refused whole, `409 has_repo`, a rename still following), superseded since M3-15b-2a and M3-15b-2b are done (`docs/merge/PROGRESS.md`) by decisions 4 and 6 |
+| Second amendment of 2026-10-05 (M3-15b-2): §4 *Resync*; §6 what needs a confirmation; how it is built | decision 4 (*Resync*; *How it is applied*), decision 6 |
+| Third amendment of 2026-10-05 (M3-17): S1–S4; the student view, routes, checks, staff, hints | decision 8 |
+| Fourth amendment of 2026-10-05 (M3-15b-2b): R1, R2, how it is built | decision 4, *Resync* |
+| Fourth amendment: R3 | decision 6 |
+| Fifth amendment of 2026-10-06 (ADR-077): staff seats stay unplaced | decision 2 |
+| Decision 11, Delivery | decision 11, Lots |
+
