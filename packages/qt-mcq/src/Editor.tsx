@@ -469,7 +469,7 @@ export function McqEditor({
                         : "slot"
                   }
                   {...(RichText === undefined ? {} : { RichText })}
-                  {...(uploadAsset === undefined ? {} : { uploadAsset })}
+                  uploadAsset={uploadAsset}
                   onText={(text) => setChoices(patchAt(config.choices, index, { text }))}
                   onCorrect={(correct) => setChoices(patchAt(config.choices, index, { correct }))}
                   onRemove={() => setChoices(removeAt(config.choices, index))}

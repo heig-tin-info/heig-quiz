@@ -45,19 +45,22 @@ export const RunnerRequest = z.object({
 });
 export type RunnerRequest = z.infer<typeof RunnerRequest>;
 
+/** One case of a run, as the runner reports it. */
+export const RunnerCase = z.object({
+  /** The program's own exit code; null when it did not exit by itself (killed, oom). */
+  exitCode: z.number().int().nullable(),
+  stdout: z.string(),
+  stderr: z.string(),
+  ms: z.number(),
+  timedOut: z.boolean(),
+  oom: z.boolean(),
+  truncated: z.boolean(),
+});
+export type RunnerCase = z.infer<typeof RunnerCase>;
+
 export const RunnerOutcome = z.object({
   compile: z.object({ ok: z.boolean(), stdout: z.string(), stderr: z.string(), ms: z.number() }),
-  cases: z.array(
-    z.object({
-      exitCode: z.number().int().nullable(),
-      stdout: z.string(),
-      stderr: z.string(),
-      ms: z.number(),
-      timedOut: z.boolean(),
-      oom: z.boolean(),
-      truncated: z.boolean(),
-    }),
-  ),
+  cases: z.array(RunnerCase),
 });
 export type RunnerOutcome = z.infer<typeof RunnerOutcome>;
 

@@ -271,6 +271,8 @@ export function CategorizeEditor({
               onRemove={() => removeCard(slot.id)}
             />
           )}
+          // The card following the pointer is drawn with `renderMarkdown`;
+          // the cards themselves are fields.
           renderOverlay={(card) => (
             <OverlayCard>
               <GripIcon className="size-3.5 text-fg-faint" />

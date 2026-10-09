@@ -624,10 +624,7 @@ export function QuestionEditorHost({
   onChange: (next: unknown) => void;
   issues?: readonly ConfigIssue[];
   disabled?: boolean;
-  /**
-   * The pool's image upload. Absent — the poll launcher's unsaved question,
-   * which has no pool to hold an image — the editors offer no upload.
-   */
+  /** The pool's image upload: `EditorProps.uploadAsset`. */
   uploadAsset?: (file: File) => Promise<string>;
   /**
    * The element of the screen's right column a type's editor may portal its
@@ -664,14 +661,14 @@ export function QuestionEditorHost({
         config={config}
         onChange={onChange}
         {...(disabled === undefined ? {} : { disabled })}
-        {...(issues === undefined ? {} : { issues })}
+        issues={issues}
         strings={strings}
         {...canvasStringsProp(client.id, t)}
         {...(client.id === "circuit" ? { kindLabels: circuitKindLabels(t) } : {})}
         renderMarkdown={renderBlock}
         renderHelp={renderHelp}
         RichText={LazyRichText}
-        {...(uploadAsset === undefined ? {} : { uploadAsset })}
+        uploadAsset={uploadAsset}
         {...(aside === undefined ? {} : { aside })}
         {...(ungraded === undefined ? {} : { ungraded })}
         {...(published === undefined ? {} : { published })}
@@ -689,8 +686,10 @@ export function QuestionEditorHost({
   );
 }
 
-type PlayerHostProps = PlayerProps<unknown, unknown> & {
+/** What every shipped player accepts on top of the core contract; `student/QuestionHost.tsx` mounts one too. */
+export type PlayerHostProps = PlayerProps<unknown, unknown> & {
   strings?: unknown;
+  /** `circuit` and `diagram`: the canvas ships a dictionary of its own. */
   canvasStrings?: unknown;
   /** `cloze` only: its text with the blanks in place (`ClozeMarkdownText`). */
   renderText?: ClozeTextRenderer;
