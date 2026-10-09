@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { GradedResult } from "@quiz/core/server";
+import { testGradeContext } from "@quiz/core/testing";
 import { categorizeServer } from "./server.js";
 import type { CategorizeAnswer, CategorizeConfig, CategorizeDetails, CategorizeReviewDetails } from "./schema.js";
-import { C, config, gradeContext, K, RIGHT } from "./test/fixtures.js";
+import { C, config, K, RIGHT } from "./test/fixtures.js";
 
 function grade(
   cfg: CategorizeConfig,
@@ -10,7 +11,7 @@ function grade(
   points = 1,
   defaults?: Record<string, unknown>,
 ): GradedResult<CategorizeDetails> {
-  const result = categorizeServer.grade(cfg, answer, gradeContext(points, defaults));
+  const result = categorizeServer.grade(cfg, answer, testGradeContext(points, defaults));
   if (result instanceof Promise || result.kind !== "graded") throw new Error("expected a synchronous grade");
   return result;
 }

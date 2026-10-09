@@ -1,7 +1,7 @@
 /** The `brainstorm` review: the ideas given, nothing to judge. */
 import type { ReviewProps, StringOverrides } from "@quiz/core/client";
-import { resolveStrings, showsSection } from "@quiz/core/client";
-import { caption, markdown, reviewPrompt } from "@quiz/ui";
+import { resolveStrings } from "@quiz/core/client";
+import { caption, ReviewPrompt } from "@quiz/ui";
 
 import type { BrainstormAnswer, BrainstormDetails, BrainstormSolution, BrainstormStudent } from "./schema.js";
 import { brainstormReviewStrings, type BrainstormReviewStringKey } from "./strings.js";
@@ -15,9 +15,7 @@ export function BrainstormReview({ student, answer, sections, strings, renderMar
   const ideas = answer?.ideas ?? [];
   return (
     <div className="flex flex-col gap-3">
-      {showsSection(sections, "prompt") ? (
-        <p className={reviewPrompt}>{markdown(renderMarkdown, student.prompt)}</p>
-      ) : null}
+      <ReviewPrompt as="p" prompt={student.prompt} sections={sections} renderMarkdown={renderMarkdown} />
       <div className="flex flex-col gap-1">
         <span className="text-[13px] font-medium text-fg">{s.yourIdeas}</span>
         {ideas.length === 0 ? (

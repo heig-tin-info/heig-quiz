@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import type { FinalizeContext, GradeContext, RunnerService } from "@quiz/core/server";
+import type { FinalizeContext } from "@quiz/core/server";
 import { isGraded, isPendingRunner } from "@quiz/core/server";
+import { testGradeContext } from "@quiz/core/testing";
 
 import {
   buildRunnerRequest,
@@ -32,27 +33,8 @@ import {
   sineSeries,
 } from "./test/fixtures.js";
 
-const runner: RunnerService = {
-  run: () => Promise.reject(new Error("no runner in a unit test")),
-  health: () => Promise.resolve({ ok: false, languages: [], queued: 0, avgMs: null }),
-};
-
-const ctx: GradeContext = {
-  seed: 7,
-  itemId: "item-1",
-  attemptId: "attempt-1",
-  itemPoints: 8,
-  now: new Date("2026-09-22T10:00:00Z"),
-  runner,
-};
-
-const finalizeCtx: FinalizeContext = {
-  seed: ctx.seed,
-  itemId: ctx.itemId,
-  attemptId: ctx.attemptId,
-  itemPoints: ctx.itemPoints,
-  now: ctx.now,
-};
+const ctx = testGradeContext(8);
+const finalizeCtx: FinalizeContext = ctx;
 
 const manual = (overrides: Record<string, unknown> = {}): CircuitConfig =>
   circuitConfig({ grading: { mode: "manual", tolerance: 0.05, rubric: "" }, ...overrides });

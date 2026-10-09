@@ -46,6 +46,7 @@ import katex from "katex";
 import { Marked, type Renderer, type Tokens } from "marked";
 
 import { journalAssetUrl } from "./assets.js";
+import { decodeEntities } from "./entities.js";
 import { asBoolean, oneLine, splitFrontMatter } from "./frontMatter.js";
 import { escapeHtml, highlight } from "./highlight.js";
 import { relativeHref, resolveRelative } from "./journalTree.js";
@@ -127,33 +128,6 @@ function asDate(value: unknown): { date: Date | null; warning?: JournalWarning }
     if (!Number.isNaN(d.getTime())) return { date: d };
   }
   return { date: null, warning: { code: "visible_from_invalid", value: String(value) } };
-}
-
-/** The entities `decodeEntities` knows by name; any other stays as typed. */
-const NAMED: Record<string, string> = {
-  amp: "&",
-  lt: "<",
-  gt: ">",
-  quot: '"',
-  apos: "'",
-  nbsp: "\u00a0",
-};
-
-/**
- * What the reader sees for the entities written in a heading: numeric ones
- * (`&#233;`, `&#xE9;`) and the named ones of {@link NAMED}. A heading is kept
- * as TEXT (title, TOC), and text is never parsed as HTML again: an entity left
- * encoded would show as `&amp;` to a student.
- */
-function decodeEntities(text: string): string {
-  return text.replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (whole, name: string) => {
-    if (name[0] === "#") {
-      const code = name[1] === "x" || name[1] === "X" ? parseInt(name.slice(2), 16) : parseInt(name.slice(1), 10);
-      const valid = code > 0 && code <= 0x10ffff && (code < 0xd800 || code > 0xdfff);
-      return valid ? String.fromCodePoint(code) : whole;
-    }
-    return NAMED[name.toLowerCase()] ?? whole;
-  });
 }
 
 /**

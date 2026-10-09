@@ -11,9 +11,9 @@ import { useMemo, useState } from "react";
 
 import { resolveStrings, showsSection } from "@quiz/core/client";
 import type { ReviewProps } from "@quiz/core/client";
-import { breakdownOf, cx, hint, markdown, reviewPrompt } from "@quiz/ui";
+import { breakdownOf, hint, ReviewPrompt } from "@quiz/ui";
 
-import { CompileFailure, ReferenceSolutionCard, ScoreLine } from "../ProgramReview.js";
+import { CompileFailure, NoBreakdown, ReferenceSolutionCard, ScoreLine } from "../ProgramReview.js";
 import { ImagePanel, type ImageLayout, type ImageView } from "./ImagePanel.js";
 import { decodeImage } from "./pixels.js";
 import {
@@ -71,20 +71,11 @@ export function CodeImageReview({
 
   // The target picture stays with the answer whatever `sections` says: it is
   // what the output is judged against, not the teacher's solution (#109).
-  const statement = showsSection(sections, "prompt") ? (
-    <div className={cx("whitespace-pre-wrap", reviewPrompt)}>
-      {markdown(renderMarkdown, student.prompt)}
-    </div>
-  ) : null;
+  const statement = (
+    <ReviewPrompt preWrap prompt={student.prompt} sections={sections} renderMarkdown={renderMarkdown} />
+  );
 
-  if (breakdown === null) {
-    return (
-      <div className="flex flex-col gap-3">
-        {statement}
-        <p className={hint}>{answer === null ? s.notAnswered : s.runnerError}</p>
-      </div>
-    );
-  }
+  if (breakdown === null) return <NoBreakdown statement={statement} answered={answer !== null} s={s} />;
 
   return (
     <div className="flex flex-col gap-4">

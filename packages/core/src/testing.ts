@@ -8,7 +8,8 @@
  * list of findings, and the caller asserts the list is empty, which prints
  * every leak at once instead of the first one.
  */
-import { COMMON_FORBIDDEN_STUDENT_KEYS } from "./contract.js";
+import { COMMON_FORBIDDEN_STUDENT_KEYS, type GradeContext } from "./contract.js";
+import type { RunnerService } from "./runner.js";
 
 /**
  * What a question type hands the contract test: a FULLY populated
@@ -56,4 +57,30 @@ export function findStudentLeaks(
     if (out.includes(secret)) leaks.push(`secret value ${JSON.stringify(secret)}`);
   }
   return leaks;
+}
+
+/** A runner a type that never runs code must never call: calling it is a bug, so it throws. */
+const noRunner: RunnerService = {
+  run() {
+    throw new Error("this question type must never call the runner");
+  },
+  health() {
+    return Promise.resolve({ ok: false, languages: [], queued: 0, avgMs: null });
+  },
+};
+
+/**
+ * The grading context of a `qt-*` unit test: fixed ids, seed and instant, a
+ * runner that throws, and the evaluation's per-type `defaults` when given.
+ */
+export function testGradeContext(itemPoints: number, defaults?: GradeContext["defaults"]): GradeContext {
+  return {
+    seed: 7,
+    itemId: "item-1",
+    attemptId: "attempt-1",
+    itemPoints,
+    now: new Date("2026-09-20T10:00:00Z"),
+    runner: noRunner,
+    ...(defaults === undefined ? {} : { defaults }),
+  };
 }

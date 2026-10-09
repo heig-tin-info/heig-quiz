@@ -2,11 +2,12 @@
  * The SVG of an element and of a link, shared by the editor and the view.
  * Pure: a shape is a function of its data and of the layout's route.
  */
+import { DIRS } from "@quiz/domain/gridRouter";
 import type { JSX } from "react";
 
 import { FINAL_RADIUS, HEAD, INITIAL_RADIUS, PAD, PSEUDO, ROW, bodyCompartments, member, sizeOf, wrapName, wrapWidth, type Measure } from "../geometry.js";
 import { CIRCLES, FLOW_NODES, INK, LINK_STYLE, SHAPES, type PlaceTool } from "../kinds.js";
-import { DIRS, type End, type Route } from "../layout.js";
+import { type End, type Route } from "../layout.js";
 import type { Cardinality, DiagramLink, DiagramNode, LinkType } from "../scene.js";
 import {
   cardFill,

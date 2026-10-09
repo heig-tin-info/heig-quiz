@@ -57,7 +57,9 @@ import {
   OutputHeads,
   sectionTitle,
   table,
+  TableHead,
   textareaClass,
+  Th,
   useOutputMode,
   Verdict,
   verdictTone,
@@ -409,20 +411,12 @@ export function CodePlayer({
         ) : (
           <div className="overflow-x-auto">
             <table className={table.table}>
-              <thead className={table.head}>
-                <tr>
-                  <th scope="col" className={table.th}>
-                    {s.caseName}
-                  </th>
-                  <th scope="col" className={table.th}>
-                    {s.stdin}
-                  </th>
-                  <OutputHeads mode={outputMode} strings={s} className={table.th} />
-                  <th scope="col" className={table.th}>
-                    {s.verdict}
-                  </th>
-                </tr>
-              </thead>
+              <TableHead>
+                <Th>{s.caseName}</Th>
+                <Th>{s.stdin}</Th>
+                <OutputHeads mode={outputMode} strings={s} className={table.th} />
+                <Th>{s.verdict}</Th>
+              </TableHead>
               <tbody>
                 {student.visibleCases.map((visibleCase, i) => {
                   const result = outcome?.cases[i];

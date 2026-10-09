@@ -13,7 +13,7 @@
  * `server.ts`.
  */
 import type { FinalizeContext, GradeContext, GradeResult, GradedResult } from "@quiz/core/server";
-import { RunnerRequest, type RunnerOutcome } from "@quiz/core/server";
+import { RunnerRequest, zeroGrade, type RunnerOutcome } from "@quiz/core/server";
 import { round2 } from "@quiz/domain/round";
 
 import { extractNets, formatIssue, hasPaletteViolation } from "./netlist.js";
@@ -406,13 +406,7 @@ export function gradeCircuit(
   const diagnosis = diagnose(config, answer);
 
   if (isEmptyAnswer(answer)) {
-    return {
-      kind: "graded",
-      points: 0,
-      maxPoints: ctx.itemPoints,
-      details: { ...baseDetails(config, diagnosis, "none"), reason: "empty" },
-      state: "validated",
-    };
+    return zeroGrade(ctx, { ...baseDetails(config, diagnosis, "none"), reason: "empty" }, "validated");
   }
   const drawn = answer as CircuitAnswer;
 
@@ -420,27 +414,14 @@ export function gradeCircuit(
     // More components than the palette allows, or a kind it never offered:
     // the editor cannot produce this, so the answer is stale (the teacher
     // tightened the palette) or tampered with. Either way a human decides.
-    return {
-      kind: "graded",
-      points: 0,
-      maxPoints: ctx.itemPoints,
-      details: { ...baseDetails(config, diagnosis, "none"), reason: "palette_violation" },
-      state: "proposed",
-      comment: "palette_violation",
-    };
+    return zeroGrade(ctx, { ...baseDetails(config, diagnosis, "none"), reason: "palette_violation" }, "proposed", "palette_violation");
   }
 
   const indexes = config.stimuli.map((_stimulus, i) => i);
 
   if (config.grading.mode !== "simulation" && indexes.length === 0) {
     // Nothing to run and nothing to compare: the teacher grades the drawing.
-    return {
-      kind: "graded",
-      points: 0,
-      maxPoints: ctx.itemPoints,
-      details: { ...baseDetails(config, diagnosis, "none"), reason: "manual" },
-      state: "proposed",
-    };
+    return zeroGrade(ctx, { ...baseDetails(config, diagnosis, "none"), reason: "manual" }, "proposed");
   }
 
   // `manual` with stimuli still goes through the runner: the grading panel is
@@ -458,14 +439,7 @@ export function gradeCircuit(
     return { kind: "pending", via: "runner", request };
   } catch {
     // An oversized deck: the runner would refuse it anyway.
-    return {
-      kind: "graded",
-      points: 0,
-      maxPoints: ctx.itemPoints,
-      details: { ...baseDetails(config, diagnosis, "error"), reason: "runner_request_invalid" },
-      state: "proposed",
-      comment: "runner_request_invalid",
-    };
+    return zeroGrade(ctx, { ...baseDetails(config, diagnosis, "error"), reason: "runner_request_invalid" }, "proposed", "runner_request_invalid");
   }
 }
 
@@ -528,13 +502,7 @@ export function finalizeRunnerCircuit(
   const total = totalStimulusPoints(config);
 
   if (isEmptyAnswer(answer)) {
-    return {
-      kind: "graded",
-      points: 0,
-      maxPoints: ctx.itemPoints,
-      details: { ...baseDetails(config, diagnosis, "none"), reason: "empty" },
-      state: "validated",
-    };
+    return zeroGrade(ctx, { ...baseDetails(config, diagnosis, "none"), reason: "empty" }, "validated");
   }
 
   const simulation = config.grading.mode === "simulation";
@@ -585,13 +553,7 @@ export function finalizeRunnerCircuit(
   if (!simulation) {
     // `manual`: the curves are there for the teacher's eyes, and `ok` is
     // informational only. The score is theirs to set.
-    return {
-      kind: "graded",
-      points: 0,
-      maxPoints: ctx.itemPoints,
-      details,
-      state: "proposed",
-    };
+    return zeroGrade(ctx, details, "proposed");
   }
 
   const points = round2(total > 0 ? (earned / total) * ctx.itemPoints : 0);

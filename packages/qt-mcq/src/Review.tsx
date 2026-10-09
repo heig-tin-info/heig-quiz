@@ -28,7 +28,7 @@ import {
   type ChoiceMarkState,
   cx,
   markdown,
-  reviewPrompt,
+  ReviewPrompt,
   ScoreHeader,
   Verdict,
 } from "@quiz/ui";
@@ -68,9 +68,7 @@ export function McqReview({
 
   return (
     <div className="flex flex-col gap-4">
-      {showsSection(sections, "prompt") ? (
-        <p className={reviewPrompt}>{markdown(renderMarkdown, student.prompt)}</p>
-      ) : null}
+      <ReviewPrompt as="p" prompt={student.prompt} sections={sections} renderMarkdown={renderMarkdown} />
 
       <ul className="flex flex-col gap-1">
         {student.choices.map((choice, index) => {

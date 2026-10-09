@@ -5,11 +5,12 @@
  */
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { testGradeContext } from "@quiz/core/testing";
 
 import { CATEGORIZE_GRADING_MAX_COLUMNS, categorizeGrading } from "./grading.js";
 import type { CategorizeAnswer, CategorizeConfig, CategorizeDetails } from "./schema.js";
 import { categorizeServer } from "./server.js";
-import { C, config, gradeContext, K, RIGHT } from "./test/fixtures.js";
+import { C, config, K, RIGHT } from "./test/fixtures.js";
 
 const view = { seed: 3, itemId: "i", shuffle: false };
 
@@ -20,7 +21,7 @@ function setup(cfg: CategorizeConfig) {
 }
 
 function detailsOf(cfg: CategorizeConfig, answer: CategorizeAnswer): CategorizeDetails {
-  const result = categorizeServer.grade(cfg, answer, gradeContext(1));
+  const result = categorizeServer.grade(cfg, answer, testGradeContext(1));
   if (result instanceof Promise || result.kind !== "graded") throw new Error("expected a grade");
   return result.details;
 }

@@ -28,11 +28,12 @@ import {
   cx,
   hint,
   lockedBlock,
-  markdown,
   pointsOrDash,
-  reviewPrompt,
+  ReviewPrompt,
   sectionTitle,
   table,
+  TableHead,
+  Th,
   Verdict,
   verdictTone,
 } from "@quiz/ui";
@@ -153,11 +154,9 @@ export function CircuitReview({
   const reference = teacher && showsSection(sections, "solution") ? (solution?.reference ?? null) : null;
 
   /* The statement, so a verdict is never read without the question it judges. */
-  const statement = showsSection(sections, "prompt") ? (
-    <div className={cx("whitespace-pre-wrap", reviewPrompt)}>
-      {markdown(renderMarkdown, student.prompt)}
-    </div>
-  ) : null;
+  const statement = (
+    <ReviewPrompt preWrap prompt={student.prompt} sections={sections} renderMarkdown={renderMarkdown} />
+  );
 
   const canvas = canvasStrings === undefined ? {} : { strings: canvasStrings };
 
@@ -257,25 +256,13 @@ export function CircuitReview({
         <div className="overflow-x-auto">
           <table className={table.table}>
             <caption className="sr-only">{s.stimuli}</caption>
-            <thead className={table.head}>
-              <tr>
-                <th scope="col" className={table.th}>
-                  {s.stimulusName}
-                </th>
-                <th scope="col" className={table.th}>
-                  {s.verdict}
-                </th>
-                <th scope="col" className={cx(table.th, "text-right")}>
-                  {s.error}
-                </th>
-                <th scope="col" className={table.th}>
-                  {s.reason}
-                </th>
-                <th scope="col" className={cx(table.th, "text-right")}>
-                  {s.points}
-                </th>
-              </tr>
-            </thead>
+            <TableHead>
+              <Th>{s.stimulusName}</Th>
+              <Th>{s.verdict}</Th>
+              <Th right>{s.error}</Th>
+              <Th>{s.reason}</Th>
+              <Th right>{s.points}</Th>
+            </TableHead>
             <tbody>
               {rows.map(({ detail, label }, i) => {
                 // No waveform, no distance, no envelope: the stimulus never ran. (A
