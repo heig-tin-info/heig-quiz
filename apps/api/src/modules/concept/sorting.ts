@@ -4,6 +4,11 @@
  * admin's accept, which writes the decisions and creates the new concepts
  * they name, validated, in one transaction.
  *
+ * Since the cut-over (third addendum §3) the tags are frozen: the pairs
+ * still listed without a decision are late ones, and accepting one into a
+ * concept also links that concept to the live questions of the pool that
+ * wear the tag. An accepted decision is read-only (409 `sorting_locked`).
+ *
  * It reads `question_tags`, `pool_tags`, `questions` and their versions by
  * join and never writes them. A pair's excerpts come from the student view
  * of the latest published version (`questionExcerpt`): never an answer key,
@@ -21,17 +26,19 @@ import {
   type TagSorting,
   type TagSortingAcceptResponse,
   type TagSortingItem,
+  type TagSortingLocked,
   type TagSortingRow,
 } from "@quiz/contracts";
 import { groupNewConcepts, groupTagsByConceptKey, tagGroupKey, type NewConceptGroup } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
-import { isUniqueViolation, type Db } from "../../db/client.js";
+import { isUniqueViolation, type Db, type Tx } from "../../db/client.js";
 import {
   conceptTagSortings,
   concepts,
   pools,
   poolTags,
+  questionConcepts,
   questions,
   questionTags,
   questionVersions,
@@ -179,9 +186,12 @@ const itemsError = (code: "tag_unknown" | "concept_not_found" | "concept_batch_c
  * that share one language's key only). A key already held hits the unique
  * index, as `createConcept` does, and is answered 409 `concept_exists`
  * naming each holder and the items that asked for it. Each pair's row is
- * written with the admin's decision at the server's instant, over a
- * proposal or a former decision; the proposal stays. Audited per pool
- * (`concept.sort`) and per created concept (`concept.validate`).
+ * written with the admin's decision at the server's instant, over the
+ * model's proposal, which stays; a pair already accepted is refused, 409
+ * `sorting_locked` naming the items (third addendum §3). A pair accepted into
+ * a concept links it to the pool's live questions that wear the tag, beside
+ * the concepts they already have. Audited per pool (`concept.sort`) and per
+ * created concept (`concept.validate`).
  */
 export async function acceptTagSortings(
   db: Db,
@@ -209,6 +219,24 @@ export async function acceptTagSortings(
       const wornKeys = new Set(worn.map((w) => pairKey({ poolId: w.poolId!, tag: w.tag })));
       const unknown = items.filter((i) => !wornKeys.has(pairKey(i)));
       if (unknown.length > 0) throw itemsError("tag_unknown", unknown);
+
+      const accepted = await tx
+        .select({ poolId: conceptTagSortings.poolId, tag: conceptTagSortings.tag })
+        .from(conceptTagSortings)
+        .where(
+          and(
+            isNotNull(conceptTagSortings.decision),
+            inArray(conceptTagSortings.poolId, [...new Set(items.map((i) => i.poolId))]),
+            inArray(conceptTagSortings.tag, [...new Set(items.map((i) => i.tag))]),
+          ),
+        );
+      const acceptedKeys = new Set(accepted.map(pairKey));
+      const locked = items.filter((i) => acceptedKeys.has(pairKey(i)));
+      if (locked.length > 0) {
+        throw new DomainError("sorting_locked", 409, "An accepted decision is read-only", {
+          items: locked.map(({ poolId, tag }) => ({ poolId, tag })),
+        } satisfies Omit<TagSortingLocked, "error">);
+      }
 
       const targetIds = [
         ...new Set(items.flatMap((i) => (i.decision.kind === "concept" ? [i.decision.conceptId] : []))),
@@ -286,6 +314,7 @@ export async function acceptTagSortings(
           },
         })
         .returning();
+      await linkAccepted(tx, decided);
 
       const byPool = new Map<string, { tag: string; decision: string; conceptId: string | null; reason: string | null }[]>();
       for (const d of decided) {
@@ -315,6 +344,29 @@ export async function acceptTagSortings(
   } catch (error) {
     throw (await conflictOf(db, error, wanted)) ?? error;
   }
+}
+
+/**
+ * The links of the pairs just accepted into a concept (third addendum §3):
+ * each live question of the pool that wears the tag gets the concept, in
+ * one statement; a link it already has stays.
+ */
+async function linkAccepted(
+  tx: Tx,
+  decided: readonly { poolId: string; tag: string; conceptId: string | null }[],
+): Promise<void> {
+  const linked = decided.filter((d): d is typeof d & { conceptId: string } => d.conceptId !== null);
+  if (linked.length === 0) return;
+  const array = (values: readonly string[], type: "uuid" | "text") =>
+    sql`ARRAY[${sql.join(values.map((v) => sql`${v}`), sql`, `)}]::${sql.raw(type)}[]`;
+  await tx.execute(sql`
+    INSERT INTO ${questionConcepts} (question_id, concept_id)
+    SELECT qt.question_id, d.concept_id
+    FROM unnest(${array(linked.map((d) => d.poolId), "uuid")}, ${array(linked.map((d) => d.tag), "text")},
+                ${array(linked.map((d) => d.conceptId), "uuid")}) AS d(pool_id, tag, concept_id)
+    JOIN ${questionTags} qt ON qt.tag = d.tag
+    JOIN ${questions} q ON q.id = qt.question_id AND q.pool_id = d.pool_id AND q.deleted_at IS NULL
+    ON CONFLICT DO NOTHING`);
 }
 
 /**

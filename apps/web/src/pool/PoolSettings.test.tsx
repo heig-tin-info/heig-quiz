@@ -33,7 +33,7 @@ const makeDetail = (over: Partial<PoolDetail["pool"]> = {}, role: PoolDetail["ro
   },
   role,
   categories: [],
-  tags: [],
+  concepts: [],
   questionCount: 14,
 });
 

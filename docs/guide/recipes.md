@@ -46,7 +46,7 @@ The drill is spaced practice: each day, a few questions from a student's past ev
 - Give one short exercise a week on that week's material. **Allow drill**, on the **Time and mode** step, is on by default for an exercise, and its questions become drill cards when each student hands in. A card is served only once the exercise's feedback shows the key, so keep **Show the expected answer** on. An exam has it off by default; turned on, its questions become cards at the release of the results.
 - Only multiple choice, short answer, fill in the blanks and categorize questions become cards, and only when they are graded automatically: code, essays, diagrams and circuits stay out.
 - The students see the key after each review, and the drill serves the latest published version of each question. A question you plan to reuse in an exam will have been practised, key included: keep the exam's questions out of the drill.
-- The classroom's **Drill** tab shows, per student, the **Recall, 30 days** and the sessions, and **Mastery per tag** shows which topics are fading.
+- The classroom's **Drill** tab shows, per student, the **Recall, 30 days** and the sessions, and **Mastery per concept** shows which concepts are fading.
 
 ## Programming questions beyond "write a function"
 

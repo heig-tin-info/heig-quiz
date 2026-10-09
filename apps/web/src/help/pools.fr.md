@@ -2,7 +2,7 @@
 
 ## Ce qu'est une banque
 
-Une banque est une collection de questions : catégories hiérarchiques, tags,
+Une banque est une collection de questions : catégories hiérarchiques, notions,
 et un historique de versions publiées par question. Elle vous appartient, et
 non à un cours — une banque peut nourrir plusieurs cours, et un cours peut
 puiser dans plusieurs banques.

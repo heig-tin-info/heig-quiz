@@ -276,13 +276,22 @@ describe("POST /concepts and the stop list", () => {
     });
     expect(created.statusCode, created.body).toBe(201);
   });
+
+  it("lets a qualifier tell a concept apart from a dropped tag, and the admin curate onto it", async () => {
+    const post = (who: Who, payload: Record<string, unknown>) =>
+      server.app.inject({ method: "POST", url: "/app/api/concepts", headers: who.headers, payload });
+    const qualified = await post(teacher, { lang: "fr", label: "C01", qualifier: "langage" });
+    expect(qualified.statusCode, qualified.body).toBe(201);
+    const byAdmin = await post(admin, { lang: "fr", label: "Lecture de code" });
+    expect(byAdmin.statusCode, byAdmin.body).toBe(201);
+  });
 });
 
 describe("PATCH /concepts and the stop list", () => {
   const patch = (who: Who, id: string, payload: Record<string, unknown>) =>
     server.app.inject({ method: "PATCH", url: `/app/api/concepts/${id}`, headers: who.headers, payload });
 
-  it("refuses to rename a concept onto a dropped tag's key, for the creator and the admin", async () => {
+  it("refuses the creator a rename onto a dropped tag's key, not the admin", async () => {
     const created = await server.app.inject({
       method: "POST",
       url: "/app/api/concepts",
@@ -290,18 +299,22 @@ describe("PATCH /concepts and the stop list", () => {
       payload: { lang: "fr", label: "chapitre" },
     });
     const id = created.json().id as string;
-    for (const who of [teacher, admin]) {
-      const res = await patch(who, id, { en: { label: "Lecture de code" } });
-      expect(res.statusCode, res.body).toBe(422);
-      expect(ConceptWriteRefusal.parse(res.json())).toEqual({
-        error: "concept_dropped",
-        message: expect.any(String),
-        errors: [{ input: "Lecture de code", error: "concept_dropped", reason: "task_kind" }],
-      });
-    }
+    const res = await patch(teacher, id, { en: { label: "Lecture de code" } });
+    expect(res.statusCode, res.body).toBe(422);
+    expect(ConceptWriteRefusal.parse(res.json())).toEqual({
+      error: "concept_dropped",
+      message: expect.any(String),
+      errors: [{ input: "Lecture de code", error: "concept_dropped", reason: "task_kind" }],
+    });
     expect((await db().select().from(concepts).where(eq(concepts.id, id)))[0]).toMatchObject({ labelEn: null });
     const ok = await patch(teacher, id, { fr: { description: "Un chapitre." }, en: { label: "chapter" } });
     expect(ok.statusCode, ok.body).toBe(200);
+    const byAdmin = await patch(admin, id, { en: { label: "Lecture de code" } });
+    expect(byAdmin.statusCode, byAdmin.body).toBe(200);
+    // Already on the list, the side may not move to another dropped key for the creator.
+    const moved = await patch(teacher, id, { en: { label: "C01" } });
+    expect(moved.statusCode, moved.body).toBe(422);
+    expect(moved.json()).toMatchObject({ error: "concept_dropped" });
   });
 
   it("lets a qualifier-only edit pass on a concept whose label is dropped elsewhere", async () => {

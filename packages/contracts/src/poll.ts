@@ -15,6 +15,7 @@
 import { z } from "zod";
 
 import { pageOf } from "./common.js";
+import { ConceptRef } from "./concept.js";
 import { LLM_ERROR_CODES } from "./llm.js";
 import { QuestionSearch, QuestionTypeId } from "./pool.js";
 
@@ -200,7 +201,7 @@ const PollPoolQuestion = z.object({
   /** The statement, as the student sees it (`toStudent`). */
   prompt: z.string(),
   pool: z.object({ id: z.uuid(), name: z.string() }),
-  tags: z.array(z.string()),
+  concepts: z.array(ConceptRef),
   difficulty: z.number().int().min(1).max(5),
   /** The published version a poll would freeze. */
   latestNumber: z.number().int().min(1),
@@ -208,13 +209,13 @@ const PollPoolQuestion = z.object({
 type PollPoolQuestion = z.infer<typeof PollPoolQuestion>;
 
 /**
- * One page of "From pools". `total` counts every match, and `tags` is every
- * tag of the scope — the filters left out — for the filter sheet and the
- * `tag:` completion, the way a pool's tags feed its own bar.
+ * One page of "From pools". `total` counts every match, and `concepts` is
+ * every concept of the scope — the filters left out — for the filter sheet
+ * and the `#` completion, the way a pool's concepts feed its own bar.
  */
 export const PollPoolPage = pageOf(PollPoolQuestion).extend({
   total: z.number().int().nonnegative(),
-  tags: z.array(z.string()),
+  concepts: z.array(ConceptRef),
 });
 export type PollPoolPage = z.infer<typeof PollPoolPage>;
 

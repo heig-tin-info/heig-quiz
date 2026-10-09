@@ -4,20 +4,28 @@ import { isDeepStrictEqual } from "node:util";
 
 import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
-import type { ParametersDraft, QuestionDetail, VersionDetail, VersionRow, ZodIssueLite } from "@quiz/contracts";
+import type {
+  ConceptLang,
+  ParametersDraft,
+  QuestionDetail,
+  VersionDetail,
+  VersionRow,
+  ZodIssueLite,
+} from "@quiz/contracts";
 import { issuesOf } from "@quiz/contracts";
 
-import { isUniqueViolation, type Db } from "../../db/client.js";
+import type { AuditActor } from "../../audit.js";
+import { isUniqueViolation, type Db, type Tx } from "../../db/client.js";
 import {
   assets,
   attempts,
   evaluationItems,
   evaluations,
-  questionTags,
   questionVersionAssets,
   questionVersions,
   questions,
 } from "../../db/schema.js";
+import { conceptsOf, copyQuestionConcepts, resolveForWrite, setQuestionConcepts } from "../concept/service.js";
 import { userTopic } from "../realtime/bus.js";
 import { poolChanged, poolPeopleChanged } from "./events.js";
 import {
@@ -43,9 +51,15 @@ import {
 } from "./shared.js";
 import { tellPoolOfPublication } from "./members.js";
 import { ensurePersonalPool } from "./pools.js";
-import { normalizeTag, ensurePoolTags } from "./tags.js";
-import { tagsOf, isKeyless, metaJson, versionJson, draftJson } from "./questionList.js";
+import { isKeyless, metaJson, versionJson, draftJson } from "./questionList.js";
 import { reviewJson, reviewOf } from "./reviewStore.js";
+
+/** Who changes a question: the teacher a created concept is credited to, their language, the audit's actor. */
+export interface QuestionWriter {
+  userId: string;
+  lang: ConceptLang;
+  actor: AuditActor;
+}
 
 /**
  * A new question and its first draft, pre-filled by the type's
@@ -55,6 +69,9 @@ import { reviewJson, reviewOf } from "./reviewStore.js";
  * through `saveDraftConfig`, exactly like the autosave of `putDraft`, and is
  * stored as it stands (decision D16). Refusing it here would mean no teacher
  * could ever create a question.
+ *
+ * `concepts`, when given, are resolved and linked in the same transaction
+ * (`writeConcepts`): a refusal creates nothing.
  */
 export async function createQuestion(
   db: Db,
@@ -64,6 +81,7 @@ export async function createQuestion(
     internalName: string;
     categoryId?: string | null;
     createdBy: string;
+    concepts?: { inputs: readonly string[]; createMissing: boolean; writer: QuestionWriter } | undefined;
   },
 ): Promise<QuestionRecord> {
   const t = typeOf(input.type);
@@ -93,6 +111,10 @@ export async function createQuestion(
       updatedAt: now,
       createdAt: now,
     });
+    if (input.concepts) {
+      const { inputs, createMissing, writer } = input.concepts;
+      await writeConcepts(tx, id, inputs, createMissing, writer, now);
+    }
     return created!;
   }).catch((error: unknown) => {
     throw questionWriteError(error);
@@ -299,8 +321,9 @@ export async function draftOf(db: Db, questionId: string): Promise<VersionRecord
   return row;
 }
 
-export async function questionDetail(db: Db, question: QuestionRecord): Promise<QuestionDetail> {
-  const [draft, versions, tags] = await Promise.all([
+/** A question as its editor reads it, its concepts labelled in `lang` (the reader's). */
+export async function questionDetail(db: Db, question: QuestionRecord, lang: ConceptLang): Promise<QuestionDetail> {
+  const [draft, versions, refs] = await Promise.all([
     draftOf(db, question.id),
     db
       .select()
@@ -309,13 +332,13 @@ export async function questionDetail(db: Db, question: QuestionRecord): Promise<
         and(eq(questionVersions.questionId, question.id), isNotNull(questionVersions.number)),
       )
       .orderBy(desc(questionVersions.number)),
-    tagsOf(db, [question.id]),
+    conceptsOf(db, [question.id], lang),
   ]);
   const rows = versions.map(versionJson);
   const latest = versions[0];
   const review = latest ? await reviewOf(db, latest.id) : null;
   return {
-    meta: metaJson(question, tags.get(question.id) ?? []),
+    meta: metaJson(question, refs.get(question.id) ?? []),
     draft: draftJson(question.type, draft),
     versions: rows,
     latestPublished: rows[0] ?? null,
@@ -325,8 +348,36 @@ export async function questionDetail(db: Db, question: QuestionRecord): Promise<
 }
 
 /**
+ * Sets a question's concepts from what a write names (ADR-081 third
+ * addendum): each input an id or a label, resolved all or nothing
+ * (`resolveForWrite`, a 422 `ConceptWriteRefusal` otherwise); an unknown
+ * label becomes a `proposed` concept in the writer's language only with
+ * `createMissing`. Inside the caller's transaction.
+ */
+async function writeConcepts(
+  tx: Tx,
+  questionId: string,
+  inputs: readonly string[],
+  createMissing: boolean,
+  writer: QuestionWriter,
+  now: Date,
+): Promise<void> {
+  const { ids } = await resolveForWrite(tx, inputs, {
+    create: createMissing,
+    lang: writer.lang,
+    createdBy: writer.userId,
+    actor: writer.actor,
+    now,
+  });
+  await setQuestionConcepts(tx, questionId, ids);
+}
+
+/**
  * Metadata only. Renaming also refreshes the draft's `search_text`, so the
  * full-text index follows the name the teacher searches by.
+ *
+ * `concepts` replaces the question's set (`writeConcepts`), in the same
+ * transaction.
  */
 export async function patchQuestion(
   db: Db,
@@ -336,8 +387,10 @@ export async function patchQuestion(
     categoryId?: string | null | undefined;
     difficulty?: number | undefined;
     shuffleable?: boolean | undefined;
-    tags?: readonly string[] | undefined;
+    concepts?: readonly string[] | undefined;
+    createMissing?: boolean | undefined;
   },
+  writer: QuestionWriter,
 ): Promise<void> {
   const now = new Date();
   await db.transaction(async (tx) => {
@@ -352,15 +405,8 @@ export async function patchQuestion(
         updatedAt: now,
       })
       .where(eq(questions.id, question.id));
-    if (patch.tags) {
-      const unique = [...new Set(patch.tags.map(normalizeTag))].filter(Boolean);
-      await tx.delete(questionTags).where(eq(questionTags.questionId, question.id));
-      if (unique.length) {
-        await tx
-          .insert(questionTags)
-          .values(unique.map((tag) => ({ questionId: question.id, tag })));
-        await ensurePoolTags(tx, poolOf(question), unique);
-      }
+    if (patch.concepts) {
+      await writeConcepts(tx, question.id, patch.concepts, patch.createMissing ?? false, writer, now);
     }
     if (patch.internalName !== undefined) {
       const [draft] = await tx
@@ -728,14 +774,14 @@ export async function softDeleteQuestion(db: Db, question: QuestionRecord): Prom
     .where(eq(questions.id, question.id));
 }
 
-/** `?hard=1`: the rows really go away (cascade on versions and tags). */
+/** `?hard=1`: the rows really go away (cascade on versions and concept links). */
 export async function hardDeleteQuestion(db: Db, question: QuestionRecord): Promise<void> {
   if (await isQuestionInUse(db, question.id)) throw new VersionInUse();
   await db.delete(questions).where(eq(questions.id, question.id));
 }
 
 /**
- * Copies a question into a pool: metadata, tags and the CURRENT draft — not
+ * Copies a question into a pool: metadata, concepts and the CURRENT draft — not
  * the history, which belongs to the original. The copy keeps a pointer to
  * its origin so a teacher can tell where it came from.
  */
@@ -745,7 +791,6 @@ export async function copyQuestion(
   input: { targetPoolId: string; categoryId?: string | null; userId: string },
 ): Promise<QuestionRecord> {
   const draft = await draftOf(db, question.id);
-  const tags = (await tagsOf(db, [question.id])).get(question.id) ?? [];
   const id = randomUUID();
   const now = new Date();
   const name = await freeName(db, input.targetPoolId, question.internalName);
@@ -778,11 +823,8 @@ export async function copyQuestion(
       updatedAt: now,
       createdAt: now,
     });
-    if (tags.length) {
-      await tx.insert(questionTags).values(tags.map((tag) => ({ questionId: id, tag })));
-      // The copy may land in another pool, whose vocabulary learns the tags.
-      await ensurePoolTags(tx, input.targetPoolId, tags);
-    }
+    // The vocabulary is the instance's (ADR-081 §3): the copy names the same concepts.
+    await copyQuestionConcepts(tx, question.id, id);
     return created!;
   }).catch((error: unknown) => {
     throw questionWriteError(error);

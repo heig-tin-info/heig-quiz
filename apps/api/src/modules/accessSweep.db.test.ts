@@ -28,7 +28,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { registerForTests } from "@quiz/registry/server";
 
-import { attempts, courseConditions, courseStaff, enrollments, evaluations, journalPageRevisions, poolMembers, poolTags } from "../db/schema.js";
+import { attempts, courseConditions, courseStaff, enrollments, evaluations, journalPageRevisions, poolMembers } from "../db/schema.js";
 import { fakeShort } from "../test/fakeType.js";
 import { routesOf, testServer, type Method, type TestServer } from "../test/http.js";
 import { seedLive } from "../test/live.js";
@@ -94,7 +94,6 @@ async function world(): Promise<World> {
   const colleague = await server.signIn("teacher");
   await db.insert(courseStaff).values({ courseId: seed.courseId, userId: colleague.id });
   await db.insert(poolMembers).values({ poolId: seed.poolId, userId: colleague.id, role: "reader" });
-  await db.insert(poolTags).values({ poolId: seed.poolId, tag: "malloc" });
   const [entry] = await db.select().from(enrollments).where(eq(enrollments.classroomId, seed.classroomId));
   // A poll of the owner's, for the poll routes (an exam turned poll,
   // as `evaluation.db.test.ts` makes one: a poll is refused items).
@@ -135,7 +134,6 @@ async function world(): Promise<World> {
       userId: colleague.id,
       eid: entry!.id,
       attemptId,
-      tag: "malloc",
       number: "1",
       revisionId: revision!.id,
       kind: "evaluation",

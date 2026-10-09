@@ -50,7 +50,7 @@ teacher's call — and had no common place.
    pool's "LLM review" tab. Fix and Ignore stay in that tab: their routes
    write the server's draft, which would race the editor's autosave. After
    "Review now" the card shows the call's result at once, with no toast.
-5. **Later actions** of the same family (a tag suggestion) land in the same
+5. **Later actions** of the same family (a concept suggestion, ADR-081 §7, #557) land in the same
    card.
 
 ## Consequences

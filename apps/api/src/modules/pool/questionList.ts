@@ -2,6 +2,8 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 
 import type {
+  ConceptLang,
+  ConceptRef,
   QuestionDraft,
   QuestionMeta,
   QuestionRow,
@@ -14,12 +16,14 @@ import { reviewPill } from "@quiz/domain";
 import type { Db } from "../../db/client.js";
 import {
   coursePools,
+  concepts,
   pools,
+  questionConcepts,
   questionReviews,
-  questionTags,
   questionVersions,
   questions,
 } from "../../db/schema.js";
+import { byLabel, conceptsOf, toConceptRef } from "../concept/service.js";
 import { hasKey, isParameterized, loadConfig, publicationIssuesOf, tryLoadConfig } from "./config.js";
 import { exampleConfig, parameterIssues, type VersionContent } from "./instance.js";
 import { type QuestionRecord, poolOf, type VersionRecord, qualified } from "./shared.js";
@@ -137,9 +141,9 @@ function filterWhere(search: SearchFilters): SQL[] {
   if (search.categoryId) clauses.push(eq(questions.categoryId, search.categoryId));
   if (search.type?.length) clauses.push(inArray(questions.type, search.type));
   if (search.difficulty?.length) clauses.push(inArray(questions.difficulty, search.difficulty));
-  if (search.tag?.length) {
+  if (search.concept?.length) {
     clauses.push(
-      sql`EXISTS (SELECT 1 FROM ${questionTags} WHERE ${questionTags.questionId} = ${questions.id} AND ${inArray(questionTags.tag, search.tag)})`,
+      sql`EXISTS (SELECT 1 FROM ${questionConcepts} WHERE ${questionConcepts.questionId} = ${questions.id} AND ${inArray(questionConcepts.conceptId, search.concept)})`,
     );
   }
   if (search.q) {
@@ -153,23 +157,6 @@ function filterWhere(search: SearchFilters): SQL[] {
   if (search.versionMin !== undefined) clauses.push(sql`${latestNumber} >= ${search.versionMin}`);
   if (search.versionMax !== undefined) clauses.push(sql`${latestNumber} <= ${search.versionMax}`);
   return clauses;
-}
-
-/** Tags of a set of questions, in one query. */
-export async function tagsOf(db: Db, ids: readonly string[]): Promise<Map<string, string[]>> {
-  const out = new Map<string, string[]>();
-  if (ids.length === 0) return out;
-  const rows = await db
-    .select()
-    .from(questionTags)
-    .where(inArray(questionTags.questionId, ids))
-    .orderBy(asc(questionTags.tag));
-  for (const row of rows) {
-    const list = out.get(row.questionId) ?? [];
-    list.push(row.tag);
-    out.set(row.questionId, list);
-  }
-  return out;
 }
 
 interface VersionFacts {
@@ -265,7 +252,7 @@ function hasDraftChanges(facts: VersionFacts | undefined): boolean {
 
 function rowJson(
   question: QuestionRecord & { starred: boolean },
-  tags: string[],
+  concepts: ConceptRef[],
   facts: VersionFacts | undefined,
 ): QuestionRow {
   return {
@@ -273,7 +260,7 @@ function rowJson(
     type: question.type,
     internalName: question.internalName,
     difficulty: question.difficulty,
-    tags,
+    concepts,
     categoryId: question.categoryId,
     latestNumber: facts?.latestNumber ?? null,
     hasDraftChanges: hasDraftChanges(facts),
@@ -289,22 +276,25 @@ function rowJson(
 
 /**
  * `GET /pools/:id/questions`: filtered, sorted on the requested column,
- * cursor-paginated, each row carrying whether the CALLER starred it.
+ * cursor-paginated, each row carrying whether the CALLER starred it and its
+ * concepts labelled in `lang`.
  */
 export async function listQuestions(
   db: Db,
   poolId: string,
   userId: string,
   search: QuestionSearch,
+  lang: ConceptLang,
 ) {
-  const { page, tags, facts, nextCursor, total } = await pageWhere(
+  const { page, facts, nextCursor, total } = await pageWhere(
     db,
     searchWhere(poolId, userId, search),
     search,
     starredBy(userId),
   );
+  const refs = await conceptsOf(db, page.map((q) => q.id), lang);
   return {
-    items: page.map((q) => rowJson(q, tags.get(q.id) ?? [], facts.get(q.id))),
+    items: page.map((q) => rowJson(q, refs.get(q.id) ?? [], facts.get(q.id))),
     nextCursor,
     total,
   };
@@ -351,11 +341,10 @@ async function pageWhere(
     .limit(search.limit + 1);
   const page = rows.slice(0, search.limit).map((r) => ({ ...r.question, starred: r.starred }));
   const ids = page.map((q) => q.id);
-  const [tags, facts] = await Promise.all([tagsOf(db, ids), versionFactsOf(db, ids)]);
+  const facts = await versionFactsOf(db, ids);
   const last = rows[search.limit - 1];
   return {
     page,
-    tags,
     facts,
     nextCursor:
       rows.length > search.limit && last
@@ -374,7 +363,6 @@ async function pageWhere(
 interface ReachableQuestion {
   question: QuestionRecord;
   pool: { id: string; name: string };
-  tags: string[];
   latestNumber: number;
   /** The latest published version, for what the caller shows of it. */
   latest: VersionContent;
@@ -400,13 +388,12 @@ function reachableScope(poolWhere: SQL | undefined, types?: readonly string[]): 
 }
 
 /**
- * The rows of a search across pools, with their tags, their pool's name and
- * their latest version, by id; a row whose latest version is gone is left out.
+ * The rows of a search across pools, with their pool's name and their
+ * latest version, by id; a row whose latest version is gone is left out.
  */
 async function hydrateReachable(
   db: Db,
   page: readonly QuestionRecord[],
-  tags: Map<string, string[]>,
   facts: Map<string, VersionFacts>,
 ): Promise<Map<string, ReachableQuestion>> {
   const poolIds = [...new Set(page.map((q) => q.poolId).filter((id): id is string => id !== null))];
@@ -428,7 +415,6 @@ async function hydrateReachable(
     out.set(question.id, {
       question,
       pool: { id: question.poolId, name: names.get(question.poolId) ?? "" },
-      tags: tags.get(question.id) ?? [],
       latestNumber: fact.latestNumber,
       latest: fact.latest,
     });
@@ -444,8 +430,9 @@ async function hydrateReachable(
  * linked to that course. `types` is what the caller can run: a `type:`
  * filter outside it matches nothing rather than widening the search.
  *
- * `tags` is every tag of the SCOPE (the filters left out), for the filter
- * sheet and the `tag:` completion, the way a pool's own tags feed its bar.
+ * Each row carries its concepts, and `concepts` is every concept of the
+ * SCOPE (the filters left out), for the filter sheet and the `#` completion,
+ * the way a pool's own concepts feed its bar; all labelled in `lang`.
  */
 export async function searchReachableQuestions(
   db: Db,
@@ -456,8 +443,14 @@ export async function searchReachableQuestions(
     search: QuestionSearch;
     /** Leave out the parameterized questions (ADR-056 §10): a poll's picker. */
     staticOnly?: boolean;
+    lang: ConceptLang;
   },
-): Promise<{ items: ReachableQuestion[]; nextCursor: string | null; total: number; tags: string[] }> {
+): Promise<{
+  items: (ReachableQuestion & { concepts: ConceptRef[] })[];
+  nextCursor: string | null;
+  total: number;
+  concepts: ConceptRef[];
+}> {
   const { search } = input;
   const types = search.type?.length
     ? input.types.filter((t) => search.type!.includes(t))
@@ -466,21 +459,27 @@ export async function searchReachableQuestions(
   if (input.courseId !== null) scope.push(linkedTo(input.courseId));
   if (input.staticOnly) scope.push(eq(questions.randomizable, false));
   const filters = filterWhere({ ...search, type: undefined, categoryId: undefined, includeDeleted: false });
-  const [{ page, tags, facts, nextCursor, total }, scopeTags] = await Promise.all([
+  const [{ page, facts, nextCursor, total }, scopeConcepts] = await Promise.all([
     pageWhere(db, [...scope, ...filters], search),
     db
-      .selectDistinct({ tag: questionTags.tag })
-      .from(questionTags)
-      .innerJoin(questions, eq(questions.id, questionTags.questionId))
-      .where(and(...scope))
-      .orderBy(asc(questionTags.tag)),
+      .selectDistinct({ concept: concepts })
+      .from(questionConcepts)
+      .innerJoin(questions, eq(questions.id, questionConcepts.questionId))
+      .innerJoin(concepts, eq(concepts.id, questionConcepts.conceptId))
+      .where(and(...scope)),
   ]);
-  const rows = await hydrateReachable(db, page, tags, facts);
+  const [rows, refs] = await Promise.all([
+    hydrateReachable(db, page, facts),
+    conceptsOf(db, page.map((q) => q.id), input.lang),
+  ]);
   return {
-    items: page.flatMap((q) => rows.get(q.id) ?? []),
+    items: page.flatMap((q) => {
+      const row = rows.get(q.id);
+      return row ? [{ ...row, concepts: refs.get(q.id) ?? [] }] : [];
+    }),
     nextCursor,
     total,
-    tags: scopeTags.map((r) => r.tag),
+    concepts: scopeConcepts.map((r) => toConceptRef(r.concept, input.lang)).sort(byLabel),
   };
 }
 
@@ -539,15 +538,14 @@ export async function rankReachableQuestions(
     .limit(input.limit);
   const page = rows.map((r) => r.question);
   const ids = page.map((q) => q.id);
-  const [tags, facts] = await Promise.all([tagsOf(db, ids), versionFactsOf(db, ids)]);
-  const hydrated = await hydrateReachable(db, page, tags, facts);
+  const hydrated = await hydrateReachable(db, page, await versionFactsOf(db, ids));
   return rows.flatMap((r) => {
     const row = hydrated.get(r.question.id);
     return row ? [{ ...row, linked: r.linked, searchText: r.searchText }] : [];
   });
 }
 
-export function metaJson(question: QuestionRecord, tags: string[]): QuestionMeta {
+export function metaJson(question: QuestionRecord, concepts: ConceptRef[]): QuestionMeta {
   return {
     id: question.id,
     poolId: poolOf(question),
@@ -557,7 +555,7 @@ export function metaJson(question: QuestionRecord, tags: string[]): QuestionMeta
     difficulty: question.difficulty,
     shuffleable: question.shuffleable,
     randomizable: question.randomizable,
-    tags,
+    concepts,
     createdBy: question.createdBy,
     originQuestionId: question.originQuestionId,
     deletedAt: question.deletedAt?.toISOString() ?? null,

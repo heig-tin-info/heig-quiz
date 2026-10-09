@@ -25,7 +25,7 @@ import {
   type DrillServed,
   type DrillSession,
   type DrillStudentActivity,
-  type DrillTagMastery,
+  type DrillConceptMastery,
   type EvaluationDrill,
 } from "@quiz/contracts";
 
@@ -182,11 +182,11 @@ export function useDrillProgress(classroomId: string, student: string) {
   });
 }
 
-/** The mastery per tag of the classroom (ADR-041 §10, item 10). */
+/** The mastery per concept of the classroom (ADR-041 §10, item 10). */
 export function useClassroomDrillMastery(classroomId: string) {
   return useQuery({
     queryKey: classroomDrillKey(classroomId, "mastery"),
-    queryFn: () => api<DrillTagMastery[]>(`/app/api/classrooms/${classroomId}/drill/mastery`),
+    queryFn: () => api<DrillConceptMastery[]>(`/app/api/classrooms/${classroomId}/drill/mastery`),
   });
 }
 

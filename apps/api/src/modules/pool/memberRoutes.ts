@@ -1,4 +1,4 @@
-/** The people of a pool (F-POOL-05), and its tag vocabulary. */
+/** The people of a pool (F-POOL-05). */
 import type { FastifyInstance } from "fastify";
 
 import {
@@ -7,8 +7,6 @@ import {
   PoolMemberInvite,
   PoolMemberParam,
   PoolMemberPatch,
-  TagParam,
-  TagPatch,
 } from "@quiz/contracts";
 
 import { requirePoolRole } from "../guards.js";
@@ -156,57 +154,5 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
       poolPeopleChanged(audience);
       return reply.code(204).send();
     }),
-  );
-
-  /** The tag vocabulary of the pool: name, description, usage count. */
-  app.get(
-    "/app/api/pools/:id/tags",
-    { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: inPool() }, ({ scope: pool }) =>
-      service.poolTags(app.db, pool.id),
-    ),
-  );
-
-  /**
-   * The pool's "Tags" tab: each tag with its live questions and the number
-   * of courses using it — a bare count over every course, never a name.
-   */
-  app.get(
-    "/app/api/pools/:id/tags/usage",
-    { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: inPool() }, ({ scope: pool }) =>
-      service.poolTagUsage(app.db, pool.id),
-    ),
-  );
-
-  /**
-   * Documents one tag of the pool. The row is created on the spot when the
-   * tag only existed on questions so far, so a teacher never has to "declare"
-   * a tag before describing it.
-   */
-  app.patch(
-    "/app/api/pools/:id/tags/:tag",
-    { preHandler: requireTeacher },
-    teacher(
-      { params: IdParam, load: inPool("contributor") },
-      async ({ req, reply, scope: pool }) => {
-        const params = TagParam.safeParse(req.params);
-        if (!params.success) return invalid(reply, params.error);
-        const body = TagPatch.safeParse(req.body);
-        if (!body.success) return invalid(reply, body.error);
-        const tag = await service.describeTag(
-          app.db,
-          pool.id,
-          params.data.tag,
-          body.data.description,
-        );
-        await trace(req, "tag.describe", "pool", pool.id, {
-          tag: tag.tag,
-          description: tag.description,
-        });
-        poolChanged(pool.id);
-        return tag;
-      },
-    ),
   );
 }

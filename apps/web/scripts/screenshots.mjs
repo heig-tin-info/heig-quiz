@@ -252,7 +252,7 @@ const scenes = [
   { name: "classroom-loading", role: "teacher", path: "/classrooms/r1?slow=1", settle: 300 },
   { name: "classroom-roster-many", role: "teacher", path: "/classrooms/r1?tab=roster&many=1" },
   // ADR-041 (#317, slice 4): the classroom's Drill tab — the students'
-  // activity and the mastery per tag, a student's weekly progression, the
+  // activity and the mastery per concept, a student's weekly progression, the
   // drill on with nothing yet (r2) and the drill off (r3).
   { name: "classroom-drill", role: "teacher", path: "/classrooms/r1?tab=drill" },
   { name: "classroom-drill-student", role: "teacher", path: "/classrooms/r1?tab=drill", fold: true, act: async (p) => { await p.getByRole("button", { name: /^(Progression of|Progression de)/ }).first().click(); await p.getByText(/^(Reviews per week|Révisions par semaine)$/).first().waitFor(); } },
@@ -1055,10 +1055,26 @@ const scenes = [
   // The LLM review (ADR-060): the pool's tab, and its empty state.
   { name: "pool-review", role: "teacher", path: "/pools/p1?tab=review&empty=0" },
   { name: "pool-review-empty", role: "teacher", path: "/pools/p2?tab=review&empty=0" },
-  { name: "pool-tags", role: "teacher", path: "/pools/p1?tab=tags" },
-  { name: "pool-tags-heat", role: "teacher", path: "/pools/p1?tab=tags", ls: { "quiz-pool-tags-view": "heat" } },
-  // The personal pool: its poll questions wear no tag.
-  { name: "pool-tags-empty", role: "teacher", path: "/pools/p0?tab=tags" },
+  // ADR-081 third addendum §6: the read-only Concepts tab, its heat, and a
+  // pool whose questions have no concept (the personal pool's poll questions).
+  { name: "pool-concepts", role: "teacher", path: "/pools/p1?tab=concepts" },
+  { name: "pool-concepts-heat", role: "teacher", path: "/pools/p1?tab=concepts", ls: { "quiz-pool-concepts-view": "heat" } },
+  { name: "pool-concepts-empty", role: "teacher", path: "/pools/p0?tab=concepts" },
+  // §7: a typed `#word` filters on every concept it may name; one naming none says so and filters nothing.
+  { name: "pool-search-concept", role: "teacher", path: "/pools/p1?q=%23pointer", fold: true, act: skipCoach },
+  { name: "pool-search-concept-none", role: "teacher", path: "/pools/p1?q=%23inductance", fold: true, act: skipCoach },
+  { name: "pool-search-concept-complete", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByLabel(/^(search a question|rechercher une question)$/i).first().fill("#po");
+      await p.waitForTimeout(400);
+    } },
+  { name: "pool-bulk-concept", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("checkbox", { name: /^(select|sélectionner) ptr-arith-01$/i }).check();
+      await p.getByRole("button", { name: /^(add a concept|ajouter une notion)$/i }).first().click();
+      await p.getByRole("dialog").getByLabel(/^(concepts|notions)$/i).fill("tab");
+      await p.waitForTimeout(400);
+    } },
   { name: "pool-empty", role: "teacher", path: "/pools/p1?empty=1", settle: 800 },
   { name: "pool-error", role: "teacher", path: "/pools/p1?fail=1", settle: 2500 },
   { name: "pool-loading", role: "teacher", path: "/pools/p1?slow=1", settle: 300 },
@@ -1682,14 +1698,14 @@ const scenes = [
       await p.waitForTimeout(800);
     } },
   // P2b (ADR-080 amendment of 2026-10-08): asked from the pools list, the
-  // stub opens the pool it names, searched by its tag; the panel stays open.
+  // stub opens the pool it names, searched by its concept; the panel stays open.
   { name: "assist-p2b-pool-opened", role: "teacher", path: "/pools", fold: true, act: async (p) => {
       await skipCoach(p);
       await p.getByRole("button", { name: /^(ask the help assistant|demander à l'assistant d'aide)$/i }).click();
       await p.getByRole("button", { name: /^(new conversation|nouvelle conversation)$/i }).click();
       await p.getByRole("textbox", { name: /question/i }).fill("Montre-moi les questions de la banque Programmation C, seulement tag:pointeurs");
       await p.keyboard.press("Enter");
-      await p.waitForURL(/\/pools\/p1\?q=tag%3Apointeurs/);
+      await p.waitForURL(/\/pools\/p1\?q=%23pointeurs/);
       await p.waitForTimeout(1200);
       // The pool's first-visit tour would open over it; a returning teacher has none.
       await skipCoach(p);

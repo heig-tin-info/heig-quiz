@@ -30,10 +30,13 @@ import {
   PoolCreate,
   PollQuestionType,
   QuestionCreate,
-  QuestionPatch,
+  QuestionPatchFields,
   SimilarQuestionSearch,
   TemplateInstantiate,
+  type ConceptResolution,
+  type ConceptResolveResponse,
 } from "@quiz/contracts";
+import { filterIds, type LabelResolution } from "@quiz/domain";
 
 import { checkConfig, describeQuestionType, questionTypeSummaries } from "./questionTypes.js";
 
@@ -89,15 +92,66 @@ const WRITE: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, op
 
 const Id = z.uuid();
 const Difficulty = z.number().int().min(1).max(5);
-const Tags = z.array(z.string().trim().min(1).max(64)).max(32);
+/**
+ * What a question exercises (ADR-081, third addendum §4, addendum §7): the
+ * one wording every tool that names concepts shares, so that a client does
+ * not recreate what the admin's sorting dropped.
+ */
+const CONCEPTS_MEANING =
+  "Concepts are what the question exercises (`pointers`, `Ohm's law`): never an organisational label " +
+  "(a week, an exam, a difficulty, `to-review`) nor a kind of task (code reading, code writing, " +
+  "vocabulary, tracing, debugging). The vocabulary is shared by the whole instance, in French and English.";
+const Concepts = QuestionPatchFields.shape.concepts.describe(
+  `${CONCEPTS_MEANING} Replaces the question's concepts. Each entry is a concept id, a label in either ` +
+  "language, or a label with its qualifier (`adresse (mémoire)`). All or nothing: an ambiguous label is " +
+  "refused with 422 `concept_ambiguous` and its candidates, an unknown one with 422 `concept_unknown` and " +
+  "the close candidates (pick one and retry with its id), a label the admin dropped with 422 `concept_dropped`.",
+);
+const CreateMissing = QuestionPatchFields.shape.createMissing.describe(
+  "true creates a `proposed` concept for a label that matches none; false by default: prefer an existing " +
+    "concept, and create one only for a real concept the vocabulary lacks. A dropped label is refused even so.",
+);
 
-/** The `QuestionPatch` fields present in a tool's arguments, for `PATCH /questions/:id`. */
+/** The `QuestionPatchFields` present in a tool's arguments, for `PATCH /questions/:id`. */
 const metaOf = (args: Record<string, unknown>) =>
   Object.fromEntries(
-    Object.keys(QuestionPatch.shape)
+    Object.keys(QuestionPatchFields.shape)
       .filter((key) => args[key] !== undefined)
       .map((key) => [key, args[key]]),
   );
+
+/**
+ * The concept ids a filter names (ADR-081 third addendum §7, `filterIds`):
+ * what each word designates — the concept it resolves to, or every homonym
+ * — never a close-only candidate. A word that designates nothing is refused
+ * with its close candidates, or its drop, rather than silently matching
+ * nothing. A read (`GET /concepts/resolve`), so the assistant may filter too.
+ */
+async function conceptFilter(api: Api, labels: readonly string[] | undefined): Promise<string | undefined> {
+  if (!labels?.length) return undefined;
+  const params = new URLSearchParams(labels.map((input): [string, string] => ["input", input]));
+  const { results } = (await api.get(`/concepts/resolve?${params}`)) as ConceptResolveResponse;
+  const designated = results.map((r) => ({ r, ids: filterIds(labelResolution(r)) }));
+  const nothing = designated.filter((d) => d.ids.length === 0).map((d) => d.r);
+  if (nothing.length > 0) {
+    throw new ToolRefusal(
+      "A concept designates nothing in the vocabulary; nothing was searched.",
+      nothing.map((r) =>
+        r.kind === "dropped"
+          ? { input: r.input, dropped: r.reason }
+          : { input: r.input, didYouMean: r.kind === "unknown" ? r.candidates : [] },
+      ),
+    );
+  }
+  return [...new Set(designated.flatMap((d) => d.ids))].join(",");
+}
+
+/** A resolution of the route as the domain's rule reads it: ids only. */
+function labelResolution(r: ConceptResolution): LabelResolution {
+  if (r.kind === "resolved") return { kind: "resolved", id: r.concept.id };
+  if (r.kind === "ambiguous") return { kind: "ambiguous", candidates: r.candidates.map((c) => c.id) };
+  return { kind: "unknown", candidates: r.kind === "unknown" ? r.candidates.map((c) => c.id) : [] };
+}
 
 /**
  * The variables of a parameterized question (ADR-056), as a tool takes them:
@@ -236,22 +290,30 @@ export const TOOLS: Tool[] = [
     title: "List the questions of a pool",
     description:
       "Search a pool's questions. `latestNumber` is null for a question never published — only published " +
-      "questions can go into an evaluation. Pass `cursor` from the previous page to continue.",
+      "questions can go into an evaluation. Each question lists its `concepts`. Pass `cursor` from the " +
+      "previous page to continue.",
     input: z.object({
       poolId: Id,
       q: z.string().trim().max(200).optional().describe("Full-text search in names and statements"),
       type: z.array(z.string()).optional(),
-      tag: z.array(z.string()).optional(),
+      concepts: z
+        .array(z.string().trim().min(1).max(120))
+        .max(32)
+        .optional()
+        .describe(
+          "Only the questions that exercise one of these concepts: ids or labels in either language. A label " +
+            "matches every concept it may designate; one that matches none is refused with close candidates.",
+        ),
       categoryId: Id.optional(),
       limit: z.number().int().min(1).max(200).default(50),
       cursor: z.string().max(200).optional(),
     }),
     annotations: READ,
-    run: (api, a) =>
+    run: async (api, a) =>
       api.get(`/pools/${a.poolId}/questions`, {
         q: a.q,
         type: a.type?.join(","),
-        tag: a.tag?.join(","),
+        concept: await conceptFilter(api, a.concepts),
         categoryId: a.categoryId,
         limit: a.limit,
         cursor: a.cursor,
@@ -419,22 +481,27 @@ export const TOOLS: Tool[] = [
       variables: Variables,
       categoryId: Id.nullable().optional(),
       difficulty: Difficulty.optional().describe("1 (easy) to 5 (hard); 3 by default"),
-      tags: Tags.optional(),
+      concepts: Concepts,
+      createMissing: CreateMissing,
       publish: z.boolean().default(true),
-    }),
+    })
+    // A client still holding the tool of before the cut-over (its `tags`) is refused, not ignored.
+    .strict(),
     annotations: WRITE,
     run: async (api, a) => {
       if (a.publish) {
         const issues = checkConfig(a.type, a.config, { explanation: a.explanation, variables: a.variables });
         if (issues) throw new ToolRefusal("The config does not satisfy the type's schema; nothing was created.", issues);
       }
+      // The concepts are resolved in the creation's own transaction: a refusal creates nothing.
       const created = await api.post(`/pools/${a.poolId}/questions`, {
         type: a.type,
         internalName: a.internalName,
         categoryId: a.categoryId ?? null,
+        ...(a.concepts === undefined ? {} : { concepts: a.concepts, createMissing: a.createMissing ?? false }),
       });
       const id: string = created.meta.id;
-      const meta = metaOf({ difficulty: a.difficulty, tags: a.tags });
+      const meta = metaOf({ difficulty: a.difficulty });
       if (Object.keys(meta).length > 0) await api.patch(`/questions/${id}`, meta);
       return saveAndPublish(
         api,
@@ -456,9 +523,13 @@ export const TOOLS: Tool[] = [
       config: z.record(z.string(), z.unknown()).optional(),
       explanation: z.string().max(20_000).optional(),
       variables: Variables,
-      ...QuestionPatch.shape,
+      ...QuestionPatchFields.shape,
+      concepts: Concepts,
+      createMissing: CreateMissing,
       publish: z.boolean().default(true),
-    }),
+    })
+    // As `create_question`: a stale client's `tags` are refused, not ignored.
+    .strict(),
     annotations: WRITE,
     run: async (api, a) => {
       const current = await api.get(`/questions/${a.questionId}`);

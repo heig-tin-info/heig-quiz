@@ -41,10 +41,19 @@ Common columns omitted: `id uuid pk`, `created_at`, `updated_at`.
 | `categories` | `pool_id`, `parent_id` nullable, `name`, `position` | Tree by parent |
 | `questions` | `pool_id` nullable (an unsaved poll question, ADR-014 addendum), `category_id` nullable, `type` text, `internal_name`, `difficulty` smallint 1 to 5, `shuffleable` bool, `randomizable` bool (derived: the latest published version declares variables, ADR-056 §1), `origin_question_id` nullable, `stats_since` nullable, `deleted_at` | Stable metadata. `stats_since`: written only by the statistics reset (ADR-038) |
 | `question_stars` | `user_id`, `question_id`, `starred_at` | composite pk, both FKs cascade, index on `question_id`; one user's favourite (F-POOL-10, [ADR-040](../../adr/ADR-040-favoris-de-question.md)). "Per pool" is a join on `questions.pool_id` |
-| `question_tags` | `question_id`, `tag` text | composite pk, index on `tag`. No `tags` table: tags are normalised strings, the distinct list comes from a query |
+| `question_tags` | `question_id`, `tag` text | **Frozen** since the cut-over to concepts (ADR-081, third addendum): no longer read nor written by the questions, kept only so a (pool, tag) pair still pending in the sorting can be accepted; dropped with `pool_tags` once no pair is pending (step d). A question's classification is `question_concepts` |
 | `question_versions` | `question_id`, `number` int nullable, `config` jsonb, `config_version` int, `explanation` text, `variables` jsonb nullable (the variables table of a parameterized question, ADR-056; null = static), `search` generated tsvector, `published_at`, `published_by`, `change_note`, `deprecated_at`, `deprecation_note` | unique (question_id, number). `number` null = draft, a single one per question thanks to a partial unique index `WHERE number IS NULL` |
 | `assets` | `owner_id`, `pool_id`, `sha256`, `mime`, `bytes`, `width`, `height`, `path` | Deduplicated by hash. Referenced in the markdown by `asset:<id>` |
 | `question_version_assets` | `version_id`, `asset_id` | For export and cleanup |
+
+**Concept**, module `concept` (`db/concept.ts`, ADR-081)
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `concepts` | `status` proposed / validated / merged, `merged_into` nullable, `label_fr` / `label_en`, `qualifier_*`, `description_*`, `key_fr` / `key_en`, `created_by` | One vocabulary for the instance. A `proposed` concept may have one language only. Unique key (`conceptKey` of label and qualifier) per language among the concepts not merged; a merged one points at the final concept |
+| `question_concepts` | `question_id`, `concept_id` | composite pk, index on `concept_id`. The concepts a question exercises, unordered and unweighted; the question's links go with it, a concept in use cannot be deleted (RESTRICT), only merged. "A question's first concept" is the smallest id |
+| `concept_tag_sortings` | `pool_id`, `tag`, `decision` concept / drop, `concept_id`, `drop_reason`, `proposal` jsonb, `decided_by`, `decided_at` | pk (pool, tag). The sorting of the former tags (second addendum); an accepted row is read-only after the cut-over, a pending one stays listed until decided |
+| `concept_sort_runs` | singleton `id = 'default'`, `state`, `started_by`, `heartbeat_at`, `groups_done` / `groups_total` | The model pass that proposes the sorting |
 
 **Evaluation**
 

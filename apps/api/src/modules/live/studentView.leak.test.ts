@@ -518,6 +518,9 @@ describe("studentSolutionView keeps the teacher's material home (ADR-037)", () =
   });
 });
 
+/** A concept a question carries (ADR-081): its id and its labels in both languages are searched for. */
+const CONCEPT = { id: "c0ffee00-0000-4000-8000-00000000c0de", fr: "arithmétique des pointeurs", en: "pointer arithmetic" };
+
 describe("stripMetadata is the last line of defence", () => {
   /** A type that breaks the contract on purpose: the strip must still hold. */
   const rogue: AnyQuestionTypeServer = {
@@ -529,8 +532,13 @@ describe("stripMetadata is the last line of defence", () => {
       correct: [0, 2],
       internalName: "Q17 — hard",
       tags: ["exam"],
+      // What the question exercises (ADR-081): the teacher's classification, never the student's.
+      concepts: [
+        { id: CONCEPT.id, label: CONCEPT.en, qualifier: "", status: "validated" },
+        { id: CONCEPT.id, label: CONCEPT.fr, qualifier: "", status: "validated" },
+      ],
       difficulty: 5,
-      nested: { referenceSolution: "int main(){}" },
+      nested: { referenceSolution: "int main(){}", concepts: [CONCEPT.id] },
     }),
   } as unknown as AnyQuestionTypeServer;
 
@@ -547,7 +555,9 @@ describe("stripMetadata is the last line of defence", () => {
       const keys = keysOf(payload);
       expect(keys).toContain("prompt");
       for (const forbidden of FORBIDDEN_STUDENT_KEYS) expect(keys).not.toContain(forbidden);
-      expect(JSON.stringify(payload)).not.toContain("int main(){}");
+      const serialized = JSON.stringify(payload);
+      expect(serialized).not.toContain("int main(){}");
+      for (const marker of [CONCEPT.id, CONCEPT.fr, CONCEPT.en]) expect(serialized).not.toContain(marker);
     } finally {
       restore();
     }

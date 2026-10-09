@@ -1,29 +1,29 @@
 /**
  * The links between questions and concepts (ADR-081, third addendum
- * 2026-10-08), and the resolution of a write that names concepts. Inert
- * until the cut-over (third addendum §1): no route, pool, drill, poll or MCP
- * tool calls these yet, except the stop list, which `POST /concepts`
- * applies already.
+ * 2026-10-08), and the resolution of a write that names concepts. The pool
+ * module calls these inside its own transactions (addendum §4) and reads
+ * the links by join.
  *
  * - `resolveForWrite`: what the inputs of a write designate (addendum §2,
  *   third addendum §4), all or nothing; creates the `proposed` concepts asked
  *   for. The decision is `planConceptWrite` of `@quiz/domain` (invariant 8);
  *   this file loads the vocabulary and the stop list, and writes.
- * - `setQuestionConcepts`: replaces a question's set, inside the pool
- *   module's transaction (addendum §4).
- * - `conceptsOf`: what the pool module reads. The per-pool usage count comes
- *   with the cut-over, beside its access filter.
+ * - `setQuestionConcepts`: replaces a question's set; `copyQuestionConcepts`
+ *   gives a copy its original's.
+ * - `conceptsOf`: a question's concepts as a reader sees them;
+ *   `poolConcepts`: the concepts a pool's live questions use, counted
+ *   (`PoolDetail.concepts`, read once the pool is loaded through its access).
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
-import type { Concept, ConceptInputError, ConceptLang, ConceptRef, TagDropReason } from "@quiz/contracts";
+import type { Concept, ConceptInputError, ConceptLang, ConceptRef, PoolConcept, TagDropReason } from "@quiz/contracts";
 import { conceptKey, planConceptWrite, type ConceptToCreate, type ConceptWriteError } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
-import { concepts, conceptTagSortings, questionConcepts } from "../../db/schema.js";
+import { concepts, conceptTagSortings, questionConcepts, questions } from "../../db/schema.js";
 import { DomainError } from "../http.js";
 import { columnsOf, conflictOr, perLang, side, toConcept, toConceptRef, toResolvable, type ConceptRow } from "./row.js";
 
@@ -214,8 +214,38 @@ export async function conceptsOf(
     .innerJoin(concepts, eq(concepts.id, questionConcepts.conceptId))
     .where(inArray(questionConcepts.questionId, [...questionIds]));
   for (const { questionId, concept } of rows) out.get(questionId)!.push(toConceptRef(concept, lang));
-  for (const refs of out.values()) {
-    refs.sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
-  }
+  for (const refs of out.values()) refs.sort(byLabel);
   return out;
+}
+
+/** A reader's order: by label, then id. */
+export function byLabel(a: ConceptRef, b: ConceptRef): number {
+  return a.label.localeCompare(b.label) || a.id.localeCompare(b.id);
+}
+
+/** Gives the question `toId` the concepts of `fromId` (a copy, ADR-017), inside the caller's transaction. */
+export async function copyQuestionConcepts(tx: Db | Tx, fromId: string, toId: string): Promise<void> {
+  await tx.execute(sql`
+    INSERT INTO ${questionConcepts} (question_id, concept_id)
+    SELECT ${toId}::uuid, ${questionConcepts.conceptId} FROM ${questionConcepts}
+    WHERE ${questionConcepts.questionId} = ${fromId}
+    ON CONFLICT DO NOTHING`);
+}
+
+/**
+ * The concepts the live questions of a pool use, each with how many of them
+ * (ADR-081 third addendum §6), by label in `lang`. The caller has loaded the
+ * pool through its access predicate.
+ */
+export async function poolConcepts(db: Db | Tx, poolId: string, lang: ConceptLang): Promise<PoolConcept[]> {
+  const rows = await db
+    .select({ concept: concepts, count: sql<number>`count(*)::int` })
+    .from(questionConcepts)
+    .innerJoin(questions, eq(questions.id, questionConcepts.questionId))
+    .innerJoin(concepts, eq(concepts.id, questionConcepts.conceptId))
+    .where(and(eq(questions.poolId, poolId), isNull(questions.deletedAt)))
+    .groupBy(concepts.id);
+  return rows
+    .map((r) => ({ concept: toConceptRef(r.concept, lang), count: r.count }))
+    .sort((a, b) => byLabel(a.concept, b.concept));
 }

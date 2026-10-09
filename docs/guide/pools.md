@@ -1,6 +1,6 @@
 # Question pools
 
-A pool is where your questions live: a tree of categories, a vocabulary of tags, and one history of published versions per question. It belongs to you, not to a course: one pool can feed several courses, and a course can draw on several pools. You get a private pool the first time you sign in, and nobody else sees it until you share it.
+A pool is where your questions live: a tree of categories, the concepts each question exercises, and one history of published versions per question. It belongs to you, not to a course: one pool can feed several courses, and a course can draw on several pools. You get a private pool the first time you sign in, and nobody else sees it until you share it.
 
 ## The pools page
 
@@ -37,19 +37,21 @@ Deleting a category never deletes a question: its questions move back to the roo
 
 ### Search and filters
 
-The search field matches the internal name and the statement. **Filters** opens a sheet with the type, the difficulty, the tags and **Show deleted questions**.
+The search field matches the internal name and the statement. **Filters** opens a sheet with the type, the difficulty, the concepts and **Show deleted questions**.
+
+<!-- screenshot: refresh after cut-over -->
 
 <figure markdown="span">
   ![The filters sheet of a pool](../assets/screenshots/pool-filters-light.png#only-light)
   ![The filters sheet of a pool](../assets/screenshots/pool-filters-dark.png#only-dark)
-  <figcaption>The filters: type, difficulty, tags, and the switch that shows deleted questions.</figcaption>
+  <figcaption>The filters: type, difficulty, concepts, and the switch that shows deleted questions.</figcaption>
 </figure>
 
 Everything you tick comes back as removable chips under the search bar, with the number of questions left. The search field accepts the same filters as words, which is faster once you know the vocabulary:
 
 | Typed | Meaning |
 | --- | --- |
-| `tag:pointers` or `tag:#pointers` | the questions wearing that tag |
+| `#pointers` (also `tag:pointers`) | the questions classified under a concept that word names |
 | `type:mcq`, `type:short`, `type:cloze`, `type:code` | that question type |
 | `difficulty:3` | exactly 3 |
 | `difficulty:>3`, `difficulty:>=2`, `difficulty:<3`, `difficulty:<=4` | a bound |
@@ -58,19 +60,25 @@ Everything you tick comes back as removable chips under the search bar, with the
 | `version:>1`, `version:>=2`, `version:<3`, `version:1-3` | a bound, a range |
 | `"a whole phrase"` | those words together |
 
-Anything else is free text. Several `tag:` words add up, and two `version:` bounds narrow each other. Words and ticks are the same filter: both appear as chips, and removing a chip removes the word from the field. Right after `tag:` or `type:`, a short list opens under the field; arrows move through it, Enter inserts, Escape closes.
+A concept word matches every concept it may name: its label in French or in English, or the label with its qualifier (`#"address (memory)"`), so `#pointeur` and `#pointers` find the same questions; a word that names no concept is shown with a dashed chip and filters nothing. Anything else is free text. Several concept words add up (a question matching any of them is listed), and two `version:` bounds narrow each other. Words and ticks are the same filter: both appear as chips, and removing a chip removes the word from the field. Right after `#`, `tag:` or `type:`, a short list opens under the field; arrows move through it, Enter inserts, Escape closes.
 
 ### Cards, table, grouping and sort
 
-**Group by** splits the list by **Type**, **Tags** or **Category**; a question with three tags appears in each of its three sections. Click a column header to sort the whole pool by that column, and click it again to reverse the order; the cards follow the same order, newest change first until you pick another. Beside the toggle that switches between **Cards** and **List**, the count says how many questions your search, filters and category match — all of them, not only those already loaded. The grouping and the view are remembered for your next visit.
+**Group by** splits the list by **Type**, **Concepts** or **Category**; a question with three concepts appears in each of its three sections. Click a column header to sort the whole pool by that column, and click it again to reverse the order; the cards follow the same order, newest change first until you pick another. Beside the toggle that switches between **Cards** and **List**, the count says how many questions your search, filters and category match — all of them, not only those already loaded. The grouping and the view are remembered for your next visit.
 
 ### Row actions and bulk actions
 
-Each row shows the type as an icon, the internal name, the tags, the difficulty as five dots, the published version and the last change. The three icons at the end of the row are **Edit**, **Duplicate** and **Delete**.
+Each row shows the type as an icon, the internal name, its concepts, the difficulty as five dots, the published version and the last change. The three icons at the end of the row are **Edit**, **Duplicate** and **Delete**.
 
-A click on a row shows the question as a student will read it, in a panel beside the list; on a narrower window the panel takes the list's place, and **Back to the list** returns to the row you left. The version shown is the latest published one, the one an evaluation would take, or the draft of a question never published; a line says so when the draft has changes not yet published. From the keyboard, P shows the focused row and Space stars it (below); on a wide window ↑ and ↓ move from row to row and show each one, opening the panel if it was closed. Escape or the **×** closes it. With the panel open, the table drops the columns it has no room for (version, last change, tags), and gets them back when it closes. To edit, press Enter on the row, double-click it, click its pencil or **Open in the editor** in the panel.
+A click on a row shows the question as a student will read it, in a panel beside the list; on a narrower window the panel takes the list's place, and **Back to the list** returns to the row you left. The version shown is the latest published one, the one an evaluation would take, or the draft of a question never published; a line says so when the draft has changes not yet published. From the keyboard, P shows the focused row and Space stars it (below); on a wide window ↑ and ↓ move from row to row and show each one, opening the panel if it was closed. Escape or the **×** closes it. With the panel open, the table drops the columns it has no room for (version, last change, concepts), and gets them back when it closes. To edit, press Enter on the row, double-click it, click its pencil or **Open in the editor** in the panel.
 
-Tick several rows and a bar appears at the bottom: **Star**, **Add a tag**, **Move to a category**, **Move to another pool**, **Delete**. Deleting hides the questions from the lists; the results already recorded are kept.
+Tick several rows and a bar appears at the bottom: **Star**, **Add a concept**, **Move to a category**, **Move to another pool**, **Delete**. Deleting hides the questions from the lists; the results already recorded are kept. **Add a concept** adds the concept you pick to every ticked question.
+
+### The Concepts tab
+
+Beside **Questions**, the **Concepts** tab (*Notions* in the French interface) lists the concepts the pool's questions exercise, each with the number of questions classified under it. It is read-only: a click on a concept opens the questions under it, filtered as with `#`. A concept's label and description belong to the platform's shared vocabulary, which the administrator maintains; to change what a question exercises, edit the question or use **Add a concept** in the bulk bar.
+
+<!-- screenshot: refresh after cut-over -->
 
 ### Favourites
 
@@ -118,7 +126,15 @@ You always edit the draft. It is saved shortly after you stop typing, and the ba
 
 ### The properties panel
 
-On the right: the **Internal name**, the **Category**, the **Difficulty** from 1 to 5, and the **Tags**. The tag field suggests the vocabulary already used in the pool, with the number of questions wearing each tag and its one-line description. Pick an existing tag rather than typing a synonym: two spellings of the same idea split the pool in two. A new word is offered as **Create "…"**, and you describe it on the spot with **Add a description**; that line is what the next teacher reads. Backspace in the empty field removes the last tag.
+On the right: the **Internal name**, the **Category**, the **Difficulty** from 1 to 5, and the **Concepts** the question exercises (*Notions* in the French interface).
+
+<!-- screenshot: refresh after cut-over -->
+
+A concept is not a free word. It comes from one vocabulary shared by every pool of the platform, with a label in French and in English, so that `pointeur` in your pool and `pointers` in a colleague's are one and the same concept, and each reader sees it in the language of their interface. Type in **Add a concept…** to search: the concepts already used in this pool come first, marked **in this pool**, and each suggestion shows its description. A word with two meanings is told apart by a qualifier, shown in parentheses wherever a concept has one: *address (memory)* is not *address (postal)*. A concept marked **proposed** has not been reviewed by the administrator yet; you may use it all the same. Backspace in the empty field removes the last concept.
+
+When nothing fits, the last row offers **Create "…"**. It opens **New concept**: the **Label**, in your interface language, and an optional **Qualifier**, only for a homonym. The concept is created as proposed and added to the question at once; the administrator reviews it later, and may rename it or merge it into an existing one, which your questions follow. If the label turns out to exist already, that concept is added instead and a line says so.
+
+A concept is what the question teaches. A week, an exam, a chapter or the kind of task (reading code, writing code, vocabulary) is not one: the category, the difficulty and the course's templates already hold those. A label the administrator dropped for that reason cannot be created again; the field says so and asks you to pick an existing concept.
 
 A multiple-choice question also shows a **Scoring** card with **Never shuffle this question**, for a choice list whose order matters, such as "all of the above".
 
@@ -145,7 +161,7 @@ The **Try** tab shows the question as a student sees it. Answer it, then click *
 
 ## The student preview
 
-**Student preview** (`Ctrl+Shift+M`) opens a panel under the properties that shows the draft exactly as a student receives it: no internal name, no tags, no key, no explanation.
+**Student preview** (`Ctrl+Shift+M`) opens a panel under the properties that shows the draft exactly as a student receives it: no internal name, no concepts, no key, no explanation.
 
 <figure markdown="span">
   ![The student preview panel in the editor](../assets/screenshots/editor-preview-light.png#only-light)
@@ -198,7 +214,7 @@ The **Sharing** section of a pool's **Settings** tab says who may read and write
 | Role | May |
 | --- | --- |
 | **Reader** | open the pool and read its questions |
-| **Contributor** | also write: questions, categories, tags, images |
+| **Contributor** | also write: questions, categories, the questions' concepts, images |
 | **Owner** | also manage the members, the name, the icon, the visibility and the deletion |
 
 A reader sees the questions and none of the actions: no **New question**, no edit, no duplicate, no delete, no tick boxes. Opening a question still works, since reading one means opening it.

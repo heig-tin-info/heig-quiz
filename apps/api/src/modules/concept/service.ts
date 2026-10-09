@@ -1,8 +1,8 @@
 /**
  * The vocabulary of concepts (ADR-081, addendum 2026-10-08): reading it,
  * resolving what someone typed to a concept, proposing a concept and editing
- * it. No question, course or tag reads or writes it yet: the links to
- * questions (`./links.ts`) are inert until the cut-over (third addendum §1).
+ * it. Questions are classified by it since the cut-over (third addendum):
+ * their links are `./links.ts`'s.
  *
  * Every teacher reads the whole vocabulary, proposed concepts included, so
  * as not to recreate one (addendum §5). A teacher proposes; the creator
@@ -18,24 +18,36 @@ import {
   CONCEPT_LANGS,
   type Concept,
   type ConceptCreate,
+  type ConceptLang,
   type ConceptPatch,
   type ConceptResolution,
+  type TagDropReason,
 } from "@quiz/contracts";
-import { cleanConceptLabel, cleanConceptQualifier, conceptKey, droppedReason, resolveConceptLabel } from "@quiz/domain";
+import {
+  cleanConceptLabel,
+  cleanConceptQualifier,
+  conceptToCreate,
+  droppedReason,
+  qualifiedConceptKey,
+  resolveConceptLabel,
+} from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
-import { isForeignKeyViolation, isRestrictViolation, type Db } from "../../db/client.js";
+import { isForeignKeyViolation, isRestrictViolation, type Db, type Tx } from "../../db/client.js";
 import { concepts } from "../../db/schema.js";
 import type { Caller } from "../guards.js";
 import { DomainError } from "../http.js";
 import { droppedKeys, insertProposed, refuseInputs } from "./links.js";
-import { columnsOf, conflictOr, perLang, side, sideOf, toConcept, toResolvable } from "./row.js";
+import { columnsOf, conflictOr, perLang, side, sideOf, toConcept, toConceptRef, toResolvable } from "./row.js";
 
-export { toConcept } from "./row.js";
+export { toConcept, toConceptRef } from "./row.js";
 export { acceptTagSortings, listTagSortings, type SortingContext } from "./sorting.js";
 export { lastSortRun, startSortRun } from "./propose.js";
 export {
+  byLabel,
   conceptsOf,
+  copyQuestionConcepts,
+  poolConcepts,
   resolveForWrite,
   setQuestionConcepts,
   type ConceptWrite,
@@ -63,32 +75,59 @@ export async function listConcepts(db: Db): Promise<Concept[]> {
  * What each typed string designates (ADR-081 addendum §2): an id, a
  * qualified label, or a bare label matched against the labels of the
  * concepts that are not merged (`resolveConceptLabel`, which computes the
- * keys itself). One result per input, in order.
+ * keys itself). One result per input, in order, each concept labelled in
+ * the reader's language. An input that designates no concept and whose key
+ * is a dropped tag's is `dropped` (third addendum §4), so a client can
+ * refuse it before writing anything. It previews the picker's
+ * `POST /concepts`, not a question write: the admin, whom the stop list does
+ * not bind there ({@link stopList}), never sees `dropped`, though a question
+ * write of theirs naming that label is still refused.
  */
-export async function resolveLabels(db: Db, inputs: readonly string[]): Promise<ConceptResolution[]> {
+export async function resolveLabels(
+  db: Db,
+  inputs: readonly string[],
+  lang: ConceptLang,
+  caller: Pick<Caller, "role">,
+): Promise<ConceptResolution[]> {
   const rows = await db.select().from(concepts);
-  const byId = new Map(rows.map((r) => [r.id, toConcept(r)]));
+  const byId = new Map(rows.map((r) => [r.id, toConceptRef(r, lang)]));
   const vocabulary = rows.map(toResolvable);
   const concept = (id: string) => byId.get(id)!;
+  const dropped = await stopList(db, caller);
 
-  return inputs.map((input) => {
+  return inputs.map((input): ConceptResolution => {
     const outcome = resolveConceptLabel(input, vocabulary);
-    return outcome.kind === "resolved"
-      ? { input, kind: "resolved", concept: concept(outcome.id) }
-      : { input, kind: outcome.kind, candidates: outcome.candidates.map(concept) };
+    if (outcome.kind === "resolved") return { input, kind: "resolved", concept: concept(outcome.id) };
+    const fresh = outcome.kind === "unknown" ? conceptToCreate(input) : null;
+    const reason = fresh && droppedReason(fresh, dropped);
+    if (reason !== null) return { input, kind: "dropped", reason };
+    return { input, kind: outcome.kind, candidates: outcome.candidates.map(concept) };
   });
+}
+
+/**
+ * The stop list as it binds `caller` (third addendum §4, amended
+ * 2026-10-08): the dropped keys for a teacher, nothing for the admin, the
+ * curator of the vocabulary, who may create or rename onto a dropped key
+ * ("C", "Logique"). A question write names no caller here: it is always
+ * bound, the admin's included, so neither the editor nor an MCP client
+ * recreates a dropped tag.
+ */
+async function stopList(db: Db | Tx, caller: Pick<Caller, "role">): Promise<Map<string, TagDropReason>> {
+  return caller.role === "admin" ? new Map() : droppedKeys(db);
 }
 
 /**
  * A `proposed` concept in the creator's language (addendum §3, §5). A key
  * already held by a concept that is not merged is a 409 `concept_exists`
- * naming it; a label whose key is a tag the admin dropped in the sorting is
- * a 422 `concept_dropped` (the stop list, third addendum §4).
+ * naming it; an unqualified label whose key is a tag the admin dropped in
+ * the sorting is a 422 `concept_dropped` for a teacher (the stop list,
+ * {@link stopList}).
  */
 export async function createConcept(db: Db, ctx: ConceptContext, body: ConceptCreate): Promise<Concept> {
   const label = cleanConceptLabel(body.label);
   const qualifier = cleanConceptQualifier(body.qualifier ?? "");
-  const reason = droppedReason(label, await droppedKeys(db));
+  const reason = droppedReason({ label, qualifier }, await stopList(db, ctx.caller));
   if (reason !== null) throw refuseInputs([{ input: body.label, error: "concept_dropped", reason }]);
   const who = { createdBy: ctx.caller.id, actor: ctx.actor, now: ctx.now };
   const input = { label, qualifier, description: body.description ?? "" };
@@ -110,10 +149,11 @@ export async function createConcept(db: Db, ctx: ConceptContext, body: ConceptCr
  * always (addendum §5); anyone else a 403 `concept_forbidden`. A merged
  * concept is no longer edited (409 `concept_merged`), a missing one is a
  * 404. A language left with a qualifier or a description but no label is a
- * 422 `concept_label_missing`. A rename — a label whose bare key changes —
- * onto the key of a tag the admin dropped is a 422 `concept_dropped`, for
- * the admin too (the stop list, third addendum §4); a qualifier or
- * description edit is not a rename.
+ * 422 `concept_label_missing`. An edit that changes a side's key and
+ * leaves it on the stop list — unqualified, its label's key a dropped
+ * tag's — is a 422 `concept_dropped` for the creator; the admin is not
+ * bound ({@link stopList}). A side already on it whose key stays (a concept
+ * older than the drop, a description edit) may still be edited.
  */
 export async function patchConcept(db: Db, ctx: ConceptContext, id: string, patch: ConceptPatch): Promise<Concept> {
   let keys = perLang<string | null>(() => null);
@@ -140,12 +180,13 @@ export async function patchConcept(db: Db, ctx: ConceptContext, id: string, patc
         return next;
       });
       keys = perLang((lang) => sides[lang].key);
-      const dropped = await droppedKeys(tx);
+      const dropped = await stopList(tx, ctx.caller);
+      const keyOf = (s: { label: string | null; qualifier: string }) =>
+        s.label === null ? null : qualifiedConceptKey(s.label, s.qualifier);
       const refused = CONCEPT_LANGS.flatMap((lang) => {
-        const { label } = sides[lang];
-        const was = sideOf(current, lang).label;
-        if (label === null || (was !== null && conceptKey(label) === conceptKey(was))) return [];
-        const reason = droppedReason(label, dropped);
+        const { label, qualifier } = sides[lang];
+        if (label === null || keyOf(sides[lang]) === keyOf(sideOf(current, lang))) return [];
+        const reason = droppedReason({ label, qualifier }, dropped);
         return reason === null ? [] : [{ input: label, error: "concept_dropped" as const, reason }];
       });
       if (refused.length > 0) throw refuseInputs(refused);
@@ -202,9 +243,8 @@ export async function validateConcept(db: Db, ctx: Omit<ConceptContext, "caller"
 /**
  * Deletes a concept nothing refers to (ADR-081 second addendum §2, third
  * addendum §7): a sorting decision that maps to it, a concept merged into
- * it, or a question linked to it makes the
- * foreign key refuse, answered 409 `concept_in_use`; a missing one is a 404.
- * Before the cut-over this is the only deletion; afterwards a concept is
+ * it, or a question linked to it makes the foreign key refuse, answered 409
+ * `concept_in_use`; a missing one is a 404. A concept a question uses is
  * merged, never deleted.
  */
 export async function deleteConcept(db: Db, ctx: Omit<ConceptContext, "caller">, id: string): Promise<void> {

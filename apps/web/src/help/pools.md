@@ -2,7 +2,7 @@
 
 ## What a pool is
 
-A pool is a collection of questions: hierarchical categories, tags, and one
+A pool is a collection of questions: hierarchical categories, concepts, and one
 history of published versions per question. It belongs to you, not to a
 course — one pool can feed several courses, and a course can draw on
 several pools.

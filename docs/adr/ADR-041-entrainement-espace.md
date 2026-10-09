@@ -26,6 +26,12 @@ ADR-085 §4's amendment of 2026-10-08, the due date §5 computes is capped to
 the next day for a confident error, FSRS's state untouched. Read §15 below for the final location of the teacher's drill switch;
 §14 describes the earlier screen arrangement.
 
+§6's interleaving, §10 item 10, §12's interleaving rule and §15's mastery read
+are amended by the [third addendum of ADR-081](ADR-081-vocabulaire-de-notions.md#third-addendum-2026-10-08-the-cut-over)
+(§8, the cut-over from tags to concepts): mastery is per concept, labelled in
+the reader's language, past reviews regrouped under today's classification;
+a session interleaves by the question's first concept id.
+
 ## Context
 
 The spec reserved a phase-2 drill in five lines: every question a student
@@ -105,7 +111,8 @@ re-export it. The web build then contains none of it.
 - A session holds the **due cards first**, the lowest retrievability ahead,
   then **new cards capped per day**, until a **time budget of about ten
   minutes** counted from the cards' reference times; it may end early.
-  Courses and tags are **interleaved**, not in blocks.
+  Courses and tags are **interleaved**, not in blocks (concepts since the
+  ADR-081 cut-over).
 - **No reminders and no streaks in v1**: a "today's drill is available"
   badge on the home and on the centre slot of the bottom bar.
 
@@ -171,7 +178,8 @@ changed.
 9. At most **10 new cards per day**; a card longer than the whole budget is
    still served alone, so a session is never empty while a card is
    available. A per-classroom setting may come later.
-10. **Mastery per tag, per classroom**, for the teacher.
+10. **Mastery per tag, per classroom**, for the teacher. *Amended by ADR-081
+    (third addendum §8):* per concept, labelled in the reader's language.
 
 Two more rules this ADR proposed are adopted with them:
 
@@ -246,7 +254,8 @@ rating or the recall rate, and there is no extra practice (06, question
 - **A new card held back by the cap is announced for tomorrow**: an empty
   day gives the start of the next day as its next due date.
 - **Interleaving** groups the session by course and the question's first
-  tag in alphabetical order.
+  tag in alphabetical order. *Amended by ADR-081 (third addendum §8):* by
+  the question's first concept id, which carries no alphabetical meaning.
 - **A review is scored on the type's `defaultPoints`**, not the points the
   item had in its evaluation: correctness is a ratio, and a review has no
   item.
@@ -350,7 +359,8 @@ confirmation (past activity stays visible; the teacher sees the opt-out).
   `GET /classrooms/:id/drill/activity` (one row per student seat),
   `GET /classrooms/:id/drill/progress?student=` (the weeks of one seat,
   by its enrollment id: reviews and recall counts per week) and
-  `GET /classrooms/:id/drill/mastery` (per tag). Each is a bounded number
+  `GET /classrooms/:id/drill/mastery` (per tag; per concept since the
+  ADR-081 cut-over). Each is a bounded number
   of queries whatever the class size.
 - **The recall rate** of §10 item 8 is defined once, in `@quiz/domain`
   (`drillRecallCounts`): a card's first review is decided over its whole

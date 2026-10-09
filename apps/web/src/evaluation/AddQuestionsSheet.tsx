@@ -7,6 +7,7 @@ import type { PoolSummary, QuestionPage, QuestionRow } from "@quiz/contracts";
 import { api } from "../api";
 import { useT, type TFunction } from "../i18n";
 import { EMPTY_FILTERS, questionQuery, type QuestionFilters } from "../pool/filters";
+import { useFilterVocabulary } from "../pool/useFilterVocabulary";
 import { DifficultyDots } from "../pool/QuestionTable";
 import { useSetStars, useStarredQuestions } from "../pool/stars";
 import { QUESTION_TYPE_IDS, typeLabel } from "../questionTypes";
@@ -120,13 +121,15 @@ export function AddQuestionsSheet({
     }),
     [q, type, difficulty],
   );
-  const search = questionQuery(filters);
+  // A `#word` typed here names concepts too, resolved as on the pool screen.
+  const { vocabulary, waiting } = useFilterVocabulary(q);
+  const search = questionQuery(filters, vocabulary);
   const questions = useInfiniteQuery<QuestionPage>({
     queryKey: poolQuestionsKey(current ?? "", search),
-    enabled: current !== null,
+    enabled: current !== null && !waiting,
     queryFn: ({ pageParam }) =>
       api(
-        `/app/api/pools/${current}/questions${questionQuery(filters, pageParam as string | null)}`,
+        `/app/api/pools/${current}/questions${questionQuery(filters, vocabulary, pageParam as string | null)}`,
       ),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,

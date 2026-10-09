@@ -13,8 +13,6 @@ import {
   questions,
 } from "../../db/schema.js";
 import type { QuestionRecord } from "./shared.js";
-import { ensurePoolTags } from "./tags.js";
-import { tagsOf } from "./questionList.js";
 
 /**
  * A move would land two live questions on the same internal name in the
@@ -115,7 +113,7 @@ export async function staffSeatsOf(
 }
 
 /**
- * Moves questions into a pool, with their tags, in ONE transaction.
+ * Moves questions into a pool, with their concepts, in ONE transaction.
  *
  * The question keeps its id, its internal name, its versions, its draft and
  * its history: only `pool_id` and `category_id` change. That is the whole
@@ -123,11 +121,9 @@ export async function staffSeatsOf(
  * on resolving, and a teacher who moved a question by mistake moves it back.
  *
  * Three things travel with it and are worth naming:
- *   - the TAGS stay on `question_tags` (they are the question's), and the
- *     target pool's vocabulary learns them through `ensurePoolTags`, the same
- *     way a copy teaches them (ADR-017). The source pool keeps its `pool_tags`
- *     rows — a teacher's one-line description of "pointeurs" is documentation
- *     of the pool, not of the question that left;
+ *   - the CONCEPTS stay on `question_concepts` (they are the question's);
+ *     the vocabulary is the instance's (ADR-081 §3), so there is nothing to
+ *     teach the target pool — ADR-017 §5 is obsolete since the cut-over;
  *   - the ASSETS keep their `assets.pool_id`: they are addressed by id and
  *     served by the asset route, which authorizes through the ATTEMPT or the
  *     pool the caller reaches — moving the rows would be a second, silent
@@ -152,14 +148,12 @@ export async function moveQuestions(
   const ids = input.questions.map((q) => q.id);
   if (ids.length === 0) return;
   await assertNamesFree(db, input.targetPoolId, input.questions);
-  const tags = [...new Set([...(await tagsOf(db, ids)).values()].flat())];
   const now = new Date();
   await db.transaction(async (tx) => {
     await tx
       .update(questions)
       .set({ poolId: input.targetPoolId, categoryId: input.categoryId, updatedAt: now })
       .where(inArray(questions.id, ids));
-    await ensurePoolTags(tx, input.targetPoolId, tags);
     const links = [...new Set(input.linkCourseIds ?? [])];
     if (links.length) {
       await tx

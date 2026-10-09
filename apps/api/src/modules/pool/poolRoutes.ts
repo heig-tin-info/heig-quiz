@@ -11,7 +11,7 @@ import {
   poolRoleOf,
   requirePoolRole,
 } from "../guards.js";
-import { invalid } from "../http.js";
+import { invalid, readerLang } from "../http.js";
 import { publish } from "../../events.js";
 import { poolChanged, poolPeopleChanged } from "./events.js";
 import * as service from "./service.js";
@@ -55,7 +55,7 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     "/app/api/pools/:id",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: inPool() }, async ({ req, scope: pool }) =>
-      service.poolDetail(app.db, pool, await poolRoleOf(app.db, pool, callerOf(req))),
+      service.poolDetail(app.db, pool, await poolRoleOf(app.db, pool, callerOf(req)), readerLang(req)),
     ),
   );
 

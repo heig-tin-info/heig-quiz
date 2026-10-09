@@ -9,16 +9,19 @@
  * The rule: the rows keep the order the SERVER sent them inside a section —
  * the sort is the server's answer and a grouping must not quietly re-sort it —
  * and the sections themselves are ordered by something stable (the registry's
- * order for a type, the alphabet for a tag, the tree for a category). A
- * question wearing three tags appears in three sections, because `tags` is the
- * one grouping whose key is not a single value; every other one partitions.
+ * order for a type, the alphabet for a concept, the tree for a category). A
+ * question with three concepts appears in three sections, because `concepts`
+ * is the one grouping whose key is not a single value; every other one
+ * partitions.
  * The rows with nothing to group on land in a last section of their own.
  */
 import type { QuestionRow } from "@quiz/contracts";
 
-export type GroupBy = "none" | "type" | "tags" | "category";
+import { refName } from "../concepts/sorting";
 
-export const GROUP_BY: readonly GroupBy[] = ["none", "type", "tags", "category"];
+export type GroupBy = "none" | "type" | "concepts" | "category";
+
+export const GROUP_BY: readonly GroupBy[] = ["none", "type", "concepts", "category"];
 
 export function isGroupBy(value: string): value is GroupBy {
   return (GROUP_BY as readonly string[]).includes(value);
@@ -36,7 +39,7 @@ export interface GroupLabels {
   type: (id: string) => string;
   /** "Pointeurs / Arithmétique", or the id when the tree does not hold it. */
   category: (id: string) => string;
-  noTag: string;
+  noConcept: string;
   noCategory: string;
 }
 
@@ -64,15 +67,19 @@ export function groupQuestions(
     return keys.map((key) => ({ key: `type:${key}`, label: labels.type(key), rows: buckets.get(key)! }));
   }
 
-  if (by === "tags") {
+  if (by === "concepts") {
+    const names = new Map<string, string>();
     for (const row of rows) {
-      if (row.tags.length === 0) push("", row);
-      else for (const tag of row.tags) push(tag, row);
+      if (row.concepts.length === 0) push("", row);
+      for (const c of row.concepts) {
+        names.set(c.id, refName(c));
+        push(c.id, row);
+      }
     }
-    const tags = [...buckets.keys()].filter((k) => k !== "").sort((a, b) => a.localeCompare(b));
-    const groups = tags.map((tag) => ({ key: `tag:${tag}`, label: `#${tag}`, rows: buckets.get(tag)! }));
-    const untagged = buckets.get("");
-    if (untagged) groups.push({ key: "tag:", label: labels.noTag, rows: untagged });
+    const ids = [...names.keys()].sort((a, b) => names.get(a)!.localeCompare(names.get(b)!));
+    const groups = ids.map((id) => ({ key: `concept:${id}`, label: names.get(id)!, rows: buckets.get(id)! }));
+    const loose = buckets.get("");
+    if (loose) groups.push({ key: "concept:", label: labels.noConcept, rows: loose });
     return groups;
   }
 

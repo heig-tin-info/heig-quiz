@@ -32,7 +32,7 @@ const POOL: PoolDetail = {
   categories: [
     { id: "k1", poolId: "p1", parentId: null, name: "Pointeurs", position: 0, children: [] },
   ],
-  tags: [],
+  concepts: [],
   questionCount: 2,
 };
 
@@ -65,7 +65,7 @@ const PAGE: QuestionPage = {
       type: "code",
       internalName: "ptr-arith-01",
       difficulty: 3,
-      tags: [],
+      concepts: [],
       categoryId: "k1",
       latestNumber: 3,
       hasDraftChanges: false,
@@ -82,7 +82,7 @@ const PAGE: QuestionPage = {
       type: "mcq",
       internalName: "ptr-null-check",
       difficulty: 2,
-      tags: [],
+      concepts: [],
       categoryId: null,
       latestNumber: null,
       hasDraftChanges: true,

@@ -26,7 +26,7 @@ export type AdminTab = (typeof ADMIN_TABS)[number];
 export const CLASSROOM_QUERY_TABS = ["evaluations", "roster", "drill"] as const;
 export type ClassroomQueryTab = (typeof CLASSROOM_QUERY_TABS)[number];
 /** The pool screen's tabs (`?tab=`); `review` while the platform has a model. */
-export const POOL_TABS = ["questions", "tags", "review", "settings"] as const;
+export const POOL_TABS = ["questions", "concepts", "review", "settings"] as const;
 /** The question editor's tabs (`?tab=`). */
 export const QUESTION_TABS = ["edit", "try", "versions"] as const;
 /** The results' tabs (`?tab=`). */
@@ -66,7 +66,7 @@ export interface AssistScreenSpec {
 const tabs = (values: readonly string[]): AssistParamSpec => ({ kind: "enum", values });
 const SEARCH: AssistParamSpec = {
   kind: "text",
-  hint: "the search box: free text and tag:<name> type:<type id> difficulty:<n|>n|a-b> version:<n|>n>",
+  hint: "the search box: free text and #<concept> type:<type id> difficulty:<n|>n|a-b> version:<n|>n>",
 };
 
 export const ASSIST_SCREENS = {

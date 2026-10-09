@@ -1,13 +1,15 @@
 /**
  * The Drill tab of a classroom (ADR-041 §6, §8, #317 slice 4): each
- * student's activity, the mastery per tag, and the confidence per question
+ * student's activity, the mastery per concept, and the confidence per question
  * (ADR-085 §8, aggregated only). A read view, so the page
  * header carries no primary action on this tab.
  *
  * The switch is a row of the classroom's Settings (D24): with the drill off,
  * the tab is an empty state whose one action opens them.
  */
-import type { ClassroomDetail, DrillStudentActivity, DrillTagMastery } from "@quiz/contracts";
+import type { ClassroomDetail, DrillStudentActivity, DrillConceptMastery } from "@quiz/contracts";
+
+import { refName } from "../concepts/sorting";
 import { drillRecallRate, drillRecallTrend } from "@quiz/domain";
 import { Dumbbell, Tag } from "lucide-react";
 import { useState } from "react";
@@ -97,7 +99,7 @@ export function ClassroomDrill({
           <p className="px-1 text-xs text-fg-faint">{t("drill.recall.help")}</p>
           <p className="px-1 text-xs text-fg-faint">{t("drill.teacher.notice")}</p>
         </section>
-        <MasteryPerTag classroomId={room.id} />
+        <MasteryPerConcept classroomId={room.id} />
         <ConfidencePerQuestion classroomId={room.id} />
       </>
     );
@@ -111,8 +113,12 @@ export function ClassroomDrill({
   );
 }
 
-/** Mastery per tag: one bar per tag, the mean retrievability of the classroom's reviewed cards. */
-function MasteryPerTag({ classroomId }: { classroomId: string }) {
+/**
+ * Mastery per concept: one bar per concept, the mean retrievability of the
+ * classroom's reviewed cards, labelled in the reader's language (ADR-081
+ * third addendum §8); the questions without a concept in a bar of their own.
+ */
+function MasteryPerConcept({ classroomId }: { classroomId: string }) {
   const t = useT();
   const { locale } = useI18n();
   const mastery = useClassroomDrillMastery(classroomId);
@@ -134,11 +140,11 @@ function MasteryPerTag({ classroomId }: { classroomId: string }) {
     <section className="space-y-3">
       <SectionHeading icon={Tag} title={t("drill.mastery.title")} description={t("drill.mastery.desc")} />
       <Card className="divide-y divide-line">
-        {mastery.data.map((m: DrillTagMastery) => (
-          <div key={m.tag ?? ""} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 px-4 py-3 sm:grid-cols-[12rem_minmax(0,1fr)_auto]">
+        {mastery.data.map((m: DrillConceptMastery) => (
+          <div key={m.concept?.id ?? ""} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 px-4 py-3 sm:grid-cols-[12rem_minmax(0,1fr)_auto]">
             <div className="min-w-0">
-              <p className={m.tag === null ? "truncate text-sm italic text-fg-muted" : "truncate text-sm font-semibold"}>
-                {m.tag ?? t("drill.mastery.untagged")}
+              <p className={m.concept === null ? "truncate text-sm italic text-fg-muted" : "truncate text-sm font-semibold"}>
+                {m.concept === null ? t("drill.mastery.noConcept") : refName(m.concept)}
               </p>
               <p className="text-xs text-fg-faint">{t("drill.mastery.counts", { cards: m.cards, students: m.students })}</p>
             </div>

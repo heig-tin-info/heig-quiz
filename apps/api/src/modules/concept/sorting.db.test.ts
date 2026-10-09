@@ -17,6 +17,7 @@ import {
   TagSortingConflict,
   TagSortingItemsError,
   TagSortingList,
+  TagSortingLocked,
   type Concept,
   type TagSortingRow,
 } from "@quiz/contracts";
@@ -27,6 +28,7 @@ import {
   conceptTagSortings,
   pools,
   poolTags,
+  questionConcepts,
   questions,
   questionTags,
   questionVersions,
@@ -42,6 +44,9 @@ let teacher: Who;
 let admin: Who;
 /** Alpha: `pointeur` ×3 (described), `boucle` ×2 (one never published); a deleted question wears `fantome`. */
 let alpha: string;
+/** The live questions of alpha wearing `pointeur`, and the deleted one. */
+let pointeurs: string[];
+let gone: string;
 /** Beta: `pointeurs` ×1, `semaine3` ×1. */
 let beta: string;
 
@@ -122,11 +127,13 @@ beforeAll(async () => {
   admin = await server.signIn("admin");
   alpha = await pool("Alpha");
   beta = await pool("Beta");
-  await question(alpha, "one", ["pointeur", "boucle"]);
-  await question(alpha, "two", ["pointeur"]);
-  await question(alpha, "three", ["pointeur"]);
+  pointeurs = [
+    await question(alpha, "one", ["pointeur", "boucle"]),
+    await question(alpha, "two", ["pointeur"]),
+    await question(alpha, "three", ["pointeur"]),
+  ];
   await question(alpha, "draft", ["boucle"], false);
-  const gone = await question(alpha, "gone", ["pointeur", "fantome"]);
+  gone = await question(alpha, "gone", ["pointeur", "fantome"]);
   await server.app.db.update(questions).set({ deletedAt: new Date() }).where(eq(questions.id, gone));
   await server.app.db
     .update(poolTags)
@@ -136,6 +143,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+  await server.app.db.delete(questionConcepts);
   await server.app.db.delete(conceptTagSortings);
   await server.app.db.delete(concepts);
 });
@@ -273,26 +281,46 @@ describe("accepting decisions", () => {
     expect(twice.statusCode).toBe(400);
   });
 
-  it("changes an accepted decision, keeps the model's proposal, and accepts the same decision again", async () => {
+  it("locks an accepted decision since the cut-over, and keeps the model's proposal", async () => {
     const proposal = { kind: "drop", dropReason: "task_kind", model: "test-model" } as const;
     await server.app.db.insert(conceptTagSortings).values({ poolId: alpha, tag: "boucle", proposal });
     expect((await list()).find((r) => r.tag === "boucle")!.sorting).toMatchObject({ decision: null, decidedAt: null, proposal });
 
     // Proposed first: once `boucle` is dropped, the stop list refuses to create it (third addendum §4).
     const loop = await propose({ lang: "fr", label: "boucle" });
-    await accepted([{ poolId: alpha, tag: "boucle", decision: { kind: "drop", reason: "task_kind" } }]);
+    const dropped = await accepted([{ poolId: alpha, tag: "boucle", decision: { kind: "drop", reason: "task_kind" } }]);
+    expect(dropped.rows[0]!.sorting).toMatchObject({ decision: "drop", proposal });
     server.clock.advance(60_000);
-    const changed = await accepted([{ poolId: alpha, tag: "boucle", decision: { kind: "concept", conceptId: loop.id } }]);
-    expect(changed.rows[0]!.sorting).toMatchObject({
-      decision: "concept",
-      concept: { id: loop.id },
-      dropReason: null,
-      proposal,
-      decidedAt: server.clock.now().toISOString(),
+    const changed = await accept([
+      { poolId: beta, tag: "semaine3", decision: { kind: "drop", reason: "organisational" } },
+      { poolId: alpha, tag: "boucle", decision: { kind: "concept", conceptId: loop.id } },
+    ]);
+    expect(changed.statusCode).toBe(409);
+    expect(TagSortingLocked.parse(changed.json())).toEqual({
+      error: "sorting_locked",
+      items: [{ poolId: alpha, tag: "boucle" }],
     });
-    const again = await accepted([{ poolId: alpha, tag: "boucle", decision: { kind: "concept", conceptId: loop.id } }]);
-    expect(again.rows[0]!.sorting).toMatchObject({ decision: "concept", concept: { id: loop.id } });
-    expect(await server.app.db.select().from(conceptTagSortings)).toHaveLength(1);
+    // Nothing of the batch was written: the other pair waits, the locked one is unchanged.
+    expect((await list()).find((r) => r.tag === "semaine3")!.sorting).toBeNull();
+    expect((await list()).find((r) => r.tag === "boucle")!.sorting).toMatchObject({ decision: "drop", proposal });
+    expect(await server.app.db.select().from(questionConcepts)).toEqual([]);
+  });
+
+  it("links a pair accepted into a concept to the pool's live questions wearing the tag, beside their concepts", async () => {
+    const other = await propose({ lang: "fr", label: "adresse" });
+    // A teacher classified one of them by hand after the cut-over: that link stays.
+    await server.app.db.insert(questionConcepts).values({ questionId: pointeurs[0]!, conceptId: other.id });
+    const result = await accepted([
+      { poolId: alpha, tag: "pointeur", decision: pointer },
+      { poolId: beta, tag: "semaine3", decision: { kind: "drop", reason: "organisational" } },
+    ]);
+    const created = result.created[0]!.id;
+    const links = await server.app.db.select().from(questionConcepts);
+    expect(links.filter((l) => l.conceptId === created).map((l) => l.questionId).sort()).toEqual([...pointeurs].sort());
+    expect(links).toContainEqual({ questionId: pointeurs[0]!, conceptId: other.id });
+    // Not the deleted question, and nothing for a drop or for another pool's pair.
+    expect(links.map((l) => l.questionId)).not.toContain(gone);
+    expect(links).toHaveLength(4);
   });
 
   it("goes with its pool", async () => {

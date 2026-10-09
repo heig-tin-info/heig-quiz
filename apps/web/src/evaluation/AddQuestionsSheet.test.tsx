@@ -77,7 +77,7 @@ const row = (over: Partial<QuestionPage["items"][number]>): QuestionPage["items"
   type: "mcq",
   internalName: "ptr-null-check",
   difficulty: 2,
-  tags: [],
+  concepts: [],
   categoryId: null,
   latestNumber: 1,
   hasDraftChanges: false,

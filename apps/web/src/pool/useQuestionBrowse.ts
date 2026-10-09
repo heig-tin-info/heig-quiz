@@ -13,7 +13,7 @@ import type { QuestionRow } from "@quiz/contracts";
 import { listboxIndex } from "../ui";
 import type { QuestionGroup } from "./QuestionGroups";
 
-/** A row as the list draws it: a question may repeat (grouped by tag), so it is keyed by section. */
+/** A row as the list draws it: a question may repeat (grouped by concept), so it is keyed by section. */
 interface Entry {
   key: string;
   row: QuestionRow;

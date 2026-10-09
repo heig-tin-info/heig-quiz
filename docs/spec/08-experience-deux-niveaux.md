@@ -38,7 +38,7 @@ The platform serves two profiles of teachers with the same interface. The novice
 | Version in git | YAML export and import from the interface, token REST API, `quiz pull` and `quiz push` CLI. The exported folder is readable and diffable. |
 | Automate | Personal API tokens in the settings, generated OpenAPI, `curl` examples in the documentation. |
 | Do everything from the keyboard | `Ctrl+K` command palette, global shortcuts, `j` `k` navigation in lists, `Enter` to open, `Esc` to close. |
-| Process in bulk | Multiple selection in the pool: add a tag, move to a category, export, add to an evaluation. |
+| Process in bulk | Multiple selection in the pool: add a concept (ADR-081), move to a category, export, add to an evaluation. |
 | Inspect | Version history with diff, LLM call log, event log of an attempt, raw export of an evaluation as JSON. |
 | Use LLM assistance | The administrator configures one institutional provider key, model and daily cap; teachers use that gateway. No personal key or per-teacher model configuration (ADR-058). |
 | Run a project like a repository | The advanced options of a project: the source's whole history, a deadline commit instead of a lock, review checkpoints dated relative to the deadline (J−3), groups copied from another project; a sync of the source as a pull request into every repository; the runs of each repository, "grade now", a lock per repository (F-PROJ). |
@@ -51,7 +51,7 @@ The platform serves two profiles of teachers with the same interface. The novice
 | Group | Examples |
 |---|---|
 | Navigation | Go to the course (its page, F-ORG-12), the classroom, the pool, the settings |
-| Questions | Full-text search and by tag `#pointers`, by type `type:code`, by difficulty `diff:3`; open, try, add to the evaluation being edited |
+| Questions | Full-text search and by concept `#pointers` (any concept the word may designate, ADR-081), by type `type:code`, by difficulty `diff:3`; open, try, add to the evaluation being edited |
 | Contextual actions | On an evaluation: start, pause, add 5 minutes, close, release the results. On a question: publish, duplicate, generate a variant, export |
 | Creation | New question of type X, new evaluation, new pool |
 | Preferences | Theme, language, default source mode |
@@ -85,7 +85,7 @@ The actions are provided by the mounted screens, through the command registry in
 ## 8.6 Features that make the difference
 
 - **Generate a variant**: same question, other values or other context, as a draft linked to the original by `origin_question_id`.
-- **Generate a quiz**: duration, tags, difficulty, and the platform composes a draft evaluation from the answer-time statistics. Phase 3.
+- **Generate a quiz**: duration, concepts, difficulty, and the platform composes a draft evaluation from the answer-time statistics. Phase 3.
 - **Session code and QR code** to join a poll from a phone. Classrooms use the teacher-managed roster and matching edu-ID address, without an entry code (ADR-053).
 - **Projection view** without names: presence ring in the waiting room, live distribution for a poll, completion rate during a quiz.
 - **Image difference** for `codeimage`: the target, the student's image and a green / red difference, one grid or two side by side, with the share of correct pixels.

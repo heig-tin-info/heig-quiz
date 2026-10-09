@@ -9,8 +9,15 @@ open. Amended the same day by the [addendum](#addendum-2026-10-08-transition-res
 product owner before step 3 of #599, and by the
 [second addendum](#second-addendum-2026-10-08-sorting-the-existing-tags)
 (sorting the existing tags) and the
-[third addendum](#third-addendum-2026-10-08-the-cut-over) (the cut-over). Not implemented: the work is tracked by a parent issue that groups #557
-and #578.
+[third addendum](#third-addendum-2026-10-08-the-cut-over) (the cut-over). The work is tracked by #599, under a parent issue that groups #557
+and #578. Steps (a) and (b) of the transition (addendum §1) are implemented;
+the **cut-over, step (c), is implemented** by the cut-over PR of #599 (#648):
+questions, the pool's filter and Notions tab, the bulk bar, move and copy,
+polls, the drill, the MCP tools, the teacher assistant and the seed read and
+write concepts. Step (d), dropping `question_tags` and `pool_tags`, comes
+later, once no (pool, tag) pair is pending (third addendum §3). The links to
+courses (§8), aliases, relations, the curation screen and the model's help
+in the picker (#557) are not implemented.
 
 Scope: what a question is classified by, who may create and change that
 classification, how it is stored, and what a course declares. It does not
@@ -21,6 +28,12 @@ Relations: replaces the "Tag" entry of the [glossary](../spec/01-glossaire-et-do
 and the tags of F-QST-01, F-POOL-03 and F-STAT-04; the per-tag readings of
 [ADR-041 §10](ADR-041-entrainement-espace.md) and F-DRILL-05 read concepts
 instead. Uses the [LLM gateway](ADR-058-passerelle-llm.md) for the suggestions.
+The third addendum (the cut-over) amends [ADR-017 §5](ADR-017-deplacement-de-question.md)
+(a moved question's concepts travel, nothing is taught to the target pool),
+the tag wording of [ADR-013 §1](ADR-013-partage-des-pools.md), the
+interleaving and mastery of [ADR-041](ADR-041-entrainement-espace.md) §6,
+§10, §12 and §15, and the pool search of [ADR-080](ADR-080-assistant-enseignant.md)'s
+P2b amendment.
 
 ## Context
 
@@ -317,10 +330,23 @@ where named.
    the key of a tag the admin dropped in the sorting is refused even when
    creation is asked (`422 concept_dropped`), so neither a teacher nor an
    LLM client recreates `c01`, `lecture-de-code` or `prog-c`. Renaming a
-   concept's label onto such a key is refused too, the admin included (a
-   qualifier-only edit is not a rename). The
+   concept's label onto such a key is refused too. The
    Consequences' "creating a proposed concept for an unknown one" no longer
-   holds.
+   holds. *Amended the same day by the product owner, on the challenge of
+   the cut-over PR:* the list of dropped keys is instance-wide while the
+   sorting was decided by pool, so it held real concept names (`c`,
+   `logique`, `physique`, `calcul`, `trace`) dropped in one pool only. Two
+   exemptions follow. A label with a qualifier is never refused: the
+   qualifier tells the concept apart from the dropped tag ("Trace
+   (matrice)"). The admin, curator of the vocabulary (§7), is not bound when
+   creating or editing a concept (`POST` and `PATCH /concepts`, and the
+   picker's preview); a question write — the editor, the bulk bar, an MCP
+   tool — stays bound for everyone. An edit is refused only when it changes
+   a side's key and leaves it on the list; a side already there whose key
+   stays (a concept older than the drop) may still be edited.
+   Creating a question with a `tags` field (a client of before the
+   cut-over) is a `400 validation`, through the MCP tool as through the
+   route, rather than a question silently without its tags.
 5. **The question editor's picker creates** a `proposed` concept from the
    cut-over on: a label in the interface language and an optional
    qualifier; the concepts already used in the pool first (§5). The model's

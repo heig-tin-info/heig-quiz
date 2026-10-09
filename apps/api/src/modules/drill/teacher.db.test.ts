@@ -5,7 +5,7 @@
  * (06, question 28 (j)), nothing counted after an opt-out while what came
  * before stays (28 (k)), the opt-out's date (§13, item 5), the recall rate
  * on repeated reviews (§10, item 8), the Zurich days, the weekly buckets and
- * the mastery per tag.
+ * the mastery per concept.
  *
  * The cards are created by the production hooks (an exercise handed in).
  * The REVIEWS are written as rows at chosen instants: the view reads
@@ -18,12 +18,12 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { DrillProgress, DrillStudentActivity, DrillTagMastery } from "@quiz/contracts";
+import { DrillConceptMastery, DrillProgress, DrillStudentActivity } from "@quiz/contracts";
 import { drillRecallCounts, type DrillReviewFact } from "@quiz/domain";
 import { drillRetrievability } from "@quiz/domain/drillSchedule";
 import { registerForTests } from "@quiz/registry/server";
 
-import { classrooms, drillCards, drillReviews, enrollments, questionTags } from "../../db/schema.js";
+import { classrooms, concepts, drillCards, drillReviews, enrollments, questionConcepts } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
@@ -282,13 +282,19 @@ describe("the teacher's view of the drill: progression", () => {
   });
 });
 
-describe("the teacher's view of the drill: mastery per tag", () => {
-  it("means the retrievability of the classroom's reviewed cards per tag, weakest first", async () => {
+describe("the teacher's view of the drill: mastery per concept", () => {
+  it("means the retrievability of the classroom's reviewed cards per concept, weakest first, in the reader's language", async () => {
     const db = server.app.db;
-    await db.insert(questionTags).values([
-      { questionId: seed.questionIds[0]!, tag: "pointers" },
-      { questionId: seed.questionIds[1]!, tag: "loops" },
-      { questionId: other.questionIds[0]!, tag: "pointers" },
+    const [pointersId, loopsId] = [randomUUID(), randomUUID()];
+    const at = new Date(NOW);
+    await db.insert(concepts).values([
+      { id: pointersId, status: "validated", labelFr: "pointeurs", keyFr: "pointeur", labelEn: "pointers", keyEn: "pointer", createdAt: at, updatedAt: at },
+      { id: loopsId, status: "proposed", labelEn: "loops", keyEn: "loop", createdAt: at, updatedAt: at },
+    ]);
+    await db.insert(questionConcepts).values([
+      { questionId: seed.questionIds[0]!, conceptId: pointersId },
+      { questionId: seed.questionIds[1]!, conceptId: loopsId },
+      { questionId: other.questionIds[0]!, conceptId: pointersId },
     ]);
     // The state the scheduler left: q0 strong for Alice, weak for Bob; q1 reviewed by Alice only.
     const state = async (s: Seeded, userId: string, q: number, stability: number, at: string | null) => {
@@ -307,16 +313,19 @@ describe("the teacher's view of the drill: mastery per tag", () => {
     await state(seed, bob.id, 1, 5, null); // never reviewed: not in the mean
     await state(other, alice.id, 0, 1, "2026-11-20T09:00:00Z"); // another classroom's card (28 (j))
 
-    const res = await get(`${base()}/mastery`, teacher);
+    const res = await get(`${base()}/mastery`, { ...teacher, headers: { ...teacher.headers, "accept-language": "fr" } });
     expect(res.statusCode).toBe(200);
-    const tags = (res.json() as unknown[]).map((t) => DrillTagMastery.parse(t));
-    const pointers = tags.find((t) => t.tag === "pointers")!;
-    const loops = tags.find((t) => t.tag === "loops")!;
+    const rows = (res.json() as unknown[]).map((t) => DrillConceptMastery.parse(t));
+    const pointers = rows.find((t) => t.concept?.id === pointersId)!;
+    const loops = rows.find((t) => t.concept?.id === loopsId)!;
+    // French for the reader; a concept without a French label falls back to English.
+    expect(pointers.concept).toMatchObject({ label: "pointeurs", status: "validated" });
+    expect(loops.concept).toMatchObject({ label: "loops", status: "proposed" });
     expect(pointers).toMatchObject({ cards: 2, students: 2 });
     expect(pointers.retrievability).toBeCloseTo((r(a0) + r(b0)) / 2, 6);
     expect(loops).toMatchObject({ cards: 1, students: 1 });
     expect(loops.retrievability).toBeCloseTo(r(a1), 6);
-    // Every question is tagged: no `null` entry.
-    expect(tags.map((t) => t.tag)).toEqual(["pointers", "loops"]);
+    // Every question has a concept: no `null` entry.
+    expect(rows.map((t) => t.concept?.id)).toEqual([pointersId, loopsId]);
   });
 });

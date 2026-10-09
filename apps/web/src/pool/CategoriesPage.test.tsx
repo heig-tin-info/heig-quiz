@@ -27,7 +27,7 @@ const POOL: PoolDetail = {
   },
   role: "owner",
   categories: [],
-  tags: [],
+  concepts: [],
   questionCount: 6,
 };
 

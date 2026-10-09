@@ -9,16 +9,26 @@
  *
  * `q` holds the search box RAW, tokens included: `resolveFilters` runs
  * `searchSyntax.ts` over it and merges what it finds with the chips the sheet
- * set, so `tag:pointeurs` typed in the field and #pointeurs ticked in the
- * sheet are the same filter and neither hides the other.
+ * set, so `#pointeurs` typed in the field and Pointeurs ticked in the
+ * sheet filter together and neither hides the other.
+ *
+ * A typed concept word is resolved HERE, against the instance's vocabulary
+ * (ADR-081 third addendum §7), by the one rule a filter has (`conceptIdsOf`,
+ * `filterIds` of `@quiz/domain`): the concept it names, or every homonym it
+ * names alike — never a merely close one — and the API receives their ids,
+ * any of them. A word that names no concept filters NOTHING: the bar shows
+ * it as a dashed chip that says so, rather than emptying the list on a typo.
+ * Until the vocabulary has loaded the words are `pending`, and the screens
+ * hold their query (`useFilterVocabulary`).
  *
  * The statistics bounds (F-STAT-03) are the one part the API never sees: the
  * pool screen already holds every question's statistics (ADR-038 §7), so it
  * filters its rows against them itself (`matchesStats`) instead of a second
  * route re-reading the history per search.
  */
-import type { QuestionSort, QuestionStats } from "@quiz/contracts";
+import type { Concept, QuestionSort, QuestionStats } from "@quiz/contracts";
 
+import { conceptIdsOf } from "../concepts/refs";
 import { parseSearch } from "./searchSyntax";
 
 export type { QuestionSort };
@@ -31,7 +41,8 @@ export interface QuestionFilters {
    */
   q: string;
   types: string[];
-  tags: string[];
+  /** Concept ids, ticked in the sheet or opened from the Concepts tab (`?concept=`). */
+  concepts: string[];
   difficulties: number[];
   /**
    * `null` is "every category". The API filters on one category id and has
@@ -81,7 +92,7 @@ const DEFAULT_DIR: SortDir = "desc";
  */
 export const NO_FILTERS = {
   types: [],
-  tags: [],
+  concepts: [],
   difficulties: [],
   includeDeleted: false,
   versionMin: null,
@@ -114,21 +125,43 @@ export const STATS_PAGE_SIZE = 200;
 
 const union = <T>(a: T[], b: T[]): T[] => [...a, ...b.filter((v) => !a.includes(v))];
 
+/** A concept word of the search box, and the concepts it designates (`[]`: none). */
+export interface ConceptWord {
+  word: string;
+  ids: string[];
+}
+
+/** The vocabulary a concept word resolves against; `undefined` while it loads. */
+export type Vocabulary = readonly Concept[] | undefined;
+
+export interface ResolvedFilters extends QuestionFilters {
+  /** The typed concept words; their ids are already in `concepts`. */
+  words: ConceptWord[];
+  /** Concept words are typed and the vocabulary is not there yet: no answer to ask for. */
+  pending: boolean;
+}
+
 /**
  * The filters the API is actually asked for: the search box's tokens merged
  * into the chips, and `q` reduced to the free text. Everything downstream —
  * the query string, the chip row, the filter count — reads this and not the
  * raw state, so there is one answer to "what is filtering this list".
  */
-export function resolveFilters(filters: QuestionFilters): QuestionFilters {
+export function resolveFilters(filters: QuestionFilters, vocabulary?: Vocabulary): ResolvedFilters {
   const parsed = parseSearch(filters.q);
+  const words = parsed.conceptWords.map((word) => ({
+    word,
+    ids: vocabulary ? conceptIdsOf(word, vocabulary) : [],
+  }));
   const min = [filters.versionMin, parsed.versionMin].filter((v): v is number => v !== null);
   const max = [filters.versionMax, parsed.versionMax].filter((v): v is number => v !== null);
   return {
     ...filters,
     q: parsed.q,
     types: union(filters.types, parsed.types),
-    tags: union(filters.tags, parsed.tags),
+    concepts: words.reduce((all, w) => union(all, w.ids), filters.concepts),
+    words,
+    pending: words.length > 0 && vocabulary === undefined,
     difficulties: union(filters.difficulties, parsed.difficulties).sort((a, b) => a - b),
     // Two bounds on one screen intersect: the narrower one is the one the
     // reader can see a reason for.
@@ -144,13 +177,17 @@ export function resolveFilters(filters: QuestionFilters): QuestionFilters {
  * are omitted while they hold their default, for the same reason: a key that
  * changes shape on a value that changed nothing refetches for nothing.
  */
-export function questionQuery(filters: QuestionFilters, cursor?: string | null): string {
-  const resolved = resolveFilters(filters);
+export function questionQuery(
+  filters: QuestionFilters,
+  vocabulary?: Vocabulary,
+  cursor?: string | null,
+): string {
+  const resolved = resolveFilters(filters, vocabulary);
   const params = new URLSearchParams();
   const q = resolved.q.trim();
   if (q) params.set("q", q);
   if (resolved.types.length) params.set("type", [...resolved.types].join(","));
-  if (resolved.tags.length) params.set("tag", [...resolved.tags].join(","));
+  if (resolved.concepts.length) params.set("concept", [...resolved.concepts].join(","));
   if (resolved.difficulties.length) {
     params.set("difficulty", [...resolved.difficulties].sort((a, b) => a - b).join(","));
   }
@@ -171,7 +208,9 @@ export function activeFilterCount(filters: QuestionFilters): number {
   return (
     (resolved.q.trim() ? 1 : 0) +
     resolved.types.length +
-    resolved.tags.length +
+    // One per chip: a ticked concept, a typed word (whatever it designates).
+    filters.concepts.length +
+    resolved.words.length +
     resolved.difficulties.length +
     (resolved.includeDeleted ? 1 : 0) +
     // The two bounds are one filter: "version 2 to 4" is one thing to remove.

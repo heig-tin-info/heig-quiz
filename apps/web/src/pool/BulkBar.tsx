@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { Category, CategoryNode, PoolDetail, PoolSummary, QuestionRow } from "@quiz/contracts";
 
 import { api } from "../api";
+import { ConceptPicker } from "../concepts/ConceptPicker";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { categoryPaths } from "./categories";
@@ -19,8 +20,9 @@ import { anyPoolKey, poolKey, poolsKey } from "../queryKeys";
  *
  * Three of the four operations are sequential calls to the ordinary routes
  * (`PATCH /questions/:id`, `DELETE /questions/:id`): the API has no bulk
- * endpoint for them, and a teacher tagging twenty questions is not a reason to
- * invent one. What the bar owes the reader is a single report at the end,
+ * endpoint for them, and a teacher classifying twenty questions is not a
+ * reason to invent one. "Add a concept" sends each question its own concepts
+ * plus the ones picked (ids: the picker is where a concept is created). What the bar owes the reader is a single report at the end,
  * which is what `runAll` produces.
  *
  * "Move to another pool" is the exception and is ONE call
@@ -35,7 +37,7 @@ import { anyPoolKey, poolKey, poolsKey } from "../queryKeys";
  * already starred and "Star" otherwise, so it always offers the one gesture
  * that changes something — and the bar, already five actions wide, does not
  * grow a sixth. It keeps the selection: the rows flip in place, and the
- * teacher may go on to tag or move what they just starred.
+ * teacher may go on to classify or move what they just starred.
  */
 
 /** The `<option>` value that opens the "name it" field instead of picking. */
@@ -46,14 +48,17 @@ export function BulkBar({
   ids,
   rows,
   categories,
+  poolConceptIds,
   onStar,
   onClear,
 }: {
   poolId: string;
   ids: string[];
-  /** The loaded rows, so "add a tag" can keep the tags a question already has. */
+  /** The loaded rows, so "add a concept" keeps the concepts a question already has. */
   rows: QuestionRow[];
   categories: CategoryNode[];
+  /** The concepts the pool already uses: the picker offers them first. */
+  poolConceptIds: readonly string[];
   /** Stars or unstars the selection, optimistically (`useSetStars`). */
   onStar: (ids: string[], starred: boolean) => Promise<boolean>;
   onClear: () => void;
@@ -64,8 +69,8 @@ export function BulkBar({
   const toastError = useErrorToast();
   const confirm = useConfirm();
   const moveQuestions = useMoveQuestions();
-  const [dialog, setDialog] = useState<"tag" | "move" | "pool" | null>(null);
-  const [tag, setTag] = useState("");
+  const [dialog, setDialog] = useState<"concept" | "move" | "pool" | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
   const [categoryId, setCategoryId] = useState("");
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -115,14 +120,14 @@ export function BulkBar({
     onClear();
   };
 
-  const addTag = () => {
-    const value = tag.trim();
-    if (!value) return;
+  const addConcepts = () => {
+    if (picked.length === 0) return;
     void runAll((id) => {
       const row = rows.find((r) => r.id === id);
-      const tags = row ? [...new Set([...row.tags, value])] : [value];
-      return api(`/app/api/questions/${id}`, { method: "PATCH", body: JSON.stringify({ tags }) });
+      const concepts = [...new Set([...(row?.concepts.map((c) => c.id) ?? []), ...picked])];
+      return api(`/app/api/questions/${id}`, { method: "PATCH", body: JSON.stringify({ concepts }) });
     });
+    setPicked([]);
   };
 
   /**
@@ -204,8 +209,8 @@ export function BulkBar({
         <Button size="sm" variant="ghost" onClick={() => void onStar(ids, !allStarred)}>
           {allStarred ? <StarOff /> : <Star />} {t(allStarred ? "pool.bulk.unstar" : "pool.bulk.star")}
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => setDialog("tag")}>
-          <Tag /> {t("pool.bulk.tag")}
+        <Button size="sm" variant="ghost" onClick={() => setDialog("concept")}>
+          <Tag /> {t("pool.bulk.concept")}
         </Button>
         <Button size="sm" variant="ghost" onClick={() => setDialog("move")}>
           <FolderInput /> {t("pool.bulk.move")}
@@ -218,22 +223,19 @@ export function BulkBar({
         </Button>
       </SelectionBar>
 
-      {dialog === "tag" ? (
+      {dialog === "concept" ? (
         <FormDialog
-          title={t(ids.length === 1 ? "pool.bulk.tagTitle.one" : "pool.bulk.tagTitle", { n: ids.length })}
-          onClose={() => setDialog(null)}
-          onSubmit={addTag}
-          submitLabel={t("pool.bulk.tag")}
+          title={t(ids.length === 1 ? "pool.bulk.conceptTitle.one" : "pool.bulk.conceptTitle", { n: ids.length })}
+          onClose={() => {
+            setDialog(null);
+            setPicked([]);
+          }}
+          onSubmit={addConcepts}
+          submitLabel={t("pool.bulk.concept")}
           submitting={busy}
-          canSubmit={tag.trim() !== ""}
+          canSubmit={picked.length > 0}
         >
-          <Field
-            label={t("question.meta.tagAdd")}
-            fullWidth
-            autoFocus
-            value={tag}
-            onChange={(e) => setTag(e.target.value)}
-          />
+          <ConceptPicker value={picked} onChange={setPicked} poolConceptIds={poolConceptIds} />
         </FormDialog>
       ) : null}
 

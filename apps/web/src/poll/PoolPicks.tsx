@@ -9,6 +9,8 @@ import { useT } from "../i18n";
 import { activeFilterCount, EMPTY_FILTERS, questionQuery, type QuestionFilters } from "../pool/filters";
 import { PoolListTail } from "../pool/PoolListStates";
 import { QuestionSearchBar } from "../pool/QuestionSearchBar";
+import { useFilterVocabulary } from "../pool/useFilterVocabulary";
+import { refName } from "../concepts/sorting";
 import { pollPoolQuestionsKey } from "../queryKeys";
 import { Button, EmptyState, QueryError, Segmented, Skeleton } from "../ui";
 import { PickRow } from "./PickRow";
@@ -19,7 +21,7 @@ export type PoolScope = "room" | "all";
 /**
  * "From pools" (issue #162): any published multiple-choice or short-answer
  * question of any pool the teacher reaches, found with the pool screen's own
- * search — the same field, the same grammar (`tag:`, `type:`,
+ * search — the same field, the same grammar (`#concept`, `type:`,
  * `difficulty:`, `version:`), the same filter sheet (`QuestionSearchBar`).
  *
  * A poll is not graded, so it may borrow from any pool. When the audience is
@@ -46,11 +48,15 @@ export function PoolPicks({
   const [scope, setScope] = useState<PoolScope>("room");
   const room = classroomId !== null && scope === "room" ? classroomId : null;
   const suffix = room === null ? "" : `&classroomId=${encodeURIComponent(room)}`;
+  const { vocabulary, waiting } = useFilterVocabulary(filters.q);
 
   const questions = useInfiniteQuery<PollPoolPage>({
-    queryKey: pollPoolQuestionsKey(`${questionQuery(filters)}${suffix}`),
+    queryKey: pollPoolQuestionsKey(`${questionQuery(filters, vocabulary)}${suffix}`),
     queryFn: ({ pageParam }) =>
-      api(`/app/api/polls/pool-questions${questionQuery(filters, pageParam as string | null)}${suffix}`),
+      api(
+        `/app/api/polls/pool-questions${questionQuery(filters, vocabulary, pageParam as string | null)}${suffix}`,
+      ),
+    enabled: !waiting,
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
     // The field is typed into: the rows stay while the next answer comes.
@@ -75,7 +81,8 @@ export function PoolPicks({
       <QuestionSearchBar
         filters={filters}
         onChange={setFilters}
-        tags={first?.tags ?? []}
+        concepts={first?.concepts ?? []}
+        vocabulary={vocabulary}
         types={PollQuestionType.options}
         deleted={false}
       >
@@ -164,7 +171,7 @@ export function PoolPicks({
                     {row.pool.name}
                     {" · "}
                     {t("eval.questions.version", { n: row.latestNumber })}
-                    {row.tags.length > 0 ? ` · ${row.tags.map((tag) => `#${tag}`).join(" ")}` : null}
+                    {row.concepts.length > 0 ? ` · ${row.concepts.map(refName).join(", ")}` : null}
                   </>
                 }
               />

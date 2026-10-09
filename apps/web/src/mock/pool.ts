@@ -53,6 +53,7 @@ import {
   type TeamsLinkPreview,
   type TeamsTabState,
 } from "@quiz/contracts";
+import { conceptRefs, seedConceptIds, unknownConceptIds } from "./concept";
 import {
   D,
   H,
@@ -132,7 +133,8 @@ export interface MockQuestion {
   difficulty: number;
   shuffleable: boolean;
   randomizable: boolean;
-  tags: string[];
+  /** Concept ids (ADR-081): a question shows them as `ConceptRef`s (`conceptRefs`). */
+  concepts: string[];
   deletedAt: string | null;
   updatedAt: string;
   draft: { config: Record<string, unknown>; explanation: string; variables: ParametersDraft | null };
@@ -851,7 +853,7 @@ export const questions: MockQuestion[] = [
     difficulty: 3,
     shuffleable: false,
     randomizable: false,
-    tags: ["pointeurs", "arithmetique"],
+    concepts: seedConceptIds(["Pointeur", "Arithmétique des pointeurs"]),
     config: codeConfig(
       "Écrivez la fonction `somme` qui retourne la somme des `n` premiers éléments de `t`.\n\nL'opérateur d'indexation `[]` est **interdit** : utilisez l'arithmétique des pointeurs.",
       SUM_TEMPLATE,
@@ -879,7 +881,7 @@ export const questions: MockQuestion[] = [
     difficulty: 2,
     shuffleable: true,
     randomizable: false,
-    tags: ["pointeurs", "securite"],
+    concepts: seedConceptIds(["Pointeur", "Sécurité"]),
     config: mcqConfig(
       "Soit `int *p;` déclaré dans une fonction, sans initialisation. Que vaut `p` ?",
       [
@@ -901,7 +903,7 @@ export const questions: MockQuestion[] = [
     difficulty: 1,
     shuffleable: false,
     randomizable: false,
-    tags: ["pointeurs", "sizeof"],
+    concepts: seedConceptIds(["Pointeur", "sizeof"]),
     config: shortNumber(
       "Sur une machine 64 bits (LP64), que vaut `sizeof(int *)` ? Répondez en octets.",
       8,
@@ -918,7 +920,7 @@ export const questions: MockQuestion[] = [
     difficulty: 3,
     shuffleable: true,
     randomizable: false,
-    tags: ["memoire", "pointeurs"],
+    concepts: seedConceptIds(["Allocation dynamique", "Pointeur"]),
     /*
      * The question the rich cloze editor was built for: a dropdown inside a
      * TABLE cell. The `|` of the hole is exactly the character a markdown row
@@ -954,7 +956,7 @@ export const questions: MockQuestion[] = [
     difficulty: 3,
     shuffleable: true,
     randomizable: false,
-    tags: ["tableaux", "pointeurs"],
+    concepts: seedConceptIds(["Tableau", "Pointeur"]),
     config: mcqConfig(
       "Dans `void f(int t[10])`, que vaut `sizeof(t)` à l'intérieur de `f` sur une machine 64 bits ?",
       [
@@ -976,7 +978,7 @@ export const questions: MockQuestion[] = [
     difficulty: 2,
     shuffleable: true,
     randomizable: false,
-    tags: ["fichiers"],
+    concepts: seedConceptIds(["Fichier"]),
     // The one MULTIPLE-answer question of the mock: two keys, so the scoring
     // card of the editor is shown whole — the policy, the answer limit and
     // the shuffling exception all live there and single mode hides two of
@@ -1003,7 +1005,7 @@ export const questions: MockQuestion[] = [
     difficulty: 4,
     shuffleable: false,
     randomizable: false,
-    tags: ["tableaux", "securite"],
+    concepts: seedConceptIds(["Tableau", "Sécurité"]),
     config: codeConfig(
       "Le programme ci-dessous déborde d'un tampon. Corrigez-le sans changer la taille de `dest`.",
       "#include <stdio.h>\n#include <string.h>\n\nint main(void) {\n    char dest[8];\n    const char *src = \"bonjour tout le monde\";\n    strcpy(dest, src);\n    printf(\"%s\\n\", dest);\n    return 0;\n}\n",
@@ -1023,7 +1025,7 @@ export const questions: MockQuestion[] = [
     difficulty: 2,
     shuffleable: false,
     randomizable: true,
-    tags: ["accelerometre", "mrua"],
+    concepts: seedConceptIds(["Accéléromètre", "MRUA"]),
     config: {
       configVersion: 3,
       prompt:
@@ -1056,7 +1058,7 @@ export const questions: MockQuestion[] = [
     difficulty: 3,
     shuffleable: false,
     randomizable: false,
-    tags: ["filtre", "capteur", "rc"],
+    concepts: seedConceptIds(["Filtre", "Capteur", "Circuit RC"]),
     config: circuitConfig(
       "La sortie analogique du capteur est bruitée au-delà de quelques kilohertz. " +
         "Câblez entre l'entrée et la sortie du quadripôle un filtre **passe-bas** du " +
@@ -1075,7 +1077,7 @@ export const questions: MockQuestion[] = [
     difficulty: 1,
     shuffleable: false,
     randomizable: false,
-    tags: ["electronique", "resistances"],
+    concepts: seedConceptIds(["Électronique", "Résistance"]),
     config: shortNumber(
       "Une LED rouge (chute de 2,0 V) est alimentée en 5,0 V à travers une résistance de 200 Ω. Quel courant la traverse, en mA ?",
       15,
@@ -1092,7 +1094,7 @@ export const questions: MockQuestion[] = [
     difficulty: 2,
     shuffleable: true,
     randomizable: false,
-    tags: ["i2c", "bus"],
+    concepts: seedConceptIds(["I2C", "Bus"]),
     config: mcqConfig(
       "Sur un bus I²C en adressage 7 bits, combien de périphériques distincts peut-on adresser au maximum ?",
       [
@@ -1113,7 +1115,7 @@ export const questions: MockQuestion[] = [
     difficulty: 3,
     shuffleable: true,
     randomizable: false,
-    tags: ["can", "mesure"],
+    concepts: seedConceptIds(["Conversion analogique-numérique", "Mesure"]),
     config: {
       configVersion: 2,
       text: "Un convertisseur analogique-numérique de {{#12}} bits découpe sa pleine échelle en {{#4096}} paliers. Sous 3,3 V, un palier vaut environ {{#0.8:0.05}} mV.",
@@ -1137,7 +1139,7 @@ export const questions: MockQuestion[] = [
     difficulty: 2,
     shuffleable: true,
     randomizable: false,
-    tags: ["amplificateur", "gain"],
+    concepts: seedConceptIds(["Amplificateur", "Gain"]),
     config: mcqConfig(
       "Un montage inverseur a `R1 = 1 kΩ` en entrée et `R2 = 10 kΩ` en contre-réaction. Quel est son gain ?",
       [
@@ -1158,7 +1160,7 @@ export const questions: MockQuestion[] = [
     difficulty: 3,
     shuffleable: false,
     randomizable: false,
-    tags: ["amplificateur"],
+    concepts: seedConceptIds(["Amplificateur"]),
     config: shortNumber(
       "Un AOP a un slew rate de 0,5 V/µs. Quelle est la durée minimale d'un front de 5 V ? Répondez en µs.",
       10,
@@ -1178,7 +1180,7 @@ export const questions: MockQuestion[] = [
     difficulty: 2,
     shuffleable: true,
     randomizable: false,
-    tags: ["filtre", "gain"],
+    concepts: seedConceptIds(["Filtre", "Gain"]),
     config: {
       configVersion: 2,
       text: "Un RC série est un filtre {{passe-bas|passe-haut}} dont la fréquence de coupure vaut 1 / (2π{{RC}}).",
@@ -1196,7 +1198,7 @@ export const questions: MockQuestion[] = [
     difficulty: 4,
     shuffleable: true,
     randomizable: false,
-    tags: ["filtre"],
+    concepts: seedConceptIds(["Filtre"]),
     config: mcqConfig("Quelle est la pente d'atténuation d'un filtre passif du second ordre ?", [
       ["-20 dB/décade", false],
       ["-40 dB/décade", true],
@@ -1220,7 +1222,7 @@ export const questions: MockQuestion[] = [
     difficulty: 2,
     shuffleable: false,
     randomizable: false,
-    tags: ["boucles", "image"],
+    concepts: seedConceptIds(["Boucle", "Image"]),
     config: codeimageConfig(),
     explanation: "La distance au bord le plus proche est min(x, y, 15 − x, 15 − y).",
     published: [{ number: 1, changeNote: "Première version", daysAgo: 4 }],
@@ -1238,7 +1240,7 @@ export const questions: MockQuestion[] = [
     difficulty: 3,
     shuffleable: false,
     randomizable: false,
-    tags: ["pile", "mémoire", "rédaction"],
+    concepts: seedConceptIds(["Pile", "Adresse (mémoire)"]),
     config: RICH_CONFIG,
     explanation: "La pile est bornée : une récursion sans fin finit par toucher la page de garde.",
     published: [{ number: 1, changeNote: "Première version", daysAgo: 6 }],
@@ -1255,7 +1257,7 @@ export const questions: MockQuestion[] = [
     difficulty: 1,
     shuffleable: true,
     randomizable: false,
-    tags: ["types", "classement"],
+    concepts: seedConceptIds(["Types"]),
     config: CATEGORIZE_CONFIG,
     explanation: "`string` n'existe pas en C : une chaîne est un tableau de `char`.",
     published: [{ number: 1, changeNote: "Première version", daysAgo: 5 }],
@@ -1272,7 +1274,7 @@ export const questions: MockQuestion[] = [
     difficulty: 2,
     shuffleable: false,
     randomizable: false,
-    tags: ["uml", "héritage", "diagramme"],
+    concepts: seedConceptIds(["UML", "Héritage", "Diagramme de classes"]),
     config: DIAGRAM_CONFIG,
     explanation: "`Figure` réalise `Forme` ; `Cercle` et `Rectangle` en héritent.",
     published: [{ number: 1, changeNote: "Première version", daysAgo: 3 }],
@@ -1293,7 +1295,7 @@ questions.push(
     difficulty: 2,
     shuffleable: true,
     randomizable: false,
-    tags: [],
+    concepts: [],
     config: mcqConfig("Que vaut `sizeof(char)` en C, quelle que soit l'architecture ?", [
       ["`1`", true],
       ["`2`", false],
@@ -1310,7 +1312,7 @@ questions.push(
     difficulty: 1,
     shuffleable: true,
     randomizable: false,
-    tags: [],
+    concepts: [],
     config: shortNumber("Combien de bits dans un octet ?", 8),
     published: [{ number: 1, changeNote: "", daysAgo: 9 }],
   }),
@@ -1322,7 +1324,7 @@ questions.push(
     difficulty: 1,
     shuffleable: true,
     randomizable: false,
-    tags: [],
+    concepts: [],
     config: mcqConfig("Le rythme des laboratoires vous convient-il ?", [
       ["Trop lent", false],
       ["Juste bien", false],
@@ -1346,15 +1348,15 @@ if (deprecated) {
 /** `?many=1`: a pool long enough to need the cursor and the "load more" row. */
 function inflatePool() {
   const topics = [
-    ["boucles", "Une boucle `for` qui compte à rebours"],
-    ["chaines", "Longueur d'une chaîne sans `strlen`"],
-    ["structs", "Taille d'une structure alignée"],
-    ["recursion", "Factorielle récursive"],
-    ["makefile", "Une règle implicite de `make`"],
-    ["bits", "Masquage d'un bit de poids faible"],
+    ["boucles", "Une boucle `for` qui compte à rebours", "Boucle"],
+    ["chaines", "Longueur d'une chaîne sans `strlen`", "Chaîne de caractères"],
+    ["structs", "Taille d'une structure alignée", "Structure"],
+    ["recursion", "Factorielle récursive", "Récursivité"],
+    ["makefile", "Une règle implicite de `make`", "Makefile"],
+    ["bits", "Masquage d'un bit de poids faible", "Opérations bit à bit"],
   ];
   for (let i = 0; i < 60; i += 1) {
-    const [tag, title] = topics[i % topics.length]!;
+    const [tag, title, concept] = topics[i % topics.length]!;
     questions.push(
       makeQuestion({
         poolId: "p1",
@@ -1364,7 +1366,7 @@ function inflatePool() {
         difficulty: (i % 5) + 1,
         shuffleable: true,
         randomizable: false,
-        tags: [tag!],
+        concepts: seedConceptIds([concept!]),
         config:
           i % 4 === 0
             ? mcqConfig(`${title} — que se passe-t-il ?`, [
@@ -1522,59 +1524,16 @@ const categoryTree = (poolId: string): TreeNode[] => {
   return roots;
 };
 
-const poolTags = (poolId: string) =>
-  [...new Set(liveQuestions(poolId).flatMap((q) => q.tags))].sort();
-
 /**
- * The descriptions a teacher wrote in this session, keyed `poolId\u0000tag`.
- * A few are pre-written: the tag field is about a documented vocabulary, and
- * an empty column would show none of it.
+ * `PoolDetail.concepts`: the concepts the pool's live questions use, with
+ * how many of them (ADR-081 third addendum §6), most used first.
  */
-const tagDescriptions = new Map<string, string>([
-  ["p1\u0000pointeurs", "Adresses, déréférencement, arithmétique de pointeurs"],
-  ["p1\u0000memoire", "malloc, free et la durée de vie des objets"],
-  ["p1\u0000securite", "Débordements, entrées non validées, comportements indéfinis"],
-  ["p1\u0000tableaux", "Tableaux, indices et leur relation aux pointeurs"],
-  // Documented, worn by no question yet: in the Tags tab's list, not in its heat.
-  ["p1\u0000structures", "struct, union et alignement en mémoire"],
-]);
-
-/** `GET /pools/:id/tags`: the vocabulary of the pool, with its usage counts. */
-const poolTagDetails = (poolId: string) =>
-  poolTags(poolId).map((tag) => ({
-    tag,
-    description: tagDescriptions.get(`${poolId}\u0000${tag}`) ?? "",
-    count: liveQuestions(poolId).filter((q) => q.tags.includes(tag)).length,
-  }));
-
-/** The made-up course counts of the Tags tab: the mock has no course walk. */
-const tagCourses = new Map<string, number>([
-  ["p1\u0000pointeurs", 2],
-  ["p1\u0000tableaux", 2],
-  ["p1\u0000memoire", 1],
-  ["p1\u0000boucles", 1],
-  ["p1\u0000fichiers", 1],
-]);
-
-/**
- * `GET /pools/:id/tags/usage`: the vocabulary (the tags worn and the ones
- * only documented) with the questions and a course count from `tagCourses`.
- */
-const poolTagUsage = (poolId: string) => {
-  const documented = flags.empty
-    ? []
-    : [...tagDescriptions.keys()]
-        .filter((key) => key.startsWith(`${poolId}\u0000`))
-        .map((key) => key.slice(poolId.length + 1));
-  return [...new Set([...poolTags(poolId), ...documented])].sort().map((tag) => {
-    const key = `${poolId}\u0000${tag}`;
-    return {
-      tag,
-      description: tagDescriptions.get(key) ?? "",
-      questions: liveQuestions(poolId).filter((q) => q.tags.includes(tag)).length,
-      courses: tagCourses.get(key) ?? 0,
-    };
-  });
+const poolConcepts = (poolId: string) => {
+  const live = liveQuestions(poolId).filter((q) => !q.deletedAt);
+  const ids = [...new Set(live.flatMap((q) => q.concepts))];
+  return conceptRefs(ids)
+    .map((concept) => ({ concept, count: live.filter((q) => q.concepts.includes(concept.id)).length }))
+    .sort((a, b) => b.count - a.count || a.concept.label.localeCompare(b.concept.label));
 };
 
 // --- The LLM review (ADR-060): two remarks on ptr-null-check, ptr-arith-01
@@ -1624,7 +1583,7 @@ const questionRow = (q: MockQuestion) => ({
   type: q.type,
   internalName: q.internalName,
   difficulty: q.difficulty,
-  tags: q.tags,
+  concepts: conceptRefs(q.concepts),
   categoryId: q.categoryId,
   latestNumber: q.versions.at(-1)?.number ?? null,
   hasDraftChanges:
@@ -1663,7 +1622,7 @@ const questionMeta = (q: MockQuestion) => ({
   difficulty: q.difficulty,
   shuffleable: q.shuffleable,
   randomizable: q.randomizable,
-  tags: q.tags,
+  concepts: conceptRefs(q.concepts),
   createdBy: "u-me",
   originQuestionId: null,
   deletedAt: q.deletedAt,
@@ -2286,7 +2245,7 @@ on("GET", "/app/api/pools/:id", (m) => {
     pool,
     role: poolSummary(pool).role,
     categories: categoryTree(pool.id),
-    tags: poolTags(pool.id),
+    concepts: poolConcepts(pool.id),
     questionCount: liveQuestions(pool.id).filter((q) => !q.deletedAt).length,
   };
 });
@@ -2464,20 +2423,6 @@ on("POST", "/app/api/notifications/teams/tab", (): TeamsTabState => {
   }
   return { state: "unlinked", linkUrl: `${window.location.origin}/teams/link?token=${"T".repeat(43)}` };
 });
-on("GET", "/app/api/pools/:id/tags", (m) => poolTagDetails(poolOr404(m.groups!.id!).id));
-on("GET", "/app/api/pools/:id/tags/usage", (m) => poolTagUsage(poolOr404(m.groups!.id!).id));
-on("PATCH", "/app/api/pools/:id/tags/:tag", (m, body) => {
-  const pool = poolOr404(m.groups!.id!);
-  const tag = decodeURIComponent(m.groups!.tag!).toLowerCase();
-  const description = String(body.description ?? "");
-  tagDescriptions.set(`${pool.id}\u0000${tag}`, description);
-  return {
-    tag,
-    description,
-    count: liveQuestions(pool.id).filter((q) => q.tags.includes(tag)).length,
-  };
-});
-
 on("POST", "/app/api/pools/:id/categories", (m, body) => {
   const pool = poolOr404(m.groups!.id!);
   const parentId = (body.parentId as string | null | undefined) ?? null;
@@ -2546,7 +2491,7 @@ on("DELETE", "/app/api/categories/:id", (m) => {
  */
 export function searchQuestions(candidates: MockQuestion[], params: URLSearchParams): MockQuestion[] {
   const list = params.getAll("type").flatMap((v) => v.split(","));
-  const tags = params.getAll("tag").flatMap((v) => v.split(","));
+  const concepts = params.getAll("concept").flatMap((v) => v.split(","));
   const difficulties = params.getAll("difficulty").flatMap((v) => v.split(",")).map(Number);
   const q = (params.get("q") ?? "").trim().toLowerCase();
   const categoryId = params.get("categoryId");
@@ -2580,7 +2525,7 @@ export function searchQuestions(candidates: MockQuestion[], params: URLSearchPar
     .filter((question) => includeDeleted || question.deletedAt === null)
     .filter((question) => !starred || (stars.has(question.id) && question.deletedAt === null))
     .filter((question) => list.length === 0 || list.includes(question.type))
-    .filter((question) => tags.length === 0 || question.tags.some((x) => tags.includes(x)))
+    .filter((question) => concepts.length === 0 || question.concepts.some((x) => concepts.includes(x)))
     .filter((question) => difficulties.length === 0 || difficulties.includes(question.difficulty))
     .filter((question) => categoryId === null || question.categoryId === categoryId)
     .filter((question) => {
@@ -2630,7 +2575,7 @@ on("POST", "/app/api/pools/:id/questions", (m, body) => {
     difficulty: 3,
     shuffleable: true,
     randomizable: false,
-    tags: [],
+    concepts: [],
     config: emptyConfig(type),
   });
   created.updatedAt = iso(0);
@@ -2696,7 +2641,16 @@ on("PATCH", "/app/api/questions/:id", (m, body) => {
   if (body.categoryId !== undefined) q.categoryId = body.categoryId as string | null;
   if (typeof body.difficulty === "number") q.difficulty = body.difficulty;
   if (typeof body.shuffleable === "boolean") q.shuffleable = body.shuffleable;
-  if (Array.isArray(body.tags)) q.tags = body.tags as string[];
+  if (body.tags !== undefined) {
+    throw new MockPayload(400, { error: "validation", message: "tags_removed" });
+  }
+  if (Array.isArray(body.concepts)) {
+    // The web app sends ids only (the picker creates); the mock resolves nothing else.
+    const ids = [...new Set(body.concepts as string[])];
+    const missing = unknownConceptIds(ids);
+    if (missing.length > 0) throw new MockPayload(422, { error: "concept_not_found", ids: missing });
+    q.concepts = ids;
+  }
   q.updatedAt = iso(0);
   return questionMeta(q);
 });
@@ -2962,7 +2916,7 @@ on("POST", "/app/api/questions/:id/copy", (m, body) => {
     difficulty: q.difficulty,
     shuffleable: q.shuffleable,
     randomizable: q.randomizable,
-    tags: [...q.tags],
+    concepts: [...q.concepts],
     config: q.draft.config,
     explanation: q.draft.explanation,
   });

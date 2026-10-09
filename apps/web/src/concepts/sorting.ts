@@ -59,7 +59,6 @@ export function groupRows(rows: readonly TagSortingRow[]): { key: string; rows: 
 /** The pairs the most questions wear first: what a decision is named after. */
 export const byUse = (pairs: readonly TagSortingRow[]) => [...pairs].sort((a, b) => b.count - a.count);
 
-/** The label in the reader's language, else the other, with its qualifier: `Adresse (mémoire)`. */
 /**
  * A concept in the reader's language: its label and qualifier there, else in
  * the other language (a `proposed` concept may have one only), with `lang`
@@ -77,10 +76,13 @@ export function conceptSide(c: Concept, locale: Locale) {
   };
 }
 
-export function conceptName(c: Concept, locale: Locale): string {
-  const { label, qualifier } = conceptSide(c, locale);
+/** `Adresse (mémoire)`: a label, and its qualifier when it has one (only homonyms do). */
+export function refName({ label, qualifier }: { label: string; qualifier: string }): string {
   return qualifier ? `${label} (${qualifier})` : label;
 }
+
+/** The label in the reader's language, else the other, with its qualifier: `Adresse (mémoire)`. */
+export const conceptName = (c: Concept, locale: Locale): string => refName(conceptSide(c, locale));
 
 /** What a pending decision reads as. */
 export function choiceText(t: TFunction, locale: Locale, p: Pending): string {

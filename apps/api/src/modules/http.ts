@@ -39,6 +39,23 @@ export function invalid(reply: FastifyReply, error: z.ZodError) {
 export const emptyBody = (body: unknown) => (body === undefined || body === null ? {} : body);
 
 /**
+ * The language a reader is answered in where a response carries words of
+ * the instance (a concept's label, ADR-081 §2), by the web app's own rule:
+ * the interface language of their account; when they left it to the
+ * browser (`locale` null), the first of French and English their browser
+ * asks for (`Accept-Language`, in order); English otherwise.
+ */
+export function readerLang(req: FastifyRequest): "fr" | "en" {
+  const chosen = req.user?.locale;
+  if (chosen === "fr" || chosen === "en") return chosen;
+  for (const tag of String(req.headers["accept-language"] ?? "").split(",")) {
+    const base = tag.trim().toLowerCase().split(/[-;]/)[0];
+    if (base === "fr" || base === "en") return base;
+  }
+  return "en";
+}
+
+/**
  * The only refusal a caller without access ever sees (invariant 6): an
  * entity they may not reach is indistinguishable from one that never existed.
  */

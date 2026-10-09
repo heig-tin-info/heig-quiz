@@ -311,11 +311,28 @@ describe("PollLauncher · From pools (#162)", () => {
   const POOL_QUESTION = "66666666-6666-4666-8666-666666666666";
   const OTHER_QUESTION = "77777777-7777-4777-8777-777777777777";
 
-  const pageOf = (items: PollPoolPage["items"], tags: string[] = []): PollPoolPage => ({
+  const PTR = "00000000-0000-4000-8000-0000000000a1";
+  const I2C = "00000000-0000-4000-8000-0000000000a2";
+  const ref = (id: string, label: string) => ({ id, label, qualifier: "", status: "validated" as const });
+  const SCOPE = [ref(I2C, "I2C"), ref(PTR, "Pointeur")];
+  /** The vocabulary a typed `#word` resolves against (`GET /concepts`). */
+  const VOCABULARY = {
+    concepts: SCOPE.map((c) => ({
+      id: c.id,
+      status: c.status,
+      mergedInto: null,
+      labels: { fr: c.label, en: c.label },
+      qualifiers: { fr: "", en: "" },
+      descriptions: { fr: "", en: "" },
+      createdBy: null,
+      createdAt: "2026-10-01T08:00:00.000Z",
+    })),
+  };
+  const pageOf = (items: PollPoolPage["items"], concepts: PollPoolPage["concepts"] = []): PollPoolPage => ({
     items,
     nextCursor: null,
     total: items.length,
-    tags,
+    concepts,
   });
   const linked = {
     id: POOL_QUESTION,
@@ -323,7 +340,7 @@ describe("PollLauncher · From pools (#162)", () => {
     internalName: "ptr-arith",
     prompt: "What does `p + 1` point to?",
     pool: { id: "88888888-8888-4888-8888-888888888888", name: "Programmation C" },
-    tags: ["pointeurs"],
+    concepts: [ref(PTR, "Pointeur")],
     difficulty: 2,
     latestNumber: 3,
   };
@@ -333,7 +350,7 @@ describe("PollLauncher · From pools (#162)", () => {
     internalName: "i2c-lines",
     prompt: "How many lines does I²C use?",
     pool: { id: "99999999-9999-4999-8999-999999999999", name: "Systèmes embarqués" },
-    tags: ["i2c"],
+    concepts: [ref(I2C, "I2C")],
     difficulty: 1,
     latestNumber: 1,
   };
@@ -343,7 +360,7 @@ describe("PollLauncher · From pools (#162)", () => {
     const { calls } = mockFetch({
       [`GET ${QUESTIONS}`]: ok(picks),
       [`GET ${COURSES}`]: ok(courses),
-      [`GET ${POOLS}?limit=25`]: ok(pageOf([linked, elsewhere], ["i2c", "pointeurs"])),
+      [`GET ${POOLS}?limit=25`]: ok(pageOf([linked, elsewhere], SCOPE)),
       "POST /app/api/polls": ok({
         evaluation: { id: "e3", classroomId: null, title: "t", state: "running", code: "QZ3", createdAt: new Date().toISOString() },
         joinUrl: "/p/QZ3",
@@ -357,8 +374,8 @@ describe("PollLauncher · From pools (#162)", () => {
 
     await user.click(await screen.findByRole("tab", { name: /From pools/ }));
     expect(await screen.findByText("i2c-lines")).toBeVisible();
-    // The pool, the version and the tags say where the question comes from.
-    expect(screen.getByText(/Systèmes embarqués · v1 · #i2c/)).toBeVisible();
+    // The pool, the version and the concepts say where the question comes from.
+    expect(screen.getByText(/Systèmes embarqués · v1 · I2C/)).toBeVisible();
     expect(screen.getByText("2 questions")).toBeVisible();
     // An anonymous poll belongs to no course: nothing to narrow to.
     expect(screen.queryByRole("radiogroup", { name: "Which pools" })).toBeNull();
@@ -419,16 +436,17 @@ describe("PollLauncher · From pools (#162)", () => {
     const { calls } = mockFetch({
       [`GET ${QUESTIONS}`]: ok(picks),
       [`GET ${COURSES}`]: ok(courses),
-      [`GET ${POOLS}?limit=25`]: ok(pageOf([linked, elsewhere], ["i2c", "pointeurs"])),
-      [`GET ${POOLS}?tag=i2c&limit=25`]: ok(pageOf([elsewhere], ["i2c", "pointeurs"])),
+      [`GET ${POOLS}?limit=25`]: ok(pageOf([linked, elsewhere], SCOPE)),
+      [`GET ${POOLS}?concept=${I2C}&limit=25`]: ok(pageOf([elsewhere], SCOPE)),
+      "GET /app/api/concepts": ok(VOCABULARY),
     });
     renderWithProviders(<PollLauncher navigate={vi.fn()} />);
 
     await user.click(await screen.findByRole("tab", { name: /From pools/ }));
     await screen.findByText("ptr-arith");
-    await user.type(screen.getByLabelText("Search a question"), "tag:i2c ");
+    await user.type(screen.getByLabelText("Search a question"), "#i2c ");
     await waitFor(() => expect(screen.queryByText("ptr-arith")).toBeNull());
-    expect(calls.some((c) => c.url === `${POOLS}?tag=i2c&limit=25`)).toBe(true);
+    expect(calls.some((c) => c.url === `${POOLS}?concept=${I2C}&limit=25`)).toBe(true);
     // The token became a chip, as on the pool screen.
     expect(screen.getByRole("button", { name: "Clear filters — #i2c" })).toBeVisible();
 

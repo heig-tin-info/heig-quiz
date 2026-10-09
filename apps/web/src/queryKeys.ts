@@ -9,8 +9,7 @@
  * in all but name; this is that module, named.
  *
  * Invalidation matches by PREFIX, so the array shapes are load-bearing:
- * `poolKey(id)` must stay a prefix of `poolTagsKey(id)` and
- * `poolQuestionsKey(id, …)`, `gradingKey(id)` of every grading read,
+ * `poolKey(id)` must stay a prefix of `poolQuestionsKey(id, …)`, `gradingKey(id)` of every grading read,
  * `resultsKey(id)` of every results read. `queryKeys.test.ts` pins each
  * factory against the literal it replaced, so a reshaped key fails there and
  * not as a stale screen.
@@ -191,7 +190,7 @@ export const poolsKey = ["pools"] as const;
 export const evaluationPoolsKey = (id: string) => ["pools", "evaluation", id] as const;
 /** The pools a template's picker offers (its course's linked pools), likewise. */
 export const templatePoolsKey = (id: string) => ["pools", "template", id] as const;
-/** The prefix of EVERY pool's cache — details, questions, tags — for a move across pools. */
+/** The prefix of EVERY pool's cache — details, questions, concepts — for a move across pools. */
 export const anyPoolKey = ["pool"] as const;
 /** `undefined` while the id is not known yet (a question editor before its detail loads). */
 export const poolKey = (id: string | undefined) => ["pool", id] as const;
@@ -217,10 +216,7 @@ export const poolReviewsKey = (poolId: string) => ["pool", poolId, "reviews"] as
  * the pool, so whatever refreshes the pool refreshes it too.
  */
 export const poolStarredKey = (poolId: string) => ["pool", poolId, "starred"] as const;
-export const poolTagsKey = (poolId: string) => ["pool", poolId, "tags"] as const;
-/** The pool's "Tags" tab (`GET /pools/:id/tags/usage`): under the tags, so their refresh reaches it. */
-export const poolTagUsageKey = (poolId: string) => ["pool", poolId, "tags", "usage"] as const;
-/** `GET /pools/:id/categories`, the tree with its counts: under the pool, like the tags. */
+/** `GET /pools/:id/categories`, the tree with its counts: under the pool. */
 export const poolCategoriesKey = (poolId: string) => ["pool", poolId, "categories"] as const;
 export const poolMembersKey = (poolId: string) => ["pool-members", poolId] as const;
 /** Without `q`, the prefix of every search of that pool's candidates. */

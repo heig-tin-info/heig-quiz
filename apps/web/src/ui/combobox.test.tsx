@@ -6,7 +6,7 @@ import { useCombobox, type ComboboxOptions } from "./combobox";
 
 /*
  * The two kinds of list the hook serves, asserted on the hook itself: the
- * three call sites (TagInput, TeacherPicker, the pool search) have their own
+ * three call sites (ConceptPicker, TeacherPicker, the pool search) have their own
  * tests through the DOM, and this pins the matrix they rely on.
  */
 

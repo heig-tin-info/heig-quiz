@@ -35,8 +35,8 @@ async function newPool(who: Actor, name: string): Promise<string> {
   return created.json().id as string;
 }
 
-/** A question of `source`, with the tags it carries into the move. */
-async function question(name: string, tags: string[] = []): Promise<string> {
+/** A question of `source`, with the concepts it carries into the move (labels, created if missing). */
+async function question(name: string, concepts: string[] = []): Promise<string> {
   const created = await server.app.inject({
     method: "POST",
     url: `/app/api/pools/${source}/questions`,
@@ -45,12 +45,12 @@ async function question(name: string, tags: string[] = []): Promise<string> {
   });
   expect(created.statusCode).toBe(201);
   const id = created.json().meta.id as string;
-  if (tags.length) {
+  if (concepts.length) {
     const patched = await server.app.inject({
       method: "PATCH",
       url: `/app/api/questions/${id}`,
       headers: mover.headers,
-      payload: { tags },
+      payload: { concepts, createMissing: true },
     });
     expect(patched.statusCode).toBe(200);
   }
@@ -80,8 +80,8 @@ afterAll(async () => {
 });
 
 describe("POST /questions/move", () => {
-  it("keeps the id and the tags, and teaches the tags to the target pool", async () => {
-    const id = await question("mv-keeps-id", ["pointeurs", "revision"]);
+  it("keeps the id and the concepts, which the target pool now lists", async () => {
+    const id = await question("mv-keeps-id", ["pointeurs", "récursivité"]);
     const res = await move(mover, { questionIds: [id], targetPoolId: destination });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({
@@ -96,25 +96,26 @@ describe("POST /questions/move", () => {
     expect(row!.poolId).toBe(destination);
     expect(row!.categoryId).toBeNull();
 
-    // The question is served by the target pool now, with its tags.
+    // The question is served by the target pool now, with its concepts.
     const listed = await server.app.inject({
       method: "GET",
       url: `/app/api/pools/${destination}/questions`,
       headers: mover.headers,
     });
     expect(listed.json().items.map((q: { id: string }) => q.id)).toContain(id);
-    expect(listed.json().items.find((q: { id: string }) => q.id === id).tags).toEqual([
+    const labels = (concepts: { label: string }[]) => concepts.map((c) => c.label);
+    expect(labels(listed.json().items.find((q: { id: string }) => q.id === id).concepts)).toEqual([
       "pointeurs",
-      "revision",
+      "récursivité",
     ]);
 
-    // The target pool's vocabulary learned them (`pool_tags`).
+    // The vocabulary is the instance's: the target pool lists them, nothing to teach it.
     const detail = await server.app.inject({
       method: "GET",
       url: `/app/api/pools/${destination}`,
       headers: mover.headers,
     });
-    expect(detail.json().tags).toEqual(expect.arrayContaining(["pointeurs", "revision"]));
+    expect(detail.json().concepts.map((c: { concept: { label: string } }) => c.concept.label)).toEqual(expect.arrayContaining(["pointeurs", "récursivité"]));
   });
 
   it("audits the move with both of its ends", async () => {

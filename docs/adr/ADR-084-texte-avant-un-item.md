@@ -53,7 +53,8 @@ teacher who actually read.
    restore and the teacher's preview (ADR-018) all come through it. It is
    not question content and does not pass `toStudent`; it is an item
    property the teacher wrote for students to read, and nothing of a
-   question's key, tags or explanation travels with it.
+   question's key, concepts (tags before ADR-081's cut-over) or explanation
+   travels with it.
 5. **Not in grading, feedback, results nor the dashboard.** None of those
    payloads carries it: they are about answers, and the intro asks none.
    The teacher reads it in the builder.

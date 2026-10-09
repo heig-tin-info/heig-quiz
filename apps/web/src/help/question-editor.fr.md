@@ -10,7 +10,7 @@ publication qui réclame ce qui manque.
 ## Trois onglets
 
 - **Éditer** — le formulaire du type de question, l'explication, et les
-  propriétés à droite : nom interne, catégorie, difficulté, tags, mélange
+  propriétés à droite : nom interne, catégorie, difficulté, notions, mélange
   des choix pour chaque étudiant.
 - **Essayer** — répondez à votre propre question et voyez la correction.
   Rien n'est enregistré.
@@ -18,16 +18,18 @@ publication qui réclame ce qui manque.
   pouvez la consulter, la restaurer dans le brouillon, ou la déprécier en
   indiquant pourquoi.
 
-## Les tags
+## Les notions
 
-Le champ des tags propose le vocabulaire déjà utilisé dans la banque, avec le
-nombre de questions portant chaque tag et la description en une ligne de ce
-qu'il désigne. Choisissez-en un plutôt que de taper un synonyme : deux
-orthographes de la même idée coupent la banque en deux. Un mot que personne
-n'a encore employé est proposé comme **Créer « … »**, et la description vous
-est demandée dans la foulée — c'est elle que lira le prochain enseignant.
-Cliquez un tag pour écrire ou modifier sa description ; appuyez sur Retour
-arrière dans le champ vide pour retirer le dernier.
+Le champ des notions dit ce que la question exerce, à partir du vocabulaire
+commun de la plateforme : tapez quelques lettres et choisissez. Les notions
+déjà utilisées dans la banque viennent en premier, chacune avec son
+qualificatif quand elle en a un (seuls les homonymes en ont) et sa
+description. Choisissez-en une plutôt que de proposer un synonyme. Quand rien
+ne correspond, **Créer « … »** propose une nouvelle notion dans votre langue,
+avec un qualificatif facultatif ; elle reste *proposée* jusqu'à ce que
+l'administrateur la relise. Retour arrière dans le champ vide retire la
+dernière.
+
 
 ## Écrire l'énoncé
 

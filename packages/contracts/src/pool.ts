@@ -9,6 +9,7 @@
 import { z } from "zod";
 
 import { BoolFlag, IntList, StringList, ZodIssueLite, pageOf } from "./common.js";
+import { ConceptRef } from "./concept.js";
 import { NamedValues, ParametersDraft } from "./parameters.js";
 import { QuestionReview, ReviewPill } from "./review.js";
 
@@ -260,6 +261,19 @@ export type CategoryOrder = z.infer<typeof CategoryOrder>;
 
 // --- Questions -----------------------------------------------------------
 
+/**
+ * One concept the live questions of a pool use, and how many of them
+ * (ADR-081 third addendum §6): `PoolDetail.concepts`, which feeds both the
+ * filter's completion and the read-only "Concepts" tab. A validated
+ * concept's description is the admin's (addendum §6).
+ */
+export const PoolConcept = z.object({
+  concept: ConceptRef,
+  count: z.number().int().nonnegative(),
+});
+export type PoolConcept = z.infer<typeof PoolConcept>;
+
+
 export const QuestionMeta = z.object({
   id: z.uuid(),
   poolId: z.uuid(),
@@ -269,7 +283,8 @@ export const QuestionMeta = z.object({
   difficulty: z.number().int().min(1).max(5),
   shuffleable: z.boolean(),
   randomizable: z.boolean(),
-  tags: z.array(z.string()),
+  /** What the question exercises (ADR-081), labelled in the reader's language, by label. */
+  concepts: z.array(ConceptRef),
   createdBy: z.uuid().nullable(),
   originQuestionId: z.uuid().nullable(),
   deletedAt: z.string().nullable(),
@@ -282,7 +297,7 @@ export const QuestionRow = z.object({
   type: z.string(),
   internalName: z.string(),
   difficulty: z.number().int(),
-  tags: z.array(z.string()),
+  concepts: z.array(ConceptRef),
   categoryId: z.uuid().nullable(),
   /** Highest published version number, null while the question is a draft only. */
   latestNumber: z.number().int().nullable(),
@@ -321,8 +336,9 @@ export const QuestionPage = pageOf(QuestionRow).extend({ total: z.number().int()
 export type QuestionPage = z.infer<typeof QuestionPage>;
 
 /**
- * Filter bar of the pool screen, as query parameters. Repeated (`?tag=a&tag=b`)
- * and comma-separated (`?tag=a,b`) forms are both accepted.
+ * Filter bar of the pool screen, as query parameters. Repeated
+ * (`?concept=a&concept=b`) and comma-separated (`?concept=a,b`) forms are
+ * both accepted.
  */
 export const QuestionSort = z.enum(["name", "type", "difficulty", "version", "updated"]);
 export type QuestionSort = z.infer<typeof QuestionSort>;
@@ -330,7 +346,12 @@ export type QuestionSort = z.infer<typeof QuestionSort>;
 export const QuestionSearch = z.object({
   q: z.string().trim().max(200).optional(),
   type: StringList.optional(),
-  tag: StringList.optional(),
+  /**
+   * Concept ids, any of them (ADR-081 third addendum §7): the web app
+   * resolves a typed `#word` to every concept it may designate and sends
+   * their ids. A concept matches its own questions only (no narrower ones yet).
+   */
+  concept: StringList.pipe(z.array(z.uuid())).optional(),
   difficulty: IntList.optional(),
   categoryId: z.uuid().optional(),
   /** Soft-deleted questions are hidden unless this is set (F-QST-11). */
@@ -351,22 +372,52 @@ export const QuestionSearch = z.object({
 });
 export type QuestionSearch = z.infer<typeof QuestionSearch>;
 
-export const QuestionCreate = z.object({
-  type: QuestionTypeId,
-  internalName: z.string().trim().min(1).max(200),
-  categoryId: z.uuid().nullable().optional(),
-});
+/** What a question exercises, as a write names it: ids or labels, resolved all or nothing (ADR-081). */
+const ConceptInputs = z.array(z.string().trim().min(1).max(120)).max(32);
+
+/**
+ * `POST /pools/:id/questions`. `concepts` and `createMissing` as in
+ * `QuestionPatch`, resolved in the same transaction as the creation: a
+ * refusal creates nothing. Strict like `QuestionPatch`: a client of before
+ * the cut-over sending `tags` gets a 400 `validation`, not a question
+ * silently without them.
+ */
+export const QuestionCreate = z
+  .object({
+    type: QuestionTypeId,
+    internalName: z.string().trim().min(1).max(200),
+    categoryId: z.uuid().nullable().optional(),
+    concepts: ConceptInputs.optional(),
+    createMissing: z.boolean().optional(),
+  })
+  .strict();
 export type QuestionCreate = z.infer<typeof QuestionCreate>;
 
-export const QuestionPatch = z
-  .object({
-    internalName: z.string().trim().min(1).max(200).optional(),
-    categoryId: z.uuid().nullable().optional(),
-    difficulty: z.number().int().min(1).max(5).optional(),
-    shuffleable: z.boolean().optional(),
-    tags: z.array(z.string().trim().min(1).max(64)).max(32).optional(),
-  })
-  .refine((b) => Object.keys(b).length > 0, { message: "Nothing to update" });
+/**
+ * The metadata of a question a teacher may change. `concepts` replaces the
+ * question's set: each entry an id or a label, with its qualifier or not,
+ * resolved all or nothing (ADR-081 addendum §2, third addendum §4; a refusal
+ * is a 422 `ConceptWriteRefusal`). An unknown label creates a `proposed`
+ * concept, in the caller's interface language, only with `createMissing`.
+ */
+export const QuestionPatchFields = z.object({
+  internalName: z.string().trim().min(1).max(200).optional(),
+  categoryId: z.uuid().nullable().optional(),
+  difficulty: z.number().int().min(1).max(5).optional(),
+  shuffleable: z.boolean().optional(),
+  concepts: ConceptInputs.optional(),
+  createMissing: z.boolean().optional(),
+});
+
+/**
+ * `PATCH /questions/:id`, strict: an unknown key is a 400 `validation`, so
+ * that a tab still holding the editor of before the cut-over (its `tags`)
+ * fails loudly rather than having them silently ignored.
+ */
+export const QuestionPatch = QuestionPatchFields.strict().refine(
+  (b) => Object.keys(b).some((k) => k !== "createMissing"),
+  { message: "Nothing to update" },
+);
 export type QuestionPatch = z.infer<typeof QuestionPatch>;
 
 // --- Draft and versions --------------------------------------------------
@@ -664,7 +715,8 @@ export const PoolDetail = z.object({
   /** The caller's effective role: what the screen may offer. */
   role: PoolRole,
   categories: z.array(CategoryNode),
-  tags: z.array(z.string()),
+  /** The concepts the pool's live questions use, with their counts, by label. */
+  concepts: z.array(PoolConcept),
   questionCount: z.number().int(),
 });
 export type PoolDetail = z.infer<typeof PoolDetail>;
@@ -690,49 +742,6 @@ export const PoolInUse = z.object({
 });
 export type PoolInUse = z.infer<typeof PoolInUse>;
 
-// --- Tags ----------------------------------------------------------------
-
-/**
- * The tag vocabulary of a pool (`GET /pools/:id/tags`): the tag, the one-line
- * description a teacher wrote for it and how many live questions wear it.
- * `PoolDetail.tags` stays a plain list of names — the filter bar needs
- * nothing more, and only the tag editor pays for the counts.
- */
-export const PoolTag = z.object({
-  tag: z.string(),
-  description: z.string(),
-  count: z.number().int(),
-});
-export type PoolTag = z.infer<typeof PoolTag>;
-
-/**
- * One tag of the pool's "Tags" tab (`GET /pools/:id/tags/usage`): the tag,
- * its description, how many live questions wear it, and how many DISTINCT
- * courses use one of them — an exam or an exercise of a classroom of the
- * course, or a template of the course, pinning a version of such a
- * question. A bare count over every course, the ones the reader cannot
- * reach included: never a name. A route of its own, so the tag field
- * (`PoolTag`) does not pay for the join.
- */
-export const PoolTagUsage = z.object({
-  tag: z.string(),
-  description: z.string(),
-  questions: z.number().int(),
-  courses: z.number().int(),
-});
-export type PoolTagUsage = z.infer<typeof PoolTagUsage>;
-
-export const TagPatch = z.object({
-  description: z.string().trim().max(200),
-});
-export type TagPatch = z.infer<typeof TagPatch>;
-
-/** `:tag` of `PATCH /pools/:id/tags/:tag`, normalized like a stored tag. */
-export const TagParam = z.object({
-  id: z.uuid(),
-  tag: z.string().trim().min(1).max(64),
-});
-export type TagParam = z.infer<typeof TagParam>;
 
 // --- Similar questions ---------------------------------------------------
 

@@ -1,7 +1,7 @@
 /**
  * `concept` route schemas: the instance-wide vocabulary of concepts that
- * will replace the tags (ADR-081, addendum 2026-10-08 §1a: the registry
- * alone, connected to nothing yet).
+ * classifies the questions since the cut-over from tags (ADR-081, third
+ * addendum 2026-10-08).
  *
  * A concept has a label, a qualifier and a description per language; a
  * `proposed` concept may have one language only. Its identity is its id; a
@@ -46,6 +46,19 @@ export const Concept = z.object({
 });
 export type Concept = z.infer<typeof Concept>;
 
+/**
+ * A concept as a question shows it: its label and qualifier in the reader's
+ * language, falling back to the other one (a `proposed` concept may have one
+ * language only), and its status.
+ */
+export const ConceptRef = z.object({
+  id: z.uuid(),
+  label: z.string(),
+  qualifier: z.string(),
+  status: ConceptStatus,
+});
+export type ConceptRef = z.infer<typeof ConceptRef>;
+
 export const ConceptList = z.object({ concepts: z.array(Concept) });
 export type ConceptList = z.infer<typeof ConceptList>;
 
@@ -83,21 +96,38 @@ export const ConceptPatch = z
   .refine((p) => p.fr !== undefined || p.en !== undefined, "nothing to change");
 export type ConceptPatch = z.infer<typeof ConceptPatch>;
 
-/** `POST /concepts/resolve`: what was typed, an id or a label (with its qualifier or not). */
-export const ConceptResolveRequest = z.object({
-  inputs: z.array(z.string().trim().min(1).max(120)).min(1).max(32),
+/**
+ * `GET /concepts/resolve?input=a&input=b`: what was typed, an id or a label
+ * (with its qualifier or not), one `input` parameter each. A read, so that a
+ * read-only client (the teacher assistant) may resolve too. Never split on
+ * commas: a label may hold one.
+ */
+export const ConceptResolveQuery = z.object({
+  input: z
+    .union([z.string(), z.array(z.string())])
+    .transform((v) => (Array.isArray(v) ? v : [v]))
+    .pipe(z.array(z.string().trim().min(1).max(120)).min(1).max(32)),
 });
-export type ConceptResolveRequest = z.infer<typeof ConceptResolveRequest>;
+export type ConceptResolveQuery = z.infer<typeof ConceptResolveQuery>;
+
+/** Why a tag is dropped: an organisational label, a kind of task, or noise (a typo, a test). */
+export const TAG_DROP_REASONS = ["organisational", "task_kind", "noise"] as const;
+export const TagDropReason = z.enum(TAG_DROP_REASONS);
+export type TagDropReason = z.infer<typeof TagDropReason>;
 
 /**
  * What one typed label designates (ADR-081 addendum §2): one concept;
  * several (homonyms, or an alias two concepts share); or none, with the
- * close "did you mean" candidates when there are some. Candidates best first.
+ * close "did you mean" candidates when there are some; or the key of a
+ * dropped tag. Candidates best first,
+ * labelled in the reader's language (`ConceptRef`, defined below).
  */
 export const ConceptResolution = z.discriminatedUnion("kind", [
-  z.object({ input: z.string(), kind: z.literal("resolved"), concept: Concept }),
-  z.object({ input: z.string(), kind: z.literal("ambiguous"), candidates: z.array(Concept) }),
-  z.object({ input: z.string(), kind: z.literal("unknown"), candidates: z.array(Concept) }),
+  z.object({ input: z.string(), kind: z.literal("resolved"), concept: ConceptRef }),
+  z.object({ input: z.string(), kind: z.literal("ambiguous"), candidates: z.array(ConceptRef) }),
+  z.object({ input: z.string(), kind: z.literal("unknown"), candidates: z.array(ConceptRef) }),
+  /** No concept, and the key of a tag the admin dropped: a write refuses it even with creation asked (third addendum §4). */
+  z.object({ input: z.string(), kind: z.literal("dropped"), reason: TagDropReason }),
 ]);
 export type ConceptResolution = z.infer<typeof ConceptResolution>;
 
@@ -114,10 +144,6 @@ export type ConceptResolveResponse = z.infer<typeof ConceptResolveResponse>;
 export const TAG_SORTING_DECISIONS = ["concept", "drop"] as const;
 export const TagSortingDecisionKind = z.enum(TAG_SORTING_DECISIONS);
 
-/** Why a tag is dropped: an organisational label, a kind of task, or noise (a typo, a test). */
-export const TAG_DROP_REASONS = ["organisational", "task_kind", "noise"] as const;
-export const TagDropReason = z.enum(TAG_DROP_REASONS);
-export type TagDropReason = z.infer<typeof TagDropReason>;
 
 /** One language of a new concept: a label always (a validated concept has both). */
 const NewConceptSide = z.object({
@@ -265,6 +291,17 @@ export const TagSortingItemsError = z.object({
 });
 export type TagSortingItemsError = z.infer<typeof TagSortingItemsError>;
 
+/**
+ * 409 of an accept naming the pairs already accepted: since the cut-over a
+ * decision is read-only (third addendum §3), so re-applying one never
+ * overwrites what teachers did to the links afterwards.
+ */
+export const TagSortingLocked = z.object({
+  error: z.literal("sorting_locked"),
+  items: z.array(TagPair),
+});
+export type TagSortingLocked = z.infer<typeof TagSortingLocked>;
+
 // ---------------------------------------------------------------------------
 // The model pass that proposes the sorting (second addendum §3): one run at
 // a time, started by the admin, in the background.
@@ -314,19 +351,6 @@ export type ConceptSortRunStatus = z.infer<typeof ConceptSortRunStatus>;
 // ---------------------------------------------------------------------------
 
 /**
- * A concept as a question shows it: its label and qualifier in the reader's
- * language, falling back to the other one (a `proposed` concept may have one
- * language only), and its status.
- */
-export const ConceptRef = z.object({
-  id: z.uuid(),
-  label: z.string(),
-  qualifier: z.string(),
-  status: ConceptStatus,
-});
-export type ConceptRef = z.infer<typeof ConceptRef>;
-
-/**
  * Why one input of a write naming concepts is refused (addendum §2, third
  * addendum §4): several exact matches (`concept_ambiguous`), close matches
  * only or none without creation asked (`concept_unknown`, "did you mean"
@@ -344,9 +368,9 @@ export type ConceptInputError = z.infer<typeof ConceptInputError>;
 /**
  * The 422 of a write naming concepts, all or nothing: every input at fault,
  * in the order of the request; `error` is the first one's code. Its
- * candidates are `ConceptRef`s (`POST /concepts/resolve` still answers whole
- * `Concept`s; it moves to `ConceptRef` at the cut-over). `POST` and `PATCH
- * /concepts` answer a label on the stop list with this body too.
+ * candidates are `ConceptRef`s, as those of `GET /concepts/resolve`.
+ * `POST` and `PATCH /concepts` answer a label on the stop list with this
+ * body too.
  */
 export const ConceptWriteRefusal = z.object({
   error: z.enum(["concept_ambiguous", "concept_unknown", "concept_dropped"]),

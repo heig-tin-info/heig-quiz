@@ -1,9 +1,11 @@
 import { LayoutGrid, List } from "lucide-react";
 import type { ReactNode } from "react";
 
+import type { ConceptRef } from "@quiz/contracts";
+
 import { useT } from "../i18n";
 import { iconOption, Segmented } from "../ui";
-import type { QuestionFilters } from "./filters";
+import type { QuestionFilters, Vocabulary } from "./filters";
 import { GROUP_BY, type GroupBy } from "./QuestionGroups";
 import { QuestionSearchBar } from "./QuestionSearchBar";
 import type { StatsOffer } from "./StatsFilterFields";
@@ -42,7 +44,8 @@ export type ListView = "cards" | "list";
 export function FilterBar({
   filters,
   onChange,
-  tags,
+  concepts,
+  vocabulary,
   stats,
   total,
   view,
@@ -53,8 +56,10 @@ export function FilterBar({
 }: {
   filters: QuestionFilters;
   onChange: (next: QuestionFilters) => void;
-  /** Every tag used in this pool, as the API reports them. */
-  tags: string[];
+  /** Every concept this pool's questions use, as the API reports them. */
+  concepts: readonly ConceptRef[];
+  /** What the typed concept words resolve against. */
+  vocabulary: Vocabulary;
   /** The pool's statistics, which the sheet's last block filters on (F-STAT-03). */
   stats?: StatsOffer;
   /** How many questions the search matches (the API's `total`); `null` while unknown. */
@@ -72,7 +77,8 @@ export function FilterBar({
     <QuestionSearchBar
       filters={filters}
       onChange={onChange}
-      tags={tags}
+      concepts={concepts}
+      vocabulary={vocabulary}
       stats={stats}
       coach="pool.search"
     >

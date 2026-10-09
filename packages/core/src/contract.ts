@@ -154,6 +154,7 @@ export const COMMON_FORBIDDEN_STUDENT_KEYS: readonly string[] = [
   "referenceSolution",
   "rubric",
   "tags",
+  "concepts",
 ];
 
 export interface GradeContext {

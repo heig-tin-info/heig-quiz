@@ -14,6 +14,13 @@ proposals the teacher confirms — is implemented** under the
 §2, §5, §8, §9, the P2 amendment's item 10, the P2b amendment's decision 2
 and, for the assistant only, ADR-059 §1–2.
 
+Since the cut-over from tags to concepts
+([ADR-081, third addendum](ADR-081-vocabulaire-de-notions.md#third-addendum-2026-10-08-the-cut-over),
+§1 and §7), the assistant's question tools carry concepts instead of tags,
+and a word it searches the pool with (`tag:printf`, `#printf` below)
+resolves to every concept that word may designate, in either language;
+the P2b amendment's examples are otherwise unchanged.
+
 Scope: the in-app chat of the teacher UI, the `assist` purpose of the LLM
 gateway, the conversations it stores.
 

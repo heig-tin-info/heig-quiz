@@ -3,19 +3,40 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import type { Concept, ConceptRef } from "@quiz/contracts";
+
 import { renderWithProviders } from "../test/render";
-import { EMPTY_FILTERS, type QuestionFilters } from "./filters";
+import { EMPTY_FILTERS, type QuestionFilters, type Vocabulary } from "./filters";
 import { FilterBar } from "./FilterBar";
 import type { GroupBy } from "./QuestionGroups";
 
 /*
  * The filter sheet of the pool screen, on its own: what a chip reports, what
- * the tag search narrows, and where the cap on the tag list falls. The
+ * the concept search narrows, and where the cap on the concept list falls. The
  * page-level wiring (the query string these filters produce) is covered by
  * PoolView.test.tsx and filters.test.ts.
  */
 
-const TAGS = Array.from({ length: 24 }, (_, i) => `tag-${String(i + 1).padStart(2, "0")}`);
+const idOf = (i: number) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`;
+const CONCEPTS: ConceptRef[] = Array.from({ length: 24 }, (_, i) => ({
+  id: idOf(i + 1),
+  label: `Concept ${String(i + 1).padStart(2, "0")}`,
+  qualifier: "",
+  status: "validated",
+}));
+/** The same concepts as the vocabulary has them, for the typed words to resolve against. */
+const VOCABULARY: Concept[] = CONCEPTS.map((c) => ({
+  id: c.id,
+  status: c.status,
+  mergedInto: null,
+  labels: { fr: c.label, en: c.label },
+  qualifiers: { fr: "", en: "" },
+  descriptions: { fr: "", en: "" },
+  createdBy: null,
+  createdAt: "2026-10-01T08:00:00.000Z",
+}));
+const C07 = idOf(7);
+const C24 = idOf(24);
 
 /**
  * The bar is fully controlled, so a test that types into the field has to
@@ -25,13 +46,15 @@ const TAGS = Array.from({ length: 24 }, (_, i) => `tag-${String(i + 1).padStart(
  */
 function Host({
   initial,
-  tags,
+  concepts,
+  vocabulary,
   onChange,
   onView,
   onGroup,
 }: {
   initial: QuestionFilters;
-  tags: string[];
+  concepts: ConceptRef[];
+  vocabulary: Vocabulary;
   onChange: (next: QuestionFilters) => void;
   onView: (next: "cards" | "list") => void;
   onGroup: (next: GroupBy) => void;
@@ -44,7 +67,8 @@ function Host({
         onChange(next);
         setFilters(next);
       }}
-      tags={tags}
+      concepts={concepts}
+      vocabulary={vocabulary}
       total={7}
       view="list"
       onView={onView}
@@ -54,14 +78,15 @@ function Host({
   );
 }
 
-function setup(filters: Partial<QuestionFilters> = {}, tags: string[] = TAGS) {
+function setup(filters: Partial<QuestionFilters> = {}, concepts: ConceptRef[] = CONCEPTS) {
   const onChange = vi.fn();
   const onView = vi.fn();
   const onGroup = vi.fn();
   renderWithProviders(
     <Host
       initial={{ ...EMPTY_FILTERS, ...filters }}
-      tags={tags}
+      concepts={concepts}
+      vocabulary={VOCABULARY}
       onChange={onChange}
       onView={onView}
       onGroup={onGroup}
@@ -94,52 +119,61 @@ describe("FilterBar", () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ difficulties: [3] }));
   });
 
-  it("caps the tag chips at twenty and offers the rest behind one chip", async () => {
+  it("caps the concept chips at twenty and offers the rest behind one chip", async () => {
     const { user } = setup();
     const sheet = await openSheet(user);
-    expect(within(sheet).getByRole("button", { name: "#tag-20" })).toBeInTheDocument();
-    expect(within(sheet).queryByRole("button", { name: "#tag-21" })).not.toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Concept 20" })).toBeInTheDocument();
+    expect(within(sheet).queryByRole("button", { name: "Concept 21" })).not.toBeInTheDocument();
     await user.click(within(sheet).getByRole("button", { name: "Show all (24)" }));
-    expect(within(sheet).getByRole("button", { name: "#tag-24" })).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Concept 24" })).toBeInTheDocument();
   });
 
-  it("keeps a selected tag in the list even past the cap, and first", async () => {
-    const { user } = setup({ tags: ["tag-24"] });
+  it("keeps a selected concept in the list even past the cap, and first", async () => {
+    const { user } = setup({ concepts: [C24] });
     const sheet = await openSheet(user);
-    const picked = within(sheet).getByRole("button", { name: "#tag-24" });
+    const picked = within(sheet).getByRole("button", { name: "Concept 24" });
     expect(picked).toHaveAttribute("aria-pressed", "true");
-    // First of the pills, before tag-01: what is on must be reachable.
-    const chips = within(sheet).getAllByRole("button", { name: /^#?tag-/ });
+    // First of the pills, before Concept 01: what is on must be reachable.
+    const chips = within(sheet).getAllByRole("button", { name: /^Concept \d/ });
     expect(chips[0]).toBe(picked);
   });
 
-  it("narrows the tag chips as the search is typed", async () => {
+  it("narrows the concept chips as the search is typed", async () => {
     const { user } = setup();
     const sheet = await openSheet(user);
-    await user.type(within(sheet).getByLabelText("Search a tag"), "tag22");
-    expect(within(sheet).getByRole("button", { name: "#tag-22" })).toBeInTheDocument();
-    expect(within(sheet).queryByRole("button", { name: "#tag-01" })).not.toBeInTheDocument();
+    await user.type(within(sheet).getByLabelText("Search a concept"), "concept 22");
+    expect(within(sheet).getByRole("button", { name: "Concept 22" })).toBeInTheDocument();
+    expect(within(sheet).queryByRole("button", { name: "Concept 01" })).not.toBeInTheDocument();
   });
 
   it("toggles the first match on Enter", async () => {
     const { onChange, user } = setup();
     const sheet = await openSheet(user);
-    await user.type(within(sheet).getByLabelText("Search a tag"), "tag07{Enter}");
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ tags: ["tag-07"] }));
+    await user.type(within(sheet).getByLabelText("Search a concept"), "concept 07{Enter}");
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ concepts: [C07] }));
   });
 
   it("says so when nothing matches", async () => {
     const { user } = setup();
     const sheet = await openSheet(user);
-    await user.type(within(sheet).getByLabelText("Search a tag"), "zzzz");
-    expect(within(sheet).getByText("No tag matches.")).toBeInTheDocument();
+    await user.type(within(sheet).getByLabelText("Search a concept"), "zzzz");
+    expect(within(sheet).getByText("No concept matches.")).toBeInTheDocument();
+  });
+
+  it("unticks a concept a typed word designates by taking the word out", async () => {
+    const { onChange, user } = setup({ q: "#concept-07 segfault" });
+    const sheet = await openSheet(user);
+    const chip = within(sheet).getByRole("button", { name: "Concept 07" });
+    expect(chip).toHaveAttribute("aria-pressed", "true");
+    await user.click(chip);
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ q: "segfault", concepts: [] }));
   });
 
   it("keeps the deleted switch and the removable chips of the bar", async () => {
-    const { onChange, user } = setup({ tags: ["tag-01"], includeDeleted: true });
+    const { onChange, user } = setup({ concepts: [idOf(1)], includeDeleted: true });
     // Under the bar, outside the sheet: one chip per active filter.
-    await user.click(screen.getByRole("button", { name: "Clear filters — #tag-01" }));
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ tags: [] }));
+    await user.click(screen.getByRole("button", { name: "Clear filters — Concept 01" }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ concepts: [] }));
     const sheet = await openSheet(user);
     expect(within(sheet).getByRole("switch", { name: "Show deleted questions" })).toBeChecked();
   });
@@ -147,14 +181,20 @@ describe("FilterBar", () => {
 
 describe("FilterBar · the search box as a language", () => {
   it("shows a chip for a filter that was TYPED, not ticked", async () => {
-    setup({ q: "tag:pointeurs segfault" });
-    expect(screen.getByText("#pointeurs")).toBeInTheDocument();
+    setup({ q: "#concept-07 segfault" });
+    expect(screen.getByText("#concept-07")).toBeInTheDocument();
+  });
+
+  it("says on its chip that a typed word designates no concept", () => {
+    setup({ q: "#inductance" });
+    expect(screen.getByText("#inductance")).toBeInTheDocument();
+    expect(screen.getByText(/no concept matches/)).toBeInTheDocument();
   });
 
   it("removing that chip takes the token out of the text as well", async () => {
-    const { onChange, user } = setup({ q: "tag:pointeurs segfault" });
-    await user.click(screen.getByRole("button", { name: "Clear filters — #pointeurs" }));
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ q: "segfault", tags: [] }));
+    const { onChange, user } = setup({ q: "tag:concept-07 segfault" });
+    await user.click(screen.getByRole("button", { name: "Clear filters — #concept-07" }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ q: "segfault" }));
   });
 
   it("shows the version bounds as one chip, and clears both at once", async () => {
@@ -165,22 +205,22 @@ describe("FilterBar · the search box as a language", () => {
     );
   });
 
-  it("offers the pool's tags once the caret sits after tag:", async () => {
+  it("offers the pool's concepts once the caret sits after #", async () => {
     const { user } = setup();
     const field = screen.getByLabelText("Search a question");
-    await user.type(field, "tag:");
+    await user.type(field, "#");
     const list = await screen.findByRole("listbox");
-    expect(within(list).getByText("#tag-01")).toBeInTheDocument();
+    expect(within(list).getByText("#Concept 01")).toBeInTheDocument();
   });
 
-  it("narrows that list by what follows, and Enter inserts the tag", async () => {
+  it("narrows that list by what follows, and Enter inserts the name, quoted", async () => {
     const { onChange, user } = setup();
     const field = screen.getByLabelText("Search a question");
-    await user.type(field, "tag:tag07");
+    await user.type(field, "tag:concept07");
     const list = await screen.findByRole("listbox");
-    expect(within(list).getByText("#tag-07")).toBeInTheDocument();
+    expect(within(list).getByText("#Concept 07")).toBeInTheDocument();
     await user.keyboard("{Enter}");
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ q: "tag:tag-07 " }));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'tag:"Concept 07" ' }));
   });
 
   it("offers the four types after type:, by their label", async () => {
@@ -193,7 +233,7 @@ describe("FilterBar · the search box as a language", () => {
 
   it("closes the list on Escape without emptying the field", async () => {
     const { user } = setup();
-    await user.type(screen.getByLabelText("Search a question"), "tag:");
+    await user.type(screen.getByLabelText("Search a question"), "#");
     await screen.findByRole("listbox");
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
@@ -201,7 +241,7 @@ describe("FilterBar · the search box as a language", () => {
 
   it("documents the grammar under the field", () => {
     setup();
-    expect(screen.getByText(/tag:name/)).toBeInTheDocument();
+    expect(screen.getByText(/#concept/)).toBeInTheDocument();
   });
 });
 
