@@ -535,6 +535,17 @@ live in `ui/state.ts`, each written once.
   name that says the action; it stops the row's click, and it is shown only
   where the fix would be accepted.
 - Card: `surface` + hairline + 16 px radius; padding 16–20.
+- Disclosure: a folded card (`src/ui/disclosure.tsx`), for the part of a
+  settings page a teacher rarely touches (an evaluation's Conditions and
+  Advanced options). The header row is ONE button the width of the card —
+  14 px medium title, a 13 px muted line saying what is inside, a faint
+  chevron on the right that turns over when open, `surface-2` on hover —
+  with `aria-expanded`, named by the title and described by the line. Open,
+  the body follows under a hairline, its rows divided by hairlines with the
+  card's 16 px gutter. A count beside the title (a `zinc` badge) says when
+  something is set inside, so a folded card never hides it. Folded by
+  default and never remembered: a disclosure that remembers being open is
+  always open.
 - NotePanel: a note set INSIDE a card — an explanation, a teacher's comment,
   a reference solution — as a 12 px uppercase semibold eyebrow in `fg-faint`
   over its body, in a `field`-radius (10 px) panel. ONE rhythm: **12 px of
@@ -1721,13 +1732,23 @@ What replaces them:
   the left on its own fill; the mean is sticky on the right from `@2xl`
   (42 rem of card) and scrolls with the rest below it. On a phone the e-mail
   under the name goes, so the first grade column stays on screen.
-- **Head.** A column's title (13 px semibold, truncated) with its kind and
-  weight under it in 11 px muted — "Exam · 40 %", the weight a whole
-  percentage ("Not counted" when it is left out of the mean), and the menu of its settings behind a faint chevron: whether it
-  counts, its weight. A column NOT released carries a `zinc` badge with the
-  eye-off icon and a `surface-2` strip over its whole height; its cells show
-  no grade of the activity (a mark of the teacher's stands there) and the
-  column is out of the mean.
+- **Head.** Every grade column is one width (144 px, `w-36`). Its title is
+  13 px semibold, wrapped and clamped to two lines, never spilling over the
+  next column; under it the weight alone in 11 px muted — "40 %", a whole
+  percentage ("Not counted" when it is left out of the mean). The kind
+  (exam, exercise, project) is not on the head: the tooltip carries the full
+  title and the kind, and the accessible name both. The menu of its settings
+  sits behind a faint chevron: whether it counts, its weight. The heads stand
+  on the bottom of the row, so the weights line up. A column NOT released
+  carries a `zinc` badge with the eye-off icon ABOVE its title and a
+  `surface-2` strip over its whole height; its cells show no grade of the
+  activity (a mark of the teacher's stands there) and the column is out of
+  the mean.
+- **Exercises.** An exercise left out of the mean is practice, and a
+  classroom has many: hidden by default, behind a second `SettingRow`
+  "Show exercises" under the mean's, present only when such a column exists,
+  never remembered. An exercise with a weight counts and always shows. The
+  mean and the CSV do not change.
 - **Cell.** The grade as `Grade` writes it, centred, tabular. A cell is a
   `Menu` trigger — absent, a score, clear the mark — except on an archived
   classroom, where it is plain text. A pencil beside a grade says "set by

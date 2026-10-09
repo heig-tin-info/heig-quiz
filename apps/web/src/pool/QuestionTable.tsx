@@ -14,6 +14,7 @@ import {
   RelativeTime,
   Skeleton,
   T,
+  TableBand,
   TableHead,
   Tip,
   type Column,
@@ -259,15 +260,7 @@ export function QuestionTable({
         {groups.map((group) => (
           <tbody role="rowgroup" key={group.key}>
             {group.label === null ? null : (
-              <tr role="row" className={T.stack.band}>
-                <td role="cell"
-                  colSpan={span}
-                  className={cx(T.stack.band, "border-t border-line bg-surface-2 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-fg-muted")}
-                >
-                  {group.label}
-                  <span className="ml-2 tabular-nums text-fg-faint">{group.rows.length}</span>
-                </td>
-              </tr>
+              <TableBand stacked span={span} label={group.label} count={group.rows.length} />
             )}
             {group.rows.map((row) => (
               <tr role="row"

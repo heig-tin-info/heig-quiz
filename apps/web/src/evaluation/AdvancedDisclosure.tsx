@@ -1,6 +1,3 @@
-import { useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
-
 import { CategorizePolicy, categorizePolicyOf, kioskOf, McqPolicy, negativeMarkingOf, safeExamBrowserOf, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
 import {
   allowedFeedbackWhen,
@@ -18,7 +15,7 @@ import {
 import { usePublicConfig } from "../api";
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
-import { Button, Card, Segmented, Select, SettingRow, Switch } from "../ui";
+import { Disclosure, Segmented, Select, SettingRow, Switch } from "../ui";
 import type { ConfigPatch, ConfigView } from "./editTarget";
 
 /**
@@ -41,8 +38,9 @@ export function withFeedbackFallback<B extends { settings: { lobby: LobbyName } 
  * settings a teacher who knows what they want reaches for, and which a novice
  * must never have to read to run their first quiz.
  *
- * Folded by default and not persisted. A disclosure that remembers being open
- * is a disclosure that is always open, and then it is not a disclosure.
+ * Folded by default and not persisted (`Disclosure`): a header row that names
+ * what is inside, so the teacher who wants one of these settings knows which
+ * card to open without opening it.
  *
  * It reads and writes the configuration an evaluation and a template share
  * (`ConfigView`, `ConfigPatch`).
@@ -72,7 +70,6 @@ export function AdvancedDisclosure({
   holdsCategorize?: boolean;
 }) {
   const t = useT();
-  const [open, setOpen] = useState(false);
   const { settings, feedbackPolicy, mode, mcqPolicy } = config;
   // ADR-051: the kiosk path exists on this platform (`KIOSK_ATTESTATION`).
   const kioskOffered = usePublicConfig().data?.kiosk != null;
@@ -87,269 +84,256 @@ export function AdvancedDisclosure({
   const policyDesc = (desc: string) =>
     negativeMarkingOf(settings) && mode !== "poll" ? `${desc} ${t("eval.policy.overridden")}` : desc;
 
-  if (!open) {
-    return (
-      <Button variant="secondary" onClick={() => setOpen(true)}>
-        <ChevronDown /> {t("eval.advanced")}
-      </Button>
-    );
-  }
-
   return (
-    <div className="space-y-3">
-      <Button variant="secondary" onClick={() => setOpen(false)}>
-        <ChevronUp /> {t("eval.advanced.hide")}
-      </Button>
-      <Card className="divide-y divide-line px-4">
+    <Disclosure title={t("eval.advanced")} desc={t("eval.advanced.desc")}>
+      <SettingRow
+        title={t("eval.navigation")}
+        desc={t(`eval.navigation.desc.${settings.navigation}` as keyof Dict)}
+      >
+        <Segmented
+          name="navigation"
+          value={settings.navigation}
+          disabled={disabled}
+          onChange={(navigation) => set({ navigation })}
+          options={[
+            { value: "free", label: t("eval.navigation.free") },
+            { value: "forward_only", label: t("eval.navigation.forward_only") },
+            { value: "milestones", label: t("eval.navigation.milestones") },
+          ]}
+        />
+      </SettingRow>
+
+      <SettingRow title={t("eval.presentation")} desc={t("eval.presentation.desc")}>
+        <Segmented
+          name="presentation"
+          value={settings.presentation}
+          disabled={disabled}
+          onChange={(presentation) => set({ presentation })}
+          options={[
+            { value: "zen", label: t("eval.presentation.zen") },
+            { value: "continuous", label: t("eval.presentation.continuous") },
+            // F-EVAL-08: only offered when navigation is free.
+            ...(settings.navigation === "free"
+              ? [
+                  {
+                    value: "student_choice" as const,
+                    label: t("eval.presentation.student_choice"),
+                  },
+                ]
+              : []),
+          ]}
+        />
+      </SettingRow>
+
+      {/* ADR-086: a Live evaluation's waiting room; a Scheduled one has
+          none, its mode says so. */}
+      {clock.mode === "live" ? (
         <SettingRow
-          title={t("eval.navigation")}
-          desc={t(`eval.navigation.desc.${settings.navigation}` as keyof Dict)}
+          title={t("eval.lobby")}
+          desc={t(`eval.lobby.desc.${settings.lobby}` as keyof Dict)}
         >
           <Segmented
-            name="navigation"
-            value={settings.navigation}
+            name="lobby"
+            value={settings.lobby}
             disabled={disabled}
-            onChange={(navigation) => set({ navigation })}
-            options={[
-              { value: "free", label: t("eval.navigation.free") },
-              { value: "forward_only", label: t("eval.navigation.forward_only") },
-              { value: "milestones", label: t("eval.navigation.milestones") },
-            ]}
-          />
-        </SettingRow>
-
-        <SettingRow title={t("eval.presentation")} desc={t("eval.presentation.desc")}>
-          <Segmented
-            name="presentation"
-            value={settings.presentation}
-            disabled={disabled}
-            onChange={(presentation) => set({ presentation })}
-            options={[
-              { value: "zen", label: t("eval.presentation.zen") },
-              { value: "continuous", label: t("eval.presentation.continuous") },
-              // F-EVAL-08: only offered when navigation is free.
-              ...(settings.navigation === "free"
-                ? [
-                    {
-                      value: "student_choice" as const,
-                      label: t("eval.presentation.student_choice"),
-                    },
-                  ]
-                : []),
-            ]}
-          />
-        </SettingRow>
-
-        {/* ADR-086: a Live evaluation's waiting room; a Scheduled one has
-            none, its mode says so. */}
-        {clock.mode === "live" ? (
-          <SettingRow
-            title={t("eval.lobby")}
-            desc={t(`eval.lobby.desc.${settings.lobby}` as keyof Dict)}
-          >
-            <Segmented
-              name="lobby"
-              value={settings.lobby}
-              disabled={disabled}
-              onChange={(lobby) => {
-                patch.mutate(withFeedbackFallback(config, { settings: { lobby } }));
-              }}
-              options={liveLobbies(clock.limited).map((value) => ({
-                value,
-                label: t(`eval.lobby.${value}`),
-              }))}
-            />
-          </SettingRow>
-        ) : null}
-
-        <SettingRow title={t("eval.shuffleItems")} desc={t("eval.shuffleItems.desc")}>
-          <Switch
-            checked={settings.shuffleItems}
-            disabled={disabled}
-            label={t("eval.shuffleItems")}
-            onChange={(shuffleItems) => set({ shuffleItems })}
-          />
-        </SettingRow>
-        <SettingRow title={t("eval.shuffleChoices")} desc={t("eval.shuffleChoices.desc")}>
-          <Switch
-            checked={settings.shuffleChoices}
-            disabled={disabled}
-            label={t("eval.shuffleChoices")}
-            onChange={(shuffleChoices) => set({ shuffleChoices })}
-          />
-        </SettingRow>
-        <SettingRow title={t("eval.showProgressBar")} desc={t("eval.showProgressBar.desc")}>
-          <Switch
-            checked={settings.showProgressBar}
-            disabled={disabled}
-            label={t("eval.showProgressBar")}
-            onChange={(showProgressBar) => set({ showProgressBar })}
-          />
-        </SettingRow>
-        <SettingRow title={t("eval.logVisibility")} desc={t("eval.logVisibility.desc")}>
-          <Switch
-            checked={settings.logVisibility}
-            disabled={disabled}
-            label={t("eval.logVisibility")}
-            onChange={(logVisibility) => set({ logVisibility })}
-          />
-        </SettingRow>
-        <SettingRow title={t("eval.requireFullscreen")} desc={t("eval.requireFullscreen.desc")}>
-          <Switch
-            checked={settings.requireFullscreen}
-            disabled={disabled}
-            label={t("eval.requireFullscreen")}
-            onChange={(requireFullscreen) => set({ requireFullscreen })}
-          />
-        </SettingRow>
-        {/* ADR-069: the calculator the student's screen provides. A poll has
-            nothing to compute. */}
-        {calculatorAllowedFor(mode) ? (
-          <SettingRow title={t("eval.calculator")} desc={t(`eval.calculator.desc.${calculator}`)}>
-            <Segmented
-              name="calculator"
-              label={t("eval.calculator")}
-              value={calculator}
-              disabled={disabled}
-              onChange={(calculator) => set({ calculator })}
-              options={CALCULATOR_MODES.map((value) => ({
-                value,
-                label: t(`eval.calculator.${value}`),
-              }))}
-            />
-          </SettingRow>
-        ) : null}
-
-        {/* F-EVAL-11 and #78: `immediate` is hidden, not disabled, for an
-            evaluation sat in class (an exam, or an exercise with a waiting
-            room) — the same treatment as `student_choice` above. The row
-            then says why, so the missing choice is not a mystery. */}
-        <SettingRow
-          title={t("eval.feedback")}
-          desc={
-            <>
-              {t(`eval.feedback.desc.${feedbackPolicy.when}` as keyof Dict)}
-              {inClass ? (
-                <span className="mt-0.5 block text-fg-faint">{t("eval.feedback.inClassHint")}</span>
-              ) : null}
-            </>
-          }
-        >
-          <Segmented
-            name="feedback"
-            value={feedbackPolicy.when}
-            disabled={feedbackDisabled}
-            onChange={(when) => feedback({ when })}
-            options={allowedFeedbackWhen({ mode, lobby: settings.lobby }).map((when) => ({
-              value: when,
-              label: t(`eval.feedback.${when}` as keyof Dict),
+            onChange={(lobby) => {
+              patch.mutate(withFeedbackFallback(config, { settings: { lobby } }));
+            }}
+            options={liveLobbies(clock.limited).map((value) => ({
+              value,
+              label: t(`eval.lobby.${value}`),
             }))}
           />
         </SettingRow>
-        <SettingRow title={t("eval.feedback.showKey")}>
-          <Switch
-            checked={feedbackPolicy.showKey}
-            disabled={feedbackDisabled}
-            label={t("eval.feedback.showKey")}
-            onChange={(showKey) => feedback({ showKey })}
-          />
-        </SettingRow>
-        <SettingRow title={t("eval.feedback.showExplanation")}>
-          <Switch
-            checked={feedbackPolicy.showExplanation}
-            disabled={feedbackDisabled}
-            label={t("eval.feedback.showExplanation")}
-            onChange={(showExplanation) => feedback({ showExplanation })}
-          />
-        </SettingRow>
+      ) : null}
 
-        {/* docs/04 §4.4: what every mcq item of this evaluation that says
-            "inherited" is scored with. A question that names its own policy
-            overrides it, and a single-answer question is always all or
-            nothing. Frozen once an attempt exists, like the rest of what
-            decides a score. */}
-        <SettingRow
-          title={t("mcq.policy.title")}
-          desc={policyDesc(t(`mcq.policy.desc.${mcqPolicy}` as keyof Dict))}
-          help="mcq-policies"
-        >
-          <Select
-            value={mcqPolicy}
+      <SettingRow title={t("eval.shuffleItems")} desc={t("eval.shuffleItems.desc")}>
+        <Switch
+          checked={settings.shuffleItems}
+          disabled={disabled}
+          label={t("eval.shuffleItems")}
+          onChange={(shuffleItems) => set({ shuffleItems })}
+        />
+      </SettingRow>
+      <SettingRow title={t("eval.shuffleChoices")} desc={t("eval.shuffleChoices.desc")}>
+        <Switch
+          checked={settings.shuffleChoices}
+          disabled={disabled}
+          label={t("eval.shuffleChoices")}
+          onChange={(shuffleChoices) => set({ shuffleChoices })}
+        />
+      </SettingRow>
+      <SettingRow title={t("eval.showProgressBar")} desc={t("eval.showProgressBar.desc")}>
+        <Switch
+          checked={settings.showProgressBar}
+          disabled={disabled}
+          label={t("eval.showProgressBar")}
+          onChange={(showProgressBar) => set({ showProgressBar })}
+        />
+      </SettingRow>
+      <SettingRow title={t("eval.logVisibility")} desc={t("eval.logVisibility.desc")}>
+        <Switch
+          checked={settings.logVisibility}
+          disabled={disabled}
+          label={t("eval.logVisibility")}
+          onChange={(logVisibility) => set({ logVisibility })}
+        />
+      </SettingRow>
+      <SettingRow title={t("eval.requireFullscreen")} desc={t("eval.requireFullscreen.desc")}>
+        <Switch
+          checked={settings.requireFullscreen}
+          disabled={disabled}
+          label={t("eval.requireFullscreen")}
+          onChange={(requireFullscreen) => set({ requireFullscreen })}
+        />
+      </SettingRow>
+      {/* ADR-069: the calculator the student's screen provides. A poll has
+          nothing to compute. */}
+      {calculatorAllowedFor(mode) ? (
+        <SettingRow title={t("eval.calculator")} desc={t(`eval.calculator.desc.${calculator}`)}>
+          <Segmented
+            name="calculator"
+            label={t("eval.calculator")}
+            value={calculator}
             disabled={disabled}
-            size="sm"
-            width="w-52"
-            aria-label={t("mcq.policy.title")}
-            onChange={(e) => patch.mutate({ mcqPolicy: e.target.value as McqPolicy })}
-          >
-            {McqPolicy.options.map((policy) => (
-              <option key={policy} value={policy}>
-                {t(`mcq.policy.${policy}` as keyof Dict)}
-              </option>
-            ))}
-          </Select>
+            onChange={(calculator) => set({ calculator })}
+            options={CALCULATOR_MODES.map((value) => ({
+              value,
+              label: t(`eval.calculator.${value}`),
+            }))}
+          />
         </SettingRow>
+      ) : null}
 
-        {/* ADR-036: the same, for the categorize items that say "inherited",
-            shown only while the evaluation holds one. */}
-        {holdsCategorize ? (
-          <SettingRow
-            title={t("eval.categorizePolicy")}
-            desc={policyDesc(t(`eval.categorizePolicy.desc.${categorizePolicyOf(settings)}`))}
-          >
-            <Segmented
-              name="categorizePolicy"
-              label={t("eval.categorizePolicy")}
-              value={categorizePolicyOf(settings)}
-              disabled={disabled}
-              onChange={(categorizePolicy) => set({ categorizePolicy })}
-              options={CategorizePolicy.options.map((policy) => ({
-                value: policy,
-                label: t(`eval.categorizePolicy.${policy}`),
-              }))}
-            />
-          </SettingRow>
-        ) : null}
+      {/* F-EVAL-11 and #78: `immediate` is hidden, not disabled, for an
+          evaluation sat in class (an exam, or an exercise with a waiting
+          room) — the same treatment as `student_choice` above. The row
+          then says why, so the missing choice is not a mystery. */}
+      <SettingRow
+        title={t("eval.feedback")}
+        desc={
+          <>
+            {t(`eval.feedback.desc.${feedbackPolicy.when}` as keyof Dict)}
+            {inClass ? (
+              <span className="mt-0.5 block text-fg-faint">{t("eval.feedback.inClassHint")}</span>
+            ) : null}
+          </>
+        }
+      >
+        <Segmented
+          name="feedback"
+          value={feedbackPolicy.when}
+          disabled={feedbackDisabled}
+          onChange={(when) => feedback({ when })}
+          options={allowedFeedbackWhen({ mode, lobby: settings.lobby }).map((when) => ({
+            value: when,
+            label: t(`eval.feedback.${when}` as keyof Dict),
+          }))}
+        />
+      </SettingRow>
+      <SettingRow title={t("eval.feedback.showKey")}>
+        <Switch
+          checked={feedbackPolicy.showKey}
+          disabled={feedbackDisabled}
+          label={t("eval.feedback.showKey")}
+          onChange={(showKey) => feedback({ showKey })}
+        />
+      </SettingRow>
+      <SettingRow title={t("eval.feedback.showExplanation")}>
+        <Switch
+          checked={feedbackPolicy.showExplanation}
+          disabled={feedbackDisabled}
+          label={t("eval.feedback.showExplanation")}
+          onChange={(showExplanation) => feedback({ showExplanation })}
+        />
+      </SettingRow>
 
-        {/* ADR-026: negative marking, beside the policies it overrides. For
-            the whole evaluation, never per question, and frozen with the
-            rest of what decides a score. A poll has no score to penalise. */}
-        {mode === "poll" ? null : (
-          <SettingRow title={t("eval.negativeMarking")} desc={t("eval.negativeMarking.desc")}>
-            <Switch
-              checked={negativeMarkingOf(settings)}
-              disabled={disabled}
-              label={t("eval.negativeMarking")}
-              onChange={(negativeMarking) => set({ negativeMarking })}
-            />
-          </SettingRow>
-        )}
+      {/* docs/04 §4.4: what every mcq item of this evaluation that says
+          "inherited" is scored with. A question that names its own policy
+          overrides it, and a single-answer question is always all or
+          nothing. Frozen once an attempt exists, like the rest of what
+          decides a score. */}
+      <SettingRow
+        title={t("mcq.policy.title")}
+        desc={policyDesc(t(`mcq.policy.desc.${mcqPolicy}` as keyof Dict))}
+        help="mcq-policies"
+      >
+        <Select
+          value={mcqPolicy}
+          disabled={disabled}
+          size="sm"
+          width="w-52"
+          aria-label={t("mcq.policy.title")}
+          onChange={(e) => patch.mutate({ mcqPolicy: e.target.value as McqPolicy })}
+        >
+          {McqPolicy.options.map((policy) => (
+            <option key={policy} value={policy}>
+              {t(`mcq.policy.${policy}` as keyof Dict)}
+            </option>
+          ))}
+        </Select>
+      </SettingRow>
 
-        {/* ADR-027: an exam sat in Safe Exam Browser only. */}
-        {mode === "exam" ? (
-          <SettingRow title={t("eval.seb")} desc={t("eval.seb.desc")}>
-            <Switch
-              checked={safeExamBrowserOf(settings)}
-              disabled={disabled}
-              label={t("eval.seb")}
-              onChange={(safeExamBrowser) => set({ safeExamBrowser })}
-            />
-          </SettingRow>
-        ) : null}
+      {/* ADR-036: the same, for the categorize items that say "inherited",
+          shown only while the evaluation holds one. */}
+      {holdsCategorize ? (
+        <SettingRow
+          title={t("eval.categorizePolicy")}
+          desc={policyDesc(t(`eval.categorizePolicy.desc.${categorizePolicyOf(settings)}`))}
+        >
+          <Segmented
+            name="categorizePolicy"
+            label={t("eval.categorizePolicy")}
+            value={categorizePolicyOf(settings)}
+            disabled={disabled}
+            onChange={(categorizePolicy) => set({ categorizePolicy })}
+            options={CategorizePolicy.options.map((policy) => ({
+              value: policy,
+              label: t(`eval.categorizePolicy.${policy}`),
+            }))}
+          />
+        </SettingRow>
+      ) : null}
 
-        {/* ADR-051 §2: an exam sat on the school's kiosk stations — offered
-            where the kiosk path exists, and kept in sight where it is on,
-            so it can always be turned off. */}
-        {mode === "exam" && (kioskOffered || kioskOf(settings)) ? (
-          <SettingRow title={t("eval.kiosk")} desc={t("eval.kiosk.desc")}>
-            <Switch
-              checked={kioskOf(settings)}
-              disabled={disabled}
-              label={t("eval.kiosk")}
-              onChange={(kiosk) => set({ kiosk })}
-            />
-          </SettingRow>
-        ) : null}
-      </Card>
-    </div>
+      {/* ADR-026: negative marking, beside the policies it overrides. For
+          the whole evaluation, never per question, and frozen with the
+          rest of what decides a score. A poll has no score to penalise. */}
+      {mode === "poll" ? null : (
+        <SettingRow title={t("eval.negativeMarking")} desc={t("eval.negativeMarking.desc")}>
+          <Switch
+            checked={negativeMarkingOf(settings)}
+            disabled={disabled}
+            label={t("eval.negativeMarking")}
+            onChange={(negativeMarking) => set({ negativeMarking })}
+          />
+        </SettingRow>
+      )}
+
+      {/* ADR-027: an exam sat in Safe Exam Browser only. */}
+      {mode === "exam" ? (
+        <SettingRow title={t("eval.seb")} desc={t("eval.seb.desc")}>
+          <Switch
+            checked={safeExamBrowserOf(settings)}
+            disabled={disabled}
+            label={t("eval.seb")}
+            onChange={(safeExamBrowser) => set({ safeExamBrowser })}
+          />
+        </SettingRow>
+      ) : null}
+
+      {/* ADR-051 §2: an exam sat on the school's kiosk stations — offered
+          where the kiosk path exists, and kept in sight where it is on,
+          so it can always be turned off. */}
+      {mode === "exam" && (kioskOffered || kioskOf(settings)) ? (
+        <SettingRow title={t("eval.kiosk")} desc={t("eval.kiosk.desc")}>
+          <Switch
+            checked={kioskOf(settings)}
+            disabled={disabled}
+            label={t("eval.kiosk")}
+            onChange={(kiosk) => set({ kiosk })}
+          />
+        </SettingRow>
+      ) : null}
+    </Disclosure>
   );
 }

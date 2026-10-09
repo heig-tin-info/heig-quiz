@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import type { ClassroomDetail, EvaluationSummary } from "@quiz/contracts";
+import { EvaluationMode, EvaluationState, type ClassroomDetail, type EvaluationSummary } from "@quiz/contracts";
 import { templatePullable } from "@quiz/domain";
 
 import { api } from "../api";
@@ -32,10 +32,13 @@ import {
   Menu,
   pressable,
   QueryError,
+  Segmented,
   Select,
   Skeleton,
   T,
+  TableBand,
   TableHead,
+  usePersistentChoice,
   useSortableTable,
   type Column,
 } from "../ui";
@@ -182,6 +185,49 @@ function evaluationRank(
   }
 }
 
+/**
+ * "Group by" on the list (the pool's control, `FilterBar`): none, the state
+ * badge, or the mode. Remembered per browser, as the pool's is — a teacher
+ * who reads their evaluations by state reads them so every time.
+ */
+type EvaluationGroupBy = "none" | "status" | "mode";
+const GROUP_BY: readonly EvaluationGroupBy[] = ["none", "status", "mode"];
+const GROUP_KEY = "quiz-evaluations-group";
+
+interface EvaluationGroup {
+  key: string;
+  /** The band's words, or `null` for the single group of `none`. */
+  label: string | null;
+  rows: EvaluationSummary[];
+}
+
+/**
+ * The rows cut into groups, each keeping the order it was handed (the
+ * server's, or the column the teacher sorted on). The groups follow the
+ * order of the enums — a state in lifecycle order, draft to released — and
+ * only the groups that hold a row are drawn.
+ */
+function groupEvaluations(
+  rows: readonly EvaluationSummary[],
+  by: EvaluationGroupBy,
+  t: TFunction,
+): EvaluationGroup[] {
+  if (by === "none") return [{ key: "all", label: null, rows: [...rows] }];
+  const groups =
+    by === "status"
+      ? EvaluationState.options.map((state) => ({
+          key: state,
+          label: evaluationStateLabel(state, t),
+          rows: rows.filter((row) => row.state === state),
+        }))
+      : EvaluationMode.options.map((mode) => ({
+          key: mode,
+          label: t(`eval.mode.${mode}`),
+          rows: rows.filter((row) => row.mode === mode),
+        }));
+  return groups.filter((group) => group.rows.length > 0);
+}
+
 export function EvaluationList({
   classroomId,
   navigate,
@@ -224,6 +270,8 @@ export function EvaluationList({
     (row, key) => evaluationRank(row, key, t),
     null,
   );
+  const [groupBy, setGroupBy] = usePersistentChoice(GROUP_KEY, GROUP_BY, "none");
+  const groups = groupEvaluations(sorted, groupBy, t);
   const columns: Column<EvaluationSort>[] = [
     { key: "title", label: t("eval.titleLabel") },
     { key: "mode", label: t("eval.mode") },
@@ -298,144 +346,171 @@ export function EvaluationList({
           </EmptyState>
         </Card>
       ) : (
-        /* The three counts leave in turn as the card narrows (`T` › column
-           priority): the attempts first, then the points, then the number of
-           questions. The title with its state badge, the mode and the row
-           menu are what the list is for, and they stay. */
-        <Card className={`${T.container} overflow-hidden`}>
-          <table className={T.table}>
-            <TableHead columns={columns} sort={sort} onToggle={toggle} />
-            <tbody>
-              {sorted.map((row) => (
-                <tr
-                  key={row.id}
-                  className={`${T.row} ${T.rowHover} cursor-pointer`}
-                  onClick={() => open(row)}
-                  {...pressable(() => open(row), "row")}
-                >
-                  <td className={T.td}>
-                    <span className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold">{row.title}</span>
-                      <Badge tone={stateTone(row.state)}>{evaluationStateLabel(row.state, t)}</Badge>
-                      {/* Its template moved (F-EVAL-26): shown only where the
-                          pull would be accepted, as the pull's own door. */}
-                      {templatePullable(row) ? (
-                        <TemplateBehindBadge
-                          from={row.originRevision!}
-                          to={row.templateRevision!}
-                          title={row.title}
-                          onOpen={() => setPulling(row.id)}
+        <>
+          {/* A reader's habit, one size down, as on the pool (`FilterBar`):
+              the caption is also the radiogroup's name. One row has nothing
+              to group. */}
+          {list.data.length < 2 ? null : (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-fg-faint">{t("pool.groupBy")}</span>
+              <Segmented
+                name="evaluations-group"
+                size="sm"
+                label={t("pool.groupBy")}
+                value={groupBy}
+                onChange={setGroupBy}
+                options={GROUP_BY.map((g) => ({
+                  value: g,
+                  label: t(g === "none" ? "pool.group.none" : g === "status" ? "eval.group.status" : "eval.mode"),
+                }))}
+              />
+            </div>
+          )}
+          {/* The three counts leave in turn as the card narrows (`T` › column
+              priority): the attempts first, then the points, then the number
+              of questions. The title with its state badge, the mode and the
+              row menu are what the list is for, and they stay. A grouping
+              cuts the rows into bands and keeps the sort inside each. */}
+          <Card className={`${T.container} overflow-hidden`}>
+            <table className={T.table}>
+              <TableHead columns={columns} sort={sort} onToggle={toggle} />
+              {groups.map((group) => (
+                <tbody key={group.key}>
+                  {group.label === null ? null : (
+                    <TableBand span={columns.length} label={group.label} count={group.rows.length} />
+                  )}
+                  {group.rows.map((row) => (
+                    <tr
+                      key={row.id}
+                      className={`${T.row} ${T.rowHover} cursor-pointer`}
+                      onClick={() => open(row)}
+                      {...pressable(() => open(row), "row")}
+                    >
+                      <td className={T.td}>
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold">{row.title}</span>
+                          <Badge tone={stateTone(row.state)}>{evaluationStateLabel(row.state, t)}</Badge>
+                          {/* Its template moved (F-EVAL-26): shown only where the
+                              pull would be accepted, as the pull's own door. */}
+                          {templatePullable(row) ? (
+                            <TemplateBehindBadge
+                              from={row.originRevision!}
+                              to={row.templateRevision!}
+                              title={row.title}
+                              onOpen={() => setPulling(row.id)}
+                            />
+                          ) : null}
+                        </span>
+                      </td>
+                      <td className={`${T.td} text-fg-muted`}>
+                        {/* A poll is the one mode that changes where the whole row
+                            leads, so it is a badge and the other two stay words:
+                            the badge is what a teacher scans a list of thirty
+                            evaluations for. Zinc, never the accent — "New
+                            evaluation" owns the red on this screen. */}
+                        {row.mode === "poll" ? (
+                          <Badge tone="zinc">{t("eval.mode.poll")}</Badge>
+                        ) : (
+                          t(`eval.mode.${row.mode}`)
+                        )}
+                      </td>
+                      <td className={`${T.td} ${T.colHigh} text-right tabular-nums`}>{row.itemCount}</td>
+                      <td className={`${T.td} ${T.colMid} text-right tabular-nums`}>{row.totalPoints}</td>
+                      <td className={`${T.td} ${T.colLow} text-right tabular-nums`}>
+                        {row.attemptCount === 0 ? "—" : row.attemptCount}
+                      </td>
+                      <td className={`${T.td} text-right`} onClick={(e) => e.stopPropagation()}>
+                        <Menu
+                          label={t("live.row.actions", { name: row.title })}
+                          items={[
+                            ...(row.mode === "poll"
+                              ? [
+                                  {
+                                    label: t("poll.openProjection"),
+                                    icon: Presentation,
+                                    onSelect: () => navigate({ view: "poll", id: row.id }),
+                                  },
+                                ]
+                              : []),
+                            // WP10: once a quiz is closed, the two screens the
+                            // teacher actually wants are the correction and the
+                            // table — first in the menu, above the dashboard the
+                            // row no longer opens by itself.
+                            ...(isGraded(row.state) && row.mode !== "poll"
+                              ? [
+                                  {
+                                    label: t("eval.grading"),
+                                    icon: ClipboardCheck,
+                                    onSelect: () => navigate(gradingLinks(row.id).grading),
+                                  },
+                                  {
+                                    label: t("eval.results"),
+                                    icon: BarChart3,
+                                    onSelect: () => navigate(gradingLinks(row.id).results),
+                                  },
+                                ]
+                              : []),
+                            ...(hasDashboard(row) && row.mode !== "poll"
+                              ? [
+                                  {
+                                    label: t("eval.dashboard"),
+                                    icon: MonitorPlay,
+                                    onSelect: () => navigate({ view: "live", id: row.id }),
+                                  },
+                                ]
+                              : []),
+                            ...(row.mode === "poll"
+                              ? []
+                              : [
+                                  {
+                                    label: t("eval.configure"),
+                                    icon: ClipboardList,
+                                    onSelect: () => navigate({ view: "evaluation", id: row.id }),
+                                  },
+                                ]),
+                            {
+                              label: t("eval.duplicate"),
+                              icon: Copy,
+                              onSelect: () => duplicate.mutate(row),
+                            },
+                            // A poll has nothing to keep (`422 template_poll`).
+                            ...(row.mode === "poll" || !classroom.data
+                              ? []
+                              : [
+                                  {
+                                    label: t("templates.save"),
+                                    icon: FileStack,
+                                    onSelect: () => setSavingTemplate(row),
+                                  },
+                                ]),
+                            {
+                              label: t("eval.delete"),
+                              icon: Trash2,
+                              danger: true,
+                              separator: true,
+                              onSelect: async () => {
+                                if (
+                                  await confirm({
+                                    title: t("eval.deleteConfirm", { name: row.title }),
+                                    confirmLabel: t("common.delete"),
+                                    cancelLabel: t("common.cancel"),
+                                    danger: true,
+                                  })
+                                ) {
+                                  remove.mutate(row);
+                                }
+                              },
+                            },
+                          ]}
                         />
-                      ) : null}
-                    </span>
-                  </td>
-                  <td className={`${T.td} text-fg-muted`}>
-                    {/* A poll is the one mode that changes where the whole row
-                        leads, so it is a badge and the other two stay words:
-                        the badge is what a teacher scans a list of thirty
-                        evaluations for. Zinc, never the accent — "New
-                        evaluation" owns the red on this screen. */}
-                    {row.mode === "poll" ? (
-                      <Badge tone="zinc">{t("eval.mode.poll")}</Badge>
-                    ) : (
-                      t(`eval.mode.${row.mode}`)
-                    )}
-                  </td>
-                  <td className={`${T.td} ${T.colHigh} text-right tabular-nums`}>{row.itemCount}</td>
-                  <td className={`${T.td} ${T.colMid} text-right tabular-nums`}>{row.totalPoints}</td>
-                  <td className={`${T.td} ${T.colLow} text-right tabular-nums`}>
-                    {row.attemptCount === 0 ? "—" : row.attemptCount}
-                  </td>
-                  <td className={`${T.td} text-right`} onClick={(e) => e.stopPropagation()}>
-                    <Menu
-                      label={t("live.row.actions", { name: row.title })}
-                      items={[
-                        ...(row.mode === "poll"
-                          ? [
-                              {
-                                label: t("poll.openProjection"),
-                                icon: Presentation,
-                                onSelect: () => navigate({ view: "poll", id: row.id }),
-                              },
-                            ]
-                          : []),
-                        // WP10: once a quiz is closed, the two screens the
-                        // teacher actually wants are the correction and the
-                        // table — first in the menu, above the dashboard the
-                        // row no longer opens by itself.
-                        ...(isGraded(row.state) && row.mode !== "poll"
-                          ? [
-                              {
-                                label: t("eval.grading"),
-                                icon: ClipboardCheck,
-                                onSelect: () => navigate(gradingLinks(row.id).grading),
-                              },
-                              {
-                                label: t("eval.results"),
-                                icon: BarChart3,
-                                onSelect: () => navigate(gradingLinks(row.id).results),
-                              },
-                            ]
-                          : []),
-                        ...(hasDashboard(row) && row.mode !== "poll"
-                          ? [
-                              {
-                                label: t("eval.dashboard"),
-                                icon: MonitorPlay,
-                                onSelect: () => navigate({ view: "live", id: row.id }),
-                              },
-                            ]
-                          : []),
-                        ...(row.mode === "poll"
-                          ? []
-                          : [
-                              {
-                                label: t("eval.configure"),
-                                icon: ClipboardList,
-                                onSelect: () => navigate({ view: "evaluation", id: row.id }),
-                              },
-                            ]),
-                        {
-                          label: t("eval.duplicate"),
-                          icon: Copy,
-                          onSelect: () => duplicate.mutate(row),
-                        },
-                        // A poll has nothing to keep (`422 template_poll`).
-                        ...(row.mode === "poll" || !classroom.data
-                          ? []
-                          : [
-                              {
-                                label: t("templates.save"),
-                                icon: FileStack,
-                                onSelect: () => setSavingTemplate(row),
-                              },
-                            ]),
-                        {
-                          label: t("eval.delete"),
-                          icon: Trash2,
-                          danger: true,
-                          separator: true,
-                          onSelect: async () => {
-                            if (
-                              await confirm({
-                                title: t("eval.deleteConfirm", { name: row.title }),
-                                confirmLabel: t("common.delete"),
-                                cancelLabel: t("common.cancel"),
-                                danger: true,
-                              })
-                            ) {
-                              remove.mutate(row);
-                            }
-                          },
-                        },
-                      ]}
-                    />
-                  </td>
-                </tr>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
               ))}
-            </tbody>
-          </table>
-        </Card>
+            </table>
+          </Card>
+        </>
       )}
       {savingTemplate && classroom.data ? (
         <SaveAsTemplateDialog

@@ -11,14 +11,13 @@ import {
   Actions,
   Badge,
   Button,
-  Card,
   Checkbox,
   cx,
+  Disclosure,
   inputClass,
   inputSize,
   type MenuItem,
   Select,
-  SettingRow,
 } from "../ui";
 import type { ConfigPatch, ConfigView } from "./editTarget";
 
@@ -41,7 +40,10 @@ import type { ConfigPatch, ConfigView } from "./editTarget";
  * same component, with its own course.
  *
  * Its primary stays the step's: "Add" is a secondary, a row's moves and
- * removal sit in its `Actions` menu.
+ * removal sit in its `Actions` menu. Folded (`Disclosure`), like the
+ * advanced options under it: most evaluations announce nothing, and the
+ * count beside the title says when one does, so the folded card never hides
+ * that a condition is set.
  */
 export function ConditionsSetting({
   config,
@@ -79,8 +81,18 @@ export function ConditionsSetting({
   const imposed = imposedConditions({ ...config, closesAt, timeBonusPercent: 0 });
 
   return (
-    <Card className="divide-y divide-line px-4">
-      <SettingRow title={t("eval.conditions")} desc={t("eval.conditions.desc")} />
+    <Disclosure
+      title={t("eval.conditions")}
+      desc={t("eval.conditions.desc")}
+      aside={
+        list.length > 0 ? (
+          <Badge tone="zinc">
+            <span aria-hidden>{list.length}</span>
+            <span className="sr-only">{t("eval.conditions.count", { n: list.length })}</span>
+          </Badge>
+        ) : null
+      }
+    >
       <CatalogPicker
         entries={catalog.data ? offered : undefined}
         failed={catalog.isError}
@@ -131,7 +143,7 @@ export function ConditionsSetting({
           ))}
         </ul>
       </div>
-    </Card>
+    </Disclosure>
   );
 }
 

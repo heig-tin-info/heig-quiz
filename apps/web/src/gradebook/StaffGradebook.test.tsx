@@ -76,6 +76,8 @@ function renderTab(table: GradebookStaff | ReturnType<typeof fail>, extra: Param
 }
 
 const cell = (student: string, column: string) => screen.findByRole("button", { name: `Marks for ${student}, ${column}` });
+/** The exercises left out of the mean are hidden by default; the fixture's "Exercises" is one. */
+const showExercises = async () => userEvent.click(await screen.findByRole("switch", { name: "Show exercises" }));
 const choose = async (button: HTMLElement, item: string) => {
   await userEvent.click(button);
   await userEvent.click(await screen.findByRole("menuitem", { name: item }));
@@ -84,6 +86,7 @@ const choose = async (button: HTMLElement, item: string) => {
 describe("the matrix", () => {
   it("draws a row per student and a column per activity: a grade, the absence sigil in its own colour, dashes, the mean", async () => {
     renderTab(makeTable());
+    await showExercises();
     const alice = await cell("Alice Dupont", "Test 1");
     expect(alice).toHaveTextContent("5.5");
     const absent = await cell("Bob Favre", "Test 1");
@@ -101,6 +104,7 @@ describe("the matrix", () => {
 
   it("marks a column not released and one that does not count, with its weight", async () => {
     renderTab(makeTable());
+    await showExercises();
     await cell("Alice Dupont", "Test 2");
     const later = screen.getByRole("columnheader", { name: /Test 2/ });
     expect(within(later).getByText("Not released")).toBeInTheDocument();
@@ -109,8 +113,42 @@ describe("the matrix", () => {
     expect(within(screen.getByRole("columnheader", { name: /Test 1/ })).queryByText("Not released")).toBeNull();
   });
 
+  it("hides the exercises left out of the mean until asked, keeps one that counts, and leaves the mean alone", async () => {
+    renderTab(makeTable());
+    await cell("Alice Dupont", "Test 1");
+    expect(screen.queryByRole("columnheader", { name: /Exercises/ })).toBeNull();
+    expect(screen.getByText("Exercises that do not count in the mean are hidden.")).toBeInTheDocument();
+    const row = screen.getByRole("row", { name: /Alice Dupont/ });
+    expect(within(row).getAllByRole("cell").at(-1)).toHaveTextContent("5.5");
+    await showExercises();
+    expect(screen.getByRole("columnheader", { name: /Exercises/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("switch", { name: "Show exercises" }));
+    expect(screen.queryByRole("columnheader", { name: /Exercises/ })).toBeNull();
+  });
+
+  it("offers no exercise switch when every exercise counts", async () => {
+    const table = makeTable();
+    table.columns[1] = { ...table.columns[1]!, counts: true };
+    renderTab(table);
+    await cell("Alice Dupont", "Exercises");
+    expect(screen.queryByRole("switch", { name: "Show exercises" })).toBeNull();
+  });
+
+  it("names a column by its full title and kind, and shows its weight alone", async () => {
+    const long = "Exam 1: numeration, types and tools for the first half of the semester";
+    const table = makeTable();
+    table.columns[0] = { ...table.columns[0]!, title: long };
+    renderTab(table);
+    const head = await screen.findByRole("button", { name: (name) => name.startsWith(`${long} (Graded quiz)`) });
+    expect(head).toHaveTextContent(/100 %$/);
+    // Clamped to two lines, never truncated in the DOM.
+    expect(head.querySelector(".line-clamp-2")).toHaveTextContent(long);
+    expect(within(head).queryByText(/Graded quiz ·/)).toBeNull();
+  });
+
   it("closes on the class means: each column's, a dash where there is none, and the overall one under the mean", async () => {
     renderTab(makeTable());
+    await showExercises();
     const row = await screen.findByRole("row", { name: /Class mean/ });
     const cells = within(row).getAllByRole("cell");
     // A grade carries its band in words for a screen reader: the figure leads.
@@ -147,6 +185,7 @@ describe("the writes of a cell", () => {
     const after = makeTable();
     after.rows[0]!.cells[EXERCISE] = { ...empty, kind: "absent", grade: 1, source: "mark" };
     const { calls } = renderTab(makeTable(), { [`PUT ${URL_MARK(EXERCISE, ALICE)}`]: ok(after) });
+    await showExercises();
     await choose(await cell("Alice Dupont", "Exercises"), "Mark absent (a1.0)");
     await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
     expect(calls.find((c) => c.method === "PUT")!.body).toEqual({ kind: "absent" });
@@ -195,6 +234,7 @@ describe("the writes of a cell", () => {
 
   it("sets a score: points out of a maximum, a comment, and no submit while the score is above its maximum", async () => {
     const { calls } = renderTab(makeTable(), { [`PUT ${URL_MARK(EXERCISE, BOB)}`]: ok(makeTable()) });
+    await showExercises();
     await choose(await cell("Bob Favre", "Exercises"), "Set a score…");
     const dialog = await screen.findByRole("dialog", { name: "Score for Bob Favre" });
     const submit = within(dialog).getByRole("button", { name: "Set the score" });
@@ -222,6 +262,7 @@ describe("the writes of a cell", () => {
       mark: { kind: "absent", points: null, max: null, comment: null, setBy: "Ada Lovelace", setAt: "2026-10-02T08:00:00.000Z" },
     };
     const { calls } = renderTab(table, { [`DELETE ${URL_MARK(EXERCISE, BOB)}`]: ok(makeTable()) });
+    await showExercises();
     await userEvent.click(await cell("Alice Dupont", "Exercises"));
     expect(screen.queryByRole("menuitem", { name: "Clear the mark" })).toBeNull();
     await userEvent.keyboard("{Escape}");
@@ -236,6 +277,7 @@ describe("the settings of a column and of the mean", () => {
       [`PATCH ${URL_COLUMN(EXERCISE)}`]: ok(makeTable()),
       [`PATCH ${URL_COLUMN(TEST)}`]: ok(makeTable()),
     });
+    await showExercises();
     await cell("Alice Dupont", "Test 1");
     await choose(screen.getByRole("button", { name: /^Exercises/ }), "Count in the mean");
     await waitFor(() => expect(calls.some((c) => c.method === "PATCH")).toBe(true));

@@ -206,6 +206,43 @@ export function SortHeader<K extends string>({
 }
 
 /**
+ * The label row of a group, when a list is cut by a "Group by" (the pool's
+ * questions, a classroom's evaluations): a full-width band on `surface-2`,
+ * the group's name in a 12 px uppercase eyebrow and its row count beside it.
+ * It opens the group's own `<tbody>`, so a table cut in groups is a run of
+ * row groups, each headed by its band. `stacked`: the table is a row-card
+ * table (`T.stack`), where the band must turn into a block with its rows; in
+ * a plain table that block would shrink it to one column.
+ */
+export function TableBand({
+  span,
+  label,
+  count,
+  stacked = false,
+}: {
+  span: number;
+  label: ReactNode;
+  count: number;
+  stacked?: boolean;
+}) {
+  return (
+    <tr role="row" className={stacked ? stack.band : undefined}>
+      <td
+        role="cell"
+        colSpan={span}
+        className={cx(
+          stacked && stack.band,
+          "border-t border-line bg-surface-2 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-fg-muted",
+        )}
+      >
+        {label}
+        <span className="ml-2 tabular-nums text-fg-faint">{count}</span>
+      </td>
+    </tr>
+  );
+}
+
+/**
  * One column of a table, as data: its sort key, its label, and the classes
  * that decide where it goes when the table narrows.
  *

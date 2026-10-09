@@ -7,7 +7,8 @@
 //             arithmetic (listboxIndex, rovingIndex), on layers (and
 //             isPlainClick from controls, for its link items).
 //   controls  buttons and form controls.
-//   table     sortable tables: useSortableTable, the styles `T`, TableHead.
+//   table     sortable tables: useSortableTable, the styles `T`, TableHead,
+//             the band over a group of rows (TableBand).
 //   identity  a person or an organization as a picture or initials
 //             (PersonAvatar, Avatar, OrgAvatar), and the GitHub mark
 //             (GithubIcon).
@@ -43,6 +44,8 @@
 //             the help assistant), on layers.
 //   expand    the layer a question type's canvas expands into
 //             (ExpandPanel), on layers + controls.
+//   disclosure a folded card whose header row opens it (Disclosure), on
+//             layers + page.
 //
 // `QueryError`, `PageError` and `FormError` come from the app side (they read an
 // `ApiError`), so that nothing under `ui/` imports the HTTP client.
@@ -67,5 +70,6 @@ export * from "./combobox";
 export * from "./selection";
 export * from "./state";
 export * from "./expand";
+export * from "./disclosure";
 export * from "./toolDock";
 export { FormError, PageError, QueryError } from "../queryError";

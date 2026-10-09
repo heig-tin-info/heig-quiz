@@ -196,6 +196,49 @@ describe("EvaluationList", () => {
     );
   });
 
+  it("groups by state in lifecycle order or by mode, keeps the sort inside a group, and remembers the choice", async () => {
+    const user = userEvent.setup();
+    mockFetch(
+      list([
+        summary({ title: "Zebra", state: "closed" }),
+        summary({ id: id("evaluation", 2), title: "Alpha", state: "closed", mode: "exercise" }),
+        summary({ id: id("evaluation", 3), title: "Beta", state: "draft" }),
+        summary({ id: id("evaluation", 4), title: "Gamma", state: "running", mode: "poll" }),
+      ]),
+    );
+    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
+    await screen.findByText("Zebra");
+    const group = screen.getByRole("radiogroup", { name: "Group by" });
+    // A band is a row whose one cell spans the table; its count follows the label.
+    const lines = () =>
+      screen
+        .getAllByRole("row")
+        .slice(1)
+        .map((row) => {
+          const cells = within(row).getAllByRole("cell");
+          return cells.length === 1 ? `[${cells[0]!.textContent}]` : (within(cells[0]!).getAllByText(/./)[0]!.textContent ?? "");
+        });
+    expect(lines()).toEqual(["Zebra", "Alpha", "Beta", "Gamma"]);
+
+    await user.click(within(group).getByRole("radio", { name: "Status" }));
+    expect(lines()).toEqual(["[draft1]", "Beta", "[running1]", "Gamma", "[closed2]", "Zebra", "Alpha"]);
+    expect(localStorage.getItem("quiz-evaluations-group")).toBe("status");
+
+    // A column sort applies inside each group.
+    await user.click(screen.getByRole("button", { name: "Title" }));
+    expect(lines()).toEqual(["[draft1]", "Beta", "[running1]", "Gamma", "[closed2]", "Alpha", "Zebra"]);
+
+    await user.click(within(group).getByRole("radio", { name: "Mode" }));
+    expect(lines()).toEqual(["[Exam2]", "Beta", "Zebra", "[Exercise1]", "Alpha", "[Poll1]", "Gamma"]);
+  });
+
+  it("offers no grouping for a single evaluation", async () => {
+    mockFetch(list([summary()]));
+    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
+    await screen.findByText("Quiz 3");
+    expect(screen.queryByRole("radiogroup", { name: "Group by" })).toBeNull();
+  });
+
   it("renders the empty and the failed states", async () => {
     mockFetch(list([]));
     const { unmount } = renderWithProviders(
