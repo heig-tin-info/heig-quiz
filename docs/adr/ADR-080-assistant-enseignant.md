@@ -105,8 +105,9 @@ pool, question, evaluation, template — and never a user's, an
 enrollment's, an attempt's or a student's; the stored exchange keeps the
 pattern without them.*
 
-*Amended by P3 (§9, decision 2): from the question editor, the context also carries the draft's own
-texts, never stored.*
+*Amended by P3 (2026-10-08, §9, decision 2): "This amends §2: from the question editor, the context
+carries the teacher's own text, never stored; the prompt shows the model the draft's free texts only, by
+path, not its key nor its settings."*
 
 ### 3. Where it is offered
 
@@ -638,7 +639,7 @@ navigation whose result the model reads back.
 
 - **Nothing stored, history in the tab** (the spec challenge's default). Rejected by the product owner: a
   teacher comes back to an answer, and an administrator must be able to see what the assistant told a
-  teacher; the 30-day retention and the audited read bound it.
+  teacher. The 30-day retention and the audited read bound it.
 - **Vector RAG with embeddings.** Anthropic has no embeddings API; a second provider contradicts
   F-LLM-01, and the corpus fits an index plus a tool.
 - **The whole corpus in the prompt.** About 80 k tokens per question, cached or not; the index with
@@ -663,3 +664,4 @@ that now holds them:
 | "P2 amendment", "P2, item N" (1–10, and its Deferred list) | [§8](#8-p2-read-tools), "The P2 amendment", item N |
 | "P2b amendment", "P2b", its decisions 1–3 and its design as built | [§10](#10-p2b-driving-the-interface) |
 | "P3 amendment", "P3, decision N" (1–11), the classified write commands, the stub, Deferred | [§9](#9-p3-writes), "The P3 amendment", decision N |
+| A bare "ADR-080 amendment of 2026-10-08" (three comments of `apps/web/scripts/screenshots.mjs`, each prefixed with its phase) | "P2 (…)" is [§8](#8-p2-read-tools), "P2b (…)" [§10](#10-p2b-driving-the-interface), "P3 (…)" [§9](#9-p3-writes) |
