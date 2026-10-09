@@ -15,8 +15,8 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createApiToken } from "../../auth/tokens.js";
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
-import { defaultProjectGradingScale } from "@quiz/contracts";
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { defaultProjectGradingScale, CSRF_COOKIE } from "@quiz/contracts";
 import { avatars, classrooms, githubOrganizations, groupSets, importIdMap, projects } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";

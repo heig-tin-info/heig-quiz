@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, Monitor, Pencil, RotateCcw } from "lucide-react";
 import { useState } from "react";
 
-import { KIOSK_LABEL_MAX, KioskDevicePatch, type KioskAttestation, type KioskDevice } from "@quiz/contracts";
+import { KIOSK_LABEL_MAX, KioskDevicePatch, type KioskDevice } from "@quiz/contracts";
+import type { KioskAttestation } from "@quiz/domain";
 
 import { api, apiErrorMessage, usePublicConfig } from "./api";
 import { useConfirm } from "./confirm";

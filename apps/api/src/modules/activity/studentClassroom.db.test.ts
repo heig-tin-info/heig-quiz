@@ -11,9 +11,9 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { StudentClassroom, StudentClassroomPage, type SessionKind } from "@quiz/contracts";
+import { StudentClassroom, StudentClassroomPage, CSRF_COOKIE, type SessionKind } from "@quiz/contracts";
 
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import {
   attempts,
   classroomJournals,

@@ -13,7 +13,8 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { NotificationPayload, type CheckStatus, type SystemCheckKey } from "@quiz/contracts";
+import { NotificationPayload, type SystemCheckKey } from "@quiz/contracts";
+import type { CheckStatus } from "@quiz/domain";
 
 import type { AppConfig } from "../../config.js";
 import { healthCheckStates, notifications, users } from "../../db/schema.js";

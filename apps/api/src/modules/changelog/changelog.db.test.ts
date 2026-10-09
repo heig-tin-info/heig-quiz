@@ -7,9 +7,9 @@
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { ChangelogList, type ChangelogSource } from "@quiz/contracts";
+import { ChangelogList, CSRF_COOKIE, type ChangelogSource } from "@quiz/contracts";
 
-import { CSRF_COOKIE, SESSION_COOKIE, createSession, type NewSession } from "../../auth/session.js";
+import { SESSION_COOKIE, createSession, type NewSession } from "../../auth/session.js";
 import { changelogEntries, users } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { syncChangelog } from "./service.js";

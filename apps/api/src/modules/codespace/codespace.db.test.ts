@@ -25,6 +25,7 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  CSRF_COOKIE,
   CodespaceAssignmentSync,
   DEFAULT_MAX_ACTIVE_SESSIONS,
   LAUNCH_AUDIENCE,
@@ -38,7 +39,7 @@ import {
 } from "@quiz/contracts";
 import { verifyHs256 } from "@quiz/domain";
 
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
 import type { AppConfig } from "../../config.js";
 import {

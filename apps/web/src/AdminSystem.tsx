@@ -16,7 +16,6 @@ import {
 import type {
   CheckCause,
   CheckDetail,
-  CheckStatus,
   CheckValue,
   DetailMeaning,
   ScheduledTaskKey,
@@ -27,6 +26,7 @@ import type {
   SystemStatusQuery,
   TestMailResult,
 } from "@quiz/contracts";
+import type { CheckStatus } from "@quiz/domain";
 
 import { api, ApiError, apiErrorMessage } from "./api";
 import { formatBytes, formatDecimal, formatMs, useI18n, useT, type Dict } from "./i18n";

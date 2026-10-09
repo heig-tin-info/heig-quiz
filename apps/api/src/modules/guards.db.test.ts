@@ -11,10 +11,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { eq } from "drizzle-orm";
+import { CSRF_COOKIE } from "@quiz/contracts";
 import type { SessionKind } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
-import { createSession, CSRF_COOKIE, SESSION_COOKIE } from "../auth/session.js";
+import { createSession, SESSION_COOKIE } from "../auth/session.js";
 import { evaluations } from "../db/schema.js";
 import { fakeShort } from "../test/fakeType.js";
 import { testServer, type TestServer } from "../test/http.js";

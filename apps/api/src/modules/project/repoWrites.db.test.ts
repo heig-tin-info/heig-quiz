@@ -19,9 +19,9 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ProjectDetail, ProjectInvitationResent, ProjectRepoProtection, ProjectSummary } from "@quiz/contracts";
+import { ProjectDetail, ProjectInvitationResent, ProjectRepoProtection, ProjectSummary, CSRF_COOKIE } from "@quiz/contracts";
 
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
 import { loadConfig } from "../../config.js";
 import {

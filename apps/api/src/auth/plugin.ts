@@ -9,7 +9,7 @@ import type { AppConfig } from "../config.js";
 import { avatars, users } from "../db/schema.js";
 import { publish } from "../events.js";
 import { errorClass, tracked } from "../serviceHealth.js";
-import { CoachSeenPatch, MePatch, type PublicConfig, type SessionKind } from "@quiz/contracts";
+import { CoachSeenPatch, MePatch, CSRF_COOKIE, CSRF_HEADER, type PublicConfig, type SessionKind } from "@quiz/contracts";
 
 import { shownAvatar } from "../modules/avatar.js";
 import { invalid } from "../modules/http.js";
@@ -25,8 +25,6 @@ import { trustRefused } from "./trust.js";
 import { apiTokenRoutes } from "./tokenRoutes.js";
 import { ASSIST_AUDIENCE, findTokenUser, isApiToken } from "./tokens.js";
 import {
-  CSRF_COOKIE,
-  CSRF_HEADER,
   PORTAL,
   SESSION_COOKIE,
   SITTING,

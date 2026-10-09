@@ -12,7 +12,7 @@
  */
 import { z } from "zod";
 
-import { LLM_CONFIDENCES } from "@quiz/core/server";
+import { LLM_CONFIDENCES } from "@quiz/core/llm";
 import { GRADING_SOURCES, GRADING_STATES } from "@quiz/domain";
 
 import { IdParam, StaffItemRef } from "./common.js";

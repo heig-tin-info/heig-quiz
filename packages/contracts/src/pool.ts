@@ -8,7 +8,7 @@
  */
 import { z } from "zod";
 
-import { QUESTION_TYPE_IDS } from "@quiz/core/client";
+import { QUESTION_TYPE_IDS } from "@quiz/core/contract";
 import { POOL_ROLES, POOL_VISIBILITIES } from "@quiz/domain";
 
 import { BoolFlag, IntList, PersonRef, StringList, ZodIssueLite, pageOf } from "./common.js";

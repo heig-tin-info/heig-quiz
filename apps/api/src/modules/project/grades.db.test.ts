@@ -20,9 +20,9 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ProjectDetail, ProjectReleaseResult, ProjectRepoScores } from "@quiz/contracts";
+import { ProjectDetail, ProjectReleaseResult, ProjectRepoScores, CSRF_COOKIE } from "@quiz/contracts";
 
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
 import { auditLog, courseStaff, enrollments, githubOrganizations, projectGradeRuns, projectRepos, projects } from "../../db/schema.js";
 import { resetLiveStateCache } from "../../github/metrics.js";

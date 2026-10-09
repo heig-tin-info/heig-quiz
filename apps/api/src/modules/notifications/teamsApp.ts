@@ -32,6 +32,7 @@ import {
   type NotificationPayload,
   type TeamsNotificationKind,
 } from "@quiz/contracts";
+import type { Locale } from "@quiz/domain";
 
 import type { ActivityNotification } from "./teams.js";
 import { TEAMS_COLOR_PNG, TEAMS_OUTLINE_PNG } from "./teamsIcons.js";
@@ -39,7 +40,6 @@ import {
   activityParameters,
   notificationPath,
   serverText,
-  type MailLocale,
   type RenderedNotification,
 } from "./templates.js";
 
@@ -125,7 +125,7 @@ interface AppOptions {
  * `activities.activityTypes[0].templateText`, …), in one language. The
  * manifest takes the English values in place, `fr.json` the French ones.
  */
-export function teamsAppStrings(locale: MailLocale): Record<string, string> {
+export function teamsAppStrings(locale: Locale): Record<string, string> {
   const t = serverText(locale);
   const strings: Record<string, string> = {
     "name.short": t["app.name.short"],
@@ -189,7 +189,7 @@ function teamsManifest(opts: AppOptions): Record<string, unknown> {
 }
 
 /** `fr.json`: the French strings, under the localization schema. */
-export function teamsLocalization(locale: MailLocale): Record<string, unknown> {
+export function teamsLocalization(locale: Locale): Record<string, unknown> {
   return {
     $schema: `${SCHEMAS}/MicrosoftTeams.Localization.schema.json`,
     ...teamsAppStrings(locale),

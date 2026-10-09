@@ -22,10 +22,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { z } from "zod";
 
-import { issuesOf } from "@quiz/contracts";
+import { issuesOf, CSRF_COOKIE, CSRF_HEADER } from "@quiz/contracts";
 import type { Locale } from "@quiz/domain";
 
-import { CSRF_COOKIE, CSRF_HEADER } from "../auth/session.js";
 
 /** `400 validation` with the issues an editor can underline. */
 export function invalid(reply: FastifyReply, error: z.ZodError) {

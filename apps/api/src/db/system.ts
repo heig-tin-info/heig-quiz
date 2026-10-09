@@ -18,8 +18,8 @@
  */
 import { boolean, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
-import { CHECK_STATUSES, SCHEDULED_TASK_STATUSES, SYSTEM_CHECK_KEYS } from "@quiz/contracts";
-import { CHECK_NOTIFIED } from "@quiz/domain";
+import { SYSTEM_CHECK_KEYS } from "@quiz/contracts";
+import { CHECK_NOTIFIED, CHECK_STATUSES, SCHEDULED_TASK_STATUSES } from "@quiz/domain";
 
 export const scheduledTasks = pgTable("scheduled_tasks", {
   key: text("key").primaryKey(),

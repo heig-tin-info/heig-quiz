@@ -20,13 +20,12 @@ import type { FastifyInstance } from "fastify";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import {
-  CHECK_STATUSES,
   SYSTEM_ALERT_STATES,
   type NotificationPayload,
   type SystemCheck,
   type SystemCheckKey,
 } from "@quiz/contracts";
-import { nextCheckState, type CheckState } from "@quiz/domain";
+import { CHECK_STATUSES, nextCheckState, type CheckState } from "@quiz/domain";
 
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";

@@ -4,7 +4,7 @@
  */
 import { z } from "zod";
 
-import { SCHEDULED_TASK_STATUSES, type ScheduledTaskStatus } from "@quiz/domain";
+import { SCHEDULED_TASK_STATUSES } from "@quiz/domain";
 
 /** `POST /app/api/admin/teachers` — grant the teacher role to an address. */
 export const TeacherGrantCreate = z.object({ email: z.email() });
@@ -79,9 +79,6 @@ export const SCHEDULED_TASK_KEYS = [
   "integrity.purge",
 ] as const;
 export type ScheduledTaskKey = (typeof SCHEDULED_TASK_KEYS)[number];
-
-/** `running` from the claim until the run ends; `null` for a task never run. */
-export { SCHEDULED_TASK_STATUSES, type ScheduledTaskStatus };
 
 /** The period an administrator may set: one minute to one week. */
 export const TASK_INTERVAL_MIN_MINUTES = 1;

@@ -28,7 +28,6 @@ import {
   serviceCheckKey,
   type CheckCause,
   type CheckDetail,
-  type CheckStatus,
   type CheckValue,
   type HealthResponse,
   type SystemCheck,
@@ -54,6 +53,7 @@ import {
   taskAttention,
   tickerStatus,
   worstStatus,
+  type CheckStatus,
   type ServiceName,
 } from "@quiz/domain";
 

@@ -45,10 +45,11 @@ import { type Dict, en } from "./en";
 export type { Locale };
 export type LocaleChoice = Locale | "browser";
 
-export const LOCALES: { code: Locale; label: string }[] = [
-  { code: "en", label: "English" },
-  { code: "fr", label: "Français" },
-];
+/**
+ * Each interface language named in itself. The list is the domain's
+ * `LOCALES`: a language added there does not compile until it is named here.
+ */
+export const LOCALE_LABELS: Record<Locale, string> = { en: "English", fr: "Français" };
 
 const STORE_KEY = "quiz-locale";
 

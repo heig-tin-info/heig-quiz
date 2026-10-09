@@ -6,6 +6,8 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { CSRF_COOKIE } from "@quiz/contracts";
+
 import { auditLog, sessions } from "../db/schema.js";
 import { subscribe, type BusMessage } from "../events.js";
 import { testServer, type TestServer } from "../test/http.js";
@@ -139,7 +141,7 @@ describe("switching them on and off", () => {
 
 /** A second portal session of the same account, as another browser would hold. */
 async function secondSession(userId: string) {
-  const { createSession, SESSION_COOKIE, CSRF_COOKIE } = await import("./session.js");
+  const { createSession, SESSION_COOKIE } = await import("./session.js");
   const session = await createSession(server.app.db, userId, 12);
   return {
     cookie: `${SESSION_COOKIE}=${session.token}; ${CSRF_COOKIE}=${session.csrf}`,

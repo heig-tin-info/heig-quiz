@@ -30,6 +30,7 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  CSRF_COOKIE,
   defaultProjectGradingScale,
   GroupErrorCode,
   GroupSetDetail,
@@ -40,7 +41,7 @@ import {
   type SessionKind,
 } from "@quiz/contracts";
 
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
 import {
   auditLog,

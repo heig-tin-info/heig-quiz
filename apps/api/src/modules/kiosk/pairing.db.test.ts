@@ -7,10 +7,10 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { DEVICE_CODE_GRANT, KioskDeviceAuthorization, PairPreview } from "@quiz/contracts";
+import { DEVICE_CODE_GRANT, KioskDeviceAuthorization, PairPreview, CSRF_COOKIE } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
-import { createSession, CSRF_COOKIE, SESSION_COOKIE } from "../../auth/session.js";
+import { createSession, SESSION_COOKIE } from "../../auth/session.js";
 import { auditLog, kioskPairings, sessions } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type Payload, type TestServer } from "../../test/http.js";

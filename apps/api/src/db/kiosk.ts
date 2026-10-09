@@ -12,8 +12,8 @@
  */
 import { char, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
-import { KIOSK_ATTESTATIONS, KIOSK_DEVICE_STATUSES } from "@quiz/contracts";
-import { KIOSK_WATCHES, PAIRING_STATES } from "@quiz/domain";
+import { KIOSK_DEVICE_STATUSES } from "@quiz/contracts";
+import { KIOSK_ATTESTATIONS, KIOSK_WATCHES, PAIRING_STATES } from "@quiz/domain";
 
 import { users } from "./auth.js";
 import { evaluations } from "./evaluation.js";

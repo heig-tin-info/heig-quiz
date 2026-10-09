@@ -20,6 +20,7 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  CSRF_COOKIE,
   Journal,
   JOURNAL_ASSET_MAX_BYTES,
   JOURNAL_MARKDOWN_MAX,
@@ -29,7 +30,7 @@ import {
   type JournalStaff,
 } from "@quiz/contracts";
 
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import {
   auditLog,
   classroomJournals,

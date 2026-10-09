@@ -12,7 +12,8 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import { asc, eq, getTableColumns, sql } from "drizzle-orm";
 
-import type { KioskAttestation, KioskDevice, KioskDevicePatch, KioskStation } from "@quiz/contracts";
+import type { KioskDevice, KioskDevicePatch, KioskStation } from "@quiz/contracts";
+import type { KioskAttestation } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { kioskDevices } from "../../db/schema.js";

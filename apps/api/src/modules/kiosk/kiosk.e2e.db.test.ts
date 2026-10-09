@@ -15,6 +15,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  CSRF_COOKIE,
   DEVICE_CODE_GRANT,
   DashboardView,
   KioskAttested,
@@ -25,7 +26,7 @@ import {
 } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
-import { CSRF_COOKIE, SESSION_COOKIE } from "../../auth/session.js";
+import { SESSION_COOKIE } from "../../auth/session.js";
 import { auditLog } from "../../db/schema.js";
 import { subscribe } from "../../events.js";
 import { fakeShort } from "../../test/fakeType.js";

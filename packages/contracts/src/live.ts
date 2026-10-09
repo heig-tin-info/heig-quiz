@@ -20,7 +20,6 @@ import {
   PROGRESS_STATUSES,
   PROVIDED_CALCULATORS,
   RETAKE_REFUSALS,
-  TRUSTED_CLIENTS,
   type ConditionsInput,
   type ImposedCondition as DomainImposedCondition,
 } from "@quiz/domain";
@@ -36,6 +35,7 @@ import {
   RetakeScope,
   TrustedClient,
 } from "./evaluation.js";
+import { SESSION_KINDS } from "./api.js";
 import { StaffItemRef } from "./common.js";
 import { Verdict } from "./grading.js";
 import { IntegrityIncident } from "./integrity.js";
@@ -662,7 +662,7 @@ export type DashboardCell = z.infer<typeof DashboardCell>;
  * off a station. Staff only, like the whole dashboard.
  */
 export const DashboardAccess = z.object({
-  kind: z.enum(["portal", ...TRUSTED_CLIENTS]),
+  kind: z.enum(SESSION_KINDS).exclude(["impersonation"]),
   station: z.string().nullable(),
   alert: z.enum(["suspended", "unavailable"]).nullable(),
 });

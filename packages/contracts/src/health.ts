@@ -46,8 +46,6 @@ export type HealthResponse = z.infer<typeof HealthResponse>;
 
 // --- The system status (N-OPS-03, ADR-055) -------------------------------
 
-export { CHECK_STATUSES, type CheckStatus };
-
 /** The check key of a third-party service (ADR-055 §6). */
 export const serviceCheckKey = <N extends ServiceName>(name: N) => `service.${name}` as const;
 

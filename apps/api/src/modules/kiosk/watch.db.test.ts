@@ -8,11 +8,11 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DEVICE_CODE_GRANT, DashboardView, KioskDeviceAuthorization, type ServerEvent } from "@quiz/contracts";
+import { DEVICE_CODE_GRANT, DashboardView, KioskDeviceAuthorization, CSRF_COOKIE, type ServerEvent } from "@quiz/contracts";
 import { KIOSK_SILENT_AFTER_MS } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
-import { createSession, CSRF_COOKIE, SESSION_COOKIE } from "../../auth/session.js";
+import { createSession, SESSION_COOKIE } from "../../auth/session.js";
 import { auditLog, kioskDevices, kioskPairings, sessions } from "../../db/schema.js";
 import { subscribe } from "../../events.js";
 import { fakeShort } from "../../test/fakeType.js";

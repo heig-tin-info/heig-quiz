@@ -3,7 +3,7 @@ import { ScrollText, Users, Wifi, WifiOff } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { TransitionRefusal, type DashboardAlertEvent, type DashboardRow } from "@quiz/contracts";
-import { pausableMode, trustedClientsOf } from "@quiz/domain";
+import { isLiveState, pausableMode, trustedClientsOf } from "@quiz/domain";
 
 import { ApiError, api, usePublicConfig } from "../api";
 import { useConfirm } from "../confirm";
@@ -198,7 +198,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
 
   const state = query.data ?? null;
   const evaluationState = state?.view.evaluation.state ?? "draft";
-  const live = evaluationState === "running" || evaluationState === "paused";
+  const live = isLiveState(evaluationState);
   // Only an exam pauses (§1 glossary); unknown until the detail has loaded.
   const canPause = detail.data !== undefined && pausableMode(detail.data.evaluation.mode);
   const pausable = live && (canPause || evaluationState === "paused");

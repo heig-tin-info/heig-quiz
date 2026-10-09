@@ -23,9 +23,9 @@
 import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
-import { GroupConsequences, ProjectDetail, ProjectErrorCode, ProjectSummary } from "@quiz/contracts";
+import { GroupConsequences, ProjectDetail, ProjectErrorCode, ProjectSummary, CSRF_COOKIE } from "@quiz/contracts";
 
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
 import { classrooms, projectGroupMembers, projectGroups, projects } from "../../db/schema.js";
 import {

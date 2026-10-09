@@ -104,13 +104,10 @@ export const DEFAULT_MCQ_POLICY = DEFAULT_MCQ_SCORE_POLICY;
 export const CategorizePolicy = z.enum(CATEGORIZE_SCORE_POLICIES);
 export type CategorizePolicy = z.infer<typeof CategorizePolicy>;
 
-/** What an evaluation without the setting scores `inherit` questions with. */
-export const DEFAULT_CATEGORIZE_POLICY = DEFAULT_CATEGORIZE_SCORE_POLICY;
-
-/** The categorize policy of an evaluation's settings (ADR-036); absent is {@link DEFAULT_CATEGORIZE_POLICY}. */
+/** The categorize policy of an evaluation's settings (ADR-036); absent is `DEFAULT_CATEGORIZE_SCORE_POLICY` of `@quiz/domain`. */
 export const categorizePolicyOf = (settings: {
   categorizePolicy?: CategorizePolicy | undefined;
-}): CategorizePolicy => settings.categorizePolicy ?? DEFAULT_CATEGORIZE_POLICY;
+}): CategorizePolicy => settings.categorizePolicy ?? DEFAULT_CATEGORIZE_SCORE_POLICY;
 
 /** F-EVAL-15: which attempt is a student's result when an exercise allows several. */
 export const RetakeKeep = z.enum(RETAKE_KEEPS);

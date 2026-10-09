@@ -21,9 +21,9 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { GradeRunList, ProjectDetail, type ProjectGradingScale } from "@quiz/contracts";
+import { GradeRunList, ProjectDetail, CSRF_COOKIE, type ProjectGradingScale } from "@quiz/contracts";
 
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
 import { loadConfig } from "../../config.js";
 import { enrollments, githubAccounts, githubOrganizations, gradeDispatches, projectGradeRuns, projectRepos, projects, pushReceipts } from "../../db/schema.js";

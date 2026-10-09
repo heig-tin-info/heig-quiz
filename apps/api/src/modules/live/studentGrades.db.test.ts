@@ -13,10 +13,10 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { StudentGrades, type FeedbackPolicy, type SessionKind } from "@quiz/contracts";
+import { StudentGrades, CSRF_COOKIE, type FeedbackPolicy, type SessionKind } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { classrooms, enrollments, evaluations } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { evaluationRows } from "../../test/grades.js";

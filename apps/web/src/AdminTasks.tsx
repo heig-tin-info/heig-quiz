@@ -5,8 +5,8 @@ import type {
   AdminScheduledTask,
   ScheduledTaskKey,
   ScheduledTaskPatch,
-  ScheduledTaskStatus,
 } from "@quiz/contracts";
+import type { ScheduledTaskStatus } from "@quiz/domain";
 
 import { api, apiErrorMessage } from "./api";
 import { formatMs, useT, type Dict } from "./i18n";

@@ -22,8 +22,6 @@ import type { NotificationKind, NotificationPayload, TeamsNotificationKind } fro
 import type { Locale } from "@quiz/domain";
 import { escapeHtml } from "@quiz/docrender/highlight";
 
-export type MailLocale = Locale;
-
 const en = {
   "results_released.subject": "Results available: {evaluationTitle}",
   "results_released.body": "The results of “{evaluationTitle}” are available.",
@@ -344,10 +342,10 @@ const fr: Record<Key, string> = {
   "activity.github_org_lost.template": "Organisation GitHub perdue : {classroomName}",
 };
 
-const DICTS: Record<MailLocale, Record<Key, string>> = { en, fr };
+const DICTS: Record<Locale, Record<Key, string>> = { en, fr };
 
 /** The whole dictionary of one language (the Teams app package reads it). */
-export function serverText(locale: MailLocale): Record<Key, string> {
+export function serverText(locale: Locale): Record<Key, string> {
   return DICTS[locale];
 }
 
@@ -504,7 +502,7 @@ function teamsLine(s: string): string {
 }
 
 /** Narrows `users.locale` (null, or a value this dictionary lacks) to a language. */
-export function mailLocale(locale: string | null | undefined): MailLocale {
+export function mailLocale(locale: string | null | undefined): Locale {
   return locale === "fr" ? "fr" : "en";
 }
 
@@ -515,7 +513,7 @@ export function mailLocale(locale: string | null | undefined): MailLocale {
  */
 export function renderNotification(
   payload: NotificationPayload,
-  locale: MailLocale,
+  locale: Locale,
   webUrl: string,
 ): RenderedNotification {
   const t = DICTS[locale];
@@ -540,7 +538,7 @@ export function renderNotification(
  * The administrator's test e-mail (ADR-055 §6): the same layout as every
  * message, naming the platform, and linking back to the System status.
  */
-export function renderTestMail(locale: MailLocale, webUrl: string): Pick<RenderedNotification, "subject" | "text" | "html"> {
+export function renderTestMail(locale: Locale, webUrl: string): Pick<RenderedNotification, "subject" | "text" | "html"> {
   const t = DICTS[locale];
   return composeMail(t, {
     subject: "test_mail.subject",
