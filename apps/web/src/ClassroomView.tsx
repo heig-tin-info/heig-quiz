@@ -192,9 +192,9 @@ export function ClassroomView({
   const toast = useToast();
   const toastError = useErrorToast();
   const me = useMe();
-  const [importing, setImporting] = useState(false);
-  const [editingPeriod, setEditingPeriod] = useState(false);
-  const [creating, setCreating] = useState(false);
+  /** The one dialog open over the page: the roster import, the period, a new evaluation. */
+  const [layer, setLayer] = useState<"import" | "period" | "evaluation" | null>(null);
+  const closeLayer = () => setLayer(null);
   // The evaluations are where the page opens, whatever the roster holds: the
   // sidebar and the course page land there, the Roster is one click away.
   const [tabParam, setTab] = useSearchParam("tab", "evaluations");
@@ -299,7 +299,7 @@ export function ClassroomView({
         title={
           <span className="flex flex-wrap items-baseline gap-3">
             {data.name}
-            <PeriodLink room={data} onOpen={() => setEditingPeriod(true)} />
+            <PeriodLink room={data} onOpen={() => setLayer("period")} />
             {data.archivedAt ? <Badge tone="zinc">{t("classrooms.archived")}</Badge> : null}
             {link ? (
               <Badge tone="zinc" icon={GithubIcon}>
@@ -328,7 +328,7 @@ export function ClassroomView({
             {/* The open tab's one primary action, always in this slot: the
                 page never shows both, so the squint test has one answer. */}
             {tab === "roster" ? (
-              <Button data-coach="classroom.add" onClick={() => setImporting(true)}>
+              <Button data-coach="classroom.add" onClick={() => setLayer("import")}>
                 <UserPlus /> {t("roster.add")}
               </Button>
             ) : tab === "evaluations" ? (
@@ -336,7 +336,7 @@ export function ClassroomView({
                 classroomId={id}
                 github={github.isSuccess ? github.data : undefined}
                 navigate={navigate}
-                onEvaluation={() => setCreating(true)}
+                onEvaluation={() => setLayer("evaluation")}
                 onConnect={openConnect}
               />
             ) : tab === "groups" && !data.archivedAt ? (
@@ -392,7 +392,7 @@ export function ClassroomView({
                   icon={Users}
                   title={t("roster.empty.title")}
                   action={
-                    <Button onClick={() => setImporting(true)}>
+                    <Button onClick={() => setLayer("import")}>
                       <UserPlus /> {t("roster.add")}
                     </Button>
                   }
@@ -415,7 +415,7 @@ export function ClassroomView({
             <EvaluationList
               classroomId={id}
               navigate={navigate}
-              onNew={() => setCreating(true)}
+              onNew={() => setLayer("evaluation")}
               newProject={newProjectAction(id, github.isSuccess ? github.data : undefined, navigate, openConnect, t)}
             />
             {/* M3-10: the projects, a group of their own under the evaluations. */}
@@ -445,16 +445,14 @@ export function ClassroomView({
         )}
       </div>
 
-      {importing ? (
-        <RosterImport classroomId={id} onClose={() => setImporting(false)} />
-      ) : null}
-      {editingPeriod ? <PeriodModal room={data} onClose={() => setEditingPeriod(false)} /> : null}
-      {creating ? (
+      {layer === "import" ? <RosterImport classroomId={id} onClose={closeLayer} /> : null}
+      {layer === "period" ? <PeriodModal room={data} onClose={closeLayer} /> : null}
+      {layer === "evaluation" ? (
         <NewEvaluationModal
           classroomId={id}
-          onClose={() => setCreating(false)}
+          onClose={closeLayer}
           onCreated={(evaluation) => {
-            setCreating(false);
+            closeLayer();
             navigate({ view: "evaluation", id: evaluation });
           }}
         />
