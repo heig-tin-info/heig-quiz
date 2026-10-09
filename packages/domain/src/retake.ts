@@ -9,15 +9,26 @@
  *   - {@link keptAttempt}: which of a student's attempts counts, `best` or
  *     `last`. The results, the grade, the CSV, the release and the student's
  *     own card all use it, so they can never disagree on which attempt is the
- *     student's result.
+ *     student's result;
+ *   - {@link itemStanding} and {@link partialRetakeRefusal} (ADR-090): which
+ *     questions of an attempt are acquired, and whether a retake may ask only
+ *     the others.
  *
  * Pure: the current instant is injected, nothing is read from a database.
  */
 import { isLiveState, type EvaluationModeName } from "./evaluationConfig.js";
 import type { EvaluationStateName } from "./itemList.js";
+import type { NavigationMode } from "./questionProgress.js";
 
 /** Which attempt a student's result is: the best score, or the last attempt. */
 export type RetakeKeep = "best" | "last";
+
+/**
+ * What a retake asks again (ADR-090): every question (`all`, ADR-025), or
+ * only the questions to review (`to_review`) — the acquired ones are carried
+ * over from the previous attempt as they stand.
+ */
+export type RetakeScope = "all" | "to_review";
 
 /** `settings.retakes` of an evaluation, as on the wire. */
 export interface RetakePolicy {
@@ -25,6 +36,84 @@ export interface RetakePolicy {
   keep: RetakeKeep;
   /** The most attempts a student may take in all; `null` is unlimited. */
   maxAttempts: number | null;
+  /** ADR-090; absent is `all`: read it through {@link retakeScopeOf}. */
+  scope?: RetakeScope | undefined;
+}
+
+/** The scope of a retake rule: absent (every evaluation stored before ADR-090) is `all`. */
+export function retakeScopeOf(policy: Pick<RetakePolicy, "scope">): RetakeScope {
+  return policy.scope ?? "all";
+}
+
+/**
+ * Whether a retake may ask only the questions to review (ADR-090): the
+ * exercise takes retakes and the teacher chose `to_review`.
+ */
+export function partialRetakesOn(mode: EvaluationModeName, policy: RetakePolicy): boolean {
+  return retakesOn(mode, policy) && retakeScopeOf(policy) === "to_review";
+}
+
+/**
+ * ADR-090 §1: a partial retake shows the acquired questions read-only and
+ * lets the student move freely between the others, which only `free`
+ * navigation does — a validated checkpoint carried over would close the
+ * questions before it. The server refuses any other pairing while retakes
+ * are on.
+ */
+export function retakeScopeFits(policy: RetakePolicy, navigation: NavigationMode): boolean {
+  return !policy.enabled || retakeScopeOf(policy) === "all" || navigation === "free";
+}
+
+/**
+ * Where a question of a finished attempt stands for a partial retake
+ * (ADR-090 §2):
+ *
+ * - `acquired`: its validated points reach its maximum. A question worth
+ *   nothing (maximum 0) is acquired whatever its grading — there is nothing
+ *   to win by asking it again; a bonus question (ADR-052) is acquired at its
+ *   maximum like any other;
+ * - `pending`: no validated grading yet (a hand-, model- or runner-graded
+ *   answer nobody settled). Asked again, like `to_review`, but shown
+ *   "awaiting correction", never "wrong";
+ * - `to_review`: validated, below its maximum.
+ */
+export type ItemStanding = "acquired" | "to_review" | "pending";
+
+export interface StandingInput {
+  /** The item's points, as the evaluation gives them. */
+  maxPoints: number;
+  /** The VALIDATED points of the cell, or `null` when none is validated. */
+  validatedPoints: number | null;
+}
+
+export function itemStanding(input: StandingInput): ItemStanding {
+  if (input.maxPoints <= 0) return "acquired";
+  if (input.validatedPoints === null) return "pending";
+  return input.validatedPoints >= input.maxPoints ? "acquired" : "to_review";
+}
+
+/** The ids of the acquired items among `items`, in their order (ADR-090 §2). */
+export function acquiredItems(items: readonly (StandingInput & { id: string })[]): string[] {
+  return items.filter((item) => itemStanding(item) === "acquired").map((item) => item.id);
+}
+
+/**
+ * Why a partial retake is refused, checked after {@link retakeRefusal}
+ * (ADR-090 §3): the teacher did not choose `to_review` (`scope_all`), or
+ * every question is already acquired (`nothing_to_review`) — "Redo
+ * everything" is then the retake left.
+ */
+export type PartialRetakeRefusal = "scope_all" | "nothing_to_review";
+
+export function partialRetakeRefusal(input: {
+  mode: EvaluationModeName;
+  retakes: RetakePolicy;
+  /** The questions of the attempt the retake follows, as {@link itemStanding} reads them. */
+  items: readonly StandingInput[];
+}): PartialRetakeRefusal | null {
+  if (!partialRetakesOn(input.mode, input.retakes)) return "scope_all";
+  if (input.items.every((item) => itemStanding(item) === "acquired")) return "nothing_to_review";
+  return null;
 }
 
 /** The state of an attempt, as on the wire (`AttemptState`). */

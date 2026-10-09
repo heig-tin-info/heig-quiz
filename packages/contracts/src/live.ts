@@ -28,6 +28,7 @@ import {
   FeedbackPolicy,
   Navigation,
   RetakeKeep,
+  RetakeScope,
   TrustedClient,
 } from "./evaluation.js";
 import { IntegrityIncident } from "./integrity.js";
@@ -120,6 +121,12 @@ export const AttemptItem = z.object({
   flagged: z.boolean(),
   /** Navigation already forbids writing to this item (forward_only, milestones). */
   locked: z.boolean(),
+  /**
+   * ADR-090: acquired in the previous attempt and carried over by a partial
+   * retake, answer and grading as they stood. Shown read-only, still
+   * reachable; every write to it is `409 item_acquired`.
+   */
+  acquired: z.boolean(),
 });
 export type AttemptItem = z.infer<typeof AttemptItem>;
 
@@ -151,6 +158,7 @@ export const ImposedCondition = z.discriminatedUnion("key", [
     bonusPercent: z.number().int(),
   }),
   z.object({ key: z.literal("attempts"), kind: z.literal("info"), maxAttempts: z.number().int().nullable() }),
+  z.object({ key: z.literal("partial_retake"), kind: z.literal("info") }),
   z.object({
     key: z.literal("navigation"),
     kind: z.literal("info"),
@@ -319,6 +327,30 @@ export const RetakeRefused = z.object({
   message: z.string().optional(),
 });
 export type RetakeRefused = z.infer<typeof RetakeRefused>;
+
+/**
+ * The body of `POST /evaluations/:id/retake` (ADR-090): redo every question
+ * (`all`, the default, what a body-less request from before ADR-090 means),
+ * or only those to review — refused unless the teacher chose that scope.
+ */
+export const RetakeBody = z.object({ scope: RetakeScope.default("all") });
+export type RetakeBody = z.infer<typeof RetakeBody>;
+
+/**
+ * `POST /evaluations/:id/retake` with `scope: "to_review"` refused, after
+ * the rule of {@link RetakeRefused} passed (ADR-090): the teacher kept every
+ * question (`scope_all`), or nothing is left to review
+ * (`nothing_to_review`). `@quiz/domain`'s `partialRetakeRefusal`.
+ */
+export const PartialRetakeRefusalReason = z.enum(["scope_all", "nothing_to_review"]);
+export type PartialRetakeRefusalReason = z.infer<typeof PartialRetakeRefusalReason>;
+
+export const PartialRetakeRefused = z.object({
+  error: z.literal("partial_retake_refused"),
+  reason: PartialRetakeRefusalReason,
+  message: z.string().optional(),
+});
+export type PartialRetakeRefused = z.infer<typeof PartialRetakeRefused>;
 
 // --- Autosave (PLAN-MVP §4.7) --------------------------------------------
 
@@ -507,6 +539,11 @@ export type AttemptScore = z.infer<typeof AttemptScore>;
 const CardRetakes = z.object({
   keep: RetakeKeep,
   maxAttempts: z.number().int().nullable(),
+  /**
+   * ADR-090: under `to_review` the card's retake opens the results page of
+   * the latest attempt, where the student chooses what to redo.
+   */
+  scope: RetakeScope,
   /** How many attempts the student has taken, the one in progress included. */
   attemptCount: z.number().int(),
   /** The server's rule (`retakeRefusal`), evaluated now: the Retake button. */

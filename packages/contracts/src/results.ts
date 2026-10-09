@@ -11,7 +11,7 @@
  */
 import { z } from "zod";
 
-import { EvaluationMode, GradingScale, RetakeKeep } from "./evaluation.js";
+import { EvaluationMode, GradingScale, RetakeKeep, RetakeScope } from "./evaluation.js";
 import { AttemptScore, AttemptState, RetakeRefusalReason } from "./live.js";
 import { Verdict } from "./grading.js";
 
@@ -253,8 +253,38 @@ export const RetakeStatus = z.object({
   /** Attempts taken so far, the first included. */
   attemptCount: z.number().int(),
   refusal: RetakeRefusalReason.nullable(),
+  /** ADR-090: what a retake asks again by default. */
+  scope: RetakeScope,
+  /**
+   * ADR-090: under `to_review`, how many questions of the LATEST attempt a
+   * partial retake would ask again (the "(n)" of its button) — 0 when all
+   * are acquired, which leaves "Redo everything" alone. `null` under `all`,
+   * or while the latest attempt is unfinished.
+   */
+  toReview: z.number().int().nonnegative().nullable(),
 });
 export type RetakeStatus = z.infer<typeof RetakeStatus>;
+
+/**
+ * Where a question stands for a partial retake (ADR-090), `@quiz/domain`'s
+ * `ItemStanding`: `acquired`, `to_review`, or `pending` (awaiting a
+ * teacher's grading — asked again, but not wrong).
+ */
+export const ItemStanding = z.enum(["acquired", "to_review", "pending"]);
+export type ItemStanding = z.infer<typeof ItemStanding>;
+
+/**
+ * One question of the attempt on the page, as a partial retake reads it
+ * (ADR-090 §4): its id, its rank in the STUDENT's own order (0 is the first
+ * question they saw) and its standing. Nothing else — no points, no answer,
+ * no key — so it may travel under the policy `none`.
+ */
+export const ReviewItem = z.object({
+  itemId: z.uuid(),
+  rank: z.number().int().nonnegative(),
+  standing: ItemStanding,
+});
+export type ReviewItem = z.infer<typeof ReviewItem>;
 
 const StudentResults = z.object({
   available: z.literal(true),
@@ -307,6 +337,12 @@ export const FeedbackPending = z.object({
   score: AttemptScore.optional(),
   /** Only with `retakes_open`: whether another attempt may start now, and why not. */
   retake: RetakeStatus.optional(),
+  /**
+   * Only with `retakes_open`, under the scope `to_review`, and for the
+   * student's latest attempt: each question's standing, in the student's
+   * order (ADR-090 §4) — whatever the feedback policy, `none` included.
+   */
+  review: z.array(ReviewItem).optional(),
 });
 export type FeedbackPending = z.infer<typeof FeedbackPending>;
 
