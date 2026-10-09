@@ -187,7 +187,7 @@ In the critical path only if D09 finds online assignments in production.
 | M8-02 | Legacy URL resolver | done | M8-01, M3-12, M4-04 | `merge/M8-02-legacy-urls` | #547 | `GET /legacy/classroom/*`: every row of §6.6 (pure rule in domain, ids through the id map, targets loaded under `staffAccess`); the import now writes the `classrooms` id-map rows; card M8-02 "As delivered" |
 | M8-03 | Caddy fragments | done | — | `merge/M8-03-caddy-fragments` | #598 | `infra/caddy/`: maintenance (C1) and redirect (C6) fragments, curl matrix script; card M8-03 "As delivered" |
 | M8-04 | Codespace identity remap | dropped | M6 in scope | | | Product owner, 2026-10-09: classroom's portal never served a real class, and it has been stopped and disabled since M6-04 (SQLite and volumes archived in `/root/classroom-codespace` on the engine VM); Quiz's portal started empty. Nothing to remap; runbook step C4 |
-| M8-05 | Cutover runbook | review | M8-01…03 | `merge/M8-05-cutover-runbook` | PR_NUMBER | [`10-cutover-runbook.md`](10-cutover-runbook.md): checklist, open decisions O1–O7, T-7…T-1, C1–C8, rollback, D, E/M9-01, announcements, M8-06's steps; card M8-05 "As delivered". Before M8-06: the production image must run the import (O6, §1.6) |
+| M8-05 | Cutover runbook | review | M8-01…03 | `merge/M8-05-cutover-runbook` | #653 | [`10-cutover-runbook.md`](10-cutover-runbook.md): checklist, open decisions O1–O7, T-7…T-1, C1–C8, rollback, D, E/M9-01, announcements, M8-06's steps; card M8-05 "As delivered". Before M8-06: the production image must run the import (O6, §1.6) |
 | M8-06 | Rehearsal on staging | todo | M8-05, D22, runbook O6 | | | Runbook §7 |
 | M8-07 | Cutover | todo | M8-06 go, D20, runbook O1–O5 | | | Runbook §2 |
 
