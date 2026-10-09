@@ -418,5 +418,5 @@ Step 0, done by hand on real hardware, gates the SEB hardening (§3–4) and the
 
 | Old reference | Now |
 | --- | --- |
-| §10 Delivery, steps 1–8 (one pull request each) | removed: delivery lives in `docs/merge/PROGRESS.md` and `changes/` |
+| §10 Delivery, steps 1–8 (one pull request each): 1 this ADR and the spec; 2 the trusted-client setting and the generalized `sitRefusal` (no kiosk reachable yet); 3 SEB hardening (§3–4); 4 registry and attestation; 5 the extension; 6 pairing and the two pages; 7 re-attestation, suspension and the supervisor's view; 8 the end-to-end tests with the mock attestation, and `docs/development/kiosk.md` | removed: delivery lives in `docs/merge/PROGRESS.md` and `changes/` (`apps/api/src/db/kiosk.ts` cites steps 4 and 6) |
 | §10, step 0 (hardware checks gating steps 3 and 4) | [§10](#10-hardware-checks-before-the-switches) |
