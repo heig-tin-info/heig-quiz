@@ -27,6 +27,7 @@ import {
 } from "@quiz/domain/outputDiff";
 
 import { CheckboxField, Segmented } from "./fields.js";
+import { Th } from "./review.js";
 import { badge, cx } from "./styles.js";
 
 export type OutputMode = "side" | "diff";
@@ -243,27 +244,15 @@ export function OutputDiff({
 export function OutputHeads({
   mode,
   strings,
-  className,
 }: {
   mode: OutputMode;
   strings: Pick<OutputStrings, "expected" | "got" | "outputDiffHeader">;
-  className: string;
 }): ReactNode {
-  if (mode === "diff") {
-    return (
-      <th scope="col" className={className}>
-        {strings.outputDiffHeader}
-      </th>
-    );
-  }
+  if (mode === "diff") return <Th>{strings.outputDiffHeader}</Th>;
   return (
     <>
-      <th scope="col" className={className}>
-        {strings.expected}
-      </th>
-      <th scope="col" className={className}>
-        {strings.got}
-      </th>
+      <Th>{strings.expected}</Th>
+      <Th>{strings.got}</Th>
     </>
   );
 }

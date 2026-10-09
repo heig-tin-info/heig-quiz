@@ -82,7 +82,7 @@ export {
   type OutputMode,
   type OutputStrings,
 } from "./output.js";
-export { ReviewPrompt, TableHead, Th } from "./review.js";
+export { HeadRow, ReviewPrompt, Th } from "./review.js";
 export { patchAt, removeAt, RowHead, RowList, RowListHeader } from "./rows.js";
 export { AdvancedDisclosure, EditorSection, PromptSection } from "./sections.js";
 export { PromptField } from "./PromptField.js";

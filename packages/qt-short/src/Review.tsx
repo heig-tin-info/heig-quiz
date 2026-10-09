@@ -45,7 +45,7 @@ export function ShortReview({
 
   return (
     <div className="flex flex-col gap-3">
-      <ReviewPrompt as="p" prompt={student.prompt} sections={sections} renderMarkdown={renderMarkdown} />
+      <ReviewPrompt prompt={student.prompt} sections={sections} renderMarkdown={renderMarkdown} />
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[13px] font-medium text-fg">{s.yourAnswer}</span>

@@ -11,7 +11,7 @@
  * the development stub yet) and something to grade against, the essay goes
  * to it instead (`pending: 'llm'`, docs/spec/04 §4.8, F-GRADE-02).
  */
-import { ConfigMigrationError, type QuestionTypeServer } from "@quiz/core/server";
+import { ConfigMigrationError, zeroGrade, type QuestionTypeServer } from "@quiz/core/server";
 
 import { richGenerator } from "./generate.js";
 import {
@@ -126,7 +126,7 @@ export const richServer: QuestionTypeServer<
         details: { reason: "llm", chars },
       };
     }
-    return { kind: "graded", points: 0, maxPoints: ctx.itemPoints, details: { reason: "manual", chars }, state: "proposed" };
+    return zeroGrade(ctx, { reason: "manual", chars }, "proposed");
   },
 
   /**

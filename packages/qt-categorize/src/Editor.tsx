@@ -20,6 +20,7 @@ import type {
   StringOverrides,
 } from "@quiz/core/client";
 import { fmt, issuesAt, plural, resolveStrings, rootIssues } from "@quiz/core/client";
+import { newId } from "@quiz/core/id";
 import {
   AsideSection,
   buttonClass,
@@ -50,7 +51,6 @@ import {
   CATEGORIZE_MAX_CARDS,
   CATEGORIZE_MAX_COLUMNS,
   CATEGORIZE_MIN_COLUMNS,
-  newId,
   type CategorizeConfig,
   type CategorizeQuestionPolicy,
 } from "./schema.js";

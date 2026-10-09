@@ -68,7 +68,7 @@ export function McqReview({
 
   return (
     <div className="flex flex-col gap-4">
-      <ReviewPrompt as="p" prompt={student.prompt} sections={sections} renderMarkdown={renderMarkdown} />
+      <ReviewPrompt prompt={student.prompt} sections={sections} renderMarkdown={renderMarkdown} />
 
       <ul className="flex flex-col gap-1">
         {student.choices.map((choice, index) => {

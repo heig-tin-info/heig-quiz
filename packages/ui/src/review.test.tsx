@@ -1,15 +1,15 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { ReviewPrompt, TableHead, Th } from "./review.js";
+import { ReviewPrompt, HeadRow, Th } from "./review.js";
 
 describe("ReviewPrompt", () => {
-  it("draws the statement in the type's element, through the host's markdown", () => {
-    const { container } = render(<ReviewPrompt prompt="Why?" sections={undefined} renderMarkdown={(s) => <em>{s}</em>} as="p" />);
-    expect(container.innerHTML).toBe('<p class="text-sm font-medium text-fg"><em>Why?</em></p>');
+  it("draws the statement in a div, through the host's markdown", () => {
+    const { container } = render(<ReviewPrompt prompt="Why?" sections={undefined} renderMarkdown={(s) => <em>{s}</em>} />);
+    expect(container.innerHTML).toBe('<div class="text-sm font-medium text-fg"><em>Why?</em></div>');
   });
 
-  it("keeps a program's line breaks, and is a div by default", () => {
+  it("keeps a program's line breaks", () => {
     const { container } = render(<ReviewPrompt prompt={"a\nb"} sections={{ prompt: true }} renderMarkdown={undefined} preWrap />);
     expect(container.innerHTML).toBe('<div class="whitespace-pre-wrap text-sm font-medium text-fg">a\nb</div>');
   });
@@ -20,14 +20,14 @@ describe("ReviewPrompt", () => {
   });
 });
 
-describe("TableHead", () => {
+describe("HeadRow", () => {
   it("is one header row of column headers, a number column right-aligned", () => {
     const { container } = render(
       <table>
-        <TableHead>
+        <HeadRow>
           <Th>Case</Th>
           <Th right>Points</Th>
-        </TableHead>
+        </HeadRow>
       </table>,
     );
     expect(container.querySelector("thead")?.outerHTML).toBe(

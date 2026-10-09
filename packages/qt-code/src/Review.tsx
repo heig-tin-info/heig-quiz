@@ -19,13 +19,13 @@ import {
   badge,
   breakdownOf,
   cx,
+  HeadRow,
   hint,
   OutputCells,
   OutputControls,
   OutputHeads,
   ReviewPrompt,
   table,
-  TableHead,
   Th,
   useOutputMode,
   Verdict,
@@ -153,13 +153,13 @@ export function CodeReview({
         <div className="overflow-x-auto">
           <table className={table.table}>
             <caption className="sr-only">{s.cases}</caption>
-            <TableHead>
+            <HeadRow>
               <Th>{s.caseName}</Th>
               <Th>{s.args}</Th>
-              <OutputHeads mode={outputMode} strings={s} className={table.th} />
+              <OutputHeads mode={outputMode} strings={s} />
               <Th>{s.verdict}</Th>
               <Th right>{s.points}</Th>
-            </TableHead>
+            </HeadRow>
             <tbody>
               {shown.map((detail, i) => {
                 const spec = specs.get(detail.name);

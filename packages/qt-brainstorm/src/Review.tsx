@@ -15,7 +15,7 @@ export function BrainstormReview({ student, answer, sections, strings, renderMar
   const ideas = answer?.ideas ?? [];
   return (
     <div className="flex flex-col gap-3">
-      <ReviewPrompt as="p" prompt={student.prompt} sections={sections} renderMarkdown={renderMarkdown} />
+      <ReviewPrompt prompt={student.prompt} sections={sections} renderMarkdown={renderMarkdown} />
       <div className="flex flex-col gap-1">
         <span className="text-[13px] font-medium text-fg">{s.yourIdeas}</span>
         {ideas.length === 0 ? (

@@ -12,30 +12,27 @@ import { cx, reviewPrompt, table } from "./styles.js";
 
 /**
  * The statement, so a verdict is never read without the question it judges —
- * unless the reader chose to hide it (`sections`, #109). `as` keeps each
- * type's element: a `p` for a prompt that is one paragraph, a `div` for one
- * that may hold blocks. `preWrap` keeps the line breaks of a program's or a
- * circuit's statement.
+ * unless the reader chose to hide it (`sections`, #109). A `div`: the host's
+ * markdown may render blocks. `preWrap` keeps the line breaks of a program's
+ * or a circuit's statement.
  */
 export function ReviewPrompt({
   prompt,
   sections,
   renderMarkdown,
-  as: Tag = "div",
   preWrap = false,
 }: {
   prompt: string;
   sections: ReviewSections | undefined;
   renderMarkdown: MarkdownRenderer | undefined;
-  as?: "p" | "div";
   preWrap?: boolean;
 }): ReactNode {
   if (!showsSection(sections, "prompt")) return null;
-  return <Tag className={preWrap ? cx("whitespace-pre-wrap", reviewPrompt) : reviewPrompt}>{markdown(renderMarkdown, prompt)}</Tag>;
+  return <div className={preWrap ? cx("whitespace-pre-wrap", reviewPrompt) : reviewPrompt}>{markdown(renderMarkdown, prompt)}</div>;
 }
 
 /** The header row of a results table: its {@link Th} cells, in order. */
-export function TableHead({ children }: { children: ReactNode }): ReactNode {
+export function HeadRow({ children }: { children: ReactNode }): ReactNode {
   return (
     <thead className={table.head}>
       <tr>{children}</tr>

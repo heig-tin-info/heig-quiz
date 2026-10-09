@@ -26,13 +26,13 @@ import {
   breakdownOf,
   card,
   cx,
+  HeadRow,
   hint,
   lockedBlock,
   pointsOrDash,
   ReviewPrompt,
   sectionTitle,
   table,
-  TableHead,
   Th,
   Verdict,
   verdictTone,
@@ -256,13 +256,13 @@ export function CircuitReview({
         <div className="overflow-x-auto">
           <table className={table.table}>
             <caption className="sr-only">{s.stimuli}</caption>
-            <TableHead>
+            <HeadRow>
               <Th>{s.stimulusName}</Th>
               <Th>{s.verdict}</Th>
               <Th right>{s.error}</Th>
               <Th>{s.reason}</Th>
               <Th right>{s.points}</Th>
-            </TableHead>
+            </HeadRow>
             <tbody>
               {rows.map(({ detail, label }, i) => {
                 // No waveform, no distance, no envelope: the stimulus never ran. (A

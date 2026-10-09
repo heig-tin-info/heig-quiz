@@ -76,15 +76,21 @@ interface SearchWindow {
   readonly H: number;
 }
 
-function windowAround(ax: number, ay: number, bx: number, by: number, m: number, clip: GridBox | undefined): SearchWindow {
-  if (clip === undefined) {
-    return { x0: Math.min(ax, bx) - m, y0: Math.min(ay, by) - m, W: Math.abs(ax - bx) + 2 * m + 1, H: Math.abs(ay - by) + 2 * m + 1 };
-  }
+/** No bound at all: the diagram's canvas. */
+const UNBOUNDED: GridBox = { x0: -Infinity, y0: -Infinity, x1: Infinity, y1: Infinity };
+
+/**
+ * The window `m` cells around both ends, clipped. Its size is the span of the
+ * ends plus the margins, LESS what the clip cut off: written so, an unclipped
+ * window is `|a − b| + 2m + 1` to the bit even on off-grid (fractional)
+ * coordinates, where `x1 − x0 + 1` can differ by an ulp and move a route.
+ */
+function windowAround(ax: number, ay: number, bx: number, by: number, m: number, clip: GridBox = UNBOUNDED): SearchWindow {
   const x0 = Math.max(clip.x0, Math.min(ax, bx) - m);
   const y0 = Math.max(clip.y0, Math.min(ay, by) - m);
-  const x1 = Math.min(clip.x1, Math.max(ax, bx) + m);
-  const y1 = Math.min(clip.y1, Math.max(ay, by) + m);
-  return { x0, y0, W: x1 - x0 + 1, H: y1 - y0 + 1 };
+  const cutX = x0 - (Math.min(ax, bx) - m) + (Math.max(ax, bx) + m - Math.min(clip.x1, Math.max(ax, bx) + m));
+  const cutY = y0 - (Math.min(ay, by) - m) + (Math.max(ay, by) + m - Math.min(clip.y1, Math.max(ay, by) + m));
+  return { x0, y0, W: Math.abs(ax - bx) + 2 * m + 1 - cutX, H: Math.abs(ay - by) + 2 * m + 1 - cutY };
 }
 
 const nodeAt = (w: SearchWindow, x: number, y: number, d: number): number => ((y - w.y0) * w.W + (x - w.x0)) * 5 + (d + 1);

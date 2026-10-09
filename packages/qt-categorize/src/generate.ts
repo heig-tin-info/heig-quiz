@@ -8,6 +8,7 @@
  */
 import { z } from "zod";
 
+import { newId } from "@quiz/core/id";
 import type { AnswerGenerator } from "@quiz/core/server";
 
 import {
@@ -15,7 +16,6 @@ import {
   CATEGORIZE_LABEL_MAX,
   CATEGORIZE_MAX_CARDS,
   CATEGORIZE_MAX_COLUMNS,
-  newId,
   type CategorizeCard,
   type CategorizeColumn,
   type CategorizeConfig,

@@ -24,7 +24,7 @@ export const CATEGORIZE_MAX_COLUMNS = 6;
 export const CATEGORIZE_MAX_CARDS = 30;
 
 /**
- * An id minted by the editor ({@link newId}): lowercase letters and digits,
+ * An id minted by the editor (`newId`, `@quiz/core/id`): lowercase letters and digits,
  * bounded so an answer stays small. The charset keeps a crafted id from
  * carrying anything but an identity (no markup, no path, no whitespace).
  */
@@ -187,8 +187,6 @@ export const CategorizeDetailsSchema = z.object({
   fraction: z.number(),
 });
 export type CategorizeDetails = z.infer<typeof CategorizeDetailsSchema>;
-
-export { newId };
 
 /** See `emptyMcqDraft`: the shape and the defaults, no content, may be invalid (D16). */
 export function emptyCategorizeDraft(): CategorizeConfig {

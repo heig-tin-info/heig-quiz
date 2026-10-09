@@ -7,10 +7,12 @@
  * automaton), under (or right of) the element that leads to it — and steps
  * aside until it overlaps nothing.
  */
+import { newId } from "@quiz/core/id";
+
 import type { Parsed, ParsedNode } from "./codecs/parsed.js";
 import { GRID, holds, rectOf, snap, type Measure, type Rect } from "./geometry.js";
 import { CONTAINERS, DEFAULT_SIZE, KINDS, type DiagramKind } from "./kinds.js";
-import { newId, type DiagramLink, type DiagramNode, type Scene } from "./scene.js";
+import type { DiagramLink, DiagramNode, Scene } from "./scene.js";
 
 const FIELDS = ["stereo", "abstract", "body", "accept", "initial"] as const;
 

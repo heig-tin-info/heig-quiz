@@ -13,6 +13,11 @@
  * the whole readability gain of syntax colour; everything past that is
  * decoration. Unknown languages fall through to escaped text, which is the
  * correct answer for a block of shell output.
+ *
+ * Its {@link escapeHtml} has more readers than the tokenizer: the web's
+ * markdown, the journal, and the HTML the API writes itself — the mails
+ * (`notifications/templates.ts`), the development login page
+ * (`auth/dev.ts`) and the GitHub App setup script.
  */
 
 /** Keywords per language family. One list per family, not per language. */

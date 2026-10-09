@@ -11,6 +11,8 @@
  * acts — not select a copy that was not made, not focus an element that
  * was not placed.
  */
+import { newId } from "@quiz/core/id";
+
 import { holds, rectOf, snap, type Bounds, type Measure, type Rect } from "../geometry.js";
 import { CONTAINERS, DEFAULT_SIZE, INK, KINDS, NAMELESS, SQUARE, TOOL_PRESET, minSize, typeOfTool, type DiagramKind, type PlaceTool } from "../kinds.js";
 import type { Route } from "../layout.js";
@@ -19,7 +21,6 @@ import {
   MAX_LINKS,
   MAX_VIA,
   freshCopy,
-  newId,
   type DiagramLink,
   type DiagramNode,
   type LinkType,

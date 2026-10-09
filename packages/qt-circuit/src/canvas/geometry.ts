@@ -11,9 +11,10 @@
  * schema stores: `0..BOX.width` × `0..BOX.height`. The router works in grid
  * steps internally and converts back before anything is stored.
  */
+import { DIRS } from "@quiz/domain/gridRouter";
+
 import {
   BOX,
-  DIRECTIONS,
   GRID,
   LIBRARY,
   PORTS,
@@ -103,7 +104,7 @@ export function pinPosition(component: Placement, index: number): PinPoint | nul
   const pin = LIBRARY[component.kind].pins[index];
   if (pin === undefined) return null;
   const [x, y] = transform(component.m, pin.x, pin.y);
-  const away = DIRECTIONS[pin.d];
+  const away = DIRS[pin.d];
   if (away === undefined) return null;
   const [dx, dy] = transform(component.m, away[0], away[1]);
   return { x: component.x + x, y: component.y + y, d: directionOf(dx, dy) };

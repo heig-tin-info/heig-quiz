@@ -49,6 +49,7 @@ import {
   buttonClass,
   card,
   cx,
+  HeadRow,
   hint,
   isLocked,
   lockedBlock,
@@ -57,7 +58,6 @@ import {
   OutputHeads,
   sectionTitle,
   table,
-  TableHead,
   textareaClass,
   Th,
   useOutputMode,
@@ -411,12 +411,12 @@ export function CodePlayer({
         ) : (
           <div className="overflow-x-auto">
             <table className={table.table}>
-              <TableHead>
+              <HeadRow>
                 <Th>{s.caseName}</Th>
                 <Th>{s.stdin}</Th>
-                <OutputHeads mode={outputMode} strings={s} className={table.th} />
+                <OutputHeads mode={outputMode} strings={s} />
                 <Th>{s.verdict}</Th>
-              </TableHead>
+              </HeadRow>
               <tbody>
                 {student.visibleCases.map((visibleCase, i) => {
                   const result = outcome?.cases[i];

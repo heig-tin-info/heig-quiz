@@ -21,7 +21,7 @@
 import { randomUUID } from "node:crypto";
 
 import { isLiveIndividualRepo, resolveFinalScore, type ScoreLike } from "@quiz/domain";
-import { getTableName, inArray } from "drizzle-orm";
+import { getTableName, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
@@ -57,11 +57,11 @@ function childLeftOut(ctx: Ctx, repo: SourceStudentRepo): string | null {
   return repoLeftOut(ctx, repo) ?? (ctx.known.get("student_repos")?.has(repo.id) ? null : "its repository was not carried");
 }
 
-/** Inserts in chunks, unless present; the number of rows written. */
+/** Inserts in chunks, unless present; the number of rows written (a constant comes back per row, never the row and its payload). */
 export async function insertAll<T extends PgTable>(ctx: Ctx, table: T, rows: T["$inferInsert"][], label: string = getTableName(table)): Promise<number> {
   let n = 0;
   for (let i = 0; i < rows.length; i += CHUNK) {
-    const done = await ctx.db.insert(table).values(rows.slice(i, i + CHUNK)).onConflictDoNothing().returning();
+    const done = await ctx.db.insert(table).values(rows.slice(i, i + CHUNK)).onConflictDoNothing().returning({ one: sql<number>`1` });
     n += done.length;
   }
   written(ctx, label, n);

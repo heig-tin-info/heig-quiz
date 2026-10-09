@@ -12,7 +12,7 @@
  * diagram's kind (`kindIssues` in `kinds.ts`). The schema bounds everything,
  * because the autosave sends the whole answer every 300 ms.
  *
- * Every id is OPAQUE, minted by the editor ({@link newId}): a starter scene
+ * Every id is OPAQUE, minted by the editor (`newId`, `@quiz/core/id`): a starter scene
  * reaches the student with its ids, so an id must say nothing (the rule of
  * `categorize`, ADR-036).
  */
@@ -192,8 +192,6 @@ export const emptyScene = (): Scene => ({ nodes: [], links: [] });
 
 /** A scene with neither an element nor a link. */
 export const isEmptyScene = (scene: Scene): boolean => scene.nodes.length === 0 && scene.links.length === 0;
-
-export { newId };
 
 /**
  * A copy of a scene under fresh ids, moved by `offset` (elbows included);
