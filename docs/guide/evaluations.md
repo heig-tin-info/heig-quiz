@@ -123,15 +123,27 @@ Everything else lives behind **Advanced options**, folded by default. A novice n
 - **Multiple-answer scoring**: the policy every multiple-choice item of this evaluation uses when the student ticks only some of several correct answers, unless the question names its own. **Exact**, **True/false**, **Distance**, **Symmetric** or **Ripkey**; a question with a single correct answer is always all or nothing. The formulas are in [Question types](question-types.md).
 - **Categorize scoring** (shown once the evaluation holds a categorize question): the policy of every categorize item set to **Inherited**, **Per card** (each card earns its share) or **Exact** (all the points for a perfect board only). The formulas are in [Question types](question-types.md#categorize).
 - **Negative marking** (not on a poll): on every multiple-choice and categorize question, a wrong answer costs points and no answer costs nothing; it replaces the two policies above, which then say so. The total never goes below 0, and students are told in the waiting room and on each question concerned.
-- **Safe Exam Browser** (exams only): the students sit the exam in [Safe Exam Browser](https://safeexambrowser.org), and only there. See below.
-- **Kiosk stations** (exams only, where the platform has stations): the students may sit the exam on one of the school's Chromebooks locked on the exam. See below.
+- **Allowed devices** (exams only): where the students may sit the exam — **Any device**, **Safe Exam Browser**, **SEB or kiosk station** or **Kiosk station only**. See [Allowed devices](#allowed-devices) below.
 
 !!! note
     A Live evaluation's waiting room and the feedback policy sit under **Advanced options**, not on the main card. Open the disclosure to change them.
 
+### Allowed devices
+
+On an exam, **Allowed devices** under **Advanced options** is one choice of four:
+
+| Choice | The exam is sat |
+| --- | --- |
+| **Any device** | in the student's usual browser, from the portal |
+| **Safe Exam Browser** | in [Safe Exam Browser](#safe-exam-browser) only |
+| **SEB or kiosk station** | in Safe Exam Browser or on a [kiosk station](#kiosk-stations); either is accepted |
+| **Kiosk station only** | on one of the school's kiosk stations only |
+
+The two kiosk choices are offered only where the platform administrator has set the stations up ([Kiosk stations](../kiosk.md)). With any choice but **Any device**, the portal alone never opens the exam. The choice is frozen once the exam runs.
+
 ### Safe Exam Browser
 
-An exam can require Safe Exam Browser (SEB), the locked-down browser that keeps the student inside the exam. Turn on **Safe Exam Browser** under **Advanced options**; the switch is offered on exams only.
+An exam can require Safe Exam Browser (SEB), the locked-down browser that keeps the student inside the exam. Choose **Safe Exam Browser** (or **SEB or kiosk station**) under **Allowed devices**.
 
 What changes for the students:
 
@@ -143,14 +155,7 @@ To try it yourself before the class does, give yourself a seat with **Join as st
 
 ### Kiosk stations
 
-The school keeps Chromebooks locked in kiosk mode as exam stations: a fallback for a student whose laptop fails, or the way a whole room sits an exam. Turn on **Kiosk stations** under **Advanced options**; the switch is offered on exams only, and only where the platform administrator has set the stations up ([Kiosk stations](../kiosk.md)).
-
-| Safe Exam Browser | Kiosk stations | The exam is sat |
-| --- | --- | --- |
-| off | on | on a kiosk station only |
-| on | on | in Safe Exam Browser or on a kiosk station |
-
-The portal alone never opens an exam with either switch on. Both are frozen once the exam runs.
+The school keeps Chromebooks locked in kiosk mode as exam stations: a fallback for a student whose laptop fails, or the way a whole room sits an exam. Choose **Kiosk station only**, or **SEB or kiosk station** for stations as a fallback beside Safe Exam Browser, under **Allowed devices**; both choices are offered only where the platform administrator has set the stations up ([Kiosk stations](../kiosk.md)).
 
 What the students do:
 

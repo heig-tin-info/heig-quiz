@@ -225,11 +225,12 @@ Every change is audited (`kiosk.device_labeled`, `kiosk.device_retired`,
 
 ## 5. On the day of the exam
 
-1. **The teacher** turns on **Kiosk stations** under **Advanced options** of
-   the exam (step 2 of the editor). The switch is offered only on exams,
-   and only while `KIOSK_ATTESTATION` is not `off`. With **Safe Exam
-   Browser** also on, either is accepted; the portal alone never opens the
-   exam. The setting freezes once the exam runs.
+1. **The teacher** picks **Kiosk station only** (or **SEB or kiosk
+   station**, where either is accepted) under **Allowed devices**, in the
+   **Advanced options** of the exam (step 2 of the editor). These choices
+   are offered only on exams, and only while `KIOSK_ATTESTATION` is not
+   `off`; the portal alone never opens the exam. The setting freezes once
+   the exam runs.
 2. **The student** sits at a station, which shows its name, a code
    (`XXXX-XXXX`) and a QR code. They scan it with their phone, signed in to
    the portal (or sign in on the way), check the station's name, pick the
@@ -281,7 +282,7 @@ exam comes back as soon as one attestation is accepted.
 | **The station cannot start** — "The station keeps trying by itself." | the server cannot get a challenge from Google (network, quota, the service account not in **Services with full access**, a revoked key) or the platform is unreachable | the API's log (`attestation` failures are logged by kind and HTTP status, never with a token); the station retries every 30 seconds |
 | **Google unreachable** in the Last check column | the last attempt could not reach Google | as above; a station at rest shows **The station cannot start** until Google answers again |
 | The phone says **This code does not work** | the code expired (5 minutes), was already used, or was mistyped | type the code the station shows now. After 10 wrong codes in 10 minutes the phone says **Too many wrong codes** and must wait |
-| The phone says **No exam to start on a station** | the exam is not open yet, does not accept kiosk stations, or the student has no seat in the classroom | the exam's state and its **Kiosk stations** switch |
+| The phone says **No exam to start on a station** | the exam is not open yet, does not accept kiosk stations, or the student has no seat in the classroom | the exam's state and its **Allowed devices** |
 | Several stations of a room fail together with 429 | a room behind one NAT address: attestation and code requests are limited to 240 calls per client address per minute (one attestation is two calls: about 120 stations attesting in the same minute) | stagger the boot of a very large room; the stations' polls while waiting for a phone are not counted |
 
 ## 7. Verify on hardware
