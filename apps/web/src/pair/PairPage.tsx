@@ -11,7 +11,7 @@ import { pairPreviewKey } from "../queryKeys";
 import type { Navigate } from "../router";
 import { SignInGate } from "../SignInGate";
 import { ConditionsList } from "../student/ConditionsList";
-import { Alert, Button, Card, EmptyState, Field, GateFrame, QueryError, RadioRow, Skeleton, cx } from "../ui";
+import { Alert, Button, Card, EmptyState, Field, GateCard, GateFrame, QueryError, RadioRow, Skeleton, cx } from "../ui";
 import { CodeScanner } from "./CodeScanner";
 import { canScan } from "./scan";
 
@@ -290,17 +290,17 @@ function ExamPicker({
 function Done({ label, navigate }: { label: string; navigate?: Navigate | undefined }) {
   const t = useT();
   return (
-    <GateFrame>
-      <Card className="px-6 py-8 text-center" role="status">
-        <CircleCheck className="mx-auto size-10 text-success" aria-hidden />
-        <h1 className="mt-3 text-lg font-bold tracking-tight">{t("pair.done.title")}</h1>
-        <p className="mt-2 text-sm leading-relaxed text-fg-muted">{t("pair.done.body", { label })}</p>
-        {navigate ? (
-          <Button variant="secondary" className="mt-6" onClick={() => navigate({ view: "home" })}>
-            {t("player.closed.home")}
-          </Button>
-        ) : null}
-      </Card>
-    </GateFrame>
+    <GateCard
+      role="status"
+      icon={<CircleCheck className="mx-auto size-10 text-success" aria-hidden />}
+      title={t("pair.done.title")}
+      body={t("pair.done.body", { label })}
+    >
+      {navigate ? (
+        <Button variant="secondary" className="mt-6" onClick={() => navigate({ view: "home" })}>
+          {t("player.closed.home")}
+        </Button>
+      ) : null}
+    </GateCard>
   );
 }

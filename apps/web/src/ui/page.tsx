@@ -5,6 +5,7 @@ import type { CSSProperties, ReactNode, RefObject } from "react";
 import { buttonClass, card, NotePanel } from "@quiz/ui";
 
 import { Fab, type PagePrimary } from "./fab";
+import { Skeleton } from "./feedback";
 import { cx, HelpIcon, LG_PX, PageHelpButton, Tip, useMinWidth, type IconType } from "./layers";
 import { rovingIndex } from "./menu";
 
@@ -18,6 +19,50 @@ import { rovingIndex } from "./menu";
 export function GateFrame({ children }: { children: ReactNode }) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-115 flex-col justify-center px-4 py-10">{children}</main>
+  );
+}
+
+/**
+ * The message of a gate page (`GateFrame`), centred in its card: an icon,
+ * the title, a sentence, then whatever the page asks (its one action).
+ */
+export function GateCard({
+  icon,
+  title,
+  body,
+  role,
+  children,
+}: {
+  /** Above the title; a gate without one starts with its title. */
+  icon?: ReactNode;
+  title: ReactNode;
+  body?: ReactNode;
+  /** `status` for a gate that reports an outcome (the pairing done). */
+  role?: "status";
+  children?: ReactNode;
+}) {
+  return (
+    <GateFrame>
+      <Card className="px-6 py-8 text-center" role={role}>
+        {icon}
+        <h1 className={cx("text-lg font-bold tracking-tight", icon !== undefined && "mt-3")}>{title}</h1>
+        {body ? <p className="mt-2 text-sm leading-relaxed text-fg-muted">{body}</p> : null}
+        {children}
+      </Card>
+    </GateFrame>
+  );
+}
+
+/** A gate page while what it shows is read: the title and two lines of text. */
+export function GateSkeleton() {
+  return (
+    <GateFrame>
+      <Card className="space-y-3 px-6 py-8" aria-busy="true">
+        <Skeleton className="mx-auto h-6 w-2/3" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-5/6" />
+      </Card>
+    </GateFrame>
   );
 }
 

@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CircleCheck, ExternalLink, Link2, MessagesSquare, ShieldAlert, TriangleAlert } from "lucide-react";
 
@@ -8,7 +7,7 @@ import { api, ApiError } from "../api";
 import { useT } from "../i18n";
 import { teamsHostKey, teamsTabKey } from "../queryKeys";
 import { parsePath, routeToPath } from "../router";
-import { Button, Card, GateFrame, Skeleton } from "../ui";
+import { Button, GateCard, GateSkeleton } from "../ui";
 import { connectTeams, type TeamsHost } from "./teamsHost";
 
 /**
@@ -25,7 +24,7 @@ import { connectTeams, type TeamsHost } from "./teamsHost";
  */
 export function TeamsTabPage({ connect = connectTeams }: { connect?: () => Promise<TeamsHost | null> }) {
   const host = useQuery({ queryKey: teamsHostKey, queryFn: connect, retry: false, staleTime: Infinity });
-  if (host.isPending) return <Loading />;
+  if (host.isPending) return <GateSkeleton />;
   if (!host.data) return <Outside />;
   return <InTeams host={host.data} />;
 }
@@ -82,14 +81,16 @@ function InTeams({ host }: { host: TeamsHost }) {
     </Button>
   );
 
-  if (state.isPending) return <Loading />;
+  if (state.isPending) return <GateSkeleton />;
   if (state.isError) {
     const err = state.error;
     if (err instanceof ApiError && err.status === 403) {
       return (
-        <Frame icon={<ShieldAlert className="mx-auto size-8 text-warning" />} title={t("teamsTab.refused.title")}>
-          <p className="mt-2 text-sm leading-relaxed text-fg-muted">{t("teamsTab.refused.body")}</p>
-        </Frame>
+        <GateCard
+          icon={<ShieldAlert className="mx-auto size-8 text-warning" />}
+          title={t("teamsTab.refused.title")}
+          body={t("teamsTab.refused.body")}
+        />
       );
     }
     const code =
@@ -98,14 +99,14 @@ function InTeams({ host }: { host: TeamsHost }) {
         : t("teamsTab.errorCode", { code: err instanceof ApiError ? String(err.status) : err.message });
     const sso = err instanceof SsoFailure || (err instanceof ApiError && err.status === 401);
     return (
-      <Frame
+      <GateCard
         icon={<TriangleAlert className="mx-auto size-8 text-warning" />}
         title={sso ? t("teamsTab.sso.title") : t("error.server")}
+        body={sso ? t("teamsTab.sso.body") : null}
       >
-        {sso ? <p className="mt-2 text-sm leading-relaxed text-fg-muted">{t("teamsTab.sso.body")}</p> : null}
         <p className="mt-2 font-mono text-xs break-all text-fg-muted">{code.slice(0, 200)}</p>
         {retry}
-      </Frame>
+      </GateCard>
     );
   }
 
@@ -113,8 +114,7 @@ function InTeams({ host }: { host: TeamsHost }) {
   const data = state.data;
   if (data.state === "unlinked") {
     return (
-      <Frame icon={<Badge icon={Link2} />} title={t("teamsTab.unlinked.title")}>
-        <p className="mt-2 text-sm leading-relaxed text-fg-muted">{t("teamsTab.unlinked.body")}</p>
+      <GateCard icon={<Badge icon={Link2} />} title={t("teamsTab.unlinked.title")} body={t("teamsTab.unlinked.body")}>
         <Button size="lg" className="mt-6 w-full" onClick={() => void host.openLink(data.linkUrl)}>
           {t("teamsTab.unlinked.action")}
         </Button>
@@ -122,32 +122,31 @@ function InTeams({ host }: { host: TeamsHost }) {
         <Button variant="ghost" size="sm" className="mt-4" loading={state.isFetching} onClick={() => void state.refetch()}>
           {t("teamsTab.unlinked.recheck")}
         </Button>
-      </Frame>
+      </GateCard>
     );
   }
 
   const target = tabTargetPath(host.subPageId);
   if (target) {
     return (
-      <Frame icon={<Badge icon={ExternalLink} />} title={t("teamsTab.target.title")}>
-        <p className="mt-2 text-sm leading-relaxed text-fg-muted">{t("teamsTab.target.body")}</p>
+      <GateCard icon={<Badge icon={ExternalLink} />} title={t("teamsTab.target.title")} body={t("teamsTab.target.body")}>
         <Button size="lg" className="mt-6 w-full" onClick={() => open(target)}>
           {t("teamsTab.target.action")}
         </Button>
         <p className="mt-4 text-xs text-fg-faint">{t("teamsTab.target.account", { name: data.accountName })}</p>
-      </Frame>
+      </GateCard>
     );
   }
   return (
-    <Frame
+    <GateCard
       icon={<CircleCheck className="mx-auto size-8 text-success" />}
       title={t("teamsTab.linked.title", { name: data.accountName })}
+      body={t("teamsTab.linked.body")}
     >
-      <p className="mt-2 text-sm leading-relaxed text-fg-muted">{t("teamsTab.linked.body")}</p>
       <Button variant="secondary" className="mt-6" onClick={() => open(routeToPath({ view: "settings" }))}>
         {t("teamsTab.linked.open")}
       </Button>
-    </Frame>
+    </GateCard>
   );
 }
 
@@ -160,35 +159,13 @@ function Badge({ icon: Icon }: { icon: typeof Link2 }) {
   );
 }
 
-function Frame({ icon, title, children }: { icon: ReactNode; title: string; children?: ReactNode }) {
-  return (
-    <GateFrame>
-      <Card className="px-6 py-8 text-center">
-        {icon}
-        <h1 className="mt-3 text-lg font-bold tracking-tight">{title}</h1>
-        {children}
-      </Card>
-    </GateFrame>
-  );
-}
-
 function Outside() {
   const t = useT();
   return (
-    <Frame icon={<MessagesSquare className="mx-auto size-8 text-fg-muted" />} title={t("teamsTab.outside.title")}>
-      <p className="mt-2 text-sm leading-relaxed text-fg-muted">{t("teamsTab.outside.body")}</p>
-    </Frame>
-  );
-}
-
-function Loading() {
-  return (
-    <GateFrame>
-      <Card className="space-y-3 px-6 py-8" aria-busy="true">
-        <Skeleton className="mx-auto h-6 w-2/3" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-5/6" />
-      </Card>
-    </GateFrame>
+    <GateCard
+      icon={<MessagesSquare className="mx-auto size-8 text-fg-muted" />}
+      title={t("teamsTab.outside.title")}
+      body={t("teamsTab.outside.body")}
+    />
   );
 }

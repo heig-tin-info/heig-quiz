@@ -9,7 +9,7 @@ import { api, isNotFound } from "../api";
 import { useT } from "../i18n";
 import { notificationSettingsKey, teamsLinkKey } from "../queryKeys";
 import { SignInGate } from "../SignInGate";
-import { Alert, Button, Card, FormError, GateFrame, Skeleton } from "../ui";
+import { Alert, Button, Card, FormError, GateCard, GateFrame, GateSkeleton } from "../ui";
 
 /**
  * The Teams link page (ADR-030). The HEIG Quiz tab in Teams opens it in the
@@ -46,13 +46,11 @@ export function TeamsLinkPage({ me, onSettings }: { me: Me | null; onSettings?: 
 function Invalid() {
   const t = useT();
   return (
-    <GateFrame>
-      <Card className="px-6 py-8 text-center">
-        <TriangleAlert className="mx-auto size-8 text-warning" />
-        <h1 className="mt-3 text-lg font-bold tracking-tight">{t("teamsLink.invalid.title")}</h1>
-        <p className="mt-2 text-sm text-fg-muted">{t("teamsLink.invalid.body")}</p>
-      </Card>
-    </GateFrame>
+    <GateCard
+      icon={<TriangleAlert className="mx-auto size-8 text-warning" />}
+      title={t("teamsLink.invalid.title")}
+      body={t("teamsLink.invalid.body")}
+    />
   );
 }
 
@@ -83,43 +81,25 @@ function Confirm({ token, me, onSettings }: { token: string; me: Me; onSettings?
 
   if (link.isSuccess) {
     return (
-      <GateFrame>
-        <Card className="px-6 py-8 text-center">
-          <CircleCheck className="mx-auto size-8 text-success" />
-          <h1 className="mt-3 text-lg font-bold tracking-tight">{t("teamsLink.done.title")}</h1>
-          <p className="mt-2 text-sm text-fg-muted">{t("teamsLink.done.body")}</p>
-          <Button
-            variant="secondary"
-            className="mt-6"
-            onClick={() => (onSettings ? onSettings() : window.location.assign("/settings"))}
-          >
-            {t("teamsLink.done.settings")}
-          </Button>
-        </Card>
-      </GateFrame>
+      <GateCard
+        icon={<CircleCheck className="mx-auto size-8 text-success" />}
+        title={t("teamsLink.done.title")}
+        body={t("teamsLink.done.body")}
+      >
+        <Button
+          variant="secondary"
+          className="mt-6"
+          onClick={() => (onSettings ? onSettings() : window.location.assign("/settings"))}
+        >
+          {t("teamsLink.done.settings")}
+        </Button>
+      </GateCard>
     );
   }
-  if (preview.isPending) {
-    return (
-      <GateFrame>
-        <Card className="space-y-3 px-6 py-8">
-          <Skeleton className="mx-auto h-6 w-2/3" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-5/6" />
-        </Card>
-      </GateFrame>
-    );
-  }
+  if (preview.isPending) return <GateSkeleton />;
   if (isNotFound(preview.error) || isNotFound(link.error)) return <Invalid />;
   if (preview.isError) {
-    return (
-      <GateFrame>
-        <Card className="px-6 py-8 text-center">
-          <TriangleAlert className="mx-auto size-8 text-warning" />
-          <h1 className="mt-3 text-lg font-bold tracking-tight">{t("error.server")}</h1>
-        </Card>
-      </GateFrame>
-    );
+    return <GateCard icon={<TriangleAlert className="mx-auto size-8 text-warning" />} title={t("error.server")} />;
   }
 
   const p = preview.data;
