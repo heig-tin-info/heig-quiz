@@ -41,18 +41,6 @@ export function Rank({ n }: { n: number }): ReactNode {
   );
 }
 
-export const CloseIcon = ({ className = "size-3.5" }: { className?: string }) => (
-  <StrokeIcon className={cx("shrink-0", className)} strokeWidth={1.7}>
-    <path d="M6 6l12 12M18 6 6 18" />
-  </StrokeIcon>
-);
-
-export const PlusIcon = ({ className = "size-3.5" }: { className?: string }) => (
-  <StrokeIcon className={cx("shrink-0", className)} strokeWidth={1.7}>
-    <path d="M12 5v14M5 12h14" />
-  </StrokeIcon>
-);
-
 export const CheckIcon = ({ className = "size-3.5" }: { className?: string }) => (
   <StrokeIcon className={cx("shrink-0", className)} strokeWidth={1.7}>
     <path d="m5 12.5 4.5 4.5L19 7.5" />

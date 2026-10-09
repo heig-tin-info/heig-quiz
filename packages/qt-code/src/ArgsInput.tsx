@@ -19,9 +19,8 @@
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react";
 
 import { fmt } from "@quiz/core/client";
-import { buttonClass, cx, inputClass, inputSize, lockedBlock } from "@quiz/ui";
+import { buttonClass, cx, inputClass, inputSize, lockedBlock, PlusIcon, TrashIcon } from "@quiz/ui";
 
-import { PlusIcon, TrashIcon } from "./icons.js";
 import type { CodeLanguage } from "./schema.js";
 
 /** The words of the argument list; both the editor's and the player's dictionaries carry them. */

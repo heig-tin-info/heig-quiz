@@ -60,7 +60,7 @@ export {
   type ChoiceMarkState,
   type RunStatus,
 } from "./grading.js";
-export { AlertIcon, GripIcon, StrokeIcon, typeIcon, WandIcon } from "./icon.js";
+export { AlertIcon, CloseIcon, GripIcon, PlusIcon, StrokeIcon, TrashIcon, typeIcon, WandIcon } from "./icon.js";
 export { ErrorText, IssueList } from "./issues.js";
 export {
   AsideSection,

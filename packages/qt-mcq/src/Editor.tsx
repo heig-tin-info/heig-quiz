@@ -66,17 +66,12 @@ import {
   removeAt,
   sectionClass,
   sectionTitle,
+  PlusIcon,
   Segmented,
+  TrashIcon,
   WandIcon,
 } from "@quiz/ui";
-import {
-  choiceLetter,
-  iconButtonClass,
-  Pastille,
-  PlusIcon,
-  Tip,
-  TrashIcon,
-} from "./ui.js";
+import { choiceLetter, iconButtonClass, Pastille, Tip } from "./ui.js";
 
 /** The choices drag up and down only. */
 const restrictToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 });

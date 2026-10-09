@@ -9,6 +9,8 @@
  */
 import type { ReactNode } from "react";
 
+import { cx } from "./styles.js";
+
 /** A 24 px outline drawn in `currentColor`. `size` fixes its box when no class sizes it. */
 export function StrokeIcon({
   className,
@@ -82,6 +84,42 @@ export function AlertIcon({ className = "size-3.5" }: { className?: string | und
     <StrokeIcon className={className} strokeWidth={2}>
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7.5v5.5M12 16.5h.01" />
+    </StrokeIcon>
+  );
+}
+
+/*
+ * The glyphs of a row's own controls — add one, remove one, close — that
+ * several types draw. Each was drawn per package, and the same plus existed
+ * at three stroke widths. They keep their size (`shrink-0`) in a flex row;
+ * a button that sizes its icons (`[&_svg]:size-*`) still wins over the
+ * default `size-3.5`.
+ */
+type GlyphProps = { className?: string | undefined };
+
+/** Add a row, a choice, a column. */
+export function PlusIcon({ className = "size-3.5" }: GlyphProps): ReactNode {
+  return (
+    <StrokeIcon className={cx("shrink-0", className)} strokeWidth={1.7}>
+      <path d="M12 5v14M5 12h14" />
+    </StrokeIcon>
+  );
+}
+
+/** Close, remove from a set, or "wrong" beside a verdict. */
+export function CloseIcon({ className = "size-3.5" }: GlyphProps): ReactNode {
+  return (
+    <StrokeIcon className={cx("shrink-0", className)} strokeWidth={1.7}>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </StrokeIcon>
+  );
+}
+
+/** Delete a row: lucide's bin (ISC), so it matches the app's. */
+export function TrashIcon({ className = "size-3.5" }: GlyphProps): ReactNode {
+  return (
+    <StrokeIcon className={cx("shrink-0", className)} strokeWidth={1.7}>
+      <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
     </StrokeIcon>
   );
 }

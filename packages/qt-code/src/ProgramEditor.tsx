@@ -17,7 +17,7 @@ import type { ConfigIssue, EditorProps } from "@quiz/core/client";
 
 import { splitTemplate, templateMarkerIssues } from "@quiz/domain/lockedTemplate";
 
-import { LockIcon } from "./LockIcon.js";
+import { LockIcon } from "./icons.js";
 import { LockedEditor } from "./LockedEditor.js";
 import { isLockedLineRange, lockedLineNumbers, lockLines, selectedLines, unlockLines } from "./lockEdit.js";
 import { CodeArea, monacoAvailable, type CodeLineDecoration } from "./MonacoHost.js";
