@@ -29,7 +29,14 @@ import { MAX_PAGE_LENGTH, MAX_PAGES } from "./store";
 import type { Notepad } from "./useNotepad";
 
 /** The `beforeinput` kinds a blocked clipboard refuses, beside the plain events. */
-const CLIPBOARD_INPUTS = new Set(["insertFromPaste", "insertFromDrop", "deleteByCut"]);
+const CLIPBOARD_INPUTS = new Set([
+  "insertFromPaste",
+  "insertFromPasteAsQuotation",
+  "insertFromDrop",
+  "insertFromYank",
+  "deleteByCut",
+  "deleteByDrag",
+]);
 
 const block = (event: SyntheticEvent) => event.preventDefault();
 
@@ -40,7 +47,7 @@ export function NotepadDock({
 }: {
   notepad: Notepad;
   noClipboard: boolean;
-  seat?: ToolDockSeat;
+  seat: ToolDockSeat;
 }) {
   const t = useT();
   const toast = useToast();
@@ -111,7 +118,12 @@ export function NotepadDock({
             spellCheck={false}
             {...clipboard}
             // The field's chrome (`inputClass`), in the code face and ruled.
-            className={cx(inputClass, "notepad-ruled min-h-0 w-full flex-1 resize-none pb-1 font-mono !text-[13px]")}
+            // The whole panel is this one field: focused, its border turns
+            // to the ink rather than the accent's red frame and ring.
+            className={cx(
+              inputClass,
+              "notepad-ruled min-h-0 w-full flex-1 resize-none pb-1 font-mono !text-[13px] focus:!border-fg focus:!ring-0",
+            )}
           />
           {saveFailed ? (
             <p role="status" className="mt-1.5 text-[12px] leading-snug text-warning">

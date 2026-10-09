@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   emptyNotes,
   loadNotes,
+  markNotepadEnded,
   MAX_PAGES,
   MAX_PAGE_LENGTH,
   notepadKey,
@@ -84,6 +85,9 @@ export function useNotepad({
     const key = notepadKey(attemptId);
     const onStorage = (event: StorageEvent) => {
       if (event.key !== key && event.key !== null) return;
+      // Removed there (the attempt ended, or the storage was cleared): no
+      // later keystroke here may write the notes back.
+      if (event.newValue === null) markNotepadEnded(attemptId);
       const stored = event.key === null ? null : parseNotes(event.newValue);
       const next = stored === null ? emptyNotes(checkpoint) : current(stored, checkpoint);
       synced.current = next;

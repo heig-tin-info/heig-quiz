@@ -53,7 +53,8 @@ export function PlayerTools({
       {notepad !== "none" && !me.isPending ? (
         <PlayerNotepad
           attemptId={attemptId}
-          persist={!preview && me.data?.session?.kind !== "impersonation"}
+          // A failed /me never falls back to persisting.
+          persist={me.isSuccess && !preview && me.data?.session?.kind !== "impersonation"}
           checkpoint={furthestCheckpoint(
             navigation,
             items.map((item) => ({ milestone: item.milestone, validated: item.markedDone })),

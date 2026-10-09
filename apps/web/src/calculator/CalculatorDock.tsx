@@ -19,7 +19,7 @@ import { useT } from "../i18n";
 import { IconButton, ToolDock, type ToolDockSeat } from "../ui";
 import { Calculator, type CalculatorKind } from "./Calculator";
 
-export function CalculatorDock({ kind, seat }: { kind: CalculatorKind; seat?: ToolDockSeat }) {
+export function CalculatorDock({ kind, seat }: { kind: CalculatorKind; seat: ToolDockSeat }) {
   const t = useT();
   // The user's setting: reverse Polish notation, on the same keys.
   const rpn = useMe().data?.rpnCalculator === true;

@@ -47,7 +47,8 @@ Three facts constrain it:
    (`422 notepad_not_allowed`) and reads it as `none`. The teacher chooses it
    under the advanced options, beside "Calculator provided".
 2. **The conditions** (ADR-079): after the calculator's line, "Notepad
-   provided (kept on this device until you hand in)" and, for
+   provided, kept on this device only" (not "until you hand in": under
+   `milestones` a checkpoint empties it before that) and, for
    `provided_no_clipboard` only, "Copy and paste are disabled in the
    notepad", both of kind *provided*. The second line states only what is
    enforced: inside the notepad. The answer fields keep their clipboard.
@@ -65,9 +66,12 @@ Three facts constrain it:
    changes device loses it. A write the browser refuses is said in the panel,
    never lost in silence. The notes are deleted at every end of the attempt
    the client sees (submitted, deadline, evaluation closed), at sign-out, when
-   a kiosk station (`/kiosk`) or the pairing page (`/pair`) loads (every
-   notepad), and, when a player loads, those untouched for 24 hours — never
-   another recent attempt's, which may be open in another tab. The teacher's
+   a kiosk station (`/kiosk`) loads (every notepad), and, when a player loads,
+   those untouched for 24 hours — never another recent attempt's, which may be
+   open in another tab. The pairing page (`/pair`) is not a purge point: it
+   runs on the student's own phone, while the notes of a kiosk sitting live
+   on the station; purging there would protect nothing and would wipe the
+   phone's own exercise in progress. The teacher's
    preview and an impersonation session (ADR-034) keep the notepad in memory
    only. Whether Safe Exam Browser and a kiosk station keep `localStorage`
    across a reload was not verified on real clients; the client purges
@@ -76,8 +80,12 @@ Three facts constrain it:
    `free`). `furthestCheckpoint` gives the rank of the furthest validated
    milestone in the student's order; the notes record it, and notes written
    under an earlier one are dropped — on load, before every write and as soon
-   as the attempt moves on. A second tab follows through the `storage` event.
-   The checkpoint's confirmation says "The notepad is emptied too." This is
+   as the attempt moves on. The checkpoint's confirmation says so ("…closes
+   every question before it, and empties the notepad"). **Tabs stay in step**: every tab of the same attempt listens
+   to the `storage` event and adopts what another tab wrote, flushed or
+   removed; a removal (that tab saw the attempt end) marks the attempt ended
+   here too, so a later keystroke in this tab cannot write the notes back.
+   This is
    pedagogical, not a security control: a student can copy the notes
    elsewhere before crossing.
 6. **The clipboard.** In `provided_no_clipboard`, the notepad's field refuses
@@ -95,7 +103,7 @@ Three facts constrain it:
   (`furthestCheckpoint`, which `lockedItems` now shares) and a small web
   module (`notepad/`: the store, the hook, the dock, the clipboard record).
 - `ToolDock` gains a `slot` and a controlled `open`; `--tool-dock-h` grows
-  to 7.5 rem while two docks stand, so the toasts and the panels clear both.
+  by one `--tool-dock-step` (3.5 rem) while two docks stand, so the toasts and the panels clear both.
 - The teacher sees nothing of the notes, by design.
 - A device switch, a cleared browser or a refused write loses the notes; the
   conditions say "kept on this device".

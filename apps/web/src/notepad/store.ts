@@ -10,10 +10,11 @@
  *
  * The notes are deleted with the attempt: at every end `useAttempt` sees
  * (submitted, deadline, evaluation closed), at sign-out, when a kiosk
- * station or the pairing page loads (every notepad), and — on a player's
+ * station loads (every notepad), and — on a player's
  * load — those of attempts left untouched for a day. Never the recent notes
  * of another attempt: a student may have an exercise open in another tab.
  */
+import { forgetNotepadCopy } from "./clipboard";
 
 /** The prefix of every notepad key; the attempt's id follows. */
 export const NOTEPAD_KEY_PREFIX = "quiz.notepad.";
@@ -89,14 +90,28 @@ export function saveNotes(attemptId: string, notes: NotepadNotes): boolean {
   }
 }
 
+/**
+ * Another tab removed this attempt's notes (it saw the attempt end): this
+ * tab will not write them back either.
+ */
+export function markNotepadEnded(attemptId: string): void {
+  ended.add(attemptId);
+}
+
 /** The attempt is over: its notes go, and stay gone. */
 export function purgeNotepad(attemptId: string): void {
-  ended.add(attemptId);
+  markNotepadEnded(attemptId);
   try {
     localStorage.removeItem(notepadKey(attemptId));
   } catch {
     // Nothing to clean in a storage that cannot be read either.
   }
+}
+
+/** The one call at the end of an attempt: its notes and the last copy out of the notepad go. */
+export function endNotepad(attemptId: string): void {
+  purgeNotepad(attemptId);
+  forgetNotepadCopy();
 }
 
 /** Every notepad key on this device, read defensively. */
@@ -121,7 +136,7 @@ function remove(key: string): void {
   }
 }
 
-/** Sign-out, a kiosk station, the pairing page: no student's notes stay on this device. */
+/** Sign-out, a kiosk station: no student's notes stay on this device. */
 export function purgeAllNotepads(): void {
   for (const key of notepadKeys()) remove(key);
 }

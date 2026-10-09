@@ -55,7 +55,7 @@ export function usePlayerControls({
       title: t("player.validate.title"),
       message:
         state.navigation === "milestones"
-          ? `${t("conditions.navigation.milestones.body")}${notepad ? ` ${t("notepad.flushNotice")}` : ""}`
+          ? t(notepad ? "conditions.navigation.milestones.bodyNotepad" : "conditions.navigation.milestones.body")
           : t(blank ? "player.validateBlank.body" : "player.validate.body"),
       confirmLabel: validateLabel,
       // Irreversible: Enter right after Ctrl+Enter must not validate for good.

@@ -57,12 +57,6 @@ function render(routes: Record<string, RouteHandler>, route = "/pair?code=bcdf-g
 afterEach(() => vi.unstubAllGlobals());
 
 describe("the phone's pairing page (ADR-051 §7)", () => {
-  it("leaves no notepad on the phone (ADR-090)", () => {
-    localStorage.setItem("quiz.notepad.a1", "{}");
-    render({ "GET /app/api/config": ok({ devLogin: false, kiosk: null }) }, "/pair", null);
-    expect(localStorage.getItem("quiz.notepad.a1")).toBeNull();
-  });
-
   it("signs a signed-out phone in, and comes back with the code", async () => {
     render({ "GET /app/api/config": ok({ devLogin: false, kiosk: null }) }, "/pair?code=bcdf-ghjk", null);
     const assign = vi.fn();

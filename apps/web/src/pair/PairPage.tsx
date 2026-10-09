@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CircleCheck, MonitorSmartphone, ScanQrCode, TriangleAlert } from "lucide-react";
 
@@ -7,7 +7,6 @@ import { formatUserCode, normalizeUserCode } from "@quiz/domain";
 
 import { ApiError, api } from "../api";
 import { useT } from "../i18n";
-import { purgeAllNotepads } from "../notepad/store";
 import { pairPreviewKey } from "../queryKeys";
 import type { Navigate } from "../router";
 import { SignInGate } from "../SignInGate";
@@ -32,8 +31,6 @@ import { canScan } from "./scan";
 export function PairPage({ me, navigate }: { me: Me | null; navigate?: Navigate }) {
   const t = useT();
   const [initial] = useState(() => normalizeUserCode(new URLSearchParams(window.location.search).get("code") ?? ""));
-  // ADR-090: pairing starts a sitting elsewhere; no notepad stays on this device.
-  useEffect(() => purgeAllNotepads(), []);
   if (!me) {
     return (
       <SignInGate

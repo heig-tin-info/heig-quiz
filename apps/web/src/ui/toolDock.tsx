@@ -14,8 +14,8 @@
  * close, as a calculator put down on the desk.
  *
  * Several tools on one screen (the player's calculator and notepad,
- * ADR-090) form one group: each takes a `slot`, its button stacked 56 px
- * above the previous one (`data-tool-dock-slot`, which raises
+ * ADR-090) form one group: each takes a `slot`, its button stacked
+ * `--tool-dock-step` (56 px) above the previous one (`data-tool-dock-slot`, which raises
  * `--tool-dock-h` for the whole stack), and the owner holds which one is
  * open through `open`/`onOpenChange`, so one panel shows at a time. Every
  * panel rises above the whole stack.
@@ -125,7 +125,7 @@ export function ToolDock({
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={() => (open ? close() : setOpen(true))}
-        style={{ bottom: `calc(${offset} + 1rem + ${slot * 3.5}rem)` }}
+        style={{ bottom: `calc(${offset} + 1rem + ${slot} * var(--tool-dock-step))` }}
         className={cx(
           "fixed right-4 inline-flex size-12 items-center justify-center rounded-full border shadow-popover transition-[background-color,transform] duration-120 active:scale-[0.97] sm:right-6",
           // Open, the neutral ink fill of a pressed toggle (`ToggleChip`'s): never the accent.

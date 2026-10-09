@@ -36,8 +36,7 @@ import type {
 } from "@quiz/contracts";
 
 import { api } from "../api";
-import { forgetNotepadCopy } from "../notepad/clipboard";
-import { purgeNotepad } from "../notepad/store";
+import { endNotepad } from "../notepad/store";
 import { useEventStream } from "../realtime/useEventStream";
 import { useServerClock } from "../realtime/useServerClock";
 import { Autosave, type SyncState } from "./autosave";
@@ -173,8 +172,7 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
   // submitted, deadline, evaluation closed — however it was learnt.
   useEffect(() => {
     if (closed === null) return;
-    purgeNotepad(attemptId);
-    forgetNotepadCopy();
+    endNotepad(attemptId);
   }, [closed, attemptId]);
 
   // --- Adopting a fresh view ----------------------------------------------

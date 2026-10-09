@@ -2293,8 +2293,9 @@ same `ToolDock`.
 
 - **The dock group**: with both tools on, the two 48 px buttons stack at the
   bottom right, 8 px apart — the calculator at the bottom (`slot` 0), the
-  notepad above (`slot` 1, 56 px higher). The second slot raises
-  `--tool-dock-h` to 7.5 rem (`data-tool-dock-slot`, `style.css`), so every
+  notepad above (`slot` 1, one `--tool-dock-step` of 56 px higher). The
+  second slot raises `--tool-dock-h` by that step to 7.5 rem
+  (`data-tool-dock-slot`, `style.css`), so every
   panel and the toasts rise above the whole stack, and the phone footer
   (`--player-footer-h`) still lifts both. One panel at a time: the player
   (`PlayerTools`) holds which is open through `ToolDock`'s `open` /
@@ -2309,7 +2310,9 @@ same `ToolDock`.
 - **The page**: plain text, no toolbar, nothing rendered. The field's chrome
   (`inputClass`) in the code face at 13 px, with a 24 px line height and a
   `line-strong` hairline under every line (`.notepad-ruled`), scrolling with
-  the text, in both themes through the token. Delete asks nothing: an
+  the text, in both themes through the token. Focused, its border turns to
+  the ink (`fg`) with no ring: the whole panel is this one field, and the
+  accent's red frame around it read as an error. Delete asks nothing: an
   `info` toast with Undo (`notify.tsx`'s one action) puts the page back. A
   write the device refuses shows one 12 px `warning` line under the page.
 

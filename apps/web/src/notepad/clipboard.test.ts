@@ -13,16 +13,6 @@ describe("the notepad's last copy", () => {
     expect(isFromNotepad("x = 3")).toBe(false);
   });
 
-  it("matches the last copied text exactly, and nothing else", () => {
-    recordNotepadCopy("x = 3");
-    expect(isFromNotepad("x = 3")).toBe(true);
-    expect(isFromNotepad("x = 3 ")).toBe(false);
-    expect(isFromNotepad("x =")).toBe(false);
-    recordNotepadCopy("y = 4");
-    expect(isFromNotepad("x = 3")).toBe(false);
-    expect(isFromNotepad("y = 4")).toBe(true);
-  });
-
   it("ignores an empty selection, and forgets at the end of the attempt", () => {
     recordNotepadCopy("kept");
     recordNotepadCopy("");

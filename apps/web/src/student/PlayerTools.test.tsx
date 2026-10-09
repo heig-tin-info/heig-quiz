@@ -9,7 +9,7 @@ import { forgetNotepadCopy, isFromNotepad } from "../notepad/clipboard";
 import { MAX_PAGES, MAX_PAGE_LENGTH, notepadKey } from "../notepad/store";
 import { meKey } from "../queryKeys";
 import { makeMe } from "../test/fixtures";
-import { makeQueryClient, renderWithProviders } from "../test/render";
+import { fail, makeQueryClient, mockFetch, renderWithProviders } from "../test/render";
 import { PlayerTools } from "./PlayerTools";
 
 /*
@@ -32,22 +32,27 @@ function setup({
   navigation = "milestones",
   items = ITEMS,
   me = makeMe({ role: "student", session: { kind: "portal" } as Me["session"] }),
+  attemptId = ATTEMPT,
 }: {
   calculator?: CalculatorMode;
   notepad?: NotepadMode;
   preview?: boolean;
   navigation?: NavigationMode;
   items?: Items;
-  me?: Me;
+  /** `error`: `/me` failed. */
+  me?: Me | "error";
+  /** Another attempt: an ended one stays ended for the module's life. */
+  attemptId?: string;
 } = {}) {
   const user = userEvent.setup();
   const queryClient = makeQueryClient();
-  queryClient.setQueryData(meKey, me);
+  if (me === "error") mockFetch({ "GET /app/api/me": fail(500, { error: "boom" }) });
+  else queryClient.setQueryData(meKey, me);
   const tools = (list: Items) => (
     <PlayerTools
       calculator={calculator}
       notepad={notepad}
-      attemptId={ATTEMPT}
+      attemptId={attemptId}
       preview={preview}
       navigation={navigation}
       items={list}
@@ -64,8 +69,9 @@ const stored = () => JSON.parse(localStorage.getItem(notepadKey(ATTEMPT)) ?? "nu
 } | null;
 // `hidden`: the panel is mounted while closed (`keepMounted`).
 const page = () => screen.getByRole("textbox", { name: /^Page \d+ of \d+$/, hidden: true });
-const openNotepad = (user: ReturnType<typeof userEvent.setup>) =>
-  user.click(screen.getByRole("button", { name: "Notepad" }));
+const openNotepad = async (user: ReturnType<typeof userEvent.setup>) =>
+  // `find`: the notepad mounts once `/me` has settled.
+  user.click(await screen.findByRole("button", { name: "Notepad" }));
 
 beforeEach(() => forgetNotepadCopy());
 
@@ -182,6 +188,28 @@ describe("where the notes are kept", () => {
     expect(localStorage.getItem(notepadKey(ATTEMPT))).toBeNull();
   });
 
+  it("never falls back to persisting when /me fails", async () => {
+    const { user } = setup({ me: "error" });
+    await openNotepad(user);
+    await user.type(page(), "draft");
+    expect(page()).toHaveValue("draft");
+    expect(localStorage.getItem(notepadKey(ATTEMPT))).toBeNull();
+  });
+
+  it("does not write back the notes another tab removed at the attempt's end", async () => {
+    const key = notepadKey("att-ended-elsewhere");
+    const { user } = setup({ attemptId: "att-ended-elsewhere" });
+    await openNotepad(user);
+    await user.type(page(), "a");
+    expect(localStorage.getItem(key)).not.toBeNull();
+    localStorage.removeItem(key);
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key, newValue: null }));
+    });
+    await user.type(page(), "late");
+    expect(localStorage.getItem(key)).toBeNull();
+  });
+
   it("follows another tab of the same attempt", async () => {
     setup();
     const next = JSON.stringify({ pages: ["from the other tab"], page: 0, checkpoint: -1, savedAt: Date.now() });
@@ -231,7 +259,14 @@ describe("the clipboard", () => {
     await openNotepad(user);
     expect(screen.getByText("No copy-paste")).toBeInTheDocument();
     for (const name of events) expect(fireEvent[name](page())).toBe(false);
-    for (const inputType of ["insertFromPaste", "insertFromDrop", "deleteByCut"]) {
+    for (const inputType of [
+      "insertFromPaste",
+      "insertFromPasteAsQuotation",
+      "insertFromDrop",
+      "insertFromYank",
+      "deleteByCut",
+      "deleteByDrag",
+    ]) {
       const event = new InputEvent("beforeinput", { inputType, bubbles: true, cancelable: true });
       page().dispatchEvent(event);
       expect(event.defaultPrevented).toBe(true);

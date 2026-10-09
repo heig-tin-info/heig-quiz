@@ -103,6 +103,8 @@
      ADR-069), 3 rem, with its 1 rem of air: its panel and the toasts rise
      above it. */
   --tool-dock-h: 0px;
+  /* From one stacked dock's button to the next (ADR-090): 3 rem and 0.5 rem of air. */
+  --tool-dock-step: 3.5rem;
   /* The phone's floating action button (`ui/fab.tsx`, #450), 3.5 rem with its
      1 rem of air: the toasts, the docked tools and the page's end spacer
      rise by it. Zero unless a FAB is up. */
@@ -130,7 +132,7 @@
 /* Two docks stacked (the calculator and the notepad, ADR-090): the second
    button sits 3.5 rem higher, and the panels and the toasts rise with it. */
 :root:has([data-tool-dock-slot="1"]) {
-  --tool-dock-h: 7.5rem;
+  --tool-dock-h: calc(4rem + var(--tool-dock-step));
 }
 /* The FAB steps aside while a list's selection bar is up: the bar spans the
    bottom edge, and the selection is the task of the moment. */
