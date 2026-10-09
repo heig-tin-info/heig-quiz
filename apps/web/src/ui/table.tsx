@@ -151,7 +151,7 @@ export const T = {
  * `aria-sort` on the `<th>` is the same answer for a screen reader, which
  * cannot see the arrow at all.
  */
-export function SortHeader<K extends string>({
+function SortHeader<K extends string>({
   k,
   sort,
   onToggle,

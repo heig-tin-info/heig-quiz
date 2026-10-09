@@ -94,12 +94,12 @@ export function LinkButton({
 
 /*
  * The field chrome (`inputClass`, no width and no height of its own), the two
- * control heights (`inputSize`) and the multi-line field (`textareaClass`)
- * are written once, in `@quiz/ui`: the editors and players of the question
- * types wear them too, so a field in a question editor is the field of every
- * other form of the app.
+ * control heights (`inputSize`) and the multi-line field (`textareaClass`,
+ * which `Textarea` wears) are written once, in `@quiz/ui`: the editors and
+ * players of the question types wear them too, so a field in a question
+ * editor is the field of every other form of the app.
  */
-export { inputClass, inputSize, textareaClass };
+export { inputClass, inputSize };
 type InputSize = keyof typeof inputSize;
 
 /**
@@ -565,7 +565,6 @@ export function SettingRow({
   children?: ReactNode;
   className?: string;
 }) {
-  const id = useId();
   return (
     // The row wraps rather than squeezing: the text keeps a 14 rem floor, so a
     // wide control (segmented, select) drops to its own line on a phone while a
@@ -577,7 +576,7 @@ export function SettingRow({
       )}
     >
       <div className="min-w-0 flex-1 basis-56">
-        <span id={id} className="flex items-center gap-1 text-sm font-medium text-fg">
+        <span className="flex items-center gap-1 text-sm font-medium text-fg">
           {title}
           {help ? <HelpIcon topic={help} /> : null}
         </span>
