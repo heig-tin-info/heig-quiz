@@ -67,9 +67,10 @@ table inet host {
 		# SSH from anywhere: the operator, the CI's deploy keys (GitHub's
 		# runners, no fixed address) and the backup pull (forced commands).
 		tcp dport 22 accept
-		# Caddy: ACME HTTP-01 and the redirect, then HTTPS and HTTP/3.
+		# Caddy: ACME HTTP-01 and the redirect, then HTTPS. No UDP 443:
+		# HTTP/3 is off on this VM (deployment.md, The two machines: the code VM's
+		# Caddyfile, `servers { protocols h1 h2 }`).
 		tcp dport { 80, 443 } accept
-		udp dport 443 accept
 		# The runner's Caddy site, for the application VM only.
 		tcp dport 8443 ip saddr @runner_clients_v4 accept
 		tcp dport 8443 ip6 saddr @runner_clients_v6 accept

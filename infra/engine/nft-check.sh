@@ -9,8 +9,8 @@
 #   nft-check.sh app       the application VM: SSH, :8443 answers (401
 #                          without RUNNER_TOKEN, 200 with it)
 #   nft-check.sh vm        the engine VM, as root: the tables, the policy,
-#                          the drop counter, then the codespace network
-#                          assertions of both instances
+#                          the drop counter, then a probe container on each
+#                          instance's codespace network
 set -uo pipefail
 
 HOST=code.chevallier.io
@@ -78,17 +78,37 @@ case "${1:-}" in
 		else
 			echo "  ..    no table inet netavark (iptables backend, or no container yet)"
 		fi
-		if nft list chain inet host input 2>/dev/null | grep -q 'policy drop;'; then pass "input policy drop"; else fail "input policy is not drop"; fi
+		# Captured, then matched: under pipefail, `nft … | grep -q` fails
+		# whenever grep exits first and nft gets SIGPIPE.
+		chain=$(nft list chain inet host input 2>/dev/null)
+		if [[ "$chain" == *'policy drop;'* ]]; then pass "input policy drop"; else fail "input policy is not drop"; fi
 		if systemctl is-active --quiet quiz-host-nft-rollback.timer; then
 			echo "  ..    rollback armed: confirm once every check is green"
 		fi
-		nft list chain inet host input | grep -o 'counter packets [0-9]* bytes [0-9]*' | sed 's/^/  ..    dropped: /'
+		grep -o 'counter packets [0-9]* bytes [0-9]*' <<<"$chain" | sed 's/^/  ..    dropped: /'
+		# A throwaway container on each instance's closed network: its git
+		# channel open, the other instance's closed (host.nft's cs0/cs1
+		# accept relies on inet codespace for that), the host's SSH closed,
+		# no egress. Not infra/net/test.sh: it listens on the gateway's 9418,
+		# which a live portal holds, and its regression section reloads
+		# inet codespace without isolation.
+		# shellcheck source=SCRIPTDIR/../../apps/codespace/deploy/lib.sh
+		. "$(dirname "${BASH_SOURCE[0]}")/../../apps/codespace/deploy/lib.sh"
+		probe() { pd run --rm --network "$CS_NET" "$CS_ANCHOR_IMAGE" sh -c "$1" >/dev/null 2>&1; }
+		declare -A gw
+		for i in prod staging; do cs_instance "$i"; gw[$i]=$CS_GATEWAY; done
 		for i in prod staging; do
-			if CS_INSTANCE=$i /usr/local/lib/quiz-codespace/infra/net/test.sh >/dev/null 2>&1; then
-				pass "codespace network assertions ($i)"
-			else
-				fail "codespace network assertions ($i): rerun CS_INSTANCE=$i /usr/local/lib/quiz-codespace/infra/net/test.sh"
-			fi
+			cs_instance "$i"
+			other=$([ "$i" = prod ] && echo staging || echo prod)
+			probe true || { fail "$i: cannot start a probe on $CS_NET"; continue; }
+			if probe "nc -z -w 3 $CS_GATEWAY $CS_GIT_PORT"; then pass "$i: git channel $CS_GATEWAY:$CS_GIT_PORT open"
+			else fail "$i: git channel $CS_GATEWAY:$CS_GIT_PORT closed (portal running?)"; fi
+			if probe "! nc -z -w 3 ${gw[$other]} $CS_GIT_PORT"; then pass "$i: $other's git channel closed from $CS_NET"
+			else fail "$i: $other's git channel ${gw[$other]}:$CS_GIT_PORT reachable from $CS_NET"; fi
+			if probe "! nc -z -w 3 $CS_GATEWAY 22"; then pass "$i: host SSH closed from $CS_NET"
+			else fail "$i: host SSH reachable from $CS_NET"; fi
+			if probe "! nc -z -w 3 1.1.1.1 80"; then pass "$i: no egress from $CS_NET"
+			else fail "$i: 1.1.1.1:80 reachable from $CS_NET"; fi
 		done
 		;;
 	*) echo "usage: $0 outside | app | vm" >&2; exit 2 ;;

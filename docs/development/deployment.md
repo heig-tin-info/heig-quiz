@@ -314,7 +314,8 @@ Caddyfile's `remote_ip` name the same addresses and move together. ufw
 stays inactive: never enable it beside this table.
 
 No deploy changes it: a production deploy only warns when the checkout's
-file differs from the applied copy. **Applying it**, the first time and
+file differs from the applied copy, so a merged change takes effect only
+once re-applied. **Applying it**, the first time and
 after every change, as root on the VM, from the production checkout, in a
 session kept open (`ss -tulpn` first: nothing listening may be left out):
 
@@ -324,7 +325,7 @@ infra/engine/nft-apply.sh                       # nft -c, rollback armed for 180
 # within 180 s, from other terminals:
 infra/engine/nft-check.sh outside               # workstation: SSH, code-dev /healthz, :8443 and 9418 time out
 infra/engine/nft-check.sh app                   # application VM, as srv in /srv/quiz: SSH, :8443 answers 401
-infra/engine/nft-check.sh vm                    # here, a second session: tables, policy, codespace network tests
+infra/engine/nft-check.sh vm                    # here, a second session: tables, policy, a probe on each codespace network
 infra/engine/nft-apply.sh confirm               # all green; otherwise do nothing and the previous table returns
 ```
 

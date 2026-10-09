@@ -4262,6 +4262,14 @@ serves now (16a), and what waits for the group repositories (16b).
   in a user namespace (stubbed systemd), shellcheck. Remaining, the
   owner's: the first apply and confirm on the VM, the restore drill, the
   acceptance runs.
+- **As delivered (rollout)** (engine VM, 2026-10-08/09, with the owner's
+  authorization): slices live, `CODESPACE_MEMORY=768m` for both instances;
+  Caddy masks `token=`; HTTP/3 off on the VM (#649). Restore drill passed,
+  first daily pull 2026-10-08. Host firewall confirmed 2026-10-09 after the
+  `nft-check.sh vm` fix (#651). Acceptance met under load (a loaded live
+  session beside parallel runner smokes): no OOM and no `memory.high` in
+  either slice, worst run 5.3 s against `RUNNER_TIMEOUT_MS` 30 s.
+  Remaining: re-applying `host.nft` for the removed `udp dport 443`.
 
 ### M6-06 — Quiz `codespace` module
 - **Depends on**: M6-03, M3-02.
