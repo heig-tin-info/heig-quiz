@@ -157,7 +157,7 @@ export function badge(tone: BadgeTone = "neutral", extra = ""): string {
   );
 }
 
-/** Table classes, aligned on `T` in `apps/web/src/ui/page.tsx`. */
+/** Table classes: the base of the app's `T` (`apps/web/src/ui/table.tsx`). */
 export const table = {
   table: "w-full text-[13px]",
   head: "text-left text-xs text-fg-muted",

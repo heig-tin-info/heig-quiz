@@ -2,6 +2,8 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
+import { table } from "@quiz/ui";
+
 import { cx } from "./layers";
 
 // Sortable tables: one motif for every hand-rolled table.
@@ -99,11 +101,9 @@ const stack = {
  * DESIGN.md › Tables.
  */
 export const T = {
-  table: "w-full text-[13px]",
-  head: "text-left text-xs text-fg-muted",
-  th: "px-3 py-2 font-medium",
-  td: "px-3 py-2.5 align-middle",
-  row: "border-t border-line transition-colors",
+  // The cells are `@quiz/ui`'s, which the question types' tables wear too.
+  ...table,
+  row: `${table.row} transition-colors`,
   rowHover: "group hover:bg-surface-2/70",
   /**
    * On the wrapper that scrolls: turns it into the query container. It is

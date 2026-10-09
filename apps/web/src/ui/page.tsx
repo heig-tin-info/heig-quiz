@@ -2,7 +2,7 @@ import { PenLine } from "lucide-react";
 import { Fragment, isValidElement, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 
-import { buttonClass, NotePanel } from "@quiz/ui";
+import { buttonClass, card, NotePanel } from "@quiz/ui";
 
 import { Fab, type PagePrimary } from "./fab";
 import { cx, HelpIcon, LG_PX, PageHelpButton, Tip, useMinWidth, type IconType } from "./layers";
@@ -75,7 +75,7 @@ export function Card({
     <div
       {...rest}
       className={cx(
-        "rounded-card border border-line bg-surface",
+        card,
         interactive && "cursor-pointer transition-colors duration-150 hover:border-line-strong hover:bg-surface-2/40",
         className,
       )}
