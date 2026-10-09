@@ -4,8 +4,19 @@
  * the release, and the page's one primary action. The `project` module
  * reads the rows; these decide.
  */
-import type { ProjectGradingModeName, ProjectStateName, PublishModeName } from "./enums.js";
 import { projectGrade, type ProjectGrade, type ProjectScale } from "./projectGrade.js";
+
+/** F-PROJ-03: `draft` → `published` → `locked` (at the deadline). */
+export const PROJECT_STATES = ["draft", "published", "locked"] as const;
+export type ProjectStateName = (typeof PROJECT_STATES)[number];
+
+/** F-PROJ-01: `none` — no score shown and no review dispatched. */
+export const PROJECT_GRADING_MODES = ["auto", "none"] as const;
+export type ProjectGradingModeName = (typeof PROJECT_GRADING_MODES)[number];
+
+/** F-PROJ-03: publish by hand (now), or by the ticker at the start. */
+export const PUBLISH_MODES = ["manual", "scheduled"] as const;
+export type PublishModeName = (typeof PUBLISH_MODES)[number];
 
 /** A score's grade by the project's scale, or null when it has no maximum to read it against. */
 export function scoreGrade(points: number | null, max: number | null, scale: ProjectScale): ProjectGrade | null {

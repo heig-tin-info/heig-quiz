@@ -21,7 +21,7 @@
  *
  * `now` is the server's clock (invariant 5), never read here.
  */
-import type { ProjectStateName } from "./enums.js";
+import type { ProjectStateName } from "./projectView.js";
 
 /** The fields `ProjectPatch` may carry, in the form's order. */
 export const PROJECT_PATCH_FIELDS = [

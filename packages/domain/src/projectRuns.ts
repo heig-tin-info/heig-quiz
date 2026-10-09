@@ -4,7 +4,26 @@
  * from heig-classroom's `grading.ts`). The `project` module reads the rows
  * and the receipts; these rules decide.
  */
-import type { DeadlineStrategyName, GradeRunKindName, GradeRunParseStatusName } from "./enums.js";
+
+/** F-PROJ-09: a ruleset that blocks pushes, or one empty commit of the App per branch. */
+export const DEADLINE_STRATEGIES = ["lock", "commit"] as const;
+export type DeadlineStrategyName = (typeof DEADLINE_STRATEGIES)[number];
+
+/**
+ * Why a grade run has a score or none (F-PROJ-10, `extractScore`):
+ * `multiple` — several `GRADE` annotations, no score.
+ */
+export const GRADE_RUN_PARSE_STATUSES = ["ok", "no_annotation", "malformed", "multiple", "fallback"] as const;
+export type GradeRunParseStatusName = (typeof GRADE_RUN_PARSE_STATUSES)[number];
+
+/**
+ * What triggered a grade run: a push (`ci`, the indicative score) or the
+ * final review dispatched after the freeze (`review`, heig-classroom's
+ * `llm`; the import maps it). A `review` run never enters the selection of
+ * the current score: it fills the repository's review slot (F-PROJ-11).
+ */
+export const GRADE_RUN_KINDS = ["ci", "review"] as const;
+export type GradeRunKindName = (typeof GRADE_RUN_KINDS)[number];
 
 /** The workflow whose runs carry a score (a wire name, I16). */
 export const GRADING_WORKFLOW_PATH = ".github/workflows/grading.yml";

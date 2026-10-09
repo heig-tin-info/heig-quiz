@@ -7,7 +7,7 @@
  * gateway; this decides what is said.
  */
 import { assistCommandList, assistScreenCatalogue, type AssistAction, type AssistScreenCommand } from "./assistScreens.js";
-import { LOCALES, type Locale } from "./enums.js";
+import { LOCALES, type Locale } from "./locales.js";
 
 /** The UI languages, and so the help topics' variants and the reply's fallback language. */
 export const ASSIST_LOCALES = LOCALES;

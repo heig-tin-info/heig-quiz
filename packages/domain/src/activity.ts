@@ -13,9 +13,9 @@
  *
  * Pure: the instant is the caller's.
  */
-import type { ProjectStateName } from "./enums.js";
 import { isInClass, type EvaluationModeName, type LobbyName } from "./evaluationConfig.js";
 import { isEvaluationOpen, type EvaluationStateName } from "./itemList.js";
+import type { ProjectStateName } from "./projectView.js";
 
 /** A `scheduled` activity is live this long before it opens. */
 export const LIVE_LEAD_MS = 15 * 60_000;
