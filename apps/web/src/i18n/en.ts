@@ -1375,7 +1375,7 @@ export const en = {
   "pool.newQuestionAction": "Create question",
   "pool.questionName": "Internal name",
   "pool.questionNameHint": "Only you see it. It is how you find the question again.",
-  "pool.questionNamePlaceholder": "ptr-arith-01",
+  "pool.questionNamePlaceholder": "Pointer arithmetic on an array",
   "pool.questionType": "Question type",
   "pool.createFailed": "The question could not be created.",
   "pool.search": "Search a question",

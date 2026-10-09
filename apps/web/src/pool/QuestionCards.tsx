@@ -83,7 +83,7 @@ function QuestionCard({
     >
       <div className="flex min-w-0 items-start gap-2">
         <TypeGlyph type={row.type} />
-        <span className="min-w-0 flex-1 break-words font-mono text-[13px] font-bold group-aria-[current=true]:text-accent">
+        <span className="min-w-0 flex-1 break-words text-[13px] font-semibold group-aria-[current=true]:text-accent">
           {row.internalName}
         </span>
         {row.deletedAt ? <Badge tone="zinc">{t("pool.deleted")}</Badge> : null}

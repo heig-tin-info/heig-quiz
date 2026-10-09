@@ -53,7 +53,7 @@ export function QuestionHeader({
     <PageHeader
       help="question-editor"
       eyebrow={<Trail navigate={navigate} items={[...crumbs, { label: data.meta.internalName }]} />}
-      title={<span className="font-mono">{data.meta.internalName}</span>}
+      title={data.meta.internalName}
       description={
         <span className="flex flex-wrap items-center gap-2">
           <Badge tone="zinc" icon={Icon}>

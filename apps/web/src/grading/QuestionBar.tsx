@@ -74,7 +74,7 @@ export function QuestionBar({
           <Badge tone="zinc">{typeLabel(t, item.type)}</Badge>
           <Badge tone="zinc">{t("grading.points", { n: item.points })}</Badge>
         </span>
-        <span className="min-w-0 truncate font-mono text-[12.5px] text-fg-muted">
+        <span className="min-w-0 truncate text-[13px] text-fg-muted">
           {item.internalName}
         </span>
         <span className="flex-1" />
