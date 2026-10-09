@@ -32,10 +32,10 @@ import { randomUUID } from "node:crypto";
 
 import { eq, sql } from "drizzle-orm";
 
-import type { AppConfig } from "../../src/config.js";
-import type { Db } from "../../src/db/client.js";
-import { classrooms, courses, githubClassroomLinks, githubOrganizations, importIdMap, users } from "../../src/db/schema.js";
-import { normalizeEmail, ownersOf } from "../../src/identity.js";
+import type { AppConfig } from "../config.js";
+import type { Db } from "../db/client.js";
+import { classrooms, courses, githubClassroomLinks, githubOrganizations, importIdMap, users } from "../db/schema.js";
+import { normalizeEmail, ownersOf } from "../identity.js";
 import type { Ctx, Mapped } from "./ctx.js";
 import { nameOf } from "./ctx.js";
 import { resolveIdentities, targetOf } from "./identity.js";

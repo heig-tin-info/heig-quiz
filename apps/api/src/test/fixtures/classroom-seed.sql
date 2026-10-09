@@ -1,5 +1,5 @@
 -- A synthetic heig-classroom database, the source of the import of merge
--- task M1-06 (apps/api/scripts/import-classroom.ts,
+-- task M1-06 (apps/api/src/import-classroom.ts,
 -- docs/merge/02-data-and-migration.md §2.5). Two parts:
 --
 -- 1. heig-classroom's schema, exactly as production has it: its 31 Drizzle

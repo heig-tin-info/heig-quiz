@@ -47,9 +47,9 @@ import {
   projects,
   studentGroupMembers,
   studentGroups,
-} from "../../src/db/schema.js";
-import { repoMembers } from "../../src/modules/project/groupRepos.js";
-import { stopProjects } from "../../src/modules/project/service.js";
+} from "../db/schema.js";
+import { repoMembers } from "../modules/project/groupRepos.js";
+import { stopProjects } from "../modules/project/service.js";
 import { note, tally, tallyMapped, written, type Ctx, type OwnedRow } from "./ctx.js";
 import type { SourceAssignment, SourceGroup, SourceGroupMember } from "./source.js";
 import { assignmentsInScope, carryOwned, reposInScope } from "./steps-projects.js";

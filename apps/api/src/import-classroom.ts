@@ -5,12 +5,19 @@
  * the complete import is the switch).
  *
  *   pnpm --filter @quiz/api import:classroom \
- *     --source postgres://reader@…/hgc --mapping mapping.json \
+ *     --source-db hgc_cutover --mapping mapping.json \
  *     --actor admin@heig-vd.ch [--dry-run | --apply] [--final] \
  *     [--report-json report.json] [--window-hours 24] \
  *     [--assistants skip|staff] [--missing-students report|enroll]
  *
- * The target is the `DATABASE_URL` of the environment, as for the API. A dry
+ * In the production image it is compiled with the API, like `seed.ts`, and
+ * runs with plain Node, nothing fetched: `node dist/import-classroom.js …`
+ * (from `/app`). `--help` prints the usage and exits 0 before reading any
+ * configuration, which CI uses to prove the image carries it.
+ *
+ * The target is the `DATABASE_URL` of the environment, as for the API; the
+ * source is the database `--source-db` names on the same server, reached
+ * with the same credentials (`sourceUrl`), so no secret is ever on argv. A dry
  * run (the default) does every write in a transaction it rolls back, and
  * prints the full report. `--apply` refuses while the report has a refusal
  * (`run.ts`). `--final` marks the cutover import, which also enforces the
@@ -26,17 +33,17 @@ import { parseArgs } from "node:util";
 
 import type { FastifyInstance } from "fastify";
 
-import { systemClock } from "../src/clock.js";
-import { loadConfig } from "../src/config.js";
-import { githubApp } from "../src/github/app.js";
-import { ingestJournal } from "../src/modules/journal/ingest.js";
-import { createDb } from "../src/db/client.js";
+import { systemClock } from "./clock.js";
+import { loadConfig } from "./config.js";
+import { githubApp } from "./github/app.js";
+import { ingestJournal } from "./modules/journal/ingest.js";
+import { createDb } from "./db/client.js";
 import { ClassroomMapping } from "./import-classroom/mapping.js";
 import { formatReport, runImport, type ImportOptions } from "./import-classroom/run.js";
-import { openSource, readSnapshot } from "./import-classroom/source.js";
+import { openSource, readSnapshot, sourceUrl } from "./import-classroom/source.js";
 
 const USAGE =
-  "usage: import-classroom --source <classroom DATABASE_URL> --mapping <file.json> --actor <admin e-mail> " +
+  "usage: import-classroom --source-db <database on the server of DATABASE_URL> --mapping <file.json> --actor <admin e-mail> " +
   "[--dry-run | --apply] [--final] [--report-json <file>] [--window-hours <n>] " +
   "[--assistants skip|staff] [--missing-students report|enroll]";
 
@@ -49,7 +56,7 @@ function choice<T extends string>(value: string | undefined, allowed: readonly T
 async function main() {
   const { values } = parseArgs({
     options: {
-      source: { type: "string" },
+      "source-db": { type: "string" },
       mapping: { type: "string" },
       actor: { type: "string" },
       "dry-run": { type: "boolean" },
@@ -59,10 +66,15 @@ async function main() {
       final: { type: "boolean" },
       "report-json": { type: "string" },
       "window-hours": { type: "string" },
+      help: { type: "boolean" },
     },
     strict: true,
   });
-  if (!values.source || !values.mapping || !values.actor) throw new Error(USAGE);
+  if (values.help) {
+    console.log(USAGE);
+    return;
+  }
+  if (!values["source-db"] || !values.mapping || !values.actor) throw new Error(USAGE);
   if (values.apply && values["dry-run"]) throw new Error("--dry-run and --apply exclude each other");
 
   const raw = readFileSync(values.mapping);
@@ -86,7 +98,7 @@ async function main() {
   if (missingStudents) options.missingStudents = missingStudents;
 
   const config = loadConfig();
-  const source = await openSource(values.source);
+  const source = await openSource(sourceUrl(config.DATABASE_URL, values["source-db"]));
   const target = createDb(config.DATABASE_URL);
   try {
     // The journal module's own ingestion over the target database, as the queue's worker runs it (no queue here: `boss` unset).

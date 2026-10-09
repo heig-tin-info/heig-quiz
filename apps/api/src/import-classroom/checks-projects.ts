@@ -14,7 +14,7 @@
  */
 import { inArray } from "drizzle-orm";
 
-import { projectGradeRuns, projectRepos, pushReceipts } from "../../src/db/schema.js";
+import { projectGradeRuns, projectRepos, pushReceipts } from "../db/schema.js";
 import type { Ctx } from "./ctx.js";
 import type { ImportCheck } from "./registry.js";
 import type { SourceStudentRepo } from "./source.js";

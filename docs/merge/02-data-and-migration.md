@@ -163,12 +163,16 @@ accounts after the union (makes roster claims ambiguous).
 
 ## 2.5 The import script
 
-`Q:apps/api/scripts/import-classroom.ts` (task M1-06 creates it, every
+`Q:apps/api/src/import-classroom.ts` (task M1-06 creates it, every
 porting task that adds a table extends it, M8-01 completes it). Run with
-`pnpm --filter @quiz/api import:classroom`; the target is the
-environment's `DATABASE_URL`.
+`pnpm --filter @quiz/api import:classroom` in development; it is compiled
+with the API, so the production image runs it as
+`node dist/import-classroom.js` (from `/app`, nothing fetched). The target
+is the environment's `DATABASE_URL`.
 
-- **Inputs**: `--source <classroom DATABASE_URL>` (read-only role; the
+- **Inputs**: `--source-db <name>` (a database on the server of
+  `DATABASE_URL`, reached with its credentials: the cutover restores
+  classroom's dump there, so no password is ever on the command line; the
   session is opened `default_transaction_read_only=on` and the snapshot is
   read in one `REPEATABLE READ READ ONLY` transaction), `--mapping
   <file.json>` (required, zod `ClassroomMapping`: per classroom-classroom,
@@ -224,9 +228,9 @@ environment's `DATABASE_URL`.
   project, `sum(teacher_points)`, count of frozen grades, every journal
   re-ingested with `sync_status = ok`, every grade-run link resolves,
   latest push receipt per repository equals the source.
-- **Tests**: `apps/api/scripts/fixtures/classroom-seed.sql` (classroom's
+- **Tests**: `apps/api/src/test/fixtures/classroom-seed.sql` (classroom's
   31 migrations concatenated, then synthetic, anonymised rows), imported
-  into a PGlite Quiz database in `scripts/import-classroom.db.test.ts`; a
+  into a PGlite Quiz database in `src/import-classroom.db.test.ts`; a
   second run writes nothing; a merge into an existing classroom; a
   duplicate identity refused; an unconnected or wrong-org classroom
   refused; a dropped classroom's people not imported; the GitHub link

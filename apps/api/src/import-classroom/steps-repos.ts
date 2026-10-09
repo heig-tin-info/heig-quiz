@@ -32,7 +32,7 @@ import {
   projectSyncPrs,
   pushReceipts,
   reverts,
-} from "../../src/db/schema.js";
+} from "../db/schema.js";
 import { note, tally, target, written, type Ctx, type OwnedRow } from "./ctx.js";
 import type { SourceAssignment, SourceStudentRepo } from "./source.js";
 import { GROUP_GONE, assignmentsInScope, carryOwned, repoLeftOut, repoOwner, reposInScope } from "./steps-projects.js";

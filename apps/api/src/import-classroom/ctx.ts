@@ -22,9 +22,9 @@ import { createHash } from "node:crypto";
 import { and, eq, getTableColumns, getTableName, sql, type SQL } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
-import type { AppConfig } from "../../src/config.js";
-import type { Tx } from "../../src/db/client.js";
-import { importIdMap } from "../../src/db/schema.js";
+import type { AppConfig } from "../config.js";
+import type { Tx } from "../db/client.js";
+import { importIdMap } from "../db/schema.js";
 import type { Identity } from "./identity.js";
 import { targetOf } from "./identity.js";
 import type { Destination } from "./mapping.js";

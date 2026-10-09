@@ -8,7 +8,7 @@ task M1-06: the rule `decideMatch` (`packages/domain/src/identityMatch.ts`),
 `apps/api/src/auth/adoption.ts` (`findAdoption`, `applyAdoption`), called
 by `signIn` (`auth/login.ts`), the audit actions `auth.account_adopted` and
 `auth.adoption_ambiguous`, and the import's placeholder subjects
-(`apps/api/scripts/import-classroom/identity.ts`). Tested by
+(`apps/api/src/import-classroom/identity.ts`). Tested by
 `identityMatch.test.ts` and `auth/adoption.db.test.ts`. Completes ADR-035 (the merge) and §2.4 of
 `docs/merge/02-data-and-migration.md`.
 

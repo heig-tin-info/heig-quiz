@@ -22,7 +22,7 @@ import { ProjectGradingScale } from "@quiz/contracts";
 import { DEADLINE_REMINDER_MS } from "@quiz/domain";
 import { and, eq, getTableName, inArray, isNull } from "drizzle-orm";
 
-import { githubClassroomLinks, projectCheckpoints, projects } from "../../src/db/schema.js";
+import { githubClassroomLinks, projectCheckpoints, projects } from "../db/schema.js";
 import { nameOf, note, remember, syncOwned, tallyMapped, target, written, type Ctx, type OwnedRow } from "./ctx.js";
 import type { SourceAssignment, SourceGroup, SourceSnapshot, SourceStudentRepo } from "./source.js";
 

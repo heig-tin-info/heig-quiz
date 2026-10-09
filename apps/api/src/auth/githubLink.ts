@@ -191,7 +191,7 @@ export type ImportedLinkOutcome =
 
 /**
  * Carries a heig-classroom account link over to the Quiz user it was matched
- * to (spec 06 no. 44; merge task M1-06, `scripts/import-classroom.ts`). A link
+ * to (spec 06 no. 44; merge task M1-06, `src/import-classroom.ts`). A link
  * is an identity, not a grant — the person's GitHub id and login, no token —
  * so the App that recorded it does not matter. Never moves an existing link:
  * Quiz's side wins every disagreement, which the import reports.

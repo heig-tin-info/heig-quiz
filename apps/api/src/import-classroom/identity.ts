@@ -25,10 +25,10 @@ import { and, eq, inArray, isNull, notLike } from "drizzle-orm";
 
 import { decideMatch } from "@quiz/domain";
 
-import { placeholderSub } from "../../src/auth/adoption.js";
-import type { Db } from "../../src/db/client.js";
-import { userEmails, users } from "../../src/db/schema.js";
-import { normalizeEmail } from "../../src/identity.js";
+import { placeholderSub } from "../auth/adoption.js";
+import type { Db } from "../db/client.js";
+import { userEmails, users } from "../db/schema.js";
+import { normalizeEmail } from "../identity.js";
 import type { SourceSnapshot, SourceUser } from "./source.js";
 
 export type Identity =
