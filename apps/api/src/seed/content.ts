@@ -11,7 +11,7 @@
  * looks them up before it writes, so running it twice changes nothing.
  */
 
-import type { QuestionTypeId } from "@quiz/contracts";
+import type { EvaluationPreset, QuestionTypeId } from "@quiz/contracts";
 
 /** Every registered type: the seed's union can never fall behind the registry. */
 type QuestionTypeName = QuestionTypeId;
@@ -91,8 +91,8 @@ export interface PoolSpec {
 export interface EvaluationSpec {
   /** Unique inside the classroom, and the key the seed is idempotent on. */
   title: string;
-  mode: "exam" | "exercise";
-  preset: "exam" | "exercise";
+  mode: EvaluationPreset;
+  preset: EvaluationPreset;
   /** Where the evaluation is left once it is built. */
   target: "draft" | "scheduled" | "lobby" | "closed";
   /** `internalName`s, in the order the items must appear. */

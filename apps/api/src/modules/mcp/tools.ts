@@ -25,6 +25,7 @@ import {
   CourseCreate,
   EvaluationCreate,
   EvaluationPatch,
+  EvaluationPreset,
   OAUTH_SCOPE,
   ParametersDraft,
   PoolCreate,
@@ -194,7 +195,7 @@ async function saveAndPublish(
 /** The arguments `create_evaluation` and `create_template` share: what the quiz is. */
 const QuizFields = {
   title: EvaluationCreate.shape.title,
-  mode: z.enum(["exam", "exercise"]).default("exercise"),
+  mode: EvaluationPreset.default("exercise"),
   questionIds: z.array(Id).max(200).default([]),
 };
 

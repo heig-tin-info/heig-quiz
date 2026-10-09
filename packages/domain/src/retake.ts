@@ -20,15 +20,17 @@ import { isLiveState, type EvaluationModeName } from "./evaluationConfig.js";
 import type { EvaluationStateName } from "./itemList.js";
 import type { NavigationMode } from "./questionProgress.js";
 
-/** Which attempt a student's result is: the best score, or the last attempt. */
-export type RetakeKeep = "best" | "last";
+/** Which attempt a student's result is: the best score, or the last attempt (F-EVAL-15). */
+export const RETAKE_KEEPS = ["best", "last"] as const;
+export type RetakeKeep = (typeof RETAKE_KEEPS)[number];
 
 /**
  * What a retake asks again (ADR-091): every question (`all`, ADR-025), or
  * only the questions to review (`to_review`) — the acquired ones are carried
  * over from the previous attempt as they stand.
  */
-export type RetakeScope = "all" | "to_review";
+export const RETAKE_SCOPES = ["all", "to_review"] as const;
+export type RetakeScope = (typeof RETAKE_SCOPES)[number];
 
 /** `settings.retakes` of an evaluation, as on the wire. */
 export interface RetakePolicy {
@@ -82,7 +84,8 @@ export function retakeScopeFits(
  *   "awaiting correction", never "wrong";
  * - `to_review`: validated, below its maximum.
  */
-export type ItemStanding = "acquired" | "to_review" | "pending";
+export const ITEM_STANDINGS = ["acquired", "to_review", "pending"] as const;
+export type ItemStanding = (typeof ITEM_STANDINGS)[number];
 
 export interface StandingInput {
   /** The item's points, as the evaluation gives them. */
@@ -125,8 +128,12 @@ export function partialRetakeRefusal(input: {
   return null;
 }
 
-/** The state of an attempt, as on the wire (`AttemptState`). */
-export type AttemptStateName = "not_started" | "in_progress" | "submitted" | "expired";
+/** The state of an attempt (`AttemptState` on the wire). */
+export const ATTEMPT_STATES = ["not_started", "in_progress", "submitted", "expired"] as const;
+export type AttemptStateName = (typeof ATTEMPT_STATES)[number];
+
+/** Who closed an attempt: the ticker, the student's hand-in, or the teacher. */
+export const ATTEMPT_CLOSERS = ["server", "student", "teacher"] as const;
 
 /** An attempt is finished once it is handed in or closed; only then may another start. */
 export function isFinishedAttempt(state: AttemptStateName): boolean {
@@ -177,15 +184,17 @@ export function retakesOn(mode: EvaluationModeName, policy: RetakePolicy): boole
  * - `scope_all`, `nothing_to_review`: a retake of the questions to review
  *   only, refused by {@link partialRetakeRefusal} (ADR-091).
  */
-export type RetakeRefusal =
-  | "not_allowed"
-  | "not_open"
-  | "closed"
-  | "no_attempt"
-  | "unfinished"
-  | "max_attempts"
-  | "scope_all"
-  | "nothing_to_review";
+export const RETAKE_REFUSALS = [
+  "not_allowed",
+  "not_open",
+  "closed",
+  "no_attempt",
+  "unfinished",
+  "max_attempts",
+  "scope_all",
+  "nothing_to_review",
+] as const;
+export type RetakeRefusal = (typeof RETAKE_REFUSALS)[number];
 
 export interface RetakeInput {
   mode: EvaluationModeName;

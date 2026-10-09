@@ -12,7 +12,7 @@
  */
 import { z } from "zod";
 
-import { EvaluationMode, EvaluationState } from "./evaluation.js";
+import { EvaluationClosedBy, EvaluationMode, EvaluationState } from "./evaluation.js";
 import { ProjectActivitySummary } from "./project.js";
 
 /** The kinds of activity. */
@@ -46,7 +46,7 @@ export const EvaluationActivitySummary = z.object({
   startedAt: z.iso.datetime().nullable(),
   /** When its run ended, and whose hand ended it; both null until then. */
   closedAt: z.iso.datetime().nullable(),
-  closedBy: z.enum(["server", "teacher"]).nullable(),
+  closedBy: EvaluationClosedBy.nullable(),
   updatedAt: z.iso.datetime(),
 });
 export type EvaluationActivitySummary = z.infer<typeof EvaluationActivitySummary>;

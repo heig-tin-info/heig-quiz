@@ -10,7 +10,9 @@
 /** A write arriving later than `deadline + GRACE_MS` is refused with 410 attempt_closed. */
 export const GRACE_MS = 3000;
 
-export type EvaluationTiming = "duration" | "deadline" | "manual";
+/** F-EVAL-04: who ends an attempt — its own duration, the common deadline, or the teacher. */
+export const TIMINGS = ["duration", "deadline", "manual"] as const;
+export type EvaluationTiming = (typeof TIMINGS)[number];
 
 /**
  * The common window of a `deadline`-timed evaluation as the teacher set it.

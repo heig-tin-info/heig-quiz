@@ -4,7 +4,7 @@
  */
 import { and, eq } from "drizzle-orm";
 
-import type { EvaluationState } from "@quiz/contracts";
+import type { EvaluationClosedBy, EvaluationState } from "@quiz/contracts";
 import {
   evaluationTotal,
   lacksGradedPoints,
@@ -170,7 +170,7 @@ export async function tryApplyState(
   row: EvaluationRecord,
   to: EvaluationState,
   now: Date,
-  closedBy: "server" | "teacher" = "teacher",
+  closedBy: EvaluationClosedBy = "teacher",
 ): Promise<EvaluationRecord | null> {
   const next: Partial<typeof evaluations.$inferInsert> = { state: to, updatedAt: now };
   if (to === "running") {
@@ -219,7 +219,7 @@ export async function applyState(
   row: EvaluationRecord,
   to: EvaluationState,
   now: Date,
-  closedBy?: "server" | "teacher",
+  closedBy?: EvaluationClosedBy,
 ): Promise<EvaluationRecord> {
   return (await tryApplyState(db, row, to, now, closedBy)) ?? (await byId(db, row.id))!;
 }

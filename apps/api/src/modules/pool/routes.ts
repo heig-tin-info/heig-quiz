@@ -13,24 +13,8 @@
 import fastifyMultipart from "@fastify/multipart";
 import type { FastifyInstance } from "fastify";
 
-import {
-  CategorizePolicy,
-  DEFAULT_CATEGORIZE_POLICY,
-  DEFAULT_MCQ_POLICY,
-  McqPolicy,
-  type QuestionTypeId,
-} from "@quiz/contracts";
+import type { QuestionTypeId } from "@quiz/contracts";
 import { QUESTION_TYPE_IDS } from "@quiz/core/server";
-import {
-  CATEGORIZE_SCORE_POLICIES,
-  DEFAULT_CATEGORIZE_SCORE_POLICY,
-  type CategorizeScorePolicy,
-} from "@quiz/domain/categorizeScore";
-import {
-  DEFAULT_MCQ_SCORE_POLICY,
-  MCQ_SCORE_POLICIES,
-  type McqScorePolicy,
-} from "@quiz/domain/mcqScore";
 
 import type { AppConfig } from "../../config.js";
 import { poolRouteContext } from "./routeContext.js";
@@ -52,22 +36,6 @@ import { similarRoutes } from "./similarRoutes.js";
  */
 const _questionTypesAgree: readonly QuestionTypeId[] = QUESTION_TYPE_IDS;
 void _questionTypesAgree;
-
-/**
- * The same proof for the MCQ policies: the wire enum of `@quiz/contracts` and
- * the scoring formulas of `@quiz/domain` (their reference list), both ways,
- * and the same default.
- */
-const _mcqPoliciesAgree: readonly McqScorePolicy[] = McqPolicy.options;
-const _mcqPoliciesAgreeBack: readonly McqPolicy[] = MCQ_SCORE_POLICIES;
-const _mcqDefaultsAgree: typeof DEFAULT_MCQ_SCORE_POLICY = DEFAULT_MCQ_POLICY;
-void [_mcqPoliciesAgree, _mcqPoliciesAgreeBack, _mcqDefaultsAgree];
-
-/** And for the categorize policies (ADR-036), an evaluation setting. */
-const _categorizePoliciesAgree: readonly CategorizeScorePolicy[] = CategorizePolicy.options;
-const _categorizePoliciesAgreeBack: readonly CategorizePolicy[] = CATEGORIZE_SCORE_POLICIES;
-const _categorizeDefaultsAgree: typeof DEFAULT_CATEGORIZE_SCORE_POLICY = DEFAULT_CATEGORIZE_POLICY;
-void [_categorizePoliciesAgree, _categorizePoliciesAgreeBack, _categorizeDefaultsAgree];
 
 export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;

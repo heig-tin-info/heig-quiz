@@ -14,6 +14,7 @@ import {
   defaultSettings,
   type EvaluationMode,
   type EvaluationPatch,
+  type EvaluationPreset,
   ReleasedGrades,
   negativeMarkingOf,
   conditionsOf,
@@ -58,7 +59,7 @@ import { latestPublished, type CopyHome } from "./items.js";
  * The two presets of §4.3. An exam is timed, forward-only-ish and silent
  * until release; an exercise is open and gives feedback immediately.
  */
-function presetSettings(preset: "exam" | "exercise"): {
+function presetSettings(preset: EvaluationPreset): {
   settings: EvaluationSettings;
   feedbackPolicy: FeedbackPolicy;
 } {
@@ -80,7 +81,7 @@ export async function createEvaluation(
   input: CopyHome & {
     title: string;
     mode: EvaluationMode;
-    preset?: "exam" | "exercise" | undefined;
+    preset?: EvaluationPreset | undefined;
     /** ADR-041 §2: the teacher's choice at creation; absent is the mode's default. */
     allowDrill?: boolean | undefined;
     createdBy: string;

@@ -10,8 +10,16 @@
 import type { EvaluationTiming } from "./deadline.js";
 import type { EvaluationStateName } from "./itemList.js";
 
-/** The evaluation modes of F-EVAL-01, spelled as on the wire. */
-export type EvaluationModeName = "exam" | "exercise" | "poll";
+/** The evaluation modes of F-EVAL-01. `poll` is stored and refused by every evaluation route (decision D7). */
+export const EVALUATION_MODES = ["exam", "exercise", "poll"] as const;
+export type EvaluationModeName = (typeof EVALUATION_MODES)[number];
+
+/**
+ * Who ended a run: the ticker past its closing time (`server`), or the
+ * teacher's Close or End (`teacher`).
+ */
+export const EVALUATION_CLOSERS = ["server", "teacher"] as const;
+export type EvaluationCloser = (typeof EVALUATION_CLOSERS)[number];
 
 /** A field the timing still needs. */
 export type TimingField = "durationS" | "opensAt" | "closesAt";
@@ -79,19 +87,18 @@ export function pastTiming(
 
 // --- Feedback policy (F-EVAL-11, #78) --------------------------------------
 
-/** When the student sees the correction, as on the wire (`FeedbackPolicy.when`). */
-export type FeedbackWhen = "none" | "on_release" | "immediate";
+/** When the student sees the correction (`FeedbackPolicy.when`): every policy, in the order the screen offers them. */
+export const FEEDBACK_WHEN = ["none", "on_release", "immediate"] as const;
+export type FeedbackWhen = (typeof FEEDBACK_WHEN)[number];
 
 /** The waiting room setting of F-EVAL-06. */
-export type LobbyName = "skip" | "auto" | "manual";
+export const LOBBIES = ["skip", "auto", "manual"] as const;
+export type LobbyName = (typeof LOBBIES)[number];
 
 export interface FeedbackContext {
   mode: EvaluationModeName;
   lobby: LobbyName;
 }
-
-/** Every policy, in the order the screen offers them. */
-export const FEEDBACK_WHEN: readonly FeedbackWhen[] = ["none", "on_release", "immediate"];
 
 /** What an evaluation falls back to when its context stops allowing `immediate`. */
 export const IN_CLASS_FEEDBACK: FeedbackWhen = "on_release";

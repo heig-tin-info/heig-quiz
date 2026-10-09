@@ -21,13 +21,11 @@
  *     and continue" in `forward_only`, crossing a checkpoint in
  *     `milestones`. Stored in `answers.marked_done`, the column that held the
  *     old "Mark as done" (which it replaces).
- *
- * The unions are spelled out rather than imported from `@quiz/contracts`
- * (the domain depends on nothing but `@quiz/core`); they are structurally the
- * types of the same names there.
  */
 
-export type NavigationMode = "free" | "forward_only" | "milestones";
+/** F-EVAL-07. `milestones` locks everything up to a passed milestone item. */
+export const NAVIGATIONS = ["free", "forward_only", "milestones"] as const;
+export type NavigationMode = (typeof NAVIGATIONS)[number];
 
 /** What the student's question list shows for one question. */
 export type AnswerMark = "answered" | "skipped" | "unanswered";
@@ -109,7 +107,8 @@ export function furthestCheckpoint(
 }
 
 /** The progress half of a dashboard cell (F-DASH-01). */
-export type ProgressStatus = "empty" | "seen" | "in_progress" | "skipped" | "done";
+export const PROGRESS_STATUSES = ["empty", "seen", "in_progress", "skipped", "done"] as const;
+export type ProgressStatus = (typeof PROGRESS_STATUSES)[number];
 
 /**
  * One cell's progress, from what is stored. `row` is false when the student

@@ -3,7 +3,7 @@
  * handle type, the failures and the gate of the item list.
  */
 import type { EvaluationState } from "@quiz/contracts";
-import { EVALUATION_STATES, itemListLock, type EvaluationStateName, type PastTiming } from "@quiz/domain";
+import { itemListLock, type PastTiming } from "@quiz/domain";
 
 import type { Db, Tx } from "../../db/client.js";
 import { evaluationItems, evaluations } from "../../db/schema.js";
@@ -11,13 +11,6 @@ import { refusalClass, type Refusal } from "../http.js";
 
 export type EvaluationRecord = typeof evaluations.$inferSelect;
 
-/**
- * `@quiz/domain` spells the state union again (it depends on no contract);
- * the two must stay the same set, both ways, at compile time.
- */
-const _statesAgree: readonly EvaluationState[] = EVALUATION_STATES;
-const _statesAgreeBack: readonly EvaluationStateName[] = [] as EvaluationState[];
-void [_statesAgree, _statesAgreeBack];
 export type ItemRecord = typeof evaluationItems.$inferSelect;
 /**
  * A handle or an open transaction: the state change below is also the second

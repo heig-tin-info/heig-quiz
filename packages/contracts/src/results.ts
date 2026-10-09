@@ -11,11 +11,11 @@
  */
 import { z } from "zod";
 
+import { FEEDBACK_REFUSALS, ITEM_STANDINGS } from "@quiz/domain";
+
 import { StaffItemRef } from "./common.js";
 import { EvaluationMode, GradingScale, RetakeKeep, RetakeScope } from "./evaluation.js";
-import type { ItemStanding as DomainItemStanding } from "@quiz/domain";
-
-import { AttemptScore, AttemptState, RetakeRefusalReason, type Same } from "./live.js";
+import { AttemptScore, AttemptState, RetakeRefusalReason } from "./live.js";
 import { Verdict } from "./grading.js";
 
 /** A student with no attempt at all still gets a row, and a 1.0 (F-RES-02). */
@@ -261,9 +261,8 @@ export type RetakeStatus = z.infer<typeof RetakeStatus>;
  * `ItemStanding`: `acquired`, `to_review`, or `pending` (awaiting a
  * teacher's grading — asked again, but not wrong).
  */
-export const ItemStanding = z.enum(["acquired", "to_review", "pending"]);
+export const ItemStanding = z.enum(ITEM_STANDINGS);
 export type ItemStanding = z.infer<typeof ItemStanding>;
-true satisfies Same<ItemStanding, DomainItemStanding>;
 
 /**
  * One question of the attempt on the page, as a partial retake reads it
@@ -325,7 +324,7 @@ export const FeedbackPending = z.object({
    * `exam_open`: an exam not closed yet shows nothing, whatever its policy:
    * the results come after the deadline.
    */
-  reason: z.enum(["results_pending", "no_feedback", "attempt_open", "retakes_open", "exam_open"]),
+  reason: z.enum(FEEDBACK_REFUSALS),
   evaluation: z.object({ id: z.uuid(), title: z.string() }),
   /** Only with `retakes_open`: the points of this attempt, and nothing else. */
   score: AttemptScore.optional(),

@@ -22,6 +22,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { DEFAULT_MAX_ACTIVE_SESSIONS, SESSION_KINDS } from "@quiz/contracts";
+import { MCQ_SCORE_POLICIES } from "@quiz/domain";
 
 import { bytea } from "./columns.js";
 import { evaluations } from "./evaluation.js";
@@ -59,9 +60,7 @@ export const users = pgTable(
      * (docs/04 §4.4); null falls back to `all_or_nothing`. It is a SEED, read
      * once at creation: changing it never moves an existing evaluation.
      */
-    mcqPolicy: text("mcq_policy", {
-      enum: ["all_or_nothing", "true_false", "discordance", "symmetric", "ripkey"],
-    }),
+    mcqPolicy: text("mcq_policy", { enum: MCQ_SCORE_POLICIES }),
     /**
      * The coach marks (the bubbles that introduce a screen to a newcomer,
      * `apps/web/src/coach/`) are shown; null means yes. Turned off from the

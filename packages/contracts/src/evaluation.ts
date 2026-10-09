@@ -11,38 +11,50 @@ import { z } from "zod";
 
 import {
   CALCULATOR_MODES,
+  CATEGORIZE_SCORE_POLICIES,
   CONDITION_KINDS,
+  DEFAULT_CATEGORIZE_SCORE_POLICY,
+  DEFAULT_MCQ_SCORE_POLICY,
+  EVALUATION_CLOSERS,
+  EVALUATION_MODES,
+  EVALUATION_STATES,
+  FEEDBACK_WHEN,
+  LOBBIES,
   MAX_CONDITION_LENGTH,
   MAX_CONDITIONS,
+  MCQ_SCORE_POLICIES,
+  NAVIGATIONS,
   NOTEPAD_MODES,
+  RETAKE_KEEPS,
+  RETAKE_SCOPES,
   ROUNDINGS,
+  TIMINGS,
   TRUSTED_CLIENTS,
 } from "@quiz/domain";
 
 import { ConceptRef } from "./concept.js";
 
 /** F-EVAL-01. `poll` is accepted by the column and refused by every route (decision D7). */
-export const EvaluationMode = z.enum(["exam", "exercise", "poll"]);
+export const EvaluationMode = z.enum(EVALUATION_MODES);
 export type EvaluationMode = z.infer<typeof EvaluationMode>;
+
+/** The named presets of settings at creation: a mode, `poll` aside. */
+export const EvaluationPreset = EvaluationMode.exclude(["poll"]);
+export type EvaluationPreset = z.infer<typeof EvaluationPreset>;
 
 /**
  * The stored states (decision D6). `graded` is NOT one of them: it is
  * `closed` plus "no proposed grading left", and the UI shows it as a badge.
  */
-export const EvaluationState = z.enum([
-  "draft",
-  "scheduled",
-  "lobby",
-  "running",
-  "paused",
-  "closed",
-  "grading",
-  "released",
-]);
+export const EvaluationState = z.enum(EVALUATION_STATES);
 export type EvaluationState = z.infer<typeof EvaluationState>;
 
+/** Who ended a run (`evaluations.closed_by`): the ticker, or the teacher. */
+export const EvaluationClosedBy = z.enum(EVALUATION_CLOSERS);
+export type EvaluationClosedBy = z.infer<typeof EvaluationClosedBy>;
+
 /** F-EVAL-07. `milestones` locks everything up to a passed milestone item. */
-export const Navigation = z.enum(["free", "forward_only", "milestones"]);
+export const Navigation = z.enum(NAVIGATIONS);
 export type Navigation = z.infer<typeof Navigation>;
 
 /** F-EVAL-08. `student_choice` is only offered when navigation is `free`. */
@@ -50,7 +62,7 @@ export const Presentation = z.enum(["zen", "continuous", "student_choice"]);
 export type Presentation = z.infer<typeof Presentation>;
 
 /** F-EVAL-06. */
-const LobbyMode = z.enum(["skip", "auto", "manual"]);
+const LobbyMode = z.enum(LOBBIES);
 type LobbyMode = z.infer<typeof LobbyMode>;
 
 /**
@@ -60,15 +72,12 @@ type LobbyMode = z.infer<typeof LobbyMode>;
  * screen asks "who drives the clock?" and derives this with `lobby`
  * (`clockChoiceOf`, `@quiz/domain`).
  */
-export const Timing = z.enum(["duration", "deadline", "manual"]);
+export const Timing = z.enum(TIMINGS);
 export type Timing = z.infer<typeof Timing>;
 
 /**
  * How a multiple-answer MCQ is scored (docs/04 §4.4). The five formulas live
- * in `@quiz/domain/mcqScore`, whose `MCQ_SCORE_POLICIES` is the reference
- * list; this enum is the WIRE name of the same five, spelled again because
- * `packages/contracts` depends on no package. `apps/api` checks the two equal,
- * both ways, at compile time (`modules/pool/routes.ts`).
+ * in `@quiz/domain/mcqScore`, whose `MCQ_SCORE_POLICIES` is the list.
  *
  * It appears at two levels of a three-level hierarchy:
  *   1. the teacher's preference (`Me.mcqPolicy`), which seeds
@@ -77,35 +86,26 @@ export type Timing = z.infer<typeof Timing>;
  * A question that names a policy overrides both, and a `single` question is
  * always all or nothing.
  */
-export const McqPolicy = z.enum([
-  "all_or_nothing",
-  "true_false",
-  "discordance",
-  "symmetric",
-  "ripkey",
-]);
+export const McqPolicy = z.enum(MCQ_SCORE_POLICIES);
 export type McqPolicy = z.infer<typeof McqPolicy>;
 
 /** What an evaluation gets when its creator expressed no preference. */
-export const DEFAULT_MCQ_POLICY = "all_or_nothing" satisfies McqPolicy;
+export const DEFAULT_MCQ_POLICY = DEFAULT_MCQ_SCORE_POLICY;
 
 /**
  * How a `categorize` question is scored (docs/04 §4.13, ADR-036). The two
  * formulas live in `@quiz/domain/categorizeScore`, whose
- * `CATEGORIZE_SCORE_POLICIES` is the reference list; this is the WIRE name of
- * the same two, spelled again because `packages/contracts` depends on no
- * package. `apps/api` checks the two equal, both ways, at compile time
- * (`modules/pool/routes.ts`), like {@link McqPolicy}.
+ * `CATEGORIZE_SCORE_POLICIES` is the list.
  *
  * It is a setting of the evaluation (`settings.categorizePolicy`), which a
  * question configured `inherit` defers to; there is no per-teacher
  * preference.
  */
-export const CategorizePolicy = z.enum(["per_item", "all_or_nothing"]);
+export const CategorizePolicy = z.enum(CATEGORIZE_SCORE_POLICIES);
 export type CategorizePolicy = z.infer<typeof CategorizePolicy>;
 
 /** What an evaluation without the setting scores `inherit` questions with. */
-export const DEFAULT_CATEGORIZE_POLICY = "per_item" satisfies CategorizePolicy;
+export const DEFAULT_CATEGORIZE_POLICY = DEFAULT_CATEGORIZE_SCORE_POLICY;
 
 /** The categorize policy of an evaluation's settings (ADR-036); absent is {@link DEFAULT_CATEGORIZE_POLICY}. */
 export const categorizePolicyOf = (settings: {
@@ -113,11 +113,11 @@ export const categorizePolicyOf = (settings: {
 }): CategorizePolicy => settings.categorizePolicy ?? DEFAULT_CATEGORIZE_POLICY;
 
 /** F-EVAL-15: which attempt is a student's result when an exercise allows several. */
-export const RetakeKeep = z.enum(["best", "last"]);
+export const RetakeKeep = z.enum(RETAKE_KEEPS);
 export type RetakeKeep = z.infer<typeof RetakeKeep>;
 
 /** ADR-091: a retake asks every question, or only the questions to review. */
-export const RetakeScope = z.enum(["all", "to_review"]);
+export const RetakeScope = z.enum(RETAKE_SCOPES);
 export type RetakeScope = z.infer<typeof RetakeScope>;
 
 /**
@@ -344,7 +344,7 @@ export const defaultGradingScale = (): GradingScale =>
 
 /** F-EVAL-11. `immediate` is refused for `exam`. */
 export const FeedbackPolicy = z.object({
-  when: z.enum(["none", "on_release", "immediate"]).default("on_release"),
+  when: z.enum(FEEDBACK_WHEN).default("on_release"),
   /** The student's own answer. */
   showAnswer: z.boolean().default(true),
   /** The solution. */
@@ -533,7 +533,7 @@ export const EvaluationCreate = z.object({
   title: z.string().trim().min(1).max(200),
   mode: EvaluationMode.default("exam"),
   /** Named preset of settings; `exam` and `exercise` for now. */
-  preset: z.enum(["exam", "exercise"]).optional(),
+  preset: EvaluationPreset.optional(),
   /** ADR-041 §2: the teacher's choice at creation; absent is the mode's default. */
   allowDrill: z.boolean().optional(),
 });

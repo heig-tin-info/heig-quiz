@@ -25,23 +25,9 @@
  * entered moves it back to `draft` first (`lobby → draft` and `closed →
  * draft` are legal while no attempt exists): the edit is then an explicit
  * step, never a side effect on something students can see.
- *
- * The union is spelled out here rather than imported from `@quiz/contracts`
- * (the domain depends on nothing but `@quiz/core`); it is structurally the
- * same type as `EvaluationState` there, and `apps/api` checks the two equal
- * at compile time.
  */
-export type EvaluationStateName =
-  | "draft"
-  | "scheduled"
-  | "lobby"
-  | "running"
-  | "paused"
-  | "closed"
-  | "grading"
-  | "released";
 
-/** Every state, in lifecycle order. */
+/** Every stored state of an evaluation, in lifecycle order: the one list of their names. */
 export const EVALUATION_STATES = [
   "draft",
   "scheduled",
@@ -51,7 +37,10 @@ export const EVALUATION_STATES = [
   "closed",
   "grading",
   "released",
-] as const satisfies readonly EvaluationStateName[];
+] as const;
+
+/** `graded` is not one: it is `closed` with no proposed grading left (decision D6). */
+export type EvaluationStateName = (typeof EVALUATION_STATES)[number];
 
 /**
  * Closed, being graded or released: the second half of an evaluation's life.
