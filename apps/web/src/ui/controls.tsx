@@ -551,20 +551,41 @@ export function FieldError({ id, className, children }: { id: string; className?
 /**
  * Settings row: label + a description of the CURRENT choice on the left
  * (one dynamic line, not one per option), the control on the right.
+ * `stacked`: a control that is a list (branches, protected files) lies under
+ * the title rather than beside it.
  */
 export function SettingRow({
   title,
   desc,
   help,
+  stacked = false,
   children,
   className = "",
 }: {
   title: ReactNode;
   desc?: ReactNode;
   help?: string;
+  stacked?: boolean;
   children?: ReactNode;
   className?: string;
 }) {
+  const text = (
+    <div className={stacked ? undefined : "min-w-0 flex-1 basis-56"}>
+      <span className="flex items-center gap-1 text-sm font-medium text-fg">
+        {title}
+        {help ? <HelpIcon topic={help} /> : null}
+      </span>
+      {desc ? <p className="mt-0.5 text-[13px] text-fg-muted">{desc}</p> : null}
+    </div>
+  );
+  if (stacked) {
+    return (
+      <div className={cx("space-y-2.5 py-3", className)}>
+        {text}
+        {children}
+      </div>
+    );
+  }
   return (
     // The row wraps rather than squeezing: the text keeps a 14 rem floor, so a
     // wide control (segmented, select) drops to its own line on a phone while a
@@ -575,13 +596,7 @@ export function SettingRow({
         className,
       )}
     >
-      <div className="min-w-0 flex-1 basis-56">
-        <span className="flex items-center gap-1 text-sm font-medium text-fg">
-          {title}
-          {help ? <HelpIcon topic={help} /> : null}
-        </span>
-        {desc ? <p className="mt-0.5 text-[13px] text-fg-muted">{desc}</p> : null}
-      </div>
+      {text}
       {children ? <div className="flex shrink-0 items-center gap-2">{children}</div> : null}
     </div>
   );
