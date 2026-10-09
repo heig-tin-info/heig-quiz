@@ -224,12 +224,13 @@ const EnvSchema = z.object({
   GRADING_RUNNER_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(1),
 
   /**
-   * LLM grading (F-GRADE-02, ADR-045). `none` — the default — sends nothing
-   * to any model: an essay is graded by hand. `stub` is a DETERMINISTIC fake
-   * provider (a keyword count, `modules/llm/stub.ts`) that lets development,
-   * the seed and the tests show AI proposals with a confidence; like the
-   * development login, it is refused in production below. The network
-   * providers of F-LLM-01 are not implemented yet.
+   * LLM grading (F-GRADE-02, ADR-045, ADR-063). `none` — the default —
+   * grades through the gateway (`LLM_KEY_SECRET` below) when it is on and
+   * holds a key; with the gateway off, nothing is sent to any model and an
+   * answer is graded by hand (`modules/llm/index.ts`). `stub` is a
+   * DETERMINISTIC fake provider (a keyword count, `modules/llm/stub.ts`) that
+   * lets development, the seed and the tests show AI proposals with a
+   * confidence; like the development login, it is refused in production below.
    */
   LLM_PROVIDER: z.enum(["none", "stub"]).default("none"),
 
@@ -239,8 +240,8 @@ const EnvSchema = z.object({
    * crypto.ts`). Empty — the default — turns the gateway off: nothing can be
    * stored nor sent. A secret of ADR-010 (environment file, age vault), at
    * least 32 characters; production refuses a development value. Changing it
-   * loses only the stored provider key, which is entered again. It does not
-   * touch the grading pass, which `LLM_PROVIDER` drives (ADR-058 §8).
+   * loses only the stored provider key, which is entered again. The grading
+   * pass goes through this gateway too, unless `LLM_PROVIDER` is `stub`.
    */
   LLM_KEY_SECRET: z
     .string()

@@ -31,6 +31,7 @@ packages/
   qt-circuit/ question type: two-port schematic, graded by ngspice simulation
   qt-rich/    question type: essay, manual or LLM-proposed grading
   qt-categorize/ question type: cards sorted into columns (ADR-036)
+  qt-brainstorm/ question type: a brainstorm poll's ideas (ADR-071)
   diagram/    the diagram engine: scenes, kinds, router, editor (ADR-046)
   qt-diagram/ question type: a diagram, manual or LLM-proposed grading (ADR-046/063)
 docs/
@@ -56,7 +57,7 @@ their spec/merge tasks, not entries in the current tree.
 At the root: `Dockerfile` (the application image), `apps/runner/Dockerfile`
 (the runner image), `compose.prod.yml`, `compose.staging.yml`, `Caddyfile`,
 `Caddyfile.staging` and `deploy.sh` for production and staging (the runbook
-is the [deployment page](deployment.md); the root `deploy.md` points to it); `docker-compose.dev.yml` for the optional
+is the [deployment page](deployment.md)); `docker-compose.dev.yml` for the optional
 development services; `zensical.toml` for this site; `CLAUDE.md` for the
 working conventions and the invariants.
 
@@ -79,10 +80,13 @@ and the jobs. The modules live under `src/modules/`, the schema under
 The React single-page application ([ADR-008](../adr/ADR-008-frontend-spa-react.md)),
 built with Vite. `src/router.ts` is the route union, `src/api.ts` the typed
 client over the contracts, `src/i18n/` the dictionaries, `src/mock/` the
-in-browser API used by `pnpm dev:mock`. Feature directories (`pool`,
-`question`, `evaluation`, `live`, `attempt`, `grading`, `results`,
-`student`, `poll`, `preview`, `notifications`, `oauth`, `coach`, `help`,
-`realtime`, `runner`, `markdown`) hold the screens and their tests;
+in-browser API used by `pnpm dev:mock`. Feature directories (`activities`,
+`assist`, `attempt`, `calculator`, `changelog`, `coach`, `concepts`,
+`course`, `discover`, `drill`, `evaluation`, `github`, `gradebook`,
+`grading`, `group`, `help`, `journal`, `kiosk`, `live`, `markdown`,
+`notepad`, `notifications`, `oauth`, `pair`, `poll`, `pool`, `preview`,
+`project`, `question`, `realtime`, `results`, `runner`, `student`) hold the
+screens and their tests;
 `src/ui/` holds the generic primitives. The
 design rules are in `apps/web/DESIGN.md`, and `.claude/skills/quiz-ui/SKILL.md`
 is the checklist a screen goes through before it is declared finished.
@@ -129,7 +133,7 @@ The application image does not contain it.
 | `@quiz/ui` | `.` | the shared primitives of the question-type surfaces (React as a peer, `@quiz/core` its only dependency; it never imports a `qt-*` package nor `apps/web`) |
 | `@quiz/qt-mcq`, `qt-short`, `qt-cloze` | `./server`, `./client` | one question type each: config schema, canonical form, grading on the server; Editor, Player and Review components on the client |
 | `@quiz/qt-code` | `./server`, `./client` | two types sharing one program half: `code`, graded by the runner's test cases, and `codeimage`, judged by the picture its stdout draws ([ADR-021](../adr/ADR-021-codeimage-variante-de-code.md)) |
-| `@quiz/qt-rich` | `./server`, `./client` | `rich`, shown as "Essay": a text graded by hand against a rubric (docs/spec/04 §4.8) |
+| `@quiz/qt-rich` | `./server`, `./client` | `rich`, shown as "Essay": a text graded against a rubric, by hand or from a language model's proposal (docs/spec/04 §4.8, [ADR-063](../adr/ADR-063-correction-llm.md)) |
 | `@quiz/qt-categorize` | `./server`, `./client` | `categorize`, shown as "Categorize": cards sorted into columns, with distractors and an optional order, scored per card or all or nothing, and by the evaluation's negative marking ([ADR-036](../adr/ADR-036-type-classement.md)) |
 | `@quiz/diagram` | `./server`, `./client` | the diagram engine: the scene and its schema, the catalogue of eight kinds, the router, the text serialisers (`./server`, no parser); `DiagramEditor` and `DiagramView` (`./client`) ([ADR-046](../adr/ADR-046-type-diagramme.md)) |
 | `@quiz/qt-diagram` | `./server`, `./client` | `diagram`, shown as "Diagram": a diagram of the notation the teacher chose, drawn on the engine's canvas and graded by hand beside a reference ([ADR-046](../adr/ADR-046-type-diagramme.md)) |
@@ -148,8 +152,9 @@ projection, `client.tsx` exports the lazy components.
 
 `packages/registry` is the one place the API and the web app learn which
 question types exist. `src/server.ts` maps `mcq`, `short`, `cloze`,
-`code`, `circuit` and `codeimage` to their `*Server` objects; `src/client.ts` does the same for the
-components. Registering a type is an import and an entry in each map. The
+`code`, `circuit`, `codeimage`, `rich`, `categorize`, `diagram` and
+`brainstorm` to their `*Server` objects; `src/client.ts` does the same for
+the components. Registering a type is an import and an entry in each map. The
 registry depends on `core` and on the `qt-*` packages; nothing inside `core`
 may depend on the registry, or the package graph would cycle (decision D1
 in the [MVP plan](../PLAN-MVP.md)).
@@ -177,16 +182,19 @@ application would have written.
 Beside the module directories sit a few shared files that are not modules:
 `src/modules/guards.ts`, the access predicates every route loads an entity
 through; `src/modules/http.ts`, the common replies and the guarded-route
-wrappers `studentRoute`/`teacherRoute`; and two small plugins, `admin.ts`
-and `avatar.ts`. `src/modules/runner/` is not a module either: it holds the
+wrappers `studentRoute`/`teacherRoute`; and a small plugin, `avatar.ts`. `src/modules/runner/` is not a module either: it holds the
 API-side client of the runner (`http.ts`) and the stub that stands in for it
 (`unavailable.ts`).
 
 ### Schema and migrations
 
-The Drizzle schema is split by module under `apps/api/src/db/` (`org.ts`,
-`pool.ts`, `evaluation.ts`, `live.ts`, `grading.ts`, `auth.ts`,
-`notifications.ts`) and re-exported by `db/schema.ts`. A table belongs to
+The Drizzle schema is split by module under `apps/api/src/db/` (`assist.ts`,
+`auth.ts`, `changelog.ts`, `codespace.ts`, `concept.ts`, `drill.ts`,
+`evaluation.ts`, `github.ts`, `gradebook.ts`, `grading.ts`, `group.ts`,
+`importClassroom.ts`, `journal.ts`, `kiosk.ts`, `live.ts`, `llm.ts`,
+`notifications.ts`, `org.ts`, `poll.ts`, `pool.ts`, `project.ts`,
+`review.ts`, `system.ts`) and re-exported by `db/schema.ts`; `columns.ts`
+holds shared column types and `client.ts` the connection. A table belongs to
 one module; another module may read it in a join but never writes it.
 
 Migrations are SQL files under `apps/api/drizzle/`, generated, never

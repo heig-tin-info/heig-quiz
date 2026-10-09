@@ -39,8 +39,8 @@ Modular monolith, ADR-001 of heig-classroom: a single API process, a single depl
 ### Repository
 
 Use [the repository map](../development/repository.md#the-map) for current
-packages. `packages/canonical`, `packages/cli`, `packages/ui-kit` and
-`apps/codespace` are accepted future work, not existing packages. Deployment
+packages. `packages/canonical`, `packages/cli` and `packages/ui-kit` are
+accepted future work, not existing packages. Deployment
 files live at the repository root; there is no `deploy/` directory.
 
 ### API modules
@@ -62,7 +62,7 @@ Each module lives in `apps/api/src/modules/<name>/` with `routes.ts` the HTTP ha
 | `llm` | Providers, keys, prompt templates, call log, generation | `auth` |
 | `runner` | HTTP client of the runner service, queue and priorities | |
 | `drill` | Cards, FSRS, sessions, reviews, the teacher's activity and mastery reads (ADR-041) | `org`, `pool`, `evaluation`, `live` (the student view), `results`; registers on `live`'s `onAttemptsEnded` (hand-in) and `results`' `onResultsReleased` (release), which never import it |
-| `canonical` | Import / export, API and CLI | `pool` |
+| `canonical` | Planned, not present: import / export, API and CLI | `pool` |
 | `admin` | Users, health, settings, audit; the admin routes of the scheduled tasks | all, read-only; `system` |
 | `system` | The scheduled tasks (D10): their table, the ticker's claim, the `system.task` worker, the instrumented run (5.4, Clock) | |
 | `realtime` | Event bus, SSE streams, presence, topics | |
@@ -70,6 +70,16 @@ Each module lives in `apps/api/src/modules/<name>/` with `routes.ts` the HTTP ha
 | `project` | Projects (F-PROJ): their lifecycle, the distribution repository, acceptance and provisioning, groups, the score pipeline, deadline, freeze and review dispatch, sync of the source, reconciliation, the staff and student views (5.11) | `org`, `github` (registers its handlers and push receipts on the webhook registry, which never imports it) |
 | `gradebook` | A classroom's gradebook (F-GBOOK, ADR-074): its columns' settings, the staff's marks and the published mean (the only things it stores), read from the released results of `results` and `project` through the `ActivityKind` entries (`gradebookEntries`), never recomputed | `org`, `activity` (the registry: `results` and `project` answer through it) |
 | `journal` | A classroom's journal in its two modes (ADR-057): in Quiz, the pages, assets and revisions it owns and their writes; in a GitHub repository, ingestion into the read model; rendering through `docrender`, the reader's access (5.11) | `org`, `github` (registers on its webhook registry, which never imports it) |
+| `activity` | The activities of every kind where a page lists them together: `ActivityKind` over `KINDS` (evaluations, projects), the student home and classroom cards, the gradebook entries | |
+| `poll` | Live polls (F-LIVE-13, F-LIVE-14, ADR-014): an evaluation of mode `poll` with one item, created and started in one call, on the `live` machinery; the brainstorm poll and its AI assistance (ADR-071, ADR-072) | |
+| `notifications` | The bell and the channels that leave the platform, e-mail and Microsoft Teams (ADR-030): `notifyMany` the one entry, the recipient's preferences, deliveries as jobs | |
+| `group` | A classroom's group sets, their groups and who is in which, formed by hand, at random or by the students (ADR-070) | |
+| `codespace` | What Quiz says to the online workspace portal (ADR-047, ADR-078): the signed project sync, the launch token, the git token relay | |
+| `kiosk` | The kiosk station registry (ADR-051): attestation, pairing, the station cookie | |
+| `legacy` | The resolver of heig-classroom's legacy URLs (merge task M8-02) | |
+| `assist` | The teacher assistant (ADR-080, F-LLM-07): a question answered by the gateway with read-only tools | |
+| `mcp` | The MCP server's tool catalogue and the in-process client of `/app/api` its tools call through | |
+| `changelog` | What's new on the platform (ADR-087): the entries shipped in the build and what each reader has acknowledged | |
 
 Rules:
 

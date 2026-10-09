@@ -11,7 +11,7 @@
 #
 # The code runner is NOT in this file: it runs on the code VM, behind its own
 # Caddy, and the API reaches it over HTTPS with the shared RUNNER_TOKEN of
-# .env.prod (apps/runner/deploy/, deploy.md § Runner).
+# .env.prod (apps/runner/deploy/, docs/development/deployment.md §3).
 services:
   app:
     # Image built in CI and pulled from GHCR -- never built on the VM.
@@ -37,7 +37,7 @@ services:
       # Uploaded question images, content-addressed: a backup is an rsync.
       # Owned by uid 1000 on the host (`node` in the image).
       - ./assets:/app/assets
-      # Written by `backup` (container root), read-only here (deploy.md §6).
+      # Written by `backup` (container root), read-only here (docs/development/deployment.md §6).
       - ./backup-status:/app/backup-status:ro
     depends_on:
       postgres:
@@ -88,8 +88,8 @@ services:
       timeout: 3s
       retries: 10
 
-  # Daily pg_dump to ./backups; 30-day retention. The OFF-VM copy (rclone to
-  # object storage) still needs wiring -- see deploy.md, Backups.
+  # Daily pg_dump to ./backups; 30-day retention. The off-VM copy is a host
+  # timer (borg to a Storage Box): docs/development/deployment.md §6.
   # After each dump, a one-line report in ./backup-status/last.json (when it
   # finished, whether it worked, the file and its size), written through a
   # temporary file so the app never reads half of it (ADR-055). `$$` is a

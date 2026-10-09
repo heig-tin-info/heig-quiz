@@ -56,7 +56,7 @@ Never in the main checkout (the guard hook refuses it anyway).
   same files are not independent: do them in sequence.
 
 A UI change goes through the `quiz-ui` skill, including the screenshot check.
-Done means: `pnpm build && pnpm typecheck && pnpm test` pass in the worktree.
+Done means: `pnpm build && pnpm typecheck`, then `VITEST_MAX_WORKERS=4 pnpm -r --workspace-concurrency=1 test`, pass in the worktree.
 
 ## 4. Review — both reviewers, in parallel
 

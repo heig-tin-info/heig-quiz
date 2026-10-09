@@ -49,8 +49,10 @@ deploying, not for editing.
 
 ## 4. Before you push to `main`
 
-`pnpm build && pnpm typecheck && pnpm test` locally, the same three steps CI
-runs. A red `main` blocks every other agent's deploy, not only yours.
+`pnpm build && pnpm typecheck`, then the full suite once, sequentially
+(§7): `VITEST_MAX_WORKERS=4 pnpm -r --workspace-concurrency=1 test`. These
+are the steps CI runs. A red `main` blocks every other agent's deploy, not
+only yours.
 
 ## 5. Moving work in progress into a worktree
 

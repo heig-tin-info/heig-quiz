@@ -354,7 +354,7 @@ jobs:
           # deploy.sh refuses to restart production under a live evaluation
           # (exit 3, the job fails, the runner step is skipped). Setting this
           # variable to THIS run's sha, then re-running the job, forces it;
-          # any other value forces nothing (deploy.md §5).
+          # any other value forces nothing (docs/development/deployment.md §5).
           DEPLOY_FORCE_SHA: ${{ vars.DEPLOY_FORCE_SHA }}
         run: |
           force=

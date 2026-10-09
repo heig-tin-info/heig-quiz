@@ -20,7 +20,7 @@ issue, read it (`gh issue view <n> --comments`).
 
 1. `docs/spec/00-cadre-et-perimetre.md` — is the request in scope, or
    explicitly out (§0.6)?
-2. The spec file that covers the feature (the table in `CLAUDE.md` says
+2. The spec file that covers the feature (the index `docs/spec/README.md` says
    which) and the numbered requirements it touches (F-…, N-…). Quote their
    IDs.
 3. `docs/spec/06-questions-ouvertes.md` — does the request depend on, or

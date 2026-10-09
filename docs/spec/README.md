@@ -30,6 +30,13 @@ also records historical decisions (D1–D20), not a current backlog. Follow the
 history links from a current chapter or ADR when you need an old rationale,
 compatibility detail or decision provenance. Do not load archives routinely.
 
+Two registers number their decisions with a "D": the MVP plan's D1–D20
+(§9 of [`PLAN-MVP.md`](../PLAN-MVP.md), one or two digits) and the merge's
+D01–D29 ([`08-decisions.md`](../merge/08-decisions.md), always two digits).
+The same number means two different decisions: D14 is the runner stub in
+the MVP plan and the journal assets' storage in the merge. A citation names
+its register when the context does not: "PLAN-MVP D14", "merge D14".
+
 Keep requirement IDs, question numbers and links stable. Put an implementation
 fact in its owning code/schema, a product rule in its spec and a rationale in
 its ADR; link across them instead of copying declarations or delivery diaries.

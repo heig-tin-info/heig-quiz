@@ -160,9 +160,9 @@ internal bridge).
 
 ### GitHub invariant (ADR-035, N-SEC-16..18)
 
-15. **Quiz's own GitHub App, and its secrets never at rest.** The
-    redaction, the `config.ts` refusals and the in-memory tokens exist
-    (M1-02); the rest lands with the task named. Quiz talks to
+15. **Quiz's own GitHub App, and its secrets never at rest.** Every rule
+    below is in force; the task named with each one delivered it (M1-02,
+    M2-03, M2-04, M2-06). Quiz talks to
     GitHub only through its own App (D23), never heig-classroom's; staging
     has a separate App on a test organization and never holds the
     production one (N-SEC-18; M2-06). The App key, webhook secret and

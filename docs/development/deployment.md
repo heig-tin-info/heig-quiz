@@ -1,9 +1,9 @@
 # Deployment
 
 This page is the operator's runbook: the shape of the deployment, the exact
-commands for the two machines, and what to do on a bad day. The root
-`deploy.md` only points here. Its section numbers (§1 to §8) are kept on
-purpose, because comments in the scripts and compose files cite them.
+commands for the two machines, and what to do on a bad day. Its section
+numbers (§1 to §8) are kept on purpose, because comments in the scripts and
+compose files cite them.
 
 Production is `https://quiz.chevallier.io` and staging is
 `https://quiz.dev.chevallier.io` (§8). They run on two virtual machines and
@@ -688,43 +688,6 @@ deployed image and not `:latest` (main's head, not yet approved):
 docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image <command>
 ```
 
-### The CSP moves from Caddy to the application (#319, once)
-
-The release that brings `apps/api/src/csp.ts` also removes the CSP,
-`X-Frame-Options` and the `@teamsTab` block from `Caddyfile` and
-`Caddyfile.staging`. The fragments are installed by hand, so this is one
-manual step per environment, in this order:
-
-1. **The image first.** Let the merge deploy staging, then check that the
-   application sends the policy:
-   `curl -sI https://quiz.dev.chevallier.io/ | grep -i content-security` shows
-   `default-src 'self'`.
-2. **Then staging's fragment**, as `srv`. Production's checkout is still at
-   the previous release, so the new file comes from `origin/main`:
-
-   ```bash
-   cd /srv/quiz && git fetch -q origin && git show origin/main:Caddyfile.staging > /etc/caddy/conf.d/quiz-staging.caddy \
-     && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && sudo systemctl reload caddy
-   ```
-
-3. **Approve production**, check the header as in step 1 on
-   `quiz.chevallier.io`, then install its fragment, as `srv` (the checkout is
-   now at the release):
-
-   ```bash
-   cd /srv/quiz && cp Caddyfile /etc/caddy/conf.d/quiz.caddy \
-     && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && sudo systemctl reload caddy
-   ```
-
-Why this order: the new fragment in front of the OLD image leaves the site
-with no CSP at all until the image arrives. The old fragment in front of the
-new image is safe but not finished: every page carries both policies (the
-browser enforces both, and the old one only adds `frame-ancestors`), while
-on `/teams` the old `@teamsTab` block REPLACES the application's policy with
-its framing-only one. Hence the reinstall right after each deploy. A
-rollback to an image older than this release needs the previous fragments
-back (`git show <old sha>:Caddyfile`), for the first reason.
-
 ### Rollback
 
 Re-run the `deploy-production` job of the run of the healthy commit (Actions
@@ -769,19 +732,9 @@ restore it anyway. A rollback holds until the next approved promotion.
   deleted up to 30 days ago (N-DATA-03). The directory belongs to `srv`
   (container root, the writer), mode 755, **not** to uid 1000. Compose
   creates it on first start if it is missing, but create it by hand
-  (below) so that its owner and mode are the ones you chose.
-
-```bash
-# once, as srv, when upgrading to the release that brings ADR-055
-cd /srv/quiz && mkdir -p backup-status && chmod 755 backup-status
-C="docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image"
-$C up -d backup app          # the backup restarts and dumps at once: the report appears
-cat backup-status/last.json  # {"finished_at":"…","ok":true,"exit_code":0,…}
-```
-
-A restart of `backup` takes a dump at once (the loop starts with one), so
-expect one extra dump in `backups/` on that day. Staging has no `backup`
-service and no `BACKUP_STATUS_FILE`: its status says "not configured".
+  (§2, *Setting up the application VM*) so that its owner and mode are the
+  ones you chose. Staging has no `backup` service and no
+  `BACKUP_STATUS_FILE`: its status says "not configured".
 
 - `/srv/quiz/assets/` (question images, content-addressed by sha256) is part
   of what the off-site copy holds (below). `./secrets` goes through the
@@ -1177,37 +1130,6 @@ and replace `secrets/eduid-private-key.pem`, `OIDC_CLIENT_ID` and
 `OIDC_PRIVATE_KEY_KID` in `.env.staging`; `srvstg` then holds nothing of
 production's.
 
-### Cutover from the old `srv` staging (2026-09-28, once)
-
-Staging ran as `srv` in `/srv/quiz-staging` until the commit that introduced
-`srvstg`. The move, in this order:
-
-1. **Before merging**: the whole *Setting up staging (once)* above: the
-   `srvstg` account, its rootless Docker, `chmod o-rwx`, the inbox, the
-   checkout, the secrets, `.env.staging`, the key in
-   `/home/srvstg/.ssh/authorized_keys`, then
-   `gh secret set STAGING_DEPLOY_SSH_KEY --env staging` and
-   `gh variable set STAGING_DEPLOY_USER --body srvstg`.
-2. **Just before the merge**, as `srv`, free `127.0.0.1:3003` (the new stack
-   binds it from another daemon):
-   `cd /srv/quiz-staging && docker compose -f compose.staging.yml --env-file .env.staging --env-file .env.image down -v`
-3. **Merge**: the first staging deploy lands on `srvstg`, database empty.
-4. **Fill the data** (below). `/srv/quiz/scripts/staging-export.sh` exists
-   only once production has been promoted to that commit; until then, run
-   `main`'s copy against the production checkout without switching it:
-
-   ```bash
-   # as srv
-   cd /srv/quiz && git fetch -q origin && git show origin/main:scripts/staging-export.sh > /tmp/staging-export.sh
-   QUIZ_PROD_DIR=/srv/quiz bash /tmp/staging-export.sh && rm /tmp/staging-export.sh
-   ```
-
-5. **Clean up** what `srv` still holds of staging: delete the
-   `command="/srv/quiz-staging/deploy.sh staging"` line from
-   `/home/srv/.ssh/authorized_keys`, `rm -rf /srv/quiz-staging` (it holds
-   production data and the edu-ID key), and remove the repository-level
-   leftover: `gh secret delete STAGING_DEPLOY_SSH_KEY --repo heig-tin-info/heig-quiz`.
-
 ### Refreshing the data
 
 The copy travels one way, from production into `/srv/staging-inbox`, which
@@ -1301,7 +1223,7 @@ configuration.
 | `RUNNER_TOKEN` | `openssl rand -hex 32`, the same value as `/etc/quiz-runner/env` on the runner VM | sent as `Authorization: Bearer` on every call; required when `RUNNER_MODE=http`, the process does not start without it |
 | `RUNNER_TIMEOUT_MS` | default `30000` | wall-clock budget of one runner call |
 | `GRADING_RUNNER_CONCURRENCY` | default `1` | runner jobs of the background grading the API runs at once ([ADR-067](../adr/ADR-067-correction-a-la-remise-des-exercices.md)): exercises are graded at every hand-in, and the runner's queue (`RUNNER_CONCURRENCY`) also serves the students' Run clicks; raise it only with the runner's own concurrency |
-| `LLM_PROVIDER` | unset (`none`) | essays are graded by hand; `stub`, the development fake, makes the process refuse to start |
+| `LLM_PROVIDER` | unset (`none`) | AI grading proposals go through the gateway (`LLM_KEY_SECRET`, below) when it is on and holds a key, otherwise answers are graded by hand; `stub`, the development fake, makes the process refuse to start |
 | `LLM_KEY_SECRET` | `openssl rand -hex 32`, copied into the age vault | the master key that encrypts the Anthropic key entered in Administration › AI ([ADR-058](../adr/ADR-058-passerelle-llm.md)); empty turns the AI gateway off; under 32 characters, or containing `change-me`, the process does not start; a new value only means pasting the key again |
 | `LLM_DAILY_CAP_MAX_USD` | default `100` | the most the console may set as the AI daily spending cap |
 | `BACKUP_STATUS_FILE` | `/app/backup-status/last.json`, set by compose | the `backup` service's report of its last dump (§6); empty: the System status says "not configured" |
