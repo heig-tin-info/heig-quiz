@@ -7,8 +7,8 @@ decision comment; §5 (FSRS-5, default weights, retention 0.9, `ts-fsrs`) and §
 adopt the issue's own proposals (body, §2 and §3) that comment did not decide; §5's implementation
 details are this ADR's. Folded on 2026-10-09: the product owner's second round (former §10, 2026-09-29,
 issue #317, last comment: every "to be confirmed" proposal accepted, one changed; question 28 of
-docs/spec/06 settled) and third round (former §13, 2026-09-29, review of slice 2, all accepted as
-recommended).
+docs/spec/06 settled) and third round (former §13, 2026-09-29, issue #317, last comment, review of
+slice 2, all accepted as recommended).
 
 Relations: amends F-DRILL-01 to F-DRILL-04 and adds F-DRILL-06 (docs/spec/02);
 amends N-DATA-02, N-DATA-03 and N-DATA-07 (docs/spec/03), the question-type

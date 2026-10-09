@@ -72,8 +72,8 @@ on unsafe methods only (writes). A GET and the event stream pass, so that the
 page can still read the attempt, say why it is suspended, and hear the
 resumption: `EventSource` stops for good on a non-200.
 
-*Amended 2026-10-09 (documents existing behaviour, reported to the product
-owner):* a second refusal is not anonymous either. A submit of a `kiosk`
+*Amended 2026-10-09 (documents existing behaviour, flagged on 2026-10-09 for
+the product owner's acknowledgement):* a second refusal is not anonymous either. A submit of a `kiosk`
 session without an attestation check less than two minutes old (§6) answers
 `423 kiosk_attestation_stale`, which the page meets by re-attesting and
 retrying once (§6). The code already does so: `kioskAttestationRefusal` and
@@ -420,7 +420,7 @@ Step 0, done by hand on real hardware, gates the SEB hardening (§3–4) and the
 
 ## Correspondence of old references
 
-§1–§9 keep their numbers and text.
+§1–§9 keep their numbers and text, except §1's dated note of 2026-10-09.
 
 <a id="10-delivery"></a>
 
