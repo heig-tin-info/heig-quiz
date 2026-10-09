@@ -148,7 +148,7 @@ function GradeTable({ rows, open }: { rows: GradeRow[]; open: Opener }) {
             <tr
               key={keyOf(row)}
               className={cx(T.row, go && cx(T.rowHover, "cursor-pointer"))}
-              {...(go ? { onClick: go, ...pressable(go, "row") } : {})}
+              {...(go ? pressable(go, "row") : {})}
             >
               <td className={T.td}>
                 <span className="font-semibold">{row.title}</span>
@@ -193,7 +193,7 @@ function GradeList({ rows, open }: { rows: GradeRow[]; open: Opener }) {
               "flex items-start gap-3 px-4 py-3.5",
               go && "cursor-pointer transition-colors hover:bg-surface-2/70",
             )}
-            {...(go ? { onClick: go, ...pressable(go, "link"), "aria-label": row.title } : {})}
+            {...(go ? { ...pressable(go, "link"), "aria-label": row.title } : {})}
           >
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold leading-snug">{row.title}</p>

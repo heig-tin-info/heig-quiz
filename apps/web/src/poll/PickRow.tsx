@@ -45,7 +45,6 @@ export function PickRow({
       <div
         {...pressable(onSelect)}
         aria-pressed={selected}
-        onClick={onSelect}
         className="flex min-w-0 flex-1 cursor-pointer items-start gap-3 rounded-field p-3 text-left"
       >
         <span className="mt-0.5">

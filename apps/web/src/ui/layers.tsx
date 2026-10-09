@@ -65,7 +65,8 @@ export const Z = {
 /**
  * Keyboard contract for an element made clickable without being a <button>
  * (a card, a table row): Enter and Space activate it, and Space does not
- * scroll the page underneath. Spread it next to the element's own `onClick`.
+ * scroll the page underneath. It carries the element's `onClick` too: the
+ * click and the keys do the same thing.
  *
  * `role` is a parameter because a clickable <tr> must stay a row: announcing
  * it as a button would cost the reader the table structure around it. Cards
@@ -82,6 +83,7 @@ export function pressable(onActivate: () => void, role: string = "button") {
   return {
     role,
     tabIndex: 0,
+    onClick: () => onActivate(),
     onKeyDown: (e: React.KeyboardEvent) => {
       if (e.key !== "Enter" && e.key !== " ") return;
       if (e.target !== e.currentTarget) return;

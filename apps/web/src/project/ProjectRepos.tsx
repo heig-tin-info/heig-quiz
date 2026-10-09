@@ -262,7 +262,6 @@ export function ProjectRepos({
                     opens && `${T.rowHover} cursor-pointer`,
                     repo?.flags.deleted && "text-fg-faint",
                   )}
-                  onClick={opens}
                   {...(opens ? pressable(opens, "row") : {})}
                   {...(index === firstOpenable ? { "data-coach": "project.repo" } : {})}
                 >

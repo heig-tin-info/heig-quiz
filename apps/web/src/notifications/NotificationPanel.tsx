@@ -212,7 +212,6 @@ function NotificationRow({
     // contract of a button without the nesting.
     <div
       {...pressable(() => onOpen(item))}
-      onClick={() => onOpen(item)}
       className="flex w-full cursor-pointer items-start gap-2.5 rounded-field px-2.5 py-2 text-left transition-colors hover:bg-surface-2"
     >
       {/* The unread mark is a dot and a weight, not a tinted row: the accent

@@ -527,7 +527,6 @@ function ClassroomCard({
   return (
     <Card
       interactive
-      onClick={open}
       {...pressable(open, "link")}
       aria-label={room.name}
       className="flex flex-wrap items-center gap-x-5 gap-y-2 p-5"

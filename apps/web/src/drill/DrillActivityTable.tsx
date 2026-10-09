@@ -14,6 +14,7 @@ import { useI18n, useT } from "../i18n";
 import {
   Badge,
   type Column,
+  caseInsensitiveCompare,
   cx,
   Dash,
   isoDateParts,
@@ -81,10 +82,7 @@ export function DrillActivityTable({
       }
     },
     { key: "name", dir: 1 },
-    (x, y) =>
-      typeof x === "number" && typeof y === "number"
-        ? x - y
-        : String(x).localeCompare(String(y), undefined, { sensitivity: "base" }),
+    caseInsensitiveCompare,
   );
   const columns: Column<SortKey>[] = [
     { key: "name", label: t("drill.col.student") },

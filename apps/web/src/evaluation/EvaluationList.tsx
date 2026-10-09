@@ -362,7 +362,6 @@ export function EvaluationList({
                     <tr
                       key={row.id}
                       className={`${T.row} ${T.rowHover} cursor-pointer`}
-                      onClick={() => open(row)}
                       {...pressable(() => open(row), "row")}
                     >
                       <td className={T.td}>

@@ -18,6 +18,7 @@ import {
   Badge,
   Button,
   Card,
+  caseInsensitiveCompare,
   cx,
   EmptyState,
   ErrorText,
@@ -146,10 +147,7 @@ function TeachersSection() {
     (r, k) =>
       k === "name" ? `${r.familyName ?? ""} ${r.givenName ?? ""}`.trim() || r.email : (r[k] ?? ""),
     { key: "name", dir: 1 },
-    (x, y) =>
-      typeof x === "number" && typeof y === "number"
-        ? x - y
-        : String(x).localeCompare(String(y), undefined, { sensitivity: "base" }),
+    caseInsensitiveCompare,
   );
 
   const columns: Column<SortKey>[] = [

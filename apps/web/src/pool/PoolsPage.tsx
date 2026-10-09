@@ -165,7 +165,6 @@ function PoolRow({
   return (
     <tr
       {...pressable(() => navigate({ view: "pool", id: pool.id }), "row")}
-      onClick={() => navigate({ view: "pool", id: pool.id })}
       className={cx(T.row, T.rowHover, "cursor-pointer")}
     >
       <td className={T.td}>

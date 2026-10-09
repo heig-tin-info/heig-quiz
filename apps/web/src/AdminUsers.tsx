@@ -11,6 +11,7 @@ import {
   Badge,
   Button,
   Card,
+  caseInsensitiveCompare,
   cx,
   EmptyState,
   PersonAvatar,
@@ -87,10 +88,7 @@ export function UsersSection() {
     // Staff first: the few rows an admin comes for, above the hundreds of
     // students; ties keep the server's order, by family name.
     { key: "role", dir: 1 },
-    (x, y) =>
-      typeof x === "number" && typeof y === "number"
-        ? x - y
-        : String(x).localeCompare(String(y), undefined, { sensitivity: "base" }),
+    caseInsensitiveCompare,
   );
   const shown = showAll ? sorted : sorted.slice(0, FIRST_ROWS);
 

@@ -4,9 +4,9 @@ import { GitBranch, Square, Users } from "lucide-react";
 import type { ActivitySummary, PollTeacherView, ProjectActivitySummary } from "@quiz/contracts";
 
 import { api } from "../api";
-import { useConfirm } from "../confirm";
+import { useConfirm, type ConfirmOptions } from "../confirm";
 import { evaluationLinkItems } from "../evaluation/common";
-import { useT } from "../i18n";
+import { useT, type TFunction } from "../i18n";
 import { useErrorToast } from "../notify";
 import { repoHref } from "../project/projectPage";
 import { activitiesKey, pollKey } from "../queryKeys";
@@ -14,9 +14,16 @@ import type { Route } from "../router";
 import { IconLink, Menu, type MenuItem } from "../ui";
 import { typeOf } from "./model";
 
+/** The confirmation of ending a poll, on its projection as in a list. */
+export const endPollConfirmation = (t: TFunction): ConfirmOptions => ({
+  title: t("poll.endConfirm"),
+  confirmLabel: t("poll.end"),
+  danger: true,
+});
+
 /**
  * Ending a poll from the Activities section (#190): the projection's own
- * confirmation, word for word, and the same route. Only a poll ends from a
+ * confirmation (`endPollConfirmation`) and the same route. Only a poll ends from a
  * list: closing an exam expires every attempt and starts the grading, and
  * that stays on its dashboard, behind its own confirmation.
  */
@@ -37,12 +44,7 @@ export function useEndPoll(): { end: (row: ActivitySummary) => void; pending: st
   return {
     end: (row) =>
       void (async () => {
-        const ok = await confirm({
-          title: t("poll.endConfirm"),
-          confirmLabel: t("poll.end"),
-          danger: true,
-        });
-        if (ok) mutation.mutate(row.id);
+        if (await confirm(endPollConfirmation(t))) mutation.mutate(row.id);
       })(),
     pending: mutation.isPending ? (mutation.variables ?? null) : null,
   };
