@@ -122,6 +122,10 @@ There is no explicit "publish revision" step. (The counter exists from the
 first slice at 1; editing a template in place, which moves it, is the third
 pull request.)
 
+*2026-10-09:* the change is compared on the EFFECTIVE settings, each optional
+key read through its accessor (`kioskOf`, `retakesOf`, …), so a patch that
+spells out a default the row left absent does not move the revision.
+
 ### 5. Deletion
 
 - Deleting a template leaves its instances running; their
