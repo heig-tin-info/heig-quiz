@@ -2,10 +2,10 @@
 
 ## Status
 
-Proposed (2026-10-04, issue #458); implemented (#505, #509, `qt-brainstorm`,
-migrations 0065/0066); acceptance by the product owner pending. §9–§14, the
-AI assistance, were accepted by the product owner on 2026-10-04 as ADR-072,
-folded here on 2026-10-09 ([correspondence table](#correspondence-with-adr-072)).
+Proposed (2026-10-04, issue #458); acceptance by the product owner pending.
+§9–§14, the AI assistance, were accepted by the product owner on 2026-10-04
+as ADR-072, folded here on 2026-10-09
+([correspondence table](#correspondence-with-adr-072)).
 
 Scope: a third question type for live polls, what of its answers reaches
 the room, and the model that may moderate it while the poll runs.

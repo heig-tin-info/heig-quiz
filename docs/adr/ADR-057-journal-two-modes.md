@@ -61,7 +61,8 @@ dépôt GitHub"); never "local".
   created and never changes when the page moves, so links between pages
   and students' bookmarks stay valid. The order among siblings is a field
   of its own, and nesting is a parent page. Numeric prefixes exist only in
-  what "Move to GitHub" commits (§3).
+  what "Move to GitHub" commits (§3). Explicit order and nesting are not
+  built (see the note at the end of §3).
 - **Assets** live in `journal_assets` under a relative path beside the page
   (`images/…`), referenced from the markdown by that relative path, never
   `asset:<id>` (F-JRN-11). Their `blob_sha` is the sha256 of the content,
@@ -86,8 +87,8 @@ dépôt GitHub"); never "local".
 ### 2. In a GitHub repository (`mode = 'github'`, the expert)
 
 - **The repository is the content**, edited in the teacher's own tools
-  (VS Code, git). ADR-049 holds for this mode as written, with its
-  addendum, except for the browser writes.
+  (VS Code, git). The rules kept from ADR-049 for this mode are §7,
+  *GitHub mode*.
 - **The platform is read-only for it.** No editing in the browser: the
   page, asset and add/delete routes of M4-03 refuse a GitHub-mode journal.
   The push webhook and Refresh update the copy, as today.
@@ -136,7 +137,8 @@ Every new route goes through `accessibleClassroom` / `staffAccess`
 sessions never reach the journal. The audit union gains, task by task:
 the mode on `journal.create`, the Quiz-mode page writes, `journal.restore`,
 `journal.reorder`, `journal.export` (Move to GitHub) and `journal.import`
-(Bring back into Quiz).
+(Bring back into Quiz). The last three come with M4-10 to M4-13, not built
+(see the note at the end of §3).
 
 ### 6. Not in the first version
 
