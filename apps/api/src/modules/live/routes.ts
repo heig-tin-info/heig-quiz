@@ -390,12 +390,13 @@ export async function livePlugin(app: FastifyInstance) {
         if (isIntegrityEventKind(body.kind) && !service.storesIntegrityEvent(scope.evaluation, req.auth)) {
           return reply.code(204).send();
         }
-        const used = await service.countRecentEvents(
-          app.db,
-          scope.attempt.id,
-          body.kind,
-          new Date(now.getTime() - 60_000),
-        );
+        const since = new Date(now.getTime() - 60_000);
+        // A paste's flag is the server's, from its own journal (ADR-088 §4).
+        if (body.kind === "paste") {
+          await service.recordPaste(app.db, scope.attempt.id, body.details.length, now, since);
+          return reply.code(204).send();
+        }
+        const used = await service.countRecentEvents(app.db, scope.attempt.id, body.kind, since);
         if (used >= EVENTS_PER_MINUTE) {
           return reply.header("retry-after", "60").code(429).send({ error: "rate_limited" });
         }

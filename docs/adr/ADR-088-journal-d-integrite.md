@@ -16,7 +16,7 @@ release, the `integrity.purge` scheduled task), the player's signals and toast
 Relations: amends F-EVAL-13, F-EVAL-33 (the platform's line), N-SEC-10,
 N-DATA-02, N-DATA-03 and N-DATA-07; refines [ADR-079](ADR-079-conditions-de-l-evaluation.md)
 §2 (a poll never shows the derived line `visibility_logged`, which names
-pasting once the paste step ships); relies on
+leaving the page and pasting from outside it); relies on
 [ADR-034](ADR-034-agir-en-tant-qu-etudiant.md) (delegated sessions) and
 [ADR-051](ADR-051-postes-kiosque-attestes.md) (confined sessions).
 
@@ -71,13 +71,22 @@ never presented as proof.
    the `visibility` and `focus` rows already stored for an evaluation whose
    switch is off, and for a poll.
 
-4. **Pasting: a length and a flag, never the content.** A paste event
-   (`paste`, PR 3) carries `{ length, afterFocusLoss }`: the number of
-   characters, and whether the page had lost focus just before.
-   `afterFocusLoss` is computed by the SERVER from the previous event of the
-   attempt, never sent by the client. A paste whose text was copied from the
-   same tab (its fingerprint known to the player) is not reported. The pasted
-   text is never sent nor stored.
+4. **Pasting: a length and a flag, never the content.** The player sends
+   `paste {length}` — the number of characters, nothing else; the strict
+   schema refuses any other key with a `400`. The server stores it as
+   `{ length, afterFocusLoss }` (`recordPaste`), the flag computed by the
+   SERVER, never sent by the client, by one rule on its own times: the
+   attempt's latest `visibility` or `focus` entry is an absence still open
+   (`hidden`, `focused:false`), or a return to the page received within the
+   last 60 s. No such entry, or a return older than that, is `false`. At most
+   30 pastes per attempt are stored a minute; the rest are answered `204` and
+   dropped, like an event the switch does not keep. The player reports a
+   paste or a drop (`paste`, `drop` in the capture phase, never prevented, so
+   an editor still receives it) only when its text, whitespace collapsed, is
+   at least 20 characters long and none of the tab's last five copies (`copy`,
+   `cut`, `dragstart`: the selection, and what the page's own handlers put on
+   the clipboard) holds it. Those fingerprints stay in the tab's memory. The
+   pasted text is never sent nor stored.
 
 5. **The client filters its own noise.** An absence shorter than one second
    is dropped, and a blur into an in-page iframe (a question's own editor) is
@@ -86,12 +95,11 @@ never presented as proof.
 
 6. **The toast.** When the student comes back to the page, or pastes from
    outside, a toast says: "This event is recorded and visible to your
-   teacher." At most one per kind every five minutes, shown on focus return,
-   never during the absence, and never under a `seb` or `kiosk` session.
-   The conditions line `visibility_logged` reads "Leaving the page is
-   recorded" until the paste step (§9, PR 3) ships; that step changes it to
-   "Leaving the page and pasting from outside are recorded". No text a
-   student or an administrator reads announces pasting before then.
+   teacher." At most one per kind every five minutes, shown on focus return
+   (never during the absence) or at the paste, and never under a `seb` or
+   `kiosk` session. The conditions line `visibility_logged` reads "Leaving
+   the page and pasting from outside are recorded", and says that the pasted
+   content itself is never recorded.
 
 7. **The teacher's view.** A discreet list in the attempt inspector and the
    dashboard: student, time, kind, the paste's length and flag. The live badge
@@ -99,7 +107,7 @@ never presented as proof.
    the student knows the rule (the condition line, the toast), not the record.
 
 8. **Retention.** The integrity rows (`INTEGRITY_EVENT_KINDS`: `visibility`,
-   `focus`, and `paste` from PR 3) are deleted at the release of the grades,
+   `focus`, `paste`) are deleted at the release of the grades,
    in the release's transaction (`releaseResults`), their count recorded in
    the release's audit entry (`journalPurged`); a re-release finds nothing
    left. An evaluation never released loses them six months after it closed

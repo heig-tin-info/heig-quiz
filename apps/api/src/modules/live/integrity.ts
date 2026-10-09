@@ -3,7 +3,7 @@
  *
  * {@link storesIntegrityEvent} is the one rule of what is written. The
  * retention (N-DATA-03): the rows of
- * `INTEGRITY_EVENT_KINDS` — leaving the page (and pasting, once its step ships) — are
+ * `INTEGRITY_EVENT_KINDS` — leaving the page and pasting from outside it — are
  * a hint for the time of the exam and of its correction, never a record to
  * keep. They are deleted at the release of the grades, in the release's
  * transaction ({@link purgeIntegrityJournal}), and, for an evaluation never
@@ -13,7 +13,7 @@
  * (`countRecentEvents`), and `reconnect`, `ip_change`, `time_added`,
  * `paused`, `resumed` are the sitting's own history.
  */
-import { and, eq, inArray, isNotNull, isNull, lt, type SQLWrapper } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, lt, lte, type SQLWrapper } from "drizzle-orm";
 
 import { INTEGRITY_EVENT_KINDS } from "@quiz/contracts";
 import { integrityJournalOn } from "@quiz/domain";
@@ -22,6 +22,7 @@ import { delegated, type SessionAuth } from "../../auth/session.js";
 import type { Db, Tx } from "../../db/client.js";
 import { attemptEvents, attempts, evaluations } from "../../db/schema.js";
 import { settingsOf, type EvaluationRecord } from "../evaluation/service.js";
+import { countRecentEvents, logAttemptEvent } from "./autosave.js";
 
 /**
  * Whether an integrity event sent through this session is stored: only while
@@ -36,6 +37,51 @@ export function storesIntegrityEvent(
   auth: Pick<SessionAuth, "actorUserId"> | null,
 ): boolean {
   return integrityJournalOn(evaluation.mode, settingsOf(evaluation).logVisibility) && !delegated(auth);
+}
+
+/** At most this many pastes of an attempt are stored a minute; the rest are dropped. */
+export const PASTES_PER_MINUTE = 30;
+/** A paste this soon after the student came back to the page follows a focus loss. */
+const AFTER_FOCUS_LOSS_MS = 60_000;
+
+type JournalRow = Pick<typeof attemptEvents.$inferSelect, "kind" | "details" | "at">;
+
+/**
+ * ADR-088 §4: whether a paste at `now` follows a focus loss, read from the
+ * attempt's latest `visibility` or `focus` entry `last` — an absence still
+ * open (the tab hidden, the window blurred), or a return to the page received
+ * within {@link AFTER_FOCUS_LOSS_MS}. Server times only: the client never
+ * says.
+ */
+function followsFocusLoss(last: JournalRow | undefined, now: Date): boolean {
+  if (last === undefined) return false;
+  const details = (last.details ?? {}) as { state?: string; focused?: boolean };
+  const away = last.kind === "visibility" ? details.state === "hidden" : details.focused === false;
+  return away || now.getTime() - last.at.getTime() <= AFTER_FOCUS_LOSS_MS;
+}
+
+/**
+ * Stores a paste of `length` characters (ADR-088 §4) with the flag the
+ * server derives, or drops it once {@link PASTES_PER_MINUTE} were stored
+ * since `since`: the journal is a hint, a burst of pastes adds nothing a
+ * teacher needs, and the route answers 204 either way. The pasted text never
+ * reaches the server.
+ */
+export async function recordPaste(db: Db, attemptId: string, length: number, now: Date, since: Date): Promise<void> {
+  if ((await countRecentEvents(db, attemptId, "paste", since)) >= PASTES_PER_MINUTE) return;
+  const [last] = await db
+    .select({ kind: attemptEvents.kind, details: attemptEvents.details, at: attemptEvents.at })
+    .from(attemptEvents)
+    .where(
+      and(
+        eq(attemptEvents.attemptId, attemptId),
+        inArray(attemptEvents.kind, ["visibility", "focus"]),
+        lte(attemptEvents.at, now),
+      ),
+    )
+    .orderBy(desc(attemptEvents.at))
+    .limit(1);
+  await logAttemptEvent(db, attemptId, "paste", { length, afterFocusLoss: followsFocusLoss(last, now) }, now);
 }
 
 /** How long after its close an evaluation never released keeps its journal. */

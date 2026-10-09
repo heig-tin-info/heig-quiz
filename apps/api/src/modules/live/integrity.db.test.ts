@@ -101,7 +101,7 @@ describe("the release deletes the integrity journal (ADR-088 §8)", () => {
     const closed = await live.closeEvaluation(db, await reload(db, evaluation.id), app.clock.now(), "teacher", app);
     const released = await results.releaseResults(db, closed, app.clock.now());
 
-    expect(released.journalPurged).toBe(2);
+    expect(released.journalPurged).toBe(3); // visibility, focus, paste
     expect(await kindsOf(attempt.id)).toEqual([...KEPT].sort());
     // Another evaluation's journal is not this release's.
     expect(await kindsOf(other.attempt.id)).toEqual([...ALL_KINDS].sort());
@@ -148,6 +148,7 @@ describe("the six-month backstop (ADR-088 §8)", () => {
 });
 
 describe("the one-off migration (0094_integrity_journal_off_purge)", () => {
+  // It predates `paste`: no paste row existed then, and it names none.
   it("drops the visibility and focus rows of a switched-off evaluation and of a poll, nothing else", async () => {
     const off = await sitting("exam", { logVisibility: false });
     const on = await sitting("exam", { logVisibility: true });
@@ -163,8 +164,8 @@ describe("the one-off migration (0094_integrity_journal_off_purge)", () => {
       await client.exec(statement);
     }
 
-    expect(await kindsOf(off.attempt.id)).toEqual([...KEPT].sort());
-    expect(await kindsOf(poll.attempt.id)).toEqual([...KEPT].sort());
+    expect(await kindsOf(off.attempt.id)).toEqual([...KEPT, "paste"].sort());
+    expect(await kindsOf(poll.attempt.id)).toEqual([...KEPT, "paste"].sort());
     expect(await kindsOf(on.attempt.id)).toEqual([...ALL_KINDS].sort());
     expect(await kindsOf(legacy.attempt.id)).toEqual([...ALL_KINDS].sort());
     expect(await db.select().from(attemptEvents).where(inArray(attemptEvents.attemptId, ids))).toHaveLength(

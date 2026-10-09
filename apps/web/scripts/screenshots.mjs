@@ -865,6 +865,8 @@ const scenes = [
   { name: "player-conditions", role: "student", path: `${TAKE}?scene=running`, fold: true, act: (p) => p.getByRole("button", { name: /^(show the conditions|voir les conditions)$/i }).click() },
   // F-EVAL-13: back on the page after leaving it, the integrity notice top right.
   { name: "player-left-notice", role: "student", path: `${TAKE}?scene=running`, fold: true, act: leaveAndReturn },
+  // ADR-088 §4: a passage pasted from outside the page, the paste notice top right.
+  { name: "player-paste-notice", role: "student", path: `${TAKE}?scene=running`, fold: true, act: pasteFromOutside },
   { name: "player-cloze", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 2) },
   { name: "player-short", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 3) },
   { name: "player-code", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 4) },
@@ -1785,6 +1787,18 @@ async function leaveAndReturn(page) {
   await page.evaluate(() => window.dispatchEvent(new Event("blur")));
   await page.waitForTimeout(1_200);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.waitForTimeout(400);
+}
+
+/** A passage copied outside the page is pasted into the short answer (ADR-088 §4). */
+async function pasteFromOutside(page) {
+  await openQuestion(page, 3);
+  await page.evaluate(() => {
+    const clipboardData = new DataTransfer();
+    clipboardData.setData("text/plain", "A definition found in a textbook, word for word.");
+    const target = document.querySelector("main input, main textarea") ?? document.body;
+    target.dispatchEvent(new ClipboardEvent("paste", { clipboardData, bubbles: true, cancelable: true }));
+  });
   await page.waitForTimeout(400);
 }
 

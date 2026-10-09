@@ -14,7 +14,8 @@
  *     and the shuffles are left out: they are not the student's to act on.
  *     So is `requireFullscreen`: no player asks for full screen nor records
  *     leaving it yet, and a line saying so would state what is not true.
- *     Leaving the page is journalled (F-EVAL-13, ADR-088), so
+ *     Leaving the page and pasting from outside it are journalled
+ *     (F-EVAL-13, ADR-088), so
  *     `logVisibility` says so.
  *
  * {@link imposedConditions} is the one derivation: the server sends its
