@@ -28,6 +28,7 @@ import {
   Segmented,
   Skeleton,
   T,
+  TableHead,
   type Tone,
 } from "../ui";
 import { refusalMessage } from "./projectPage";
@@ -187,14 +188,14 @@ function WorkspaceSessions({ projectId }: { projectId: string }) {
       {title}
       <Card className="overflow-x-auto">
         <table className={cx(T.table, "min-w-140")}>
-          <thead className={T.head}>
-            <tr>
-              <th className={T.th}>{t("project.workspace.col.student")}</th>
-              <th className={T.th}>{t("project.workspace.col.state")}</th>
-              <th className={T.th}>{t("project.workspace.col.lastSeen")}</th>
-              <th className={T.th}>{t("project.workspace.col.lastPush")}</th>
-            </tr>
-          </thead>
+          <TableHead
+            columns={[
+              { key: "student", label: t("project.workspace.col.student") },
+              { key: "state", label: t("project.workspace.col.state") },
+              { key: "lastSeen", label: t("project.workspace.col.lastSeen") },
+              { key: "lastPush", label: t("project.workspace.col.lastPush") },
+            ]}
+          />
           <tbody>
             {rows.map((s) => (
               <tr key={s.sessionId} className={T.row}>

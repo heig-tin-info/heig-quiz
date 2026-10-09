@@ -286,7 +286,7 @@ describe("the release", () => {
     expect(screen.getByText("Final score")).toBeInTheDocument();
     expect(screen.getByText("36 / 40")).toBeInTheDocument();
     expect(screen.getByText("5.5")).toBeInTheDocument();
-    const note = screen.getByText("Your teacher's comment").parentElement!;
+    const note = screen.getByText("Your teacher's comment").closest("div")!;
     expect(within(note).getByText(/Bon travail,\s*attention aux fuites\./)).toBeInTheDocument();
     expect(screen.queryByText("Score at the deadline")).toBeNull();
     expect(screen.queryByText(/indicative/)).toBeNull();

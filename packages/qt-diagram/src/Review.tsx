@@ -57,16 +57,16 @@ export function DiagramReview({
   const shownText = texts === null || texts.reference === null ? null : tab === "student" ? texts.student : texts.reference;
 
   return (
-    <div className="flex flex-col gap-3">
+    // `text-sm text-fg`: the body of the panels; the other blocks set their own.
+    <div className="flex flex-col gap-3 text-sm text-fg">
       {showsSection(sections, "prompt") ? <div className={reviewPrompt}>{markdown(renderMarkdown, student.prompt)}</div> : null}
 
       {details?.reason === "kind_mismatch" ? <p className="text-[13px] text-warning">{s.kindMismatch}</p> : null}
 
       <NotePanel
         eyebrow={s.answer}
-        bodyClassName="text-sm text-fg"
         tone="outlined"
-        aside={drawn && scene ? <span className="font-normal normal-case tracking-normal tabular-nums">{countsOf(scene, s)}</span> : null}
+        aside={drawn && scene ? countsOf(scene, s) : null}
       >
         {drawn && scene ? (
           <DiagramView kind={student.kind} value={scene} strings={canvasStrings} aria-label={s.answer} />
@@ -79,15 +79,14 @@ export function DiagramReview({
         <>
           <NotePanel
             eyebrow={s.reference}
-            bodyClassName="text-sm text-fg"
             tone="soft"
-            aside={<span className="font-normal normal-case tracking-normal tabular-nums">{countsOf(guide.reference, s)}</span>}
+            aside={countsOf(guide.reference, s)}
           >
             <DiagramView kind={student.kind} value={guide.reference} strings={canvasStrings} aria-label={s.reference} />
           </NotePanel>
 
           {shownText === null ? null : (
-            <NotePanel eyebrow={s.text} bodyClassName="text-sm text-fg" tone="soft">
+            <NotePanel eyebrow={s.text} tone="soft">
               <div className="flex flex-col gap-2">
                 <Segmented<"student" | "reference">
                   name={`${id}-text`}
@@ -112,7 +111,7 @@ export function DiagramReview({
           )}
 
           {guide.rubric === undefined ? null : (
-            <NotePanel eyebrow={s.rubric} bodyClassName="text-sm text-fg" tone="soft">
+            <NotePanel eyebrow={s.rubric} tone="soft">
               {guide.rubric.trim() === "" ? <span className={caption}>{s.noRubric}</span> : markdown(renderMarkdown, guide.rubric)}
             </NotePanel>
           )}

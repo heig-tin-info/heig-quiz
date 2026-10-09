@@ -39,24 +39,20 @@ export function AsideSection({
  * `soft` (a `surface-2` recess) is for what the product says — an
  * explanation, a key; `outlined` (a `line-strong` hairline on `surface`) is
  * for what a person wrote to this reader — a teacher's comment, a student's
- * answer. `aside` sits at the end of the eyebrow's line (a count);
- * `bodyClassName` sets the body's type when the host does not. DESIGN.md ›
- * Components › NotePanel.
+ * answer. `aside` sits at the end of the eyebrow's line, in the body's
+ * case and figures (a count). DESIGN.md › Components › NotePanel.
  */
 export function NotePanel({
   eyebrow,
   aside,
   tone = "soft",
-  bodyClassName,
   children,
 }: {
   eyebrow: ReactNode;
   aside?: ReactNode;
   tone?: "soft" | "outlined";
-  bodyClassName?: string;
   children: ReactNode;
 }): ReactNode {
-  const eyebrowClass = "text-xs font-semibold uppercase tracking-wide text-fg-faint";
   return (
     <div
       className={cx(
@@ -64,15 +60,11 @@ export function NotePanel({
         tone === "soft" ? "bg-surface-2" : "border border-line-strong bg-surface",
       )}
     >
-      {aside == null ? (
-        <p className={eyebrowClass}>{eyebrow}</p>
-      ) : (
-        <p className={cx("flex items-baseline justify-between gap-2", eyebrowClass)}>
-          <span>{eyebrow}</span>
-          {aside}
-        </p>
-      )}
-      <div className={cx("mt-1", bodyClassName)}>{children}</div>
+      <p className="flex items-baseline justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-fg-faint">
+        <span>{eyebrow}</span>
+        {aside == null ? null : <span className="font-normal normal-case tracking-normal tabular-nums">{aside}</span>}
+      </p>
+      <div className="mt-1">{children}</div>
     </div>
   );
 }

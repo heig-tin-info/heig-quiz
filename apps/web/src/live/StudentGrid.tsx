@@ -5,7 +5,7 @@ import { displayedRate } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import type { GridState } from "../realtime/grid";
-import { cx, T } from "../ui";
+import { cx, Dash, T } from "../ui";
 import { ACTIONS, ACTIONS_KIOSK, COL, GridRow, PROGRESS } from "./GridRow";
 
 /**
@@ -266,8 +266,14 @@ export function StudentGrid({
                   to keep in agreement. */}
               {t("live.grid.class")}
             </th>
-            <td className={cx(T.td, PROGRESS, "text-right text-fg-faint")}>—</td>
-            {showScore ? <td className={cx(T.td, "text-right text-fg-faint")}>—</td> : null}
+            <td className={cx(T.td, PROGRESS, "text-right")}>
+              <Dash />
+            </td>
+            {showScore ? (
+              <td className={cx(T.td, "text-right")}>
+                <Dash />
+              </td>
+            ) : null}
             {view.items.map((item) => {
               const total = totals.get(item.id);
               return (

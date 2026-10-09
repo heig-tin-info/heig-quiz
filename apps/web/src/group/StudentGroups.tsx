@@ -96,12 +96,7 @@ export function StudentGroups({ classroomId }: { classroomId: string }) {
   }
   if (sets.isError) {
     return (
-      <QueryError
-        title={t("sgroups.loadError")}
-        error={sets.error}
-        onRetry={() => void refetch()}
-        retrying={sets.isFetching}
-      />
+      <QueryError title={t("sgroups.loadError")} query={sets} />
     );
   }
   const list = sets.data?.sets ?? [];

@@ -1055,8 +1055,7 @@ describe("NotePanel", () => {
         <p>Because pointers are addresses.</p>
       </NotePanel>,
     );
-    const eyebrow = screen.getByText("Explanation");
-    const panel = eyebrow.parentElement!;
+    const panel = screen.getByText("Explanation").closest("div")!;
     expect(panel).toHaveClass("bg-surface-2");
     expect(screen.getByText("Because pointers are addresses.")).toBeVisible();
   });
@@ -1067,7 +1066,7 @@ describe("NotePanel", () => {
         <p>Good start.</p>
       </NotePanel>,
     );
-    const panel = screen.getByText("Comment").parentElement!;
+    const panel = screen.getByText("Comment").closest("div")!;
     expect(panel).toHaveClass("border");
     expect(panel).not.toHaveClass("bg-surface-2");
   });

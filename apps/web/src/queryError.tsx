@@ -73,13 +73,7 @@ export function QueryError({ title, fallback, ...failure }: QueryErrorProps) {
  * So the page keeps a heading — what could not be loaded — and the alert
  * underneath says what went wrong and offers the retry.
  */
-export function PageError({
-  title,
-  ...rest
-}: QueryErrorProps & {
-  /** The `<h1>`: what the page was, not what the server said. */
-  title: string;
-}) {
+export function PageError({ title, ...rest }: QueryErrorProps) {
   const t = useT();
   return (
     <div className="space-y-6">

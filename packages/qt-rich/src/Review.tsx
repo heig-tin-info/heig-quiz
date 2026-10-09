@@ -10,7 +10,7 @@
  */
 import type { ReviewProps, StringOverrides } from "@quiz/core/client";
 import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
-import { caption, markdown, NotePanel, reviewPrompt, ScoreHeader } from "@quiz/ui";
+import { caption, cx, markdown, NotePanel, reviewPrompt, ScoreHeader } from "@quiz/ui";
 
 import { countChars, type RichAnswer, type RichDetails, type RichSolution, type RichStudent } from "./schema.js";
 import { richReviewStrings, type RichReviewStringKey } from "./strings.js";
@@ -51,18 +51,16 @@ export function RichReview({
       ) : null}
 
       <div className="@container">
-        <div className={guide ? "grid items-start gap-3 @2xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]" : "grid"}>
+        <div
+          className={cx(
+            "text-sm text-fg",
+            guide ? "grid items-start gap-3 @2xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]" : "grid",
+          )}
+        >
           <NotePanel
             eyebrow={s.answer}
-            bodyClassName="text-sm text-fg"
             tone="outlined"
-            aside={
-              written ? (
-                <span className="font-normal normal-case tracking-normal tabular-nums">
-                  {fmt(s.count, { count: countChars(text) })}
-                </span>
-              ) : null
-            }
+            aside={written ? fmt(s.count, { count: countChars(text) }) : null}
           >
             {body}
           </NotePanel>
@@ -71,7 +69,7 @@ export function RichReview({
             <div className="flex flex-col gap-3">
               {/* Absent from a student's key (ADR-037): no panel at all. */}
               {guide.rubric === undefined ? null : (
-                <NotePanel eyebrow={s.rubric} bodyClassName="text-sm text-fg" tone="soft">
+                <NotePanel eyebrow={s.rubric} tone="soft">
                   {guide.rubric.trim() === "" ? (
                     <span className={caption}>{s.noRubric}</span>
                   ) : (
@@ -80,7 +78,7 @@ export function RichReview({
                 </NotePanel>
               )}
               {guide.reference !== undefined && guide.reference.trim() !== "" ? (
-                <NotePanel eyebrow={s.reference} bodyClassName="text-sm text-fg" tone="soft">
+                <NotePanel eyebrow={s.reference} tone="soft">
                   {markdown(renderMarkdown, guide.reference)}
                 </NotePanel>
               ) : null}

@@ -279,11 +279,15 @@ export function TableHead<K extends string>({
   onToggle,
 }: {
   columns: Column<K>[];
-  /** `null`: the rows stand in the order they arrived in. */
-  sort?: SortState<K> | null;
-  /** Without it, the table does not sort: no column is a button. */
-  onToggle?: (k: K) => void;
-}) {
+} & (
+  | {
+      /** `null`: the rows stand in the order they arrived in. */
+      sort: SortState<K> | null;
+      onToggle: (k: K) => void;
+    }
+  // A table that does not sort: no column is a button.
+  | { sort?: never; onToggle?: never }
+)) {
   const stacked = columns.some((c) => c.stack !== undefined);
   const role = (c: Column<K>) =>
     c.stack === undefined ? undefined : c.stack === "sub" ? stack.subHead : stack[c.stack];
