@@ -20,8 +20,8 @@ import type { FastifyInstance } from "fastify";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import {
+  CHECK_STATUSES,
   SYSTEM_ALERT_STATES,
-  type CheckStatus,
   type NotificationPayload,
   type SystemCheck,
   type SystemCheckKey,
@@ -95,9 +95,7 @@ async function administrators(db: Db): Promise<string[]> {
 
 /** "13 ok, 1 warn, 1 unknown": the run's line on the scheduled tasks screen. */
 function tally(checks: readonly SystemCheck[]): string {
-  const order: CheckStatus[] = ["ok", "warn", "fail", "unknown"];
-  return order
-    .map((status) => [status, checks.filter((c) => c.status === status).length] as const)
+  return CHECK_STATUSES.map((status) => [status, checks.filter((c) => c.status === status).length] as const)
     .filter(([, n]) => n > 0)
     .map(([status, n]) => `${n} ${status}`)
     .join(", ");

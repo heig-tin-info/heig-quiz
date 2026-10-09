@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { SERVICE_NAMES, type ServiceName } from "@quiz/domain";
+import { CHECK_STATUSES, SERVICE_NAMES, type CheckStatus, type ServiceName } from "@quiz/domain";
 
 import { SCHEDULED_TASK_KEYS } from "./admin.js";
 
@@ -46,9 +46,7 @@ export type HealthResponse = z.infer<typeof HealthResponse>;
 
 // --- The system status (N-OPS-03, ADR-055) -------------------------------
 
-/** Mirrored by `CheckStatus` of `@quiz/domain/health` (the domain does not depend on the contracts). */
-export const CHECK_STATUSES = ["ok", "warn", "fail", "unknown"] as const;
-export type CheckStatus = (typeof CHECK_STATUSES)[number];
+export { CHECK_STATUSES, type CheckStatus };
 
 /** The check key of a third-party service (ADR-055 §6). */
 export const serviceCheckKey = <N extends ServiceName>(name: N) => `service.${name}` as const;

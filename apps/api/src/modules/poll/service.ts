@@ -32,6 +32,7 @@ import type { FastifyInstance } from "fastify";
 import {
   type ClosedBy,
   POLL_SHORT_CAP,
+  type PollState,
   type PollAudience,
   type ConceptLang,
   type PollPoolPage,
@@ -259,7 +260,7 @@ export async function byCode(
   db: Db,
   code: string,
   now: Date,
-): Promise<{ evaluation: EvaluationRecord; state: "running" | "ended" } | null> {
+): Promise<{ evaluation: EvaluationRecord; state: PollState } | null> {
   const [row] = await db
     .select()
     .from(evaluations)
@@ -856,7 +857,7 @@ export function joinUrl(webUrl: string, code: string): string {
 export async function publicView(
   db: Db,
   scope: PollScope,
-  state: "running" | "ended",
+  state: PollState,
   viewer: Viewer & { loggedIn: boolean },
 ): Promise<PollPublicView> {
   const { evaluation, item } = scope;

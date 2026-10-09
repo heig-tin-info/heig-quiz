@@ -15,13 +15,17 @@ export const KIOSK_SILENT_AFTER_MS = 12 * 60_000;
 /** The submit of a kiosk sitting needs a check younger than this (ADR-051 §6). */
 export const KIOSK_FRESH_MS = 2 * 60_000;
 
+/** The outcome of a station's last attestation attempt (ADR-051 §6). */
+export const KIOSK_ATTESTATIONS = ["ok", "unavailable", "refused"] as const;
+export type KioskAttestation = (typeof KIOSK_ATTESTATIONS)[number];
+
 /** The station's last attempt, as `kiosk_devices` stores it. */
 export interface KioskCheck {
-  attestation: "ok" | "unavailable" | "refused" | null;
+  attestation: KioskAttestation | null;
   checkedAt: Date | null;
 }
 
-export type KioskAttestationState = "ok" | "unavailable" | "refused" | "silent";
+export type KioskAttestationState = KioskAttestation | "silent";
 
 const ageMs = (check: KioskCheck, now: Date) => now.getTime() - check.checkedAt!.getTime();
 

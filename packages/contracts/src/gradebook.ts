@@ -18,10 +18,10 @@
  */
 import { z } from "zod";
 
-import { FINAL_SCORE_SOURCES, GRADEBOOK_MARK_KINDS, WEIGHT_MAX, WEIGHT_MIN } from "@quiz/domain";
+import { FINAL_SCORE_SOURCES, GRADEBOOK_COLUMN_KINDS, GRADEBOOK_MARK_KINDS, WEIGHT_MAX, WEIGHT_MIN } from "@quiz/domain";
 
 /** What a column is of; a poll never has one. */
-export const GradebookColumnKind = z.enum(["exam", "exercise", "project"]);
+export const GradebookColumnKind = z.enum(GRADEBOOK_COLUMN_KINDS);
 export type GradebookColumnKind = z.infer<typeof GradebookColumnKind>;
 
 /** How a column's activity is addressed in a route: an evaluation or a project. */

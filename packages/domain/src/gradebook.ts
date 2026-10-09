@@ -45,7 +45,8 @@ export const WEIGHT_MAX = 100;
 export const WEIGHT_DEFAULT = 100;
 
 /** What a gradebook column is of: an evaluation's mode, or a project (a poll never has a column). */
-export type GradebookColumnKind = "exam" | "exercise" | "project";
+export const GRADEBOOK_COLUMN_KINDS = ["exam", "exercise", "project"] as const;
+export type GradebookColumnKind = (typeof GRADEBOOK_COLUMN_KINDS)[number];
 
 /**
  * Whether a column counts toward the mean before the teacher says: exams

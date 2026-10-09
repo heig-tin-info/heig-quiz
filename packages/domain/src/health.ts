@@ -8,12 +8,13 @@
  * (no ticker in this process, no backup report configured) says so itself.
  */
 
-/**
- * Mirrors `CHECK_STATUSES` of `@quiz/contracts` on purpose: the domain
- * depends on no schema package, and the API assigns one to the other, so a
- * drift is a compile error there.
- */
-export type CheckStatus = "ok" | "warn" | "fail" | "unknown";
+/** A check's verdict, from the best to the worst, `unknown` last. */
+export const CHECK_STATUSES = ["ok", "warn", "fail", "unknown"] as const;
+export type CheckStatus = (typeof CHECK_STATUSES)[number];
+
+/** A scheduled task's last run: `running` from the claim until the run ends. */
+export const SCHEDULED_TASK_STATUSES = ["running", "ok", "error"] as const;
+export type ScheduledTaskStatus = (typeof SCHEDULED_TASK_STATUSES)[number];
 
 export const HEALTH_THRESHOLDS = {
   /** The ticker's last completed pass older than this is a dead clock (never under 3 periods). */
@@ -91,7 +92,7 @@ export function backupStatus(report: BackupReport, now: Date): CheckStatus {
 
 export interface TaskState {
   enabled: boolean;
-  lastStatus: "running" | "ok" | "error" | null;
+  lastStatus: ScheduledTaskStatus | null;
   lastOkAt: Date | null;
   intervalMinutes: number;
 }

@@ -4,13 +4,14 @@
  */
 import { z } from "zod";
 
+import { KIOSK_ATTESTATIONS, type KioskAttestation } from "@quiz/domain";
+
 import { EvaluationConditions } from "./live.js";
 
 export const KIOSK_DEVICE_STATUSES = ["unnamed", "active", "retired"] as const;
 
 /** The outcome of a station's last attestation attempt (ADR-051 §6). */
-export const KIOSK_ATTESTATIONS = ["ok", "unavailable", "refused"] as const;
-export type KioskAttestation = (typeof KIOSK_ATTESTATIONS)[number];
+export { KIOSK_ATTESTATIONS, type KioskAttestation };
 
 /** The longest station label an admin may give (`KioskDevicePatch`, the admin's field). */
 export const KIOSK_LABEL_MAX = 80;
