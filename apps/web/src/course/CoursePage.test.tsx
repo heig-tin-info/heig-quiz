@@ -61,7 +61,7 @@ function world(templates: unknown[] = [TEMPLATE]) {
 }
 
 describe("CoursePage", () => {
-  it("opens on the course's classrooms, with its six tabs under its name", async () => {
+  it("opens on the course's classrooms, with its five tabs under its name", async () => {
     mockFetch(world());
     const navigate = vi.fn();
     renderWithProviders(<CoursePage id="c1" navigate={navigate} />);
@@ -73,7 +73,6 @@ describe("CoursePage", () => {
       expect.stringMatching(/^Templates/),
       expect.stringMatching(/^Linked pools/),
       expect.stringMatching(/^Members/),
-      "Conditions",
       "Settings",
     ]);
     expect(within(tabs).getByRole("tab", { name: /Classrooms/ })).toHaveAttribute("aria-selected", "true");
@@ -100,7 +99,6 @@ describe("CoursePage", () => {
     ["templates", "New template"],
     ["pools", "Link a pool"],
     ["members", "Add a staff member"],
-    ["conditions", "Add condition"],
   ] as const)("has one primary action on %s: %s", async (tab, label) => {
     mockFetch(world());
     renderWithProviders(<CoursePage id="c1" tab={tab} navigate={vi.fn()} />);
@@ -380,12 +378,8 @@ describe("CoursePage", () => {
         expect(screen.queryByRole("button", { name: /Add a staff member/ })).toBeNull();
         unmount();
       }
-      const { unmount } = renderWithProviders(<CoursePage id="c1" tab="templates" navigate={vi.fn()} />);
+      renderWithProviders(<CoursePage id="c1" tab="templates" navigate={vi.fn()} />);
       expect(await screen.findByRole("button", { name: /New template/ })).toBeVisible();
-      unmount();
-      // The catalog of conditions is every member's (ADR-068 §3).
-      renderWithProviders(<CoursePage id="c1" tab="conditions" navigate={vi.fn()} />);
-      expect(await screen.findByRole("button", { name: "Actions on “Phones”" })).toBeVisible();
     });
 
     it("lists the pools without their unlink", async () => {
@@ -423,15 +417,28 @@ describe("CoursePage", () => {
       expect(screen.queryByRole("button", { name: /Delete course/ })).toBeNull();
       expect(screen.getByText(/are its owners' to change/)).toBeVisible();
     });
+
+    it("reads the catalog of conditions without its controls, and says why (F-ORG-16)", async () => {
+      mockFetch(assistantWorld());
+      renderWithProviders(<CoursePage id="c1" tab="settings" navigate={vi.fn()} />);
+
+      expect(await screen.findByText("Phones")).toBeVisible();
+      expect(screen.getByText("One A4 sheet of notes")).toBeVisible();
+      expect(screen.queryByRole("textbox", { name: /Condition/ })).toBeNull();
+      expect(screen.queryByRole("button", { name: /Add condition/ })).toBeNull();
+      expect(screen.queryByRole("button", { name: /Actions on/ })).toBeNull();
+      expect(screen.queryByRole("button", { name: /Show archived/ })).toBeNull();
+      expect(screen.getByText(/The catalog is the course owners' to change/)).toBeVisible();
+    });
   });
 
-  describe("its catalog of conditions (F-ORG-16)", () => {
+  describe("its catalog of conditions, in its settings (F-ORG-16)", () => {
     it("lists the active entries, keeps the archived ones collapsed, and says the snapshot rule", async () => {
       const { calls } = mockFetch({
         ...world(),
         "POST /app/api/courses/c1/conditions/k0/unarchive": ok(CONDITIONS[2]),
       });
-      renderWithProviders(<CoursePage id="c1" tab="conditions" navigate={vi.fn()} />);
+      renderWithProviders(<CoursePage id="c1" tab="settings" navigate={vi.fn()} />);
 
       expect(await screen.findByRole("textbox", { name: "Condition 1" })).toHaveValue("One A4 sheet of notes");
       expect(screen.getByRole("textbox", { name: "Condition 2" })).toHaveValue("Phones");
@@ -446,7 +453,7 @@ describe("CoursePage", () => {
       );
     });
 
-    it("adds an entry from the header, edits one, moves one and archives one", async () => {
+    it("adds an entry from its section, edits one, moves one and archives one", async () => {
       const { calls } = mockFetch({
         ...world(),
         "POST /app/api/courses/c1/conditions": ok(CONDITIONS[0]),
@@ -454,7 +461,7 @@ describe("CoursePage", () => {
         "PUT /app/api/courses/c1/conditions/order": noContent(),
         "POST /app/api/courses/c1/conditions/k1/archive": ok(CONDITIONS[0]),
       });
-      renderWithProviders(<CoursePage id="c1" tab="conditions" navigate={vi.fn()} />);
+      renderWithProviders(<CoursePage id="c1" tab="settings" navigate={vi.fn()} />);
 
       await userEvent.click(await screen.findByRole("button", { name: /Add condition/ }));
       const dialog = await screen.findByRole("dialog", { name: "Add condition" });
@@ -488,7 +495,7 @@ describe("CoursePage", () => {
 
     it("says so when the catalog is empty", async () => {
       mockFetch({ ...world(), "GET /app/api/courses/c1/conditions": ok([]) });
-      renderWithProviders(<CoursePage id="c1" tab="conditions" navigate={vi.fn()} />);
+      renderWithProviders(<CoursePage id="c1" tab="settings" navigate={vi.fn()} />);
       expect(await screen.findByText(/No conditions yet/)).toBeVisible();
     });
   });

@@ -58,7 +58,7 @@ export function useCourseDetail(courseId: string) {
 /**
  * The course's catalog of conditions (F-ORG-16): every entry, the active
  * ones first; a reader filters on `archivedAt` (the editor offers the
- * active ones, the Conditions tab shows both).
+ * active ones, the course's settings show both).
  */
 export function useCourseConditions(courseId: string) {
   return useQuery<CourseCondition[]>({

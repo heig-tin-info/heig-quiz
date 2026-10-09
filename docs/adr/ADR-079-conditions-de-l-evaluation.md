@@ -14,6 +14,10 @@ owner, 2026-10-08): §6 only — the student reads the conditions
 grouped by kind instead of in two blocks (announced, imposed). See the
 amendment under §6; the rest of the record is unchanged.
 
+Amended 2026-10-09 (product owner): §5 only — the catalog is a section of
+the course's Settings tab, no longer a tab of its own, and only the
+course's owners write it; assistants read it. See the amendment under §5.
+
 Scope: `EvaluationSettings.conditions`, the derivation `imposedConditions`
 (`packages/domain/src/evaluationConditions.ts`), the student views that carry
 `EvaluationConditions` (waiting room, ready screen, attempt, and for a
@@ -24,7 +28,8 @@ Relations: amends [ADR-076](ADR-076-demarrage-explicite-d-une-tentative.md) §1
 (the ready screen's rules become the conditions) and the waiting room's rules
 card of F-EVAL-16; generalises [ADR-069](ADR-069-calculatrice-fournie.md) §2
 (the platform states only what it enforces); depends on
-[ADR-068](ADR-068-roles-de-l-equipe-du-cours.md) §3 for the catalog's writers.
+[ADR-068](ADR-068-roles-de-l-equipe-du-cours.md) §3 for the catalog's writers
+(owner-only since the amendment of 2026-10-09).
 
 ## Context
 
@@ -87,6 +92,20 @@ a text that changes after the exam leaves no record of what was announced.
    `catalogId` is not in the active catalog shows as a one-off condition.
    No student route reads the table (tested on the waiting room, the ready
    screen and the attempt).
+
+   *Amended 2026-10-09 (product owner):* the catalog is a setting of the
+   course, not a main content of its page. The Conditions tab is removed;
+   the catalog is a section of the course's Settings tab, with its own
+   secondary "Add condition" (the Settings tab keeps no primary), and the
+   old address `/courses/:id/conditions` opens the Settings tab. Only the
+   course's owners write it: every write route (create, `PATCH /:cid`,
+   `PUT /order`, `archive`, `unarchive`) takes the owner role (`403
+   owner_required` for an assistant, ADR-068 §2); the list stays readable by
+   every staff member, since an assistant still ticks its entries in the
+   conditions of an evaluation or a template. An assistant sees the active
+   entries as plain text, with one line saying they are the owners' to
+   change. Supersedes "managed by every staff member" and "with no role
+   step" above.
 6. **One renderer, two blocks.** *(The two blocks and the per-line word are
    obsolete: see the amendment of 2026-10-08 below.)* The student reads "Announced by your
    teacher" first, in the teacher's order, then "Imposed by the platform", in

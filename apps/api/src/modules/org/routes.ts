@@ -250,14 +250,16 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   // --- The course's catalog of conditions (F-ORG-16, ADR-079 §5) ---
 
   /**
-   * Every member of the staff manages the catalog (ADR-068 §3): the course
-   * under `staffAccess` (404 otherwise), no role step. An entry is looked up
-   * within that course, so another course's id is the same 404.
+   * Every member of the staff reads the catalog (an assistant ticks its
+   * entries in an evaluation's conditions); only the course's owners write
+   * it (ADR-079 §5, amended 2026-10-09): the course under `staffAccess` (404
+   * otherwise), then the owner role (403 `owner_required`). An entry is
+   * looked up within that course, so another course's id is the same 404.
    */
   const onCondition = {
     params: CourseConditionParam,
     load: async (req: FastifyRequest, reply: FastifyReply, p: { id: string; cid: string }) => {
-      const course = await loadCourse(req, reply, p);
+      const course = await ownedCourse(req, reply, p);
       if (!course) return null;
       const row = await service.conditionOfCourse(app.db, course.id, p.cid);
       if (row) return { course, row };
@@ -275,7 +277,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.post(
     "/app/api/courses/:id/conditions",
     { preHandler: requireTeacher },
-    teacher({ ...onCourse(), body: CourseConditionCreate }, async ({ req, reply, body, scope: course }) => {
+    teacher({ ...onCourse("owner"), body: CourseConditionCreate }, async ({ req, reply, body, scope: course }) => {
       const row = await service.createCondition(app.db, course.id, body);
       await trace(req, "course.condition_create", "course", course.id, {
         conditionId: row.id,
@@ -303,7 +305,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.put(
     "/app/api/courses/:id/conditions/order",
     { preHandler: requireTeacher },
-    teacher({ ...onCourse(), body: CourseConditionOrder }, async ({ reply, body, scope: course }) => {
+    teacher({ ...onCourse("owner"), body: CourseConditionOrder }, async ({ reply, body, scope: course }) => {
       await service.reorderConditions(app.db, course.id, body.ids);
       return reply.code(204).send();
     }),

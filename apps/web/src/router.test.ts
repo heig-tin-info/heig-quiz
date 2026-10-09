@@ -131,6 +131,8 @@ describe("routeToPath / parsePath", () => {
     // Its tabs are paths of their own; the classrooms are the bare address.
     expect(routeToPath({ view: "course", id: "k-1", tab: "members" })).toBe("/courses/k-1/members");
     expect(parsePath("/courses/k-1/members")).toEqual({ view: "course", id: "k-1", tab: "members" });
+    // The former Conditions tab is a section of the settings (F-ORG-16).
+    expect(parsePath("/courses/k-1/conditions")).toEqual({ view: "course", id: "k-1", tab: "settings" });
     expect(routeToPath({ view: "course", id: "k-1", tab: "classrooms" })).toBe("/courses/k-1");
     expect(parsePath("/courses/k-1/nope")).toEqual({ view: "course", id: "k-1" });
   });

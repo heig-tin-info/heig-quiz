@@ -242,7 +242,7 @@ export function moveActions(
 
 /**
  * The text of a condition: written when the field is left, put back when
- * left blank. The course's Conditions tab draws its entries with it too.
+ * left blank. The catalog in the course's settings draws its entries with it too.
  */
 export function ConditionRow({
   index,

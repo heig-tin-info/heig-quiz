@@ -1,21 +1,24 @@
 /**
- * The course page's Conditions tab (F-ORG-16, ADR-079 §5): the catalog of
- * the conditions its staff announces often, which an evaluation's or a
- * template's conditions pick from. Every member manages it (ADR-068 §3), so
- * the header's "Add condition" is every member's, and so are the rows.
+ * The catalog of conditions of a course (F-ORG-16, ADR-079 §5), a section of
+ * the course's Settings tab: the conditions its staff announces often, which
+ * an evaluation's or a template's conditions pick from.
  *
- * A row is the evaluation editor's own (`ConditionRow`): the kind, the text
- * written when the field is left, and a menu to move it or archive it. An
- * entry is archived, never deleted; the archived ones wait collapsed under
- * the list, behind a quiet "Show archived" disclosure, as a course's archived
- * classrooms do, each with its Restore.
+ * The course's owners manage it (ADR-079 §5, amended 2026-10-09): the
+ * section's own "Add condition" (a secondary: a settings tab has no
+ * primary), the rows' text and kind, their menu to move or archive them, and
+ * the archived entries waiting collapsed under the list behind a quiet "Show
+ * archived" disclosure, each with its Restore. An entry is archived, never
+ * deleted. An assistant reads the active entries as plain text — no
+ * disabled controls — under one line saying whose they are to change; they
+ * still tick them in an evaluation's conditions.
  *
- * The snapshot rule is said once, under the list: picking an entry copies
- * its words, so nothing done here changes an evaluation or a template that
- * already holds them.
+ * The row is the evaluation editor's own (`ConditionRow`). The snapshot rule
+ * is said once, under the list: picking an entry copies its words, so
+ * nothing done here changes an evaluation or a template that already holds
+ * them.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Archive, ArchiveRestore, ChevronDown, ChevronRight } from "lucide-react";
+import { Archive, ArchiveRestore, ChevronDown, ChevronRight, ListChecks, Plus } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -31,7 +34,7 @@ import { ConditionRow, moveActions } from "../evaluation/ConditionsSetting";
 import { useT } from "../i18n";
 import { useErrorToast } from "../notify";
 import { courseConditionsKey } from "../queryKeys";
-import { Button, Card, Field, FieldLabel, FormDialog, QueryError, Segmented, Skeleton } from "../ui";
+import { Button, Card, Field, FieldLabel, FormDialog, QueryError, SectionHeading, Segmented, Skeleton } from "../ui";
 import { useCourseConditions } from "./parts";
 
 /** One write to the catalog: a path under `/courses/:id/conditions`, a method, a body. */
@@ -41,13 +44,36 @@ interface CatalogWrite {
   body?: unknown;
 }
 
-export function CourseConditions({
+export function CourseConditions({ courseId, canManage }: { courseId: string; canManage: boolean }) {
+  const t = useT();
+  const [adding, setAdding] = useState(false);
+  return (
+    <section className="space-y-3">
+      <SectionHeading
+        icon={ListChecks}
+        title={t("courses.settings.conditions")}
+        actions={
+          canManage ? (
+            <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
+              <Plus /> {t("courses.conditions.add")}
+            </Button>
+          ) : null
+        }
+      />
+      <Catalog courseId={courseId} canManage={canManage} adding={adding} onAdding={setAdding} />
+    </section>
+  );
+}
+
+function Catalog({
   courseId,
+  canManage,
   adding,
   onAdding,
 }: {
   courseId: string;
-  /** The header's "Add condition" was pressed: its dialog is open. */
+  canManage: boolean;
+  /** The section's "Add condition" was pressed: its dialog is open. */
   adding: boolean;
   onAdding: (open: boolean) => void;
 }) {
@@ -64,22 +90,20 @@ export function CourseConditions({
     onError: toastError("error.save"),
   });
 
-  if (catalog.isLoading) return <Skeleton className="h-40 w-full max-w-3xl" />;
+  if (catalog.isLoading) return <Skeleton className="h-40 w-full" />;
   if (catalog.isError) {
     return (
-      <div className="max-w-3xl">
-        <QueryError
-          title={t("courses.conditions.loadFailed")}
-          error={catalog.error}
-          onRetry={() => void catalog.refetch()}
-          retrying={catalog.isFetching}
-        />
-      </div>
+      <QueryError
+        title={t("courses.conditions.loadFailed")}
+        error={catalog.error}
+        onRetry={() => void catalog.refetch()}
+        retrying={catalog.isFetching}
+      />
     );
   }
   const rows = catalog.data ?? [];
   const active = rows.filter((r) => r.archivedAt === null);
-  const archived = rows.filter((r) => r.archivedAt !== null);
+  const archived = canManage ? rows.filter((r) => r.archivedAt !== null) : [];
   const move = (i: number, delta: -1 | 1) => {
     const ids = active.map((r) => r.id);
     [ids[i], ids[i + delta]] = [ids[i + delta]!, ids[i]!];
@@ -87,12 +111,14 @@ export function CourseConditions({
   };
 
   return (
-    <div className="max-w-3xl space-y-3">
-      <Card className="px-4">
+    <>
+      <Card className="px-5">
         {active.length === 0 ? (
-          // Words, not a second button: "Add condition" is in the header.
-          <p className="py-3 text-sm text-fg-muted">{t("courses.conditions.empty")}</p>
-        ) : (
+          // Words, not a second button: "Add condition" is in the heading.
+          <p className="py-3 text-sm text-fg-muted">
+            {t(canManage ? "courses.conditions.empty" : "courses.conditions.emptyReadOnly")}
+          </p>
+        ) : canManage ? (
           <ol className="divide-y divide-line">
             {active.map((row, i) => (
               <ConditionRow
@@ -115,10 +141,18 @@ export function CourseConditions({
               />
             ))}
           </ol>
+        ) : (
+          <ol className="divide-y divide-line">
+            {active.map((row) => (
+              <li key={row.id} className="py-2.5">
+                <p className="text-xs font-medium text-fg-faint">{t(`conditions.kind.${row.kind}`)}</p>
+                <p className="text-sm [overflow-wrap:anywhere]">{row.text}</p>
+              </li>
+            ))}
+          </ol>
         )}
         {archived.length > 0 ? (
           <div className="border-t border-line py-2">
-            {/* A quiet disclosure: the tab's accent belongs to "Add condition". */}
             <Button
               variant="ghost"
               size="sm"
@@ -150,7 +184,9 @@ export function CourseConditions({
           </div>
         ) : null}
       </Card>
-      <p className="text-[13px] text-fg-muted">{t("courses.conditions.snapshot")}</p>
+      <p className="text-[13px] text-fg-muted">
+        {t(canManage ? "courses.conditions.snapshot" : "courses.conditions.ownerOnly")}
+      </p>
 
       {adding ? (
         <AddConditionModal
@@ -161,13 +197,13 @@ export function CourseConditions({
           onClose={() => onAdding(false)}
         />
       ) : null}
-    </div>
+    </>
   );
 }
 
 /**
  * A new entry of the catalog: its kind and its text, two fields, so a
- * `Modal`. The write is the tab's own; a refusal is its toast, and the
+ * `Modal`. The write is the section's own; a refusal is its toast, and the
  * dialog stays open on it.
  */
 function AddConditionModal({

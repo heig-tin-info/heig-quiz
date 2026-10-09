@@ -1,4 +1,4 @@
-import { FileStack, FolderTree, Library, ListChecks, Plus, School, Settings as SettingsIcon, UserPlus, Users } from "lucide-react";
+import { FileStack, FolderTree, Library, Plus, School, Settings as SettingsIcon, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 
 import type { CourseSummary } from "@quiz/contracts";
@@ -22,7 +22,6 @@ import {
   Skeleton,
   Tabs,
 } from "../ui";
-import { CourseConditions } from "./CourseConditions";
 import { CourseIcon } from "./CourseIcon";
 import { CourseSettings } from "./CourseSettings";
 import { LinkedPools, LinkPoolMenu } from "./CoursePools";
@@ -32,15 +31,14 @@ import { useCourseActions } from "./useCourseActions";
 /**
  * The page of one course (F-ORG-12), in tabs as the classroom's: its
  * classrooms (the default), its evaluation templates, which live here and
- * nowhere else (ADR-031), the pools it draws from, its members, its catalog
- * of conditions (F-ORG-16) and its settings. Each tab is a path of its own
- * (`/courses/:id/<tab>`).
+ * nowhere else (ADR-031), the pools it draws from, its members and its
+ * settings, which hold its catalog of conditions (F-ORG-16). Each tab is a
+ * path of its own (`/courses/:id/<tab>`).
  *
  * The header's one primary action is the open tab's: New classroom, New
- * template, Link a pool, Add a staff member, Add condition; Settings has
- * none. An assistant (ADR-068) is offered only New template and Add
- * condition there: the classrooms, the linked pools and the staff are the
- * owners' to change. The course's
+ * template, Link a pool, Add a staff member; Settings has none. An
+ * assistant (ADR-068) is offered only New template there: the classrooms,
+ * the linked pools and the staff are the owners' to change. The course's
  * actions are `useCourseActions`, the card's copy, so the two cannot drift —
  * the card keeps them in its menu, the page spreads them over its tabs.
  *
@@ -115,19 +113,17 @@ function Course({
   const actions = useCourseActions(course, { onGone: () => navigate({ view: "home" }) });
   const { isOwner } = actions;
   const [creatingTemplate, setCreatingTemplate] = useState(false);
-  const [addingCondition, setAddingCondition] = useState(false);
   const templates = useCourseTemplates(course.id);
   const pools = useCourseDetail(course.id).data?.pools;
   const open = (next: CourseTab) => navigate({ view: "course", id: course.id, tab: next });
 
-  // The open tab's one primary action. New template and Add condition are
-  // every member's (ADR-068 §3); the other three are the owners', and an
+  // The open tab's one primary action. New template is every member's
+  // (ADR-068 §3); the other three are the owners', and an
   // assistant gets none there. Each creates, so it is the header's
   // `primary` (the FAB on a phone, #450) — except Link a pool, a menu,
   // which stays in the action row.
   const memberPrimary: Partial<Record<CourseTab, PagePrimary>> = {
     templates: { icon: Plus, label: t("templates.new"), onClick: () => setCreatingTemplate(true) },
-    conditions: { icon: Plus, label: t("courses.conditions.add"), onClick: () => setAddingCondition(true) },
   };
   const ownerPrimary: Partial<Record<CourseTab, PagePrimary>> = {
     classrooms: { icon: Plus, label: t("classrooms.new"), onClick: actions.newClassroom },
@@ -167,7 +163,6 @@ function Course({
             { value: "templates", label: t("courses.tab.templates"), count: templates.data?.length, icon: FileStack },
             { value: "pools", label: t("courses.tab.pools"), count: pools?.length, icon: FolderTree },
             { value: "members", label: t("courses.tab.members"), count: course.staff.length, icon: Users },
-            { value: "conditions", label: t("courses.tab.conditions"), icon: ListChecks },
             { value: "settings", label: t("courses.tab.settings"), icon: SettingsIcon },
           ]}
         />
@@ -197,8 +192,6 @@ function Course({
           <LinkedPools course={course} navigate={navigate} />
         ) : tab === "members" ? (
           <CourseMembers course={course} staffActions={actions.staffActions} />
-        ) : tab === "conditions" ? (
-          <CourseConditions courseId={course.id} adding={addingCondition} onAdding={setAddingCondition} />
         ) : (
           <CourseSettings course={course} actions={actions} />
         )}
