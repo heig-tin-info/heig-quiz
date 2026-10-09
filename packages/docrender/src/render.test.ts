@@ -340,6 +340,52 @@ describe("gfm", () => {
   });
 });
 
+describe("task lists", () => {
+  const plan = [
+    "- [ ] Numbers",
+    "  - [x] Bases",
+    "  - [ ] Two's complement",
+    "- [ ] Tools",
+    "  - [ ] Compiler",
+    "    - [ ] gcc",
+    "- [ ] Types",
+    "  - [x] Integers",
+    "  - [x] Floats",
+    "- [x] Loops",
+    "  - [ ] for",
+    "- plain item",
+    "",
+  ].join("\n");
+  const items = (html: string) => [...html.matchAll(/<li class="md-check md-check-(\w+)">/g)].map((m) => m[1]);
+
+  it("derives a parent's state from its sub-tasks", () => {
+    const p = renderPage(plan, ctx());
+    expect(items(p.html)).toEqual([
+      "doing", "done", "todo", // Numbers: one leaf of two ticked
+      "todo", "todo", "todo", // Tools: nothing ticked, two levels deep
+      "done", "done", "done", // Types: every sub-task ticked
+      "done", "todo", // Loops: ticked by hand, whatever is below
+    ]);
+  });
+
+  it("counts the covered leaves on a parent, none on a leaf", () => {
+    const counts = [...renderPage(plan, ctx()).html.matchAll(/md-check-count">([^<]*)</g)].map((m) => m[1]);
+    expect(counts).toEqual(["1/2", "0/1", "0/1", "2/2", "1/1"]);
+  });
+
+  it("keeps a disabled native checkbox, ticked when the item is done, and no bullet item is touched", () => {
+    const p = renderPage("- [ ] a\n  - [x] b\n  - [ ] d\n- c\n", ctx());
+    expect(p.html).toContain('<li class="md-check md-check-doing"><input type="checkbox" class="md-check-box" disabled><div class="md-check-label">a');
+    expect(p.html).toContain('<input type="checkbox" class="md-check-box" disabled checked><div class="md-check-label">b</div>');
+    expect(p.html).toContain("<li>c</li>");
+    expect(p.html.match(/type="checkbox"/g)).toHaveLength(3);
+  });
+
+  it("escapes the label like any text", () => {
+    expect(renderPage("- [ ] <script>\n", ctx()).html).not.toContain("<script>");
+  });
+});
+
 describe("warnings (J5)", () => {
   it("are codes with parameters, every one valid for the contract, never a sentence", () => {
     const p = renderPage(
