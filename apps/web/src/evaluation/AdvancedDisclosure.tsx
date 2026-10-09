@@ -1,4 +1,4 @@
-import { CategorizePolicy, categorizePolicyOf, kioskOf, McqPolicy, negativeMarkingOf, safeExamBrowserOf, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
+import { CategorizePolicy, categorizePolicyOf, McqPolicy, negativeMarkingOf, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
 import {
   allowedFeedbackWhen,
   CALCULATOR_MODES,
@@ -16,6 +16,7 @@ import { usePublicConfig } from "../api";
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import { Disclosure, Segmented, Select, SettingRow, Switch } from "../ui";
+import { AllowedDevices } from "./AllowedDevices";
 import type { ConfigPatch, ConfigView } from "./editTarget";
 
 /**
@@ -309,30 +310,10 @@ export function AdvancedDisclosure({
         </SettingRow>
       )}
 
-      {/* ADR-027: an exam sat in Safe Exam Browser only. */}
+      {/* ADR-027, ADR-051 §2: where an exam may be sat — its two trusted
+          clients, chosen as one. */}
       {mode === "exam" ? (
-        <SettingRow title={t("eval.seb")} desc={t("eval.seb.desc")}>
-          <Switch
-            checked={safeExamBrowserOf(settings)}
-            disabled={disabled}
-            label={t("eval.seb")}
-            onChange={(safeExamBrowser) => set({ safeExamBrowser })}
-          />
-        </SettingRow>
-      ) : null}
-
-      {/* ADR-051 §2: an exam sat on the school's kiosk stations — offered
-          where the kiosk path exists, and kept in sight where it is on,
-          so it can always be turned off. */}
-      {mode === "exam" && (kioskOffered || kioskOf(settings)) ? (
-        <SettingRow title={t("eval.kiosk")} desc={t("eval.kiosk.desc")}>
-          <Switch
-            checked={kioskOf(settings)}
-            disabled={disabled}
-            label={t("eval.kiosk")}
-            onChange={(kiosk) => set({ kiosk })}
-          />
-        </SettingRow>
+        <AllowedDevices settings={settings} kioskOffered={kioskOffered} disabled={disabled} onChange={set} />
       ) : null}
     </Disclosure>
   );
