@@ -4274,9 +4274,16 @@ serves now (16a), and what waits for the group repositories (16b).
   confirmed 2026-10-09 after one rollback: two `nft-check.sh vm` checks
   failed falsely (`nft | grep -q` under pipefail; `infra/net/test.sh`
   cannot bind 9418 beside a portal), fixed here by a captured match and a
-  throwaway probe container per network. Remaining: the acceptance run
-  (grading within `RUNNER_TIMEOUT_MS` with sessions live) and re-applying
-  `host.nft` for the removed `udp dport 443`.
+  throwaway probe container per network. 2026-10-09 ~07:50: `c-dev`
+  rebuilt on the VM from 1855b8fc (#650), 44 s, image test 51/51, start
+  1.38 s. Acceptance run, 2026-10-09: runner smoke on the VM
+  (`127.0.0.1:3200`) all languages ok, max 1.6 s; then one live staging
+  session (`smoke.mjs --launch`) loaded with 2 CPU spinners and 600 MB held
+  (697/805 MB of its 768m limit, 64% CPU) beside 4 parallel runner smokes
+  (20 runs: c, cpp, python, js, spice): all ok, max 5.3 s (cpp) against
+  `RUNNER_TIMEOUT_MS` 30 s; `memory.events`: `quiz-runner.slice` oom_kill
+  0, `codespace.slice` high 0, max 0, oom_kill 0. Acceptance met.
+  Remaining: re-applying `host.nft` for the removed `udp dport 443`.
 
 ### M6-06 — Quiz `codespace` module
 - **Depends on**: M6-03, M3-02.
