@@ -10,7 +10,8 @@
  * identically:
  *
  *   - under `keep: "last"`, ask first: a retake can LOWER the result, so the
- *     student is told before starting, not after (review of #116);
+ *     student is told before starting, not after (review of #116) — a retake
+ *     of the questions to review (ADR-090) as much as a whole one;
  *   - on success, make the attempt route open the NEW attempt (issue #120).
  *     `/take/:id` reads `POST /evaluations/:id/attempt` through a cached
  *     query keyed on the evaluation; the entry cached from attempt n (a
@@ -18,11 +19,11 @@
  *     the hand-in screen — and the player, bound to that attempt's id, would
  *     never move to attempt n + 1 when the refetch came back. Every entry of
  *     the evaluation is dropped and the retake's own answer seeded in its
- *     place, so the route renders attempt n + 1 at once, blank.
+ *     place, so the route renders attempt n + 1 at once.
  */
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
-import type { AttemptOrLobby, RetakeKeep } from "@quiz/contracts";
+import type { AttemptOrLobby, RetakeBody, RetakeKeep, RetakeScope } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -49,11 +50,17 @@ function adoptRetake(qc: QueryClient, evaluationId: string, entry: AttemptOrLobb
   void qc.invalidateQueries(anyFeedback);
 }
 
+interface RetakeRequest {
+  evaluationId: string;
+  /** ADR-090: every question, or only those to review. */
+  scope: RetakeScope;
+}
+
 export interface Retake {
   /** Confirms under `keep: "last"`, then starts the attempt and opens it. */
-  start: (evaluationId: string, keep: RetakeKeep) => Promise<void>;
-  /** The evaluation whose retake is on its way, for the button's spinner. */
-  pendingFor: string | null;
+  start: (evaluationId: string, keep: RetakeKeep, scope?: RetakeScope) => Promise<void>;
+  /** The retake on its way, for the spinner of the button that asked for it. */
+  pending: RetakeRequest | null;
 }
 
 export function useRetake(navigate: (r: Route) => void): Retake {
@@ -62,22 +69,26 @@ export function useRetake(navigate: (r: Route) => void): Retake {
   const confirm = useConfirm();
   const toastError = useErrorToast();
   const mutation = useMutation({
-    mutationFn: (evaluationId: string) =>
-      api<AttemptOrLobby>(`/app/api/evaluations/${evaluationId}/retake`, { method: "POST" }),
-    onSuccess: (entry, evaluationId) => {
+    mutationFn: ({ evaluationId, scope }: RetakeRequest) =>
+      api<AttemptOrLobby>(`/app/api/evaluations/${evaluationId}/retake`, {
+        method: "POST",
+        body: JSON.stringify({ scope } satisfies RetakeBody),
+      }),
+    onSuccess: (entry, { evaluationId }) => {
       adoptRetake(qc, evaluationId, entry);
       navigate({ view: "attempt", evaluationId });
     },
     onError: (error) => {
-      // The server refused (`retake_refused`, with its reason) or failed:
-      // the screens re-read their payload, which now says why.
+      // The server refused (`retake_refused`, `partial_retake_refused`, with
+      // its reason) or failed: the screens re-read their payload, which now
+      // says why.
       toastError("shome.retakeFailed")(error);
       void qc.invalidateQueries({ queryKey: studentHomeKey });
       void qc.invalidateQueries(anyFeedback);
     },
   });
 
-  const start = async (evaluationId: string, keep: RetakeKeep) => {
+  const start = async (evaluationId: string, keep: RetakeKeep, scope: RetakeScope = "all") => {
     if (
       keep === "last" &&
       !(await confirm({
@@ -88,8 +99,8 @@ export function useRetake(navigate: (r: Route) => void): Retake {
     ) {
       return;
     }
-    mutation.mutate(evaluationId);
+    mutation.mutate({ evaluationId, scope });
   };
 
-  return { start, pendingFor: mutation.isPending ? (mutation.variables ?? null) : null };
+  return { start, pending: mutation.isPending ? (mutation.variables ?? null) : null };
 }

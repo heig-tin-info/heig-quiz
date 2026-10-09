@@ -95,6 +95,7 @@ const view = (): AttemptView => ({
       skipped: false,
       flagged: false,
       locked: false,
+      acquired: false,
     },
     {
       id: I2,
@@ -118,6 +119,7 @@ const view = (): AttemptView => ({
       skipped: false,
       flagged: false,
       locked: false,
+      acquired: false,
     },
   ],
 });

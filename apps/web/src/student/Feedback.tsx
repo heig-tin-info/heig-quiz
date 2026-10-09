@@ -1,7 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Hourglass, RotateCcw } from "lucide-react";
+import { CheckCircle2, Hourglass, RotateCcw, type LucideIcon } from "lucide-react";
 
-import type { FeedbackPending, RetakeStatus, StudentFeedback } from "@quiz/contracts";
+import type {
+  FeedbackPending,
+  ItemStanding,
+  RetakeScope,
+  RetakeStatus,
+  ReviewItem,
+  StudentFeedback,
+} from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
 
 import { api } from "../api";
@@ -9,6 +16,7 @@ import { Grade } from "../Grade";
 import { useT, type Dict } from "../i18n";
 import type { Route } from "../router";
 import {
+  Badge,
   Card,
   EmptyState,
   PageSkeleton,
@@ -16,6 +24,7 @@ import {
   Button,
   RelativeTime,
   Stat,
+  type Tone,
 } from "../ui";
 import { attemptFeedbackKey } from "../queryKeys";
 import { CopyItem } from "../CopyItem";
@@ -87,7 +96,14 @@ function AttemptCount({ retake }: { retake: RetakeStatus }) {
   );
 }
 
-/** The one action of the results page between two attempts. */
+/**
+ * The one action of the results page between two attempts. Under the scope
+ * `to_review` (ADR-090) it is two, ranked: redo the questions to review —
+ * the primary, with their count — and redo everything, secondary. Both go
+ * through the same `useRetake`, so the confirmation of `keep: "last"`
+ * applies to either. With every question acquired, redoing everything is
+ * the only retake left.
+ */
 function RetakeOffer({
   retake,
   navigate,
@@ -98,12 +114,33 @@ function RetakeOffer({
   const t = useT();
   const start = useRetake(navigate);
   if (retake.refusal === null) {
+    const busy = (scope: RetakeScope) =>
+      start.pending?.evaluationId === retake.evaluationId && start.pending.scope === scope;
+    const run = (scope: RetakeScope) => void start.start(retake.evaluationId, retake.keep, scope);
+    if (retake.scope === "to_review" && retake.toReview !== null) {
+      if (retake.toReview === 0) {
+        return (
+          <div className="flex flex-col items-center gap-3">
+            <p className="text-sm text-fg-muted">{t("feedback.retake.allAcquired")}</p>
+            <Button variant="primary" loading={busy("all")} onClick={() => run("all")}>
+              <RotateCcw /> {t("feedback.retake.all")}
+            </Button>
+          </div>
+        );
+      }
+      return (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button variant="primary" loading={busy("to_review")} onClick={() => run("to_review")}>
+            <RotateCcw /> {t("feedback.retake.partial", { n: retake.toReview })}
+          </Button>
+          <Button variant="secondary" loading={busy("all")} onClick={() => run("all")}>
+            {t("feedback.retake.all")}
+          </Button>
+        </div>
+      );
+    }
     return (
-      <Button
-        variant="primary"
-        loading={start.pendingFor === retake.evaluationId}
-        onClick={() => void start.start(retake.evaluationId, retake.keep)}
-      >
+      <Button variant="primary" loading={busy("all")} onClick={() => run("all")}>
         <RotateCcw /> {t("shome.retake")}
       </Button>
     );
@@ -123,6 +160,42 @@ function RetakeOffer({
         </Button>
       ) : null}
     </div>
+  );
+}
+
+const STANDING: Record<ItemStanding, { tone: Tone; icon: LucideIcon; label: keyof Dict }> = {
+  acquired: { tone: "green", icon: CheckCircle2, label: "feedback.review.acquired" },
+  to_review: { tone: "amber", icon: RotateCcw, label: "feedback.review.to_review" },
+  pending: { tone: "zinc", icon: Hourglass, label: "feedback.review.pending" },
+};
+
+/**
+ * ADR-090: where each question of the attempt stands, in the order the
+ * student saw them — a word per question and nothing else, the server's
+ * whole answer (`review`). A question awaiting a teacher is not "wrong".
+ */
+function ReviewList({ review }: { review: readonly ReviewItem[] }) {
+  const t = useT();
+  return (
+    <section className="space-y-2">
+      <h2 className="text-base font-semibold">{t("feedback.review.title")}</h2>
+      <p className="text-sm text-fg-muted">{t("feedback.review.body")}</p>
+      <Card className="p-0">
+        <ul className="divide-y divide-line">
+          {review.map((row) => {
+            const { tone, icon, label } = STANDING[row.standing];
+            return (
+              <li key={row.itemId} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                <span className="text-sm">{t("feedback.review.item", { n: row.rank + 1 })}</span>
+                <Badge tone={tone} icon={icon}>
+                  {t(label)}
+                </Badge>
+              </li>
+            );
+          })}
+        </ul>
+      </Card>
+    </section>
   );
 }
 
@@ -215,6 +288,7 @@ export function Feedback({
             {t(PENDING_BODY[data.reason], { title: data.evaluation.title })}
           </EmptyState>
         </Card>
+        {data.review ? <ReviewList review={data.review} /> : null}
       </div>
     );
   }

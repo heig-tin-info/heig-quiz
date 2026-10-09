@@ -69,6 +69,8 @@ export function imposedText(line: ImposedCondition, t: TFunction): { title: stri
         : line.maxAttempts === null
           ? { title: t("conditions.attempts.unlimited") }
           : { title: t("conditions.attempts.upTo", { n: line.maxAttempts }) };
+    case "partial_retake":
+      return { title: t("conditions.partialRetake"), body: t("conditions.partialRetake.body") };
     case "navigation":
       return line.navigation === "forward_only"
         ? { title: t("conditions.navigation.forward_only"), body: t("conditions.navigation.forward_only.body") }

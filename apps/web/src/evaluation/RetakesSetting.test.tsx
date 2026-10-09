@@ -68,6 +68,33 @@ describe("RetakesSetting", () => {
     );
   });
 
+  it("chooses what a retake asks again, with the rest of the rule (ADR-090)", async () => {
+    const detail = exercise({ enabled: true, keep: "best", maxAttempts: 3 });
+    const { calls } = mockFetch({ [PATCH]: ok(detail) });
+    renderWithProviders(<Harness detail={detail} />);
+    expect(screen.getByRole("radio", { name: "All" })).toBeChecked();
+    await userEvent.click(screen.getByRole("radio", { name: "To review" }));
+    await waitFor(() =>
+      expect(calls.filter((c) => c.method === "PATCH").at(-1)?.body).toEqual({
+        settings: { retakes: { enabled: true, keep: "best", maxAttempts: 3, scope: "to_review" } },
+      }),
+    );
+  });
+
+  it("keeps the scope at All, and says why, under a navigation that is not free (ADR-090)", () => {
+    const detail = exercise({ enabled: true, keep: "best", maxAttempts: null });
+    const locked = {
+      ...detail,
+      evaluation: {
+        ...detail.evaluation,
+        settings: { ...detail.evaluation.settings, navigation: "milestones" as const },
+      },
+    };
+    renderWithProviders(<Harness detail={locked} />);
+    expect(screen.getByRole("radio", { name: "To review" })).toBeDisabled();
+    expect(screen.getByText(/Only with free navigation/)).toBeInTheDocument();
+  });
+
   it("is frozen with the rest of the structure", () => {
     renderWithProviders(
       <Harness detail={exercise({ enabled: true, keep: "best", maxAttempts: null })} disabled />,

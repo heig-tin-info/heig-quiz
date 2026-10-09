@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { retakesOf, type EvaluationSettings, type RetakeSettings } from "@quiz/contracts";
+import { retakeScopeOf } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import { Card, cx, inputClass, inputSize, Segmented, SettingRow, Switch } from "../ui";
@@ -15,7 +16,13 @@ import type { ConfigPatch } from "./editTarget";
  * only once it is on, so a teacher who never wants retakes reads one line.
  *
  * The rule travels whole (`EvaluationSettingsPatch.retakes`): every change
- * sends the three fields together.
+ * sends its fields together.
+ *
+ * ADR-090: what a retake asks again — every question, or only those to
+ * review. The second needs free navigation (the server refuses the pair,
+ * `422 retake_scope_navigation`): under another navigation the choice is
+ * disabled and says why, and once it is on, the navigation row says why it
+ * cannot move (`AdvancedDisclosure`).
  */
 export function RetakesSetting({
   settings,
@@ -28,6 +35,9 @@ export function RetakesSetting({
 }) {
   const t = useT();
   const retakes = retakesOf(settings);
+  const scope = retakeScopeOf(retakes);
+  // A partial retake needs free navigation; one already chosen can always be undone.
+  const scopeLocked = settings.navigation !== "free" && scope === "all";
   const set = (next: Partial<RetakeSettings>) =>
     patch.mutate({ settings: { retakes: { ...retakes, ...next } } });
 
@@ -88,6 +98,25 @@ export function RetakesSetting({
               value={max}
               onChange={(e) => setMax(e.target.value)}
               onBlur={commitMax}
+            />
+          </SettingRow>
+          <SettingRow
+            title={t("eval.retakes.scope")}
+            desc={
+              scopeLocked
+                ? `${t("eval.retakes.scope.desc")} ${t("eval.retakes.scope.needsFree")}`
+                : t("eval.retakes.scope.desc")
+            }
+          >
+            <Segmented
+              name="retakes-scope"
+              value={scope}
+              disabled={disabled || scopeLocked}
+              onChange={(next) => set({ scope: next })}
+              options={[
+                { value: "all", label: t("eval.retakes.scope.all") },
+                { value: "to_review", label: t("eval.retakes.scope.to_review") },
+              ]}
             />
           </SettingRow>
         </>

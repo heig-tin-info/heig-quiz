@@ -39,6 +39,12 @@ export interface PlayerItem {
   skipped: boolean;
   /** The student's review flag (issue #89). */
   flagged: boolean;
+  /**
+   * ADR-090: carried over from the previous attempt by a partial retake —
+   * read-only, still reachable (it is not a navigation lock), the server
+   * refusing any write to it.
+   */
+  acquired: boolean;
   /** What `toStudent` published. Opaque here; only the type's Player reads it. */
   student: unknown;
   /** The server's own verdict when the view was built. */
@@ -114,6 +120,7 @@ const toItem = (item: AttemptItem): PlayerItem => ({
   markedDone: item.markedDone,
   skipped: item.skipped,
   flagged: item.flagged,
+  acquired: item.acquired,
   student: item.student,
   serverLocked: item.locked,
 });

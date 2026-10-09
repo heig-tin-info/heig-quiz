@@ -311,7 +311,9 @@ export function PlayerView({
   const passage = passageOf(state);
   const total = state.items.length;
   const locked = item ? isLocked(state, item.id) : true;
-  const readOnly = locked || closed !== null || paused;
+  // ADR-090: a question a partial retake carried over is read, not written.
+  const acquired = item?.acquired === true;
+  const readOnly = locked || acquired || closed !== null || paused;
   // On a phone the three actions live in a sticky footer under the thumb;
   // on a desktop they sit right under the question, where the mouse already
   // is — a footer at the bottom of a 900 px window is a trip per question.
@@ -501,6 +503,7 @@ export function PlayerView({
               {...(rail ? {} : { points: item.points })}
               bonus={item.bonus}
               validated={validated}
+              acquired={acquired}
               mark={mark}
             />
             {canReread(state) ? (
@@ -545,6 +548,7 @@ export function PlayerView({
             ) : null}
             <PlayerHint
               locked={locked}
+              acquired={acquired}
               canValidate={canValidate}
               validateLabel={controls.validateLabel}
               navigation={state.navigation}
@@ -590,17 +594,21 @@ export function PlayerView({
  */
 function PlayerHint({
   locked,
+  acquired,
   canValidate,
   validateLabel,
   navigation,
 }: {
   locked: boolean;
+  acquired: boolean;
   canValidate: boolean;
   validateLabel: string;
   navigation: PlayerSession["state"]["navigation"];
 }) {
   const t = useT();
-  const hint = locked
+  const hint = acquired
+    ? t("player.acquired.hint")
+    : locked
     ? t("player.hint.locked")
     : !canValidate
       ? null

@@ -39,6 +39,7 @@ export function makeAttemptItem(
     skipped: false,
     flagged: false,
     locked: false,
+    acquired: false,
     ...over,
   };
 }

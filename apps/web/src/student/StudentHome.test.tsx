@@ -348,6 +348,7 @@ describe("the student home", () => {
         retakes: {
           keep: "best",
           maxAttempts: 3,
+          scope: "all",
           attemptCount: 2,
           canRetake: true,
           kept: { attemptId: "a8", attemptNumber: 1, score: { points: 7.5, totalPoints: 10, pendingCount: 0 } },
