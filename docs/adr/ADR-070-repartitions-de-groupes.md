@@ -85,14 +85,15 @@ were settled by the product owner on 2026-10-04.
    Membership is by roster line, as in ADR-048 decision 3: a student is placed
    before they ever sign in. **The students of a set** are the classroom's
    roster lines, claimed or not, except staff seats (ADR-018), which are never
-   placed. *Amended 2026-10-06 (product owner, ADR-077):* a teacher's staff seat
-   may now accept an individual project to test it
+   placed. The set's `max_size` replaces `projects.group_max_size`, which the
+   migration drops. An archived classroom's sets are read-only
+   (`409 classroom_archived`) and cannot be opened to its students.
+   *Amended 2026-10-06 (product owner, ADR-077), staff seats stay unplaced:* a
+   teacher's staff seat may now accept an individual project to test it
    ([ADR-077](ADR-077-depots-de-test-du-personnel.md)), but it is never placed
    in a group: on a group project it answers `409 no_group`, whatever group
    membership it kept from before it became a staff seat, and it is never
-   invited on a group's repository. The set's `max_size` replaces `projects.group_max_size`, which the
-   migration drops. An archived classroom's sets are read-only
-   (`409 classroom_archived`) and cannot be opened to its students.
+   invited on a group's repository. *(End of the amendment.)*
 
 3. **Three ways to form groups, on the same set.**
    - **By hand**: create, rename, delete a group; move a student into a group
@@ -138,20 +139,24 @@ were settled by the product owner on 2026-10-04.
      follows; in the copy a name or slug that clashes is disambiguated like a
      repository name (ADR-048).
    - **What stops.** After the deadline the copy no longer moves: a move in
-     December never changes who was graded in October. *Amended 2026-10-05
-     (M3-15b-1):* a group of the copy stops following at the FIRST of its
-     deadlines: the project's (already `groups_stopped_at`) or, earlier, its
-     repository's own (ADR-064). A repository whose deadline is extended past
-     the project's does not keep its group following. Each copy group's stop is
-     stored (`project_groups.stopped_at`, M3-15b-2). A copy that has
+     December never changes who was graded in October. A copy that has
      stopped does not follow again by itself — not when its deadline is moved
      later (F-PROJ-09), nor when the project is unarchived. The project page
      then shows that the set has drifted, and *Resync with the set* applies
      the whole difference through the confirmation of decision 6.
-   - ***Resync with the set*** *(amended 2026-10-05, M3-15b-2 and M3-15b-2b)*
-     is allowed after the deadline — its confirmation names every frozen
-     repository it touches — and refused once the project is released
-     (`409 released`).
+     *Amended 2026-10-05 (product owner, M3-15b-1), the first deadline stops a
+     group:* a group of the copy stops following at the FIRST of its
+     deadlines: the project's (already `groups_stopped_at`) or, earlier, its
+     repository's own (ADR-064). A repository whose deadline is extended past
+     the project's does not keep its group following. (The per-group stop is
+     stored by M3-15b-2.) *(End of the amendment.)*
+     *How it is built (orchestrator, 2026-10-05, M3-15b-2a):* each copy
+     group's stop is stored (`project_groups.stopped_at`).
+   - ***Resync with the set*** *(amended 2026-10-05, product owner, M3-15b-2;
+     delivered by M3-15b-2b)* is allowed after the deadline — its confirmation
+     names every frozen repository it touches — and refused once the project is
+     released (`409 released`). *R1 and R2 below: product owner, 2026-10-05,
+     M3-15b-2b.*
      - **R1, a deleted set group.** A stopped group with a repository whose
        set group was since deleted is KEPT by *Resync*: its repository and its
        frozen score stay; its members follow the set, each named as a `lose`
@@ -193,7 +198,8 @@ were settled by the product owner on 2026-10-04.
      reconciliation (M3-06). **An arrival waits only for the same student's
      pending departure**: it is written to the copy, then invited, or invited
      when they link their GitHub account (ADR-048). Each GitHub write is
-     audited. *How it is built (orchestrator, 2026-10-05, M3-15b-2a):* a move
+     audited.
+     *How it is built (orchestrator, 2026-10-05, M3-15b-2a):* a move
      touching a group with a repository is always the job's; the set's
      transaction applies the rest, marks the departures on the copy
      (`departing_at`, which no invitation passes) and the project due
@@ -228,7 +234,7 @@ were settled by the product owner on 2026-10-04.
    the repositories, runs and scores stay (F-PROJ-17). A seat whose account
    changes (unclaim, adoption, ADR-061) is a departure of the former
    account's GitHub login followed by an arrival of the new one.
-   *Amended 2026-10-05 (M3-15b-1), nothing to revoke:* when GitHub cannot be
+   *Amended 2026-10-05 (product owner, M3-15b-1), nothing to revoke:* when GitHub cannot be
    asked — the App not installed or uninstalled, the organization or the
    repository deleted on GitHub (`deleted_at`), the member never had an
    account invited — there is nothing to revoke: the removal proceeds, and the
@@ -238,7 +244,7 @@ were settled by the product owner on 2026-10-04.
    INVITED, recorded at each invitation (`project_repo_access`), never the
    user's link of today. The same revocation runs before an unclaim, an e-mail
    change that detaches the seat's account, and a self-enroll that turns the
-   seat into a staff seat.
+   seat into a staff seat. *(End of the amendment.)*
 
 6. **A membership write is guarded by its consequences, decided by the
    server** (product owner). Every membership write (add, move, remove,
@@ -252,17 +258,19 @@ were settled by the product owner on 2026-10-04.
    at once, and the page offers *Undo* (the reverse write, itself a write
    that may meet the 409) for a few seconds; a write with consequences opens
    a confirmation that names them. The client never guesses the consequences.
-   *Amended 2026-10-05 (M3-15b-2), what needs a confirmation:* every place or
-   unplace touching a following group that has a repository needs the
-   confirmation, even when GitHub will have nothing to do (no account invited,
-   the App gone): it changes whose repository and grade it is. The
-   `group.sync` job then audits the revocation skipped (decision 5). The
-   consequences confirmed are those the write ADDS to the ones already
-   waiting, by a SHA-256 digest of their sorted (project, group, roster line,
-   kind) (M3-15b-2a). *Amended 2026-10-05 (M3-15b-2b), R3, an arrival without
-   a repository:* a resync may move a student into a group without a
-   repository after the deadline: allowed, and its confirmation flags it (the
-   student will have no repository, Accept being closed).
+   *Amended 2026-10-05 (product owner, M3-15b-2), what needs a confirmation:*
+   every place or unplace touching a following group that has a repository
+   needs the confirmation, even when GitHub will have nothing to do (no account
+   invited, the App gone): it changes whose repository and grade it is. The
+   `group.sync` job then audits the revocation skipped (decision 5).
+   *(End of the amendment.)*
+   *How it is built (orchestrator, 2026-10-05, M3-15b-2a):* the consequences
+   confirmed are those the write ADDS to the ones already waiting, by a SHA-256
+   digest of their sorted (project, group, roster line, kind).
+   *Amended 2026-10-05 (product owner, M3-15b-2b), R3, an arrival without a
+   repository:* a resync may move a student into a group without a repository
+   after the deadline: allowed, and its confirmation flags it (the student will
+   have no repository, Accept being closed). *(End of the amendment.)*
 
 7. **The project form** offers, under group work, the classroom's sets
    (name, number of groups, students placed / not placed, date) and
@@ -292,8 +300,9 @@ were settled by the product owner on 2026-10-04.
    staff note. Tested like the other student views: a second classroom's set,
    a closed set, and another group's members after closing, searched for in
    every student response.
-   *Amended 2026-10-05 (M3-17), the students' side, settled before it was
-   built:*
+   *Amended 2026-10-05 (product owner, M3-17), the students' side, settled
+   before it was built:*
+
    - **S1, where.** The student's classroom page gets a *Groups* tab (fr
      *Groupes*), at the same address as the staff's, `/classrooms/:id/groups`,
      role-dispatched like `/classrooms/:id` (F-ORG-15). It is drawn only while
@@ -309,7 +318,9 @@ were settled by the product owner on 2026-10-04.
      never takes the urgent accent, and nothing is notified.
    - **S4, the unplaced.** While the set is open, the students also see the
      students of the set in no group, by first and last name only.
-   - **The student view** (orchestrator, M3-17) is one service of the module
+   *How it is built (orchestrator, M3-17):*
+
+   - **The student view** is one service of the module
      (`studentGroupSets`), each field picked by hand: `serverNow`, and per set
      the set (`name`, `maxSize`, `openUntil`, `open`), `writable`, `myGroupId`,
      the groups (`name`, `size`, members' names) and, while open, `unplaced`;
@@ -463,8 +474,9 @@ were settled by the product owner on 2026-10-04.
 
 ## Alternatives considered
 
-1. **Groups per project only** (ADR-048 as written, with *Copy from…*): right for one lab, wrong for a
-   semester — a dropout is removed project by project; sets keep its economy (a new or duplicated set per lab).
+1. **Groups per project only** (ADR-048 as written, with *Copy from…*): correct for one lab, wrong for a
+   semester — a student who drops out is removed project by project. Group sets keep its economy (a new
+   set, or a duplicated one, per lab) without that cost.
 2. **One list of groups per classroom**: the false invariant heig-classroom rightly rejected; several
    named sets are its fix.
 3. **A frozen copy at publication** (the set is only a template): simpler, and the semester case again
@@ -474,8 +486,8 @@ were settled by the product owner on 2026-10-04.
 5. **A stopped copy that follows again on its own** after a reopen: the next change would replay, without
    a word, every move made since the freeze; the explicit *Resync* shows them first.
 6. **A synchronous, all-or-nothing membership change** (ADR-048 alternative 5 kept): impossible to keep
-   atomic across several repositories; a copy that loses a member only once GitHub has revoked them never
-   claims a revocation that did not happen.
+   atomic across several repositories; the copy that loses a member only when GitHub has revoked them keeps
+   its honesty instead — the copy never claims a revocation that did not happen.
 7. **A confirmation on every drop**: safe and slow when forming ten groups by hand; *Undo* covers a
    mistaken drop with no consequence, the confirmation stays for a drop that reaches GitHub.
 8. **Unbalanced remainders** (10 by 4 as 4, 4, 2): one group carries the whole shortfall; balanced sizes
