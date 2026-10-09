@@ -99,7 +99,7 @@ interface Spec {
 }
 
 const SPECS: Spec[] = [
-  { n: 1, title: "Test 1 — Bases du C", mode: "exam", kind: "evaluation", daysAgo: 42, released: true, weight: 50 },
+  { n: 1, title: "Examen 1 : numération, types et outils", mode: "exam", kind: "evaluation", daysAgo: 42, released: true, weight: 50 },
   { n: 2, title: "Test 2 — Pointeurs", mode: "exam", kind: "evaluation", daysAgo: 28, released: true, weight: 100 },
   { n: 3, title: "Exercices — Boucles", mode: "exercise", kind: "evaluation", daysAgo: 21, released: true, weight: 100 },
   { n: 4, title: "Labo 1 — Calculatrice", mode: "project", kind: "project", daysAgo: 14, released: true, weight: 40 },

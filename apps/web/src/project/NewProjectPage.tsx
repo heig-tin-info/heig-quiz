@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, RotateCw } from "lucide-react";
+import { RotateCw } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import type {
@@ -28,6 +28,7 @@ import {
   Alert,
   Button,
   Card,
+  Disclosure,
   EmptyState,
   Field,
   FieldError,
@@ -354,21 +355,20 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
             </div>
           </Card>
 
-          <div className="space-y-3">
-            <Button variant="secondary" aria-expanded={advancedOpen} onClick={() => setAdvanced(!advancedOpen)}>
-              {advancedOpen ? <ChevronUp /> : <ChevronDown />}{" "}
-              {t(advancedOpen ? "eval.advanced.hide" : "eval.advanced")}
-            </Button>
-            {advancedOpen ? (
-              <ProjectAdvanced
-                classroomId={classroomId}
-                draft={draft}
-                detail={detail.data}
-                update={update}
-                message={message}
-              />
-            ) : null}
-          </div>
+          <Disclosure
+            title={t("eval.advanced")}
+            desc={t("project.advanced.desc")}
+            open={advancedOpen}
+            onOpenChange={setAdvanced}
+          >
+            <ProjectAdvanced
+              classroomId={classroomId}
+              draft={draft}
+              detail={detail.data}
+              update={update}
+              message={message}
+            />
+          </Disclosure>
 
           <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line pt-5">
             <Button variant="secondary" onClick={back}>

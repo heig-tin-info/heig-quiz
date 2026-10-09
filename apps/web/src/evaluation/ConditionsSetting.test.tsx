@@ -1,5 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 
 import type { CourseCondition, EvaluationDetail, EvaluationSettings } from "@quiz/contracts";
@@ -22,6 +23,13 @@ function Harness({ detail, disabled = false }: { detail: EvaluationDetail; disab
   return <ConditionsSetting config={detail.evaluation} courseId={detail.courseId} patch={patch} disabled={disabled} />;
 }
 
+/** The card is folded by default: renders it, then opens it. */
+async function renderOpen(ui: ReactElement) {
+  const rendered = renderWithProviders(ui);
+  await userEvent.click(screen.getByRole("button", { name: /^Conditions/ }));
+  return rendered;
+}
+
 const PATCH = `PATCH /app/api/evaluations/${EVALUATION_ID}`;
 const two = [
   { kind: "allowed" as const, text: "Notes" },
@@ -37,10 +45,25 @@ const catalog: CourseCondition[] = [
 const lastPatch = (calls: { method: string; body: unknown }[]) => calls.filter((c) => c.method === "PATCH").at(-1)?.body;
 
 describe("ConditionsSetting", () => {
+  it("is folded, and says how many conditions it holds while folded", async () => {
+    renderWithProviders(<Harness detail={withSettings({ conditions: two })} />);
+    const header = screen.getByRole("button", { name: "Conditions 2 set" });
+    expect(header).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("textbox", { name: "Condition 1" })).toBeNull();
+    await userEvent.click(header);
+    expect(header).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("textbox", { name: "Condition 1" })).toHaveValue("Notes");
+  });
+
+  it("shows no count when nothing is announced", () => {
+    renderWithProviders(<Harness detail={withSettings({ conditions: [] })} />);
+    expect(screen.getByRole("button", { name: "Conditions" })).toBeInTheDocument();
+  });
+
   it("adds a one-off condition, trimmed, at the end of the list", async () => {
     const detail = withSettings({ conditions: two });
     const { calls } = mockFetch({ [PATCH]: ok(detail) });
-    renderWithProviders(<Harness detail={detail} />);
+    await renderOpen(<Harness detail={detail} />);
     const add = screen.getByRole("button", { name: "Add" });
     expect(add).toBeDisabled();
     await userEvent.selectOptions(screen.getAllByRole("combobox", { name: "Kind" }).at(-1)!, "provided");
@@ -56,7 +79,7 @@ describe("ConditionsSetting", () => {
   it("edits a text on leaving the field, and puts a blank one back", async () => {
     const detail = withSettings({ conditions: two });
     const { calls } = mockFetch({ [PATCH]: ok(detail) });
-    renderWithProviders(<Harness detail={detail} />);
+    await renderOpen(<Harness detail={detail} />);
     const first = screen.getByRole("textbox", { name: "Condition 1" });
     await userEvent.clear(first);
     await userEvent.tab();
@@ -72,7 +95,7 @@ describe("ConditionsSetting", () => {
   it("moves and removes a condition from its menu", async () => {
     const detail = withSettings({ conditions: two });
     const { calls } = mockFetch({ [PATCH]: ok(detail) });
-    renderWithProviders(<Harness detail={detail} />);
+    await renderOpen(<Harness detail={detail} />);
     await userEvent.click(screen.getByRole("button", { name: "Actions on “Notes”" }));
     await userEvent.click(screen.getByRole("menuitem", { name: "Move down" }));
     await waitFor(() => expect(lastPatch(calls)).toEqual({ settings: { conditions: [two[1], two[0]] } }));
@@ -81,22 +104,22 @@ describe("ConditionsSetting", () => {
     await waitFor(() => expect(lastPatch(calls)).toEqual({ settings: { conditions: [two[0]] } }));
   });
 
-  it("previews what the platform adds from the settings, and nothing for calculator `none`", () => {
-    renderWithProviders(<Harness detail={withSettings({ calculator: "scientific", negativeMarking: true })} />);
+  it("previews what the platform adds from the settings, and nothing for calculator `none`", async () => {
+    await renderOpen(<Harness detail={withSettings({ calculator: "scientific", negativeMarking: true })} />);
     expect(screen.getByText("Added by the platform")).toBeInTheDocument();
     expect(screen.getByText("A scientific calculator")).toBeInTheDocument();
     expect(screen.getByText("Wrong answers cost points")).toBeInTheDocument();
   });
 
-  it("stops offering Add at 20 conditions", () => {
+  it("stops offering Add at 20 conditions", async () => {
     const many = Array.from({ length: 20 }, (_, i) => ({ kind: "info" as const, text: `Line ${i}` }));
-    renderWithProviders(<Harness detail={withSettings({ conditions: many })} />);
+    await renderOpen(<Harness detail={withSettings({ conditions: many })} />);
     expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
     expect(screen.getByText("At most 20 conditions.")).toBeInTheDocument();
   });
 
-  it("is frozen with the rest of the settings", () => {
-    renderWithProviders(<Harness detail={withSettings({ conditions: two })} disabled />);
+  it("is frozen with the rest of the settings", async () => {
+    await renderOpen(<Harness detail={withSettings({ conditions: two })} disabled />);
     expect(screen.getByRole("textbox", { name: "Condition 1" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Actions on “Notes”" })).toBeNull();
     expect(screen.getByRole("button", { name: "Add" })).toBeDisabled();
@@ -106,7 +129,7 @@ describe("ConditionsSetting", () => {
     it("appends a ticked entry as a snapshot with its catalogId, and unticking removes it", async () => {
       const detail = withSettings({ conditions: [{ ...two[0]!, catalogId: catalog[0]!.id }, two[1]!] });
       const { calls } = mockFetch({ [PATCH]: ok(detail), [CATALOG]: ok(catalog) });
-      renderWithProviders(<Harness detail={detail} />);
+      await renderOpen(<Harness detail={detail} />);
       const dictionary = await screen.findByRole("checkbox", { name: /A dictionary/ });
       expect(dictionary).toBeChecked();
       // The linked row says where it came from; the one-off row does not.
@@ -133,7 +156,7 @@ describe("ConditionsSetting", () => {
       const gone = "33333333-3333-4333-8333-333333333333";
       const detail = withSettings({ conditions: [{ kind: "info", text: "Archived since", catalogId: gone }] });
       const { calls } = mockFetch({ [PATCH]: ok(detail), [CATALOG]: ok(catalog) });
-      renderWithProviders(<Harness detail={detail} />);
+      await renderOpen(<Harness detail={detail} />);
       expect(await screen.findByRole("checkbox", { name: /A dictionary/ })).not.toBeChecked();
       expect(screen.queryByText("Catalog")).toBeNull();
       await userEvent.click(screen.getByRole("checkbox", { name: /A dictionary/ }));
@@ -152,12 +175,12 @@ describe("ConditionsSetting", () => {
     it("disables the unticked entries at 20 conditions, and says where the catalog is kept when empty", async () => {
       const many = Array.from({ length: 20 }, (_, i) => ({ kind: "info" as const, text: `Line ${i}` }));
       mockFetch({ [CATALOG]: ok(catalog) });
-      const { unmount } = renderWithProviders(<Harness detail={withSettings({ conditions: many })} />);
+      const { unmount } = await renderOpen(<Harness detail={withSettings({ conditions: many })} />);
       expect(await screen.findByRole("checkbox", { name: /A dictionary/ })).toBeDisabled();
       unmount();
 
       mockFetch({ [CATALOG]: ok([]) });
-      renderWithProviders(<Harness detail={withSettings({ conditions: two })} />);
+      await renderOpen(<Harness detail={withSettings({ conditions: two })} />);
       expect(await screen.findByText(/The course has no catalog yet/)).toBeInTheDocument();
     });
   });

@@ -9,7 +9,7 @@
  *
  * The four decisions:
  *   - Type: the student is the bold identity; a column's title is a 13 px
- *     semibold head with its kind and weight under it; a grade is the one
+ *     semibold head on two lines at most, its weight under it; a grade is the one
  *     number of its cell, in `Grade`'s band colour.
  *   - Color: no accent here at all — the page's one primary, Export CSV,
  *     lives in the header (`ClassroomView`). The absence `a1.0` wears `info`
@@ -70,6 +70,9 @@ import { AbsentSigil, Dash, fullName, GradeOrDash, MODE_LABEL } from "./cells";
  */
 const MEAN_PIN = "@2xl:sticky @2xl:right-0 @2xl:z-10 @2xl:border-l @2xl:border-line";
 
+/** One width for every grade column's head; the title wraps inside it. */
+const HEAD_WIDTH = "w-36";
+
 /** Where a column's unreleased state tints its cells. */
 const UNRELEASED_FILL = "bg-surface-2/50";
 
@@ -109,6 +112,18 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
   const writes = useGradebookWrites(classroomId);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const readOnly = data.archived;
+  /*
+   * The exercises left out of the mean are practice, and a classroom has
+   * many: folded away by default, a switch away, never persisted. Exercises
+   * only, as the owner asked — an exam or a project left out of the mean
+   * stays in sight, and an exercise the teacher gave a weight counts and
+   * stays. Neither the mean nor the CSV changes: what is hidden never
+   * counted.
+   */
+  const [showExercises, setShowExercises] = useState(false);
+  const optional = (column: GradebookColumn) => column.mode === "exercise" && !column.counts;
+  const hasOptional = data.columns.some(optional);
+  const columns = showExercises ? data.columns : data.columns.filter((column) => !optional(column));
 
   /**
    * Runs one write; a refusal is a toast, in words. True when it went through.
@@ -186,6 +201,15 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
           onChange={(next) => void attempt(() => writes.publishMean(next))}
         />
       </SettingRow>
+      {hasOptional ? (
+        <SettingRow
+          title={t("gbook.exercises.show")}
+          desc={t(showExercises ? "gbook.exercises.shownDesc" : "gbook.exercises.hiddenDesc")}
+          className="py-0"
+        >
+          <Switch checked={showExercises} label={t("gbook.exercises.show")} onChange={setShowExercises} />
+        </SettingRow>
+      ) : null}
 
       {/* `relative`: the sr-only spans of the cells are absolute, and would otherwise lay out past the scroller, on the page. */}
       <Card className={cx(T.container, "relative overflow-x-auto")}>
@@ -195,11 +219,11 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
               <th scope="col" className={cx(T.th, "sticky left-0 z-10 min-w-36 bg-surface align-bottom")}>
                 {t("gbook.col.student")}
               </th>
-              {data.columns.map((column) => (
+              {columns.map((column) => (
                 <th
                   key={column.activityId}
                   scope="col"
-                  className={cx(T.th, "min-w-32 align-bottom", !column.released && UNRELEASED_FILL)}
+                  className={cx(T.th, "align-bottom", !column.released && UNRELEASED_FILL)}
                 >
                   <ColumnHead column={column} items={readOnly ? null : columnItems(column)} />
                 </th>
@@ -222,7 +246,7 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
                   {/* On a phone the name alone: the sticky column keeps room for the grades. */}
                   <span className="hidden max-w-56 truncate text-xs text-fg-muted @lg:block">{row.email}</span>
                 </th>
-                {data.columns.map((column) => {
+                {columns.map((column) => {
                   const cell = row.cells[column.activityId];
                   return (
                     <td key={column.activityId} className={cx(T.td, "text-center", !column.released && UNRELEASED_FILL)}>
@@ -254,7 +278,7 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
                   <span>{t("gbook.classMean")}</span>
                 </Tip>
               </th>
-              {data.columns.map((column) => (
+              {columns.map((column) => (
                 <td key={column.activityId} className={cx(T.td, "text-center font-semibold tabular-nums")}>
                   <GradeOrDash value={column.classMean} />
                 </td>
@@ -294,23 +318,44 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
   );
 }
 
-/** A column's head: its title, kind and weight, and the menu of its settings. */
+/**
+ * A column's head: its title, its weight, and the menu of its settings.
+ *
+ * Every grade column has the same width (`HEAD_WIDTH`) and its title wraps
+ * on two lines at most, clamped: a long exam title never spills over the
+ * next column. The full title and the column's kind are in the tooltip (and
+ * in the accessible name); the head keeps the weight alone, the one figure a
+ * teacher compares across columns. The "not released" badge sits ABOVE the
+ * title: the heads stand on the bottom of the row, so the weights line up.
+ */
 function ColumnHead({ column, items }: { column: GradebookColumn; items: MenuItem[] | null }) {
   const t = useT();
-  const body = (
-    <>
-      <span className="flex items-center gap-1 text-[13px] font-semibold text-fg">
-        <span className="truncate">{column.title}</span>
-        {items ? <ChevronDown aria-hidden className="size-3 shrink-0 text-fg-faint" /> : null}
+  const kind = t(MODE_LABEL[column.mode]);
+  // The tooltip is inside the menu's trigger: `Tip` stays shut while the
+  // panel of a trigger around it is open.
+  const head = (
+    <Tip label={`${column.title} · ${kind}`} className="flex min-w-0 flex-col items-start gap-0.5">
+      <span className="flex min-w-0 items-start gap-1 text-[13px] font-semibold text-fg">
+        <span className="line-clamp-2 min-w-0 [overflow-wrap:anywhere]">
+          {column.title}{" "}
+          <span className="sr-only">({kind})</span>
+        </span>
+        {items ? <ChevronDown aria-hidden className="mt-1 size-3 shrink-0 text-fg-faint" /> : null}
       </span>
       <span className="text-[11px] font-normal text-fg-muted">
-        {t(MODE_LABEL[column.mode])} ·{" "}
         {t(column.counts ? "gbook.weightShort" : "gbook.notCounted", { weight: String(column.weight) })}
       </span>
-    </>
+    </Tip>
   );
   return (
-    <div className="flex max-w-44 flex-col items-start gap-1">
+    <div className={cx(HEAD_WIDTH, "flex flex-col items-start gap-1")}>
+      {column.released ? null : (
+        <Tip label={t("gbook.unreleased.help")}>
+          <Badge tone="zinc" icon={EyeOff}>
+            {t("gbook.unreleased")}
+          </Badge>
+        </Tip>
+      )}
       {items ? (
         <Menu
           align="start"
@@ -319,21 +364,14 @@ function ColumnHead({ column, items }: { column: GradebookColumn; items: MenuIte
           trigger={
             <button
               type="button"
-              className="-mx-1.5 flex max-w-44 flex-col items-start rounded-field px-1.5 py-0.5 text-left transition-colors hover:bg-surface-3"
+              className="-mx-1.5 flex min-w-0 max-w-full rounded-field px-1.5 py-0.5 text-left transition-colors hover:bg-surface-3"
             >
-              {body}
+              {head}
             </button>
           }
         />
       ) : (
-        <div className="flex flex-col items-start">{body}</div>
-      )}
-      {column.released ? null : (
-        <Tip label={t("gbook.unreleased.help")}>
-          <Badge tone="zinc" icon={EyeOff}>
-            {t("gbook.unreleased")}
-          </Badge>
-        </Tip>
+        head
       )}
     </div>
   );

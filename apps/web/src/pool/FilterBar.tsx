@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 
 import type { ConceptRef } from "@quiz/contracts";
 
-import { useT } from "../i18n";
-import { iconOption, Segmented } from "../ui";
+import { useT, type Dict } from "../i18n";
+import { GroupBySwitch, iconOption, Segmented } from "../ui";
 import type { QuestionFilters, Vocabulary } from "./filters";
 import { GROUP_BY, type GroupBy } from "./QuestionGroups";
 import { QuestionSearchBar } from "./QuestionSearchBar";
@@ -32,14 +32,21 @@ import type { StatsOffer } from "./StatsFilterFields";
  *
  * Both controls are `Segmented`, not a select and a switch: a row of pills
  * shows the whole (short, known) set and the current one at a glance, which
- * is what a habit control is for. The caption before the grouping track is
- * also the `aria-label` of its radiogroup.
+ * is what a habit control is for. The grouping is `GroupBySwitch`, which the
+ * classroom's evaluation list draws too.
  *
  * `actions` are the list's own tertiary actions, drawn after the count as
  * `Actions` draws them — today the one "Clear favourites" (F-POOL-10), which
  * acts on the list and is too rare to stand beside the page's primary.
  */
 export type ListView = "cards" | "list";
+
+const GROUP_LABEL: Record<GroupBy, keyof Dict> = {
+  none: "common.group.none",
+  type: "pool.group.type",
+  concepts: "pool.group.concepts",
+  category: "pool.group.category",
+};
 
 export function FilterBar({
   filters,
@@ -83,20 +90,12 @@ export function FilterBar({
       coach="pool.search"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] text-fg-faint">{t("pool.groupBy")}</span>
-          <Segmented
-            name="pool-group"
-            size="sm"
-            label={t("pool.groupBy")}
-            value={group}
-            onChange={(next) => onGroup(next)}
-            options={GROUP_BY.map((g) => ({
-              value: g,
-              label: t(`pool.group.${g}` as "pool.group.none"),
-            }))}
-          />
-        </div>
+        <GroupBySwitch
+          name="pool-group"
+          value={group}
+          onChange={onGroup}
+          options={GROUP_BY.map((g) => ({ value: g, label: t(GROUP_LABEL[g]) }))}
+        />
         <div className="ml-auto flex items-center gap-3">
           {total === null ? null : (
             <span aria-live="polite" className="text-xs tabular-nums text-fg-faint">
