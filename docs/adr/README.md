@@ -103,6 +103,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-085 — Confidence in the drill: stated beside the review, never part of a score](ADR-085-confiance-dans-l-entrainement.md)
 - [ADR-086 — Scheduled or Live: who drives the clock, a safety deadline, and a limit cut at the window's end](ADR-086-planifiee-ou-en-direct.md)
 - [ADR-088 — The exam integrity journal: leaving the page and pasting from outside, recorded lightly, never proof](ADR-088-journal-d-integrite.md)
+- [ADR-090 — Partial retake of an exercise](ADR-090-reprise-partielle-d-un-exercice.md)
 
 ### Question analytics
 
