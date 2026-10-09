@@ -65,7 +65,7 @@ teacher/admin pool members, and admin kinds target the admin role. The settings
 list follows those capabilities: students see seat kinds before enrollment;
 teachers/admins need a student seat for those kinds, and an admin needs a course
 seat for course kinds. Teachers can configure course kinds before receiving a
-seat. The project kinds enter the grid with their emitters: on a platform
+seat. The project kinds (2026-10-04, M3-09b) enter the grid with their emitters: on a platform
 without Quiz's GitHub App (`GITHUB_APP_ID` unset) they are never sent and not
 listed (`GITHUB_KINDS`, `notificationKindsFor({ github })`) — a toggle that does
 nothing is a lie.
@@ -78,7 +78,7 @@ missing French sentence is a compile error.
 **7.** Payloads carry identifiers, titles and counts, never grades, points,
 answers, question content, student names or student e-mail. Teacher names in
 sharing and ownership notices are deliberate exceptions. System alerts carry
-check keys only. Project payloads carry the project's id and name and counts,
+check keys only. Project payloads (2026-10-04, M3-09b) carry the project's id and name and counts,
 never a score, a login or a student's name (N-SEC-20); the entry opens the
 project (`/projects/:id`, the student's view of it for a student),
 `github_org_lost` the classroom's Settings.
@@ -121,7 +121,7 @@ never gated by notification preferences.
 
 **12.** The kinds below; the external-default column means both e-mail and Teams
 unless stated otherwise. App is on for all. The predicates are part of the
-decision, not mere UI hints. The project kinds (F-NOTIF-13, accepted by merge
+decision, not mere UI hints. The project kinds (2026-10-04, M3-09b) (F-NOTIF-13, accepted by merge
 decision D18, delivered by M3-09b) use the same notification entry, locale and
 per-kind preferences as every other kind; nothing of heig-classroom's mails was
 ported independently, and its `grade.final` mail on the final review is dropped
@@ -140,13 +140,13 @@ ported independently, and its `grade.final` mail on the final review is dropped
 | `pool_question_added` | Every publication, first or later version; pool owner and contributor/owner shares, not readers or author; folded per pool | Off |
 | `pool_shared`, `pool_ownership` | Existing sharing/ownership events for the affected account | On |
 | `system_alert` | Admin health failure, continued failure after a day, or recovery; not folded; ADR-055 | E-mail on; Teams forbidden |
-| `project_published` | `publishProject` committed, by hand or by the ticker (once: a draft publishes once); the classroom's claimed student seats; not folded | Off |
-| `project_deadline_reminder` | 24 h before the student's EFFECTIVE deadline, claimed and sent in one tick (rule 19); claimed student seats | On |
-| `project_repo_invited` | Accept provisioned the repository in THIS request and GitHub left the invitation pending; the student; never on an idempotent repeat nor a resend | On |
-| `project_grade_final` | FIRST release only (`ProjectReleaseResult.first`); the students of the repositories the release covered, a staff seat's never; no score carried | On |
-| `project_deadline_applied` | A `project.deadline` job pass that locked or committed on at least one repository; the course staff; folded per project with the count | Off |
-| `project_provision_failed` | A row's FIRST provisioning failure, never an invitation GitHub refused; the course staff; folded per project, `reason` the latest (`repo_name_taken`, `github_error`) | On |
-| `github_org_lost` | The installation an organization held forgotten — uninstalled, deleted with it, or a 404 the healing met —; the course staff of each non-archived linked classroom, one entry per classroom; not folded; a suspension tells nobody | On |
+| `project_published` (2026-10-04, M3-09b) | `publishProject` committed, by hand or by the ticker (once: a draft publishes once); the classroom's claimed student seats; not folded | Off |
+| `project_deadline_reminder` (2026-10-04, M3-09b) | 24 h before the student's EFFECTIVE deadline, claimed and sent in one tick (rule 19); claimed student seats | On |
+| `project_repo_invited` (2026-10-04, M3-09b) | Accept provisioned the repository in THIS request and GitHub left the invitation pending; the student; never on an idempotent repeat nor a resend | On |
+| `project_grade_final` (2026-10-04, M3-09b) | FIRST release only (`ProjectReleaseResult.first`); the students of the repositories the release covered, a staff seat's never; no score carried | On |
+| `project_deadline_applied` (2026-10-04, M3-09b) | A `project.deadline` job pass that locked or committed on at least one repository; the course staff; folded per project with the count | Off |
+| `project_provision_failed` (2026-10-04, M3-09b) | A row's FIRST provisioning failure, never an invitation GitHub refused; the course staff; folded per project, `reason` the latest (`repo_name_taken`, `github_error`) | On |
+| `github_org_lost` (2026-10-04, M3-09b) | The installation an organization held forgotten — uninstalled, deleted with it, or a 404 the healing met —; the course staff of each non-archived linked classroom, one entry per classroom; not folded; a suspension tells nobody | On |
 
 **13.** `activity_scheduled` claims `scheduled_announced_at` before sending. The
 marker is never cleared by rescheduling or returning to draft, and never copied
@@ -164,7 +164,7 @@ failure must not fail publication. `student_joined` and `roster_conflict` carry
 classroom/count, not student identity; the roster is where the teacher reads the
 names.
 
-**15.** A lost organization: the notice follows the ROW's transition and
+**15.** A lost organization (2026-10-04, M3-09b): the notice follows the ROW's transition and
 GitHub's STATE, never a webhook's words. The installation an organization held
 is forgotten by `forgetInstallation` when GitHub no longer has it (an
 `installation` webhook of any action re-read against
@@ -204,7 +204,7 @@ logged per evaluation, other evaluations continue, and claimed failures are not
 retried. The payload has no date needing a recipient time zone; it says less
 than 24 hours.
 
-**19.** The project reminder mirrors rules 17–18 on the student's EFFECTIVE
+**19.** The project reminder (2026-10-04, M3-09b) mirrors rules 17–18 on the student's EFFECTIVE
 deadline (their repository's own, else the project's), 24 hours before it — the
 one `DEADLINE_REMINDER_MS` of `@quiz/domain`, the evaluations' too —, with two
 claims in the project ticker (`projectTick`, every 20 s), each a conditional
@@ -231,7 +231,7 @@ own deadline.
 - The scan never reminds after the deadline, skips drafts, archived projects and
   archived classrooms, and a late pass catches up while the deadline lies ahead.
 
-**20.** For the import (M8-01): `projects.reminder_sent_at` and
+**20.** For the import (M8-01) (2026-10-04, M3-09b): `projects.reminder_sent_at` and
 `project_repos.reminder_sent_at` are null = owed. The import must set them to
 the import time for every imported project or repository whose effective
 deadline lies within 24 hours of the import, or the first tick sends a burst; a
@@ -328,7 +328,7 @@ just before expiry. The manifest declares each Teams-supported activity type,
 excluding `system_alert`; catalogue tests enforce completeness. That list alone
 may run ahead of the catalogue, so one manifest bump can declare the types of
 kinds still to be emitted. Bundle newly added kinds into one manifest update,
-since users may need to reinstall (the seven project activity types were
+since users may need to reinstall (the seven project activity types, 2026-10-04, M3-09b, were
 declared in ONE bump, `TEAMS_APP_VERSION` 2.1.0 → 2.2.0). Teams renders its
 template in Teams' language and the server preview in Quiz locale, capped at 150
 characters. Deep links are parsed into a known router route and rebuilt under

@@ -1,6 +1,6 @@
 # Microsoft Teams notifications: the setup
 
-The Teams channel of the notifications (ADR-030, §4) posts to each user's
+The Teams channel of the notifications (ADR-030, rules 26–31; §4 before the 2026-10-09 renumbering) posts to each user's
 Teams **activity feed** through Microsoft Graph, as the app "HEIG Quiz". Each
 user installs that app in their own Teams by uploading a small package the
 platform serves; installing it grants the app the one permission it uses,
@@ -23,7 +23,7 @@ TEAMS_ALLOWED_TENANTS=a372f724-c0b2-4ea0-abfb-0eb8c6f84e40   # HEIG-VD only
 ids, comma-separated) whose Teams accounts may be linked. Anyone can upload
 the app into their own Teams; without the list, a stranger could send a HEIG
 user a link to their own Teams account and receive that user's notifications
-(ADR-030, "Consent phishing across tenants"). Leave it empty only for a test
+(ADR-030, rules 27 and 29; formerly "Consent phishing across tenants"). Leave it empty only for a test
 app: under `NODE_ENV=production` an empty list with Teams on stops the process
 at boot. A Teams account of another organization sees, in the tab, that HEIG Quiz
 only links HEIG-VD accounts, and gets no link.
