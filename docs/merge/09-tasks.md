@@ -4262,6 +4262,21 @@ serves now (16a), and what waits for the group repositories (16b).
   in a user namespace (stubbed systemd), shellcheck. Remaining, the
   owner's: the first apply and confirm on the VM, the restore drill, the
   acceptance runs.
+- **As delivered (rollout)** (engine VM, 2026-10-08/09, with the owner's
+  authorization): slices live (runner's engine-ready log: `cgroupParent`
+  `quiz-runner.slice`; staging portal in `codespace.slice`),
+  `CODESPACE_MEMORY=768m` for both instances. Caddy 2.6.2 masks
+  `token=REDACTED`, the 502 path included. HTTP/3 off in the VM's Caddyfile
+  (UDP 443 never reached Caddy; browsers stalled after one request, #649).
+  Backup: export + restore drill in a scratch dir (zstd, `integrity_check`,
+  no cookie token, `git fsck`, ownership all good); the application VM's
+  `srv` timer pulls daily, first archive 2026-10-08. Host firewall
+  confirmed 2026-10-09 after one rollback: two `nft-check.sh vm` checks
+  failed falsely (`nft | grep -q` under pipefail; `infra/net/test.sh`
+  cannot bind 9418 beside a portal), fixed here by a captured match and a
+  throwaway probe container per network. Remaining: the acceptance run
+  (grading within `RUNNER_TIMEOUT_MS` with sessions live) and re-applying
+  `host.nft` for the removed `udp dport 443`.
 
 ### M6-06 — Quiz `codespace` module
 - **Depends on**: M6-03, M3-02.
