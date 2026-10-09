@@ -661,6 +661,32 @@ describe("a classroom's poll: its roster and its staff, signed in", () => {
     expect(refused.json().error).toBe("csrf");
   });
 
+  // The only unauthenticated write surface: nothing of a forged request is
+  // read, and each later refusal comes in the same order on every route.
+  it("refuses in one order: CSRF, the code, the body, then the poll", async () => {
+    const forged = { cookie: outsider.headers.cookie!, "x-csrf-token": "not-the-one" };
+    for (const url of ["/app/api/p/!!/join", "/app/api/p/!!/answer"]) {
+      const res = await post(url, forged, []);
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toEqual({ error: "csrf" });
+    }
+    // A malformed code is the 404 of a miss, before a malformed body…
+    const badCode = await post("/app/api/p/!!/answer", outsider.headers, []);
+    expect(badCode.statusCode).toBe(404);
+    expect(badCode.json()).toEqual({ error: "not_found" });
+    // …which is a 400 before the poll is looked up: an unknown code, or a
+    // poll whose roster the caller is not on.
+    for (const at of ["ZZZZZZ", named]) {
+      const res = await post(`/app/api/p/${at}/answer`, outsider.headers, []);
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toBe("validation");
+    }
+    // The read checks no CSRF and has no body.
+    const read = await get("/app/api/p/!!", forged);
+    expect(read.statusCode).toBe(404);
+    expect(read.json()).toEqual({ error: "not_found" });
+  });
+
   // The poll's title is its question's internal name (#305): no student road
   // may lead to the evaluation's own views.
   it("refuses a rostered student the evaluation's live streams, with the 404 of a missing one", async () => {

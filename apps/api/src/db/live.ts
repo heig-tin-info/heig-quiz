@@ -39,6 +39,7 @@ import {
 import { users } from "./auth.js";
 import type { StoredInstance } from "./columns.js";
 import { evaluationItems, evaluations } from "./evaluation.js";
+import { enrollments } from "./org.js";
 
 /**
  * Participants without an account: a browser that scanned the QR of an
@@ -167,6 +168,17 @@ export const attempts = pgTable(
       .where(sql`${t.state} = 'in_progress'`),
   ],
 );
+
+/**
+ * The row `attempts` belongs to a STAFF seat of the classroom of the row
+ * `evaluations` (ADR-018): THE definition, read by `staffAttemptIds` (the
+ * `evaluation` module) and by the queries that span several evaluations (the
+ * item analysis, ADR-038; a pool's use count, ADR-013). A guest (`user_id`
+ * null) and a classroom-less evaluation never match. Only in a SELECT that
+ * joins both tables by name. Here, beside the tables it reads, so that no
+ * module imports another's facade for one SQL fragment.
+ */
+export const isStaffAttempt = sql`exists (select 1 from ${enrollments} where ${enrollments.classroomId} = ${evaluations.classroomId} and ${enrollments.userId} = ${attempts.userId} and ${enrollments.staff})`;
 
 export const answers = pgTable(
   "answers",

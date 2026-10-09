@@ -27,7 +27,7 @@ import {
   users,
 } from "./db/schema.js";
 import { knownEmails, normalizeEmail, ownersOf } from "./identity.js";
-import { holdsCourseSeat } from "./modules/org/service.js";
+import { holdsCourseSeat } from "./modules/guards.js";
 import { transferOnLoss, vacateSeats } from "./modules/pool/service.js";
 import { accessRevoked } from "./modules/realtime/bus.js";
 

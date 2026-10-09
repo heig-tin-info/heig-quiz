@@ -30,7 +30,8 @@ import { seedLive } from "../test/live.js";
 import { GITHUB_ACCOUNT_STALE, defaultProjectGradingScale } from "@quiz/contracts";
 
 import { createApiToken } from "./tokens.js";
-import { linkReturn, linkedLogin } from "./githubLink.js";
+import { linkReturn } from "./githubLink.js";
+import { linkedLogin } from "./linkedLogin.js";
 import { CSRF_COOKIE, SESSION_COOKIE, createSession, type NewSession } from "./session.js";
 
 const CLIENT_ID = "Iv1.quiztest";

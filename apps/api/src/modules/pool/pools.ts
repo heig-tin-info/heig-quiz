@@ -9,7 +9,6 @@ import { displayName, effectivePoolRole, heldPoolRole, type PoolRoleFacts } from
 import { isForeignKeyViolation, qualified, type Db } from "../../db/client.js";
 import type { Caller } from "../guards.js";
 import { shownAvatar } from "../avatar.js";
-import { isStaffAttempt } from "../evaluation/service.js";
 import {
   attempts,
   avatars,
@@ -18,6 +17,7 @@ import {
   courseStaff,
   evaluationItems,
   evaluations,
+  isStaffAttempt,
   poolMembers,
   pools,
   questionVersions,
@@ -37,13 +37,9 @@ export const questionCount = sql<number>`(SELECT count(*) FROM ${questions} WHER
  * of a student account (no guest) which is not a staff walk (ADR-018). A
  * historical fact: the `stats_since` reset does not apply. Counted through
  * `questions.pool_id`, so a moved question carries its history along.
- *
- * A function, not a constant: `isStaffAttempt` comes from the evaluation
- * module, which imports this one, and is only read at call time. Reads
- * `evaluations`, `evaluation_items` and `attempts` by join.
+ * Reads `evaluations`, `evaluation_items` and `attempts` by join.
  */
-function usedCountOf(): SQL<number> {
-  return sql<number>`(SELECT count(DISTINCT ${qualified(questions.id)}) FROM ${questions}
+const usedCount = sql<number>`(SELECT count(DISTINCT ${qualified(questions.id)}) FROM ${questions}
     JOIN ${questionVersions} ON ${qualified(questionVersions.questionId)} = ${qualified(questions.id)}
     JOIN ${evaluationItems} ON ${qualified(evaluationItems.questionVersionId)} = ${qualified(questionVersions.id)}
     JOIN ${evaluations} ON ${qualified(evaluations.id)} = ${qualified(evaluationItems.evaluationId)}
@@ -55,7 +51,6 @@ function usedCountOf(): SQL<number> {
           AND ${qualified(attempts.startedAt)} IS NOT NULL
           AND ${qualified(attempts.userId)} IS NOT NULL
           AND NOT ${isStaffAttempt}))::int`;
-}
 
 export function poolJson(pool: PoolRow): Pool {
   return {
@@ -142,7 +137,7 @@ export async function listPools(
     .select({
       pool: pools,
       questionCount,
-      usedCount: usedCountOf(),
+      usedCount,
       memberCount: memberCountOf,
       memberRole: memberRoleOf(viewer.id),
       isCourseStaff: courseStaffOf(viewer.id),

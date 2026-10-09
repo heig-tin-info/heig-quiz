@@ -4,7 +4,8 @@
  * (`modules/github/`, merge tasks M2-02 and M2-04): installations, the
  * classroom's link to an organization, the webhook intake — except
  * `github_accounts`, the user's account link, which is `auth`'s: written by
- * `auth/githubLink.ts` only (link, unlink, rename; M2-03). The project and
+ * `auth/githubLink.ts` (link, unlink) and `auth/linkedLogin.ts` (rename)
+ * only (M2-03). The project and
  * journal modules read these tables by join and never write them; the
  * intake reaches them through its handler registry.
  *

@@ -1,8 +1,9 @@
 /**
  * Linking a user's GitHub account (F-GH-05, N-SEC-16, invariant 15; merge
  * task M2-03, ported from heig-classroom's `auth/github-link.ts`). This file
- * is the one writer of `github_accounts`: the link, the unlink, the rename,
- * and the links the heig-classroom import carries over (`importAccountLink`).
+ * and `linkedLogin.ts` (the rename) are the one writer of `github_accounts`:
+ * the link, the unlink, and the links the heig-classroom import carries over
+ * (`importAccountLink`).
  *
  * The flow is the user-to-server OAuth of Quiz's OWN App (D23): no OAuth App
  * and no scope, so the user grants nothing on their repositories, and it is
@@ -32,16 +33,12 @@
  */
 import { randomBytes } from "node:crypto";
 
-import { and, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from "fastify";
-import type { App, Octokit } from "octokit";
+import type { App } from "octokit";
 import { z } from "zod";
 
-import {
-  GITHUB_ACCOUNT_STALE,
-  type GithubAccountState,
-  type GithubLinkOutcome,
-} from "@quiz/contracts";
+import type { GithubAccountState, GithubLinkOutcome } from "@quiz/contracts";
 
 import { audit } from "../audit.js";
 import { iso } from "../clock.js";
@@ -58,7 +55,6 @@ import {
 } from "../db/schema.js";
 import { publish } from "../events.js";
 import { githubApp } from "../github/app.js";
-import { currentLogin } from "../github/collaborators.js";
 import { ownSessionGuard } from "../modules/guards.js";
 import { inviteOnGithubLink } from "../modules/project/service.js";
 import { safeReturnTo } from "./returnTo.js";
@@ -258,51 +254,6 @@ async function linkRelevant(db: Db, userId: string): Promise<boolean> {
     )
     .limit(1);
   return row !== undefined;
-}
-
-/**
- * The login GitHub knows TODAY for a user's linked account, followed through
- * its immutable id (`GET /user/{account_id}`, heig-classroom #41): a renamed
- * account's row is updated and `github.renamed` audited. A user with no link
- * left, or whose account GitHub no longer has, gets `GITHUB_ACCOUNT_STALE` —
- * the `409` body, "Relink GitHub" in the web. Any other failure (GitHub
- * unreachable, rate limit) throws: the caller may then go on with the stored
- * login. `octokit` is an installation client of the caller's organization
- * (an App JWT cannot read users).
- *
- * For the tasks that name or invite a student on GitHub: a project's
- * Accept (`modules/project/accept.ts`, M3-03), and M4-03.
- */
-export async function linkedLogin(
-  db: Db,
-  octokit: Octokit,
-  userId: string,
-  /** The user's link when the caller has read it already. */
-  loaded?: typeof githubAccounts.$inferSelect,
-): Promise<string | typeof GITHUB_ACCOUNT_STALE> {
-  const [linked] = loaded ? [loaded] : await db.select().from(githubAccounts).where(eq(githubAccounts.userId, userId));
-  if (!linked) return GITHUB_ACCOUNT_STALE;
-  const login = await currentLogin(octokit, linked.githubUserId);
-  if (login === null) return GITHUB_ACCOUNT_STALE;
-  if (login === linked.login) return login;
-  // Conditional on the login read: two requests that notice the same rename
-  // audit it once.
-  const moved = await db
-    .update(githubAccounts)
-    .set({ login })
-    .where(and(eq(githubAccounts.userId, userId), eq(githubAccounts.login, linked.login)))
-    .returning({ userId: githubAccounts.userId });
-  if (moved.length > 0) {
-    await audit(db, {
-      actorUserId: null,
-      actorType: "system",
-      action: "github.renamed",
-      subjectType: "user",
-      subjectId: userId,
-      payload: { githubUserId: linked.githubUserId, from: linked.login, to: login },
-    });
-  }
-  return login;
 }
 
 export async function githubLinkPlugin(app: FastifyInstance, opts: { config: AppConfig }) {

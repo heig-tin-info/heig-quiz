@@ -253,36 +253,6 @@ export async function deleteCourse(db: Db, courseId: string): Promise<void> {
   });
 }
 
-/**
- * The account holds a seat on at least one course staff: what makes a
- * teacher (`decideRole`) and what the course kinds of notification are sent
- * to (`tellStaff`, `staffOf`).
- */
-export async function holdsCourseSeat(db: Db, userId: string): Promise<boolean> {
-  const [seat] = await db
-    .select({ courseId: courseStaff.courseId })
-    .from(courseStaff)
-    .where(eq(courseStaff.userId, userId))
-    .limit(1);
-  return seat !== undefined;
-}
-
-/**
- * The staff seats of a classroom's course (`course_staff`, the rows
- * `staffAccess` reads): the ONE audience of a staff notification about a
- * classroom or what it holds (F-NOTIF-11) — an evaluation's grading, a
- * project's deadline, its organization lost — and of the hints addressed to
- * `teacher:<id>`. A seatless admin is never among them.
- */
-export async function classroomStaffIds(db: Db, classroomId: string): Promise<string[]> {
-  const rows = await db
-    .select({ userId: courseStaff.userId })
-    .from(courseStaff)
-    .innerJoin(classrooms, eq(classrooms.courseId, courseStaff.courseId))
-    .where(eq(classrooms.id, classroomId));
-  return [...new Set(rows.map((r) => r.userId))];
-}
-
 /** The course's staff, for the course detail. */
 export async function staffOfCourse(db: Db, courseId: string) {
   return db

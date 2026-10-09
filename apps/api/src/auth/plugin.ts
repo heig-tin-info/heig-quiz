@@ -136,13 +136,22 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   // an impersonation session that may write (ADR-034). One test, one place.
   const development = config.AUTH_DEV_LOGIN && config.NODE_ENV !== "production";
   /**
-   * The attributes of both session cookies, wherever they are set. A
-   * confined session's are `Strict` (ADR-051 §4): nothing cross-site ever
-   * carries one. The portal's stay `Lax`: the OIDC callback is a cross-site
-   * navigation (N-SEC-01).
+   * A session's cookie pair, the one place both are set (opened, renewed):
+   * the session itself (`httpOnly`), and the CSRF token the frontend reads
+   * for the X-CSRF-Token header (double-submit) — when there is one to set.
+   * One scope and one expiry. A confined session's are `Strict` (ADR-051
+   * §4): nothing cross-site ever carries one. The portal's stay `Lax`: the
+   * OIDC callback is a cross-site navigation (N-SEC-01).
    */
-  const cookieBase = (auth: Pick<SessionAuth, "kind">) =>
-    ({ path: "/", sameSite: confined(auth) ? "strict" : "lax", secure }) as const;
+  const setSessionCookies = (
+    reply: FastifyReply,
+    auth: Pick<SessionAuth, "kind">,
+    pair: { token: string; csrf: string | undefined; expires: Date },
+  ) => {
+    const base = { path: "/", sameSite: confined(auth) ? "strict" : "lax", secure } as const;
+    reply.setCookie(SESSION_COOKIE, pair.token, { ...base, httpOnly: true, expires: pair.expires });
+    if (pair.csrf) reply.setCookie(CSRF_COOKIE, pair.csrf, { ...base, httpOnly: false, expires: pair.expires });
+  };
 
   // --- Session resolution on every request ---
   app.decorateRequest("user", null);
@@ -233,16 +242,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     // Mirror the sliding renewal on the cookies, else the browser drops them
     // while the server-side session is still alive.
     if (found.renewedTo) {
-      const base = cookieBase(found.auth);
-      reply.setCookie(SESSION_COOKIE, token, {
-        ...base,
-        httpOnly: true,
-        expires: found.renewedTo,
-      });
-      const csrf = req.cookies[CSRF_COOKIE];
-      if (csrf) {
-        reply.setCookie(CSRF_COOKIE, csrf, { ...base, httpOnly: false, expires: found.renewedTo });
-      }
+      setSessionCookies(reply, found.auth, { token, csrf: req.cookies[CSRF_COOKIE], expires: found.renewedTo });
     }
   });
 
@@ -270,18 +270,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     "openSession",
     async (reply: FastifyReply, user: SessionUser, auth: NewSession = PORTAL) => {
       const session = await createSession(app.db, user.id, config.SESSION_TTL_HOURS, auth);
-      const base = cookieBase(auth);
-      reply.setCookie(SESSION_COOKIE, session.token, {
-        ...base,
-        httpOnly: true,
-        expires: session.expiresAt,
-      });
-      // Readable by the frontend for the X-CSRF-Token header (double-submit).
-      reply.setCookie(CSRF_COOKIE, session.csrf, {
-        ...base,
-        httpOnly: false,
-        expires: session.expiresAt,
-      });
+      setSessionCookies(reply, auth, { token: session.token, csrf: session.csrf, expires: session.expiresAt });
     },
   );
 

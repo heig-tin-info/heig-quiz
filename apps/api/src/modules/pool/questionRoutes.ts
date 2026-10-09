@@ -25,7 +25,7 @@ import { iso, isoOrNull } from "../../clock.js";
 import { questions } from "../../db/schema.js";
 import { actorOf } from "../../audit.js";
 import { callerOf, findAccessiblePool, requirePoolRole } from "../guards.js";
-import { invalid, rateLimited, readerLang } from "../http.js";
+import { rateLimited, readerLang } from "../http.js";
 import { poolChanged } from "./events.js";
 import { generateAnswers, generatorTypes } from "./generate.js";
 import * as service from "./service.js";
@@ -227,10 +227,8 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
   app.get(
     "/app/api/questions/:id/versions/:number",
     { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: onQuestion() }, async ({ req, reply, scope }) => {
-      const params = VersionParam.safeParse(req.params);
-      if (!params.success) return reply.code(404).send({ error: "not_found" });
-      const version = await service.versionDetail(app.db, scope.question, params.data.number);
+    teacher({ params: IdParam, path: VersionParam, load: onQuestion() }, async ({ reply, path, scope }) => {
+      const version = await service.versionDetail(app.db, scope.question, path.number);
       if (!version) return reply.code(404).send({ error: "not_found" });
       return version;
     }),
@@ -239,14 +237,10 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
   app.post(
     "/app/api/questions/:id/versions/:number/restore",
     { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: onQuestion("contributor") }, async ({ req, reply, scope }) => {
-      const params = VersionParam.safeParse(req.params);
-      if (!params.success) return reply.code(404).send({ error: "not_found" });
-      const done = await service.restoreVersion(app.db, scope.question, params.data.number);
+    teacher({ params: IdParam, path: VersionParam, load: onQuestion("contributor") }, async ({ req, reply, path, scope }) => {
+      const done = await service.restoreVersion(app.db, scope.question, path.number);
       if (!done) return reply.code(404).send({ error: "not_found" });
-      await trace(req, "question.restore_version", "question", scope.question.id, {
-        number: params.data.number,
-      });
+      await trace(req, "question.restore_version", "question", scope.question.id, { number: path.number });
       poolChanged(scope.pool.id);
       const [fresh] = await app.db
         .select()
@@ -259,25 +253,16 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
   app.post(
     "/app/api/questions/:id/versions/:number/deprecate",
     { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: onQuestion("contributor") }, async ({ req, reply, scope }) => {
-      const params = VersionParam.safeParse(req.params);
-      if (!params.success) return reply.code(404).send({ error: "not_found" });
-      const body = DeprecateBody.safeParse(req.body);
-      if (!body.success) return invalid(reply, body.error);
-      const version = await service.deprecateVersion(
-        app.db,
-        scope.question.id,
-        params.data.number,
-        body.data.note,
-      );
-      if (!version) return reply.code(404).send({ error: "not_found" });
-      await trace(req, "question.deprecate", "question", scope.question.id, {
-        number: params.data.number,
-        note: body.data.note,
-      });
-      poolChanged(scope.pool.id);
-      return version;
-    }),
+    teacher(
+      { params: IdParam, path: VersionParam, body: DeprecateBody, load: onQuestion("contributor") },
+      async ({ req, reply, path, body, scope }) => {
+        const version = await service.deprecateVersion(app.db, scope.question.id, path.number, body.note);
+        if (!version) return reply.code(404).send({ error: "not_found" });
+        await trace(req, "question.deprecate", "question", scope.question.id, { number: path.number, note: body.note });
+        poolChanged(scope.pool.id);
+        return version;
+      },
+    ),
   );
 
   /**

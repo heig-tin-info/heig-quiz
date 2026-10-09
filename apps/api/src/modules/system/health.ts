@@ -63,7 +63,7 @@ import { serverErrorsOf } from "../../httpMetrics.js";
 import { serviceRecord } from "../../serviceHealth.js";
 import { MIGRATIONS_DIR } from "../../paths.js";
 import { InProcessQueue } from "../../jobs.js";
-import { lastTickOf } from "../../ticker.js";
+import { lastTickOf } from "../../tickerPass.js";
 import { overdueAttempts, overdueEvaluations } from "../live/service.js";
 import { todayBudget } from "../llm/service.js";
 import { openStreamCount } from "../realtime/bus.js";

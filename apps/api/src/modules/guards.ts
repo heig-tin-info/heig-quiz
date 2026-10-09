@@ -13,15 +13,16 @@
  * the reply-aware loader is that finder plus the 404. One query, two doors.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { and, eq, isNull, ne, sql, type AnyColumn, type SQL } from "drizzle-orm";
+import { and, eq, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
 
-import type { CourseRole, PoolRole } from "@quiz/contracts";
+import { EvaluationSettings, type CourseRole, type PoolRole } from "@quiz/contracts";
 import {
   courseRoleAllows,
   effectiveCourseRole,
   effectivePoolRole,
   ipAllowed,
   poolRoleAllows,
+  trustedClientsOf,
 } from "@quiz/domain";
 
 import { PORTAL, confined, delegated, type SessionAuth, type SessionState } from "../auth/session.js";
@@ -49,7 +50,6 @@ import {
   STAFF_ROLES,
   users,
 } from "../db/schema.js";
-import { trustedClients } from "./evaluation/service.js";
 
 /**
  * THE access predicate, on a query that has `courses` in scope: a seat on
@@ -66,13 +66,6 @@ import { trustedClients } from "./evaluation/service.js";
 export function staffAccess(userId: string, courseId: AnyColumn | SQL = courses.id): SQL {
   return sql`EXISTS (SELECT 1 FROM ${courseStaff} WHERE ${courseStaff.courseId} = ${courseId} AND ${courseStaff.userId} = ${userId})`;
 }
-
-/**
- * The same predicate under the name PLAN-MVP §4.1 uses for the `org` routes.
- * One definition, two names: `staffAccess` reads well next to a `courses`
- * query, `courseAccess` next to `poolAccess` below.
- */
-const courseAccess = staffAccess;
 
 /**
  * THE access predicate for a pool, on a query that has `pools` in scope
@@ -205,6 +198,36 @@ export async function requireCourseRole(
   return null;
 }
 
+/**
+ * The account holds a seat on at least one course staff: what makes a
+ * teacher (`decideRole`) and what the course kinds of notification are sent
+ * to (`tellStaff`, `staffOf`).
+ */
+export async function holdsCourseSeat(db: Db, userId: string): Promise<boolean> {
+  const [seat] = await db
+    .select({ courseId: courseStaff.courseId })
+    .from(courseStaff)
+    .where(eq(courseStaff.userId, userId))
+    .limit(1);
+  return seat !== undefined;
+}
+
+/**
+ * The staff seats of a classroom's course (`course_staff`, the rows
+ * `staffAccess` reads): the ONE audience of a staff notification about a
+ * classroom or what it holds (F-NOTIF-11) — an evaluation's grading, a
+ * project's deadline, its organization lost — and of the hints addressed to
+ * `teacher:<id>`. A seatless admin is never among them.
+ */
+export async function classroomStaffIds(db: Db, classroomId: string): Promise<string[]> {
+  const rows = await db
+    .select({ userId: courseStaff.userId })
+    .from(courseStaff)
+    .innerJoin(classrooms, eq(classrooms.courseId, courseStaff.courseId))
+    .where(eq(classrooms.id, classroomId));
+  return [...new Set(rows.map((r) => r.userId))];
+}
+
 /** Whether the caller is an owner of the course (ADR-068): for a write whose role requirement depends on its effect. */
 export async function isCourseOwner(db: Db, courseId: string, user: Pick<Caller, "id" | "reach">): Promise<boolean> {
   return courseRoleAllows(await courseRoleOf(db, courseId, user), "owner");
@@ -284,6 +307,22 @@ export function adminGuard(app: FastifyInstance, { hidden = false } = {}) {
 async function notFound(reply: FastifyReply): Promise<null> {
   await reply.code(404).send({ error: "not_found" });
   return null;
+}
+
+/**
+ * The reply-aware door of a `find…` finder (invariant 6): its entity, or the
+ * 404 of a missing one. The access predicate stays in the finder's query.
+ * `portalOnly`: any session but the caller's own portal one
+ * ({@link ownPortalSession}) gets the same 404, BEFORE anything is loaded.
+ */
+function routeLoader<P, T>(
+  find: (app: FastifyInstance, req: FastifyRequest, params: P) => Promise<T | null>,
+  { portalOnly = false }: { portalOnly?: boolean } = {},
+) {
+  return async (app: FastifyInstance, req: FastifyRequest, reply: FastifyReply, params: P): Promise<T | null> => {
+    if (portalOnly && !ownPortalSession(req.auth)) return notFound(reply);
+    return (await find(app, req, params)) ?? notFound(reply);
+  };
 }
 
 /**
@@ -463,14 +502,9 @@ export async function findAccessibleClassroom(db: Db, user: Caller, classroomId:
 }
 
 /** Loads the classroom + its course, gated by the same predicate. */
-export async function accessibleClassroom(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  params: { id: string },
-) {
-  return (await findAccessibleClassroom(app.db, callerOf(req), params.id)) ?? notFound(reply);
-}
+export const accessibleClassroom = routeLoader((app, req, params: { id: string }) =>
+  findAccessibleClassroom(app.db, callerOf(req), params.id),
+);
 
 // ---------------------------------------------------------------------------
 // Projects (F-PROJ, merge task M3-02): the staff's routes, portal sessions
@@ -492,15 +526,10 @@ export async function findAccessibleProject(db: Db, user: Caller, projectId: str
 }
 
 /** {@link findAccessibleProject} for the caller's own portal session, answering the 404 (invariant 6). */
-export async function accessibleProject(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  params: { id: string },
-) {
-  if (!ownPortalSession(req.auth)) return notFound(reply);
-  return (await findAccessibleProject(app.db, callerOf(req), params.id)) ?? notFound(reply);
-}
+export const accessibleProject = routeLoader(
+  (app, req, params: { id: string }) => findAccessibleProject(app.db, callerOf(req), params.id),
+  { portalOnly: true },
+);
 
 /**
  * A repository of a project the caller reaches (M3-05a): the project under
@@ -521,29 +550,20 @@ export async function findAccessibleProjectRepo(db: Db, user: Caller, projectId:
 }
 
 /** {@link findAccessibleProjectRepo} for the caller's own portal session, answering the 404 (invariant 6). */
-export async function accessibleProjectRepo(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  params: { id: string; rid: string },
-) {
-  if (!ownPortalSession(req.auth)) return notFound(reply);
-  return (await findAccessibleProjectRepo(app.db, callerOf(req), params.id, params.rid)) ?? notFound(reply);
-}
+export const accessibleProjectRepo = routeLoader(
+  (app, req, params: { id: string; rid: string }) =>
+    findAccessibleProjectRepo(app.db, callerOf(req), params.id, params.rid),
+  { portalOnly: true },
+);
 
 /**
  * {@link accessibleClassroom} for the projects' and the group sets' (ADR-070)
  * classroom routes: the caller's own portal session only.
  */
-export async function projectsClassroom(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  params: { id: string },
-) {
-  if (!ownPortalSession(req.auth)) return notFound(reply);
-  return accessibleClassroom(app, req, reply, params);
-}
+export const projectsClassroom = routeLoader(
+  (app, req, params: { id: string }) => findAccessibleClassroom(app.db, callerOf(req), params.id),
+  { portalOnly: true },
+);
 
 // ---------------------------------------------------------------------------
 // Group sets (ADR-070, merge task M3-15a): the staff's routes, portal
@@ -566,15 +586,10 @@ export async function findAccessibleGroupSet(db: Db, user: Caller, setId: string
 }
 
 /** {@link findAccessibleGroupSet} for the caller's own portal session, answering the 404 (invariant 6). */
-export async function accessibleGroupSet(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  params: { id: string },
-) {
-  if (!ownPortalSession(req.auth)) return notFound(reply);
-  return (await findAccessibleGroupSet(app.db, callerOf(req), params.id)) ?? notFound(reply);
-}
+export const accessibleGroupSet = routeLoader(
+  (app, req, params: { id: string }) => findAccessibleGroupSet(app.db, callerOf(req), params.id),
+  { portalOnly: true },
+);
 
 // ---------------------------------------------------------------------------
 // Group sets, the students' side (F-PROJ-22, ADR-070 §8; merge task M3-17).
@@ -654,14 +669,9 @@ export async function findStudentGroupSet(
 }
 
 /** {@link findStudentGroupSet} for the request's own session, answering the 404 (invariant 6). */
-export async function studentGroupSet(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  params: { id: string },
-) {
-  return (await findStudentGroupSet(app.db, callerOf(req).id, req.auth, params.id, app.clock.now())) ?? notFound(reply);
-}
+export const studentGroupSet = routeLoader((app, req, params: { id: string }) =>
+  findStudentGroupSet(app.db, callerOf(req).id, req.auth, params.id, app.clock.now()),
+);
 
 /**
  * The student's side of a project (F-PROJ-05, N-SEC-20; merge task M3-03):
@@ -692,15 +702,10 @@ export async function findStudentProject(db: Db, userId: string, projectId: stri
  * plugin's `403 impersonation_read_only` elsewhere, ADR-034),
  * a Bearer token, a `seb` or `kiosk` session never accept a project.
  */
-export async function studentProject(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  params: { id: string },
-) {
-  if (!ownPortalSession(req.auth)) return notFound(reply);
-  return (await findStudentProject(app.db, callerOf(req).id, params.id)) ?? notFound(reply);
-}
+export const studentProject = routeLoader(
+  (app, req, params: { id: string }) => findStudentProject(app.db, callerOf(req).id, params.id),
+  { portalOnly: true },
+);
 
 /** A project loaded through {@link findStudentProjectView}: the student payload's scope. */
 export interface StudentProjectScope extends ReadableClassroom {
@@ -746,14 +751,9 @@ export function sebProjectSession(auth: Pick<SessionAuth, "kind" | "actorUserId"
 }
 
 /** {@link findStudentProjectView} for the request's own session, answering the 404 (invariant 6). */
-export async function studentProjectView(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  params: { id: string },
-): Promise<StudentProjectScope | null> {
-  return (await findStudentProjectView(app.db, callerOf(req), req.auth, params.id)) ?? notFound(reply);
-}
+export const studentProjectView = routeLoader((app, req, params: { id: string }) =>
+  findStudentProjectView(app.db, callerOf(req), req.auth, params.id),
+);
 
 // ---------------------------------------------------------------------------
 // The student branch (invariant 6, spec 05 §5.7): the classroom routes a
@@ -918,14 +918,9 @@ export async function findAccessiblePool(
 }
 
 /** `/pools/:id` */
-export async function accessiblePool(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  params: { id: string },
-): Promise<AccessiblePool | null> {
-  return (await findAccessiblePool(app.db, callerOf(req), params.id)) ?? notFound(reply);
-}
+export const accessiblePool = routeLoader((app, req, params: { id: string }) =>
+  findAccessiblePool(app.db, callerOf(req), params.id),
+);
 
 type QuestionScope = { question: typeof questions.$inferSelect; pool: AccessiblePool };
 
@@ -970,14 +965,9 @@ export async function findOwnUnsavedPollQuestion(
 }
 
 /** `/questions/:id` — so a handler never has to re-check anything. */
-export async function accessibleQuestion(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  params: { id: string },
-): Promise<QuestionScope | null> {
-  return (await findAccessibleQuestion(app.db, callerOf(req), params.id)) ?? notFound(reply);
-}
+export const accessibleQuestion = routeLoader((app, req, params: { id: string }) =>
+  findAccessibleQuestion(app.db, callerOf(req), params.id),
+);
 
 /** `/categories/:id` — the category AND its pool. */
 export async function accessibleCategory(
@@ -1046,14 +1036,9 @@ async function findTemplate(
 }
 
 /** {@link findTemplate}, answering the 404 of a missing template (invariant 6). */
-export async function loadTemplate(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  templateId: string,
-) {
-  return (await findTemplate(app.db, callerOf(req), templateId)) ?? notFound(reply);
-}
+export const loadTemplate = routeLoader((app, req, templateId: string) =>
+  findTemplate(app.db, callerOf(req), templateId),
+);
 
 type ReachableEvaluation = { evaluation: typeof evaluations.$inferSelect; staff: boolean };
 
@@ -1182,7 +1167,7 @@ export function sitRefusal(
   evaluation: typeof evaluations.$inferSelect,
   staffWatch: boolean,
 ): "client" | "ip" | null {
-  const clients = trustedClients(evaluation);
+  const clients = trustedClientsOf(evaluation.mode, EvaluationSettings.parse(evaluation.settings));
   const auth = req.auth;
   const refused = confined(auth)
     ? auth.evaluationId !== evaluation.id || !clients.includes(auth.kind)
@@ -1193,14 +1178,9 @@ export function sitRefusal(
 }
 
 /** `findReachableEvaluation`, answering 404 when it finds nothing. */
-export async function reachableEvaluation(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  evaluationId: string,
-): Promise<ReachableEvaluation | null> {
-  return (await findReachableEvaluation(app.db, callerOf(req), evaluationId)) ?? notFound(reply);
-}
+export const reachableEvaluation = routeLoader((app, req, evaluationId: string) =>
+  findReachableEvaluation(app.db, callerOf(req), evaluationId),
+);
 
 /**
  * `/attempts/:id` — the student's own attempt. A teacher does NOT reach a

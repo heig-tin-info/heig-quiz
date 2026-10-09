@@ -20,7 +20,8 @@ import type { AppConfig } from "./config.js";
 import type { Db } from "./db/client.js";
 import { auditLog, sessions, users } from "./db/schema.js";
 import { testApp, testDb } from "./test/db.js";
-import { lastTickOf, startTicker, TICK_TASKS, type TickTask } from "./ticker.js";
+import { startTicker, TICK_TASKS, type TickTask } from "./ticker.js";
+import { lastTickOf } from "./tickerPass.js";
 
 const TICK_MS = 1_000;
 const config = { TICK_MS, KIOSK_ATTESTATION: "off" } as unknown as AppConfig;

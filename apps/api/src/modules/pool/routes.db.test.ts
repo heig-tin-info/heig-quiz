@@ -1442,6 +1442,19 @@ describe("the order of the refusals, over HTTP", () => {
       role: "reader",
     });
     expect(memberAsOwner.statusCode).toBe(404);
+    // …and before the body: the sub-parameter is the 404 first.
+    const memberAndBody = await patch(`/app/api/pools/${open}/members/not-a-uuid`, owner.headers, { role: 42 });
+    expect(memberAndBody.statusCode).toBe(404);
+    expect(memberAndBody.json()).toEqual({ error: "not_found" });
+    // A member may leave by DELETE, so its role step is the handler's, after
+    // the sub-parameter: a malformed id is a reader's 404 there.
+    const leaveAsReader = await server.app.inject({
+      method: "DELETE",
+      url: `/app/api/pools/${open}/members/not-a-uuid`,
+      headers: reader.headers,
+    });
+    expect(leaveAsReader.statusCode).toBe(404);
+    expect(leaveAsReader.json()).toEqual({ error: "not_found" });
 
     const malformed = await patch(`/app/api/pools/${open}`, owner.headers, badBody);
     expect(malformed.statusCode).toBe(400);

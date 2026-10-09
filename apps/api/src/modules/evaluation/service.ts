@@ -55,7 +55,6 @@ export {
   retakePolicyOf,
   retakesEnabled,
   isLatestAttempt,
-  isStaffAttempt,
   feedbackOf,
   scaleOf,
   toEvaluation,

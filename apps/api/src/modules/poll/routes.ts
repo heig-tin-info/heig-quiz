@@ -30,6 +30,7 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { eq } from "drizzle-orm";
+import type { z } from "zod";
 
 import {
   IdParam,
@@ -485,20 +486,45 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     };
   }
 
-  function notOnRoster(reply: FastifyReply): FastifyReply {
-    return reply.code(403).send({
-      error: "not_on_roster",
-      message: "This poll is for the students of its classroom",
-    });
+  /**
+   * What the three public routes share, in this order: a write's CSRF check
+   * FIRST (the only unauthenticated write surface: nothing of a forged
+   * request is parsed), the code (404), the body (400), then the poll the
+   * code names — its 404, or the 403 of `not_on_roster`. Null once it has
+   * answered.
+   */
+  async function publicRequest<B extends z.ZodType | undefined = undefined>(
+    req: FastifyRequest,
+    reply: FastifyReply,
+    now: Date,
+    spec: { write: boolean; body?: B },
+  ) {
+    if (spec.write && csrfRefused(req, reply)) return null;
+    const params = PollCodeParam.safeParse(req.params);
+    if (!params.success) {
+      notFound(reply);
+      return null;
+    }
+    const body = spec.body?.safeParse(emptyBody(req.body));
+    if (body && !body.success) {
+      invalid(reply, body.error);
+      return null;
+    }
+    const found = await publicScope(req, params.data.code, now);
+    if (!found) {
+      notFound(reply);
+      return null;
+    }
+    if (found === "not_on_roster") {
+      reply.code(403).send({ error: "not_on_roster", message: "This poll is for the students of its classroom" });
+      return null;
+    }
+    return { ...found, body: body?.data as B extends z.ZodType ? z.output<B> : undefined };
   }
 
   app.get("/app/api/p/:code", async (req, reply) => {
-    const now = app.clock.now();
-    const params = PollCodeParam.safeParse(req.params);
-    if (!params.success) return notFound(reply);
-    const found = await publicScope(req, params.data.code, now);
-    if (!found) return notFound(reply);
-    if (found === "not_on_roster") return notOnRoster(reply);
+    const found = await publicRequest(req, reply, app.clock.now(), { write: false });
+    if (!found) return reply;
     return service.publicView(app.db, found.scope, found.state, found.viewer);
   });
 
@@ -510,13 +536,8 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
    */
   app.post("/app/api/p/:code/join", async (req, reply) => {
     const now = app.clock.now();
-    const refused = csrfRefused(req, reply);
-    if (refused) return refused;
-    const params = PollCodeParam.safeParse(req.params);
-    if (!params.success) return notFound(reply);
-    const found = await publicScope(req, params.data.code, now);
-    if (!found) return notFound(reply);
-    if (found === "not_on_roster") return notOnRoster(reply);
+    const found = await publicRequest(req, reply, now, { write: true });
+    if (!found) return reply;
     const { scope, viewer } = found;
     if (found.state !== "running") {
       // Nothing to join any more; the page still shows the question.
@@ -557,23 +578,16 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
   /** One answer, changeable until the poll ends. */
   app.post("/app/api/p/:code/answer", async (req, reply) => {
     const now = app.clock.now();
-    const refused = csrfRefused(req, reply);
-    if (refused) return refused;
-    const params = PollCodeParam.safeParse(req.params);
-    if (!params.success) return notFound(reply);
-    const body = PollAnswer.safeParse(emptyBody(req.body));
-    if (!body.success) return invalid(reply, body.error);
-    const found = await publicScope(req, params.data.code, now);
-    if (!found) return notFound(reply);
-    if (found === "not_on_roster") return notOnRoster(reply);
-    const { scope, viewer } = found;
+    const found = await publicRequest(req, reply, now, { write: true, body: PollAnswer });
+    if (!found) return reply;
+    const { scope, viewer, body } = found;
     if (found.state !== "running") {
       return reply.code(410).send({ error: "attempt_closed", reason: "evaluation_closed" });
     }
     const attempt = await service.attemptOfViewer(app.db, scope.evaluation, viewer);
     if (!attempt) return reply.code(403).send({ error: "not_joined" });
     try {
-      await service.answerPoll(app.db, scope, attempt, body.data.payload, now);
+      await service.answerPoll(app.db, scope, attempt, body.payload, now);
       try {
         await ai.requestAiPass(app, scope, now);
       } catch (err) {

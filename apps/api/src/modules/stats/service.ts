@@ -65,10 +65,10 @@ import {
   evaluationItems,
   evaluations,
   gradings,
+  isStaffAttempt,
   questionVersions,
   questions,
 } from "../../db/schema.js";
-import { isStaffAttempt } from "../evaluation/service.js";
 import { pairKey, type PairKey } from "../grading/service.js";
 import { answeredBy } from "../live/service.js";
 import { tryLoadConfig, typeOf } from "../pool/config.js";
