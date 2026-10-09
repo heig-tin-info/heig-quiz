@@ -35,7 +35,7 @@ import { KIOSK_TASKS } from "./modules/kiosk/jobs.js";
 import { LIVE_TASKS } from "./modules/live/jobs.js";
 import { PROJECT_TASKS } from "./modules/project/jobs.js";
 import { scheduledTasksTick } from "./modules/system/jobs.js";
-import { markTickerPass } from "./tickerPass.js";
+import { markTickerPass } from "./serviceHealth.js";
 
 export interface TickTask {
   name: string;

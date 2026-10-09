@@ -47,48 +47,61 @@ files live at the repository root; there is no `deploy/` directory.
 
 Each module lives in `apps/api/src/modules/<name>/` with `routes.ts` the HTTP handlers, `service.ts` the logic and database access (a module may split its service into cohesive files under its directory, `service.ts` staying the entry other modules import — `live/` does, since 2026-09-23), `events.ts` the events it publishes, `jobs.ts` its pg-boss handlers. A module never imports another module's `routes.ts`. It calls the other modules' `service.ts`.
 
-"Depends on" is the module graph the code has: the other modules whose
-code a module's files import at run time (type-only imports, the shared
-`guards.ts` and `http.ts`, and the packages aside), measured with madge on
-2026-10-09. A pair that depends both ways (`live` and `grading`, `pool` and
-`stats`, …) is a cycle between modules, not necessarily between files: the
-file-level cycles left are `grading`/`live`/`results` (audit 2026-10-03 A1e),
-the four files of `system` (its health checks read the scheduled-task
-catalog that runs them), and the schema's lazy foreign keys.
-
 | Module | Responsibility | Depends on |
 |---|---|---|
-| `auth` | OIDC, sessions, claims, multi-address identity, global roles | `codespace`, `kiosk`, `live`, `org`, `project`, `realtime` (its plugins mount their sign-in and session routes) |
-| `org` | Courses, classrooms, staff, rosters, accommodations | `auth`, `evaluation`, `github`, `journal`, `notifications`, `pool`, `project`, `realtime` |
-| `pool` | Pools, categories, tags, questions, versions, drafts, assets, search | `concept`, `live`, `llm`, `notifications`, `realtime`, `stats` |
-| `concept` | The instance-wide vocabulary of concepts (ADR-081): concepts, the resolution of a typed label, proposing and editing; the sorting of the existing tags (`concept_tag_sortings`, second addendum) and the model pass that proposes it (`concept_sort_runs`, LLM purpose `sort`); the links to questions (`question_concepts`) and the resolution of a write naming concepts, inert until the cut-over (third addendum §1); aliases, relations and the links to courses come later | `llm` |
-| `evaluation` | Configuration of an evaluation, items, lifecycle, settings | `concept`, `live`, `notifications`, `pool`, `realtime` |
-| `live` | Attempts, answers, autosave, presence, clock, live control, deadline ticker | `auth`, `evaluation`, `grading`, `pool`, `realtime`, `results`, `runner` |
-| `preview` | The teacher's stateless preview of an evaluation: seed, student view, runs and grading, nothing stored (ADR-018) | `evaluation`, `grading`, `live`, `pool` |
-| `grading` | Automatic grading, runner, LLM, validation panel, regrading, release | `evaluation`, `live`, `llm`, `notifications`, `pool`, `realtime`, `results` |
-| `results` | Grades, grade scale, CSV exports, statistical views of an evaluation, student feedback | `evaluation`, `grading`, `live`, `notifications`, `pool`, `realtime` |
-| `stats` | Item analysis per question (ADR-038), the time spent on it (ADR-039) and its discrimination index (ADR-042) and the distractors of a multiple-choice question (ADR-043), aggregates for the pool | `grading`, `live`, `pool` |
-| `llm` | Providers, keys, prompt templates, call log, generation | none |
-| `runner` | HTTP client of the runner service, queue and priorities | none |
-| `drill` | Cards, FSRS, sessions, reviews, the teacher's activity and mastery reads (ADR-041) | `concept`, `evaluation`, `live`, `org`, `pool`, `results`, `runner`; registers on `live`'s `onAttemptsEnded` (hand-in) and `results`' `onResultsReleased` (release), which never import it |
+| `auth` | OIDC, sessions, claims, multi-address identity, global roles | |
+| `org` | Courses, classrooms, staff, rosters, accommodations | `auth` |
+| `pool` | Pools, categories, tags, questions, versions, drafts, assets, search | `auth`, `core` |
+| `concept` | The instance-wide vocabulary of concepts (ADR-081): concepts, the resolution of a typed label, proposing and editing; the sorting of the existing tags (`concept_tag_sortings`, second addendum) and the model pass that proposes it (`concept_sort_runs`, LLM purpose `sort`); the links to questions (`question_concepts`) and the resolution of a write naming concepts, inert until the cut-over (third addendum §1); aliases, relations and the links to courses come later | `auth` |
+| `evaluation` | Configuration of an evaluation, items, lifecycle, settings | `org`, `pool` |
+| `live` | Attempts, answers, autosave, presence, clock, live control, deadline ticker | `evaluation` |
+| `preview` | The teacher's stateless preview of an evaluation: seed, student view, runs and grading, nothing stored (ADR-018) | `live`, `grading`, `runner` |
+| `grading` | Automatic grading, runner, LLM, validation panel, regrading, release | `live`, `runner`, `llm` |
+| `results` | Grades, grade scale, CSV exports, statistical views of an evaluation, student feedback | `grading` |
+| `stats` | Item analysis per question (ADR-038), the time spent on it (ADR-039) and its discrimination index (ADR-042) and the distractors of a multiple-choice question (ADR-043), aggregates for the pool | `grading`, `evaluation`, `pool` |
+| `llm` | Providers, keys, prompt templates, call log, generation | `auth` |
+| `runner` | HTTP client of the runner service, queue and priorities | |
+| `drill` | Cards, FSRS, sessions, reviews, the teacher's activity and mastery reads (ADR-041) | `org`, `pool`, `evaluation`, `live` (the student view), `results`; registers on `live`'s `onAttemptsEnded` (hand-in) and `results`' `onResultsReleased` (release), which never import it |
 | `canonical` | Planned, not present: import / export, API and CLI | `pool` |
-| `admin` | Users, health, settings, audit; the admin routes of the scheduled tasks | `codespace`, `notifications`, `system`; reads the other modules' tables by join, read-only |
-| `system` | The scheduled tasks (D10): their table, the ticker's claim, the `system.task` worker, the instrumented run (5.4, Clock) | `assist`, `auth`, `drill`, `github`, `live`, `llm`, `notifications`, `poll`, `pool`, `project`, `realtime`, `runner` (the catalog of every module's scheduled tasks) |
-| `realtime` | Event bus, SSE streams, presence, topics | `auth`, `live` |
-| `github` | Quiz's GitHub App: installations and organizations, the classroom ↔ organization link and its checks, GitHub account linking, the webhook intake and its handler registry, delivery reconciliation (5.11) | `notifications`, `pool`, `realtime` |
-| `project` | Projects (F-PROJ): their lifecycle, the distribution repository, acceptance and provisioning, groups, the score pipeline, deadline, freeze and review dispatch, sync of the source, reconciliation, the staff and student views (5.11) | `auth`, `codespace`, `github`, `notifications`, `realtime` (registers its handlers and push receipts on the webhook registry, which never imports it) |
-| `gradebook` | A classroom's gradebook (F-GBOOK, ADR-074): its columns' settings, the staff's marks and the published mean (the only things it stores), read from the released results of `results` and `project` through the `ActivityKind` entries (`gradebookEntries`), never recomputed | `activity`, `realtime` (the registry: `results` and `project` answer through it) |
-| `journal` | A classroom's journal in its two modes (ADR-057): in Quiz, the pages, assets and revisions it owns and their writes; in a GitHub repository, ingestion into the read model; rendering through `docrender`, the reader's access (5.11) | `auth`, `github`, `pool`, `realtime` (registers on its webhook registry, which never imports it) |
-| `activity` | The activities of every kind where a page lists them together: `ActivityKind` over `KINDS` (evaluations, projects), the student home and classroom cards, the gradebook entries | `auth`, `evaluation`, `group`, `journal`, `live`, `org`, `project`, `results` |
-| `poll` | Live polls (F-LIVE-13, F-LIVE-14, ADR-014): an evaluation of mode `poll` with one item, created and started in one call, on the `live` machinery; the brainstorm poll and its AI assistance (ADR-071, ADR-072) | `evaluation`, `live`, `llm`, `pool`, `realtime` |
-| `notifications` | The bell and the channels that leave the platform, e-mail and Microsoft Teams (ADR-030): `notifyMany` the one entry, the recipient's preferences, deliveries as jobs | `auth`, `realtime` |
-| `group` | A classroom's group sets, their groups and who is in which, formed by hand, at random or by the students (ADR-070) | `project`, `realtime` |
-| `codespace` | What Quiz says to the online workspace portal (ADR-047, ADR-078): the signed project sync, the launch token, the git token relay | `auth`, `github`, `project` |
-| `kiosk` | The kiosk station registry (ADR-051): attestation, pairing, the station cookie | `auth`, `live`, `realtime` |
-| `legacy` | The resolver of heig-classroom's legacy URLs (merge task M8-02) | none |
-| `assist` | The teacher assistant (ADR-080, F-LLM-07): a question answered by the gateway with read-only tools | `auth`, `llm`, `mcp` |
-| `mcp` | The MCP server's tool catalogue and the in-process client of `/app/api` its tools call through | `auth`, `pool` |
-| `changelog` | What's new on the platform (ADR-087): the entries shipped in the build and what each reader has acknowledged | none |
+| `admin` | Users, health, settings, audit; the admin routes of the scheduled tasks | all, read-only; `system` |
+| `system` | The scheduled tasks (D10): their table, the ticker's claim, the `system.task` worker, the instrumented run (5.4, Clock) | |
+| `realtime` | Event bus, SSE streams, presence, topics | |
+| `github` | Quiz's GitHub App: installations and organizations, the classroom ↔ organization link and its checks, GitHub account linking, the webhook intake and its handler registry, delivery reconciliation (5.11) | `auth`, `org` |
+| `project` | Projects (F-PROJ): their lifecycle, the distribution repository, acceptance and provisioning, groups, the score pipeline, deadline, freeze and review dispatch, sync of the source, reconciliation, the staff and student views (5.11) | `org`, `github` (registers its handlers and push receipts on the webhook registry, which never imports it) |
+| `gradebook` | A classroom's gradebook (F-GBOOK, ADR-074): its columns' settings, the staff's marks and the published mean (the only things it stores), read from the released results of `results` and `project` through the `ActivityKind` entries (`gradebookEntries`), never recomputed | `org`, `activity` (the registry: `results` and `project` answer through it) |
+| `journal` | A classroom's journal in its two modes (ADR-057): in Quiz, the pages, assets and revisions it owns and their writes; in a GitHub repository, ingestion into the read model; rendering through `docrender`, the reader's access (5.11) | `org`, `github` (registers on its webhook registry, which never imports it) |
+| `activity` | The activities of every kind where a page lists them together: `ActivityKind` over `KINDS` (evaluations, projects), the student home and classroom cards, the gradebook entries | |
+| `poll` | Live polls (F-LIVE-13, F-LIVE-14, ADR-014): an evaluation of mode `poll` with one item, created and started in one call, on the `live` machinery; the brainstorm poll and its AI assistance (ADR-071, ADR-072) | |
+| `notifications` | The bell and the channels that leave the platform, e-mail and Microsoft Teams (ADR-030): `notifyMany` the one entry, the recipient's preferences, deliveries as jobs | |
+| `group` | A classroom's group sets, their groups and who is in which, formed by hand, at random or by the students (ADR-070) | |
+| `codespace` | What Quiz says to the online workspace portal (ADR-047, ADR-078): the signed project sync, the launch token, the git token relay | |
+| `kiosk` | The kiosk station registry (ADR-051): attestation, pairing, the station cookie | |
+| `legacy` | The resolver of heig-classroom's legacy URLs (merge task M8-02) | |
+| `assist` | The teacher assistant (ADR-080, F-LLM-07): a question answered by the gateway with read-only tools | |
+| `mcp` | The MCP server's tool catalogue and the in-process client of `/app/api` its tools call through | |
+| `changelog` | What's new on the platform (ADR-087): the entries shipped in the build and what each reader has acknowledged | |
+
+**Measured divergences (madge, 2026-10-09).** The column above is the
+intended architecture. The code's module graph differs from it; each edge
+below is a mismatch to settle, either in the code or in this table by a
+decision, not a description of what is accepted. Measured: the other modules
+whose code a module's files import at run time (value imports; type-only
+imports, tests, the shared `guards.ts` and `http.ts`, and the packages
+aside); edges to `realtime`, through which every module publishes (rule 4),
+are left out.
+
+- Beyond the modules stated: `org` → `evaluation`, `github`, `journal`, `notifications`, `pool`, `project`; `pool` → `concept`, `live`, `llm`, `notifications`, `stats`; `concept` → `llm`; `evaluation` → `concept`, `live`, `notifications`; `live` → `auth`, `grading`, `pool`, `results`, `runner`; `preview` → `evaluation`, `pool`; `grading` → `evaluation`, `notifications`, `pool`, `results`; `results` → `evaluation`, `live`, `notifications`, `pool`; `stats` → `live`; `drill` → `concept`, `runner`; `github` → `notifications`, `pool`; `project` → `auth`, `codespace`, `notifications`; `journal` → `auth`, `pool`.
+- Where no dependency is stated: `auth` → `codespace`, `kiosk`, `live`, `org`, `project`; `system` → `assist`, `auth`, `drill`, `github`, `live`, `llm`, `notifications`, `poll`, `pool`, `project`, `runner`; `realtime` → `auth`, `live`; `activity` → `auth`, `evaluation`, `group`, `journal`, `live`, `org`, `project`, `results`; `poll` → `evaluation`, `live`, `llm`, `pool`; `notifications` → `auth`; `group` → `project`; `codespace` → `auth`, `github`, `project`; `kiosk` → `auth`, `live`; `assist` → `auth`, `llm`, `mcp`; `mcp` → `auth`, `pool`.
+
+The file-level cycles left are `grading`/`live`/`results` (audit 2026-10-03
+A1e), the four files of `system` (its health checks read the scheduled-task
+catalog that runs them) and the schema's lazy foreign keys. To regenerate
+the module graph: `madge` over `apps/api/src` with `skipTypeImports` and
+tests excluded (the madge API, `madge(path, { fileExtensions: ["ts"],
+tsConfig: "apps/api/tsconfig.json", detectiveOptions: { ts: { skipTypeImports:
+true } }, excludeRegExp: [/\.test\.ts$/] }).obj()`), each file mapped to its
+`modules/<name>/` (or `auth/`) directory; the plain cycle count is `npx
+madge --circular --extensions ts apps/api/src`.
 
 Rules:
 

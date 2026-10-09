@@ -517,7 +517,7 @@ export async function livePlugin(app: FastifyInstance) {
       { params: IdParam, body: ExtendBody, load: staffEvaluation },
       async ({ req, reply, now, body, scope }) => {
         if (body.scope === "attempt") {
-          const target = await staffAttempt(app, req, reply, scope.evaluation.id, body.attemptId!);
+          const target = await staffAttempt(app, req, reply, { evaluationId: scope.evaluation.id, attemptId: body.attemptId! });
           if (!target) return reply;
         }
         const updated = await service.extendTime(

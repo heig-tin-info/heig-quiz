@@ -11,6 +11,9 @@
  * that resolves a second entity from its body), the loader is split: a
  * `find…` FINDER returns the entity or null and never touches the reply, and
  * the reply-aware loader is that finder plus the 404. One query, two doors.
+ *
+ * `holdsCourseSeat` and `classroomStaffIds` live here too: this file owns the
+ * `course_staff` predicate, and they read the same seats.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { and, eq, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
@@ -475,20 +478,14 @@ export function seesUser(user: Caller, subjectId: string): SQL | undefined {
  */
 
 /** Loads the course if and only if the current user is on its staff. */
-export async function accessibleCourse(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  params: { id: string },
-) {
+export const accessibleCourse = routeLoader(async (app, req, params: { id: string }) => {
   const [course] = await app.db
     .select()
     .from(courses)
     .where(and(eq(courses.id, params.id), accessWhere(callerOf(req), staffAccess(req.user!.id))))
     .limit(1);
-  if (!course) return notFound(reply);
-  return course;
-}
+  return course ?? null;
+});
 
 /** The classroom + its course if the caller is on its staff; null otherwise. */
 export async function findAccessibleClassroom(db: Db, user: Caller, classroomId: string) {
@@ -502,9 +499,10 @@ export async function findAccessibleClassroom(db: Db, user: Caller, classroomId:
 }
 
 /** Loads the classroom + its course, gated by the same predicate. */
-export const accessibleClassroom = routeLoader((app, req, params: { id: string }) =>
-  findAccessibleClassroom(app.db, callerOf(req), params.id),
-);
+const classroomOfRequest = (app: FastifyInstance, req: FastifyRequest, params: { id: string }) =>
+  findAccessibleClassroom(app.db, callerOf(req), params.id);
+
+export const accessibleClassroom = routeLoader(classroomOfRequest);
 
 // ---------------------------------------------------------------------------
 // Projects (F-PROJ, merge task M3-02): the staff's routes, portal sessions
@@ -560,10 +558,7 @@ export const accessibleProjectRepo = routeLoader(
  * {@link accessibleClassroom} for the projects' and the group sets' (ADR-070)
  * classroom routes: the caller's own portal session only.
  */
-export const projectsClassroom = routeLoader(
-  (app, req, params: { id: string }) => findAccessibleClassroom(app.db, callerOf(req), params.id),
-  { portalOnly: true },
-);
+export const projectsClassroom = routeLoader(classroomOfRequest, { portalOnly: true });
 
 // ---------------------------------------------------------------------------
 // Group sets (ADR-070, merge task M3-15a): the staff's routes, portal
@@ -874,12 +869,7 @@ export async function readableClassroom(
 }
 
 /** Loads the roster entry if the current user is on the course's staff. */
-export async function accessibleEnrollment(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  params: { id: string; eid: string },
-) {
+export const accessibleEnrollment = routeLoader(async (app, req, params: { id: string; eid: string }) => {
   const [row] = await app.db
     .select({ enrollment: enrollments })
     .from(enrollments)
@@ -893,9 +883,8 @@ export async function accessibleEnrollment(
       ),
     )
     .limit(1);
-  if (!row) return notFound(reply);
-  return row.enrollment;
-}
+  return row?.enrollment ?? null;
+});
 
 // ---------------------------------------------------------------------------
 // Pool loaders — same motif, `poolAccess` instead of `staffAccess`.
@@ -970,21 +959,15 @@ export const accessibleQuestion = routeLoader((app, req, params: { id: string })
 );
 
 /** `/categories/:id` — the category AND its pool. */
-export async function accessibleCategory(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  params: { id: string },
-): Promise<{ category: typeof categories.$inferSelect; pool: AccessiblePool } | null> {
+export const accessibleCategory = routeLoader(async (app, req, params: { id: string }) => {
   const [row] = await app.db
     .select({ category: categories, pool: pools })
     .from(categories)
     .innerJoin(pools, eq(categories.poolId, pools.id))
     .where(and(eq(categories.id, params.id), accessWhere(callerOf(req), poolAccess(req.user!.id))))
     .limit(1);
-  if (!row) return notFound(reply);
-  return row;
-}
+  return row ?? null;
+});
 
 // ---------------------------------------------------------------------------
 // Evaluation and attempt loaders (WP5) — same motif as everything above: the
@@ -998,12 +981,7 @@ interface EvaluationScope {
 }
 
 /** Loads an evaluation by id for a member of its course's teaching staff. */
-export async function loadEvaluation(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  evaluationId: string,
-): Promise<EvaluationScope | null> {
+export const loadEvaluation = routeLoader(async (app, req, evaluationId: string): Promise<EvaluationScope | null> => {
   const [row] = await app.db
     .select({ evaluation: evaluations, classroom: classrooms })
     .from(evaluations)
@@ -1011,9 +989,8 @@ export async function loadEvaluation(
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
     .where(and(eq(evaluations.id, evaluationId), accessWhere(callerOf(req), staffAccess(req.user!.id))))
     .limit(1);
-  if (!row) return notFound(reply);
-  return row;
-}
+  return row ?? null;
+});
 
 /**
  * An evaluation TEMPLATE (ADR-031) and its course, for a member of that
@@ -1167,6 +1144,8 @@ export function sitRefusal(
   evaluation: typeof evaluations.$inferSelect,
   staffWatch: boolean,
 ): "client" | "ip" | null {
+  // The twin of `trustedClients()` in `evaluation/reads.ts`, computed here
+  // from the domain rule so that guards never imports the evaluation facade.
   const clients = trustedClientsOf(evaluation.mode, EvaluationSettings.parse(evaluation.settings));
   const auth = req.auth;
   const refused = confined(auth)
@@ -1187,33 +1166,18 @@ export const reachableEvaluation = routeLoader((app, req, evaluationId: string) 
  * student route: they have `/evaluations/:id/attempts/:attemptId` instead,
  * which is read-only and audited.
  */
-export async function ownAttempt(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  attemptId: string,
-): Promise<{
-  attempt: typeof attempts.$inferSelect;
-  evaluation: typeof evaluations.$inferSelect;
-} | null> {
+export const ownAttempt = routeLoader(async (app, req, attemptId: string) => {
   const [row] = await app.db
     .select({ attempt: attempts, evaluation: evaluations })
     .from(attempts)
     .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))
     .where(and(eq(attempts.id, attemptId), eq(attempts.userId, req.user!.id)))
     .limit(1);
-  if (!row) return notFound(reply);
-  return row;
-}
+  return row ?? null;
+});
 
 /** Any attempt of an evaluation the caller is staff of (dashboard, controls). */
-export async function staffAttempt(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  evaluationId: string,
-  attemptId: string,
-): Promise<typeof attempts.$inferSelect | null> {
+export const staffAttempt = routeLoader(async (app, req, p: { evaluationId: string; attemptId: string }) => {
   const [row] = await app.db
     .select({ attempt: attempts })
     .from(attempts)
@@ -1222,15 +1186,14 @@ export async function staffAttempt(
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
     .where(
       and(
-        eq(attempts.id, attemptId),
-        eq(attempts.evaluationId, evaluationId),
+        eq(attempts.id, p.attemptId),
+        eq(attempts.evaluationId, p.evaluationId),
         accessWhere(callerOf(req), staffAccess(req.user!.id)),
       ),
     )
     .limit(1);
-  if (!row) return notFound(reply);
-  return row.attempt;
-}
+  return row?.attempt ?? null;
+});
 
 /**
  * An evaluation and one of its attempts, for its staff: the loader of the
@@ -1246,7 +1209,7 @@ export const loadEvaluationAttempt =
   ): Promise<{ evaluation: typeof evaluations.$inferSelect; attempt: typeof attempts.$inferSelect } | null> => {
     const scope = await loadEvaluation(app, req, reply, p.id);
     if (!scope) return null;
-    const attempt = await staffAttempt(app, req, reply, p.id, p.attemptId);
+    const attempt = await staffAttempt(app, req, reply, { evaluationId: p.id, attemptId: p.attemptId });
     return attempt && { evaluation: scope.evaluation, attempt };
   };
 
@@ -1263,12 +1226,7 @@ interface AnswerScope {
 }
 
 /** `/answers/:answerId/…` — teacher side (the grading panel). */
-export async function staffAnswer(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  answerId: string,
-): Promise<AnswerScope | null> {
+export const staffAnswer = routeLoader(async (app, req, answerId: string): Promise<AnswerScope | null> => {
   const [row] = await app.db
     .select({ answer: answers, attempt: attempts, evaluation: evaluations })
     .from(answers)
@@ -1278,9 +1236,8 @@ export async function staffAnswer(
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
     .where(and(eq(answers.id, answerId), accessWhere(callerOf(req), staffAccess(req.user!.id))))
     .limit(1);
-  if (!row) return notFound(reply);
-  return row;
-}
+  return row ?? null;
+});
 
 interface GradingScope {
   grading: typeof gradings.$inferSelect;
@@ -1288,12 +1245,7 @@ interface GradingScope {
 }
 
 /** `/gradings/:id/…` — the same motif, from the grading itself. */
-export async function staffGrading(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  gradingId: string,
-): Promise<GradingScope | null> {
+export const staffGrading = routeLoader(async (app, req, gradingId: string): Promise<GradingScope | null> => {
   const [row] = await app.db
     .select({ grading: gradings, evaluation: evaluations })
     .from(gradings)
@@ -1303,6 +1255,5 @@ export async function staffGrading(
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
     .where(and(eq(gradings.id, gradingId), accessWhere(callerOf(req), staffAccess(req.user!.id))))
     .limit(1);
-  if (!row) return notFound(reply);
-  return row;
-}
+  return row ?? null;
+});

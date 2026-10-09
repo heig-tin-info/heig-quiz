@@ -136,7 +136,8 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   // an impersonation session that may write (ADR-034). One test, one place.
   const development = config.AUTH_DEV_LOGIN && config.NODE_ENV !== "production";
   /**
-   * A session's cookie pair, the one place both are set (opened, renewed):
+   * A session's cookie pair, the one place both are set (opened, renewed;
+   * cleared at sign-out by {@link clearSessionCookies}):
    * the session itself (`httpOnly`), and the CSRF token the frontend reads
    * for the X-CSRF-Token header (double-submit) — when there is one to set.
    * One scope and one expiry. A confined session's are `Strict` (ADR-051
@@ -151,6 +152,12 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     const base = { path: "/", sameSite: confined(auth) ? "strict" : "lax", secure } as const;
     reply.setCookie(SESSION_COOKIE, pair.token, { ...base, httpOnly: true, expires: pair.expires });
     if (pair.csrf) reply.setCookie(CSRF_COOKIE, pair.csrf, { ...base, httpOnly: false, expires: pair.expires });
+  };
+
+  /** The pair's end, at sign-out: both cookies cleared on the path they were set on. */
+  const clearSessionCookies = (reply: FastifyReply) => {
+    reply.clearCookie(SESSION_COOKIE, { path: "/" });
+    reply.clearCookie(CSRF_COOKIE, { path: "/" });
   };
 
   // --- Session resolution on every request ---
@@ -387,8 +394,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
       // The audit entry is `deleteSession`'s: `auth.logout`, or the end of an impersonation.
       // And `superpowers.disabled` (`logout`) when they were still on (ADR-054).
       if (token) await deleteSession(app.db, token, app.clock.now());
-      reply.clearCookie(SESSION_COOKIE, { path: "/" });
-      reply.clearCookie(CSRF_COOKIE, { path: "/" });
+      clearSessionCookies(reply);
       return reply.code(204).send();
     },
   );

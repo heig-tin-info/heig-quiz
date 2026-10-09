@@ -439,104 +439,83 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
   // =========================================================================
 
   /**
-   * The poll a code names, with the browser's identity resolved — or
-   * `"not_on_roster"` when a classroom's poll is asked for by a signed-in
-   * account that holds neither a seat on its roster nor one on its staff
-   * (ADR-014, addendum 2026-09-27). That refusal is a 403 and not a 404: the
-   * code is on the wall of the room, so the poll's existence is no secret —
-   * what is withheld is its content, and the reason is the one thing the
-   * reader can act on (sign in with another account). A browser with no
-   * session is told to sign in first (`me.loginRequired`), as before.
-   */
-  async function publicScope(
-    req: FastifyRequest,
-    code: string,
-    now: Date,
-  ): Promise<
-    | {
-        scope: service.PollScope;
-        state: "running" | "ended";
-        viewer: service.Viewer & { loggedIn: boolean };
-      }
-    | "not_on_roster"
-    | null
-  > {
-    const found = await service.byCode(app.db, code, now);
-    if (!found) return null;
-    if (
-      !isOwnedPoll(found.evaluation) &&
-      req.user &&
-      !(await findReachableEvaluation(app.db, callerOf(req), found.evaluation.id))
-    ) {
-      return "not_on_roster";
-    }
-    const scope = await service.scopeOf(app.db, found.evaluation);
-    if (!scope) return null;
-    const token = req.cookies[service.GUEST_COOKIE];
-    const guest =
-      req.user || !token ? null : await live.guestByToken(app.db, found.evaluation.id, token);
-    return {
-      scope,
-      state: found.state,
-      viewer: {
-        userId: req.user?.id ?? null,
-        guestId: guest?.id ?? null,
-        loggedIn: Boolean(req.user),
-      },
-    };
-  }
-
-  /**
    * What the three public routes share, in this order: a write's CSRF check
    * FIRST (the only unauthenticated write surface: nothing of a forged
    * request is parsed), the code (404), the body (400), then the poll the
-   * code names — its 404, or the 403 of `not_on_roster`. Null once it has
-   * answered.
+   * code names (404), with the browser's identity resolved. Null once it
+   * has answered.
+   *
+   * A classroom's poll asked for by a signed-in account that holds neither a
+   * seat on its roster nor one on its staff is `403 not_on_roster` (ADR-014,
+   * addendum 2026-09-27), not a 404: the code is on the wall of the room, so
+   * the poll's existence is no secret — what is withheld is its content, and
+   * the reason is the one thing the reader can act on (sign in with another
+   * account). A browser with no session is told to sign in first
+   * (`me.loginRequired`), as before.
    */
   async function publicRequest<B extends z.ZodType | undefined = undefined>(
     req: FastifyRequest,
     reply: FastifyReply,
     now: Date,
-    spec: { write: boolean; body?: B },
+    body?: B,
   ) {
-    if (spec.write && csrfRefused(req, reply)) return null;
+    if (req.method !== "GET" && csrfRefused(req, reply)) return null;
     const params = PollCodeParam.safeParse(req.params);
     if (!params.success) {
       notFound(reply);
       return null;
     }
-    const body = spec.body?.safeParse(emptyBody(req.body));
-    if (body && !body.success) {
-      invalid(reply, body.error);
+    const parsed = body?.safeParse(emptyBody(req.body));
+    if (parsed && !parsed.success) {
+      invalid(reply, parsed.error);
       return null;
     }
-    const found = await publicScope(req, params.data.code, now);
-    if (!found) {
-      notFound(reply);
-      return null;
-    }
-    if (found === "not_on_roster") {
+    const found = await service.byCode(app.db, params.data.code, now);
+    if (
+      found &&
+      !isOwnedPoll(found.evaluation) &&
+      req.user &&
+      !(await findReachableEvaluation(app.db, callerOf(req), found.evaluation.id))
+    ) {
       reply.code(403).send({ error: "not_on_roster", message: "This poll is for the students of its classroom" });
       return null;
     }
-    return { ...found, body: body?.data as B extends z.ZodType ? z.output<B> : undefined };
+    const scope = found && (await service.scopeOf(app.db, found.evaluation));
+    if (!found || !scope) {
+      notFound(reply);
+      return null;
+    }
+    const token = req.cookies[service.GUEST_COOKIE];
+    const guest =
+      req.user || !token ? null : await live.guestByToken(app.db, found.evaluation.id, token);
+    const viewer: service.Viewer & { loggedIn: boolean } = {
+      userId: req.user?.id ?? null,
+      guestId: guest?.id ?? null,
+      loggedIn: Boolean(req.user),
+    };
+    return {
+      scope,
+      state: found.state,
+      viewer,
+      body: parsed?.data as B extends z.ZodType ? z.output<B> : undefined,
+    };
   }
 
   app.get("/app/api/p/:code", async (req, reply) => {
-    const found = await publicRequest(req, reply, app.clock.now(), { write: false });
+    const found = await publicRequest(req, reply, app.clock.now());
     if (!found) return reply;
     return service.publicView(app.db, found.scope, found.state, found.viewer);
   });
 
   /**
    * Joining. A session joins as itself — for a classroom's poll, only when
-   * it sits on the roster or the staff (`publicScope`); a browser with no
+   * it sits on the roster or the staff (`publicRequest`); a browser with no
    * session joins as a guest when the poll is anonymous, and is told to sign
    * in otherwise.
    */
   app.post("/app/api/p/:code/join", async (req, reply) => {
     const now = app.clock.now();
-    const found = await publicRequest(req, reply, now, { write: true });
+    const found = await publicRequest(req, reply, now);
     if (!found) return reply;
     const { scope, viewer } = found;
     if (found.state !== "running") {
@@ -578,7 +557,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
   /** One answer, changeable until the poll ends. */
   app.post("/app/api/p/:code/answer", async (req, reply) => {
     const now = app.clock.now();
-    const found = await publicRequest(req, reply, now, { write: true, body: PollAnswer });
+    const found = await publicRequest(req, reply, now, PollAnswer);
     if (!found) return reply;
     const { scope, viewer, body } = found;
     if (found.state !== "running") {

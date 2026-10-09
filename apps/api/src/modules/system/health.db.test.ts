@@ -24,7 +24,7 @@ import { testApp } from "../../test/db.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { startTicker } from "../../ticker.js";
-import { lastTickOf } from "../../tickerPass.js";
+import { lastTickOf } from "../../serviceHealth.js";
 import { applyState } from "../evaluation/service.js";
 import * as live from "../live/service.js";
 import { HEALTH_CHECKS, runChecks } from "./health.js";

@@ -21,7 +21,7 @@ import type { Db } from "./db/client.js";
 import { auditLog, sessions, users } from "./db/schema.js";
 import { testApp, testDb } from "./test/db.js";
 import { startTicker, TICK_TASKS, type TickTask } from "./ticker.js";
-import { lastTickOf } from "./tickerPass.js";
+import { lastTickOf } from "./serviceHealth.js";
 
 const TICK_MS = 1_000;
 const config = { TICK_MS, KIOSK_ATTESTATION: "off" } as unknown as AppConfig;
