@@ -24,6 +24,7 @@ import {
   Skeleton,
   Switch,
   T,
+  TableHead,
   type IconType,
   type Tone,
 } from "./ui";
@@ -121,18 +122,16 @@ export function TasksSection() {
       ) : (
         <Card className={cx("overflow-x-auto", T.container)}>
           <table className={cx(T.table, "min-w-160")}>
-            <thead className={T.head}>
-              <tr>
-                <th className={T.th}>{t("admin.tasks.col.task")}</th>
-                <th className={T.th}>{t("admin.tasks.col.enabled")}</th>
-                <th className={T.th}>{t("admin.tasks.col.every")}</th>
-                <th className={T.th}>{t("admin.tasks.col.lastRun")}</th>
-                <th className={cx(T.th, T.colMid)}>{t("admin.tasks.col.nextRun")}</th>
-                <th className={T.th}>
-                  <span className="sr-only">{t("common.actions")}</span>
-                </th>
-              </tr>
-            </thead>
+            <TableHead
+              columns={[
+                { key: "task", label: t("admin.tasks.col.task") },
+                { key: "enabled", label: t("admin.tasks.col.enabled") },
+                { key: "every", label: t("admin.tasks.col.every") },
+                { key: "lastRun", label: t("admin.tasks.col.lastRun") },
+                { key: "nextRun", label: t("admin.tasks.col.nextRun"), className: T.colMid },
+                { key: "actions", label: t("common.actions"), srOnly: true },
+              ]}
+            />
             <tbody>
               {rows.map((r) => {
                 const name = t(taskName(r.key));

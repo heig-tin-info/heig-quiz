@@ -247,7 +247,8 @@ export function TableBand({
  * that decide where it goes when the table narrows.
  *
  * A column that does not sort (`sortable: false`) is a tick box or an actions
- * cell: its `key` is then only a name, never handed to `onToggle`.
+ * cell: its `key` is then only a name, never handed to `onToggle`. In a
+ * table that does not sort at all (no `onToggle`), every key is a name.
  */
 export type Column<K extends string> = {
   label: ReactNode;
@@ -268,17 +269,20 @@ export type Column<K extends string> = {
  * written twice, once in the `<th>` and once in the `<td>`. Declared here,
  * a table says its columns ONCE, the head and the priority classes can no
  * longer disagree, and every table of the app sorts the same way: click the
- * label, click it again to flip it.
+ * label, click it again to flip it. A table that does not sort leaves out
+ * `sort` and `onToggle`, and its head is the same labels, scoped the same
+ * way, with no button.
  */
 export function TableHead<K extends string>({
   columns,
-  sort,
+  sort = null,
   onToggle,
 }: {
   columns: Column<K>[];
   /** `null`: the rows stand in the order they arrived in. */
-  sort: SortState<K> | null;
-  onToggle: (k: K) => void;
+  sort?: SortState<K> | null;
+  /** Without it, the table does not sort: no column is a button. */
+  onToggle?: (k: K) => void;
 }) {
   const stacked = columns.some((c) => c.stack !== undefined);
   const role = (c: Column<K>) =>
@@ -289,7 +293,7 @@ export function TableHead<K extends string>({
     <thead role="rowgroup" className={T.head}>
       <tr role="row" className={stacked ? stack.row : undefined}>
         {columns.map((c) =>
-          c.sortable === false ? (
+          c.sortable === false || onToggle === undefined ? (
             <th
               key={c.key}
               scope="col"

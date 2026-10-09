@@ -142,4 +142,23 @@ describe("TableHead", () => {
     renderHead(null);
     expect(screen.getByRole("columnheader", { name: "Student" }).closest("tr")).not.toHaveAttribute("class");
   });
+
+  // R08: a table that does not sort uses the same head, scoped like the others.
+  it("draws a table that does not sort: labels, no button, every header scoped to its column", () => {
+    render(
+      <table>
+        <TableHead
+          columns={[
+            { key: "name", label: "Student" },
+            { key: "score", label: "Score", right: true },
+            { key: "actions", label: "Actions", srOnly: true },
+          ]}
+        />
+      </table>,
+    );
+    expect(screen.queryByRole("button")).toBeNull();
+    const headers = screen.getAllByRole("columnheader");
+    expect(headers.map((th) => th.getAttribute("scope"))).toEqual(["col", "col", "col"]);
+    expect(headers[1]).toHaveClass("text-right");
+  });
 });

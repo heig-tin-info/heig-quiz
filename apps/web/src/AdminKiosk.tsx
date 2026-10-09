@@ -23,6 +23,7 @@ import {
   SectionHeading,
   Skeleton,
   T,
+  TableHead,
   type Tone,
 } from "./ui";
 
@@ -85,17 +86,15 @@ export function KioskSection() {
           ) : null}
           <Card className={cx("overflow-x-auto", T.container)}>
             <table className={T.table}>
-              <thead className={T.head}>
-                <tr>
-                  <th className={T.th}>{t("admin.kiosk.col.station")}</th>
-                  <th className={T.th}>{t("admin.kiosk.col.status")}</th>
-                  <th className={cx(T.th, T.colHigh)}>{t("admin.kiosk.col.checked")}</th>
-                  <th className={cx(T.th, T.colMid)}>{t("admin.kiosk.col.attested")}</th>
-                  <th className={T.th}>
-                    <span className="sr-only">{t("common.actions")}</span>
-                  </th>
-                </tr>
-              </thead>
+              <TableHead
+                columns={[
+                  { key: "station", label: t("admin.kiosk.col.station") },
+                  { key: "status", label: t("admin.kiosk.col.status") },
+                  { key: "checked", label: t("admin.kiosk.col.checked"), className: T.colHigh },
+                  { key: "attested", label: t("admin.kiosk.col.attested"), className: T.colMid },
+                  { key: "actions", label: t("common.actions"), srOnly: true },
+                ]}
+              />
               <tbody>
                 {rows.map((d) => (
                   <StationRow key={d.id} device={d} />

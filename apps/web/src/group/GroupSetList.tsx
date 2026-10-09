@@ -4,7 +4,7 @@ import type { GroupSetSummary } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import type { Navigate } from "../router";
-import { Badge, Button, Card, EmptyState, isoDateTime, pressable, QueryError, Skeleton, T } from "../ui";
+import { Badge, Button, Card, EmptyState, isoDateTime, pressable, QueryError, Skeleton, T, TableHead } from "../ui";
 import { useClassroomGroupSets } from "./api";
 import { SetUses } from "./parts";
 
@@ -72,16 +72,16 @@ export function GroupSetList({
   return (
     <Card className={`${T.container} overflow-x-auto`}>
       <table className={T.table}>
-        <thead className={T.head}>
-          <tr>
-            <th className={T.th}>{t("groups.col.name")}</th>
-            <th className={`${T.th} text-right`}>{t("groups.col.groups")}</th>
-            <th className={`${T.th} text-right`}>{t("groups.col.placed")}</th>
-            <th className={`${T.th} text-right`}>{t("groups.col.unplaced")}</th>
-            <th className={`${T.th} ${T.colMid}`}>{t("groups.col.usedBy")}</th>
-            <th className={`${T.th} ${T.colHigh}`}>{t("groups.col.created")}</th>
-          </tr>
-        </thead>
+        <TableHead
+          columns={[
+            { key: "name", label: t("groups.col.name") },
+            { key: "groups", label: t("groups.col.groups"), right: true },
+            { key: "placed", label: t("groups.col.placed"), right: true },
+            { key: "unplaced", label: t("groups.col.unplaced"), right: true },
+            { key: "usedBy", label: t("groups.col.usedBy"), className: T.colMid },
+            { key: "created", label: t("groups.col.created"), className: T.colHigh },
+          ]}
+        />
         <tbody>
           {sets.map((set) => (
             <tr
