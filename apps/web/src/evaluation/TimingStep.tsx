@@ -1,7 +1,12 @@
 import { CalendarClock, Check, Lock, MonitorPlay, Radio, Timer } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { TransitionRefusal, type EvaluationDetail, type EvaluationPatch } from "@quiz/contracts";
+import {
+  EVALUATION_DURATION_MAX_MINUTES,
+  TransitionRefusal,
+  type EvaluationDetail,
+  type EvaluationPatch,
+} from "@quiz/contracts";
 import {
   clockChoiceOf,
   clockFields,
@@ -285,7 +290,7 @@ export function ConfigSettings({
                 label={t("eval.duration")}
                 type="number"
                 min={1}
-                max={480}
+                max={EVALUATION_DURATION_MAX_MINUTES}
                 size="sm"
                 width="w-24"
                 disabled={disabled}

@@ -7,6 +7,10 @@ open questions the same day: an optional safety deadline in Live, the Live
 date a calendar hint only, a limit cut at the end of a Scheduled window, the
 names Scheduled / Live, « Planifiée / En direct »). No migration.
 
+Amended 2026-10-09 (product owner): §1, the time limit per student is at
+most 8 hours (`EVALUATION_DURATION_MAX_MINUTES`, `@quiz/contracts`), down
+from the 24 hours the patch accepted.
+
 Scope: the time part of the configuration screen of an evaluation and of a
 template (step 2, "Time and mode"), the action of the launch step, the
 stored `timing` × `lobby` × `opensAt` / `closesAt` / `durationS` they map
@@ -50,7 +54,7 @@ The step asks **who drives the clock?** — **Scheduled** (the platform opens
 and closes it between a start and an end; students work without the
 teacher; no waiting room) or **Live** (the teacher opens the waiting room,
 starts and closes) — then **Time limit per student** (a number of minutes,
-or none). The mode is never stored: `clockChoiceOf` (`@quiz/domain`) reads
+at most 8 hours (product owner, 2026-10-09), or none). The mode is never stored: `clockChoiceOf` (`@quiz/domain`) reads
 it back from `timing` and `lobby`, and `clockPatch` writes them, so every
 evaluation and template saved before keeps working and shows the mode its
 settings mean.

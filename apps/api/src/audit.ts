@@ -537,8 +537,8 @@ export type AuditAction =
   | "teacher.revoke";
 
 /**
- * Append-only audit log (NFR-05, AU-42). In production the application SQL
- * role has neither UPDATE nor DELETE on this table.
+ * Append-only audit log (NFR-05, AU-42). The trigger of migration 0096
+ * refuses every UPDATE and DELETE on this table (ADR-003 §5).
  */
 export async function audit(
   db: Db | Tx,

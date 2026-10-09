@@ -956,7 +956,7 @@ export async function questionPicks(
     .where(
       and(
         inArray(questions.id, candidates),
-        inArray(questions.type, ["mcq", "short"]),
+        inArray(questions.type, [...POLLABLE_TYPES]),
         // ADR-056 §10: a parameterized question is never offered.
         eq(questions.randomizable, false),
         isNull(questions.deletedAt),
