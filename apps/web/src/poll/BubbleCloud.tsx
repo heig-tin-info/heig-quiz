@@ -2,6 +2,7 @@ import { forceCollide, forceSimulation, forceX, forceY, type Simulation, type Si
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { PollTally } from "@quiz/contracts";
+import { prefersReducedMotion } from "@quiz/ui";
 
 import { cx } from "../ui";
 
@@ -71,9 +72,6 @@ function labelSize(label: string, r: number): number {
   return Math.max(10, Math.min(r * 0.42, byArea, byWord));
 }
 
-const reducedMotion = () =>
-  typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
-
 export function BubbleCloud({ bubbles, className }: { bubbles: readonly Bubble[]; className?: string }) {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -133,7 +131,7 @@ export function BubbleCloud({ bubbles, className }: { bubbles: readonly Bubble[]
       .alphaDecay(0.03);
     sim.current = simulation;
 
-    if (reducedMotion()) {
+    if (prefersReducedMotion()) {
       simulation.stop();
       for (let i = 0; i < 300; i += 1) {
         simulation.tick();

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { createPortal } from "react-dom";
 
 import type { Me } from "@quiz/contracts";
+import { prefersReducedMotion } from "@quiz/ui";
 
 import { api, useMePatch } from "../api";
 import { useT } from "../i18n";
@@ -56,10 +57,6 @@ export function visibleBottom(target?: Element | null): number {
   }
   return bottom;
 }
-
-const reducedMotion = () =>
-  typeof window.matchMedia === "function" &&
-  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** How long a screen gets to draw itself before its tour starts. */
 const SETTLE_MS = 900;
@@ -316,7 +313,7 @@ function Bubble({
       const bottom = visibleBottom(first);
       if (r.top < 64 || r.bottom > bottom - 64) {
         // `scrollIntoView` knows nothing of a fixed bar over the page.
-        const behavior = reducedMotion() ? "auto" : "smooth";
+        const behavior = prefersReducedMotion() ? "auto" : "smooth";
         const dock = window.innerHeight - bottom;
         if (dock > 0) {
           window.scrollBy({ top: r.top + r.height / 2 - bottom / 2, behavior });
@@ -502,7 +499,7 @@ function Bubble({
 
 /** The end of a walk: a handful of sparks thrown from the button. */
 function burst(from: HTMLElement) {
-  if (reducedMotion()) return;
+  if (prefersReducedMotion()) return;
   const r = from.getBoundingClientRect();
   const colors = ["var(--accent)", "var(--info)", "var(--success)", "var(--warning)"];
   for (let i = 0; i < 16; i += 1) {

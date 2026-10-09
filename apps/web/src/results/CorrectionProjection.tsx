@@ -2,6 +2,7 @@ import { ArrowLeft, Eye, EyeOff, ListChecks, Maximize2, Minimize2, Moon, Sun } f
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { isEvaluationOpen } from "@quiz/domain";
+import { prefersReducedMotion } from "@quiz/ui";
 
 import { useT } from "../i18n";
 import type { Route } from "../router";
@@ -69,8 +70,10 @@ export function CorrectionProjection({
     (index: number) => {
       const target = Math.max(0, Math.min(list.length - 1, index));
       setCurrent(target);
-      const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-      sections.current[target]?.scrollIntoView?.({ behavior: reduce ? "auto" : "smooth", block: "start" });
+      sections.current[target]?.scrollIntoView?.({
+        behavior: prefersReducedMotion() ? "auto" : "smooth",
+        block: "start",
+      });
     },
     [list.length],
   );

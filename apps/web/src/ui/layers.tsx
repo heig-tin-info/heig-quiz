@@ -1,18 +1,9 @@
 import { CircleHelp, X } from "lucide-react";
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { ComponentProps, ComponentType, ReactNode, RefCallback, RefObject } from "react";
 import { createPortal } from "react-dom";
 
-import { cx } from "@quiz/ui";
+import { cx, useMediaQuery } from "@quiz/ui";
 
 import { useI18n, useT } from "../i18n";
 
@@ -91,24 +82,6 @@ export function pressable(onActivate: () => void, role: string = "button") {
       onActivate();
     },
   };
-}
-
-/**
- * True when `query` matches, following the window as it changes. False
- * where `matchMedia` does not exist (a test).
- */
-function useMediaQuery(query: string): boolean {
-  const supported = typeof window !== "undefined" && typeof window.matchMedia === "function";
-  return useSyncExternalStore(
-    (onChange) => {
-      if (!supported) return () => {};
-      const media = window.matchMedia(query);
-      media.addEventListener("change", onChange);
-      return () => media.removeEventListener("change", onChange);
-    },
-    () => (supported ? window.matchMedia(query).matches : false),
-    () => false,
-  );
 }
 
 /**
