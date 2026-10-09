@@ -8,7 +8,7 @@
  */
 import { count } from "drizzle-orm";
 
-import { legacyClassroomAuditLog } from "../../src/db/schema.js";
+import { legacyClassroomAuditLog } from "../db/schema.js";
 import { note, target, tally, written, type Ctx } from "./ctx.js";
 
 const CHUNK = 500;

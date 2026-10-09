@@ -14,7 +14,7 @@
  */
 import { count, inArray } from "drizzle-orm";
 
-import { webhookDeliveries } from "../../src/db/schema.js";
+import { webhookDeliveries } from "../db/schema.js";
 import { note, tally, written, type Ctx } from "./ctx.js";
 
 const DAYS = 30;

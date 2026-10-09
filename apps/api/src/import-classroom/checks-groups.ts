@@ -11,7 +11,7 @@
  */
 import { inArray } from "drizzle-orm";
 
-import { projectGroupMembers, projectGroups } from "../../src/db/schema.js";
+import { projectGroupMembers, projectGroups } from "../db/schema.js";
 import type { Ctx } from "./ctx.js";
 import type { ImportCheck } from "./registry.js";
 import { IN_CHUNK } from "./steps-repos.js";

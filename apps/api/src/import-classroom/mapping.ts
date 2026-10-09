@@ -20,8 +20,8 @@
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Db } from "../../src/db/client.js";
-import { classrooms, courses, githubClassroomLinks, githubOrganizations } from "../../src/db/schema.js";
+import type { Db } from "../db/client.js";
+import { classrooms, courses, githubClassroomLinks, githubOrganizations } from "../db/schema.js";
 import type { SourceClassroom, SourceSnapshot } from "./source.js";
 
 const SourceRef = z

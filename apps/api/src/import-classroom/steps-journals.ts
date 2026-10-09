@@ -34,8 +34,8 @@
  */
 import { eq, inArray, sql } from "drizzle-orm";
 
-import { classroomJournals, githubClassroomLinks, githubOrganizations } from "../../src/db/schema.js";
-import { actsOn } from "../../src/modules/github/service.js";
+import { classroomJournals, githubClassroomLinks, githubOrganizations } from "../db/schema.js";
+import { actsOn } from "../modules/github/service.js";
 import { note, remember, syncOwned, tallyMapped, target, written, type Ctx, type OwnedRow } from "./ctx.js";
 import type { ImportCheck } from "./registry.js";
 import type { SourceJournalAttachment } from "./source.js";

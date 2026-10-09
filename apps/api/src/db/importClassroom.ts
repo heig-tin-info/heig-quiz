@@ -2,7 +2,7 @@
  * The bookkeeping of the heig-classroom import (ADR-035, merge task M1-06,
  * docs/merge/02-data-and-migration.md §2.5), in a schema of its own,
  * `import_classroom`: nothing of the application reads or writes it. Owned
- * by `apps/api/scripts/import-classroom.ts`, its only writer.
+ * by `apps/api/src/import-classroom.ts`, its only writer.
  *
  * `id_map` is what makes the import idempotent — a source row already mapped
  * is never imported again, so a second `--apply` writes nothing — and what

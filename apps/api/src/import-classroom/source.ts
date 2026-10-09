@@ -452,8 +452,25 @@ export async function readSnapshot(query: SourceQuery): Promise<SourceSnapshot> 
 }
 
 /**
- * A read-only connection to classroom's PostgreSQL (`--source`). The role
- * given should be read-only as well; the session refuses writes anyway.
+ * The source's connection string: the database `name` (`--source-db`) on
+ * the server of the target's `DATABASE_URL`, with its credentials. The
+ * cutover restores classroom's dump into a scratch database there
+ * (`hgc_cutover`), so no second URL, and above all no password, ever
+ * appears on the command line (`/proc/<pid>/cmdline`).
+ */
+export function sourceUrl(targetUrl: string, name: string): string {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`--source-db: ${name} is not a database name`);
+  const url = new URL(targetUrl);
+  if (url.protocol !== "postgres:" && url.protocol !== "postgresql:") {
+    throw new Error("--source-db: the target DATABASE_URL is not a PostgreSQL URL");
+  }
+  url.pathname = `/${name}`;
+  return url.toString();
+}
+
+/**
+ * A read-only connection to classroom's PostgreSQL (`sourceUrl`). The
+ * session refuses writes whatever the role may do.
  */
 export async function openSource(url: string): Promise<{ query: SourceQuery; close: () => Promise<void> }> {
   const client = new pg.Client({

@@ -108,7 +108,7 @@ entity (404 when it fails, invariant 6), and a role that says what the caller ma
 
 10. **Migration.** `course_staff.role text NOT NULL DEFAULT 'owner'` (migration
     `0062_course_staff_role`): every seat that existed becomes an owner, so nobody loses a
-    right they had. The import from heig-classroom (`scripts/import-classroom`) maps a
+    right they had. The import from heig-classroom (`src/import-classroom`) maps a
     classroom's owner and its `teacher` seats to `owner`, its `assistant` seats to
     `assistant`, and never demotes: an account that owns one classroom of the course owns
     the course, and a seat Quiz already held keeps its role unless the import makes it an

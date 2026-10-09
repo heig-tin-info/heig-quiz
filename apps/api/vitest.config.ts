@@ -25,7 +25,12 @@ export default defineConfig({
     testTimeout: 60_000,
     hookTimeout: 120_000,
     maxWorkers,
-    // The demo world is a development script, never served.
-    coverage: { ...coverage, exclude: [...coverage.exclude, "src/seed.ts", "src/seed/**"] },
+    // The demo world is a development script, never served. The import's
+    // command line only parses flags; its steps (`src/import-classroom/`)
+    // are measured.
+    coverage: {
+      ...coverage,
+      exclude: [...coverage.exclude, "src/seed.ts", "src/seed/**", "src/import-classroom.ts"],
+    },
   },
 });

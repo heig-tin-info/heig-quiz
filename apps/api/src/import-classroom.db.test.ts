@@ -1,6 +1,6 @@
 /**
  * The heig-classroom import (M1-06) against the synthetic classroom database
- * of `fixtures/classroom-seed.sql`, into a Quiz database on PGlite migrated by
+ * of `test/fixtures/classroom-seed.sql`, into a Quiz database on PGlite migrated by
  * the real migrations.
  *
  * The fixture, in short: classrooms Prog-A (org #1001, owner Ada, assistant
@@ -17,12 +17,12 @@ import { and, count, eq, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { systemClock } from "../src/clock.js";
-import { loadConfig, type AppConfig } from "../src/config.js";
-import { appKey, fakeGithub, orgsRoute } from "../src/github/testing.js";
-import { ingestJournal } from "../src/modules/journal/ingest.js";
-import { repoRoute, type FakeRepo } from "../src/modules/journal/testing.js";
-import type { Db } from "../src/db/client.js";
+import { systemClock } from "./clock.js";
+import { loadConfig, type AppConfig } from "./config.js";
+import { appKey, fakeGithub, orgsRoute } from "./github/testing.js";
+import { ingestJournal } from "./modules/journal/ingest.js";
+import { repoRoute, type FakeRepo } from "./modules/journal/testing.js";
+import type { Db } from "./db/client.js";
 import {
   auditLog,
   classrooms,
@@ -43,8 +43,8 @@ import {
   userEmails,
   userIdpClaims,
   users,
-} from "../src/db/schema.js";
-import { testDb } from "../src/test/db.js";
+} from "./db/schema.js";
+import { testDb } from "./test/db.js";
 import type { ClassroomMapping } from "./import-classroom/mapping.js";
 import { sourcePreflight } from "./import-classroom/preflight.js";
 import { REGISTRY, type Registry } from "./import-classroom/registry.js";
@@ -92,7 +92,7 @@ let snapshot: SourceSnapshot;
 
 beforeAll(async () => {
   source = new PGlite();
-  await source.exec(readFileSync(new URL("./fixtures/classroom-seed.sql", import.meta.url), "utf8"));
+  await source.exec(readFileSync(new URL("./test/fixtures/classroom-seed.sql", import.meta.url), "utf8"));
   snapshot = await readSnapshot(async <T>(text: string) => (await source.query<T>(text)).rows);
 });
 

@@ -1,6 +1,6 @@
 /**
  * The project and group steps of the heig-classroom import (M8-01b, M8-01c) against the
- * synthetic classroom database of `fixtures/classroom-seed.sql`, part 3.
+ * synthetic classroom database of `test/fixtures/classroom-seed.sql`, part 3.
  *
  * The fixture's projects: Alpha (Prog-A, published; a milestone dispatched
  * and one never confirmed; Sam's, Sue's and Sid's repositories, Sid's still
@@ -20,8 +20,8 @@ import { PGlite } from "@electric-sql/pglite";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import type { AppConfig } from "../src/config.js";
-import type { Db } from "../src/db/client.js";
+import type { AppConfig } from "./config.js";
+import type { Db } from "./db/client.js";
 import {
   botCommits,
   classrooms,
@@ -50,14 +50,14 @@ import {
   reverts,
   userEmails,
   users,
-} from "../src/db/schema.js";
-import { testDb } from "../src/test/db.js";
+} from "./db/schema.js";
+import { testDb } from "./test/db.js";
 import type { ClassroomMapping } from "./import-classroom/mapping.js";
 import { sourcePreflight } from "./import-classroom/preflight.js";
 import { REGISTRY, type Registry } from "./import-classroom/registry.js";
 import { runImport, type ImportOptions } from "./import-classroom/run.js";
 import { readSnapshot, type SourceSnapshot } from "./import-classroom/source.js";
-import { repoMembers, seatRepos } from "../src/modules/project/groupRepos.js";
+import { repoMembers, seatRepos } from "./modules/project/groupRepos.js";
 
 const config = { SUPER_ADMIN_EMAIL: "", STAFF_AFFILIATION_DOMAINS: ["heig-vd.ch"] } as unknown as AppConfig;
 
@@ -109,7 +109,7 @@ let snapshot: SourceSnapshot;
 
 beforeAll(async () => {
   source = new PGlite();
-  await source.exec(readFileSync(new URL("./fixtures/classroom-seed.sql", import.meta.url), "utf8"));
+  await source.exec(readFileSync(new URL("./test/fixtures/classroom-seed.sql", import.meta.url), "utf8"));
   snapshot = await readSnapshot(async <T>(text: string) => (await source.query<T>(text)).rows);
 });
 

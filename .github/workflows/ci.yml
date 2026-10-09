@@ -66,6 +66,9 @@ jobs:
       - run: node apps/web/scripts/fetch-runtimes.mjs --strict
       - run: pnpm build
       - run: pnpm typecheck
+      # The heig-classroom import is compiled with the API and run with plain
+      # Node in production (docs/merge/02-data-and-migration.md §2.5).
+      - run: node apps/api/dist/import-classroom.js --help
 
   # The API's and the SPA's suites, sharded, run side by side: in one job,
   # the API's db tests (each loading a PGlite, src/test/template.ts) and the
@@ -202,6 +205,11 @@ jobs:
             ghcr.io/heig-tin-info/${{ matrix.image }}:${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,scope=${{ matrix.image }},mode=max
+      # The image carries the heig-classroom import, runnable with plain Node
+      # and no fetch (the cutover runs it in a one-off `app` container). A
+      # failure here stops the deploys, which pull this sha's tag.
+      - if: matrix.image == 'quiz'
+        run: docker run --rm --network none ghcr.io/heig-tin-info/quiz:${{ github.sha }} node dist/import-classroom.js --help
 
   # Deploy, in two steps (ADR-028): every push to main goes to STAGING
   # (quiz.dev.chevallier.io) automatically; the SAME sha goes to PRODUCTION

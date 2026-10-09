@@ -8,10 +8,10 @@
  */
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
-import { audit } from "../../src/audit.js";
-import { placeholderSub } from "../../src/auth/adoption.js";
-import { addAddresses, recordIdpClaims } from "../../src/auth/claims.js";
-import { importAccountLink } from "../../src/auth/githubLink.js";
+import { audit } from "../audit.js";
+import { placeholderSub } from "../auth/adoption.js";
+import { addAddresses, recordIdpClaims } from "../auth/claims.js";
+import { importAccountLink } from "../auth/githubLink.js";
 import {
   avatars,
   enrollments,
@@ -20,13 +20,13 @@ import {
   teacherGrants,
   userEmails,
   users,
-} from "../../src/db/schema.js";
-import { emailIn, normalizeEmail } from "../../src/identity.js";
-import { createTeacherGrant } from "../../src/modules/admin/service.js";
+} from "../db/schema.js";
+import { emailIn, normalizeEmail } from "../identity.js";
+import { createTeacherGrant } from "../modules/admin/service.js";
 import type { CourseRole } from "@quiz/contracts";
 
-import { addStaff, changeStaffSeat, claimLines, type ClaimMatch } from "../../src/modules/org/service.js";
-import { syncRoleOfUser } from "../../src/roles.js";
+import { addStaff, changeStaffSeat, claimLines, type ClaimMatch } from "../modules/org/service.js";
+import { syncRoleOfUser } from "../roles.js";
 
 import { targetOf } from "./identity.js";
 import { listed, nameOf, note, remember, syncOwned, tallyMapped, target, written, type Ctx, type OwnedRow } from "./ctx.js";
