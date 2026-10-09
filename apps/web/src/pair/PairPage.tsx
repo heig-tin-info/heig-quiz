@@ -13,7 +13,7 @@ import { SignInGate } from "../SignInGate";
 import { ConditionsList } from "../student/ConditionsList";
 import { Alert, Button, Card, EmptyState, Field, GateFrame, QueryError, RadioRow, Skeleton, cx } from "../ui";
 import { CodeScanner } from "./CodeScanner";
-import { canScan, loadDecoder, type Decode } from "./scan";
+import { canScan } from "./scan";
 
 /**
  * `/pair` — the phone's half of a kiosk station's pairing (ADR-051 §7,
@@ -56,8 +56,7 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
   const [picked, setPicked] = useState<string | null>(null);
   const fieldId = useId();
   const [scannable] = useState(canScan);
-  // The decoder being loaded while the camera is open; null when it is closed.
-  const [scanning, setScanning] = useState<Promise<Decode> | null>(null);
+  const [scanning, setScanning] = useState(false);
   const [cameraFailed, setCameraFailed] = useState(false);
 
   const preview = useQuery<PairPreview>({
@@ -98,20 +97,17 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
     lookUp(typed);
   };
   const startScan = () => {
-    const decoder = loadDecoder();
-    // Awaited by the scanner; marked handled for a scanner cancelled before it gets there.
-    decoder.catch(() => {});
     setCameraFailed(false);
-    setScanning(decoder);
+    setScanning(true);
   };
   // A scanned code goes the way of a typed one: into the field, then Continue.
   const scanned = (value: string) => {
-    setScanning(null);
+    setScanning(false);
     setTyped(value);
     lookUp(value);
   };
   const scanFailed = () => {
-    setScanning(null);
+    setScanning(false);
     setCameraFailed(true);
     document.getElementById(fieldId)?.focus();
   };
@@ -170,9 +166,8 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
             </p>
             {scanning ? (
               <CodeScanner
-                decoder={scanning}
                 onCode={scanned}
-                onCancel={() => setScanning(null)}
+                onCancel={() => setScanning(false)}
                 onFail={scanFailed}
               />
             ) : cameraFailed ? (

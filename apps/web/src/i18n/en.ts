@@ -2900,7 +2900,6 @@ export const en = {
   "pair.scan.video": "Camera",
   "pair.scan.aim": "Point the camera at the QR code on the station.",
   "pair.scan.foreign": "This QR code is not a station code.",
-  "pair.scan.cancel": "Cancel",
   "pair.scan.unavailable": "Camera unavailable — type the code.",
   "pair.station": "Station",
   "pair.station.check": "Check that this is the name on the screen in front of you.",

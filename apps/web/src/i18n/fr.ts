@@ -2899,7 +2899,6 @@ export const fr: Record<keyof Dict, string> = {
   "pair.scan.video": "Caméra",
   "pair.scan.aim": "Visez le code QR affiché sur le poste.",
   "pair.scan.foreign": "Ce code QR n'est pas celui d'un poste.",
-  "pair.scan.cancel": "Annuler",
   "pair.scan.unavailable": "Caméra indisponible — saisissez le code.",
   "pair.station": "Poste",
   "pair.station.check": "Vérifiez que c'est bien le nom affiché sur l'écran devant vous.",

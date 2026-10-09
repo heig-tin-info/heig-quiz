@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -208,6 +208,18 @@ describe("scanning the station's QR with the page's camera", () => {
     await open();
     unmount();
     expect(stop).toHaveBeenCalled();
+  });
+
+  it("lets the camera go when the page is hidden, and offers the scan again", async () => {
+    render({}, "/pair");
+    await open();
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(stop).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Scan with camera" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
   });
 
   it("names a QR that is not a station's, keeps scanning and sends nothing", async () => {
