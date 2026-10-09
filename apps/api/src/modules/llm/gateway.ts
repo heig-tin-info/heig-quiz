@@ -9,8 +9,8 @@
  * (ADR-080 §5) is the multi-turn call with read-only tools: each of its
  * provider requests goes through the same reservation and log.
  *
- * `app.llm`, the grading service, is chosen in `index.ts` (`createLlm`,
- * ADR-063 §5 and §9): the stub, else this gateway's grader, else none.
+ * `app.llm` is chosen by `createLlm` (the llm module's entry, ADR-063 §5
+ * and §9): the stub, else this gateway's grader, else none.
  */
 import { llmWorstCaseUsd, modelFor, type LlmPurpose } from "@quiz/domain";
 
