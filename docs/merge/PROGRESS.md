@@ -15,8 +15,12 @@ separate commit on `main`. Protocol: [`README.md`](README.md).
   (D20).
 - **Next actions**: the pilot's follow-ups M3-14k…n (product owner's
   decisions of 2026-10-06), then the breadcrumb app-wide; the load test
-  later; M3-14f and M3-14g wait for the product owner; the import's dry run on a dump (M8-01), then the cutover
-  runbook and its rehearsal on staging (M8-05, M8-06); M4-10 and M4-12 are free; M8-03 is in review. Quiz's production App exists (registered by hand);
+  later; M3-14f and M3-14g wait for the product owner. The cutover runbook
+  ([`10-cutover-runbook.md`](10-cutover-runbook.md), M8-05) is in
+  review. Its open decisions O1–O7 are the owner's. The import's runtime
+  in the production image (O6) comes before the rehearsal on staging
+  (M8-06), which is also the import's dry run on a dump (M8-01).
+  M8-04 is dropped. M4-10 and M4-12 are free. Quiz's production App exists (registered by hand);
   staging's, `heig-quiz-staging`, exists since 2026-10-06 (M2-06).
   Teachers create their Quiz classrooms; the merge then writes the
   correspondence table (D22).
@@ -181,11 +185,11 @@ In the critical path only if D09 finds online assignments in production.
 | --- | --- | --- | --- | --- | --- | --- |
 | M8-01 | Import script complete | done | schema tasks, D11 | `merge/M8-01a-import-frame` (a of a, b, c, d); `merge/M8-01d-import-journals`; `merge/M8-01b-import-projects` | #535 (a), #538 (d), #539 (b), #550 (c) | a: the frame (pre-flight, parity report, re-import semantics, `--final`, legacy audit, `steps-<entity>.ts` + `registry.ts`); d: classroom journals imported `pending` (re-ingested by the journal module, never copied, I65) and 30 days of webhook deliveries; b: projects, checkpoints, individual repositories, runs, bot commits, review ledger (synthetic rule), reverts, push receipts, reminders, five parity checks, pre-flight `work-mode`; c: group assignments → group sets with their copies, group repositories and children, invited accounts, two group parity checks plus the repositories check widened (`merge/M8-01c-import-groups`, #550): card M8-01, "As delivered (a)", "(b)", "(c)", "(d)"; the acceptance's dry run on a staging copy of a production dump is M8-06's rehearsal (2026-10-08) |
 | M8-02 | Legacy URL resolver | done | M8-01, M3-12, M4-04 | `merge/M8-02-legacy-urls` | #547 | `GET /legacy/classroom/*`: every row of §6.6 (pure rule in domain, ids through the id map, targets loaded under `staffAccess`); the import now writes the `classrooms` id-map rows; card M8-02 "As delivered" |
-| M8-03 | Caddy fragments | review | — | `merge/M8-03-caddy-fragments` | #598 | `infra/caddy/`: maintenance (C1) and redirect (C6) fragments, curl matrix script; card M8-03 "As delivered" |
-| M8-04 | Codespace identity remap | todo | M6 in scope | | | |
-| M8-05 | Cutover runbook | todo | M8-01…04 | | | |
-| M8-06 | Rehearsal on staging | todo | M8-05, D22 | | | |
-| M8-07 | Cutover | todo | M8-06 go, D20 | | | |
+| M8-03 | Caddy fragments | done | — | `merge/M8-03-caddy-fragments` | #598 | `infra/caddy/`: maintenance (C1) and redirect (C6) fragments, curl matrix script; card M8-03 "As delivered" |
+| M8-04 | Codespace identity remap | dropped | M6 in scope | | | Product owner, 2026-10-09: classroom's portal never served a real class, and it has been stopped and disabled since M6-04 (SQLite and volumes archived in `/root/classroom-codespace` on the engine VM); Quiz's portal started empty. Nothing to remap; runbook step C4 |
+| M8-05 | Cutover runbook | review | M8-01…03 | `merge/M8-05-cutover-runbook` | #653 | [`10-cutover-runbook.md`](10-cutover-runbook.md), replacing 06 §6.5 B–E and §6.7. Findings: the production image could not run the import (O6, before M8-06); no legacy cookie secret; I57 → C8; M8-04 dropped. Card M8-05 "As delivered" |
+| M8-06 | Rehearsal on staging | todo | M8-05, D22, #655 deployed | | | Runbook §7 |
+| M8-07 | Cutover | todo | M8-06 go, D20, runbook O1–O5 | | | Runbook §2 |
 
 ## M9 — Decommission
 
