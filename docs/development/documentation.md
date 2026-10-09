@@ -51,6 +51,8 @@ only with a link back to the current source and a clear historical notice.
 Archived pages use `search: { exclude: true }` in YAML front matter so the
 site search does not present obsolete instructions alongside current ones.
 Preserve existing URLs and section anchors as pointers when consolidating.
+2026-10-09: an anchor list into `history/` may be reduced to a correspondence
+table of the cited sections plus bare compatibility anchors.
 
 Do not archive unresolved product questions or remove an accepted requirement
 because its code is not implemented. Record a verified delivery boundary and

@@ -10,10 +10,13 @@
 
 **Where the rest went.** The full plan, unchanged, is archived at
 [`history/PLAN-MVP.md`](history/PLAN-MVP.md). Source comments cite its
-sections as "PLAN-MVP §x.y" (§1 the question-type contract, §2 the four
-types, §3 the schema, §4 the contracts, §5 the state machines, §6 the web
-app, §7 the domain, §8 the work packages, Deviations): every such citation
-other than §9 resolves in that archived copy.
+sections as "PLAN-MVP §x.y" (§0 the MVP scope lock, §1 the question-type
+contract, §2 the four types, §3 the schema, §4 the contracts, §5 the state
+machines, §6 the web app, §7 the domain, §8 the work packages, §10 the quick
+reference for implementing agents, Deviations): every such citation other
+than §9 resolves in that archived copy.
+
+<a id="0-mvp-scope-lock"></a><a id="1-packagescore-the-question-type-contract"></a><a id="2-the-four-question-types"></a><a id="3-drizzle-schema-per-module-appsapisrcdbmodulets-re-exported-by-dbschemats"></a><a id="4-packagescontracts-http-routes-and-sse-grammar"></a><a id="5-state-machines-and-the-grading-flow"></a><a id="6-web-app"></a><a id="7-packagesdomain-pure-functions-no-db-no-io-100-unit-tested"></a><a id="8-work-breakdown-for-parallel-agents"></a><a id="10-quick-reference-for-implementing-agents"></a><a id="deviations"></a>
 
 ## 9. Open decisions (spec silent or contradictory)
 

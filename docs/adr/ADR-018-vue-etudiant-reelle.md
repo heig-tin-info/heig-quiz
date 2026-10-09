@@ -144,6 +144,8 @@ decision above. Their full text is the [historical record](history/ADR-018-vue-e
 in code or another record ("ADR-018 §3", "ADR-018, sixth addendum") lives here
 now:
 
+<a id="adr-018-the-real-student-view-and-the-teachers-own-test-attempt"></a><a id="reading-map"></a><a id="consequences"></a><a id="what-this-adr-does-not-decide"></a><a id="rejected-alternatives"></a><a id="addendum-2026-09-22-the-switch-belongs-to-the-frame-and-to-the-window"></a><a id="context_1"></a><a id="decision_1"></a><a id="consequences_1"></a><a id="rejected-alternatives_1"></a><a id="addendum-2026-09-22-second-the-page-button-goes-the-frame-switch-stays"></a><a id="addendum-2026-09-24-third-the-way-back-from-the-attempt-itself"></a><a id="addendum-2026-09-25-fourth-a-stateless-preview-of-the-whole-evaluation"></a><a id="context_2"></a><a id="decision_2"></a><a id="what-it-does-not-exercise"></a><a id="rejected-alternatives_2"></a><a id="addendum-2026-09-27-fifth-the-waiting-room-previewed-from-the-launch-step"></a><a id="context_3"></a><a id="decision_3"></a><a id="rejected-alternatives_3"></a><a id="addendum-2026-09-29-sixth-fixing-a-question-without-losing-the-walk"></a><a id="context_4"></a><a id="decision_4"></a><a id="rejected-alternatives_4"></a><a id="addendum-2026-10-01-seventh-the-preview-is-a-mode-not-a-notice"></a><a id="context_5"></a><a id="decision_5"></a>
+
 | Old reference | Current section | Full text |
 | --- | --- | --- |
 | §1 the walk; §2 where it was entered from; §7 the student path; first to third addenda | [Real student view and return](#real-student-view-and-return) | [first](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-09-22-the-switch-belongs-to-the-frame-and-to-the-window), [second](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-09-22-second-the-page-button-goes-the-frame-switch-stays), [third](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-09-24-third-the-way-back-from-the-attempt-itself) |
@@ -152,5 +154,6 @@ now:
 | Fifth addendum (waiting room); sixth (fixing a question); seventh (preview is a mode) | [Editing during preview and previewing the lobby](#editing-during-preview-and-previewing-the-lobby) | [fifth](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-09-27-fifth-the-waiting-room-previewed-from-the-launch-step), [sixth](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-09-29-sixth-fixing-a-question-without-losing-the-walk), [seventh](history/ADR-018-vue-etudiant-reelle.md#addendum-2026-10-01-seventh-the-preview-is-a-mode-not-a-notice) |
 
 Amended 2026-10-09: the list of compatibility anchors into the historical
-record was reduced to this table (the references that code and records cite);
-the full text stays in [history/ADR-018](history/ADR-018-vue-etudiant-reelle.md).
+record was reduced to this table (the references that code and records cite)
+and bare compatibility anchors, so old links still land here; the full text
+stays in [history/ADR-018](history/ADR-018-vue-etudiant-reelle.md).

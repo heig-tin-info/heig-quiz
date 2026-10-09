@@ -49,8 +49,11 @@ were recorded on the card [M3-14](history/09-tasks-delivered.md#m3-14-pilot-and-
 
 ### M3-14g — Leaving the course staff ends one's staff seats
 - **Depends on**: M3-14c.
-- **Note** (ADR-077 Q7): leaving the course staff keeps one's staff seats
-  today; a follow-up (product owner, 2026-10-06: keep as is for now).
+- **Note** (ADR-077 Q7; product owner, 2026-10-06: keep as is for now, a
+  follow-up): removing a member from a course's staff (ADR-068) leaves their
+  staff seats in its classrooms, and with M3-14c their test repositories'
+  grants. To decide: remove the seats (and revoke) with the staff seat, or
+  keep them.
 
 The pilot's load test (100 repositories at a deadline applied in < 5 min,
 the tick with 100 due projects) was deferred (product owner, 2026-10-06).
@@ -182,6 +185,8 @@ the tick with 100 due projects) was deferred (product owner, 2026-10-06).
     (runbook O4, §1.3).
   - M8-03: the freeze from C1 to C8 measured here decides M8-03b, the
     read-only flag in classroom, built only past 2 h (runbook §0).
+  - M8-01: the import script's non-blocking defects from the code review of
+    #550 (see Loose ends below) may show in the rehearsal's report.
 
 ### M8-07 — The cutover
 - **Who**: the product owner, with an agent following the runbook
@@ -196,11 +201,27 @@ the tick with 100 due projects) was deferred (product owner, 2026-10-06).
 
 ## Loose ends recorded on delivered cards
 
-Not tasks of their own; each is on its delivered card.
+Open follow-ups that are not tasks of their own; the detail is on each
+delivered card.
 
-- [M8-02](history/09-tasks-delivered.md#m8-02-legacy-url-resolver): not
-  done, the HMAC-honouring of an old unsubscribe link and an absolute
-  `Location`; the non-blocking follow-ups of the code review of #547.
+- [M3-03](history/09-tasks-delivered.md#m3-03-acceptance-and-provisioning): the journal's `targetOf`
+  (`journal/writes.ts`) could use `classroomInstallation`.
+- [M3-04](history/09-tasks-delivered.md#m3-04-ingestion-and-grading-pipeline): storing a repository's
+  name without its owner, still open (recorded on M3-08b's card).
+- [M3-08b](history/09-tasks-delivered.md#m3-08b-teacher-score-release-invitation-resend-protection-re-enable):
+  a manual re-dispatch of an unconfirmed review.
+- [M3-12a](history/09-tasks-delivered.md#m3-12a-web-project-page-reads-lifecycle-deadline-checkpoints):
+  the full draft edit (start, grace, grading, scale, publication mode).
+- [M6-10](history/09-tasks-delivered.md#m6-10-git-relay-through-quiz-issued-scoped-tokens-adr-078):
+  `codespace_relays` rows are not purged with their project; the daily
+  reconciliation's head refresh does not read the relays; an App push looks
+  `pushAuthor` up twice.
+- [M8-01](history/09-tasks-delivered.md#m8-01-import-script-complete): the follow-ups of the code
+  review of #550, not blocking (group stops, member placement, `addedAt`,
+  `repoMembers` batching, among others); relevant to the M8-06 rehearsal.
+- [M8-02](history/09-tasks-delivered.md#m8-02-legacy-url-resolver): not done, the HMAC-honouring of
+  an old unsubscribe link and an absolute `Location`; the non-blocking
+  follow-ups of the code review of #547.
 
 ## L — After the merge
 

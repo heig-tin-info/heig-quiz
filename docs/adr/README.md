@@ -146,7 +146,8 @@ put requirements in the spec, operational commands in the runbook and delivery
 progress in the merge task cards. Link to those sources instead of copying them.
 
 Keep existing IDs, paths and heading anchors stable, except to resolve a
-duplicate number, noted in the record's Status. Select an unused ID after
+duplicate number, noted in the record's Status (2026-10-09: an anchor list into `history/` may be reduced to a correspondence
+table of the cited sections plus bare compatibility anchors). Select an unused ID after
 checking both the repository and concurrent branches/PRs; rebase before
 merging, and renumber yours if that ID landed meanwhile. For a changed decision,
 name the affected section in the new record and add a reciprocal link in the old
