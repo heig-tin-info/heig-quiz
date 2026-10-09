@@ -23,7 +23,7 @@
 import { useMemo, useState } from "react";
 
 import { fmt, plural, resolveStrings } from "@quiz/core/client";
-import type { MarkdownRenderer, PlayerProps } from "@quiz/core/client";
+import type { PlayerProps } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 
 import { Plot, SchematicEditor, SchematicView, type CanvasStrings } from "./canvas/index.js";
@@ -52,8 +52,6 @@ interface CircuitPlayerProps extends PlayerProps<CircuitStudent, CircuitAnswer> 
   strings?: Partial<CircuitPlayerStrings> | undefined;
   /** The canvas has a dictionary of its own; the host translates it too. */
   canvasStrings?: Partial<CanvasStrings> | undefined;
-  /** The host's sanitised markdown view; plain text when absent. */
-  renderMarkdown?: MarkdownRenderer | undefined;
 }
 
 type SimState =

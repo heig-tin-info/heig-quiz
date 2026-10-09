@@ -16,19 +16,20 @@
  *    (`tryAdapterFor`), so the editor screen never branches on a type id.
  *
  * The cast on the three components is deliberate: the registry erases five
- * type parameters (`AnyQuestionTypeClient`), so the props a concrete editor
- * accepts — `issues`, `strings`, `renderMarkdown` — are not visible through
- * it. Every value passed below is still built from that package's own
- * exported defaults, so a renamed key shows up as a missing key in
- * `questionTypes.test.ts`.
+ * type parameters (`AnyQuestionTypeClient`), so the props a concrete type
+ * adds to the contract's — `strings`, `onTry`, `renderText` — are not
+ * visible through it. Every value passed below is still built from that
+ * package's own exported defaults, so a renamed key shows up as a missing
+ * key in `questionTypes.test.ts`.
  */
 import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
 
 import type { TryResult } from "@quiz/contracts";
 import type {
-  CanvasShortcutsListener,
   ConfigIssue,
-  ExpandProps,
+  EditorProps,
+  PlayerProps,
+  ReviewProps,
   ReviewSections,
   RichTextComponent,
 } from "@quiz/core/client";
@@ -569,36 +570,20 @@ function Unknown({ children }: { children: ReactNode }) {
 }
 
 /**
- * Every prop any of the four editors accepts. The registry types its entry as
- * `ComponentType<EditorProps<unknown>>`, which knows nothing of `issues`,
- * `strings` or `renderMarkdown`; this is the shape the cast restores.
+ * Every prop any of the editors accepts. The registry types its entry as
+ * `ComponentType<EditorProps<unknown>>`, which knows nothing of `strings` or
+ * `onTry`; this is the shape the cast restores.
  */
-interface EditorHostProps {
-  config: unknown;
-  onChange: (next: unknown) => void;
-  disabled?: boolean;
-  issues?: readonly ConfigIssue[];
+type EditorHostProps = EditorProps<unknown> & {
   strings?: unknown;
   /** `circuit` and `diagram`: the canvas ships a dictionary of its own (`qt.<type>.c.*`). */
   canvasStrings?: unknown;
   /** `circuit` only: the component names, keyed by kind (`qt.circuit.kind.*`). */
   kindLabels?: unknown;
-  renderMarkdown?: (source: string) => ReactNode;
-  renderHelp?: (topic: string) => ReactNode;
-  RichText?: RichTextComponent;
-  uploadAsset?: (file: File) => Promise<string>;
-  aside?: HTMLElement | null;
-  ungraded?: boolean;
-  published?: boolean;
   onTry?: (config: unknown) => Promise<TryOutcome>;
   /** `code` only: `CodeEditorProps.onTryInBrowser`. */
   onTryInBrowser?: (config: CodeConfig) => Promise<RunnerOutcome | "unavailable">;
-  /** `diagram` and `circuit`: the layer a canvas expands into (`EditorProps.Expand`). */
-  Expand?: ComponentType<ExpandProps>;
-  onGenerateItem?: (index: number) => Promise<void>;
-  /** `diagram` and `circuit`: the sidebar strip a focused canvas lends its keys to. */
-  onCanvasShortcuts?: CanvasShortcutsListener;
-}
+};
 
 /**
  * The app's sanitised renderer, injected into every type's components.
@@ -639,10 +624,7 @@ export function QuestionEditorHost({
   onChange: (next: unknown) => void;
   issues?: readonly ConfigIssue[];
   disabled?: boolean;
-  /**
-   * The pool's image upload. Absent — the poll launcher's unsaved question,
-   * which has no pool to hold an image — the editors offer no upload.
-   */
+  /** The pool's image upload: `EditorProps.uploadAsset`. */
   uploadAsset?: (file: File) => Promise<string>;
   /**
    * The element of the screen's right column a type's editor may portal its
@@ -679,14 +661,14 @@ export function QuestionEditorHost({
         config={config}
         onChange={onChange}
         {...(disabled === undefined ? {} : { disabled })}
-        {...(issues === undefined ? {} : { issues })}
+        issues={issues}
         strings={strings}
         {...canvasStringsProp(client.id, t)}
         {...(client.id === "circuit" ? { kindLabels: circuitKindLabels(t) } : {})}
         renderMarkdown={renderBlock}
         renderHelp={renderHelp}
         RichText={LazyRichText}
-        {...(uploadAsset === undefined ? {} : { uploadAsset })}
+        uploadAsset={uploadAsset}
         {...(aside === undefined ? {} : { aside })}
         {...(ungraded === undefined ? {} : { ungraded })}
         {...(published === undefined ? {} : { published })}
@@ -704,24 +686,18 @@ export function QuestionEditorHost({
   );
 }
 
-interface PlayerHostProps {
-  student: unknown;
-  answer: unknown;
-  onChange: (next: unknown) => void;
-  readOnly: boolean;
+/** What every shipped player accepts on top of the core contract; `student/QuestionHost.tsx` mounts one too. */
+export type PlayerHostProps = PlayerProps<unknown, unknown> & {
   strings?: unknown;
+  /** `circuit` and `diagram`: the canvas ships a dictionary of its own. */
   canvasStrings?: unknown;
-  renderMarkdown?: (source: string) => ReactNode;
   /** `cloze` only: its text with the blanks in place (`ClozeMarkdownText`). */
   renderText?: ClozeTextRenderer;
-  /** The formatted answer field (`PlayerProps.RichText`); a player without one ignores it. */
-  RichText?: RichTextComponent;
   onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
   allowManualRun?: boolean;
   testsPrimary?: boolean;
   onSimulate?: (answer: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
-  Expand?: ComponentType<ExpandProps>;
-}
+};
 
 export function QuestionPlayerHost({
   t,
@@ -790,21 +766,12 @@ export function QuestionPlayerHost({
   );
 }
 
-interface ReviewHostProps {
-  student: unknown;
-  answer: unknown;
-  solution: unknown;
-  details: unknown;
-  points: number | null;
-  maxPoints: number;
-  audience: "teacher" | "student";
-  sections?: ReviewSections;
+type ReviewHostProps = ReviewProps<unknown, unknown, unknown, unknown> & {
   strings?: unknown;
   canvasStrings?: unknown;
-  renderMarkdown?: (source: string) => ReactNode;
   /** `cloze` only: its text with the blanks in place (`ClozeMarkdownText`). */
   renderText?: ClozeTextRenderer;
-}
+};
 
 export function QuestionReviewHost({
   t,

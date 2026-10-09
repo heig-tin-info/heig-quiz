@@ -15,6 +15,8 @@
  */
 import { z } from "zod";
 
+import { RunnerCase } from "@quiz/core/runner";
+
 import { EvaluationState } from "./evaluation.js";
 import { Verdict } from "./grading.js";
 import { AttemptState, CellStatus, ClosedBy } from "./live.js";
@@ -195,19 +197,12 @@ export const RunnerResultEvent = z.object({
     z.object({
       status: z.literal("ok"),
       compile: z.object({ ok: z.boolean(), stderr: z.string() }),
+      /** The runner's own case, named and judged against `expected`. */
       cases: z.array(
-        z.object({
+        RunnerCase.extend({
           name: z.string(),
           ok: z.boolean(),
-          /** The program's own exit code; null when it did not exit by itself (killed, oom). */
-          exitCode: z.number().int().nullable(),
-          stdout: z.string(),
-          stderr: z.string(),
           expected: z.string(),
-          ms: z.number(),
-          timedOut: z.boolean(),
-          oom: z.boolean(),
-          truncated: z.boolean(),
         }),
       ),
     }),

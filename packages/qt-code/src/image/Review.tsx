@@ -10,7 +10,7 @@
 import { useMemo, useState } from "react";
 
 import { resolveStrings, showsSection } from "@quiz/core/client";
-import type { MarkdownRenderer, ReviewProps } from "@quiz/core/client";
+import type { ReviewProps } from "@quiz/core/client";
 import { breakdownOf, cx, hint, markdown, reviewPrompt } from "@quiz/ui";
 
 import { CompileFailure, ReferenceSolutionCard, ScoreLine } from "../ProgramReview.js";
@@ -37,7 +37,6 @@ interface CodeImageReviewProps
    * player — the player's: one wording of "Target", "Difference", … for both.
    */
   strings?: Partial<CodeImageReviewStrings & CodeImagePlayerStrings> | undefined;
-  renderMarkdown?: MarkdownRenderer | undefined;
 }
 
 export function CodeImageReview({

@@ -48,116 +48,7 @@ export const KIND_LABELS: KindLabels = Object.fromEntries(
 // Editor
 // ---------------------------------------------------------------------------
 
-export interface CircuitEditorStrings {
-  questionSection: string;
-  prompt: string;
-
-  palette: string;
-  paletteHint: string;
-  groupPassive: string;
-  groupDiodes: string;
-  groupTransistors: string;
-  groupOpamp: string;
-  groupTerminals: string;
-  maxComponents: string;
-  maxComponentsHint: string;
-  paletteEmpty: string;
-
-  supplies: string;
-  suppliesHint: string;
-  vcc: string;
-  vee: string;
-  supplyNone: string;
-
-  stimuli: string;
-  stimuliHint: string;
-  stimulus: string;
-  stimulusName: string;
-  addStimulus: string;
-  removeStimulus: string;
-  noStimuli: string;
-  totalPoints: string;
-  "totalPoints.one": string;
-
-  source: string;
-  sourceDc: string;
-  sourceSine: string;
-  sourcePulse: string;
-  sourceStep: string;
-  volts: string;
-  amplitude: string;
-  frequency: string;
-  offset: string;
-  low: string;
-  high: string;
-  dutyCycle: string;
-  stepFrom: string;
-  stepTo: string;
-  stepAt: string;
-  sourceOhms: string;
-
-  load: string;
-  loadOpen: string;
-  loadResistor: string;
-  loadCapacitor: string;
-  loadOhms: string;
-  loadFarads: string;
-
-  analysisKind: string;
-  analysisTran: string;
-  analysisAc: string;
-  acHint: string;
-  bias: string;
-  analysis: string;
-  stopMs: string;
-  skipMs: string;
-  samples: string;
-  sweep: string;
-  fStartHz: string;
-  fStopHz: string;
-  pointsPerDecade: string;
-  hidden: string;
-  points: string;
-
-  reference: string;
-  referenceHint: string;
-  expand: string;
-  expanded: string;
-  tryReference: string;
-  trying: string;
-  tryUnavailable: string;
-  tryFailed: string;
-  tryNeedsReference: string;
-  tryNeedsStimulus: string;
-  tryInvalidDraft: string;
-  tryDone: string;
-  "tryDone.one": string;
-
-  grading: string;
-  modeManual: string;
-  modeSimulation: string;
-  modeManualHint: string;
-  modeSimulationHint: string;
-  tolerance: string;
-  toleranceHint: string;
-  bodeMagDb: string;
-  bodeFloorDb: string;
-  bodePhase: string;
-  bodePhaseDeg: string;
-  bodeHint: string;
-  rubric: string;
-  rubricHint: string;
-  showExpected: string;
-  showExpectedHint: string;
-
-  advanced: string;
-  commonGround: string;
-  commonGroundHint: string;
-  simulationsPerMinute: string;
-  simulationsPerMinuteHint: string;
-}
-
-export const EDITOR_STRINGS: CircuitEditorStrings = {
+export const EDITOR_STRINGS = {
   questionSection: "Question",
   prompt: "Statement",
 
@@ -273,58 +164,13 @@ export const EDITOR_STRINGS: CircuitEditorStrings = {
   simulationsPerMinuteHint: "The budget of the student's Simulate button.",
 };
 
+export type CircuitEditorStrings = typeof EDITOR_STRINGS;
+
 // ---------------------------------------------------------------------------
 // Player
 // ---------------------------------------------------------------------------
 
-export interface CircuitPlayerStrings {
-  schematic: string;
-  expand: string;
-  expandHint: string;
-  expanded: string;
-  components: string;
-  complete: string;
-
-  /** The netlist diagnostics, one sentence per `NetlistIssue.code`. */
-  issueFloatingPin: string;
-  issueUnconnectedPort: string;
-  issueDanglingWire: string;
-  issueNoGround: string;
-  issueMissingValue: string;
-  issueInvalidValue: string;
-  issueValueOutOfRange: string;
-  issueDuplicateName: string;
-  issueTooManyComponents: string;
-  issueKindNotAllowed: string;
-
-  stimuli: string;
-  noStimuli: string;
-  hiddenStimuli: string;
-  "hiddenStimuli.one": string;
-  srcDc: string;
-  srcSine: string;
-  srcPulse: string;
-  srcStep: string;
-  loadOpen: string;
-  loadResistor: string;
-  loadCapacitor: string;
-  window: string;
-  sweep: string;
-  srcBias: string;
-
-  simulate: string;
-  simulating: string;
-  simulateHint: string;
-  simulateUnavailable: string;
-  simulateRateLimited: string;
-  simulateFailed: string;
-  simulateNothing: string;
-
-  plot: string;
-  noSeries: string;
-}
-
-export const PLAYER_STRINGS: CircuitPlayerStrings = {
+export const PLAYER_STRINGS = {
   schematic: "Your circuit",
   expand: "Expand",
   expandHint: "Expand the circuit to draw.",
@@ -332,6 +178,7 @@ export const PLAYER_STRINGS: CircuitPlayerStrings = {
   components: "{n} / {max} components",
   complete: "Everything is connected.",
 
+  /** The netlist diagnostics, one sentence per `NetlistIssue.code`. */
   issueFloatingPin: "{ref} is not connected.",
   issueUnconnectedPort: "The {ref} port is not connected.",
   issueDanglingWire: "A wire ends in the air ({ref}).",
@@ -371,66 +218,13 @@ export const PLAYER_STRINGS: CircuitPlayerStrings = {
   noSeries: "This stimulus produced no waveform.",
 };
 
+export type CircuitPlayerStrings = typeof PLAYER_STRINGS;
+
 // ---------------------------------------------------------------------------
 // Review
 // ---------------------------------------------------------------------------
 
-export interface CircuitReviewStrings {
-  score: string;
-  yourCircuit: string;
-  reference: string;
-  noAnswer: string;
-  noReference: string;
-
-  diagnostics: string;
-  netSummary: string;
-  noIssues: string;
-  /*
-   * The netlist diagnostics again, worded for someone reading the answer back
-   * rather than for the student still drawing it. Duplicated on purpose, as
-   * `qt-code` duplicates its verdicts between the player and the review: two
-   * audiences, two tenses, and a shared dictionary would have to pick one.
-   */
-  issueFloatingPin: string;
-  issueUnconnectedPort: string;
-  issueDanglingWire: string;
-  issueNoGround: string;
-  issueMissingValue: string;
-  issueInvalidValue: string;
-  issueValueOutOfRange: string;
-  issueDuplicateName: string;
-  issueTooManyComponents: string;
-  issueKindNotAllowed: string;
-
-  stimuli: string;
-  stimulusName: string;
-  hiddenStimulus: string;
-  points: string;
-  verdict: string;
-  passed: string;
-  failed: string;
-  notRun: string;
-  error: string;
-  errorPercent: string;
-  /** An AC stimulus's error: the worst gap to the reference's Bode plot. */
-  envelopeGap: string;
-  envelopeGapPhase: string;
-  reason: string;
-  reasonNotSimulated: string;
-  reasonSpiceFailed: string;
-  reasonTimeout: string;
-  reasonNetlist: string;
-  reasonOther: string;
-  log: string;
-
-  manualGrade: string;
-  runnerUnavailable: string;
-  runnerBusy: string;
-  runnerError: string;
-  runnerNone: string;
-}
-
-export const REVIEW_STRINGS: CircuitReviewStrings = {
+export const REVIEW_STRINGS = {
   score: "{points} / {max} points",
   yourCircuit: "The circuit",
   reference: "Reference circuit",
@@ -440,6 +234,12 @@ export const REVIEW_STRINGS: CircuitReviewStrings = {
   diagnostics: "What the netlist read",
   netSummary: "Components: {components} · Nets: {nets}",
   noIssues: "No problem found in the wiring.",
+  /*
+   * The netlist diagnostics again, worded for someone reading the answer back
+   * rather than for the student still drawing it. Duplicated on purpose, as
+   * `qt-code` duplicates its verdicts between the player and the review: two
+   * audiences, two tenses, and a shared dictionary would have to pick one.
+   */
   issueFloatingPin: "{ref} was not connected.",
   issueUnconnectedPort: "The {ref} port was not connected.",
   issueDanglingWire: "A wire ended in the air ({ref}).",
@@ -461,6 +261,7 @@ export const REVIEW_STRINGS: CircuitReviewStrings = {
   notRun: "Not run",
   error: "Error",
   errorPercent: "{percent} %",
+  /** An AC stimulus's error: the worst gap to the reference's Bode plot. */
   envelopeGap: "{db} dB",
   envelopeGapPhase: "{db} dB · {deg}°",
   reason: "Reason",
@@ -478,42 +279,30 @@ export const REVIEW_STRINGS: CircuitReviewStrings = {
   runnerNone: "This circuit was not simulated.",
 };
 
+export type CircuitReviewStrings = typeof REVIEW_STRINGS;
+
 /**
  * The words of the grading table's one circuit column (ADR-044): what the
  * schematic holds, and how its simulation went. The drawing itself stays
  * in the answer panel.
  */
-/* A type, not an interface: the grading contract takes it as a `Record<string, string>`. */
-export type CircuitGradingStrings = {
-  schematic: string;
-  parts: string;
-  "parts.one": string;
-  wires: string;
-  "wires.one": string;
-  /** The stimuli passed, out of all of them. */
-  stimuli: string;
-  "stimuli.one": string;
-  /** The chip's tooltip when some failed: `{names}` lists them. */
-  failed: string;
-  /** Not simulated, and the netlist read problems in the wiring. */
-  issues: string;
-  "issues.one": string;
-  /** No verdict yet: the simulator owes it. */
-  atSimulator: string;
-  notSimulated: string;
-};
-
-export const GRADING_STRINGS: CircuitGradingStrings = {
+export const GRADING_STRINGS = {
   schematic: "Schematic",
   parts: "{n} parts",
   "parts.one": "1 part",
   wires: "{n} wires",
   "wires.one": "1 wire",
+  /** The stimuli passed, out of all of them. */
   stimuli: "{passed}/{total} stimuli",
   "stimuli.one": "{passed}/{total} stimulus",
+  /** The chip's tooltip when some failed: `{names}` lists them. */
   failed: "Failed: {names}",
+  /** Not simulated, and the netlist read problems in the wiring. */
   issues: "{n} wiring problems",
   "issues.one": "1 wiring problem",
+  /** No verdict yet: the simulator owes it. */
   atSimulator: "simulator…",
   notSimulated: "Not simulated",
 };
+
+export type CircuitGradingStrings = typeof GRADING_STRINGS;

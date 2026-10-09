@@ -14,7 +14,7 @@
  * With an `answerKey` (a teacher's preview, "Show answers", #554) the
  * accepted answers are listed under the field, which keeps its place.
  */
-import type { MarkdownRenderer, PlayerProps, StringOverrides } from "@quiz/core/client";
+import type { PlayerProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
 import {
   defaultShortConstraints,
@@ -32,7 +32,6 @@ type ShortPlayerProps = PlayerProps<ShortStudent, ShortAnswer, ShortSolution> & 
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
   disabled?: boolean;
   strings?: StringOverrides<ShortPlayerStringKey>;
-  renderMarkdown?: MarkdownRenderer;
 };
 
 /**

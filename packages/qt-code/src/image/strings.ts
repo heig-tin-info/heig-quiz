@@ -23,32 +23,8 @@ import type { ProgramEditorStrings } from "../ProgramEditor.js";
 import type { ProgramPlayerStrings } from "../ProgramPlayer.js";
 import type { ProgramReviewStrings } from "../ProgramReview.js";
 
-export interface ImageEditorStrings {
+export const IMAGE_EDITOR_STRINGS = {
   /** Re-worded for a picture: the reference draws the target, it checks no case. */
-  referenceSolutionHint: string;
-  imageSection: string;
-  imageHint: string;
-  width: string;
-  height: string;
-  sizeHint: string;
-  palette: string;
-  paletteBw: string;
-  paletteColor16: string;
-  paletteGray256: string;
-  target: string;
-  targetHint: string;
-  targetEmpty: string;
-  targetInvalid: string;
-  referenceImage: string;
-  useAsTarget: string;
-  targetSet: string;
-  tryMatch: string;
-  tryDrawn: string;
-  tryIncomplete: string;
-  tryStale: string;
-}
-
-export const IMAGE_EDITOR_STRINGS: ImageEditorStrings = {
   referenceSolutionHint:
     "Your own answer, in the student's editor. The button below runs it and draws its image, which you can then use as the target. Students see it when the evaluation shows the expected answer.",
   imageSection: "Image",
@@ -76,37 +52,9 @@ export const IMAGE_EDITOR_STRINGS: ImageEditorStrings = {
   tryStale: "The size or the palette changed since this run. Try the reference solution again.",
 };
 
-export interface ImagePlayerStrings {
-  imageSection: string;
-  view: string;
-  viewTarget: string;
-  viewComputed: string;
-  viewDiff: string;
-  layout: string;
-  layoutSingle: string;
-  layoutSplit: string;
-  targetImage: string;
-  computedImage: string;
-  diffImage: string;
-  notRunYet: string;
-  noTarget: string;
-  pixelScore: string;
-  diffOk: string;
-  diffWrong: string;
-  legend: string;
-  warningExtra: string;
-  "warningExtra.one": string;
-  warningMissing: string;
-  "warningMissing.one": string;
-  warningInvalid: string;
-  "warningInvalid.one": string;
-  endTimedOut: string;
-  endOutOfMemory: string;
-  endCrashed: string;
-  endTruncated: string;
-}
+export type ImageEditorStrings = typeof IMAGE_EDITOR_STRINGS;
 
-export const IMAGE_PLAYER_STRINGS: ImagePlayerStrings = {
+export const IMAGE_PLAYER_STRINGS = {
   imageSection: "Image",
   view: "View",
   viewTarget: "Target",
@@ -138,13 +86,13 @@ export const IMAGE_PLAYER_STRINGS: ImagePlayerStrings = {
   endTruncated: "The output was cut at the size limit.",
 };
 
-export interface ImageReviewStrings {
-  noImage: string;
-}
+export type ImagePlayerStrings = typeof IMAGE_PLAYER_STRINGS;
 
-export const IMAGE_REVIEW_STRINGS: ImageReviewStrings = {
+export const IMAGE_REVIEW_STRINGS = {
   noImage: "The program printed no image.",
 };
+
+export type ImageReviewStrings = typeof IMAGE_REVIEW_STRINGS;
 
 /** Everything the editor reads: `code`'s program half, its try row, and the above. */
 export type CodeImageEditorStrings = ProgramEditorStrings &
@@ -182,20 +130,15 @@ export const CODEIMAGE_REVIEW_DEFAULTS: CodeImageReviewStrings = {
 };
 
 /** What the grading table's picture column adds to `code`'s program column (ADR-044). */
-export type ImageGradingStrings = {
-  column: string;
-  /** The accessible name of a student's thumbnail, and of the key's. */
-  picture: string;
-  target: string;
-  noPicture: string;
-};
-
-export const IMAGE_GRADING_STRINGS: ImageGradingStrings = {
+export const IMAGE_GRADING_STRINGS = {
   column: "Picture · program",
+  /** The accessible name of a student's thumbnail, and of the key's. */
   picture: "The picture the program draws",
   target: "The target picture",
   noPicture: "No picture",
 };
+
+export type ImageGradingStrings = typeof IMAGE_GRADING_STRINGS;
 
 export type CodeImageGradingStrings = CodeGradingStrings & ImageGradingStrings;
 

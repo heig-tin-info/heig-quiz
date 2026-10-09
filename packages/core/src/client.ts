@@ -12,9 +12,21 @@ export interface EditorProps<TConfig> {
   config: TConfig;
   /** The host merges, validates lazily and autosaves the draft. */
   onChange: (next: TConfig) => void;
-  /** Uploads an image and returns `asset:<uuid>` for the markdown. */
-  uploadAsset: (file: File) => Promise<string>;
+  /**
+   * Uploads an image and returns `asset:<uuid>` for the markdown. Absent —
+   * the poll launcher's unsaved question, which has no pool to hold an image —
+   * the editor offers no upload.
+   */
+  uploadAsset?: ((file: File) => Promise<string>) | undefined;
   disabled?: boolean;
+  /** Validation problems of the stored draft (decision D16), placed by field. */
+  issues?: readonly ConfigIssue[] | undefined;
+  /**
+   * The host's sanitised markdown view (`MarkdownRenderer`). Absent, a type
+   * shows plain text, and an editor previews nothing: its field already
+   * shows the source.
+   */
+  renderMarkdown?: MarkdownRenderer | undefined;
   /**
    * The host's WYSIWYG markdown editor (`apps/web/src/markdown/RichText.tsx`),
    * injected exactly as `renderMarkdown` is and for the same reason: a `qt-*`
@@ -228,6 +240,8 @@ export interface PlayerProps<TStudent, TAnswer, TSolution = unknown> {
   answerKey?: TSolution | null;
   /** Code type only: interactive run through `POST /attempts/:id/run`. */
   run?: (payload: unknown) => Promise<unknown>;
+  /** The host's sanitised markdown view (`MarkdownRenderer`); plain text when absent. */
+  renderMarkdown?: MarkdownRenderer | undefined;
   /**
    * The host's WYSIWYG markdown editor, lent to a player for the reason it is
    * lent to an editor (`EditorProps.RichText`): the `rich` type's formatted
@@ -295,6 +309,8 @@ export interface ReviewProps<TStudent, TAnswer, TSolution, TDetails> {
    * the student's answer nor the verdict on it: those are what is graded.
    */
   sections?: ReviewSections;
+  /** The host's sanitised markdown view (`MarkdownRenderer`); plain text when absent. */
+  renderMarkdown?: MarkdownRenderer | undefined;
 }
 
 /**

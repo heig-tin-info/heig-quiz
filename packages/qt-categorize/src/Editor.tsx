@@ -16,7 +16,6 @@ import { useId, useState } from "react";
 import type {
   ConfigIssue,
   EditorProps,
-  MarkdownRenderer,
   RichTextComponent,
   StringOverrides,
 } from "@quiz/core/client";
@@ -56,13 +55,8 @@ import {
 import { categorizeEditorStrings, type CategorizeEditorStringKey } from "./strings.js";
 import { CloseIcon, iconButtonClass, PlusIcon, Rank } from "./ui.js";
 
-type CategorizeEditorProps = Omit<EditorProps<CategorizeConfig>, "uploadAsset"> & {
-  uploadAsset?: EditorProps<CategorizeConfig>["uploadAsset"];
-  /** What the last save reported, as zod paths (decision D16). */
-  issues?: readonly ConfigIssue[];
+type CategorizeEditorProps = EditorProps<CategorizeConfig> & {
   strings?: StringOverrides<CategorizeEditorStringKey>;
-  /** The card following the pointer is drawn with it; the cards themselves are fields. */
-  renderMarkdown?: MarkdownRenderer;
 };
 
 /** The policies a question can carry, in the order of the segmented control. */
@@ -277,6 +271,8 @@ export function CategorizeEditor({
               onRemove={() => removeCard(slot.id)}
             />
           )}
+          // The card following the pointer is drawn with `renderMarkdown`;
+          // the cards themselves are fields.
           renderOverlay={(card) => (
             <OverlayCard>
               <GripIcon className="size-3.5 text-fg-faint" />

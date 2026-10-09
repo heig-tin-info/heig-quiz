@@ -13,7 +13,7 @@
 import { useId, useMemo, type ReactNode } from "react";
 
 import { fmt, issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
-import type { ConfigIssue, EditorProps, MarkdownRenderer } from "@quiz/core/client";
+import type { EditorProps } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 import {
   AdvancedDisclosure,
@@ -70,9 +70,7 @@ export type CodeImageTryOutcome = RunnerOutcome | { details: CodeImageDetails } 
 
 export interface CodeImageEditorProps extends EditorProps<CodeImageConfig> {
   onTry?: ((config: CodeImageConfig) => Promise<CodeImageTryOutcome>) | undefined;
-  issues?: readonly ConfigIssue[] | undefined;
   strings?: Partial<CodeImageEditorStrings> | undefined;
-  renderMarkdown?: MarkdownRenderer | undefined;
   monaco?: boolean | undefined;
 }
 

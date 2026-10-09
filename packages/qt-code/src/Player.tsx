@@ -25,7 +25,7 @@
 import { useId, useState } from "react";
 
 import { fmt, plural, resolveStrings } from "@quiz/core/client";
-import type { MarkdownRenderer, PlayerProps } from "@quiz/core/client";
+import type { PlayerProps } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 
 import { ArgsInput } from "./ArgsInput.js";
@@ -112,8 +112,6 @@ interface CodePlayerProps extends PlayerProps<CodeStudent, CodeAnswer> {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
   disabled?: boolean | undefined;
   strings?: Partial<CodePlayerStrings> | undefined;
-  /** The host's sanitised markdown view; plain text when absent. */
-  renderMarkdown?: MarkdownRenderer | undefined;
   /** Forces the Monaco path on or off (tests use the textarea). */
   monaco?: boolean | undefined;
 }

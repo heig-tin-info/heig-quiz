@@ -13,7 +13,7 @@
  *  - the SOLUTION feeds the "Expected: …" line under a wrong card, and only
  *    that — `null` when the feedback policy hides the key.
  */
-import type { MarkdownRenderer, ReviewProps, StringOverrides } from "@quiz/core/client";
+import type { ReviewProps, StringOverrides } from "@quiz/core/client";
 import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
 import { breakdownOf, caption, cx, markdown, reviewPrompt, ScoreHeader } from "@quiz/ui";
 
@@ -35,7 +35,6 @@ type CategorizeReviewProps = ReviewProps<
   CategorizeReviewDetails
 > & {
   strings?: StringOverrides<CategorizeReviewStringKey>;
-  renderMarkdown?: MarkdownRenderer;
 };
 
 export function CategorizeReview({

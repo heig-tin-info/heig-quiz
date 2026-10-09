@@ -10,7 +10,7 @@
 import { useId, useState } from "react";
 
 import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
-import type { MarkdownRenderer, ReviewProps } from "@quiz/core/client";
+import type { ReviewProps } from "@quiz/core/client";
 
 import type { CodeAnswer, CodeCaseDetail, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
 import { CompileFailure, ReferenceSolutionCard, ScoreLine } from "./ProgramReview.js";
@@ -37,8 +37,6 @@ interface CodeReviewProps
   /** docs/06 Q8: the policy may name the hidden cases once the results are out. */
   showHiddenCaseNames?: boolean | undefined;
   strings?: Partial<CodeReviewStrings> | undefined;
-  /** The host's sanitised markdown view; plain text when absent. */
-  renderMarkdown?: MarkdownRenderer | undefined;
 }
 
 /** The case as the teacher wrote it, when the feedback policy sends the key. */

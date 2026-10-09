@@ -10,7 +10,7 @@
  * reconstructs a key.
  */
 import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
-import type { MarkdownRenderer, ReviewProps } from "@quiz/core/client";
+import type { ReviewProps } from "@quiz/core/client";
 
 import { Plot, SchematicView, type CanvasStrings } from "./canvas/index.js";
 import type {
@@ -42,8 +42,6 @@ interface CircuitReviewProps
   strings?: Partial<CircuitReviewStrings> | undefined;
   /** The canvas has a dictionary of its own; the host translates it too. */
   canvasStrings?: Partial<CanvasStrings> | undefined;
-  /** The host's sanitised markdown view; plain text when absent. */
-  renderMarkdown?: MarkdownRenderer | undefined;
 }
 
 /**

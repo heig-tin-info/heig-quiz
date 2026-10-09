@@ -5,7 +5,7 @@
  */
 import { useState } from "react";
 
-import type { MarkdownRenderer, PlayerProps, StringOverrides } from "@quiz/core/client";
+import type { PlayerProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
 import { BRAINSTORM_IDEA_MAX, ideaKey } from "@quiz/domain";
 import { buttonClass, caption, cx, inputClass, inputSize, isLocked, label, markdown } from "@quiz/ui";
@@ -16,7 +16,6 @@ import { brainstormPlayerStrings, type BrainstormPlayerStringKey } from "./strin
 type BrainstormPlayerProps = PlayerProps<BrainstormStudent, BrainstormAnswer> & {
   disabled?: boolean;
   strings?: StringOverrides<BrainstormPlayerStringKey>;
-  renderMarkdown?: MarkdownRenderer;
 };
 
 export function BrainstormPlayer({

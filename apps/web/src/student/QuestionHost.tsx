@@ -21,7 +21,6 @@ import { Suspense, type ComponentType, type ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 
 import type { PlayerProps } from "@quiz/core/client";
-import type { ClozeTextRenderer } from "@quiz/qt-cloze/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 import { questionTypeClient } from "@quiz/registry/client";
 
@@ -29,21 +28,8 @@ import { useT } from "../i18n";
 import { ClozeMarkdownText } from "../markdown/ClozeMarkdownText";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { Alert, ScrollableCode, Spinner } from "../ui";
-import { canvasStringsProp, LazyRichText, questionType } from "../questionTypes";
+import { canvasStringsProp, LazyRichText, questionType, type PlayerHostProps } from "../questionTypes";
 import { playerStringsFor } from "./questionStrings";
-
-/** What every shipped player accepts on top of the core contract. */
-interface HostPlayerProps extends PlayerProps<unknown, unknown> {
-  strings?: unknown;
-  /** `circuit` and `diagram`: the canvas ships a dictionary of its own. */
-  canvasStrings?: unknown;
-  renderMarkdown?: (source: string) => ReactNode;
-  /** `cloze` only: its text with the blanks in place, through the app's pipeline. */
-  renderText?: ClozeTextRenderer;
-  onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
-  allowManualRun?: boolean;
-  onSimulate?: (answer: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
-}
 
 /*
  * `inline`, because every place a question type calls this is already a
@@ -129,9 +115,9 @@ export function QuestionHost({
   answerKey?: unknown;
 }) {
   const t = useT();
-  let Player: ComponentType<HostPlayerProps>;
+  let Player: ComponentType<PlayerHostProps>;
   try {
-    Player = questionTypeClient(type).Player as unknown as ComponentType<HostPlayerProps>;
+    Player = questionTypeClient(type).Player as unknown as ComponentType<PlayerHostProps>;
   } catch {
     return (
       <Alert tone="danger" icon={AlertTriangle} title={t("player.loadFailed")}>

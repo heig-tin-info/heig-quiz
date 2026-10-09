@@ -9,7 +9,7 @@
  * the list is reorderable and numbered.
  */
 import { useId, useState } from "react";
-import type { ConfigIssue, EditorProps, MarkdownRenderer, StringOverrides } from "@quiz/core/client";
+import type { EditorProps, StringOverrides } from "@quiz/core/client";
 import { issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import {
   defaultShortConstraints,
@@ -43,11 +43,8 @@ import {
   textareaClass,
 } from "@quiz/ui";
 
-type ShortEditorProps = Omit<EditorProps<ShortConfig>, "uploadAsset"> & {
-  uploadAsset?: EditorProps<ShortConfig>["uploadAsset"];
-  issues?: readonly ConfigIssue[];
+type ShortEditorProps = EditorProps<ShortConfig> & {
   strings?: StringOverrides<ShortEditorStringKey>;
-  renderMarkdown?: MarkdownRenderer;
 };
 
 type Strings = Readonly<Record<ShortEditorStringKey, string>>;

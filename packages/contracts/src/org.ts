@@ -7,6 +7,7 @@
  */
 import { z } from "zod";
 
+import { PersonRef } from "./common.js";
 import { ConditionKind, EvaluationCondition } from "./evaluation.js";
 import { PoolColor, PoolIcon } from "./pool.js";
 
@@ -161,13 +162,7 @@ export type StaffPatch = z.infer<typeof StaffPatch>;
 export const StaffParam = z.object({ id: z.uuid(), uid: z.uuid() });
 export type StaffParam = z.infer<typeof StaffParam>;
 
-const StaffMember = z.object({
-  userId: z.uuid(),
-  givenName: z.string(),
-  familyName: z.string(),
-  email: z.string(),
-  role: CourseRole,
-});
+const StaffMember = PersonRef.extend({ role: CourseRole });
 type StaffMember = z.infer<typeof StaffMember>;
 
 const ClassroomRef = z.object({

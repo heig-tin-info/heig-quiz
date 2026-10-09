@@ -10,7 +10,7 @@
  */
 import type { ReactNode } from "react";
 
-import type { MarkdownRenderer, ReviewProps, StringOverrides } from "@quiz/core/client";
+import type { ReviewProps, StringOverrides } from "@quiz/core/client";
 import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
 import { caption, markdown, reviewPrompt, ScoreHeader } from "@quiz/ui";
 
@@ -19,7 +19,6 @@ import { richReviewStrings, type RichReviewStringKey } from "./strings.js";
 
 type RichReviewProps = ReviewProps<RichStudent, RichAnswer, RichSolution, RichDetails> & {
   strings?: StringOverrides<RichReviewStringKey>;
-  renderMarkdown?: MarkdownRenderer;
 };
 
 /** A labelled panel: `outlined` for what the student wrote, `soft` for the teacher's guide. */

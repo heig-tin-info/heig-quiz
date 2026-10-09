@@ -33,6 +33,7 @@ import {
   RetakeScope,
   TrustedClient,
 } from "./evaluation.js";
+import { StaffItemRef } from "./common.js";
 import { IntegrityIncident } from "./integrity.js";
 
 export const AttemptState = z.enum(["not_started", "in_progress", "submitted", "expired"]);
@@ -740,16 +741,7 @@ export const DashboardView = z.object({
      */
     journalOn: z.boolean(),
   }),
-  items: z.array(
-    z.object({
-      id: z.uuid(),
-      position: z.number().int(),
-      points: z.number(),
-      type: z.string(),
-      internalName: z.string(),
-      milestone: z.boolean(),
-    }),
-  ),
+  items: z.array(StaffItemRef.extend({ milestone: z.boolean() })),
   rows: z.array(DashboardRow),
   totals: z.array(
     z.object({
@@ -838,13 +830,7 @@ export const AttemptInspect = z.object({
   }),
   items: z.array(
     z.object({
-      item: z.object({
-        id: z.uuid(),
-        position: z.number().int(),
-        points: z.number(),
-        type: z.string(),
-        internalName: z.string(),
-      }),
+      item: StaffItemRef,
       studentConfig: z.unknown(),
       answer: z.unknown().nullable(),
       revision: z.number().int(),

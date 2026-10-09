@@ -14,7 +14,7 @@
  */
 import { useId, useState, type ReactNode } from "react";
 
-import type { MarkdownRenderer, ReviewProps, StringOverrides } from "@quiz/core/client";
+import type { ReviewProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings, showsSection } from "@quiz/core/client";
 import { DiagramView, type DiagramStrings } from "@quiz/diagram/client";
 import { isEmptyScene, toText } from "@quiz/diagram/server";
@@ -27,7 +27,6 @@ import { diagramReviewStrings, type DiagramReviewStringKey } from "./strings.js"
 type DiagramReviewProps = ReviewProps<DiagramStudent, DiagramAnswer, DiagramSolution, DiagramDetails> & {
   strings?: StringOverrides<DiagramReviewStringKey>;
   canvasStrings?: Partial<DiagramStrings>;
-  renderMarkdown?: MarkdownRenderer;
 };
 
 /** A labelled panel: `outlined` for what the student drew, `soft` for the teacher's guide (the `rich` review's). */

@@ -11,6 +11,28 @@ export const IdParam = z.object({ id: z.uuid() });
 export type IdParam = z.infer<typeof IdParam>;
 
 /**
+ * An item of an evaluation as the staff sees it: the grading queue, the
+ * results, the dashboard and the inspector all name it this way.
+ */
+export const StaffItemRef = z.object({
+  id: z.uuid(),
+  position: z.number().int(),
+  internalName: z.string(),
+  type: z.string(),
+  points: z.number(),
+});
+export type StaffItemRef = z.infer<typeof StaffItemRef>;
+
+/** An account named to the staff: a pool's member or candidate, a course's staff seat. */
+export const PersonRef = z.object({
+  userId: z.uuid(),
+  email: z.string(),
+  givenName: z.string(),
+  familyName: z.string(),
+});
+export type PersonRef = z.infer<typeof PersonRef>;
+
+/**
  * A zod issue, reduced to what a UI can show. `PUT /questions/:id/draft`
  * returns these for a config that was stored anyway (decision D16), so the
  * editor can underline the fields without knowing zod.

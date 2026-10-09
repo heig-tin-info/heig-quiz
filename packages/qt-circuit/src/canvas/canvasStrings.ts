@@ -13,73 +13,8 @@
  */
 import { LIBRARY, type ComponentKind, type PortId } from "../library.js";
 
-export interface CanvasStrings {
+export const CANVAS_STRINGS = {
   /** Accessible name of the editor's canvas, when the host gives none. */
-  editorLabel: string;
-  viewLabel: string;
-
-  toolSelect: string;
-  toolWire: string;
-
-  components: string;
-  /** "3 / 10" under the palette heading: what is placed against what is allowed. */
-  componentCount: string;
-  paletteFull: string;
-
-  rotate: string;
-  mirrorHorizontal: string;
-  mirrorVertical: string;
-  duplicate: string;
-  remove: string;
-  undo: string;
-  redo: string;
-  fit: string;
-  /** The shortcut zone's lines (`SHORTCUT_LINES`); W and Del reuse `toolWire` and `remove`. */
-  shortcutUndoRedo: string;
-  shortcutTransform: string;
-  shortcutPart: string;
-
-  inspector: string;
-  fieldName: string;
-  fieldValue: string;
-  valueMissing: string;
-  valueInvalid: string;
-  valueRange: string;
-  nameInvalid: string;
-
-  modeSelect: string;
-  modeWire: string;
-  modePlace: string;
-  hintSelect: string;
-  hintSelection: string;
-  "hintSelection.one": string;
-  hintWire: string;
-  hintWireDrawing: string;
-  hintPlace: string;
-  cursor: string;
-
-  /** The label of a kind, for a palette tooltip and the inspector title. */
-  kind: (kind: ComponentKind) => string;
-  port: (port: PortId) => string;
-  emptySchematic: string;
-
-  plotEmpty: string;
-  plotTime: string;
-  plotVoltage: string;
-  plotCurrent: string;
-  plotFrequency: string;
-  plotMagnitude: string;
-  plotPhase: string;
-  /** Accessible name of a Bode plot that has no title. */
-  bodeLabel: string;
-  seriesVin: string;
-  seriesVout: string;
-  seriesExpected: string;
-  seriesIout: string;
-  showCurrent: string;
-}
-
-export const CANVAS_STRINGS: CanvasStrings = {
   editorLabel: "Schematic editor",
   viewLabel: "Schematic",
 
@@ -87,6 +22,7 @@ export const CANVAS_STRINGS: CanvasStrings = {
   toolWire: "Wire",
 
   components: "Components",
+  /** "3 / 10" under the palette heading: what is placed against what is allowed. */
   componentCount: "{used} / {max}",
   paletteFull: "You may place {max} components.",
 
@@ -98,6 +34,7 @@ export const CANVAS_STRINGS: CanvasStrings = {
   undo: "Undo",
   redo: "Redo",
   fit: "Fit to view",
+  /** The shortcut zone's lines (`SHORTCUT_LINES`); W and Del reuse `toolWire` and `remove`. */
   shortcutUndoRedo: "Undo / Redo",
   shortcutTransform: "Rotate / Mirror",
   shortcutPart: "Pick a part",
@@ -121,8 +58,9 @@ export const CANVAS_STRINGS: CanvasStrings = {
   hintPlace: "{kind}: click to place, R to rotate, H or V to mirror, Escape to stop.",
   cursor: "x {x}  y {y}",
 
-  kind: (kind) => LIBRARY[kind].label,
-  port: (port) => port,
+  /** The label of a kind, for a palette tooltip and the inspector title. */
+  kind: (kind: ComponentKind): string => LIBRARY[kind].label,
+  port: (port: PortId): string => port,
   emptySchematic: "Nothing drawn yet.",
 
   plotEmpty: "Run a simulation to see the output",
@@ -132,6 +70,7 @@ export const CANVAS_STRINGS: CanvasStrings = {
   plotFrequency: "Hz",
   plotMagnitude: "dB",
   plotPhase: "°",
+  /** Accessible name of a Bode plot that has no title. */
   bodeLabel: "Bode plot of the output",
   seriesVin: "v(in)",
   seriesVout: "v(out)",
@@ -139,3 +78,5 @@ export const CANVAS_STRINGS: CanvasStrings = {
   seriesIout: "i(out)",
   showCurrent: "Show current",
 };
+
+export type CanvasStrings = typeof CANVAS_STRINGS;

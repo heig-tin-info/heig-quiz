@@ -10,7 +10,7 @@
  * choices are marked in place, a success tint and their verdict in words, so
  * the question keeps the layout it has without the key.
  */
-import type { MarkdownRenderer, PlayerProps, StringOverrides } from "@quiz/core/client";
+import type { PlayerProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
 import type { McqAnswer, McqSolution, McqStudent } from "./schema.js";
 import { mcqPlayerStrings, type McqPlayerStringKey } from "./strings.js";
@@ -21,7 +21,6 @@ type McqPlayerProps = PlayerProps<McqStudent, McqAnswer, McqSolution> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
   disabled?: boolean;
   strings?: StringOverrides<McqPlayerStringKey>;
-  renderMarkdown?: MarkdownRenderer;
 };
 
 export function McqPlayer({

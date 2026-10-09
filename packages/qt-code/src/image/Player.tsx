@@ -18,7 +18,7 @@
 import { useMemo, useState } from "react";
 
 import { plural, resolveStrings } from "@quiz/core/client";
-import type { MarkdownRenderer, PlayerProps } from "@quiz/core/client";
+import type { PlayerProps } from "@quiz/core/client";
 import { badge, card, cx, isLocked, sectionTitle } from "@quiz/ui";
 
 import {
@@ -54,7 +54,6 @@ export interface CodeImagePlayerProps extends PlayerProps<CodeImageStudent, Code
     | undefined;
   disabled?: boolean | undefined;
   strings?: Partial<CodeImagePlayerStrings> | undefined;
-  renderMarkdown?: MarkdownRenderer | undefined;
   /** Forces the Monaco path on or off (tests use the textarea). */
   monaco?: boolean | undefined;
 }

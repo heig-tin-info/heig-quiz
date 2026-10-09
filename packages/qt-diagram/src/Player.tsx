@@ -20,7 +20,7 @@
  * link being drawn, the tool, the selection) and consumes the key only then;
  * a key it leaves alone closes the layer, which is the host's to decide.
  */
-import type { MarkdownRenderer, PlayerProps, StringOverrides } from "@quiz/core/client";
+import type { PlayerProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
 import { DiagramEditor, DiagramView, type DiagramStrings } from "@quiz/diagram/client";
 import type { Scene } from "@quiz/diagram/server";
@@ -35,7 +35,6 @@ type DiagramPlayerProps = PlayerProps<DiagramStudent, DiagramAnswer> & {
   strings?: StringOverrides<DiagramPlayerStringKey>;
   /** The engine's dictionary: the tools' accessible names, the inspector. */
   canvasStrings?: Partial<DiagramStrings>;
-  renderMarkdown?: MarkdownRenderer;
 };
 
 /** The inline canvas: tall enough to draw a dozen elements, short enough to keep the prompt in sight. */
