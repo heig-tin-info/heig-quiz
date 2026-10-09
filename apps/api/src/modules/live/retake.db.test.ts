@@ -322,9 +322,9 @@ describe("a retake (F-EVAL-15)", () => {
   it("replaces reopening: a teacher reopens no attempt of such an exercise", async () => {
     const { app, seed, evaluation, items } = await exercise();
     const first = await sit(app, evaluation, items, seed.studentIds[0]!, [true, true]);
-    await expect(live.reopenAttempt(db, evaluation, first, app.clock.now())).rejects.toBeInstanceOf(
-      live.RetakesEnabled,
-    );
+    await expect(live.reopenAttempt(db, evaluation, first, app.clock.now())).rejects.toMatchObject({
+      code: "retakes_enabled",
+    });
   });
 });
 

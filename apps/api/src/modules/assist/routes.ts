@@ -28,8 +28,8 @@ import { dropAssistToken, mintAssistToken } from "../../auth/tokens.js";
 import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
 import type { AppConfig } from "../../config.js";
 import { callerOf, ownSessionGuard, teacherGuard } from "../guards.js";
-import { invalid, notFound } from "../http.js";
-import { LlmError, llmFailure } from "../llm/service.js";
+import { invalid, notFound, rateLimited } from "../http.js";
+import { llmArms } from "../llm/service.js";
 import { injectedApi } from "../mcp/service.js";
 import { loadCorpus } from "./corpus.js";
 import {
@@ -83,7 +83,7 @@ export async function assistPlugin(app: FastifyInstance, opts: { config: AppConf
     const user = req.user!;
     const now = app.clock.now();
     if (!questions.spend(`assist:${user.id}`, ASSIST_TURNS_PER_MINUTE, now)) {
-      return reply.code(429).header("retry-after", String(BUDGET_RETRY_AFTER_S)).send({ error: "rate_limited" });
+      return rateLimited(reply, BUDGET_RETRY_AFTER_S);
     }
     const engine = await engineNow();
     if (!corpus || !engine) return reply.code(409).send({ error: "llm_not_configured" });
@@ -97,10 +97,8 @@ export async function assistPlugin(app: FastifyInstance, opts: { config: AppConf
       // twice — a few cents, rather than an exchange written into a
       // conversation its owner just deleted.
       if (error instanceof ConversationNotFound) return missing(reply);
-      if (error instanceof LlmError) {
-        const { status, body: failure } = llmFailure(error);
-        return reply.code(status).send(failure);
-      }
+      const refused = llmArms(reply, error, now);
+      if (refused) return refused;
       throw error;
     }
   });

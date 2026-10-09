@@ -6,9 +6,8 @@
  */
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 
-import type { Db } from "../../db/client.js";
+import { qualified, type Db } from "../../db/client.js";
 import { questionStars, questions } from "../../db/schema.js";
-import { qualified } from "./shared.js";
 
 /**
  * THE definition of "starred by the caller", as a predicate on `questions`:

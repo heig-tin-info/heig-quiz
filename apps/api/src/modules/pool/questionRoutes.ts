@@ -25,10 +25,9 @@ import { iso, isoOrNull } from "../../clock.js";
 import { questions } from "../../db/schema.js";
 import { actorOf } from "../../audit.js";
 import { callerOf, findAccessiblePool, requirePoolRole } from "../guards.js";
-import { invalid, readerLang } from "../http.js";
-import { LlmError, llmFailure } from "../llm/service.js";
+import { invalid, rateLimited, readerLang } from "../http.js";
 import { poolChanged } from "./events.js";
-import { GenerateRefusal, generateAnswers, generatorTypes } from "./generate.js";
+import { generateAnswers, generatorTypes } from "./generate.js";
 import * as service from "./service.js";
 import { coreFailure, LLM_CALLS_PER_MINUTE, type PoolRouteContext } from "./routeContext.js";
 
@@ -64,7 +63,7 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
     teacher(
       { params: IdParam, body: QuestionCreate, load: inPool("contributor") },
       async ({ req, reply, body, scope: pool }) => {
-        // A name the pool already holds is `NameTaken`'s 409, a category of
+        // A name the pool already holds is `questionWriteError`'s 409 `duplicate_name`, a category of
         // another pool the 404 of `poolFailure`, a type the registry refuses
         // the 422 of `coreFailure`.
         const created = await service.createQuestion(app.db, {
@@ -106,7 +105,7 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
     teacher(
       { params: IdParam, body: QuestionPatch, load: onQuestion("contributor") },
       async ({ req, reply, body, scope }) => {
-        // `NameTaken`'s 409 and `poolFailure`'s 404, like the create route.
+        // `questionWriteError`'s 409 `duplicate_name` and `poolFailure`'s 404, like the create route.
         // A concept that cannot be resolved is the 422 `ConceptWriteRefusal`.
         await service.patchQuestion(app.db, scope.question, body, {
           userId: req.user!.id,
@@ -162,24 +161,15 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
       { params: IdParam, body: GenerateRequest, load: onQuestion("contributor") },
       async ({ req, reply, body, scope }) => {
         if (!generations.spend(`generate:${req.user!.id}`, LLM_CALLS_PER_MINUTE, app.clock.now())) {
-          return reply.code(429).header("retry-after", String(BUDGET_RETRY_AFTER_S)).send({ error: "rate_limited" });
+          return rateLimited(reply, BUDGET_RETRY_AFTER_S);
         }
-        try {
-          return await generateAnswers(app.llmGateway, app.runner, {
-            type: scope.question.type,
-            config: body.config,
-            explanation: body.explanation,
-            item: body.item,
-            userId: req.user!.id,
-          });
-        } catch (error) {
-          if (error instanceof GenerateRefusal) return reply.code(400).send({ error: error.code });
-          if (error instanceof LlmError) {
-            const { status, body } = llmFailure(error);
-            return reply.code(status).send(body);
-          }
-          throw error;
-        }
+        return generateAnswers(app.llmGateway, app.runner, {
+          type: scope.question.type,
+          config: body.config,
+          explanation: body.explanation,
+          item: body.item,
+          userId: req.user!.id,
+        });
       },
     ),
   );

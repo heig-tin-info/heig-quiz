@@ -102,6 +102,16 @@ export function hint(type: EventType, topics: Topic[], except?: string): void {
 }
 
 /**
+ * A hint to a course's staff (`course:<id>`) and to the `user:` topic of
+ * each student it concerns — NEVER to `classroom:<id>`, where every student
+ * of the classroom listens: a hint there would tell a student what happens
+ * to a classmate, and make every client refetch each time (N-SEC-20).
+ */
+export function staffAndStudentsHint(type: EventType, courseId: string, userIds: readonly string[]): void {
+  hint(type, [`course:${courseId}`, ...new Set(userIds.map(userTopic))]);
+}
+
+/**
  * These users just LOST access to something — a staff seat, a roster line, a
  * pool, the teacher role. A stream's topics are computed once, when it
  * connects, so their open streams would keep hearing `course:`/`classroom:`
@@ -234,6 +244,28 @@ export function evaluationState(input: {
     },
     [evaluationTopic(input.evaluationId)],
   );
+}
+
+/**
+ * The state column moved: everyone watching the evaluation knows now
+ * (F-LIVE-04), and its listing — which shows the state badge — re-reads.
+ */
+export function evaluationStateChanged(
+  evaluation: Parameters<typeof homeTopic>[0] & {
+    state: EvaluationState;
+    pausedAt: Date | null;
+    closesAt: Date | null;
+  },
+  now: Date,
+): void {
+  evaluationState({
+    evaluationId: evaluation.id,
+    state: evaluation.state,
+    pausedAt: evaluation.pausedAt,
+    closesAt: evaluation.closesAt,
+    now,
+  });
+  hint("evaluations", homeTopic(evaluation));
 }
 
 export function attemptDeadline(input: {

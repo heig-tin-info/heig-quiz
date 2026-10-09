@@ -59,7 +59,6 @@ import {
   retakeScopeOf,
   round2,
   type AttemptTally,
-  type CorrectionPublishRefusal,
   type FeedbackGate,
   type FeedbackRefusal,
 } from "@quiz/domain";
@@ -72,7 +71,7 @@ import {
   enrollments,
   gradings,
 } from "../../db/schema.js";
-import { DomainError } from "../http.js";
+import { refusalClass, type Refusal } from "../http.js";
 import {
   applyState,
   byId,
@@ -121,19 +120,24 @@ import { exampleInstance, explanationOrNull, isParameterized, itemInstance } fro
 
 export { watchReleasedGrades, type GradeWatch } from "./updated.js";
 
-export class ResultsError extends DomainError {
-  override name = "ResultsError";
-}
+/**
+ * Everything this module refuses, by code: its status and, where the
+ * refusal reads the same wherever it is thrown, its message.
+ */
+const REFUSALS = {
+  not_releasable: [409],
+  not_over: [409],
+  // "Publish the correction" on an exam or a poll (ADR-050): never, whatever the state.
+  correction_not_allowed: [422],
+  // …and on an exercise that is not running (not yet, or no more).
+  correction_not_open: [409, "only a running exercise publishes its correction early"],
+} satisfies Record<string, Refusal>;
+
+export class ResultsError extends refusalClass("ResultsError", REFUSALS) {}
 
 export class NotReleasable extends ResultsError {
   constructor(message: string) {
-    super("not_releasable", 409, message);
-  }
-}
-
-export class NotOver extends ResultsError {
-  constructor(message: string) {
-    super("not_over", 409, message);
+    super("not_releasable", message);
   }
 }
 
@@ -144,21 +148,6 @@ const isOver = (evaluation: EvaluationRecord): boolean => isEvaluationOver(evalu
 const correctionPublished = (evaluation: EvaluationRecord): boolean =>
   evaluation.correctionPublishedAt !== null;
 
-/** "Publish the correction" on an exam or a poll (ADR-050): never, whatever the state. */
-export class CorrectionNotAllowed extends ResultsError {
-  constructor(reason: Exclude<CorrectionPublishRefusal, "not_open">) {
-    super("correction_not_allowed", 422, `the correction of a ${reason} is never published early`, {
-      reason,
-    });
-  }
-}
-
-/** …and on an exercise that is not running (not yet, or no more). */
-export class CorrectionNotOpen extends ResultsError {
-  constructor() {
-    super("correction_not_open", 409, "only a running exercise publishes its correction early");
-  }
-}
 
 // --- The grade table ------------------------------------------------------
 
@@ -491,11 +480,13 @@ export async function publishCorrection(
   now: Date,
 ): Promise<{ publishedAt: Date; first: boolean; toGrade: string[] }> {
   const refusal = correctionPublishRefusal(evaluation);
-  if (refusal === "exam" || refusal === "poll") throw new CorrectionNotAllowed(refusal);
+  if (refusal === "exam" || refusal === "poll") {
+    throw new ResultsError("correction_not_allowed", `the correction of a ${refusal} is never published early`, { reason: refusal });
+  }
   if (!(await setCorrectionPublished(db, evaluation.id, now))) {
     // Published already (the first instant is the answer), or not running.
     const at = (await byId(db, evaluation.id))?.correctionPublishedAt ?? null;
-    if (at === null) throw new CorrectionNotOpen();
+    if (at === null) throw new ResultsError("correction_not_open");
     return { publishedAt: at, first: false, toGrade: [] };
   }
   const ungraded = await db
@@ -526,7 +517,7 @@ export async function publishCorrection(
  */
 export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<ByQuestion[]> {
   if (!isDebriefOpen({ state: evaluation.state, correctionPublished: correctionPublished(evaluation) })) {
-    throw new NotOver("the debrief of a question waits for the close");
+    throw new ResultsError("not_over", "the debrief of a question waits for the close");
   }
   const items = await joinedItems(db, evaluation.id);
   const validated = await validatedGradings(db, evaluation.id);

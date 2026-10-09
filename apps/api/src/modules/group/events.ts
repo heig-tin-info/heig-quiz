@@ -6,12 +6,9 @@
  * NEVER to `classroom:<id>`, where every student of the classroom listens,
  * whatever the set (N-SEC-20).
  */
-import type { Topic } from "@quiz/contracts";
-
 import * as bus from "../realtime/bus.js";
 
 /** A set of a classroom of course `courseId` changed: its staff re-read, and `userIds` (its students, when they read it). */
 export function groupsChanged(courseId: string, userIds: readonly string[] = []): void {
-  const topics: Topic[] = [`course:${courseId}`, ...new Set(userIds.map(bus.userTopic))];
-  bus.hint("groups", topics);
+  bus.staffAndStudentsHint("groups", courseId, userIds);
 }

@@ -45,7 +45,7 @@ import {
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { answers, attempts, enrollments, evaluations, guestParticipants } from "../../db/schema.js";
-import { DomainError } from "../http.js";
+import { rateLimited, refusalClass, type FailureArms, type Refusal } from "../http.js";
 import {
   feedbackOf,
   gradeDefaults,
@@ -104,9 +104,59 @@ export const PREVIEW_ATTEMPT_ID = "00000000-0000-4000-8000-000000000000";
 
 // --- Failures -------------------------------------------------------------
 
-export class LiveError extends DomainError {
-  override name = "LiveError";
-}
+/**
+ * Everything this module refuses, by code: its status and, where the
+ * refusal reads the same wherever it is thrown, its message.
+ */
+const REFUSALS = {
+  // The 410 of §4.7, `AttemptClosedError`.
+  attempt_closed: [410],
+  // Reopening gives a student their paper back, which only means something
+  // while the evaluation still takes writes: `running` or `paused`; anywhere
+  // else a reopened attempt would be `in_progress` and yet unusable (#95).
+  evaluation_not_live: [409, "the evaluation is not running or paused"],
+  // Extra time on a finished evaluation (`closed`, `released`) moves a
+  // deadline nobody can use any more; the dashboard offers no `+N min` there.
+  evaluation_finished: [409, "the evaluation is already closed"],
+  // `RetakeRefused`.
+  retake_refused: [409],
+  // ADR-091: a question a partial retake carried over is the previous
+  // attempt's, as it stood: no write of any kind reaches it.
+  item_acquired: [409, "this question was acquired in the previous attempt and is kept as it is"],
+  // An exercise that allows several attempts reopens none (ADR-025): the
+  // student starts another attempt instead, which is what retakes are for.
+  retakes_enabled: [409, "this exercise allows retakes: the student starts a new attempt"],
+  // ADR-050: a reopened student would rewrite their answers with the
+  // correction in hand.
+  correction_published: [409, "the correction of this exercise is published: no attempt is reopened"],
+  not_open: [409, "this evaluation is not open"],
+  // `AnswerInvalid`.
+  answer_invalid: [422],
+  irreversible: [409, "a validated question cannot be re-opened"],
+  // "I won't answer" on a question that holds an answer (#89): skipping is
+  // not a way to throw an answer away.
+  answered: [409, "this question holds an answer"],
+  // `done: true` where there is nothing to validate: a `free` evaluation, or
+  // a question that is not a checkpoint in `milestones` (#89).
+  not_validatable: [409, "this question has no validation step"],
+  item_locked: [409, "navigation does not allow going back to this question"],
+  // `RateLimited`.
+  rate_limited: [429],
+  // `RunnerDown`.
+  runner_unavailable: [503],
+  not_runnable: [422, "this question type has nothing to run"],
+  // The type CAN run, and this answer has nothing to run (an empty
+  // schematic, a circuit with no stimulus): the player says "draw something
+  // first" rather than "the simulator is down".
+  nothing_to_run: [422, "this answer has nothing to run yet"],
+  not_found: [404],
+  not_implemented: [501],
+  internal_error: [500],
+} satisfies Record<string, Refusal>;
+
+export type LiveErrorCode = keyof typeof REFUSALS;
+
+export class LiveError extends refusalClass("LiveError", REFUSALS) {}
 
 /** The 410 of §4.7. The body carries the reason AND the server's clock. */
 export class AttemptClosedError extends LiveError {
@@ -114,7 +164,7 @@ export class AttemptClosedError extends LiveError {
     readonly reason: AttemptClosed["reason"],
     readonly deadlineAt: Date | null,
   ) {
-    super("attempt_closed", 410, `attempt closed: ${reason}`);
+    super("attempt_closed", `attempt closed: ${reason}`);
   }
   body(now: Date): AttemptClosed {
     return {
@@ -127,68 +177,13 @@ export class AttemptClosedError extends LiveError {
 }
 
 /**
- * Reopening an attempt gives a student their paper back, which only means
- * something while the evaluation still takes writes: `running` or `paused`.
- * Anywhere else `closedReason` answers `evaluation_closed` to every write,
- * so a reopened attempt would be `in_progress` and yet unusable (#95). A
- * make-up session after the close is another feature: the grading pass has
- * already run.
- */
-class EvaluationNotLive extends LiveError {
-  constructor() {
-    super("evaluation_not_live", 409, "the evaluation is not running or paused");
-  }
-}
-
-/**
- * Extra time on a finished evaluation (`closed`, `released`) moves a deadline
- * nobody can use any more: the attempts are closed and graded. The dashboard
- * offers no `+N min` there; the server refuses it the same way.
- */
-export class EvaluationFinished extends LiveError {
-  constructor() {
-    super("evaluation_finished", 409, "the evaluation is already closed");
-  }
-}
-
-/**
  * F-EVAL-15: a retake the rule refuses (`@quiz/domain#retakeRefusal`), or a
  * retake of the questions to review `partialRetakeRefusal` refuses
  * (ADR-091). The reason travels in the body, so the screens can say which.
  */
 export class RetakeRefused extends LiveError {
   constructor(readonly reason: RetakeRefusal) {
-    super("retake_refused", 409, `retake refused: ${reason}`);
-  }
-}
-
-/**
- * ADR-091: a question a partial retake carried over is the previous
- * attempt's, as it stood: no write of any kind reaches it.
- */
-export class ItemAcquired extends LiveError {
-  constructor() {
-    super("item_acquired", 409, "this question was acquired in the previous attempt and is kept as it is");
-  }
-}
-
-/**
- * An exercise that allows several attempts reopens none (ADR-025): the
- * student starts another attempt instead, which is what retakes are for.
- */
-export class RetakesEnabled extends LiveError {
-  constructor() {
-    super("retakes_enabled", 409, "this exercise allows retakes: the student starts a new attempt");
-  }
-}
-
-/**
- * Nor does an exercise whose correction is published (ADR-050): a reopened
- * student would rewrite their answers with the correction in hand.
- */
-export class CorrectionPublished extends LiveError {
-  constructor() {
-    super("correction_published", 409, "the correction of this exercise is published: no attempt is reopened");
+    super("retake_refused", `retake refused: ${reason}`, { reason });
   }
 }
 
@@ -206,83 +201,40 @@ export function reopenRefusal(
   return null;
 }
 
-class NotOpen extends LiveError {
-  constructor() {
-    super("not_open", 409, "this evaluation is not open");
-  }
-}
-
-
 export class AnswerInvalid extends LiveError {
   constructor(readonly issues: unknown) {
-    super("answer_invalid", 422);
-  }
-}
-
-export class Irreversible extends LiveError {
-  constructor(message = "a validated question cannot be re-opened") {
-    super("irreversible", 409, message);
-  }
-}
-
-/**
- * "I won't answer" on a question that holds an answer (issue #89). Skipping is
- * not a way to throw an answer away: the player only offers it on an empty
- * question, and flushes the autosave before asking.
- */
-export class AlreadyAnswered extends LiveError {
-  constructor() {
-    super("answered", 409, "this question holds an answer");
-  }
-}
-
-/**
- * `done: true` where there is nothing to validate: a `free` evaluation, or a
- * question that is not a checkpoint in `milestones` (issue #89).
- */
-export class NotValidatable extends LiveError {
-  constructor() {
-    super("not_validatable", 409, "this question has no validation step");
-  }
-}
-
-export class ItemLocked extends LiveError {
-  constructor(message = "navigation does not allow going back to this question") {
-    super("item_locked", 409, message);
+    super("answer_invalid");
   }
 }
 
 /** A 429 with its `Retry-After`. */
 export class RateLimited extends LiveError {
   constructor(readonly retryAfterS: number) {
-    super("rate_limited", 429);
-  }
-}
-
-export class RunnerDown extends LiveError {
-  constructor(readonly reason: string) {
-    super("runner_unavailable", 503, reason);
-  }
-}
-
-export class NotRunnable extends LiveError {
-  constructor() {
-    super("not_runnable", 422, "this question type has nothing to run");
+    super("rate_limited");
   }
 }
 
 /**
- * The type CAN run, and this particular answer has nothing to run: an empty
- * schematic, a circuit with no stimulus. It is not `not_runnable` — that one
- * says the button should not be there at all — and it is not a 4xx the client
- * should report as an error, so the student's player says "draw something
- * first" rather than "the simulator is down".
+ * `reason` beside `message`: the player names the failure with it ("busy",
+ * "not_configured", "timeout") without parsing a sentence.
  */
-export class NothingToRun extends LiveError {
-  constructor() {
-    super("nothing_to_run", 422, "this answer has nothing to run yet");
+export class RunnerDown extends LiveError {
+  constructor(readonly reason: string) {
+    super("runner_unavailable", reason, { reason });
   }
 }
+
+/**
+ * The failures answered in their own shape before the shared tail: the 410
+ * with the server's clock, the type's issues, a `retry-after`. The `live`
+ * and `poll` routes share them.
+ */
+export const liveFailureArms: FailureArms = (reply, error, now) => {
+  if (error instanceof AttemptClosedError) return reply.code(410).send(error.body(now));
+  if (error instanceof AnswerInvalid) return reply.code(422).send({ error: error.code, details: error.issues });
+  if (error instanceof RateLimited) return rateLimited(reply, error.retryAfterS);
+  return null;
+};
 
 // --- Deadlines ------------------------------------------------------------
 
@@ -548,7 +500,7 @@ export async function ensureGuest(
     })
     .onConflictDoNothing({ target: guestParticipants.tokenHash });
   const row = await guestByToken(db, evaluationId, token);
-  if (!row) throw new LiveError("internal_error", 500, "guest vanished after insert");
+  if (!row) throw new LiveError("internal_error", "guest vanished after insert");
   return row;
 }
 
@@ -658,7 +610,7 @@ export async function ensureAttempt(
     .onConflictDoNothing()
     .returning({ id: attempts.id });
   const row = await attemptOf(db, evaluation.id, participant);
-  if (!row) throw new LiveError("internal_error", 500, "attempt vanished after insert");
+  if (!row) throw new LiveError("internal_error", "attempt vanished after insert");
   // F-DASH-03: the teacher's grid learns the row exists the moment it does,
   // not at the next refetch. A guest has no roster row to light up.
   if (created.length > 0 && row.userId !== null) {
@@ -1285,7 +1237,7 @@ export async function enterEvaluation(
   const { evaluation, participant, now, start } = input;
   // A guest (no user) only ever joins a poll, which is not entered here.
   if (evaluation.mode === "poll" || participant.userId === null) {
-    throw new LiveError("not_implemented", 501, "poll is phase 2");
+    throw new LiveError("not_implemented", "poll is phase 2");
   }
   // The room restriction (F-EVAL-12) is already settled: `sitRefusal`, in
   // the route's loader, refused an off-site request.
@@ -1295,7 +1247,7 @@ export async function enterEvaluation(
   const existing = await attemptOf(db, evaluation.id, participant);
   // A closed evaluation still hands back a finished attempt: the student
   // must be able to reopen the page and see what they submitted.
-  if (!open && existing === null) throw new NotOpen();
+  if (!open && existing === null) throw new LiveError("not_open");
   if (existing === null && evaluation.state === "running" && !start) {
     return { kind: "ready", view: readyView(evaluation, participant), attempt: null };
   }
@@ -1474,12 +1426,12 @@ export async function reopenAttempt(
   now: Date,
 ): Promise<AttemptRecord> {
   if (evaluation.state !== "running" && evaluation.state !== "paused") {
-    throw new EvaluationNotLive();
+    throw new LiveError("evaluation_not_live");
   }
   if (attempt.state === "in_progress") return attempt;
   const refused = reopenRefusal(evaluation);
-  if (refused === "retakes_enabled") throw new RetakesEnabled();
-  if (refused === "correction_published") throw new CorrectionPublished();
+  if (refused === "retakes_enabled") throw new LiveError("retakes_enabled");
+  if (refused === "correction_published") throw new LiveError("correction_published");
   const participant = await participantOfAttempt(db, evaluation, attempt);
   const { deadlineAt, bonusS } = deadlineFor(evaluation, {
     startedAt: attempt.startedAt ?? now,

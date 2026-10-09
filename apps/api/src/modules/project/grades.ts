@@ -39,7 +39,7 @@ import { audit, type AuditActor } from "../../audit.js";
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { projectRepos, projects } from "../../db/schema.js";
-import { DomainError } from "../http.js";
+import { notFoundError } from "../http.js";
 import { notifyUsers } from "../notifications/service.js";
 import { isLive, releaseCounts, repoForUpdate } from "./deadline.js";
 import { releasableScore, repoScores, slotRuns, teacherRunMax } from "./detail.js";
@@ -119,7 +119,7 @@ export async function overrideScore(
 export async function releaseProject(db: Db, projectId: string, actor: AuditActor, userId: string, now: Date): Promise<ProjectReleaseResult> {
   const { result, project, repos } = await db.transaction(async (tx) => {
     const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
-    if (!project) throw new DomainError("not_found", 404, "No such project");
+    if (!project) throw notFoundError("project");
     if (project.gradingMode !== "auto") throw new ProjectError("grading_none", "The project is not graded");
     if (groupSyncOwed(project)) throw new ProjectError("group_sync_pending", "A resync of the groups is still being applied on GitHub");
     const repos = await studentRepos(tx, project);

@@ -47,7 +47,7 @@ import {
 import { iso } from "../../clock.js";
 import type { Db, Tx } from "../../db/client.js";
 import { answers, attempts, gradings, questionVersions, users } from "../../db/schema.js";
-import { DomainError } from "../http.js";
+import { refusalClass, type Refusal } from "../http.js";
 import {
   flagReleasedEvaluationsOf,
   joinedItem,
@@ -89,32 +89,24 @@ const NEWEST_FIRST = [
 
 // --- Failures -------------------------------------------------------------
 
-export class GradingError extends DomainError {
-  override name = "GradingError";
-}
-
-/** F-GRADE-05: overriding a correction without saying why is not allowed. */
-export class CommentRequired extends GradingError {
-  constructor() {
-    super("comment_required", 422, "a manual override must carry a comment");
-  }
-}
-
 /**
- * F-GRADE-05 (ADR-026): a manual score outside what the item can be worth —
- * `[0, max]`, or `[-max, max]` for a choice question under negative marking.
+ * Everything this module refuses, by code: its status and, where the
+ * refusal reads the same wherever it is thrown, its message.
  */
-class PointsOutOfRange extends GradingError {
-  constructor(range: { min: number; max: number }) {
-    super("points_out_of_range", 422, `the points must lie in [${range.min}, ${range.max}]`);
-  }
-}
+const REFUSALS = {
+  // F-GRADE-05: overriding a correction without saying why is not allowed.
+  comment_required: [422, "a manual override must carry a comment"],
+  // F-GRADE-05 (ADR-026): a manual score outside what the item can be worth —
+  // `[0, max]`, or `[-max, max]` for a choice question under negative marking.
+  points_out_of_range: [422],
+  not_pending: [409, "this grading is not a proposal any more"],
+  // A regrade with a version whose variables are not the item's (ADR-056 §5):
+  // the values the students were served could not be read under it, so the
+  // item keeps its version and nothing is regraded.
+  variables_changed: [409, "the version declares other variables than the item's"],
+} satisfies Record<string, Refusal>;
 
-class NotPending extends GradingError {
-  constructor() {
-    super("not_pending", 409, "this grading is not a proposal any more");
-  }
-}
+export class GradingError extends refusalClass("GradingError", REFUSALS) {}
 
 // --- Keys -----------------------------------------------------------------
 
@@ -758,7 +750,7 @@ export async function assertPointsInRange(
   const item = await joinedItem(db, evaluation.id, cell.itemId);
   const range = pointsRangeOf(evaluation, item, cell.maxPoints);
   const value = round2(points);
-  if (value < range.min || value > range.max) throw new PointsOutOfRange(range);
+  if (value < range.min || value > range.max) throw new GradingError("points_out_of_range", `the points must lie in [${range.min}, ${range.max}]`);
 }
 
 /**
@@ -772,7 +764,7 @@ export async function manualOverride(
   userId: string,
   now: Date,
 ): Promise<GradingRecord> {
-  if (input.comment.trim().length === 0) throw new CommentRequired();
+  if (input.comment.trim().length === 0) throw new GradingError("comment_required");
   return writeGrading(db, {
     attemptId: target.attemptId,
     itemId: target.itemId,
@@ -810,7 +802,7 @@ function validationOf(
   userId: string,
   now: Date,
 ): WriteGradingInput {
-  if (grading.state !== "proposed") throw new NotPending();
+  if (grading.state !== "proposed") throw new GradingError("not_pending");
   const adjusted = input.points !== undefined && round2(input.points) !== grading.points;
   return {
     attemptId: grading.attemptId,
@@ -908,7 +900,7 @@ export async function regradeItem(
       if (!version) return null;
       // The values the students had are kept, and the new version's derived
       // rows replayed from them (ADR-056 §5): only under the same names.
-      if (!sameTable(parametersOf(item), parametersOf(version))) throw new VariablesChanged();
+      if (!sameTable(parametersOf(item), parametersOf(version))) throw new GradingError("variables_changed");
       await retargetItemVersion(tx, item.itemId, version.id);
       note = `${note} (re-graded with version ${input.toVersionNumber})`;
     }
@@ -951,17 +943,6 @@ export async function standDownAutomaticGradings(db: DbOrTx, attemptId: string):
         ne(gradings.state, "superseded"),
       ),
     );
-}
-
-/**
- * A regrade with a version whose variables are not the item's (ADR-056 §5):
- * the values the students were served could not be read under it, so the
- * item keeps its version and nothing is regraded.
- */
-export class VariablesChanged extends GradingError {
-  constructor() {
-    super("variables_changed", 409, "the version declares other variables than the item's");
-  }
 }
 
 /** The full history of one cell, newest first (F-GRADE-05, F-GRADE-06). */

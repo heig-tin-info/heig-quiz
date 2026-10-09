@@ -19,6 +19,7 @@ import { eq } from "drizzle-orm";
 import { audit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import { users } from "../db/schema.js";
+import { escapeHtml } from "../html.js";
 import { claimEnrollments } from "../modules/org/service.js";
 import { syncUserEmails } from "./claims.js";
 import { returnToOf, safeReturnTo } from "./returnTo.js";
@@ -89,10 +90,6 @@ export async function upsertPersona(
   await claimEnrollments(app.db, { id: row.id });
   const [fresh] = await app.db.select().from(users).where(eq(users.id, row.id)).limit(1);
   return fresh ?? row;
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 }
 
 function page(next: string): string {

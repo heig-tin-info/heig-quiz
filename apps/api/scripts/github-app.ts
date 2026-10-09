@@ -31,7 +31,7 @@ import { Octokit } from "octokit";
 
 import { GITHUB_WEBHOOK_SECRET_MIN } from "../src/config.js";
 import { appManifest, envLines } from "../src/github/manifest.js";
-import { escapeHtml } from "../src/modules/notifications/templates.js";
+import { escapeHtml } from "../src/html.js";
 
 const USAGE =
   "usage: github-app --url <https://host> --name <App name> (--org <login> | --personal) " +

@@ -20,9 +20,13 @@ import {
   poolAccess,
   requirePoolRole,
   teacherGuard,
+  withRoleStep,
 } from "../guards.js";
-import { notFound, teacherRoute } from "../http.js";
+import { notFound, teacherRoute, type FailureArms } from "../http.js";
+import { llmArms } from "../llm/service.js";
 import { userTopic } from "../realtime/bus.js";
+import { GenerateRefusal } from "./generate.js";
+import { ReviewRefusal } from "./review.js";
 import * as service from "./service.js";
 
 /** A held-down wand, not a quota (ADR-059): the gateway's daily cap is the ceiling. */
@@ -43,13 +47,18 @@ export function coreFailure(reply: FastifyReply, error: unknown): FastifyReply |
 }
 
 /**
- * The module's own arms: `coreFailure`, and a category outside the pool as
- * the bare 404 a missing entity gets (the one `POST /questions/move` sends).
+ * The module's own arms: `coreFailure`; a category outside the pool as the
+ * bare 404 a missing entity gets (the one `POST /questions/move` sends); a
+ * wand or a review refused before any model, `{ error }` alone; and a model
+ * call that failed, as `llmArms` words it for every screen.
  */
-function poolFailure(reply: FastifyReply, error: unknown): FastifyReply | null {
+const poolFailure: FailureArms = (reply, error, now) => {
   if (error instanceof service.CategoryNotInPool) return notFound(reply);
-  return coreFailure(reply, error);
-}
+  if (error instanceof GenerateRefusal || error instanceof ReviewRefusal) {
+    return reply.code(error.status).send({ error: error.code });
+  }
+  return llmArms(reply, error, now) ?? coreFailure(reply, error);
+};
 
 export function poolRouteContext(app: FastifyInstance, config: AppConfig) {
   const requireTeacher = teacherGuard(app);
@@ -82,16 +91,10 @@ export function poolRouteContext(app: FastifyInstance, config: AppConfig) {
     poolOf: (scope: S) => typeof pools.$inferSelect,
     role: PoolRole | undefined,
   ) {
-    return async (
-      req: FastifyRequest,
-      reply: FastifyReply,
-      params: { id: string },
-    ): Promise<S | null> => {
-      const scope = await load(req, reply, params);
-      if (!scope) return null;
-      if (role && !(await requirePoolRole(app, req, reply, poolOf(scope), role))) return null;
-      return scope;
-    };
+    return withRoleStep(
+      load,
+      role && (async (req, reply, scope) => (await requirePoolRole(app, req, reply, poolOf(scope), role)) !== null),
+    );
   }
   const inPool = (role?: PoolRole) =>
     withRole((req, reply, p) => accessiblePool(app, req, reply, p), (pool) => pool, role);

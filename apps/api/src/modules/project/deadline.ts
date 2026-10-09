@@ -35,7 +35,7 @@ import { audit, type AuditActor } from "../../audit.js";
 import { isoOrNull } from "../../clock.js";
 import type { Db, Tx } from "../../db/client.js";
 import { gradeDispatches, projectCheckpoints, projectGradeRuns, projectRepos, projects, pushReceipts } from "../../db/schema.js";
-import { DomainError } from "../http.js";
+import { notFoundError } from "../http.js";
 import { ProjectError } from "./errors.js";
 import { refreshScoreSelection } from "./grading.js";
 import type { RepoRow } from "./repos.js";
@@ -281,7 +281,7 @@ export async function repoForUpdate(tx: Tx, projectId: string, repoId: string): 
     .from(projectRepos)
     .where(and(eq(projectRepos.id, repoId), eq(projectRepos.projectId, projectId)))
     .for("update");
-  if (!project || !repo) throw new DomainError("not_found", 404, "No such repository");
+  if (!project || !repo) throw notFoundError("repository");
   return { repo, project };
 }
 

@@ -38,8 +38,6 @@ import {
   AnswerInvalid,
   RateLimited,
   RunnerDown,
-  NotRunnable,
-  NothingToRun,
   assertWritable,
 } from "./attempt.js";
 import { logAttemptEvent, countRecentEvents } from "./autosave.js";
@@ -82,7 +80,7 @@ async function attemptRunContext<T>(
   const joined = await joinedItem(db, evaluation.id, itemId);
   // 404 and not 403: an item of another evaluation is indistinguishable from
   // one that does not exist (invariant 6).
-  if (!joined) throw new LiveError("not_found", 404);
+  if (!joined) throw new LiveError("not_found");
 
   const type = typeOf(joined.question.type);
   const { version } = itemInstance(joined, attempt);
@@ -90,7 +88,7 @@ async function attemptRunContext<T>(
     studentView({ type: joined.question.type, version, seed: attempt.seed, itemId, shuffle: false }),
   );
   const capability = input.capability(type, student);
-  if (capability === undefined) throw new NotRunnable();
+  if (capability === undefined) throw new LiveError("not_runnable");
 
   // N-SEC-07: the budget is the question's own, counted from the journal
   // rather than from a table of its own. Both buttons count `run` events, so
@@ -219,7 +217,7 @@ async function runVisibleCasesNow(
   // regions (invariant 14), the visible cases only; nothing the browser sent
   // becomes a file name. `null`: an empty answer, or one that no longer fits.
   const visible = prepared.capability(prepared.config, prepared.answer, prepared.ctx);
-  if (visible === null) throw new NotRunnable();
+  if (visible === null) throw new LiveError("not_runnable");
 
   const request = visibleRunRequest(visible, input);
   const { requestId, outcome } = await runForStudent(
@@ -278,7 +276,7 @@ async function simulateAnswerNow(db: Db, input: SimulateInput): Promise<RunnerOu
     answer: input.answer,
   });
   const built = prepared.capability(prepared.config, prepared.answer, prepared.ctx);
-  if (built === null) throw new NothingToRun();
+  if (built === null) throw new LiveError("nothing_to_run");
 
   // `kind: "simulate"` tells the two buttons apart in the journal; the EVENT
   // stays a `run`, because the budget is one and the audit union is closed

@@ -13,7 +13,7 @@ import type {
 } from "@quiz/contracts";
 import { reviewPill } from "@quiz/domain";
 
-import type { Db } from "../../db/client.js";
+import { likeContains, qualified, type Db } from "../../db/client.js";
 import {
   coursePools,
   concepts,
@@ -26,7 +26,7 @@ import {
 import { byLabel, conceptsOf, toConceptRef } from "../concept/service.js";
 import { hasKey, isParameterized, loadConfig, publicationIssuesOf, tryLoadConfig } from "./config.js";
 import { exampleConfig, parameterIssues, type VersionContent } from "./instance.js";
-import { type QuestionRecord, poolOf, type VersionRecord, qualified } from "./shared.js";
+import { type QuestionRecord, poolOf, type VersionRecord } from "./shared.js";
 import { starredBy } from "./stars.js";
 
 /** A cursor that does not belong to the query it was sent with (400). */
@@ -147,7 +147,7 @@ function filterWhere(search: SearchFilters): SQL[] {
     );
   }
   if (search.q) {
-    const like = `%${search.q.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+    const like = likeContains(search.q);
     clauses.push(
       sql`(${questions.internalName} ILIKE ${like} OR EXISTS (SELECT 1 FROM ${questionVersions} WHERE ${questionVersions.questionId} = ${questions.id} AND ${questionVersions.search} @@ plainto_tsquery('simple', ${search.q})))`,
     );

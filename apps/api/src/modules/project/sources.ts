@@ -16,7 +16,7 @@ import {
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { projects } from "../../db/schema.js";
-import { githubStatus, HTTP_READ, installationClient, type InstallationClient } from "../../github/app.js";
+import { githubStatus, HTTP_READ, installationClient, unless404, type InstallationClient } from "../../github/app.js";
 import { classroomInstallation, type InstalledOrg } from "../github/service.js";
 import { ProjectError } from "./errors.js";
 
@@ -56,17 +56,15 @@ export interface Source {
  */
 export async function fetchSource(db: Db, client: InstallationClient, org: InstalledOrg, name: string): Promise<Source | null> {
   if (DISTRIBUTION.test(name)) return null;
-  let data;
-  try {
-    ({ data } = await client.octokit.request("GET /repos/{owner}/{repo}", {
+  const data = await unless404(async () => {
+    const { data } = await client.octokit.request("GET /repos/{owner}/{repo}", {
       owner: org.login,
       repo: name,
       request: { retries: 0, ...HTTP_READ },
-    }));
-  } catch (err) {
-    if (githubStatus(err) === 404) return null;
-    throw err;
-  }
+    });
+    return data;
+  });
+  if (data === null) return null;
   const sameOrg =
     org.githubOrgId !== null
       ? Number(data.owner.id) === org.githubOrgId

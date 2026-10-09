@@ -55,7 +55,6 @@ export {
   DraftInvalid,
   MissingDraft,
   VersionInUse,
-  NameTaken,
   CategoryNotInPool,
   isCategoryOf,
 } from "./shared.js";
@@ -83,7 +82,7 @@ export {
   transferOnLoss,
   vacateSeats,
 } from "./members.js";
-export { mayLinkPool, poolsOfCourse, PoolLinkForbidden, setCoursePools } from "./coursePools.js";
+export { mayLinkPool, poolsOfCourse, setCoursePools } from "./coursePools.js";
 export {
   categoryTree,
   categoriesWithCounts,

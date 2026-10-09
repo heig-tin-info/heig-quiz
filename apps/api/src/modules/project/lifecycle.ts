@@ -43,7 +43,7 @@ import { codespaceProjects, enrollments, groupSets, projectGroupMembers, project
 import { githubStatus, type InstallationClient } from "../../github/app.js";
 import { createSquashedRepo } from "../../github/squash.js";
 import { purgeProjectReceipts, type InstalledOrg } from "../github/service.js";
-import { DomainError } from "../http.js";
+import { DomainError, notFoundError } from "../http.js";
 import { projectDeadlineMoved, rescheduleCheckpoints } from "./deadline.js";
 import { ProjectError } from "./errors.js";
 import { replaceGroupCopy, stopProjects } from "./groupCopy.js";
@@ -59,7 +59,6 @@ import type { ProjectRow } from "./views.js";
  */
 export const MAX_SUFFIX = 20;
 
-const notFound = () => new DomainError("not_found", 404, "No such project");
 
 // ---------------------------------------------------------------- create
 
@@ -138,7 +137,7 @@ function claimFor(db: Db, draft: ProjectRow) {
         .where(eq(projects.id, draft.id))
         .returning({ id: projects.id });
       // Deleted by its staff while it was being built: stop, push nothing.
-      if (!row) throw notFound();
+      if (!row) throw notFoundError("project");
       return true;
     } catch (err) {
       if (isUniqueViolation(err, "projects_distribution_repo_uq")) return false;
@@ -248,7 +247,7 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
     .where(eq(projects.id, draft.id))
     .returning();
   // Deleted by its staff while it was being built: the repository stays.
-  if (!row) throw notFound();
+  if (!row) throw notFoundError("project");
   await audit(db, {
     ...input.actor,
     action: "project.create",
@@ -313,7 +312,7 @@ export async function patchProject(
   return db.transaction(async (tx) => {
     const askedSet = body.groupSetId ? await groupSetOf(tx, body.groupSetId) : undefined;
     const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
-    if (!project) throw notFound();
+    if (!project) throw notFoundError("project");
     const changed: Partial<Record<ProjectPatchField, unknown>> = {};
     for (const [field, value] of Object.entries(asColumns(body)) as [ProjectPatchField, unknown][]) {
       if (isDeepStrictEqual(value, project[field])) continue;
@@ -400,7 +399,7 @@ export async function setWorkMode(
       .leftJoin(codespaceProjects, eq(codespaceProjects.projectId, projects.id))
       .where(eq(projects.id, projectId))
       .for("update", { of: projects });
-    if (!row) throw notFound();
+    if (!row) throw notFoundError("project");
     const { project } = row;
     const refusal = workModeRefusal(
       { ...caller, launched: row.launchedAt !== null, groupMode: project.groupMode },
@@ -471,7 +470,7 @@ export async function unassignedStudents(db: Db | Tx, project: Pick<ProjectRow, 
 export async function publishProject(db: Db, projectId: string, now: Date, actor: AuditActor): Promise<ProjectRow> {
   const row = await db.transaction(async (tx) => {
     const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
-    if (!project) throw notFound();
+    if (!project) throw notFoundError("project");
     if (project.state !== "draft") throw new ProjectError("not_draft", "The project is already published");
     if (project.distributionFullName === null) {
       throw new ProjectError("distribution_missing", "The project's distribution repository is not built");

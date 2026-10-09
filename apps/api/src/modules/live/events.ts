@@ -6,7 +6,7 @@
  * coalescing. The service never formats an event itself, so there is one
  * place to read when asking "who sees this, and how often".
  */
-import type { CellStatus, ClosedBy, Verdict } from "@quiz/contracts";
+import type { AttemptDeadlineEvent, CellStatus, ClosedBy, Verdict } from "@quiz/contracts";
 
 import * as bus from "../realtime/bus.js";
 import type { EvaluationRecord } from "../evaluation/service.js";
@@ -14,30 +14,15 @@ import type { attempts } from "../../db/schema.js";
 
 type AttemptRow = typeof attempts.$inferSelect;
 
-export function stateChanged(evaluation: EvaluationRecord, now: Date): void {
-  bus.evaluationState({
-    evaluationId: evaluation.id,
-    state: evaluation.state,
-    pausedAt: evaluation.pausedAt,
-    closesAt: evaluation.closesAt,
-    now,
-  });
-  bus.hint("evaluations", bus.homeTopic(evaluation));
-}
+/** The state column moved: the evaluation's watchers and its listing know now. */
+export const stateChanged = bus.evaluationStateChanged;
 
 export function attemptStarted(
   evaluation: EvaluationRecord,
   attempt: AttemptRow,
   now: Date,
 ): void {
-  bus.attemptDeadline({
-    attemptId: attempt.id,
-    evaluationId: evaluation.id,
-    deadlineAt: attempt.deadlineAt,
-    bonusS: attempt.bonusS,
-    reason: "start",
-    now,
-  });
+  deadlineChanged(evaluation, attempt, "start", now);
   // `attempt.deadline` rides the ATTEMPT topic — the student's own stream.
   // The dashboard watches the evaluation, so without the line below a row
   // that just started stayed "not started" until the next full refetch.
@@ -86,7 +71,7 @@ export function rosterChanged(evaluationId: string): void {
 export function deadlineChanged(
   evaluation: EvaluationRecord,
   attempt: AttemptRow,
-  reason: "teacher_extend" | "pause_resume" | "reopen",
+  reason: AttemptDeadlineEvent["reason"],
   now: Date,
 ): void {
   bus.attemptDeadline({

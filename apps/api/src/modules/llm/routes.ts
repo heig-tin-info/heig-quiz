@@ -14,6 +14,7 @@ import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
 import type { AppConfig } from "../../config.js";
 import { publish } from "../../events.js";
 import { adminGuard } from "../guards.js";
+import { rateLimited } from "../http.js";
 import { LlmError, monthUsage, readSettings, writeSettings } from "./service.js";
 
 /** The connection test (ADR-058 §6): a question with one obvious answer. */
@@ -59,10 +60,7 @@ export async function llmPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.post("/app/api/admin/llm/test", { preHandler: requireAdmin }, async (req, reply) => {
     const user = req.user!;
     if (!tests.spend(`llm-test:${user.id}`, TESTS_PER_MINUTE, app.clock.now())) {
-      return reply
-        .code(429)
-        .header("retry-after", String(BUDGET_RETRY_AFTER_S))
-        .send({ error: "rate_limited", message: "A few tests per minute" });
+      return rateLimited(reply, BUDGET_RETRY_AFTER_S, "A few tests per minute");
     }
     let result: LlmTestResult;
     try {

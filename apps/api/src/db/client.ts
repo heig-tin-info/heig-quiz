@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 
 import { PGlite } from "@electric-sql/pglite";
+import { getTableName, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { migrate as migrateNode } from "drizzle-orm/node-postgres/migrator";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
@@ -110,4 +111,26 @@ export function isForeignKeyViolation(err: unknown, constraint: string): boolean
  */
 export function isRestrictViolation(err: unknown, constraint: string): boolean {
   return isViolation(err, "23001", constraint);
+}
+
+/**
+ * `"table"."column"`, always. A bare `${table.column}` inside a `sql`
+ * fragment renders WITHOUT its table whenever drizzle believes the
+ * surrounding statement reads a single table — a correlated subquery in the
+ * select list of `select … from pools` came out as `"pool_id" = "id"`, both
+ * resolved against the subquery's table, and every pool counted zero.
+ * Qualifying by hand makes a fragment independent of the statement it is
+ * dropped into.
+ */
+export function qualified(column: AnyColumn): SQL {
+  return sql`${sql.identifier(getTableName(column.table))}.${sql.identifier(column.name)}`;
+}
+
+/**
+ * `%text%` for a LIKE or an ILIKE that finds `text` as typed: `%`, `_` and
+ * `\` (PostgreSQL's default LIKE escape) are characters to find, not
+ * wildcards.
+ */
+export function likeContains(text: string): string {
+  return `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }

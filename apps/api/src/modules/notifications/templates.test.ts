@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import type { NotificationPayload } from "@quiz/contracts";
 
+import { escapeHtml } from "../../html.js";
 import {
   activityParameters,
-  escapeHtml,
   mailLocale,
   notificationPath,
   renderNotification,

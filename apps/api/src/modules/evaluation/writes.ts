@@ -47,20 +47,8 @@ import {
   type ItemRecord,
   type DbOrTx,
   EvaluationError,
-  Locked,
-  RunningLocked,
-  RetakesNotAllowed,
-  RetakeScopeNavigation,
-  NegativeMarkingNotAllowed,
-  CalculatorNotAllowed,
-  NotepadNotAllowed,
-  ConditionsNotAllowed,
-  KioskUnavailable,
-  FeedbackNotAllowed,
-  PollFeedbackLocked,
-  NoPublishedVersion,
-  QuestionNotInCourse,
-  PollNotImplemented,
+  type EvaluationErrorCode,
+  questionRefused,
 } from "./shared.js";
 import { assertStaysScheduled } from "./stateMachine.js";
 import { byId, settingsOf, feedbackOf, preferredMcqPolicy } from "./reads.js";
@@ -98,7 +86,7 @@ export async function createEvaluation(
     createdBy: string;
   },
 ): Promise<EvaluationRecord> {
-  if (input.mode === "poll") throw new PollNotImplemented();
+  if (input.mode === "poll") throw new EvaluationError("not_implemented");
   const preset = presetSettings(input.preset ?? (input.mode === "exercise" ? "exercise" : "exam"));
   const id = randomUUID();
   // The creator's preference SEEDS the evaluation and is then forgotten:
@@ -163,9 +151,9 @@ export async function createPollEvaluation(
     .from(questions)
     .where(eq(questions.id, input.questionId))
     .limit(1);
-  if (!question || question.deletedAt !== null) throw new QuestionNotInCourse(input.questionId);
+  if (!question || question.deletedAt !== null) throw questionRefused("question_not_in_course", input.questionId);
   const version = (await latestPublished(db, [input.questionId])).get(input.questionId);
-  if (!version) throw new NoPublishedVersion(input.questionId);
+  if (!version) throw questionRefused("no_published_version", input.questionId);
 
   // The exercise preset, plus the reveal switch. `immediate` feedback with
   // the key HELD BACK: the reveal is the teacher's act, and it moves
@@ -223,13 +211,33 @@ export async function createPollEvaluation(
 }
 
 /**
+ * The settings a mode refuses: switching one on where `allowedFor` says no
+ * is refused, switching it off always passes. An exam is one sitting
+ * (F-EVAL-15); a poll is tallied, not graded (ADR-026), and provides no
+ * calculator (ADR-069), no notepad (ADR-090) and no conditions to sit
+ * under (ADR-079).
+ */
+const MODE_SETTINGS: readonly {
+  code: EvaluationErrorCode;
+  on: (settings: EvaluationSettings) => boolean;
+  allowedFor: (mode: EvaluationMode) => boolean;
+  why: string;
+}[] = [
+  { code: "retakes_not_allowed", on: (s) => retakesOf(s).enabled, allowedFor: retakesAllowedFor, why: "takes one attempt (F-EVAL-15)" },
+  { code: "negative_marking_not_allowed", on: negativeMarkingOf, allowedFor: negativeMarkingAllowedFor, why: "has no score to penalise (ADR-026)" },
+  { code: "calculator_not_allowed", on: (s) => (s.calculator ?? "none") !== "none", allowedFor: calculatorAllowedFor, why: "provides no calculator (ADR-069)" },
+  { code: "notepad_not_allowed", on: (s) => (s.notepad ?? "none") !== "none", allowedFor: notepadAllowedFor, why: "provides no notepad (ADR-090)" },
+  { code: "conditions_not_allowed", on: (s) => conditionsOf(s).length > 0, allowedFor: conditionsAllowedFor, why: "has no conditions (ADR-079)" },
+];
+
+/**
  * What a patch may still touch is `configLock`'s to say (`@quiz/domain`):
  * everything while nothing locks the configuration; the title, the access
  * control and the feedback policy once an attempt exists (F-EVAL-03), and
  * while the evaluation runs (#86) — access must stay fixable mid-exam, for a
  * student the allowlist locks out, and a forgotten answer key hideable. The
  * in-class rule on `immediate` (#78) below applies in every state. A poll's
- * feedback is never patched: it moves with the reveal (`PollFeedbackLocked`).
+ * feedback is never patched: it moves with the reveal (`poll_feedback_locked`).
  */
 export async function patchEvaluation(
   db: DbOrTx,
@@ -247,42 +255,25 @@ export async function patchEvaluation(
 ): Promise<EvaluationRecord> {
   const lock = configLock(row.state, ctx.attemptCount);
   if (Object.keys(patch).some((k) => !isConfigFieldWritable(lock, k))) {
-    throw lock === "running" ? new RunningLocked() : new Locked();
+    throw new EvaluationError(lock === "running" ? "running_locked" : "locked");
   }
-  if (row.mode === "poll" && patch.feedbackPolicy !== undefined) throw new PollFeedbackLocked();
+  if (row.mode === "poll" && patch.feedbackPolicy !== undefined) throw new EvaluationError("poll_feedback_locked");
   const next: Partial<typeof evaluations.$inferInsert> = { updatedAt: new Date() };
   if (patch.title !== undefined) next.title = patch.title;
   if (patch.settings !== undefined) {
     const settings = EvaluationSettings.parse({ ...settingsOf(row), ...patch.settings });
-    // An exam is one sitting (F-EVAL-15): switching retakes on is refused,
-    // switching them off always passes.
-    if (retakesOf(settings).enabled && !retakesAllowedFor(row.mode)) {
-      throw new RetakesNotAllowed(row.mode);
+    for (const { code, on, allowedFor, why } of MODE_SETTINGS) {
+      if (on(settings) && !allowedFor(row.mode)) throw new EvaluationError(code, `an evaluation of mode "${row.mode}" ${why}`);
     }
     // ADR-091: a partial retake needs free navigation; leaving either half
     // inconsistent is refused, whichever moved.
-    if (!retakeScopeFits(row.mode, retakesOf(settings), settings.navigation)) throw new RetakeScopeNavigation();
-    // A poll is tallied, not graded (ADR-026): switching negative marking on
-    // there is refused, switching it off always passes.
-    if (negativeMarkingOf(settings) && !negativeMarkingAllowedFor(row.mode)) {
-      throw new NegativeMarkingNotAllowed(row.mode);
-    }
-    // Nor does a poll provide a calculator (ADR-069); switching it off passes.
-    if ((settings.calculator ?? "none") !== "none" && !calculatorAllowedFor(row.mode)) {
-      throw new CalculatorNotAllowed(row.mode);
-    }
-    // Nor a notepad (ADR-090); switching it off passes.
-    if ((settings.notepad ?? "none") !== "none" && !notepadAllowedFor(row.mode)) {
-      throw new NotepadNotAllowed(row.mode);
-    }
-    // Nor has it conditions to sit under (ADR-079); emptying them passes.
-    if (conditionsOf(settings).length > 0 && !conditionsAllowedFor(row.mode)) {
-      throw new ConditionsNotAllowed(row.mode);
+    if (!retakeScopeFits(row.mode, retakesOf(settings), settings.navigation)) {
+      throw new EvaluationError("retake_scope_navigation");
     }
     // No kiosk path, no kiosk exam (ADR-051 §2): switching it on is refused,
     // switching it off — or patching anything else — always passes, so an
     // exam left on after the platform turned the kiosk off can be fixed.
-    if (patch.settings.kiosk === true && ctx.kioskAvailable !== true) throw new KioskUnavailable();
+    if (patch.settings.kiosk === true && ctx.kioskAvailable !== true) throw new EvaluationError("kiosk_unavailable");
     next.settings = settings;
   }
   if (patch.gradingScale !== undefined) next.gradingScale = patch.gradingScale;
@@ -312,7 +303,10 @@ export async function patchEvaluation(
     const when = ((next.feedbackPolicy ?? feedbackOf(row)) as FeedbackPolicy).when;
     const lobby = ((next.settings ?? settingsOf(row)) as EvaluationSettings).lobby;
     if (!isFeedbackAllowed({ mode: row.mode, lobby }, when)) {
-      throw new FeedbackNotAllowed(when);
+      throw new EvaluationError(
+        "feedback_not_allowed",
+        `feedback "${when}" is not allowed for an evaluation sat in class (F-EVAL-11)`,
+      );
     }
   }
 
@@ -397,7 +391,7 @@ export async function setPollSettings(
 /** `409 allow_drill_locked`: "Allow drill" is editable until the release, and never on a poll. */
 export class AllowDrillLocked extends EvaluationError {
   constructor(reason: "released" | "poll") {
-    super("allow_drill_locked", 409, `Allow drill cannot change on this evaluation (${reason})`, { reason });
+    super("allow_drill_locked", `Allow drill cannot change on this evaluation (${reason})`, { reason });
   }
 }
 

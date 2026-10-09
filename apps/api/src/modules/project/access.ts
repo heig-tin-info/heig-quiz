@@ -52,7 +52,7 @@ import { linkedLogin } from "../../auth/githubLink.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import { enrollments, githubAccounts, projectGroupMembers, projectRepoAccess, projectRepos, projects } from "../../db/schema.js";
-import { githubApp, installationClient, ownerRepo } from "../../github/app.js";
+import { githubApp, githubStatus, installationClient, ownerRepo, unless404 } from "../../github/app.js";
 import { currentLogin, inviteCollaborator, isInvitationRefused, revokeCollaborator } from "../../github/collaborators.js";
 import { projectInstallation } from "../github/service.js";
 import { ProjectError } from "./errors.js";
@@ -369,7 +369,7 @@ export async function revocationClient(db: Db, config: AppConfig, orgId: string)
   try {
     return org === null ? null : (await installationClient(config, org.installationId)).octokit;
   } catch (err) {
-    const status = (err as { status?: number }).status;
+    const status = githubStatus(err);
     if (status !== 404 && status !== 403) throw err;
     return null;
   }
@@ -387,13 +387,11 @@ export async function installationClients(db: Db, config: AppConfig, orgIds: rea
 async function nameOnGithub(octokit: Octokit, repo: RepoRow): Promise<string | null> {
   if (repo.fullName !== null) return repo.fullName;
   if (repo.githubRepoId === null) return null;
-  try {
-    const { data } = await octokit.request("GET /repositories/{repository_id}", { repository_id: repo.githubRepoId });
+  const repoId = repo.githubRepoId;
+  return unless404(async () => {
+    const { data } = await octokit.request("GET /repositories/{repository_id}", { repository_id: repoId });
     return (data as { full_name: string }).full_name;
-  } catch (err) {
-    if ((err as { status?: number }).status === 404) return null;
-    throw err;
-  }
+  });
 }
 
 /**
@@ -419,7 +417,7 @@ async function revokeGrant(octokit: Octokit | null, repo: RepoRow, grant: GrantR
     return { outcome: "ok", login, ...(await revokeCollaborator(octokit, owner, name, login)) };
   } catch (err) {
     // The repository is gone from GitHub: nobody reaches it any more.
-    if ((err as { status?: number }).status === 404) return skipped("repo_deleted", login);
+    if (githubStatus(err) === 404) return skipped("repo_deleted", login);
     throw err;
   }
 }

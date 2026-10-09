@@ -38,7 +38,7 @@ import { consequenceDelta, consequenceKey, isEmptyPlan, syncWork } from "@quiz/d
 import { audit, type AuditActor } from "../../audit.js";
 import type { Db } from "../../db/client.js";
 import { classrooms, projects } from "../../db/schema.js";
-import { DomainError } from "../http.js";
+import { notFoundError } from "../http.js";
 import { ProjectError } from "./errors.js";
 import { applyPlan, copyWork, describeConsequences, frameOf, lockSync, markDepartures, type CopyWork } from "./groupCopy.js";
 import type { ProjectRow } from "./views.js";
@@ -81,10 +81,10 @@ export async function resyncGroups(db: Db, projectId: string, input: ResyncInput
   const { now } = input;
   return db.transaction(async (tx) => {
     const [named] = await tx.select({ classroomId: projects.classroomId }).from(projects).where(eq(projects.id, projectId));
-    if (!named) throw new DomainError("not_found", 404, "No such project");
+    if (!named) throw notFoundError("project");
     const [room] = await tx.select({ archivedAt: classrooms.archivedAt }).from(classrooms).where(eq(classrooms.id, named.classroomId)).for("share");
     const { project, frame } = await lockSync(tx, projectId, now);
-    if (!project) throw new DomainError("not_found", 404, "No such project");
+    if (!project) throw notFoundError("project");
     if (!project.groupMode || project.groupSetId === null) throw new ProjectError("no_group_set", "The project follows no group set");
     if (room && room.archivedAt !== null) throw new ProjectError("classroom_archived", "The classroom is archived: its group sets are read-only");
     // A draft's copy follows its set: nothing to resync.

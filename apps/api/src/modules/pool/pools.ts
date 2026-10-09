@@ -6,7 +6,7 @@ import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 import type { ConceptLang, Pool, PoolColor, PoolInUse, PoolRole, PoolSummary } from "@quiz/contracts";
 import { displayName, effectivePoolRole, heldPoolRole, type PoolRoleFacts } from "@quiz/domain";
 
-import { isForeignKeyViolation, type Db } from "../../db/client.js";
+import { isForeignKeyViolation, qualified, type Db } from "../../db/client.js";
 import type { Caller } from "../guards.js";
 import { shownAvatar } from "../avatar.js";
 import { isStaffAttempt } from "../evaluation/service.js";
@@ -24,7 +24,7 @@ import {
   questions,
   users,
 } from "../../db/schema.js";
-import { type PoolRow, qualified } from "./shared.js";
+import { type PoolRow } from "./shared.js";
 import { poolConcepts } from "../concept/service.js";
 import { categoryTree } from "./categories.js";
 

@@ -36,7 +36,7 @@ import { audit, type AuditActor } from "../../audit.js";
 import { isForeignKeyViolation, isRestrictViolation, type Db, type Tx } from "../../db/client.js";
 import { concepts } from "../../db/schema.js";
 import type { Caller } from "../guards.js";
-import { DomainError } from "../http.js";
+import { DomainError, notFoundError } from "../http.js";
 import { droppedKeys, insertProposed, refuseInputs } from "./links.js";
 import { columnsOf, conflictOr, perLang, side, sideOf, toConcept, toConceptRef, toResolvable } from "./row.js";
 
@@ -160,7 +160,7 @@ export async function patchConcept(db: Db, ctx: ConceptContext, id: string, patc
   try {
     const row = await db.transaction(async (tx) => {
       const [current] = await tx.select().from(concepts).where(eq(concepts.id, id)).for("update");
-      if (!current) throw new DomainError("not_found", 404, "No such concept");
+      if (!current) throw notFoundError("concept");
       if (current.status === "merged") throw new DomainError("concept_merged", 409, "A merged concept is not edited");
       const admin = ctx.caller.role === "admin";
       const creator = current.status === "proposed" && current.createdBy === ctx.caller.id;
@@ -215,7 +215,7 @@ export async function patchConcept(db: Db, ctx: ConceptContext, id: string, patc
 export async function validateConcept(db: Db, ctx: Omit<ConceptContext, "caller">, id: string): Promise<Concept> {
   const row = await db.transaction(async (tx) => {
     const [current] = await tx.select().from(concepts).where(eq(concepts.id, id)).for("update");
-    if (!current) throw new DomainError("not_found", 404, "No such concept");
+    if (!current) throw notFoundError("concept");
     if (current.status === "merged") throw new DomainError("concept_merged", 409, "A merged concept is not validated");
     if (current.status === "validated") return current;
     for (const lang of CONCEPT_LANGS) {
@@ -251,7 +251,7 @@ export async function deleteConcept(db: Db, ctx: Omit<ConceptContext, "caller">,
   try {
     await db.transaction(async (tx) => {
       const [gone] = await tx.delete(concepts).where(eq(concepts.id, id)).returning();
-      if (!gone) throw new DomainError("not_found", 404, "No such concept");
+      if (!gone) throw notFoundError("concept");
       await audit(tx, {
         ...ctx.actor,
         action: "concept.delete",

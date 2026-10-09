@@ -3,6 +3,13 @@ import { resolve } from "node:path";
 
 import { z } from "zod";
 
+/** A boolean switch: `1` or `true` turns it on, anything else leaves it off. */
+const flag = (fallback: "" | "1" = "") =>
+  z
+    .string()
+    .default(fallback)
+    .transform((v) => v === "1" || v === "true");
+
 /**
  * Configuration via environment variables, validated at startup (fail-fast).
  * Secrets only travel through the environment (ADR-010).
@@ -21,10 +28,7 @@ const EnvSchema = z.object({
    */
   DATABASE_URL: z.string().default("pglite://.data/pglite"),
   /** Apply Drizzle migrations at startup (container deployment, and dev). */
-  MIGRATE_ON_START: z
-    .string()
-    .default("1")
-    .transform((v) => v === "1" || v === "true"),
+  MIGRATE_ON_START: flag("1"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
 
   /** Public URL of the portal (base for OIDC/OAuth redirect URIs). */
@@ -100,10 +104,7 @@ const EnvSchema = z.object({
    * nothing to diagnose in those traces and they drown the real output, so
    * the test helpers set this flag and `startJobs` returns cleanly.
    */
-  JOBS_DISABLED: z
-    .string()
-    .default("")
-    .transform((v) => v === "1" || v === "true"),
+  JOBS_DISABLED: flag(),
 
   /** Deadline ticker period, in milliseconds (docs/spec/05, 5.4). */
   TICK_MS: z.coerce.number().int().min(100).max(600_000).default(1000),
@@ -125,10 +126,7 @@ const EnvSchema = z.object({
    * normal session without any identity provider. NEVER in production — see
    * the refusal below, which is the same mechanism as the dev-value one.
    */
-  AUTH_DEV_LOGIN: z
-    .string()
-    .default("")
-    .transform((v) => v === "1" || v === "true"),
+  AUTH_DEV_LOGIN: flag(),
 
   /**
    * Attested kiosk stations (ADR-051 §5). `off` — the default — means no
@@ -161,10 +159,7 @@ const EnvSchema = z.object({
    * the header on `fetch` and `EventSource` (proof B). The launch refuses a
    * bad header either way.
    */
-  SEB_CONFIG_KEY_ENFORCE: z
-    .string()
-    .default("")
-    .transform((v) => v === "1" || v === "true"),
+  SEB_CONFIG_KEY_ENFORCE: flag(),
   /**
    * Hosts every `.seb` Quiz builds lets SEB's URL filter reach beside Quiz's
    * own (and, for a project, the workspace portal's): a comma-separated list

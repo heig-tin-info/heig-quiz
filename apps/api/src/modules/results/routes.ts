@@ -16,7 +16,7 @@ import { AttemptParam, IdParam, PublishCorrectionBody, ReleaseBody } from "@quiz
 import { tracer } from "../../audit.js";
 import { iso } from "../../clock.js";
 import { loadEvaluation, loadEvaluationAttempt, ownAttempt, teacherGuard, withCourseRole } from "../guards.js";
-import { studentRoute, teacherRoute } from "../http.js";
+import { sendCsv, studentRoute, teacherRoute } from "../http.js";
 import { byId } from "../evaluation/service.js";
 import * as gradingEvents from "../grading/events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
@@ -78,13 +78,7 @@ export async function resultsPlugin(app: FastifyInstance) {
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: staffEvaluation }, async ({ reply, scope }) => {
       const view = await service.resultsView(app.db, scope.evaluation);
-      return reply
-        .type("text/csv; charset=utf-8")
-        .header(
-          "content-disposition",
-          `attachment; filename="${csvFilename(scope.evaluation.title)}"`,
-        )
-        .send(resultsCsv(view));
+      return sendCsv(reply, csvFilename(scope.evaluation.title), resultsCsv(view));
     }),
   );
 

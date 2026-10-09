@@ -25,7 +25,7 @@ import { verifySignature } from "../../github/signature.js";
 import { redactTokens } from "../../redact.js";
 import { FixedWindowLimiter } from "../../limiter.js";
 import { accessibleClassroom, teacherGuard } from "../guards.js";
-import { notFound, teacherRoute } from "../http.js";
+import { notFound, rateLimited, teacherRoute } from "../http.js";
 import { INERT_IMAGE_HEADERS } from "../pool/assets.js";
 import { dispatchDelivery, storeDelivery } from "./deliveries.js";
 import { registerGithubHandlers } from "./handlers.js";
@@ -138,7 +138,7 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
     // Public, and each call reaches GitHub: counted per address.
     const wait = setups.hit(req.ip, app.clock.now().getTime());
     if (wait !== null) {
-      return reply.code(429).header("retry-after", String(wait)).send({ error: "rate_limited" });
+      return rateLimited(reply, wait);
     }
     const query = GithubSetupQuery.parse(req.query ?? {});
     let installed: string | null = null;

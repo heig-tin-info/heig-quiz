@@ -15,7 +15,7 @@
  */
 import type { Octokit } from "octokit";
 
-import { githubStatus } from "./app.js";
+import { unless404 } from "./app.js";
 
 export interface RevertResult {
   sha: string;
@@ -41,7 +41,7 @@ async function referenceBlob(
   path: string,
   ref: string,
 ): Promise<{ sha: string; content: string } | null> {
-  try {
+  return unless404(async () => {
     const { data } = await octokit.request("GET /repos/{owner}/{repo}/contents/{path}", {
       owner,
       repo,
@@ -51,10 +51,7 @@ async function referenceBlob(
     });
     if (Array.isArray(data) || data.type !== "file") return null;
     return { sha: data.sha, content: data.content };
-  } catch (err) {
-    if (githubStatus(err) === 404) return null;
-    throw err;
-  }
+  });
 }
 
 /**

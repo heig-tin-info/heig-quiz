@@ -112,6 +112,16 @@ export function githubStatus(err: unknown): number | undefined {
   return typeof status === "number" ? status : undefined;
 }
 
+/** `call`'s answer, or null when GitHub answers 404 (absent, or out of reach); any other failure throws. */
+export async function unless404<T>(call: () => Promise<T>): Promise<T | null> {
+  try {
+    return await call();
+  } catch (err) {
+    if (githubStatus(err) === 404) return null;
+    throw err;
+  }
+}
+
 /** GitHub's all-zeros sha: a push's `after` deleting a branch, its `before` creating one. */
 export function isZeroSha(sha: string): boolean {
   return /^0+$/.test(sha);
@@ -355,16 +365,13 @@ export async function resolveOrgInstallation(
 ): Promise<AppInstallation | null> {
   const app = githubApp(config);
   if (!app) return null;
-  try {
+  return unless404(async () => {
     const { data } = await app.octokit.request("GET /orgs/{org}/installation", {
       org: orgLogin,
       request: read,
     });
     return orgInstallation(data as RawInstallation);
-  } catch (err) {
-    if (githubStatus(err) === 404) return null;
-    throw err;
-  }
+  });
 }
 
 /**
@@ -379,16 +386,13 @@ export async function fetchInstallation(
 ): Promise<AppInstallation | null> {
   const app = githubApp(config);
   if (!app) return null;
-  try {
+  return unless404(async () => {
     const { data } = await app.octokit.request("GET /app/installations/{installation_id}", {
       installation_id: installationId,
       request: read,
     });
     return orgInstallation(data as RawInstallation);
-  } catch (err) {
-    if (githubStatus(err) === 404) return null;
-    throw err;
-  }
+  });
 }
 
 /** One delivery attempt of the App's webhook, as `GET /app/hook/deliveries` lists it. */
@@ -419,19 +423,17 @@ interface RawHookDelivery {
 export async function recentHookDeliveries(config: AppConfig): Promise<HookDelivery[]> {
   const app = githubApp(config);
   if (!app) return [];
-  try {
+  const deliveries = await unless404(async () => {
     const { data } = await app.octokit.request("GET /app/hook/deliveries", { per_page: 100 });
-    return (data as RawHookDelivery[]).map((d) => ({
-      id: d.id,
-      guid: d.guid,
-      statusCode: d.status_code,
-      redelivery: d.redelivery,
-      deliveredAt: new Date(d.delivered_at),
-    }));
-  } catch (err) {
-    if (githubStatus(err) === 404) return [];
-    throw err;
-  }
+    return data as RawHookDelivery[];
+  });
+  return (deliveries ?? []).map((d) => ({
+    id: d.id,
+    guid: d.guid,
+    statusCode: d.status_code,
+    redelivery: d.redelivery,
+    deliveredAt: new Date(d.delivered_at),
+  }));
 }
 
 /** Asks GitHub to deliver an attempt again (`POST /app/hook/deliveries/{id}/attempts`). */

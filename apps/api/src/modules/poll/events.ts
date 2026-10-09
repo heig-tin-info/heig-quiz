@@ -21,16 +21,7 @@ export function tallyChanged(evaluationId: string, tally: PollTally, now: Date):
 }
 
 /** A poll opened: the classroom's evaluation list has one more row. */
-export function pollStarted(evaluation: EvaluationRecord, now: Date): void {
-  bus.evaluationState({
-    evaluationId: evaluation.id,
-    state: evaluation.state,
-    pausedAt: evaluation.pausedAt,
-    closesAt: evaluation.closesAt,
-    now,
-  });
-  bus.hint("evaluations", bus.homeTopic(evaluation));
-}
+export const pollStarted = bus.evaluationStateChanged;
 
 /**
  * The reveal switch moved. No data frame: the projection and the phones
