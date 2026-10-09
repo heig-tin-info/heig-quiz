@@ -64,6 +64,7 @@ export { AlertIcon, CloseIcon, GripIcon, PlusIcon, StrokeIcon, TrashIcon, typeIc
 export { ErrorText, IssueList } from "./issues.js";
 export {
   AsideSection,
+  NotePanel,
   TryPanel,
   tryStatusOf,
   useReferenceTry,

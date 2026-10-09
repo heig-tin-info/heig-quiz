@@ -555,7 +555,9 @@ live in `ui/state.ts`, each written once.
   recess) for what the product says, and `outlined` (a `line-strong` hairline
   on `surface`) for what a person wrote to this reader. It exists because
   five such panels were written by hand with two paddings (12 and 16) and
-  two gaps (4 and 6).
+  two gaps (4 and 6). It lives in `@quiz/ui`, so the reviews of the question
+  types (`rich`, `diagram`) draw the same one, a count at the end of the
+  eyebrow's line when they have one (`aside`).
 - PersonAvatar: a person as a round picture, or their two initials on
   `surface-3` in `fg-muted` when there is no picture OR when it fails to load
   (an IdP picture URL goes stale, and a broken-image glyph is not a face).

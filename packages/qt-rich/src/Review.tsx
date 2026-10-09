@@ -8,11 +8,9 @@
  * There is no verdict: the points are the teacher's, and the score line
  * under the review says them once set.
  */
-import type { ReactNode } from "react";
-
 import type { ReviewProps, StringOverrides } from "@quiz/core/client";
 import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
-import { caption, markdown, reviewPrompt, ScoreHeader } from "@quiz/ui";
+import { caption, markdown, NotePanel, reviewPrompt, ScoreHeader } from "@quiz/ui";
 
 import { countChars, type RichAnswer, type RichDetails, type RichSolution, type RichStudent } from "./schema.js";
 import { richReviewStrings, type RichReviewStringKey } from "./strings.js";
@@ -20,35 +18,6 @@ import { richReviewStrings, type RichReviewStringKey } from "./strings.js";
 type RichReviewProps = ReviewProps<RichStudent, RichAnswer, RichSolution, RichDetails> & {
   strings?: StringOverrides<RichReviewStringKey>;
 };
-
-/** A labelled panel: `outlined` for what the student wrote, `soft` for the teacher's guide. */
-function Panel({
-  title,
-  aside,
-  tone,
-  children,
-}: {
-  title: string;
-  aside?: ReactNode;
-  tone: "soft" | "outlined";
-  children: ReactNode;
-}) {
-  return (
-    <section
-      className={
-        tone === "soft"
-          ? "rounded-field bg-surface-2 p-3"
-          : "rounded-field border border-line-strong bg-surface p-3"
-      }
-    >
-      <p className="flex items-baseline justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-fg-faint">
-        <span>{title}</span>
-        {aside}
-      </p>
-      <div className="mt-1 text-sm text-fg">{children}</div>
-    </section>
-  );
-}
 
 export function RichReview({
   student,
@@ -83,8 +52,9 @@ export function RichReview({
 
       <div className="@container">
         <div className={guide ? "grid items-start gap-3 @2xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]" : "grid"}>
-          <Panel
-            title={s.answer}
+          <NotePanel
+            eyebrow={s.answer}
+            bodyClassName="text-sm text-fg"
             tone="outlined"
             aside={
               written ? (
@@ -95,24 +65,24 @@ export function RichReview({
             }
           >
             {body}
-          </Panel>
+          </NotePanel>
 
           {guide ? (
             <div className="flex flex-col gap-3">
               {/* Absent from a student's key (ADR-037): no panel at all. */}
               {guide.rubric === undefined ? null : (
-                <Panel title={s.rubric} tone="soft">
+                <NotePanel eyebrow={s.rubric} bodyClassName="text-sm text-fg" tone="soft">
                   {guide.rubric.trim() === "" ? (
                     <span className={caption}>{s.noRubric}</span>
                   ) : (
                     markdown(renderMarkdown, guide.rubric)
                   )}
-                </Panel>
+                </NotePanel>
               )}
               {guide.reference !== undefined && guide.reference.trim() !== "" ? (
-                <Panel title={s.reference} tone="soft">
+                <NotePanel eyebrow={s.reference} bodyClassName="text-sm text-fg" tone="soft">
                   {markdown(renderMarkdown, guide.reference)}
-                </Panel>
+                </NotePanel>
               ) : null}
             </div>
           ) : null}
