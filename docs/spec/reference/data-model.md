@@ -26,7 +26,7 @@ Common columns omitted: `id uuid pk`, `created_at`, `updated_at`.
 | `courses` | `name`, `code` | |
 | `course_staff` | `course_id`, `user_id` | composite pk |
 | `user_course_prefs` | `user_id`, `course_id`, `hidden_at` nullable | composite pk, both FKs cascade; one user's display state for one course (ADR-032), no `id` nor timestamps |
-| `course_conditions` | `course_id`, `kind` allowed / forbidden / provided / info, `text` 1..200 (CHECK), `position`, `archived_at` nullable | The course's catalog of conditions (F-ORG-16, ADR-079 §5), written by any staff member; archived, never deleted. Staff only: no student route reads it, an evaluation holds a snapshot with `catalogId` |
+| `course_conditions` | `course_id`, `kind` allowed / forbidden / provided / info, `text` 1..200 (CHECK), `position`, `archived_at` nullable | The course's catalog of conditions (F-ORG-16, ADR-079 §5), read by the staff, written by the course's owners (ADR-079 §5, amended 2026-10-09); archived, never deleted. Staff only: no student route reads it, an evaluation holds a snapshot with `catalogId` |
 | `course_pools` | `course_id`, `pool_id` | composite pk |
 | `classrooms` | `course_id`, `name`, `period`, `period_start` / `period_end` text `YYYY-MM` nullable, `archived_at` | `period` is a free label; the months are both or neither, end ≥ start (CHECK). Text, not `date`: a month has no day to pin nor time zone to shift, and `YYYY-MM` compares in calendar order |
 | `enrollments` | `classroom_id`, `user_id`, `time_bonus_percent` int default 0, `note` | unique (classroom, user) |

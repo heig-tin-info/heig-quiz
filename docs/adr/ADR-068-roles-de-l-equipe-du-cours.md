@@ -4,6 +4,10 @@
 
 Accepted (2026-10-04, product owner decisions of 2026-10-02 and 2026-10-04).
 
+Amended 2026-10-09 (product owner, [ADR-079](ADR-079-conditions-de-l-evaluation.md)
+§5): §3 only — the writes to a course's catalog of conditions (F-ORG-16) join
+the owner-only routes; reading it stays every member's.
+
 Scope: what a member of a course's staff may do on the course, its classrooms and
 its evaluations; who reaches them is unchanged (`staffAccess`, invariant 6).
 
@@ -54,6 +58,7 @@ entity (404 when it fails, invariant 6), and a role that says what the caller ma
    | `POST /questions/move` with `linkCourses` | the move links its target pool to the courses that play the questions: only to courses the caller owns. An assistant's course blocks it like a course out of reach (`409 course_forbidden`), but is named in full since they reach it; each blocking course's `mayLink` says which, and the web app offers no linking when one is false |
    | `POST /courses/:id/classrooms`, `DELETE /classrooms/:id` | the course's classrooms |
    | `POST /evaluations/:id/release`, `/unrelease`, `/publish-correction`; `POST /projects/:id/release` (F-PROJ-14) | what reaches the students as final |
+   | `POST /courses/:id/conditions`, `PATCH /courses/:id/conditions/:cid`, `PUT /courses/:id/conditions/order`, `POST /courses/:id/conditions/:cid/archive\|unarchive` (amended 2026-10-09) | the course's catalog of conditions, a course setting (F-ORG-16, ADR-079 §5); its list stays every member's |
 
    Everything else stays open to every member: hiding the course for oneself, templates,
    a classroom's settings (rename, archive, GitHub, journal, drill), the roster, the

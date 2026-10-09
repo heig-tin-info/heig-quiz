@@ -1,7 +1,8 @@
 /**
  * A course's catalog of conditions (F-ORG-16, ADR-079 §5), over the REAL
- * application: every staff member manages it (an assistant included, no
- * role step), anyone else gets the 404 of a missing course; entries are
+ * application: every staff member reads it, only the course's owners write
+ * it (an assistant gets 403 `owner_required`, ADR-079 §5 amended
+ * 2026-10-09), anyone else gets the 404 of a missing course; entries are
  * archived, never deleted; the list is every entry, the active ones first;
  * the order is the active entries, whole; and no
  * student payload — waiting room, ready screen, attempt — ever carries an
@@ -68,16 +69,35 @@ const activeIds = async (courseId: string) =>
   (await list(courseId)).filter((r) => r.archivedAt === null).map((r) => r.id);
 
 describe("the catalog's routes", () => {
-  it("are every staff member's, an assistant included, and a 404 for anyone else", async () => {
+  it("are read by every staff member, written by the owners only, and a 404 for anyone else", async () => {
     const { courseId } = await seed();
-    const made = await create(courseId, assistant, "allowed", "  A calculator  ");
+    const made = await create(courseId, owner, "allowed", "  A calculator  ");
     expect(made).toMatchObject({ kind: "allowed", text: "A calculator", archivedAt: null });
 
-    const patched = await send("PATCH", `${base(courseId)}/${made.id}`, assistant, { kind: "forbidden" });
+    const patched = await send("PATCH", `${base(courseId)}/${made.id}`, owner, { kind: "forbidden" });
     expect(patched.statusCode).toBe(200);
     expect(patched.json()).toMatchObject({ kind: "forbidden", text: "A calculator" });
-    expect((await send("POST", `${base(courseId)}/${made.id}/archive`, assistant)).statusCode).toBe(200);
-    expect((await send("POST", `${base(courseId)}/${made.id}/unarchive`, assistant)).statusCode).toBe(200);
+    expect((await send("PUT", `${base(courseId)}/order`, owner, { ids: [made.id] })).statusCode).toBe(204);
+    expect((await send("POST", `${base(courseId)}/${made.id}/archive`, owner)).statusCode).toBe(200);
+    expect((await send("POST", `${base(courseId)}/${made.id}/unarchive`, owner)).statusCode).toBe(200);
+
+    // An assistant reads the catalog (they tick its entries in an evaluation)…
+    const read = await send("GET", base(courseId), assistant);
+    expect(read.statusCode).toBe(200);
+    expect((read.json() as CourseCondition[]).map((r) => r.id)).toEqual([made.id]);
+    // …and writes none of it.
+    for (const [method, url, payload] of [
+      ["POST", base(courseId), { kind: "info", text: "x" }],
+      ["PATCH", `${base(courseId)}/${made.id}`, { text: "y" }],
+      ["PUT", `${base(courseId)}/order`, { ids: [made.id] }],
+      ["POST", `${base(courseId)}/${made.id}/archive`, undefined],
+      ["POST", `${base(courseId)}/${made.id}/unarchive`, undefined],
+    ] as const) {
+      const res = await send(method, url, assistant, payload);
+      expect(res.statusCode, `${method} ${url}`).toBe(403);
+      expect(res.json(), `${method} ${url}`).toMatchObject({ error: "owner_required" });
+    }
+    expect(await list(courseId)).toMatchObject([{ id: made.id, kind: "forbidden", text: "A calculator", archivedAt: null }]);
 
     for (const [method, url, payload] of [
       ["GET", base(courseId), undefined],

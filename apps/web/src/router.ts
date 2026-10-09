@@ -359,12 +359,16 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   },
   course: {
     path: (r) => `/courses/${r.id}${r.tab && r.tab !== "classrooms" ? `/${r.tab}` : ""}`,
-    // An unknown tail is the course's classrooms, never the home.
+    // An unknown tail is the course's classrooms, never the home. The
+    // former Conditions tab is a section of the settings now (F-ORG-16):
+    // its old links land there.
     match: ([head, id, tail]) =>
       head === "courses" && id
-        ? isCourseTab(tail) && tail !== "classrooms"
-          ? { view: "course", id, tab: tail }
-          : { view: "course", id }
+        ? tail === "conditions"
+          ? { view: "course", id, tab: "settings" }
+          : isCourseTab(tail) && tail !== "classrooms"
+            ? { view: "course", id, tab: tail }
+            : { view: "course", id }
         : null,
     studentSafe: false,
     section: "home",

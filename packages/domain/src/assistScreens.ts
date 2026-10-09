@@ -17,7 +17,7 @@ import { ASSIST_MAX_WRITES, type AssistPendingWrite } from "./assistWrites.js";
 // --- The tabs a screen reads off its address ----------------------------------
 
 /** A course page's tabs, each a path of its own (`/courses/:id/<tab>`); the classrooms are the bare path. */
-export const COURSE_TABS = ["classrooms", "templates", "pools", "members", "conditions", "settings"] as const;
+export const COURSE_TABS = ["classrooms", "templates", "pools", "members", "settings"] as const;
 export type CourseTab = (typeof COURSE_TABS)[number];
 /** The Administration page's tabs (`?tab=`). */
 export const ADMIN_TABS = ["people", "system", "tasks", "llm", "concepts"] as const;
