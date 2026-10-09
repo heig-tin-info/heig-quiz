@@ -341,7 +341,7 @@ describe("EvaluationConfig", () => {
     renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
       route: "/evaluations/x?step=timing",
     });
-    const minutes = await screen.findByLabelText(/^minutes$/i);
+    const minutes = await screen.findByLabelText(/^duration$/i);
     expect(minutes).toHaveAttribute("max", "480");
     const patches = () => calls.filter((c) => c.method === "PATCH").map((c) => c.body);
 
