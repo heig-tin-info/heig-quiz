@@ -13,7 +13,7 @@
  * the reply-aware loader is that finder plus the 404. One query, two doors.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { and, eq, getTableName, isNull, ne, sql, type AnyColumn, type SQL } from "drizzle-orm";
+import { and, eq, isNull, ne, sql, type AnyColumn, type SQL } from "drizzle-orm";
 
 import type { CourseRole, PoolRole } from "@quiz/contracts";
 import {
@@ -25,7 +25,7 @@ import {
 } from "@quiz/domain";
 
 import { PORTAL, confined, delegated, type SessionAuth, type SessionState } from "../auth/session.js";
-import type { Db } from "../db/client.js";
+import { qualified, type Db } from "../db/client.js";
 import {
   answers,
   attempts,
@@ -73,18 +73,6 @@ export function staffAccess(userId: string, courseId: AnyColumn | SQL = courses.
  * query, `courseAccess` next to `poolAccess` below.
  */
 const courseAccess = staffAccess;
-
-/**
- * `"table"."column"`, always — the same precaution as `qualified` in
- * `pool/service.ts`: inside a correlated subquery of a statement drizzle
- * believes reads a single table, a bare `${pools.id}` renders as `"id"` and
- * resolves against the SUBQUERY's table whenever that one has a column by
- * the same name (`question_versions.id` does). Qualifying by hand makes a
- * fragment independent of the statement it is dropped into.
- */
-function qualified(column: AnyColumn): SQL {
-  return sql`${sql.identifier(getTableName(column.table))}.${sql.identifier(column.name)}`;
-}
 
 /**
  * THE access predicate for a pool, on a query that has `pools` in scope
@@ -223,23 +211,32 @@ export async function isCourseOwner(db: Db, courseId: string, user: Pick<Caller,
 }
 
 /**
- * A route loader of invariant 6 with the role step after it: the entity
- * under `staffAccess` (the loader's own 404), then — when `needed` is given
- * — {@link requireCourseRole}'s 403. It runs INSIDE `load`, so the route
- * wrapper refuses before it parses the body: an assistant's malformed body
- * is a 403 like a well-formed one. The pools' `withRole` is the same motif.
+ * A route loader of invariant 6 with a role step after it: the entity (the
+ * loader's own 404), then — when there is one — the `role` step, which
+ * answers its own 403 and returns null. It runs INSIDE `load`, so the route
+ * wrapper refuses before it parses the body: a malformed body from a caller
+ * without the role is a 403 like a well-formed one.
  */
+export function withRoleStep<P, S>(
+  load: (req: FastifyRequest, reply: FastifyReply, params: P) => Promise<S | null>,
+  role: ((req: FastifyRequest, reply: FastifyReply, scope: S) => Promise<unknown>) | undefined,
+) {
+  if (!role) return load;
+  return async (req: FastifyRequest, reply: FastifyReply, params: P): Promise<S | null> => {
+    const scope = await load(req, reply, params);
+    if (scope === null) return null;
+    return (await role(req, reply, scope)) ? scope : null;
+  };
+}
+
+/** {@link withRoleStep} with {@link requireCourseRole}'s 403 (owner or assistant, ADR-068). */
 export function withCourseRole<P, S>(
   app: FastifyInstance,
   load: (req: FastifyRequest, reply: FastifyReply, params: P) => Promise<S | null>,
   courseIdOf: (scope: S) => string,
   needed: CourseRole | undefined,
 ) {
-  return async (req: FastifyRequest, reply: FastifyReply, params: P): Promise<S | null> => {
-    const scope = await load(req, reply, params);
-    if (scope === null || needed === undefined) return scope;
-    return (await requireCourseRole(app, req, reply, courseIdOf(scope), needed)) ? scope : null;
-  };
+  return withRoleStep(load, needed && ((req, reply, scope) => requireCourseRole(app, req, reply, courseIdOf(scope), needed)));
 }
 
 /**

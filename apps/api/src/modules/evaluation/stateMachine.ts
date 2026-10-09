@@ -18,10 +18,9 @@ import { evaluationItems, evaluations } from "../../db/schema.js";
 import {
   type EvaluationRecord,
   type DbOrTx,
+  EvaluationError,
   IllegalTransition,
-  CodeTaken,
   refusePastTiming,
-  PollNotImplemented,
 } from "./shared.js";
 import { byId, settingsOf, attemptCount } from "./reads.js";
 import { announceMove } from "./announce.js";
@@ -204,7 +203,7 @@ export async function tryApplyState(
     .where(and(eq(evaluations.id, row.id), eq(evaluations.state, row.state)))
     .returning({ id: evaluations.id })
     .catch((err: unknown) => {
-      if (isUniqueViolation(err, "evaluations_running_poll_code_uq")) throw new CodeTaken();
+      if (isUniqueViolation(err, "evaluations_running_poll_code_uq")) throw new EvaluationError("code_taken");
       throw err;
     });
   if (updated.length === 0) return null;
@@ -236,7 +235,7 @@ export async function transition(
   to: EvaluationState,
   now: Date,
 ): Promise<EvaluationRecord> {
-  if (row.mode === "poll") throw new PollNotImplemented();
+  if (row.mode === "poll") throw new EvaluationError("not_implemented");
   const items = await db
     .select({ points: evaluationItems.points, bonus: evaluationItems.bonus })
     .from(evaluationItems)

@@ -32,7 +32,7 @@ import {
 import { csvFilename } from "../../csv.js";
 import { actorOf } from "../../audit.js";
 import { accessibleClassroom, callerOf, isCourseOwner, readableClassroom, teacherGuard } from "../guards.js";
-import { studentRoute, teacherRoute } from "../http.js";
+import { sendCsv, studentRoute, teacherRoute } from "../http.js";
 import { gradebookCsv } from "./csv.js";
 import * as service from "./service.js";
 
@@ -60,10 +60,7 @@ export async function gradebookPlugin(app: FastifyInstance) {
     { preHandler: requireTeacher },
     teacher(onClassroom, async ({ reply, scope }) => {
       const table = await service.staffGradebook(app.db, scope.room);
-      return reply
-        .type("text/csv; charset=utf-8")
-        .header("content-disposition", `attachment; filename="${csvFilename(`${scope.room.name} gradebook`, "gradebook")}"`)
-        .send(gradebookCsv(table));
+      return sendCsv(reply, csvFilename(`${scope.room.name} gradebook`, "gradebook"), gradebookCsv(table));
     }),
   );
 

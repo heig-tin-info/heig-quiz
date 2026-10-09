@@ -27,7 +27,7 @@ import type { Octokit } from "octokit";
 import { encodeJournalPath, JournalSyncError } from "@quiz/contracts";
 
 import type { AppConfig } from "../../config.js";
-import { githubStatus, installationClient } from "../../github/app.js";
+import { githubStatus, installationClient, unless404 } from "../../github/app.js";
 
 /** The longest the ingestion waits on one GitHub call, the token included. */
 export const GITHUB_TIMEOUT_MS = 30_000;
@@ -244,13 +244,10 @@ const foundRepo = (data: RawRepo): FoundRepo => ({
  * caller checks the owner it answers with.
  */
 export async function findRepo(octokit: Octokit, org: string, name: string): Promise<FoundRepo | null> {
-  try {
+  return unless404(async () => {
     const { data } = await octokit.request("GET /repos/{owner}/{repo}", { owner: org, repo: name });
     return foundRepo(data as RawRepo);
-  } catch (err) {
-    if (githubStatus(err) === 404) return null;
-    throw err;
-  }
+  });
 }
 
 /**

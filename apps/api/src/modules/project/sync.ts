@@ -59,7 +59,7 @@ import { iso, isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { botCommits, classrooms, projectRepos, projects, projectSyncPrs } from "../../db/schema.js";
-import { githubStatus, installationClient, isZeroSha, ownerRepo } from "../../github/app.js";
+import { githubStatus, installationClient, isZeroSha, ownerRepo, unless404 } from "../../github/app.js";
 import { openSyncWorkspace, SourceRewritten, updateSquashedRepo, type SyncWorkspace } from "../../github/sync.js";
 import { PROJECT_SYNC_QUEUE } from "../../jobs.js";
 import { projectInstallation, pushedBy, type WebhookHandler } from "../github/service.js";
@@ -232,7 +232,7 @@ function fileList(files: { filename: string; status: string }[]): string {
 
 /** The state of pull request `number` on GitHub, or null when it is gone. */
 async function prState(octokit: Octokit, owner: string, repo: string, number: number): Promise<SyncPrState | null> {
-  try {
+  return unless404(async () => {
     const { data } = await octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
       owner,
       repo,
@@ -240,10 +240,7 @@ async function prState(octokit: Octokit, owner: string, repo: string, number: nu
       request: { retries: 0 },
     });
     return data.state === "open" ? "open" : data.merged ? "merged" : "closed";
-  } catch (err) {
-    if (githubStatus(err) === 404) return null;
-    throw err;
-  }
+  });
 }
 
 /**
@@ -339,7 +336,7 @@ async function upsertSyncPr(
 
 /** The head of the repository's `sync/<branch>` on GitHub, or null when the App never pushed it. */
 async function syncRefHead(octokit: Octokit, owner: string, repo: string, branch: string): Promise<string | null> {
-  try {
+  return unless404(async () => {
     const { data } = await octokit.request("GET /repos/{owner}/{repo}/git/ref/{ref}", {
       owner,
       repo,
@@ -347,10 +344,7 @@ async function syncRefHead(octokit: Octokit, owner: string, repo: string, branch
       request: { retries: 0 },
     });
     return data.object.sha;
-  } catch (err) {
-    if (githubStatus(err) === 404) return null;
-    throw err;
-  }
+  });
 }
 
 /** The repository's outcome, and when (the server's clock). */

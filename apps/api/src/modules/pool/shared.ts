@@ -2,7 +2,7 @@
  * What the files of the `pool` service share: the row types, the errors a
  * question write can raise, the category guard and `qualified`.
  */
-import { and, eq, getTableName, sql, type AnyColumn, type SQL } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { ZodIssueLite } from "@quiz/contracts";
 
@@ -52,17 +52,6 @@ export class VersionInUse extends Error {
 }
 
 /**
- * A new question named like one its pool already holds
- * (`questions_pool_name_uq`): `409 duplicate_name`, sent by the shared tail.
- */
-export class NameTaken extends DomainError {
-  override name = "NameTaken";
-  constructor() {
-    super("duplicate_name", 409, "This pool already has a question by that name");
-  }
-}
-
-/**
  * A category that is not a category OF THE QUESTION'S POOL — another pool's,
  * or one that does not exist: as good as missing, the `404 not_found` a move
  * answers. The pool routes send it as `{ error: "not_found" }`.
@@ -103,23 +92,11 @@ export async function assertCategoryOf(
  * category deleted in between. Anything else is rethrown as it is.
  */
 export function questionWriteError(error: unknown): unknown {
-  if (isUniqueViolation(error, "questions_pool_name_uq")) return new NameTaken();
+  if (isUniqueViolation(error, "questions_pool_name_uq")) {
+    return new DomainError("duplicate_name", 409, "This pool already has a question by that name");
+  }
   if (isForeignKeyViolation(error, "questions_category_id_categories_id_fk")) {
     return new CategoryNotInPool();
   }
   return error;
-}
-/**
- * `"table"."column"`, always.
- *
- * A bare `${table.column}` inside a `sql` fragment renders WITHOUT its table
- * whenever drizzle believes the surrounding statement reads a single table —
- * which is exactly the case of the correlated subquery below, sitting in the
- * select list of `select … from pools`. The condition then came out as
- * `"pool_id" = "id"`, both resolved against `questions`, and every pool
- * counted zero. Qualifying by hand makes the fragment independent of the
- * statement it is dropped into.
- */
-export function qualified(column: AnyColumn): SQL {
-  return sql`${sql.identifier(getTableName(column.table))}.${sql.identifier(column.name)}`;
 }

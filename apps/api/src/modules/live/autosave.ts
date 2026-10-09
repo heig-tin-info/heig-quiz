@@ -29,11 +29,6 @@ import {
   type AnswerRecord,
   LiveError,
   AnswerInvalid,
-  AlreadyAnswered,
-  Irreversible,
-  ItemAcquired,
-  ItemLocked,
-  NotValidatable,
   orderItems,
   lockedItemIds,
   answersOf,
@@ -399,7 +394,7 @@ export async function markDone(
 ): Promise<{ done: boolean; nextItemId: string | null }> {
   const { evaluation, attempt, itemId, now } = input;
   assertWritable(evaluation, attempt, now);
-  if (attempt.acquiredItemIds.includes(itemId)) throw new ItemAcquired();
+  if (attempt.acquiredItemIds.includes(itemId)) throw new LiveError("item_acquired");
   const settings = settingsOf(evaluation);
   const stored = await answersOf(db, attempt.id);
   const current = stored.get(itemId) ?? null;
@@ -410,22 +405,22 @@ export async function markDone(
     evaluation.id,
   );
   const ownItem = ordered.find((o) => o.item.id === itemId) ?? null;
-  if (!ownItem) throw new LiveError("not_found", 404);
+  if (!ownItem) throw new LiveError("not_found");
   const locked = lockedItemIds(settings, ordered, stored).has(itemId);
   if (input.done) {
     // Validation exists only where the navigation locks: every question in
     // `forward_only`, a checkpoint in `milestones` (issue #89). Anywhere else
     // a `true` would read "Validated" for a question nothing closed.
     if (!mayValidate(settings.navigation, { milestone: ownItem.item.milestone })) {
-      throw new NotValidatable();
+      throw new LiveError("not_validatable");
     }
     // Behind a crossed checkpoint, a question is closed for every write.
-    if (locked && !current?.markedDone) throw new ItemLocked();
+    if (locked && !current?.markedDone) throw new LiveError("item_locked");
   } else if (settings.navigation !== "free") {
     // Irreversible in every locking mode: un-validating a crossed checkpoint
     // would re-open every question before it.
-    if (current?.markedDone) throw new Irreversible();
-    if (locked) throw new ItemLocked();
+    if (current?.markedDone) throw new LiveError("irreversible");
+    if (locked) throw new LiveError("item_locked");
   }
 
   const row = await writeState(db, attempt, itemId, current, { markedDone: input.done }, now);
@@ -514,11 +509,11 @@ async function stateTarget(
   // ADR-091: a question a partial retake carried over is attempt n's, as it
   // stood — not the lock of a navigation, which a carried checkpoint would
   // extend to the questions before it.
-  if (attempt.acquiredItemIds.includes(itemId)) throw new ItemAcquired();
+  if (attempt.acquiredItemIds.includes(itemId)) throw new LiveError("item_acquired");
   const settings = settingsOf(evaluation);
   if (settings.navigation === "free") {
     const joined = await joinedItem(db, evaluation.id, itemId);
-    if (!joined) throw new LiveError("not_found", 404);
+    if (!joined) throw new LiveError("not_found");
     const [current] = await db
       .select()
       .from(answers)
@@ -533,9 +528,9 @@ async function stateTarget(
     evaluation.id,
   );
   const joined = ordered.find((o) => o.item.id === itemId) ?? null;
-  if (!joined) throw new LiveError("not_found", 404);
+  if (!joined) throw new LiveError("not_found");
   const stored = await answersOf(db, attempt.id);
-  if (lockedItemIds(settings, ordered, stored).has(itemId)) throw new ItemLocked();
+  if (lockedItemIds(settings, ordered, stored).has(itemId)) throw new LiveError("item_locked");
   return { joined, current: stored.get(itemId) ?? null };
 }
 
@@ -556,7 +551,7 @@ export async function setSkipped(
 ): Promise<{ skipped: boolean }> {
   const { evaluation, attempt, itemId, now } = input;
   const { joined, current } = await stateTarget(db, evaluation, attempt, itemId, now);
-  if (input.skipped && current && answeredBy(joined)(current.payload)) throw new AlreadyAnswered();
+  if (input.skipped && current && answeredBy(joined)(current.payload)) throw new LiveError("answered");
   const row = await writeState(db, attempt, itemId, current, { skipped: input.skipped }, now);
   await publishCell(evaluation, attempt, joined, row, now);
   return { skipped: row.skipped };
@@ -617,7 +612,7 @@ export async function reportShown(
   // An item of ANOTHER evaluation would pass the foreign key of `answers`;
   // it must not become a bookmark nor a row.
   const item = itemId === null ? null : await joinedItem(db, evaluation.id, itemId);
-  if (itemId !== null && !item) throw new LiveError("not_found", 404);
+  if (itemId !== null && !item) throw new LiveError("not_found");
 
   const created = await db.transaction(async (tx) => {
     // The states read AFTER the lock, not from the request's scope: a pause
@@ -628,7 +623,7 @@ export async function reportShown(
       .from(attempts)
       .where(eq(attempts.id, attempt.id))
       .for("update");
-    if (!locked) throw new LiveError("not_found", 404);
+    if (!locked) throw new LiveError("not_found");
     // A statement of its own, so its snapshot is taken once the lock is held
     // (READ COMMITTED): a pause committed before `closeShown` queued on this
     // row is seen. Not locked: the resume locks the evaluation, then the

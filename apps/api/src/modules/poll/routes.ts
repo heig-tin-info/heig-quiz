@@ -72,18 +72,11 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
 
   const trace = tracer(app);
 
-  /** The two failures of the `live` module answered in their own shape; the rest is the shared tail. */
-  function arms(reply: FastifyReply, error: unknown, now: Date): FastifyReply | null {
-    if (error instanceof live.AttemptClosedError) return reply.code(410).send(error.body(now));
-    if (error instanceof live.AnswerInvalid) {
-      return reply.code(422).send({ error: error.code, details: error.issues });
-    }
-    return null;
-  }
+  /** The failures of the `live` module answered in their own shape; the rest is the shared tail. */
   const failure = (reply: FastifyReply, error: unknown, now: Date) =>
-    sendFailure(reply, error, now, arms);
+    sendFailure(reply, error, now, live.liveFailureArms);
 
-  const teacher = teacherRoute(app, arms);
+  const teacher = teacherRoute(app, live.liveFailureArms);
 
   // =========================================================================
   // Teacher side
@@ -220,9 +213,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
       // A type outside `mcq | short` is not a malformed request, it is a
       // question a poll cannot run: same `422 poll_type` as `POST /polls`.
       if (body.error.issues.some((i) => i.path[0] === "type")) {
-        const refused = new service.PollTypeRefused(
-          String((emptyBody(req.body) as { type?: unknown }).type),
-        );
+        const refused = service.pollTypeRefused(String((emptyBody(req.body) as { type?: unknown }).type));
         return reply.code(422).send({ error: refused.code, message: refused.message });
       }
       return invalid(reply, body.error);
@@ -237,7 +228,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
         createdBy: req.user!.id,
       });
     } catch (error) {
-      // `NameTaken`'s `409 duplicate_name`, like `POST /pools/:id/questions`.
+      // `questionWriteError`'s `409 duplicate_name`, like `POST /pools/:id/questions`.
       return failure(reply, error, app.clock.now());
     }
     await trace(req, "question.create", "question", created.id, {
@@ -289,7 +280,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     if (!body.success) {
       // Same answer as `POST /polls/questions` for a type a poll cannot run.
       if (body.error.issues.some((i) => i.path[0] === "type")) {
-        const refused = new service.PollTypeRefused(String((raw as { type?: unknown }).type));
+        const refused = service.pollTypeRefused(String((raw as { type?: unknown }).type));
         return reply.code(422).send({ error: refused.code, message: refused.message });
       }
       return invalid(reply, body.error);
@@ -336,7 +327,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
       { params: IdParam, body: PollRevealBody, load: staffPoll },
       async ({ req, now, body, scope }) => {
         // A model that cannot be called is not turned on: the teacher would believe it judges.
-        if (body.ai === true && !(await app.llmGateway.ready())) throw new service.PollAiUnavailable();
+        if (body.ai === true && !(await app.llmGateway.ready())) throw new service.PollError("llm_unavailable");
         const wasOn = service.pollSettingsOf(scope).ai;
         const updated = await service.setDisplay(app.db, scope, body, now);
         await trace(req, "poll.reveal", "evaluation", updated.id, body);

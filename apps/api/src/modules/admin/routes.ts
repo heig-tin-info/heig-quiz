@@ -22,7 +22,7 @@ import { syncUserRole } from "../../roles.js";
 import { shownAvatar } from "../avatar.js";
 import { codespaceOn } from "../codespace/service.js";
 import { adminGuard } from "../guards.js";
-import { invalid } from "../http.js";
+import { invalid, rateLimited } from "../http.js";
 import { sendTestMail } from "../notifications/service.js";
 import {
   claimTaskNow,
@@ -184,10 +184,7 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
     const user = req.user!;
     if (!user.email) return reply.code(409).send({ error: "no_email", message: "Your account has no e-mail address" });
     if (!testMails.spend(`test-mail:${user.id}`, 1, app.clock.now())) {
-      return reply
-        .code(429)
-        .header("retry-after", String(BUDGET_RETRY_AFTER_S))
-        .send({ error: "rate_limited", message: "One test e-mail per minute" });
+      return rateLimited(reply, BUDGET_RETRY_AFTER_S, "One test e-mail per minute");
     }
     const result: TestMailResult = await sendTestMail(config, req.log, { email: user.email, locale: user.locale });
     await trace(req, "system.test_mail", "user", user.id, result);

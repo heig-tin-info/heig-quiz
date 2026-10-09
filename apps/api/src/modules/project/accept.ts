@@ -57,7 +57,7 @@ import { isInvitationRefused } from "../../github/collaborators.js";
 import { provisionStudentRepo, RepoNameTaken } from "../../github/provision.js";
 import { redactTokens } from "../../redact.js";
 import { projectInstallation, type InstalledOrg } from "../github/service.js";
-import { DomainError } from "../http.js";
+import { DomainError, notFoundError } from "../http.js";
 import { notifyUsers } from "../notifications/service.js";
 import { followInvitation, inviteAccount, notRecorded, recordGrant, type NotRecorded } from "./access.js";
 import { ProjectError } from "./errors.js";
@@ -264,7 +264,7 @@ const noGroup = () => new ProjectError("no_group", "You are in no group of this 
 const tellInvited = (db: Db, project: ProjectRow, userIds: readonly string[]) =>
   notifyUsers(db, userIds, { kind: "project_repo_invited", projectId: project.id, projectTitle: project.name });
 /** The seat left (removed, unclaimed, turned staff seat) during the Accept: the 404 of a project no longer reached. */
-const gone = () => new DomainError("not_found", 404, "No such project");
+const gone = () => notFoundError("project");
 
 /**
  * Why no account of the student was recorded (`recordGrant`): their move

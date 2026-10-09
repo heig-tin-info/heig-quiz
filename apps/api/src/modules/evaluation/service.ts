@@ -34,7 +34,7 @@
  *     `configLock`).
  */
 export type { EvaluationRecord, DbOrTx } from "./shared.js";
-export { EvaluationError, IllegalTransition, Locked, assertItemListEditable } from "./shared.js";
+export { EvaluationError, IllegalTransition, assertItemListEditable, type EvaluationErrorCode } from "./shared.js";
 export {
   isLegalTransition,
   guardTransition,

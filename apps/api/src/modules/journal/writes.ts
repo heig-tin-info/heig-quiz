@@ -49,7 +49,7 @@ import {
   journalPages,
   users,
 } from "../../db/schema.js";
-import { githubApp, githubStatus } from "../../github/app.js";
+import { githubApp, githubStatus, unless404 } from "../../github/app.js";
 import { inviteCollaborator } from "../../github/collaborators.js";
 import { actsOn } from "../github/service.js";
 import { DomainError } from "../http.js";
@@ -387,17 +387,14 @@ const PERMISSION_RANK: Record<string, number> = { none: 0, read: 1, triage: 2, w
  * (GitHub answers 404 for a user who is not a collaborator).
  */
 async function permissionOf(octokit: Octokit, repo: ResolvedRepo, login: string): Promise<string | null> {
-  try {
+  return unless404(async () => {
     const { data } = await octokit.request("GET /repos/{owner}/{repo}/collaborators/{username}/permission", {
       owner: repo.owner,
       repo: repo.name,
       username: login,
     });
     return (data as { permission?: string }).permission ?? null;
-  } catch (err) {
-    if (githubStatus(err) === 404) return null;
-    throw err;
-  }
+  });
 }
 
 /**

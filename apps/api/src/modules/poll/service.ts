@@ -76,7 +76,7 @@ import {
   questionVersions,
   questions,
 } from "../../db/schema.js";
-import { DomainError } from "../http.js";
+import { DomainError, type Refusal } from "../http.js";
 import {
   byId,
   createPollEvaluation,
@@ -94,8 +94,33 @@ import * as events from "./events.js";
 
 // --- Failures -------------------------------------------------------------
 
+/**
+ * Everything this module refuses, by code: its status and, where the
+ * refusal reads the same wherever it is thrown, its message.
+ */
+const REFUSALS = {
+  // `pollTypeRefused`; also a board asked of a poll that is no brainstorm.
+  poll_type: [422],
+  // ADR-056 §10: a projector and thirty phones must show the same thing, and
+  // every attempt of a parameterized question draws its own numbers.
+  poll_parameterized: [422, "a poll cannot run a parameterized question"],
+  unpublished: [422, "this question has no published version"],
+  // "Reveal the answer" on a poll whose question has no key: there is none.
+  poll_keyless: [422, "this poll's question has no key to reveal"],
+  // AI assistance asked for while no model can be called (no key, no master key).
+  llm_unavailable: [422, "no language model is configured"],
+  code_exhausted: [503, "could not draw a free session code"],
+  not_found: [404],
+  internal_error: [500],
+} satisfies Record<string, Refusal>;
+
+/** What this module refuses (`DomainError`, sent by `sendFailure`): `{ error: code, message, ...details }`. */
 export class PollError extends DomainError {
-  override name = "PollError";
+  constructor(code: keyof typeof REFUSALS, message?: string) {
+    const [status, fixed]: Refusal = REFUSALS[code];
+    super(code, status, message ?? fixed ?? code);
+    this.name = "PollError";
+  }
 }
 
 /** The question types a poll runs: the contract's `PollQuestionType`. */
@@ -104,27 +129,10 @@ const POLLABLE_TYPES: readonly PollType[] = PollQuestionType.options;
 const isPollable = (type: string): type is PollType => PollQuestionType.safeParse(type).success;
 
 /** A poll runs the types of {@link POLLABLE_TYPES} and nothing else. */
-export class PollTypeRefused extends PollError {
-  constructor(type: string) {
-    super("poll_type", 422, `a poll cannot run a "${type}" question`);
-  }
-}
+export const pollTypeRefused = (type: string) => new PollError("poll_type", `a poll cannot run a "${type}" question`);
 
-/**
- * ADR-056 §10: a projector and thirty phones must show the same thing, and
- * every attempt of a parameterized question draws its own numbers.
- */
-export class PollParameterizedRefused extends PollError {
-  constructor() {
-    super("poll_parameterized", 422, "a poll cannot run a parameterized question");
-  }
-}
-
-class PollUnpublished extends PollError {
-  constructor() {
-    super("unpublished", 422, "this question has no published version");
-  }
-}
+/** A board on a poll of another type: there are no ideas to moderate. */
+const notBrainstorm = () => new PollError("poll_type", "only a brainstorm poll has ideas");
 
 // --- The session code -----------------------------------------------------
 
@@ -284,16 +292,16 @@ async function assertPollable(db: Db, questionId: string): Promise<void> {
     .from(questions)
     .where(eq(questions.id, questionId))
     .limit(1);
-  if (!question || question.deletedAt !== null) throw new PollError("not_found", 404);
-  if (!isPollable(question.type)) throw new PollTypeRefused(question.type);
+  if (!question || question.deletedAt !== null) throw new PollError("not_found");
+  if (!isPollable(question.type)) throw pollTypeRefused(question.type);
   // Derived from the latest published version, the one the poll freezes.
-  if (question.randomizable) throw new PollParameterizedRefused();
+  if (question.randomizable) throw new PollError("poll_parameterized");
   const [version] = await db
     .select({ id: questionVersions.id })
     .from(questionVersions)
     .where(and(eq(questionVersions.questionId, questionId), sql`${questionVersions.number} is not null`))
     .limit(1);
-  if (!version) throw new PollUnpublished();
+  if (!version) throw new PollError("unpublished");
 }
 
 /**
@@ -326,7 +334,7 @@ export async function createPoll(
   let created: Awaited<ReturnType<typeof createPollEvaluation>> | undefined;
   for (let n = 0; created === undefined; n += 1) {
     if (n === CODE_DRAWS) {
-      throw new PollError("code_exhausted", 503, "could not draw a free session code");
+      throw new PollError("code_exhausted");
     }
     const code = draw();
     if (await codeTaken(db, code, input.now)) continue;
@@ -345,7 +353,7 @@ export async function createPoll(
     }
   }
   const scope = await scopeOf(db, created.evaluation);
-  if (!scope) throw new PollError("internal_error", 500, "poll item vanished after insert");
+  if (!scope) throw new PollError("internal_error", "poll item vanished after insert");
   events.pollStarted(scope.evaluation, input.now);
   return scope;
 }
@@ -368,7 +376,7 @@ export async function createInlinePoll(
     drawCode?: () => string;
   },
 ): Promise<PollScope> {
-  if (!isPollable(input.type)) throw new PollTypeRefused(input.type);
+  if (!isPollable(input.type)) throw pollTypeRefused(input.type);
   const { questionId } = await createUnsavedQuestion(db, {
     type: input.type,
     config: input.config,
@@ -382,13 +390,6 @@ export async function createInlinePoll(
     now: input.now,
     ...(input.drawCode ? { drawCode: input.drawCode } : {}),
   });
-}
-
-/** "Reveal the answer" on a poll whose question has no key: there is none. */
-export class PollKeyless extends PollError {
-  constructor() {
-    super("poll_keyless", 422, "this poll's question has no key to reveal");
-  }
 }
 
 /**
@@ -414,8 +415,8 @@ export async function setDisplay(
   now: Date,
 ): Promise<EvaluationRecord> {
   const { evaluation, item } = scope;
-  if (change.revealed === true && !isKeyed(item)) throw new PollKeyless();
-  if ((change.moderation !== undefined || change.ai !== undefined) && !isBrainstorm(item)) throw new PollNotBrainstorm();
+  if (change.revealed === true && !isKeyed(item)) throw new PollError("poll_keyless");
+  if ((change.moderation !== undefined || change.ai !== undefined) && !isBrainstorm(item)) throw notBrainstorm();
   const current = pollSettingsOf(scope);
   const revealed = change.revealed ?? current.revealed;
   const votes = change.votes ?? current.votes;
@@ -689,27 +690,13 @@ export async function writeMarks(db: Db, evaluationId: string, marks: readonly I
     });
 }
 
-/** AI assistance asked for while no model can be called (no key, no master key). */
-export class PollAiUnavailable extends PollError {
-  constructor() {
-    super("llm_unavailable", 422, "no language model is configured");
-  }
-}
-
-/** A board on a poll of another type: there are no ideas to moderate. */
-export class PollNotBrainstorm extends PollError {
-  constructor() {
-    super("poll_type", 422, "only a brainstorm poll has ideas");
-  }
-}
-
 /**
  * The teacher's board: every idea, hidden and unmoderated ones included.
  * STAFF ONLY — the route loads the poll through the staff predicate; the
  * room only ever reads `tally.ideas`, the filtered cloud.
  */
 export async function ideaBoard(db: Db, scope: PollScope, aiAvailable: boolean): Promise<PollIdeaBoard> {
-  if (!isBrainstorm(scope.item)) throw new PollNotBrainstorm();
+  if (!isBrainstorm(scope.item)) throw notBrainstorm();
   const [payloads, marks, [run]] = await Promise.all([
     payloadsOf(db, scope),
     marksOf(db, scope.evaluation.id),
@@ -738,7 +725,7 @@ export async function actOnIdeas(
   now: Date,
   aiAvailable: boolean,
 ): Promise<PollIdeaBoard> {
-  if (!isBrainstorm(scope.item)) throw new PollNotBrainstorm();
+  if (!isBrainstorm(scope.item)) throw notBrainstorm();
   const changed = applyIdeaAction(await marksOf(db, scope.evaluation.id), action);
   if (changed.length > 0) {
     await writeMarks(db, scope.evaluation.id, changed, now);

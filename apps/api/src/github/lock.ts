@@ -16,27 +16,50 @@ import type { Octokit } from "octokit";
 // App after the cutover (03-github-projects.md §3.4).
 const LOCK_RULESET = "hgc-deadline-lock";
 
+/** The rules a ruleset of this file applies (GitHub's rule types). */
+type RulesetRule = { type: "update" | "creation" | "deletion" | "non_fast_forward" };
+
+/** The id of the repository's ruleset named `name`, if it has one. */
+async function findRuleset(octokit: Octokit, org: string, repo: string, name: string): Promise<number | undefined> {
+  const { data: rulesets } = await octokit.request("GET /repos/{owner}/{repo}/rulesets", { owner: org, repo });
+  return rulesets.find((r: { name: string; id: number }) => r.name === name)?.id;
+}
+
+/**
+ * The ruleset `name` on the repository, active on the refs `include`
+ * names: its id. Idempotent — a ruleset of that name already there is
+ * adopted, never created twice.
+ */
+export async function ensureRuleset(
+  octokit: Octokit,
+  org: string,
+  repo: string,
+  ruleset: { name: string; include: string[]; rules: RulesetRule[] },
+): Promise<number> {
+  const existing = await findRuleset(octokit, org, repo, ruleset.name);
+  if (existing !== undefined) return existing;
+  const { data } = await octokit.request("POST /repos/{owner}/{repo}/rulesets", {
+    owner: org,
+    repo,
+    name: ruleset.name,
+    target: "branch",
+    enforcement: "active",
+    conditions: { ref_name: { include: ruleset.include, exclude: [] } },
+    rules: ruleset.rules,
+  });
+  return data.id;
+}
+
 export async function lockStudentRepo(
   octokit: Octokit,
   org: string,
   repo: string,
 ): Promise<number> {
-  const { data: rulesets } = await octokit.request("GET /repos/{owner}/{repo}/rulesets", {
-    owner: org,
-    repo,
-  });
-  const existing = rulesets.find((r: { name: string; id: number }) => r.name === LOCK_RULESET);
-  if (existing) return existing.id;
-  const { data } = await octokit.request("POST /repos/{owner}/{repo}/rulesets", {
-    owner: org,
-    repo,
+  return ensureRuleset(octokit, org, repo, {
     name: LOCK_RULESET,
-    target: "branch",
-    enforcement: "active",
-    conditions: { ref_name: { include: ["~ALL"], exclude: [] } },
+    include: ["~ALL"],
     rules: [{ type: "update" }, { type: "creation" }, { type: "deletion" }],
   });
-  return data.id;
 }
 
 export async function unlockStudentRepo(
@@ -44,16 +67,12 @@ export async function unlockStudentRepo(
   org: string,
   repo: string,
 ): Promise<void> {
-  const { data: rulesets } = await octokit.request("GET /repos/{owner}/{repo}/rulesets", {
-    owner: org,
-    repo,
-  });
-  const existing = rulesets.find((r: { name: string; id: number }) => r.name === LOCK_RULESET);
-  if (!existing) return; // already unlocked, idempotent
+  const existing = await findRuleset(octokit, org, repo, LOCK_RULESET);
+  if (existing === undefined) return; // already unlocked, idempotent
   await octokit.request("DELETE /repos/{owner}/{repo}/rulesets/{ruleset_id}", {
     owner: org,
     repo,
-    ruleset_id: existing.id,
+    ruleset_id: existing,
   });
 }
 

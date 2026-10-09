@@ -9,9 +9,9 @@ import type { FastifyInstance } from "fastify";
 import { IdParam, ReviewFixBody, ReviewToggle } from "@quiz/contracts";
 
 import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
-import { LlmError, llmFailure } from "../llm/service.js";
+import { rateLimited } from "../http.js";
 import { poolChanged } from "./events.js";
-import { applyReviewFix, ReviewRefusal, reviewVersion } from "./review.js";
+import { applyReviewFix, reviewVersion } from "./review.js";
 import { ignoreReview, latestVersionOf, poolReviews, reviewJson, reviewOf, setReviewEnabled } from "./reviewStore.js";
 import { LLM_CALLS_PER_MINUTE, type PoolRouteContext } from "./routeContext.js";
 
@@ -42,28 +42,19 @@ export function reviewRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: onQuestion("contributor") }, async ({ req, reply, scope }) => {
       if (!calls.spend(`review:${req.user!.id}`, LLM_CALLS_PER_MINUTE, app.clock.now())) {
-        return reply.code(429).header("retry-after", String(BUDGET_RETRY_AFTER_S)).send({ error: "rate_limited" });
+        return rateLimited(reply, BUDGET_RETRY_AFTER_S);
       }
       const version = await latestVersionOf(app.db, scope.question.id);
       if (!version) return reply.code(400).send({ error: "not_published" });
-      try {
-        const review = await reviewVersion(
-          app.db,
-          app.llmGateway,
-          { id: version.id, number: version.number!, type: scope.question.type, config: version.config, explanation: version.explanation },
-          req.user!.id,
-          app.clock.now(),
-        );
-        poolChanged(scope.pool.id);
-        return review;
-      } catch (error) {
-        if (error instanceof ReviewRefusal) return reply.code(400).send({ error: error.code });
-        if (error instanceof LlmError) {
-          const { status, body } = llmFailure(error);
-          return reply.code(status).send(body);
-        }
-        throw error;
-      }
+      const review = await reviewVersion(
+        app.db,
+        app.llmGateway,
+        { id: version.id, number: version.number!, type: scope.question.type, config: version.config, explanation: version.explanation },
+        req.user!.id,
+        app.clock.now(),
+      );
+      poolChanged(scope.pool.id);
+      return review;
     }),
   );
 
@@ -92,20 +83,15 @@ export function reviewRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
     teacher({ params: IdParam, body: ReviewFixBody, load: onQuestion("contributor") }, async ({ reply, body, scope }) => {
       const latest = await latestReview(scope.question.id);
       if (!latest) return reply.code(400).send({ error: "no_review" });
-      try {
-        const findings = await applyReviewFix(
-          app.db,
-          scope.question,
-          { versionId: latest.version.id, findings: latest.review.findings },
-          body.finding,
-          body.undo === true,
-        );
-        poolChanged(scope.pool.id);
-        return reviewJson({ ...latest.review, findings }, latest.version.number!);
-      } catch (error) {
-        if (error instanceof ReviewRefusal) return reply.code(error.code === "fix_stale" ? 409 : 400).send({ error: error.code });
-        throw error;
-      }
+      const findings = await applyReviewFix(
+        app.db,
+        scope.question,
+        { versionId: latest.version.id, findings: latest.review.findings },
+        body.finding,
+        body.undo === true,
+      );
+      poolChanged(scope.pool.id);
+      return reviewJson({ ...latest.review, findings }, latest.version.number!);
     }),
   );
 }

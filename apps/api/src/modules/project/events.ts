@@ -26,6 +26,5 @@ export function projectsChanged(courseIds: readonly string[]): void {
 
 /** Something of a project repository changed: its students and the course's staff re-read. */
 export function repoChanged(courseId: string, userIds: readonly string[]): void {
-  const topics: Topic[] = [`course:${courseId}`, ...new Set(userIds.map(bus.userTopic))];
-  bus.hint("projects", topics);
+  bus.staffAndStudentsHint("projects", courseId, userIds);
 }

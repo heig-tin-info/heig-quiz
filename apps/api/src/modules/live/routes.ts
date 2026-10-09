@@ -52,7 +52,7 @@ import {
   staffAttempt,
   teacherGuard,
 } from "../guards.js";
-import { notFound, studentRoute, teacherRoute } from "../http.js";
+import { notFound, rateLimited, studentRoute, teacherRoute } from "../http.js";
 import * as evaluationService from "../evaluation/service.js";
 import { presence } from "../realtime/presence.js";
 import * as events from "./events.js";
@@ -66,41 +66,9 @@ export async function livePlugin(app: FastifyInstance) {
     app.requireSession(req, reply);
   const requireTeacher = teacherGuard(app);
 
-  /**
-   * The failures this module answers in their own shape — the `410` of the
-   * clock, a `retry-after`, a `reason` — before the shared tail.
-   */
-  function arms(reply: FastifyReply, error: unknown, now: Date): FastifyReply | null {
-    if (error instanceof service.AttemptClosedError) {
-      return reply.code(410).send(error.body(now));
-    }
-    if (error instanceof service.AnswerInvalid) {
-      return reply.code(422).send({ error: error.code, details: error.issues });
-    }
-    if (error instanceof service.RateLimited) {
-      return reply
-        .header("retry-after", String(error.retryAfterS))
-        .code(429)
-        .send({ error: error.code });
-    }
-    if (error instanceof service.RetakeRefused) {
-      return reply
-        .code(error.status)
-        .send({ error: error.code, reason: error.reason, message: error.message });
-    }
-    if (error instanceof service.RunnerDown) {
-      // `reason` beside `message`: the player names the failure with it
-      // ("busy", "not_configured", "timeout") without parsing a sentence.
-      return reply
-        .code(error.status)
-        .send({ error: error.code, reason: error.reason, message: error.message });
-    }
-    return null;
-  }
-
   const trace = tracer(app);
-  const student = studentRoute(app, arms);
-  const teacher = teacherRoute(app, arms);
+  const student = studentRoute(app, service.liveFailureArms);
+  const teacher = teacherRoute(app, service.liveFailureArms);
 
   // The loaders of invariant 6, each answering its own 404 — and, for the
   // routes that sit an evaluation, the same 404 when this session may not
@@ -409,7 +377,7 @@ export async function livePlugin(app: FastifyInstance) {
         }
         const used = await service.countRecentEvents(app.db, scope.attempt.id, body.kind, since);
         if (used >= EVENTS_PER_MINUTE) {
-          return reply.header("retry-after", "60").code(429).send({ error: "rate_limited" });
+          return rateLimited(reply, 60);
         }
         await service.logAttemptEvent(
           app.db,

@@ -4,13 +4,13 @@ import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import type { PoolCandidates, PoolMember, PoolMembers, PoolRole } from "@quiz/contracts";
 import { displayName } from "@quiz/domain";
 
-import type { Db } from "../../db/client.js";
+import { likeContains, qualified, type Db } from "../../db/client.js";
 import { STAFF_ROLES, poolMembers, pools, userEmails, users } from "../../db/schema.js";
 import { audit } from "../../audit.js";
 import { notify, notifyMany } from "../notifications/service.js";
 import { accessRevoked, userTopic } from "../realtime/bus.js";
 import { poolPeopleChanged } from "./events.js";
-import { type PoolRow, qualified } from "./shared.js";
+import { type PoolRow } from "./shared.js";
 
 /**
  * The accounts that may hold a pool seat, and so hear of a pool: the stored
@@ -136,9 +136,7 @@ export async function findTeacherById(db: Db, userId: string) {
  * is searched, not browsed — and none when the school is fully seated.
  */
 export async function listCandidates(db: Db, pool: PoolRow, q: string): Promise<PoolCandidates> {
-  // `\` is the default LIKE escape in PostgreSQL: a typed `%` or `_` is a
-  // character to find, not a wildcard.
-  const needle = `%${q.trim().toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const needle = likeContains(q.trim().toLowerCase());
   const rows = await db
     .select({
       userId: users.id,

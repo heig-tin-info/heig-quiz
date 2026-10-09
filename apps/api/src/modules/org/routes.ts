@@ -230,7 +230,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
     "/app/api/courses/:id/pools",
     { preHandler: requireTeacher },
     teacher({ ...onCourse("owner"), body: CoursePoolsPut }, async ({ req, body, scope: course }) => {
-      // A pool the caller only reads is `PoolLinkForbidden`'s 403 (ADR-013).
+      // A pool the caller only reads is `setCoursePools`'s 403 `pool_link_forbidden` (ADR-013).
       const linked = await setCoursePools(
         app.db,
         course.id,

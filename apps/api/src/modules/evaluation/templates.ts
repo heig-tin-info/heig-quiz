@@ -60,20 +60,13 @@ import {
   type JoinedItem,
 } from "./service.js";
 
-/** A poll is created and started in one call; it has nothing to keep (ADR-031 §2). */
-class TemplatePoll extends EvaluationError {
-  constructor() {
-    super("template_poll", 422, "a poll cannot be a template");
-  }
-}
-
 /**
  * The template went between its load and the lock of a write. The routes
  * answer it with the loader's own 404 body (`notFound`), nothing more.
  */
 export class TemplateGone extends EvaluationError {
   constructor() {
-    super("not_found", 404);
+    super("not_found");
   }
 }
 
@@ -92,7 +85,7 @@ export async function saveAsTemplate(
   template: EvaluationRecord;
   previousOrigin: { templateId: string; revision: number | null } | null;
 }> {
-  if (row.mode === "poll") throw new TemplatePoll();
+  if (row.mode === "poll") throw new EvaluationError("template_poll"); // nothing to keep (ADR-031 §2)
   return db.transaction(async (tx) => {
     const [source] = await tx
       .select()
@@ -135,7 +128,7 @@ export async function createTemplate(
     createdBy: string;
   },
 ): Promise<EvaluationRecord> {
-  if (input.mode === "poll") throw new TemplatePoll();
+  if (input.mode === "poll") throw new EvaluationError("template_poll");
   return createEvaluation(db, input);
 }
 
@@ -352,26 +345,6 @@ export async function instantiateTemplate(
 
 // --- Pulling a revision into an instance (F-EVAL-26) -------------------------
 
-/**
- * The instance has no template to pull from: none was recorded, it was
- * deleted (the FK nulled the origin), or the row it names is not a template
- * of the instance's own course. The evaluation exists — the loader found it —
- * so this is a conflict of its state, not a 404.
- */
-class NoTemplate extends EvaluationError {
-  constructor() {
-    super("no_template", 409, "the evaluation has no template to pull from");
-  }
-}
-
-/** The template moved again since the preview the teacher confirmed. */
-class TemplateMoved extends EvaluationError {
-  constructor(revision: number) {
-    super("template_moved", 409, "the template has a newer revision than the one confirmed", {
-      revision,
-    });
-  }
-}
 
 /**
  * The template of an instance's origin, provided it is a template of
@@ -387,13 +360,13 @@ async function originTemplate(
   courseId: string,
   lock?: "share",
 ): Promise<EvaluationRecord> {
-  if (row.originTemplateId === null) throw new NoTemplate();
+  if (row.originTemplateId === null) throw new EvaluationError("no_template");
   const query = db
     .select()
     .from(evaluations)
     .where(and(eq(evaluations.id, row.originTemplateId), eq(evaluations.courseId, courseId)));
   const [template] = lock === "share" ? await query.for("share") : await query;
-  if (!template || template.revision === null) throw new NoTemplate();
+  if (!template || template.revision === null) throw new EvaluationError("no_template");
   return template;
 }
 
@@ -473,8 +446,8 @@ export async function pullTemplate(
       .for("update");
     // The evaluation went since its load: the loader's 404 all the same.
     if (!locked) throw new TemplateGone();
-    if (locked.originTemplateId !== template.id) throw new NoTemplate();
-    if (template.revision !== input.revision) throw new TemplateMoved(template.revision!);
+    if (locked.originTemplateId !== template.id) throw new EvaluationError("no_template");
+    if (template.revision !== input.revision) throw new EvaluationError("template_moved", undefined, { revision: template.revision! });
     // The item-list gate itself (issue #79): draft or scheduled, no attempt
     // of anybody — a teacher's own test walk included (ADR-018).
     assertItemListEditable(locked, { attemptCount: await attemptCount(tx, locked.id) });

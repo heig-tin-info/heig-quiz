@@ -15,6 +15,7 @@ import type { Octokit } from "octokit";
 
 import { inviteCollaborator } from "./collaborators.js";
 import { gitRunner, repoUrl } from "./git.js";
+import { ensureRuleset } from "./lock.js";
 import { pushWithRetry } from "./retry.js";
 
 // Classroom's name, kept: the repositories it provisioned carry this ruleset,
@@ -46,19 +47,11 @@ export function isPlanRestriction(err: unknown): boolean {
  */
 export async function protectStudentRepo(octokit: Octokit, org: string, repo: string): Promise<number | null> {
   try {
-    const { data: rulesets } = await octokit.request("GET /repos/{owner}/{repo}/rulesets", { owner: org, repo });
-    const existing = rulesets.find((r: { name: string; id: number }) => r.name === PROTECT_RULESET);
-    if (existing) return existing.id;
-    const { data } = await octokit.request("POST /repos/{owner}/{repo}/rulesets", {
-      owner: org,
-      repo,
+    return await ensureRuleset(octokit, org, repo, {
       name: PROTECT_RULESET,
-      target: "branch",
-      enforcement: "active",
-      conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
+      include: ["~DEFAULT_BRANCH"],
       rules: [{ type: "non_fast_forward" }, { type: "deletion" }],
     });
-    return data.id;
   } catch (err) {
     if (!isPlanRestriction(err)) throw err;
     return null;

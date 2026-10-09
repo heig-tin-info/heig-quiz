@@ -334,7 +334,7 @@ describe("the order of the refusals, over HTTP", () => {
     expect(second.statusCode).toBe(200);
     expect(second.json()).toMatchObject({ points: 0.75, source: "manual", state: "validated" });
 
-    // A validated grading is no proposal: `NotPending` comes back as its own 409.
+    // A validated grading is no proposal: `not_pending` comes back as its own 409.
     const again = await post(`/app/api/gradings/${second.json().id}/validate`, teacher.headers);
     expect(again.statusCode).toBe(409);
     expect(again.json()).toEqual({

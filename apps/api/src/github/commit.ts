@@ -14,7 +14,7 @@
  */
 import type { Octokit } from "octokit";
 
-import { githubStatus } from "./app.js";
+import { unless404 } from "./app.js";
 
 /**
  * The deadline commit on `branch`: its sha, `"done"` when the head already
@@ -32,20 +32,17 @@ export async function pushEmptyCommit(opts: {
   beforeMove: (sha: string) => Promise<void>;
 }): Promise<string | "done" | null> {
   const { octokit, org, repo, branch, message } = opts;
-  let headSha: string;
-  try {
+  const headSha = await unless404(async () => {
     const { data: ref } = await octokit.request("GET /repos/{owner}/{repo}/git/ref/{ref}", {
       owner: org,
       repo,
       ref: `heads/${branch}`,
       request: { retries: 0 },
     });
-    headSha = ref.object.sha;
-  } catch (err) {
-    // Branch absent from the student repository: nothing to mark.
-    if (githubStatus(err) === 404) return null;
-    throw err;
-  }
+    return ref.object.sha;
+  });
+  // Branch absent from the student repository: nothing to mark.
+  if (headSha === null) return null;
   if (await opts.isDone(headSha)) return "done";
   const { data: headCommit } = await octokit.request(
     "GET /repos/{owner}/{repo}/git/commits/{commit_sha}",

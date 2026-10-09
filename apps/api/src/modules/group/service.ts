@@ -67,7 +67,7 @@ import { iso } from "../../clock.js";
 import type { Db, Tx } from "../../db/client.js";
 import { classrooms, courses, enrollments, groupSets, projects, studentGroupMembers, studentGroups } from "../../db/schema.js";
 import { openSet, studentVisibleSet } from "../guards.js";
-import { DomainError } from "../http.js";
+import { notFoundError } from "../http.js";
 import { ConfirmationNeeded, copiesBefore, followingCopies, projectsChanged, RepoGroupTouched, setFrozen, stepCopies } from "../project/service.js";
 import { GroupError } from "./errors.js";
 import { groupsChanged } from "./events.js";
@@ -95,7 +95,6 @@ export interface SetScope {
   course: { id: string };
 }
 
-const notFound = (what: string) => new DomainError("not_found", 404, `No such ${what}`);
 
 // ---------------------------------------------------------------- reads
 
@@ -191,7 +190,7 @@ export async function classroomGroupSets(db: Db, classroomId: string, now: Date)
 /** `GET /app/api/group-sets/:id`, and the answer of every write on the set. */
 export async function groupSetDetail(db: Db, setId: string, now: Date): Promise<GroupSetDetail> {
   const [row] = await setRows(db, eq(groupSets.id, setId), now);
-  if (!row) throw notFound("group set");
+  if (!row) throw notFoundError("group set");
   const { set } = row;
   const groups = await db.select().from(studentGroups).where(eq(studentGroups.setId, set.id)).orderBy(asc(studentGroups.position));
   const students = await db
@@ -228,7 +227,7 @@ export async function groupSetDetail(db: Db, setId: string, now: Date): Promise<
 /** The classroom read FOR SHARE: an archived one's sets are read-only (ADR-070 §2). */
 async function lockClassroom(tx: Tx, classroomId: string): Promise<void> {
   const [room] = await tx.select({ archivedAt: classrooms.archivedAt }).from(classrooms).where(eq(classrooms.id, classroomId)).for("share");
-  if (!room) throw notFound("classroom");
+  if (!room) throw notFoundError("classroom");
   if (room.archivedAt !== null) throw new GroupError("classroom_archived", "The classroom is archived: its group sets are read-only");
 }
 
@@ -264,7 +263,7 @@ async function writeSet(db: Db, scope: SetScope, ctx: WriteContext, write: (tx: 
   const done = await db.transaction(async (tx) => {
     await lockClassroom(tx, scope.room.id);
     const [set] = await tx.select().from(groupSets).where(eq(groupSets.id, scope.set.id)).for("update");
-    if (!set) throw notFound("group set");
+    if (!set) throw notFoundError("group set");
     const before = await copiesBefore(tx, set.id, await followingCopies(tx, set.id));
     const thisSet = eq(groupSets.id, set.id);
     const seenBefore = await anyVisibleSet(tx, thisSet, ctx.now);
@@ -337,7 +336,7 @@ export async function duplicateGroupSet(db: Db, scope: SetScope, ctx: WriteConte
   await db.transaction(async (tx) => {
     await lockClassroom(tx, scope.room.id);
     const [source] = await tx.select().from(groupSets).where(eq(groupSets.id, scope.set.id)).for("share");
-    if (!source) throw notFound("group set");
+    if (!source) throw notFoundError("group set");
     const name = duplicateSetName(source.name, ctx.locale);
     await tx.insert(groupSets).values({ id, classroomId: source.classroomId, name, maxSize: source.maxSize, createdBy: ctx.userId, createdAt: ctx.now });
     const groups = await tx.select().from(studentGroups).where(eq(studentGroups.setId, source.id));
@@ -383,7 +382,7 @@ export async function deleteGroupSet(db: Db, scope: SetScope, ctx: WriteContext)
 /** The set's group `groupId`, or the 404 of a missing one. */
 async function groupOf(tx: Tx, setId: string, groupId: string) {
   const [group] = await tx.select().from(studentGroups).where(and(eq(studentGroups.id, groupId), eq(studentGroups.setId, setId)));
-  if (!group) throw notFound("group");
+  if (!group) throw notFoundError("group");
   return group;
 }
 
@@ -419,7 +418,7 @@ async function insertGroup(tx: Tx, setId: string, name: string | undefined, loca
 async function renameIn(tx: Tx, setId: string, groupId: string, name: string, own?: string): Promise<Written> {
   const group = await groupOf(tx, setId, groupId);
   // A student renames their own group only: another is the 404 of a missing one.
-  if (own !== undefined && (await groupNow(tx, setId, own)) !== group.id) throw notFound("group");
+  if (own !== undefined && (await groupNow(tx, setId, own)) !== group.id) throw notFoundError("group");
   if (group.name === name) return null;
   await refuseTakenName(tx, setId, name, group.id);
   await tx.update(studentGroups).set({ name }).where(eq(studentGroups.id, group.id));
@@ -504,7 +503,7 @@ export async function placeStudent(db: Db, scope: SetScope, enrollmentId: string
       .select({ id: enrollments.id })
       .from(enrollments)
       .where(and(eq(enrollments.id, enrollmentId), isStudentOf(set.classroomId)));
-    if (!student) throw notFound("student");
+    if (!student) throw notFoundError("student");
     return placeIn(tx, set, student.id, body.groupId, ctx.now);
   });
 }

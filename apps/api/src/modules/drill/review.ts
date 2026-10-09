@@ -66,7 +66,7 @@ import {
   questions,
 } from "../../db/schema.js";
 import { gradeDefaults, type DbOrTx, type EvaluationRecord } from "../evaluation/service.js";
-import { DomainError } from "../http.js";
+import { DomainError, type Refusal } from "../http.js";
 import { drawSeed, isShuffleable, studentSolutionView, studentView } from "../live/service.js";
 import { ParameterError } from "@quiz/domain/parameters";
 
@@ -82,28 +82,34 @@ import type { StoredInstance } from "../../db/columns.js";
 import { keyShownTo } from "../results/service.js";
 import { currentVersions, drillGradeContext, keyHashOf } from "./lifecycle.js";
 
+/** Everything this module refuses, by code: its status and, where it has one, its message. */
+const REFUSALS = {
+  not_found: [404],
+  drill_not_served: [409, "serve the card before answering it"],
+  // The answer does not satisfy the type's own schema.
+  answer_invalid: [422],
+} satisfies Record<string, Refusal>;
+
+/** What this module refuses (`DomainError`, sent by `sendFailure`): `{ error: code, message }`. */
 export class DrillError extends DomainError {
-  override name = "DrillError";
+  constructor(code: keyof typeof REFUSALS) {
+    const [status, fixed]: Refusal = REFUSALS[code];
+    super(code, status, fixed ?? code);
+    this.name = "DrillError";
+  }
 }
 
 /** A card that is not the caller's, not active, or not in today's session: indistinguishable from a missing one. */
 export class DrillCardNotFound extends DrillError {
   constructor() {
-    super("not_found", 404);
+    super("not_found");
   }
 }
 
 /** An answer to a card that was not served (or already answered). */
 export class DrillNotServed extends DrillError {
   constructor() {
-    super("drill_not_served", 409, "serve the card before answering it");
-  }
-}
-
-/** The answer does not satisfy the type's own schema. */
-export class DrillAnswerInvalid extends DrillError {
-  constructor() {
-    super("answer_invalid", 422);
+    super("drill_not_served");
   }
 }
 
@@ -520,7 +526,7 @@ export async function answerCard(
     let answer: unknown = null;
     if (input.answer !== null && input.answer !== undefined) {
       const parsed = type.answerSchema.safeParse(input.answer);
-      if (!parsed.success) throw new DrillAnswerInvalid();
+      if (!parsed.success) throw new DrillError("answer_invalid");
       answer = parsed.data;
     }
     const card = row.card;

@@ -22,24 +22,6 @@ export async function poolsOfCourse(db: Db, courseId: string) {
 }
 
 /**
- * A course would newly draw from a pool the caller only reads (ADR-013): the
- * link would hand the whole course staff `contributor` on it, a write access
- * the caller does not hold. Answered `403 pool_link_forbidden`.
- */
-export class PoolLinkForbidden extends DomainError {
-  override name = "PoolLinkForbidden";
-  constructor(readonly pools: { id: string; name: string }[]) {
-    // The caller sees these pools, so naming them leaks nothing (ADR-013).
-    super(
-      "pool_link_forbidden",
-      403,
-      `Linking the pool "${pools[0]!.name}" needs contributor access to it`,
-      { poolIds: pools.map((p) => p.id) },
-    );
-  }
-}
-
-/**
  * The caller may newly link a pool where they hold `role`: linking makes the
  * whole course staff contributors of it, so it takes at least that (ADR-013).
  */
@@ -92,7 +74,13 @@ export async function setCoursePools(
         .from(pools)
         .where(inArray(pools.id, refused))
         .orderBy(asc(pools.name));
-      throw new PoolLinkForbidden(named);
+      // A course would newly draw from a pool the caller only reads (ADR-013):
+      // the link would hand the whole course staff `contributor` on it, a
+      // write access the caller does not hold. The caller sees these pools,
+      // so naming them leaks nothing.
+      throw new DomainError("pool_link_forbidden", 403, `Linking the pool "${named[0]!.name}" needs contributor access to it`, {
+        poolIds: named.map((p) => p.id),
+      });
     }
   }
   await db.transaction(async (tx) => {

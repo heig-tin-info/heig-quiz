@@ -6,6 +6,8 @@
  */
 import type { Octokit } from "octokit";
 
+import { unless404 } from "./app.js";
+
 export type CollaboratorPermission = "push" | "pull";
 
 /**
@@ -16,16 +18,13 @@ export type CollaboratorPermission = "push" | "pull";
  * when the account no longer exists; any other failure throws.
  */
 export async function currentLogin(octokit: Octokit, githubUserId: number): Promise<string | null> {
-  try {
+  return unless404(async () => {
     const { data } = await octokit.request("GET /user/{account_id}", {
       account_id: githubUserId,
       request: { retries: 0 },
     });
     return data.login;
-  } catch (err) {
-    if ((err as { status?: number }).status === 404) return null;
-    throw err;
-  }
+  });
 }
 
 /**

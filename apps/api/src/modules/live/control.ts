@@ -27,7 +27,7 @@ import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import {
   type AttemptRecord,
-  EvaluationFinished,
+  LiveError,
   beginAttempt,
 } from "./attempt.js";
 import { logAttemptEvent, logAttemptEvents } from "./autosave.js";
@@ -247,7 +247,7 @@ export async function extendTime(
   now: Date,
 ): Promise<number> {
   if (evaluation.state === "closed" || evaluation.state === "released") {
-    throw new EvaluationFinished();
+    throw new LiveError("evaluation_finished");
   }
   const seconds = input.minutes * 60;
   const target = input.attemptId;

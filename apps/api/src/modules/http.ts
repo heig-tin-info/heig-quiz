@@ -63,6 +63,22 @@ export function notFound(reply: FastifyReply) {
   return reply.code(404).send({ error: "not_found" });
 }
 
+/** A 429 with its `retry-after` (seconds), and a sentence for the log when the route has one. */
+export function rateLimited(reply: FastifyReply, retryAfterS: number, message?: string) {
+  return reply
+    .code(429)
+    .header("retry-after", String(retryAfterS))
+    .send(message === undefined ? { error: "rate_limited" } : { error: "rate_limited", message });
+}
+
+/** A CSV download: UTF-8, saved by the browser under `filename`. */
+export function sendCsv(reply: FastifyReply, filename: string, csv: string) {
+  return reply
+    .type("text/csv; charset=utf-8")
+    .header("content-disposition", `attachment; filename="${filename}"`)
+    .send(csv);
+}
+
 /**
  * The double-submit check, for a public POST that has no session to require
  * (the poll's join and vote, a kiosk station's attestation). A browser that
@@ -85,9 +101,10 @@ export function csrfRefused(req: FastifyRequest, reply: FastifyReply): FastifyRe
  * Base of everything a service refuses: a machine `code`, an HTTP `status`,
  * a sentence for the log and, in `details`, the machine half of a refusal
  * the screen translates rather than prints (#76). It travels in the body
- * beside `error` and `message`. The modules keep a thin subclass each
- * (`EvaluationError`, `LiveError`, …) so a route can still single out
- * its own family when it needs to.
+ * beside `error` and `message`. A module keeps one subclass whose codes
+ * are a closed union and whose statuses are a table (`EvaluationError`,
+ * `LiveError`, `ProjectError`, …); a refusal keeps a class of its own only
+ * where something singles it out by type.
  */
 export class DomainError extends Error {
   constructor(
@@ -100,6 +117,15 @@ export class DomainError extends Error {
     this.name = "DomainError";
   }
 }
+
+/**
+ * One row of a module's refusal table: the status of a code and, when it
+ * reads the same at every throw site, its message.
+ */
+export type Refusal = readonly [status: number, message?: string];
+
+/** The 404 a service throws for an entity that went missing under it: `No such <what>`. */
+export const notFoundError = (what: string) => new DomainError("not_found", 404, `No such ${what}`);
 
 /**
  * A module's own arms, tried before the shared tail: a reply when the error

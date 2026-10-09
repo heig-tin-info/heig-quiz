@@ -28,7 +28,7 @@ import type { Db, Tx } from "../../db/client.js";
 import { classrooms, enrollments, gradebookColumns, gradebookMarks, gradebookSettings } from "../../db/schema.js";
 import type { GradebookEntry } from "../activity/kind.js";
 import { gradebookEntries } from "../activity/service.js";
-import { DomainError } from "../http.js";
+import { notFoundError } from "../http.js";
 import {
   activityRef,
   claimedSeats,
@@ -56,19 +56,18 @@ export interface RoomScope {
   course: { id: string };
 }
 
-const notFound = (what: string) => new DomainError("not_found", 404, `No such ${what}`);
 
 /** The classroom read FOR SHARE: an archived one's gradebook is read-only. */
 async function lockClassroom(tx: Tx, classroomId: string): Promise<void> {
   const [room] = await tx.select({ archivedAt: classrooms.archivedAt }).from(classrooms).where(eq(classrooms.id, classroomId)).for("share");
-  if (!room) throw notFound("classroom");
+  if (!room) throw notFoundError("classroom");
   if (room.archivedAt !== null) throw new GradebookError("classroom_archived", "The classroom is archived: its gradebook is read-only");
 }
 
 /** The column the classroom's gradebook has for this activity, or the 404 of a missing one. */
 async function entryOf(db: Db, classroomId: string, kind: GradebookEntry["kind"], activityId: string): Promise<GradebookEntry> {
   const entry = (await gradebookEntries(db, classroomId)).find((e) => e.kind === kind && e.activityId === activityId);
-  if (!entry) throw notFound("column");
+  if (!entry) throw notFoundError("column");
   return entry;
 }
 
@@ -95,7 +94,7 @@ async function seatOf(db: Db, classroomId: string, enrollmentId: string, { claim
         claimed ? isNotNull(enrollments.userId) : undefined,
       ),
     );
-  if (!seat) throw notFound("student");
+  if (!seat) throw notFoundError("student");
   return seat;
 }
 

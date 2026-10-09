@@ -19,12 +19,9 @@ import { listPools } from "../pool/service.js";
 import {
   type EvaluationRecord,
   type DbOrTx,
-  AttemptsExist,
   assertItemListEditable,
-  NoPublishedVersion,
-  QuestionKeyless,
-  QuestionNotInCourse,
-  PoolUnlinked,
+  EvaluationError,
+  questionRefused,
 } from "./shared.js";
 import { byId, classroomIdOf, type JoinedItem, joinedItems, itemRows } from "./reads.js";
 import type { ItemRecord } from "./shared.js";
@@ -129,11 +126,11 @@ export async function addItems(
   for (const questionId of questionIds) {
     const question = byQuestion.get(questionId);
     if (!question || question.deletedAt !== null || !inLinkedPool(question, allowed)) {
-      throw new QuestionNotInCourse(questionId);
+      throw questionRefused("question_not_in_course", questionId);
     }
     const version = versions.get(questionId);
-    if (!version) throw new NoPublishedVersion(questionId);
-    if (!keyed(question.type, version)) throw new QuestionKeyless(questionId);
+    if (!version) throw questionRefused("no_published_version", questionId);
+    if (!keyed(question.type, version)) throw questionRefused("question_keyless", questionId);
     values.push({
       id: randomUUID(),
       evaluationId: row.id,
@@ -243,7 +240,7 @@ export async function updateVersions(
   itemIds: string[] | undefined,
   ctx: { attemptCount: number },
 ): Promise<ItemRow[]> {
-  assertItemListEditable(row, ctx, () => new AttemptsExist());
+  assertItemListEditable(row, ctx, "attempts_exist");
   const joined = await joinedItems(db, row.id);
   const targets = itemIds === undefined ? joined : joined.filter((j) => itemIds.includes(j.item.id));
   const versions = await latestPublished(db, [...new Set(targets.map((j) => j.question.id))]);
@@ -284,7 +281,7 @@ export async function assertPoolsLinked(
   joined: readonly JoinedItem[],
 ): Promise<void> {
   const unlinked = unlinkedRefs(joined, await coursePoolIds(db, home));
-  if (unlinked.length > 0) throw new PoolUnlinked(unlinked);
+  if (unlinked.length > 0) throw new EvaluationError("template_pool_unlinked", undefined, { items: unlinked });
 }
 
 /**
