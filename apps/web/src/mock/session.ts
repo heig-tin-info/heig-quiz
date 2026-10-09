@@ -5,6 +5,8 @@
 import type {
   ApiToken,
   ApiTokenCreated,
+  ChangelogAudience,
+  ChangelogList,
   Me,
   OAuthConnection,
   OAuthRequestView,
@@ -130,6 +132,35 @@ on("POST", "/app/api/me/coach", (_m, body) => {
   const seen = b.reset ? [] : [...new Set([...me.coach.seen, ...(b.seen ?? [])])].sort();
   me = { ...me, coach: { ...me.coach, seen } };
   return { seen };
+});
+// --- What's new (ADR-087): two releases; the latest unseen under `?whatsnew=1` ---
+
+type Entry = ChangelogList[number];
+/** A release's rows, the persona's audience only: a student reads no teacher entry. */
+const release = (liveAt: string, commitSha: string, rows: [ChangelogAudience, Entry["kind"], string, string][]) =>
+  rows
+    .filter(([audience]) => role !== "student" || audience === "student")
+    .map(([, kind, en, fr], i): Entry => ({ id: `${commitSha}-${i}`, kind, text: { en, fr }, liveAt, commitSha }));
+const LATEST = iso(-2 * H);
+const changelog: ChangelogList = flags.empty || flags.impersonating
+  ? []
+  : [
+      ...release(LATEST, "d9cfd51e4b7a", [
+        ["student", "new", "After an update, a summary of what changed on the platform is shown once; find it again under **What's new** in your account menu.", "Après une mise à jour, un résumé des nouveautés s'affiche une fois ; retrouvez-le sous **Nouveautés** dans le menu de votre compte."],
+        ["teacher", "moved", "Evaluation conditions now live in the course **Settings**.", "Les conditions d'évaluation se trouvent désormais dans les **Réglages** du cours."],
+        ["teacher", "changed", "Course and pool cards show a larger icon.", "Les cartes des cours et des pools affichent une icône plus grande."],
+      ]),
+      ...release(iso(-9 * D), "79faa04f1c2d", [
+        ["student", "changed", "A journal's task lists are drawn as a course plan.", "Les listes de tâches du journal sont présentées comme un plan de cours."],
+        ["teacher", "deprecated", "The classroom join code is going away: share the classroom's link instead.", "Le code d'accès de la classe va disparaître : partagez plutôt le lien de la classe."],
+      ]),
+    ];
+let changelogSeen = !flags.whatsnew;
+on("GET", "/app/api/changelog", () => changelog);
+on("GET", "/app/api/changelog/unseen", () => (changelogSeen ? [] : changelog.filter((e) => e.liveAt === LATEST)));
+on("POST", "/app/api/me/changelog", () => {
+  changelogSeen = true;
+  return undefined;
 });
 on("PUT", "/app/api/me/avatar", () => undefined);
 on("DELETE", "/app/api/me/avatar", () => undefined);

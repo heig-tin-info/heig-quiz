@@ -42,6 +42,10 @@ deploying, not for editing.
   CI and nothing deploys.
 - **ADR numbers** follow the ID rule of `docs/adr/README.md` (origin/main and
   open PRs); `checks` refuses a shared prefix (`scripts/check-adr-numbers.mjs`).
+- **Every PR adds a `changes/<slug>.md` entry** — what changed for students
+  or teachers, in their words; audience `none` when nobody sees it
+  (`changes/README.md`, ADR-087). `checks` refuses a PR without one, or one
+  that renames an entry: `node scripts/check-changes.mjs --base origin/main`.
 
 ## 4. Before you push to `main`
 

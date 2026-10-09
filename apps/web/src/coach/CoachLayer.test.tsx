@@ -76,6 +76,27 @@ describe("CoachLayer", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("waits while What's new is pending, then plays the tour (ADR-087)", async () => {
+    mockFetch({});
+    const me = makeMe({ coach: { enabled: null, seen: [] } });
+    const { rerender } = renderWithProviders(
+      <>
+        <Pool />
+        <CoachLayer me={me} view="pool" teacherUi paused />
+      </>,
+    );
+    await elapse(1_500);
+    expect(screen.queryByText("Write a question")).toBeNull();
+    rerender(
+      <>
+        <Pool />
+        <CoachLayer me={me} view="pool" teacherUi paused={false} />
+      </>,
+    );
+    await elapse(1_000);
+    expect(await screen.findByText("Write a question")).toBeInTheDocument();
+  });
+
   it("stays silent when turned off", async () => {
     mockFetch({});
     renderWithProviders(

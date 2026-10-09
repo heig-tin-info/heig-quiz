@@ -416,6 +416,11 @@ over it, not as one more card in it.
   browser, so a teacher is not taught the same screen on a second device.
   Settings has the switch and "Show them again"; every lone bubble has "No
   more tips", which turns them all off.
+- Waits for What's new (ADR-087): while unseen entries load or wait to be
+  read, no bubble starts. The coach introduces one control in place; What's
+  new summarises a release, once, in a dialog (one action, "Got it"; closed
+  by any means is read), on the home and the lists only (`whatsNew` in `ROUTES`).
+  Turning the coach off does not silence it.
 - Never: on a full-screen view (an exam, a projection, a join page), over a
   dialog (the layer hides while one is open), or blocking — no backdrop, no
   focus taken. Escape skips; clicking the control pointed at counts as read.

@@ -10,6 +10,7 @@ import {
   Moon,
   School,
   Settings as SettingsIcon,
+  Sparkles,
   Sun,
 } from "lucide-react";
 
@@ -191,7 +192,8 @@ export function UserMenu({
   /**
    * The inbox, for every account (a student is told of a released result): an
    * item that opens the panel, and the unread count on the avatar. It used to
-   * be a bell beside the account row, where it truncated the e-mail.
+   * be a bell beside the account row, where it truncated the e-mail. Its
+   * `navigate` also opens the history of What's new (ADR-087).
    */
   notifications?: { navigate: (r: Route) => void };
 }) {
@@ -240,7 +242,18 @@ export function UserMenu({
       // toggle with two labels cannot express "system".
       onSelect: () => setThemeChoice(theme === "dark" ? "light" : "dark"),
     },
-    { label: t("header.docs"), icon: BookOpen, href: DOCS_URL, separator: true },
+    ...(notifications
+      ? [
+          {
+            // The history of What's new (ADR-087), beside the documentation.
+            label: t("menu.whatsNew"),
+            icon: Sparkles,
+            onSelect: () => notifications.navigate({ view: "whatsNew" }),
+            separator: true,
+          },
+        ]
+      : []),
+    { label: t("header.docs"), icon: BookOpen, href: DOCS_URL, separator: !notifications },
     { label: t("header.sources"), icon: Code2, href: SOURCES_URL },
     ...(__COMMIT__
       ? [

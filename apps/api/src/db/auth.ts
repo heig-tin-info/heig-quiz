@@ -80,6 +80,13 @@ export const users = pgTable(
      * itself to the people who already know the rest.
      */
     coachSeen: jsonb("coach_seen").$type<string[]>().notNull().default([]),
+    /**
+     * When this user last acknowledged the platform's "What's new" (ADR-087):
+     * an entry live after it is unseen. Born with the account, so a new user
+     * is shown no history; moved by `POST /app/api/me/changelog`, on the
+     * database's clock, the one that dates the entries.
+     */
+    changelogSeenAt: timestamp("changelog_seen_at", { withTimezone: true }).notNull().defaultNow(),
     anonymizedAt: timestamp("anonymized_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

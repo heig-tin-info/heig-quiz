@@ -22,6 +22,9 @@ export const meKey = ["me"] as const;
 export const notificationsKey = ["notifications"] as const;
 /** The kinds x channels grid, the address and the Teams link (settings, ADR-030). */
 export const notificationSettingsKey = ["notification-settings"] as const;
+/** What's new (ADR-087): every entry the reader may see; the unseen ones under it, so the acknowledgement refreshes both. */
+export const changelogKey = ["changelog"] as const;
+export const changelogUnseenKey = [...changelogKey, "unseen"] as const;
 export const adminTeachersKey = ["admin-teachers"] as const;
 /**
  * Every account (F-ADMIN-01): under `adminTeachersKey`, so a grant, a revoke

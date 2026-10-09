@@ -49,6 +49,9 @@ import { kioskPlugin } from "./modules/kiosk/routes.js";
 import { legacyPlugin } from "./modules/legacy/routes.js";
 import { livePlugin } from "./modules/live/routes.js";
 import { assistPlugin } from "./modules/assist/routes.js";
+import { bundledChangelog } from "./modules/changelog/bundle.js";
+import { changelogPlugin } from "./modules/changelog/routes.js";
+import { syncChangelog } from "./modules/changelog/service.js";
 import { createLlm } from "./modules/llm/index.js";
 import { llmPlugin } from "./modules/llm/routes.js";
 import { LlmGateway } from "./modules/llm/service.js";
@@ -211,6 +214,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   // The teacher assistant (ADR-080): its corpus loaded once, at boot.
   await app.register(assistPlugin, { config });
   await app.register(avatarPlugin);
+  await app.register(changelogPlugin);
   await app.register(orgPlugin, { config });
   // Without Quiz's GitHub App (D23) none of its routes exists: a 404.
   if (githubApp(config)) await app.register(githubPlugin, { config });
@@ -298,6 +302,9 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   // The rows of the scheduled catalog (D10), once. A database down at boot
   // leaves them missing: the ticker then claims nothing until a restart.
   await step("scheduled tasks seeding", () => seedScheduledTasks(app.db));
+  // What's new (ADR-087): the build's entries dated by the first boot that
+  // serves them. A database down at boot dates them at the next restart.
+  await step("changelog sync", () => syncChangelog(app.db, bundledChangelog(), config.COMMIT_SHA || null));
   if (runWorkers) startTicker(app, config);
 
   // Built SPA served by the monolith (ADR-009: single image, frontend included).

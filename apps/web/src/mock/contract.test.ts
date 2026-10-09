@@ -26,6 +26,7 @@
  */
 import {
   ActivityStats,
+  ChangelogList,
   ActivitySummary,
   AdminScheduledTask,
   AdminUser,
@@ -352,6 +353,8 @@ const CHECKED: Case[] = [
   one("/app/api/notifications/settings", "/app/api/notifications/settings", NotificationSettings),
   each("/app/api/me/tokens", "/app/api/me/tokens", ApiToken),
   each("/app/api/me/connections", "/app/api/me/connections", OAuthConnection),
+  one("/app/api/changelog", "/app/api/changelog", ChangelogList),
+  one("/app/api/changelog/unseen", "/app/api/changelog/unseen", ChangelogList),
   one(
     "/app/api/oauth/requests/:id",
     "/app/api/oauth/requests/0190d3c4-0000-7000-8000-000000000001",

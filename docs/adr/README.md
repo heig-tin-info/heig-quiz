@@ -42,6 +42,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-016 — The code runner on the codespace VM, behind Caddy, with a shared token](ADR-016-runner-sur-vm-separee.md)
 - [ADR-028 — A staging environment on the production VM, and promotion by sha](ADR-028-recette-sur-la-meme-vm.md)
 - [ADR-030 — Notification channels: the bell, e-mail and Microsoft Teams](ADR-030-canaux-de-notification.md)
+- [ADR-087 — What's new: one entry file per pull request, shown once after an update](ADR-087-nouveautes-de-la-plateforme.md)
 - [ADR-055 — The system status: one registry of health checks, a narrow `/healthz`, a backup report](ADR-055-etat-du-systeme.md)
 - [ADR-065 — Connection recovery without reloading student work](ADR-065-reconnection-overlay.md)
 

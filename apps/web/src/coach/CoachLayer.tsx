@@ -129,15 +129,18 @@ export function CoachLayer({
   me,
   view,
   teacherUi,
+  paused = false,
 }: {
   me: Me;
   view: Route["view"];
   teacherUi: boolean;
+  /** Something else speaks first (What's new, ADR-087): no bubble until it is done. */
+  paused?: boolean;
 }) {
   const t = useT();
   const toast = useToast();
   const save = useMePatch();
-  const enabled = me.coach?.enabled !== false;
+  const enabled = me.coach?.enabled !== false && !paused;
   const audience: Audience = teacherUi ? "teacher" : "student";
   const { seen, mark, epoch } = useSeen(me);
   const [active, setActive] = useState<Active | null>(null);
