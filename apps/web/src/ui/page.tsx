@@ -1,5 +1,5 @@
 import { PenLine } from "lucide-react";
-import { Fragment, isValidElement, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 
 import { buttonClass, card, NotePanel } from "@quiz/ui";
@@ -375,6 +375,34 @@ export function EditableTitle({
         className="hover-reveal ml-2 inline-block size-4 -translate-y-0.5 align-middle text-fg-faint opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
       />
     </button>
+  );
+}
+
+/**
+ * A titled group inside a card or a panel: a 12 px uppercase eyebrow (h3) over
+ * its content, the group named by that visible title. `className` sets the
+ * spacing around the group; `divided` puts a hairline between its children
+ * (settings rows).
+ */
+export function Section({
+  title,
+  className,
+  divided = false,
+  children,
+}: {
+  title: ReactNode;
+  className?: string;
+  divided?: boolean;
+  children: ReactNode;
+}) {
+  const id = useId();
+  return (
+    <section aria-labelledby={id} className={cx("space-y-2", className)}>
+      <h3 id={id} className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+        {title}
+      </h3>
+      {divided ? <div className="divide-y divide-line">{children}</div> : children}
+    </section>
   );
 }
 

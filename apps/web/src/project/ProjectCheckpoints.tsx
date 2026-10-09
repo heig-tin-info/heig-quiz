@@ -6,11 +6,11 @@ import type { ProjectDetail, ReviewCheckpoint, ReviewCheckpointCreate } from "@q
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
-import { fromLocalInput } from "../evaluation/timing";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { projectCheckpointsKey } from "../queryKeys";
 import {
+  fromLocalInput,
   Actions,
   Badge,
   Button,

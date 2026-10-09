@@ -12,7 +12,7 @@ most 8 hours (`EVALUATION_DURATION_MAX_MINUTES`, `@quiz/contracts`), down
 from the 24 hours the patch accepted.
 
 Scope: the time part of the configuration screen of an evaluation and of a
-template (step 2, "Time and mode"), the action of the launch step, the
+template (step 2, "Format"), the action of the launch step, the
 stored `timing` × `lobby` × `opensAt` / `closesAt` / `durationS` they map
 to, the attempt deadline (`attemptDeadline`), the readiness and past-time
 rules (`missingTimingFields`, `pastTiming`), and the live controls that move

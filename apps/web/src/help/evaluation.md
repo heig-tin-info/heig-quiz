@@ -2,7 +2,7 @@
 
 ## Three steps
 
-**Questions**, **Time and mode**, **Launch**. They are tabs, not a locked
+**Questions**, **Format**, **Launch**. They are tabs, not a locked
 wizard: you come back to the one you left, and the step is in the address.
 
 ## Questions
@@ -30,23 +30,25 @@ The row shows a **refresh** button only when a newer published version of the
 question exists, and a **bin** that takes the item out of this evaluation —
 the question itself stays in its pool.
 
-## Time and mode
+## Format
 
 One question carries this step: who drives the clock? **Scheduled**: the
 platform opens and closes it by itself between **Opens at** and **Closes
-at**; students work without you, and there is no waiting room. **Live**: you
+at**, picked as one period on a calendar (each end with its time); students work without you, and there is no waiting room. **Live**: you
 open the waiting room and start it; it ends when you close it, or at
 **Closes at the latest**, an optional safety deadline (required for an exam
 without a time limit). Live's **Planned for** date only places it in the calendar: nothing
 opens by itself.
 
-Then one switch, **Time limit per student**: the **Minutes** count from each
+Then one switch, **Time limit per student**: the **Duration** (in minutes) counts from each
 student's own start, cut at the end (the window's, or the safety deadline) even if
 time remains. Extra time from the roster applies on top, past that end too.
 
-The rest lives under **Advanced options**: navigation, presentation,
-shuffling, progress bar, feedback, and Live's waiting room (you start, it
-starts once everyone is in, or none).
+The rest lives under **Advanced options**, in four groups: **Flow** (navigation,
+presentation, shuffling, progress bar, and Live's waiting room), **Security**
+(integrity journal, full screen, allowed devices), **Aids** (calculator,
+notepad) and **Feedback and scoring** (feedback to students, scoring policies,
+and **Allow drill**, which stays editable until the results are released).
 
 While the evaluation is running or paused, this step is locked until it
 closes: only the title and the feedback still change — the feedback so that

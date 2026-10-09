@@ -655,6 +655,8 @@ const scenes = [
   // ADR-086: a Scheduled exercise with a limit, its window to come — the
   // timing step's two dates and minutes, and Schedule as the launch action.
   { name: "eval-config-timing-scheduled", role: "teacher", path: `/evaluations/${SCHEDULED_DRAFT}?step=timing` },
+  // The window of a Scheduled evaluation, picked on one calendar.
+  { name: "eval-config-range", role: "teacher", path: `/evaluations/${SCHEDULED_DRAFT}?step=timing`, act: (p) => p.getByRole("button", { name: /^(opens at|ouverture)/i }).first().click() },
   { name: "eval-config-launch-schedule", role: "teacher", path: `/evaluations/${SCHEDULED_DRAFT}?step=launch` },
   // The waiting-room preview: a side column from `lg` up (in the scenes
   // above), a row opening a sheet on a phone.

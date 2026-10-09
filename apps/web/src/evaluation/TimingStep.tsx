@@ -31,7 +31,9 @@ import {
   Button,
   Card,
   cx,
+  DateRangeField,
   FieldError,
+  fromLocalInput,
   fieldErrorProps,
   Field,
   FormError,
@@ -39,6 +41,7 @@ import {
   SectionHeading,
   SettingRow,
   Switch,
+  toLocalInput,
   type IconType,
 } from "../ui";
 import { AdvancedDisclosure, withFeedbackFallback } from "./AdvancedDisclosure";
@@ -47,11 +50,9 @@ import { ConditionsSetting } from "./ConditionsSetting";
 import type { ConfigPatch, ConfigView } from "./editTarget";
 import { RetakesSetting } from "./RetakesSetting";
 import {
-  fromLocalInput,
   missingTiming,
   missingTimingKey,
   TIMING_FIELD_ID,
-  toLocalInput,
   transitionErrorMessage,
   type TimingField,
 } from "./timing";
@@ -206,6 +207,7 @@ export function ConfigSettings({
   dates,
   closesAt = null,
   holdsCategorize = false,
+  feedbackExtra,
 }: {
   config: ConfigView;
   /** The course of the evaluation or the template: its catalog of conditions (F-ORG-16). */
@@ -222,6 +224,8 @@ export function ConfigSettings({
   closesAt?: string | null;
   /** An item is a `categorize` question: its policy row is shown (ADR-036). */
   holdsCategorize?: boolean;
+  /** Passed to the advanced options' feedback group (an evaluation's "Allow drill"). */
+  feedbackExtra?: ReactNode;
 }) {
   const t = useT();
   const { settings, durationS, mode } = config;
@@ -290,6 +294,7 @@ export function ConfigSettings({
                 {...invalid(missing, "durationS")}
                 placeholder="45"
                 label={t("eval.duration")}
+                suffix={t("eval.duration.unit")}
                 type="number"
                 min={1}
                 max={EVALUATION_DURATION_MAX_MINUTES}
@@ -334,6 +339,7 @@ export function ConfigSettings({
         disabled={disabled}
         feedbackDisabled={feedbackDisabled}
         holdsCategorize={holdsCategorize}
+        feedbackExtra={feedbackExtra}
       />
     </>
   );
@@ -396,20 +402,47 @@ export function TimingStep({
         {missing.has(field) ? <MissingNote field={field} timing={settings.timing} /> : null}
       </div>
     );
+    if (!live) {
+      // One calendar for the window the platform opens and closes (ADR-086 §1).
+      const rangeEnd = (field: "opensAt" | "closesAt", value: string | null, label: string) => ({
+        id: TIMING_FIELD_ID[field],
+        label,
+        value,
+        ...invalid(missing, field),
+      });
+      return (
+        <div className="flex flex-col gap-1">
+          <DateRangeField
+            key={`${opensAt ?? ""}|${closesAt ?? ""}`}
+            label={t("eval.window")}
+            start={rangeEnd("opensAt", opensAt, t("eval.opensAt"))}
+            end={rangeEnd("closesAt", closesAt, t("eval.closesAt"))}
+            disabled={locked}
+            onCommit={(change, reset) =>
+              patch.mutate(
+                {
+                  ...(change.start !== undefined ? { opensAt: change.start } : {}),
+                  ...(change.end !== undefined ? { closesAt: change.end } : {}),
+                },
+                { onError: reset },
+              )
+            }
+          />
+          {missing.has("opensAt") ? <MissingNote field="opensAt" timing={settings.timing} /> : null}
+          {missing.has("closesAt") ? <MissingNote field="closesAt" timing={settings.timing} /> : null}
+        </div>
+      );
+    }
     return (
       <>
-        {live
-          ? date("opensAt", opensAt, t("eval.liveDate"), t("eval.liveDate.desc"))
-          : date("opensAt", opensAt, t("eval.opensAt"))}
+        {date("opensAt", opensAt, t("eval.liveDate"), t("eval.liveDate.desc"))}
         {clockFields(choice).includes("closesAt")
-          ? live
-            ? date(
-                "closesAt",
-                closesAt,
-                t("eval.safetyDeadline"),
-                t(mode === "exam" && !choice.limited ? "eval.safetyDeadline.descExam" : "eval.safetyDeadline.desc"),
-              )
-            : date("closesAt", closesAt, t("eval.closesAt"))
+          ? date(
+              "closesAt",
+              closesAt,
+              t("eval.safetyDeadline"),
+              t(mode === "exam" && !choice.limited ? "eval.safetyDeadline.descExam" : "eval.safetyDeadline.desc"),
+            )
           : null}
       </>
     );
@@ -461,11 +494,10 @@ export function TimingStep({
         missing={missing}
         closesAt={closesAt}
         dates={dates}
+        /* ADR-041 §2 (#317): its own writer, editable until the release —
+           not one of the settings `patch` saves, nor frozen with them. */
+        feedbackExtra={drillModeOf(mode) ? <EvaluationDrillSetting evaluation={detail.evaluation} /> : undefined}
       />
-
-      {/* ADR-041 §2 (#317): its own writer, editable until the release —
-          not one of the settings `patch` saves, nor frozen with them. */}
-      {drillModeOf(mode) ? <EvaluationDrillSetting evaluation={detail.evaluation} /> : null}
     </div>
   );
 }

@@ -13,6 +13,9 @@ export function setDateFormat(f: DateFormat | null | undefined) {
   dateFormat = f ?? "iso";
 }
 
+/** The first day of a calendar week for this reader: Sunday for the `us` format, Monday elsewhere. */
+export const weekStartsOn = (): 0 | 1 => (dateFormat === "us" ? 0 : 1);
+
 /** The date and the time of a moment, apart, in an explicit format. */
 function datePartsAs(iso: string, f: DateFormat): { date: string; time: string } {
   const d = new Date(iso);
@@ -38,6 +41,21 @@ function datePartsAs(iso: string, f: DateFormat): { date: string; time: string }
 export function formatDateTimeAs(iso: string, f: DateFormat): string {
   const { date, time } = datePartsAs(iso, f);
   return `${date} ${time}`;
+}
+
+/** A `datetime-local` value from an ISO instant, in the reader's own zone; "" for none. */
+export function toLocalInput(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
+
+/** The ISO instant of a `datetime-local` value, or null when it is empty or invalid. */
+export function fromLocalInput(value: string): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
 /** The browser's time zone: where the reader's day begins and ends, and what a `datetime-local` means. */

@@ -27,6 +27,8 @@
 //             by their number (Actions), on layers and menu.
 //   popover   the small floating card anchored on a trigger (Popover), on
 //             layers and menu (menuPosition).
+//   dateRange a period picked on one month calendar (DateRangeField), on
+//             controls, dates and popover.
 //   people    a person as a disc, its card, and a row of them (PersonPill,
 //             PersonCard, PeopleStack), on actions, popover and identity.
 //   live      the live primitives (PLAN-MVP §6.4).
@@ -64,6 +66,7 @@ export * from "./meta";
 export * from "./breadcrumb";
 export * from "./actions";
 export * from "./popover";
+export { DateRangeField, type RangeChange, type RangeEnd } from "./dateRange";
 export * from "./people";
 export * from "./live";
 export * from "./bar";

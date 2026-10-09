@@ -5,7 +5,6 @@ import { useState, type FormEvent } from "react";
 import type { ProjectCreate, ProjectSourceDetail, ProjectSourceRepo, ProjectSummary } from "@quiz/contracts";
 
 import { api } from "../api";
-import { toLocalInput } from "../evaluation/timing";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import {
@@ -18,6 +17,7 @@ import {
 import type { Navigate } from "../router";
 import { Trail, useClassroomCrumbs } from "../Trail";
 import {
+  toLocalInput,
   Alert,
   Button,
   Card,

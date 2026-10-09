@@ -803,6 +803,12 @@ describe("Field and Select", () => {
     expect(input).toHaveValue("PRG1");
   });
 
+  it("shows a suffix unit inside the field and reads it with the value", () => {
+    renderWithProviders(<Field label="Duration" suffix="min" type="number" defaultValue={45} />);
+    expect(screen.getByLabelText("Duration")).toHaveAccessibleDescription("min");
+    expect(screen.getByText("min")).toBeVisible();
+  });
+
   it("puts the height on the control and the width on the wrapper", () => {
     renderWithProviders(
       <>

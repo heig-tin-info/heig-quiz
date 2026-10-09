@@ -19,8 +19,8 @@ import {
   renderWithProviders,
   type RouteHandler,
 } from "../test/render";
+import { toLocalInput } from "../ui";
 import { EvaluationConfig } from "./EvaluationConfig";
-import { toLocalInput } from "./timing";
 
 /*
  * The three-step flow of docs/spec/08 §8.2, asserted where it touches the
@@ -176,7 +176,7 @@ describe("EvaluationConfig", () => {
       });
       const backstop = await screen.findByLabelText(/^closes at the latest$/i);
       expect(backstop).toHaveValue(toLocalInput(future));
-      expect(screen.getByLabelText(/^minutes$/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/^duration$/i)).toBeInTheDocument();
       fireEvent.change(backstop, { target: { value: "" } });
       fireEvent.blur(backstop);
       await waitFor(() =>
@@ -195,14 +195,57 @@ describe("EvaluationConfig", () => {
       });
     });
 
+    it("writes the Scheduled window as one patch, from one calendar", async () => {
+      const user = userEvent.setup();
+      const base = makeEvaluationDetail().evaluation;
+      const detail = makeEvaluationDetail({
+        evaluation: {
+          ...base,
+          settings: { ...base.settings, timing: "deadline", lobby: "skip" },
+          opensAt: new Date(2030, 2, 4, 8, 0).toISOString(),
+          closesAt: new Date(2030, 2, 11, 18, 0).toISOString(),
+        },
+      });
+      const { calls } = mockFetch(routes(detail, { [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(detail) }));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      await user.click(await screen.findByRole("button", { name: /^opens at/i }));
+      await user.click(screen.getByRole("button", { name: /March 6, 2030/ }));
+      await user.click(screen.getByRole("button", { name: /March 13, 2030/ }));
+      expect(calls.find((c) => c.method === "PATCH")).toBeUndefined();
+      await user.keyboard("{Escape}");
+      await waitFor(() =>
+        expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({
+          opensAt: new Date(2030, 2, 6, 8, 0).toISOString(),
+          closesAt: new Date(2030, 2, 13, 18, 0).toISOString(),
+        }),
+      );
+    });
+
+    it("offers 'Allow drill' among the feedback options, with its own writer", async () => {
+      const user = userEvent.setup();
+      mockFetch(
+        routes(makeEvaluationDetail(), {
+          [`GET /app/api/evaluations/${EVALUATION_ID}/drill`]: ok({ allowDrill: false, cards: 0 }),
+        }),
+      );
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
+      const feedback = screen.getByRole("region", { name: "Feedback and scoring" });
+      expect(await within(feedback).findByRole("switch", { name: "Allow drill" })).toBeEnabled();
+    });
+
     it("shows a Scheduled window, and a Live date for the calendar with its safety deadline", async () => {
       mockFetch(routes(withClock({ timing: "deadline", lobby: "skip" })));
       const { unmount } = renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
         route: "/evaluations/x?step=timing",
       });
-      expect(await screen.findByLabelText(/^opens at$/i)).toBeInTheDocument();
-      expect(screen.getByLabelText(/^closes at$/i)).toBeInTheDocument();
-      expect(screen.queryByLabelText(/^minutes$/i)).toBeNull();
+      expect(await screen.findByRole("button", { name: /^opens at/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /^closes at/i })).toBeInTheDocument();
+      expect(screen.queryByLabelText(/^duration$/i)).toBeNull();
       unmount();
 
       mockFetch(routes(withClock({ timing: "manual", lobby: "manual" })));
@@ -298,7 +341,7 @@ describe("EvaluationConfig", () => {
     renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
       route: "/evaluations/x?step=timing",
     });
-    const minutes = await screen.findByLabelText(/^minutes$/i);
+    const minutes = await screen.findByLabelText(/^duration$/i);
     expect(minutes).toHaveAttribute("max", "480");
     const patches = () => calls.filter((c) => c.method === "PATCH").map((c) => c.body);
 
@@ -314,7 +357,7 @@ describe("EvaluationConfig", () => {
   });
 
   /*
-   * "Time and mode" is the densest form of the flow: a duration, two dates
+   * "Format" is the densest form of the flow: a duration, two dates
    * and three segmented controls, plus everything the advanced disclosure
    * holds. Every caption there has to name a real control.
    */
@@ -502,7 +545,7 @@ describe("EvaluationConfig", () => {
         route: "/evaluations/x?step=timing",
       });
 
-      const opensAt = await screen.findByLabelText(/^opens at$/i);
+      const opensAt = await screen.findByRole("button", { name: /^opens at/i });
       expect(opensAt).not.toHaveAttribute("aria-invalid");
       await user.click(screen.getByRole("button", { name: /^go to launch$/i }));
 
@@ -511,7 +554,7 @@ describe("EvaluationConfig", () => {
       expect(opensAt).toHaveAccessibleDescription(/enter when it opens/i);
       expect(opensAt).toHaveFocus();
       // The closing time is set: only the missing field is marked.
-      expect(screen.getByLabelText(/^closes at$/i)).not.toHaveAttribute("aria-invalid");
+      expect(screen.getByRole("button", { name: /^closes at/i })).not.toHaveAttribute("aria-invalid");
     });
 
     it("asks a live exam without a limit for its safety deadline (ADR-086 §2)", async () => {
@@ -546,7 +589,7 @@ describe("EvaluationConfig", () => {
       renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
         route: "/evaluations/x?step=launch",
       });
-      expect(await screen.findByRole("status")).toHaveTextContent(/finish the timing in time and mode/i);
+      expect(await screen.findByRole("status")).toHaveTextContent(/finish the timing in format/i);
       expect(screen.getByText(/enter when it opens/i)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /^open$/i })).toBeDisabled();
       // No start to come: nothing to schedule, only the opening (ADR-086).
@@ -624,7 +667,7 @@ describe("EvaluationConfig", () => {
       expect(screen.getByRole("button", { name: /^live(?! dashboard)/i })).toBeDisabled();
       expect(screen.getByRole("button", { name: /^scheduled/i })).toBeDisabled();
       expect(screen.getByRole("switch", { name: /time limit per student/i })).toBeDisabled();
-      expect(screen.getByLabelText(/^minutes$/i)).toBeDisabled();
+      expect(screen.getByLabelText(/^duration$/i)).toBeDisabled();
 
       await user.click(screen.getByRole("button", { name: /^advanced options$/i }));
       // A forgotten answer key must be hideable mid-run (#86); the rest stays frozen.
@@ -668,7 +711,7 @@ describe("EvaluationConfig", () => {
       <EvaluationConfig id={EVALUATION_ID} navigate={navigate} />,
       { route: "/evaluations/x?step=questions" },
     );
-    expect(await screen.findByRole("button", { name: /^go to time and mode$/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /^go to format$/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^next$/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /^back to/i })).toBeNull();
     unmount();
@@ -760,7 +803,7 @@ describe("EvaluationConfig", () => {
       route: "/evaluations/x?step=launch",
     });
     expect(
-      await screen.findByRole("button", { name: /^back to time and mode$/i }),
+      await screen.findByRole("button", { name: /^back to format$/i }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^go to /i })).toBeNull();
   });

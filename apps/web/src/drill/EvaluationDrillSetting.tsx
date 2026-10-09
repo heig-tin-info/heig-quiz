@@ -23,7 +23,7 @@ import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import { evaluationDrillKey, evaluationKey } from "../queryKeys";
-import { Alert, Button, Card, QueryError, SettingRow, Skeleton, Switch } from "../ui";
+import { Alert, Button, QueryError, SettingRow, Skeleton, Switch } from "../ui";
 import { fetchEvaluationDrill, removeEvaluationCards, setEvaluationDrill } from "./api";
 
 export function EvaluationDrillSetting({ evaluation }: { evaluation: Evaluation }) {
@@ -67,7 +67,7 @@ export function EvaluationDrillSetting({ evaluation }: { evaluation: Evaluation 
   };
 
   return (
-    <Card className="divide-y divide-line px-4">
+    <div className="divide-y divide-line">
       <div className="pb-3">
         <SettingRow
           title={t("eval.drill")}
@@ -105,6 +105,6 @@ export function EvaluationDrillSetting({ evaluation }: { evaluation: Evaluation 
           </Button>
         </SettingRow>
       ) : null}
-    </Card>
+    </div>
   );
 }

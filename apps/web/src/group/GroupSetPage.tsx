@@ -7,13 +7,14 @@ import { GroupMaxSize, type GroupRandomForm, type GroupSetDetail } from "@quiz/c
 import { api, isNotFound } from "../api";
 import { AppLink } from "../AppLink";
 import { useConfirm } from "../confirm";
-import { fromLocalInput, toLocalInput } from "../evaluation/timing";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { classroomGroupSetsKey, groupSetKey } from "../queryKeys";
 import { useSearchParam, type Navigate } from "../router";
 import { Trail, useClassroomCrumbs } from "../Trail";
 import {
+  fromLocalInput,
+  toLocalInput,
   Alert,
   Button,
   Card,
