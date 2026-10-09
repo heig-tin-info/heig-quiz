@@ -5,7 +5,8 @@ import type { ActivitySummary } from "@quiz/contracts";
 
 import { useI18n, useT } from "../i18n";
 import type { Route } from "../router";
-import { Card, cx, EmptyState, IconButton, isoDateTime } from "../ui";
+import { useShortcuts } from "../shortcuts";
+import { Card, cx, EmptyState, IconButton, isoDateTime, modKey } from "../ui";
 import { bucketOf, kindOf, typeOf, type Span } from "./model";
 import { classroomLabel, openerOf, TYPE_ICON } from "./views";
 
@@ -216,6 +217,17 @@ export function ActivityTimeline({
     return () => el.removeEventListener("wheel", onWheel);
   }, [rooms.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps -- attach once the track exists
 
+  // The gestures go to the sidebar's strip, with the keys of every other
+  // screen, rather than a sentence above the track.
+  const wheel = t("activities.timeline.key.wheel");
+  useShortcuts(
+    [
+      { keys: wheel, alternatives: [t("activities.timeline.key.drag")], label: t("activities.timeline.pan") },
+      { keys: `${modKey()}+${wheel}`, label: t("activities.timeline.zoom") },
+    ],
+    rooms.length > 0,
+  );
+
   if (rooms.length === 0) {
     return (
       <Card>
@@ -318,8 +330,7 @@ export function ActivityTimeline({
 
   return (
     <Card className="p-5">
-      <div className="touch-group mb-3 flex items-center gap-1">
-        <p className="mr-auto text-[13px] text-fg-muted">{t("activities.timeline.hint")}</p>
+      <div className="touch-group mb-3 flex items-center justify-end gap-1">
         <IconButton label={t("activities.timeline.zoomOut")} onClick={() => zoomBy(1.6)}>
           <ZoomOut />
         </IconButton>
