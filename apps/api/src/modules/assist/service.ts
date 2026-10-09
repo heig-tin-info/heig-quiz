@@ -67,7 +67,7 @@ export type AssistEngine = "model" | "stub" | null;
 
 /**
  * The stub when `LLM_PROVIDER=stub` (development), as the grading service
- * chooses (`llm/index.ts`); else the gateway when it holds a key; else nothing.
+ * chooses (`llm/service.ts`); else the gateway when it holds a key; else nothing.
  */
 export async function assistEngine(gateway: LlmGateway, stub: boolean): Promise<AssistEngine> {
   if (stub) return "stub";

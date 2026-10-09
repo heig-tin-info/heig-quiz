@@ -59,7 +59,6 @@ export {
   feedbackOf,
   scaleOf,
   toEvaluation,
-  templateRevisionsOf,
   gradeDefaults,
   negativeMarkingEnabled,
   trustedClients,
@@ -119,6 +118,5 @@ export {
   unlinkedRefs,
   assertPoolsLinked,
   replaceItems,
-  copyItems,
   copyEvaluation,
 } from "./items.js";

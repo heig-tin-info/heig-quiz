@@ -124,5 +124,3 @@ export const mcqGradingStrings = {
   expected: "Expected",
   notExpected: "Not expected",
 } as const;
-
-export type McqGradingStringKey = keyof typeof mcqGradingStrings;

@@ -54,7 +54,7 @@ export { createCheckpoint, deleteCheckpoint, listCheckpoints } from "./checkpoin
 export { projectDetail, repoRuns } from "./detail.js";
 export { repoDeadline, setRepoDeadline, setStaffLock } from "./deadline.js";
 export { overrideScore, releaseProject } from "./grades.js";
-export { gradebookProjects, projectLiveScores, projectReleasedScore, type ProjectGradeCell } from "./gradebook.js";
+export { gradebookProjects, projectLiveScores, projectReleasedScore } from "./gradebook.js";
 export { projectsChanged } from "./events.js";
 export { ConfirmationNeeded, copiesBefore, followingCopies, RepoGroupTouched, setFrozen, stepCopies, stopProjects } from "./groupCopy.js";
 export { requestGroupSync } from "./groupSync.js";
@@ -70,12 +70,7 @@ export {
   publishProject,
   setProjectArchived,
   setWorkMode,
-  unassignedStudents,
-  type CreateInput,
-  type Unassigned,
-  type WorkModeCaller,
 } from "./lifecycle.js";
-export { ProjectError } from "./errors.js";
 export { listSources, sourceDetail } from "./sources.js";
 export { studentProject, studentProjectCards, studentResendInvitation } from "./studentView.js";
 export { requestSync } from "./sync.js";

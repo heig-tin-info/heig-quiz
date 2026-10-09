@@ -1073,7 +1073,6 @@ export {
   scoreOf,
   studentAttempts,
   tallyByAttempt,
-  type AttemptTally,
   type StudentAttempts,
 } from "./kept.js";
 

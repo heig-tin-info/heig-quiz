@@ -7,7 +7,6 @@ import { z } from "zod";
 import { EvaluationConditions } from "./live.js";
 
 export const KIOSK_DEVICE_STATUSES = ["unnamed", "active", "retired"] as const;
-export type KioskDeviceStatus = (typeof KIOSK_DEVICE_STATUSES)[number];
 
 /** The outcome of a station's last attestation attempt (ADR-051 §6). */
 export const KIOSK_ATTESTATIONS = ["ok", "unavailable", "refused"] as const;

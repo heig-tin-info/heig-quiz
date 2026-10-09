@@ -66,7 +66,6 @@ export const CategorizeDefaultsSchema = z.object({
   policy: CategorizePolicySchema,
   negativeMarking: z.boolean().optional(),
 });
-export type CategorizeDefaults = z.infer<typeof CategorizeDefaultsSchema>;
 
 const unique = (ids: readonly string[]): boolean => new Set(ids).size === ids.length;
 

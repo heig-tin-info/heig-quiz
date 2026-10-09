@@ -118,7 +118,7 @@ import { solutionView, stripKeys, studentSolutionView, studentView } from "../li
 import { typeOf } from "../pool/config.js";
 import { exampleInstance, explanationOrNull, isParameterized, itemInstance } from "../pool/service.js";
 
-export { watchReleasedGrades, type GradeWatch } from "./updated.js";
+export { watchReleasedGrades } from "./updated.js";
 
 /**
  * Everything this module refuses, by code: its status and, where the

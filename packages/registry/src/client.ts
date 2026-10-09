@@ -1,8 +1,6 @@
 /**
  * The static browser-side question-type registry (PLAN-MVP §1.5, decision D1).
  *
- * Every entry must expose `Editor`/`Player`/`Review` through `React.lazy`, so
- * that Monaco never enters the initial bundle (N-PERF-05).
  * Every entry exposes `Editor`/`Player`/`Review` through `React.lazy`, so that
  * Monaco never enters the initial bundle (N-PERF-05).
  */

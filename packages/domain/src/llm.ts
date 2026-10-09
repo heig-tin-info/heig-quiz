@@ -40,9 +40,6 @@ export type LlmModelId = (typeof LLM_MODELS)[number]["id"];
 export const LLM_MODEL_IDS = LLM_MODELS.map((m) => m.id) as [LlmModelId, ...LlmModelId[]];
 export const DEFAULT_LLM_MODEL: LlmModelId = "claude-sonnet-5-5";
 
-/** The daily cap in USD until an administrator sets one (ADR-058 §5); the migration writes it. */
-export const DEFAULT_LLM_DAILY_CAP_USD = 20;
-
 /**
  * A model of the list by id. A reply may name a model the list does not hold
  * (a dated variant): it is priced as the DEAREST model, so that the estimate

@@ -90,5 +90,3 @@ export const diagramGradingStrings = {
   links: "{n} links",
   "links.one": "1 link",
 } as const;
-
-export type DiagramGradingStringKey = keyof typeof diagramGradingStrings;

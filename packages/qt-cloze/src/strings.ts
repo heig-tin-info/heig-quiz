@@ -51,5 +51,3 @@ export const clozeGradingStrings = {
   blank: "Blank {n}",
   empty: "empty",
 } as const;
-
-export type ClozeGradingStringKey = keyof typeof clozeGradingStrings;

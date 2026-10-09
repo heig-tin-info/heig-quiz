@@ -18,14 +18,12 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
-import type { GradingLlm } from "./modules/llm/index.js";
-
 import { PERSONAS, upsertPersona, type Persona } from "./auth/dev.js";
 import { systemClock } from "./clock.js";
 import { loadConfig } from "./config.js";
 import { createDb, type Db } from "./db/client.js";
 import { classrooms, courseStaff, courses, enrollments } from "./db/schema.js";
-import { createLlm } from "./modules/llm/index.js";
+import { createLlm, type GradingLlm } from "./modules/llm/service.js";
 import { createClassroom } from "./modules/org/service.js";
 import { UnavailableRunner } from "./modules/runner/unavailable.js";
 import { MIGRATIONS_DIR } from "./paths.js";
