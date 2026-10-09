@@ -33,6 +33,7 @@ import { templateTarget } from "./editTarget";
 import { useItemPane } from "./ItemPreview";
 import { ItemsStep } from "./ItemsStep";
 import { clockSummary } from "./clockSummary";
+import { ModeControl } from "./ModeChoice";
 import { ConfigSettings } from "./TimingStep";
 import { UseTemplateDialog, useTemplateActions } from "./templates";
 import { useConfigPatch } from "./usePatch";
@@ -49,7 +50,8 @@ import { useTemplate } from "./api";
  * evaluation's. What a run has and a template does not is simply not passed:
  * no dates (a sentence stands in their place), no IP list, no launch step,
  * no dashboard, no roster, no duplicate, no staff attempt. The mode is a
- * badge, set at creation; the revision sits beside it, since that number is
+ * badge beside the title and a control in the settings (ADR-092, a template
+ * may always change it); the revision sits beside it, since that number is
  * what a classroom's copy is compared with.
  *
  * Two tabs and not the evaluation's three steps: there is nothing to launch,
@@ -215,6 +217,7 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
               icon={Settings2}
               title={t("templates.settings")}
               description={t("templates.settings.desc")}
+              actions={<ModeControl config={template} changeable patch={patch} />}
             />
             <FormError error={patch.error} title={t("eval.saveFailed")} />
             <ConfigSettings

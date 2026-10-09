@@ -32,6 +32,22 @@ describe("Segmented", () => {
     expect(screen.getByRole("radio", { name: "Beta" })).toBeDisabled();
   });
 
+  it("disables one option on its own and says why in its title", () => {
+    const onChange = vi.fn();
+    render(
+      <Segmented
+        name="k"
+        label="Kind"
+        value="a"
+        options={[options[0], { ...options[1], disabled: true, title: "Why not" }]}
+        onChange={onChange}
+      />,
+    );
+    expect(screen.getByRole("radio", { name: "Beta" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "Alpha" })).toBeEnabled();
+    expect(screen.getByTitle("Why not")).toBeTruthy();
+  });
+
   it("takes an aria-label when no caption names it, and a dense size", () => {
     render(<Segmented name="k" label="Group by" size="sm" value="a" options={options} onChange={() => {}} />);
     screen.getByRole("radiogroup", { name: "Group by" });

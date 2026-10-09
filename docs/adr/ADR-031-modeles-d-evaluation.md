@@ -15,7 +15,10 @@ code any more, so what this record says a template drops or an instance keeps no
 `TemplatePatch` still refuses an `accessCode` key, as an unknown one. **Amended by
 [ADR-052](ADR-052-questions-bonus.md) (2026-09-30):** the bonus flag of an item is content like its
 milestone flag — a template carries it, a copy and a pull copy it, a change of it moves the revision and
-shows in a pull's summary. The `threshold` grade scale a template could hold is gone.
+shows in a pull's summary. The `threshold` grade scale a template could hold is gone. **Amended by
+[ADR-092](ADR-092-changer-le-mode-d-une-evaluation.md) (2026-10-09):** a template's mode is editable in
+place (`mode` joins `TemplatePatch`) and moves the revision; an instance keeps its own mode, a pull never
+carrying it.
 
 ## Context
 

@@ -16,6 +16,7 @@ import {
   configLock,
   drillModeOf,
   isConfigFieldWritable,
+  modeChangeable,
   retakesAllowedFor,
   type ClockChoice,
   type ClockMode,
@@ -27,7 +28,6 @@ import { EvaluationDrillSetting } from "../drill/EvaluationDrillSetting";
 import { useT } from "../i18n";
 import {
   Alert,
-  Badge,
   Button,
   Card,
   cx,
@@ -47,6 +47,7 @@ import {
 import { AdvancedDisclosure, withFeedbackFallback } from "./AdvancedDisclosure";
 import { clockSummary } from "./clockSummary";
 import { ConditionsSetting } from "./ConditionsSetting";
+import { ModeControl } from "./ModeChoice";
 import type { ConfigPatch, ConfigView } from "./editTarget";
 import { RetakesSetting } from "./RetakesSetting";
 import {
@@ -454,7 +455,14 @@ export function TimingStep({
         icon={Timer}
         title={t("eval.step.timing")}
         description={t("eval.step.timing.desc")}
-        actions={<Badge tone="zinc">{t(`eval.mode.${mode}`)}</Badge>}
+        actions={
+          <ModeControl
+            config={detail.evaluation}
+            changeable={modeChangeable(mode, state, detail.attemptCount)}
+            scheduled={state === "scheduled"}
+            patch={patch}
+          />
+        }
       />
 
       {lock === "running" ? (

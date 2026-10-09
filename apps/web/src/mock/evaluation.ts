@@ -8,6 +8,8 @@ import { countsAsCompleted,
   itemListDiff,
   itemListLock,
   missingTimingFields,
+  modeChangeable,
+  modeChangeEffects,
   pastTiming,
   parseCloze,
   poolRoleAllows,
@@ -1228,7 +1230,11 @@ on("PATCH", "/app/api/evaluations/:id", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
   // #86: what a patch may touch is the domain's `configLock`, as on the server.
   const lock = configLock(e.state, attemptCountOf(e));
-  if (Object.keys(body).some((k) => !isConfigFieldWritable(lock, k))) {
+  // ADR-092: the mode has its own cutoff and code.
+  if (body.mode !== undefined && body.mode !== e.mode && !modeChangeable(e.mode, e.state, attemptCountOf(e))) {
+    throw new MockPayload(409, { error: "mode_frozen", message: "the mode can no longer change (ADR-092)" });
+  }
+  if (Object.keys(body).some((k) => k !== "mode" && !isConfigFieldWritable(lock, k))) {
     throw new MockPayload(
       409,
       lock === "running"
@@ -1270,20 +1276,26 @@ function assertConfigPatch(e: MockEvaluation, body: Record<string, unknown>): vo
       });
     }
   }
+  // ADR-092: every gate runs against the mode the write leaves behind.
+  const mode = (body.mode as MockEvaluation["mode"] | undefined) ?? e.mode;
+  const modeChanged = mode !== e.mode;
   // F-EVAL-15: an exam takes one attempt, as on the server.
-  if (settings?.retakes?.enabled === true && e.mode !== "exercise") {
+  const retakes =
+    settings?.retakes?.enabled ?? (modeChanged ? (e.settings as { retakes?: { enabled?: boolean } }).retakes?.enabled : undefined);
+  if (retakes === true && mode !== "exercise") {
     throw new MockPayload(422, {
       error: "retakes_not_allowed",
-      message: `an evaluation of mode "${e.mode}" takes one attempt (F-EVAL-15)`,
+      message: `an evaluation of mode "${mode}" takes one attempt (F-EVAL-15)`,
     });
   }
   const feedback = body.feedbackPolicy as { when?: FeedbackWhen } | undefined;
   // F-EVAL-11, #78: the server refuses `immediate` in class, whichever half
-  // of the pair the patch moves, and writes nothing.
+  // of the pair the patch moves, and writes nothing. A change of mode brings
+  // its own fallback (`applyConfigPatch`), unless the patch chose a policy.
   if (feedback?.when !== undefined || settings?.lobby !== undefined) {
     const lobby = settings?.lobby ?? (e.settings as { lobby: LobbyName }).lobby;
     const when = feedback?.when ?? (e.feedbackPolicy as { when: FeedbackWhen }).when;
-    if (!isFeedbackAllowed({ mode: e.mode, lobby }, when)) {
+    if (!isFeedbackAllowed({ mode, lobby }, when)) {
       throw new MockPayload(422, {
         error: "feedback_not_allowed",
         message: `feedback "${when}" is not allowed for an evaluation sat in class (F-EVAL-11)`,
@@ -1295,6 +1307,18 @@ function assertConfigPatch(e: MockEvaluation, body: Record<string, unknown>): vo
 /** The fields an evaluation and a template share, written. */
 function applyConfigPatch(e: MockEvaluation, body: Record<string, unknown>): void {
   if (typeof body.title === "string") e.title = body.title;
+  // ADR-092: only the forced consequences, no preset.
+  if (typeof body.mode === "string" && body.mode !== e.mode) {
+    const settings = e.settings as { lobby: LobbyName; allowDrill?: boolean };
+    const effects = modeChangeEffects(e.mode, body.mode as MockEvaluation["mode"], {
+      lobby: settings.lobby,
+      feedbackWhen: (e.feedbackPolicy as { when: FeedbackWhen }).when,
+      allowDrill: settings.allowDrill,
+    });
+    e.settings = { ...e.settings, allowDrill: settings.allowDrill ?? effects.allowDrill };
+    e.feedbackPolicy = { ...e.feedbackPolicy, when: effects.feedbackWhen };
+    e.mode = body.mode as MockEvaluation["mode"];
+  }
   if (body.settings) e.settings = { ...e.settings, ...(body.settings as object) };
   if (body.feedbackPolicy) {
     e.feedbackPolicy = { ...e.feedbackPolicy, ...(body.feedbackPolicy as object) };
@@ -1699,6 +1723,7 @@ on("DELETE", "/app/api/evaluations/:id/items/:itemId", (m) => {
  */
 const contentOf = (e: MockEvaluation) =>
   JSON.stringify([
+    e.mode,
     e.items.map((i) => [i.id, i.points, i.milestone, i.bonus, i.intro, i.versionNumber]),
     e.settings,
     e.gradingScale,

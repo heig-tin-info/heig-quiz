@@ -595,7 +595,9 @@ export const TOOLS: Tool[] = [
     name: "update_evaluation",
     title: "Update an evaluation",
     description:
-      "Changes an evaluation's title, settings, feedback policy, grading scale (linear, its rounding) or schedule (`opensAt`, " +
+      "Changes an evaluation's title, `mode` (`exam` or `exercise`, only while it is a draft or scheduled with " +
+      "no attempt, else 409 `mode_frozen`; nothing but the forced consequences changes with it: `immediate` " +
+      "feedback becomes `on_release` for an exam, and an exam refuses retakes), settings, feedback policy, grading scale (linear, its rounding) or schedule (`opensAt`, " +
       "`closesAt` as ISO date-times, `durationS` in seconds). Does not start it. While it is running or " +
       "paused, only the title, the IP allowlist and the feedback policy may change " +
         "(an evaluation with a waiting room never takes `immediate` feedback). A poll's feedback policy " +

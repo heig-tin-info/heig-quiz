@@ -610,6 +610,11 @@ const EvaluationPatchFields = z.object({
   // object is not strict, so a stale client that still sends one has it
   // stripped (a patch with nothing else is the usual "Nothing to update").
   title: z.string().trim().min(1).max(200).optional(),
+  /**
+   * ADR-092: the mode, editable while the evaluation is a draft or scheduled
+   * with no attempt (`409 mode_frozen` otherwise). `poll` is never a target.
+   */
+  mode: EvaluationMode.exclude(["poll"]).optional(),
   settings: EvaluationSettingsPatch.optional(),
   gradingScale: GradingScale.optional(),
   feedbackPolicy: FeedbackPolicyPatch.optional(),

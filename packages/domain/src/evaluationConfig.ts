@@ -197,6 +197,55 @@ export function isConfigEditable(state: EvaluationStateName, attemptCount: numbe
   return configLock(state, attemptCount) === null;
 }
 
+// --- Changing the mode (ADR-092) ---------------------------------------------
+
+/**
+ * Whether the mode of an evaluation may still be changed (ADR-092): while it
+ * is a draft or scheduled AND nobody has an attempt, the teacher's own
+ * included. From the lobby on, students are in the room under the rules they
+ * were announced. A template (never run, always a draft with no attempt)
+ * always passes. A poll is never changed. One rule, read by the API
+ * (`409 mode_frozen`) and by the configuration screen.
+ */
+export function modeChangeable(
+  mode: EvaluationModeName,
+  state: EvaluationStateName,
+  attemptCount: number,
+): boolean {
+  return mode !== "poll" && (state === "draft" || state === "scheduled") && attemptCount === 0;
+}
+
+/** What a change of mode writes besides the mode itself (ADR-092 §1). */
+export interface ModeChangeEffects {
+  /** The feedback timing after the change: `immediate` falls back in class, nothing is ever turned on. */
+  feedbackWhen: FeedbackWhen;
+  /**
+   * "Allow drill" FROZEN at the value the old mode gave it, so that a change
+   * of mode does not silently flip the drill (`drillAllowedOn` falls back to
+   * the mode's default when nothing is stored).
+   */
+  allowDrill: boolean;
+}
+
+/**
+ * The forced consequences of moving from `from` to `to`, and only those: no
+ * preset is reapplied (ADR-086, ADR-088 §2, ADR-041 §2). Going where
+ * `immediate` feedback is refused (an exam, or an exercise given a waiting
+ * room) turns it into {@link IN_CLASS_FEEDBACK}; `showKey` and
+ * `showExplanation` are never touched, so a change of mode can only close
+ * the correction, never open it.
+ */
+export function modeChangeEffects(
+  from: EvaluationModeName,
+  to: EvaluationModeName,
+  current: { lobby: LobbyName; feedbackWhen: FeedbackWhen; allowDrill: boolean | undefined },
+): ModeChangeEffects {
+  return {
+    feedbackWhen: feedbackWhenFor({ mode: to, lobby: current.lobby }, current.feedbackWhen),
+    allowDrill: drillAllowedOn(from, current.allowDrill),
+  };
+}
+
 // --- Negative marking (ADR-026, #130) --------------------------------------
 
 /**

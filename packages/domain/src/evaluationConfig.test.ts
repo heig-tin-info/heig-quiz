@@ -9,6 +9,8 @@ import {
   isInClass,
   isLiveState,
   logVisibilityDefault,
+  modeChangeable,
+  modeChangeEffects,
   notepadOn,
   missingTimingFields,
   pastTiming,
@@ -177,5 +179,39 @@ describe("the integrity journal's switch (F-EVAL-13, ADR-088)", () => {
     expect(integrityJournalOn("exercise", true)).toBe(true);
     expect(integrityJournalOn("exam", false)).toBe(false);
     expect(integrityJournalOn("poll", true)).toBe(false);
+  });
+});
+
+describe("changing the mode (ADR-092)", () => {
+  it("is open to a draft or scheduled evaluation nobody has attempted", () => {
+    expect(modeChangeable("exam", "draft", 0)).toBe(true);
+    expect(modeChangeable("exercise", "scheduled", 0)).toBe(true);
+  });
+
+  it("is closed from the lobby on, once an attempt exists, and on a poll", () => {
+    for (const state of ["lobby", "running", "paused", "closed", "released"] as const) {
+      expect(modeChangeable("exam", state, 0)).toBe(false);
+    }
+    expect(modeChangeable("exam", "draft", 1)).toBe(false);
+    expect(modeChangeable("poll", "draft", 0)).toBe(false);
+  });
+
+  it("falls back from `immediate` going to an exam, and keeps every other policy", () => {
+    const base = { lobby: "skip", allowDrill: undefined } as const;
+    expect(modeChangeEffects("exercise", "exam", { ...base, feedbackWhen: "immediate" }).feedbackWhen).toBe("on_release");
+    expect(modeChangeEffects("exercise", "exam", { ...base, feedbackWhen: "none" }).feedbackWhen).toBe("none");
+    expect(modeChangeEffects("exam", "exercise", { ...base, feedbackWhen: "on_release" }).feedbackWhen).toBe("on_release");
+  });
+
+  it("falls back from `immediate` for an exercise given a waiting room", () => {
+    const current = { lobby: "manual", feedbackWhen: "immediate", allowDrill: undefined } as const;
+    expect(modeChangeEffects("exam", "exercise", current).feedbackWhen).toBe("on_release");
+  });
+
+  it("freezes the drill at the value the old mode gave it", () => {
+    const base = { lobby: "skip", feedbackWhen: "on_release" } as const;
+    expect(modeChangeEffects("exercise", "exam", { ...base, allowDrill: undefined }).allowDrill).toBe(true);
+    expect(modeChangeEffects("exam", "exercise", { ...base, allowDrill: undefined }).allowDrill).toBe(false);
+    expect(modeChangeEffects("exam", "exercise", { ...base, allowDrill: true }).allowDrill).toBe(true);
   });
 });

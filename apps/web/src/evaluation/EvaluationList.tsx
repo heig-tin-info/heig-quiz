@@ -32,7 +32,7 @@ import {
 } from "../ui";
 import { evaluationHome, evaluationLinkItems, evaluationStateLabel, stateTone } from "./common";
 import { evaluationsKey } from "../queryKeys";
-import { ModeChoice, type CreatedMode } from "./ModeChoice";
+import { ModeChoice, TemplateModeLine, type CreatedMode } from "./ModeChoice";
 import {
   InstantiateError,
   SaveAsTemplateDialog,
@@ -136,7 +136,10 @@ export function NewEvaluationModal({
         onChange={(e) => setTitle(e.target.value)}
       />
       {template ? (
-        <p className="text-[13px] text-fg-muted">{t("templates.useHelp")}</p>
+        <>
+          <TemplateModeLine mode={template.mode} />
+          <p className="text-[13px] text-fg-muted">{t("templates.useHelp")}</p>
+        </>
       ) : (
         <ModeChoice value={mode} onChange={setMode} />
       )}

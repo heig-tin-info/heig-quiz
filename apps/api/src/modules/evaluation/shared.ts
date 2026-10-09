@@ -74,6 +74,9 @@ const REFUSALS = {
   no_template: [409, "the evaluation has no template to pull from"],
   template_moved: [409, "the template has a newer revision than the one confirmed"],
   allow_drill_locked: [409],
+  // ADR-092: the mode changes only while the evaluation is a draft or
+  // scheduled with no attempt (`modeChangeable`), and never on a poll.
+  mode_frozen: [409, "the mode can no longer change: students have been let in, or an attempt exists (ADR-092)"],
 } satisfies Record<string, Refusal>;
 
 export type EvaluationErrorCode = keyof typeof REFUSALS;

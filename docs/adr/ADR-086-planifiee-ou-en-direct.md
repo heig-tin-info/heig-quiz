@@ -18,6 +18,10 @@ to, the attempt deadline (`attemptDeadline`), the readiness and past-time
 rules (`missingTimingFields`, `pastTiming`), and the live controls that move
 `closesAt` (`extendTime`, `resumeEvaluation`).
 
+Amended by [ADR-092](ADR-092-changer-le-mode-d-une-evaluation.md)
+(2026-10-09): the mode is editable until students are let in; a change reapplies
+no preset and leaves the clock fields alone (`assertStaysScheduled` holds).
+
 Relations: amends F-EVAL-04 (an exam may be closed by the teacher when it
 has a safety deadline), F-EVAL-05 (the extra time is added after the cut),
 F-EVAL-06 (the waiting room is a Live setting) and F-LIVE-12 (a late
