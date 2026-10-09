@@ -101,6 +101,9 @@ describe("TemplateEditor", () => {
     expect(screen.queryByLabelText("Opens at")).toBeNull();
     expect(screen.queryByLabelText("Closes at")).toBeNull();
     expect(screen.getByText(/Dates are set in each evaluation/)).toBeVisible();
+    // A template may always change its mode (ADR-092).
+    expect(screen.getByRole("radio", { name: "Exam" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Exercise" })).toBeEnabled();
   });
 
   it("opens a question with the way back to this template", async () => {

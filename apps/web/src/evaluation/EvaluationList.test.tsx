@@ -337,7 +337,10 @@ describe("EvaluationList", () => {
       await user.selectOptions(select, TEMPLATE);
       const dialog = screen.getByRole("dialog");
       expect(within(dialog).getByRole("textbox")).toHaveValue("Final exam");
+      // The choice is the template's, shown read-only (ADR-092).
       expect(within(dialog).queryByText("Mode")).not.toBeInTheDocument();
+      expect(within(dialog).queryByRole("radiogroup")).not.toBeInTheDocument();
+      expect(within(dialog).getByText(/mode included \(Exam, which you can change afterwards/)).toBeInTheDocument();
       await user.click(screen.getByRole("button", { name: "Create evaluation" }));
       await waitFor(() => expect(onCreated).toHaveBeenCalledWith(created));
       const post = calls.find((c) => c.method === "POST");

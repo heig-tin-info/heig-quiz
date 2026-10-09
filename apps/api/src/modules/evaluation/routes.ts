@@ -125,6 +125,12 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
     return result;
   }
 
+  /** The audit payload of a patch: the fields sent, and the mode when it changes (ADR-092). */
+  const auditPatch = (before: service.EvaluationRecord, body: { mode?: string | undefined }) => ({
+    fields: Object.keys(body),
+    ...(body.mode !== undefined && body.mode !== before.mode ? { mode: { from: before.mode, to: body.mode } } : {}),
+  });
+
   // --- Collection --------------------------------------------------------
 
   app.get(
@@ -188,9 +194,17 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
           req,
           scope.evaluation,
           "evaluation.update",
-          { fields: Object.keys(body) },
-          (ctx) => service.patchEvaluation(app.db, scope.evaluation, body, { ...ctx, now, kioskAvailable }),
+          auditPatch(scope.evaluation, body),
+          (ctx) =>
+            // A transaction: a change of mode locks the row and decides on it (ADR-092).
+            app.db.transaction((tx) => service.patchEvaluation(tx, scope.evaluation, body, { ...ctx, now, kioskAvailable })),
         );
+        // ADR-092: a scheduled exam that becomes an exercise is announced as
+        // the move to scheduled would have, once (the marker claims it);
+        // `announceMove` itself keeps to a scheduled exercise.
+        if (row.mode !== scope.evaluation.mode) {
+          await service.announceMove(app.db, row, now);
+        }
         return detail(req, row, scope.classroom.courseId);
       },
     ),
@@ -457,7 +471,7 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
     teacher(
       { params: IdParam, body: TemplatePatch, load: staffTemplate },
       ({ req, now, body, scope }) =>
-        templateWrite(req, scope.template, { fields: Object.keys(body) }, (tx, row, ctx) =>
+        templateWrite(req, scope.template, auditPatch(scope.template, body), (tx, row, ctx) =>
           service.patchEvaluation(tx, row, body, { ...ctx, now, kioskAvailable }),
         ),
     ),

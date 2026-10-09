@@ -30,6 +30,9 @@ import {
   isConfigFieldWritable,
   isFeedbackAllowed,
   logVisibilityDefault,
+  drillAllowedOn,
+  feedbackWhenFor,
+  modeChangeable,
   negativeMarkingAllowedFor,
   OVER_STATES,
   retakesAllowedFor,
@@ -53,7 +56,7 @@ import {
   questionRefused,
 } from "./shared.js";
 import { assertStaysScheduled } from "./stateMachine.js";
-import { byId, settingsOf, feedbackOf, preferredMcqPolicy } from "./reads.js";
+import { attemptCount as countAttempts, byId, settingsOf, feedbackOf, preferredMcqPolicy } from "./reads.js";
 import { latestPublished, type CopyHome } from "./items.js";
 
 /**
@@ -243,7 +246,7 @@ const MODE_SETTINGS: readonly {
  */
 export async function patchEvaluation(
   db: DbOrTx,
-  row: EvaluationRecord,
+  loaded: EvaluationRecord,
   patch: EvaluationPatch,
   ctx: {
     attemptCount: number;
@@ -255,33 +258,68 @@ export async function patchEvaluation(
     kioskAvailable?: boolean;
   },
 ): Promise<EvaluationRecord> {
-  const lock = configLock(row.state, ctx.attemptCount);
-  if (Object.keys(patch).some((k) => !isConfigFieldWritable(lock, k))) {
+  // ADR-092: a change of mode is decided on the row LOCKED, its state and
+  // its attempts read again under the lock (as `pullTemplate` does): a
+  // ticker move to the lobby or a first attempt between the load and this
+  // write must not let the mode land on a sat evaluation. The caller hands
+  // a transaction for an evaluation (the template path already holds one).
+  // The ONE place of the exemption: sending the mode the row already has is
+  // no change (an MCP client may), so it is neither locked nor refused.
+  let row = loaded;
+  let attemptTotal = ctx.attemptCount;
+  if (patch.mode !== undefined && patch.mode !== loaded.mode) {
+    const [locked] = await db.select().from(evaluations).where(eq(evaluations.id, loaded.id)).for("update");
+    if (!locked) throw new EvaluationError("not_found");
+    row = locked;
+    attemptTotal = await countAttempts(db, locked.id);
+  }
+  const modeChanged = patch.mode !== undefined && patch.mode !== row.mode;
+  if (modeChanged && !modeChangeable(row.mode, row.state, attemptTotal)) throw new EvaluationError("mode_frozen");
+  const mode: EvaluationMode = patch.mode ?? row.mode;
+  const lock = configLock(row.state, attemptTotal);
+  if (Object.keys(patch).some((k) => k !== "mode" && !isConfigFieldWritable(lock, k))) {
     throw new EvaluationError(lock === "running" ? "running_locked" : "locked");
   }
   if (row.mode === "poll" && patch.feedbackPolicy !== undefined) throw new EvaluationError("poll_feedback_locked");
   const next: Partial<typeof evaluations.$inferInsert> = { updatedAt: new Date() };
   if (patch.title !== undefined) next.title = patch.title;
-  if (patch.settings !== undefined) {
+  if (modeChanged) next.mode = mode;
+  if (patch.settings !== undefined || modeChanged) {
     const settings = EvaluationSettings.parse({ ...settingsOf(row), ...patch.settings });
+    // ADR-041 §2: the drill is frozen at what the old mode gave it, so the
+    // change does not silently flip it.
+    if (modeChanged) settings.allowDrill = drillAllowedOn(row.mode, settings.allowDrill);
+    // The settings the write leaves behind are judged against the mode it
+    // leaves behind: a change of mode runs every gate against the new one.
     for (const { code, on, allowedFor, why } of MODE_SETTINGS) {
-      if (on(settings) && !allowedFor(row.mode)) throw new EvaluationError(code, `an evaluation of mode "${row.mode}" ${why}`);
+      if (on(settings) && !allowedFor(mode)) throw new EvaluationError(code, `an evaluation of mode "${mode}" ${why}`);
     }
     // ADR-091: a partial retake needs free navigation; leaving either half
     // inconsistent is refused, whichever moved.
-    if (!retakeScopeFits(row.mode, retakesOf(settings), settings.navigation)) {
+    if (!retakeScopeFits(mode, retakesOf(settings), settings.navigation)) {
       throw new EvaluationError("retake_scope_navigation");
     }
     // No kiosk path, no kiosk exam (ADR-051 §2): switching it on is refused,
     // switching it off — or patching anything else — always passes, so an
     // exam left on after the platform turned the kiosk off can be fixed.
-    if (patch.settings.kiosk === true && ctx.kioskAvailable !== true) throw new EvaluationError("kiosk_unavailable");
+    // A stored kiosk becoming an exam is a kiosk exam switched on.
+    const kioskOn = patch.settings?.kiosk === true || (modeChanged && mode === "exam" && settings.kiosk === true);
+    if (kioskOn && ctx.kioskAvailable !== true) throw new EvaluationError("kiosk_unavailable");
     next.settings = settings;
   }
   if (patch.gradingScale !== undefined) next.gradingScale = patch.gradingScale;
   if (patch.mcqPolicy !== undefined) next.mcqPolicy = patch.mcqPolicy;
-  if (patch.feedbackPolicy !== undefined) {
-    next.feedbackPolicy = FeedbackPolicy.parse({ ...feedbackOf(row), ...patch.feedbackPolicy });
+  if (patch.feedbackPolicy !== undefined || modeChanged) {
+    const merged = FeedbackPolicy.parse({ ...feedbackOf(row), ...patch.feedbackPolicy });
+    // ADR-092: the one forced consequence of a change of mode on feedback.
+    // `immediate` falls back where the new mode refuses it, unless the patch
+    // chose a `when` itself (then the check below judges it). Nothing is
+    // ever turned on. SEB and kiosk stay stored, inert outside an exam.
+    const lobby = ((next.settings ?? settingsOf(row)) as EvaluationSettings).lobby;
+    next.feedbackPolicy =
+      modeChanged && patch.feedbackPolicy?.when === undefined
+        ? { ...merged, when: feedbackWhenFor({ mode, lobby }, merged.when) }
+        : merged;
   }
   if (patch.opensAt !== undefined) next.opensAt = patch.opensAt === null ? null : new Date(patch.opensAt);
   if (patch.closesAt !== undefined) {
@@ -297,14 +335,15 @@ export async function patchEvaluation(
   // students while the others are still working (F-EVAL-11, #78). The pair
   // the patch LEAVES behind is checked, whichever half it moved: adding a
   // waiting room under `immediate` is refused like asking for `immediate`
-  // under a waiting room. The screen sends the fallback with the change
-  // (`feedbackWhenFor`), so only an inconsistent client meets this 422. A
+  // under a waiting room. For a lobby change the SCREEN sends the fallback
+  // (`feedbackWhenFor`), so only an inconsistent client meets this 422; for a
+  // change of mode the server applies it itself (above, ADR-092). A
   // patch that touches neither half passes, so a row stored before the rule
   // can still be renamed.
-  if (patch.feedbackPolicy?.when !== undefined || patch.settings?.lobby !== undefined) {
+  if (patch.feedbackPolicy?.when !== undefined || patch.settings?.lobby !== undefined || modeChanged) {
     const when = ((next.feedbackPolicy ?? feedbackOf(row)) as FeedbackPolicy).when;
     const lobby = ((next.settings ?? settingsOf(row)) as EvaluationSettings).lobby;
-    if (!isFeedbackAllowed({ mode: row.mode, lobby }, when)) {
+    if (!isFeedbackAllowed({ mode, lobby }, when)) {
       throw new EvaluationError(
         "feedback_not_allowed",
         `feedback "${when}" is not allowed for an evaluation sat in class (F-EVAL-11)`,
@@ -317,7 +356,8 @@ export async function patchEvaluation(
   // open it, or close it, at its next pass.
   if (
     row.state === "scheduled" &&
-    (patch.opensAt !== undefined ||
+    (modeChanged ||
+      patch.opensAt !== undefined ||
       patch.closesAt !== undefined ||
       patch.durationS !== undefined ||
       patch.settings?.timing !== undefined)

@@ -173,7 +173,7 @@ export function UseTemplateDialog({
         fullWidth
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        help={t("templates.useHelp")}
+        help={t("templates.useHelp", { mode: t(`eval.mode.${template.mode}`) })}
       />
     </FormDialog>
   );

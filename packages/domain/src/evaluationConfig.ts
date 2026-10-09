@@ -197,6 +197,24 @@ export function isConfigEditable(state: EvaluationStateName, attemptCount: numbe
   return configLock(state, attemptCount) === null;
 }
 
+// --- Changing the mode (ADR-092) ---------------------------------------------
+
+/**
+ * Whether the mode of an evaluation may still be changed (ADR-092): while it
+ * is a draft or scheduled AND nobody has an attempt, the teacher's own
+ * included. From the lobby on, students are in the room under the rules they
+ * were announced. A template (never run, always a draft with no attempt)
+ * always passes. A poll is never changed. One rule, read by the API
+ * (`409 mode_frozen`) and by the configuration screen.
+ */
+export function modeChangeable(
+  mode: EvaluationModeName,
+  state: EvaluationStateName,
+  attemptCount: number,
+): boolean {
+  return mode !== "poll" && (state === "draft" || state === "scheduled") && attemptCount === 0;
+}
+
 // --- Negative marking (ADR-026, #130) --------------------------------------
 
 /**

@@ -34,7 +34,8 @@ export function Segmented<T extends string>({
   /** Groups the native radios (one form holds several groups). */
   name: string;
   value: T;
-  options: ReadonlyArray<{ value: T; label: ReactNode }>;
+  /** An option may be disabled on its own, with the `title` that says why. */
+  options: ReadonlyArray<{ value: T; label: ReactNode; disabled?: boolean | undefined; title?: string | undefined }>;
   onChange: (value: T) => void;
   disabled?: boolean | undefined;
   size?: "sm" | "md" | undefined;
@@ -77,12 +78,14 @@ export function Segmented<T extends string>({
       {options.map((o) => (
         <label
           key={o.value}
+          {...(o.title === undefined ? {} : { title: o.title })}
           className={cx(
+            o.disabled && "opacity-60",
             "inline-flex items-center justify-center rounded-full px-3 font-medium transition-colors has-focus-visible:ring-2 has-focus-visible:ring-accent/50",
             size === "sm" ? "h-6 text-xs" : "h-7 text-[13px]",
             value === o.value
               ? "bg-surface text-fg ring-1 ring-line-strong/70"
-              : cx("text-fg-muted", !disabled && "cursor-pointer hover:text-fg"),
+              : cx("text-fg-muted", !disabled && !o.disabled && "cursor-pointer hover:text-fg"),
           )}
         >
           <input
@@ -90,7 +93,7 @@ export function Segmented<T extends string>({
             name={name}
             className="sr-only"
             checked={value === o.value}
-            disabled={disabled}
+            disabled={disabled || o.disabled}
             onChange={() => onChange(o.value)}
           />
           {o.label}

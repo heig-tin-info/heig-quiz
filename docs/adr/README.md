@@ -104,6 +104,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-086 — Scheduled or Live: who drives the clock, a safety deadline, and a limit cut at the window's end](ADR-086-planifiee-ou-en-direct.md)
 - [ADR-088 — The exam integrity journal: leaving the page and pasting from outside, recorded lightly, never proof](ADR-088-journal-d-integrite.md)
 - [ADR-091 — Partial retake of an exercise](ADR-091-reprise-partielle-d-un-exercice.md)
+- [ADR-092 — Changing the mode of an evaluation: only the mode moves, until students are let in](ADR-092-changer-le-mode-d-une-evaluation.md)
 
 ### Question analytics
 

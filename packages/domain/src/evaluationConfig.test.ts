@@ -9,6 +9,7 @@ import {
   isInClass,
   isLiveState,
   logVisibilityDefault,
+  modeChangeable,
   notepadOn,
   missingTimingFields,
   pastTiming,
@@ -177,5 +178,20 @@ describe("the integrity journal's switch (F-EVAL-13, ADR-088)", () => {
     expect(integrityJournalOn("exercise", true)).toBe(true);
     expect(integrityJournalOn("exam", false)).toBe(false);
     expect(integrityJournalOn("poll", true)).toBe(false);
+  });
+});
+
+describe("changing the mode (ADR-092)", () => {
+  it("is open to a draft or scheduled evaluation nobody has attempted", () => {
+    expect(modeChangeable("exam", "draft", 0)).toBe(true);
+    expect(modeChangeable("exercise", "scheduled", 0)).toBe(true);
+  });
+
+  it("is closed from the lobby on, once an attempt exists, and on a poll", () => {
+    for (const state of ["lobby", "running", "paused", "closed", "released"] as const) {
+      expect(modeChangeable("exam", state, 0)).toBe(false);
+    }
+    expect(modeChangeable("exam", "draft", 1)).toBe(false);
+    expect(modeChangeable("poll", "draft", 0)).toBe(false);
   });
 });

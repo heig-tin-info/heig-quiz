@@ -136,7 +136,7 @@ export function NewEvaluationModal({
         onChange={(e) => setTitle(e.target.value)}
       />
       {template ? (
-        <p className="text-[13px] text-fg-muted">{t("templates.useHelp")}</p>
+        <p className="text-[13px] text-fg-muted">{t("templates.useHelp", { mode: t(`eval.mode.${template.mode}`) })}</p>
       ) : (
         <ModeChoice value={mode} onChange={setMode} />
       )}
