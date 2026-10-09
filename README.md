@@ -250,16 +250,11 @@ releases and exports it, over HTTP only.
 | **Identity** | Switch edu-ID (OpenID Connect with PKCE); Keycloak in development |
 | **Contracts** | every HTTP input validated by a schema the server and the client share |
 
-```
-apps/api        Fastify API, Drizzle schema and migrations
-apps/web        the React single-page application
-apps/runner     the hardened code execution service
-packages/       contracts, pure domain rules, one package per question type,
-                the diagram engine, the journal renderer
-docs/           user guide, specification, architecture decision records
-```
-
-The [repository map](docs/development/repository.md) has the details;
+Four applications live under `apps/` (the API, the web app, the code
+runner, the online workspace) and the shared code under `packages/`
+(contracts, pure domain rules, one package per question type, the diagram
+engine, the journal renderer). The
+[repository map](docs/development/repository.md) owns the layout;
 [`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](AGENTS.md) hold the invariants and
 the working rules every contributor, human or agent, follows.
 

@@ -36,40 +36,33 @@ which items you skipped.
 3. **Dev login.** Any change to `apps/api/src/config.ts`, auth, or env
    handling: `AUTH_DEV_LOGIN=1` and `pglite://` must still refuse to start
    under `NODE_ENV=production`.
-4. **Student views (`toStudent`, the journal).** Any new field in a
-   question type's config, any new route or SSE event sending question
-   data to a student: the only exit is `studentView` in the `live` module.
-   A new config field that holds answer material must be stripped by
-   `toStudent` AND covered by that type's test
-   (forbidden-key list and search for the answer values, spec 05 §5.7).
+4. **Student views** (invariant 4 of `CLAUDE.md`; the rule is there). Any
+   new field in a question type's config, any new route or SSE event sending
+   question data to a student: does it pass through `studentView` in the
+   `live` module? A new config field holding answer material must be
+   stripped by `toStudent` AND covered by that type's test (forbidden-key
+   list and search for the answer values, spec 05 §5.7).
    **Journal**: any route, SSE event or asset handler serving journal data
-   to a student goes through the `journal` module's student view. The
-   student payload carries no draft, no page before its `visible_from`
-   (judged by the database's `now()`, never the client's), no markdown, no
-   blob sha, no warning, no hidden count, and its navigation lists only the
-   pages it serves; an asset is served only if a page of that payload
-   references it (N-SEC-12, N-SEC-13). Demand the test: a draft, a future
-   page and an asset referenced by them only, searched for in every student
-   response, for a student, the staff test seat and an impersonation
-   session. Journal markdown escapes raw HTML (N-SEC-14) and every path is
-   checked inside the journal's root (N-SEC-15).
+   to a student: does it go through the `journal` module's student view?
+   Check the student payload against the list of invariant 4, with
+   `visible_from` judged by the database's `now()`, never the client's, and
+   its navigation listing only the pages it serves. Demand the test: a
+   draft, a future page and an asset referenced by them only, searched for
+   in every student response, for a student, the staff test seat and an
+   impersonation session. Journal markdown escapes raw HTML (N-SEC-14) and
+   every path is checked inside the journal's root (N-SEC-15).
 5. **Server clock.** No deadline, receipt time or "is it late" decision from
    a client value. Writes after `deadline + 3 s` → `410 attempt_closed`.
-6. **Access loaded, not checked.** A new route reaching a classroom-scoped
-   entity loads it through `staffAccess` (`apps/api/src/modules/guards.ts`)
-   or the student equivalent; a denied access is a 404 identical to a missing
-   entity, never a 403 that leaks existence. Look for a load followed by an
-   `if (!allowed)`: that is the pattern the invariant forbids.
-   **Student branch**: a classroom route a student reads loads through
-   `readableClassroom`. The course's staff (through `staffAccess`) get the
-   staff payload, unless the request asks for the student payload (a
-   teacher in the student view on their staff seat, ADR-018); that
-   parameter can only narrow, never widen. An impersonation session
-   (ADR-034) gets the student payload whatever it asks. A claimed
-   enrollment of the caller gets the student payload; anyone else the 404.
-   Blockers: an impersonation session receiving the staff payload, or the
-   narrowing parameter widening the payload. Journal routes serve portal
-   sessions only: a `seb` session must not reach them (ADR-027).
+6. **Access loaded, not checked** (invariant 6 of `CLAUDE.md`; the rule is
+   there). A new route reaching a classroom-scoped entity: does it load
+   through `staffAccess`, or `readableClassroom` for a classroom route a
+   student reads (`apps/api/src/modules/guards.ts`)? Look for a load
+   followed by an `if (!allowed)` — the pattern the invariant forbids — and
+   for a 403 that leaks existence where a missing entity's 404 is due.
+   Blockers: an impersonation session receiving the staff payload, the
+   student-view parameter widening the payload, a `seb` session reaching a
+   journal route, a caller with neither a staff seat nor a claimed
+   enrollment who gets anything but the 404.
 7. **Contracts.** Every new body, query or params is a zod schema in
    `packages/contracts`, used by the route AND by the client.
 8. **Pure rules in `packages/domain`,** with unit tests, no DB access.

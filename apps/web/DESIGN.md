@@ -77,32 +77,32 @@ Components never write `text-white` on `bg-accent`, `bg-danger` or
 
 Every pair the design promises, computed on the values above (translucent
 `-soft` backgrounds composited over `surface`). Text pairs are held to 4.5:1,
-non-text ones (focus ring) to 3:1. `fg-faint` used to be held to 3:1 as a
-decorative tone — but a caption is read, not glanced at: "Choose one answer.",
+non-text ones (focus ring) to 3:1. `fg-faint` is not a decorative tone held
+to 3:1. A caption is read, not glanced at: "Choose one answer.",
 "14 minutes left" and a course code all live in it, and a reader who cannot
 make them out has lost the sentence, not an ornament. So it is held to 4.5:1
 on `canvas` and on `surface`, in both themes, and stays a clear step quieter
 than `fg-muted`. A caption that carries information a screen cannot repeat
 belongs in `fg-muted` anyway; `fg-faint` is for the ones that only support it.
 
-| Pair | Light before | Light after | Dark before | Dark after |
-| --- | --- | --- | --- | --- |
-| `fg-muted` on `surface` | 5.98 | 5.98 | 6.52 | 6.52 |
-| `fg-muted` on `surface-2` | 5.30 | 5.30 | 5.96 | 5.96 |
-| `fg-faint` on `surface` | 3.43 ✗ | **5.14** | 3.19 ✗ | **4.94** |
-| `fg-faint` on `canvas` | 3.15 ✗ | **4.71** | 3.44 ✗ | **5.31** |
-| `success` on `success-soft` | 4.70 | 4.70 | 6.10 | 6.10 |
-| `warning` on `warning-soft` | 4.48 ✗ | **4.76** | 6.27 | 6.27 |
-| `danger` on `danger-soft` | 5.01 | 5.01 | 4.88 | 4.88 |
-| `info` on `info-soft` | — | **5.27** | — | **5.39** |
-| `info` on `surface` | — | **5.98** | — | **6.76** |
-| `on-info-mid` on `info-mid` | — | **5.46** | — | **5.70** |
-| `accent` on `accent-soft` | 5.75 | 5.75 | 3.75 ✗ | **4.58** |
-| `accent` on `surface` | 6.64 | 6.64 | 4.31 ✗ | **5.18** |
-| `on-fill` on `accent` | 6.64 | 6.64 | 4.03 ✗ (white) | **5.57** |
-| `on-fill` on `accent-hover` | 8.23 | 8.23 | 3.39 ✗ (white) | **6.85** |
-| `on-fill` on `danger` | 5.87 | 5.87 | 2.91 ✗ (white) | **6.42** |
-| focus ring on `surface` / `canvas` | 6.64 / 6.09 | 6.64 / 6.09 | 4.31 / 4.64 | 5.18 / 5.57 |
+| Pair | Light | Dark |
+| --- | --- | --- |
+| `fg-muted` on `surface` | 5.98 | 6.52 |
+| `fg-muted` on `surface-2` | 5.30 | 5.96 |
+| `fg-faint` on `surface` | 5.14 | 4.94 |
+| `fg-faint` on `canvas` | 4.71 | 5.31 |
+| `success` on `success-soft` | 4.70 | 6.10 |
+| `warning` on `warning-soft` | 4.76 | 6.27 |
+| `danger` on `danger-soft` | 5.01 | 4.88 |
+| `info` on `info-soft` | 5.27 | 5.39 |
+| `info` on `surface` | 5.98 | 6.76 |
+| `on-info-mid` on `info-mid` | 5.46 | 5.70 |
+| `accent` on `accent-soft` | 5.75 | 4.58 |
+| `accent` on `surface` | 6.64 | 5.18 |
+| `on-fill` on `accent` | 6.64 | 5.57 |
+| `on-fill` on `accent-hover` | 8.23 | 6.85 |
+| `on-fill` on `danger` | 5.87 | 6.42 |
+| focus ring on `surface` / `canvas` | 6.64 / 6.09 | 5.18 / 5.57 |
 
 Two pairs stay below their target, on purpose:
 
@@ -158,12 +158,10 @@ Two pairs stay below their target, on purpose:
   fields 10 px; cards 12 px; sheets and dialogs 16 px; menus 12 px.
   Pills on everything you press, soft squares on everything that holds —
   save the keys of the calculator's keypad, soft squares in a grid (below).
-  Each of those was one step larger (12 / 16 / 20 / 14) and the previous
-  radii read as soft and toy-like next to dense tables: the pool table, the
-  live grid and the grading list are the screens this product is for, and a
-  16 px corner around a 13 px row makes the card louder than its contents.
-  The pills are untouched — they mark what you press, and that distinction is
-  the point of the scale.
+  The radii stay small because the pool table, the live grid and the grading
+  list are the screens this product is for, and a 16 px corner around a
+  13 px row makes the card louder than its contents. The pills mark what you
+  press, and that distinction is the point of the scale.
   In the markup the radii are the tokens `rounded-field`, `rounded-card`,
   `rounded-sheet`, `rounded-menu` and `rounded-key` (`style.css`), never a
   bracketed pixel value that happens to equal one. Two values stand outside
@@ -215,8 +213,7 @@ question's prose never carries it, so the question scenes do not move.
 - **Everything else is `.md-body` unchanged**: the same tokens in both
   themes (no colour of its own, so dark mode follows by itself), the same
   radii — a code block and an image at `rounded-field` (10 px), inline code
-  at 5 px — not classroom's larger 12/16 scale, which this product left
-  (Shape and elevation). Syntax colour in a code block (`.tok-kw` in
+  at 5 px (Shape and elevation). Syntax colour in a code block (`.tok-kw` in
   accent, `.tok-str` in success) is semantic and does not count as the
   screen's one accent use.
 
@@ -244,7 +241,7 @@ question's prose never carries it, so the question scenes do not move.
   (F-JRN-06). A page hidden from students (staff payload only) carries an
   eye on its own entry or menu item, never summed up on a folder's entry.
   The page is a centred 48 rem column (the prose capped at 72 ch inside
-  it): no navigation column eats the width any more. From `xl` (1280) a
+  it): no navigation column eats the width. From `xl` (1280) a
   13 rem table of contents stands at its right, 32 px away, sticking to
   the top of the window; below `xl`, phone included, it folds into a
   small "On this page" disclosure above the page. The page is a sheet
@@ -341,8 +338,7 @@ caret) and `rovingIndex` for a horizontal roving strip (`Tabs`,
 `ProgressSegments`). They return the next index or null and nothing else:
 `preventDefault`, opening the list and moving the focus stay with the
 caller (a component, or `useCombobox` for the three comboboxes), because
-that is where the components legitimately differ. They exist because five
-lists and two strips each wrote that arithmetic out by hand.
+that is where the components legitimately differ.
 
 An element made clickable without being a button (a card, a table row) takes
 `pressable()` from `ui/layers.tsx`: `tabIndex={0}` plus Enter and Space, with Space
@@ -371,16 +367,16 @@ armed only when the label is REALLY cut (`useTruncated`, which measures
 `scrollWidth` against `clientWidth`): a bubble repeating a label the eye
 already reads is noise on every row of the list.
 
-A sidebar row carries ONE label (#153). A classroom row shows its name and
-nothing beside it: a second label (the course code) cut the name on almost
-every row at 240 px and did not even tell two classrooms of one course apart.
+A sidebar row carries ONE label. A classroom row shows its name and
+nothing beside it: a second label (the course code) would cut the name on
+almost every row at 240 px and would not tell two classrooms of one course apart.
 The course (code · name) is what that row's `Tip` always says, preceded by the
 whole classroom name when the ellipsis cut it. The Classrooms section sits
 under a `border-t border-line` hairline, like the shortcut strip: it is apart
 from the navigation, and it looks apart.
 
 "Courses" and "Question pools" disclose a tree under their row, and both
-behave alike (`useNavCycle`, #154): the one being read, or all of them,
+behave alike (`useNavCycle`): the one being read, or all of them,
 remembered per browser. Like every sidebar row, a click navigates to the
 section's list page, from wherever the reader is; only a click on that list
 page, where there is nowhere left to go, toggles the tree. In a tree the current
@@ -455,26 +451,24 @@ live in `ui/state.ts`, each written once.
   the closed list of choices (or a predicate for an open set, an id); anything
   else stored gives `fallback`. Both accessors are wrapped: a private window
   or blocked site data makes `localStorage` THROW, and a remembered habit is
-  never worth a crash — the page simply starts on the fallback. It exists
-  because five screens wrote that reader by hand, and two of them crashed in
-  a private window. The storage keys are the ones those screens always used,
-  so nobody loses a remembered view. The theme, the locale mirror and the
+  never worth a crash — the page simply starts on the fallback. The storage
+  keys stay the ones the screens have always used, so nobody loses a
+  remembered view. The theme, the locale mirror and the
   notification preferences, which are not choices of this shape, go through
   the same guarded `readStored` / `writeStored` / `removeStored`: a guard on
   the page is worth nothing if the boot crashed first.
 - `isTyping(target)`: a single-letter shortcut (`f`, `r`, `v`, an arrow) is
   not one while the keystroke lands in an input, a textarea, a select or a
   contenteditable surface — there it is a letter the reader is writing. Every
-  screen-wide key handler asks it first; four screens used to spell it out.
+  screen-wide key handler asks it first.
 - `useFullscreen()`: the page-level full screen (a `fixed inset-0` stage,
   which is all a projector needs) with the browser's own `requestFullscreen`
   attempted on top and its refusal swallowed. It LISTENS to
   `fullscreenchange`, because Escape, F11 and the browser's chrome leave the
   browser full screen without telling the page: the state must follow the
   browser out, or the reader is left inside an overlay whose button says
-  "Leave full screen" about a full screen already gone. The live dashboard's
-  private copy lacked that listener and did exactly that; the poll projection
-  and the dashboard now share this one.
+  "Leave full screen" about a full screen already gone. The poll projection
+  and the live dashboard share this one.
 
 ## Components
 
@@ -498,9 +492,9 @@ live in `ui/state.ts`, each written once.
   app's `Button` and `LinkButton` and the question types all wear.
 - Icon button: round, ghost; `danger` turns red on hover only. Its disc as
   a link to a page outside the app, in a new tab, is `IconLink` — a
-  project's two repositories on GitHub on its row (M3-14h); its label is
+  project's two repositories on GitHub on its row; its label is
   its tooltip and accessible name, as an icon button's.
-- Mode banner (`ModeBanner` in `Shell.tsx`, #200): a mode of the whole
+- Mode banner (`ModeBanner` in `Shell.tsx`): a mode of the whole
   application — the student view, acting as someone else, the teacher's
   preview of an evaluation (ADR-018, seventh addendum) — is stated above
   everything, not as a page notice. Full width over the sidebar,
@@ -553,9 +547,8 @@ live in `ui/state.ts`, each written once.
   group" end of the spacing scale, since the panel is one group nested in a
   card that already has its 16–20 of air. Two tones: `soft` (`surface-2`, a
   recess) for what the product says, and `outlined` (a `line-strong` hairline
-  on `surface`) for what a person wrote to this reader. It exists because
-  five such panels were written by hand with two paddings (12 and 16) and
-  two gaps (4 and 6). It lives in `@quiz/ui`, so the reviews of the question
+  on `surface`) for what a person wrote to this reader. It lives in
+  `@quiz/ui`, so the reviews of the question
   types (`rich`, `diagram`) draw the same one, a count at the end of the
   eyebrow's line when they have one (`aside`).
 - PersonAvatar: a person as a round picture, or their two initials on
@@ -566,9 +559,7 @@ live in `ui/state.ts`, each written once.
   name as its accessible name and as a `Tip`, never a native `title`; one
   with the name written beside it (a roster row) carries neither. A picture
   that loaded shows larger on hover — at most 176 px, never upscaled — with
-  the name in the same bubble; initials never do, nor does a touch screen. It
-  exists because three places drew "a picture, or initials", and two of them
-  had no fallback.
+  the name in the same bubble; initials never do, nor does a touch screen.
 - OrgAvatar: an organization — a GitHub organization, the owner of a
   classroom's repositories — as its picture, or its initials (the first
   letter of the first two words of the login, `heig-tin-info` ⇒ HT) on
@@ -585,8 +576,8 @@ live in `ui/state.ts`, each written once.
 - Avatar initials below the type scale: 9 px in the 16 px `OrgAvatar`, 10 px
   in the 24 px one. The 12 px caption step would overflow a box that small;
   these are glyphs in a badge, not text to read, and exist nowhere else.
-- GithubIcon (`ui/identity.tsx`): the GitHub mark, which lucide no longer
-  carries, in `currentColor`. It is an `IconType`, so it goes wherever a
+- GithubIcon (`ui/identity.tsx`): the GitHub mark, which lucide does not
+  carry, in `currentColor`. It is an `IconType`, so it goes wherever a
   lucide icon goes, and it is drawn to the same optical size: its view box
   leaves the one-twelfth margin a lucide glyph has inside its 24 units, so
   at `size-4` it sits beside a `Pencil` without looking one step larger.
@@ -609,10 +600,8 @@ live in `ui/state.ts`, each written once.
   is already written beside them. Those actions go through `Actions`, so one
   of them is one icon button. The row has a ceiling (`max`, ten): past it the
   rest becomes a single "+N" disc in the `Initials` colours, opening on the
-  WHOLE list, one line per person. It exists because the staff used to be a
-  hairline-separated strip under the classrooms with the word STAFF over three
-  discs, and "remove Pierre Roulet from the staff" was an item in the course's
-  own menu — an action about a person, filed under the thing they are on.
+  WHOLE list, one line per person. An action about a person is never filed
+  under the thing they are on (the course's own menu).
 - MetaItem / MetaLine (`ui/meta.tsx`): the small facts under a title — a
   deadline, a commit, a score. An item is an icon (lucide, `size-3.5`,
   `fg-faint`, decoration) and its text at 13 px `fg-muted`; an icon never
@@ -623,8 +612,8 @@ live in `ui/state.ts`, each written once.
   image named for a screen reader and by a `Tip` on hover, not a tab stop.
 - Breadcrumb (`ui/breadcrumb.tsx`, drawn through `src/Trail.tsx`): the trail
   of a page, in the `PageHeader` eyebrow, `Courses › PRG1 › PRG1-2026 › Quiz 3
-  › Results`. It replaced `ParentLink` (the single "one level up" button) in
-  the whole app, staff pages included (product owner, 2026-10-06). A `nav`
+  › Results`, in the whole app, staff pages included; there is no separate
+  "one level up" button. A `nav`
   named by the caller (`breadcrumb.label`, translated), an ordered list;
   ancestors are real links (`href` from `routeToPath`, routed in the app on a
   plain click), the last item is the page, `aria-current="page"`, in `fg`. The
@@ -682,8 +671,8 @@ live in `ui/state.ts`, each written once.
   like a word: 100 % of the sidebar (about 200 px), 112 px in the phone top
   bar and in the drawer (the folded sidebar shows the Q bubble alone, the
   favicon's file, 28 px: the wordmark at 40 px is four dots), 220 px on
-  the signed-out page, where it IS the `h1` and the 28 px title under it
-  is gone — it said "Quiz" a second time.
+  the signed-out page, where it IS the `h1`, with no 28 px title under it
+  — it would say "Quiz" a second time.
 - Alert: hairline + soft tone fill, an icon, a title and one paragraph. Its
   `action` slot holds one button, beside the text from `sm` up and on a line
   of its own below it: a long label inline squeezes the body to one word per
@@ -698,10 +687,8 @@ live in `ui/state.ts`, each written once.
   the server's message or the fallback. Without a title it is one 13 px
   `danger` line, the shape a dialog puts under its fields (`FormDialog`'s
   `error` slot); with a `title` it is a danger `Alert`, the shape a step, a
-  sheet or a page uses, where a bare red line would be lost. It exists
-  because seventeen sites spelled out `isError ? … apiErrorMessage … : null`
-  by hand. It lives beside QueryError (`queryError.tsx`), for the same
-  reason: `ui/` never imports the HTTP client.
+  sheet or a page uses, where a bare red line would be lost. It lives beside
+  QueryError (`queryError.tsx`), because `ui/` never imports the HTTP client.
 - Field: label 13 px 500 above, 10 px radius (`rounded-field`), `line-strong` border, accent
   ring on focus. The `<label>` covers the text only and points at the control
   through `htmlFor`; the help "?" is its sibling, never inside it, or that
@@ -719,12 +706,11 @@ live in `ui/state.ts`, each written once.
   34 px button outlined like a secondary one, in the header's action row,
   after the page's actions and before the overflow "…" — never beside the
   h1. "?" and "…" stay together. The title is renamed in place, carries
-  badges and wraps; a "?" riding it never sat right, the action row does not
-  move. Under `lg` the header is a two-column grid (#450): the title block on
-  the left, "?" and "…" at its top right, the other actions on a row of their
-  own under both — so once the primary has left for the FAB, the "?" no
-  longer stands alone on a line under the description. From `lg`, one action
-  row as before.
+  badges and wraps, so a "?" riding it would move; the action row does not.
+  Under `lg` the header is a two-column grid: the title block on the left,
+  "?" and "…" at its top right, the other actions on a row of their own
+  under both — so once the primary has left for the FAB, the "?" never
+  stands alone on a line under the description. From `lg`, one action row.
 - Help "?" (`HelpIcon`): **16 px**, `fg-faint` at rest, accent on hover, the
   same beside a 16 px section heading, a dialog title and a 13 px field
   label — it is a mark next to a word, not an action of its own, and one size
@@ -739,11 +725,11 @@ live in `ui/state.ts`, each written once.
 - ToggleChip: a value you switch on, as a pill — `border-line-strong` on
   `surface` in `fg-muted` at rest, `accent-soft` on an `accent` border in
   `accent` when pressed, 28 px tall, 13 px, an optional leading icon.
-  Containers lay them out with `flex flex-wrap gap-2`. It exists because a
-  column of checkboxes is the shape of independent SETTINGS, and the filter
-  sheet holds SETS — the type of a question, a difficulty, a tag: the reader
-  wants to see what is on at a glance, and two-word labels beside small boxes
-  collided the moment the sheet was narrower than the longest of them. It is
+  Containers lay them out with `flex flex-wrap gap-2`. Not a column of
+  checkboxes, which is the shape of independent SETTINGS: the filter sheet
+  holds SETS — the type of a question, a difficulty, a tag — the reader wants
+  to see what is on at a glance, and two-word labels beside small boxes
+  collide the moment the sheet is narrower than the longest of them. It is
   a real `aria-pressed` button, so the state and the label are never
   separated; `pressed` left undefined drops `aria-pressed` for the one pill
   in a row that is an action and not a value ("Show all (37)").
@@ -751,7 +737,7 @@ live in `ui/state.ts`, each written once.
   `surface` text (the progress strip's "done" segment): for a screen whose
   one accent is spoken for — the player's
   answer tools (Leave unanswered, Clear), which must read as buttons and
-  as on/off without ever out-shouting Next (issue #128). The review flag is
+  as on/off without ever out-shouting Next. The review flag is
   not one of them: it belongs to the question, not to the answer, and is an
   `IconButton` with `aria-pressed` floated in the card's top-right corner,
   filled in `fg` when on (the favourite star's recipe).
@@ -790,9 +776,8 @@ live in `ui/state.ts`, each written once.
   an mcq's choices), at the LEFT of the row, `GripVertical` in `fg-faint` on a
   28 px round hover target. It is a real `<button>` carrying the @dnd-kit
   listeners, which is the whole point: the keyboard sensor reorders through
-  that same affordance (focus, Space, arrows, Space), so the ↑ / ↓ pair it
-  replaces is removed rather than kept beside it — two controls for one
-  gesture means one of them is lying. Pointer sensor at 4 px of slop so a
+  that same affordance (focus, Space, arrows, Space), so there is no ↑ / ↓
+  pair beside it — two controls for one gesture means one of them is lying. Pointer sensor at 4 px of slop so a
   click in the row is still a click, and `restrictToVerticalAxis`.
 - Milestone separator: the evaluation's `milestone` boolean, drawn as a BAND
   across the list under the row it belongs to — `surface-2`, a dashed
@@ -811,15 +796,15 @@ live in `ui/state.ts`, each written once.
   itself (never the page) to the selected tab, so a route that opens on a
   fourth tab shows it.
 - Sheet: right drawer, 560 px, for every form longer than three fields.
-  Under `lg` the same `Sheet` is a BOTTOM sheet (#450): full width, rising
+  Under `lg` the same `Sheet` is a BOTTOM sheet: full width, rising
   from the bottom edge (`sheet-up`, 48 px with the panel easing), as tall as
   its content up to the window less 2.5 rem of the page behind it, the top
   corners `rounded-sheet`, a hairline on top, `shadow-overlay`, and the iOS
   home-indicator inset kept clear under its footer. Header and footer stay
   put and the body scrolls, as in the drawer; Escape, the X, the focus trap
   and "never the backdrop" are unchanged. No drag handle: the sheet does not
-  close by a swipe, and a handle would promise one. One change in the
-  primitive — no screen chooses its direction.
+  close by a swipe, and a handle would promise one. The primitive decides —
+  no screen chooses its direction.
   Dialog: centered, ≤ 480 px, for confirmations and one-field forms.
   A sheet never opens another sheet; a dialog may open over a sheet.
   A sheet may dock ONE reading pane on its left edge (`Sheet aside`), part
@@ -845,8 +830,7 @@ live in `ui/state.ts`, each written once.
 - FormDialog (`ui/forms.tsx`): the short form in a dialog — one to three
   fields, Cancel (`common.cancel`, always) and ONE submit button whose label
   is the verb ("Create course", "Save"), spinner while `submitting`, disabled
-  until `canSubmit`, and the failure under the fields. It exists because
-  seven dialogs wrote that footer out by hand, each one a chance to drift.
+  until `canSubmit`, and the failure under the fields.
   It deliberately has no `size`: a fourth field is
   the sign the form belongs in a `Sheet`, never a reason to widen the
   dialog. `dense` (12 px between rows instead of 16) is for a body that is a
@@ -854,8 +838,7 @@ live in `ui/state.ts`, each written once.
 - Menu: overflow for tertiary actions; destructive items last, separated. A
   list longer than the room left under (or above) its trigger scrolls inside
   the panel, capped at the viewport (a set's thirty groups to move a
-  student into, M3-16a). It
-  closes on a page scroll, but not on the scroll its own opening click causes
+  student into). It closes on a page scroll, but not on the scroll its own opening click causes
   (200 ms of grace) nor on one inside the panel. Its panel stacks ABOVE the
   dialog layer (`Z.popover` > `Z.modal`), because menus open from inside
   sheets, dialogs and the mobile drawer. An item may carry a `description`,
@@ -872,9 +855,7 @@ live in `ui/state.ts`, each written once.
   different things. An item that cannot be a button — no icon, or an `href`
   or a `description`, which are rows of text — sends the whole list to the
   menu, and so does `menu`, for a list whose length varies with the state and
-  would otherwise flicker between two shapes under the reader's pointer. It
-  exists because "how many is too many" was being answered by hand at every
-  site, and the answers had started to differ.
+  would otherwise flicker between two shapes under the reader's pointer.
 - Popover: a small floating card hung on a trigger — a colleague's name and
   address behind their disc, the list behind a "+2". Built from the same two
   pieces as `Menu` (`menuPosition`, `useLayer`), so it closes on the same four
@@ -908,8 +889,6 @@ live in `ui/state.ts`, each written once.
   `accent-soft` chip in semibold `accent`, the others `fg-muted` with a
   `surface-2` hover; `mousemove` (never `mouseenter`) moves the highlight.
   What a pick does — close, stay open for another tag — is the call site's.
-  It exists because three comboboxes wrote the pattern out by hand and had
-  started to disagree on the panel and the highlighted row.
 - Toast: bottom-right, above the phone's bottom bar when it is up
   (`--bottom-nav-h`), the floating action button (`--fab-h`) and a docked
   tool (`--tool-dock-h`), `surface` + hairline + overlay shadow. Tones
@@ -932,7 +911,7 @@ live in `ui/state.ts`, each written once.
   bottom-right corner is the player's footer and its Hand in, which a notice
   arriving as the student comes back must not cover. Each corner holds five
   toasts at most, counted apart.
-- Group board (`group/GroupBoard.tsx`, M3-16a): a group set's students in
+- Group board (`group/GroupBoard.tsx`): a group set's students in
   no group and its groups, as the categorize board draws its tray and
   columns (`ColumnFrame`'s hairline card, the chip of a categorize card,
   `info` for the selected student and the "Move here" buttons, `info-soft`
@@ -951,8 +930,8 @@ live in `ui/state.ts`, each written once.
   block, optionally under a 96 px summary strip for a page that opens on
   figures (results, the student's feedback); 24 px between the rows, the
   header-to-body gap above. The widths mean nothing and are the same on every
-  page: a skeleton says "a page is coming", and six pages each guessing their
-  own proportions said nothing more. The skeletons that DO mirror their
+  page: a skeleton says "a page is coming", and proportions guessed page by
+  page say nothing more. The skeletons that DO mirror their
   content keep their own shape — the pool's table and cards
   (`QuestionTableSkeleton`, `QuestionCardsSkeleton`), the grading list
   (`ListSkeleton`) and the projection's stage — because there the rows are
@@ -1006,10 +985,10 @@ live in `ui/state.ts`, each written once.
   says nothing. A tile's label is the RAW lucide name (`flask-conical`),
   untranslated on purpose: it is an identifier, like a SHA or a tag, and in
   the search step it is the very string the reader typed.
-- Pool colour (#213): the colour of the ICON, and of nothing else — never
+- Pool colour: the colour of the ICON, and of nothing else — never
   the card, the name or a page header. Grey is the default and is `null`,
-  like the default icon, so a pool nobody coloured looks as it always did
-  (the call site's `fg-muted` / `fg-faint`). The fifteen others are a closed
+  like the default icon, so a pool nobody coloured keeps the call site's
+  `fg-muted` / `fg-faint`. The fifteen others are a closed
   set of NAMES (`PoolColor` in `@quiz/contracts`), each a `--pool-<name>`
   token swapped under `html.dark`, never a stored hex, and set INLINE
   (`color: var(--pool-teal)`) — it then wins over the call site's grey ink
@@ -1087,7 +1066,7 @@ live in `ui/state.ts`, each written once.
   whose whole message is "there is nothing to do". `label` names the figure;
   the middle is `aria-hidden`, or the reader hears the numbers twice.
 - ProgressSegments: a stepper in the zen player, one circle per question —
-  the student's question list (issues #89, #219). Each circle carries FOUR
+  the student's question list. Each circle carries FOUR
   independent facts. Its mark is a SHAPE before it is a tint, so it reads in
   grey and to a colour-blind student: answered is a solid `fg` circle with a
   check in `surface` ink; "left unanswered" a dashed `fg-muted` circle on
@@ -1123,7 +1102,7 @@ live in `ui/state.ts`, each written once.
   14 px, the first, the last, the current and every 5th. A multiple landing
   within two slots of the last one is dropped, so "30" and "32" never
   collide. Under 14 px a dot and its connectors no longer fit (40 questions
-  on a phone), and the strip SCROLLS instead (issue #223): every question is
+  on a phone), and the strip SCROLLS instead: every question is
   back in a full 28 px slot with its glyph and number, the student swipes
   the strip, and it brings the current question to its middle whenever it
   changes — scrolling itself, never the page, and without the smooth motion
@@ -1171,9 +1150,8 @@ live in `ui/state.ts`, each written once.
   the caller draws (the pill in the editor, the WHOLE row in the player), so
   the roles, the grouping of the radios and the keyboard are the platform's;
   the disc is `aria-hidden`, because in the player the name of the control is
-  the text of the choice and not a letter. It replaced a letter plus a box
-  labelled "Correct": two targets and a word that named nothing a teacher was
-  looking for.
+  the text of the choice and not a letter. One target, never a letter plus
+  a box labelled "Correct", a word that names nothing a teacher looks for.
 - LetteredChoice (`packages/qt-mcq/src/ui.tsx`): a choice behind its letter
   in a CORRECTION — the mcq review and the poll's reveal on a phone — where
   nothing is clicked. A 28 px letter in the state of the grading table's tick
@@ -1185,12 +1163,12 @@ live in `ui/state.ts`, each written once.
   filled letter always has its verdict in words beside it.
 - VerdictCell: one cell of the live grid and of the grading list, nine
   states in two families. PROGRESS is drawn in SHAPES, not pictograms
-  (#227) — `blank` (never opened: a faint 10 px hollow square glyph,
+  — `blank` (never opened: a faint 10 px hollow square glyph,
   `line-strong`), `inProgress` (opened, nothing written: the cell itself an
   empty box, a `line-strong` edge and no fill), `answered` (holds an answer:
   the box filled `info-mid`, no icon), `done` (validated in a locking
   navigation: the `info` fill AND a check, because two blues alone would be
-  colour alone), `skipped` ("Leave unanswered", issue #89: `surface-2` with a
+  colour alone), `skipped` ("Leave unanswered": `surface-2` with a
   DASHED `fg-faint` edge and a dash — a decision to leave the question, not
   progress through it, so not blue) — and VERDICT, which the grid's
   "Results" switch puts in their place: `correct`, `partial`, `wrong`,
@@ -1203,14 +1181,14 @@ live in `ui/state.ts`, each written once.
   alone in the box), and
   INHERITS the state's ink rather than carrying `fg` — that is what keeps it
   readable on the filled `done` blue, where `fg` measured 2.9:1. `flagged`
-  (the student's review flag, issue #89) is a third fact on top of the state,
+  (the student's review flag) is a third fact on top of the state,
   so it is a corner mark rather than a tint: a solid `warning` flag on a
   14 px `surface` disc with a `line` ring, top right, and "flagged for
   review" in the accessible name. The column header counts the class's flags
   (a flag and the number, `warning`) on the same line as `Q3`, so the header
   row stays one line tall, level with Student and Actions; the question's
   type is the header's tooltip.
-- Master and detail (the grading panel, #102): from `lg`, the step header
+- Master and detail (the grading panel): from `lg`, the step header
   (picker, chevrons, progress) sticks to the top on a strip of `canvas`; its
   measured height is the CSS variable `--grading-sticky`, under which the
   compact list column (300 px, scrolling inside itself) and the detail's own
@@ -1312,8 +1290,7 @@ live in `ui/state.ts`, each written once.
   `Ctrl+Enter` leaves the block, Tab indents by two spaces. The block carries
   its LANGUAGE in a small field at its top-right corner — the same placement
   as the picture's toolbar, for the same reason — because the tag of the fence
-  is what colours the code and what the student's `render.ts` reads, and it
-  was the one thing the block could not say. The colour is the STUDENT's
+  is what colours the code and what the student's `render.ts` reads. The colour is the STUDENT's
   tokenizer (`markdown/highlight.ts`, four classes), drawn over the document
   as ProseMirror decorations: the same four token colours the reader gets,
   and not one character of it in the markdown.
@@ -1326,9 +1303,9 @@ live in `ui/state.ts`, each written once.
   A `{{…}}` HOLE of the cloze type is an OBJECT in the field and not five
   characters: a pill in `accent-soft` on `accent`, 13 px mono, showing the body
   as written with a `▾` in front of a dropdown. Clicking it opens the same
-  one-field bar the link address uses; Backspace takes it whole. It is what let
-  the cloze editor drop its textarea, since a hole written as text came back
-  with the serializer's escapes in it. Inside a fenced block a hole stays text
+  one-field bar the link address uses; Backspace takes it whole. The cloze
+  editor has no textarea: a hole written as text comes back with the
+  serializer's escapes in it. Inside a fenced block a hole stays text
   — a code block holds no nodes — and is tinted by the same decoration plugin
   as the keywords, through a fifth token class, `tok-hole`.
 - FormulaDialog: the one surface a formula is written on. A LaTeX box (which
@@ -1437,10 +1414,10 @@ nothing else on it leaves the system.
   at 1920 × 1080, against 11 px and 16 px for the same fit without widening.
 - **The way in is TOP right, and it is the only thing in that corner.** The
   host, the session code and the QR tile travel together, in the first band of
-  the stage (the original design had them in the footer; the product does not). The
-  reason is the toaster: `notify.tsx` pins the toast stack to `fixed bottom-4
-  right-4`, and a "student joined" notice arriving mid-lecture landed straight
-  on the code the back rows were scanning. The two corners are opposite ones
+  the stage, never in the footer. The reason is the toaster: `notify.tsx`
+  pins the toast stack to `fixed bottom-4 right-4`, and a "student joined"
+  notice arriving mid-lecture would land straight on the code the back rows
+  are scanning. The two corners are opposite ones
   and neither has to know about the other. The teacher's controls stay in the
   same top strip, pushed against the tile — the room's eye is on the question,
   not up there.
@@ -1524,21 +1501,21 @@ those three. So the wrapper that scrolls the table carries `T.container`
 | `T.wordFrom` | ≥ 32rem (512 px) | gives a badge its word back |
 
 The thresholds are measured, not picked: 1120 px of content keeps everything,
-the pool table started clipping its actions at about 800 px, and 672 px is
+the pool table clips its actions under about 800 px, and 672 px is
 what the tablet width leaves. The identity column, the tick box and the
 ACTIONS never carry a priority — they are the row and what you do with it.
 
 Below the last threshold the table still scrolls sideways. The actions cell
 then takes `T.stickyEnd` (`sticky right-0` on the row's own fill, hover
 included), because a row whose actions are off screen is a row you cannot
-act on, and that was the bug the priorities were added for.
+act on.
 
 Every table head is `TableHead`, sorting or not (a table that does not sort
 leaves out `sort` and `onToggle`: the same labels, no button). A sortable
 table sorts by its column labels, through one motif. A head is
 declared as DATA — one `Column` per column, carrying its label, its
 priority class and its width — and `TableHead` (`ui/table.tsx`) draws it, so
-the head and the priorities can no longer disagree and every table of the
+the head and the priorities cannot disagree and every table of the
 app sorts the same way: click a label to order by it, click it again to flip
 it. The affordance is the arrow, and it stays inside the hairline aesthetic:
 a faint `ArrowUpDown` that fades in on hover and on keyboard focus, in the
@@ -1564,10 +1541,9 @@ Applied today: the pool table (version, updated, tags), the roster (last
 sign-in, accommodation, e-mail), the evaluation list (attempts, points,
 questions) and the grade table (duration, e-mail).
 
-`T.container` is also `relative`. An `sr-only` label is `absolute`, and with
-no positioned ancestor inside the scroller it was placed against the page,
-past the scroller's clip: on a phone the pool and grading tables widened the
-whole page by their hidden labels, and the page scrolled sideways.
+`T.container` is also `relative`: an `sr-only` label is `absolute`, and with
+no positioned ancestor inside the scroller it is placed against the page, past
+the scroller's clip, and widens the whole page on a phone.
 
 ### Row cards (phone)
 
@@ -1618,7 +1594,7 @@ laid out in two or three short lines that stack at 390 px.
 Applied today: the test cases of a `code` question
 (`packages/qt-code/src/Editor.tsx`). One case carries a name, a command line,
 an input, an expected output, the two checks that decide whether it passed,
-its points, its time budget and its visibility — ten fields. As a table it was
+its points, its time budget and its visibility — ten fields. As a table it is
 unreadable at 1440 px; as a panel it reads at 390 px.
 
 The threshold is not the count, it is the question "would a teacher SCAN these
@@ -1674,7 +1650,7 @@ One question's answers as a table (`src/grading/`, origin
   It is NOT the live grid's `VerdictCell` (`ui/live.tsx`), on purpose: that
   cell is a tinted tile of a grid where partial reads AMBER beside the blue
   of progress, one of nine states; here there is no progress to tell apart,
-  and the owner wanted partial credit to read as green in part — so the
+  and partial credit must read as green in part (owner decision) — so the
   stripes. The grid keeps its scale, the table its own.
 - **The key's row** is `info-soft` (laid as a flat gradient over `surface`,
   so it stays opaque in dark mode where `info-soft` is translucent), with a
@@ -1745,8 +1721,7 @@ What replaces them:
 
 - **Scroll.** The card is the scroller (`overflow-x-auto`) and is `relative`:
   the cells' `sr-only` spans are absolute, and a scroller that is not
-  positioned lets them lay out past its edge, on the PAGE (it scrolled
-  sideways at 390 px until this was found). The student column is sticky on
+  positioned lets them lay out past its edge, on the PAGE. The student column is sticky on
   the left on its own fill; the mean is sticky on the right from `@2xl`
   (42 rem of card) and scrolls with the rest below it. On a phone the e-mail
   under the name goes, so the first grade column stays on screen.
@@ -1795,8 +1770,8 @@ What replaces them:
 
 ## Poll outcome donut (launcher, "Recent polls")
 
-A 36 px ring beside each row of the launcher's "Recent polls" (issue #161,
-`poll/OutcomeDonut.tsx`): how the question fared over its last five runs.
+A 36 px ring beside each row of the launcher's "Recent polls"
+(`poll/OutcomeDonut.tsx`): how the question fared over its last five runs.
 With the projection's donut, one of the two charts of the teacher's
 surfaces, so its rules are written here.
 
@@ -1807,7 +1782,7 @@ surfaces, so its rules are written here.
   validator: ΔE 6.7 (deutan) in light and 4.0 in dark — below the floor even
   with secondary encoding; `success`/`warning` is 7.1 / 7.6, legal with it.
   It is also the voice of the projection: a poll marks nobody wrong. No
-  answer is an absence, not a category, hence a grey; `line-strong` vanished
+  answer is an absence, not a category, hence a grey; `line-strong` vanishes
   on the dark surface.
 - **Never colour alone**: 2 px surface gaps between the parts, the correct
   share printed in the hole (10 px, tabular), the exact shares in words on
@@ -1902,32 +1877,30 @@ student alike, goes through `t()` with an `en` and an `fr` entry (N-I18N-01).
 ## The bottom bar (phone)
 
 A student opens the app on a phone far more often than a teacher does, and
-reaches for it with a thumb (#191, the product owner's decision of
-2026-09-29); a teacher's real use of a phone is launching or following a
-poll (#449, 2026-10-08). So under `lg` — the frame's own breakpoint, where
+reaches for it with a thumb; a teacher's real use of a phone is launching or
+following a poll. So under `lg` — the frame's own breakpoint, where
 the sidebar gives way to the top bar; between `lg` and `xl` the sidebar only
 folds to its icons — both UIs get a bar at the bottom: ONE component
 (`BottomNav.tsx`, rules in `bottomNavSlots.ts`), two sets of slots.
 
 - **The student's slots** for a student, or a teacher in student view, who
   is looking at exactly what a student gets; **the teacher's slots** in the
-  teacher UI (#449, superseding the "teacher" half of #191).
+  teacher UI.
 - **Navigation, never an action.** No slot wears the accent fill; the current
   one is the sidebar's selection (an `accent` icon on an `accent-soft`
   pill), so the screen's one primary button is still the one
   red FILL on it (invariant 2).
 - **Slots**, each an icon alone (24 px; the label is for a screen reader,
-  `sr-only`, the product owner's decision of 2026-10-01: four or five icons
-  met every day need no caption, and the captions made the bar heavy),
+  `sr-only`: four or five icons met every day need no caption, and captions
+  make the bar heavy),
   sharing the width equally.
 - **The student's**: Activities (the home, "Open now"), Courses (the student's
   classrooms, `/courses`, and lit on a classroom's pages — F-ORG-14, D07),
   Grades (the student's finished work, `/grades`, and lit on a feedback
-  page), Profile (the settings), and Drill (#317, `/drill`) in the MIDDLE.
-  Every slot is a route: the last anchor of the home (Grades, `/#past`)
-  became the Grades page on 2026-10-01, and the home lost its Past section
-  to it.
-- **The teacher's** (#449), with the teacher sidebar's icons: Activities
+  page), Profile (the settings), and Drill (`/drill`) in the MIDDLE.
+  Every slot is a route, never an anchor of the home, which has no Past
+  section: past work is the Grades page.
+- **The teacher's**, with the teacher sidebar's icons: Activities
   (`/activities`, lit on a project and on an evaluation's results too),
   Courses (the home, lit on a course, a template and the pools, which a
   phone reaches from a course: there is no Pools slot), **Polls** in the
@@ -1947,10 +1920,9 @@ folds to its icons — both UIs get a bar at the bottom: ONE component
   least one classroom whose drill is on (`visibleSlots`); the four others
   share the width otherwise. Its label is the page's title, `nav.drill`, in
   the bar and the sidebar alike: the feature is "Révisions" everywhere in
-  French (the product owner's decision of 2026-10-01); in the bar it is
+  French; in the bar it is
   what a screen reader announces.
-- **The desktop sidebar mirrors the bar** (D07, the product owner's decision
-  of 2026-10-01). The student's sidebar rows are the bar's slots, in the
+- **The desktop sidebar mirrors the bar** (D07). The student's sidebar rows are the bar's slots, in the
   bar's order and under the same conditions, minus Profile, which is the
   account menu's at the foot of the sidebar: Activities, Courses, Drill,
   Grades (`sidebarSlots`). They take the slots' icons, lead where the slots
@@ -1961,9 +1933,9 @@ folds to its icons — both UIs get a bar at the bottom: ONE component
   `canvas` so it reads on the lit pill too, with the words for a screen
   reader. The sidebar row carries the same dot as its trailing mark. A
   number of cards left would be a streak by another name, which the product
-  owner ruled out; the accent is right because the dot points at the one
+  rules out; the accent is right because the dot points at the one
   thing to do there, like the primary it leads to.
-- **Shape.** It floats, the way a phone's own apps draw it now (2026-10-01):
+- **Shape.** It floats, the way a phone's own apps draw it:
   a 56 px `rounded-full` pill, 16 px in from the sides (at most `max-w-sm`),
   lifted off the bottom edge by `--bottom-nav-gap` — 12 px, or the iOS
   home-indicator inset less 8 px when that is larger, so the pill tucks into
@@ -2003,8 +1975,8 @@ folds to its icons — both UIs get a bar at the bottom: ONE component
 
 On a phone the header's action row is at the top, out of the thumb's reach.
 So a screen's one primary action, WHEN IT CREATES something on a list page,
-moves to a floating action button at the bottom right under `lg` (#450, the
-product owner's decisions of 2026-10-08). `ui/fab.tsx`.
+moves to a floating action button at the bottom right under `lg`
+(`ui/fab.tsx`).
 
 - **One mechanism.** `PageHeader` takes a singular `primary` (`{ icon,
   label, onClick, coach? }`): from `lg` it is the accent button of the
@@ -2052,7 +2024,7 @@ product owner's decisions of 2026-10-08). `ui/fab.tsx`.
 ## The student's "Coming up", by day
 
 The home and a classroom's page group their Coming up section by the day
-each card opens (product owner, 2026-10-01; `UpcomingByDay` in
+each card opens (`UpcomingByDay` in
 `student/cards.tsx`, the rule `groupByDay` of `@quiz/domain`): Today,
 Tomorrow, This week, Later, an empty day not drawn. The day is a
 sub-heading INSIDE the section, never a second `SectionHeading`: an `h3` at
@@ -2068,13 +2040,13 @@ the projects bring deadlines (D07).
 ## The student's activity card
 
 One grammar for every card of the student's home and classroom page — an
-evaluation, a poll, a project, a group set, the drill (merge task M3-14l,
-product owner 2026-10-06; `ActivityRow` in `student/ActivityRow.tsx`):
+evaluation, a poll, a project, a group set, the drill (`ActivityRow` in
+`student/ActivityRow.tsx`):
 
 - A **kind icon** (lucide, `size-4`, `fg-faint`) before the title: exam
   `FileCheck2`, exercise `PencilLine`, poll `ChartNoAxesColumn`, project
-  `FolderGit2`, groups `Users`, drill `Repeat`. It replaces the old kind
-  badge. It is an `IconTip`: named by a `Tip` on hover and by its accessible
+  `FolderGit2`, groups `Users`, drill `Repeat`; the kind is never a badge.
+  It is an `IconTip`: named by a `Tip` on hover and by its accessible
   name (`role="img"`), so the kind word stays in the card's accessible text.
 - The **title** (17 px bold; a link for a project and a group set) and the
   **status badge** beside it, wrapping under it on a phone. Tones: amber when
@@ -2135,8 +2107,8 @@ draws before the session gate, so it carries its own door.
 - **Only End takes the control away** (ADR-014, addendum 2026-09-29). While
   the poll runs, what the teacher shows — the key, the votes — sits in a
   second card UNDER the question, which keeps its "Send"/"Update" bar: a
-  reveal that removed the control read as "you may not answer" to everyone
-  who joined after it (poll KUFE5R). That card names no verdict (no "your
+  reveal that removed the control would read as "you may not answer" to
+  everyone who joined after it. That card names no verdict (no "your
   answer — wrong" beside a field the reader may still change). Once the poll
   has ended the same block REPLACES the question and the verdict joins it.
   The key wears `success`, a wrong own pick `danger`, and both carry a WORD
@@ -2215,7 +2187,7 @@ of its own:
 
 ## The launch checklist (evaluation, step 3)
 
-The last step before a class can enter (issue #152, variant B). Its one
+The last step before a class can enter. Its one
 primary action is "Open the waiting room" — "Open" when the evaluation has no
 waiting room — and "Schedule…" is its only secondary.
 
@@ -2317,7 +2289,7 @@ same `ToolDock`.
   `line-strong` hairline under every line (`.notepad-ruled`), scrolling with
   the text, in both themes through the token. Focused, its border turns to
   the ink (`fg`) with no ring: the whole panel is this one field, and the
-  accent's red frame around it read as an error. Delete asks nothing: an
+  accent's red frame around it reads as an error. Delete asks nothing: an
   `info` toast with Undo (`notify.tsx`'s one action) puts the page back. A
   write the device refuses shows one 12 px `warning` line under the page.
 

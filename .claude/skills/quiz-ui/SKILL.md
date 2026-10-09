@@ -52,13 +52,12 @@ is the flow, not the styling. Stop and ask.
 6. Tables: at most seven visible columns, one dominant identity column
    (bold), numbers right-aligned and tabular, status as a `Badge`, actions in
    the last column, `—` for empty cells, hover on clickable rows.
-7. **Every** user-facing string goes through `t()` with both an `en` and a
-   `fr` entry in `src/i18n/{en,fr}.ts` — teacher surfaces included (N-I18N-01). The
-   `fr` dictionary is typed `Record<keyof Dict, string>`, so a missing French
-   key is a compile error. Keep it that way.
-8. Question content never reaches a student except through the type's
-   `toStudent`. A component that renders a question renders what the server
-   sent it; it never reconstructs an answer key, a tag or an explanation.
+7. **Every** user-facing string follows invariant 1 of `CLAUDE.md`: `t()`,
+   with both an `en` and a `fr` entry in `src/i18n/{en,fr}.ts`.
+8. Question content reaches a student only through `toStudent` (invariant 4
+   of `CLAUDE.md`). A component that renders a question renders what the
+   server sent it; it never reconstructs an answer key, a tag or an
+   explanation.
 9. Logic stays where it is. A UI change never alters an API call, a query
    key, a mutation payload or a domain rule; those live in `apps/api` and in
    `packages/domain`.

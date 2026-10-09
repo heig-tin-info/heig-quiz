@@ -25,7 +25,8 @@ screenshot, edit the scene in the script, never the manifest.
 
 ## How a page shows an image
 
-The theme hides one of the two variants, so a page embeds both:
+A screenshot taken in one palette looks wrong in the other, so a page
+embeds both variants, each with a fragment naming its palette:
 
 ```markdown
 <figure markdown="span">
@@ -34,6 +35,12 @@ The theme hides one of the two variants, so a page embeds both:
   <figcaption>The courses page: one card per course.</figcaption>
 </figure>
 ```
+
+The fragment is not part of the file name: the browser requests
+`teacher-home-light.png` and the theme's stylesheet hides the image whose
+fragment does not match the active palette, so the reader sees exactly one
+of the two, and switching the palette swaps it in place. Write the same
+alt text on both lines; only one is ever visible.
 
 ## Regenerating
 

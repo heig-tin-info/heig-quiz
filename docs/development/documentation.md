@@ -33,7 +33,7 @@ pnpm docs:build               # zensical build: the static site in site/ (gitign
 | [`docs/adr/README.md`](../adr/README.md) | the topic index and reading protocol for architecture decisions |
 | `docs/development/` | these pages |
 | `docs/PLAN-MVP.md` | the decisions D1–D20 of the phase-1 plan; the full plan is archived in `docs/history/PLAN-MVP.md` |
-| `docs/assets/screenshots/` | the screenshots, two files per image (see below) |
+| `docs/assets/screenshots/` | the screenshots, two files per image ([screenshots](screenshots.md)) |
 
 The `nav` array of `zensical.toml` controls the site navigation. The ADR
 records are reached through the [decision index](../adr/README.md), so their
@@ -107,23 +107,7 @@ use headings or a table instead.
 
 ## Images in light and dark
 
-The site has a light and a dark palette, and a screenshot of the
-application taken in one of them looks wrong in the other. Every
-screenshot therefore exists twice, `<name>-light.png` and
-`<name>-dark.png`, and a page embeds both with a fragment that tells the
-theme which palette each one belongs to:
-
-```markdown
-![The grading panel](../assets/screenshots/grading-light.png#only-light)
-![The grading panel](../assets/screenshots/grading-dark.png#only-dark)
-```
-
-The fragment is not part of the file name: the browser requests
-`grading-light.png` and the theme's stylesheet hides the image whose
-fragment does not match the active palette, so the reader sees exactly one
-of the two, and switching the palette swaps it in place. Write the same
-alt text on both lines; only one is ever visible.
-
-The screenshots are not taken by hand. The pipeline that produces both
-files for every screen, and the manifest that lists them, is described on
-its own page: [screenshots](screenshots.md).
+Every screenshot exists twice, `<name>-light.png` and `<name>-dark.png`,
+and a page embeds both so that the theme shows the one matching its
+palette. The markup, and the pipeline that produces both files for every
+screen, are described on their own page: [screenshots](screenshots.md).

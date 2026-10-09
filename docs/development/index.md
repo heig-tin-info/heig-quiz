@@ -302,12 +302,11 @@ pnpm build && pnpm typecheck && pnpm test
 On a workstation, run the suites one package at a time
 (`VITEST_MAX_WORKERS=4 pnpm -r --workspace-concurrency=1 test`, see
 [the repository rules](repository.md)). `.github/workflows/ci.yml` runs the
-same three steps on every push and pull request, on Node 24 with a frozen lockfile, split into parallel jobs
-under one `checks` status: build and typecheck, the API's suite in four
-shards, the SPA's in three, and every other package (the runner's unit
-suite included). The runner's integration suite has its own workflow. On
-a push to `main` the same workflow then builds the two production images
-and deploys them; see [deployment](deployment.md).
+same three steps on every push and pull request, on Node 24 with a frozen
+lockfile, in parallel jobs under one `checks` status, then builds and
+deploys the images on a push to `main`. Its jobs and stages are described
+once, in [deployment, §4](deployment.md#4-continuous-deployment). The
+runner's integration suite has its own workflow.
 
 ### Coverage
 
