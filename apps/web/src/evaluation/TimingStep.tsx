@@ -298,8 +298,13 @@ export function ConfigSettings({
                 onChange={(e) => setMinutes(e.target.value)}
                 onBlur={() => {
                   const n = Number(minutes);
-                  if (!Number.isFinite(n) || n < 1) return;
-                  const next = Math.round(n) * 60;
+                  if (minutes.trim() === "" || !Number.isFinite(n)) return;
+                  // Brought back into the field's range rather than sent for
+                  // the server to refuse (DESIGN.md: a control never leads
+                  // to a refusal).
+                  const clamped = Math.min(EVALUATION_DURATION_MAX_MINUTES, Math.max(1, Math.round(n)));
+                  setMinutes(String(clamped));
+                  const next = clamped * 60;
                   if (next !== durationS) patch.mutate({ durationS: next });
                 }}
                 className="text-right tabular-nums"
