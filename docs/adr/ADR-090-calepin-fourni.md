@@ -15,7 +15,7 @@ Scope: a scratch notepad in the player of an exam or an exercise.
 Relations: the sibling of [ADR-069](ADR-069-calculatrice-fournie.md) (the
 calculator provided), whose setting, refusal and dock it mirrors; adds two
 imposed lines to [ADR-079](ADR-079-conditions-de-l-evaluation.md)'s
-conditions; §6 is the notepad's half of the paste step of
+conditions; §6 places the notepad within the paste step of
 [ADR-088](ADR-088-journal-d-integrite.md).
 
 ## Context
@@ -89,19 +89,22 @@ Three facts constrain it:
    pedagogical, not a security control: a student can copy the notes
    elsewhere before crossing.
 6. **The clipboard.** In `provided_no_clipboard`, the notepad's field refuses
-   copy, cut, paste, drag and drop, and the `beforeinput` of a paste, a drop or
-   a cut. Otherwise, the last text copied or cut out of the notepad is kept in
-   memory (`apps/web/src/notepad/clipboard.ts`, `isFromNotepad`), never
-   persisted nor sent. It is the exemption ADR-088's paste step will read: a
-   paste into an answer is exempt only when its text equals that last copy;
-   a paste INTO the notepad from outside is journaled like any outside paste.
-   This record does not detect pastes; that step ships separately.
+   copy, cut, paste, drag and drop, and the `beforeinput` of a paste, a drop,
+   a cut, a drag, a yank or a quotation paste. With the integrity journal
+   (ADR-088 §4, shipped beside this record), the notepad is part of the
+   page: a copy out of it is one of the page's own copies, so pasting it into
+   an answer is not journaled, while a paste INTO the notepad from outside is
+   journaled like any outside paste. A paste the blocked notepad refuses is
+   still seen by the journal's listener, which runs first; it is then
+   journaled as the attempt it was. The notepad needs no record of its own:
+   an exemption module planned before ADR-088 §4 shipped was dropped as
+   redundant.
 
 ## Consequences
 
 - One more key in the settings, two imposed lines, a domain rule
   (`furthestCheckpoint`, which `lockedItems` now shares) and a small web
-  module (`notepad/`: the store, the hook, the dock, the clipboard record).
+  module (`notepad/`: the store, the hook, the dock).
 - `ToolDock` gains a `slot` and a controlled `open`; `--tool-dock-h` grows
   by one `--tool-dock-step` (3.5 rem) while two docks stand, so the toasts and the panels clear both.
 - The teacher sees nothing of the notes, by design.

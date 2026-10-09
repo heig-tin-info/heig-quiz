@@ -14,7 +14,6 @@
  * load — those of attempts left untouched for a day. Never the recent notes
  * of another attempt: a student may have an exercise open in another tab.
  */
-import { forgetNotepadCopy } from "./clipboard";
 
 /** The prefix of every notepad key; the attempt's id follows. */
 export const NOTEPAD_KEY_PREFIX = "quiz.notepad.";
@@ -98,20 +97,14 @@ export function markNotepadEnded(attemptId: string): void {
   ended.add(attemptId);
 }
 
-/** The attempt is over: its notes go, and stay gone. */
-export function purgeNotepad(attemptId: string): void {
+/** The attempt is over: its notes go, and stay gone. The one call at its end (`useAttempt`). */
+export function endNotepad(attemptId: string): void {
   markNotepadEnded(attemptId);
   try {
     localStorage.removeItem(notepadKey(attemptId));
   } catch {
     // Nothing to clean in a storage that cannot be read either.
   }
-}
-
-/** The one call at the end of an attempt: its notes and the last copy out of the notepad go. */
-export function endNotepad(attemptId: string): void {
-  purgeNotepad(attemptId);
-  forgetNotepadCopy();
 }
 
 /** Every notepad key on this device, read defensively. */

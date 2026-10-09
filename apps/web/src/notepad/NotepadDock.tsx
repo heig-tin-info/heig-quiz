@@ -11,9 +11,10 @@
  * is simply gone).
  *
  * `noClipboard` (`provided_no_clipboard`) blocks copy, cut, paste and drag
- * IN the notepad only; the answer fields keep theirs. Otherwise what is
- * copied or cut out of it is recorded in memory (`clipboard.ts`), the
- * exemption the integrity journal's paste step will read.
+ * IN the notepad only; the answer fields keep theirs. Otherwise a copy out
+ * of it is one of the page's own copies for the integrity journal
+ * (`attempt/integrity.ts`, ADR-088 §4): pasting it into an answer is not
+ * journaled, while a paste into it from outside is.
  *
  * Closed, it stays mounted (`keepMounted`); it opens with focus in the
  * page. Nothing of it reaches the server.
@@ -24,7 +25,6 @@ import { useEffect, useRef, type SyntheticEvent } from "react";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { cx, IconButton, inputClass, ToolDock, type ToolDockSeat } from "../ui";
-import { recordNotepadCopy } from "./clipboard";
 import { MAX_PAGE_LENGTH, MAX_PAGES } from "./store";
 import type { Notepad } from "./useNotepad";
 
@@ -65,19 +65,9 @@ export function NotepadDock({
     return () => field.removeEventListener("beforeinput", refuse);
   }, [noClipboard]);
 
-  const record = (event: SyntheticEvent<HTMLTextAreaElement>) => {
-    const { value, selectionStart, selectionEnd } = event.currentTarget;
-    recordNotepadCopy(value.slice(selectionStart, selectionEnd));
-  };
   const clipboard = noClipboard
-    ? {
-        onCopy: block,
-        onCut: block,
-        onPaste: block,
-        onDragStart: block,
-        onDrop: block,
-      }
-    : { onCopy: record, onCut: record };
+    ? { onCopy: block, onCut: block, onPaste: block, onDragStart: block, onDrop: block }
+    : {};
 
   const remove = () => {
     const undo = notepad.deletePage();

@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { Me } from "@quiz/contracts";
 import type { CalculatorMode, NavigationMode, NotepadMode } from "@quiz/domain";
 
-import { forgetNotepadCopy, isFromNotepad } from "../notepad/clipboard";
 import { MAX_PAGES, MAX_PAGE_LENGTH, notepadKey } from "../notepad/store";
 import { meKey } from "../queryKeys";
 import { makeMe } from "../test/fixtures";
@@ -72,8 +71,6 @@ const page = () => screen.getByRole("textbox", { name: /^Page \d+ of \d+$/, hidd
 const openNotepad = async (user: ReturnType<typeof userEvent.setup>) =>
   // `find`: the notepad mounts once `/me` has settled.
   user.click(await screen.findByRole("button", { name: "Notepad" }));
-
-beforeEach(() => forgetNotepadCopy());
 
 describe("the dock group", () => {
   it("stacks both buttons and opens one panel at a time, each keeping its state", async () => {
@@ -276,14 +273,12 @@ describe("the clipboard", () => {
     expect(typing.defaultPrevented).toBe(false);
   });
 
-  it("is free otherwise, and remembers what was copied out", async () => {
+  it("is free otherwise", async () => {
     const { user } = setup();
     await openNotepad(user);
-    await user.type(page(), "x = 42");
-    const field = page() as HTMLTextAreaElement;
-    field.setSelectionRange(4, 6);
-    expect(fireEvent.copy(field)).toBe(true);
-    expect(isFromNotepad("42")).toBe(true);
-    expect(isFromNotepad("x = 42")).toBe(false);
+    for (const name of events) expect(fireEvent[name](page())).toBe(true);
+    const paste = new InputEvent("beforeinput", { inputType: "insertFromPaste", bubbles: true, cancelable: true });
+    page().dispatchEvent(paste);
+    expect(paste.defaultPrevented).toBe(false);
   });
 });

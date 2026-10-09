@@ -2,12 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   emptyNotes,
+  endNotepad,
   loadNotes,
   MAX_PAGE_LENGTH,
   notepadKey,
   parseNotes,
   purgeAllNotepads,
-  purgeNotepad,
   purgeStaleNotepads,
   saveNotes,
   STALE_MS,
@@ -44,7 +44,7 @@ describe("the notepad's storage", () => {
 
   it("deletes an ended attempt's notes, and a late write does not bring them back", () => {
     saveNotes("att-3", notes(1));
-    purgeNotepad("att-3");
+    endNotepad("att-3");
     expect(localStorage.getItem(notepadKey("att-3"))).toBeNull();
     saveNotes("att-3", notes(2));
     expect(localStorage.getItem(notepadKey("att-3"))).toBeNull();
