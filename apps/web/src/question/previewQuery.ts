@@ -1,7 +1,7 @@
 import type { PreviewResult, PreviewSolution } from "@quiz/contracts";
 
 import { api } from "../api";
-import { questionPreviewKey } from "../queryKeys";
+import { questionPreviewKey, solutionKey } from "../queryKeys";
 
 /**
  * The student view of one version of a question (`POST /questions/:id/preview`,
@@ -26,7 +26,7 @@ export const questionPreviewQuery = (id: string, source: "draft" | number) => ({
  * "Show answers" of a preview: a request of its own, made on the click.
  */
 export const questionSolutionQuery = (id: string, source: "draft" | number) => ({
-  queryKey: [...questionPreviewKey(id, source), "solution"] as const,
+  queryKey: solutionKey(questionPreviewKey(id, source)),
   queryFn: () =>
     api<PreviewSolution>(`/app/api/questions/${id}/preview/solution`, {
       method: "POST",

@@ -8,6 +8,7 @@ import { displayName } from "@quiz/domain";
 import { api, isNotFound } from "../api";
 import { useT } from "../i18n";
 import { notificationSettingsKey, teamsLinkKey } from "../queryKeys";
+import { routeToPath } from "../router";
 import { SignInGate } from "../SignInGate";
 import { Alert, Button, Card, FormError, GateCard, GateFrame, GateIcon, GateSkeleton } from "../ui";
 
@@ -89,7 +90,7 @@ function Confirm({ token, me, onSettings }: { token: string; me: Me; onSettings?
         <Button
           variant="secondary"
           className="mt-6"
-          onClick={() => (onSettings ? onSettings() : window.location.assign("/settings"))}
+          onClick={() => (onSettings ? onSettings() : window.location.assign(routeToPath({ view: "settings" })))}
         >
           {t("teamsLink.done.settings")}
         </Button>

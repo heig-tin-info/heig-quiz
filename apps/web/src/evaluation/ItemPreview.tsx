@@ -6,7 +6,7 @@ import type { ItemPreview as ItemPreviewData, ItemRow, PreviewSolution } from "@
 
 import { api } from "../api";
 import { useT } from "../i18n";
-import { itemPreviewKey } from "../queryKeys";
+import { itemPreviewKey, solutionKey } from "../queryKeys";
 import type { EditTarget } from "./editTarget";
 import { typeLabel } from "../questionTypes";
 import { Alert, ASIDE_MIN_WIDTH, IconButton, pageBox, PaneOrSheet, useMinWidth } from "../ui";
@@ -122,7 +122,7 @@ export function ItemPreview({
           key={item.id}
           query={preview}
           solution={{
-            queryKey: [...key, "solution"],
+            queryKey: solutionKey(key),
             queryFn: () => api<PreviewSolution>(`${target.base}/preview/items/${item.id}/solution`),
           }}
         />

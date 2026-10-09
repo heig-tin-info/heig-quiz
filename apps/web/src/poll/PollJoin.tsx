@@ -39,7 +39,7 @@ import type { Me, PollPublicView } from "@quiz/contracts";
 
 import { api, isNotFound, refusedWith } from "../api";
 import { useT } from "../i18n";
-import type { Route } from "../router";
+import { routeToPath, type Route } from "../router";
 import { isAnswered, QuestionHost } from "../student/QuestionHost";
 import { SignInGate } from "../SignInGate";
 import {
@@ -368,7 +368,7 @@ function LoginGate({ code }: { code: string }) {
   const t = useT();
   return (
     <SignInGate
-      next={`/p/${code}`}
+      next={routeToPath({ view: "join", code })}
       header={null}
       title={t("join.eyebrow")}
       body={t("join.login.body")}

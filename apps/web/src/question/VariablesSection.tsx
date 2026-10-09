@@ -17,7 +17,7 @@ import { api, apiErrorMessage } from "../api";
 import { HelpIcon } from "../help";
 import { useT, type TFunction } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
-import { questionInstancesKey } from "../queryKeys";
+import { questionInstancesKey, solutionKey } from "../queryKeys";
 import {
   Alert,
   Button,
@@ -517,7 +517,7 @@ function Draws({
               label={t("param.draws.drawN", { n: instances.indexOf(current) + 1 })}
               showsAnswers
               solution={{
-                queryKey: [...questionInstancesKey(questionId, savedStamp ?? ""), current.seed, "solution"],
+                queryKey: solutionKey([...questionInstancesKey(questionId, savedStamp ?? ""), current.seed]),
                 // The draw's explanation is always shown under it, key or not.
                 queryFn: () => Promise.resolve({ solution: current.solution, explanation: null }),
               }}

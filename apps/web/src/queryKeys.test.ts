@@ -161,6 +161,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["attemptKey", keys.attemptKey("a1"), ["attempt", "a1"]],
     ["attemptFeedbackKey", keys.attemptFeedbackKey("a1"), ["attempt", "a1", "feedback"]],
     ["attemptEntryKey", keys.attemptEntryKey("e1"), ["attempt", "enter", "e1"]],
+    ["solutionKey", keys.solutionKey(keys.questionPreviewKey("q1", "draft")), ["question", "q1", "preview", "draft", "solution"]],
     ["pollQuestionsKey", keys.pollQuestionsKey, ["poll-questions"]],
     ["pollPoolQuestionsKey", keys.pollPoolQuestionsKey("?limit=25"), ["poll-pool-questions", "?limit=25"]],
     ["pollKey", keys.pollKey("e1"), ["poll", "e1"]],
