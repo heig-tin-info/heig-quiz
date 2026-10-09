@@ -9,7 +9,9 @@ import { countsAsCompleted,
   itemListLock,
   missingTimingFields,
   modeChangeable,
-  modeChangeEffects,
+  retakesAllowedFor,
+  feedbackWhenFor,
+  drillAllowedOn,
   pastTiming,
   parseCloze,
   poolRoleAllows,
@@ -1282,7 +1284,7 @@ function assertConfigPatch(e: MockEvaluation, body: Record<string, unknown>): vo
   // F-EVAL-15: an exam takes one attempt, as on the server.
   const retakes =
     settings?.retakes?.enabled ?? (modeChanged ? (e.settings as { retakes?: { enabled?: boolean } }).retakes?.enabled : undefined);
-  if (retakes === true && mode !== "exercise") {
+  if (retakes === true && !retakesAllowedFor(mode)) {
     throw new MockPayload(422, {
       error: "retakes_not_allowed",
       message: `an evaluation of mode "${mode}" takes one attempt (F-EVAL-15)`,
@@ -1307,21 +1309,23 @@ function assertConfigPatch(e: MockEvaluation, body: Record<string, unknown>): vo
 /** The fields an evaluation and a template share, written. */
 function applyConfigPatch(e: MockEvaluation, body: Record<string, unknown>): void {
   if (typeof body.title === "string") e.title = body.title;
-  // ADR-092: only the forced consequences, no preset.
-  if (typeof body.mode === "string" && body.mode !== e.mode) {
-    const settings = e.settings as { lobby: LobbyName; allowDrill?: boolean };
-    const effects = modeChangeEffects(e.mode, body.mode as MockEvaluation["mode"], {
-      lobby: settings.lobby,
-      feedbackWhen: (e.feedbackPolicy as { when: FeedbackWhen }).when,
-      allowDrill: settings.allowDrill,
-    });
-    e.settings = { ...e.settings, allowDrill: settings.allowDrill ?? effects.allowDrill };
-    e.feedbackPolicy = { ...e.feedbackPolicy, when: effects.feedbackWhen };
-    e.mode = body.mode as MockEvaluation["mode"];
-  }
+  // ADR-092: only the forced consequences, no preset (the server's rule).
+  const modeChanged = typeof body.mode === "string" && body.mode !== e.mode; // the single no-op exemption
+  const from = e.mode;
+  const stored = e.settings as { lobby: LobbyName; allowDrill?: boolean };
+  if (modeChanged) e.mode = body.mode as MockEvaluation["mode"];
   if (body.settings) e.settings = { ...e.settings, ...(body.settings as object) };
-  if (body.feedbackPolicy) {
-    e.feedbackPolicy = { ...e.feedbackPolicy, ...(body.feedbackPolicy as object) };
+  // The drill is frozen at what the old mode gave it.
+  if (modeChanged) e.settings = { ...e.settings, allowDrill: drillAllowedOn(from, stored.allowDrill) };
+  const feedback = body.feedbackPolicy as { when?: FeedbackWhen } | undefined;
+  if (body.feedbackPolicy || modeChanged) {
+    const merged = { ...e.feedbackPolicy, ...((body.feedbackPolicy as object | undefined) ?? {}) } as { when: FeedbackWhen };
+    // `immediate` falls back where the new mode refuses it, unless the patch chose a `when`.
+    const lobby = (e.settings as { lobby: LobbyName }).lobby;
+    e.feedbackPolicy = {
+      ...merged,
+      when: modeChanged && feedback?.when === undefined ? feedbackWhenFor({ mode: e.mode, lobby }, merged.when) : merged.when,
+    };
   }
   if (body.gradingScale) e.gradingScale = body.gradingScale as Record<string, unknown>;
   if (body.mcqPolicy) e.mcqPolicy = body.mcqPolicy as McqScorePolicy;

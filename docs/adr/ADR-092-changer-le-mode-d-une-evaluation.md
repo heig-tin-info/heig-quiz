@@ -34,8 +34,8 @@ what a student sees.
    The consequences written with it are the forced ones, and nothing else:
    - Going where `immediate` feedback is refused (an exam, or an exercise given a waiting room;
      `feedbackWhenFor`), `feedbackPolicy.when` becomes `on_release`, unless
-     the same patch chose a policy itself (which is then validated against the
-     new mode). `immediate`, `showKey` and `showExplanation` are never turned
+     the same patch chooses a `when` (which is then validated against the
+     new mode); any other feedback field in the patch leaves the fallback in force. `immediate`, `showKey` and `showExplanation` are never turned
      on by a change of mode: an exercise sat in class would otherwise hand the
      key to the first student who hands in. The screen says so when the
      fallback happens.
@@ -50,7 +50,9 @@ what a student sees.
 2. **Cutoff.** The mode changes while the evaluation is `draft` or
    `scheduled` and nobody has an attempt, the teacher's own included
    (`modeChangeable`, `@quiz/domain`). Otherwise `409 mode_frozen`. Sending
-   the mode the row already has is no change. A template (never run) may
+   the mode the row already has is no change. The decision is taken on the
+   row locked in the writing transaction, its state and attempts read again,
+   so a ticker move or a first attempt cannot slip in between. A template (never run) may
    always change; the change moves its revision like any content edit
    (F-EVAL-25); its instances keep their own mode, and a pull (F-EVAL-26)
    copies the questions only, so it never carries the mode.

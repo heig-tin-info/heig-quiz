@@ -1,5 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it } from "vitest";
 
 import type { EvaluationDetail } from "@quiz/contracts";
@@ -29,8 +30,15 @@ function Harness({
   changeable?: boolean;
   scheduled?: boolean;
 }) {
-  const patch = useConfigPatch(evaluationTarget(EVALUATION_ID));
-  return <ModeControl config={detail.evaluation} changeable={changeable} scheduled={scheduled} patch={patch} />;
+  const write = useConfigPatch(evaluationTarget(EVALUATION_ID));
+  // The screen re-renders from the answer, as the cache does.
+  const [shown, setShown] = useState(detail);
+  const patch = {
+    mutate: (body: Parameters<typeof write.mutate>[0]) =>
+      write.mutate(body, { onSuccess: (answer) => setShown(answer as EvaluationDetail) }),
+    error: write.error,
+  };
+  return <ModeControl config={shown.evaluation} changeable={changeable} scheduled={scheduled} patch={patch} />;
 }
 
 const PATCH = `PATCH /app/api/evaluations/${EVALUATION_ID}`;
@@ -83,7 +91,11 @@ describe("ModeControl", () => {
     const detail = detailOf("exercise", {
       feedbackPolicy: { ...base.evaluation.feedbackPolicy, when: "immediate" },
     });
-    mockFetch({ [PATCH]: ok(detail) });
+    // The server answers with the evaluation as it now stands: an exam, feedback at release.
+    const answer = detailOf("exam", {
+      feedbackPolicy: { ...base.evaluation.feedbackPolicy, when: "on_release" },
+    });
+    mockFetch({ [PATCH]: ok(answer) });
     renderWithProviders(<Harness detail={detail} />);
     await userEvent.click(screen.getByRole("radio", { name: "Exam" }));
     expect(await screen.findByText(/An exam never gives feedback immediately/)).toBeInTheDocument();

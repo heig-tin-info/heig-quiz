@@ -2,7 +2,7 @@ import { CopyPlus, FileStack, Settings2, Unlink } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { TemplatePatch, type TemplateDetail } from "@quiz/contracts";
-import { TEMPLATE_TABS, type CourseTab } from "@quiz/domain";
+import { modeChangeable, TEMPLATE_TABS, type CourseTab } from "@quiz/domain";
 
 import { isNotFound } from "../api";
 import { useCourses } from "../course/parts";
@@ -217,7 +217,7 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
               icon={Settings2}
               title={t("templates.settings")}
               description={t("templates.settings.desc")}
-              actions={<ModeControl config={template} changeable patch={patch} />}
+              actions={<ModeControl config={template} changeable={modeChangeable(template.mode, "draft", 0)} patch={patch} />}
             />
             <FormError error={patch.error} title={t("eval.saveFailed")} />
             <ConfigSettings

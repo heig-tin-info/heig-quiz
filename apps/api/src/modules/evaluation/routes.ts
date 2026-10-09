@@ -195,11 +195,14 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
           scope.evaluation,
           "evaluation.update",
           auditPatch(scope.evaluation, body),
-          (ctx) => service.patchEvaluation(app.db, scope.evaluation, body, { ...ctx, now, kioskAvailable }),
+          (ctx) =>
+            // A transaction: a change of mode locks the row and decides on it (ADR-092).
+            app.db.transaction((tx) => service.patchEvaluation(tx, scope.evaluation, body, { ...ctx, now, kioskAvailable })),
         );
         // ADR-092: a scheduled exam that becomes an exercise is announced as
-        // the move to scheduled would have, once (the marker claims it).
-        if (row.state === "scheduled" && scope.evaluation.mode === "exam" && row.mode === "exercise") {
+        // the move to scheduled would have, once (the marker claims it);
+        // `announceMove` itself keeps to a scheduled exercise.
+        if (row.mode !== scope.evaluation.mode) {
           await service.announceMove(app.db, row, now);
         }
         return detail(req, row, scope.classroom.courseId);

@@ -31,7 +31,7 @@ import {
   Select,
   Skeleton,
 } from "../ui";
-import { ModeChoice, TemplateModeLine, type CreatedMode } from "./ModeChoice";
+import { ModeChoice, type CreatedMode } from "./ModeChoice";
 import { coursesKey, courseTemplatesKey, evaluationKey, evaluationsKey } from "../queryKeys";
 
 /**
@@ -173,9 +173,8 @@ export function UseTemplateDialog({
         fullWidth
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        help={t("templates.useHelp")}
+        help={t("templates.useHelp", { mode: t(`eval.mode.${template.mode}`) })}
       />
-      <TemplateModeLine mode={template.mode} />
     </FormDialog>
   );
 }

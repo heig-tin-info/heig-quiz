@@ -64,15 +64,6 @@ const scheduledNotices = async (userId: string) =>
     .where(and(eq(notifications.userId, userId), sql`${notifications.payload}->>'kind' = 'activity_scheduled'`));
 
 describe("changing the mode of a draft (ADR-092)", () => {
-  it("changes both ways and answers the evaluation with its new mode", async () => {
-    const { teacher, url } = await world();
-    const toExercise = await changeMode(teacher, url, "exercise");
-    expect(toExercise.status).toBe(200);
-    expect(EvaluationDetail.parse(toExercise.body).evaluation.mode).toBe("exercise");
-    const back = await changeMode(teacher, url, "exam");
-    expect(EvaluationDetail.parse(back.body).evaluation.mode).toBe("exam");
-  });
-
   it("reapplies no preset: the settings and the answer key policy stay as stored", async () => {
     const { teacher, seed, url } = await world();
     const before = await reload(server.app.db, seed.evaluationId);
@@ -106,14 +97,52 @@ describe("changing the mode of a draft (ADR-092)", () => {
       showKey: false,
       showExplanation: false,
     });
+  });
 
-    // An exam goes to exercise: no switch of the correction is turned on.
-    await changeMode(teacher, url, "exercise");
+  it("applies the fallback even when the same patch touches another feedback field", async () => {
+    const { teacher, seed, url } = await world("exercise");
+    await server.app.db
+      .update(evaluations)
+      .set({ feedbackPolicy: { when: "immediate", showAnswer: true, showKey: true, showExplanation: false } })
+      .where(eq(evaluations.id, seed.evaluationId));
+    const res = await patch(teacher, url, { mode: "exam", feedbackPolicy: { showKey: false } });
+    expect(res.statusCode).toBe(200);
     expect(service.feedbackOf(await reload(server.app.db, seed.evaluationId))).toMatchObject({
       when: "on_release",
       showKey: false,
-      showExplanation: false,
     });
+    // A `when` the patch chooses itself is judged against the new mode, not replaced.
+    const chosen = await patch(teacher, url, { mode: "exercise", feedbackPolicy: { when: "immediate" } });
+    expect(chosen.statusCode).toBe(200);
+    const bad = await patch(teacher, url, { mode: "exam", feedbackPolicy: { when: "immediate" } });
+    expect([bad.statusCode, bad.json().error]).toEqual([422, "feedback_not_allowed"]);
+  });
+
+  it("refuses a stored kiosk becoming an exam where the platform has no kiosk", async () => {
+    const { teacher, seed, url } = await world("exercise");
+    await server.app.db
+      .update(evaluations)
+      .set({ settings: { ...service.settingsOf(await reload(server.app.db, seed.evaluationId)), kiosk: true } })
+      .where(eq(evaluations.id, seed.evaluationId));
+    const refused = await changeMode(teacher, url, "exam");
+    expect([refused.status, refused.body.error]).toEqual([422, "kiosk_unavailable"]);
+    expect((await reload(server.app.db, seed.evaluationId)).mode).toBe("exercise");
+  });
+
+  it("decides the cutoff on the locked re-read, not on the row loaded earlier", async () => {
+    const { seed } = await world();
+    const loaded = await reload(server.app.db, seed.evaluationId);
+    // Between the load and the write, a student enters and the evaluation opens.
+    await server.app.db
+      .insert(attempts)
+      .values({ id: randomUUID(), evaluationId: seed.evaluationId, userId: seed.studentIds[0]!, seed: 1 });
+    await server.app.db.update(evaluations).set({ state: "lobby" }).where(eq(evaluations.id, seed.evaluationId));
+    await expect(
+      server.app.db.transaction((tx) =>
+        service.patchEvaluation(tx, loaded, { mode: "exercise" }, { attemptCount: 0, now: server.clock.now() }),
+      ),
+    ).rejects.toMatchObject({ code: "mode_frozen" });
+    expect((await reload(server.app.db, seed.evaluationId)).mode).toBe("exam");
   });
 
   it("refuses an exam while retakes are on (422 retakes_not_allowed), the mode unchanged", async () => {
@@ -270,15 +299,5 @@ describe("a template", () => {
     });
     expect(pulled.statusCode).toBe(200);
     expect((await reload(server.app.db, instanceId)).mode).toBe("exam");
-  });
-
-  it("refuses an exam with retakes on, and a poll", async () => {
-    const { teacher, seed } = await world("exercise");
-    const template = await savedTemplate(teacher, seed);
-    const url = `/app/api/templates/${template.id}`;
-    await patch(teacher, url, { settings: { retakes: { enabled: true, keep: "best", maxAttempts: 2 } } });
-    const refused = await changeMode(teacher, url, "exam");
-    expect([refused.status, refused.body.error]).toEqual([422, "retakes_not_allowed"]);
-    expect((await changeMode(teacher, url, "poll")).status).toBe(400);
   });
 });

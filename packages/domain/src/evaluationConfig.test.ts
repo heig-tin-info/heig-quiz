@@ -10,7 +10,6 @@ import {
   isLiveState,
   logVisibilityDefault,
   modeChangeable,
-  modeChangeEffects,
   notepadOn,
   missingTimingFields,
   pastTiming,
@@ -194,24 +193,5 @@ describe("changing the mode (ADR-092)", () => {
     }
     expect(modeChangeable("exam", "draft", 1)).toBe(false);
     expect(modeChangeable("poll", "draft", 0)).toBe(false);
-  });
-
-  it("falls back from `immediate` going to an exam, and keeps every other policy", () => {
-    const base = { lobby: "skip", allowDrill: undefined } as const;
-    expect(modeChangeEffects("exercise", "exam", { ...base, feedbackWhen: "immediate" }).feedbackWhen).toBe("on_release");
-    expect(modeChangeEffects("exercise", "exam", { ...base, feedbackWhen: "none" }).feedbackWhen).toBe("none");
-    expect(modeChangeEffects("exam", "exercise", { ...base, feedbackWhen: "on_release" }).feedbackWhen).toBe("on_release");
-  });
-
-  it("falls back from `immediate` for an exercise given a waiting room", () => {
-    const current = { lobby: "manual", feedbackWhen: "immediate", allowDrill: undefined } as const;
-    expect(modeChangeEffects("exam", "exercise", current).feedbackWhen).toBe("on_release");
-  });
-
-  it("freezes the drill at the value the old mode gave it", () => {
-    const base = { lobby: "skip", feedbackWhen: "on_release" } as const;
-    expect(modeChangeEffects("exercise", "exam", { ...base, allowDrill: undefined }).allowDrill).toBe(true);
-    expect(modeChangeEffects("exam", "exercise", { ...base, allowDrill: undefined }).allowDrill).toBe(false);
-    expect(modeChangeEffects("exam", "exercise", { ...base, allowDrill: true }).allowDrill).toBe(true);
   });
 });

@@ -1,14 +1,22 @@
+import { useEffect, useRef } from "react";
+
 import { retakesOf, type EvaluationMode } from "@quiz/contracts";
-import { modeChangeEffects } from "@quiz/domain";
+import { retakesAllowedFor } from "@quiz/domain";
 
 import { useConfirm } from "../confirm";
-import { useT } from "../i18n";
+import { useT, type TFunction } from "../i18n";
 import { useToast } from "../notify";
 import { Badge, Segmented } from "../ui";
 import type { ConfigPatch, ConfigView } from "./editTarget";
 
 /** The two modes a new evaluation or a new template can take: a poll is neither. */
 export type CreatedMode = Exclude<EvaluationMode, "poll">;
+
+/** The two pills, written once for the creation dialogs and the configuration. */
+const modeOptions = (t: TFunction, disabledExam = false, title?: string) => [
+  { value: "exam" as const, label: t("eval.mode.exam"), disabled: disabledExam, ...(disabledExam && title ? { title } : {}) },
+  { value: "exercise" as const, label: t("eval.mode.exercise") },
+];
 
 /**
  * The mode of a new evaluation or a new template, with the sentence that
@@ -28,30 +36,11 @@ export function ModeChoice({
     <div className="space-y-1.5">
       <span className="text-[13px] font-medium">{t("eval.mode")}</span>
       <div>
-        <Segmented
-          name="eval-mode"
-          label={t("eval.mode")}
-          value={value}
-          onChange={onChange}
-          options={[
-            { value: "exam", label: t("eval.mode.exam") },
-            { value: "exercise", label: t("eval.mode.exercise") },
-          ]}
-        />
+        <Segmented name="eval-mode" label={t("eval.mode")} value={value} onChange={onChange} options={modeOptions(t)} />
       </div>
       <p className="text-[13px] text-fg-muted">{t(`eval.mode.desc.${value}`)}</p>
     </div>
   );
-}
-
-/**
- * The mode a template brings, read-only, in the dialog that starts an
- * evaluation from it (ADR-092): the copy takes it, and the teacher may
- * change it afterwards in the configuration.
- */
-export function TemplateModeLine({ mode }: { mode: EvaluationMode }) {
-  const t = useT();
-  return <p className="text-[13px] text-fg-muted">{t("templates.modeLine", { mode: t(`eval.mode.${mode}`) })}</p>;
 }
 
 /**
@@ -61,10 +50,11 @@ export function TemplateModeLine({ mode }: { mode: EvaluationMode }) {
  * it always was otherwise.
  *
  * Only the mode moves: the server reapplies no preset. The exam option is
- * disabled while retakes are on (the teacher turns them off first, as the
- * server demands); a scheduled evaluation asks first, since its card is
- * already on the students' screens; and the one setting the change forces
- * (`immediate` feedback does not exist in an exam) is said in a note.
+ * disabled while retakes are on and an exam refuses them (the teacher turns
+ * them off first); a scheduled evaluation asks first, since its card is
+ * already on the students' screens; and the one setting the server forces
+ * (`immediate` feedback does not exist in an exam) is said in a note, read
+ * from the refreshed configuration, not guessed before the answer.
  */
 export function ModeControl({
   config,
@@ -82,9 +72,17 @@ export function ModeControl({
   const confirm = useConfirm();
   const toast = useToast();
   const { mode, settings, feedbackPolicy } = config;
+
+  // The note: the mode just changed and the server moved the feedback with it.
+  const seen = useRef({ mode, when: feedbackPolicy.when });
+  useEffect(() => {
+    if (seen.current.mode !== mode && seen.current.when !== feedbackPolicy.when) toast(t("eval.mode.feedbackFell"), "info");
+    seen.current = { mode, when: feedbackPolicy.when };
+  }, [mode, feedbackPolicy.when, toast, t]);
+
   if (!changeable || mode === "poll") return <Badge tone="zinc">{t(`eval.mode.${mode}`)}</Badge>;
 
-  const retakes = retakesOf(settings).enabled;
+  const retakes = retakesOf(settings).enabled && !retakesAllowedFor("exam");
   const hint = t("eval.mode.retakesFirst");
   const change = async (next: CreatedMode) => {
     if (next === mode) return;
@@ -98,13 +96,7 @@ export function ModeControl({
     ) {
       return;
     }
-    const effects = modeChangeEffects(mode, next, {
-      lobby: settings.lobby,
-      feedbackWhen: feedbackPolicy.when,
-      allowDrill: settings.allowDrill,
-    });
     patch.mutate({ mode: next });
-    if (effects.feedbackWhen !== feedbackPolicy.when) toast(t("eval.mode.feedbackFell"), "info");
   };
 
   return (
@@ -114,10 +106,7 @@ export function ModeControl({
         label={t("eval.mode")}
         value={mode}
         onChange={(next) => void change(next)}
-        options={[
-          { value: "exam", label: t("eval.mode.exam"), disabled: retakes, ...(retakes ? { title: hint } : {}) },
-          { value: "exercise", label: t("eval.mode.exercise") },
-        ]}
+        options={modeOptions(t, retakes, hint)}
       />
       {retakes ? <span className="text-xs text-fg-muted">{hint}</span> : null}
     </div>
