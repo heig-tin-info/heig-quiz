@@ -19,7 +19,7 @@
  */
 import { useId, useState } from "react";
 
-import type { ConfigIssue, EditorProps, MarkdownRenderer, StringOverrides } from "@quiz/core/client";
+import type { EditorProps, StringOverrides } from "@quiz/core/client";
 import { issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import { DiagramEditor, ToolIcon, type DiagramStrings } from "@quiz/diagram/client";
 import { DIAGRAM_KINDS, emptyScene, freshCopy, isEmptyScene, type DiagramKind, type PlaceTool, type Scene } from "@quiz/diagram/server";
@@ -28,13 +28,10 @@ import { AsideSection, buttonClass, cx, ExpandableCanvas, hint, IssueList, label
 import type { DiagramConfig } from "./schema.js";
 import { diagramEditorStrings, kindHintKey, kindKey, type DiagramEditorStringKey } from "./strings.js";
 
-type DiagramEditorProps = Omit<EditorProps<DiagramConfig>, "uploadAsset"> & {
-  uploadAsset?: EditorProps<DiagramConfig>["uploadAsset"];
-  issues?: readonly ConfigIssue[];
+type DiagramEditorProps = EditorProps<DiagramConfig> & {
   strings?: StringOverrides<DiagramEditorStringKey>;
   /** The engine's dictionary: tools, inspector, text pane (`qt.diagram.c.*` in the host). */
   canvasStrings?: Partial<DiagramStrings>;
-  renderMarkdown?: MarkdownRenderer;
 };
 
 /** The canvas height of the reference and the starter: room for a dozen elements. */

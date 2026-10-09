@@ -18,7 +18,7 @@
  * answer; without the solution the choices the student missed lose their
  * mark, while the verdict on each ticked choice stays, since it is the grade.
  */
-import type { MarkdownRenderer, ReviewProps, StringOverrides } from "@quiz/core/client";
+import type { ReviewProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings, showsSection } from "@quiz/core/client";
 import type { McqAnswer, McqDetails, McqSolution, McqStudent } from "./schema.js";
 import { mcqReviewStrings, type McqReviewStringKey } from "./strings.js";
@@ -36,7 +36,6 @@ import { choiceLetter, choiceMark, LetteredChoice } from "./ui.js";
 
 type McqReviewProps = ReviewProps<McqStudent, McqAnswer, McqSolution, McqDetails> & {
   strings?: StringOverrides<McqReviewStringKey>;
-  renderMarkdown?: MarkdownRenderer;
 };
 
 /** What each state wears: its row (only a tick is tinted) and its verdict in words. */

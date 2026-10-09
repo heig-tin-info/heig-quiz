@@ -12,88 +12,7 @@
  * other. A count-dependent sentence has a `<key>.one` sibling, used for 1.
  */
 
-export interface CodeEditorStrings {
-  questionSection: string;
-  prompt: string;
-  language: string;
-  template: string;
-  templateHint: string;
-  lockedRegions: string;
-  "lockedRegions.one": string;
-  lock: string;
-  unlock: string;
-  lockLines: string;
-  unlockLines: string;
-  markerUnknown: string;
-  markerUnopened: string;
-  markerNested: string;
-  referenceSolution: string;
-  referenceSolutionHint: string;
-  referenceRegion: string;
-  referenceLocked: string;
-  referenceExtraPieces: string;
-  tryReference: string;
-  trying: string;
-  tryUnavailable: string;
-  tryCompileFailed: string;
-  tryRegionsMismatch: string;
-  tryResult: string;
-  tryDiverged: string;
-  "tryDiverged.one": string;
-  cases: string;
-  case: string;
-  caseName: string;
-  args: string;
-  argument: string;
-  addArgument: string;
-  removeArgument: string;
-  commandLine: string;
-  stdin: string;
-  expected: string;
-  compareStdout: string;
-  exitCode: string;
-  exitCodeHint: string;
-  exitCodeAny: string;
-  hidden: string;
-  points: string;
-  timeMs: string;
-  timeMsHint: string;
-  addCase: string;
-  removeCase: string;
-  runtime: string;
-  runtimeBackend: string;
-  runtimeBrowser: string;
-  runtimeBackendHint: string;
-  runtimeBrowserHint: string;
-  cooldown: string;
-  cooldownFixed: string;
-  cooldownProgressive: string;
-  cooldownFixedHint: string;
-  cooldownProgressiveHint: string;
-  advanced: string;
-  action: string;
-  actionCheck: string;
-  actionRun: string;
-  compileArgs: string;
-  timeLimit: string;
-  memoryLimit: string;
-  outputLimit: string;
-  runsPerMinute: string;
-  allOrNothing: string;
-  allOrNothingHint: string;
-  compare: string;
-  trimTrailing: string;
-  ignoreCase: string;
-  numeric: string;
-  numericOff: string;
-  numericAbs: string;
-  numericRel: string;
-  epsilon: string;
-  totalPoints: string;
-  "totalPoints.one": string;
-}
-
-export const EDITOR_STRINGS: CodeEditorStrings = {
+export const EDITOR_STRINGS = {
   questionSection: "Question",
   prompt: "Statement",
   language: "Language",
@@ -179,65 +98,9 @@ export const EDITOR_STRINGS: CodeEditorStrings = {
   "totalPoints.one": "1 point in total",
 };
 
-export interface CodePlayerStrings {
-  locked: string;
-  program: string;
-  editableRegion: string;
-  run: string;
-  running: string;
-  compile: string;
-  compiling: string;
-  runTests: string;
-  freeTry: string;
-  availableIn: string;
-  loadingRuntime: string;
-  runUnavailable: string;
-  runFailed: string;
-  rateLimited: string;
-  visibleCases: string;
-  noVisibleCases: string;
-  hiddenCases: string;
-  "hiddenCases.one": string;
-  files: string;
-  caseName: string;
-  stdin: string;
-  noStdin: string;
-  command: string;
-  expected: string;
-  expectedAnyOutput: string;
-  got: string;
-  verdict: string;
-  passed: string;
-  failed: string;
-  notRun: string;
-  timedOut: string;
-  outOfMemory: string;
-  crashed: string;
-  truncated: string;
-  exitMismatch: string;
-  outputMismatch: string;
-  outputSideBySide: string;
-  outputDiff: string;
-  outputView: string;
-  showWhitespace: string;
-  outputDiffHeader: string;
-  noFinalNewline: string;
-  truncatedDiff: string;
-  compileFailed: string;
-  compileOk: string;
-  allOrNothing: string;
-  manual: string;
-  manualArgs: string;
-  argument: string;
-  addArgument: string;
-  removeArgument: string;
-  commandLine: string;
-  manualRun: string;
-  manualOutput: string;
-  exitCode: string;
-}
+export type CodeEditorStrings = typeof EDITOR_STRINGS;
 
-export const PLAYER_STRINGS: CodePlayerStrings = {
+export const PLAYER_STRINGS = {
   locked: "Locked — provided by your teacher",
   program: "Your program",
   editableRegion: "Your code, region {n}",
@@ -296,42 +159,9 @@ export const PLAYER_STRINGS: CodePlayerStrings = {
   exitCode: "exit {code}",
 };
 
-export interface CodeReviewStrings {
-  score: string;
-  compileFailed: string;
-  compilerOutput: string;
-  cases: string;
-  caseName: string;
-  args: string;
-  noArgs: string;
-  expected: string;
-  got: string;
-  verdict: string;
-  passed: string;
-  failed: string;
-  timedOut: string;
-  outOfMemory: string;
-  crashed: string;
-  exitMismatch: string;
-  outputMismatch: string;
-  outputSideBySide: string;
-  outputDiff: string;
-  outputView: string;
-  showWhitespace: string;
-  outputDiffHeader: string;
-  noFinalNewline: string;
-  points: string;
-  hiddenSummary: string;
-  hiddenCase: string;
-  runnerUnavailable: string;
-  runnerBusy: string;
-  runnerError: string;
-  notAnswered: string;
-  referenceSolution: string;
-  yourCode: string;
-}
+export type CodePlayerStrings = typeof PLAYER_STRINGS;
 
-export const REVIEW_STRINGS: CodeReviewStrings = {
+export const REVIEW_STRINGS = {
   score: "{points} / {max} points",
   compileFailed: "Compilation failed",
   compilerOutput: "Compiler output",
@@ -366,38 +196,28 @@ export const REVIEW_STRINGS: CodeReviewStrings = {
   yourCode: "Your code",
 };
 
+export type CodeReviewStrings = typeof REVIEW_STRINGS;
+
 /**
  * The words of the grading table's program column (ADR-044), `code`'s and
  * `codeimage`'s alike: the program clamped to five lines, and the chip that
  * says how its run went.
  */
-/* A type, not an interface: the grading contract takes it as a `Record<string, string>`. */
-export type CodeGradingStrings = {
-  program: string;
-  /** The foot of a clamped program. */
-  more: string;
-  "more.one": string;
-  /** The tooltip of a clamped program, and of an unfolded one. */
-  expand: string;
-  collapse: string;
-  /** The cases passed, out of all of them. */
-  tests: string;
-  "tests.one": string;
-  compileFailed: string;
-  /** No verdict yet: the answer waits for the runner (or was never run). */
-  atRunner: string;
-  runFailed: string;
-};
-
-export const GRADING_STRINGS: CodeGradingStrings = {
+export const GRADING_STRINGS = {
   program: "Program",
+  /** The foot of a clamped program. */
   more: "{n} more lines",
   "more.one": "1 more line",
+  /** The tooltip of a clamped program, and of an unfolded one. */
   expand: "Show the whole program",
   collapse: "Fold the program",
+  /** The cases passed, out of all of them. */
   tests: "{passed}/{total} tests",
   "tests.one": "{passed}/{total} test",
   compileFailed: "Does not compile",
+  /** No verdict yet: the answer waits for the runner (or was never run). */
   atRunner: "runner…",
   runFailed: "Not run",
 };
+
+export type CodeGradingStrings = typeof GRADING_STRINGS;

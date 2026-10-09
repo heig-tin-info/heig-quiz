@@ -11,6 +11,7 @@
  */
 import { z } from "zod";
 
+import { StaffItemRef } from "./common.js";
 import { EvaluationMode, GradingScale, RetakeKeep, RetakeScope } from "./evaluation.js";
 import type { ItemStanding as DomainItemStanding } from "@quiz/domain";
 
@@ -55,12 +56,7 @@ export const ResultsStats = z.object({
 });
 export type ResultsStats = z.infer<typeof ResultsStats>;
 
-export const ResultsItem = z.object({
-  id: z.uuid(),
-  position: z.number().int(),
-  internalName: z.string(),
-  type: z.string(),
-  points: z.number(),
+export const ResultsItem = StaffItemRef.extend({
   /** ADR-052: a bonus item, whose points are not in `totalPoints`. */
   bonus: z.boolean(),
   /** Mean of `points / maxPoints` over the validated gradings of this item. */

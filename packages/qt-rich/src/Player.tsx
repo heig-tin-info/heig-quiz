@@ -18,7 +18,7 @@
  */
 import { useEffect, useId, useState } from "react";
 
-import type { MarkdownRenderer, PlayerProps, StringOverrides } from "@quiz/core/client";
+import type { PlayerProps, StringOverrides } from "@quiz/core/client";
 import { fmt, resolveStrings } from "@quiz/core/client";
 import {
   caption,
@@ -40,7 +40,6 @@ type RichPlayerProps = PlayerProps<RichStudent, RichAnswer> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
   disabled?: boolean;
   strings?: StringOverrides<RichPlayerStringKey>;
-  renderMarkdown?: MarkdownRenderer;
 };
 
 export function RichPlayer({

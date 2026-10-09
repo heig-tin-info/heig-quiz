@@ -5,7 +5,7 @@
  * then shows the verdict without the accepted answers — and so does
  * `sections.solution === false` (#109).
  */
-import type { MarkdownRenderer, ReviewProps, StringOverrides } from "@quiz/core/client";
+import type { ReviewProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings, showsSection } from "@quiz/core/client";
 import type { ShortAnswer, ShortDetails, ShortSolution, ShortStudent } from "./schema.js";
 import { shortReviewStrings, type ShortReviewStringKey } from "./strings.js";
@@ -18,7 +18,6 @@ type ShortReviewProps = ReviewProps<
   ShortDetails
 > & {
   strings?: StringOverrides<ShortReviewStringKey>;
-  renderMarkdown?: MarkdownRenderer;
 };
 
 export function ShortReview({

@@ -14,7 +14,7 @@
 import { useId, type ReactNode } from "react";
 
 import { fmt, issuesAt, plural, resolveStrings, rootIssues } from "@quiz/core/client";
-import type { ConfigIssue, EditorProps, MarkdownRenderer } from "@quiz/core/client";
+import type { ConfigIssue, EditorProps } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 
 import {
@@ -79,15 +79,7 @@ export interface CodeEditorProps extends EditorProps<CodeConfig> {
    * other is a trial that lies. `"unavailable"`, or a throw, says nothing.
    */
   onTryInBrowser?: ((config: CodeConfig) => Promise<RunnerOutcome | "unavailable">) | undefined;
-  /** Validation problems of the stored draft (decision D16), placed by field. */
-  issues?: readonly ConfigIssue[] | undefined;
   strings?: Partial<CodeEditorStrings> | undefined;
-  /**
-   * The host's sanitised markdown view, used to preview the statement under
-   * its textarea. Absent, the preview is not drawn at all: the textarea
-   * already shows the source, so there is nothing to fall back to.
-   */
-  renderMarkdown?: MarkdownRenderer | undefined;
   /** Forces the Monaco path on or off (tests use the textarea). */
   monaco?: boolean | undefined;
 }

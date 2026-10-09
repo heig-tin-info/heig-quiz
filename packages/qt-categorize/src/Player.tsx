@@ -7,7 +7,7 @@
  * it writes are the canonical ones; the display order is never sent back.
  * A card in no column is simply absent from the answer: that is the tray.
  */
-import type { MarkdownRenderer, PlayerProps, StringOverrides } from "@quiz/core/client";
+import type { PlayerProps, StringOverrides } from "@quiz/core/client";
 import { plural, resolveStrings } from "@quiz/core/client";
 import { buttonClass, caption, cx, GripIcon, isLocked, markdown } from "@quiz/ui";
 
@@ -21,7 +21,6 @@ type CategorizePlayerProps = PlayerProps<CategorizeStudent, CategorizeAnswer> & 
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
   disabled?: boolean;
   strings?: StringOverrides<CategorizePlayerStringKey>;
-  renderMarkdown?: MarkdownRenderer;
 };
 
 export function CategorizePlayer({

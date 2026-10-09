@@ -15,7 +15,7 @@
 import { useId, type ReactNode } from "react";
 
 import { fmt, issuesAt, plural, resolveStrings, rootIssues } from "@quiz/core/client";
-import type { ConfigIssue, EditorProps, MarkdownRenderer } from "@quiz/core/client";
+import type { ConfigIssue, EditorProps } from "@quiz/core/client";
 
 import { Plot, SchematicEditor, type CanvasStrings } from "./canvas/index.js";
 import { COMPONENT_KINDS, type ComponentKind } from "./library.js";
@@ -94,8 +94,6 @@ export interface CircuitEditorProps extends EditorProps<CircuitConfig> {
    * the stored config (invariant 14).
    */
   onTry?: ((config: CircuitConfig) => Promise<CircuitTryOutcome>) | undefined;
-  /** Validation problems of the stored draft (decision D16), placed by field. */
-  issues?: readonly ConfigIssue[] | undefined;
   strings?: Partial<CircuitEditorStrings> | undefined;
   /**
    * The component names, keyed by kind rather than by sentence: the same
@@ -105,12 +103,6 @@ export interface CircuitEditorProps extends EditorProps<CircuitConfig> {
   kindLabels?: Partial<KindLabels> | undefined;
   /** The canvas has a dictionary of its own; the host translates it too. */
   canvasStrings?: Partial<CanvasStrings> | undefined;
-  /**
-   * The host's sanitised markdown view. Absent, the statement falls back to a
-   * plain textarea and nothing is previewed: the textarea already shows the
-   * source, so there is nothing to fall back to.
-   */
-  renderMarkdown?: MarkdownRenderer | undefined;
 }
 
 type TryDone = { details: CircuitDetails };

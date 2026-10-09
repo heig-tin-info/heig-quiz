@@ -9,18 +9,15 @@
  */
 import { useId } from "react";
 
-import type { ConfigIssue, EditorProps, MarkdownRenderer, StringOverrides } from "@quiz/core/client";
+import type { EditorProps, StringOverrides } from "@quiz/core/client";
 import { fmt, issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import { AsideSection, hint, IssueList, label, NumberField, PromptField, sectionClass, Segmented } from "@quiz/ui";
 
 import { CHARS_PER_A4_PAGE, pagesText, RICH_MAX_CHARS, type RichConfig, type RichFormat } from "./schema.js";
 import { richEditorStrings, type RichEditorStringKey } from "./strings.js";
 
-type RichEditorProps = Omit<EditorProps<RichConfig>, "uploadAsset"> & {
-  uploadAsset?: EditorProps<RichConfig>["uploadAsset"];
-  issues?: readonly ConfigIssue[];
+type RichEditorProps = EditorProps<RichConfig> & {
   strings?: StringOverrides<RichEditorStringKey>;
-  renderMarkdown?: MarkdownRenderer;
 };
 
 export function RichEditor({

@@ -39,7 +39,6 @@ import { CSS } from "@dnd-kit/utilities";
 import type {
   ConfigIssue,
   EditorProps,
-  MarkdownRenderer,
   RichTextComponent,
   StringOverrides,
 } from "@quiz/core/client";
@@ -79,23 +78,8 @@ import {
   TrashIcon,
 } from "./ui.js";
 
-type McqEditorProps = Omit<EditorProps<McqConfig>, "uploadAsset"> & {
-  /** The rich editor uses it; the textarea fallback does not. */
-  uploadAsset?: EditorProps<McqConfig>["uploadAsset"];
-  /** What the last save reported, as zod paths (decision D16). */
-  issues?: readonly ConfigIssue[];
+type McqEditorProps = EditorProps<McqConfig> & {
   strings?: StringOverrides<McqEditorStringKey>;
-  /** The host's sanitised markdown view; plain text when absent. */
-  renderMarkdown?: MarkdownRenderer;
-  /** The host's contextual help; without it the "?" beside a label is not drawn. */
-  renderHelp?: EditorProps<McqConfig>["renderHelp"];
-  /**
-   * Where the host wants the scoring settings (`EditorProps.aside`). Given
-   * one, the "Scoring" card is PORTALLED there — the right column of the
-   * question editor, under "Properties". Absent, it stays in the main column,
-   * which is what a test and any other host get.
-   */
-  aside?: EditorProps<McqConfig>["aside"];
 };
 
 type Strings = Readonly<Record<McqEditorStringKey, string>>;

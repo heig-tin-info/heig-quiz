@@ -12,6 +12,7 @@
  */
 import { z } from "zod";
 
+import { IdParam, StaffItemRef } from "./common.js";
 import { NamedValues, ParametersDraft } from "./parameters.js";
 import { VersionRow } from "./pool.js";
 
@@ -91,12 +92,7 @@ export const GradingHistoryEntry = z.object({
 });
 export type GradingHistoryEntry = z.infer<typeof GradingHistoryEntry>;
 
-export const GradingQueueItem = z.object({
-  id: z.uuid(),
-  position: z.number().int(),
-  internalName: z.string(),
-  type: z.string(),
-  points: z.number(),
+export const GradingQueueItem = StaffItemRef.extend({
   /**
    * The lowest points a manual correction may give (F-GRADE-05): 0, or
    * `-points` for a choice question of an evaluation with negative marking
@@ -306,5 +302,5 @@ export const AnswerIdParam = z.object({ answerId: z.uuid() });
 export type AnswerIdParam = z.infer<typeof AnswerIdParam>;
 
 /** `/gradings/:id/…` */
-export const GradingIdParam = z.object({ id: z.uuid() });
+export const GradingIdParam = IdParam;
 export type GradingIdParam = z.infer<typeof GradingIdParam>;

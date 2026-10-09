@@ -1,5 +1,5 @@
 /** The `brainstorm` review: the ideas given, nothing to judge. */
-import type { MarkdownRenderer, ReviewProps, StringOverrides } from "@quiz/core/client";
+import type { ReviewProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings, showsSection } from "@quiz/core/client";
 import { caption, markdown, reviewPrompt } from "@quiz/ui";
 
@@ -8,7 +8,6 @@ import { brainstormReviewStrings, type BrainstormReviewStringKey } from "./strin
 
 type BrainstormReviewProps = ReviewProps<BrainstormStudent, BrainstormAnswer, BrainstormSolution, BrainstormDetails> & {
   strings?: StringOverrides<BrainstormReviewStringKey>;
-  renderMarkdown?: MarkdownRenderer;
 };
 
 export function BrainstormReview({ student, answer, sections, strings, renderMarkdown }: BrainstormReviewProps) {

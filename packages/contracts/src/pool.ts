@@ -8,7 +8,7 @@
  */
 import { z } from "zod";
 
-import { BoolFlag, IntList, StringList, ZodIssueLite, pageOf } from "./common.js";
+import { BoolFlag, IntList, PersonRef, StringList, ZodIssueLite, pageOf } from "./common.js";
 import { ConceptRef } from "./concept.js";
 import { NamedValues, ParametersDraft } from "./parameters.js";
 import { QuestionReview, ReviewPill } from "./review.js";
@@ -129,11 +129,7 @@ export type PoolPatch = z.infer<typeof PoolPatch>;
 // --- Members (F-POOL-05) ---------------------------------------------------
 
 /** One account in a pool: the owner row first, then the members in the order they were added. */
-export const PoolMember = z.object({
-  userId: z.uuid(),
-  email: z.string(),
-  givenName: z.string(),
-  familyName: z.string(),
+export const PoolMember = PersonRef.extend({
   role: PoolRole,
   /** `true` on the `pools.owner_id` account; it cannot be removed or demoted here. */
   isOwner: z.boolean(),
@@ -153,12 +149,7 @@ export const PoolCandidateQuery = z.object({ q: z.string().trim().max(100).defau
 export type PoolCandidateQuery = z.infer<typeof PoolCandidateQuery>;
 
 /** A teacher account that holds no seat on the pool yet: what the invite picker offers. */
-export const PoolCandidate = z.object({
-  userId: z.uuid(),
-  email: z.string(),
-  givenName: z.string(),
-  familyName: z.string(),
-});
+export const PoolCandidate = PersonRef;
 export type PoolCandidate = z.infer<typeof PoolCandidate>;
 
 export const PoolCandidates = z.array(PoolCandidate);

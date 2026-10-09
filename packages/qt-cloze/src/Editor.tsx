@@ -10,7 +10,6 @@
  * one is a chip with an editor of its own; nothing here knows about that.
  */
 import type {
-  ConfigIssue,
   EditorProps,
   RichTextComponent,
   StringOverrides,
@@ -29,9 +28,7 @@ import {
   sectionClass,
 } from "@quiz/ui";
 
-type ClozeEditorProps = Omit<EditorProps<ClozeConfig>, "uploadAsset"> & {
-  uploadAsset?: EditorProps<ClozeConfig>["uploadAsset"];
-  issues?: readonly ConfigIssue[];
+type ClozeEditorProps = EditorProps<ClozeConfig> & {
   strings?: StringOverrides<ClozeEditorStringKey>;
   /** The host's WYSIWYG editor; a textarea when the host has none. */
   RichText?: RichTextComponent;

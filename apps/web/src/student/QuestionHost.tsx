@@ -37,7 +37,6 @@ interface HostPlayerProps extends PlayerProps<unknown, unknown> {
   strings?: unknown;
   /** `circuit` and `diagram`: the canvas ships a dictionary of its own. */
   canvasStrings?: unknown;
-  renderMarkdown?: (source: string) => ReactNode;
   /** `cloze` only: its text with the blanks in place, through the app's pipeline. */
   renderText?: ClozeTextRenderer;
   onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
