@@ -286,7 +286,7 @@ export function QuestionTable({
                   <span className="flex items-center gap-2">
                     <StarButton row={row} onToggle={() => onStar(row)} />
                     <TypeGlyph type={row.type} />
-                    <span className="font-mono font-bold group-aria-[current=true]:text-accent">
+                    <span className="font-semibold group-aria-[current=true]:text-accent">
                       {row.internalName}
                     </span>
                     {row.deletedAt ? <Badge tone="zinc">{t("pool.deleted")}</Badge> : null}

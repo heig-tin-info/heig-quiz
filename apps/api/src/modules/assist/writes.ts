@@ -45,7 +45,7 @@ const WRITE_DESCRIPTIONS: Record<AssistWriteTool, string> = {
   create_question:
     "PREPARES a new question as a DRAFT in a pool, for the user to confirm; it is never published (the user publishes " +
     "it in its editor). Call find_similar_questions first in this answer, and describe_question_types for its type, " +
-    "and follow the schema exactly. `internalName` is a unique slug in the pool, never shown to students.",
+    "and follow the schema exactly.",
   create_category: "PREPARES a category (a folder) in a pool, optionally under a parent category, for the user to confirm.",
   create_template:
     "PREPARES an evaluation template (a reusable exam or exercise) of a course, for the user to confirm; with no " +

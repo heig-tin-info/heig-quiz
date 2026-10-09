@@ -108,6 +108,11 @@ const Concepts = QuestionPatchFields.shape.concepts.describe(
   "refused with 422 `concept_ambiguous` and its candidates, an unknown one with 422 `concept_unknown` and " +
   "the close candidates (pick one and retry with its id), a label the admin dropped with 422 `concept_dropped`.",
 );
+/** A question's internal name reads as a title in every teacher list, not as an identifier (#691). */
+const INTERNAL_NAME_MEANING =
+  "A short, meaningful title of at most 7 words, in the language of the conversation " +
+  "(`L'île aux yeux bleus`, `Pointer arithmetic on an array`), not a slug nor a code. Unique in the " +
+  "pool (case-insensitive), seen by teachers only, never by students.";
 const CreateMissing = QuestionPatchFields.shape.createMissing.describe(
   "true creates a `proposed` concept for a label that matches none; false by default: prefer an existing " +
     "concept, and create one only for a real concept the vocabulary lacks. A dropped label is refused even so.",
@@ -470,13 +475,12 @@ export const TOOLS: Tool[] = [
       "Creates a question in a pool, saves its config and explanation, and publishes it (unless " +
       "`publish` is false). Call `find_similar_questions` first and reuse a close hit rather than " +
       "writing a duplicate. Call `describe_question_types` for the type first. An invalid config is " +
-      "refused with the list of issues and nothing is created. `internalName` is a unique slug inside " +
-      "the pool, never shown to students (e.g. `fr-vocab-prolixe`). `explanation` is Markdown shown " +
+      "refused with the list of issues and nothing is created. `explanation` is Markdown shown " +
       "after grading when the evaluation allows it.",
     input: z.object({
       poolId: Id,
       type: QuestionCreate.shape.type,
-      internalName: QuestionCreate.shape.internalName,
+      internalName: QuestionCreate.shape.internalName.describe(INTERNAL_NAME_MEANING),
       config: z.record(z.string(), z.unknown()),
       explanation: z.string().max(20_000).optional(),
       variables: Variables,
@@ -518,13 +522,16 @@ export const TOOLS: Tool[] = [
     title: "Update a question",
     description:
       "Changes a question: its metadata, and/or its draft (config, explanation), then publishes a new " +
-      "version (unless `publish` is false). Evaluations keep the version they were built with.",
+      "version (unless `publish` is false). Evaluations keep the version they were built with. A change " +
+      "of metadata alone (a rename, the concepts) passes `publish: false`, or it publishes a new version " +
+      "of unchanged content.",
     input: z.object({
       questionId: Id,
       config: z.record(z.string(), z.unknown()).optional(),
       explanation: z.string().max(20_000).optional(),
       variables: Variables,
       ...QuestionPatchFields.shape,
+      internalName: QuestionPatchFields.shape.internalName.describe(INTERNAL_NAME_MEANING),
       concepts: Concepts,
       createMissing: CreateMissing,
       publish: z.boolean().default(true),

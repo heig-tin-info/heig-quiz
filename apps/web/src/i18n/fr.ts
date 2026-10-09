@@ -1369,7 +1369,7 @@ export const fr: Record<keyof Dict, string> = {
   "pool.newQuestionAction": "Créer la question",
   "pool.questionName": "Nom interne",
   "pool.questionNameHint": "Vous seul le voyez. C'est ainsi que vous retrouvez la question.",
-  "pool.questionNamePlaceholder": "ptr-arith-01",
+  "pool.questionNamePlaceholder": "Arithmétique de pointeurs sur un tableau",
   "pool.questionType": "Type de question",
   "pool.createFailed": "La question n'a pas pu être créée.",
   "pool.search": "Rechercher une question",

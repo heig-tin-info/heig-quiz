@@ -41,7 +41,7 @@ a current API payload. One YAML file per question; images live in a sibling
 ```yaml
 id: 01920e6d-1e00-7000-8000-000000000001  # stable UUID v7, generated at creation
 type: mcq
-name: pointeurs-arithmetique-01      # internal name
+name: Arithmétique de pointeurs   # internal name: a short title, never shown to students
 concepts: [pointers, pointer arithmetic]   # labels or ids, resolved as in ADR-081 (addendum §2)
 difficulty: 2
 version: 3

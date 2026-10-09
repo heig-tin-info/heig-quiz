@@ -95,7 +95,7 @@ export function QuestionStatsSheet({
   return (
     <Sheet
       title={t("pool.stats.title")}
-      subtitle={<span className="font-mono">{row.internalName}</span>}
+      subtitle={row.internalName}
       onClose={onClose}
       footer={
         canReset ? (

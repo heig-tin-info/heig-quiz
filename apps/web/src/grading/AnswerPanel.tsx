@@ -98,7 +98,7 @@ export function AnswerPanel(props: PanelProps) {
         title={t("grading.panel.question", { n: props.number })}
         subtitle={
           <>
-            <span className="font-mono text-[12.5px]">{props.item.internalName}</span> ·{" "}
+            {props.item.internalName} ·{" "}
             {typeLabel(t, props.item.type)} · {t("grading.points", { n: props.item.points })}
           </>
         }
