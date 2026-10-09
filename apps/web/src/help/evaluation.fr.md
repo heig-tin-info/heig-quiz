@@ -2,7 +2,7 @@
 
 ## Trois étapes
 
-**Questions**, **Temps et mode**, **Démarrage**. Ce sont des onglets, pas un
+**Questions**, **Modalité**, **Démarrage**. Ce sont des onglets, pas un
 assistant verrouillé : vous revenez à l'étape que vous aviez quittée, et
 l'étape est inscrite dans l'adresse.
 
@@ -32,26 +32,28 @@ La ligne montre un bouton **rafraîchir** seulement lorsqu'une version publiée
 plus récente de la question existe, et une **corbeille** qui retire l'item de
 cette évaluation — la question, elle, reste dans sa banque.
 
-## Temps et mode
+## Modalité
 
 Une question porte cette étape : qui mène le temps ? **Planifiée** : la
 plateforme l'ouvre et la ferme d'elle-même entre **Ouverture** et
-**Fermeture** ; les étudiants travaillent sans vous, sans salle d'attente.
+**Fermeture**, choisies comme une période sur un calendrier (chaque bout avec son heure) ; les étudiants travaillent sans vous, sans salle d'attente.
 **En direct** : vous ouvrez la salle d'attente et donnez le départ ; elle se
 termine quand vous la clôturez, ou à **Ferme au plus tard**, une échéance de
 sécurité facultative (obligatoire pour un examen sans limite de temps). La date **Prévue le**
 d'une évaluation en direct la place seulement dans le calendrier : rien ne
 s'ouvre de soi-même.
 
-Puis un interrupteur, **Limite de temps par étudiant** : les **Minutes** se
-comptent depuis le début de chaque étudiant, coupées à la fin (celle de la fenêtre, ou
+Puis un interrupteur, **Limite de temps par étudiant** : la **Durée** (en minutes) se
+compte depuis le début de chaque étudiant, coupées à la fin (celle de la fenêtre, ou
 l'échéance de sécurité) même s'il reste du temps. Le temps supplémentaire de la
 liste s'ajoute, au-delà de cette fin aussi.
 
-Le reste vit sous **Options avancées** : navigation, présentation, mélange,
-barre de progression, retour à l'étudiant, et la salle d'attente d'une
-évaluation en direct (vous démarrez, départ quand tout le monde est là, ou
-aucune).
+Le reste vit sous **Options avancées**, en quatre groupes : **Déroulement**
+(navigation, présentation, mélange, barre de progression, et la salle
+d'attente d'une évaluation en direct), **Sécurité** (journal d'intégrité,
+plein écran, appareils autorisés), **Aides** (calculatrice, bloc-notes) et
+**Retour et notation** (retour à l'étudiant, politiques de notation, et
+**Autoriser les révisions**, modifiable jusqu'à la publication des résultats).
 
 Pendant que l'évaluation est en cours ou en pause, cette étape est
 verrouillée jusqu'à la clôture : seuls le titre et le retour à l'étudiant

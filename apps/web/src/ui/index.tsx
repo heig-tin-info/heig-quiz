@@ -14,6 +14,8 @@
 //             (GithubIcon).
 //   dates     the account's date format, absolute and relative times, and a
 //             percentage in the interface language.
+//   dateRange a period picked on one month calendar (DateRangeField), on
+//             controls, dates and popover.
 //   feedback  Spinner, Skeleton, Progress, Kbd, Badge, Alert, EmptyState.
 //   page      surfaces and page structure: Card, PageHeader, Tabs…
 //             The six above are on layers and import no other sibling,
@@ -57,6 +59,7 @@ export * from "./controls";
 export * from "./table";
 export * from "./identity";
 export * from "./dates";
+export * from "./dateRange";
 export * from "./feedback";
 export * from "./page";
 export type { PagePrimary } from "./fab";

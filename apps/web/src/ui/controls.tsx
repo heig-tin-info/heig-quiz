@@ -131,11 +131,28 @@ export function FieldLabel({
   );
 }
 
+/** The input of a `Field`, with its unit laid over the right edge; the input alone when there is none. */
+function SuffixWrap({ suffix, id, children }: { suffix?: string; id: string; children: ReactNode }) {
+  if (!suffix) return <>{children}</>;
+  return (
+    <span className="relative block">
+      {children}
+      <span
+        id={`${id}-suffix`}
+        className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-fg-muted"
+      >
+        {suffix}
+      </span>
+    </span>
+  );
+}
+
 export function Field({
   label,
   help,
   hint,
   description,
+  suffix,
   fullWidth,
   size = "md",
   width = "w-52",
@@ -148,6 +165,12 @@ export function Field({
   hint?: ReactNode;
   /** What the value is, one line under the input, read with it (`aria-describedby`). */
   description?: ReactNode;
+  /**
+   * A unit shown inside the field, on the right of the value ("min"). It is
+   * part of the field's description, so a screen reader hears "Duration, 45,
+   * min"; give the input `text-right tabular-nums` for a number.
+   */
+  suffix?: string;
   /** Stretch label and input to the parent width (grid cells). */
   fullWidth?: boolean;
   /** Control height: `sm` 28 px for dense rows, `md` 34 px by default. */
@@ -166,17 +189,19 @@ export function Field({
       <FieldLabel htmlFor={id} help={help} hint={hint}>
         {label}
       </FieldLabel>
-      <input
-        {...props}
-        // Added to, never replaced by, a caller's own (`fieldErrorProps`).
-        aria-describedby={
-          [description ? `${id}-description` : null, props["aria-describedby"]]
-            .filter(Boolean)
-            .join(" ") || undefined
-        }
-        id={id}
-        className={cx(inputClass, inputSize[size], "w-full", className)}
-      />
+      <SuffixWrap suffix={suffix} id={id}>
+        <input
+          {...props}
+          // Added to, never replaced by, a caller's own (`fieldErrorProps`).
+          aria-describedby={
+            [description ? `${id}-description` : null, suffix ? `${id}-suffix` : null, props["aria-describedby"]]
+              .filter(Boolean)
+              .join(" ") || undefined
+          }
+          id={id}
+          className={cx(inputClass, inputSize[size], "w-full", suffix && "pr-10", className)}
+        />
+      </SuffixWrap>
       {description ? (
         <p id={`${id}-description`} className="text-xs text-fg-muted">
           {description}

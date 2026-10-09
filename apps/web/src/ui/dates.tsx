@@ -13,6 +13,9 @@ export function setDateFormat(f: DateFormat | null | undefined) {
   dateFormat = f ?? "iso";
 }
 
+/** The first day of a calendar week for this reader: Sunday for the `us` format, Monday elsewhere. */
+export const weekStartsOn = (): 0 | 1 => (dateFormat === "us" ? 0 : 1);
+
 /** The date and the time of a moment, apart, in an explicit format. */
 function datePartsAs(iso: string, f: DateFormat): { date: string; time: string } {
   const d = new Date(iso);
