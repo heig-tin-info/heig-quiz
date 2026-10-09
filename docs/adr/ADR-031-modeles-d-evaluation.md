@@ -5,8 +5,9 @@
 Accepted (2026-09-27, issue #151, decisions settled with the product owner on the issue). Folded on
 2026-10-09: the addendum of 2026-09-28 (a–e, into §1, §4, §6 and §7), the pull's of 2026-09-28 (PR B, now
 §8) and *Save as template* linking its source of 2026-09-30 (now §9); the delivery plan (§7, addendum b)
-and the Rollback section are removed (the runbook owns procedures; its one lasting fact is a
-Consequence). The promote screen is deferred (06 no. 25, issue #229).
+and the Rollback section are removed (the runbook owns procedures; its one lasting fact is a Consequence).
+The promote screen is deferred until a term of use of 2–4 (the former delivery plan's smallest slice,
+editing in place and the pull) shows what it must do (06 no. 25, issue #229).
 
 Relations: requirements F-EVAL-18, F-EVAL-24 to F-EVAL-26, F-ORG-12. **Amended by
 [ADR-053](ADR-053-retrait-des-codes-d-entree.md) (2026-09-30):** an exam or an exercise has no access
@@ -82,11 +83,12 @@ there is no `kind` column to keep in step with it.
 - **Access.** A loader `loadTemplate` finds a template through `staffAccess` on
   its course, the one predicate of invariant 6: every member of the course's
   staff manages the course's templates, and anyone else gets the 404 of a
-  template that does not exist (a 404 test on every route). `loadEvaluation`
-  keeps its inner join on `classrooms`, so no generic evaluation route (items,
-  settings, dashboard, grading, preview, results, the MCP tools built on them)
-  ever sees a template; the code is shared at the service level, not by widening
-  a loader.
+  template that does not exist (a 404 test on every route, from the former
+  delivery plan). `loadEvaluation` keeps its inner join on `classrooms`, so no
+  generic evaluation route (items, settings, dashboard, grading, preview
+  *(addendum c, 2026-09-28)*, results, the MCP tools built on them) ever sees a
+  template; *(addendum c, 2026-09-28)* the code is shared at the service level,
+  not by widening a loader.
 - **A separate contract.** `EvaluationTemplate` in `@quiz/contracts` is the
   template's own shape, with `courseId` and `revision`; `Evaluation.classroomId`
   stays non-null.
@@ -176,7 +178,9 @@ spells out a default the row left absent does not move the revision.
   has at least one template: the novice path (08) is unchanged.
 - Audit: `template.create`, `template.instantiate`, `template.delete` join the
   closed union of `audit.ts` (invariant 9), then `template.update` with editing
-  in place (A2), then `template.pull` with the pull (B).
+  in place (A2), then `template.pull` with the pull (B). The 2026-09-28 delivery
+  split named A1 (the course page, §7), A2 (an empty template and editing in
+  place, §1 and §6) and B (the pull, §8).
 - **An empty template** *(addendum b, 2026-09-28)*:
   `POST /courses/:id/templates` (a new F-EVAL-24) creates one at course level,
   taking a title, a mode (`exam` | `exercise`) and a preset; a `poll` is
@@ -203,7 +207,8 @@ templates. Its one primary action is *New classroom*. On that page the templates
 section is **always shown**, with an empty state that names the one door there
 is today — *Save as template* in an evaluation's menu. The card on the Courses
 home no longer lists templates at all: it is a summary whose title opens the
-page. This reverses the slice-2 rule "the list shows nothing while empty", and
+page. This reverses the slice-2 rule (the smallest usable slice, the former delivery
+plan's second step) "the list shows nothing while empty", and
 the novice home (08) stays as it was, since that list left the card instead of
 growing an empty block on it. The "behind template" badge arrives with its fix,
 the pull (§8), rather than as a warning nobody can act on.
