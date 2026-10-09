@@ -27,17 +27,14 @@ import { Suspense, type ComponentType, type ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 
 import type { PlayerProps } from "@quiz/core/client";
-import type { RunnerOutcome } from "@quiz/core/server";
 import type { ClozeTextRenderer } from "@quiz/qt-cloze/client";
-import { questionTypeClient } from "@quiz/registry/client";
 
+import type { RunResult } from "../attempt/run";
 import { useT } from "../i18n";
 import { ClozeMarkdownText } from "../markdown/ClozeMarkdownText";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { Alert, ScrollableCode, Spinner } from "../ui";
 import { canvasStringsProp, LazyRichText, playerStrings, questionType } from "../questionTypes";
-
-type RunResult = Promise<RunnerOutcome | "unavailable" | "rate_limited">;
 
 /** What every shipped player accepts on top of the core contract. */
 type PlayerHostProps = PlayerProps<unknown, unknown> & {
@@ -46,10 +43,10 @@ type PlayerHostProps = PlayerProps<unknown, unknown> & {
   canvasStrings?: unknown;
   /** `cloze`: its text with the blanks in place (`ClozeMarkdownText`). */
   renderText?: ClozeTextRenderer;
-  onRun?: (answer: unknown, options?: unknown) => RunResult;
-  allowManualRun?: boolean;
-  testsPrimary?: boolean;
-  onSimulate?: (answer: unknown) => RunResult;
+  onRun?: ((answer: unknown, options?: unknown) => Promise<RunResult>) | undefined;
+  allowManualRun?: boolean | undefined;
+  testsPrimary?: boolean | undefined;
+  onSimulate?: ((answer: unknown) => Promise<RunResult>) | undefined;
 };
 
 /*
@@ -58,18 +55,25 @@ type PlayerHostProps = PlayerProps<unknown, unknown> & {
  * the browser silently repairs by closing the paragraph early, which moves the
  * text the student is reading.
  */
-const renderMarkdown = (source: string): ReactNode => <MarkdownView source={source} inline />;
+const inlineRenderer = (size: "sm" | "md") => (source: string): ReactNode => (
+  <MarkdownView source={source} inline size={size} />
+);
+const RENDER_MARKDOWN = { sm: inlineRenderer("sm"), md: inlineRenderer("md") };
 
 /**
  * "Has something been written here?" is the question TYPE's call, not ours.
  * It asks only whether SOMETHING was written — never whether it is right —
  * so it reads the answer and nothing of the key. A type the client registry
- * does not know falls back to "anything at all".
+ * does not know falls back to "anything at all", and so does an answer the
+ * type cannot read: it comes from storage, and a stored payload of another
+ * shape must not take the whole attempt down.
  */
 export function isAnswered(type: string, answer: unknown): boolean {
   if (answer === null || answer === undefined) return false;
+  const client = questionType(type);
+  if (!client) return true;
   try {
-    return questionTypeClient(type).isAnswered(answer);
+    return client.isAnswered(answer);
   } catch {
     return true;
   }
@@ -87,10 +91,15 @@ export function isWide(type: string): boolean {
 /**
  * The type's own empty answer, for "Clear" (issue #89, multiple choice only).
  * `null` for a type the registry does not know: nothing is offered then.
+ * Also `null` when the type cannot build one from `student`: the grading
+ * panel hands a `null` student while no answer is shown, and a `cloze` or a
+ * `diagram` reads its empty answer off the student view.
  */
 export function emptyAnswerOf(type: string, student: unknown): unknown {
+  const client = questionType(type);
+  if (!client) return null;
   try {
-    return questionTypeClient(type).emptyAnswer(student);
+    return client.emptyAnswer(student);
   } catch {
     return null;
   }
@@ -110,6 +119,7 @@ export function QuestionHost({
   Expand,
   onCanvasShortcuts,
   answerKey,
+  size = "md",
 }: {
   type: string;
   student: unknown;
@@ -117,18 +127,18 @@ export function QuestionHost({
   onChange: (next: unknown) => void;
   readOnly: boolean;
   /** Present only for a type that has something to run. */
-  onRun?: (answer: unknown, options?: unknown) => RunResult;
+  onRun?: ((answer: unknown, options?: unknown) => Promise<RunResult>) | undefined;
   /** `code` only: whether the free stdin box has a runner that will take it. */
-  allowManualRun?: boolean;
+  allowManualRun?: boolean | undefined;
   /** `code` only: false where the host has its own primary action (the Try tab's "Run the tests"). */
-  testsPrimary?: boolean;
+  testsPrimary?: boolean | undefined;
   /**
    * `circuit` only: the simulation of `POST /attempts/:id/simulate`. It sits
    * beside `onRun` rather than inside it because the two answer different
    * questions — a program's output against a case, a circuit's waveform
    * against a stimulus — and neither has a browser half to fall back on here.
    */
-  onSimulate?: (answer: unknown) => RunResult;
+  onSimulate?: ((answer: unknown) => Promise<RunResult>) | undefined;
   /** Where something is saved as one types: see `PlayerProps.onUnsent`. */
   onUnsent?: (unsent: boolean) => void;
   /** The attempt's expand layer (`PlayerProps.Expand`); a player that needs no room ignores it. */
@@ -137,12 +147,17 @@ export function QuestionHost({
   onCanvasShortcuts?: PlayerProps<unknown, unknown>["onCanvasShortcuts"];
   /** A teacher's preview only, "Show answers" on: see `PlayerProps.answerKey`. */
   answerKey?: unknown;
+  /**
+   * The text's size: the student's (`md`), or the dense one (`sm`) where the
+   * statement sits among 13 px reviews — the grading panel's key row.
+   */
+  size?: "sm" | "md";
 }) {
   const t = useT();
   const client = questionType(type);
   if (!client) {
     return (
-      <Alert tone="danger" icon={AlertTriangle} title={t("player.loadFailed")}>
+      <Alert tone="danger" icon={AlertTriangle} title={t("qt.unknown")}>
         {type}
       </Alert>
     );
@@ -162,13 +177,13 @@ export function QuestionHost({
           readOnly={readOnly}
           strings={playerStrings[client.id](t)}
           {...canvasStringsProp(client.id, t)}
-          renderMarkdown={renderMarkdown}
+          renderMarkdown={RENDER_MARKDOWN[size]}
           renderText={ClozeMarkdownText}
           RichText={LazyRichText}
-          {...(onRun ? { onRun } : {})}
-          {...(allowManualRun === undefined ? {} : { allowManualRun })}
-          {...(testsPrimary === undefined ? {} : { testsPrimary })}
-          {...(onSimulate ? { onSimulate } : {})}
+          onRun={onRun}
+          allowManualRun={allowManualRun}
+          testsPrimary={testsPrimary}
+          onSimulate={onSimulate}
           {...(onUnsent ? { onUnsent } : {})}
           {...(Expand ? { Expand } : {})}
           {...(answerKey === undefined ? {} : { answerKey })}

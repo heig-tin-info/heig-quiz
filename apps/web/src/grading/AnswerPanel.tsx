@@ -190,13 +190,14 @@ function ExpectedBody({ item, columns, student, parameters, explanation }: Panel
   return (
     <div className="space-y-6">
       <Section title={t("grading.panel.statement")}>
-        {/* No expand layer: a statement with nothing to draw. */}
+        {/* No expand layer: a statement with nothing to draw; dense, among 13 px reviews. */}
         <QuestionHost
           type={item.type}
           student={student}
           answer={emptyAnswerOf(item.type, student)}
           onChange={() => {}}
           readOnly
+          size="sm"
         />
       </Section>
       {parameters ? <VariablesList parameters={parameters} /> : null}
