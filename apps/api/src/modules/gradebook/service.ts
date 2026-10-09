@@ -17,7 +17,5 @@
  * The CSV export (F-GBOOK-04, M5-03b) is `csv.ts`, served by `routes.ts` from
  * the staff's table.
  */
-export { GradebookError } from "./errors.js";
-export { gradebookChanged } from "./events.js";
 export { staffGradebook, studentGradebook } from "./table.js";
-export { clearMark, patchColumn, patchSettings, setMark, type RoomScope, type WriteContext } from "./writes.js";
+export { clearMark, patchColumn, patchSettings, setMark, type WriteContext } from "./writes.js";

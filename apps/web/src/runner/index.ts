@@ -19,16 +19,11 @@
  * the mark is the server's, computed on the backend runner, always.
  */
 import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
-import { RUNNO_LANGUAGES, type CodeRuntime } from "@quiz/qt-code/client";
+import { browserCapable, type CodeRuntime } from "@quiz/qt-code/client";
 
 import { BrowserRunnerUnavailable, type BrowserRunner, type RunHooks } from "./types";
 
 export { BrowserRunnerUnavailable } from "./types";
-
-/** Cheap enough to answer before loading anything: the list is two entries long. */
-export function browserCanRun(language: string): boolean {
-  return (RUNNO_LANGUAGES as readonly string[]).includes(language);
-}
 
 /**
  * The browser runner for a language, loaded on demand.
@@ -37,7 +32,7 @@ export function browserCanRun(language: string): boolean {
  * stay out of the chunk a student downloads to answer an MCQ (N-PERF-05).
  */
 async function browserRunner(language: string): Promise<BrowserRunner | null> {
-  if (!browserCanRun(language)) return null;
+  if (!browserCapable(language)) return null;
   try {
     const { runnoRunner } = await import("./runno/runner");
     return runnoRunner.supports(language) ? runnoRunner : null;

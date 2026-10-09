@@ -9,7 +9,7 @@ import { z } from "zod";
 import type { LlmGradeOutcome, LlmGradeRequest } from "@quiz/core/server";
 
 import type { LlmGateway } from "./gateway.js";
-import type { GradingLlm } from "./index.js";
+import type { GradingLlm } from "./service.js";
 
 /** A criterion's sentence, the justification: long enough to say why, short enough to read beside a copy. */
 const SENTENCE_MAX = 600;

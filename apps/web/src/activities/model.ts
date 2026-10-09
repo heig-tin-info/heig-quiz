@@ -85,12 +85,8 @@ export interface ActivityKindSpec<A extends ActivitySummary> {
   inRoom(a: A): boolean;
   /** Where it sits on the gantt; null for what has no date at all. */
   span(a: A, now: number): Span | null;
-  /**
-   * Where a click on its row leads; null for a kind whose page does not
-   * parse in this build (`routeEnabled`, none today): the row is then not
-   * clickable.
-   */
-  home(a: A): Route | null;
+  /** Where a click on its row leads. */
+  home(a: A): Route;
   stateLabel(a: A, t: TFunction): string;
   stateTone(a: A): Tone;
 }
@@ -156,7 +152,7 @@ export const KIND: { [K in ActivitySummary["kind"]]: ActivityKindSpec<Extract<Ac
       const s = new Date(a.startAt).getTime();
       return { s, d: Math.max(s, a.deadlineAt === null ? s : new Date(a.deadlineAt).getTime()) };
     },
-    // The project page (M3-12), in every build.
+    // The project page (M3-12).
     home: (a) => ({ view: "project", id: a.id }),
     stateLabel: (a, t) => projectStateLabel(a.state, t),
     stateTone: (a) => projectStateTone(a.state),

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  bottomSlotOf,
   evaluationInView,
   parsePath,
   ROUTE_VIEWS,
-  routeEnabled,
   ROUTES,
   routeToPath,
   sectionOf,
@@ -50,54 +50,13 @@ describe("routeToPath / parsePath", () => {
     expect(ROUTES.classrooms.studentSafe).toBe(false);
   });
 
-  it("parses the student's Courses in every build, since M5-02 (F-ORG-14)", () => {
-    expect(parsePath("/courses")).toEqual({ view: "studentCourses" });
-    expect(routeToPath({ view: "studentCourses" })).toBe("/courses");
-  });
-
-  it("parses the student's Grades in every build (F-ORG-14, F-RES-04)", () => {
-    expect(parsePath("/grades")).toEqual({ view: "studentGrades" });
-    expect(routeToPath({ view: "studentGrades" })).toBe("/grades");
-  });
-
-  it("parses the classroom's Settings in every build, since M2-07 (F-ORG-13)", () => {
-    expect(parsePath("/classrooms/c-1/settings")).toEqual({ view: "classroomSettings", id: "c-1" });
-  });
-
-  it("parses the classroom's journal in every build, since M4-05 (F-JRN-07)", () => {
-    expect(ROUTES.classroomJournal.preview).toBeUndefined();
-    expect(parsePath("/classrooms/c-1/journal")).toEqual({ view: "classroomJournal", id: "c-1" });
-    expect(parsePath("/classrooms/c-1/journal/10-semaine-1/a.md")).toEqual({
-      view: "classroomJournal",
-      id: "c-1",
-      path: "10-semaine-1/a.md",
-    });
-  });
-
-  it("parses none of the classroom merge's other routes while CLASSROOM_PAGES is off", () => {
-    // A production build: every such address reads as it did before them.
-    // M3-16a: a project's groups page is gone; its address reads as home.
-    expect(parsePath("/projects/p-1/groups")).toEqual({ view: "home" });
-    expect(parsePath("/projects/x/groups")).toEqual({ view: "home" });
-  });
-
-  it("parses the classroom's Grades in every build, since M5-04 (F-GBOOK-01, F-GBOOK-05)", () => {
-    expect(ROUTES.classroomGrades.preview).toBeUndefined();
-    expect(routeToPath({ view: "classroomGrades", id: "c-1" })).toBe("/classrooms/c-1/grades");
-    expect(parsePath("/classrooms/c-1/grades")).toEqual({ view: "classroomGrades", id: "c-1" });
+  it("serves the classroom's Grades as one address, two pages (M5-04, F-GBOOK-01, F-GBOOK-05)", () => {
     // One address, two pages, under the Courses slot.
     expect(ROUTES.classroomGrades.studentSafe).toBe(true);
     expect(ROUTES.classroomGrades.bottomSlot).toEqual({ student: "courses", teacher: "classrooms" });
   });
 
-  it("parses the classroom's Groups and a group set in every build, since M3-16a (ADR-070)", () => {
-    expect(ROUTES.classroomGroups.preview).toBeUndefined();
-    expect(ROUTES.groupSet.preview).toBeUndefined();
-    expect(routeToPath({ view: "classroomGroups", id: "c-1" })).toBe("/classrooms/c-1/groups");
-    expect(parsePath("/classrooms/c-1/groups")).toEqual({ view: "classroomGroups", id: "c-1" });
-    expect(parsePath("/classrooms/c-1/groups/")).toEqual({ view: "classroomGroups", id: "c-1" });
-    expect(routeToPath({ view: "groupSet", classroomId: "c-1", id: "s-1" })).toBe("/classrooms/c-1/groups/s-1");
-    expect(parsePath("/classrooms/c-1/groups/s-1")).toEqual({ view: "groupSet", classroomId: "c-1", id: "s-1" });
+  it("serves the classroom's Groups and a group set (M3-16a, ADR-070)", () => {
     // The way back to a project travels in the query, which `parsePath` never reads.
     expect(routeToPath({ view: "groupSet", classroomId: "c-1", id: "s-1", fromProject: "p-1" })).toBe(
       "/classrooms/c-1/groups/s-1?fromProject=p-1",
@@ -107,21 +66,6 @@ describe("routeToPath / parsePath", () => {
     // The Groups tab is one address, two pages (F-PROJ-22, M3-17), under the Courses slot.
     expect(ROUTES.classroomGroups.studentSafe).toBe(true);
     expect(ROUTES.classroomGroups.bottomSlot).toEqual({ student: "courses", teacher: "classrooms" });
-  });
-
-  it("parses the project page and the new project in every build, since M3-12 (F-PROJ-13)", () => {
-    expect(ROUTES.project.preview).toBeUndefined();
-    expect(ROUTES.projectNew.preview).toBeUndefined();
-    expect(parsePath("/projects/p-1")).toEqual({ view: "project", id: "p-1" });
-    expect(parsePath("/classrooms/c-1/projects/new")).toEqual({ view: "projectNew", classroomId: "c-1" });
-  });
-
-  it("enables exactly the routes that parse in this build (M3-10)", () => {
-    expect(routeEnabled("project")).toBe(true);
-    expect(routeEnabled("projectNew")).toBe(true);
-    expect(routeEnabled("classroomGroups")).toBe(true);
-    expect(routeEnabled("groupSet")).toBe(true);
-    expect(routeEnabled("classroomSettings")).toBe(true);
   });
 
   it("parses the page of one course, a page of the Courses section (F-ORG-12)", () => {
@@ -280,10 +224,7 @@ describe("ROUTES", () => {
   });
 
   it("round-trips a sample of every view, the table's order included", () => {
-    // The merge's previews round-trip in router.classroomPages.test.ts, flag on.
-    for (const r of Object.values(sample).filter((r) => !ROUTES[r.view].preview)) {
-      expect(parsePath(routeToPath(r))).toEqual(r);
-    }
+    for (const r of Object.values(sample)) expect(parsePath(routeToPath(r))).toEqual(r);
   });
 
   it("marks the views a student has a screen for, and only them", () => {
@@ -393,5 +334,91 @@ describe("ROUTES", () => {
       ["results", "e-1"],
       ["evaluation", "e-1"],
     ]);
+  });
+});
+
+/* The routes of the classroom merge (M1-05, `docs/merge/05-web.md` §5.2). */
+describe("the classroom merge's routes", () => {
+  it("writes the paths of §5.2 and reads them back", () => {
+    const cases: [Route, string][] = [
+      [{ view: "studentCourses" }, "/courses"],
+      [{ view: "studentGrades" }, "/grades"],
+      [{ view: "classroom", id: "c-1" }, "/classrooms/c-1"],
+      [{ view: "classroomSettings", id: "c-1" }, "/classrooms/c-1/settings"],
+      [{ view: "classroomJournal", id: "c-1" }, "/classrooms/c-1/journal"],
+      [{ view: "classroomJournal", id: "c-1", path: "README.md" }, "/classrooms/c-1/journal/README.md"],
+      [
+        { view: "classroomJournal", id: "c-1", path: "10-semaine-1/20-pointeurs/README.md" },
+        "/classrooms/c-1/journal/10-semaine-1/20-pointeurs/README.md",
+      ],
+      [
+        { view: "classroomJournal", id: "c-1", path: "20-semaine 2 été/10-tableaux #1.md" },
+        "/classrooms/c-1/journal/20-semaine%202%20%C3%A9t%C3%A9/10-tableaux%20%231.md",
+      ],
+      [{ view: "classroomGrades", id: "c-1" }, "/classrooms/c-1/grades"],
+      [{ view: "project", id: "p-1" }, "/projects/p-1"],
+      [{ view: "classroomGroups", id: "c-1" }, "/classrooms/c-1/groups"],
+      [{ view: "groupSet", classroomId: "c-1", id: "s-1" }, "/classrooms/c-1/groups/s-1"],
+      [{ view: "projectNew", classroomId: "c-1" }, "/classrooms/c-1/projects/new"],
+    ];
+    for (const [route, path] of cases) {
+      expect(routeToPath(route)).toBe(path);
+      expect(parsePath(path)).toEqual(route);
+    }
+  });
+
+  it("opens the Settings' connect sheet by its query, which the page itself reads (M3-11)", () => {
+    expect(routeToPath({ view: "classroomSettings", id: "c-1", connect: true })).toBe("/classrooms/c-1/settings?connect=1");
+  });
+
+  it("tells /courses (the student's) from /courses/:id (one course)", () => {
+    expect(parsePath("/courses/")).toEqual({ view: "studentCourses" });
+    expect(parsePath("/courses/k-1")).toEqual({ view: "course", id: "k-1" });
+  });
+
+  it("reads a nested journal path as the address wrote it, trailing and doubled slashes aside", () => {
+    const route = { view: "classroomJournal", id: "c-1", path: "10-semaine-1/README.md" };
+    expect(parsePath("/classrooms/c-1/journal/10-semaine-1/README.md/")).toEqual(route);
+    expect(parsePath("/classrooms/c-1/journal//10-semaine-1//README.md")).toEqual(route);
+    expect(parsePath("/classrooms/c-1/journal/")).toEqual({ view: "classroomJournal", id: "c-1" });
+  });
+
+  it("keeps a malformed escape as written, for the reader to find no such page", () => {
+    expect(parsePath("/classrooms/c-1/journal/%E0%A4%A.md")).toEqual({
+      view: "classroomJournal",
+      id: "c-1",
+      path: "%E0%A4%A.md",
+    });
+  });
+
+  it.each([
+    ["an escaped slash, never a separator", "a%2Fb.md"],
+    ["an escaped slash, lower case", "a%2fb.md"],
+    ["an escaped climb with a slash", "..%2F..%2Fsecret.md"],
+    ["an escaped climb", "%2E%2E/secret.md"],
+    ["a plain climb", "a/../../secret.md"],
+    ["a NUL", "a%00.md"],
+    ["a double-encoded dot", "%252e%252e/secret.md"],
+    ["a path over the cap", `${"x".repeat(401)}.md`],
+  ])("lands on the journal's home for %s", (_why, tail) => {
+    expect(parsePath(`/classrooms/c-1/journal/${tail}`)).toEqual({ view: "classroomJournal", id: "c-1" });
+  });
+
+  it("takes the tabs before the classroom, which keeps any other tail", () => {
+    expect(parsePath("/classrooms/c-1/settings/")).toEqual({ view: "classroomSettings", id: "c-1" });
+    expect(parsePath("/classrooms/c-1/grades/")).toEqual({ view: "classroomGrades", id: "c-1" });
+    expect(parsePath("/classrooms/c-1/whatever")).toEqual({ view: "classroom", id: "c-1" });
+    expect(parsePath("/classrooms/c-1/groups/")).toEqual({ view: "classroomGroups", id: "c-1" });
+    // A project takes no tail (M3-10): anything else, its old groups page included, is home.
+    expect(parsePath("/projects/p-1/groups")).toEqual({ view: "home" });
+    expect(parsePath("/projects/p-1/other")).toEqual({ view: "home" });
+    expect(parsePath("/projects")).toEqual({ view: "home" });
+  });
+
+  it("opens the classroom to a student, and lights Courses on the student's classroom pages", () => {
+    expect(ROUTES.classroom.studentSafe).toBe(true);
+    for (const path of ["/courses", "/classrooms/c-1", "/classrooms/c-1/journal/a.md", "/classrooms/c-1/grades"]) {
+      expect(bottomSlotOf(parsePath(path), false)).toBe("courses");
+    }
   });
 });

@@ -889,7 +889,5 @@ export {
   onReceipt,
   pushAuthor,
   pushedBy,
-  type ReceiptTracker,
-  type WebhookDelivery,
   type WebhookHandler,
 } from "./deliveries.js";

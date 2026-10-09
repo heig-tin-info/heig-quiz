@@ -15,7 +15,7 @@ import type { AppConfig } from "../../config.js";
 import { HttpRunner, type FetchLike } from "./http.js";
 import { UnavailableRunner } from "./unavailable.js";
 
-export { HttpRunner, type FetchLike, type HttpRunnerOptions } from "./http.js";
+export { HttpRunner } from "./http.js";
 export { UnavailableRunner } from "./unavailable.js";
 
 /** What `/healthz` says about the runner. `stub` is a choice, not a failure. */

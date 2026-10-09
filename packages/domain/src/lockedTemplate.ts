@@ -35,8 +35,6 @@ const LINE_COMMENT: Record<TemplateLanguage, readonly string[]> = {
 
 export const LOCK_MARKER = "@@lock";
 export const ENDLOCK_MARKER = "@@endlock";
-/** A synonym of {@link ENDLOCK_MARKER}, accepted everywhere a template is split. */
-export const UNLOCK_MARKER = "@@unlock";
 /**
  * The separator between the pieces of a reference solution (`@quiz/qt-code`'s
  * `reference.ts`). Recognised here so the package has one matcher; it means

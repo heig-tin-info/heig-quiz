@@ -26,8 +26,8 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type Modifier,
 } from "@dnd-kit/core";
-import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
   SortableContext,
   sortableKeyboardCoordinates,
@@ -77,6 +77,9 @@ import {
   Tip,
   TrashIcon,
 } from "./ui.js";
+
+/** The choices drag up and down only. */
+const restrictToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 });
 
 type McqEditorProps = EditorProps<McqConfig> & {
   strings?: StringOverrides<McqEditorStringKey>;

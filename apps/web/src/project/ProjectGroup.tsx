@@ -4,7 +4,6 @@ import { FolderGit2 } from "lucide-react";
 import type { ProjectActivitySummary } from "@quiz/contracts";
 
 import { ActivityMenu } from "../activities/actions";
-import { kindOf } from "../activities/model";
 import { openProps, StateBadge } from "../activities/views";
 import { api } from "../api";
 import { githubAbsent } from "../github/api";
@@ -101,11 +100,10 @@ export function ProjectGroup({
           <TableHead columns={columns} sort={sort} onToggle={toggle} />
           <tbody>
             {ordered.map((row) => {
-              const opens = kindOf(row).home(row) !== null;
               return (
                 <tr
                   key={row.id}
-                  className={opens ? `${T.row} ${T.rowHover} cursor-pointer` : T.row}
+                  className={`${T.row} ${T.rowHover} cursor-pointer`}
                   {...openProps(row, navigate, "row")}
                 >
                   <td className={T.td}>

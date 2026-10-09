@@ -8,6 +8,7 @@ import {
   CODE_CONFIG_VERSION,
   CODE_LANGUAGES,
   RUNNO_LANGUAGES,
+  browserCapable,
   caseTimeMs,
   emptyCodeCase,
   emptyCodeConfig,
@@ -91,6 +92,7 @@ describe("CodeConfig", () => {
 
   it("names the languages the browser runtime can serve", () => {
     expect([...RUNNO_LANGUAGES]).toEqual(["c", "python"]);
+    expect(["c", "python", "rust"].map(browserCapable)).toEqual([true, true, false]);
     expect(CodeConfig.safeParse({ ...codeConfig(), runtime: "runno" }).success).toBe(true);
     expect(CodeConfig.safeParse({ ...codeConfig(), runtime: "browser" }).success).toBe(false);
   });

@@ -97,5 +97,3 @@ export const shortGradingStrings = {
   answer: "Answer",
   empty: "empty",
 } as const;
-
-export type ShortGradingStringKey = keyof typeof shortGradingStrings;

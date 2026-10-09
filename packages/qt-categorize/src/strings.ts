@@ -113,5 +113,3 @@ export const categorizeGradingStrings = {
   /** The key's cell of the summary column. */
   total: "{total} cards",
 } as const;
-
-export type CategorizeGradingStringKey = keyof typeof categorizeGradingStrings;

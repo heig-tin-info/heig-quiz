@@ -57,5 +57,3 @@ export type RichReviewStringKey = keyof typeof richReviewStrings;
 export const richGradingStrings = {
   essay: "Essay",
 } as const;
-
-export type RichGradingStringKey = keyof typeof richGradingStrings;

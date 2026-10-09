@@ -487,7 +487,7 @@ export async function notificationSettings(
 // Made, read and forgotten in `teamsLink.ts`; the entry other modules import
 // is this one.
 
-export { teamsLinkOf, unlinkTeams, type TeamsLink } from "./teamsLink.js";
+export { teamsLinkOf, unlinkTeams } from "./teamsLink.js";
 
 // --- The administrator's test e-mail (ADR-055 §6) -------------------------
 

@@ -34,5 +34,3 @@ export const brainstormGradingStrings = {
   ideas: "Ideas",
   empty: "empty",
 } as const;
-
-export type BrainstormGradingStringKey = keyof typeof brainstormGradingStrings;

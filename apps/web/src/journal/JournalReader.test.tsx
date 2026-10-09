@@ -7,7 +7,6 @@ import type { Journal, JournalPage, JournalPageStaff, JournalStaff } from "@quiz
 
 import type { Route } from "../router";
 import { fail, mockFetch, ok, renderWithProviders, type RouteHandler } from "../test/render";
-// The journal's route parses in every build since M4-05: no flag to stub.
 import { journalLinkTarget } from "./JournalArticle";
 import { JournalReader } from "./JournalReader";
 

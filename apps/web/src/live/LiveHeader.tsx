@@ -11,8 +11,9 @@ import {
 } from "lucide-react";
 
 import type { EvaluationState } from "@quiz/contracts";
+import { isEvaluationOver } from "@quiz/domain";
 
-import { evaluationStateLabel, isGraded, stateTone } from "../evaluation/common";
+import { evaluationStateLabel, stateTone } from "../evaluation/common";
 import { useT } from "../i18n";
 import { Actions, Badge, Button, ClockCountdown, IconButton, Menu, PageHeader } from "../ui";
 
@@ -159,7 +160,7 @@ export function LiveHeader({
               className="mr-2 text-[30px] leading-none [&_svg]:size-6"
             />
           ) : null}
-          {isGraded(state) ? (
+          {isEvaluationOver(state) ? (
             <Button onClick={onGoToGrading}>
               <ClipboardCheck /> {t("live.goToGrading")}
             </Button>

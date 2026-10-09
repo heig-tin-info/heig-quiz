@@ -32,7 +32,6 @@ const classroomCount = {
  * `@quiz/domain` returns them (the domain mirrors this list).
  */
 export const SYSTEM_ALERT_STATES = ["failing", "still_failing", "recovered"] as const;
-export type SystemAlertState = (typeof SYSTEM_ALERT_STATES)[number];
 
 /** The project a project kind is about: its id and its name, nothing else of it. */
 const projectRef = {
@@ -48,7 +47,6 @@ const projectRef = {
  * the staff are not told of it (the student relinks their account).
  */
 export const PROVISION_FAILURE_REASONS = ["repo_name_taken", "github_error"] as const;
-export type ProvisionFailureReason = (typeof PROVISION_FAILURE_REASONS)[number];
 
 /** What each kind carries; the web app renders the sentence from it. */
 export const NotificationPayload = z.discriminatedUnion("kind", [

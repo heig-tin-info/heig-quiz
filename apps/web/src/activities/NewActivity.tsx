@@ -3,7 +3,7 @@ import { ChevronDown, ClipboardList, FolderGit2, Plus } from "lucide-react";
 import type { GithubClassroom } from "@quiz/contracts";
 
 import { useT, type TFunction } from "../i18n";
-import { routeEnabled, type Navigate } from "../router";
+import type { Navigate } from "../router";
 import { Button, Menu, type MenuItem } from "../ui";
 
 /**
@@ -13,9 +13,8 @@ import { Button, Menu, type MenuItem } from "../ui";
  * Stateless: the classroom page holds the GitHub read (F-PROJ-01, F-GH-02)
  * and hands over its answer, `undefined` while it is not a success — still
  * loading, failed, or the 404 of a platform without Quiz's App. Until then,
- * and in a build where the new project does not parse yet (`routeEnabled`,
- * M3-11), the button is the plain "New evaluation" it always was: no menu
- * that turns back into a button, and no door to a page that is not there.
+ * the button is the plain "New evaluation" it always was: no menu that turns
+ * back into a button.
  * On a classroom not connected, Project says so under its label and opens
  * the Settings' "Connect to GitHub" sheet (`?connect=1`, M2-07) — GitHub
  * then returns to the Settings, not to a form (F-GH-02). On a connected one
@@ -79,7 +78,7 @@ export function newProjectAction(
   onConnect: () => void,
   t: TFunction,
 ): { description?: string; onSelect: () => void } | null {
-  if (!github || !routeEnabled("projectNew")) return null;
+  if (!github) return null;
   return github.link !== null
     ? { onSelect: () => navigate({ view: "projectNew", classroomId }) }
     : { description: t("project.notConnected"), onSelect: onConnect };

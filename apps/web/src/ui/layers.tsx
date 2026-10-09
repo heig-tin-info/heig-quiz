@@ -294,12 +294,6 @@ export function useLayer(
   }, [enabled, trap, escape, panel]);
 }
 
-/** Escape-only layer, for a floating element with no panel to trap. */
-export function useEscape(onEscape: () => void, enabled = true) {
-  const none = useRef<HTMLElement>(null);
-  useLayer(none, onEscape, { trap: false, enabled });
-}
-
 /** Locks the page scroll while a floating layer is open. */
 export function useScrollLock() {
   useLayoutEffect(() => {

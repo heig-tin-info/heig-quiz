@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { GithubClassroom } from "@quiz/contracts";
 
@@ -12,22 +12,8 @@ import { fail, mockFetch, ok, renderWithProviders, type Reply } from "../test/re
  * "New ▾" (M3-10): the classroom's one primary on its activities tab, and
  * the GitHub gate of Project — absent without Quiz's App, the Settings'
  * connect sheet on a classroom not connected, the new project on a
- * connected one — and nothing of it in a build where the new project does
- * not parse yet (M3-11).
+ * connected one.
  */
-
-/*
- * Whether a `preview` route parses is a build flag (`CLASSROOM_PAGES`); the
- * tests choose it per case through `routeEnabled`.
- */
-const gate = vi.hoisted(() => ({ enabled: true }));
-vi.mock("../router", async (original) => ({
-  ...(await original<typeof import("../router")>()),
-  routeEnabled: () => gate.enabled,
-}));
-beforeEach(() => {
-  gate.enabled = true;
-});
 
 const ROOM = "/app/api/classrooms/r1";
 const INSTALL = "https://github.com/apps/heig-quiz/installations/new?state=r1";
@@ -108,14 +94,6 @@ describe("New ▾ on the classroom's activities", () => {
     expect(project).not.toHaveTextContent("GitHub");
     await userEvent.click(project);
     expect(navigate).toHaveBeenCalledWith({ view: "projectNew", classroomId: "r1" });
-  });
-
-  it("is the plain New evaluation in a build where the new project's route does not parse", async () => {
-    gate.enabled = false;
-    renderClassroom(ok(connected));
-    await screen.findByText("No evaluation yet");
-    await waitFor(() => expect(screen.getAllByRole("button", { name: /New evaluation/ })).toHaveLength(2));
-    expect(screen.queryByRole("button", { name: /^New$/ })).toBeNull();
   });
 
   it("is the plain New evaluation while the link is not known yet: no menu that turns back", async () => {

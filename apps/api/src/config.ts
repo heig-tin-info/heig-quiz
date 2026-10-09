@@ -222,7 +222,7 @@ const EnvSchema = z.object({
    * LLM grading (F-GRADE-02, ADR-045, ADR-063). `none` — the default —
    * grades through the gateway (`LLM_KEY_SECRET` below) when it is on and
    * holds a key; with the gateway off, nothing is sent to any model and an
-   * answer is graded by hand (`modules/llm/index.ts`). `stub` is a
+   * answer is graded by hand (`modules/llm/service.ts`). `stub` is a
    * DETERMINISTIC fake provider (a keyword count, `modules/llm/stub.ts`) that
    * lets development, the seed and the tests show AI proposals with a
    * confidence; like the development login, it is refused in production below.

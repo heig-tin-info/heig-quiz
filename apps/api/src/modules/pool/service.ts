@@ -24,14 +24,13 @@
  *     `questions`; publishing is ONE transaction guarded by two unique
  *     indexes (see `db/pool.ts`).
  */
-export type { PoolRow, QuestionRecord } from "./shared.js";
+export type { QuestionRecord } from "./shared.js";
 export {
   asStatic,
   isParameterized,
   loadConfig,
   typeOf,
   type StaticVersion,
-  type StoredVersion,
 } from "./config.js";
 export {
   configPerAttempt,
@@ -46,7 +45,6 @@ export {
   readingPerAttempt,
   templateHash,
   writtenConfig,
-  type Instance,
   type InstanceAttempt,
   type Reading,
   type VersionContent,
@@ -119,7 +117,6 @@ export {
   softDeleteQuestion,
   hardDeleteQuestion,
   copyQuestion,
-  type QuestionWriter,
 } from "./questionWrite.js";
 export type { UsingCourse } from "./move.js";
 export {

@@ -131,6 +131,9 @@ export type CodeCooldown = z.infer<typeof CodeCooldown>;
 /** The languages the browser runner can run (docs/04 §4.7). */
 export const RUNNO_LANGUAGES = ["c", "python"] as const satisfies readonly CodeLanguage[];
 
+/** Whether the browser runner can run a language; anything else is the server's. */
+export const browserCapable = (language: string): boolean => (RUNNO_LANGUAGES as readonly string[]).includes(language);
+
 export const CodeFile = z.object({
   name: z.string().regex(/^[\w.-]{1,40}$/),
   content: z.string().max(64_000),

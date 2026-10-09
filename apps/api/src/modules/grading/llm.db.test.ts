@@ -22,7 +22,7 @@ import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { applyState, joinedItems } from "../evaluation/service.js";
 import * as live from "../live/service.js";
-import type { GradingLlm } from "../llm/index.js";
+import type { GradingLlm } from "../llm/service.js";
 import { LlmError } from "../llm/provider.js";
 import { STUB_MODEL, StubLlm } from "../llm/stub.js";
 import * as results from "../results/service.js";

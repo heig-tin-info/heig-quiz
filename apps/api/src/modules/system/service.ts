@@ -32,7 +32,7 @@ import { SCHEDULED_TASKS } from "./catalog.js";
 
 // The health checks (N-OPS-03, ADR-055) live beside, in `health.ts`; this
 // file stays the module's entry.
-export { coarseHealth, runChecks, systemStatus, HEALTH_CHECKS } from "./health.js";
+export { coarseHealth, systemStatus } from "./health.js";
 
 /**
  * A run still `running` this long after its claim is taken for dead (a

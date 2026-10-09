@@ -6,8 +6,8 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type Modifier,
 } from "@dnd-kit/core";
-import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
   arrayMove,
   SortableContext,
@@ -65,6 +65,9 @@ import { useTargetRefresh } from "./editTarget";
 import { IntroBand, IntroEditor } from "./ItemIntro";
 import { ItemPreview, type ItemPane } from "./ItemPreview";
 import { useConfirm } from "../confirm";
+
+/** The rows drag up and down only. */
+const restrictToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 });
 
 /**
  * Step 1 of the novice flow (docs/spec/08 §8.2): WHICH questions, in WHICH
