@@ -18,6 +18,7 @@ import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { applyState } from "../evaluation/service.js";
+import { PASTES_PER_MINUTE } from "./integrity.js";
 
 let server: TestServer;
 let restore: () => void;
@@ -731,6 +732,89 @@ describe("the attempt journal takes only what a client may write (F-EVAL-13)", (
     };
     expect(await kindsAfterPosting(true)).toEqual(["focus", "reconnect", "visibility"]);
     expect(await kindsAfterPosting(false)).toEqual(["reconnect"]);
+  });
+});
+
+/** ADR-088 §4: a paste is a length, and its flag is the server's. */
+describe("the attempt journal's pastes (ADR-088 §4)", () => {
+  async function sittingAt(logVisibility = true) {
+    const learner = await server.signIn("student");
+    const own = await seedLive(server.app.db, {
+      teacherId: teacher.id,
+      studentIds: [learner.id],
+      questions: 1,
+      settings: { logVisibility },
+    });
+    await post(`/app/api/evaluations/${own.evaluationId}/start`, teacher.headers, { confirm: true });
+    const entered = await post(`/app/api/evaluations/${own.evaluationId}/attempt/start`, learner.headers, {});
+    const attemptId = entered.json().view.attempt.id as string;
+    const url = `/app/api/attempts/${attemptId}/events`;
+    const send = async (body: Payload) => (await post(url, learner.headers, body)).statusCode;
+    const pastes = async () =>
+      (
+        await server.app.db
+          .select()
+          .from(attemptEvents)
+          .where(and(eq(attemptEvents.attemptId, attemptId), eq(attemptEvents.kind, "paste")))
+          .orderBy(attemptEvents.at)
+      ).map((r) => r.details);
+    return { send, pastes };
+  }
+  const paste = (length: number) => ({ kind: "paste", details: { length } });
+
+  it("refuses a pasted text, a client's flag and a length out of range", async () => {
+    const { send, pastes } = await sittingAt();
+    for (const forged of [
+      { kind: "paste", details: { length: 40, afterFocusLoss: false } },
+      { kind: "paste", details: { length: 40, text: "the answer" } },
+      { kind: "paste", details: { length: 0 } },
+      { kind: "paste", details: { length: 2.5 } },
+      { kind: "paste" },
+    ]) {
+      expect(await send(forged)).toBe(400);
+    }
+    expect(await pastes()).toEqual([]);
+  });
+
+  it("stores the length and derives afterFocusLoss from the journal's times", async () => {
+    const { send, pastes } = await sittingAt();
+    expect(await send(paste(40))).toBe(204); // nothing before it
+    server.clock.advance(1_000);
+    expect(await send({ kind: "focus", details: { focused: false } })).toBe(204);
+    server.clock.advance(1_000);
+    expect(await send(paste(41))).toBe(204); // the absence is still open
+    server.clock.advance(5_000);
+    expect(await send({ kind: "focus", details: { focused: true } })).toBe(204);
+    server.clock.advance(30_000);
+    expect(await send(paste(42))).toBe(204); // back 30 s ago
+    server.clock.advance(31_000);
+    expect(await send(paste(43))).toBe(204); // back over a minute ago
+    server.clock.advance(1_000);
+    expect(await send({ kind: "visibility", details: { state: "hidden" } })).toBe(204);
+    server.clock.advance(1_000);
+    expect(await send(paste(44))).toBe(204); // the tab hidden, still away
+    expect(await pastes()).toEqual([
+      { length: 40, afterFocusLoss: false },
+      { length: 41, afterFocusLoss: true },
+      { length: 42, afterFocusLoss: true },
+      { length: 43, afterFocusLoss: false },
+      { length: 44, afterFocusLoss: true },
+    ]);
+  });
+
+  it("stores nothing while the journal is off", async () => {
+    const { send, pastes } = await sittingAt(false);
+    expect(await send(paste(40))).toBe(204);
+    expect(await pastes()).toEqual([]);
+  });
+
+  it("keeps 30 pastes a minute and drops the rest with a 204", async () => {
+    const { send, pastes } = await sittingAt();
+    for (let i = 0; i < PASTES_PER_MINUTE + 2; i++) expect(await send(paste(20))).toBe(204);
+    expect(await pastes()).toHaveLength(PASTES_PER_MINUTE);
+    server.clock.advance(61_000);
+    expect(await send(paste(20))).toBe(204);
+    expect(await pastes()).toHaveLength(PASTES_PER_MINUTE + 1);
   });
 });
 

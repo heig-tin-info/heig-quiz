@@ -52,7 +52,7 @@ export type CellStatus = z.infer<typeof CellStatus>;
  * a pause, a `+N min`, a run — and a client that could write them could
  * forge its own history.
  */
-export const ClientEventKind = z.enum(["visibility", "focus", "reconnect"]);
+export const ClientEventKind = z.enum(["visibility", "focus", "reconnect", "paste"]);
 export type ClientEventKind = z.infer<typeof ClientEventKind>;
 
 export const AttemptEventKind = z.enum([
@@ -67,7 +67,7 @@ export type AttemptEventKind = z.infer<typeof AttemptEventKind>;
 
 /**
  * The integrity journal (ADR-088): the client kinds that say the student
- * left the page (pasting from outside it joins with ADR-088's paste step). THE list, read by
+ * left the page or pasted a text copied outside it. THE list, read by
  * three rules: the server stores them only while `logVisibility` is on and
  * the session is not a delegated one (`POST /attempts/:id/events`),
  * and it deletes them at the release of the grades or, for an evaluation
@@ -78,6 +78,7 @@ export type AttemptEventKind = z.infer<typeof AttemptEventKind>;
 export const INTEGRITY_EVENT_KINDS = [
   ClientEventKind.enum.visibility,
   ClientEventKind.enum.focus,
+  ClientEventKind.enum.paste,
 ] as const satisfies readonly ClientEventKind[];
 export type IntegrityEventKind = (typeof INTEGRITY_EVENT_KINDS)[number];
 
@@ -406,11 +407,14 @@ export const SubmitResponse = z.object({
 export type SubmitResponse = z.infer<typeof SubmitResponse>;
 
 /**
- * `POST /attempts/:id/events`: a client-writable kind, and for the two that
+ * `POST /attempts/:id/events`: a client-writable kind, and for those that
  * carry details exactly what the player sends — nothing a client could grow
- * the journal with.
+ * the journal with. A `paste` carries its length only: never the pasted
+ * text, and never `afterFocusLoss`, which the server derives (ADR-088 §4).
  */
 const client = ClientEventKind.enum;
+/** The longest paste a journal entry counts; a longer one is reported at this length. */
+export const PASTE_MAX_LENGTH = 1_000_000;
 export const AttemptEventBody = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal(client.visibility),
@@ -421,6 +425,10 @@ export const AttemptEventBody = z.discriminatedUnion("kind", [
     details: z.strictObject({ focused: z.boolean() }),
   }),
   z.strictObject({ kind: z.literal(client.reconnect) }),
+  z.strictObject({
+    kind: z.literal(client.paste),
+    details: z.strictObject({ length: z.number().int().min(1).max(PASTE_MAX_LENGTH) }),
+  }),
 ]);
 // Every client kind has its arm: one added to `ClientEventKind` without one
 // is a compile error here.

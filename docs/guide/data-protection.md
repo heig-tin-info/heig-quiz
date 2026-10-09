@@ -51,7 +51,7 @@ The class list is the only way into a classroom: the join code a student could t
 | Notifications | Platform messages, preferences, the link to a Microsoft Teams account |
 | Anonymous polls | A hash of the browser's cookie, with no identity |
 
-The attempt journal is kept for every evaluation, whether its **Log tab changes** setting is on or off (see [Known limits](#known-limits-and-planned-improvements)).
+The attempt journal records leaving the page and pasting from outside it only while the evaluation's **Log leaving the page and pasting** setting is on (on by default for an exam, off for an exercise); a paste is recorded as its length and whether the page had just lost the focus, never its content (ADR-088). That record is deleted at the release of the grades, or six months after the close of an evaluation never released.
 
 The time on each question never leaves the server: no screen shows it, to the student or to the teacher; only the pool statistics use it, as an aggregate (see [Statistics](#statistics-and-anonymisation)).
 
@@ -148,7 +148,7 @@ This section will describe what is in place once it is.
 
 ## Retention and what happens to the data after the studies
 
-**Two retention periods are enforced: five years for the drill, 30 days for the help assistant's conversations (below).** A drill review is deleted five years after it was made, and a question's drill card five years after its last review; the server checks every six hours (`apps/api/src/modules/drill/jobs.ts`, ADR-041, N-DATA-03). Every other piece of data stays until a teacher deletes it (N-DATA-03). In particular, nothing happens automatically when a student completes or leaves their studies.
+**Three retention periods are enforced: five years for the drill, 30 days for the help assistant's conversations (below), and the correction for the exam integrity journal.** The integrity journal of an evaluation's attempts (leaving the page, pasting from outside it) is deleted when its grades are released, or six months after its close if they never are (`apps/api/src/modules/live/integrity.ts`, ADR-088 §8, N-DATA-03). A drill review is deleted five years after it was made, and a question's drill card five years after its last review; the server checks every six hours (`apps/api/src/modules/drill/jobs.ts`, ADR-041, N-DATA-03). Every other piece of data stays until a teacher deletes it (N-DATA-03). In particular, nothing happens automatically when a student completes or leaves their studies.
 
 What is deleted, and when:
 
@@ -156,6 +156,7 @@ What is deleted, and when:
 | --- | --- |
 | Deleting an evaluation | Its attempts, answers, attempt journals, gradings and notifications are deleted, and the drill cards it gave rise to, with their reviews |
 | Deleting a classroom or a course | The same for all its evaluations, plus the class list and the classroom's drill data |
+| Releasing the grades | The attempts' integrity journal (leaving the page, pasting from outside it) is deleted; an evaluation whose grades are never released loses it six months after its close, checked every day |
 | "Remove these questions from the drill" on an evaluation | The drill cards it gave rise to and their reviews are deleted |
 | Archiving a classroom | Nothing is deleted: the classroom is only hidden |
 | Removing a student from the class list | Their seat goes; their attempts, answers, grades and drill data stay in the database |
@@ -262,8 +263,7 @@ Access and traceability:
 Informing the student:
 
 - the application has no "Data and privacy" page yet (N-DATA-07), and no data export (N-DATA-04); the drill's notice lives in the drill tab only;
-- the student is not told in the interface that tab changes and loss of focus are recorded, and does not see that journal;
-- an evaluation's **Log tab changes** setting has no effect: the journal is always kept.
+- the student is told by the evaluation's conditions, and by a toast, that leaving the page and pasting from outside it are recorded, but does not see that journal.
 
 Hosting and security:
 

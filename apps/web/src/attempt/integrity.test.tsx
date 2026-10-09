@@ -164,3 +164,112 @@ describe("the integrity journal, focus", () => {
     expect(toasts()).toHaveLength(0);
   });
 });
+
+/*
+ * The paste half (ADR-088 §4): a paste or a drop of a passage that was not
+ * copied on the page is journaled as its length, never its text. jsdom has
+ * no ClipboardEvent nor DataTransfer: a plain event carries a stand-in.
+ */
+const PASTE_NOTICE =
+  "You probably pasted content from outside the platform. This event is recorded and visible to your teacher.";
+const pasteToasts = () => screen.queryAllByText(PASTE_NOTICE).filter((el) => !el.closest(".toast-leave"));
+
+/** A clipboard (or drag) stand-in: what a handler sets, `getData` reads. */
+function transfer(text = "") {
+  let data = text;
+  return {
+    getData: (type: string) => (type === "text/plain" ? data : ""),
+    setData: (_type: string, value: string) => void (data = value),
+  };
+}
+
+/** Dispatches `type` on `target`, its text in `clipboardData` (or `dataTransfer` for a drag). */
+function fire(target: EventTarget, type: string, text = "") {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  const key = type === "drop" || type === "dragstart" ? "dataTransfer" : "clipboardData";
+  Object.defineProperty(event, key, { value: transfer(text) });
+  act(() => void target.dispatchEvent(event));
+  return event;
+}
+
+/** A focused textarea holding `value`, all of it selected. */
+function field(value: string) {
+  const area = document.createElement("textarea");
+  area.value = value;
+  document.body.append(area);
+  area.focus();
+  area.setSelectionRange(0, value.length);
+  return area;
+}
+
+describe("the integrity journal, paste", () => {
+  const OUTSIDE = "A passage written somewhere else entirely.";
+
+  it("journals an outside paste by its length, tells the student, and never prevents it", () => {
+    const { sent } = setup();
+    const event = fire(field(""), "paste", OUTSIDE);
+    expect(sent()).toEqual([{ kind: "paste", details: { length: OUTSIDE.length } }]);
+    expect(JSON.stringify(sent())).not.toContain("somewhere");
+    expect(pasteToasts()).toHaveLength(1);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it("ignores a passage copied on the page, whitespace aside", () => {
+    const { sent } = setup();
+    const copied = "int main(void) {\n    return 0;\n}  // copied on the page";
+    const area = field(copied);
+    fire(area, "copy");
+    fire(area, "paste", copied.replace(/\n\s*/g, " "));
+    // Cut too, and part of a copy.
+    const other = field("Another sentence of the statement, long enough.");
+    fire(other, "cut");
+    fire(other, "paste", "sentence of the statement, long");
+    expect(sent()).toEqual([]);
+    expect(pasteToasts()).toHaveLength(0);
+  });
+
+  it("ignores what an editor of the page put on the clipboard itself", () => {
+    const { sent } = setup();
+    const editor = document.createElement("div");
+    document.body.append(editor);
+    const line = "the whole line an editor copies with nothing selected";
+    editor.addEventListener("copy", (e) => {
+      (e as ClipboardEvent).clipboardData!.setData("text/plain", line);
+      e.preventDefault();
+    });
+    fire(editor, "copy");
+    fire(field(""), "paste", line);
+    expect(sent()).toEqual([]);
+  });
+
+  it("ignores a short paste", () => {
+    const { sent } = setup();
+    fire(field(""), "paste", "  nineteen   chars!  ");
+    expect(sent()).toEqual([]);
+  });
+
+  it("journals a drop of outside text, not a drag inside the page", () => {
+    const { sent } = setup();
+    const area = field("");
+    const inside = "a sentence dragged from the statement below";
+    fire(area, "dragstart", inside);
+    fire(area, "drop", inside);
+    expect(sent()).toEqual([]);
+    fire(area, "drop", OUTSIDE);
+    expect(sent()).toEqual([{ kind: "paste", details: { length: OUTSIDE.length } }]);
+  });
+
+  it("posts nothing when not journaled", () => {
+    const { sent } = setup({ journaled: false, notify: false });
+    fire(field(""), "paste", OUTSIDE);
+    expect(sent()).toEqual([]);
+    expect(pasteToasts()).toHaveLength(0);
+  });
+
+  it("journals a confined session's paste without a toast", () => {
+    const { sent } = setup({ notify: false });
+    fire(field(""), "paste", OUTSIDE);
+    expect(sent()).toHaveLength(1);
+    expect(pasteToasts()).toHaveLength(0);
+  });
+});
