@@ -4,6 +4,7 @@
  * from heig-classroom's `grading.ts`). The `project` module reads the rows
  * and the receipts; these rules decide.
  */
+import type { DeadlineStrategyName, GradeRunKindName, GradeRunParseStatusName } from "./enums.js";
 
 /** The workflow whose runs carry a score (a wire name, I16). */
 export const GRADING_WORKFLOW_PATH = ".github/workflows/grading.yml";
@@ -12,7 +13,7 @@ export const GRADING_WORKFLOW_PATH = ".github/workflows/grading.yml";
  * The review dispatched by Quiz (`grade-final`, `grade-milestone`) is a
  * `review` run; every other run is the indicative `ci` tier.
  */
-export function runKind(run: { event: string; path: string }): "ci" | "review" {
+export function runKind(run: { event: string; path: string }): GradeRunKindName {
   return run.event === "repository_dispatch" && run.path === GRADING_WORKFLOW_PATH ? "review" : "ci";
 }
 
@@ -36,7 +37,7 @@ export function effectiveDeadline(repo: { deadlineAt: Date | null }, project: { 
  */
 export function deadlineWantsLock(
   repo: { staffLock: boolean | null; deadlineAppliedAt: Date | null },
-  strategy: "lock" | "commit",
+  strategy: DeadlineStrategyName,
 ): boolean {
   return repo.staffLock ?? (repo.deadlineAppliedAt !== null && strategy === "lock");
 }
@@ -76,9 +77,9 @@ export function receivedLate(receivedAt: Date | null, deadline: Date, now: Date)
 /** What the selection reads of a stored run. */
 export interface ScoredRun {
   id: string;
-  kind: "ci" | "review";
+  kind: GradeRunKindName;
   afterDeadline: boolean;
-  parseStatus: "ok" | "no_annotation" | "malformed" | "multiple" | "fallback";
+  parseStatus: GradeRunParseStatusName;
   completedAt: Date;
   headSha: string;
 }

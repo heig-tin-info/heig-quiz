@@ -21,12 +21,19 @@
 import { z } from "zod";
 
 import {
+  CI_STATUSES,
+  DEADLINE_STRATEGIES,
   FINAL_SCORE_SOURCES,
+  GRADE_RUN_KINDS,
+  GRADE_RUN_PARSE_STATUSES,
+  PROJECT_GRADING_MODES,
   PROJECT_PATCH_FIELDS,
   PROJECT_PRIMARY_ACTIONS,
   PROJECT_REVIEW_REASONS,
   PROJECT_REVIEW_STATUSES,
   PROJECT_SCALE_KINDS,
+  PROJECT_STATES,
+  PUBLISH_MODES,
   STUDENT_PROJECT_STATUSES,
   slugify,
 } from "@quiz/domain";
@@ -38,18 +45,11 @@ import { GroupConfirm } from "./group.js";
 // ---------------------------------------------------------- closed values
 
 /** F-PROJ-03: `draft` → `published` → `locked` (at the deadline). */
-export const PROJECT_STATES = ["draft", "published", "locked"] as const;
 export const ProjectState = z.enum(PROJECT_STATES);
 export type ProjectState = z.infer<typeof ProjectState>;
 
 /** F-PROJ-02: one commit per branch after the hand-out overlay, or the history as it is. */
 export const SOURCE_STRATEGIES = ["squash", "whole"] as const;
-/** F-PROJ-09: a ruleset that blocks pushes, or one empty commit of the App per branch. */
-export const DEADLINE_STRATEGIES = ["lock", "commit"] as const;
-/** F-PROJ-01: `none` — no score shown and no review dispatched. */
-export const PROJECT_GRADING_MODES = ["auto", "none"] as const;
-/** F-PROJ-03: publish by hand (now), or by the ticker at the start. */
-export const PUBLISH_MODES = ["manual", "scheduled"] as const;
 
 export const SourceStrategy = z.enum(SOURCE_STRATEGIES);
 export const DeadlineStrategy = z.enum(DEADLINE_STRATEGIES);
@@ -78,8 +78,6 @@ export const PROJECT_DEFAULTS = {
 export const PROVISION_STATUSES = ["pending", "ok", "error"] as const;
 /** The student's invitation to their repository (F-PROJ-07). */
 export const INVITATION_STATUSES = ["none", "pending", "accepted"] as const;
-/** Pass / fail of a repository without `grading.yml` (F-PROJ-10). */
-export const CI_STATUSES = ["none", "pending", "pass", "fail"] as const;
 /** The sync pull request of a repository's branch (F-PROJ-12): one at most per branch (`project_sync_prs`). */
 export const SYNC_PR_STATES = ["open", "merged", "closed"] as const;
 /**
@@ -89,20 +87,6 @@ export const SYNC_PR_STATES = ["open", "merged", "closed"] as const;
  * left alone (`skipped`: locked, past its effective deadline, or gone).
  */
 export const SYNC_OUTCOMES = ["opened", "updated", "up_to_date", "failed", "skipped"] as const;
-
-/**
- * Why a grade run has a score or none (F-PROJ-10, `extractScore` of
- * `@quiz/domain`): `multiple` — several `GRADE` annotations, no score.
- */
-export const GRADE_RUN_PARSE_STATUSES = ["ok", "no_annotation", "malformed", "multiple", "fallback"] as const;
-
-/**
- * What triggered a grade run: a push (`ci`, the indicative score) or the
- * final review dispatched after the freeze (`review`, heig-classroom's
- * `llm`; the import maps it). A `review` run never enters the selection of
- * the current score: it fills the repository's review slot (F-PROJ-11).
- */
-export const GRADE_RUN_KINDS = ["ci", "review"] as const;
 
 /**
  * The App's own commits on a student repository, never a student's work:

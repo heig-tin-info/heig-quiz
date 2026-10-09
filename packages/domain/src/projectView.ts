@@ -4,6 +4,7 @@
  * the release, and the page's one primary action. The `project` module
  * reads the rows; these decide.
  */
+import type { ProjectGradingModeName, ProjectStateName, PublishModeName } from "./enums.js";
 import { projectGrade, type ProjectGrade, type ProjectScale } from "./projectGrade.js";
 
 /** A score's grade by the project's scale, or null when it has no maximum to read it against. */
@@ -30,9 +31,9 @@ export const PROJECT_PRIMARY_ACTIONS = ["publish", "sync", "release", "none"] as
 export type ProjectPrimaryAction = (typeof PROJECT_PRIMARY_ACTIONS)[number];
 
 export interface PrimaryActionInput {
-  state: "draft" | "published" | "locked";
+  state: ProjectStateName;
   archived: boolean;
-  gradingMode: "auto" | "none";
+  gradingMode: ProjectGradingModeName;
   /** The source holds commits the distribution repository lacks (F-PROJ-12, M3-07). */
   sourceAhead: boolean;
   /** The repositories that take a deadline (provisioned, not deleted). */
@@ -104,7 +105,7 @@ export interface ProjectReviewState {
 }
 
 export interface ReviewStateInput {
-  gradingMode: "auto" | "none";
+  gradingMode: ProjectGradingModeName;
   frozenAt: Date | null;
   frozenGradeRunId: string | null;
   reviewGradeRunId: string | null;
@@ -137,8 +138,8 @@ export function reviewState(repo: ReviewStateInput): ProjectReviewState {
  * locked project is what it is stored as.
  */
 export function projectListDates<D>(p: {
-  state: "draft" | "published" | "locked";
-  publishMode: "manual" | "scheduled";
+  state: ProjectStateName;
+  publishMode: PublishModeName;
   durationMinutes: number | null;
   startAt: D;
   deadlineAt: D;

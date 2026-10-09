@@ -5,6 +5,7 @@
  * repository's runs they read before the release. The `project` module
  * reads the rows; these decide.
  */
+import type { CiStatusName } from "./enums.js";
 
 /**
  * The spec's words (F-PROJ-04), plus `released` once the scores are out
@@ -64,7 +65,7 @@ export function studentScoreRun<T>(repo: {
 }
 
 /** The CI state of a repository as the webhooks store it, and as a student reads it. */
-export type StudentCiStatus = "none" | "pending" | "pass" | "fail";
+export type StudentCiStatus = CiStatusName;
 
 export interface StudentCiReading {
   /** The commit the view stands on; `at` null when it is a run's head, whose push time is not the run's. */

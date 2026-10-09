@@ -21,6 +21,7 @@
  *
  * `now` is the server's clock (invariant 5), never read here.
  */
+import type { ProjectStateName } from "./enums.js";
 
 /** The fields `ProjectPatch` may carry, in the form's order. */
 export const PROJECT_PATCH_FIELDS = [
@@ -44,7 +45,7 @@ export type ProjectFieldRefusal = "not_draft" | "publish_mode_frozen" | "strateg
 
 /** The facts of a project the rule reads. */
 export interface ProjectLifeLike {
-  state: "draft" | "published" | "locked";
+  state: ProjectStateName;
   deadlineAt: Date;
 }
 
