@@ -90,6 +90,10 @@
      the window. Zero without one; the banner sets it on the frame it wraps,
      and every sticky bar and full-height column under it offsets by it. */
   --banner-h: 0px;
+  /* The exam player's top bar (`PlayerShell.tsx`), which publishes it on the
+     document while it is mounted: its docked column and the top toasts
+     (`notify.tsx`) sit under it. Zero without a player. */
+  --bar-h: 0px;
   /* The phone top bar's height (`Shell.tsx`), and the bottom bar's
      (`BottomNav.tsx`, #191): zero unless that bar is in the page under `lg`.
      DESIGN.md, "The bottom bar (phone)". */

@@ -46,7 +46,7 @@ import {
   type PlayerState,
 } from "./playerReducer";
 import { useAttemptRun, type RunFn } from "./run";
-import { useBrowserSignals, useDocumentVisible, useJournal, usePosition, type Report } from "./signals";
+import { useDocumentVisible, useJournal, useOnlineResume, usePosition, type Report } from "./signals";
 import { useStateWrites, type StateWrites } from "./writes";
 import { attemptKey } from "../queryKeys";
 
@@ -242,7 +242,7 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
     },
   });
 
-  useBrowserSignals(report, saver, preview);
+  useOnlineResume(saver, preview);
   usePosition(attemptId, state.items[state.index]?.id ?? null, {
     live: !preview && closed === null && !paused,
     visible,

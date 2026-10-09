@@ -3303,6 +3303,7 @@ export const fr: Record<keyof Dict, string> = {
   "player.closed.home": "Retour à l'accueil",
   "player.closed.results": "Voir mes résultats",
   "player.loading": "Ouverture de l'évaluation…",
+  "player.integrity.focus": "Vous avez quitté la page de l'évaluation. Cet événement est enregistré et visible par votre enseignant.",
   "player.loadFailed": "Cette évaluation n'a pas pu être ouverte.",
   "player.notOpen": "Cette évaluation n'est pas ouverte.",
   "player.notAvailable": "Cette évaluation ne vous est pas accessible.",

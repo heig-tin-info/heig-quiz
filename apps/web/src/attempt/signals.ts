@@ -33,22 +33,18 @@ export function useJournal(attemptId: string, preview: boolean): Report {
   );
 }
 
-/** The browser's own signals: journaled, and `online` replays the answers. */
-export function useBrowserSignals(report: Report, saver: Autosave, preview: boolean): void {
+/**
+ * The browser coming back online replays the answers. Leaving the page and
+ * coming back is the integrity journal's (`integrity.ts`), which the player
+ * wires: it alone knows the session the attempt is sat in.
+ */
+export function useOnlineResume(saver: Autosave, preview: boolean): void {
   useEffect(() => {
     if (preview) return;
-    const onVisibility = () => report({ kind: "visibility", details: { state: document.visibilityState } });
-    const onBlur = () => report({ kind: "focus", details: { focused: false } });
     const onOnline = () => saver.resume();
-    document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("blur", onBlur);
     window.addEventListener("online", onOnline);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("blur", onBlur);
-      window.removeEventListener("online", onOnline);
-    };
-  }, [report, saver, preview]);
+    return () => window.removeEventListener("online", onOnline);
+  }, [saver, preview]);
 }
 
 /** Whether the page is on screen: false while the tab is hidden or minimised. */
