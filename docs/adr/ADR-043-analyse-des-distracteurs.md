@@ -17,6 +17,8 @@ an option whose value is drawn for it alone (`drawn`) says its share is its
 place's.
 Amended 2026-09-30 with ADR-038 §2: exams only, never an exercise (§1).
 
+Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
+
 ## Context
 
 F-STAT-02 promised, beside the difficulty and the discrimination, a
@@ -160,11 +162,6 @@ number of students who picked each option. They carry no identity, and a
 reader of the pool statistics already reads `p` over the same answers;
 a 100 % share says what every counted student answered, as `p = 1` says
 they all earned full marks. Accepted, with ADR-038's differencing risk.
-
-### Rollback
-
-Dropping the field from the contract and the block from the panel hides it;
-nothing is stored.
 
 ## Alternatives considered
 

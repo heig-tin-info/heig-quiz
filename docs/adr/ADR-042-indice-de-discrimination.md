@@ -13,6 +13,8 @@ the constants `DISCRIMINATION_MIN_ITEMS`, `DISCRIMINATION_MIN_N`,
 F-STAT-02 (docs/spec/02). Builds on ADR-038 (what is counted) and ADR-039
 (the not-reached rule).
 
+Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
+
 ## Context
 
 ADR-038 gave a question its success rate `p`: how hard it is. F-STAT-02
@@ -146,11 +148,6 @@ The same as ADR-038's: differencing two reads around one new attempt moves
 `r` by an amount that says something about that attempt. The index is a
 correlation over ten attempts or more, rounded to two decimals, without
 identity; accepted for the same reasons.
-
-### Rollback
-
-Dropping the field from the contract and the block from the panel hides
-it; nothing is stored, nothing to migrate.
 
 ## Alternatives considered
 

@@ -3,6 +3,8 @@
 ## Status
 
 Proposed (YYYY-MM-DD). Record acceptance and its source when decided.
+Status is five lines at most; delivery progress lives in
+`docs/merge/PROGRESS.md` and `changes/`, never in the record.
 
 Scope: the component or product rule this decision governs.
 

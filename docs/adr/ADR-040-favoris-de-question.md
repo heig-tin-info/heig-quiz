@@ -8,6 +8,8 @@ Accepted (2026-09-29, settled with the product owner; with the table
 module, the `starred` flag and filter of `QuestionRow` / `QuestionSearch`,
 and F-POOL-10).
 
+Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
+
 ## Context
 
 Before a test, a teacher browses a pool — the arrows and the preview pane of
@@ -89,11 +91,6 @@ Four facts shape the answer:
   refetched. A per-star invalidation would reload every page the teacher
   scrolled through.
 - Deleting a user or a question takes its stars with it.
-
-### Rollback
-
-Drop the routes, the flag and the filter; the table can stay empty or be
-dropped with a migration. Nothing else reads it.
 
 ## Alternatives considered
 

@@ -17,6 +17,8 @@ Amended 2026-09-30, decided by the product owner: the success rate and its
 `n` count EXAMS only, never an exercise (§2), so the kept attempt of an
 exercise (ADR-025) no longer enters the statistics.
 
+Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
+
 ## Context
 
 The specification promised item statistics per question VERSION in the
@@ -185,11 +187,6 @@ could narrow the answer down to one student already sees that class's
 results. Should it ever matter, two mitigations exist, neither built: a
 coarser rounding of `p`, or refreshing the figures only when an
 evaluation's results are released.
-
-### Rollback
-
-Dropping the routes and the panel hides everything; the column is inert
-without them. Nothing else reads `stats_since`, and nothing was deleted.
 
 ## Alternatives considered
 

@@ -16,6 +16,8 @@ floored at 0), [ADR-031](ADR-031-modeles-d-evaluation.md) (a template carries
 the bonus flag) and [ADR-022](ADR-022-jetons-api-et-serveur-mcp.md) (the MCP
 item shape).
 
+Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
+
 ## Context
 
 F-EVAL-10 offered two grade scales: `linear`, grade = 1 + 5 × points / total,
@@ -108,13 +110,6 @@ setting nobody could edit.
 - A teacher who wants "any 18 of 20 points" must now say which question is
   the bonus; the platform no longer expresses a pass mark detached from the
   questions. This is deliberate.
-
-### Rollback
-
-Drop the column and the flag from the reads; the totals then include every
-item again. The `threshold` kind would have to come back in the contracts,
-the domain and the settings screen; the rows converted by 0040 would stay
-linear.
 
 ## Alternatives considered
 

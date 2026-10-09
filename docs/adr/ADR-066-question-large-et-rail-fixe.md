@@ -12,6 +12,8 @@ and the split in `packages/qt-code/src/ProgramPlayer.tsx`
 (`ProgramSplit`). Completes ADR-046 §6 and its addenda (Expand) and
 ADR-021 (the program half `codeimage` shares with `code`).
 
+Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
+
 ## Context
 
 The zen player kept every question in a 760 px column, and from 1024 px of
@@ -76,13 +78,6 @@ suit a program, whose statement must stay in sight while it is written.
   stacks. The grading panel draws the review, not the player, and is not
   concerned.
 - The guide's screenshots of the player change.
-
-### Rollback
-
-Remove `wide` from the two client entries: every question returns to the
-760 px column under the pinned rail, and `ProgramSplit` stacks wherever its
-host is narrower than 60rem. The pinned rail itself is the `FRAME` of
-`PlayerShell`; restoring the 984 px centered block is a two-line change.
 
 ## Alternatives considered
 

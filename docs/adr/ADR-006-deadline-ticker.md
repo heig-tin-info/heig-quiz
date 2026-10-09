@@ -44,6 +44,8 @@ conditional UPDATE on the database clock and enqueues them on
 `system.task` (spec 05 §5.4, Clock). Point 1's advisory lock is not used: the
 claim is the multi-process safety, as for every other sweep.
 
+Amended 2026-10-09: points 1, 2 and 4 describe the ticker as built: a 1 s tick whose tasks claim atomically, with no advisory lock; the project lease and job of ADR-064; the indexes' real names.
+
 ## Context
 
 The deadline job must start at most 60 s after the due time and apply to 100 repositories in
@@ -53,17 +55,20 @@ Europe/Zurich and stored in UTC (C-02).
 
 ## Decision
 
-1. A **single ticker** runs every 20 s, protected by a Postgres advisory lock (safe even
-   after a `WORKER_MODE` split): it selects the published assignments whose
-   `deadline_at <= now()` and `deadline_applied_at IS NULL`, and enqueues a `deadline.apply`
-   job (singleton per assignment).
-2. `deadline.apply` fans out into per-repository jobs (concurrency 10), each idempotent (it
-   re-reads `locked_at` and `bot_commits` before acting); individual failures stay in retry
-   without blocking the other repositories.
+1. A **single ticker** (`apps/api/src/ticker.ts`) ticks every second (`TICK_MS`, what the
+   live evaluation clock needs) and runs its tasks, each at its own period (`everyMs`;
+   the projects' every 20 s). No advisory lock guards it: every action is an atomic claim on the
+   server's clock (a conditional UPDATE, or an insert on a unique key), so two processes
+   never both act and a restart catches up, and what it enqueues is idempotent (no queue
+   dedupes, #273).
+2. For a project, the ticker sets the project `locked` and applies each due repository's deadline
+   in its own claims, then takes a **lease** on the project's row and sends one job that
+   settles its GitHub work, re-reading the row at each step
+   ([ADR-064](ADR-064-echeance-des-projets-baux.md)); a deadline is per repository.
 3. **Freezing** follows the same mechanism: a scan on `frozen_at IS NULL` triggers the
    definitive freeze at `deadline + grace_minutes` (details in ADR-012).
-4. The partial indexes `assignments(deadline_at) WHERE state='published' AND
-   deadline_applied_at IS NULL` (and its equivalent for freezing) make the scan free.
+4. Partial indexes make the scans cheap: `projects_deadline_due_idx` (published, deadline
+   not applied) and `project_repos_freeze_due_idx` (applied, not frozen).
 
 ## Consequences
 

@@ -8,6 +8,8 @@ and the evaluation setting `settings.categorizePolicy`). No migration.
 Extended by [ADR-041](ADR-041-entrainement-espace.md): `categorize` participates in the drill.
 The absence of a drill rating in this record describes the earlier version.
 
+Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
+
 ## Context
 
 The specification (docs/spec/04) lists no type where the student SORTS:
@@ -189,12 +191,6 @@ figures only. The type is not pollable, and has no drill rating nor
   `mcqPolicy` (`users.mcq_policy`): every evaluation starts at `per_item`. A
   preference would be a column on `users` and a row on the settings page; it
   is left as a possible follow-up if teachers ask for it.
-
-### Rollback
-
-Unregistering the type hides it from new questions; stored questions of the
-type would then fail to load, so a rollback deletes or converts them first.
-The settings key is inert without the type.
 
 ## Alternatives considered
 

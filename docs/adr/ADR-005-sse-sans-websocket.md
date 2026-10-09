@@ -14,6 +14,8 @@ token is confined to the MCP route and cannot open it.
 [ADR-065](ADR-065-reconnection-overlay.md) adds connection recovery and graceful
 restart signaling without reloading student work.
 
+Amended 2026-10-09: decision 4's fallback is a 60 s refetch while watching, and a reopen after 30 s without a `clock` frame, as the client does; it said a 30 s refetch.
+
 ## Context
 
 The portal pushes CI statuses, grades and notifications in real time (GR-10, NT-01). The
@@ -29,7 +31,10 @@ No functional requirement depends on real time — it is a display comfort.
 3. **No `Last-Event-ID` replay** and no ring buffer: on (re)connection the front end replays
    its TanStack Query requests — there is no resume state to maintain on the server.
 4. A `:ping` heartbeat every 25 s; `flush_interval -1` on the route in Caddy.
-   Degradation: without SSE, a periodic 30 s refetch.
+   Degradation: a client that watches a live subject refetches its query every
+   60 s whatever the stream says (`SAFETY_REFETCH_MS`), and closes and reopens
+   a stream that sent no `clock` frame for 30 s (`SILENCE_MS`,
+   `apps/web/src/realtime/useEventStream.ts`).
 
 ## Consequences
 

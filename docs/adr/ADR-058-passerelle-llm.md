@@ -43,6 +43,8 @@ Amends:
 Defers N-DATA-05's "no-retention mode" and the data-protection review of
 what is sent to the provider to a new open question (docs/spec/06, row 43).
 
+Amended 2026-10-09: §2 says what the screen writes (`models.default` only) and how a call resolves its model (the purpose's own, the purpose's fixed model, the default, the platform's), as `modelFor` does.
+
 ## Context
 
 ADR-045 gave the grading pass a call path and a deterministic stub, and
@@ -94,8 +96,12 @@ The table `llm_settings` holds ONE row (`id = 'default'`, a CHECK): the
 provider (`anthropic`), the encrypted key and its last four characters, the
 model per purpose (`models` jsonb, `{ purpose → model id }`), the daily cap
 in USD, who changed it and when. The administration screen offers ONE model
-select and writes it for every purpose; a per-purpose choice is a screen
-change, not a schema change.
+select and writes it as `models.default` only. A call resolves its model
+(`modelFor`, `@quiz/domain/llm`) as: the purpose's own entry of `models`,
+else the model fixed for that purpose in code (`PURPOSE_MODELS`: Haiku for
+`poll`, [ADR-071](ADR-071-sondage-brainstorm.md) §12, formerly ADR-072),
+else `models.default`, else the platform's default. A per-purpose choice in
+the screen is a screen change, not a schema change.
 
 The selectable models are a closed list in `@quiz/domain` (`LLM_MODELS`),
 each with its price per million input and output tokens: Claude Sonnet 5.5

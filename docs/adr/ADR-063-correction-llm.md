@@ -17,6 +17,10 @@ Amends open question 27 / ADR-037 and ADR-045 §6 (a teacher may copy the
 justification into the comment, §7). Closes the `llm` grading mode of
 `circuit` (§6) and keeps the `llm` matcher of `short` refused.
 
+Amended 2026-10-09: [ADR-045](ADR-045-service-llm-de-correction.md) is
+folded into this record (§9, and the
+[correspondence table](#correspondence-with-adr-045) at the end).
+
 ## Context
 
 ADR-045 built the call path: an essay with a rubric or a model answer
@@ -173,6 +177,29 @@ that after the close the answers to essay and diagram questions are sent
 to an LLM provider (Anthropic), without the student's name, for a grade
 the teacher reviews.
 
+### 9. The development stub (folded from ADR-045)
+
+`LLM_PROVIDER=stub` selects a deterministic grader, for development, the
+seed, the tests and the guide's screenshots (`modules/llm/stub.ts`): the
+share of the rubric's terms (else of the model answer's) found in the
+answer gives the points, that share and the answer's length the
+confidence, and its justification says it is a development stub, without
+naming or counting the terms. `config.ts` refuses to start with it under
+`NODE_ENV=production`, by the same mechanism and with the same kind of test
+as `AUTH_DEV_LOGIN` (invariant 3): a grade no model produced must never
+reach a real student. `.env.example` turns it on for development; the seed
+takes the process's provider, never one of its own. `LLM_PROVIDER=none`,
+the default, leaves the grading to the gateway when it is on, and to the
+teacher otherwise.
+
+A type asks by returning `pending: 'llm'` with what it builds from its
+config and the answer alone; the pass adds nothing that names a person, an
+attempt, an item or an evaluation (F-LLM-04, `grading/llm.db.test.ts`). The
+justification is written under `details.justification`
+(`JUSTIFICATION_KEY`, `@quiz/core/reasons`), never in `comment`, which is
+what a student reads; the grading panel shows it to the teacher as the AI's
+justification, never shown to the student (§4, §7).
+
 ## Consequences
 
 - An essay or a diagram is proposed a grade minutes after the close, with
@@ -209,3 +236,20 @@ the teacher reviews.
 - **A diagram as a picture for every kind.** The text form is exact, costs
   a fraction of an image, and needs no renderer; the picture is kept for
   the kind that has none.
+
+## Correspondence with ADR-045
+
+[ADR-045](ADR-045-service-llm-de-correction.md) (2026-09-30) built the call
+path with a development stub; it was folded here on 2026-10-09. Code and
+documents that cite it resolve as follows.
+
+| ADR-045 | This record |
+| --- | --- |
+| §1 One service per process, chosen by `LLM_PROVIDER` | §5, last paragraph: `createLlm` returns the stub, else the gateway's grader when the gateway is on, else none (§1 said the stub was the only provider) |
+| §2 The stub is refused in production | §9 |
+| §3 The request: what the type builds, nothing that identifies | §4 and §9; a question with neither a rubric nor a model answer is not sent (§1) |
+| §4 An inline call, not a queue | superseded by §2 (the `grading.llm` queue) |
+| §5 No call while the evaluation runs (F-LLM-03) | §1 |
+| §6 The justification is the teacher's | §4 (`details` keys), §7 (copied into the comment only by hand), §9 |
+| Consequences (the real-provider work owed) | paid by §2, §4 and §8 |
+| Alternatives (a fake grading by the seed; the justification as the comment; a queue now) | §9 (the seed uses the services), §7, Alternatives ("Calling the model inline") |

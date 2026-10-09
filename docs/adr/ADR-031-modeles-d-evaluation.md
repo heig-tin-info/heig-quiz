@@ -20,6 +20,8 @@ flag of an item is content like its milestone flag — a template carries it,
 a copy and a pull copy it, a change of it moves the revision and shows in a
 pull's summary. The `threshold` grade scale a template could hold is gone.
 
+Amended 2026-10-09: the Rollback section is removed (the runbook owns procedures); its one lasting fact is a Consequence.
+
 ## Context
 
 A course is taught year after year (glossary: "persistent from one year to
@@ -196,20 +198,10 @@ B is delivered (F-EVAL-26, the addendum of 2026-09-28, PR B).
   unchanged, because it is the same row read by the same code.
 - `evaluations` carries four more nullable columns and a second CHECK. The
   migration adds columns and replaces two constraints; no existing row
-  changes shape (none has a `course_id`).
-
-### Rollback
-
-The migration adds four nullable columns and replaces one CHECK with two
-(and the owned-poll index with a narrower one). It cannot be undone by
-dropping the columns alone: the home CHECK of `0018_poll_audience` reads a
-row with no classroom as an owned poll, so it refuses to be restored while a
-template row exists, and the previous code would read such a row the same
-way. A rollback therefore first deletes the templates
-(`DELETE FROM evaluations WHERE course_id IS NOT NULL`, their items
-cascading), then drops the four columns and restores the constraints and the
-index of `0018_poll_audience`. Templates are lost; their instances are
-ordinary evaluations and stay.
+  changes shape (none has a `course_id`). It is not undone by dropping the
+  columns: the CHECK of `0018_poll_audience` cannot be restored while a
+  template row exists, so undoing it loses the templates (their instances
+  are ordinary evaluations and stay).
 
 ## Alternatives considered
 

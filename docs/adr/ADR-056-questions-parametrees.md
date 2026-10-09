@@ -16,6 +16,8 @@ permutations are still recomputed. It also amends
 [ADR-043](ADR-043-analyse-des-distracteurs.md) (random distractors)
 and [ADR-014](ADR-014-sondages-en-direct.md) (polls refuse such a question).
 
+Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
+
 ## Context
 
 A question is static: one statement, one key. A teacher who asks "a ball
@@ -355,12 +357,6 @@ back without an error (§7). mathjs evaluates synchronously on the API's
 event loop. That is acceptable for one-line expressions under the caps, and
 moving evaluation to a worker is the fallback if a measurement says
 otherwise.
-
-### Rollback
-
-Hide the Variables section and refuse `variables` on write. Versions that
-are already parameterized stay readable through their stored values.
-Dropping the column loses only drafts.
 
 ## Alternatives considered
 

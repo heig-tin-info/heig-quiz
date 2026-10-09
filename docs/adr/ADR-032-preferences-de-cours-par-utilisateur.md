@@ -11,6 +11,8 @@ Amended by [ADR-053](ADR-053-retrait-des-codes-d-entree.md) (archiving no longer
 and [ADR-054](ADR-054-super-powers-admin.md) (cross-course admin access requires Super Powers).
 Personal hiding remains the decision of this record.
 
+Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
+
 ## Context
 
 A teacher keeps every course they ever taught: a course is persistent from
@@ -76,11 +78,6 @@ Three facts shape the answer:
 - A global archive can still be added later, on `courses`, without touching
   this table: the two would answer different questions.
 - Deleting a user or a course takes its preference rows with it.
-
-### Rollback
-
-Drop the routes and the flag; the table can stay empty or be dropped with a
-migration. Nothing else reads it.
 
 ## Alternatives considered
 

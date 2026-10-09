@@ -32,6 +32,10 @@ are amended by the [third addendum of ADR-081](ADR-081-vocabulaire-de-notions.md
 the reader's language, past reviews regrouped under today's classification;
 a session interleaves by the question's first concept id.
 
+Amended 2026-10-09: the Rollback section is removed (the [deployment runbook](../development/deployment.md) owns recovery); its rule on student history is a Consequence.
+
+Amended 2026-10-09: §15 places the classroom's drill switch in the classroom's Settings (`ClassroomSettings.tsx`), not in the Drill tab.
+
 ## Context
 
 The spec reserved a phase-2 drill in five lines: every question a student
@@ -385,9 +389,10 @@ confirmation (past activity stays visible; the teacher sees the opt-out).
 - **No read filters deleted questions**: a card exists only for a question
   an evaluation holds, which the pool refuses to delete (soft or hard), and
   deleting the evaluation cascades to the cards and their reviews (28 (a)).
-- **The screen** is a third tab of the classroom, **Drill**, which also
-  takes the classroom's drill switch from the Evaluations tab (§14): off,
-  the tab is an empty state above the switch. The per-student progression
+- **The screen** is a third tab of the classroom, **Drill**. The classroom's
+  drill switch, first on the Evaluations tab (§14), is a row of the
+  classroom's Settings tab (`ClassroomSettings.tsx`, D24): off, the Drill
+  tab is an empty state whose one action opens the Settings. The per-student progression
   opens in a sheet (its recall figure is all time, and says so, beside the
   table's 30 days), as two small charts over the same weeks (no second
   axis): reviews as bars, the recall rate as a line with the 90 % target.
@@ -401,17 +406,9 @@ confirmation (past activity stays visible; the teacher sees the opt-out).
 - Early ratings lean on the student's own time or a type estimate, until a
   question has enough correct answers on a device class.
 - Five years of reviews per student: small rows, well within one database.
+  Cards and reviews are student history, never disposable scheduler state.
 - The teacher's view is individual; the tab's notice and the data page are
   part of the feature.
-
-### Rollback
-
-The original slice-1 rollback removed the unused pure rules and dependency.
-That description applies only before the persisted drill and its screens
-were delivered; it is not a rollback procedure for the current feature.
-Use the [deployment runbook](../development/deployment.md) for deployment
-and database recovery. Cards and reviews contain student history and must
-not be discarded as if the scheduler were still unused.
 
 ## Alternatives considered
 

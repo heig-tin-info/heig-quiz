@@ -23,6 +23,8 @@ hand", settled here); reads the releases of
 projects: the frozen score and its release, F-PROJ-14) without changing
 them; the student exit follows F-RES-04 and spec 05 §5.7.
 
+Amended 2026-10-09: the consequence on the student's global Grades page records M5-04's decision instead of deferring to it.
+
 ## Context
 
 D06 made the gradebook one table per classroom: a column per evaluation or
@@ -180,8 +182,10 @@ gain the class means. Everything else stands.
   student view, impersonation) for an unreleased grade, a mark's comment and
   another student's data.
 - Two stored kinds of column settings: a column nobody touched has no row.
-- The student's global Grades page (`/grades`) keeps its own rows; M5-04
-  decides whether it reads the gradebook (D06 note of 2026-10-01).
+- The student's global Grades page (`/grades`) keeps its own rows
+  (`StudentGrades`, `GET /app/api/student/results`): M5-04 decided not to
+  move it onto the gradebook, whose cells carry no status, feedback link nor
+  pending count (D06 note of 2026-10-01; card M5-04, "As delivered").
 
 ## Alternatives considered
 

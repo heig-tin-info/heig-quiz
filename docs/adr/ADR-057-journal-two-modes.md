@@ -5,14 +5,20 @@
 Accepted (2026-10-01, decided by the product owner in conversation;
 `docs/merge/08-decisions.md` D29). The mode schema, Quiz-mode writes and
 revisions, standard editor and read-only GitHub mode are implemented
-(M4-07–M4-09). Explicit ordering/nesting, mode switches and copying remain
-pending (M4-10–M4-13); their decisions below are accepted, not yet delivered.
+(M4-07–M4-09). Explicit ordering/nesting, mode switches and copying
+(M4-10–M4-13) are accepted and not built: the product owner dropped them on
+2026-10-08, to be implemented on demand.
 See [merge progress](../merge/PROGRESS.md) and [task cards](../merge/09-tasks.md). It supersedes D25 (the journal's WYSIWYG
 editor over git). It amends [ADR-049](ADR-049-journal-source-github.md):
 point 2 of its body (Postgres is never what a teacher edits) holds for the
 GitHub mode only, and points 2 (Settings, enabled once connected) and 7
 (the editor) of its addendum are replaced by this decision. D24 and D27
 are amended accordingly.
+
+Amended 2026-10-09: ADR-049 is folded into this record: the rules of its
+body and addenda still in force are §7, and the
+[correspondence table](#correspondence-with-adr-049) at the end maps each
+of its points. The status of M4-10–M4-13 above follows the merge progress.
 
 ## Context
 
@@ -145,6 +151,76 @@ the mode on `journal.create`, the Quiz-mode page writes, `journal.restore`,
 Copying a journal from another classroom of the course (next semester):
 later, M4-13.
 
+### 7. The rules kept from ADR-049 (folded 2026-10-09)
+
+ADR-049 was heig-classroom's journal decision (its ADR-015), ported with an
+addendum on 2026-09-30. What still holds, by mode:
+
+- **Both modes.**
+  - **One journal per classroom** (D03): one `classroom_journals` row per
+    classroom, keyed by `classroom_id`; `journal_pages` and
+    `journal_assets` keyed by (`classroom_id`, `path`). There is no shared
+    copy and no "attach the journal of another classroom". An asset is
+    served at `JOURNAL_ASSETS_PATH` (`/app/api/classrooms/:id/journal/assets/*`)
+    behind the classroom's own access check.
+  - **Rendering happens once, on the server**, when a page is ingested or
+    saved, never on read: the reading path carries no markdown library.
+    Raw HTML in the markdown is **escaped into visible text**, not
+    sanitised (D15): the output is safe by construction. The questions
+    keep their own rule (a sanitised allow-list, N-SEC-05).
+  - **One renderer, in this repository** (`packages/docrender`): the
+    renderer, the page tree, the repository naming and the code tokenizer,
+    importable by the API and the web mock; `packages/domain` stays free of
+    marked and KaTeX.
+  - **Assets** are `bytea`, at most `JOURNAL_ASSET_MAX_BYTES` (5 MB) each
+    (D14); in GitHub mode only the ones a page references are downloaded.
+  - **Access and the student's exit** (invariants 4 and 6): a
+    `readableClassroom` loader; the course's staff read everything, a
+    claimed enrollment reads the student view, anyone else gets the 404.
+    The student view is the journal's one exit (no draft, no page before
+    its `visible_from`, no markdown, blob sha nor warning). The staff get
+    the staff payload unless the request asks for the student payload (a
+    teacher in the student view, ADR-018), which only narrows; an
+    impersonation session (ADR-034) gets the student payload whatever it
+    asks.
+  - **The defects of heig-classroom's journal stay fixed**: J1, an asset
+    reaches a student only if a page visible to students references it;
+    J2, every ingestion runs under an advisory lock per classroom row and
+    writes the copy in one transaction; J3, each row has its own root path;
+    J4, a ticker sweep (every 60 s) emits the hint when a page's
+    `visible_from` passes; J5, warnings are codes with parameters,
+    translated in the web app (N-I18N-01); J6, the long-form styles are a
+    `.md-body.md-doc` modifier; J7, development runs without webhooks nor a
+    queue, with Refresh as its path.
+  - **Removing a journal** removes the classroom's row and the platform's
+    copy, never a repository.
+- **GitHub mode (§2).**
+  - **The repository is the content**: one markdown file per page, the
+    repository's layout is the navigation (alphabetical order, numeric
+    prefixes for control, `README.md` as a directory's landing page), no
+    manifest and no identifier injected into the markdown. Postgres holds
+    a rendered copy, never what the teacher edits; a page view is one
+    `SELECT`, never a GitHub call, so a GitHub outage leaves the journal
+    readable.
+  - **Nothing is cloned**: the Contents and Trees APIs only.
+  - **Which repositories** (D27): any repository of the classroom's
+    organization, through Quiz's own GitHub App (D23; staging has its own).
+    The product owner accepted on 2026-09-30 that any member of a course's
+    staff can thereby make the App read a repository of the organizations
+    linked to that course's classrooms; every choice is audited
+    (`journal.*`). Since this record the App writes only the seed
+    `README.md` of a repository it creates (and would write the initial
+    commit of Move to GitHub, §3).
+  - **Creation never adopts an existing repository**: creating a journal
+    makes a new repository; choosing an existing one is a separate,
+    deliberate action (F-JRN-02, F-JRN-03). Move to GitHub targets a new
+    or empty repository only (§3).
+  - Two classrooms may name the same repository when both are linked to
+    the same organization (D02): each keeps its own copy, and a push
+    reaches every row that holds the repository.
+  - The course's staff who linked a GitHub account are invited as
+    collaborators of the journal repository; students never are.
+
 ## Consequences
 
 - A novice writes course notes with no GitHub, no App and no connected
@@ -176,3 +252,34 @@ later, M4-13.
   syntax, and it is a second editor beside the questions' Tiptap.
 - **Lexical with an mdast bridge.** A third editor framework; it moves the
   round-trip problem into another serialiser instead of removing it.
+
+## Correspondence with ADR-049
+
+[ADR-049](ADR-049-journal-source-github.md) (heig-classroom's journal,
+imported 2026-09-30) was folded here on 2026-10-09. Its body was
+classroom's, read through two addenda; code and documents that cite it
+resolve as follows. (ADR-049 said in one place that this record replaced
+"points 2 and 7" of its first addendum and in another "points 2, 3 and 7":
+points 2 and 7 are replaced, point 3 is amended.)
+
+| ADR-049 | This record |
+| --- | --- |
+| Body point 1 (the repository is the content) | §7, GitHub mode |
+| Body point 2 (Postgres is a read model) | §7, GitHub mode; §1 for Quiz mode, where the database is the content |
+| Body point 3 (rendered once, on the server; raw HTML escaped) | §7, both modes |
+| Body point 4 (nothing cloned) | §7, GitHub mode |
+| Body point 5 (writes go to GitHub first, with an optimistic lock) | superseded: GitHub mode is read-only (§2); Quiz mode locks on a page `version` (§1) |
+| Body point 6 (creation never adopts) | §7, GitHub mode, and §3 (Move to GitHub); its last sentence (one journal for several classrooms) is dropped |
+| Body point 7 (one copy per repository and ref) | dropped: one journal per classroom (§7) |
+| Body Consequences (read-only during a GitHub outage; reorder is a rename; assets capped; staff invited) | §7; an explicit order for Quiz mode, §1 |
+| Addendum point 1 (one journal per classroom, D03) | §7, both modes |
+| Addendum point 2 (set up in Settings, D24) | replaced by the mode choice (Decision, §2) |
+| Addendum point 3 (any repository of the organization, D27) | amended: §7, GitHub mode, and Consequences |
+| Addendum point 4 (Quiz's own App, D23) | §7, GitHub mode |
+| Addendum point 5 (assets in `bytea`, 5 MB, D14) | §7, both modes |
+| Addendum point 6 (escaped HTML, D15) | §7, both modes |
+| Addendum point 7 (the WYSIWYG editor, D25) | replaced by §1 (the standard editor) and §2 (read-only) |
+| Addendum point 8 (one renderer, `packages/docrender`) | §7, both modes |
+| Addendum point 9 (access and the student's exit) | §7, both modes; §5 |
+| Addendum point 10 (defects J1–J7) | §7, both modes |
+| Second addendum (two modes) | this record |

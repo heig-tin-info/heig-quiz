@@ -8,9 +8,9 @@ self-formation, the guard of a drag and drop) were settled by the product
 owner on 2026-10-04, and the record as a whole accepted the same day.
 
 Scope: where a classroom's groups of students live, who forms them and how,
-and how a group project uses them. The GitHub side of a group repository
-(created at the first acceptance, every member invited, a revocation before a
-departure) stays [ADR-048](ADR-048-projets-de-groupe.md)'s lot 2.
+and how a group project uses them, including the GitHub side of a group
+repository (decision 12, folded from [ADR-048](ADR-048-projets-de-groupe.md)'s
+lot 2).
 
 Relations: amends [ADR-048](ADR-048-projets-de-groupe.md) decisions 1, 2, 4
 and 5 and its rejected alternatives 1, 2 and 5 (the scope of a group, who
@@ -24,8 +24,12 @@ set's student view, lot 2); the glossary's *Project group*
 (`docs/spec/01-glossaire-et-domaine.md`); the cards M3-15 and M3-16
 (`docs/merge/09-tasks.md`). The import of F-PROJ-20 (M8-01) maps onto it.
 Delivery: cards M3-15, M3-16 (lot 1) and M3-17 (lot 2) of the
-[merge progress](../merge/PROGRESS.md); until M3-15, no group route exists
-and Accept answers `409 no_group` for any group project (M3-03).
+[merge progress](../merge/PROGRESS.md).
+
+Amended 2026-10-09: [ADR-048](ADR-048-projets-de-groupe.md) is folded into
+this record: its rules still in force are decision 12, and the
+[correspondence table](#correspondence-with-adr-048) at the end maps each
+of its sections.
 
 Amended 2026-10-05 (product owner, merge task M3-15b-1): decisions 4 and
 5 — the first deadline stops a group, and what "nothing to revoke" means;
@@ -259,6 +263,49 @@ meaning, which ADR-048 deliberately does not use.
     - ADR-048 lot 3 (per-member invitation follow-up, a per-member
       adjustment of the group's score) is unchanged and still later.
 
+12. **The GitHub side, and the rules kept from ADR-048** (heig-classroom's
+    ADR-014, imported as ADR-048 and folded here on 2026-10-09).
+    - **Group mode** requires the students' own tools (`work_mode = 'free'`,
+      `409 work_mode_group`, ADR-047) and changes only while the project is
+      a draft (`409 not_draft`).
+    - **Publishing refuses to leave anyone out**: a group project with a
+      student in no group of its copy answers `409 unassigned_students`
+      before any state change; the scheduled publication applies the same
+      guard in the ticker, so such a draft stays a draft past its start, and
+      goes live on the tick that follows the fix.
+    - **One `project_repos` row per group repository**, `group_id` set
+      (`ON DELETE SET NULL`: deleting a group never deletes a repository),
+      `user_id` the member whose Accept created it and nothing more (§4,
+      N-SEC-20). The members are read from the copy, never copied onto the
+      row, so the deadline, the freeze, the CI score and the review are per
+      repository, hence per group, by construction. Grades and exports stay
+      one line per student, each member reading the group repository's
+      score. "Which repository is this student's?" is answered in one place
+      (`modules/project/groupRepos.ts`, `pickStudentRepo` of `@quiz/domain`).
+    - **Accept.** The first member to accept creates
+      `<project slug>-<group slug>` (`groupRepoName`, capped at GitHub's 100
+      characters), and every member with a linked GitHub account is invited
+      with `push`; a later Accept joins the repository and invites its
+      member. A student in no group gets `409 no_group`; a member with no
+      linked account is invited when they link it, or when they accept.
+      GitHub teams are not used: students are outside collaborators, and a
+      team only grants access to members of the organization.
+    - **One provisioning at a time**: a partial unique index on
+      (`project_id`, `group_id`) makes two simultaneous Accepts insert one
+      row, and an atomic claim (`provision_claimed_at`) lets one of them
+      provision it; the other answers `409 provision_in_progress`.
+    - **No adoption.** A name another tracked repository bears is
+      disambiguated with the group's id, and the provisioning adopts an
+      existing repository of that name only when this row recorded its id
+      (`409 repo_name_taken` otherwise).
+    - **An individual repository inside a group project** (imported from
+      heig-classroom's lot 1, M8-01) keeps its student while it is live
+      (`isLiveIndividualRepo`): they are then neither shown nor invited into
+      their group's repository. Quiz's own Accept never makes one.
+    - **Later** (heig-classroom's lot 3, unchanged): a per-member follow-up
+      of the invitations, and the staff's per-member adjustment of a group's
+      score.
+
 ### Amendment of 2026-10-05 (product owner, M3-15b-1)
 
 - **§4, the first deadline stops a group.** A group of the copy stops
@@ -478,3 +525,24 @@ How it is built (orchestrator, M3-17):
 10. **GitHub teams for group repositories**: students are outside
     collaborators, and a team only grants access to members of the
     organization (ADR-048, lot 2).
+
+## Correspondence with ADR-048
+
+[ADR-048](ADR-048-projets-de-groupe.md) (heig-classroom's group
+assignments, imported 2026-09-30) was folded here on 2026-10-09. Code and
+documents that cite it resolve as follows.
+
+| ADR-048 | This record |
+| --- | --- |
+| Decision 1 (a group belongs to one assignment, *Copy from…*) | replaced by decisions 2 and 4 (group sets, a project's copy) |
+| Decision 2 (the staff forms the groups) | replaced by decisions 3 and 8 |
+| Decision 3 (membership by roster line) | decision 2 |
+| Decision 4 (a group with a repository is locked) | replaced by decisions 4 and 6 (the rename lock lifted; departures through the job, confirmed) |
+| Decision 5 (an advisory maximum size) | decision 3 (the set's `max_size`) |
+| Decision 6 (group mode requires the free work mode, draft only) | decision 12 |
+| Decision 7 (publishing refuses anyone left out) | decision 12 |
+| Decision 8 (three lots) | decision 11; lot 3 in decision 12, *Later* |
+| Lot 2 (one repository per group: data model, Accept, one provisioning at a time, no adoption, leftover individual repositories, audit) | decision 12; membership changes on GitHub, decisions 4 to 6; the roster's revocation, decision 5; the audit, decision 9 |
+| Consequences (additive migration, `group_id` set null, staff routes, audit) | decisions 9 and 12 |
+| Rejected alternatives 1, 2 and 5 | replaced by decisions 2, 3, 4 and 8; Alternatives 1, 2 and 6 |
+| Rejected alternatives 3 (a hard maximum) and 4 (a repository at the group's creation) | still rejected: decision 3 (advisory for the staff), decision 12 (created at the first Accept) |

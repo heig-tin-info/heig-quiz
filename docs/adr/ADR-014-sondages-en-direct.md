@@ -5,7 +5,7 @@
 Accepted (2026-09-21), consolidated from the amendments through 2026-10-01.
 [ADR-053](ADR-053-retrait-des-codes-d-entree.md) removes non-poll access codes;
 [ADR-056](ADR-056-questions-parametrees.md) excludes parameterized questions.
-[ADR-071](ADR-071-sondage-brainstorm.md) (proposed) adds the `brainstorm` type and a moderation switch.
+[ADR-071](ADR-071-sondage-brainstorm.md) adds the `brainstorm` type, a moderation switch and its AI assistance.
 This consolidation changes no decision. The [historical record](history/ADR-014-sondages-en-direct.md)
 preserves incidents, alternatives, migration details and original section numbering.
 Amended 2026-10-04: the launcher's defaults are safe for a projected screen

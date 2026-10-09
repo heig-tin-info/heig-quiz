@@ -4,8 +4,9 @@
 
 Accepted (2026-10-04; asked by the product owner, who settled in
 conversation the name "provided", the order of operations in both modes
-and where the calculator appears). Implemented by `calculatorOn` and the
-engine in `packages/domain/src/calculator.ts`, `settings.calculator` in
+and where the calculator appears). Implemented by `calculatorOn`
+(`packages/domain/src/evaluationConfig.ts`), the engine in
+`packages/domain/src/calculator.ts`, `settings.calculator` in
 `packages/contracts/src/evaluation.ts`, and the keypad and its dock in
 `apps/web/src/calculator/`. Requirement F-EVAL-32. §2 is generalised and
 §3's announcement amended by [ADR-079](ADR-079-conditions-de-l-evaluation.md)
@@ -13,6 +14,8 @@ engine in `packages/domain/src/calculator.ts`, `settings.calculator` in
 room announces the calculator among the evaluation's conditions.
 Its sibling, the notepad provided, is [ADR-090](ADR-090-calepin-fourni.md):
 the two docks stack at the bottom right, one panel open at a time.
+
+Amended 2026-10-09: `calculatorOn` is located in `packages/domain/src/evaluationConfig.ts`, not beside the engine.
 
 ## Amendment — reverse Polish notation (2026-10-05)
 

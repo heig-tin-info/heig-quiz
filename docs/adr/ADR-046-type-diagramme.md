@@ -13,6 +13,8 @@ Amended by [ADR-063](ADR-063-correction-llm.md) §5: diagrams can receive LLM gr
 through their text form. The manual-only v1 scope of §5 below is historical;
 the diagram engine and student editing decisions remain in force.
 
+Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
+
 ## Context
 
 Teachers of software engineering, databases, digital systems and
@@ -175,12 +177,6 @@ a schematic drawn and graded by hand, and ADR-021 kept one concept per type.
   mockup's example for each).
 - The grading panel gains a side-by-side view of two diagrams and of two
   texts, which later computed proposals and the LLM will reuse.
-
-### Rollback
-
-Unregistering the type hides it from new questions; stored questions of the
-type would then fail to load, so a rollback deletes them first. The engine
-package is inert without the type.
 
 ## Addendum (2026-09-30): what the implementation settled
 
