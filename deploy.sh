@@ -20,7 +20,8 @@
 # pulled, nothing restarted; scripts/live-evaluations.sql says what "live"
 # means) unless the command starts with the word "force": "force <sha>
 # <token>". The CI sends it only for the sha named by the repository
-# variable DEPLOY_FORCE_SHA (deploy.md §5, *The live-evaluation guard*).
+# variable DEPLOY_FORCE_SHA (docs/development/deployment.md §5, *The
+# live-evaluation guard*).
 #
 # NEVER build here: an on-VM build starves PostgreSQL and fills the disk.
 # This only pulls a prebuilt image and restarts. The code runner is deployed
@@ -109,10 +110,10 @@ fi
 # means; it runs in the RUNNING database, before anything is pulled or
 # restarted. On a refusal the checkout goes back to the running commit and
 # the job fails, so the operator re-runs it once the room is empty, or with
-# "force" (deploy.md §5, *The live-evaluation guard*). Staging is not
-# guarded: nobody sits an exam there, its data is a copy of production's
-# (live rows included, frozen at the copy), and a refused staging deploy
-# would hold back every promotion.
+# "force" (docs/development/deployment.md §5, *The live-evaluation guard*).
+# Staging is not guarded: nobody sits an exam there, its data is a copy of
+# production's (live rows included, frozen at the copy), and a refused
+# staging deploy would hold back every promotion.
 if [ "$environment" = production ] && [ -f .env.image ]; then
   # An assignment, so that a failing `ps` stops the deploy (set -e) instead
   # of reading as "no database".
@@ -131,7 +132,7 @@ if [ "$environment" = production ] && [ -f .env.image ]; then
       printf '%s\n' "$live" | sed 's/\t/ | /g; s/^/  /'
     } >&2
     if [ -z "${QUIZ_DEPLOY_FORCE:-}" ]; then
-      echo "deploy: REFUSED. Re-run the deploy job once it has closed, or force it (deploy.md §5)." >&2
+      echo "deploy: REFUSED. Re-run the deploy job once it has closed, or force it (docs/development/deployment.md §5)." >&2
       # Back to the commit actually running: .env.image names it, whichever
       # copy of this script (old or new) did the checkout.
       # Only a full sha reaches git: never an option-like value.

@@ -136,7 +136,7 @@ Two consequences:
   with a queue (`project.dispatch`, M3-05b).
 
 To start over, delete the directory. That is also how an existing database
-gets a newer demo world, such as the nine-question "Test 0": the seed only
+gets a newer demo world, such as the ten-question "Test 0": the seed only
 adds what is missing and never rewrites an evaluation that already exists.
 
 ```bash

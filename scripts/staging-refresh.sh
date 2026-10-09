@@ -17,7 +17,7 @@
 # installation and live project, so that staging's own App never acts on a
 # production organization (N-SEC-18).
 #
-# Each refresh is also a restore test of the production dump (deploy.md §6):
+# Each refresh is also a restore test of the production dump (docs/development/deployment.md §6):
 # a dump that does not restore here would not restore there either.
 set -euo pipefail
 
@@ -34,7 +34,7 @@ dump="${1:-$INBOX/quiz.dump}"
 echo "staging-refresh: restoring $dump"
 
 # Into a freshly recreated database, the app stopped: `pg_restore --clean`
-# into an existing one fails on pg-boss's partitioned tables (deploy.md §6).
+# into an existing one fails on pg-boss's partitioned tables (docs/development/deployment.md §6).
 "${STAGING[@]}" stop app
 "${STAGING[@]}" exec -T postgres psql -U quiz -d postgres -v ON_ERROR_STOP=1 \
   -c 'DROP DATABASE IF EXISTS quiz WITH (FORCE)' -c 'CREATE DATABASE quiz OWNER quiz'

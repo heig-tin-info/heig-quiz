@@ -132,19 +132,21 @@ External services called:
 | Scaleway Transactional Email (Paris region by default) | The recipient's address, the title of the evaluation or the name of the pool concerned; no grade, according to the code (`apps/api/src/modules/notifications/`) |
 | Microsoft Teams | For a linked account, a notification with the title concerned; limited to the authorised organisations |
 | The host of the edu-ID picture | A browser showing a portrait that was not uploaded loads it directly from the address edu-ID provided, without sending the page's address |
+| GitHub, for a classroom connected to an organisation | The students' project repositories the platform creates in that organisation, and the invitation of their linked GitHub accounts to them; a journal kept in a GitHub repository is only read from it |
 | Anthropic (Claude), once a key is stored | Question content; after the close, essay and diagram answers masked of the students' names; a brainstorm's ideas, live, when its AI assistance is on; a teacher's questions to the help assistant and what its read tools return for them, the names and final results of the teacher's own classrooms included (see [Purposes](#purposes)) |
 
 E-mails and Teams messages carry titles, names of classrooms and pools, and counts; they never carry a grade or a question's content: "your grade changed" says that it changed, not what it is (`apps/api/src/modules/notifications/templates.ts`). Whether e-mail and Teams are enabled in production: **To be confirmed**. The platform loads no analytics script, and no font or library from a third party: everything is served by the server itself.
 
-### GitHub and the journal (planned)
+### GitHub and the journal
 
-The merge of heig-classroom into the platform (ADR-035) will bring a classroom journal published from a GitHub repository (ADR-049) and a link between a platform account and a GitHub account. None of it runs today: the database has the journal's tables, but no code fills them and no route serves them, and there is no GitHub connection. What the specification plans, for when it lands:
+The merge of heig-classroom into the platform (ADR-035) brought a classroom journal, projects in GitHub repositories and a link between a platform account and a GitHub account. What they hold:
 
-- for a linked account, the GitHub identifier and login (N-DATA-02); linking is never a way to sign in;
-- a copy of the journal repository's pages and the files they reference, kept per classroom, deleted with the journal or the classroom; the repository itself is not the platform's data (N-DATA-03);
-- the platform talks to GitHub through its own GitHub App only; its keys stay out of the repository and the database, the access tokens GitHub issues are kept in memory, never stored nor logged, and the token of an account link is used once to read the account, then discarded (N-SEC-16 to N-SEC-18).
+- **A linked GitHub account**: the GitHub identifier and login, and when the link was made (`github_accounts`, `apps/api/src/db/github.ts`, N-DATA-02). Linking is never a way to sign in; removing the link deletes the row (`apps/api/src/auth/githubLink.ts`).
+- **The journal** of a classroom (`apps/api/src/db/journal.ts`): its pages and the files they reference. Written in the platform, each save keeps a revision with its author; published from a GitHub repository, the pages are a copy of the repository's. Removing the journal or deleting the classroom deletes them; a GitHub repository itself is never deleted (F-JRN-04, N-DATA-03).
+- **Projects** (`apps/api/src/db/project.ts`, `apps/api/src/db/group.ts`): which student accepted which repository, the GitHub accounts invited to it, the server's receipt time and commit count of each push (`push_receipts`, `apps/api/src/db/github.ts`), the CI runs and their scores, the teacher's score and comment, and the classroom's groups. Deleting a project deletes its rows on the platform and nothing on GitHub.
+- **GitHub's notifications** to the platform (webhooks), kept as received; their content is erased 30 days after they were processed (`webhook_deliveries`, `apps/api/src/db/github.ts`).
 
-This section will describe what is in place once it is.
+The platform talks to GitHub through its own GitHub App only; its keys stay out of the repository and the database, the access tokens GitHub issues are kept in memory, never stored nor logged, and the token of an account link is used once to read the account, then discarded (N-SEC-16 to N-SEC-18).
 
 ## Retention and what happens to the data after the studies
 

@@ -109,7 +109,7 @@ implementation, split in `./server` and `./client` so the API never loads a
 component. If `core` held the registry, `core` would import `qt-mcq` and
 `qt-mcq` would import `core`, which is the cycle decision D1 breaks by moving
 the wiring one package up. The apps also depend on some `qt-*` packages
-directly (`apps/web` on all eight, and on the `diagram` engine for its gallery, `apps/api` on `qt-code`, and both on
+directly (`apps/web` on all nine, and on the `diagram` engine for its gallery, `apps/api` on `qt-code`, and both on
 `core`), which is omitted above because the registry already carries the
 edge. Settled by
 [5.2 Code modularity](../spec/05-architecture.md#52-code-modularity) and

@@ -6,7 +6,7 @@
 # The checkout's commit is the runner image tagged with it, which becomes
 # :latest, the tag the quadlet runs. The language images are NOT touched by
 # a deploy: they are the runner's only supply chain and are rebuilt on
-# purpose with images/build.sh (deploy.md).
+# purpose with images/build.sh (docs/development/deployment.md §3).
 set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")/../../.."
