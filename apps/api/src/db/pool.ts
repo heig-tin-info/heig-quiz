@@ -31,6 +31,7 @@ import {
 import type { ParametersDraft } from "@quiz/contracts";
 
 import { POOL_COLORS } from "@quiz/contracts";
+import { POOL_ROLES, POOL_VISIBILITIES } from "@quiz/domain";
 
 import { users } from "./auth.js";
 import { courses } from "./org.js";
@@ -56,7 +57,7 @@ export const pools = pgTable(
     icon: text("icon"),
     /** The icon's colour, a `PoolColor` name (`teal`); null is grey, the default. */
     color: text("color", { enum: POOL_COLORS }),
-    visibility: text("visibility", { enum: ["private", "shared", "public"] })
+    visibility: text("visibility", { enum: POOL_VISIBILITIES })
       .notNull()
       .default("private"),
     ownerId: uuid("owner_id")
@@ -94,7 +95,7 @@ export const poolMembers = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    role: text("role", { enum: ["reader", "contributor", "owner"] })
+    role: text("role", { enum: POOL_ROLES })
       .notNull()
       .default("reader"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

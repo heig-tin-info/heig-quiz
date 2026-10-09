@@ -18,7 +18,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { POOL_COLORS } from "@quiz/contracts";
-import { CONDITION_KINDS } from "@quiz/domain";
+import { CONDITION_KINDS, COURSE_ROLES } from "@quiz/domain";
 
 import { users } from "./auth.js";
 
@@ -60,7 +60,7 @@ export const courseStaff = pgTable(
      * existed before ADR-068 an owner; a NEW seat's role is always written
      * by `addStaff` (the contract defaults it to `assistant`).
      */
-    role: text("role", { enum: ["owner", "assistant"] })
+    role: text("role", { enum: COURSE_ROLES })
       .notNull()
       .default("owner"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

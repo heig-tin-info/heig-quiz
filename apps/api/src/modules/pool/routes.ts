@@ -13,9 +13,6 @@
 import fastifyMultipart from "@fastify/multipart";
 import type { FastifyInstance } from "fastify";
 
-import type { QuestionTypeId } from "@quiz/contracts";
-import { QUESTION_TYPE_IDS } from "@quiz/core/server";
-
 import type { AppConfig } from "../../config.js";
 import { poolRouteContext } from "./routeContext.js";
 import { poolRoutes } from "./poolRoutes.js";
@@ -28,14 +25,6 @@ import { starRoutes } from "./starRoutes.js";
 import { tryRoutes } from "./tryRoutes.js";
 import { assetRoutes } from "./assetRoutes.js";
 import { similarRoutes } from "./similarRoutes.js";
-
-/**
- * The contracts enum and the registry constant must name the same types.
- * This assignment is the compile-time proof: adding a fifth type to
- * `@quiz/core` without adding it to `@quiz/contracts` stops the build here.
- */
-const _questionTypesAgree: readonly QuestionTypeId[] = QUESTION_TYPE_IDS;
-void _questionTypesAgree;
 
 export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;

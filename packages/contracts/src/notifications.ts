@@ -7,6 +7,8 @@
 import { z } from "zod";
 
 import { ActivityKindName } from "./activity.js";
+import type { UserRole } from "./admin.js";
+import { PoolRole } from "./pool.js";
 import { SYSTEM_CHECK_KEYS } from "./health.js";
 
 /**
@@ -54,7 +56,7 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
     kind: z.literal("pool_shared"),
     poolId: z.uuid(),
     poolName: z.string(),
-    role: z.enum(["reader", "contributor", "owner"]),
+    role: PoolRole,
     /** Who shared it, as displayed. */
     byName: z.string(),
   }),
@@ -423,7 +425,7 @@ export function notificationKindsFor({
   courseSeat,
   github,
 }: {
-  role: "student" | "teacher" | "admin";
+  role: UserRole;
   /** A claimed student seat (`enrollments.staff = false`). */
   studentSeat: boolean;
   /** A seat on a course staff (`course_staff`). */

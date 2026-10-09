@@ -10,6 +10,7 @@ import { TRUSTED_CLIENTS } from "@quiz/domain";
 
 import { McqPolicy } from "./evaluation.js";
 import type { TeacherCodespaceGrant } from "./codespace.js";
+import type { UserRole } from "./admin.js";
 import type { CourseRole } from "./org.js";
 import type { PoolColor } from "./pool.js";
 
@@ -58,7 +59,7 @@ export interface Me {
   email: string;
   givenName: string;
   familyName: string;
-  role: "teacher" | "student" | "admin";
+  role: UserRole;
   lastLoginAt: string | null;
   avatarUrl: string | null;
   hasUploadedAvatar: boolean;

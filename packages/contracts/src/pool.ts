@@ -8,20 +8,19 @@
  */
 import { z } from "zod";
 
+import { QUESTION_TYPE_IDS } from "@quiz/core/client";
+import { POOL_ROLES, POOL_VISIBILITIES } from "@quiz/domain";
+
 import { BoolFlag, IntList, PersonRef, StringList, ZodIssueLite, pageOf } from "./common.js";
 import { ConceptRef } from "./concept.js";
 import { NamedValues, ParametersDraft } from "./parameters.js";
 import { QuestionReview, ReviewPill } from "./review.js";
 
-/**
- * The question types of the MVP. `QUESTION_TYPE_IDS` in `@quiz/core` is the
- * source of truth; `apps/api/src/modules/pool/routes.ts` asserts at compile
- * time that the two lists agree, so a fifth type cannot land on one side only.
- */
-export const QuestionTypeId = z.enum(["mcq", "short", "cloze", "code", "circuit", "codeimage", "rich", "categorize", "diagram", "brainstorm"]);
+/** The question types: `QUESTION_TYPE_IDS` of `@quiz/core`. */
+export const QuestionTypeId = z.enum(QUESTION_TYPE_IDS);
 export type QuestionTypeId = z.infer<typeof QuestionTypeId>;
 
-export const PoolVisibility = z.enum(["private", "shared", "public"]);
+export const PoolVisibility = z.enum(POOL_VISIBILITIES);
 export type PoolVisibility = z.infer<typeof PoolVisibility>;
 
 /**
@@ -30,7 +29,7 @@ export type PoolVisibility = z.infer<typeof PoolVisibility>;
  * visibility and the deletion. The pool's `ownerId` is always an owner; a
  * member may be one too.
  */
-export const PoolRole = z.enum(["reader", "contributor", "owner"]);
+export const PoolRole = z.enum(POOL_ROLES);
 export type PoolRole = z.infer<typeof PoolRole>;
 
 /** A lucide icon name (`flask-conical`, `cpu`, …); null shows the default. */

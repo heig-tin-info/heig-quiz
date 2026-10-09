@@ -7,6 +7,8 @@
  */
 import { z } from "zod";
 
+import { COURSE_ROLES } from "@quiz/domain";
+
 import { PersonRef } from "./common.js";
 import { ConditionKind, EvaluationCondition } from "./evaluation.js";
 import { PoolColor, PoolIcon } from "./pool.js";
@@ -144,7 +146,7 @@ type CourseRef = z.infer<typeof CourseRef>;
  * course — its staff, its pools, its classrooms, the release of results —
  * and an `assistant` does the day-to-day work in it.
  */
-export const CourseRole = z.enum(["owner", "assistant"]);
+export const CourseRole = z.enum(COURSE_ROLES);
 export type CourseRole = z.infer<typeof CourseRole>;
 
 /** `POST /courses/:id/staff`: an account named by an address, an assistant unless said otherwise. */

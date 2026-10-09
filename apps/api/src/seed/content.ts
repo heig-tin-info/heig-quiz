@@ -11,7 +11,7 @@
  * looks them up before it writes, so running it twice changes nothing.
  */
 
-import type { EvaluationPreset, QuestionTypeId } from "@quiz/contracts";
+import type { EvaluationPreset, PoolRole, QuestionTypeId } from "@quiz/contracts";
 
 /** Every registered type: the seed's union can never fall behind the registry. */
 type QuestionTypeName = QuestionTypeId;
@@ -85,7 +85,7 @@ export interface PoolSpec {
    * Personas this pool is shared with, by key (`apps/api/auth/dev.ts`), so the
    * demo world has a pool seen from BOTH sides: its owner and a colleague.
    */
-  sharedWith?: { persona: string; role: "reader" | "contributor" | "owner" }[];
+  sharedWith?: { persona: string; role: PoolRole }[];
 }
 
 export interface EvaluationSpec {

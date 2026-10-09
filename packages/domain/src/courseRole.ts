@@ -3,12 +3,9 @@
  * (invariant 8). `staffAccess` decides who REACHES a course (a seat, or Super
  * Powers); this decides what a member may DO there, and the last-owner rule
  * every change of the staff obeys.
- *
- * The union is spelled out here rather than imported from `@quiz/contracts`
- * (the domain depends on nothing but `@quiz/core`); it is structurally the
- * same type as `CourseRole` there, so the two assign to each other.
  */
-export type CourseRoleName = "owner" | "assistant";
+export const COURSE_ROLES = ["owner", "assistant"] as const;
+export type CourseRoleName = (typeof COURSE_ROLES)[number];
 
 /** What the database knows about one (course, account) pair. */
 export interface CourseRoleFacts {
