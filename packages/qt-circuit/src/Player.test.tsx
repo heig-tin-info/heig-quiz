@@ -11,9 +11,10 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 
 import type { ExpandProps } from "@quiz/core/client";
+import type { RunOutcome } from "@quiz/core/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { CircuitPlayer, type CircuitSimulateOutcome } from "./Player.js";
+import { CircuitPlayer } from "./Player.js";
 import type { CircuitAnswer, CircuitStudent, Schematic } from "./schema.js";
 
 vi.mock("./canvas/index.js", async (importOriginal) => {
@@ -58,7 +59,7 @@ const runCase = (stdout: string) => ({
   truncated: false,
 });
 
-const outcome = (n: number): CircuitSimulateOutcome => ({
+const outcome = (n: number): RunOutcome => ({
   compile: { ok: true, stdout: "", stderr: "", ms: 0 },
   cases: Array.from({ length: n }, () => runCase(TABLE)),
 });

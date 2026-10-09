@@ -19,6 +19,7 @@ import { useMemo, useState } from "react";
 
 import { plural, resolveStrings } from "@quiz/core/client";
 import type { PlayerProps } from "@quiz/core/client";
+import type { RunOutcome } from "@quiz/core/server";
 import { badge, card, cx, isLocked, sectionTitle } from "@quiz/ui";
 
 import {
@@ -31,7 +32,6 @@ import {
   useCooldown,
   useRunSlot,
   type CodeRunStage,
-  type ProgramRunResult,
 } from "../ProgramPlayer.js";
 import { ImagePanel, type ImageLayout, type ImageView } from "./ImagePanel.js";
 import { parseImageOutput, warningsOf } from "./pixels.js";
@@ -50,7 +50,7 @@ export interface CodeImagePlayerProps extends PlayerProps<CodeImageStudent, Code
     | ((
         answer: CodeImageAnswer,
         options?: { onStage?: ((stage: CodeRunStage) => void) | undefined },
-      ) => Promise<ProgramRunResult>)
+      ) => Promise<RunOutcome>)
     | undefined;
   disabled?: boolean | undefined;
   strings?: Partial<CodeImagePlayerStrings> | undefined;

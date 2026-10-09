@@ -20,7 +20,7 @@
  *    browser gets an empty file rather than a wrong one.
  */
 import { assembleSource as assembleFromTemplate } from "@quiz/domain";
-import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
+import type { RunOutcome, RunnerRequest } from "@quiz/core/server";
 import {
   browserCapable,
   IMAGE_CASE,
@@ -132,7 +132,7 @@ export async function runCode(args: {
    */
   backend: BackendRun;
   options?: CodeRunOptions | undefined;
-}): Promise<RunnerOutcome | "unavailable" | "rate_limited"> {
+}): Promise<RunOutcome> {
   const compileOnly = args.options?.compileOnly === true;
   // A compilation has no input: a free one would only be dropped server-side.
   const manual = compileOnly ? undefined : args.options?.manual;
@@ -155,9 +155,9 @@ export async function runCode(args: {
 export async function runCodeImage(args: {
   student: CodeImageStudent;
   answer: CodeImageAnswer;
-  backend: () => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
+  backend: () => Promise<RunOutcome>;
   options?: { onStage?: ((stage: CodeRunStage) => void) | undefined } | undefined;
-}): Promise<RunnerOutcome | "unavailable" | "rate_limited"> {
+}): Promise<RunOutcome> {
   return runWithFallback<"rate_limited">(studentRunRequest(args.student, args.answer.regions, IMAGE_CASES), {
     runtime: args.student.runtime,
     backend: args.backend,
