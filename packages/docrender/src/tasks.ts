@@ -12,9 +12,9 @@
  */
 import type { Tokens } from "marked";
 
-export type TaskState = "done" | "doing" | "todo";
+type TaskState = "done" | "doing" | "todo";
 
-export interface TaskTally {
+interface TaskTally {
   state: TaskState;
   /** Leaves covered, and leaves in all; both 0 for a leaf. */
   done: number;

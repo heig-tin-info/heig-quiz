@@ -311,7 +311,7 @@ export function renderPage(source: string, ctx: RenderContext): RenderedPage {
        * A task item wears its DERIVED state (`tasks.ts`): the native checkbox
        * stays, for what a screen reader announces, ticked when the item is
        * done; a parent shows how many of its leaves are covered. The label
-       * sits beside the box, what follows it (a nested list) runs under it.
+       * sits beside the box; what follows (a nested list, any later block) runs under it.
        */
       listitem(this: Renderer, item: Tokens.ListItem) {
         if (!item.task) return false;

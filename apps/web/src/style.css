@@ -680,7 +680,8 @@ html.dark {
   column-gap: 10px;
   margin: 2px 0;
 }
-.md-body ul:has(> li.md-check) { padding-left: 0; }
+/* Only a list made of tasks only: a plain item beside a task keeps its bullet and its indent. */
+.md-body ul:has(> li.md-check):not(:has(> li:not(.md-check))) { padding-left: 0; }
 .md-body li.md-check > :not(.md-check-box, .md-check-label) { grid-column: 1 / -1; }
 .md-body li.md-check > ul:has(> li.md-check) {
   /* The guide runs under the parent's box; a child's box lands under the parent's text. */
