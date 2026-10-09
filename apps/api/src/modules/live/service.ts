@@ -87,6 +87,7 @@ export {
   logAttemptEvent,
   countRecentEvents,
 } from "./autosave.js";
+export { purgeIntegrityJournal, purgeAbandonedIntegrityJournal, storesIntegrityEvent } from "./integrity.js";
 export {
   runVisibleCases,
   simulateAnswer,

@@ -4,9 +4,11 @@ import {
   calculatorOn,
   allowedFeedbackWhen,
   feedbackWhenFor,
+  integrityJournalOn,
   isFeedbackAllowed,
   isInClass,
   isLiveState,
+  logVisibilityDefault,
   missingTimingFields,
   pastTiming,
   type TimingInput,
@@ -134,5 +136,20 @@ describe("calculatorOn (ADR-069)", () => {
     expect(calculatorOn("exam", undefined)).toBe("none");
     expect(calculatorOn("exercise", "scientific")).toBe("scientific");
     expect(calculatorOn("poll", "standard")).toBe("none");
+  });
+});
+
+describe("the integrity journal's switch (F-EVAL-13, ADR-088)", () => {
+  it("defaults on for an exam only", () => {
+    expect(logVisibilityDefault("exam")).toBe(true);
+    expect(logVisibilityDefault("exercise")).toBe(false);
+    expect(logVisibilityDefault("poll")).toBe(false);
+  });
+
+  it("follows the switch, and never journals a poll", () => {
+    expect(integrityJournalOn("exam", true)).toBe(true);
+    expect(integrityJournalOn("exercise", true)).toBe(true);
+    expect(integrityJournalOn("exam", false)).toBe(false);
+    expect(integrityJournalOn("poll", true)).toBe(false);
   });
 });

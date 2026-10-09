@@ -18,6 +18,11 @@ Amended 2026-10-09 (product owner): §5 only — the catalog is a section of
 the course's Settings tab, no longer a tab of its own, and only the
 course's owners write it; assistants read it. See the amendment under §5.
 
+Amended 2026-10-09 by [ADR-088](ADR-088-journal-d-integrite.md): §2 only —
+a poll never shows the journal's line, and the line will name pasting from
+outside the page once ADR-088's paste step ships (pending); until then it
+names leaving the page only.
+
 Scope: `EvaluationSettings.conditions`, the derivation `imposedConditions`
 (`packages/domain/src/evaluationConditions.ts`), the student views that carry
 `EvaluationConditions` (waiting room, ready screen, attempt, and for a
@@ -59,7 +64,8 @@ a text that changes after the exam leaves no record of what was announced.
    says nothing, since Quiz forbids no other calculator); the duration with
    the student's extra time, or the closing instant; the number of attempts;
    a navigation that does not go back; negative marking; the journal of
-   leaving the page when `logVisibility` is on; the autosave. The network
+   leaving the page (and of pasting from outside it once ADR-088's paste
+   step ships, pending) when `logVisibility` is on; the autosave. The network
    allowlist and the shuffles are left out (not the student's to act on),
    and so is `requireFullscreen` while no player requests full screen or
    records leaving it: a line saying so would be false.

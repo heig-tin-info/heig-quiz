@@ -111,7 +111,10 @@ export async function resultsPlugin(app: FastifyInstance) {
         const again = scope.evaluation.releasedAt !== null;
         const released = await service.releaseResults(app.db, scope.evaluation, now);
         const action = again ? "results.rerelease" : "results.release";
-        await trace(req, action, "evaluation", scope.evaluation.id, { rows: released.rows });
+        await trace(req, action, "evaluation", scope.evaluation.id, {
+          rows: released.rows,
+          journalPurged: released.journalPurged,
+        });
         await announce(scope.evaluation.id);
         return { releasedAt: iso(released.releasedAt), rows: released.rows, released: true };
       },

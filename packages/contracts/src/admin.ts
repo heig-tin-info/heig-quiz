@@ -74,6 +74,7 @@ export const SCHEDULED_TASK_KEYS = [
   "reconcile.repos",
   "llm.review",
   "assist.purge",
+  "integrity.purge",
 ] as const;
 export type ScheduledTaskKey = (typeof SCHEDULED_TASK_KEYS)[number];
 

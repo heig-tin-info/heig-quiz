@@ -12,7 +12,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { GRACE_MS } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
-import { attempts, evaluations, gradings } from "../../db/schema.js";
+import { attemptEvents, attempts, evaluations, gradings } from "../../db/schema.js";
 import { subscribe, type Topic } from "../../events.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
@@ -703,6 +703,34 @@ describe("the attempt journal takes only what a client may write (F-EVAL-13)", (
 
     expect((await post(url, learner.headers, { kind: "visibility", details: { state: "hidden" } })).statusCode).toBe(204);
     expect((await post(url, learner.headers, { kind: "focus", details: { focused: false } })).statusCode).toBe(204);
+  });
+
+  /** ADR-088 §3: the switch decides what is stored; the answer is the same either way. */
+  it("stores leaving the page only while logVisibility is on, and a reconnection always", async () => {
+    const kindsAfterPosting = async (logVisibility: boolean) => {
+      const learner = await server.signIn("student");
+      const own = await seedLive(server.app.db, {
+        teacherId: teacher.id,
+        studentIds: [learner.id],
+        questions: 1,
+        settings: { logVisibility },
+      });
+      await post(`/app/api/evaluations/${own.evaluationId}/start`, teacher.headers, { confirm: true });
+      const entered = await post(`/app/api/evaluations/${own.evaluationId}/attempt/start`, learner.headers, {});
+      const attemptId = entered.json().view.attempt.id as string;
+      const url = `/app/api/attempts/${attemptId}/events`;
+      for (const body of [
+        { kind: "visibility", details: { state: "hidden" } },
+        { kind: "focus", details: { focused: false } },
+        { kind: "reconnect" },
+      ]) {
+        expect((await post(url, learner.headers, body)).statusCode).toBe(204);
+      }
+      const rows = await server.app.db.select().from(attemptEvents).where(eq(attemptEvents.attemptId, attemptId));
+      return rows.map((r) => r.kind).sort();
+    };
+    expect(await kindsAfterPosting(true)).toEqual(["focus", "reconnect", "visibility"]);
+    expect(await kindsAfterPosting(false)).toEqual(["reconnect"]);
   });
 });
 

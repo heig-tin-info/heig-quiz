@@ -261,6 +261,22 @@ export function allowDrillWritable(mode: EvaluationModeName, state: EvaluationSt
   return drillModeOf(mode) && state !== "released";
 }
 
+// --- The integrity journal (F-EVAL-13, ADR-088) ------------------------------
+
+/**
+ * `logVisibility` at creation: on for an exam, off for an exercise (the
+ * teacher may switch it on) and for a poll, which never journals. Read once,
+ * when the evaluation is created; a stored evaluation keeps its value.
+ */
+export function logVisibilityDefault(mode: EvaluationModeName): boolean {
+  return mode === "exam";
+}
+
+/** Whether this evaluation keeps the integrity journal; a poll never does, whatever its row says. */
+export function integrityJournalOn(mode: EvaluationModeName, logVisibility: boolean): boolean {
+  return mode !== "poll" && logVisibility;
+}
+
 // --- The calculator provided (ADR-069) ---------------------------------------
 
 /** What an evaluation provides (`settings.calculator`); absent is `none`. */

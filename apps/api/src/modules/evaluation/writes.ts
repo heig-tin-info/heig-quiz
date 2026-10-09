@@ -27,6 +27,7 @@ import {
   configLock,
   isConfigFieldWritable,
   isFeedbackAllowed,
+  logVisibilityDefault,
   negativeMarkingAllowedFor,
   retakesAllowedFor,
 } from "@quiz/domain";
@@ -108,8 +109,12 @@ export async function createEvaluation(
     title: input.title,
     mode: input.mode,
     state: "draft",
-    settings:
-      input.allowDrill === undefined ? preset.settings : { ...preset.settings, allowDrill: input.allowDrill },
+    // Whatever the preset, the integrity journal follows the MODE (ADR-088 §2).
+    settings: {
+      ...preset.settings,
+      logVisibility: logVisibilityDefault(input.mode),
+      ...(input.allowDrill === undefined ? {} : { allowDrill: input.allowDrill }),
+    },
     gradingScale: defaultGradingScale(),
     feedbackPolicy: preset.feedbackPolicy,
     mcqPolicy,
