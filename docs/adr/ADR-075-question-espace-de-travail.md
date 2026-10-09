@@ -22,6 +22,11 @@ sessions, the signed-token exception) and
 `docs/spec/00-cadre-et-perimetre.md` §0.6 and F-PROJ-19. The `code` type
 ([ADR-015](ADR-015-execution-navigateur-correction-serveur.md)) is unchanged.
 
+**Amended by [ADR-089](ADR-089-kiosque-pour-l-espace-de-travail.md)
+(proposed, 2026-10-09)**: §11's kiosk condition, for projects — a station
+reaches the portal by framing it from Quiz, gated by its own hardware proof
+(proof K), not by proof B. The `workspace` question's kiosk use stays here.
+
 ## Context
 
 The `code` question (04 §4.7) is one Monaco editor over a locked template,

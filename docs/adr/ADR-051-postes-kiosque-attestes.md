@@ -11,6 +11,11 @@ the confinement of a session to an **activity** (a project) was outside
 this decision. D21 was subsequently settled on 2026-10-01 for M6; see
 [ADR-027](ADR-027-tickets-de-lancement-et-sessions-typees.md)'s Status for that scope and its implementation boundary. Delivered in steps, each its own pull request (§10).
 
+**Amended by [ADR-089](ADR-089-kiosque-pour-l-espace-de-travail.md)
+(proposed, 2026-10-09)**: §1 and §7 for a `kiosk` session confined to an
+`online_seb` project, which frames the online workspace from a Quiz page;
+the rules below for evaluations are unchanged.
+
 ## Context
 
 An exam that requires Safe Exam Browser (ADR-027) is sat on the student's

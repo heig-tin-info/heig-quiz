@@ -55,6 +55,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-027 — Launch tickets and typed sessions (Safe Exam Browser first)](ADR-027-tickets-de-lancement-et-sessions-typees.md)
 - [ADR-034 — Acting as a student: a one-time link, an `impersonation` session, read-only in production](ADR-034-agir-en-tant-qu-etudiant.md)
 - [ADR-051 — Attested kiosk stations, paired from the student's phone, beside Safe Exam Browser](ADR-051-postes-kiosque-attestes.md)
+- [ADR-089 — Kiosk stations for the online workspace: the station stays on Quiz and frames the portal](ADR-089-kiosque-pour-l-espace-de-travail.md)
 - [ADR-053 — Removing the entry codes: the classroom join code and the evaluation access code](ADR-053-retrait-des-codes-d-entree.md)
 - [ADR-054 — Super Powers: an admin reaches everyone's content for one hour, on request](ADR-054-super-powers-admin.md)
 - [ADR-068 — Course staff roles: owner and assistant](ADR-068-roles-de-l-equipe-du-cours.md)
