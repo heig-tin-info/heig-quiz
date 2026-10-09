@@ -27,6 +27,8 @@ analogy only (its addendum of 2026-09-30); the release snapshot
 (`released_grades`) is specified in `docs/spec/05-architecture.md` §5.3 and
 F-RES-04.
 
+Amended 2026-10-09: the Rollback section is removed (the runbook owns procedures); its one lasting fact is a Consequence.
+
 ## Context
 
 F-EVAL-15 asks that an `exercise` may allow several attempts, keeping the
@@ -198,6 +200,12 @@ through (`scoreVisible`).
   (`409 retakes_enabled`), and the grid does not offer it.
 - The evaluation list counts STUDENTS who took the evaluation
   (`count(distinct owner)`), not attempt rows.
+- Migration `0015` is not undone by redeploying the previous code: the old
+  code does not run on the new schema at all, since its
+  `ON CONFLICT (evaluation_id, user_id)` has no matching unique index after
+  `0015`, so every first entry into an evaluation would fail. Restoring the
+  one-attempt index first requires deleting the retakes, a decision about
+  students' results.
 
 ### Addendum (2026-09-25, issues #120, #121): the score page carries the retake
 
@@ -223,20 +231,6 @@ id — never moved to the new one. The retake now drops every cached entry of
 the evaluation and seeds the retake's own answer in its place, and the
 player is keyed by the attempt id, so a new attempt always mounts a new
 player (state, autosave and stream topic).
-
-### Rollback
-
-Migration `0015` is not reversible by reverting the code alone. Reverting
-the application after it ran needs a DOWN migration that drops
-`attempts_evaluation_user_open_uq` and `attempts_evaluation_user_number_uq`,
-recreates `attempts_evaluation_user_uq (evaluation_id, user_id)` and drops
-`attempt_number`. Recreating the one-attempt index FAILS as soon as one
-retake exists: the extra attempts must be deleted (or moved aside) first,
-keeping the kept attempt of each student, which is a decision about
-students' results and not a mechanical step. The old code does not run on
-the new schema at all: its `ON CONFLICT (evaluation_id, user_id)` target has
-no matching unique index, so every first entry into an evaluation would fail.
-A rollback is therefore a migration, never a plain redeploy.
 
 ## Alternatives considered
 

@@ -16,6 +16,8 @@ this decision. D21 was subsequently settled on 2026-10-01 for M6; see
 `online_seb` project, which frames the online workspace from a Quiz page;
 the rules below for evaluations are unchanged.
 
+Amended 2026-10-09: the session end is `endKioskSessions` (`auth/session.ts`), formerly named `endConfinedSessions` here.
+
 ## Context
 
 An exam that requires Safe Exam Browser (ADR-027) is sat on the student's
@@ -315,13 +317,13 @@ and normalization, and the state machine.
   is an impersonation (`delegated`, ADR-034), read-only in production, and
   the student must be able to answer. There is no second mechanism.
 - **The end.** The station's session is deleted by the auth module's
-  `endConfinedSessions`, which `live` calls wherever an attempt ends:
+  `endKioskSessions`, which `live` calls wherever an attempt ends:
   - the student's submit;
   - the teacher's close;
   - the ticker's expiry;
   - the evaluation's close.
 
-  `endConfinedSessions` also closes the event streams of that one session
+  `endKioskSessions` also closes the event streams of that one session
   (not of the user, whose phone keeps its portal); a stream is authorized
   only when it connects, so a deleted session would otherwise keep one open.
   ADR-027 kept the `seb` session after the submit so that the page could

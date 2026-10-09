@@ -1,4 +1,4 @@
-# ADR-009 — Deployment on a single VM, Docker Compose, Caddy, SWITCH backups
+# ADR-009 — Deployment on a single VM, Docker Compose, Caddy, provider and off-site backups
 
 ## Status
 
@@ -48,6 +48,13 @@ move to Hetzner (2026-09-25), against rejected alternative 1; it holds only
 ciphertext. The Hetzner provider backup of the whole VM and the on-VM dumps
 stay as they were. The `offsite` check of ADR-055 watches the copy.
 
+Amended 2026-10-09: the hosting facts are rewritten to the real state (title,
+Context, decisions 1 to 3, Consequences, rejected alternative 1): a Hetzner
+VM in Europe, Caddy native on the host, Hetzner Backups beside the on-VM
+dumps and the off-site copy. Hosting in Switzerland (Switch Cloud) remains an
+option, which the product owner will decide on within 6 to 12 months (open
+question 56 of `docs/spec/06-questions-ouvertes.md`).
+
 Historical Quiz scope before the classroom merge excluded GitHub reconciliation
 and its metrics. Since 2026-09-30, [ADR-011](ADR-011-reconciliation-par-les-handlers.md) is imported through
 [ADR-035](ADR-035-fusion-de-classroom.md). Read those records for reconciliation and [ADR-055](ADR-055-etat-du-systeme.md)
@@ -58,22 +65,27 @@ the Status amendments change it.
 
 The availability target is 99 % during semesters (NFR-08), with an external probe on
 `/healthz`, a daily backup with RPO 24 h and RTO 4 h tested every semester (NFR-16). Personal
-data of Swiss students: the Swiss data protection act applies (NFR-07, H11) and hosting in
-Switzerland avoids any cross-border transfer question. The operator is a teacher.
+data of Swiss students: the Swiss data protection act applies (NFR-07, H11), and the
+specification asks for a server in Europe (N-DATA-01). The operator is a teacher.
 
 ## Decision
 
-1. **One HEIG application VM** (4 vCPU / 8 GB / 60 GB, Debian stable), **Docker Compose**,
-   three services: `caddy` (automatic Let's Encrypt TLS, HSTS, the only exposed port),
-   `app` (a single image, front end included, `restart: always`), `postgres` (local volume,
-   not exposed). Webhooks are a route of the monolith behind Caddy; in development,
-   `smee.io` or `cloudflared tunnel`.
-2. Deployment by `docker compose pull && up -d`, migrations at startup (under a lock), image
-   versioned by git tag, rollback to the previous tag.
-3. **Backups**: a daily `pg_dump -Fc` through a sidecar cron container, copied off the VM to
-   **Swiss institutional object storage** (SWITCH or HEIG, encrypted transfer), with 30-day
-   retention. A **timed** restore test once per semester. *(The off-site copy is amended:
-   a borg Storage Box, append-only; see Status.)*
+1. **One application VM at Hetzner, in Europe**, shared with heig-classroom and
+   evaluation-tb (its size and accounts: `docs/development/deployment.md`, *The two
+   machines*). **Docker Compose** (the service account's rootless Docker) runs three
+   services: `app` (a single image, front end included), `postgres` (local volume, not
+   exposed) and `backup`. **Caddy** is the host's native package, shared with the
+   neighbours: automatic TLS, HSTS, the only exposed ports, one fragment per service.
+   Webhooks are a route of the monolith behind Caddy; in development, `smee.io` or
+   `cloudflared tunnel`. The code runner is on another VM (ADR-016).
+2. Deployment from CI: images built on GitHub Actions and pulled from GHCR, tagged by
+   commit sha, deployed through a forced command (`deploy.sh`), never built on the VM;
+   migrations at startup (under a lock); rollback by redeploying an earlier sha
+   (ADR-028; runbook §5).
+3. **Backups**: a daily provider backup of the whole VM (Hetzner Backups), a daily
+   `pg_dump -Fc` by the compose `backup` service kept 30 days on the VM, and the off-site
+   copy of the Status (a borg repository on a Hetzner Storage Box, append-only from the
+   VM). A **timed** restore test once per semester.
 4. **Requirements-driven observability**: `/healthz` (DB, pg-boss, clock) probed every 60 s;
    a Prometheus `/metrics` endpoint exposing the age of the oldest unprocessed webhook, the
    queue lag, dead-lettered jobs, the remaining GitHub quota and the ticker lag; a minimal
@@ -81,18 +93,22 @@ Switzerland avoids any cross-border transfer question. The operator is a teacher
 
 ## Consequences
 
-- Three containers, one compose file, a fifteen-line Caddyfile: the whole deployment can be
-  rebuilt from scratch in under an hour.
+- Three containers, one compose file, one Caddy fragment on the host: the whole deployment
+  can be rebuilt from scratch in under an hour.
 - Restoring follows the runbook: fresh VM, infrastructure repository, secrets from the vault
   (ADR-010), `pg_restore`, DNS, GH-62 reconciliation — the cron jobs absorb the lost window
   (ADR-011). RTO 4 h validated by the semester test.
-- Data and backups in Switzerland: the data protection argument is settled.
+- Data and backups are in Europe (the VM at Hetzner; the off-site copy in Helsinki, as
+  ciphertext), which N-DATA-01 asks for. Hosting in Switzerland (Switch Cloud) remains an
+  option the product owner will decide on within 6 to 12 months (open question 56).
 
 ## Rejected alternatives
 
 1. **A foreign cloud host or backup storage outside Switzerland** (Backblaze, cited by the
    robustness proposal): defensible when encrypted, but it opens an avoidable question of
-   cross-border transfer — institutional storage removes it.
+   cross-border transfer — institutional storage removes it. *No longer rejected: the
+   platform moved to Hetzner, in Europe, on 2026-09-25, and its off-site copy is encrypted
+   in Helsinki; Swiss hosting is open question 56.*
 2. **Kubernetes or a managed PaaS**: disproportionate operational capacity, external
    dependencies and recurring costs with no gain on the NFRs.
 3. **A minimal probe and minimal metrics only** (initial simplicity proposal): the review

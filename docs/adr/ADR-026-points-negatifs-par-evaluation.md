@@ -20,6 +20,8 @@ is scored with the same negative rule, its final score floored at 0
 hand stays within `[0, max]` (`scoresNegatively(type, on, bonus)`). §3's attempt-level
 floor is unchanged: one `attemptTotal`, bonus items included.
 
+Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
+
 ## Context
 
 The first MCQ configuration (docs/spec/04 §4.4, v1) carried a `penalty`
@@ -134,13 +136,6 @@ writes itself skip the guard; names and emails keep it.
 - `docs/spec/04` §4.4 is rewritten to the v2 policies and this mode; the
   v1 `penalty` / `allowNegative` are gone for good (the v1 → v2 migration of
   `packages/qt-mcq` still drops them).
-
-### Rollback
-
-Switching the setting off on an evaluation before anybody starts is a patch.
-Removing the feature would mean ignoring the flag in `gradeDefaults`; the
-stored gradings of a negative evaluation keep their signed points, and
-`attemptTotal` keeps flooring them.
 
 ## Alternatives considered
 

@@ -19,9 +19,9 @@ import { classroomLabel, openerOf, TYPE_ICON } from "./views";
  * (`computeDefault`, `buildTicks`), same gestures, same row heights — with
  * quiz's words (every label through `t()`), quiz's tokens (a bar wears its
  * state's tone, never the accent, which belongs to a primary action), and
- * activities instead of assignments. It is destined for `@heig-platform/ui`
- * (ADR-029): kept in one file, with the domain adapter (`spanOf`) apart from
- * the drawing, so the two copies can be merged at extraction.
+ * activities instead of assignments. It is a candidate for the planned
+ * `packages/ui-kit` (ADR-035, task L-03): kept in one file, with the domain
+ * adapter (`spanOf`) apart from the drawing, so it can move there whole.
  *
  * Hand-rolled with CSS and pointer events, as there: the gantt libraries
  * either bring their own theme or are unmaintained.

@@ -5,6 +5,8 @@
 Accepted (2026-09-22, with `packages/qt-circuit` and the `spice` language of the runner).
 Extended by [ADR-083 — Frequency-domain stimuli](ADR-083-stimulus-frequentiel-de-circuit.md): a stimulus may also be an AC sweep, graded by an envelope around the reference's Bode plot.
 
+Amended 2026-10-09: §5 names the runner's shared image, and rejected alternative 3 records that the `llm` mode is refused at publication (ADR-063 §6).
+
 ## Context
 
 `docs/spec/04-types-de-questions.md` §4.11 described `circuit` as a phase-3
@@ -68,9 +70,10 @@ reads a netlist on the command line and writes a table on stdout.
    No vendor model, no `.subckt` library to ship or to keep current; a
    first-year question does not ask about slew rate.
 
-5. **`spice` is a language of the runner**, not a service of its own:
-   `apps/runner/images/spice/Containerfile` (Alpine + ngspice), one entry in
-   `SPECS` (`src/languages.ts`), the same hardened container. Nothing is built,
+5. **`spice` is a language of the runner**, not a service of its own: the
+   runner's shared Alpine image (`apps/runner/images/Containerfile`, built by
+   `images/build.sh` with `ngspice` as its package), one entry in `SPECS`
+   (`src/languages.ts`), the same hardened container. Nothing is built,
    so `compile` is the "nothing to do" answer and a malformed netlist is a
    failed case. The netlist file travels in the case's `args`
    (`ngspice -b s0.cir`), so one request carries one schematic and all its
@@ -128,8 +131,8 @@ reads a netlist on the command line and writes a table on stdout.
 3. **An LLM with vision as the primary grader**, as §4.11 originally said. It
    reads a picture of a circuit, not a circuit: it cannot tell 4.7 kΩ from
    47 kΩ reliably, it cannot be shown why it was wrong, and it costs a call per
-   answer. It stays as the `llm` mode of the type, for the rubric-graded
-   questions simulation cannot express (phase 2).
+   answer. The type's `llm` mode is closed: publication refuses it
+   (`circuit.llm_not_available`, [ADR-063](ADR-063-correction-llm.md) §6).
 4. **A simulation service of its own**, beside the runner. Everything such a
    service would need — a queue, two priorities, wall clocks, memory caps, an
    image with no network, a health route the API already polls — is what

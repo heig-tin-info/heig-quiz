@@ -14,6 +14,8 @@ after this one. Amends ADR-025 §4
 and ADR-050 §3, and F-GRADE-01 of `docs/spec/02-exigences-fonctionnelles.md`.
 Settles open question 50 of `docs/spec/06-questions-ouvertes.md`.
 
+Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
+
 ## Context
 
 The exercise "Premiers pas en C" — mode `exercise`, feedback `immediate`,
@@ -142,14 +144,6 @@ part of an attempt the student has not handed in.
   down by a re-grade; a reopen leaves the same shape, on an evaluation that
   is running, which `results_updated` (released evaluations only) never
   watches.
-
-## Rollback
-
-Restore the condition "retakes enabled OR correction published" in
-`gradeAtHandIn`. The supersede on reopen and the lock are harmless
-without it (nothing is graded before the close, so a reopen finds nothing
-to stand down), and `GRADING_RUNNER_CONCURRENCY=1` is pg-boss's own default.
-No schema change to undo.
 
 ## Alternatives considered
 

@@ -36,12 +36,12 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-005 — SSE rather than WebSocket, without `Last-Event-ID` replay](ADR-005-sse-sans-websocket.md)
 - [ADR-006 — Deadlines through a single ticker-sweeper, no scheduled one-shot job](ADR-006-deadline-ticker.md)
 - [ADR-008 — React + Vite SPA front end, own accessible primitives, no SSR](ADR-008-frontend-spa-react.md)
-- [ADR-009 — Deployment on a single VM, Docker Compose, Caddy, SWITCH backups](ADR-009-deploiement-vm-compose.md)
+- [ADR-009 — Deployment on a single VM, Docker Compose, Caddy, provider and off-site backups](ADR-009-deploiement-vm-compose.md)
 - [ADR-010 — Secrets outside the repository and outside the database, in an encrypted institutional vault](ADR-010-stockage-secrets.md)
 - [ADR-011 — Reconciliation reuses the idempotent webhook handlers](ADR-011-reconciliation-par-les-handlers.md)
 - [ADR-016 — The code runner on the codespace VM, behind Caddy, with a shared token](ADR-016-runner-sur-vm-separee.md)
 - [ADR-028 — A staging environment on the production VM, and promotion by sha](ADR-028-recette-sur-la-meme-vm.md)
-- [ADR-030 — Notification channels: the bell, e-mail and Microsoft Teams](ADR-030-canaux-de-notification.md)
+- [ADR-030 — Notification channels and delivery rules](ADR-030-canaux-de-notification.md)
 - [ADR-087 — What's new: one entry file per pull request, shown once after an update](ADR-087-nouveautes-de-la-plateforme.md)
 - [ADR-055 — The system status: one registry of health checks, a narrow `/healthz`, a backup report](ADR-055-etat-du-systeme.md)
 - [ADR-065 — Connection recovery without reloading student work](ADR-065-reconnection-overlay.md)
@@ -49,7 +49,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 ### Identity, access and exam confinement
 
 - [ADR-013 — Pool sharing: three roles, one resolution order, succession by seniority](ADR-013-partage-des-pools.md)
-- [ADR-018 — The real student view, and the teacher's own test attempt](ADR-018-vue-etudiant-reelle.md)
+- [ADR-018 — The real student view and stateless preview](ADR-018-vue-etudiant-reelle.md)
 - [ADR-022 — Personal API tokens, and an MCP server that is one more client of the API](ADR-022-jetons-api-et-serveur-mcp.md)
 - [ADR-023 — The portal is its own OAuth 2.1 server, so claude.ai and ChatGPT can sign in](ADR-023-serveur-oauth-pour-mcp.md)
 - [ADR-027 — Launch tickets and typed sessions (Safe Exam Browser first)](ADR-027-tickets-de-lancement-et-sessions-typees.md)
@@ -79,9 +79,9 @@ so this index does not duplicate their status or maintain a second dependency gr
 ### Evaluations, grading and practice
 
 - [ADR-012 — Grade freezing: receipt time written synchronously, two-step freeze](ADR-012-gel-note-deux-temps.md)
-- [ADR-014 — Live polls: an evaluation of one question, a code, and participants without a roster](ADR-014-sondages-en-direct.md)
+- [ADR-014 — Live polls](ADR-014-sondages-en-direct.md)
 - [ADR-071 — The brainstorm poll: short ideas, a bubble cloud, moderated by the teacher](ADR-071-sondage-brainstorm.md)
-- [ADR-072 — AI assistance for a brainstorm: a model moderates, corrects and groups ideas live](ADR-072-ia-du-brainstorm.md)
+- [ADR-072 — AI assistance for a brainstorm: a model moderates, corrects and groups ideas live](ADR-072-ia-du-brainstorm.md) (superseded, folded into ADR-071)
 - [ADR-020 — Presence is a body in the room, and the Results switch colours it now](ADR-020-presence-et-verdicts-en-direct.md)
 - [ADR-025 — Several attempts on an exercise](ADR-025-plusieurs-tentatives-exercice.md)
 - [ADR-026 — Negative marking, per evaluation, with the total floored at 0](ADR-026-points-negatifs-par-evaluation.md)
@@ -96,7 +96,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-066 — A wide question beside a pinned rail](ADR-066-question-large-et-rail-fixe.md)
 - [ADR-067 — Grading an exercise at hand-in](ADR-067-correction-a-la-remise-des-exercices.md)
 - [ADR-069 — A calculator provided on the student's screen](ADR-069-calculatrice-fournie.md)
-- [ADR-090 — A notepad provided on the student's screen, kept on the device only](ADR-090-calepin-fourni.md)
+- [ADR-090 — A notepad provided on the student's screen](ADR-090-calepin-fourni.md)
 - [ADR-076 — An attempt starts by an explicit Start, not by opening the link](ADR-076-demarrage-explicite-d-une-tentative.md)
 - [ADR-079 — The conditions of an evaluation: announced by the teacher, imposed by the platform](ADR-079-conditions-de-l-evaluation.md)
 - [ADR-084 — A text before an item: the intro of an evaluation item](ADR-084-texte-avant-un-item.md)
@@ -114,7 +114,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 
 ### LLM services
 
-- [ADR-045 — The LLM grading service, and its development stub](ADR-045-service-llm-de-correction.md)
+- [ADR-045 — The LLM grading service, and its development stub](ADR-045-service-llm-de-correction.md) (superseded, folded into ADR-063)
 - [ADR-058 — The LLM gateway: one institutional key, a daily cap, a call log](ADR-058-passerelle-llm.md)
 - [ADR-059 — "Generate": the wand of the question editor](ADR-059-generer-la-reponse.md)
 - [ADR-060 — The LLM review of the published questions](ADR-060-revue-llm-des-questions.md)
@@ -125,14 +125,14 @@ so this index does not duplicate their status or maintain a second dependency gr
 ### Classroom merge, projects and journal
 
 - [ADR-007 — Ephemeral self-hosted runners for grading, sized by the freeze](ADR-007-runner-self-hosted.md)
-- [ADR-029 — A UI library shared by Quiz and Classroom (superseded)](ADR-029-bibliotheque-ui-commune.md)
+- [ADR-029 — A UI library shared by Quiz and Classroom](ADR-029-bibliotheque-ui-commune.md) (superseded by ADR-035)
 - [ADR-035 — Merging heig-classroom into Quiz: one platform, one roster, activities of several kinds](ADR-035-fusion-de-classroom.md)
 - [ADR-047 — Online workspace: no student credential, therefore no write access](ADR-047-espace-de-travail-en-ligne.md)
 - [ADR-078 — The workspace's git relay: Quiz issues a token scoped to one repository, the App key stays on the app VM](ADR-078-codespace-git-relay-tokens.md)
-- [ADR-048 — Group assignments: groups per assignment, formed by the staff, delivered in three lots](ADR-048-projets-de-groupe.md)
+- [ADR-048 — Group assignments: groups per assignment, formed by the staff, delivered in three lots](ADR-048-projets-de-groupe.md) (superseded, folded into ADR-070)
 - [ADR-070 — Group sets: a classroom's reusable groups, which a project follows until its deadline](ADR-070-repartitions-de-groupes.md)
 - [ADR-077 — A staff seat accepts a project: the teacher's test repository](ADR-077-depots-de-test-du-personnel.md)
-- [ADR-049 — The classroom journal: GitHub holds the content, Postgres holds a read model](ADR-049-journal-source-github.md)
+- [ADR-049 — The classroom journal: GitHub holds the content, Postgres holds a read model](ADR-049-journal-source-github.md) (superseded, folded into ADR-057)
 - [ADR-057 — The journal in two modes: in Quiz, or in a GitHub repository](ADR-057-journal-two-modes.md)
 - [ADR-062 — Building a project's distribution repository, and never deleting on GitHub](ADR-062-depot-de-distribution.md)
 - [ADR-064 — A project's deadline: claims, leases and per-repository markers](ADR-064-echeance-des-projets-baux.md)
@@ -151,8 +151,13 @@ checking both the repository and concurrent branches/PRs; rebase before
 merging, and renumber yours if that ID landed meanwhile. For a changed decision,
 name the affected section in the new record and add a reciprocal link in the old
 record's Status. Use **superseded** only for a whole decision that no longer
-applies; otherwise say **amended**, with its scope. Keep the old rationale, and
-mark obsolete instructions where they occur if a reader could retrieve them alone.
+applies; otherwise say **amended**, with its scope. A record folded into its
+successor keeps its number and path as a short stub whose Status names the
+successor and where each living rule went; the successor carries a
+correspondence table for the sections code and documents cite, and this
+index marks the stub "(superseded, folded into ADR-NNN)". Keep the old
+rationale, and mark obsolete instructions where they occur if a reader could
+retrieve them alone.
 Do not append another implementation diary to an already long record.
 
 Add a link under one topic here. The site's Decisions entry points to this index;

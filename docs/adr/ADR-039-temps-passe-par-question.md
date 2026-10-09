@@ -11,6 +11,8 @@ in `apps/api/src/modules/live/dwell.ts`, `reportShown` in
 columns of migration `0034_answer_dwell`). Amends ADR-038 (§2, the "not
 reached" bias; §8, the step it announced). Revises F-STAT-01 (docs/spec/02).
 
+Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
+
 ## Context
 
 ADR-038 gave a question its success rate and announced a second step: the
@@ -175,12 +177,6 @@ of §6 do, above their threshold.
   intervals end at the next move or the end of the attempt — overcounting
   at most the cap per interval, on attempts that are tracked from the
   migration on.
-
-### Rollback
-
-Dropping the time from the contract and the panel hides it; the columns
-are inert without them. The not-reached rule is one condition of the
-`stats` query. Nothing was deleted.
 
 ## Alternatives considered
 

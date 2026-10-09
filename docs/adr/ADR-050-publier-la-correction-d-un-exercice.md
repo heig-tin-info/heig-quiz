@@ -15,6 +15,8 @@ open question 34 (the drill). Amended 2026-10-02 by ADR-067 (§3): every
 exercise is graded at hand-in, published or not; a reopened attempt's
 automatic gradings are stood down.
 
+Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
+
 ## Context
 
 An `exercise` is practice: its grade carries little meaning. The product
@@ -165,16 +167,6 @@ decides, on purpose, that the key of this exercise may now be read.
   publication, so an open page shows the correction without a reload.
 - An exam is untouched: its correction waits for the close and the
   release, always.
-
-## Rollback
-
-A plain redeploy of the previous code works on the new schema: Drizzle
-selects the columns its schema declares, so the nullable column is simply
-never read, and the old rules (`not_over` until the close, score only
-between two attempts) apply again to every exercise, published or not. A
-`DROP COLUMN correction_published_at` is a mechanical DOWN migration if the
-column must go; it loses nothing but the instants — the corrections already
-read by students cannot be un-read anyway.
 
 ## Alternatives considered
 

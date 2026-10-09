@@ -27,6 +27,8 @@ indicative before it, converted to a grade by a per-project
 `grading_scale` (F-PROJ-14, F-GBOOK). A frozen score is never a released
 one by itself.
 
+Amended 2026-10-09: decision 2 names `bot_commits.repo_id` and decision 3.3 sets `project_repos.frozen_at` only; `student_repo_id` and `frozen_final` do not exist in Quiz.
+
 ## Context
 
 The grade frozen at the deadline is the most disputable piece of data in the system. The
@@ -41,7 +43,7 @@ grace period (GR-14.4, default 30 min). Webhooks are processed asynchronously th
 1. **Synchronous write of `push_receipts`** in the webhook's HTTP handler, before the job is
    enqueued: the receipt time (the legally decisive data of the freeze) never depends on the
    queue lag. Acknowledgement stays under 5 s (two INSERTs).
-2. A **`bot_commits` table** (`student_repo_id`, `sha`, `kind`) fed on every bot push
+2. A **`bot_commits` table** (`repo_id`, `sha`, `kind`) fed on every bot push
    (revert, deadline, sync): a **deterministic** GR-05/GH-44 eligibility filter, more reliable
    than inferring from the actor at run time.
 3. **A two-step freeze** (a literal reading of GR-12 and GR-14.4, borrowed from the
@@ -50,8 +52,9 @@ grace period (GR-14.4, default 30 min). Webhooks are processed asynchronously th
       current GR-09 grade at that instant).
    2. During the grace period, only runs on commits received before the deadline (present in
       `push_receipts`) can still improve that pointer.
-   3. At `deadline + grace_minutes`, the ticker sets `frozen_at` and `frozen_final`: the
-      frozen grade becomes definitive and immutable, and later runs never change it.
+   3. At `deadline + grace_minutes`, the ticker sets the repository's `frozen_at`
+      (`project_repos`): the frozen grade becomes definitive and immutable, and later runs
+      never change it.
 4. A SHA with no known receipt time (lost webhook, reconciled after the fact) is treated as
    `after_deadline = true` as soon as the deadline has passed — the conservative GR-14.3
    choice, open to a teacher's arbitration in the light of the history.

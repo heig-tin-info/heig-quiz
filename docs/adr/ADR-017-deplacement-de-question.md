@@ -9,6 +9,8 @@ question's and travel with it; nothing is taught to the target pool, since
 the vocabulary is the instance's and the per-pool tag descriptions are gone
 ([ADR-081, addendum §6](ADR-081-vocabulaire-de-notions.md#addendum-2026-10-08-transition-resolution-and-storage)).
 
+Amended 2026-10-09: §8 refuses an assistant's course too, as ADR-068 and `pool/moveRoutes.ts` do.
+
 ## Context
 
 `F-POOL-04` gives a question one way out of its pool: a COPY, which is a new
@@ -100,9 +102,11 @@ items already frozen on it go on resolving perfectly.
    same transaction as the move. "Linking the pool" means exactly one thing:
    a row in `course_pools`, the same row `PUT /courses/:id/pools` writes.
 
-8. **`linkCourses` never widens the caller's reach.** A course the caller has
-   no staff seat on (`staffAccess`) is answered `409 course_forbidden`, naming
-   it, and nothing is linked. Otherwise a teacher could attach their pool to a
+8. **`linkCourses` never widens the caller's reach.** A course on which the
+   caller is not an owner (no staff seat, or an assistant's seat, ADR-068;
+   Super Powers count as an owner) is answered `409 course_forbidden`, naming
+   it, and nothing is linked; a course they do not reach is named by its code
+   alone (`pool/moveRoutes.ts`). Otherwise a teacher could attach their pool to a
    colleague's course — and, through `poolAccess`, hand that colleague's whole
    staff a seat in it — by moving one question.
 

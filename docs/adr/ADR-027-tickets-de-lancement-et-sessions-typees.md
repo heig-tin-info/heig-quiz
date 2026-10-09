@@ -3,7 +3,7 @@
 ## Status
 
 Accepted (2026-09-26, issue #139, with `apps/api/src/auth/launch.ts`,
-`auth/seb.ts`, `sessions.kind` and the `sits` rule of `modules/guards.ts`).
+`auth/seb.ts`, `sessions.kind` and the `sitRefusal` rule of `modules/guards.ts`).
 Brings Safe Exam Browser back into scope (00 §0.6).
 
 **Addendum (2026-09-30, ADR-035, the classroom merge):** what is settled,
@@ -23,7 +23,7 @@ and what waits for D21 (unified SEB design, settled 2026-10-01 for M6).
   (evaluation or project) rather than to an evaluation: a project's
   session would reach the project page and "Open workspace", nothing
   else, and the platform would build every `.seb` from a shared
-  `packages/seb`. Until M6 implements it, `sessions.evaluation_id`, `sits`
+  `packages/seb`. Until M6 implements it, `sessions.evaluation_id`, `sitRefusal`
   and the routes of §3–4 are unchanged, and no project can require SEB.
   Whether Browser Exam Keys become optional per activity (§2 rejected a
   list) is part of D21 too.
@@ -81,6 +81,8 @@ This changes the bytes of every file, hence every Config Key
 the key it was launched with, and a file downloaded before the deploy and
 opened after is refused at its start route without burning its ticket —
 the student downloads it again.
+
+Amended 2026-10-09: the rule is named `sitRefusal` (`modules/guards.ts`), formerly `sits`; §4 keeps its old anchor.
 
 ## Context
 
@@ -157,9 +159,12 @@ session slides on `SESSION_TTL_HOURS`; a `seb` one never slides, and lives
 6 h from the launch. It is not deleted on submit: after it, every write is a `410` and the
 session reads its own closed attempt, which is what the screen shows.
 
-### 4. One rule for who sits what: `sits`
+<a id="4-one-rule-for-who-sits-what-sits"></a>
 
-`sits` in `modules/guards.ts`: a `seb` session sits its own evaluation and
+### 4. One rule for who sits what: `sitRefusal`
+
+`sitRefusal` in `modules/guards.ts` (first named `sits`) answers why a request
+may not sit an evaluation, or nothing when it may: a `seb` session sits its own evaluation and
 nothing else; any other session sits every evaluation that does not require
 SEB. It is applied after the loaders of the sitting routes (enter, retake,
 every `/attempts/:id/…`) and once for every SSE watch, and answered with their
