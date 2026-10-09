@@ -77,13 +77,7 @@ export function ConceptsSection() {
       {list.isLoading ? (
         <Skeleton className="h-80 w-full" />
       ) : list.isError ? (
-        <QueryError
-          title={t("admin.concepts")}
-          error={list.error}
-          onRetry={() => void list.refetch()}
-          retrying={list.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("admin.concepts")} query={list} />
       ) : rows.length === 0 ? (
         <Card>
           <EmptyState icon={Tags} title={t("admin.concepts.empty.title")}>

@@ -99,12 +99,7 @@ export function JournalSettings({ room }: { room: ClassroomDetail }) {
   let body;
   if (journal.isError) {
     body = (
-      <QueryError
-        title={t("journalSettings.loadFailed")}
-        error={journal.error}
-        onRetry={() => void journal.refetch()}
-        retrying={journal.isFetching}
-      />
+      <QueryError title={t("journalSettings.loadFailed")} query={journal} />
     );
   } else if (journal.data.mode === "quiz") {
     body = <QuizAttached room={room} journal={journal.data} />;
@@ -253,7 +248,6 @@ function RemoveRow({ room, journal }: { room: ClassroomDetail; journal: JournalS
         message,
         ...(typed ? { typeToConfirm: room.name } : {}),
         confirmLabel: t("journalSettings.remove"),
-        cancelLabel: t("common.cancel"),
         danger: true,
       })
     ) {

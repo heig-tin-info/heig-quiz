@@ -71,13 +71,7 @@ export function KioskSection() {
       {devices.isLoading ? (
         <Skeleton className="h-40 w-full" />
       ) : devices.isError ? (
-        <QueryError
-          title={t("admin.kiosk")}
-          error={devices.error}
-          onRetry={() => void devices.refetch()}
-          retrying={devices.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("admin.kiosk")} query={devices} />
       ) : rows.length === 0 ? (
         <Card>
           <EmptyState icon={Monitor} title={t("admin.kiosk.empty.title")}>
@@ -149,7 +143,6 @@ function StationRow({ device: d }: { device: KioskDevice }) {
         title: t("admin.kiosk.retireConfirm", { label: d.label ?? t("admin.kiosk.unnamed") }),
         message: t("admin.kiosk.retireConfirm.body"),
         confirmLabel: t("admin.kiosk.retire"),
-        cancelLabel: t("common.cancel"),
         danger: true,
       })
     ) {

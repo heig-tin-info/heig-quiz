@@ -184,7 +184,6 @@ export function useMoveQuestions(): (request: MoveRequest) => Promise<boolean> {
             },
           ),
           confirmLabel: t("pool.move.usedConfirm"),
-          cancelLabel: t("common.cancel"),
         });
         if (!ok) return false;
         try {

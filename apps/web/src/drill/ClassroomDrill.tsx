@@ -57,13 +57,7 @@ export function ClassroomDrill({
     );
   } else if (activity.isError || !activity.data) {
     body = (
-      <QueryError
-        title={t("drill.teacher.loadFailed")}
-        error={activity.error}
-        onRetry={() => void activity.refetch()}
-        retrying={activity.isFetching}
-        fallback={t("error.server")}
-      />
+      <QueryError title={t("drill.teacher.loadFailed")} query={activity} />
     );
   } else if (!hasActivity(activity.data)) {
     // Off with no history, or on with nothing yet: one sentence, and, when
@@ -125,13 +119,7 @@ function MasteryPerConcept({ classroomId }: { classroomId: string }) {
   if (mastery.isLoading) return <Skeleton className="h-40 w-full" />;
   if (mastery.isError || !mastery.data) {
     return (
-      <QueryError
-        title={t("drill.mastery.loadFailed")}
-        error={mastery.error}
-        onRetry={() => void mastery.refetch()}
-        retrying={mastery.isFetching}
-        fallback={t("error.server")}
-      />
+      <QueryError title={t("drill.mastery.loadFailed")} query={mastery} />
     );
   }
   // Nothing reviewed yet: the activity above already says so.
@@ -199,13 +187,7 @@ function DrillStudentSheet({
         {progress.isLoading ? (
           <Skeleton className="h-64 w-full" />
         ) : progress.isError || !progress.data ? (
-          <QueryError
-            title={t("drill.progressFailed")}
-            error={progress.error}
-            onRetry={() => void progress.refetch()}
-            retrying={progress.isFetching}
-            fallback={t("error.server")}
-          />
+          <QueryError title={t("drill.progressFailed")} query={progress} />
         ) : (
           <WeeklyProgress weeks={progress.data.weeks} />
         )}

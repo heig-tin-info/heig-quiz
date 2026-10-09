@@ -44,13 +44,7 @@ export function GroupSetList({
   }
   if (list.isError) {
     return (
-      <QueryError
-        title={t("groups.loadFailed")}
-        error={list.error}
-        onRetry={() => void list.refetch()}
-        retrying={list.isFetching}
-        fallback={t("error.server")}
-      />
+      <QueryError title={t("groups.loadFailed")} query={list} />
     );
   }
   const sets = list.data ?? [];

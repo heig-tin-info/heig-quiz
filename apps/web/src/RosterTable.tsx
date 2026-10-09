@@ -283,7 +283,6 @@ function Row({
                             title: t("roster.revokeConfirm", { name: fullName }),
                             message: t("roster.revokeBody"),
                             confirmLabel: t("roster.revoke"),
-                            cancelLabel: t("common.cancel"),
                           })
                         ) {
                           unclaim.mutate();
@@ -304,7 +303,6 @@ function Row({
                       title: t("roster.removeConfirm", { name: fullName }),
                       message: t("roster.removeBody"),
                       confirmLabel: t("roster.remove"),
-                      cancelLabel: t("common.cancel"),
                       danger: true,
                     })
                   ) {

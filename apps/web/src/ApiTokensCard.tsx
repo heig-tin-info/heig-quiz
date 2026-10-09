@@ -179,12 +179,7 @@ export function ConnectionsCard() {
   } else if (connections.isError) {
     body = (
       <div className="p-5">
-        <QueryError
-          title={t("connections.loadError")}
-          error={connections.error}
-          onRetry={() => void connections.refetch()}
-          retrying={connections.isFetching}
-        />
+        <QueryError title={t("connections.loadError")} query={connections} />
       </div>
     );
   } else if (connections.data.length === 0) {
@@ -228,7 +223,6 @@ export function ConnectionsCard() {
                               title: t("connections.revokeConfirm", { name: c.clientName }),
                               message: t("connections.revokeHint"),
                               confirmLabel: t("connections.revoke"),
-                              cancelLabel: t("common.cancel"),
                               danger: true,
                             })
                           ) {
@@ -296,12 +290,7 @@ export function ApiTokensCard() {
   } else if (tokens.isError) {
     body = (
       <div className="p-5">
-        <QueryError
-          title={t("tokens.loadError")}
-          error={tokens.error}
-          onRetry={() => void tokens.refetch()}
-          retrying={tokens.isFetching}
-        />
+        <QueryError title={t("tokens.loadError")} query={tokens} />
       </div>
     );
   } else if (tokens.data.length === 0) {
@@ -358,7 +347,6 @@ export function ApiTokensCard() {
                                   title: t("tokens.revokeConfirm", { name: token.name }),
                                   message: t("tokens.revokeHint"),
                                   confirmLabel: t("tokens.revoke"),
-                                  cancelLabel: t("common.cancel"),
                                   danger: true,
                                 })
                               ) {

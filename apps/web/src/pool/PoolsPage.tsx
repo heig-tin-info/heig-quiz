@@ -303,13 +303,7 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
           <Skeleton className="h-36 w-full" />
         </div>
       ) : pools.isError ? (
-        <QueryError
-          title={t("pools.title")}
-          error={pools.error}
-          onRetry={() => void pools.refetch()}
-          retrying={pools.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("pools.title")} query={pools} />
       ) : rows.length === 0 ? (
         <EmptyState
           icon={Library}

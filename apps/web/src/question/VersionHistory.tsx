@@ -61,13 +61,7 @@ function VersionPreview({ questionId, number }: { questionId: string; number: nu
   if (preview.isLoading) return <Skeleton className="h-24 w-full" />;
   if (preview.isError) {
     return (
-      <QueryError
-        title={t("question.versions.failed")}
-        error={preview.error}
-        onRetry={() => void preview.refetch()}
-        retrying={preview.isFetching}
-        fallback={t("error.server")}
-      />
+      <QueryError title={t("question.versions.failed")} query={preview} />
     );
   }
   return <MarkdownView source={statementOf(preview.data?.student)} size="sm" />;
@@ -190,7 +184,6 @@ export function VersionHistory({
                             title: t("question.versions.restore"),
                             message: t("question.versions.restoreConfirm", { n: v.number }),
                             confirmLabel: t("question.versions.restore"),
-                            cancelLabel: t("common.cancel"),
                           });
                           if (ok) restore.mutate(v.number);
                         },

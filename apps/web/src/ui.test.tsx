@@ -910,6 +910,18 @@ describe("QueryError", () => {
     );
     expect(screen.getByRole("button", { name: "Retry" })).toBeDisabled();
   });
+
+  // D02: one query hands over its error, its refetch and its fetching flag.
+  it("reads the error, the retry and the busy state from one query", async () => {
+    const refetch = vi.fn();
+    const query = { error: new ApiError(503, { message: "GitHub is unavailable" }), refetch, isFetching: false };
+    const { rerender } = renderWithProviders(<QueryError title="Could not load" query={query} />);
+    expect(screen.getByText("GitHub is unavailable")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+    rerender(<QueryError title="Could not load" query={{ ...query, isFetching: true }} />);
+    expect(screen.getByRole("button", { name: "Retry" })).toBeDisabled();
+  });
 });
 
 describe("FormError", () => {

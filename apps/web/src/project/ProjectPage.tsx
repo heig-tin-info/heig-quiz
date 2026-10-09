@@ -192,22 +192,11 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
     // the same 404), said as the classroom says it.
     if (detail.error instanceof ApiError && detail.error.status === 404) {
       return (
-        <QueryError
-          title={t("project.notFound")}
-          error={detail.error}
-          onRetry={() => void detail.refetch()}
-          retrying={detail.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("project.notFound")} query={detail} />
       );
     }
     return (
-      <PageError
-        title={t("project.page")}
-        error={detail.error}
-        onRetry={() => void detail.refetch()}
-        retrying={detail.isFetching}
-      />
+      <PageError title={t("project.page")} query={detail} />
     );
   }
   const project = detail.data!;

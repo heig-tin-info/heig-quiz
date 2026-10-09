@@ -249,7 +249,6 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
         await confirm({
           title: t("poll.endConfirm"),
           confirmLabel: t("poll.end"),
-          cancelLabel: t("common.cancel"),
           danger: true,
         })
       ) {
@@ -329,13 +328,7 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
     return (
       <main className={cx(stage, "items-center justify-center")}>
         <div className="w-full max-w-130">
-          <PageError
-            title={t("poll.notFound")}
-            error={poll.error}
-            onRetry={() => void poll.refetch()}
-            retrying={poll.isFetching}
-            fallback={t("error.server")}
-          />
+          <PageError title={t("poll.notFound")} query={poll} />
         </div>
       </main>
     );

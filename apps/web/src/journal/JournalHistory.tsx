@@ -98,12 +98,7 @@ export function HistorySheet({
     );
   } else if (revisions.isError) {
     body = (
-      <QueryError
-        title={t("journalHistory.loadFailed")}
-        error={revisions.error}
-        onRetry={() => void revisions.refetch()}
-        retrying={revisions.isFetching}
-      />
+      <QueryError title={t("journalHistory.loadFailed")} query={revisions} />
     );
   } else if (list.length === 0) {
     body = (
@@ -189,12 +184,7 @@ function RevisionView({ classroomId, path, revisionId }: { classroomId: string; 
   } else if (revision.isError || (as === "rendered" && rendered.isError)) {
     const failed = revision.isError ? revision : rendered;
     content = (
-      <QueryError
-        title={t("journalHistory.revisionFailed")}
-        error={failed.error}
-        onRetry={() => void failed.refetch()}
-        retrying={failed.isFetching}
-      />
+      <QueryError title={t("journalHistory.revisionFailed")} query={failed} />
     );
   } else if (as === "source") {
     content = (
@@ -269,12 +259,7 @@ export function DeletedSheet({
     );
   } else if (deleted.isError) {
     body = (
-      <QueryError
-        title={t("journalDeleted.loadFailed")}
-        error={deleted.error}
-        onRetry={() => void deleted.refetch()}
-        retrying={deleted.isFetching}
-      />
+      <QueryError title={t("journalDeleted.loadFailed")} query={deleted} />
     );
   } else if (deleted.data.length === 0) {
     body = (

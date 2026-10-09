@@ -101,13 +101,7 @@ export function ProjectWorkspace({ projectId, archived }: { projectId: string; a
       {workspace.isLoading ? (
         <Skeleton className="h-24 w-full" />
       ) : workspace.isError || !ws ? (
-        <QueryError
-          title={t("project.workspace")}
-          error={workspace.error}
-          onRetry={() => void workspace.refetch()}
-          retrying={workspace.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("project.workspace")} query={workspace} />
       ) : (
         <>
           <Card className="divide-y divide-line px-4">
@@ -174,13 +168,7 @@ function WorkspaceSessions({ projectId }: { projectId: string }) {
   if (sessions.isLoading) return <Skeleton className="h-16 w-full" />;
   if (sessions.isError || !sessions.data) {
     return (
-      <QueryError
-        title={t("project.workspace.sessions")}
-        error={sessions.error}
-        onRetry={() => void sessions.refetch()}
-        retrying={sessions.isFetching}
-        fallback={t("error.server")}
-      />
+      <QueryError title={t("project.workspace.sessions")} query={sessions} />
     );
   }
   const { reachable, sessions: rows } = sessions.data;

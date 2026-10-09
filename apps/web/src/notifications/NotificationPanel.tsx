@@ -415,12 +415,7 @@ export function NotificationPanel({
                   </div>
                 ) : list.isError ? (
                   <div className="p-2">
-                    <QueryError
-                      title={t("notif.title")}
-                      error={list.error}
-                      onRetry={() => void list.refetch()}
-                      retrying={list.isFetching}
-                    />
+                    <QueryError title={t("notif.title")} query={list} />
                   </div>
                 ) : items.length === 0 ? (
                   <EmptyState className="py-8" icon={BellOff} title={t("notif.empty.title")}>

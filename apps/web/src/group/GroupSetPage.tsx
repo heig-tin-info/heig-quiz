@@ -208,17 +208,11 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
   if (set.isError || !set.data) {
     if (set.error instanceof ApiError && set.error.status === 404) {
       return (
-        <QueryError
-          title={t("groups.set.notFound")}
-          error={set.error}
-          onRetry={() => void set.refetch()}
-          retrying={set.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("groups.set.notFound")} query={set} />
       );
     }
     return (
-      <PageError title={t("groups.set")} error={set.error} onRetry={() => void set.refetch()} retrying={set.isFetching} />
+      <PageError title={t("groups.set")} query={set} />
     );
   }
 

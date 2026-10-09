@@ -33,12 +33,7 @@ export function ClassroomsPage({ navigate }: { navigate: (r: Route) => void }) {
           <Skeleton className="h-24 w-full" />
         </div>
       ) : courses.isError ? (
-        <QueryError
-          title={t("classrooms.title")}
-          error={courses.error}
-          onRetry={() => void courses.refetch()}
-          retrying={courses.isFetching}
-        />
+        <QueryError title={t("classrooms.title")} query={courses} />
       ) : rooms.length === 0 ? (
         <EmptyState
           icon={School}

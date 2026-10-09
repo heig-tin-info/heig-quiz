@@ -284,12 +284,7 @@ export function JournalReader({
     }
     return (
       <Frame header={header}>
-        <PageError
-          title={t("journal.loadError")}
-          error={journal.error}
-          onRetry={() => void journal.refetch()}
-          retrying={journal.isFetching}
-        />
+        <PageError title={t("journal.loadError")} query={journal} />
       </Frame>
     );
   }
@@ -435,12 +430,7 @@ function PageSlot({
   if (page.isError) {
     if (!isNotFound(page.error)) {
       return (
-        <QueryError
-          title={t("journal.pageError")}
-          error={page.error}
-          onRetry={() => void page.refetch()}
-          retrying={page.isFetching}
-        />
+        <QueryError title={t("journal.pageError")} query={page} />
       );
     }
     return (

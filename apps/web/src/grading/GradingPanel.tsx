@@ -214,13 +214,7 @@ export function GradingPanel({
   if (data.evaluation.isError) {
     return (
       <Page>
-        <PageError
-          title={t("grading.loadFailed")}
-          error={data.evaluation.error}
-          onRetry={() => void data.evaluation.refetch()}
-          retrying={data.evaluation.isFetching}
-          fallback={t("error.server")}
-        />
+        <PageError title={t("grading.loadFailed")} query={data.evaluation} />
       </Page>
     );
   }
@@ -340,13 +334,7 @@ export function GradingPanel({
         <Card className="min-w-0 flex-1 overflow-hidden">
           {data.queue.isError ? (
             <div className="p-4">
-              <QueryError
-                title={t("grading.loadFailed")}
-                error={data.queue.error}
-                onRetry={() => void data.queue.refetch()}
-                retrying={data.queue.isFetching}
-                fallback={t("error.server")}
-              />
+              <QueryError title={t("grading.loadFailed")} query={data.queue} />
             </div>
           ) : data.queue.isLoading ? (
             <TableSkeleton />

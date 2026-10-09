@@ -101,7 +101,6 @@ export function useCorrectionControls({
         </div>
       ),
       confirmLabel: t("live.correction.publish"),
-      cancelLabel: t("common.cancel"),
     });
     if (ok) publish.mutate();
   };

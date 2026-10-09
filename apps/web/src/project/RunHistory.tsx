@@ -60,12 +60,7 @@ export function RunHistory({ projectId, repoId }: { projectId: string; repoId: s
   }
   if (runs.isError) {
     return (
-      <QueryError
-        title={t("project.runs.failed")}
-        error={runs.error}
-        onRetry={() => void runs.refetch()}
-        retrying={runs.isFetching}
-      />
+      <QueryError title={t("project.runs.failed")} query={runs} />
     );
   }
   const list = runs.data!;

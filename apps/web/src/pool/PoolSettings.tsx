@@ -99,7 +99,6 @@ export function PoolSettings({
       title: t("pools.leave"),
       message: t("pools.leaveConfirm", { name: pool.name }),
       confirmLabel: t("pools.leaveAction"),
-      cancelLabel: t("common.cancel"),
       danger: true,
     });
     if (ok) leave.mutate();
@@ -109,7 +108,6 @@ export function PoolSettings({
       title: t("pools.delete"),
       message: t("pools.deleteConfirm", { name: pool.name }),
       confirmLabel: t("common.delete"),
-      cancelLabel: t("common.cancel"),
       danger: true,
     });
     if (ok) remove.mutate();

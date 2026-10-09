@@ -191,7 +191,6 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
               name,
             }),
             confirmLabel: t(action === "close" ? "live.row.close" : "live.row.reopen"),
-            cancelLabel: t("common.cancel"),
             danger: action === "close",
           })
         ) {
@@ -251,7 +250,6 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
           await confirm({
             title: t("live.closeAllConfirm"),
             confirmLabel: t("live.closeAll"),
-            cancelLabel: t("common.cancel"),
             danger: true,
           })
         ) {
@@ -359,13 +357,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   }
   if (query.isError || !state) {
     return (
-      <PageError
-        title={t("live.notFound")}
-        error={query.error}
-        onRetry={() => void query.refetch()}
-        retrying={query.isFetching}
-        fallback={t("error.server")}
-      />
+      <PageError title={t("live.notFound")} query={query} />
     );
   }
 

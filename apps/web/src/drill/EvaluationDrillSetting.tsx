@@ -93,12 +93,7 @@ export function EvaluationDrillSetting({ evaluation }: { evaluation: Evaluation 
         </div>
       ) : drill.isError ? (
         <div className="py-3">
-          <QueryError
-            title={t("eval.drill.loadFailed")}
-            error={drill.error}
-            onRetry={() => void drill.refetch()}
-            retrying={drill.isFetching}
-          />
+          <QueryError title={t("eval.drill.loadFailed")} query={drill} />
         </div>
       ) : cards > 0 ? (
         <SettingRow

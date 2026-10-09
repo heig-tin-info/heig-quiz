@@ -117,13 +117,7 @@ export function TasksSection() {
       {tasks.isLoading ? (
         <Skeleton className="h-60 w-full" />
       ) : tasks.isError ? (
-        <QueryError
-          title={t("admin.tasks")}
-          error={tasks.error}
-          onRetry={() => void tasks.refetch()}
-          retrying={tasks.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("admin.tasks")} query={tasks} />
       ) : (
         <Card className={cx("overflow-x-auto", T.container)}>
           <table className={cx(T.table, "min-w-160")}>

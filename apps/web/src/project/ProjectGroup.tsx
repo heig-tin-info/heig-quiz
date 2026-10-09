@@ -71,13 +71,7 @@ export function ProjectGroup({
 
   if (list.isError && !githubAbsent(list.error)) {
     return (
-      <QueryError
-        title={t("project.loadFailed")}
-        error={list.error}
-        onRetry={() => void list.refetch()}
-        retrying={list.isFetching}
-        fallback={t("error.server")}
-      />
+      <QueryError title={t("project.loadFailed")} query={list} />
     );
   }
   if (rows.length === 0) return null;

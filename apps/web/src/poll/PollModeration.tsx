@@ -134,7 +134,6 @@ export function PollModeration({ id }: { id: string }) {
           void poll.refetch();
         }}
         retrying={board.isFetching}
-        fallback={t("error.server")}
       />
     );
   }

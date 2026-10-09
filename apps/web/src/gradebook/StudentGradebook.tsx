@@ -44,13 +44,7 @@ export function StudentGradebook({ classroomId }: { classroomId: string }) {
   }
   if (book.isError || !book.data) {
     return (
-      <QueryError
-        title={t("gbook.loadError")}
-        error={book.error}
-        onRetry={() => void book.refetch()}
-        retrying={book.isFetching}
-        fallback={t("error.server")}
-      />
+      <QueryError title={t("gbook.loadError")} query={book} />
     );
   }
   const data = book.data;

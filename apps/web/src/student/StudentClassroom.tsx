@@ -154,12 +154,7 @@ export function StudentClassroom({
   }
   if (page.isError) {
     return (
-      <PageError
-        title={t("sroom.loadError")}
-        error={page.error}
-        onRetry={() => void page.refetch()}
-        retrying={page.isFetching}
-      />
+      <PageError title={t("sroom.loadError")} query={page} />
     );
   }
 

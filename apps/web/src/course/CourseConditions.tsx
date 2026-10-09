@@ -93,12 +93,7 @@ function Catalog({
   if (catalog.isLoading) return <Skeleton className="h-40 w-full" />;
   if (catalog.isError) {
     return (
-      <QueryError
-        title={t("courses.conditions.loadFailed")}
-        error={catalog.error}
-        onRetry={() => void catalog.refetch()}
-        retrying={catalog.isFetching}
-      />
+      <QueryError title={t("courses.conditions.loadFailed")} query={catalog} />
     );
   }
   const rows = catalog.data ?? [];

@@ -334,13 +334,7 @@ export function EvaluationList({
       {list.isLoading ? (
         <Skeleton className="h-40 w-full" />
       ) : list.isError || !list.data ? (
-        <QueryError
-          title={t("eval.notFound")}
-          error={list.error}
-          onRetry={() => void list.refetch()}
-          retrying={list.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("eval.notFound")} query={list} />
       ) : list.data.length === 0 ? (
         <Card>
           <EmptyState
@@ -502,7 +496,6 @@ export function EvaluationList({
                                   await confirm({
                                     title: t("eval.deleteConfirm", { name: row.title }),
                                     confirmLabel: t("common.delete"),
-                                    cancelLabel: t("common.cancel"),
                                     danger: true,
                                   })
                                 ) {

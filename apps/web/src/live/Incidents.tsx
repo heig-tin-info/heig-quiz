@@ -206,13 +206,7 @@ export function IncidentsModal({
           <Skeleton className="h-4 w-3/5" />
         </div>
       ) : query.isError || !query.data ? (
-        <QueryError
-          title={t("live.integrity.failed")}
-          error={query.error}
-          onRetry={() => void query.refetch()}
-          retrying={query.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("live.integrity.failed")} query={query} />
       ) : (
         <IncidentTable named entries={entries} />
       )}

@@ -87,13 +87,7 @@ export function AnswerModal({
           <Skeleton className="h-28 w-full" />
         </div>
       ) : inspect.isError || !inspect.data ? (
-        <QueryError
-          title={t("live.inspect.failed")}
-          error={inspect.error}
-          onRetry={() => void inspect.refetch()}
-          retrying={inspect.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("live.inspect.failed")} query={inspect} />
       ) : !entry ? (
         <EmptyState icon={FileQuestion} title={t("live.inspect.noAnswer")} className="py-8" />
       ) : (

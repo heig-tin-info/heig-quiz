@@ -71,7 +71,6 @@ export function useQuestionActions(
         title: t("question.delete"),
         message: t("question.deleteConfirm", { name: question.internalName }),
         confirmLabel: t("common.delete"),
-        cancelLabel: t("common.cancel"),
         danger: true,
       });
       if (ok) removeQuestion(question);

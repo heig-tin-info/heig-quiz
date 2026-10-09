@@ -62,7 +62,6 @@ export function GithubAccountCard() {
                     title: t("github.unlinkConfirm", { login: account.login }),
                     message: t("github.unlinkBody"),
                     confirmLabel: t("github.unlink"),
-                    cancelLabel: t("common.cancel"),
                     danger: true,
                   })
                 ) {

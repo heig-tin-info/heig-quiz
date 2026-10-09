@@ -57,13 +57,7 @@ export function MapDialog({
       {concepts.isLoading ? (
         <Spinner className="py-6" />
       ) : concepts.isError ? (
-        <QueryError
-          title={t("admin.concepts.map.list")}
-          error={concepts.error}
-          onRetry={() => void concepts.refetch()}
-          retrying={concepts.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("admin.concepts.map.list")} query={concepts} />
       ) : matches.length === 0 ? (
         <p className="text-[13px] text-fg-muted">{t("admin.concepts.map.none")}</p>
       ) : (

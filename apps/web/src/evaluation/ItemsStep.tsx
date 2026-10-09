@@ -607,7 +607,6 @@ export function ItemsStep({
     const ok = await confirm({
       title: t("eval.questions.intro.removeConfirm"),
       confirmLabel: t("eval.questions.intro.removeAction"),
-      cancelLabel: t("common.cancel"),
       danger: true,
     });
     if (ok) patch.mutate({ itemId: item.id, body: { intro: null } });

@@ -90,13 +90,7 @@ export function StaffGradebook({ classroomId }: { classroomId: string }) {
   }
   if (table.isError || !table.data) {
     return (
-      <QueryError
-        title={t("gbook.loadError")}
-        error={table.error}
-        onRetry={() => void table.refetch()}
-        retrying={table.isFetching}
-        fallback={t("error.server")}
-      />
+      <QueryError title={t("gbook.loadError")} query={table} />
     );
   }
   return <Matrix classroomId={classroomId} data={table.data} />;

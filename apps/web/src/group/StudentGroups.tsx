@@ -101,7 +101,6 @@ export function StudentGroups({ classroomId }: { classroomId: string }) {
         error={sets.error}
         onRetry={() => void refetch()}
         retrying={sets.isFetching}
-        fallback={t("error.server")}
       />
     );
   }

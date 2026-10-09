@@ -160,13 +160,7 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
           <Skeleton className="h-28 w-full" />
         </div>
       ) : courses.isError ? (
-        <QueryError
-          title={t("courses.title")}
-          error={courses.error}
-          onRetry={() => void courses.refetch()}
-          retrying={courses.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("courses.title")} query={courses} />
       ) : all.length > 0 && rows.length === 0 ? (
         // Every course is hidden: the list is not empty, it is folded away.
         <EmptyState

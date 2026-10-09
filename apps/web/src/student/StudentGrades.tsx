@@ -76,13 +76,7 @@ export function StudentGrades({ navigate }: { navigate: (r: Route) => void }) {
     <div className="space-y-6">
       <PageHeader title={t("bnav.grades")} description={t("sgrades.subtitle")} />
       {grades.isError ? (
-        <QueryError
-          title={t("bnav.grades")}
-          error={grades.error}
-          onRetry={() => void grades.refetch()}
-          retrying={grades.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("bnav.grades")} query={grades} />
       ) : groups.length === 0 ? (
         <Card>
           <EmptyState icon={Trophy} title={t("sgrades.empty.title")}>

@@ -209,7 +209,6 @@ export function CategoriesPage({ id, navigate }: { id: string; navigate: (r: Rou
             ? t("categories.deleteConfirmTree.one", { name: node.name, n })
             : t("categories.deleteConfirm", { name: node.name, n }),
       confirmLabel: t("common.delete"),
-      cancelLabel: t("common.cancel"),
       danger: true,
     });
     if (ok) edits.remove.mutate(node.id);
@@ -220,13 +219,7 @@ export function CategoriesPage({ id, navigate }: { id: string; navigate: (r: Rou
   if (pool.isLoading) return <PageSkeleton />;
   if (pool.isError || !pool.data) {
     return (
-      <PageError
-        title={t("pools.notFound")}
-        error={pool.error}
-        onRetry={() => void pool.refetch()}
-        retrying={pool.isFetching}
-        fallback={t("error.server")}
-      />
+      <PageError title={t("pools.notFound")} query={pool} />
     );
   }
 
@@ -306,13 +299,7 @@ export function CategoriesPage({ id, navigate }: { id: string; navigate: (r: Rou
           <Skeleton className="h-5 w-56" />
         </Card>
       ) : data.isError ? (
-        <QueryError
-          title={t("pool.categories")}
-          error={data.error}
-          onRetry={() => void data.refetch()}
-          retrying={data.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("pool.categories")} query={data} />
       ) : empty ? (
         <Card>
           <EmptyState

@@ -96,13 +96,7 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
           <Skeleton className="h-24 w-full" />
         </div>
       ) : home.isError ? (
-        <QueryError
-          title={t("shome.open")}
-          error={home.error}
-          onRetry={() => void home.refetch()}
-          retrying={home.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("shome.open")} query={home} />
       ) : (
         <>
           <section className="space-y-3">

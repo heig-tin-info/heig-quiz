@@ -66,7 +66,6 @@ export function useGradingActions({
         title: t("grading.batch.confirm.title", { n }),
         message: t("grading.batch.confirm.body", { n }),
         confirmLabel: t("grading.batch.confirm.ok"),
-        cancelLabel: t("common.cancel"),
       });
       if (!ok) return;
     }

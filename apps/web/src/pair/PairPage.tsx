@@ -189,13 +189,7 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
           </div>
         ) : preview.isError ? (
           <div className="mt-5">
-            <QueryError
-              title={t("error.server")}
-              error={preview.error}
-              onRetry={() => void preview.refetch()}
-              retrying={preview.isFetching}
-              fallback={t("error.server")}
-            />
+            <QueryError title={t("error.server")} query={preview} />
           </div>
         ) : (
           <>

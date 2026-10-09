@@ -51,7 +51,6 @@ export function useEndPoll(): { end: (row: ActivitySummary) => void; pending: st
         const ok = await confirm({
           title: t("poll.endConfirm"),
           confirmLabel: t("poll.end"),
-          cancelLabel: t("common.cancel"),
           danger: true,
         });
         if (ok) mutation.mutate(row.id);

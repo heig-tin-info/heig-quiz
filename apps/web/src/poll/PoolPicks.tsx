@@ -115,13 +115,7 @@ export function PoolPicks({
           ))}
         </div>
       ) : questions.isError || !questions.data ? (
-        <QueryError
-          title={t("poll.poolsFailed")}
-          error={questions.error}
-          onRetry={() => void questions.refetch()}
-          retrying={questions.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("poll.poolsFailed")} query={questions} />
       ) : rows.length === 0 && filtered ? (
         <div className="space-y-3 py-6 text-center">
           <p className="text-[13px] text-fg-muted">{t("poll.noMatch")}</p>

@@ -113,12 +113,7 @@ export function StudentProjectPage({ id, navigate }: { id: string; navigate: Nav
   }
   if (project.isError) {
     return (
-      <PageError
-        title={t("activities.kind.project")}
-        error={project.error}
-        onRetry={() => void project.refetch()}
-        retrying={project.isFetching}
-      />
+      <PageError title={t("activities.kind.project")} query={project} />
     );
   }
   if (!project.data) return <PageSkeleton body="summary-and-block" />;

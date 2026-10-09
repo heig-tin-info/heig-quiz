@@ -84,13 +84,7 @@ export function ConfidencePerQuestion({ classroomId }: { classroomId: string }) 
     body = <Skeleton className="h-40 w-full" />;
   } else if (confidence.isError || !confidence.data) {
     body = (
-      <QueryError
-        title={t("drill.confidenceSplit.loadFailed")}
-        error={confidence.error}
-        onRetry={() => void confidence.refetch()}
-        retrying={confidence.isFetching}
-        fallback={t("error.server")}
-      />
+      <QueryError title={t("drill.confidenceSplit.loadFailed")} query={confidence} />
     );
   } else if (confidence.data.length === 0) {
     body = (

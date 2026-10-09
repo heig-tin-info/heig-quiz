@@ -131,7 +131,6 @@ export function ResultsView({
       title: t(on ? "results.release.confirm.title" : "results.unrelease.confirm.title", { title }),
       message: t(on ? "results.release.confirm.body" : "results.unrelease.confirm.body"),
       confirmLabel: t(on ? "results.release.confirm.ok" : "results.unrelease.confirm.ok"),
-      cancelLabel: t("common.cancel"),
       danger: !on,
     });
     if (!ok) return;
@@ -191,13 +190,7 @@ export function ResultsView({
   }
   if (results.isError || !view) {
     return (
-      <PageError
-        title={t("results.loadFailed")}
-        error={results.error}
-        onRetry={() => void results.refetch()}
-        retrying={results.isFetching}
-        fallback={t("error.server")}
-      />
+      <PageError title={t("results.loadFailed")} query={results} />
     );
   }
 

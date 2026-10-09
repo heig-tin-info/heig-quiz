@@ -200,13 +200,7 @@ function TeachersSection() {
         {teachers.isLoading ? (
           <Skeleton className="h-40 w-full" />
         ) : teachers.isError ? (
-          <QueryError
-            title={t("admin.teachers")}
-            error={teachers.error}
-            onRetry={() => void teachers.refetch()}
-            retrying={teachers.isFetching}
-            fallback={t("error.server")}
-          />
+          <QueryError title={t("admin.teachers")} query={teachers} />
         ) : rows.length === 0 ? (
           <Card>
             <EmptyState icon={ShieldCheck} title={t("admin.empty.title")}>
@@ -257,7 +251,6 @@ function TeachersSection() {
                             await confirm({
                               title: t("admin.revokeConfirm", { email: r.email }),
                               confirmLabel: t("admin.revoke"),
-                              cancelLabel: t("common.cancel"),
                               danger: true,
                             })
                           ) {

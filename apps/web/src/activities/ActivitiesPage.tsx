@@ -141,13 +141,7 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
     body = <Skeleton className="h-64 w-full" />;
   } else if (list.isError || !list.data) {
     body = (
-      <QueryError
-        title={t("activities.loadFailed")}
-        error={list.error}
-        onRetry={() => void list.refetch()}
-        retrying={list.isFetching}
-        fallback={t("error.server")}
-      />
+      <QueryError title={t("activities.loadFailed")} query={list} />
     );
   } else if (ordered.length === 0) {
     body = (

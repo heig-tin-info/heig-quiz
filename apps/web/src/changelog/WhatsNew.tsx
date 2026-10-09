@@ -105,12 +105,7 @@ export function WhatsNewPage() {
       {list.isPending ? (
         <Skeleton className="h-40 w-full" />
       ) : list.isError ? (
-        <QueryError
-          title={t("whatsNew.title")}
-          error={list.error}
-          onRetry={() => void list.refetch()}
-          retrying={list.isFetching}
-        />
+        <QueryError title={t("whatsNew.title")} query={list} />
       ) : list.data.length === 0 ? (
         <Card className="px-6 py-4">
           <EmptyState icon={Sparkles} title={t("whatsNew.empty")}>

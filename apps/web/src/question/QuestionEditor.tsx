@@ -237,13 +237,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   }
   if (detail.isError) {
     return (
-      <PageError
-        title={t("question.notFound")}
-        error={detail.error}
-        onRetry={() => void detail.refetch()}
-        retrying={detail.isFetching}
-        fallback={t("error.server")}
-      />
+      <PageError title={t("question.notFound")} query={detail} />
     );
   }
 

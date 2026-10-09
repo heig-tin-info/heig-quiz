@@ -418,7 +418,6 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
         n: starredCount,
       }),
       confirmLabel: t("pool.stars.clear"),
-      cancelLabel: t("common.cancel"),
     });
     if (ok && (await clearAll()) !== null) toast(t("pool.stars.cleared"), "success");
   };
@@ -447,13 +446,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   }
   if (pool.isError) {
     return (
-      <PageError
-        title={t("pools.notFound")}
-        error={pool.error}
-        onRetry={() => void pool.refetch()}
-        retrying={pool.isFetching}
-        fallback={t("error.server")}
-      />
+      <PageError title={t("pools.notFound")} query={pool} />
     );
   }
 
@@ -572,13 +565,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
               {questions.isLoading || waiting || (gathering && rows.length === 0 && !questions.isError) ? (
                 <PoolListSkeleton view={view} />
               ) : questions.isError ? (
-                <QueryError
-                  title={t("pool.title")}
-                  error={questions.error}
-                  onRetry={() => void questions.refetch()}
-                  retrying={questions.isFetching}
-                  fallback={t("error.server")}
-                />
+                <QueryError title={t("pool.title")} query={questions} />
               ) : rows.length === 0 ? (
                 <PoolEmpty
                   questionCount={detail.questionCount}

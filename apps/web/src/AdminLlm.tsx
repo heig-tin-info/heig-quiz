@@ -48,13 +48,7 @@ export function LlmSection() {
         {settings.isLoading ? (
           <Skeleton className="h-64 w-full" />
         ) : settings.isError ? (
-          <QueryError
-            title={t("admin.llm.title")}
-            error={settings.error}
-            onRetry={() => void settings.refetch()}
-            retrying={settings.isFetching}
-            fallback={t("error.server")}
-          />
+          <QueryError title={t("admin.llm.title")} query={settings} />
         ) : settings.data ? (
           <SettingsForm settings={settings.data} />
         ) : null}
@@ -195,7 +189,6 @@ function SettingsForm({ settings }: { settings: LlmSettings }) {
                     await confirm({
                       title: t("admin.llm.key.removeConfirm"),
                       confirmLabel: t("admin.llm.key.remove"),
-                      cancelLabel: t("common.cancel"),
                       danger: true,
                     })
                   ) {
@@ -243,13 +236,7 @@ function UsageSection({ settings }: { settings: LlmSettings | null }) {
       {usage.isLoading ? (
         <Skeleton className="h-40 w-full" />
       ) : usage.isError ? (
-        <QueryError
-          title={t("admin.llm.usage")}
-          error={usage.error}
-          onRetry={() => void usage.refetch()}
-          retrying={usage.isFetching}
-          fallback={t("error.server")}
-        />
+        <QueryError title={t("admin.llm.usage")} query={usage} />
       ) : usage.data ? (
         <>
           <div className="grid gap-3 sm:grid-cols-3">

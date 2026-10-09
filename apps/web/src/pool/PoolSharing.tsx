@@ -131,7 +131,6 @@ function MemberRow({
                 title: t("share.remove", { name }),
                 message: t("share.removeConfirm", { name }),
                 confirmLabel: t("common.delete"),
-                cancelLabel: t("common.cancel"),
                 danger: true,
               });
               if (ok) remove.mutate();
@@ -238,12 +237,7 @@ export function PoolSharing({ pool }: { pool: Pool }) {
             </div>
           ) : members.isError ? (
             <div className="mt-3">
-              <QueryError
-                title={t("share.members")}
-                error={members.error}
-                onRetry={() => void members.refetch()}
-                retrying={members.isFetching}
-              />
+              <QueryError title={t("share.members")} query={members} />
             </div>
           ) : (
             <div className="mt-1">
