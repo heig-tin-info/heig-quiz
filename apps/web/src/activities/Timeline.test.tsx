@@ -1,9 +1,10 @@
-import { screen } from "@testing-library/react";
+import { renderHook, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EvaluationActivitySummary } from "@quiz/contracts";
 
+import { resetShortcuts, useActiveShortcuts } from "../shortcuts";
 import { id, liveAt } from "../test/live-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 import { ActivitiesPage } from "./ActivitiesPage";
@@ -109,6 +110,20 @@ describe("the schedule view", () => {
     navigate.mockClear();
     await user.click(screen.getByRole("button", { name: "Série 6 — SPI" }));
     expect(navigate).toHaveBeenLastCalledWith({ view: "evaluation", id: NEXT.id });
+  });
+
+  it("lends its gestures to the sidebar's strip, not a sentence above the track", async () => {
+    wide(true);
+    mockFetch({ "GET /app/api/activities": ok([SERIES]) });
+    renderWithProviders(<ActivitiesPage navigate={vi.fn()} />);
+    await screen.findByRole("button", { name: "Série 4 — deux semaines" });
+    const strip = renderHook(() => useActiveShortcuts());
+    expect(strip.result.current).toEqual([
+      { keys: "Wheel", alternatives: ["Drag"], label: "Pan" },
+      { keys: "Ctrl+Wheel", label: "Zoom" },
+    ]);
+    expect(screen.queryByText(/to pan/)).not.toBeInTheDocument();
+    resetShortcuts();
   });
 
   it("falls back to the week list on a phone", async () => {
