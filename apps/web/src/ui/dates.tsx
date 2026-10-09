@@ -1,6 +1,6 @@
 import type { DateFormat } from "@quiz/contracts";
 
-import { useI18n, useT } from "../i18n";
+import { useI18n, useT, type Locale } from "../i18n";
 import { cx, Tip, useNow } from "./layers";
 
 // Dates: the account's date format, absolute and relative times.
@@ -61,7 +61,7 @@ export function isoDateParts(iso: string): { date: string; time: string } {
  * "85 %". Beside the date formats because it is the same kind of thing — a
  * number written the way the reader's language writes it.
  */
-export function percent(rate: number, locale: "en" | "fr"): string {
+export function percent(rate: number, locale: Locale): string {
   return new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 }).format(rate);
 }
 
@@ -74,7 +74,7 @@ export function percent(rate: number, locale: "en" | "fr"): string {
 export function relativeTime(
   iso: string,
   now: number,
-  locale: "en" | "fr",
+  locale: Locale,
   t: (key: "time.now") => string,
 ): string {
   const diff = new Date(iso).getTime() - now;

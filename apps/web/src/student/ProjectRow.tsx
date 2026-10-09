@@ -30,7 +30,7 @@ import type { ProjectAcceptance, StudentProjectCard, StudentProjectStatus, Stude
 
 import { api, useMe } from "../api";
 import { githubLinkHref } from "../github/api";
-import { useI18n, useT, type TFunction } from "../i18n";
+import { useI18n, useT, type Locale, type TFunction } from "../i18n";
 import { useToast } from "../notify";
 import { CiBadge } from "../project/parts";
 import { shortSha } from "../project/projectPage";
@@ -133,7 +133,7 @@ const STATE_ICON: Record<StateKind, IconType> = {
 };
 
 /** "Due {date} · {time} left" while the deadline is ahead, "Closed {ago}" once it has passed. */
-function deadlineText(deadlineAt: string, now: number, locale: "en" | "fr", t: TFunction): string {
+function deadlineText(deadlineAt: string, now: number, locale: Locale, t: TFunction): string {
   if (Date.parse(deadlineAt) > now) return `${t("shome.dueAt", { when: isoDateTime(deadlineAt) })} · ${leftLine(deadlineAt, now, t)}`;
   return t("sproj.closed", { when: relativeTime(deadlineAt, now, locale, t) });
 }

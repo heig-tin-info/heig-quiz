@@ -6,7 +6,7 @@
 
 import { z } from "zod";
 
-import { TRUSTED_CLIENTS } from "@quiz/domain";
+import { LOCALES, TRUSTED_CLIENTS, type Locale } from "@quiz/domain";
 
 import { McqPolicy } from "./evaluation.js";
 import type { TeacherCodespaceGrant } from "./codespace.js";
@@ -63,7 +63,7 @@ export interface Me {
   lastLoginAt: string | null;
   avatarUrl: string | null;
   hasUploadedAvatar: boolean;
-  locale: "en" | "fr" | null;
+  locale: Locale | null;
   dateFormat: DateFormat | null;
   /**
    * Default MCQ scoring policy for the evaluations this user creates; null
@@ -148,7 +148,7 @@ export type CoachSeenPatch = z.infer<typeof CoachSeenPatch>;
  */
 export const MePatch = z
   .object({
-    locale: z.enum(["en", "fr"]).nullable().optional(),
+    locale: z.enum(LOCALES).nullable().optional(),
     dateFormat: z.enum(DATE_FORMATS).nullable().optional(),
     mcqPolicy: McqPolicy.nullable().optional(),
     coachEnabled: z.boolean().nullable().optional(),

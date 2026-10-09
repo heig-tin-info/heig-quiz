@@ -23,6 +23,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { z } from "zod";
 
 import { issuesOf } from "@quiz/contracts";
+import type { Locale } from "@quiz/domain";
 
 import { CSRF_COOKIE, CSRF_HEADER } from "../auth/session.js";
 
@@ -45,7 +46,7 @@ export const emptyBody = (body: unknown) => (body === undefined || body === null
  * browser (`locale` null), the first of French and English their browser
  * asks for (`Accept-Language`, in order); English otherwise.
  */
-export function readerLang(req: FastifyRequest): "fr" | "en" {
+export function readerLang(req: FastifyRequest): Locale {
   const chosen = req.user?.locale;
   if (chosen === "fr" || chosen === "en") return chosen;
   for (const tag of String(req.headers["accept-language"] ?? "").split(",")) {

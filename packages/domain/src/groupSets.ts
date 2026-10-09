@@ -19,6 +19,7 @@
  * The randomness and the clock are injected by the caller (`crypto`, the
  * server's clock): every function here is deterministic.
  */
+import type { Locale } from "./enums.js";
 import { slugify } from "./repoName.js";
 import { SCHOOL_TIME_ZONE, zoneOffset } from "./zone.js";
 
@@ -382,7 +383,7 @@ export const freeName = (base: string, taken: ReadonlySet<string>): string => fi
 export const freeSlug = (base: string, taken: ReadonlySet<string>): string => firstFree(taken, (k) => (k === 1 ? base : `${base}-${k}`));
 
 /** The languages a default name is written in: the creator's (ADR-070 §1, §2). */
-export type NameLocale = "en" | "fr";
+export type NameLocale = Locale;
 
 /** "Group k" (fr "Groupe k") with the first k whose name is not `taken` (ADR-070 §1). */
 export function defaultGroupName(taken: ReadonlySet<string>, locale: NameLocale): string {

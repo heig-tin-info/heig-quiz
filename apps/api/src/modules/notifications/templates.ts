@@ -19,9 +19,10 @@
  * measures are on the System status page it links to.
  */
 import type { NotificationKind, NotificationPayload, TeamsNotificationKind } from "@quiz/contracts";
+import type { Locale } from "@quiz/domain";
 import { escapeHtml } from "@quiz/docrender/highlight";
 
-export type MailLocale = "en" | "fr";
+export type MailLocale = Locale;
 
 const en = {
   "results_released.subject": "Results available: {evaluationTitle}",

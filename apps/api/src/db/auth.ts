@@ -22,7 +22,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { DATE_FORMATS, DEFAULT_MAX_ACTIVE_SESSIONS, SESSION_KINDS, USER_ROLES } from "@quiz/contracts";
-import { MCQ_SCORE_POLICIES } from "@quiz/domain";
+import { LOCALES, MCQ_SCORE_POLICIES } from "@quiz/domain";
 
 import { bytea } from "./columns.js";
 import { evaluations } from "./evaluation.js";
@@ -52,7 +52,7 @@ export const users = pgTable(
       .default("student"),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
     /** Interface language chosen by the user; null falls back to English. */
-    locale: text("locale", { enum: ["en", "fr"] }),
+    locale: text("locale", { enum: LOCALES }),
     /** Date-time display format; null falls back to ISO (YYYY-MM-DD HH:mm). */
     dateFormat: text("date_format", { enum: DATE_FORMATS }),
     /**
