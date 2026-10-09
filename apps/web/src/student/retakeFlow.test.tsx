@@ -8,6 +8,7 @@ import type {
   AttemptView,
   EvaluationCard,
   Me,
+  ReviewItem,
   StudentFeedback,
   StudentHome as StudentHomeData,
 } from "@quiz/contracts";
@@ -118,6 +119,7 @@ function view(
         skipped: false,
         flagged: false,
         locked: false,
+        acquired: false,
       },
     ],
   };
@@ -145,6 +147,7 @@ function card(canRetake: boolean, keep: Keep = "best"): EvaluationCard {
     retakes: {
       keep,
       maxAttempts: 3,
+      scope: "all",
       attemptCount: 1,
       canRetake,
       kept: { attemptId: FIRST, attemptNumber: 1, score: { points: 1, totalPoints: 1, pendingCount: 0 } },
@@ -166,7 +169,7 @@ const home = (c: EvaluationCard): StudentHomeData => ({
 
 function feedback(
   refusal: "max_attempts" | "closed" | "not_open" | "unfinished" | null,
-  over: { keep?: Keep; attemptCount?: number } = {},
+  over: { keep?: Keep; attemptCount?: number; review?: ReviewItem[] } = {},
 ): StudentFeedback {
   return {
     available: false,
@@ -179,7 +182,10 @@ function feedback(
       maxAttempts: 3,
       attemptCount: over.attemptCount ?? 1,
       refusal,
+      // ADR-091: standings given is the scope `to_review`.
+      scope: over.review === undefined ? "all" : "to_review",
     },
+    ...(over.review ? { review: over.review } : {}),
   };
 }
 
@@ -398,5 +404,81 @@ describe("retakes on an exercise (issues #120, #121)", () => {
     });
     await userEvent.click(await screen.findByRole("button", { name: "Voir mes résultats" }));
     expect(routes).toContainEqual({ view: "feedback", attemptId: FIRST });
+  });
+});
+
+describe("a retake of the questions to review (ADR-091)", () => {
+  const REVIEW: ReviewItem[] = [
+    { itemId: ITEM, rank: 0, standing: "acquired" },
+    { itemId: SECOND, rank: 1, standing: "to_review" },
+    { itemId: FIRST, rank: 2, standing: "pending" },
+  ];
+
+  it("offers the questions to review first, everything second, and lists each question's standing", async () => {
+    const carried = view(SECOND, "in_progress", { answer: { selected: [0] } });
+    carried.items[0]!.acquired = true;
+    const { calls } = mockFetch({
+      [`GET /app/api/attempts/${FIRST}/feedback`]: ok(feedback(null, { review: REVIEW })),
+      [`POST /app/api/evaluations/${EVAL}/retake`]: ok(attempt(carried)),
+      [`GET /app/api/attempts/${SECOND}`]: ok(attempt(carried)),
+      ...playerRoutes(SECOND),
+    });
+    mount({ view: "feedback", attemptId: FIRST });
+
+    const partial = await screen.findByRole("button", { name: "Refaire les questions à revoir (2)" });
+    const all = screen.getByRole("button", { name: "Tout refaire" });
+    expect(partial.className).toBe(buttonClass("primary", "md", ""));
+    expect(all.className).toBe(buttonClass("secondary", "md", ""));
+    const list = screen.getByRole("list");
+    expect(within(list).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "Question 1Acquise",
+      "Question 2À revoir",
+      "Question 3En attente de correction",
+    ]);
+
+    await userEvent.click(partial);
+    expect(calls.find((c) => c.url.endsWith("/retake"))?.body).toEqual({ scope: "to_review" });
+    // The player: the carried question, read-only and marked.
+    expect(await screen.findByText("Acquise")).toBeInTheDocument();
+    expect(
+      screen.getByText("Acquise lors de votre tentative précédente : conservée telle quelle, avec ses points."),
+    ).toBeInTheDocument();
+  });
+
+  it("sends Redo everything as a whole retake", async () => {
+    const { calls } = mockFetch({
+      [`GET /app/api/attempts/${FIRST}/feedback`]: ok(feedback(null, { review: REVIEW })),
+      [`POST /app/api/evaluations/${EVAL}/retake`]: ok(attempt(view(SECOND, "in_progress"))),
+      [`GET /app/api/attempts/${SECOND}`]: ok(attempt(view(SECOND, "in_progress"))),
+      ...playerRoutes(SECOND),
+    });
+    mount({ view: "feedback", attemptId: FIRST });
+    await userEvent.click(await screen.findByRole("button", { name: "Tout refaire" }));
+    expect(await screen.findByText("Question 1")).toBeInTheDocument();
+    expect(calls.find((c) => c.url.endsWith("/retake"))?.body).toEqual({ scope: "all" });
+  });
+
+  it("leaves Redo everything alone once every question is acquired", async () => {
+    mockFetch({ [`GET /app/api/attempts/${FIRST}/feedback`]: ok(feedback(null, { review: [{ itemId: ITEM, rank: 0, standing: "acquired" }] })) });
+    mount({ view: "feedback", attemptId: FIRST });
+    expect(await screen.findByText("Toutes les questions sont acquises.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tout refaire" }).className).toBe(
+      buttonClass("primary", "md", ""),
+    );
+    expect(screen.queryByRole("button", { name: /Refaire les questions/ })).toBeNull();
+  });
+
+  it("takes the card's Try again to the results page, where the choice is", async () => {
+    const base = card(true);
+    const { calls } = mockFetch({
+      "GET /app/api/student/home": ok(home({ ...base, retakes: { ...base.retakes!, scope: "to_review" } })),
+      "GET /app/api/student/classrooms": ok([]),
+      [`GET /app/api/attempts/${FIRST}/feedback`]: ok(feedback(null, { review: REVIEW })),
+    });
+    const { routes } = mount({ view: "home" });
+    await userEvent.click(await screen.findByRole("button", { name: "Voir mes résultats et recommencer" }));
+    expect(routes.at(-1)).toEqual({ view: "feedback", attemptId: FIRST });
+    expect(await screen.findByRole("button", { name: "Refaire les questions à revoir (2)" })).toBeInTheDocument();
+    expect(calls.some((c) => c.url.endsWith("/retake"))).toBe(false);
   });
 });

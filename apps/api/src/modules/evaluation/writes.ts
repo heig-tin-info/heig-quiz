@@ -31,6 +31,7 @@ import {
   logVisibilityDefault,
   negativeMarkingAllowedFor,
   retakesAllowedFor,
+  retakeScopeFits,
 } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
@@ -49,6 +50,7 @@ import {
   Locked,
   RunningLocked,
   RetakesNotAllowed,
+  RetakeScopeNavigation,
   NegativeMarkingNotAllowed,
   CalculatorNotAllowed,
   NotepadNotAllowed,
@@ -257,6 +259,9 @@ export async function patchEvaluation(
     if (retakesOf(settings).enabled && !retakesAllowedFor(row.mode)) {
       throw new RetakesNotAllowed(row.mode);
     }
+    // ADR-091: a partial retake needs free navigation; leaving either half
+    // inconsistent is refused, whichever moved.
+    if (!retakeScopeFits(row.mode, retakesOf(settings), settings.navigation)) throw new RetakeScopeNavigation();
     // A poll is tallied, not graded (ADR-026): switching negative marking on
     // there is refused, switching it off always passes.
     if (negativeMarkingOf(settings) && !negativeMarkingAllowedFor(row.mode)) {
@@ -425,7 +430,7 @@ export async function setAllowDrill(
   return updated;
 }
 
-/** `results.releaseResults`: the frozen grades (ADR-012) and the state they imply. */
+/** `results.releaseResults`: the frozen grades (docs/05 §5.3) and the state they imply. */
 export async function setRelease(
   db: DbOrTx,
   id: string,

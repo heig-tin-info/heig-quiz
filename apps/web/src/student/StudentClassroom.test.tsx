@@ -376,6 +376,7 @@ describe("the classroom page's Past group (issue #203, F-EVAL-15)", () => {
       retakes: {
         keep: "best",
         maxAttempts: 3,
+        scope: "all",
         attemptCount: 2,
         canRetake: false,
         kept: { attemptId: "a8", attemptNumber: 1, score: { points: 7.5, totalPoints: 10, pendingCount: 0 } },

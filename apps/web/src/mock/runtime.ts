@@ -167,7 +167,8 @@ export type Scene =
   | "marks"
   | "forward"
   | "exercise"
-  | "intro";
+  | "intro"
+  | "partial";
 const SCENE_KEY = "quiz-mock-scene";
 const sceneParam = params.get("scene");
 if (sceneParam !== null) {

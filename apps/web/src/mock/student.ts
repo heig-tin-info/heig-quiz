@@ -63,7 +63,11 @@ import { studentRooms } from "./org";
 // serves:
 //
 //   ?scene=lobby | ready | running | paused | closed | extend | single | marks
-//          | forward | exercise | intro               (running by default)
+//          | forward | exercise | intro | partial     (running by default)
+//
+// `partial` is a partial retake of an exercise (ADR-091): Q1 and Q4 were
+// acquired in the previous attempt and come back read-only, marked
+// "Acquired"; the student stands on Q1.
 //
 // `intro` gives Q1 and Q4 the teacher's text before them (ADR-084): the
 // paper opens on the passage screen.
@@ -352,6 +356,23 @@ if (scene === "marks" || scene === "forward") {
   });
   studentPosition = studentItem(scene === "forward" ? 2 : 3);
 }
+/** ADR-091: the questions `?scene=partial` carried over from the previous attempt. */
+const PARTIAL_ACQUIRED = new Set([1, 4]);
+if (scene === "partial") {
+  studentAnswers.set(studentItem(1), { payload: { selected: [1] }, revision: 2, done: false });
+  studentAnswers.set(studentItem(4), {
+    payload: {
+      regions: [
+        "double r_parallele(double r1, double r2)\n{\n    if (r1 == 0 || r2 == 0)\n        return 0;\n    return r1 * r2 / (r1 + r2);\n}\n",
+      ],
+    },
+    revision: 3,
+    done: false,
+  });
+  studentPosition = studentItem(1);
+}
+/** The scenes served as an exercise rather than an exam. */
+const exerciseScene = scene === "exercise" || scene === "partial";
 export const BASE_DEADLINE = now + 14 * 60_000 + 32_000;
 export let studentDeadline = BASE_DEADLINE;
 /**
@@ -379,6 +400,10 @@ const studentSettings = (): AttemptView["evaluation"]["settings"] => ({
   ...(flags.kiosk ? { kiosk: true } : {}),
   ...mockCalculator(),
   ...mockNotepad(),
+  // ADR-091: the exercise of `?scene=partial` retakes the questions to review.
+  ...(scene === "partial"
+    ? { retakes: { enabled: true, keep: "best", maxAttempts: 3, scope: "to_review" } as const }
+    : {}),
 });
 
 /**
@@ -387,7 +412,7 @@ const studentSettings = (): AttemptView["evaluation"]["settings"] => ({
  */
 export const studentConditions = (kiosk = false) =>
   evaluationConditionsOf({
-    mode: scene === "exercise" ? "exercise" : "exam",
+    mode: exerciseScene ? "exercise" : "exam",
     settings: { ...studentSettings(), ...(kiosk ? { kiosk } : {}), conditions: flags.empty ? [] : MOCK_CONDITIONS },
     durationS: 20 * 60,
     closesAt: null,
@@ -411,7 +436,7 @@ export const studentAttemptView = (): AttemptView => ({
   evaluation: {
     id: STUDENT_EVAL,
     title: "Quiz 3 — Pointeurs et lois fondamentales",
-    mode: scene === "exercise" ? "exercise" : "exam",
+    mode: exerciseScene ? "exercise" : "exam",
     state: studentEvaluationState(),
     settings: studentSettings(),
     feedbackPolicy: {
@@ -465,6 +490,7 @@ export const studentAttemptView = (): AttemptView => ({
       flagged: stored?.flagged ?? false,
       // `forward_only` closes a validated question (F-LIVE-08).
       locked: scene === "forward" && stored?.done === true,
+      acquired: scene === "partial" && PARTIAL_ACQUIRED.has(n),
     };
   }),
 });
@@ -591,6 +617,8 @@ const evaluationHome = (): EvaluationHome => {
         retakes: {
           keep: "best",
           maxAttempts: 3,
+          // ADR-091: the card opens the results page, where the choice is.
+          scope: "to_review",
           attemptCount: 2,
           canRetake: true,
           kept: {
@@ -1017,7 +1045,13 @@ on("GET", `/app/api/attempts/${STUDENT_RETAKE_ATTEMPT}/feedback`, () => ({
     maxAttempts: 3,
     attemptCount: 2,
     refusal: null,
+    // ADR-091: redo the three questions to review, or everything.
+    scope: "to_review",
   },
+  // Where each question stands, in the student's order (ADR-091).
+  review: (["acquired", "to_review", "acquired", "acquired", "pending", "acquired", "to_review", "acquired"] as const).map(
+    (standing, rank) => ({ itemId: `33333333-3333-4333-8333-33333333330${rank}`, rank, standing }),
+  ),
 }));
 
 // Issue #203: the player's own attempt is `on_release` and never released in

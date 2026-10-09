@@ -26,6 +26,7 @@ const item = (id: string, over: Partial<PlayerItem> = {}): PlayerItem => ({
   markedDone: false,
   skipped: false,
   flagged: false,
+  acquired: false,
   student: {},
   serverLocked: false,
   ...over,

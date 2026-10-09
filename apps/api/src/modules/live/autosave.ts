@@ -31,6 +31,7 @@ import {
   AnswerInvalid,
   AlreadyAnswered,
   Irreversible,
+  ItemAcquired,
   ItemLocked,
   NotValidatable,
   orderItems,
@@ -398,6 +399,7 @@ export async function markDone(
 ): Promise<{ done: boolean; nextItemId: string | null }> {
   const { evaluation, attempt, itemId, now } = input;
   assertWritable(evaluation, attempt, now);
+  if (attempt.acquiredItemIds.includes(itemId)) throw new ItemAcquired();
   const settings = settingsOf(evaluation);
   const stored = await answersOf(db, attempt.id);
   const current = stored.get(itemId) ?? null;
@@ -509,6 +511,10 @@ async function stateTarget(
   now: Date,
 ): Promise<{ joined: JoinedItem; current: AnswerRecord | null }> {
   assertWritable(evaluation, attempt, now);
+  // ADR-091: a question a partial retake carried over is attempt n's, as it
+  // stood — not the lock of a navigation, which a carried checkpoint would
+  // extend to the questions before it.
+  if (attempt.acquiredItemIds.includes(itemId)) throw new ItemAcquired();
   const settings = settingsOf(evaluation);
   if (settings.navigation === "free") {
     const joined = await joinedItem(db, evaluation.id, itemId);

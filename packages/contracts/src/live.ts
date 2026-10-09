@@ -18,6 +18,8 @@ import {
   PROVIDED_CALCULATORS,
   type ConditionsInput,
   type ImposedCondition as DomainImposedCondition,
+  type RetakeRefusal as DomainRetakeRefusal,
+  type RetakeScope as DomainRetakeScope,
 } from "@quiz/domain";
 
 import {
@@ -28,6 +30,7 @@ import {
   FeedbackPolicy,
   Navigation,
   RetakeKeep,
+  RetakeScope,
   TrustedClient,
 } from "./evaluation.js";
 import { IntegrityIncident } from "./integrity.js";
@@ -120,6 +123,12 @@ export const AttemptItem = z.object({
   flagged: z.boolean(),
   /** Navigation already forbids writing to this item (forward_only, milestones). */
   locked: z.boolean(),
+  /**
+   * ADR-091: acquired in the previous attempt and carried over by a partial
+   * retake, answer and grading as they stood. Shown read-only, still
+   * reachable; every write to it is `409 item_acquired`.
+   */
+  acquired: z.boolean(),
 });
 export type AttemptItem = z.infer<typeof AttemptItem>;
 
@@ -151,6 +160,7 @@ export const ImposedCondition = z.discriminatedUnion("key", [
     bonusPercent: z.number().int(),
   }),
   z.object({ key: z.literal("attempts"), kind: z.literal("info"), maxAttempts: z.number().int().nullable() }),
+  z.object({ key: z.literal("partial_retake"), kind: z.literal("info") }),
   z.object({
     key: z.literal("navigation"),
     kind: z.literal("info"),
@@ -163,9 +173,11 @@ export const ImposedCondition = z.discriminatedUnion("key", [
 export type ImposedCondition = z.infer<typeof ImposedCondition>;
 
 // The wire shape and the domain's are the same union, both ways.
-type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+export type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 const _imposedSame: Same<ImposedCondition, DomainImposedCondition> = true;
 void _imposedSame;
+// ADR-091: the scope and the standing of the wire are the domain's.
+true satisfies Same<RetakeScope, DomainRetakeScope>;
 
 /**
  * The conditions a student reads (ADR-079, F-EVAL-33): what the teacher
@@ -300,8 +312,10 @@ export type AttemptStartBody = z.infer<typeof AttemptStartBody>;
 
 /**
  * `POST /evaluations/:id/retake` refused (F-EVAL-15): the reason is
- * `retakeRefusal`'s in `@quiz/domain`, spelled again here because contracts
- * depend on no package. A success answers {@link AttemptOrLobby}.
+ * `retakeRefusal`'s in `@quiz/domain` — or, for a retake of the questions
+ * to review, `partialRetakeRefusal`'s (`scope_all`, `nothing_to_review`,
+ * ADR-091). The two unions are checked equal below. A success answers
+ * {@link AttemptOrLobby}.
  */
 export const RetakeRefusalReason = z.enum([
   "not_allowed",
@@ -310,8 +324,11 @@ export const RetakeRefusalReason = z.enum([
   "no_attempt",
   "unfinished",
   "max_attempts",
+  "scope_all",
+  "nothing_to_review",
 ]);
 export type RetakeRefusalReason = z.infer<typeof RetakeRefusalReason>;
+true satisfies Same<RetakeRefusalReason, DomainRetakeRefusal>;
 
 export const RetakeRefused = z.object({
   error: z.literal("retake_refused"),
@@ -319,6 +336,14 @@ export const RetakeRefused = z.object({
   message: z.string().optional(),
 });
 export type RetakeRefused = z.infer<typeof RetakeRefused>;
+
+/**
+ * The body of `POST /evaluations/:id/retake` (ADR-091): redo every question
+ * (`all`, the default, what a body-less request from before ADR-091 means),
+ * or only those to review — refused unless the teacher chose that scope.
+ */
+export const RetakeBody = z.object({ scope: RetakeScope.default("all") });
+export type RetakeBody = z.infer<typeof RetakeBody>;
 
 // --- Autosave (PLAN-MVP §4.7) --------------------------------------------
 
@@ -507,6 +532,11 @@ export type AttemptScore = z.infer<typeof AttemptScore>;
 const CardRetakes = z.object({
   keep: RetakeKeep,
   maxAttempts: z.number().int().nullable(),
+  /**
+   * ADR-091: under `to_review` the card's retake opens the results page of
+   * the latest attempt, where the student chooses what to redo.
+   */
+  scope: RetakeScope,
   /** How many attempts the student has taken, the one in progress included. */
   attemptCount: z.number().int(),
   /** The server's rule (`retakeRefusal`), evaluated now: the Retake button. */

@@ -42,7 +42,7 @@ import {
   type TrustedClient,
 } from "./evaluationConfig.js";
 import type { NavigationMode } from "./questionProgress.js";
-import { retakesOn, type RetakePolicy } from "./retake.js";
+import { partialRetakesOn, retakesOn, type RetakePolicy } from "./retake.js";
 
 /** What a condition says about the thing it names, as on the wire. */
 export const CONDITION_KINDS = ["allowed", "forbidden", "provided", "info"] as const;
@@ -85,6 +85,7 @@ export type ImposedCondition =
   | { key: "duration"; kind: "info"; durationS: number; bonusPercent: number }
   | { key: "deadline"; kind: "info"; closesAt: string; bonusPercent: number }
   | { key: "attempts"; kind: "info"; maxAttempts: number | null }
+  | { key: "partial_retake"; kind: "info" }
   | { key: "navigation"; kind: "info"; navigation: (typeof LOCKED_NAVIGATIONS)[number] }
   | { key: "negative_marking"; kind: "info" }
   | { key: "visibility_logged"; kind: "info" }
@@ -161,6 +162,9 @@ const DERIVE: { [K in ImposedConditionKey]: (input: ConditionsInput) => Line<K> 
     kind: "info",
     maxAttempts: retakes !== undefined && retakesOn(mode, retakes) ? retakes.maxAttempts : 1,
   }),
+  // ADR-091: a retake may ask only the questions to review.
+  partial_retake: ({ mode, settings: { retakes } }) =>
+    retakes !== undefined && partialRetakesOn(mode, retakes) ? { key: "partial_retake", kind: "info" } : null,
   navigation: ({ settings: { navigation } }) =>
     isLocked(navigation) ? { key: "navigation", kind: "info", navigation } : null,
   negative_marking: ({ mode, settings }) =>

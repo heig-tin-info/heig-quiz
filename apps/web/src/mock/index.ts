@@ -39,7 +39,7 @@
  *  - `groups` — PRG1-2026 has group sets (section 5b'), and with `projects`
  *    two of its drafts are group projects;
  *  - `scene` — the student player's state, and only that one screen's:
- *    `?scene=lobby|ready|running|paused|closed|extend|single|marks|forward|exercise` (`running` by default).
+ *    `?scene=lobby|ready|running|paused|closed|extend|single|marks|forward|exercise|intro|partial` (`running` by default).
  *
  * ONE dataset, in one file per module of `apps/api/src/modules`, each
  * registering its own routes when it is imported:
@@ -503,7 +503,7 @@ const active = FLAG_NAMES.filter((f) => flags[f]);
 console.info(
   `[mock] persona: ${role} — switch with ?as=teacher|student|admin` +
     `\n[mock] scene flags: ${active.length ? active.join(", ") : "none"} — ?empty=1 ?fail=1 ?slow=1 ?many=1 (append =0 to clear)` +
-    `\n[mock] student scene: ${scene} — ?scene=lobby|ready|running|paused|closed|extend|single|marks|forward|exercise` +
+    `\n[mock] student scene: ${scene} — ?scene=lobby|ready|running|paused|closed|extend|single|marks|forward|exercise|intro|partial` +
     `\n[mock] polls: /evaluations/poll/poll · /evaluations/poll-short/poll · /evaluations/poll-ended/poll — ?revealed=1`,
 );
 

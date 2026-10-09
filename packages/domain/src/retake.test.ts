@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  acquiredItems,
   gradableNow,
+  itemStanding,
   keptAttempt,
   latestAttempt,
+  partialRetakeRefusal,
+  partialRetakesOn,
   retakeRefusal,
+  retakeScopeFits,
+  retakeScopeOf,
   retakesAllowedFor,
   retakesOn,
   type RetakeInput,
@@ -148,5 +154,78 @@ describe("gradableNow (ADR-067)", () => {
   it("grades every attempt once the evaluation is over", () => {
     expect(gradableNow("closed", "in_progress")).toBe(true);
     expect(gradableNow("released", "submitted")).toBe(true);
+  });
+});
+
+describe("retake scope (ADR-091)", () => {
+  const partial = { ...base.retakes, scope: "to_review" as const };
+
+  it("reads an absent scope as `all`", () => {
+    expect(retakeScopeOf(base.retakes)).toBe("all");
+    expect(retakeScopeOf(partial)).toBe("to_review");
+  });
+
+  it("is partial only on an exercise that takes retakes and chose `to_review`", () => {
+    expect(partialRetakesOn("exercise", partial)).toBe(true);
+    expect(partialRetakesOn("exercise", base.retakes)).toBe(false);
+    expect(partialRetakesOn("exercise", { ...partial, enabled: false })).toBe(false);
+    expect(partialRetakesOn("exam", partial)).toBe(false);
+  });
+
+  it("fits free navigation only, while partial retakes are on", () => {
+    expect(retakeScopeFits("exercise", partial, "free")).toBe(true);
+    expect(retakeScopeFits("exercise", partial, "forward_only")).toBe(false);
+    expect(retakeScopeFits("exercise", partial, "milestones")).toBe(false);
+    expect(retakeScopeFits("exercise", base.retakes, "milestones")).toBe(true);
+    expect(retakeScopeFits("exercise", { ...partial, enabled: false }, "forward_only")).toBe(true);
+    expect(retakeScopeFits("exam", partial, "forward_only")).toBe(true);
+  });
+});
+
+describe("itemStanding / acquiredItems (ADR-091)", () => {
+  it("is acquired at the maximum, to review below it", () => {
+    expect(itemStanding({ maxPoints: 2, validatedPoints: 2 })).toBe("acquired");
+    expect(itemStanding({ maxPoints: 2, validatedPoints: 1.5 })).toBe("to_review");
+    expect(itemStanding({ maxPoints: 2, validatedPoints: 0 })).toBe("to_review");
+    // Negative marking (ADR-026): below zero is still to review.
+    expect(itemStanding({ maxPoints: 1, validatedPoints: -0.5 })).toBe("to_review");
+  });
+
+  it("is pending without a validated grading", () => {
+    expect(itemStanding({ maxPoints: 3, validatedPoints: null })).toBe("pending");
+  });
+
+  it("never asks again a question worth nothing", () => {
+    expect(itemStanding({ maxPoints: 0, validatedPoints: null })).toBe("acquired");
+    expect(itemStanding({ maxPoints: 0, validatedPoints: 0 })).toBe("acquired");
+  });
+
+  it("lists the acquired ids in their order", () => {
+    expect(
+      acquiredItems([
+        { id: "a", standing: "acquired" },
+        { id: "b", standing: "to_review" },
+        { id: "c", standing: "pending" },
+        { id: "d", standing: "acquired" },
+      ]),
+    ).toEqual(["a", "d"]);
+  });
+});
+
+describe("partialRetakeRefusal (ADR-091)", () => {
+  const partial = { ...base.retakes, scope: "to_review" as const };
+  const items = [{ standing: "acquired" as const }, { standing: "to_review" as const }];
+
+  it("allows a partial retake when something is to review", () => {
+    expect(partialRetakeRefusal({ mode: "exercise", retakes: partial, items })).toBeNull();
+    expect(partialRetakeRefusal({ mode: "exercise", retakes: partial, items: [{ standing: "pending" }] })).toBeNull();
+  });
+
+  it("refuses it when the teacher chose every question", () => {
+    expect(partialRetakeRefusal({ mode: "exercise", retakes: base.retakes, items })).toBe("scope_all");
+  });
+
+  it("refuses it when everything is acquired", () => {
+    expect(partialRetakeRefusal({ mode: "exercise", retakes: partial, items: [items[0]!] })).toBe("nothing_to_review");
   });
 });

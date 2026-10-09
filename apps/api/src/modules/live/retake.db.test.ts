@@ -382,6 +382,7 @@ describe("grading and results with several attempts", () => {
         maxAttempts: null,
         attemptCount: 1,
         refusal: null,
+        scope: "all",
       },
     });
     expect(JSON.stringify(feedback)).not.toContain("answer-q");

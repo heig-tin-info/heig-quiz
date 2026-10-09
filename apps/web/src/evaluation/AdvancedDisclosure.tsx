@@ -1,4 +1,4 @@
-import { CategorizePolicy, categorizePolicyOf, McqPolicy, negativeMarkingOf, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
+import { CategorizePolicy, categorizePolicyOf, McqPolicy, negativeMarkingOf, retakesOf, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
 import {
   allowedFeedbackWhen,
   CALCULATOR_MODES,
@@ -11,6 +11,7 @@ import {
   NOTEPAD_MODES,
   notepadAllowedFor,
   notepadOn,
+  partialRetakesOn,
   type FeedbackWhen,
   type LobbyName,
 } from "@quiz/domain";
@@ -84,6 +85,9 @@ export function AdvancedDisclosure({
   const clock = clockChoiceOf(settings);
   const calculator = calculatorOn(mode, settings.calculator);
   const notepad = notepadOn(mode, settings.notepad);
+  // ADR-091: a retake of the questions to review needs free navigation, so
+  // the navigation stays put while it is on (`422 retake_scope_navigation`).
+  const partialRetake = partialRetakesOn(mode, retakesOf(settings));
   // ADR-026: negative marking replaces both policies below; each row says so
   // while it is on, so a teacher never tunes a policy nothing reads.
   const policyDesc = (desc: string) =>
@@ -93,12 +97,16 @@ export function AdvancedDisclosure({
     <Disclosure title={t("eval.advanced")} desc={t("eval.advanced.desc")}>
       <SettingRow
         title={t("eval.navigation")}
-        desc={t(`eval.navigation.desc.${settings.navigation}` as keyof Dict)}
+        desc={
+          partialRetake
+            ? `${t(`eval.navigation.desc.${settings.navigation}` as keyof Dict)} ${t("eval.navigation.partialRetake")}`
+            : t(`eval.navigation.desc.${settings.navigation}` as keyof Dict)
+        }
       >
         <Segmented
           name="navigation"
           value={settings.navigation}
-          disabled={disabled}
+          disabled={disabled || partialRetake}
           onChange={(navigation) => set({ navigation })}
           options={[
             { value: "free", label: t("eval.navigation.free") },

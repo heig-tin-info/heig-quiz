@@ -1,5 +1,5 @@
 import { memo, useCallback } from "react";
-import { Check, Lock, Minus } from "lucide-react";
+import { Check, CheckCircle2, Lock, Minus } from "lucide-react";
 
 import type { CanvasShortcutsListener } from "@quiz/core/client";
 import type { AnswerMark } from "@quiz/domain";
@@ -119,6 +119,7 @@ export function QuestionHeading({
   points,
   bonus = false,
   validated,
+  acquired = false,
   mark,
 }: {
   /** Zero-based position in the paper. */
@@ -128,6 +129,8 @@ export function QuestionHeading({
   /** A bonus question: its points are not in the total. */
   bonus?: boolean;
   validated: boolean;
+  /** ADR-091: carried over by a partial retake, kept as it was. */
+  acquired?: boolean;
   mark: AnswerMark;
 }) {
   const t = useT();
@@ -148,7 +151,11 @@ export function QuestionHeading({
       {bonus ? <BonusLabel /> : null}
       {/* Nothing for "not answered yet": that is what a question is until
           it is not. */}
-      {validated ? (
+      {acquired ? (
+        <Badge tone="green" icon={CheckCircle2}>
+          {t("player.acquired")}
+        </Badge>
+      ) : validated ? (
         <Badge tone="zinc" icon={Lock}>
           {t("player.validated")}
         </Badge>

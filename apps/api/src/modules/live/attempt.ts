@@ -33,9 +33,13 @@ import {
   isFinishedAttempt,
   isWritable,
   latestAttempt,
+  acquiredItems,
   lockedItems,
+  partialRetakeRefusal,
   retakeRefusal,
+  retakeScopeOf,
   type RetakeRefusal,
+  type RetakeScope,
 } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
@@ -67,7 +71,16 @@ import { endAttempts, seated } from "./dwell.js";
 import { endKioskSessions } from "../../auth/session.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
-import { scoreOf, standDownAutomaticGradings, studentAttempts, tallyByAttempt } from "../grading/service.js";
+import {
+  copyGradings,
+  scoreOf,
+  standDownAutomaticGradings,
+  standingsOf,
+  studentAttempts,
+  tallyByAttempt,
+  validatedOfAttempt,
+  type GradingRecord,
+} from "../grading/service.js";
 import { presence } from "../realtime/presence.js";
 import {
   countedAttempt,
@@ -139,12 +152,23 @@ export class EvaluationFinished extends LiveError {
 }
 
 /**
- * F-EVAL-15: a retake the rule refuses (`@quiz/domain#retakeRefusal`). The
- * reason travels in the body, so the student home can say which.
+ * F-EVAL-15: a retake the rule refuses (`@quiz/domain#retakeRefusal`), or a
+ * retake of the questions to review `partialRetakeRefusal` refuses
+ * (ADR-091). The reason travels in the body, so the screens can say which.
  */
 export class RetakeRefused extends LiveError {
   constructor(readonly reason: RetakeRefusal) {
     super("retake_refused", 409, `retake refused: ${reason}`);
+  }
+}
+
+/**
+ * ADR-091: a question a partial retake carried over is the previous
+ * attempt's, as it stood: no write of any kind reaches it.
+ */
+export class ItemAcquired extends LiveError {
+  constructor() {
+    super("item_acquired", 409, "this question was acquired in the previous attempt and is kept as it is");
   }
 }
 
@@ -650,6 +674,70 @@ export async function ensureAttempt(
   return row;
 }
 
+/** What a partial retake carries over: the items, and their validated gradings as read. */
+interface Carried {
+  itemIds: string[];
+  gradings: GradingRecord[];
+}
+
+/**
+ * ADR-091 §3: what a partial retake carries over from `latest` — the
+ * acquired items in the evaluation's order, and their validated gradings,
+ * read ONCE here and copied as read — refused (`409 retake_refused`,
+ * `scope_all` or `nothing_to_review`) unless the teacher chose that scope
+ * and something is left to review.
+ */
+async function carriedFrom(
+  tx: DbOrTx,
+  evaluation: EvaluationRecord,
+  latest: AttemptRecord,
+): Promise<Carried> {
+  const validated = await validatedOfAttempt(tx, latest.id);
+  const standings = standingsOf(await joinedItems(tx, evaluation.id), validated);
+  const refusal = partialRetakeRefusal({
+    mode: evaluation.mode,
+    retakes: retakePolicyOf(evaluation),
+    items: standings,
+  });
+  if (refusal !== null) throw new RetakeRefused(refusal);
+  const itemIds = acquiredItems(standings);
+  return { itemIds, gradings: validated.filter((g) => itemIds.includes(g.itemId)) };
+}
+
+/**
+ * ADR-091 §3: copies onto the new attempt `to` the answer of each carried
+ * item from `from`, then the validated gradings `carried` read — new ids, the
+ * same payload. The copy was shown when the original was (`firstShownAt`),
+ * and has spent no time on screen in this attempt (dwell 0, ADR-039); a flag
+ * or a validation of attempt n is not carried, they were notes on another
+ * paper.
+ */
+async function carryAcquired(
+  tx: DbOrTx,
+  from: AttemptRecord,
+  to: AttemptRecord,
+  carried: Carried,
+  now: Date,
+): Promise<void> {
+  if (carried.itemIds.length === 0) return;
+  const originals = await tx
+    .select()
+    .from(answers)
+    .where(and(eq(answers.attemptId, from.id), inArray(answers.itemId, carried.itemIds)));
+  const copies = originals.map((answer) => ({
+    ...answer,
+    id: randomUUID(),
+    attemptId: to.id,
+    markedDone: false,
+    flagged: false,
+    dwellMs: 0,
+    updatedAt: now,
+  }));
+  if (copies.length > 0) await tx.insert(answers).values(copies);
+  const answerIds = new Map(copies.map((copy) => [copy.itemId, copy.id]));
+  await copyGradings(tx, { rows: carried.gradings, toAttemptId: to.id, answerIds, now });
+}
+
 /**
  * F-EVAL-15 (ADR-025): a NEW attempt on an exercise that allows several —
  * number n + 1, a new seed (so a new item order and newly shuffled choices
@@ -672,12 +760,21 @@ export async function ensureAttempt(
  * retake to commit and then expires the new attempt with the others, or the
  * retake waits for the flip and reads `closed`. A blank attempt can never
  * be left open on a closed evaluation, graded 0, and kept as the "last".
+ *
+ * ADR-091: with `scope: "to_review"`, the questions acquired in the latest
+ * attempt are carried over in the same transaction ({@link carriedFrom},
+ * {@link carryAcquired}):
+ * the new attempt is still a whole one — its own number, seed and deadline,
+ * counted against the maximum — whose acquired questions hold attempt n's
+ * values, answer and validated grading, read-only.
  */
 export async function retakeAttempt(
   db: Db,
   input: {
     evaluation: EvaluationRecord;
     participant: Participant;
+    /** ADR-091: every question (ADR-025's blank retake), or only those to review. */
+    scope?: RetakeScope;
     now: Date;
   },
 ): Promise<AttemptRecord> {
@@ -708,6 +805,13 @@ export async function retakeAttempt(
       attempts: previous,
     });
     if (refusal !== null) throw new RetakeRefused(refusal);
+    // The rule passed, so the latest attempt exists and is finished.
+    const latest = latestAttempt(previous);
+    if (latest === null) throw new RetakeRefused("no_attempt");
+    const carried: Carried =
+      input.scope === "to_review"
+        ? await carriedFrom(tx, evaluation, latest)
+        : { itemIds: [], gradings: [] };
 
     // Started at once: `running` is the only state the rule allows, so there
     // is no lobby to wait in, and no `not_started` row a close would miss.
@@ -717,16 +821,24 @@ export async function retakeAttempt(
       extraS: 0,
     });
     const seed = drawSeed();
+    const drawn = await drawInstances(tx, evaluation, seed);
+    // ADR-091: an acquired question keeps the numbers it was acquired with;
+    // the others are drawn anew, like every retake's.
+    for (const itemId of carried.itemIds) {
+      const kept = latest.instances[itemId];
+      if (kept !== undefined) drawn[itemId] = kept;
+    }
     const created = await tx
       .insert(attempts)
       .values({
         id: randomUUID(),
         evaluationId: evaluation.id,
         ...ownerOf(participant),
-        attemptNumber: (latestAttempt(previous)?.attemptNumber ?? 0) + 1,
+        attemptNumber: latest.attemptNumber + 1,
         state: "in_progress",
         seed,
-        instances: await drawInstances(tx, evaluation, seed),
+        instances: drawn,
+        acquiredItemIds: carried.itemIds,
         startedAt: now,
         deadlineAt,
         bonusS,
@@ -736,7 +848,9 @@ export async function retakeAttempt(
       })
       .onConflictDoNothing()
       .returning();
-    return { evaluation, row: created[0] ?? null };
+    const row = created[0] ?? null;
+    if (row !== null) await carryAcquired(tx, latest, row, carried, now);
+    return { evaluation, row };
   });
 
   if (outcome.row === null) {
@@ -864,6 +978,8 @@ function attemptItems(
   ordered: readonly OrderedItem[],
   answered: ReadonlyMap<string, AnswerRecord>,
   locked: ReadonlySet<string>,
+  /** ADR-091: the items a partial retake carried over. */
+  acquired: ReadonlySet<string>,
   settings: EvaluationSettings,
   attempt: InstanceAttempt,
   defaults: Readonly<Record<string, unknown>>,
@@ -904,6 +1020,7 @@ function attemptItems(
       skipped: answer?.skipped ?? false,
       flagged: answer?.flagged ?? false,
       locked: locked.has(entry.item.id),
+      acquired: acquired.has(entry.item.id),
     };
   });
 }
@@ -974,6 +1091,7 @@ export async function attemptView(
     seed: attempt.seed,
     timeBonusPercent: participant.timeBonusPercent,
     instances: attempt.instances,
+    acquired: attempt.acquiredItemIds,
     answered: await answersOf(db, attempt.id),
     header: {
       id: attempt.id,
@@ -1006,6 +1124,7 @@ export async function previewView(
     seed,
     timeBonusPercent: 0,
     instances: {},
+    acquired: [],
     items,
     answered: new Map(),
     header: {
@@ -1036,6 +1155,8 @@ async function viewOf(
     timeBonusPercent: number;
     /** The attempt's stored values (ADR-056); `{}` for a preview, which draws them from `seed`. */
     instances: Readonly<Record<string, StoredInstance>>;
+    /** ADR-091: the items a partial retake carried over; none in a preview. */
+    acquired: readonly string[];
     items?: readonly JoinedItem[] | undefined;
     answered: ReadonlyMap<string, AnswerRecord>;
     header: AttemptView["attempt"];
@@ -1062,7 +1183,15 @@ async function viewOf(
       pausedAt: isoOrNull(evaluation.pausedAt),
       totalPoints: evaluationTotal(items.map((i) => i.item)),
     },
-    items: attemptItems(ordered, answered, locked, settings, { seed, instances: input.instances }, gradeDefaults(evaluation)),
+    items: attemptItems(
+      ordered,
+      answered,
+      locked,
+      new Set(input.acquired),
+      settings,
+      { seed, instances: input.instances },
+      gradeDefaults(evaluation),
+    ),
   };
 }
 
@@ -1510,6 +1639,7 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
     return {
       keep: policy.keep,
       maxAttempts: policy.maxAttempts,
+      scope: retakeScopeOf(policy),
       attemptCount: mine.all.length,
       canRetake:
         retakeRefusal({

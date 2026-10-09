@@ -926,6 +926,9 @@ const scenes = [
   { name: "player-marks-skipped", role: "student", path: `${TAKE}?scene=marks`, act: async (p) => { await p.getByRole("button", { name: /^leave unanswered$/i }).click(); await p.getByRole("button", { name: /^leave unanswered$/i, pressed: true }).waitFor(); } },
   // Issue #125: an exercise opens its bar with a Home button; an exam never.
   { name: "player-exercise", role: "student", path: `${TAKE}?scene=exercise`, fold: true },
+  // ADR-091: a partial retake — the question acquired in the previous
+  // attempt, read-only and marked "Acquired".
+  { name: "player-partial-retake", role: "student", path: `${TAKE}?scene=partial`, fold: true },
   // `forward_only`: the first question validated and closed, the explicit
   // "Validate and continue" step as the primary, and its confirmation.
   { name: "player-forward", role: "student", path: `${TAKE}?scene=forward` },

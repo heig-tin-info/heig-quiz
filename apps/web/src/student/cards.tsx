@@ -444,10 +444,22 @@ export function useCardActions(navigate: (r: Route) => void): {
     }
     const r = card.retakes;
     if (r !== null && finished(card) && r.canRetake) {
+      // ADR-091: when a retake may ask only the questions to review, the
+      // choice is made on the results page of the latest attempt, beside
+      // what each question stands at — never blind from the card.
+      if (r.scope === "to_review" && card.attemptId !== null) {
+        const attemptId = card.attemptId;
+        return {
+          // The label says what the click does: it opens the results.
+          label: t("shome.retakeReview"),
+          primary,
+          onClick: () => navigate(feedbackLink(attemptId).route),
+        };
+      }
       return {
         label: t("shome.retake"),
         primary,
-        loading: retake.pendingFor === card.id,
+        loading: retake.pending?.evaluationId === card.id,
         onClick: () => retake.start(card.id, r.keep),
       };
     }

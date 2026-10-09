@@ -15,6 +15,18 @@ Amended by [ADR-053](ADR-053-retrait-des-codes-d-entree.md): the evaluation acce
 removed, making §2's retake exemption moot. The network allowlist still
 applies on every entry.
 
+Amended 2026-10-09 by [ADR-091](ADR-091-reprise-partielle-d-un-exercice.md):
+§2's blank retake becomes one choice of `settings.retakes.scope` — a retake
+may ask only the questions to review, carrying the acquired ones over — and
+§4's score-only view gains, under that scope, a per-question standing
+(acquired, to review, awaiting correction) with no points, answer or key.
+
+Corrected 2026-10-09: this record cited ADR-012 for the release snapshot.
+ADR-012 is the grade freeze of projects, which reaches evaluations by
+analogy only (its addendum of 2026-09-30); the release snapshot
+(`released_grades`) is specified in `docs/spec/05-architecture.md` §5.3 and
+F-RES-04.
+
 ## Context
 
 F-EVAL-15 asks that an `exercise` may allow several attempts, keeping the
@@ -23,8 +35,8 @@ student per evaluation, and the database said so: the unique index
 `attempts_evaluation_user_uq` on `(evaluation_id, user_id)` was the
 mechanism of the idempotent `POST /evaluations/:id/attempt` (two tabs share
 one seed and one deadline), and every reader — the student home, the live
-grid, the grading panel, the results, the CSV, the release snapshot of
-ADR-012, the statistics, the staff attempt of ADR-018 — joined `attempts`
+grid, the grading panel, the results, the CSV, the release snapshot
+(`released_grades`), the statistics, the staff attempt of ADR-018 — joined `attempts`
 on `(evaluation, user)` and expected one row.
 
 The product owner answered the design questions on the issue: the teacher
@@ -75,6 +87,9 @@ student); the network allowlist is, like on every entry. *Moot since [ADR-053](A
 
 A retake is a new row with a new seed: a new item order and newly shuffled
 choices on the same frozen question versions, blank, started at once.
+*Amended by ADR-091 (2026-10-09): under `scope: "to_review"` a retake may
+carry the questions acquired in the previous attempt over; "Redo
+everything" remains this blank retake.*
 
 The rule is read again inside a transaction that holds the evaluation row
 `FOR SHARE`, and the attempt is inserted already `in_progress` in that same
@@ -92,7 +107,7 @@ row per student, with an `attemptCount` and a badge). Everything that is a
 RESULT reads the kept attempt: `keptAttempt` (`@quiz/domain`) picks, among
 the finished attempts, the best score (a tie goes to the latest) or the
 last; with no finished attempt it falls back to the latest. The results
-table, the grade, the CSV, the release snapshot (ADR-012 freezes the kept
+table, the grade, the CSV, the release snapshot (`released_grades` freezes the kept
 attempt's grade and id), the student's result cards and the per-question
 statistics all go through `keptAttempts` / `studentAttempts`
 (`grading/kept.ts`).
@@ -131,6 +146,10 @@ correction, the key per `showKey` — while the retakes go on; under `none`
 the score stays. From then on every attempt is graded at hand-in, retakes
 or not. That the key of attempt n−1 may now help attempt n is accepted: the
 teacher chose to publish.*
+
+*Amended by ADR-091 (2026-10-09): under `scope: "to_review"` the student
+also reads, beside the score, each question's standing — acquired, to
+review, awaiting correction — and nothing else of it, whatever the policy.*
 
 *Amended by ADR-067 (2026-10-02): every attempt of an exercise is graded
 alone at hand-in while it runs, with or without retakes and whatever the

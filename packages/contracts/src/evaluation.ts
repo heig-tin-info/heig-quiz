@@ -116,6 +116,10 @@ export const categorizePolicyOf = (settings: {
 export const RetakeKeep = z.enum(["best", "last"]);
 export type RetakeKeep = z.infer<typeof RetakeKeep>;
 
+/** ADR-091: a retake asks every question, or only the questions to review. */
+export const RetakeScope = z.enum(["all", "to_review"]);
+export type RetakeScope = z.infer<typeof RetakeScope>;
+
 /**
  * F-EVAL-15 (ADR-025, #92): several attempts on an `exercise`. Refused on an
  * exam by the server. `maxAttempts` counts every attempt, the first one
@@ -126,6 +130,12 @@ export const RetakeSettings = z.object({
   enabled: z.boolean().default(false),
   keep: RetakeKeep.default("best"),
   maxAttempts: z.number().int().min(2).max(100).nullable().default(null),
+  /**
+   * ADR-091: what a retake asks again. Absent on every rule stored before
+   * it, and absent is `all`: read it through `retakeScopeOf`. `to_review`
+   * needs `free` navigation (`422 retake_scope_navigation`).
+   */
+  scope: RetakeScope.optional(),
 });
 export type RetakeSettings = z.infer<typeof RetakeSettings>;
 

@@ -100,6 +100,7 @@ function viewOf(e: MockEvaluation, seed: number): AttemptView {
           skipped: false,
           flagged: false,
           locked: false,
+          acquired: false,
         },
       ];
     }),
