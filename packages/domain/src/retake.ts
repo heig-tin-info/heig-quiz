@@ -57,11 +57,16 @@ export function partialRetakesOn(mode: EvaluationModeName, policy: RetakePolicy)
  * ADR-090 §1: a partial retake shows the acquired questions read-only and
  * lets the student move freely between the others, which only `free`
  * navigation does — a validated checkpoint carried over would close the
- * questions before it. The server refuses any other pairing while retakes
- * are on.
+ * questions before it. The server refuses any other pairing while partial
+ * retakes are on ({@link partialRetakesOn}, the one rule), and the editor
+ * reads the same answer.
  */
-export function retakeScopeFits(policy: RetakePolicy, navigation: NavigationMode): boolean {
-  return !policy.enabled || retakeScopeOf(policy) === "all" || navigation === "free";
+export function retakeScopeFits(
+  mode: EvaluationModeName,
+  policy: RetakePolicy,
+  navigation: NavigationMode,
+): boolean {
+  return !partialRetakesOn(mode, policy) || navigation === "free";
 }
 
 /**
@@ -92,27 +97,31 @@ export function itemStanding(input: StandingInput): ItemStanding {
   return input.validatedPoints >= input.maxPoints ? "acquired" : "to_review";
 }
 
+/** One item with its standing, computed once by {@link itemStanding}. */
+export interface StoodItem {
+  id: string;
+  standing: ItemStanding;
+}
+
 /** The ids of the acquired items among `items`, in their order (ADR-090 §2). */
-export function acquiredItems(items: readonly (StandingInput & { id: string })[]): string[] {
-  return items.filter((item) => itemStanding(item) === "acquired").map((item) => item.id);
+export function acquiredItems(items: readonly StoodItem[]): string[] {
+  return items.filter((item) => item.standing === "acquired").map((item) => item.id);
 }
 
 /**
  * Why a partial retake is refused, checked after {@link retakeRefusal}
- * (ADR-090 §3): the teacher did not choose `to_review` (`scope_all`), or
- * every question is already acquired (`nothing_to_review`) — "Redo
- * everything" is then the retake left.
+ * passed (ADR-090 §3): the teacher did not choose `to_review` (`scope_all`),
+ * or every question is already acquired (`nothing_to_review`) — "Redo
+ * everything" is then the retake left. Two more {@link RetakeRefusal}s.
  */
-export type PartialRetakeRefusal = "scope_all" | "nothing_to_review";
-
 export function partialRetakeRefusal(input: {
   mode: EvaluationModeName;
   retakes: RetakePolicy;
-  /** The questions of the attempt the retake follows, as {@link itemStanding} reads them. */
-  items: readonly StandingInput[];
-}): PartialRetakeRefusal | null {
+  /** The questions of the attempt the retake follows, with their standing. */
+  items: readonly Pick<StoodItem, "standing">[];
+}): Extract<RetakeRefusal, "scope_all" | "nothing_to_review"> | null {
   if (!partialRetakesOn(input.mode, input.retakes)) return "scope_all";
-  if (input.items.every((item) => itemStanding(item) === "acquired")) return "nothing_to_review";
+  if (input.items.every((item) => item.standing === "acquired")) return "nothing_to_review";
   return null;
 }
 
@@ -164,7 +173,9 @@ export function retakesOn(mode: EvaluationModeName, policy: RetakePolicy): boole
  *   is entered, not retaken);
  * - `unfinished`: the latest attempt is still open — a retake never runs
  *   beside another attempt;
- * - `max_attempts`: the maximum is reached.
+ * - `max_attempts`: the maximum is reached;
+ * - `scope_all`, `nothing_to_review`: a retake of the questions to review
+ *   only, refused by {@link partialRetakeRefusal} (ADR-090).
  */
 export type RetakeRefusal =
   | "not_allowed"
@@ -172,7 +183,9 @@ export type RetakeRefusal =
   | "closed"
   | "no_attempt"
   | "unfinished"
-  | "max_attempts";
+  | "max_attempts"
+  | "scope_all"
+  | "nothing_to_review";
 
 export interface RetakeInput {
   mode: EvaluationModeName;

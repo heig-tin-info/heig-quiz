@@ -108,6 +108,7 @@ import {
   studentAttempts,
   tallyByAttempt,
   validatedGradings,
+  validatedOfAttempt,
   verdictOf,
   type GradingRecord,
   type PairKey,
@@ -724,10 +725,12 @@ function feedbackAvailable(
  * applies, so the results page offers exactly what the route would accept
  * (issues #120, #121).
  *
- * ADR-090: under the scope `to_review`, how many questions of the LATEST
- * finished attempt a partial retake would ask again — and, when `viewed` is
- * that attempt, each question's standing in the student's own order
- * (`review`): an id, a rank and a word, never a point, an answer or a key.
+ * ADR-090: under the scope `to_review`, on the page of the LATEST attempt
+ * once it is finished — the one a partial retake would follow — each
+ * question's standing in the student's own order (`review`): an id, a rank
+ * and a word, never a point, an answer or a key. Its presence is what offers
+ * the retake of the questions to review; any other attempt's page offers the
+ * plain retake.
  */
 async function retakeOffer(
   db: Db,
@@ -738,12 +741,6 @@ async function retakeOffer(
 ): Promise<{ retake: RetakeStatus; review?: ReviewItem[] }> {
   const policy = retakePolicyOf(evaluation);
   const mine = (await studentAttempts(db, userId, [evaluation])).get(evaluation.id)?.all ?? [];
-  const latest = latestAttempt(mine);
-  const items = partialRetakesOn(evaluation.mode, policy) ? await joinedItems(db, evaluation.id) : [];
-  const standings =
-    items.length > 0 && latest !== null && isFinishedAttempt(latest.state)
-      ? await standingsOf(db, items, latest.id)
-      : null;
   const retake: RetakeStatus = {
     evaluationId: evaluation.id,
     keep: policy.keep,
@@ -758,15 +755,19 @@ async function retakeOffer(
       attempts: mine,
     }),
     scope: retakeScopeOf(policy),
-    toReview: standings === null ? null : standings.filter((s) => s.standing !== "acquired").length,
   };
-  if (standings === null || latest?.id !== viewed.id) return { retake };
+  const latest = latestAttempt(mine);
+  const reviewed =
+    partialRetakesOn(evaluation.mode, policy) && latest?.id === viewed.id && isFinishedAttempt(viewed.state);
+  if (!reviewed) return { retake };
+  const items = await joinedItems(db, evaluation.id);
+  const standings = standingsOf(items, await validatedOfAttempt(db, viewed.id));
   const rank = new Map(
     orderItems(items, settingsOf(evaluation), viewed.seed, evaluation.id).map((o) => [o.item.id, o.rank]),
   );
   const review = standings
     .map((s) => ({ itemId: s.id, rank: rank.get(s.id) ?? 0, standing: s.standing }))
-    .sort((a, b) => a.rank - b.rank);
+    .sort((x, y) => x.rank - y.rank);
   return { retake, review };
 }
 
@@ -880,7 +881,11 @@ export async function studentFeedback(
     attempt.userId !== null && retakesOpen(evaluation)
       ? await retakeOffer(db, evaluation, attempt, attempt.userId, now)
       : null;
-  const retake = offer === null ? {} : { retake: offer.retake };
+  // ADR-090: the standings travel beside the retake, on both branches.
+  const retake =
+    offer === null
+      ? {}
+      : { retake: offer.retake, ...(offer.review === undefined ? {} : { review: offer.review }) };
   if (!gate.ok) {
     // The points of THIS attempt, and not one item: no verdict, no answer,
     // no key (ADR-025).
@@ -890,8 +895,6 @@ export async function studentFeedback(
       ...pending(gate.reason),
       score: scoreOf(tally, items.length, evaluationTotal(items.map((i) => i.item))),
       ...retake,
-      // ADR-090: the standing of each question, under the scope `to_review`.
-      ...(offer?.review === undefined ? {} : { review: offer.review }),
     };
   }
 

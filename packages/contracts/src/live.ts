@@ -18,6 +18,8 @@ import {
   PROVIDED_CALCULATORS,
   type ConditionsInput,
   type ImposedCondition as DomainImposedCondition,
+  type RetakeRefusal as DomainRetakeRefusal,
+  type RetakeScope as DomainRetakeScope,
 } from "@quiz/domain";
 
 import {
@@ -171,9 +173,11 @@ export const ImposedCondition = z.discriminatedUnion("key", [
 export type ImposedCondition = z.infer<typeof ImposedCondition>;
 
 // The wire shape and the domain's are the same union, both ways.
-type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+export type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 const _imposedSame: Same<ImposedCondition, DomainImposedCondition> = true;
 void _imposedSame;
+// ADR-090: the scope and the standing of the wire are the domain's.
+true satisfies Same<RetakeScope, DomainRetakeScope>;
 
 /**
  * The conditions a student reads (ADR-079, F-EVAL-33): what the teacher
@@ -308,8 +312,10 @@ export type AttemptStartBody = z.infer<typeof AttemptStartBody>;
 
 /**
  * `POST /evaluations/:id/retake` refused (F-EVAL-15): the reason is
- * `retakeRefusal`'s in `@quiz/domain`, spelled again here because contracts
- * depend on no package. A success answers {@link AttemptOrLobby}.
+ * `retakeRefusal`'s in `@quiz/domain` — or, for a retake of the questions
+ * to review, `partialRetakeRefusal`'s (`scope_all`, `nothing_to_review`,
+ * ADR-090). The two unions are checked equal below. A success answers
+ * {@link AttemptOrLobby}.
  */
 export const RetakeRefusalReason = z.enum([
   "not_allowed",
@@ -318,8 +324,11 @@ export const RetakeRefusalReason = z.enum([
   "no_attempt",
   "unfinished",
   "max_attempts",
+  "scope_all",
+  "nothing_to_review",
 ]);
 export type RetakeRefusalReason = z.infer<typeof RetakeRefusalReason>;
+true satisfies Same<RetakeRefusalReason, DomainRetakeRefusal>;
 
 export const RetakeRefused = z.object({
   error: z.literal("retake_refused"),
@@ -335,22 +344,6 @@ export type RetakeRefused = z.infer<typeof RetakeRefused>;
  */
 export const RetakeBody = z.object({ scope: RetakeScope.default("all") });
 export type RetakeBody = z.infer<typeof RetakeBody>;
-
-/**
- * `POST /evaluations/:id/retake` with `scope: "to_review"` refused, after
- * the rule of {@link RetakeRefused} passed (ADR-090): the teacher kept every
- * question (`scope_all`), or nothing is left to review
- * (`nothing_to_review`). `@quiz/domain`'s `partialRetakeRefusal`.
- */
-export const PartialRetakeRefusalReason = z.enum(["scope_all", "nothing_to_review"]);
-export type PartialRetakeRefusalReason = z.infer<typeof PartialRetakeRefusalReason>;
-
-export const PartialRetakeRefused = z.object({
-  error: z.literal("partial_retake_refused"),
-  reason: PartialRetakeRefusalReason,
-  message: z.string().optional(),
-});
-export type PartialRetakeRefused = z.infer<typeof PartialRetakeRefused>;
 
 // --- Autosave (PLAN-MVP §4.7) --------------------------------------------
 

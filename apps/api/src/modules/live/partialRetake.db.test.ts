@@ -122,7 +122,7 @@ const refusal = async (promise: Promise<unknown>): Promise<string | null> => {
     await promise;
     return null;
   } catch (error) {
-    if (error instanceof live.PartialRetakeRefused || error instanceof live.RetakeRefused) return error.reason;
+    if (error instanceof live.RetakeRefused) return error.reason;
     return `other:${(error as { code?: string }).code ?? (error as Error).message}`;
   }
 };
@@ -336,7 +336,7 @@ describe("the results page under the scope to_review (ADR-090)", () => {
     const feedback = await results.studentFeedback(db, running, first, app.clock.now());
     expect(feedback.available).toBe(false);
     if (feedback.available) return;
-    expect(feedback.retake).toMatchObject({ scope: "to_review", toReview: 2, refusal: null });
+    expect(feedback.retake).toMatchObject({ scope: "to_review", refusal: null });
     const order = orderItems(items, settingsOf(running), first.seed, evaluation.id).map((o) => o.item.id);
     expect(feedback.review!.map((r) => r.itemId)).toEqual(order);
     expect(feedback.review!.map((r) => r.rank)).toEqual([0, 1, 2]);
@@ -358,7 +358,17 @@ describe("the results page under the scope to_review (ADR-090)", () => {
     const older = await results.studentFeedback(db, running, first, app.clock.now());
     expect(older.available === false && older.review).toBeUndefined();
     const latest = await results.studentFeedback(db, running, (await live.attemptOf(db, evaluation.id, student))!, app.clock.now());
-    expect(latest.available === false && latest.retake?.toReview).toBe(1);
+    expect(latest.available === false && latest.review?.filter((r) => r.standing !== "acquired")).toHaveLength(1);
+  });
+
+  it("keeps the standings beside a published correction (ADR-050)", async () => {
+    const { app, student, evaluation, items } = await exercise();
+    const first = await sit(app, evaluation, items, student, [true, false, true]);
+    await results.publishCorrection(db, await reload(db, evaluation.id), app.clock.now());
+    const feedback = await results.studentFeedback(db, await reload(db, evaluation.id), first, app.clock.now());
+    expect(feedback.available).toBe(true);
+    expect(feedback.retake).toMatchObject({ scope: "to_review", refusal: null });
+    expect(feedback.review?.map((r) => r.standing).sort()).toEqual(["acquired", "acquired", "to_review"]);
   });
 
   it("sends the card to the results page under the scope to_review", async () => {
@@ -416,7 +426,7 @@ describe("POST /evaluations/:id/retake with a scope (ADR-090)", () => {
     await call("POST", `/app/api/attempts/${secondId}/submit`, { confirm: true });
     const none = await call("POST", `/app/api/evaluations/${seed.evaluationId}/retake`, { scope: "to_review" });
     expect(none.statusCode).toBe(409);
-    expect(none.json()).toMatchObject({ error: "partial_retake_refused", reason: "nothing_to_review" });
+    expect(none.json()).toMatchObject({ error: "retake_refused", reason: "nothing_to_review" });
     // No body: Redo everything, as before ADR-090.
     const blank = await call("POST", `/app/api/evaluations/${seed.evaluationId}/retake`);
     expect(blank.statusCode).toBe(200);

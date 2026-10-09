@@ -83,7 +83,7 @@ export async function livePlugin(app: FastifyInstance) {
         .code(429)
         .send({ error: error.code });
     }
-    if (error instanceof service.RetakeRefused || error instanceof service.PartialRetakeRefused) {
+    if (error instanceof service.RetakeRefused) {
       return reply
         .code(error.status)
         .send({ error: error.code, reason: error.reason, message: error.message });
@@ -188,7 +188,7 @@ export async function livePlugin(app: FastifyInstance) {
    * on the NEW attempt, so the player opens on it directly.
    *
    * ADR-090: `{ scope: "to_review" }` asks only the questions to review and
-   * carries the acquired ones over; `409 partial_retake_refused` when the
+   * carries the acquired ones over; `409 retake_refused` (`scope_all`, `nothing_to_review`) when the
    * teacher kept every question or nothing is left to review. No body is
    * `all`, as before.
    */

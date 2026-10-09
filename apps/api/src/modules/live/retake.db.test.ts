@@ -383,7 +383,6 @@ describe("grading and results with several attempts", () => {
         attemptCount: 1,
         refusal: null,
         scope: "all",
-        toReview: null,
       },
     });
     expect(JSON.stringify(feedback)).not.toContain("answer-q");

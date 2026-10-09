@@ -38,7 +38,6 @@ import {
   partialRetakeRefusal,
   retakeRefusal,
   retakeScopeOf,
-  type PartialRetakeRefusal,
   type RetakeRefusal,
   type RetakeScope,
 } from "@quiz/domain";
@@ -73,12 +72,14 @@ import { endKioskSessions } from "../../auth/session.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import {
-  copyValidatedGradings,
+  copyGradings,
   scoreOf,
   standDownAutomaticGradings,
   standingsOf,
   studentAttempts,
   tallyByAttempt,
+  validatedOfAttempt,
+  type GradingRecord,
 } from "../grading/service.js";
 import { presence } from "../realtime/presence.js";
 import {
@@ -151,22 +152,13 @@ export class EvaluationFinished extends LiveError {
 }
 
 /**
- * F-EVAL-15: a retake the rule refuses (`@quiz/domain#retakeRefusal`). The
- * reason travels in the body, so the student home can say which.
+ * F-EVAL-15: a retake the rule refuses (`@quiz/domain#retakeRefusal`), or a
+ * retake of the questions to review `partialRetakeRefusal` refuses
+ * (ADR-090). The reason travels in the body, so the screens can say which.
  */
 export class RetakeRefused extends LiveError {
   constructor(readonly reason: RetakeRefusal) {
     super("retake_refused", 409, `retake refused: ${reason}`);
-  }
-}
-
-/**
- * ADR-090: a retake of the questions to review the rule refuses
- * (`@quiz/domain#partialRetakeRefusal`), after {@link RetakeRefused} passed.
- */
-export class PartialRetakeRefused extends LiveError {
-  constructor(readonly reason: PartialRetakeRefusal) {
-    super("partial_retake_refused", 409, `partial retake refused: ${reason}`);
   }
 }
 
@@ -682,46 +674,56 @@ export async function ensureAttempt(
   return row;
 }
 
+/** What a partial retake carries over: the items, and their validated gradings as read. */
+interface Carried {
+  itemIds: string[];
+  gradings: GradingRecord[];
+}
+
 /**
- * ADR-090 §3: the items a partial retake carries over from `latest`, in
- * the evaluation's order — refused (`409 partial_retake_refused`) unless the
- * teacher chose that scope and something is left to review.
+ * ADR-090 §3: what a partial retake carries over from `latest` — the
+ * acquired items in the evaluation's order, and their validated gradings,
+ * read ONCE here and copied as read — refused (`409 retake_refused`,
+ * `scope_all` or `nothing_to_review`) unless the teacher chose that scope
+ * and something is left to review.
  */
-async function acquiredOf(
+async function carriedFrom(
   tx: DbOrTx,
   evaluation: EvaluationRecord,
   latest: AttemptRecord,
-): Promise<string[]> {
-  const standings = await standingsOf(tx, await joinedItems(tx, evaluation.id), latest.id);
+): Promise<Carried> {
+  const validated = await validatedOfAttempt(tx, latest.id);
+  const standings = standingsOf(await joinedItems(tx, evaluation.id), validated);
   const refusal = partialRetakeRefusal({
     mode: evaluation.mode,
     retakes: retakePolicyOf(evaluation),
     items: standings,
   });
-  if (refusal !== null) throw new PartialRetakeRefused(refusal);
-  return acquiredItems(standings);
+  if (refusal !== null) throw new RetakeRefused(refusal);
+  const itemIds = acquiredItems(standings);
+  return { itemIds, gradings: validated.filter((g) => itemIds.includes(g.itemId)) };
 }
 
 /**
- * ADR-090 §3: copies onto the new attempt `to` the answer of each item it
- * carries (`to.acquiredItemIds`) from `from`, then their validated
- * gradings — new ids, the same payload. The copy was shown when the
- * original was (`firstShownAt`), and has spent no time on screen in this
- * attempt (dwell 0, ADR-039); a flag or a validation of attempt n is not
- * carried, they were notes on another paper.
+ * ADR-090 §3: copies onto the new attempt `to` the answer of each carried
+ * item from `from`, then the validated gradings `carried` read — new ids, the
+ * same payload. The copy was shown when the original was (`firstShownAt`),
+ * and has spent no time on screen in this attempt (dwell 0, ADR-039); a flag
+ * or a validation of attempt n is not carried, they were notes on another
+ * paper.
  */
 async function carryAcquired(
   tx: DbOrTx,
   from: AttemptRecord,
   to: AttemptRecord,
+  carried: Carried,
   now: Date,
 ): Promise<void> {
-  const itemIds = to.acquiredItemIds;
-  if (itemIds.length === 0) return;
+  if (carried.itemIds.length === 0) return;
   const originals = await tx
     .select()
     .from(answers)
-    .where(and(eq(answers.attemptId, from.id), inArray(answers.itemId, itemIds)));
+    .where(and(eq(answers.attemptId, from.id), inArray(answers.itemId, carried.itemIds)));
   const copies = originals.map((answer) => ({
     ...answer,
     id: randomUUID(),
@@ -732,9 +734,8 @@ async function carryAcquired(
     updatedAt: now,
   }));
   if (copies.length > 0) await tx.insert(answers).values(copies);
-  const answerIds = new Map<string, string | null>(itemIds.map((id) => [id, null]));
-  for (const copy of copies) answerIds.set(copy.itemId, copy.id);
-  await copyValidatedGradings(tx, { fromAttemptId: from.id, toAttemptId: to.id, answerIds, now });
+  const answerIds = new Map(copies.map((copy) => [copy.itemId, copy.id]));
+  await copyGradings(tx, { rows: carried.gradings, toAttemptId: to.id, answerIds, now });
 }
 
 /**
@@ -761,7 +762,8 @@ async function carryAcquired(
  * be left open on a closed evaluation, graded 0, and kept as the "last".
  *
  * ADR-090: with `scope: "to_review"`, the questions acquired in the latest
- * attempt are carried over in the same transaction ({@link carryAcquired}):
+ * attempt are carried over in the same transaction ({@link carriedFrom},
+ * {@link carryAcquired}):
  * the new attempt is still a whole one — its own number, seed and deadline,
  * counted against the maximum — whose acquired questions hold attempt n's
  * values, answer and validated grading, read-only.
@@ -804,9 +806,12 @@ export async function retakeAttempt(
     });
     if (refusal !== null) throw new RetakeRefused(refusal);
     // The rule passed, so the latest attempt exists and is finished.
-    const latest = latestAttempt(previous)!;
-    const acquired =
-      input.scope === "to_review" ? await acquiredOf(tx, evaluation, latest) : [];
+    const latest = latestAttempt(previous);
+    if (latest === null) throw new RetakeRefused("no_attempt");
+    const carried: Carried =
+      input.scope === "to_review"
+        ? await carriedFrom(tx, evaluation, latest)
+        : { itemIds: [], gradings: [] };
 
     // Started at once: `running` is the only state the rule allows, so there
     // is no lobby to wait in, and no `not_started` row a close would miss.
@@ -819,7 +824,7 @@ export async function retakeAttempt(
     const drawn = await drawInstances(tx, evaluation, seed);
     // ADR-090: an acquired question keeps the numbers it was acquired with;
     // the others are drawn anew, like every retake's.
-    for (const itemId of acquired) {
+    for (const itemId of carried.itemIds) {
       const kept = latest.instances[itemId];
       if (kept !== undefined) drawn[itemId] = kept;
     }
@@ -833,7 +838,7 @@ export async function retakeAttempt(
         state: "in_progress",
         seed,
         instances: drawn,
-        acquiredItemIds: acquired,
+        acquiredItemIds: carried.itemIds,
         startedAt: now,
         deadlineAt,
         bonusS,
@@ -844,7 +849,7 @@ export async function retakeAttempt(
       .onConflictDoNothing()
       .returning();
     const row = created[0] ?? null;
-    if (row !== null) await carryAcquired(tx, latest, row, now);
+    if (row !== null) await carryAcquired(tx, latest, row, carried, now);
     return { evaluation, row };
   });
 

@@ -12,7 +12,9 @@
 import { z } from "zod";
 
 import { EvaluationMode, GradingScale, RetakeKeep, RetakeScope } from "./evaluation.js";
-import { AttemptScore, AttemptState, RetakeRefusalReason } from "./live.js";
+import type { ItemStanding as DomainItemStanding } from "@quiz/domain";
+
+import { AttemptScore, AttemptState, RetakeRefusalReason, type Same } from "./live.js";
 import { Verdict } from "./grading.js";
 
 /** A student with no attempt at all still gets a row, and a 1.0 (F-RES-02). */
@@ -253,15 +255,8 @@ export const RetakeStatus = z.object({
   /** Attempts taken so far, the first included. */
   attemptCount: z.number().int(),
   refusal: RetakeRefusalReason.nullable(),
-  /** ADR-090: what a retake asks again by default. */
+  /** ADR-090: what a retake may ask again; `to_review` comes with `review` beside it. */
   scope: RetakeScope,
-  /**
-   * ADR-090: under `to_review`, how many questions of the LATEST attempt a
-   * partial retake would ask again (the "(n)" of its button) — 0 when all
-   * are acquired, which leaves "Redo everything" alone. `null` under `all`,
-   * or while the latest attempt is unfinished.
-   */
-  toReview: z.number().int().nonnegative().nullable(),
 });
 export type RetakeStatus = z.infer<typeof RetakeStatus>;
 
@@ -272,6 +267,7 @@ export type RetakeStatus = z.infer<typeof RetakeStatus>;
  */
 export const ItemStanding = z.enum(["acquired", "to_review", "pending"]);
 export type ItemStanding = z.infer<typeof ItemStanding>;
+true satisfies Same<ItemStanding, DomainItemStanding>;
 
 /**
  * One question of the attempt on the page, as a partial retake reads it
@@ -311,6 +307,8 @@ const StudentResults = z.object({
    * page — the correction does not end the retakes.
    */
   retake: RetakeStatus.optional(),
+  /** As on the score-only page (ADR-090): each question's standing, latest attempt only. */
+  review: z.array(ReviewItem).optional(),
 });
 type StudentResults = z.infer<typeof StudentResults>;
 
@@ -339,8 +337,10 @@ export const FeedbackPending = z.object({
   retake: RetakeStatus.optional(),
   /**
    * Only with `retakes_open`, under the scope `to_review`, and for the
-   * student's latest attempt: each question's standing, in the student's
-   * order (ADR-090 §4) — whatever the feedback policy, `none` included.
+   * student's latest finished attempt: each question's standing, in the
+   * student's order (ADR-090 §4) — whatever the feedback policy, `none`
+   * included. Its presence is what offers the retake of the questions to
+   * review; their number is counted from it.
    */
   review: z.array(ReviewItem).optional(),
 });

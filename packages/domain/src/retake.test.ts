@@ -172,12 +172,13 @@ describe("retake scope (ADR-090)", () => {
     expect(partialRetakesOn("exam", partial)).toBe(false);
   });
 
-  it("fits free navigation only, while retakes are on", () => {
-    expect(retakeScopeFits(partial, "free")).toBe(true);
-    expect(retakeScopeFits(partial, "forward_only")).toBe(false);
-    expect(retakeScopeFits(partial, "milestones")).toBe(false);
-    expect(retakeScopeFits(base.retakes, "milestones")).toBe(true);
-    expect(retakeScopeFits({ ...partial, enabled: false }, "forward_only")).toBe(true);
+  it("fits free navigation only, while partial retakes are on", () => {
+    expect(retakeScopeFits("exercise", partial, "free")).toBe(true);
+    expect(retakeScopeFits("exercise", partial, "forward_only")).toBe(false);
+    expect(retakeScopeFits("exercise", partial, "milestones")).toBe(false);
+    expect(retakeScopeFits("exercise", base.retakes, "milestones")).toBe(true);
+    expect(retakeScopeFits("exercise", { ...partial, enabled: false }, "forward_only")).toBe(true);
+    expect(retakeScopeFits("exam", partial, "forward_only")).toBe(true);
   });
 });
 
@@ -202,28 +203,22 @@ describe("itemStanding / acquiredItems (ADR-090)", () => {
   it("lists the acquired ids in their order", () => {
     expect(
       acquiredItems([
-        { id: "a", maxPoints: 1, validatedPoints: 1 },
-        { id: "b", maxPoints: 1, validatedPoints: 0 },
-        { id: "c", maxPoints: 1, validatedPoints: null },
-        { id: "d", maxPoints: 0, validatedPoints: null },
-        { id: "e", maxPoints: 2, validatedPoints: 2 },
+        { id: "a", standing: "acquired" },
+        { id: "b", standing: "to_review" },
+        { id: "c", standing: "pending" },
+        { id: "d", standing: "acquired" },
       ]),
-    ).toEqual(["a", "d", "e"]);
+    ).toEqual(["a", "d"]);
   });
 });
 
 describe("partialRetakeRefusal (ADR-090)", () => {
   const partial = { ...base.retakes, scope: "to_review" as const };
-  const items = [
-    { maxPoints: 1, validatedPoints: 1 },
-    { maxPoints: 1, validatedPoints: 0 },
-  ];
+  const items = [{ standing: "acquired" as const }, { standing: "to_review" as const }];
 
   it("allows a partial retake when something is to review", () => {
     expect(partialRetakeRefusal({ mode: "exercise", retakes: partial, items })).toBeNull();
-    expect(
-      partialRetakeRefusal({ mode: "exercise", retakes: partial, items: [{ maxPoints: 1, validatedPoints: null }] }),
-    ).toBeNull();
+    expect(partialRetakeRefusal({ mode: "exercise", retakes: partial, items: [{ standing: "pending" }] })).toBeNull();
   });
 
   it("refuses it when the teacher chose every question", () => {
@@ -231,8 +226,6 @@ describe("partialRetakeRefusal (ADR-090)", () => {
   });
 
   it("refuses it when everything is acquired", () => {
-    expect(
-      partialRetakeRefusal({ mode: "exercise", retakes: partial, items: [items[0]!, { maxPoints: 0, validatedPoints: null }] }),
-    ).toBe("nothing_to_review");
+    expect(partialRetakeRefusal({ mode: "exercise", retakes: partial, items: [items[0]!] })).toBe("nothing_to_review");
   });
 });
