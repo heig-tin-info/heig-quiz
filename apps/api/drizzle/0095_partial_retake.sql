@@ -1,0 +1,1 @@
+ALTER TABLE "attempts" ADD COLUMN "acquired_item_ids" jsonb DEFAULT '[]'::jsonb NOT NULL;

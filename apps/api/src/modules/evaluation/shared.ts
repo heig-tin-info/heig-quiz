@@ -85,6 +85,20 @@ export class RetakesNotAllowed extends EvaluationError {
   }
 }
 
+/**
+ * ADR-090: a retake of the questions to review shows the acquired ones
+ * read-only between the others, which only `free` navigation does.
+ */
+export class RetakeScopeNavigation extends EvaluationError {
+  constructor() {
+    super(
+      "retake_scope_navigation",
+      422,
+      "a retake of the questions to review needs free navigation (ADR-090)",
+    );
+  }
+}
+
 /** ADR-026: a poll has no score, so nothing to penalise. */
 export class NegativeMarkingNotAllowed extends EvaluationError {
   constructor(mode: string) {

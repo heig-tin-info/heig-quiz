@@ -39,6 +39,7 @@ export {
   RateLimited,
   RunnerDown,
   RetakeRefused,
+  PartialRetakeRefused,
   RetakesEnabled,
   participantOf,
   sebSeat,
@@ -65,6 +66,7 @@ export {
   reopenAttempt,
   studentHome,
   drawSeed,
+  orderItems,
 } from "./attempt.js";
 export { onAttemptsEnded, type EndedAttempt } from "./dwell.js";
 export { studentGrades } from "./grades.js";

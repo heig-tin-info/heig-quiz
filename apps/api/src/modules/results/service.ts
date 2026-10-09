@@ -8,7 +8,7 @@
  *     conversion from `@quiz/domain#gradeFromPoints` (§10);
  *   - the RELEASE. One transaction writes the frozen snapshot
  *     (`released_grades`) and `released_at` together, so a half-released
- *     evaluation cannot exist (ADR-012's property, F-RES-04);
+ *     evaluation cannot exist (docs/05 §5.3, F-RES-04);
  *   - the FEEDBACK POLICY. {@link studentFeedback} is the only place it is
  *     applied, and it is the second half of the content gate of docs/05 §5.7:
  *     the key, the explanation, the teacher's comment and the hidden test
@@ -32,6 +32,7 @@ import type {
   ResultsItem,
   ResultsView,
   RetakeStatus,
+  ReviewItem,
   StaffCopy,
   StudentFeedback,
   StudentResultItem,
@@ -52,7 +53,10 @@ import {
   isEvaluationOpen,
   isEvaluationOver,
   isFinishedAttempt,
+  latestAttempt,
+  partialRetakesOn,
   retakeRefusal,
+  retakeScopeOf,
   round2,
   type AttemptTally,
   type CorrectionPublishRefusal,
@@ -100,6 +104,7 @@ import {
   pairKey,
   pointsByAttempt,
   scoreOf,
+  standingsOf,
   studentAttempts,
   tallyByAttempt,
   validatedGradings,
@@ -108,7 +113,7 @@ import {
   type PairKey,
   type StudentAttempts,
 } from "../grading/service.js";
-import { answeredBy, purgeIntegrityJournal } from "../live/service.js";
+import { answeredBy, orderItems, purgeIntegrityJournal } from "../live/service.js";
 import { solutionView, stripKeys, studentSolutionView, studentView } from "../live/studentView.js";
 import { typeOf } from "../pool/config.js";
 import { exampleInstance, explanationOrNull, isParameterized, itemInstance } from "../pool/service.js";
@@ -361,7 +366,7 @@ export async function releaseResults(
     releasedAt: iso(releasedAt),
     totalPoints: computed.totalPoints,
     scale: computed.scale,
-    // The frozen snapshot is the CLASS's grades (ADR-012); a teacher's own
+    // The frozen snapshot is the CLASS's grades (docs/05 §5.3); a teacher's own
     // test is not one of them and has nothing to freeze (ADR-018).
     rows: computed.rows
       .filter((r) => !r.staff)
@@ -718,16 +723,28 @@ function feedbackAvailable(
  * server's own rule (`retakeRefusal`), the one `POST /evaluations/:id/retake`
  * applies, so the results page offers exactly what the route would accept
  * (issues #120, #121).
+ *
+ * ADR-090: under the scope `to_review`, how many questions of the LATEST
+ * finished attempt a partial retake would ask again — and, when `viewed` is
+ * that attempt, each question's standing in the student's own order
+ * (`review`): an id, a rank and a word, never a point, an answer or a key.
  */
-async function retakeStatus(
+async function retakeOffer(
   db: Db,
   evaluation: EvaluationRecord,
+  viewed: typeof attempts.$inferSelect,
   userId: string,
   now: Date,
-): Promise<RetakeStatus> {
+): Promise<{ retake: RetakeStatus; review?: ReviewItem[] }> {
   const policy = retakePolicyOf(evaluation);
   const mine = (await studentAttempts(db, userId, [evaluation])).get(evaluation.id)?.all ?? [];
-  return {
+  const latest = latestAttempt(mine);
+  const items = partialRetakesOn(evaluation.mode, policy) ? await joinedItems(db, evaluation.id) : [];
+  const standings =
+    items.length > 0 && latest !== null && isFinishedAttempt(latest.state)
+      ? await standingsOf(db, items, latest.id)
+      : null;
+  const retake: RetakeStatus = {
     evaluationId: evaluation.id,
     keep: policy.keep,
     maxAttempts: policy.maxAttempts,
@@ -740,7 +757,17 @@ async function retakeStatus(
       now,
       attempts: mine,
     }),
+    scope: retakeScopeOf(policy),
+    toReview: standings === null ? null : standings.filter((s) => s.standing !== "acquired").length,
   };
+  if (standings === null || latest?.id !== viewed.id) return { retake };
+  const rank = new Map(
+    orderItems(items, settingsOf(evaluation), viewed.seed, evaluation.id).map((o) => [o.item.id, o.rank]),
+  );
+  const review = standings
+    .map((s) => ({ itemId: s.id, rank: rank.get(s.id) ?? 0, standing: s.standing }))
+    .sort((a, b) => a.rank - b.rank);
+  return { retake, review };
 }
 
 /**
@@ -849,10 +876,11 @@ export async function studentFeedback(
   if (!gate.ok && gate.reason !== "retakes_open") return pending(gate.reason);
   // While the exercise takes retakes, the page offers the next attempt — on
   // the score alone (ADR-025) or beside a published correction (ADR-050).
-  const retake =
+  const offer =
     attempt.userId !== null && retakesOpen(evaluation)
-      ? { retake: await retakeStatus(db, evaluation, attempt.userId, now) }
-      : {};
+      ? await retakeOffer(db, evaluation, attempt, attempt.userId, now)
+      : null;
+  const retake = offer === null ? {} : { retake: offer.retake };
   if (!gate.ok) {
     // The points of THIS attempt, and not one item: no verdict, no answer,
     // no key (ADR-025).
@@ -862,6 +890,8 @@ export async function studentFeedback(
       ...pending(gate.reason),
       score: scoreOf(tally, items.length, evaluationTotal(items.map((i) => i.item))),
       ...retake,
+      // ADR-090: the standing of each question, under the scope `to_review`.
+      ...(offer?.review === undefined ? {} : { review: offer.review }),
     };
   }
 

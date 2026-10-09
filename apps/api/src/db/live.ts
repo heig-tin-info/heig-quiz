@@ -100,6 +100,15 @@ export const attempts = pgTable(
      * student had. `{}` for an evaluation of static questions.
      */
     instances: jsonb("instances").$type<Record<string, StoredInstance>>().notNull().default({}),
+    /**
+     * ADR-090: the items a partial retake carried over from the previous
+     * attempt — acquired there, copied here with their answer and validated
+     * grading, read-only for the student (`409 item_acquired`). Written once,
+     * at the creation of the attempt; `[]` for every other attempt. Stored
+     * rather than derived: a regrade or an override may move a copy's
+     * grading later, and the student's paper must not reopen with it.
+     */
+    acquiredItemIds: jsonb("acquired_item_ids").$type<string[]>().notNull().default([]),
     startedAt: timestamp("started_at", { withTimezone: true }),
     /** Null in `manual` timing without a safety deadline: only the teacher closes (F-EVAL-04, ADR-086). */
     deadlineAt: timestamp("deadline_at", { withTimezone: true }),

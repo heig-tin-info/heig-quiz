@@ -157,7 +157,7 @@ export const evaluations = pgTable(
      * return to draft; null on every exam and poll.
      */
     correctionPublishedAt: timestamp("correction_published_at", { withTimezone: true }),
-    /** Frozen grades at release (ADR-012); written by WP6, never recomputed. */
+    /** Frozen grades at release (docs/05 §5.3, F-RES-04); written by WP6, never recomputed. */
     releasedGrades: jsonb("released_grades"),
     modifiedAfterRelease: boolean("modified_after_release").notNull().default(false),
     /**

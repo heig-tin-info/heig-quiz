@@ -25,6 +25,7 @@ import {
   ItemParam,
   MarkDoneBody,
   PositionBody,
+  RetakeBody,
   RunBody,
   SimulateBody,
   SkipBody,
@@ -82,7 +83,7 @@ export async function livePlugin(app: FastifyInstance) {
         .code(429)
         .send({ error: error.code });
     }
-    if (error instanceof service.RetakeRefused) {
+    if (error instanceof service.RetakeRefused || error instanceof service.PartialRetakeRefused) {
       return reply
         .code(error.status)
         .send({ error: error.code, reason: error.reason, message: error.message });
@@ -185,6 +186,11 @@ export async function livePlugin(app: FastifyInstance) {
    * The rule is the server's (`retakeRefusal`); a refusal is `409
    * retake_refused` with its reason. A success answers what entering does,
    * on the NEW attempt, so the player opens on it directly.
+   *
+   * ADR-090: `{ scope: "to_review" }` asks only the questions to review and
+   * carries the acquired ones over; `409 partial_retake_refused` when the
+   * teacher kept every question or nothing is left to review. No body is
+   * `all`, as before.
    */
   app.post(
     "/app/api/evaluations/:id/retake",
@@ -192,20 +198,25 @@ export async function livePlugin(app: FastifyInstance) {
     student(
       {
         params: IdParam,
+        body: RetakeBody,
+        optionalBody: true,
         load: async (req, reply, p) =>
           sitting(req, reply, await reachableEvaluation(app, req, reply, p.id)),
       },
-      async ({ req, reply, now, scope }) => {
+      async ({ req, reply, now, scope, body }) => {
         const participant = await service.participantOf(app.db, scope.evaluation, req.user!.id);
         if (!participant) return notFound(reply);
         const attempt = await service.retakeAttempt(app.db, {
           evaluation: scope.evaluation,
           participant,
+          scope: body.scope,
           now,
         });
         await trace(req, "attempt.retake", "attempt", attempt.id, {
           evaluationId: scope.evaluation.id,
           attemptNumber: attempt.attemptNumber,
+          scope: body.scope,
+          acquired: attempt.acquiredItemIds.length,
         });
         return service.attemptOrLobbyView(app.db, scope.evaluation, attempt, now, participant);
       },

@@ -1093,3 +1093,6 @@ export {
   type AttemptTally,
   type StudentAttempts,
 } from "./kept.js";
+
+// The partial retake (ADR-090): acquired items and the copy of their gradings, in `./carry.ts`.
+export { copyValidatedGradings, standingsOf, type ItemStandingRow } from "./carry.js";
