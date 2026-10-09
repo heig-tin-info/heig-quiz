@@ -2,29 +2,19 @@
 
 ## Status
 
-Accepted (2026-10-07, decisions of the product owner on issue #559, after
-a spec challenge). Records the whole feature in three phases; P1 (§1–§7)
-is implemented, by requirement F-LLM-07. **P2 (§8) is implemented** under
-the [P2 amendment of 2026-10-08](#p2-amendment-2026-10-08), which amends
-§2, §3 and §5 where they say so. **P2b — driving the interface — is
-implemented** under the [P2b amendment of 2026-10-08](#p2b-amendment-2026-10-08),
-which amends §1 and the P2 amendment's item 10 where it says so. **P3 —
-proposals the teacher confirms — is implemented** under the
-[P3 amendment of 2026-10-08](#p3-amendment-2026-10-08), which amends §1,
-§2, §5, §8, §9, the P2 amendment's item 10, the P2b amendment's decision 2
-and, for the assistant only, ADR-059 §1–2.
-
-Since the cut-over from tags to concepts
-([ADR-081, third addendum](ADR-081-vocabulaire-de-notions.md#third-addendum-2026-10-08-the-cut-over),
-§1 and §7), the assistant's question tools carry concepts instead of tags,
-and a word it searches the pool with (`tag:printf`, `#printf` below)
-resolves to every concept that word may designate, in either language;
-the P2b amendment's examples are otherwise unchanged.
+Accepted (2026-10-07, decisions of the product owner on issue #559, after a spec challenge): the whole
+feature in three phases, P1 (§1–§7, requirement F-LLM-07), P2 (§8) and P3 (§9). Amended 2026-10-08 by
+the P2, P2b and P3 amendments, folded on 2026-10-09 into §8, §10 and §9 (their items keep their numbers;
+the notes they made in §1, §2, §3 and §5 stay there).
 
 Scope: the in-app chat of the teacher UI, the `assist` purpose of the LLM
 gateway, the conversations it stores.
 
 Relations:
+- Amended by [ADR-081, third addendum](ADR-081-vocabulaire-de-notions.md#third-addendum-2026-10-08-the-cut-over)
+  (§1 and §7, the cut-over from tags to concepts): the assistant's question tools carry concepts instead
+  of tags, and a word it searches the pool with (`tag:printf`, `#printf` in §10) resolves to every
+  concept that word may designate, in either language; §10's examples are otherwise unchanged.
 - Amends [ADR-059](ADR-059-generer-la-reponse.md) §1–2 for the assistant
   only (P3 amendment, decision 1): in the editor it may rewrite the
   teacher's own texts; the wand keeps its rules.
@@ -66,15 +56,17 @@ of conversations; and a bottom-right corner already busy.
 
 ## Decision
 
-The product owner's decisions of 2026-10-07, numbered as he gave them.
+The product owner's decisions of 2026-10-07, numbered as he gave them; the amendments of
+2026-10-08 are §8 (P2), §9 (P3) and §10 (P2b).
 
-### 1. Three phases; this record ships P1
+### 1. Three phases, and what the assistant answers
 
 - **P1 — ask the documentation.** Read-only; one tool that reads the
   documentation and nothing else (§5).
 - **P2 — read tools** (§8): the platform's data, read on the teacher's
   behalf.
 - **P3 — writes** (§9): proposals the teacher confirms one by one.
+- *P2b (2026-10-08, §10), shipped before P3: driving the interface.*
 
 The assistant answers about the platform and its interface only. Anything
 else, and any request to ignore or change its instructions, gets a short
@@ -86,6 +78,10 @@ effort**: the system prompt is the only guard, a determined user can make a
 model say something off-topic, and nothing it says changes anything on the
 platform in P1. The French refusal is the product owner's wording, in the
 familiar form; the interface's own strings stay in the formal one.
+
+*Amended by P2b (§10) and P3 (§9), 2026-10-08:* the assistant still changes nothing on the platform by
+itself; it acts on the teacher's interface (§10) and proposes changes that only the teacher's Apply or
+Confirm makes (§9).
 
 ### 2. What P1 sends: the screen, never its content
 
@@ -108,6 +104,10 @@ the screen's entities from a closed list of kinds — course, classroom,
 pool, question, evaluation, template — and never a user's, an
 enrollment's, an attempt's or a student's; the stored exchange keeps the
 pattern without them.*
+
+*Amended by P3 (2026-10-08, §9, decision 2): "This amends §2: from the question editor, the context
+carries the teacher's own text, never stored; the prompt shows the model the draft's free texts only, by
+path, not its key nor its settings."*
 
 ### 3. Where it is offered
 
@@ -174,8 +174,8 @@ pattern without them.*
 - **Reply language**: the language of the user's last message, otherwise
   the UI language.
 - **No streaming** in v1. At most **4 provider requests per question**
-  (`ASSIST_MAX_STEPS`; *6 since the P2 amendment, item 7*); the last one may not call a tool, so a question
-  ends. Each request is reserved at its worst case against the cap and the
+  (`ASSIST_MAX_STEPS`; *6 since the P2 amendment, §8 item 7*); the last one may not call a tool, so a
+  question ends (*and, since P3, §9 decision 7, the turn ends after a step that prepared a write*). Each request is reserved at its worst case against the cap and the
   share, and logged in `llm_calls`.
 - **ADR-058 §1 amended**: the gateway gains `converse()` — a multi-turn call
   with read-only tools (`ReadOnlyTool`), the provider running its loop and
@@ -230,7 +230,7 @@ Under `lg`, while the pool's bulk bar spans the bottom edge, the button
 steps aside. Checked at 1440 and 390 px (`apps/web/DESIGN.md`, "The help
 assistant").
 
-### 8. P2 — read tools (built, under the P2 amendment)
+### 8. P2 — read tools
 
 - Read tools call the API as the teacher, through a per-question,
   short-lived, audience-bound token (ADR-023's machinery): the audit shows
@@ -272,24 +272,10 @@ assistant").
   client is the one that sends; it does not hold for the in-app assistant,
   where the platform sends, under this record.
 
-### 9. P3 — writes (built, under the P3 amendment)
-
-- Every write is a proposal the teacher confirms one by one, with a diff.
-- Never a publication. `create_poll` (live in front of students) and
-  `create_course` are excluded.
-- In the question editor, a rewrite or "add five choices" follows the
-  ADR-059 proposal path: merged into the draft, one Undo, the teacher
-  publishes.
-- Writes made on the assistant's behalf get a new `assistant` actor in
-  `audit.ts`'s `actorType` (invariant 9). P1 and P2 write nothing on the
-  assistant's behalf, so neither adds it.
-
-### P2 amendment (2026-10-08)
-
-The product owner's decisions of 2026-10-08 (1–4) and the spec challenge's
-(5–10), for P2. They amend §2, §3, §5 and §8 where those say so, F-LLM-03
-and F-LLM-07 (docs/spec/02), N-DATA-05 and N-DATA-07 (docs/spec/03), and
-ADR-022's consequence.
+**The P2 amendment (2026-10-08).** The product owner's decisions of 2026-10-08
+(1–4) and the spec challenge's (5–10), for P2. They amend §2, §3, §5 and §8
+where those say so, F-LLM-03 and F-LLM-07 (docs/spec/02), N-DATA-05 and
+N-DATA-07 (docs/spec/03), and ADR-022's consequence.
 
 1. **The results reader is the assistant's alone.** `get_classroom_results`
    reads the staff gradebook route (`GET /classrooms/:id/gradebook`)
@@ -317,7 +303,7 @@ ADR-022's consequence.
    sees it, students' names and results included, and sends it to
    Anthropic (`assist.notice`). N-DATA-07 and the data-protection guide say
    so to the students.
-5. **Identity**: §8, "The identity, as built".
+5. **Identity**: "The identity, as built", above.
 6. **A closed allowlist of tools**, pinned by a test
    (`assist.tools.db.test.ts`): `read_guide`; the MCP read tools that carry
    no student data — `list_courses`, `get_course`, `list_pools`,
@@ -349,129 +335,24 @@ Deferred: the results reader over MCP, opaque handles instead of uuids in
 the context, per-attempt detail (an answer, a paper), streaming, and the
 writes of P3.
 
-### P2b amendment (2026-10-08)
+### 9. P3 — writes
 
-The product owner's need of 2026-10-08: asked "show me the questions of the
-Sandbox pool", the assistant listed 28 questions in prose. It should DRIVE
-THE INTERFACE instead — open the pool's screen, searched when asked ("only
-the printf ones" is the pool's search `tag:printf`), switch a tab ("the
-roster of PRG1-2026"), run the screen's own palette commands. His decisions,
-numbered as he gave them:
+- Every write is a proposal the teacher confirms one by one, with a diff.
+- Never a publication. `create_poll` (live in front of students) and
+  `create_course` are excluded.
+- In the question editor, a rewrite or "add five choices" follows the
+  ADR-059 proposal path: merged into the draft, one Undo, the teacher
+  publishes.
+- Writes made on the assistant's behalf get a new `assistant` actor in
+  `audit.ts`'s `actorType` (invariant 9). P1 and P2 write nothing on the
+  assistant's behalf, so neither adds it.
 
-1. **Navigation happens directly, with no confirmation.** The assistant
-   opens the screen and says so in one line; the browser's Back returns.
-   The router's leave guard (`useLeaveGuard`, unsaved work) still asks
-   before the screen is left. The panel stays open across the navigation.
-2. **It may run the current screen's palette commands that have no
-   effect** — open a preview, switch to a tab, open a sheet, go to the
-   results… Commands that change anything (publish, delete, start or close
-   an evaluation, release, grade…) are not runnable in P2b; they come with
-   P3, with a confirmation.
-3. **P2b ships before P3** (writes), which will reuse this action mechanism.
-
-The design, as built:
-
-- **The browser acts; the server checks.** Two tools are handed to the
-  model after the read tools: `open_screen(screen, ids, params)` and
-  `run_screen_command(id)`. The server runs nothing for them: it checks the
-  call (`AssistUiTurn`, `checkOpenScreen` of `@quiz/domain`), answers the
-  model a short "done by the browser after your answer" — or the refusal,
-  naming what is allowed —, and returns the checked actions with the reply
-  (`AssistReply.actions`, `@quiz/contracts`). The turn goes on, so the
-  model still answers in text. The browser runs the actions in order once
-  the answer is on screen (`apps/web/src/assist/actions.ts`). **At most one
-  screen per answer, at most three commands, and no command once a screen
-  is being opened** (the commands are the current screen's, which the
-  navigation leaves). The gateway's loop is unchanged: the two tools are
-  `ReadOnlyTool`s that read nothing either.
-- **The screen catalogue is held to the router.** It is written once, in
-  `@quiz/domain` (`ASSIST_SCREENS`, `assistScreens.ts`), one line per
-  screen — pattern, ids and their entity kinds, parameters, English title,
-  help topic, administrator-only —, beside the tab lists the screens and
-  the router now read from there (`POOL_TABS`, `CLASSROOM_QUERY_TABS`,
-  `COURSE_TABS`, …). The web classifies every view of the router in
-  `ASSIST_SCREEN_LABELS` (`apps/web/src/assist/screens.ts`), a table mapped
-  over the `Route` union — a view added to the router and not classified is
-  a compile error —: the label a screen of the catalogue is named by, or
-  `null` — a student's screen, a projection, a preview, a guest's or a
-  station's page, a creation form, a page whose ids no read tool returns (a
-  project, a group set). Its test holds the two to each other and to the
-  router: the same screens, each pattern the router's own (`routePattern`),
-  each id of the kind the P2 table gives (`routeEntities`), each title the
-  label's English text. The administration is offered to an administrator's
-  assistant only.
-- **Checks.** One rule, `checkOpenScreen` (`@quiz/domain`), on both sides:
-  a screen of the role's catalogue, exactly its ids, and only its
-  parameters — a tab from its list, the pool's search as one line of at
-  most 200 characters, a category or an item id. The server requires uuids;
-  the browser requires each id to be a plain path segment, and the route's
-  path to parse back to that screen (`parsePath`). Otherwise nothing moves
-  and the answer says "Could not open this screen" — never a silent jump
-  to the home. The router's `navigate` resolves whether the app moved: when
-  the leave guard kept it on the screen, the answer says "Stayed on this
-  screen", never "Opened".
-- **Filtering reuses the screens' own address state.** The parameters a
-  route does not carry go on the query string (`navigate`'s new `query`
-  option), where the screen reads them with `useSearchParam`. The pool
-  screen gains `?q=`, its search box as typed, in the grammar of
-  `pool/searchSyntax.ts` (`tag:`, `type:`, `difficulty:`, `version:`); it is
-  also kept in the address when the teacher types, so a reload keeps it.
-- **Commands carry an effect.** A screen command (`ScreenCommand`,
-  `useScreenCommands`) must declare `effect: "none" | "write"`, so every
-  one is classified where it is written. Classified `none`: the editor's preview and "try it", the
-  live dashboard's "configure", the grading's and the results' links to
-  each other, the pool's "new question of type …" (it opens the creation
-  sheet; nothing exists until the teacher saves), the classroom's "connect
-  to GitHub" (it opens the sheet). Classified `write`: publish, start,
-  pause, extend, close, grade, regrade, release. The client sends the
-  screen's commands as `{id, label, effect}` in the context
-  (`AssistContext.commands`); the server lists the `none` ones to the model
-  in the screen part of the prompt and accepts only those; the browser runs
-  a command only while it is still registered and still `none`. A command
-  that needs a real user gesture — the editor's preview opens a new tab,
-  which a browser blocks as a pop-up after an asynchronous answer — is
-  marked `gesture` and offered in the answer as a button the teacher
-  clicks, never run on its own.
-- **A command's label is screen chrome.** It reaches the model, so a screen
-  command's label never embeds an entity's name or content (a title, a
-  student, a question); a command that would need one uses a generic label.
-  The rule is written on `ScreenCommand`.
-- **Nothing is stored.** The exchange keeps its text and the screen
-  (pattern, topic, language): never the commands nor the actions, as for
-  the tool calls of P2 (item 9). The panel shows "Opened: <screen>",
-  "Stayed on this screen" or "Done: <command>" under the answer, for this
-  tab only.
-- **The prompt prefers showing over listing**: asked to see, show, open or
-  display something, the assistant finds its id with its read tools, opens
-  the screen (searched or on a tab when the teacher narrows it) and replies
-  in one short sentence, without enumerating what the screen shows. The
-  catalogue is in the cached prefix (it depends on the role only); the
-  screen's commands in the screen part.
-- **Prompt injection is bounded by construction.** Whatever a page, a title
-  or a tool result steers the model into, an action can only move the
-  teacher's own browser to one of the app's own screens of the closed
-  catalogue — which reads with the teacher's own seats — or run an
-  effect-free command the screen offers; it never writes, never leaves the
-  origin, and the leave guard still protects unsaved work. The prompt also
-  says to act only because the user asked.
-- **The development stub** (`stubTurn`, shared by the API and the browser
-  mock) opens a pool the question names when it asks to see something,
-  searched by its `tag:x` or `#x`; the API checks its action like a
-  model's.
-- **§1 and the P2 amendment's item 10 amended**: the assistant still changes
-  nothing on the platform, and now acts on the teacher's interface.
-
-Deferred to P3: commands with an effect (behind a confirmation), and a
-navigation whose result the model reads back.
-
-### P3 amendment (2026-10-08)
-
-The product owner's decisions of 2026-10-08 (1–5) and the orchestrator's
-(6–11), for P3: the assistant PROPOSES changes, and only the teacher's
-Apply or Confirm makes them. They amend §1, §2, §8 and §9 where they say
-so, the P2 amendment's item 10 and the P2b amendment's decision 2,
-[ADR-059](ADR-059-generer-la-reponse.md) §1–2 for the assistant only, and
-F-LLM-07 (docs/spec/02).
+**The P3 amendment (2026-10-08).** The product owner's decisions of 2026-10-08
+(1–5) and the orchestrator's (6–11), for P3: the assistant PROPOSES changes, and
+only the teacher's Apply or Confirm makes them. They amend §1, §2, §8 and §9
+where they say so, the P2 amendment's item 10 (§8) and the P2b amendment's
+decision 2 (§10), [ADR-059](ADR-059-generer-la-reponse.md) §1–2 for the
+assistant only, and F-LLM-07 (docs/spec/02).
 
 1. **In the question editor the assistant may rewrite the teacher's own
    texts**: the statement, the choices' texts, the explanation, and the
@@ -615,6 +496,121 @@ it), pending writes that survive a deploy, writes over MCP that need the
 teacher's confirmation, and an editor proposal for a field a type does not
 declare.
 
+### 10. P2b — driving the interface
+
+**The P2b amendment (2026-10-08).** The product owner's need of 2026-10-08:
+asked "show me the questions of the Sandbox pool", the assistant listed 28
+questions in prose. It should DRIVE THE INTERFACE instead — open the pool's
+screen, searched when asked ("only the printf ones" is the pool's search
+`tag:printf`), switch a tab ("the roster of PRG1-2026"), run the screen's own
+palette commands. His decisions, numbered as he gave them:
+
+1. **Navigation happens directly, with no confirmation.** The assistant
+   opens the screen and says so in one line; the browser's Back returns.
+   The router's leave guard (`useLeaveGuard`, unsaved work) still asks
+   before the screen is left. The panel stays open across the navigation.
+2. **It may run the current screen's palette commands that have no
+   effect** — open a preview, switch to a tab, open a sheet, go to the
+   results… Commands that change anything (publish, delete, start or close
+   an evaluation, release, grade…) are not runnable in P2b; they come with
+   P3, with a confirmation.
+3. **P2b ships before P3** (writes), which will reuse this action mechanism.
+
+The design, as built:
+
+- **The browser acts; the server checks.** Two tools are handed to the
+  model after the read tools: `open_screen(screen, ids, params)` and
+  `run_screen_command(id)`. The server runs nothing for them: it checks the
+  call (`AssistUiTurn`, `checkOpenScreen` of `@quiz/domain`), answers the
+  model a short "done by the browser after your answer" — or the refusal,
+  naming what is allowed —, and returns the checked actions with the reply
+  (`AssistReply.actions`, `@quiz/contracts`). The turn goes on, so the
+  model still answers in text. The browser runs the actions in order once
+  the answer is on screen (`apps/web/src/assist/actions.ts`). **At most one
+  screen per answer, at most three commands, and no command once a screen
+  is being opened** (the commands are the current screen's, which the
+  navigation leaves). The gateway's loop is unchanged: the two tools are
+  `ReadOnlyTool`s that read nothing either.
+- **The screen catalogue is held to the router.** It is written once, in
+  `@quiz/domain` (`ASSIST_SCREENS`, `assistScreens.ts`), one line per
+  screen — pattern, ids and their entity kinds, parameters, English title,
+  help topic, administrator-only —, beside the tab lists the screens and
+  the router now read from there (`POOL_TABS`, `CLASSROOM_QUERY_TABS`,
+  `COURSE_TABS`, …). The web classifies every view of the router in
+  `ASSIST_SCREEN_LABELS` (`apps/web/src/assist/screens.ts`), a table mapped
+  over the `Route` union — a view added to the router and not classified is
+  a compile error —: the label a screen of the catalogue is named by, or
+  `null` — a student's screen, a projection, a preview, a guest's or a
+  station's page, a creation form, a page whose ids no read tool returns (a
+  project, a group set). Its test holds the two to each other and to the
+  router: the same screens, each pattern the router's own (`routePattern`),
+  each id of the kind the P2 table gives (`routeEntities`), each title the
+  label's English text. The administration is offered to an administrator's
+  assistant only.
+- **Checks.** One rule, `checkOpenScreen` (`@quiz/domain`), on both sides:
+  a screen of the role's catalogue, exactly its ids, and only its
+  parameters — a tab from its list, the pool's search as one line of at
+  most 200 characters, a category or an item id. The server requires uuids;
+  the browser requires each id to be a plain path segment, and the route's
+  path to parse back to that screen (`parsePath`). Otherwise nothing moves
+  and the answer says "Could not open this screen" — never a silent jump
+  to the home. The router's `navigate` resolves whether the app moved: when
+  the leave guard kept it on the screen, the answer says "Stayed on this
+  screen", never "Opened".
+- **Filtering reuses the screens' own address state.** The parameters a
+  route does not carry go on the query string (`navigate`'s new `query`
+  option), where the screen reads them with `useSearchParam`. The pool
+  screen gains `?q=`, its search box as typed, in the grammar of
+  `pool/searchSyntax.ts` (`tag:`, `type:`, `difficulty:`, `version:`); it is
+  also kept in the address when the teacher types, so a reload keeps it.
+- **Commands carry an effect.** A screen command (`ScreenCommand`,
+  `useScreenCommands`) must declare `effect: "none" | "write"`, so every
+  one is classified where it is written. Classified `none`: the editor's preview and "try it", the
+  live dashboard's "configure", the grading's and the results' links to
+  each other, the pool's "new question of type …" (it opens the creation
+  sheet; nothing exists until the teacher saves), the classroom's "connect
+  to GitHub" (it opens the sheet). Classified `write`: publish, start,
+  pause, extend, close, grade, regrade, release. The client sends the
+  screen's commands as `{id, label, effect}` in the context
+  (`AssistContext.commands`); the server lists the `none` ones to the model
+  in the screen part of the prompt and accepts only those; the browser runs
+  a command only while it is still registered and still `none`. A command
+  that needs a real user gesture — the editor's preview opens a new tab,
+  which a browser blocks as a pop-up after an asynchronous answer — is
+  marked `gesture` and offered in the answer as a button the teacher
+  clicks, never run on its own.
+- **A command's label is screen chrome.** It reaches the model, so a screen
+  command's label never embeds an entity's name or content (a title, a
+  student, a question); a command that would need one uses a generic label.
+  The rule is written on `ScreenCommand`.
+- **Nothing is stored.** The exchange keeps its text and the screen
+  (pattern, topic, language): never the commands nor the actions, as for
+  the tool calls of P2 (item 9). The panel shows "Opened: <screen>",
+  "Stayed on this screen" or "Done: <command>" under the answer, for this
+  tab only.
+- **The prompt prefers showing over listing**: asked to see, show, open or
+  display something, the assistant finds its id with its read tools, opens
+  the screen (searched or on a tab when the teacher narrows it) and replies
+  in one short sentence, without enumerating what the screen shows. The
+  catalogue is in the cached prefix (it depends on the role only); the
+  screen's commands in the screen part.
+- **Prompt injection is bounded by construction.** Whatever a page, a title
+  or a tool result steers the model into, an action can only move the
+  teacher's own browser to one of the app's own screens of the closed
+  catalogue — which reads with the teacher's own seats — or run an
+  effect-free command the screen offers; it never writes, never leaves the
+  origin, and the leave guard still protects unsaved work. The prompt also
+  says to act only because the user asked.
+- **The development stub** (`stubTurn`, shared by the API and the browser
+  mock) opens a pool the question names when it asks to see something,
+  searched by its `tag:x` or `#x`; the API checks its action like a
+  model's.
+- **§1 and the P2 amendment's item 10 (§8) amended**: the assistant still
+  changes nothing on the platform, and now acts on the teacher's interface.
+
+Deferred to P3: commands with an effect (behind a confirmation), and a
+navigation whose result the model reads back.
+
 ## Consequences
 
 - A teacher asks a question from any teacher screen and gets an answer that
@@ -641,19 +637,31 @@ declare.
 
 ## Alternatives considered
 
-- **Nothing stored, history in the tab** (the spec challenge's default).
-  Rejected by the product owner: a teacher comes back to an answer, and an
-  administrator must be able to see what the assistant told a teacher. The
-  30-day retention and the audited read bound it.
-- **Vector RAG with embeddings.** Anthropic has no embeddings API; a second
-  provider contradicts F-LLM-01, and the corpus fits an index plus a tool.
-- **The whole corpus in the prompt.** About 80 k tokens per question,
-  cached or not; the index with `read_guide` sends a tenth of it.
-- **An entry in the help drawer or the command palette only.** Rejected
-  for the floating button, which stays on every screen; the help drawer and
-  the palette are unchanged.
-- **Streaming.** Deferred: a reply of a few sentences arrives in seconds,
-  and a streaming tool loop needs the gateway to settle a reservation
-  mid-stream.
-- **The specification and ADRs in the corpus.** Developer-facing, describe
-  unshipped work and security details.
+- **Nothing stored, history in the tab** (the spec challenge's default). Rejected by the product owner: a
+  teacher comes back to an answer, and an administrator must be able to see what the assistant told a
+  teacher. The 30-day retention and the audited read bound it.
+- **Vector RAG with embeddings.** Anthropic has no embeddings API; a second provider contradicts
+  F-LLM-01, and the corpus fits an index plus a tool.
+- **The whole corpus in the prompt.** About 80 k tokens per question, cached or not; the index with
+  `read_guide` sends a tenth of it.
+- **An entry in the help drawer or the command palette only.** Rejected for the floating button, which
+  stays on every screen; the help drawer and the palette are unchanged.
+- **Streaming.** Deferred: a reply of a few sentences arrives in seconds, and a streaming tool loop needs
+  the gateway to settle a reservation mid-stream.
+- **The specification and ADRs in the corpus.** Developer-facing, describe unshipped work and security
+  details.
+
+## Correspondence of old references
+
+§1–§9 keep their numbers. The three amendments of 2026-10-08 keep their item numbers inside the section
+that now holds them:
+
+<a id="1-three-phases-this-record-ships-p1"></a><a id="8-p2-read-tools-built-under-the-p2-amendment"></a><a id="9-p3-writes-built-under-the-p3-amendment"></a><a id="p2-amendment-2026-10-08"></a><a id="p2b-amendment-2026-10-08"></a><a id="p3-amendment-2026-10-08"></a>
+
+| Old reference | Now |
+| --- | --- |
+| §1 "Three phases; this record ships P1" | [§1](#1-three-phases-and-what-the-assistant-answers) |
+| "P2 amendment", "P2, item N" (1–10, and its Deferred list) | [§8](#8-p2-read-tools), "The P2 amendment", item N |
+| "P2b amendment", "P2b", its decisions 1–3 and its design as built | [§10](#10-p2b-driving-the-interface) |
+| "P3 amendment", "P3, decision N" (1–11), the classified write commands, the stub, Deferred | [§9](#9-p3-writes), "The P3 amendment", decision N |
+| A bare "ADR-080 amendment of 2026-10-08" (three comments of `apps/web/scripts/screenshots.mjs`, each prefixed with its phase) | "P2 (…)" is [§8](#8-p2-read-tools), "P2b (…)" [§10](#10-p2b-driving-the-interface), "P3 (…)" [§9](#9-p3-writes) |

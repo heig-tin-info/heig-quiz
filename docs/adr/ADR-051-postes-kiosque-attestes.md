@@ -2,21 +2,22 @@
 
 ## Status
 
-Accepted (2026-09-30, settled with the product owner on the implementation
-plan). Amends ADR-027 (§2 the Config Key, §3 the cookie and the lifetime of a
-confined session) and the scope of `docs/spec/00-cadre-et-perimetre.md`
-§0.6. Settles, for **evaluations only**, the part of merge decision D21
-(`docs/merge/08-decisions.md`) that concerns how a SEB session is checked;
-the confinement of a session to an **activity** (a project) was outside
-this decision. D21 was subsequently settled on 2026-10-01 for M6; see
-[ADR-027](ADR-027-tickets-de-lancement-et-sessions-typees.md)'s Status for that scope and its implementation boundary. Delivered in steps, each its own pull request (§10).
+Accepted (2026-09-30, settled with the product owner on the implementation plan). Amended 2026-10-09:
+the session end is `endKioskSessions` (`auth/session.ts`), formerly named `endConfinedSessions` here;
+§10's delivery plan is removed (delivery lives in `docs/merge/PROGRESS.md` and `changes/`), its step 0
+stays as §10; §1 names the stale-submit refusal (`423 kiosk_attestation_stale`) the code already answers.
 
-**Amended by [ADR-089](ADR-089-kiosque-pour-l-espace-de-travail.md)
-(proposed, 2026-10-09)**: §1, §4 and §7 for a `kiosk` session confined to an
-`online_seb` project, which frames the online workspace from a Quiz page;
-the rules below for evaluations are unchanged.
+Scope: for **evaluations only**, the part of merge decision D21 (`docs/merge/08-decisions.md`) that
+concerns how a SEB session is checked; the confinement of a session to an **activity** (a project) was
+outside this decision. D21 was subsequently settled on 2026-10-01 for M6; see
+[ADR-027](ADR-027-tickets-de-lancement-et-sessions-typees.md)'s Status for that scope and its
+implementation boundary.
 
-Amended 2026-10-09: the session end is `endKioskSessions` (`auth/session.ts`), formerly named `endConfinedSessions` here.
+Relations: amends ADR-027 (§2 the Config Key, §3 the cookie and the lifetime of a confined session)
+and the scope of `docs/spec/00-cadre-et-perimetre.md` §0.6. **Amended by
+[ADR-089](ADR-089-kiosque-pour-l-espace-de-travail.md) (proposed, 2026-10-09)**: §1, §4 and §7 for a
+`kiosk` session confined to an `online_seb` project, which frames the online workspace from a Quiz
+page; the rules below for evaluations are unchanged.
 
 ## Context
 
@@ -70,6 +71,14 @@ session), except the suspension of §6. That answers `423 kiosk_suspended`
 on unsafe methods only (writes). A GET and the event stream pass, so that the
 page can still read the attempt, say why it is suspended, and hear the
 resumption: `EventSource` stops for good on a non-200.
+
+*Amended 2026-10-09 (documents existing behaviour, flagged on 2026-10-09 for
+the product owner's acknowledgement):* a second refusal is not anonymous either. A submit of a `kiosk`
+session without an attestation check less than two minutes old (§6) answers
+`423 kiosk_attestation_stale`, which the page meets by re-attesting and
+retrying once (§6). The code already does so: `kioskAttestationRefusal` and
+`trustRefused` (`auth/trust.ts`), answered by the session hook of
+`auth/plugin.ts`.
 
 ### 2. Which trusted clients an exam accepts
 
@@ -365,21 +374,10 @@ The station's Google device id is data about a machine, not a person. What
 links a person to a station is the `kiosk` session and the audit entries of
 the pairing. N-DATA-02 lists "the kiosk station an attempt was sat on".
 
-### 10. Delivery
+### 10. Hardware checks before the switches
 
-Each step is one pull request:
-1. this ADR and the spec;
-2. the trusted-client setting and the generalized `sitRefusal` (no kiosk
-   reachable yet);
-3. SEB hardening (§3–4);
-4. registry and attestation;
-5. the extension;
-6. pairing and the two pages;
-7. re-attestation, suspension and the supervisor's view;
-8. the end-to-end tests with the mock attestation, and `docs/development/kiosk.md`.
-
-Step 0, done by hand on real hardware, gates steps 3 and 4 (not their
-code, their switches):
+Step 0, done by hand on real hardware, gates the SEB hardening (§3–4) and the registry and attestation
+(§5) — not their code, their switches:
 - in a web kiosk, `challengeKey` with the `MACHINE` scope works and the page
   reaches the extension;
 - a real SEB sends the Config Key header on `fetch` and `EventSource`
@@ -419,3 +417,14 @@ code, their switches):
   outage would stop every station in the room at once.
 - **Revoking every other session of the user on a confined login.** It
   would sign out the very phone that approves the pairing.
+
+## Correspondence of old references
+
+§1–§9 keep their numbers and text, except §1's dated note of 2026-10-09.
+
+<a id="10-delivery"></a>
+
+| Old reference | Now |
+| --- | --- |
+| §10 Delivery, steps 1–8 (one pull request each): 1 this ADR and the spec; 2 the trusted-client setting and the generalized `sitRefusal` (no kiosk reachable yet); 3 SEB hardening (§3–4); 4 registry and attestation; 5 the extension; 6 pairing and the two pages; 7 re-attestation, suspension and the supervisor's view; 8 the end-to-end tests with the mock attestation, and `docs/development/kiosk.md` | removed: delivery lives in `docs/merge/PROGRESS.md` and `changes/` (`apps/api/src/db/kiosk.ts` cites steps 4 and 6) |
+| §10, step 0 (hardware checks gating steps 3 and 4) | [§10](#10-hardware-checks-before-the-switches) |
