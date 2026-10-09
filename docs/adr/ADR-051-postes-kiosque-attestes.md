@@ -5,7 +5,7 @@
 Accepted (2026-09-30, settled with the product owner on the implementation plan). Amended 2026-10-09:
 the session end is `endKioskSessions` (`auth/session.ts`), formerly named `endConfinedSessions` here;
 §10's delivery plan is removed (delivery lives in `docs/merge/PROGRESS.md` and `changes/`), its step 0
-stays as §10.
+stays as §10; §1 names the stale-submit refusal (`423 kiosk_attestation_stale`) the code already answers.
 
 Scope: for **evaluations only**, the part of merge decision D21 (`docs/merge/08-decisions.md`) that
 concerns how a SEB session is checked; the confinement of a session to an **activity** (a project) was
@@ -71,6 +71,14 @@ session), except the suspension of §6. That answers `423 kiosk_suspended`
 on unsafe methods only (writes). A GET and the event stream pass, so that the
 page can still read the attempt, say why it is suspended, and hear the
 resumption: `EventSource` stops for good on a non-200.
+
+*Amended 2026-10-09 (documents existing behaviour, reported to the product
+owner):* a second refusal is not anonymous either. A submit of a `kiosk`
+session without an attestation check less than two minutes old (§6) answers
+`423 kiosk_attestation_stale`, which the page meets by re-attesting and
+retrying once (§6). The code already does so: `kioskAttestationRefusal` and
+`trustRefused` (`auth/trust.ts`), answered by the session hook of
+`auth/plugin.ts`.
 
 ### 2. Which trusted clients an exam accepts
 
