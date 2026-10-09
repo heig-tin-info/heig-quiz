@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { testGradeContext } from "@quiz/core/testing";
 
 import { brainstormServer } from "./server.js";
 
 const config = brainstormServer.configSchema.parse({ configVersion: 1, prompt: "Un être vivant ?", maxIdeas: 2 });
-const ctx = { seed: 0, itemId: "i", attemptId: "a", itemPoints: 1, now: new Date(0), runner: {} as never };
+const ctx = testGradeContext(1);
 
 describe("brainstormServer", () => {
   it("has no key, so only a poll runs it", () => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { EXAMPLES } from "./examples.js";
 import { DIAGRAM_KINDS, kindIssues } from "./kinds.js";
-import { MAX_INK_POINTS, MAX_NODES_STRUCTURED, SceneSchema, emptyScene, newId, sameScene, type Scene } from "./scene.js";
+import { MAX_INK_POINTS, MAX_NODES_STRUCTURED, SceneSchema, emptyScene, sameScene, type Scene } from "./scene.js";
 
 describe("SceneSchema", () => {
   it("accepts every example", () => {
@@ -78,10 +78,4 @@ describe("sameScene", () => {
     expect(sameScene(a, { nodes: [{ ...a.nodes[0]!, x: 20 }], links: [] })).toBe(false);
     expect(sameScene(emptyScene(), emptyScene())).toBe(true);
   });
-});
-
-it("mints opaque ids", () => {
-  const ids = new Set(Array.from({ length: 100 }, newId));
-  expect(ids.size).toBe(100);
-  for (const id of ids) expect(id).toMatch(/^[a-z0-9]{8}$/);
 });

@@ -5,13 +5,14 @@
  * scale and the order in which the matchers are consulted.
  */
 import { isGraded } from "@quiz/core/server";
+import { testGradeContext } from "@quiz/core/testing";
 import { describe, expect, it } from "vitest";
-import { config, gradeContext } from "./test/fixtures.js";
+import { config } from "./test/fixtures.js";
 import type { ShortConfig } from "./schema.js";
 import { shortServer } from "./server.js";
 
 function gradedNow(cfg: ShortConfig, text: string | null, points = 10) {
-  const result = shortServer.grade(cfg, text === null ? null : { text }, gradeContext(points));
+  const result = shortServer.grade(cfg, text === null ? null : { text }, testGradeContext(points));
   if (result instanceof Promise) throw new Error("the short grader must be synchronous");
   if (!isGraded(result)) throw new Error("the short grader must never return a pending result");
   return result;

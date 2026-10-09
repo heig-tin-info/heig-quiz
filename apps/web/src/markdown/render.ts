@@ -2,6 +2,7 @@ import DOMPurify from "dompurify";
 import katex from "katex";
 import { Marked, type Tokens } from "marked";
 
+import { decodeEntities } from "@quiz/docrender/entities";
 import { TOKEN_KINDS, escapeHtml, highlight } from "@quiz/docrender/highlight";
 import { CLOZE_SENTINEL_PATTERN } from "@quiz/domain/cloze";
 
@@ -149,18 +150,6 @@ const MATH_AT_START = /^(?:\$\$[^`]+?\$\$|\$(?![\s$])(?:[^$\\\n`]|\\.)*?(?<![\s\
 
 /** A link or an image inside a candidate `$…$`: not a formula. */
 const LINK_INSIDE = /\]\(/;
-
-/** The entities a formula may be written with, decoded as marked did. */
-const ENTITY = /&(?:#(\d+)|#x([0-9a-f]+)|(lt|gt|amp|quot|apos|nbsp));/gi;
-const NAMED: Record<string, string> = { lt: "<", gt: ">", amp: "&", quot: '"', apos: "'", nbsp: " " };
-
-function decodeEntities(text: string): string {
-  return text.replace(ENTITY, (all, dec?: string, hex?: string, name?: string) => {
-    if (name) return NAMED[name.toLowerCase()] ?? all;
-    const code = dec ? Number(dec) : parseInt(hex!, 16);
-    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : all;
-  });
-}
 
 const marked = new Marked({
   gfm: true, // tables, task lists, strikethrough, autolinks

@@ -10,7 +10,7 @@
  * answer and the teacher settles it in the grading panel, the answer above
  * the reference and both text forms.
  */
-import { ConfigMigrationError, type PublicationIssue, type QuestionTypeServer } from "@quiz/core/server";
+import { ConfigMigrationError, zeroGrade, type PublicationIssue, type QuestionTypeServer } from "@quiz/core/server";
 import { formOf, isEmptyScene, kindIssues, sameScene, toText, type Scene } from "@quiz/diagram/server";
 
 import {
@@ -125,8 +125,7 @@ export const diagramServer: QuestionTypeServer<
   grade(config, answer, ctx) {
     const nodes = answer?.scene.nodes.length ?? 0;
     const links = answer?.scene.links.length ?? 0;
-    const proposal = (reason: "manual" | "kind_mismatch") =>
-      ({ kind: "graded", points: 0, maxPoints: ctx.itemPoints, details: { reason, nodes, links }, state: "proposed" }) as const;
+    const proposal = (reason: "manual" | "kind_mismatch") => zeroGrade(ctx, { reason, nodes, links }, "proposed");
     if (answer === null || !isDiagramAnswered(answer)) {
       return { kind: "graded", points: 0, maxPoints: ctx.itemPoints, details: { reason: "empty", nodes, links } };
     }

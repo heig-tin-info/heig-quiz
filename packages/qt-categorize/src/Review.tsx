@@ -15,7 +15,7 @@
  */
 import type { ReviewProps, StringOverrides } from "@quiz/core/client";
 import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
-import { breakdownOf, caption, CloseIcon, cx, markdown, reviewPrompt, ScoreHeader } from "@quiz/ui";
+import { breakdownOf, caption, CloseIcon, cx, markdown, ReviewPrompt, ScoreHeader } from "@quiz/ui";
 
 import { ColumnFrame, columnGrid, trayFrame } from "./Board.js";
 import { keyOf, normalizePlacement, trayOf } from "./placement.js";
@@ -108,9 +108,7 @@ export function CategorizeReview({
 
   return (
     <div className="flex flex-col gap-3">
-      {showsSection(sections, "prompt") ? (
-        <div className={reviewPrompt}>{markdown(renderMarkdown, student.prompt)}</div>
-      ) : null}
+      <ReviewPrompt prompt={student.prompt} sections={sections} renderMarkdown={renderMarkdown} />
 
       {tray.length > 0 ? (
         <div className={trayFrame}>

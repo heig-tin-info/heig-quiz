@@ -11,6 +11,7 @@
  * index nor a label: the student sees the card and column ids (the answer is
  * written with them), so an id must say nothing about where a card goes.
  */
+import { newId } from "@quiz/core/id";
 import { CATEGORIZE_SCORE_POLICIES } from "@quiz/domain/categorizeScore";
 import { z } from "zod";
 
@@ -23,7 +24,7 @@ export const CATEGORIZE_MAX_COLUMNS = 6;
 export const CATEGORIZE_MAX_CARDS = 30;
 
 /**
- * An id minted by the editor ({@link newId}): lowercase letters and digits,
+ * An id minted by the editor (`newId`, `@quiz/core/id`): lowercase letters and digits,
  * bounded so an answer stays small. The charset keeps a crafted id from
  * carrying anything but an identity (no markup, no path, no whitespace).
  */
@@ -186,17 +187,6 @@ export const CategorizeDetailsSchema = z.object({
   fraction: z.number(),
 });
 export type CategorizeDetails = z.infer<typeof CategorizeDetailsSchema>;
-
-/**
- * A fresh opaque id: eight base-36 characters. `crypto.getRandomValues`
- * exists in every browser and in Node ≥ 19, the two places an editor or a
- * seed runs.
- */
-export function newId(): string {
-  const bytes = new Uint8Array(8);
-  globalThis.crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => (b % 36).toString(36)).join("");
-}
 
 /** See `emptyMcqDraft`: the shape and the defaults, no content, may be invalid (D16). */
 export function emptyCategorizeDraft(): CategorizeConfig {

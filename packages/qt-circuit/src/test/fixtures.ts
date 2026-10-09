@@ -14,25 +14,10 @@ import type { RunnerOutcome } from "@quiz/core/server";
 import {
   type CircuitAnswer,
   type CircuitConfig,
-  type Schematic,
-  type SchematicComponent,
   type AcSeries,
   type TranSeries,
 } from "../schema.js";
-import {
-  at,
-  circuitConfig,
-  component,
-  freeEnd,
-  LEFT,
-  pinEnd,
-  portEnd,
-  RAIL,
-  resetIds,
-  RIGHT,
-  ROT90,
-  wire,
-} from "../testing.js";
+import { circuitConfig, rcSchematic } from "../testing.js";
 
 /** The full fixture of the leak test (`../testing.ts`), shared with the registry's contract test. */
 export * from "../testing.js";
@@ -55,50 +40,11 @@ export const readAcStdoutFixture = (): string =>
 // ---------------------------------------------------------------------------
 
 /**
- * R between `in+` and `out+`, C from `out+` down to a `GND` symbol.
- *
- * The same circuit as the verified deck: 1.59 kΩ and 100 nF, i.e. a corner at
- * one kilohertz, which is what `spice.int.test.ts` measures.
+ * {@link rcSchematic} with the verified deck's values: 1.59 kΩ and 100 nF,
+ * i.e. a corner at one kilohertz, which is what `spice.int.test.ts` measures.
  */
-export function rcLowPass(
-  values: { r?: string; c?: string } = {},
-): { schematic: Schematic; r: SchematicComponent; c: SchematicComponent } {
-  resetIds();
-  const r = component("R", "R1", 400, RAIL, { value: values.r ?? "1.59k" });
-  const cap = component("C", "C1", 600, RAIL + 80, { value: values.c ?? "100n", m: ROT90 });
-  const gnd = component("GND", "GND", 600, RAIL + 140);
-  const [rx0, ry0] = at(r, 0);
-  const [rx1, ry1] = at(r, 1);
-  const [cx0, cy0] = at(cap, 0);
-  const [cx1, cy1] = at(cap, 1);
-  const [gx, gy] = at(gnd, 0);
-  return {
-    schematic: {
-      components: [r, cap, gnd],
-      wires: [
-        wire("w1", portEnd("in+"), pinEnd(r, 0), [
-          [LEFT, RAIL],
-          [rx0, ry0],
-        ]),
-        wire("w2", pinEnd(r, 1), portEnd("out+"), [
-          [rx1, ry1],
-          [RIGHT, RAIL],
-        ]),
-        // A free end landing on the middle of w2: the T-junction.
-        wire("w3", pinEnd(cap, 0), freeEnd(cx0, RAIL), [
-          [cx0, cy0],
-          [cx0, RAIL],
-        ]),
-        wire("w4", pinEnd(cap, 1), pinEnd(gnd, 0), [
-          [cx1, cy1],
-          [gx, gy],
-        ]),
-      ],
-    },
-    r,
-    c: cap,
-  };
-}
+export const rcLowPass = (values: { r?: string; c?: string } = {}): ReturnType<typeof rcSchematic> =>
+  rcSchematic({ name: "R1", value: values.r ?? "1.59k" }, { name: "C1", value: values.c ?? "100n" });
 
 export const rcAnswer = (): CircuitAnswer => ({ schematic: rcLowPass().schematic });
 

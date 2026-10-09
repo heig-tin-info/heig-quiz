@@ -7,12 +7,13 @@
 import { render, screen, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { testGradeContext } from "@quiz/core/testing";
 import { CategorizeEditor } from "./Editor.js";
 import { CategorizePlayer } from "./Player.js";
 import { CategorizeReview } from "./Review.js";
 import { categorizeServer } from "./server.js";
 import type { CategorizeAnswer, CategorizeConfig } from "./schema.js";
-import { C, config, gradeContext, K } from "./test/fixtures.js";
+import { C, config, K } from "./test/fixtures.js";
 
 const cfg = config();
 const student = categorizeServer.toStudent(cfg, { seed: 0, itemId: "i", shuffle: false });
@@ -118,7 +119,7 @@ describe("CategorizePlayer", () => {
 
 describe("CategorizeReview", () => {
   const answer: CategorizeAnswer = { columns: { [C.int]: [K.int, K.double], [C.ptr]: [K.string] } };
-  const graded = categorizeServer.grade(cfg, answer, gradeContext(2));
+  const graded = categorizeServer.grade(cfg, answer, testGradeContext(2));
   if (graded instanceof Promise || graded.kind !== "graded") throw new Error("sync grade expected");
   const solution = categorizeServer.toSolution(cfg, { seed: 0, itemId: "i", shuffle: false });
 

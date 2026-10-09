@@ -185,3 +185,22 @@ export const sectionClass = "flex flex-col gap-2";
  */
 export const gripClass =
   "inline-flex h-7 w-6 shrink-0 cursor-grab items-center justify-center rounded-md text-fg-muted transition-colors group-hover/grip:text-fg hover:bg-surface-2 focus-visible:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:cursor-grabbing disabled:pointer-events-none disabled:opacity-40";
+
+/**
+ * What the two drawing surfaces, the circuit's canvas and the diagram's,
+ * share word for word: monochrome ink on paper, hairlines, and ONE accent
+ * use — what is selected. Each keeps its own list for the rest.
+ */
+export const canvasStyles = {
+  frame: "overflow-hidden rounded-card border border-line bg-surface",
+  toolbar: "flex flex-wrap items-center gap-1 border-b border-line bg-surface-2 px-2 py-1.5",
+  separator: "mx-1 h-5 w-px shrink-0 bg-line",
+  gridMinor: "fill-none stroke-line",
+  gridMajor: "fill-none stroke-line-strong",
+  inkNormal: "text-fg",
+  inkSelected: "text-accent",
+  /** The invisible wide stroke a line is picked by. */
+  lineHit: "fill-none stroke-transparent stroke-[12] cursor-pointer",
+  selectedHalo: "fill-accent-soft stroke-accent stroke-[1] [stroke-dasharray:3_3]",
+  marquee: "fill-accent-soft stroke-accent stroke-[1] [stroke-dasharray:4_3]",
+} as const;

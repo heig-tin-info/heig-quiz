@@ -92,6 +92,19 @@ export const isPendingRunner = <D>(r: GradeResult<D>): r is PendingRunnerResult 
 export const isPendingLlm = <D>(r: GradeResult<D>): r is PendingLlmResult =>
   r.kind === "pending" && r.via === "llm";
 
+/**
+ * A result worth nothing: an empty answer, a failed compilation, a request
+ * the runner would refuse. `comment` is the machine reason a teacher sees.
+ */
+export function zeroGrade<D>(
+  ctx: Pick<GradeContext, "itemPoints">,
+  details: D,
+  state: "validated" | "proposed",
+  comment?: string,
+): GradedResult<D> {
+  return { kind: "graded", points: 0, maxPoints: ctx.itemPoints, details, state, ...(comment === undefined ? {} : { comment }) };
+}
+
 // ---------------------------------------------------------------------------
 // Contexts
 // ---------------------------------------------------------------------------

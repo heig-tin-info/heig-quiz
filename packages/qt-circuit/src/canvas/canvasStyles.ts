@@ -12,18 +12,14 @@
  * the tool that is armed.
  */
 
-import { cx } from "@quiz/ui";
+import { canvasStyles, cx } from "@quiz/ui";
 
 export { cx };
 
-export const frame = "overflow-hidden rounded-card border border-line bg-surface";
-
-export const toolbar =
-  "flex flex-wrap items-center gap-1 border-b border-line bg-surface-2 px-2 py-1.5";
+export const { frame, toolbar, separator, gridMinor, gridMajor, inkNormal, inkSelected, selectedHalo, marquee } = canvasStyles;
+export const wireHit = canvasStyles.lineHit;
 
 export const toolbarGroup = "flex items-center gap-0.5";
-
-export const separator = "mx-1 h-5 w-px shrink-0 bg-line";
 
 /** A 28 px square icon button: the transforms and the history. */
 const ICON_BASE =
@@ -103,13 +99,7 @@ export const emptyNote = "text-[13px] text-fg-faint";
 
 export const boxOutline = "fill-none stroke-line-strong";
 
-export const gridMinor = "fill-none stroke-line";
-
-export const gridMajor = "fill-none stroke-line-strong";
-
 export const wireLine = "fill-none stroke-current stroke-[1.7] [stroke-linejoin:round] [stroke-linecap:round]";
-
-export const wireHit = "fill-none stroke-transparent stroke-[12] cursor-pointer";
 
 export const junctionDot = "fill-current";
 
@@ -125,12 +115,8 @@ export const componentValue = "fill-current opacity-70";
 
 export const hitArea = "fill-transparent cursor-move";
 
-export const selectedHalo = "fill-accent-soft stroke-accent stroke-[1] [stroke-dasharray:3_3]";
-
 export const draftLine =
   "fill-none stroke-accent stroke-[1.7] [stroke-dasharray:6_4] [stroke-linejoin:round]";
-
-export const marquee = "fill-accent-soft stroke-accent stroke-[1] [stroke-dasharray:4_3]";
 
 export const crosshair = "stroke-accent stroke-[1.2]";
 
@@ -178,7 +164,5 @@ export const shapeClass = (paint: "stroke" | "thick" | "hollow" | "solid"): stri
   }
 };
 
-/** The ink a group of drawing is in: the surface is monochrome but for these three. */
-export const inkSelected = "text-accent";
-export const inkNormal = "text-fg";
+/** The ink a group of drawing is in: the surface is monochrome but for these three (with `inkNormal`, `inkSelected`). */
 export const inkFlagged = "text-danger";

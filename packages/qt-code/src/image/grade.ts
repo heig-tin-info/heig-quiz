@@ -15,7 +15,7 @@
  * Server-only: `sha256` reads `node:crypto`.
  */
 import type { FinalizeContext, GradeContext, GradeResult, GradedResult } from "@quiz/core/server";
-import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
+import { zeroGrade, type RunnerOutcome, type RunnerRequest } from "@quiz/core/server";
 import { round2 } from "@quiz/domain/round";
 
 import {
@@ -129,22 +129,11 @@ export function finalizeRunnerCodeImage(
   const compile = compileDetail(outcome);
 
   if (!compile.ok) {
-    return {
-      kind: "graded",
-      points: 0,
-      maxPoints: ctx.itemPoints,
-      details: {
-        runner: "ok",
-        compile,
-        run: null,
-        image: null,
-        matching: 0,
-        pixelCount,
-        warnings: [],
-        sourceSha256,
-      },
-      state: "validated",
-    };
+    return zeroGrade(
+      ctx,
+      { runner: "ok", compile, run: null, image: null, matching: 0, pixelCount, warnings: [], sourceSha256 },
+      "validated",
+    );
   }
 
   const run = outcome.cases[0];

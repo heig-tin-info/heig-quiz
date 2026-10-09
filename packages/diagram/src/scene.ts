@@ -12,10 +12,11 @@
  * diagram's kind (`kindIssues` in `kinds.ts`). The schema bounds everything,
  * because the autosave sends the whole answer every 300 ms.
  *
- * Every id is OPAQUE, minted by the editor ({@link newId}): a starter scene
+ * Every id is OPAQUE, minted by the editor (`newId`, `@quiz/core/id`): a starter scene
  * reaches the student with its ids, so an id must say nothing (the rule of
  * `categorize`, ADR-036).
  */
+import { newId } from "@quiz/core/id";
 import { z } from "zod";
 
 /** Coordinates stay within ±20 000 canvas units; a freehand point, within 20 000 of its element's corner. */
@@ -191,16 +192,6 @@ export const emptyScene = (): Scene => ({ nodes: [], links: [] });
 
 /** A scene with neither an element nor a link. */
 export const isEmptyScene = (scene: Scene): boolean => scene.nodes.length === 0 && scene.links.length === 0;
-
-/**
- * A fresh opaque id: eight base-36 characters. `crypto.getRandomValues`
- * exists in every browser and in Node since 19.
- */
-export function newId(): string {
-  const bytes = new Uint8Array(8);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => (b % 36).toString(36)).join("");
-}
 
 /**
  * A copy of a scene under fresh ids, moved by `offset` (elbows included);

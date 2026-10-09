@@ -4,13 +4,14 @@
  * dropdown (PLAN-MVP §8 WP2). The grammar itself is proven in `@quiz/domain`.
  */
 import { isGraded } from "@quiz/core/server";
+import { testGradeContext } from "@quiz/core/testing";
 import { describe, expect, it } from "vitest";
-import { config, gradeContext } from "./test/fixtures.js";
+import { config } from "./test/fixtures.js";
 import type { ClozeConfig } from "./schema.js";
 import { clozeServer } from "./server.js";
 
 function gradedNow(cfg: ClozeConfig, blanks: (string | null)[] | null, points = 10) {
-  const result = clozeServer.grade(cfg, blanks === null ? null : { blanks }, gradeContext(points));
+  const result = clozeServer.grade(cfg, blanks === null ? null : { blanks }, testGradeContext(points));
   if (result instanceof Promise) throw new Error("the cloze grader must be synchronous");
   if (!isGraded(result)) throw new Error("the cloze grader must never return a pending result");
   return result;

@@ -3,6 +3,9 @@
  *
  * No database, no HTTP, no `Date.now()`: every function is total, deterministic
  * and unit-tested, and the current instant is always injected by the caller.
+ *
+ * `gridRouter` is deliberately absent: a canvas algorithm (the diagram's and
+ * the circuit's A*), not a rule the apps consume; it is reached by its subpath.
  */
 export * from "./activity.js";
 export * from "./batchable.js";

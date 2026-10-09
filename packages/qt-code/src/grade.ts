@@ -13,7 +13,7 @@
 import { createHash } from "node:crypto";
 
 import type { FinalizeContext, GradeContext, GradeResult, GradedResult } from "@quiz/core/server";
-import { RunnerRequest, type RunnerOutcome } from "@quiz/core/server";
+import { RunnerRequest, zeroGrade, type RunnerOutcome } from "@quiz/core/server";
 import { assembleSource, mainFileName, TemplateRegionMismatch } from "@quiz/domain/lockedTemplate";
 import { round2 } from "@quiz/domain/round";
 
@@ -103,13 +103,7 @@ export function delegateToRunner<D>(
   request: (source: string) => RunnerRequest,
 ): GradeResult<D> {
   if (isEmptyAnswer(answer)) {
-    return {
-      kind: "graded",
-      points: 0,
-      maxPoints: ctx.itemPoints,
-      details: zero("ok", "empty"),
-      state: "validated",
-    };
+    return zeroGrade(ctx, zero("ok", "empty"), "validated");
   }
 
   let source: string;
@@ -120,14 +114,7 @@ export function delegateToRunner<D>(
     // lock marker after the attempt started). Never paste it into the wrong
     // hole, and never silently score it zero either: a human decides.
     if (err instanceof TemplateRegionMismatch) {
-      return {
-        kind: "graded",
-        points: 0,
-        maxPoints: ctx.itemPoints,
-        details: zero("error", err.code),
-        state: "proposed",
-        comment: err.code,
-      };
+      return zeroGrade(ctx, zero("error", err.code), "proposed", err.code);
     }
     throw err;
   }
@@ -137,14 +124,7 @@ export function delegateToRunner<D>(
     built = request(source);
   } catch {
     // Oversized source or file set: the runner would refuse it anyway.
-    return {
-      kind: "graded",
-      points: 0,
-      maxPoints: ctx.itemPoints,
-      details: zero("error", "runner_request_invalid"),
-      state: "proposed",
-      comment: "runner_request_invalid",
-    };
+    return zeroGrade(ctx, zero("error", "runner_request_invalid"), "proposed", "runner_request_invalid");
   }
 
   return { kind: "pending", via: "runner", request: built, details: { sourceSha256: sha256(source) } };
@@ -251,13 +231,7 @@ export function finalizeRunnerCode(
   const compile = compileDetail(outcome);
 
   if (!compile.ok) {
-    return {
-      kind: "graded",
-      points: 0,
-      maxPoints: ctx.itemPoints,
-      details: { runner: "ok", compile, cases: [], earned: 0, total, sourceSha256 },
-      state: "validated",
-    };
+    return zeroGrade(ctx, { runner: "ok", compile, cases: [], earned: 0, total, sourceSha256 }, "validated");
   }
 
   const cases: CodeCaseDetail[] = config.tests.cases.map((testCase, i) => {

@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { isGraded } from "@quiz/core/server";
+import { testGradeContext } from "@quiz/core/testing";
 import { richServer } from "./server.js";
-import { config, gradeContext, SECRET_CONFIG } from "./test/fixtures.js";
+import { config, SECRET_CONFIG } from "./test/fixtures.js";
 
 describe("grade", () => {
   it("proposes 0 points for a written answer: a teacher grades it", async () => {
-    const result = await richServer.grade(config(), { text: "The guard page." }, gradeContext(4));
+    const result = await richServer.grade(config(), { text: "The guard page." }, testGradeContext(4));
     expect(result).toEqual({
       kind: "graded",
       points: 0,
@@ -17,7 +18,7 @@ describe("grade", () => {
 
   it("gives a validated 0 to nothing written, null or blank", async () => {
     for (const answer of [null, { text: "" }, { text: "  \n " }]) {
-      const result = await richServer.grade(config(), answer, gradeContext(4));
+      const result = await richServer.grade(config(), answer, testGradeContext(4));
       expect(isGraded(result) && result.state).toBeUndefined();
       expect(isGraded(result) && result.details.reason).toBe("empty");
       expect(isGraded(result) && result.points).toBe(0);
@@ -25,12 +26,12 @@ describe("grade", () => {
   });
 
   it("never asks the runner, nor an LLM the process does not have", async () => {
-    const result = await richServer.grade(SECRET_CONFIG, { text: "x" }, gradeContext(1));
+    const result = await richServer.grade(SECRET_CONFIG, { text: "x" }, testGradeContext(1));
     expect(result.kind).toBe("graded");
   });
 
   it("sends a written answer to the LLM service when there is one", async () => {
-    const ctx = { ...gradeContext(4), llm: true as const };
+    const ctx = { ...testGradeContext(4), llm: true as const };
     const result = await richServer.grade(SECRET_CONFIG, { text: "The guard page." }, ctx);
     expect(result).toEqual({
       kind: "pending",
@@ -48,7 +49,7 @@ describe("grade", () => {
   });
 
   it("keeps an essay with nothing to grade against, and a blank one, off the LLM", async () => {
-    const ctx = { ...gradeContext(4), llm: true as const };
+    const ctx = { ...testGradeContext(4), llm: true as const };
     const bare = await richServer.grade(config(), { text: "The guard page." }, ctx);
     expect(isGraded(bare) && bare.details.reason).toBe("manual");
     const blank = await richServer.grade(SECRET_CONFIG, { text: "  " }, ctx);

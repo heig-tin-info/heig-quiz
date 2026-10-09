@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isGraded, isPendingLlm, isPendingRunner, QUESTION_TYPE_IDS } from "./contract.js";
+import { isGraded, isPendingLlm, isPendingRunner, QUESTION_TYPE_IDS, zeroGrade } from "./contract.js";
 import type { GradeResult } from "./contract.js";
 import { ConfigMigrationError, RunnerBusy, RunnerUnavailable, UnknownQuestionType } from "./errors.js";
 import { defineClientRegistry, defineServerRegistry, makeLookup, registeredIds } from "./registry.js";
@@ -89,5 +89,17 @@ describe("GradeResult narrowing", () => {
     expect([isGraded(graded), isPendingRunner(graded), isPendingLlm(graded)]).toEqual([true, false, false]);
     expect([isGraded(runner), isPendingRunner(runner), isPendingLlm(runner)]).toEqual([false, true, false]);
     expect([isGraded(llm), isPendingRunner(llm), isPendingLlm(llm)]).toEqual([false, false, true]);
+  });
+
+  it("writes a zero on the item's scale, with a comment only when one is given", () => {
+    expect(zeroGrade({ itemPoints: 3 }, { f: 1 }, "validated")).toStrictEqual({ kind: "graded", points: 0, maxPoints: 3, details: { f: 1 }, state: "validated" });
+    expect(zeroGrade({ itemPoints: 3 }, null, "proposed", "runner_request_invalid")).toStrictEqual({
+      kind: "graded",
+      points: 0,
+      maxPoints: 3,
+      details: null,
+      state: "proposed",
+      comment: "runner_request_invalid",
+    });
   });
 });

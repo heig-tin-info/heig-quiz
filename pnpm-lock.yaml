@@ -419,6 +419,9 @@ importers:
       '@quiz/core':
         specifier: workspace:*
         version: link:../core
+      '@quiz/domain':
+        specifier: workspace:*
+        version: link:../domain
       '@quiz/ui':
         specifier: workspace:*
         version: link:../ui

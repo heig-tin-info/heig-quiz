@@ -13,19 +13,20 @@ import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
 import type { ReviewProps } from "@quiz/core/client";
 
 import type { CodeAnswer, CodeCaseDetail, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
-import { CompileFailure, ReferenceSolutionCard, ScoreLine } from "./ProgramReview.js";
+import { CompileFailure, NoBreakdown, ReferenceSolutionCard, ScoreLine } from "./ProgramReview.js";
 import { REVIEW_STRINGS, type CodeReviewStrings } from "./strings.js";
 import {
   badge,
   breakdownOf,
   cx,
+  HeadRow,
   hint,
-  markdown,
   OutputCells,
   OutputControls,
   OutputHeads,
-  reviewPrompt,
+  ReviewPrompt,
   table,
+  Th,
   useOutputMode,
   Verdict,
   verdictTone,
@@ -114,23 +115,12 @@ export function CodeReview({
      unless the reader chose to hide it (#109). The cases table stays either
      way: its expected column is what the run was judged against, the
      verdict itself, not the solution. */
-  const statement = showsSection(sections, "prompt") ? (
-    <div className={cx("whitespace-pre-wrap", reviewPrompt)}>
-      {markdown(renderMarkdown, student.prompt)}
-    </div>
-  ) : null;
+  const statement = (
+    <ReviewPrompt preWrap prompt={student.prompt} sections={sections} renderMarkdown={renderMarkdown} />
+  );
 
-  // No breakdown — an absent answer, a grading-level marker — reads the same
-  // to a student either way.
   const breakdown = breakdownOf(details, "cases");
-  if (breakdown === null) {
-    return (
-      <div className="flex flex-col gap-3">
-        {statement}
-        <p className={hint}>{answer === null ? s.notAnswered : s.runnerError}</p>
-      </div>
-    );
-  }
+  if (breakdown === null) return <NoBreakdown statement={statement} answered={answer !== null} s={s} />;
 
   // The key, when it travelled: it is what turns "Failed" into "exit 1 ≠ 0".
   const specs = new Map<string, CaseSpec>((solution?.cases ?? []).map((c) => [c.name, c]));
@@ -163,23 +153,13 @@ export function CodeReview({
         <div className="overflow-x-auto">
           <table className={table.table}>
             <caption className="sr-only">{s.cases}</caption>
-            <thead className={table.head}>
-              <tr>
-                <th scope="col" className={table.th}>
-                  {s.caseName}
-                </th>
-                <th scope="col" className={table.th}>
-                  {s.args}
-                </th>
-                <OutputHeads mode={outputMode} strings={s} className={table.th} />
-                <th scope="col" className={table.th}>
-                  {s.verdict}
-                </th>
-                <th scope="col" className={cx(table.th, "text-right")}>
-                  {s.points}
-                </th>
-              </tr>
-            </thead>
+            <HeadRow>
+              <Th>{s.caseName}</Th>
+              <Th>{s.args}</Th>
+              <OutputHeads mode={outputMode} strings={s} />
+              <Th>{s.verdict}</Th>
+              <Th right>{s.points}</Th>
+            </HeadRow>
             <tbody>
               {shown.map((detail, i) => {
                 const spec = specs.get(detail.name);

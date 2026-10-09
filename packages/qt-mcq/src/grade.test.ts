@@ -5,8 +5,9 @@
  * onto the item scale.
  */
 import { isGraded } from "@quiz/core/server";
+import { testGradeContext } from "@quiz/core/testing";
 import { describe, expect, it } from "vitest";
-import { gradeContext, multipleConfig } from "./test/fixtures.js";
+import { multipleConfig } from "./test/fixtures.js";
 import { resolvePolicy } from "./grade.js";
 import {
   MCQ_CONFIG_VERSION,
@@ -27,7 +28,7 @@ function gradedNow(
   points: number,
   defaults?: Readonly<Record<string, unknown>>,
 ) {
-  const result = mcqServer.grade(config, answer, gradeContext(points, defaults));
+  const result = mcqServer.grade(config, answer, testGradeContext(points, defaults));
   if (result instanceof Promise) throw new Error("the mcq grader must be synchronous");
   if (!isGraded(result)) throw new Error("the mcq grader must never return a pending result");
   return result;

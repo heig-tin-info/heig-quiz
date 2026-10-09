@@ -5,7 +5,6 @@ import {
   CategorizeConfigSchema,
   emptyCategorizeDraft,
   isCategorizeAnswered,
-  newId,
 } from "./schema.js";
 import { config } from "./test/fixtures.js";
 
@@ -79,13 +78,5 @@ describe("answers", () => {
   it("hold six columns at most", () => {
     const columns = Object.fromEntries(Array.from({ length: 7 }, (_, i) => [`c${i}`, []]));
     expect(CategorizeAnswerSchema.safeParse({ columns }).success).toBe(false);
-  });
-});
-
-describe("newId", () => {
-  it("mints short opaque ids", () => {
-    const ids = new Set(Array.from({ length: 50 }, newId));
-    expect(ids.size).toBe(50);
-    for (const id of ids) expect(id).toMatch(/^[0-9a-z]{8}$/);
   });
 });

@@ -123,7 +123,7 @@ describe("OutputHeads", () => {
       <table>
         <thead>
           <tr>
-            <OutputHeads mode="side" strings={strings} className="th" />
+            <OutputHeads mode="side" strings={strings} />
           </tr>
         </thead>
       </table>,
@@ -133,7 +133,7 @@ describe("OutputHeads", () => {
       <table>
         <thead>
           <tr>
-            <OutputHeads mode="diff" strings={strings} className="th" />
+            <OutputHeads mode="diff" strings={strings} />
           </tr>
         </thead>
       </table>,

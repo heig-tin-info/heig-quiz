@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
 import { fmt } from "@quiz/core/client";
 
 import type { CodeReviewStrings } from "./strings.js";
-import { badge, card, cx, lockedBlock, pointsOrDash, sectionTitle } from "@quiz/ui";
+import { badge, card, cx, hint, lockedBlock, pointsOrDash, sectionTitle } from "@quiz/ui";
 
 /** The keys of the review dictionary the program half reads. */
 export type ProgramReviewStrings = Pick<
@@ -21,7 +21,22 @@ export type ProgramReviewStrings = Pick<
   | "runnerBusy"
   | "runnerError"
   | "referenceSolution"
+  | "notAnswered"
 >;
+
+/**
+ * A review with no breakdown to show — an absent answer, a grading-level
+ * marker — which reads the same to a student either way: the statement, then
+ * why there is nothing more.
+ */
+export function NoBreakdown({ statement, answered, s }: { statement: ReactNode; answered: boolean; s: ProgramReviewStrings }): ReactNode {
+  return (
+    <div className="flex flex-col gap-3">
+      {statement}
+      <p className={hint}>{answered ? s.runnerError : s.notAnswered}</p>
+    </div>
+  );
+}
 
 /** The score, and a badge when the runner could not grade by itself. */
 export function ScoreLine({

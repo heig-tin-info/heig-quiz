@@ -19,8 +19,7 @@
  * measures are on the System status page it links to.
  */
 import type { NotificationKind, NotificationPayload, TeamsNotificationKind } from "@quiz/contracts";
-
-import { escapeHtml } from "../../html.js";
+import { escapeHtml } from "@quiz/docrender/highlight";
 
 export type MailLocale = "en" | "fr";
 

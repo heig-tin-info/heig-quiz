@@ -16,6 +16,10 @@
       "types": "./dist/rng.d.ts",
       "default": "./dist/rng.js"
     },
+    "./id": {
+      "types": "./dist/id.d.ts",
+      "default": "./dist/id.js"
+    },
     "./runner": {
       "types": "./dist/runner.d.ts",
       "default": "./dist/runner.js"

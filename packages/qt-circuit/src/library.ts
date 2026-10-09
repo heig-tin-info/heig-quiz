@@ -45,13 +45,6 @@ export const PORT_INSET = MAJOR;
 /** Direction a wire leaves a pin: 0 → +x, 1 → +y, 2 → −x, 3 → −y (mockup convention). */
 export type PinDirection = 0 | 1 | 2 | 3;
 
-export const DIRECTIONS: ReadonlyArray<readonly [number, number]> = [
-  [1, 0],
-  [0, 1],
-  [-1, 0],
-  [0, -1],
-];
-
 export interface PinSpec {
   /** Electrical name, stable: the emitter and the tests refer to it. */
   readonly name: string;

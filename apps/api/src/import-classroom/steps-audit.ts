@@ -9,34 +9,26 @@
 import { count } from "drizzle-orm";
 
 import { legacyClassroomAuditLog } from "../db/schema.js";
-import { note, target, tally, written, type Ctx } from "./ctx.js";
-
-const CHUNK = 500;
+import { note, target, tally, type Ctx } from "./ctx.js";
+import { insertAll } from "./steps-repos.js";
 
 export async function importLegacyAudit(ctx: Ctx) {
   const rows = ctx.snapshot.auditLog;
-  let inserted = 0;
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const done = await ctx.db
-      .insert(legacyClassroomAuditLog)
-      .values(
-        rows.slice(i, i + CHUNK).map((r) => ({
-          sourceId: r.id,
-          actorUserId: target(ctx, r.actorUserId) ?? null,
-          sourceActorUserId: r.actorUserId,
-          actorType: r.actorType,
-          action: r.action,
-          subjectType: r.subjectType,
-          subjectId: r.subjectId,
-          payload: r.payload,
-          createdAt: r.createdAt,
-        })),
-      )
-      .onConflictDoNothing()
-      .returning({ id: legacyClassroomAuditLog.id });
-    inserted += done.length;
-  }
-  written(ctx, "legacy_classroom_audit_log", inserted);
+  await insertAll(
+    ctx,
+    legacyClassroomAuditLog,
+    rows.map((r) => ({
+      sourceId: r.id,
+      actorUserId: target(ctx, r.actorUserId) ?? null,
+      sourceActorUserId: r.actorUserId,
+      actorType: r.actorType,
+      action: r.action,
+      subjectType: r.subjectType,
+      subjectId: r.subjectId,
+      payload: r.payload,
+      createdAt: r.createdAt,
+    })),
+  );
   const unmapped = rows.filter((r) => r.actorUserId !== null && target(ctx, r.actorUserId) === undefined).length;
   if (unmapped > 0) note(ctx, "audit", `${unmapped} row(s) by an actor the import did not reach: classroom's actor id kept, no Quiz actor`);
   // Every source row is carried, none left out: the table holds the source's rows exactly.

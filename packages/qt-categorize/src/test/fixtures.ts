@@ -1,27 +1,5 @@
 /** Test fixtures for the `categorize` suites (excluded from the build). */
-import type { GradeContext, RunnerService } from "@quiz/core/server";
 import { CategorizeConfigSchema, type CategorizeConfig } from "../schema.js";
-
-const noRunner: RunnerService = {
-  run() {
-    throw new Error("the categorize type must never call the runner");
-  },
-  health() {
-    return Promise.resolve({ ok: false, languages: [], queued: 0, avgMs: null });
-  },
-};
-
-export function gradeContext(itemPoints: number, defaults?: GradeContext["defaults"]): GradeContext {
-  return {
-    seed: 7,
-    itemId: "item-1",
-    attemptId: "attempt-1",
-    itemPoints,
-    now: new Date("2026-09-29T10:00:00Z"),
-    runner: noRunner,
-    ...(defaults === undefined ? {} : { defaults }),
-  };
-}
 
 /**
  * Three columns, six targets and two distractors: the "C types" of the

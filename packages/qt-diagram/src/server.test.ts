@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { testGradeContext } from "@quiz/core/testing";
 import { emptyScene, sameScene, toText, type Scene } from "@quiz/diagram/server";
 
-import { config, gradeContext, REFERENCE, STARTER } from "./test/fixtures.js";
+import { config, REFERENCE, STARTER } from "./test/fixtures.js";
 import { diagramServer } from "./server.js";
 
 const answer = (scene: Scene) => ({ scene });
@@ -55,7 +56,7 @@ describe("answerMisfit", () => {
 });
 
 describe("grade", () => {
-  const ctx = gradeContext(3);
+  const ctx = testGradeContext(3);
 
   it("validates 0 for no answer", async () => {
     expect(await diagramServer.grade(config(), null, ctx)).toEqual({

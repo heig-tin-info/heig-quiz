@@ -98,11 +98,20 @@ export const SECRET_TOLERANCE = 0.0777;
 /** The Bode envelope: three knobs a student must not learn either (invariant 4). */
 const SECRET_BODE = { magDb: 1.37, floorDb: 47.5, phaseDeg: 13.25 };
 
-/** The teacher's own circuit: the key. */
-export function referenceSchematic(): Schematic {
+/** One part of the RC low-pass: its name and its value. */
+interface RcPart {
+  readonly name: string;
+  readonly value: string;
+}
+
+/**
+ * The RC low-pass: R between `in+` and `out+`, C from `out+` down to a `GND`
+ * symbol, the free end of C's wire landing on the middle of w2 (a T-junction).
+ */
+export function rcSchematic(rp: RcPart, cp: RcPart): { schematic: Schematic; r: SchematicComponent; c: SchematicComponent } {
   resetIds();
-  const r = component("R", SECRET_REFERENCE_NAME, 400, RAIL, { value: SECRET_REFERENCE_VALUE });
-  const cap = component("C", "Csecret", 600, RAIL + 80, { value: "100n", m: ROT90 });
+  const r = component("R", rp.name, 400, RAIL, { value: rp.value });
+  const cap = component("C", cp.name, 600, RAIL + 80, { value: cp.value, m: ROT90 });
   const gnd = component("GND", "GND", 600, RAIL + 140);
   const [rx0, ry0] = at(r, 0);
   const [rx1, ry1] = at(r, 1);
@@ -110,27 +119,35 @@ export function referenceSchematic(): Schematic {
   const [cx1, cy1] = at(cap, 1);
   const [gx, gy] = at(gnd, 0);
   return {
-    components: [r, cap, gnd],
-    wires: [
-      wire("w1", portEnd("in+"), pinEnd(r, 0), [
-        [LEFT, RAIL],
-        [rx0, ry0],
-      ]),
-      wire("w2", pinEnd(r, 1), portEnd("out+"), [
-        [rx1, ry1],
-        [RIGHT, RAIL],
-      ]),
-      wire("w3", pinEnd(cap, 0), freeEnd(cx0, RAIL), [
-        [cx0, cy0],
-        [cx0, RAIL],
-      ]),
-      wire("w4", pinEnd(cap, 1), pinEnd(gnd, 0), [
-        [cx1, cy1],
-        [gx, gy],
-      ]),
-    ],
+    schematic: {
+      components: [r, cap, gnd],
+      wires: [
+        wire("w1", portEnd("in+"), pinEnd(r, 0), [
+          [LEFT, RAIL],
+          [rx0, ry0],
+        ]),
+        wire("w2", pinEnd(r, 1), portEnd("out+"), [
+          [rx1, ry1],
+          [RIGHT, RAIL],
+        ]),
+        wire("w3", pinEnd(cap, 0), freeEnd(cx0, RAIL), [
+          [cx0, cy0],
+          [cx0, RAIL],
+        ]),
+        wire("w4", pinEnd(cap, 1), pinEnd(gnd, 0), [
+          [cx1, cy1],
+          [gx, gy],
+        ]),
+      ],
+    },
+    r,
+    c: cap,
   };
 }
+
+/** The teacher's own circuit: the key. */
+export const referenceSchematic = (): Schematic =>
+  rcSchematic({ name: SECRET_REFERENCE_NAME, value: SECRET_REFERENCE_VALUE }, { name: "Csecret", value: "100n" }).schematic;
 
 /**
  * Two visible stimuli and one hidden one, a reference, a rubric and a

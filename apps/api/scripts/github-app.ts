@@ -28,10 +28,10 @@ import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
 import { Octokit } from "octokit";
+import { escapeHtml } from "@quiz/docrender/highlight";
 
 import { GITHUB_WEBHOOK_SECRET_MIN } from "../src/config.js";
 import { appManifest, envLines } from "../src/github/manifest.js";
-import { escapeHtml } from "../src/html.js";
 
 const USAGE =
   "usage: github-app --url <https://host> --name <App name> (--org <login> | --personal) " +

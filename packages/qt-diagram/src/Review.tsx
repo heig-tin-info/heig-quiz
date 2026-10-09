@@ -18,7 +18,7 @@ import type { ReviewProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings, showsSection } from "@quiz/core/client";
 import { DiagramView, type DiagramStrings } from "@quiz/diagram/client";
 import { isEmptyScene, toText } from "@quiz/diagram/server";
-import { caption, markdown, NotePanel, reviewPrompt, ScoreHeader, Segmented } from "@quiz/ui";
+import { caption, markdown, NotePanel, ReviewPrompt, ScoreHeader, Segmented } from "@quiz/ui";
 
 import { countsOf } from "./grading.js";
 import type { DiagramAnswer, DiagramDetails, DiagramSolution, DiagramStudent } from "./schema.js";
@@ -59,7 +59,7 @@ export function DiagramReview({
   return (
     // `text-sm text-fg`: the body of the panels; the other blocks set their own.
     <div className="flex flex-col gap-3 text-sm text-fg">
-      {showsSection(sections, "prompt") ? <div className={reviewPrompt}>{markdown(renderMarkdown, student.prompt)}</div> : null}
+      <ReviewPrompt prompt={student.prompt} sections={sections} renderMarkdown={renderMarkdown} />
 
       {details?.reason === "kind_mismatch" ? <p className="text-[13px] text-warning">{s.kindMismatch}</p> : null}
 

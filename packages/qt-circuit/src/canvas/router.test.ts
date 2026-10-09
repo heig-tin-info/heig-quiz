@@ -4,7 +4,7 @@ import { BOX, GRID } from "../library.js";
 import { Schematic, type Orientation, type SchematicComponent, type Wire } from "../schema.js";
 
 import { ORIENT_0, ORIENT_90, pinPosition, portPosition, rectOf } from "./geometry.js";
-import { blockedCells, computeRoutes, junctionPoints, route, simplify, withRoutes } from "./router.js";
+import { blockedCells, computeRoutes, junctionPoints, route, withRoutes } from "./router.js";
 
 const component = (
   id: string,
@@ -139,35 +139,6 @@ describe("route", () => {
     expect(points[0]).toEqual([240, 160]);
     const second = points[1]!;
     expect(second[0]).toBeGreaterThanOrEqual(240);
-  });
-});
-
-describe("simplify", () => {
-  it("drops the collinear vertices", () => {
-    expect(
-      simplify([
-        [0, 0],
-        [1, 0],
-        [2, 0],
-        [2, 1],
-      ]),
-    ).toEqual([
-      [0, 0],
-      [2, 0],
-      [2, 1],
-    ]);
-  });
-
-  it("leaves a two-point line alone", () => {
-    expect(
-      simplify([
-        [0, 0],
-        [4, 0],
-      ]),
-    ).toEqual([
-      [0, 0],
-      [4, 0],
-    ]);
   });
 });
 

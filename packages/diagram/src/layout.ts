@@ -17,6 +17,8 @@
  *   lines of one pair fanned into curves, a loop over an element that points
  *   to itself.
  */
+import { astar, markUsed, simplify, type Obstacles, type SearchOptions } from "@quiz/domain/gridRouter";
+
 import { CONTAINERS, INK, KINDS, type DiagramKind } from "./kinds.js";
 import { FINAL_RADIUS, GRID, INITIAL_RADIUS, centerOf, rectOf, snap, type Bounds, type Measure, type Rect } from "./geometry.js";
 import type { DiagramLink, DiagramNode, Point, Scene } from "./scene.js";
@@ -50,16 +52,6 @@ export interface Layout {
   readonly rects: ReadonlyMap<string, Rect>;
   readonly routes: ReadonlyMap<string, Route>;
 }
-
-/** Right, down, left, up: the direction an end leaves by. */
-export const DIRS: readonly XY[] = [
-  [1, 0],
-  [0, 1],
-  [-1, 0],
-  [0, -1],
-];
-
-const TURN = 4;
 
 export function layout(scene: Scene, kind: DiagramKind, measure: Measure, draft?: LinkLike): Layout {
   const rects = new Map(scene.nodes.map((n) => [n.id, rectOf(n, measure)] as const));
@@ -170,149 +162,10 @@ function anchors(types: ReadonlyMap<string, DiagramNode["t"]>, links: readonly L
 }
 
 // ---------------------------------------------------------------------------
-// The A* router, from mockups/circuit.html
+// The A* router of @quiz/domain, unbounded, a wider window each pass
 // ---------------------------------------------------------------------------
 
-/** A binary heap of (priority, node): deterministic, same pushes, same pops. */
-class Heap {
-  private readonly p: number[] = [];
-  private readonly v: number[] = [];
-  get size(): number {
-    return this.v.length;
-  }
-  push(priority: number, value: number): void {
-    let i = this.v.length;
-    this.p.push(priority);
-    this.v.push(value);
-    while (i > 0) {
-      const j = (i - 1) >> 1;
-      if ((this.p[j] ?? 0) <= priority) break;
-      this.p[i] = this.p[j] ?? 0;
-      this.v[i] = this.v[j] ?? 0;
-      i = j;
-    }
-    this.p[i] = priority;
-    this.v[i] = value;
-  }
-  pop(): number {
-    const top = this.v[0] ?? -1;
-    const lp = this.p.pop() ?? 0;
-    const lv = this.v.pop() ?? 0;
-    const n = this.v.length;
-    if (n > 0) {
-      let i = 0;
-      for (;;) {
-        let l = 2 * i + 1;
-        if (l >= n) break;
-        const r = l + 1;
-        if (r < n && (this.p[r] ?? 0) < (this.p[l] ?? 0)) l = r;
-        if ((this.p[l] ?? 0) >= lp) break;
-        this.p[i] = this.p[l] ?? 0;
-        this.v[i] = this.v[l] ?? 0;
-        i = l;
-      }
-      this.p[i] = lp;
-      this.v[i] = lv;
-    }
-    return top;
-  }
-}
-
-interface Leg {
-  pts: XY[];
-  dir: number;
-}
-
-/** One leg in grid steps: a tight window first, then wider ones, then a plain L. */
-function astar(ax: number, ay: number, ad: number, bx: number, by: number, bd: number, blocked: ReadonlySet<string>, used: Map<string, number>): Leg {
-  if (ax === bx && ay === by) return { pts: [[ax, ay]], dir: ad };
-  const need = bd >= 0 ? (bd + 2) % 4 : -1;
-  for (const m of [6, 20, 60]) {
-    const x0 = Math.min(ax, bx) - m;
-    const y0 = Math.min(ay, by) - m;
-    const W = Math.abs(ax - bx) + 2 * m + 1;
-    const H = Math.abs(ay - by) + 2 * m + 1;
-    const N = W * H * 5;
-    const cost = new Float64Array(N).fill(Infinity);
-    const parent = new Int32Array(N).fill(-1);
-    const done = new Uint8Array(N);
-    const idx = (x: number, y: number, d: number): number => ((y - y0) * W + (x - x0)) * 5 + (d + 1);
-    const heap = new Heap();
-    const s = idx(ax, ay, ad);
-    cost[s] = 0;
-    heap.push(Math.abs(ax - bx) + Math.abs(ay - by), s);
-    while (heap.size > 0) {
-      const cur = heap.pop();
-      if (done[cur] === 1) continue;
-      done[cur] = 1;
-      const d = (cur % 5) - 1;
-      const cell = (cur / 5) | 0;
-      const x = (cell % W) + x0;
-      const y = ((cell / W) | 0) + y0;
-      if (x === bx && y === by) {
-        const pts: XY[] = [];
-        for (let k = cur; k >= 0; k = parent[k] ?? -1) {
-          const c2 = (k / 5) | 0;
-          pts.push([(c2 % W) + x0, ((c2 / W) | 0) + y0]);
-        }
-        return { pts: pts.reverse(), dir: d };
-      }
-      const g = cost[cur] ?? Infinity;
-      for (let nd = 0; nd < 4; nd += 1) {
-        if (d >= 0 && nd === (d + 2) % 4) continue;
-        const step = DIRS[nd] ?? [0, 0];
-        const nx = x + step[0];
-        const ny = y + step[1];
-        if (nx < x0 || ny < y0 || nx >= x0 + W || ny >= y0 + H) continue;
-        const goal = nx === bx && ny === by;
-        const key = `${nx},${ny}`;
-        if (!goal && blocked.has(key)) continue;
-        let c = 1 + (d >= 0 && nd !== d ? TURN : 0);
-        if (goal && need >= 0 && nd !== need) c += nd === bd ? TURN * 3 : TURN;
-        const u = used.get(key);
-        if (u !== undefined && (u & (nd % 2 ? 2 : 1)) !== 0) c += 2.5;
-        const ni = idx(nx, ny, nd);
-        const g2 = g + c;
-        if (g2 < (cost[ni] ?? Infinity)) {
-          cost[ni] = g2;
-          parent[ni] = cur;
-          heap.push(g2 + Math.abs(nx - bx) + Math.abs(ny - by), ni);
-        }
-      }
-    }
-  }
-  return { pts: [[ax, ay], [bx, ay], [bx, by]], dir: by !== ay ? (by > ay ? 1 : 3) : bx > ax ? 0 : 2 };
-}
-
-/** Drops the collinear vertices, so a straight run is two points. */
-function simplify(points: readonly XY[]): XY[] {
-  if (points.length < 3) return points.map((p) => [p[0], p[1]]);
-  const first = points[0] as XY;
-  const out: XY[] = [[first[0], first[1]]];
-  for (let i = 1; i < points.length - 1; i += 1) {
-    const a = out[out.length - 1] as XY;
-    const b = points[i] as XY;
-    const c = points[i + 1] as XY;
-    if (a[0] === b[0] && a[1] === b[1]) continue;
-    if (Math.sign(b[0] - a[0]) === Math.sign(c[0] - b[0]) && Math.sign(b[1] - a[1]) === Math.sign(c[1] - b[1])) continue;
-    out.push([b[0], b[1]]);
-  }
-  const last = points[points.length - 1] as XY;
-  out.push([last[0], last[1]]);
-  return out;
-}
-
-function markUsed(p: readonly XY[], used: Map<string, number>): void {
-  for (let i = 0; i < p.length - 1; i += 1) {
-    const a = p[i] as XY;
-    const b = p[i + 1] as XY;
-    const bit = a[1] === b[1] ? 1 : 2;
-    for (const q of [a, b]) {
-      const k = `${q[0]},${q[1]}`;
-      used.set(k, (used.get(k) ?? 0) | bit);
-    }
-  }
-}
+const SEARCH: SearchOptions = { margins: [6, 20, 60] };
 
 /** A box blocks its border too; a container and a freehand element block nothing. */
 function blockedCells(nodes: readonly DiagramNode[], rects: ReadonlyMap<string, Rect>): Set<string> {
@@ -372,8 +225,7 @@ const ONTO: Partial<Record<DiagramNode["t"], Onto>> = {
 function orthogonal(nodes: readonly DiagramNode[], links: readonly LinkLike[], rects: ReadonlyMap<string, Rect>): Map<string, Route> {
   const types = new Map(nodes.map((n) => [n.id, n.t] as const));
   const ends = anchors(types, links, rects);
-  const blocked = blockedCells(nodes, rects);
-  const used = new Map<string, number>();
+  const obstacles: Obstacles = { blocked: blockedCells(nodes, rects), used: new Map() };
   const out = new Map<string, Route>();
   for (const l of links) {
     let a = ends.get(`${l.id}:a`);
@@ -386,12 +238,12 @@ function orthogonal(nodes: readonly DiagramNode[], links: readonly LinkLike[], r
     for (let i = 0; i < stops.length - 1; i += 1) {
       const s = stops[i] as End;
       const t = stops[i + 1] as End;
-      const leg = astar(s.x / GRID, s.y / GRID, dir, t.x / GRID, t.y / GRID, i === stops.length - 2 ? t.d : -1, blocked, used);
+      const leg = astar(s.x / GRID, s.y / GRID, dir, t.x / GRID, t.y / GRID, i === stops.length - 2 ? t.d : -1, obstacles, SEARCH);
       if (grid.length > 0) leg.pts.shift();
       grid.push(...leg.pts);
       if (leg.dir >= 0) dir = leg.dir;
     }
-    markUsed(grid, used);
+    markUsed(grid, obstacles.used);
     const pts = simplify(grid).map(([x, y]): XY => [x * GRID, y * GRID]);
     const ta = types.get(l.a);
     const tb = typeof l.b === "string" ? types.get(l.b) : undefined;
