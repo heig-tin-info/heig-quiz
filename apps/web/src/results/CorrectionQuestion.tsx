@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import type { AnswerDistributionEntry, ByQuestion } from "@quiz/contracts";
 import { displayedRate } from "@quiz/domain";
 import type { ClozeSolution, ClozeStudent } from "@quiz/qt-cloze/client";
+import type { ShortSolution } from "@quiz/qt-short/client";
 
 import { useT } from "../i18n";
 import { ClozeMarkdownText } from "../markdown/ClozeMarkdownText";
@@ -12,7 +13,6 @@ import {
   choicesOf,
   promptOf,
   PROJECTION_ROW_CAP,
-  type ShortSolutionLike,
 } from "../poll/pollTally";
 import { typeLabel } from "../questionTypes";
 import { BAR_TONES, cx, NotePanel, SegmentedBar, type BarPart, type BarTone } from "../ui";
@@ -230,7 +230,7 @@ function AnswerRows({ q, revealed, density }: { q: ByQuestion; revealed: boolean
   const listed = !q.parameterized && (rows.length > 0 || blank > 0);
   const overflow = q.distribution.length - rows.length;
   const top = Math.max(1, blank, ...rows.map((r) => r.count));
-  const expected = (q.solution as Partial<ShortSolutionLike> | null)?.expected;
+  const expected = (q.solution as Partial<ShortSolution> | null)?.expected;
   const hasExpected = Array.isArray(expected) && expected.length > 0;
   // The blanks alone say nothing the head does not: a row of them needs
   // groups or a key beside it.

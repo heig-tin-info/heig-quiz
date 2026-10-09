@@ -19,31 +19,10 @@
 import { foldPollAnswer } from "@quiz/domain";
 // A, B, C… comes from the type that owns the letter, so a row on the wall is
 // lettered exactly as the same choice is in the editor and in the review.
-import { choiceLetter } from "@quiz/qt-mcq/client";
+import { choiceLetter, type McqSolution, type McqStudent } from "@quiz/qt-mcq/client";
+import type { ShortSolution, ShortStudent } from "@quiz/qt-short/client";
 
 import type { PollTally, PollTeacherView } from "@quiz/contracts";
-
-/** The student view of an mcq, as `@quiz/qt-mcq` publishes it. */
-export interface McqStudentLike {
-  prompt: string;
-  choices: { id: number; text: string }[];
-  mode?: string;
-}
-
-/** The student view of a short answer. */
-export interface ShortStudentLike {
-  prompt: string;
-}
-
-/** `toSolution` of an mcq: canonical indices of the key. */
-export interface McqSolutionLike {
-  correct: number[];
-}
-
-/** `toSolution` of a short answer: the key, already written out for a human. */
-export interface ShortSolutionLike {
-  expected: string[];
-}
 
 /** One line of the projection: a choice, or a distinct free-text answer. */
 export interface PollRow {
@@ -92,8 +71,8 @@ export interface ChoiceLike {
 
 /** The choices of an mcq in the SERVED order, joined with its key. */
 export function choicesOf(question: Pick<QuestionLike, "student" | "solution">): ChoiceLike[] {
-  const student = question.student as McqStudentLike | null;
-  const solution = question.solution as McqSolutionLike | null;
+  const student = question.student as McqStudent | null;
+  const solution = question.solution as McqSolution | null;
   const key = new Set(Array.isArray(solution?.correct) ? solution.correct : []);
   return (Array.isArray(student?.choices) ? student.choices : []).map((choice, position) => ({
     id: choice.id,
@@ -109,14 +88,14 @@ export function choicesOf(question: Pick<QuestionLike, "student" | "solution">):
  * therefore nothing wrong — and only shows the distribution.
  */
 export function hasKey(question: Pick<QuestionLike, "type" | "solution">): boolean {
-  const solution = question.solution as Partial<McqSolutionLike & ShortSolutionLike> | null;
+  const solution = question.solution as Partial<McqSolution & ShortSolution> | null;
   const key = question.type === "mcq" ? solution?.correct : solution?.expected;
   return Array.isArray(key) && key.length > 0;
 }
 
 /** The prompt of the question, whatever its type; `""` for one without (a cloze). */
 export function promptOf<Q extends Pick<QuestionLike, "student">>(question: Q): string {
-  const student = question.student as Partial<McqStudentLike & ShortStudentLike> | null;
+  const student = question.student as Partial<McqStudent & ShortStudent> | null;
   return typeof student?.prompt === "string" ? student.prompt : "";
 }
 
@@ -137,7 +116,7 @@ function mcqRows(question: QuestionLike, tally: PollTally): PollRow[] {
 }
 
 function shortRows(question: QuestionLike, tally: PollTally): PollRow[] {
-  const solution = question.solution as ShortSolutionLike | null;
+  const solution = question.solution as ShortSolution | null;
   const expected = new Set(
     (Array.isArray(solution?.expected) ? solution.expected : []).map(foldPollAnswer),
   );
