@@ -4269,7 +4269,7 @@ serves now (16a), and what waits for the group repositories (16b).
   `nft-check.sh vm` fix (#651). Acceptance met under load (a loaded live
   session beside parallel runner smokes): no OOM and no `memory.high` in
   either slice, worst run 5.3 s against `RUNNER_TIMEOUT_MS` 30 s.
-  Remaining: re-applying `host.nft` for the removed `udp dport 443`.
+  `host.nft` without `udp dport 443` re-applied and confirmed 2026-10-09; every `nft-check.sh` check green (outside, app, vm with the cross-bridge probes).
 
 ### M6-06 — Quiz `codespace` module
 - **Depends on**: M6-03, M3-02.
