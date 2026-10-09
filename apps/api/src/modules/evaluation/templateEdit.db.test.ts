@@ -209,6 +209,39 @@ describe("the revision (ADR-031, addendum d)", () => {
     ]);
   });
 
+  it("does not move when a patch spells out an optional setting's default (ADR-026, ADR-069)", async () => {
+    const { teacher, seed } = await world();
+    const t = await savedTemplate(teacher, seed);
+    const url = `/app/api/templates/${t.template.id}`;
+    // The seeded exam never set these: absent reads as the default, so
+    // writing the default changes nothing a student or a grade would see.
+    const spelled = await write(teacher, "PATCH", url, {
+      settings: {
+        kiosk: false,
+        safeExamBrowser: false,
+        negativeMarking: false,
+        categorizePolicy: "per_item",
+        calculator: "none",
+        notepad: "none",
+        conditions: [],
+        retakes: { enabled: false, keep: "best", maxAttempts: null, scope: "all" },
+      },
+    });
+    expect(spelled.template.revision).toBe(1);
+    const [entry] = await server.app.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.subjectId, t.template.id), eq(auditLog.action, "template.update")));
+    expect(entry?.payload).toEqual({ fields: ["settings"], revised: false, revision: 1 });
+
+    // The same setting with an effective change moves it, once.
+    const marked = await write(teacher, "PATCH", url, { settings: { negativeMarking: true } });
+    expect(marked.template.revision).toBe(2);
+    // And back to off, now stored explicitly, moves it again.
+    const unmarked = await write(teacher, "PATCH", url, { settings: { negativeMarking: false } });
+    expect(unmarked.template.revision).toBe(3);
+  });
+
   it("moves once for a patch of the title and a setting", async () => {
     const { teacher, seed } = await world();
     const t = await savedTemplate(teacher, seed);

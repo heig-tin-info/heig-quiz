@@ -15,16 +15,30 @@ import { isDeepStrictEqual } from "node:util";
 
 import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
-import type {
-  ConceptLang,
-  EvaluationMode,
-  EvaluationTemplate,
-  TemplateDetail,
-  TemplateItemRef,
-  TemplatePullItem,
-  TemplatePullPreview,
+import {
+  categorizePolicyOf,
+  conditionsOf,
+  kioskOf,
+  negativeMarkingOf,
+  retakesOf,
+  safeExamBrowserOf,
+  type ConceptLang,
+  type EvaluationMode,
+  type EvaluationSettings,
+  type EvaluationTemplate,
+  type TemplateDetail,
+  type TemplateItemRef,
+  type TemplatePullItem,
+  type TemplatePullPreview,
 } from "@quiz/contracts";
-import { evaluationTotal, itemListDiff } from "@quiz/domain";
+import {
+  calculatorOn,
+  drillAllowedOn,
+  evaluationTotal,
+  itemListDiff,
+  notepadOn,
+  retakeScopeOf,
+} from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { evaluationItems, evaluations } from "../../db/schema.js";
@@ -228,16 +242,40 @@ export async function templateDetail(
 // --- Editing in place (F-EVAL-25, ADR-031 addendum d) -----------------------
 
 /**
+ * The settings as they take effect: each optional key (ADR-026, ADR-069 —
+ * optional so that no stored row needed a migration) read through its
+ * accessor, so a row that never set `kiosk` equals one that stores
+ * `kiosk: false`. What is stored is untouched; only the comparison sees this.
+ */
+function effectiveSettings(row: EvaluationRecord): EvaluationSettings {
+  const settings = settingsOf(row);
+  const retakes = retakesOf(settings);
+  return {
+    ...settings,
+    retakes: { ...retakes, scope: retakeScopeOf(retakes) },
+    negativeMarking: negativeMarkingOf(settings),
+    categorizePolicy: categorizePolicyOf(settings),
+    safeExamBrowser: safeExamBrowserOf(settings),
+    kiosk: kioskOf(settings),
+    calculator: calculatorOn(row.mode, settings.calculator),
+    notepad: notepadOn(row.mode, settings.notepad),
+    conditions: conditionsOf(settings),
+    allowDrill: drillAllowedOn(row.mode, settings.allowDrill),
+  };
+}
+
+/**
  * Everything of a template whose change is a new revision — its whole
  * content but the title: the configuration, read through the same parsers
- * as everywhere (so a stored row missing a defaulted key equals the same row
- * with it), and the items with their versions, points, order, milestones,
+ * as everywhere and the settings through their accessors (so a stored row
+ * missing a defaulted or optional key equals the same row spelling its
+ * default), and the items with their versions, points, order, milestones,
  * bonus flags (ADR-052) and intros (ADR-084).
  */
 async function contentOf(db: DbOrTx, row: EvaluationRecord) {
   return {
     mode: row.mode,
-    settings: settingsOf(row),
+    settings: effectiveSettings(row),
     gradingScale: scaleOf(row),
     feedbackPolicy: feedbackOf(row),
     mcqPolicy: row.mcqPolicy,
