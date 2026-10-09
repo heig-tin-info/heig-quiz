@@ -92,7 +92,7 @@ export function BulkBar({
   const pools = usePools({ enabled: dialog === "pool" });
   const targets = (pools.data ?? []).filter((p) => p.id !== poolId && p.role !== "reader");
   // The chosen pool's folders, on the key its own screen uses.
-  const target = usePool(targetPoolId, { enabled: dialog === "pool" && targetPoolId !== "" });
+  const target = usePool(targetPoolId || null, { enabled: dialog === "pool" });
 
   /** Runs one call per question, counts the failures, reports once. */
   const runAll = async (step: (id: string) => Promise<unknown>) => {

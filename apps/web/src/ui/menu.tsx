@@ -190,20 +190,20 @@ export function panelStyle(pos: MenuPlacement, align: "start" | "end"): CSSPrope
  * `menuPosition` anchors a panel on its trigger and knows nothing of the
  * panel's own width, so a right-aligned trigger near the left edge (the
  * overflow button of a page header on a phone) put half the panel off
- * screen. Measured once it is laid out and nudged back inside, 8 px from
- * either edge. A layout effect: doing it after paint would show the panel in
- * the wrong place for one frame.
+ * screen. Measured once it is laid out and nudged back inside, `margin` px
+ * from either edge (8 by default). A layout effect: doing it after paint
+ * would show the panel in the wrong place for one frame.
  */
 export function usePanelClamp(
   panel: RefObject<HTMLElement | null>,
   open: boolean,
   pos: MenuPlacement | null,
   align: "start" | "end",
+  margin = 8,
 ): void {
   useLayoutEffect(() => {
     const el = panel.current;
     if (!open || !el || !pos) return;
-    const margin = 8;
     const clamp = () => {
       el.style.marginLeft = "";
       // Computed from `pos` and the panel's width, never from its rectangle:
@@ -227,7 +227,7 @@ export function usePanelClamp(
     const observer = new ResizeObserver(clamp);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [panel, open, pos, align]);
+  }, [panel, open, pos, align, margin]);
 }
 
 /**

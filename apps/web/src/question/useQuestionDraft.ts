@@ -39,7 +39,7 @@ export function useQuestionDraft(id: string) {
     queryFn: () => api(`/app/api/questions/${id}`),
   });
   const poolId = detail.data?.meta.poolId;
-  const pool = usePool(poolId);
+  const pool = usePool(poolId ?? null);
   /*
    * A pool shared with me as `reader` (`PoolDetail.role`, the same predicate
    * `PoolView` uses for its own list). The question is READABLE — that is the

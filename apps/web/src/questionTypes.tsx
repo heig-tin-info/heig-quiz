@@ -114,7 +114,7 @@ import {
   type KindLabels,
 } from "@quiz/qt-circuit/client";
 
-import { ApiError, api } from "./api";
+import { api, refusedWith } from "./api";
 import { HelpIcon } from "./help";
 import { useT, type Dict, type TFunction } from "./i18n";
 import { ClozeMarkdownText } from "./markdown/ClozeMarkdownText";
@@ -499,18 +499,13 @@ function trySimulateReference({ id, flush }: TryContext): TryAdapter {
     } catch (error) {
       // The stored draft does not validate: the issues are on the page, and
       // the teacher must read this as their draft, not as the simulator.
-      if (isConfigInvalid(error)) return "invalid";
+      if (refusedWith(error, "config_invalid")) return "invalid";
       throw error;
     }
     if (result.status !== "graded") return "unavailable";
     return { details: result.details as CircuitDetails };
   };
 }
-
-const isConfigInvalid = (error: unknown): boolean =>
-  error instanceof ApiError &&
-  error.status === 422 &&
-  (error.body as { error?: unknown } | null)?.error === "config_invalid";
 
 /**
  * "Try the reference solution" (`CodeImageEditor`): the same two runners as

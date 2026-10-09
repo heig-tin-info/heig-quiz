@@ -46,16 +46,19 @@ interface JournalOf {
   student: JournalStudent;
 }
 
+/** The query string of a journal read in `view`: the student payload is asked for, the staff one is the default. */
+export const journalQuery = (view: JournalView): string => (view === "student" ? "?view=student" : "");
+
 /** `GET /classrooms/:id/journal` in the payload `view` names: whether there is a journal, which, and its navigation. */
-export function useJournal<V extends JournalView>(classroomId: string, view: V) {
+export function useClassroomJournal<V extends JournalView>(classroomId: string, view: V) {
   return useQuery<JournalOf[V]>({
     queryKey: journalKey(classroomId, view),
-    queryFn: () => api(`${journalBase(classroomId)}${view === "student" ? "?view=student" : ""}`),
+    queryFn: () => api(`${journalBase(classroomId)}${journalQuery(view)}`),
   });
 }
 
 /** `GET /classrooms/:id/journal` as the staff read it: whether there is a journal, and which. */
-export const useStaffJournal = (classroomId: string) => useJournal(classroomId, "staff");
+export const useStaffJournal = (classroomId: string) => useClassroomJournal(classroomId, "staff");
 
 /** The code of a refused journal write, or null for any other failure. */
 export function journalRefusal(error: unknown): JournalErrorCode | null {

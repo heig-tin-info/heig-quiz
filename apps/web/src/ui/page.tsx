@@ -53,6 +53,15 @@ export function GateCard({
   );
 }
 
+/** The accent disc above a gate's title, for the states that ask something of the reader. */
+export function GateIcon({ icon: Icon }: { icon: IconType }) {
+  return (
+    <span className="inline-flex rounded-full bg-accent-soft p-3">
+      <Icon className="size-6 text-accent" />
+    </span>
+  );
+}
+
 /** A gate page while what it shows is read: the title and two lines of text. */
 export function GateSkeleton() {
   return (

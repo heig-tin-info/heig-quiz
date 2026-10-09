@@ -19,12 +19,12 @@ export function usePools(options: ReadOptions = {}) {
   });
 }
 
-/** One pool: its folders, concepts and the caller's role. `undefined` while the id is not known yet: the query waits. */
-export function usePool(id: string | undefined, options: ReadOptions = {}) {
+/** One pool: its folders, concepts and the caller's role. `null` while the id is not known yet: the query waits. */
+export function usePool(id: string | null, options: ReadOptions = {}) {
   return useQuery<PoolDetail>({
-    queryKey: poolKey(id),
+    queryKey: poolKey(id ?? undefined),
     queryFn: () => api(`/app/api/pools/${id}`),
     ...options,
-    enabled: id !== undefined && (options.enabled ?? true),
+    enabled: id !== null && (options.enabled ?? true),
   });
 }

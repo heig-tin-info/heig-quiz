@@ -13,6 +13,7 @@ import {
   cx,
   EmptyState,
   menuPosition,
+  usePanelClamp,
   panelStyle,
   pressable,
   QueryError,
@@ -55,8 +56,7 @@ const LIST_URL = `/app/api/notifications?limit=${NOTIFICATION_LIMIT}`;
 /** Over this, the badge stops counting and says so. */
 const BADGE_CAP = 9;
 
-/** Panel geometry: 22 rem of sentences, the page's own 16 px side gutter. */
-const PANEL_WIDTH = 352;
+/** The panel stays inside the page's own 16 px side gutter (its width is 22 rem at most). */
 const GUTTER = 16;
 /** What the panel is assumed to be worth when deciding to open it upward. */
 const PANEL_MAX_HEIGHT = 420;
@@ -323,20 +323,12 @@ export function NotificationPanel({
       width: window.innerWidth,
       height: window.innerHeight,
     };
-    const placed = menuPosition(rect, viewport, align, PANEL_MAX_HEIGHT);
-    // `menuPosition` anchors the panel on the trigger and stops there. This
-    // panel is 352 px wide and the phone's avatar sits 12 px from the right
-    // edge, so the anchored panel would hang off the left of the screen:
-    // clamp it to the 16 px gutter, in the direction it hangs from.
-    const width = Math.min(PANEL_WIDTH, viewport.width - 2 * GUTTER);
-    setPos({
-      ...placed,
-      left:
-        align === "end"
-          ? Math.max(placed.left, width + GUTTER)
-          : Math.min(placed.left, viewport.width - width - GUTTER),
-    });
+    setPos(menuPosition(rect, viewport, align, PANEL_MAX_HEIGHT));
   }, [open, anchor, align]);
+  // 352 px wide, and the phone's avatar sits 12 px from the right edge: the
+  // anchored panel would hang off the left of the screen. Nudged back inside
+  // the page's 16 px gutter, like a menu inside its 8 px margin.
+  usePanelClamp(panel, shown, pos, align, GUTTER);
 
   /**
    * Both write routes answer with the WHOLE inbox as it now stands, so the

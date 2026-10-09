@@ -48,7 +48,8 @@ import {
 import {
   journalBase,
   journalErrorText,
-  useJournal,
+  journalQuery,
+  useClassroomJournal,
   useJournalDeletePage,
   useJournalRefresh,
   type JournalView,
@@ -135,9 +136,9 @@ export function JournalReader({
   const toast = useToast();
   const view: JournalView = studentView ? "student" : "staff";
   const base = journalBase(classroomId);
-  const narrow = studentView ? "?view=student" : "";
+  const narrow = journalQuery(view);
 
-  const journal = useJournal(classroomId, view);
+  const journal = useClassroomJournal(classroomId, view);
   const data: Journal | undefined = journal.data;
   const staffJournal = data && data.view === "staff" ? data : null;
   // The staff payload says "no journal" by its mode (ADR-057); a student without one gets a 404.

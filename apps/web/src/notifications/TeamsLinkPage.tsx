@@ -9,7 +9,7 @@ import { api, isNotFound } from "../api";
 import { useT } from "../i18n";
 import { notificationSettingsKey, teamsLinkKey } from "../queryKeys";
 import { SignInGate } from "../SignInGate";
-import { Alert, Button, Card, FormError, GateCard, GateFrame, GateSkeleton } from "../ui";
+import { Alert, Button, Card, FormError, GateCard, GateFrame, GateIcon, GateSkeleton } from "../ui";
 
 /**
  * The Teams link page (ADR-030). The HEIG Quiz tab in Teams opens it in the
@@ -118,9 +118,7 @@ function Confirm({ token, me, onSettings }: { token: string; me: Me; onSettings?
     <GateFrame>
       <Card className="px-6 py-8">
         <div className="text-center">
-          <span className="inline-flex rounded-full bg-accent-soft p-3">
-            <Link2 className="size-6 text-accent" />
-          </span>
+          <GateIcon icon={Link2} />
           <h1 className="mt-3 text-lg font-bold tracking-tight">{t("teamsLink.title")}</h1>
         </div>
         <dl className="mt-5 divide-y divide-line rounded-lg border border-line text-sm">

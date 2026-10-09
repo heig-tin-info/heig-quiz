@@ -7,7 +7,7 @@ import { api, isNotFound } from "../api";
 import { useT } from "../i18n";
 import { oauthRequestKey } from "../queryKeys";
 import { SignInGate } from "../SignInGate";
-import { Alert, Button, Card, FormError, GateCard, GateFrame, GateSkeleton } from "../ui";
+import { Alert, Button, Card, FormError, GateCard, GateFrame, GateIcon, GateSkeleton } from "../ui";
 
 /**
  * The OAuth consent page (ADR-023): claude.ai, ChatGPT or another MCP client
@@ -88,9 +88,7 @@ function Consent({ id, me }: { id: string; me: Me }) {
     <GateFrame>
       <Card className="px-6 py-8">
         <div className="text-center">
-          <span className="inline-flex rounded-full bg-accent-soft p-3">
-            <KeyRound className="size-6 text-accent" />
-          </span>
+          <GateIcon icon={KeyRound} />
           <h1 className="mt-3 text-lg font-bold tracking-tight">
             {t("oauth.consent.title", { client: r.clientName })}
           </h1>

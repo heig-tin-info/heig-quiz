@@ -7,7 +7,7 @@ import { api, ApiError } from "../api";
 import { useT } from "../i18n";
 import { teamsHostKey, teamsTabKey } from "../queryKeys";
 import { parsePath, routeToPath } from "../router";
-import { Button, GateCard, GateSkeleton } from "../ui";
+import { Button, GateCard, GateIcon, GateSkeleton } from "../ui";
 import { connectTeams, type TeamsHost } from "./teamsHost";
 
 /**
@@ -114,7 +114,7 @@ function InTeams({ host }: { host: TeamsHost }) {
   const data = state.data;
   if (data.state === "unlinked") {
     return (
-      <GateCard icon={<Badge icon={Link2} />} title={t("teamsTab.unlinked.title")} body={t("teamsTab.unlinked.body")}>
+      <GateCard icon={<GateIcon icon={Link2} />} title={t("teamsTab.unlinked.title")} body={t("teamsTab.unlinked.body")}>
         <Button size="lg" className="mt-6 w-full" onClick={() => void host.openLink(data.linkUrl)}>
           {t("teamsTab.unlinked.action")}
         </Button>
@@ -129,7 +129,7 @@ function InTeams({ host }: { host: TeamsHost }) {
   const target = tabTargetPath(host.subPageId);
   if (target) {
     return (
-      <GateCard icon={<Badge icon={ExternalLink} />} title={t("teamsTab.target.title")} body={t("teamsTab.target.body")}>
+      <GateCard icon={<GateIcon icon={ExternalLink} />} title={t("teamsTab.target.title")} body={t("teamsTab.target.body")}>
         <Button size="lg" className="mt-6 w-full" onClick={() => open(target)}>
           {t("teamsTab.target.action")}
         </Button>
@@ -147,15 +147,6 @@ function InTeams({ host }: { host: TeamsHost }) {
         {t("teamsTab.linked.open")}
       </Button>
     </GateCard>
-  );
-}
-
-/** The accent disc of the link and open states, as the link page draws it. */
-function Badge({ icon: Icon }: { icon: typeof Link2 }) {
-  return (
-    <span className="inline-flex rounded-full bg-accent-soft p-3">
-      <Icon className="size-6 text-accent" />
-    </span>
   );
 }
 
