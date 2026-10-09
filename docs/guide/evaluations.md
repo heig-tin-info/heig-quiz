@@ -153,6 +153,17 @@ What changes for the students:
 
 To try it yourself before the class does, give yourself a seat with **Join as student** in the classroom (a seat badged as a staff test), switch to the student view and download the file like a student. Plan a first run on a real machine of the room: SEB must be installed there, and its version is what the students will use.
 
+#### What Safe Exam Browser proves, and what it does not
+
+SEB runs on the student's own laptop, a machine the school does not control. The platform checks what it can from there, and no more:
+
+- **Checked.** SEB sends a hash of its configuration (the *Config Key*) with its requests. The platform refuses a launch whose hash does not match the exam file. On the requests that follow, a mismatch is recorded for now, not refused: refusing waits until it has been confirmed that a real SEB sends the hash on every kind of request, so that no student is locked out mid-exam. The session SEB opens reaches this one exam only, the file works once, and a new launch ends the previous session. Leaving the exam page and pasting from outside it are recorded in the attempt's integrity journal.
+- **Not checked.** That the SEB program itself is genuine. SEB offers two further keys for that: the *Browser Exam Key*, which differs for every SEB version and platform and would need a list kept up to date by hand, and the *App Signature Key*, which only an SEB Server can verify. The platform uses neither.
+
+In practice, the Config Key stops the accidental and the casual: the exam file opened in an ordinary browser, or a student without SEB. A determined student who reads the exam file and modifies or imitates SEB can get past it. Nothing on the laptop prevents a second device either, a phone or another computer beside it.
+
+So treat SEB as one layer, not as the guarantee: keep the room supervised, and shuffle the questions and choices or draw [parameterized questions](parameterized-questions.md), so that answers are not worth sharing. When the stakes call for a device the school vouches for, choose **Kiosk station only**: a [kiosk station](#kiosk-stations) is a Chromebook managed by the school, which Google attests before and during the exam.
+
 ### Kiosk stations
 
 The school keeps Chromebooks locked in kiosk mode as exam stations: a fallback for a student whose laptop fails, or the way a whole room sits an exam. Choose **Kiosk station only**, or **SEB or kiosk station** for stations as a fallback beside Safe Exam Browser, under **Allowed devices**; both choices are offered only where the platform administrator has set the stations up ([Kiosk stations](../kiosk.md)).
