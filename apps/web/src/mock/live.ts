@@ -10,6 +10,7 @@ import {
 import {
   attemptInspect,
   dashboardView,
+  evaluationIncidents,
   evaluationOr404,
   itemAnswers,
   makeRows,
@@ -74,6 +75,7 @@ on("POST", "/app/api/evaluations/:id/extend", (m, body) => {
 on("GET", "/app/api/evaluations/:id/attempts/:attemptId", (m) =>
   attemptInspect(evaluationOr404(m.groups!.id!), m.groups!.attemptId!),
 );
+on("GET", "/app/api/evaluations/:id/incidents", (m) => evaluationIncidents(evaluationOr404(m.groups!.id!)));
 on("GET", "/app/api/evaluations/:id/items/:itemId/answers", (m) =>
   itemAnswers(evaluationOr404(m.groups!.id!), m.groups!.itemId!),
 );

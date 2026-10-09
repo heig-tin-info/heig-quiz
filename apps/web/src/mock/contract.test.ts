@@ -41,6 +41,7 @@ import {
   LlmSettings,
   LlmUsage,
   AttemptInspect,
+  EvaluationIncidents,
   ItemAnswers,
   AttemptOrLobby,
   ByQuestion,
@@ -409,6 +410,11 @@ const CHECKED: Case[] = [
     "/app/api/evaluations/:id/attempts/:attemptId",
     `/app/api/evaluations/${runningId}/attempts/${attemptId}`,
     AttemptInspect,
+  ),
+  one(
+    "/app/api/evaluations/:id/incidents",
+    `/app/api/evaluations/${runningId}/incidents`,
+    EvaluationIncidents,
   ),
   ...runningItems.map((itemId) =>
     one(

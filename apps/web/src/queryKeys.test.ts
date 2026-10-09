@@ -119,6 +119,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["attemptInspectKey", keys.attemptInspectKey("e1", "a1"), ["attempt-inspect", "e1", "a1"]],
     ["attemptInspectPrefix", keys.attemptInspectPrefix("e1"), ["attempt-inspect", "e1"]],
     ["itemAnswersKey", keys.itemAnswersKey("e1", "i1"), ["item-answers", "e1", "i1"]],
+    ["evaluationIncidentsKey", keys.evaluationIncidentsKey("e1"), ["evaluation-incidents", "e1"]],
     ["gradingKey", keys.gradingKey("e1"), ["grading", "e1"]],
     ["gradingStepsKey", keys.gradingStepsKey("e1"), ["grading", "e1", "steps"]],
     [

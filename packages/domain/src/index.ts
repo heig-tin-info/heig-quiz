@@ -67,6 +67,7 @@ export * from "./groupSets.js";
 export * from "./health.js";
 export * from "./healthAlert.js";
 export * from "./identityMatch.js";
+export * from "./integrityIncidents.js";
 export * from "./ipAllowlist.js";
 export * from "./itemList.js";
 export * from "./kioskAttestation.js";

@@ -710,6 +710,11 @@ const scenes = [
   // #353: what a click opens is what was clicked — the row's eye the whole
   // paper, a cell that one answer, a column header the question for the class.
   { name: "live-inspect", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: "Open the whole paper" }).first().click() },
+  // ADR-088 §7: the row's integrity badge, the paper's Journal section it
+  // opens, and the evaluation's list behind "Journal" in the status line.
+  { name: "live-integrity-badge", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true },
+  { name: "live-integrity-inspect", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /open the journal$/ }).first().click() },
+  { name: "live-integrity-list", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Journal/ }).click() },
   { name: "live-answer", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /· Question 1$/ }).first().click() },
   { name: "live-question", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: "Open question 6 for every student" }).click() },
   { name: "live-question-hidden", role: "teacher", path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: "Open question 1 for every student" }).click() },

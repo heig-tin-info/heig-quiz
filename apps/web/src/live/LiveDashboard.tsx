@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Users, Wifi, WifiOff } from "lucide-react";
+import { ScrollText, Users, Wifi, WifiOff } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
@@ -28,11 +28,13 @@ import {
   PageError,
   PageSkeleton,
   Switch,
+  textLink,
   useFullscreen,
 } from "../ui";
 import { AssignStationDialog } from "./AssignStation";
 import { anonymousNumbers, commonDeadline } from "./cells";
 import { AnswerModal } from "./AnswerModal";
+import { IncidentsModal } from "./Incidents";
 import { InspectModal } from "./InspectModal";
 import { Legend } from "./Legend";
 import { LobbyPanel } from "./LobbyPanel";
@@ -84,6 +86,9 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
    */
   const [opened, setOpened] = useState<Opened | null>(null);
   const selected = opened?.view === "question" ? null : opened;
+
+  // The evaluation's integrity journal, over the grid (ADR-088 §7).
+  const [journalOpen, setJournalOpen] = useState(false);
 
   // The row a station is being assigned to (ADR-051 §7), with the name it showed.
   const [assigning, setAssigning] = useState<{ userId: string; name: string } | null>(null);
@@ -266,7 +271,8 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   });
 
   const openOn = useCallback(
-    (view: "answer" | "paper") => (row: DashboardRow, itemId: string) => {
+    // No question: the paper opens at its top, where its Journal section is.
+    (view: "answer" | "paper") => (row: DashboardRow, itemId = "") => {
       if (row.attemptId === null) return;
       setOpened({ view, attemptId: row.attemptId, seatId: row.seatId, itemId });
     },
@@ -370,6 +376,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   const openedIndex = opened === null ? -1 : view.items.findIndex((i) => i.id === opened.itemId);
   const close = () => setOpened(null);
   const lobby = evaluationState === "lobby" || evaluationState === "scheduled";
+  const incidentTotal = view.rows.reduce((sum, row) => sum + row.incidents, 0);
   // The one clock of the screen, for the header and for every row that
   // compares its own deadline against it. No clock while the evaluation's
   // timing is unknown: without it a `duration` quiz would show its leftover
@@ -428,6 +435,21 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
             · {t("live.present", { present: counts.present, enrolled: counts.enrolled })}
           </span>
         </span>
+        {/* Secondary on purpose: a list of names and absences has no place
+            on a projected grid until the teacher asks for it. The count is
+            the badges' sum, refreshed with the grid; no link at all when the
+            evaluation keeps no journal (a poll never does). */}
+        {lobby || !view.evaluation.journalOn ? null : (
+          <button
+            type="button"
+            onClick={() => setJournalOpen(true)}
+            className={cx("flex items-center gap-1.5 text-[13px] text-fg-muted", textLink)}
+          >
+            <ScrollText className="size-4" aria-hidden />
+            {t("live.integrity.button")}
+            {incidentTotal > 0 ? <span className="tabular-nums text-fg-faint">{incidentTotal}</span> : null}
+          </button>
+        )}
       </div>
 
       {view.rows.length === 0 ? (
@@ -461,6 +483,19 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
               />
             </Card>
           </div>
+          {journalOpen ? (
+            <IncidentsModal
+              evaluationId={id}
+              rows={view.rows}
+              nameOf={nameOf}
+              namesShown={toggles.names}
+              onOpenRow={(row) => {
+                setJournalOpen(false);
+                selectPaper(row);
+              }}
+              onClose={() => setJournalOpen(false)}
+            />
+          ) : null}
           {assigning ? (
             <AssignStationDialog
               evaluationId={id}

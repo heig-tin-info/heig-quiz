@@ -6,6 +6,7 @@ export * from "./review.js";
 export * from "./parameters.js";
 export * from "./evaluation.js";
 export * from "./activity.js";
+export * from "./integrity.js";
 export * from "./live.js";
 export * from "./student.js";
 export * from "./grading.js";

@@ -30,6 +30,7 @@ import {
   RetakeKeep,
   TrustedClient,
 } from "./evaluation.js";
+import { IntegrityIncident } from "./integrity.js";
 
 export const AttemptState = z.enum(["not_started", "in_progress", "submitted", "expired"]);
 export type AttemptState = z.infer<typeof AttemptState>;
@@ -677,6 +678,12 @@ export const DashboardRow = z.object({
   maxPoints: z.number(),
   cells: z.array(DashboardCell),
   access: DashboardAccess,
+  /**
+   * How many integrity incidents the row's attempt has (ADR-088 §7): the
+   * badge's count. Derived on each read, so it follows the grid's refetch,
+   * not its frames.
+   */
+  incidents: z.number().int().nonnegative(),
 });
 export type DashboardRow = z.infer<typeof DashboardRow>;
 
@@ -695,6 +702,11 @@ export const DashboardView = z.object({
      * correction is published (ADR-050). The grid offers Reopen only then.
      */
     reopenable: z.boolean(),
+    /**
+     * Whether the evaluation keeps the integrity journal (ADR-088 §2: its
+     * `logVisibility`, never a poll). Off, the grid offers no journal list.
+     */
+    journalOn: z.boolean(),
   }),
   items: z.array(
     z.object({
@@ -817,6 +829,8 @@ export const AttemptInspect = z.object({
       details: z.unknown().nullable(),
     }),
   ),
+  /** The integrity journal read as incidents (ADR-088 §7), in time order. */
+  incidents: z.array(IntegrityIncident),
   serverNow: z.iso.datetime(),
 });
 export type AttemptInspect = z.infer<typeof AttemptInspect>;

@@ -81,6 +81,7 @@ function paper(text: string, revision = 1): AttemptInspect & { serverNow: string
       solution: null,
     })),
     events: [],
+    incidents: [],
     serverNow: new Date().toISOString(),
   };
 }
