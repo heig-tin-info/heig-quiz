@@ -200,10 +200,12 @@ through (`scoreVisible`).
   (`409 retakes_enabled`), and the grid does not offer it.
 - The evaluation list counts STUDENTS who took the evaluation
   (`count(distinct owner)`), not attempt rows.
-- Migration `0015` is not undone by redeploying the previous code, which
-  fails on the new schema (its `ON CONFLICT (evaluation_id, user_id)` has no
-  matching unique index); restoring the one-attempt index first requires
-  deleting the retakes, a decision about students' results.
+- Migration `0015` is not undone by redeploying the previous code: the old
+  code does not run on the new schema at all, since its
+  `ON CONFLICT (evaluation_id, user_id)` has no matching unique index after
+  `0015`, so every first entry into an evaluation would fail. Restoring the
+  one-attempt index first requires deleting the retakes, a decision about
+  students' results.
 
 ### Addendum (2026-09-25, issues #120, #121): the score page carries the retake
 

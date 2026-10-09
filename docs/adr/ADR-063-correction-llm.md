@@ -187,14 +187,16 @@ confidence, and its justification says it is a development stub, without
 naming or counting the terms. `config.ts` refuses to start with it under
 `NODE_ENV=production`, by the same mechanism and with the same kind of test
 as `AUTH_DEV_LOGIN` (invariant 3): a grade no model produced must never
-reach a real student. `.env.example` turns it on for development; the seed
-takes the process's provider, never one of its own. `LLM_PROVIDER=none`,
+reach a real student. `.env.example` turns it on for development. The seed
+builds its service with `createLlm(config, null)`: the stub under
+`LLM_PROVIDER=stub`, otherwise none, never the gateway's grader, so seeding
+never calls a real model. `LLM_PROVIDER=none`,
 the default, leaves the grading to the gateway when it is on, and to the
 teacher otherwise.
 
 A type asks by returning `pending: 'llm'` with what it builds from its
-config and the answer alone; the pass adds nothing that names a person, an
-attempt, an item or an evaluation (F-LLM-04, `grading/llm.db.test.ts`). The
+config and the answer alone; the pass adds no name, address, user,
+attempt, item or evaluation id (F-LLM-04, `grading/llm.db.test.ts`). The
 justification is written under `details.justification`
 (`JUSTIFICATION_KEY`, `@quiz/core/reasons`), never in `comment`, which is
 what a student reads; the grading panel shows it to the teacher as the AI's

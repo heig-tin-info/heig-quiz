@@ -2,23 +2,11 @@
 
 ## Status
 
-Accepted (2026-10-01, decided by the product owner in conversation;
-`docs/merge/08-decisions.md` D29). The mode schema, Quiz-mode writes and
-revisions, standard editor and read-only GitHub mode are implemented
-(M4-07–M4-09). Explicit ordering/nesting, mode switches and copying
-(M4-10–M4-13) are accepted and not built: the product owner dropped them on
-2026-10-08, to be implemented on demand.
-See [merge progress](../merge/PROGRESS.md) and [task cards](../merge/09-tasks.md). It supersedes D25 (the journal's WYSIWYG
-editor over git). It amends [ADR-049](ADR-049-journal-source-github.md):
-point 2 of its body (Postgres is never what a teacher edits) holds for the
-GitHub mode only, and points 2 (Settings, enabled once connected) and 7
-(the editor) of its addendum are replaced by this decision. D24 and D27
-are amended accordingly.
-
-Amended 2026-10-09: ADR-049 is folded into this record: the rules of its
-body and addenda still in force are §7, and the
-[correspondence table](#correspondence-with-adr-049) at the end maps each
-of its points. The status of M4-10–M4-13 above follows the merge progress.
+Accepted (2026-10-01, product owner; `docs/merge/08-decisions.md` D29).
+Supersedes D25; amends D24, D27 and [ADR-049](ADR-049-journal-source-github.md):
+its body point 2 holds for the GitHub mode only, its addendum points 2 and 7
+are replaced. Amended 2026-10-09: ADR-049 is folded into this record (§7, and
+the [correspondence table](#correspondence-with-adr-049) at the end).
 
 ## Context
 
@@ -124,6 +112,10 @@ dépôt GitHub"); never "local".
   for the journals that exist today, which migrate to GitHub mode.
 - Writes are frozen while a switch runs.
 
+Not built: the product owner dropped explicit ordering and nesting, the two
+mode switches and the copy of a journal (M4-10–M4-13) on 2026-10-08, to be
+implemented on demand ([merge progress](../merge/PROGRESS.md)).
+
 ### 4. Schema
 
 - `classroom_journals.mode` (`'quiz' | 'github'`). The repository columns
@@ -185,13 +177,19 @@ addendum on 2026-09-30. What still holds, by mode:
     asks.
   - **The defects of heig-classroom's journal stay fixed**: J1, an asset
     reaches a student only if a page visible to students references it;
-    J2, every ingestion runs under an advisory lock per classroom row and
-    writes the copy in one transaction; J3, each row has its own root path;
+    J2, an ingestion holds no lock while it reads GitHub: it snapshots the
+    row's `version`, fetches outside any transaction, then writes the copy
+    in one short transaction that locks the row (`SELECT … FOR UPDATE`) and
+    commits only if the `version` is unchanged, bumping it; a stale result
+    runs again from a fresh snapshot. The `journal.ingest` queue is a
+    standard one, with no deduplication: the compare-and-set is the
+    safety (`modules/journal/ingest.ts`, `jobs.ts`); J3, each row has its own root path;
     J4, a ticker sweep (every 60 s) emits the hint when a page's
     `visible_from` passes; J5, warnings are codes with parameters,
     translated in the web app (N-I18N-01); J6, the long-form styles are a
     `.md-body.md-doc` modifier; J7, development runs without webhooks nor a
-    queue, with Refresh as its path.
+    queue, with Refresh as its path, and the mock serves rendered HTML
+    fixtures.
   - **Removing a journal** removes the classroom's row and the platform's
     copy, never a repository.
 - **GitHub mode (§2).**
@@ -218,8 +216,11 @@ addendum on 2026-09-30. What still holds, by mode:
   - Two classrooms may name the same repository when both are linked to
     the same organization (D02): each keeps its own copy, and a push
     reaches every row that holds the repository.
-  - The course's staff who linked a GitHub account are invited as
-    collaborators of the journal repository; students never are.
+  - The course's staff who linked a GitHub account at that moment are
+    invited as collaborators when a journal repository is created or
+    chosen, with `push` only, never `admin` nor `maintain`, each invitation
+    audited; a member who joins the staff or links an account later is not
+    invited automatically (F-JRN-02, F-JRN-03). Students never are.
 
 ## Consequences
 
@@ -252,6 +253,19 @@ addendum on 2026-09-30. What still holds, by mode:
   syntax, and it is a second editor beside the questions' Tiptap.
 - **Lexical with an mdast bridge.** A third editor framework; it moves the
   round-trip problem into another serialiser instead of removing it.
+- **Content in Postgres, exported to a repository later** (rejected by
+  ADR-049 for the journal's single model): two sources of truth and a
+  conflict semantics invented after the fact. Quiz mode (§1) adopts it for
+  the novice only, with Move to GitHub (§3) as the deliberate export.
+- **Cells with identifiers, Notion-style, serialised to markdown**
+  (ADR-049): `<!-- cell -->` markers illegible in the repository and
+  destroyed by the first hand edit; an editor provides cells without
+  persisting them.
+- **Rendering on read, in the client** (ADR-049): a markdown parser, KaTeX
+  and a sanitiser in every student's bundle, the same page re-rendered on
+  every view; rendering at ingestion costs the work once.
+- **Cloning the repository to render it** (ADR-049): disk and a git process
+  per classroom on a VM that has neither to spare.
 
 ## Correspondence with ADR-049
 
@@ -282,4 +296,5 @@ points 2 and 7 are replaced, point 3 is amended.)
 | Addendum point 8 (one renderer, `packages/docrender`) | §7, both modes |
 | Addendum point 9 (access and the student's exit) | §7, both modes; §5 |
 | Addendum point 10 (defects J1–J7) | §7, both modes |
+| Alternatives considered (content in Postgres, cells with ids, render on read, cloning) | Alternatives considered (the last four) |
 | Second addendum (two modes) | this record |

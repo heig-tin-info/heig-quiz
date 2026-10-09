@@ -4,7 +4,7 @@
 
 Accepted (2026-07-03, phase 3).
 
-Amended 2026-10-09: §2 records the `uuid` v4 identifiers the code generates (`randomUUID()`), not v7; §4 drops the repository layer that was never built (the modules import `drizzle-orm`). §5 is unchanged.
+Amended 2026-10-09: §2 records the `uuid` v4 identifiers the code generates (`randomUUID()`), not v7; §4 drops the repository layer that was never built (the modules import `drizzle-orm`). §5 (audit immutability by SQL roles) is not implemented today: the migrations hold no GRANT or REVOKE, and the application connects as the owner role; a trigger-based implementation is planned (2026-10-09), and this record will be amended with it.
 
 ## Context
 

@@ -2,11 +2,10 @@
 
 ## Status
 
-Accepted (2026-10-04, product owner, issue #458): the v1 scope, the model
-(a new keyless type) and where moderation happens (a separate teacher
-view); the same day, the AI assistance of §9–§14 (accepted as ADR-072).
-Implemented by `packages/qt-brainstorm`, the `poll` module and migrations
-`0065_poll_idea_marks` and `0066_poll_ai`.
+Proposed (2026-10-04, issue #458); implemented (#505, #509, `qt-brainstorm`,
+migrations 0065/0066); acceptance by the product owner pending. §9–§14, the
+AI assistance, were accepted by the product owner on 2026-10-04 as ADR-072,
+folded here on 2026-10-09 ([correspondence table](#correspondence-with-adr-072)).
 
 Scope: a third question type for live polls, what of its answers reaches
 the room, and the model that may moderate it while the poll runs.
@@ -17,11 +16,6 @@ and N-DATA-07 (docs/spec) and [ADR-058](ADR-058-passerelle-llm.md) §1 (the
 `poll` purpose); records a decision under open question 43; depends on
 F-LIVE-13, F-LIVE-14 and F-AUTH-05. [ADR-063](ADR-063-correction-llm.md)
 is unchanged: no grading pass calls a model while an evaluation runs.
-
-Amended 2026-10-09: [ADR-072](ADR-072-ia-du-brainstorm.md) is folded into
-this record (§9–§14, its amendments of §2, §3 and §5 in place, and the
-[correspondence table](#correspondence-with-adr-072) at the end); the
-status "Proposed" is corrected to the decision and its delivery.
 
 ## Context
 
@@ -40,6 +34,9 @@ rephrasing, takes them over. F-LLM-03 forbade any model call during a
 running evaluation; its reason is grading fairness: a grade must not depend
 on a model consulted mid-exam. A poll grades and releases nothing
 (ADR-014), so that reason does not apply to it.
+
+The product owner chose on 2026-10-04 the v1 scope, the model (a new keyless
+type) and where moderation happens (a separate teacher view).
 
 ## Decision
 

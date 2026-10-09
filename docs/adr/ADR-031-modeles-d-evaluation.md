@@ -200,8 +200,10 @@ B is delivered (F-EVAL-26, the addendum of 2026-09-28, PR B).
   migration adds columns and replaces two constraints; no existing row
   changes shape (none has a `course_id`). It is not undone by dropping the
   columns: the CHECK of `0018_poll_audience` cannot be restored while a
-  template row exists, so undoing it loses the templates (their instances
-  are ordinary evaluations and stay).
+  template row exists, and an earlier image reads a template (a row with no
+  classroom) as an owned poll, so a plain redeploy is unsafe once a template
+  exists. Undoing it loses the templates (their instances are ordinary
+  evaluations and stay).
 
 ## Alternatives considered
 

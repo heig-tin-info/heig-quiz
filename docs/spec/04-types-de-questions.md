@@ -253,7 +253,7 @@ Shown as **Essay** / « Rédaction » in the interface; the id `rich` is the one
 
 **LLM scoring** ([ADR-063](../adr/ADR-063-correction-llm.md)): after the close, when a model is available and the question has a rubric or model answer, `grade` returns a pending LLM request. The API queues it, masks student names in the answer, and sends the statement, rubric, reference, answer and item's points. The reply is a proposal with confidence and a per-criterion breakdown inferred from the free-text rubric. The teacher validates it; a successful proposal is retained unless explicitly regraded. There is no model call while the evaluation runs or is paused. Without a model or grading material, the manual fallback applies.
 
-The justification and `details.ai` (model and criteria) remain teacher-only even after validation. A teacher may explicitly copy the justification into the comment and edit it before saving (ADR-063 §7). A structured rubric with `label`, `points` and `description` remains deferred. [ADR-045](../adr/ADR-045-service-llm-de-correction.md) preserves the development-stub history.
+The justification and `details.ai` (model and criteria) remain teacher-only even after validation. A teacher may explicitly copy the justification into the comment and edit it before saving (ADR-063 §7). A structured rubric with `label`, `points` and `description` remains deferred. The development stub is [ADR-063 §9](../adr/ADR-063-correction-llm.md#9-the-development-stub-folded-from-adr-045) (formerly ADR-045).
 
 ## 4.9 Code image `codeimage`
 
