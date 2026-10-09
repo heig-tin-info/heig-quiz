@@ -338,8 +338,12 @@ async function diskCheck({ config }: CheckContext): Promise<CheckResult> {
 }
 
 /**
- * The report the `backup` service writes after every dump
- * (`compose.prod.yml`): the app never reads a dump, only this.
+ * The reports written beside each other in the backup-status directory, one
+ * line of JSON each, through a temporary file and a rename: `last.json` by
+ * the `backup` service after every dump (`compose.prod.yml`), `offsite.json`
+ * by srv's `quiz-offsite-backup` unit after every borg archive
+ * (`scripts/offsite-backup/push.sh`). The app never reads a dump nor the
+ * borg repository, only these.
  */
 const BackupReportFile = z.object({
   finished_at: z.iso.datetime({ offset: true }),
@@ -349,26 +353,41 @@ const BackupReportFile = z.object({
   size_bytes: z.number().optional(),
 });
 
-async function backupCheck({ config }: CheckContext): Promise<CheckResult> {
-  if (!config.BACKUP_STATUS_FILE) return { status: "unknown", cause: "backup.not_configured" };
-  let report: z.infer<typeof BackupReportFile>;
-  try {
-    report = BackupReportFile.parse(JSON.parse(await readFile(config.BACKUP_STATUS_FILE, "utf8")));
-  } catch {
-    // Absent, half-written or malformed: no report to trust.
-    return { status: "warn", cause: "backup.missing" };
-  }
-  const finishedAt = new Date(report.finished_at);
-  // The wall clock: the report was stamped by another container's clock,
-  // and an age of a day has nothing to do with the live clock of invariant 5.
-  const status = backupStatus({ finishedAt, ok: report.ok }, new Date());
-  return {
-    status,
-    value: at(finishedAt),
-    cause: !report.ok ? "backup.failed" : status === "ok" ? null : "backup.stale",
-    details: report.file
-      ? [named(report.file, ...(report.size_bytes === undefined ? [] : [bytes(report.size_bytes)]))]
-      : [],
+/**
+ * Where each report lives. Only the dump's is configured; the off-site one is
+ * by convention `offsite.json` beside it (the unit quiz-offsite-backup.service
+ * passes that path to push.sh), so the one mounted directory holds both.
+ */
+const REPORT_FILES = {
+  backup: (config: AppConfig) => config.BACKUP_STATUS_FILE,
+  offsite: (config: AppConfig) => config.BACKUP_STATUS_FILE && join(dirname(config.BACKUP_STATUS_FILE), "offsite.json"),
+} as const;
+
+/** One report, judged by the same thresholds whichever copy it describes. */
+function reportCheck(kind: keyof typeof REPORT_FILES): HealthCheck["run"] {
+  return async ({ config }) => {
+    const path = REPORT_FILES[kind](config);
+    if (!path) return { status: "unknown", cause: `${kind}.not_configured` };
+    let report: z.infer<typeof BackupReportFile>;
+    try {
+      report = BackupReportFile.parse(JSON.parse(await readFile(path, "utf8")));
+    } catch {
+      // Absent, half-written or malformed: no report to trust.
+      return { status: "warn", cause: `${kind}.missing` };
+    }
+    const finishedAt = new Date(report.finished_at);
+    // The wall clock: the report was stamped by another clock (a container,
+    // the host), and an age of a day has nothing to do with the live clock
+    // of invariant 5.
+    const status = backupStatus({ finishedAt, ok: report.ok }, new Date());
+    return {
+      status,
+      value: at(finishedAt),
+      cause: !report.ok ? `${kind}.failed` : status === "ok" ? null : `${kind}.stale`,
+      details: report.file
+        ? [named(report.file, ...(report.size_bytes === undefined ? [] : [bytes(report.size_bytes)]))]
+        : [],
+    };
   };
 }
 
@@ -460,7 +479,8 @@ export const HEALTH_CHECKS: readonly HealthCheck[] = [
   { key: "database.size", section: "storage", run: databaseSizeCheck },
   { key: "database.connections", section: "storage", run: databaseConnectionsCheck },
   { key: "disk", section: "storage", run: diskCheck },
-  { key: "backup", section: "storage", run: backupCheck },
+  { key: "backup", section: "storage", run: reportCheck("backup") },
+  { key: "offsite", section: "storage", run: reportCheck("offsite") },
   ...SERVICE_NAMES.map((name): HealthCheck => ({
     key: serviceCheckKey(name),
     section: "services",
@@ -516,12 +536,12 @@ export async function runChecks(
 // --- /healthz: the coarse words -------------------------------------------
 
 /**
- * The checks `/healthz` runs on every probe: memory, two small files and
+ * The checks `/healthz` runs on every probe: memory, three small files and
  * the runner's `/health`, no table. The container healthcheck gives the
  * route 5 s and the deploy gates on it, so they are bounded at 1 s all
  * together (they run side by side); a slow one reads as its worst word.
  */
-const COARSE: readonly SystemCheckKey[] = ["ticker", "disk", "backup", "runner"];
+const COARSE: readonly SystemCheckKey[] = ["ticker", "disk", "backup", "offsite", "runner"];
 export const COARSE_TIMEOUT_MS = 1_000;
 
 export interface CoarseHealth {
@@ -530,14 +550,15 @@ export interface CoarseHealth {
   checks: {
     ticker: "up" | "stale" | "none";
     disk: "ok" | "low" | "unknown";
+    /** The dump's report and the off-site copy's: the worse of the two. */
     backup: "ok" | "stale" | "unknown";
     runner: "up" | "down" | "disabled";
   };
 }
 
-/** The ticker, the disk, the backup and the runner, reduced to words (ADR-055 §2). */
+/** The ticker, the disk, the two backup reports and the runner, reduced to words (ADR-055 §2). */
 export async function coarseHealth(app: FastifyInstance, config: AppConfig): Promise<CoarseHealth> {
-  const [ticker, disk, backup, runner] = await runChecks(
+  const [ticker, disk, backup, offsite, runner] = await runChecks(
     app,
     config,
     COARSE.map((key) => HEALTH_CHECKS.find((c) => c.key === key)!),
@@ -547,7 +568,11 @@ export async function coarseHealth(app: FastifyInstance, config: AppConfig): Pro
   const checks: CoarseHealth["checks"] = {
     ticker: ticker?.status === "unknown" ? "none" : bad(ticker) ? "stale" : "up",
     disk: bad(disk) ? "low" : disk?.status === "ok" ? "ok" : "unknown",
-    backup: bad(backup) ? "stale" : backup?.status === "ok" ? "ok" : "unknown",
+    backup: [backup, offsite].some(bad)
+      ? "stale"
+      : backup?.status === "ok" && offsite?.status === "ok"
+        ? "ok"
+        : "unknown",
     // A runner that did not answer within the bound counts as down.
     runner: runner?.status !== "ok" ? "down" : runner.cause === "runner.disabled" ? "disabled" : "up",
   };

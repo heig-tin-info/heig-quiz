@@ -27,6 +27,9 @@ N-OPS-02): `apps/api/src/serviceHealth.ts`, `apps/api/src/httpMetrics.ts`,
 `POST /app/api/admin/system/test-mail` (`TestMailResult`) and the audit
 action `system.test_mail`. No migration.
 
+Extended on 2026-10-09 (#235) by a second report beside the dump's: §4
+gains the `offsite` check, which §2's coarse `backup` word now covers (below).
+
 Extended by [ADR-058](ADR-058-passerelle-llm.md) §7: LLM health reads gateway state and the
 `llm.budget` check; it does not make a provider call.
 
@@ -156,6 +159,20 @@ The page says, on the backup line, that the copy is **local only and no
 off-site copy is configured**: open question 10 of
 `docs/spec/06-questions-ouvertes.md` stays open, and this ADR does not
 settle it.
+
+*Amendment (2026-10-09, #235).* The off-site copy exists
+([ADR-009](ADR-009-deploiement-vm-compose.md), amendment of decision 3), and
+the note above is gone. Its unit, `srv`'s `quiz-offsite-backup`, writes a
+report of the dump's shape as `offsite.json` beside the dump's, in the
+same mounted directory (the runbook, §6, has the format), so it needs no
+variable and no mount of its own: the check `offsite` (section storage)
+derives its path from `BACKUP_STATUS_FILE`, and the two reports are judged
+by one function with the same thresholds (`backupStatus`) and the same
+causes under their own prefix (`offsite.not_configured`, `.missing`,
+`.failed`, `.stale`). `/healthz` gains no field: its coarse
+`checks.backup` is the worse of the two reports, so a night without an
+off-site archive raises `attention` and the external probe notices it
+within a day.
 
 ### 5. The alarm: an external probe first, a mail second
 

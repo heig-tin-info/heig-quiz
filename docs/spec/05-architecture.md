@@ -271,7 +271,7 @@ The key has one student exit too: once the feedback policy shows it (`showKey`),
 
 - Export of a pool: zip archive generated on the fly, `pool.yaml`, category folders, `<internal_name>.yaml`, `assets/`. The same function feeds the API, the CLI and the button in the interface.
 - Import: validation of each file by the type's schema, `migrate` if `configVersion` is old, error report per file, single transaction, drafts created by default, publication with `--publish`.
-- Backup: the `backup` service of heig-classroom, compressed `pg_dump` plus the assets volume, sent every hour to a Hetzner object storage through `rclone`, 30-day retention. Restoration documented and tested on a blank VM. *Amendment (current state, deployment runbook §6): a daily provider backup of the whole VM (Hetzner Backups) and a daily `pg_dump -Fc` kept 30 days on the VM itself. The off-site copy of the logical dumps (`rclone`) is not wired yet (06, question 10).*
+- Backup: the `backup` service of heig-classroom, compressed `pg_dump` plus the assets volume, sent every hour to a Hetzner object storage through `rclone`, 30-day retention. Restoration documented and tested on a blank VM. *Amendment (current state, deployment runbook §6): a daily provider backup of the whole VM (Hetzner Backups) and a daily `pg_dump -Fc` kept 30 days on the VM itself. Since 2026-10-09 (#235) the off-site copy is a borg repository on a Hetzner Storage Box, append-only from the VM (ADR-009, amendment of decision 3; runbook §6, The off-site copy).*
 
 ## 5.9 Deployment
 

@@ -33,7 +33,10 @@ export const HealthResponse = z.object({
     /** The live clock of this process; `none` in `WORKER_MODE=web`. */
     ticker: z.enum(["up", "stale", "none"]),
     disk: z.enum(["ok", "low", "unknown"]),
-    /** `unknown`: no backup report configured (development, staging). */
+    /**
+     * The worse of the dump's report and the off-site copy's (deployment.md
+     * §6). `unknown`: no backup report configured (development, staging).
+     */
     backup: z.enum(["ok", "stale", "unknown"]),
   }),
   uptimeSeconds: z.number(),
@@ -78,6 +81,8 @@ export const SYSTEM_CHECK_KEYS = [
   "database.connections",
   "disk",
   "backup",
+  // The off-site copy of the backups (deployment.md §6, ADR-055 §4).
+  "offsite",
   // Third-party services, judged from the process's own traffic (ADR-055 §6).
   ...SERVICE_CHECK_KEYS,
   // The LLM gateway's spend today against its daily cap (ADR-058 §7).
@@ -115,6 +120,10 @@ export const CHECK_CAUSES = [
   "backup.missing",
   "backup.failed",
   "backup.stale",
+  "offsite.not_configured",
+  "offsite.missing",
+  "offsite.failed",
+  "offsite.stale",
   "http.errors",
   "service.not_configured",
   "service.unused",

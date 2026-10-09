@@ -381,8 +381,8 @@ M6-05 amendment): the application VM pulls one archive a day over SSH.
   newest 14 are kept. The export's own messages travel back over SSH into
   the same journal.
 - *Monitoring is by hand for now:* the System status and `/healthz` read
-  the database dump's report only (ADR-055); a failed pull fails the unit,
-  nothing alerts. Check `systemctl --user list-units --failed` and
+  the database dump's and the off-site copy's reports (ADR-055, §6), not the
+  pull's; a failed pull fails the unit, nothing alerts. Check `systemctl --user list-units --failed` and
   `ls -lh /srv/quiz-engine-backups` as `srv`; the script prints the disk
   space left after each run (the VM's disk is small).
 
@@ -784,8 +784,8 @@ expect one extra dump in `backups/` on that day. Staging has no `backup`
 service and no `BACKUP_STATUS_FILE`: its status says "not configured".
 
 - `/srv/quiz/assets/` (question images, content-addressed by sha256) is part
-  of what to copy: `rsync` is enough. `./secrets` goes through the vault,
-  never through the backup directory.
+  of what the off-site copy holds (below). `./secrets` goes through the
+  vault, never through the backup directory.
 - The runner itself holds nothing to back up (its images rebuild, its
   token is in the vault copy of `.env.prod`), but the codespace portals on
   the same VM do: their SQLite and volumes are pulled daily onto this VM, 14 archives
@@ -813,15 +813,170 @@ $C exec -T postgres pg_restore -U quiz -d quiz --no-owner --role=quiz --exit-on-
 $C start app
 ```
 
-- **Still to wire**: an off-VM copy of the logical dumps (for instance
-  `rclone copy backups remote:quiz-backups` in cron; open question 10 of
-  `docs/spec/06-questions-ouvertes.md`). VM lost: new VM → §2 → secrets from
-  the vault → restore the dump → re-point the DNS. Timed restore test every
-  semester; a staging refresh (§8) doubles as one.
+- **VM lost**: new VM → §2 → secrets from the vault → the dumps and the
+  images from the off-site copy (below) → restore the dump → re-point the
+  DNS. Timed restore test every semester; a staging refresh (§8) of a dump
+  extracted from the off-site copy doubles as one.
 
 In development the equivalent of the database is the directory
 `apps/api/.data/pglite`, which is only ever copied to keep a state, never
 deployed.
+
+### The off-site copy (#235)
+
+Every night `srv`'s user timer `quiz-offsite-backup.timer` (05:30 UTC, give
+or take a quarter of an hour, `Persistent`) runs
+`scripts/offsite-backup/push.sh`: one [borg](https://www.borgbackup.org/)
+archive, `zstd,6`, of the backups of **every service of this VM**, into one
+encrypted repository (`repokey-blake2`) on a Hetzner Storage Box (BX11,
+Helsinki): another product, another machine and another site than the VM.
+The box's account, host and repository name are not in this repository:
+they are in the vault and in each machine's env file (below).
+
+The VM writes through a key the box forces into `borg serve --append-only`,
+and holds the passphrase; pruning runs only from the operator's workstation.
+Why, and what that leaves exposed: [ADR-009](../adr/ADR-009-deploiement-vm-compose.md),
+amendment of decision 3.
+
+| | |
+| --- | --- |
+| Box | `u<id>@u<id>.your-storagebox.de`, SSH on port **23**, a restricted shell (no redirect, no pipe); borg 1.2 and 1.4 on the server side, the clients use `BORG_REMOTE_PATH=borg-1.4` |
+| Repository | `ssh://u<id>@u<id>.your-storagebox.de:23/./<repo>`; archives `<hostname>-<YYYY-MM-DDTHH:MM>` (the VM's time) |
+| Sources | `/srv/quiz/backups` (**required**: missing, the run fails); `/srv/quiz/assets`, `/srv/heig-classroom/backups`, `/srv/evaluation-tb/backups`, `/srv/evaluation-tb/assets`, `/srv/quiz-engine-backups` (skipped with a log line when missing). A file still being written (`*.tmp`, `.*.part`) is left out |
+| Not in it | the PostgreSQL data directories (the dumps suffice; the Hetzner VM backup holds the physical copy), the images (pulled or rebuilt), the secrets (the vault, ADR-010) |
+| On the VM | borgbackup 1.4 (apt); the key `~/.ssh/storagebox-borg`; the passphrase `~/.config/borg-offsite/passphrase` and the env file `~/.config/borg-offsite/env`, both mode 600 |
+| In the vault | the box's account and **password** (password SSH cannot be relied on being off), its full-access key, the passphrase and the exported repository key (`borg key export`, and `--paper`), beside `.env.prod` and `secrets/` |
+| The night (UTC) | heig-classroom dump ~19:54, quiz dump 21:01, evaluation-tb dump 03:17, engine pull 03:00–05:00, then the off-site copy |
+
+Both scripts read the repository and the credentials from
+`~/.config/borg-offsite/env` (mode 600, outside any checkout) and refuse to
+run without it. On the VM; the workstation's has its own `BORG_RSH` (the
+full-access key), or none if ssh's configuration selects it:
+
+```bash
+export BORG_REPO=ssh://u<id>@u<id>.your-storagebox.de:23/./<repo>
+export BORG_REMOTE_PATH=borg-1.4
+export BORG_PASSCOMMAND="cat $HOME/.config/borg-offsite/passphrase"
+export BORG_RSH="ssh -i $HOME/.ssh/storagebox-borg -o IdentitiesOnly=yes -o BatchMode=yes -o ServerAliveInterval=30"
+```
+
+(`push.sh` falls back to that `BORG_RSH` when the file sets none.) The first
+archive held 165 MB, 146 MB once deduplicated, in 3 s: each following night
+adds only what changed.
+
+**The report.** After each run, success or failure, `push.sh` writes one
+line of JSON to the path its unit passes,
+`/srv/quiz/backup-status/offsite.json`, beside the dump's `last.json` and in
+the same shape, through a temporary file and a rename:
+`{"finished_at":"…","ok":true,"exit_code":0,"file":"<archive>"}`. `ok` is
+true for borg's exit 0 and 1 (a warning: a file that changed while read,
+logged); exit 2 and above, a missing env file or a missing
+`/srv/quiz/backups` give `ok: false` and fail the unit. The app reads it as
+the **Off-site copy** check (ADR-055, `offsite`), with the dump's thresholds
+(a warning past 26 h, a failure past 50 h or when the run failed), and the
+coarse `backup` word of `/healthz` is the worse of the two copies (§7).
+
+Setting it up, once (done on 2026-10-09; kept for a new VM or a new box):
+
+```bash
+# application VM, as srv: the key, the box's host key, the passphrase, the env file
+ssh-keygen -t ed25519 -N '' -C borg-offsite@<vm> -f ~/.ssh/storagebox-borg
+ssh-keyscan -p 23 u<id>.your-storagebox.de >> ~/.ssh/known_hosts    # compare with Hetzner's fingerprints
+install -d -m 0700 ~/.config/borg-offsite
+(umask 077; openssl rand -base64 32 > ~/.config/borg-offsite/passphrase)   # the same value goes to the vault
+(umask 077; nano ~/.config/borg-offsite/env)                               # the four lines above
+```
+
+The box's shell takes no redirect: write its `.ssh/authorized_keys` on the
+workstation and put it through sftp with the full-access account. It holds
+the workstation's own key, unrestricted, and the VM's, forced:
+
+```text
+command="borg-1.4 serve --append-only --restrict-to-repository /home/<repo>",restrict ssh-ed25519 AAAA… borg-offsite@<vm>
+```
+
+```bash
+# workstation: put the file, create the repository, export its key
+sftp -P 23 u<id>@u<id>.your-storagebox.de
+#   sftp> mkdir .ssh
+#   sftp> put authorized_keys .ssh/authorized_keys
+#   sftp> chmod 600 .ssh/authorized_keys
+source ~/.config/borg-offsite/env       # the workstation's, with the VM's passphrase copied
+borg init --encryption=repokey-blake2
+borg key export :: repo.borg-key && borg key export --paper :: > repo.borg-key.txt   # both to the vault
+
+# application VM, as srv: the user units, then a first run by hand
+install -d ~/.config/systemd/user
+cp /srv/quiz/scripts/offsite-backup/quiz-offsite-backup.{service,timer} ~/.config/systemd/user/
+systemctl --user daemon-reload && systemctl --user enable --now quiz-offsite-backup.timer
+systemctl --user start quiz-offsite-backup.service
+```
+
+The production deploy brings both these scripts (its checkout) and the
+`offsite` check: until `offsite.json` exists the check warns and `/healthz`
+raises `attention`. Pause the external probe's monitor, deploy, install the
+units and start the service at once, then resume it.
+
+Checking it, as `srv`:
+
+```bash
+systemctl --user list-timers quiz-offsite-backup.timer
+journalctl --user -u quiz-offsite-backup -n 30 --no-pager      # borg's --stats and its rc
+cat /srv/quiz/backup-status/offsite.json
+source ~/.config/borg-offsite/env && borg list                 # the archives
+```
+
+**Restoring from the box.** Any machine with borg, the env file's values,
+the passphrase and the repository key reads it (the vault's export, through
+`borg key import`, if the repository's own copy is lost or cannot be
+trusted). List, then extract what you need into an empty directory; the
+paths come back without their leading `/`:
+
+```bash
+borg list
+borg extract --list ::<archive> srv/quiz/backups/quiz-<date>.dump srv/quiz/assets
+```
+
+The dump then goes through the full restore above (a recreated database,
+`pg_restore`) and the images back into `/srv/quiz/assets/`; the dumps of
+heig-classroom and evaluation-tb follow their own runbooks, the codespace
+archive the restore of §3. A timed restore test: `staging-refresh.sh <file>`
+(§8) of the extracted dump.
+
+**Recovering from a deletion through the append-only key.** A `delete` or
+a `prune` sent with the VM's key is recorded, not applied: until a compact
+runs with the full-access key, the transaction log can be rolled back
+(borg's documented append-only recovery). From the workstation, with the
+full-access account, and **before any prune or compact**:
+
+1. read the repository's `transactions` file (over sftp) and find the last
+   good transaction, the one before the unwanted ones;
+2. delete the segment files written after it (`data/<n>/<segment>`, the
+   higher numbers), then the `hints.*`, `index.*` and `integrity.*` files;
+3. `borg check` rebuilds the index: the deleted archives are back
+   (`borg list`).
+
+Each client's cache is then newer than the repository and refuses with
+"Cache … newer than repository": remove `~/.cache/borg/<repo id>` and
+`~/.config/borg/security/<repo id>` on every machine that used it, the VM
+included, before its next run.
+
+**Pruning**, by hand from the workstation only (once a month is enough):
+`scripts/offsite-backup/prune.sh` keeps 7 daily, 8 weekly and 12 monthly
+archives, then compacts, and saves the list of archives it leaves
+(`~/.config/borg-offsite/last-archives`). Before touching anything it
+refuses, pruning and compacting nothing:
+
+- when an archive of that saved list is gone: someone deleted it, and a
+  compact would make the deletion permanent; recover it as above;
+- when a calendar day after the newest saved archive, up to yesterday, has
+  no archive: one made since may have been deleted. Once the gap is
+  explained (the VM was down), `--accept-gaps` goes on;
+- when there is no saved list (the first run, a new workstation): read the
+  `transactions` file first, then `--first-run`.
+
+It cannot see the deletion of an archive whose day still has another one
+(a second run by hand), nor of today's.
 
 ## 7. Monitoring
 
@@ -842,10 +997,10 @@ object reports, in coarse words only
 | `runner` | `up`, `down`, `disabled` | `down`: configured but unreachable, or refusing the token; `disabled`: `RUNNER_MODE=stub` |
 | `ticker` | `up`, `stale`, `none` | the live clock completed a pass within 10 s; `none`: no ticker in this process (`WORKER_MODE=web`) |
 | `disk` | `ok`, `low`, `unknown` | under 15 % free where the app writes (the question images, the backup report) is `low` |
-| `backup` | `ok`, `stale`, `unknown` | the last dump's report: `stale` when older than 26 h or failed; `unknown` when not configured (staging, development) |
+| `backup` | `ok`, `stale`, `unknown` | the worse of the last dump's report and the off-site copy's (§6): `stale` when either is older than 26 h, failed or missing; `unknown` when not configured (staging, development) |
 
 and one aggregate, `"attention": true` when the ticker is `stale`, the disk
-`low`, the backup `stale` or the runner `down`. Nothing else: no path, no
+`low`, the backup `stale` (the dump or its off-site copy) or the runner `down`. Nothing else: no path, no
 size, no name — the route is public. The details are on the admin page.
 These checks run side by side within 1 s, well inside the healthcheck's
 5 s: a runner that does not answer in time reads as `down`.
@@ -861,7 +1016,9 @@ keyword monitor**:
   Caddy, DNS or the certificate);
 - **and** alert when the body does **not** contain the keyword
   `"attention":false` (no space: the body is compact JSON). That covers a
-  stale ticker, a low disk, a stale or failed backup and a runner down.
+  stale ticker, a low disk, a stale or failed backup or off-site copy, and
+  a runner down: a night without an off-site archive is noticed the next
+  morning (past 26 h).
 - a timeout of 10 s, and a confirmation of two consecutive failures before
   alerting, so that a deploy's restart (a few seconds) does not page anyone.
 
@@ -903,7 +1060,7 @@ background jobs per queue (waiting, failed in 24 h, oldest wait), the
 runner, the live evaluations and the open real-time connections. Data and
 storage: the database's response time, size and largest tables, the
 connections in use against `max_connections`, the free disk, the last
-backup. The live section also counts the server errors (5xx) of the last
+backup and the last off-site copy. The live section also counts the server errors (5xx) of the last
 24 hours, with the three route templates that answered most of them (a
 warning from five, never a failure). External services (ADR-055 §6):
 e-mail, sign-in (the OIDC callback), Teams, the LLM provider and the GitHub

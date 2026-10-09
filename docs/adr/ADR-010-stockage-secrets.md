@@ -45,6 +45,15 @@ holds for every other secret. Losing the master key loses only the provider
 key, which an administrator enters again. The key is never returned by the
 API and the log redaction knows `sk-ant-` and `x-api-key`.
 
+**Amended again (2026-10-09, #235, the off-site backups):** the borg
+passphrase of the off-site repository and the Storage Box keys are secrets
+of this ADR, outside the repository and the database. The passphrase lives
+on the VM, `srv`'s `~/.config/borg-offsite/passphrase` (mode 600), because
+the VM encrypts its archives; the box's full-access key does not, and the
+VM's own key can only append (ADR-009, amendment of decision 3). The
+passphrase, the full-access key and the exported repository key go into the
+vault of point 2.
+
 ## Context
 
 Server secrets: the PEM private key of the GitHub App, the OIDC and GitHub OAuth client
