@@ -4,7 +4,6 @@ import {
   CALCULATOR_MODES,
   calculatorAllowedFor,
   calculatorOn,
-  retakeScopeFits,
   clockChoiceOf,
   feedbackWhenFor,
   isInClass,
@@ -12,6 +11,7 @@ import {
   NOTEPAD_MODES,
   notepadAllowedFor,
   notepadOn,
+  partialRetakesOn,
   type FeedbackWhen,
   type LobbyName,
 } from "@quiz/domain";
@@ -87,8 +87,7 @@ export function AdvancedDisclosure({
   const notepad = notepadOn(mode, settings.notepad);
   // ADR-090: a retake of the questions to review needs free navigation, so
   // the navigation stays put while it is on (`422 retake_scope_navigation`).
-  // Asked as the server will: would a navigation other than `free` fit?
-  const partialRetake = !retakeScopeFits(mode, retakesOf(settings), "forward_only");
+  const partialRetake = partialRetakesOn(mode, retakesOf(settings));
   // ADR-026: negative marking replaces both policies below; each row says so
   // while it is on, so a teacher never tunes a policy nothing reads.
   const policyDesc = (desc: string) =>

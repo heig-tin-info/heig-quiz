@@ -609,11 +609,11 @@ function PlayerHint({
   const hint = acquired
     ? t("player.acquired.hint")
     : locked
-    ? t("player.hint.locked")
-    : !canValidate
-      ? null
-      : navigation === "milestones"
-        ? t("player.hint.milestone")
-        : t("player.hint.forward", { action: validateLabel });
+      ? t("player.hint.locked")
+      : !canValidate
+        ? null
+        : navigation === "milestones"
+          ? t("player.hint.milestone")
+          : t("player.hint.forward", { action: validateLabel });
   return hint ? <p className="mt-3 text-[13px] leading-relaxed text-fg-muted">{hint}</p> : null;
 }
