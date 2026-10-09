@@ -6,7 +6,7 @@ Accepted (2026-10-07, product owner: option B below). Revised the same
 day after a spec challenge (orchestrator): no forced relay, attribution by
 declared heads, tokens until the deadline plus the grace — that last point
 (§7) confirmed by the product owner on 2026-10-07. Implemented by merge
-task M6-10 ([task cards](../merge/09-tasks.md),
+task M6-10 ([task card](../merge/history/09-tasks-delivered.md#m6-10-git-relay-through-quiz-issued-scoped-tokens-adr-078),
 [progress](../merge/PROGRESS.md)); until it is deployed the portal runs
 with its relay off, as the M6-03 amendment of ADR-047 left it.
 

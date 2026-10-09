@@ -23,7 +23,7 @@ freezes at publication), F-PROJ-06 (rewritten on sets), F-PROJ-13 (the
 5 below), and adds F-PROJ-22 (decision 8); N-SEC-20 in `docs/spec/03-exigences-non-fonctionnelles.md` (the
 set's student view, lot 2); the glossary's *Project group*
 (`docs/spec/01-glossaire-et-domaine.md`); the cards M3-15 and M3-16
-(`docs/merge/09-tasks.md`). The import of F-PROJ-20 (M8-01) maps onto it.
+(`docs/merge/history/09-tasks-delivered.md`). The import of F-PROJ-20 (M8-01) maps onto it.
 
 ## Context
 

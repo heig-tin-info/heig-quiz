@@ -160,7 +160,20 @@ rationale, and mark obsolete instructions where they occur if a reader could
 retrieve them alone.
 Do not append another implementation diary to an already long record.
 
+Amended 2026-10-09 (rules carried from the archived 2026-10-02 audit):
+
+- A record never restates another record's decision: it links to the record
+  that owns it and names the affected points, so the copy cannot drift.
+- Records on one topic that settle different trade-offs stay separate (project
+  CI runners, ADR-007, and the question runner, ADR-016; the freeze, ADR-012,
+  and its application to projects, ADR-064); a repeated reference to an access
+  invariant is local rationale, not duplication. Fold only a record whose
+  living rules have all moved.
+- Consolidating keeps every stated limit explicit — an at-most-once loss
+  window, a privacy exception, what a preview does not exercise, a change a
+  notification can miss — and never replaces it with a stronger promise.
+
 Add a link under one topic here. The site's Decisions entry points to this index;
 there is no separate per-ADR navigation list to update. Build the documentation
-and check links before opening the PR. The [2026-10-02 audit](AUDIT-2026-10-02.md)
-records the reasons for this organization and the remaining documentation debt.
+and check links before opening the PR. The [2026-10-02 audit](history/AUDIT-2026-10-02.md),
+archived, records the reasons for this organization.

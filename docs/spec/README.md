@@ -26,7 +26,8 @@ migration work, including accepted features not implemented yet.
 
 [07 — Original reuse of heig-classroom](07-reutilisation-heig-classroom.md)
 is frozen history, not an implementation plan. The [MVP plan](../PLAN-MVP.md)
-also records historical decisions (D1–D20), not a current backlog. Follow the
+also records historical decisions (D1–D20), not a current backlog; its full
+text, cited as "PLAN-MVP §x.y", is [archived](../history/PLAN-MVP.md). Follow the
 history links from a current chapter or ADR when you need an old rationale,
 compatibility detail or decision provenance. Do not load archives routinely.
 

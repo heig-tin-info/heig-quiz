@@ -32,7 +32,7 @@ pnpm docs:build               # zensical build: the static site in site/ (gitign
 | [`docs/spec/README.md`](../spec/README.md) | the specification reading index; detailed data model and history are loaded only for relevant tasks |
 | [`docs/adr/README.md`](../adr/README.md) | the topic index and reading protocol for architecture decisions |
 | `docs/development/` | these pages |
-| `docs/PLAN-MVP.md` | the phase-1 implementation plan, archived |
+| `docs/PLAN-MVP.md` | the decisions D1–D20 of the phase-1 plan; the full plan is archived in `docs/history/PLAN-MVP.md` |
 | `docs/assets/screenshots/` | the screenshots, two files per image (see below) |
 
 The `nav` array of `zensical.toml` controls the site navigation. The ADR

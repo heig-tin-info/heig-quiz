@@ -44,7 +44,7 @@ nav = [
     { "Installing on a new Ubuntu server" = "development/new-server.md" },
     { "GitHub App" = "development/github-app.md" },
     { "Microsoft Teams setup" = "development/teams.md" },
-    { "Kiosk stations (Chromebooks)" = "kiosk.md" },
+    { "Kiosk stations (Chromebooks)" = "development/kiosk.md" },
     { "Architecture" = "development/architecture.md" },
     { "Writing the documentation" = "development/documentation.md" },
     { "Screenshots" = "development/screenshots.md" },
@@ -73,10 +73,12 @@ nav = [
       { "7. Incompatibilities" = "merge/07-incompatibilities.md" },
       { "8. Decisions" = "merge/08-decisions.md" },
       { "9. Task cards" = "merge/09-tasks.md" },
+      { "9. Task cards, delivered" = "merge/history/09-tasks-delivered.md" },
       { "Production measurements" = "merge/measures-2026-09-28.md" },
     ] },
     { "Archive" = [
-      { "MVP plan (phase 1)" = "PLAN-MVP.md" },
+      { "MVP plan (phase 1, D1–D20)" = "PLAN-MVP.md" },
+      { "MVP plan, full text" = "history/PLAN-MVP.md" },
     ] },
   ] },
 ]

@@ -140,7 +140,7 @@ On an exam, **Allowed devices** under **Advanced options** is one choice of four
 | **SEB or kiosk station** | in Safe Exam Browser or on a [kiosk station](#kiosk-stations); either is accepted |
 | **Kiosk station only** | on one of the school's kiosk stations only |
 
-The two kiosk choices are offered only where the platform administrator has set the stations up ([Kiosk stations](../kiosk.md)). With any choice but **Any device**, the portal alone never opens the exam. The choice is frozen once the exam runs.
+The two kiosk choices are offered only where the platform administrator has set the stations up ([Kiosk stations](../development/kiosk.md)). With any choice but **Any device**, the portal alone never opens the exam. The choice is frozen once the exam runs.
 
 ### Safe Exam Browser
 
@@ -167,7 +167,7 @@ So treat SEB as one layer, not as the guarantee: keep the room supervised, and s
 
 ### Kiosk stations
 
-The school keeps Chromebooks locked in kiosk mode as exam stations: a fallback for a student whose laptop fails, or the way a whole room sits an exam. Choose **Kiosk station only**, or **SEB or kiosk station** for stations as a fallback beside Safe Exam Browser, under **Allowed devices**; both choices are offered only where the platform administrator has set the stations up ([Kiosk stations](../kiosk.md)).
+The school keeps Chromebooks locked in kiosk mode as exam stations: a fallback for a student whose laptop fails, or the way a whole room sits an exam. Choose **Kiosk station only**, or **SEB or kiosk station** for stations as a fallback beside Safe Exam Browser, under **Allowed devices**; both choices are offered only where the platform administrator has set the stations up ([Kiosk stations](../development/kiosk.md)).
 
 What the students do:
 

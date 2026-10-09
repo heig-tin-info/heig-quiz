@@ -1,8 +1,9 @@
 /**
- * The project steps of the import (merge task M8-01b, docs/merge/09-tasks.md
- * M3-01, M3-04, M3-05a/b, M3-07, M3-08, M3-09b, "From …" notes): heig-
- * classroom's assignments become projects, its milestones checkpoints. The
- * repositories and what hangs on them are `steps-repos.ts`.
+ * The project steps of the import (merge task M8-01b,
+ * docs/merge/history/09-tasks-delivered.md M3-01, M3-04, M3-05a/b, M3-07,
+ * M3-08, M3-09b, "From …" notes): heig-classroom's assignments become
+ * projects, its milestones checkpoints. The repositories and what hangs on
+ * them are `steps-repos.ts`.
  *
  * Ids are kept (an assignment's id is its project's, a milestone's its
  * checkpoint's), so a permalink resolves through the id map and a restore of

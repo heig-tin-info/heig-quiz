@@ -141,7 +141,7 @@ stations:
    (`challenge_failed`).
 
 The device policy of the OU (kiosk mode, verified boot, no developer mode)
-is `docs/kiosk.md`'s subject, not this extension's.
+is `docs/development/kiosk.md`'s subject, not this extension's.
 
 What `challengeKey` needs, per Google's documentation
 ([platformKeys](https://developer.chrome.com/docs/extensions/reference/api/enterprise/platformKeys),

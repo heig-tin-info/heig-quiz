@@ -271,5 +271,6 @@ hardening flags are documented in
 - [7. Reuse of heig-classroom](../spec/07-reutilisation-heig-classroom.md):
   what was kept, adapted or dropped from the sibling project this
   repository started from.
-- [The MVP plan](../PLAN-MVP.md), archived: the phase-1 work packages and
-  the decisions numbered D1 to D20 that the code comments refer to.
+- [The MVP plan](../PLAN-MVP.md): the decisions numbered D1 to D20 that the
+  code comments refer to; the phase-1 work packages and the sections cited
+  as "PLAN-MVP §x.y" are in its [archived full copy](../history/PLAN-MVP.md).

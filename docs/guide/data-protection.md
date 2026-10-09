@@ -120,7 +120,7 @@ The platform runs at the hosting provider Hetzner, on two virtual machines (`doc
 - the application machine carries the application server, the PostgreSQL database and the daily database backups; it also hosts two other services (heig-classroom and evaluation-tb), whose files the other accounts cannot read;
 - a second machine runs the code submitted by students, in isolated containers (ADR-016). It receives the program to run and its test data, with no student name or identifier (`packages/core/src/runner.ts`).
 
-The specification says "a server in Europe" (`docs/spec/03-exigences-non-fonctionnelles.md`, N-DATA-01). Both machines are in Hetzner datacenters in Europe. An older decision (ADR-009) mentions hosting in Switzerland; it predates the move to Hetzner and no longer describes the situation.
+The specification says "a server in Europe" (`docs/spec/03-exigences-non-fonctionnelles.md`, N-DATA-01). Both machines are in Hetzner datacenters in Europe. The deployment decision ([ADR-009](../adr/ADR-009-deploiement-vm-compose.md)) records this hosting; hosting in Switzerland remains an option the product owner will decide on (open question 56 of `docs/spec/06-questions-ouvertes.md`).
 
 A staging environment runs on the same machine, under a separate system account, and receives a copy of the production data that is **not anonymised**, to test under real conditions (ADR-028). Only the addresses on its sign-in allowlist, the platform's administrators, can sign in, and its reference configuration turns off e-mail and Teams notifications (`.env.staging.example`, `docs/development/deployment.md` §8).
 

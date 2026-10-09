@@ -2,11 +2,11 @@
 
 This page is for whoever administers the school's Chromebooks in the Google
 Admin console and the platform's server. It sets up the attested kiosk
-stations of [ADR-051](adr/ADR-051-postes-kiosque-attestes.md): Chromebooks
+stations of [ADR-051](../adr/ADR-051-postes-kiosque-attestes.md): Chromebooks
 locked on `https://quiz.chevallier.io/kiosk`, where a student sits an exam
 without Safe Exam Browser, unlocked by scanning a code with their phone.
 Projects worked in the online workspace: see
-[ADR-089](adr/ADR-089-kiosque-pour-l-espace-de-travail.md) (proposed; nothing below changes yet).
+[ADR-089](../adr/ADR-089-kiosque-pour-l-espace-de-travail.md) (proposed; nothing below changes yet).
 
 !!! warning "Google moves its menus"
     The Admin console paths below come from Google's help pages as of
@@ -166,7 +166,7 @@ either way.
 ## 3. The platform's configuration
 
 In `.env.prod` (the full table is in
-[Deployment §10](development/deployment.md#10-configuration-reference)).
+[Deployment §10](deployment.md#10-configuration-reference)).
 `apps/api/src/config.ts` validates them at startup and refuses to start on
 the combinations marked below.
 
