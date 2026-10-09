@@ -50,43 +50,13 @@ describe("routeToPath / parsePath", () => {
     expect(ROUTES.classrooms.studentSafe).toBe(false);
   });
 
-  it("parses the student's Courses in every build, since M5-02 (F-ORG-14)", () => {
-    expect(parsePath("/courses")).toEqual({ view: "studentCourses" });
-    expect(routeToPath({ view: "studentCourses" })).toBe("/courses");
-  });
-
-  it("parses the student's Grades in every build (F-ORG-14, F-RES-04)", () => {
-    expect(parsePath("/grades")).toEqual({ view: "studentGrades" });
-    expect(routeToPath({ view: "studentGrades" })).toBe("/grades");
-  });
-
-  it("parses the classroom's Settings in every build, since M2-07 (F-ORG-13)", () => {
-    expect(parsePath("/classrooms/c-1/settings")).toEqual({ view: "classroomSettings", id: "c-1" });
-  });
-
-  it("parses the classroom's journal in every build, since M4-05 (F-JRN-07)", () => {
-    expect(parsePath("/classrooms/c-1/journal")).toEqual({ view: "classroomJournal", id: "c-1" });
-    expect(parsePath("/classrooms/c-1/journal/10-semaine-1/a.md")).toEqual({
-      view: "classroomJournal",
-      id: "c-1",
-      path: "10-semaine-1/a.md",
-    });
-  });
-
-  it("parses the classroom's Grades in every build, since M5-04 (F-GBOOK-01, F-GBOOK-05)", () => {
-    expect(routeToPath({ view: "classroomGrades", id: "c-1" })).toBe("/classrooms/c-1/grades");
-    expect(parsePath("/classrooms/c-1/grades")).toEqual({ view: "classroomGrades", id: "c-1" });
+  it("serves the classroom's Grades as one address, two pages (M5-04, F-GBOOK-01, F-GBOOK-05)", () => {
     // One address, two pages, under the Courses slot.
     expect(ROUTES.classroomGrades.studentSafe).toBe(true);
     expect(ROUTES.classroomGrades.bottomSlot).toEqual({ student: "courses", teacher: "classrooms" });
   });
 
-  it("parses the classroom's Groups and a group set in every build, since M3-16a (ADR-070)", () => {
-    expect(routeToPath({ view: "classroomGroups", id: "c-1" })).toBe("/classrooms/c-1/groups");
-    expect(parsePath("/classrooms/c-1/groups")).toEqual({ view: "classroomGroups", id: "c-1" });
-    expect(parsePath("/classrooms/c-1/groups/")).toEqual({ view: "classroomGroups", id: "c-1" });
-    expect(routeToPath({ view: "groupSet", classroomId: "c-1", id: "s-1" })).toBe("/classrooms/c-1/groups/s-1");
-    expect(parsePath("/classrooms/c-1/groups/s-1")).toEqual({ view: "groupSet", classroomId: "c-1", id: "s-1" });
+  it("serves the classroom's Groups and a group set (M3-16a, ADR-070)", () => {
     // The way back to a project travels in the query, which `parsePath` never reads.
     expect(routeToPath({ view: "groupSet", classroomId: "c-1", id: "s-1", fromProject: "p-1" })).toBe(
       "/classrooms/c-1/groups/s-1?fromProject=p-1",
@@ -96,11 +66,6 @@ describe("routeToPath / parsePath", () => {
     // The Groups tab is one address, two pages (F-PROJ-22, M3-17), under the Courses slot.
     expect(ROUTES.classroomGroups.studentSafe).toBe(true);
     expect(ROUTES.classroomGroups.bottomSlot).toEqual({ student: "courses", teacher: "classrooms" });
-  });
-
-  it("parses the project page and the new project in every build, since M3-12 (F-PROJ-13)", () => {
-    expect(parsePath("/projects/p-1")).toEqual({ view: "project", id: "p-1" });
-    expect(parsePath("/classrooms/c-1/projects/new")).toEqual({ view: "projectNew", classroomId: "c-1" });
   });
 
   it("parses the page of one course, a page of the Courses section (F-ORG-12)", () => {
@@ -377,6 +342,7 @@ describe("the classroom merge's routes", () => {
   it("writes the paths of §5.2 and reads them back", () => {
     const cases: [Route, string][] = [
       [{ view: "studentCourses" }, "/courses"],
+      [{ view: "studentGrades" }, "/grades"],
       [{ view: "classroom", id: "c-1" }, "/classrooms/c-1"],
       [{ view: "classroomSettings", id: "c-1" }, "/classrooms/c-1/settings"],
       [{ view: "classroomJournal", id: "c-1" }, "/classrooms/c-1/journal"],

@@ -152,7 +152,7 @@ export const KIND: { [K in ActivitySummary["kind"]]: ActivityKindSpec<Extract<Ac
       const s = new Date(a.startAt).getTime();
       return { s, d: Math.max(s, a.deadlineAt === null ? s : new Date(a.deadlineAt).getTime()) };
     },
-    // The project page (M3-12), in every build.
+    // The project page (M3-12).
     home: (a) => ({ view: "project", id: a.id }),
     stateLabel: (a, t) => projectStateLabel(a.state, t),
     stateTone: (a) => projectStateTone(a.state),

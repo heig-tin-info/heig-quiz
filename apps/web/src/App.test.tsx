@@ -110,7 +110,7 @@ describe("the student's Courses and classroom page (M5-02, F-ORG-14/15)", () => 
     expect(calls.some((c) => c.url.startsWith("/app/api/student/"))).toBe(false);
   });
 
-  it("opens the student's page of a classroom at the teacher's address, in every build", async () => {
+  it("opens the student's page of a classroom at the teacher's address", async () => {
     vi.stubGlobal("EventSource", FakeStream);
     mockFetch({
       "GET /app/api/me": ok(makeMe({ role: "student" })),

@@ -47,9 +47,9 @@ export type Route =
    * bottom bar leaves no drawer to hold it.
    */
   | { view: "classrooms" }
-  /* The pages of the classroom merge (ADR-035, `docs/merge/05-web.md` §5.2). */
   /**
-   * The student's Courses (F-ORG-14, D07): their classrooms, each card opening
+   * The student's Courses (F-ORG-14, D07; a page of the classroom merge,
+   * ADR-035, `docs/merge/05-web.md` §5.2): their classrooms, each card opening
    * the classroom's page. `/courses` alone; `/courses/:id` is a teacher's course.
    */
   | { view: "studentCourses" }
@@ -454,7 +454,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     studentSafe: false,
     bottomSlot: { teacher: "classrooms" },
   },
-  // F-PROJ-13 (M3-12): the staff's project page, in every build. One
+  // F-PROJ-13 (M3-12): the staff's project page. One
   // address, two pages (F-PROJ-15, M3-13): a student, a teacher in the
   // student view and an impersonation get the student's project, under the
   // Courses slot like the classroom's pages it hangs off.
