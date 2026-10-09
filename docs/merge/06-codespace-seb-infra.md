@@ -213,64 +213,16 @@ slug is its own (classroom's is `hgc-prod`).
 
 ## 6.5 Cutover
 
-The commands, checks and owners are in
-[`10-cutover-runbook.md`](10-cutover-runbook.md) (M8-05). It follows
-production as of 2026-10-09. C2 has no codespace step and C4 is dropped:
-classroom's portal has been stopped since M6-04 (M8-04 dropped).
-`CODESPACE_*` are already set (C5). `LEGACY_CLASSROOM_COOKIE_SECRET` is
-not used. Redirects become 308 at E.
-
 **A — Ship.** The GitHub substrate and the journal are live with Quiz's
-own App (D23) since M2/M4; what remains dark sits behind its switch
-(`CODESPACE_URL` ⇒ routes 404, tasks no-op), through the normal pipeline.
+own App (D23) since M2/M4. What remains dark sits behind its switch
+(`CODESPACE_URL` ⇒ routes 404, tasks no-op), and ships through the normal
+pipeline.
 
-**B — Prepare, no downtime.**
-1. Every organization still used by classroom installs Quiz's App ("All
-   repositories"); the list comes from the dry run of the import script.
-2. Stage the codespace secrets in Quiz's `.env.prod`, inactive.
-3. Engine VM: deploy the portal from the Quiz repository (check the Drizzle
-   journal is identical), both issuers accepted.
-4. Rehearse on staging (`srvstg`): restore a classroom dump, run the
-   script, walk the product with `LOGIN_ALLOWLIST` and the staging App,
-   **time it**.
-5. Pick T0: no live workspace session, no deadline in [T0, T0 + window +
-   grace], no live evaluation; announce a week and a day ahead.
-
-**C — Freeze and migrate (target ≤ 1 h).**
-1. Caddy maintenance fragment on `classroom.chevallier.io`
-   (`infra/caddy/classroom-maintenance.caddy`): a bilingual 503
-   with `Retry-After`; `/webhooks/github` answers 503 (classroom's App
-   is idle from then on; Quiz's App received its own deliveries); pause the uptime probe;
-   `docker compose stop app` (Postgres stays up). If the rehearsal takes
-   > 2 h, build a read-only flag in classroom instead (M8-03b).
-2. Dumps: `pg_dump -Fc hgc` ⇒ `backups/pre-merge-<ts>.dump`, a pre-migration
-   dump of Quiz; `systemctl stop codespace`, SQLite backup, rsync of the
-   volumes.
-3. `import-classroom --apply` (classroom project ids kept).
-4. Codespace identity remap (M8-04), `PLATFORM_URL` = Quiz, start the portal.
-5. Set `CODESPACE_*` in Quiz (if M6 is in scope), `up -d app`.
-6. Replace the maintenance fragment with the redirect fragment
-   (`infra/caddy/classroom-redirect.caddy`; check it with
-   `infra/caddy/check-classroom-redirects.sh https://classroom.chevallier.io`). Classroom's
-   App is left installed and idle; its webhook points at a stopped service.
-7. Catch up: `reconcile.repos`, `reconcile.grades` by hand (Quiz's App saw
-   every push, but only for repositories the import just made known); `codespace.sync` for every online project (new Config Keys ⇒
-   redistribute `.seb` files). Pushes during the freeze fall under GR-14.3
-   (late if reconciled after the deadline) — hence T0 away from deadlines.
-8. Smoke: edu-ID login, GitHub link, a webhook from a test push, the
-   teacher's project page, a student Start ⇒ `/launch` ⇒ workbench ⇒
-   `git push` relayed, an old URL redirects, an e-mail goes out. Point the
-   probe at Quiz.
-
-**D — Observe 1–2 weeks.** Redirects stay **302** (browsers cache
-301/308). Classroom stopped but intact. At the declared point of no return,
-switch to 301/308.
-
-**E — Decommission.** Age-encrypted final dump off the VM; remove
-classroom's containers, volumes, secrets, fragment, `/srv/heig-classroom`,
-CI key, repository secret, GHCR package; keep the DNS name and redirect
-fragment ≥ 1 year; uninstall classroom's App from the organizations and
-delete it last; archive the repository.
+**B–E — Prepare, freeze and migrate, observe, decommission.** These are
+[`10-cutover-runbook.md`](10-cutover-runbook.md) (M8-05): who does what,
+the commands, the checks, and the M8-03b threshold. One rule stays here:
+redirects are **302** during the observation (D), because browsers cache
+301 and 308. They become **308** at the point of no return (E).
 
 ## 6.6 Permalinks (`classroom.chevallier.io` ⇒ Quiz)
 
@@ -303,12 +255,5 @@ asserts each row's status and `Location`.
 
 ## 6.7 Rollback
 
-Precondition: the sha of classroom's last good image is noted;
-`/srv/heig-classroom` untouched until phase E.
-
-| When | Rollback |
-| --- | --- |
-| A, B | re-run an older `deploy-production` job; codespace: switch its release symlink (restore SQLite if a migration crossed) |
-| C, before step C6 | remove the maintenance fragment, reinstall `classroom.caddy`, `docker compose start app`, restore `CLASSROOM_URL`, the portal's SQLite and volumes if remapped, restore Quiz's pre-migration dump |
-| After C6, before the point of no return | all of the above + classroom's own App redelivers what it missed (`GET /app/hook/deliveries`) + unset `CODESPACE_*` in Quiz + replay by hand the writes Quiz made to classroom-origin data since T0 (from the audit log). The cost grows daily: keep phase D short |
-| After the point of no return | fix forward only |
+The rollback table, with what no rollback undoes, is in
+[`10-cutover-runbook.md`](10-cutover-runbook.md) §3.

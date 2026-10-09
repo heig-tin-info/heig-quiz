@@ -2,11 +2,10 @@
 
 The operator's sequence for switching heig-classroom off and Quiz on: what
 to do from a week before T0 to the decommission, who does it, the command,
-the check that proves it worked and how to undo it. It applies §6.5–§6.7 of
-[`06-codespace-seb-infra.md`](06-codespace-seb-infra.md) to production as it
-stands on 2026-10-09. Where the two disagree, this page follows production
-and says why. Rehearse it on staging first: M8-06 runs this page there and
-times it (§7).
+the check that proves it worked and how to undo it. It replaces §6.5 B–E
+and §6.7 of [`06-codespace-seb-infra.md`](06-codespace-seb-infra.md), and
+is written for production as it stands on 2026-10-09. Rehearse it on
+staging first: M8-06 runs this page there and times it (§7).
 
 **Who** is one of:
 
@@ -21,7 +20,9 @@ times it (§7).
 - **teachers**: through the owner.
 
 Root SSH to the application VM is refused. `srv` may use sudo only for
-`caddy validate` and `systemctl reload caddy`.
+`caddy validate` and `systemctl reload caddy`. No step writes to a
+production database by hand: data changes go through the import or the
+product's own actions.
 
 ## 0. One-page checklist
 
@@ -29,50 +30,80 @@ Open decisions for the owner (each blocks the step named):
 
 | # | Decision | Blocks | Suggested |
 | --- | --- | --- | --- |
-| O1 | **T0 date and window.** D20's target week (2026-10-05) has passed. Pick a weekday morning, at least 7 days out, that passes the checks of §1.4. | the announcement (T-7) | a Tuesday or Wednesday, 07:00–09:00 Europe/Zurich |
-| O2 | **Organizations.** Which classroom organizations still need Quiz's App installed and a Quiz classroom connected? §1.2 produces the list. | the dry run (T-3) | install it on every organization of a live classroom; drop the archived and test ones in the mapping |
-| O3 | **One final import or two.** D26 plans a first import while classroom still runs, then a `--final` one. Between the two runs, both Apps act on the same repositories: Quiz's ticker on what was imported, classroom's on everything (the M8-01 note "from M3-04"). | C3 | **one** `--final` import at T0, if M8-06 times it under 30 min |
-| O4 | **Staff-seat repositories.** ADR-077 asks the dry run to count the repositories classroom let its teachers accept. The import does not count them; §1.3 has the SQL. Import them (badged "Teacher") or leave them out? | the mapping (T-3) | import them: they are counted nowhere |
-| O5 | **Deadline window.** The `--final` pre-flight refuses any live assignment whose deadline plus grace falls within 24 h of the run (`--window-hours`, default 24). | T0 | keep 24 h; shorten it only by an explicit flag and only for a deadline you have checked |
-| O6 | **The import's runtime.** The production image cannot run the import as is (§1.6). | M8-06 | a small code PR before M8-06 |
-| O7 | **The point of no return.** D lasts one to two weeks. | E | T0 + 7 days if C8 and the D checks are clean |
+| O1 | **T0 date and window.** D20's target week (2026-10-05) has passed. Pick a weekday morning, at least 7 days out, that passes §1.4. | the announcement (T-7) | a Tuesday or Wednesday, 07:00–09:00 Europe/Zurich |
+| O2 | **Organizations.** Which classroom organizations still need Quiz's App installed and a Quiz classroom connected (§1.2)? | the dry run (T-5) | install it on every organization of a live classroom; drop the archived and test classrooms in the mapping |
+| O3 | **One final import or two.** D26 plans a first import while classroom still runs, then a `--final` one. Between the two runs, both Apps act on the same repositories: Quiz's ticker on what was imported, classroom's on everything (the M8-01 note "from M3-04"). | C3 | **one** `--final` import at T0, if M8-06's measured freeze C1→C8 stays within the M8-03b threshold (below) |
+| O4 | **Staff-seat repositories.** ADR-077 asks the dry run to count the repositories classroom let its teachers accept. The import does not count them, so §1.3 gives the SQL. Import them (badged "Teacher") or leave them out? | the mapping (T-3) | import them: they are counted nowhere |
+| O5 | **Deadline window.** The `--final` pre-flight refuses a live assignment whose deadline plus grace falls within 24 h of the run (`--window-hours`, default 24). | T0 | keep 24 h |
+| O6 | **The import's runtime.** The production image must run the import (§1.6). | M8-06 | in progress (a code PR) |
+| O7 | **The point of no return.** D lasts one to two weeks. | E | T0 + 7 days if C8 and D's checks are clean |
 
 D20 and D22 are settled (08-decisions.md); only their date (O1) and their
 inputs (O2, the mapping) remain.
 
+**The M8-03b threshold** is set here, and 06 and the M8-03 card point to
+it. If M8-06 measures a freeze from C1 to C8 longer than **2 h**, build
+M8-03b (a read-only flag in classroom) before T0. C3 alone is not the
+criterion.
+
 **The sequence:**
 
-- [ ] **P**: the import runs from the production image (§1.6, O6); M8-06 rehearsed, go written in `PROGRESS.md`
-- [ ] **T-7**: T0 chosen (O1), checked with the SQL of §1.4; announcement 1 sent (appendix A)
+- [ ] **P**: O6 merged; M8-06 rehearsed (§7), go written in `PROGRESS.md`
+- [ ] **T-7**: T0 chosen (O1) and checked with §1.4; announcement 1 sent (appendix A)
 - [ ] **T-7**: the organization list (§1.2); teachers asked to install Quiz's App and connect their classrooms
-- [ ] **T-5**: a staging dry run on fresh dumps (§1.3); the mapping and its lists sent to the teachers
-- [ ] **T-3**: rosters fixed by hand (`lists.missingStudents`, `lists.skippedAssistants`); mapping validated (D22); O3, O4 settled
-- [ ] **T-1**: a production dry run (§1.3), clean; secrets verified (§1.5); backups checked (§1.7); classroom's image noted; announcement 2 sent
+- [ ] **T-5**: a staging dry run on fresh dumps (§1.3), its personal-data copies deleted the same day (§5.1)
+- [ ] **T-3**: rosters fixed by hand (`lists.missingStudents`, `lists.skippedAssistants`); mapping validated (D22); O3 and O4 settled
+- [ ] **T-1**: a production dry run (§1.3), clean; §1.4 re-run; secrets checked (§1.5); backups checked and image tags recorded (§1.7); **Quiz deploys frozen** until C8 (§1.7); announcement 2 sent
+- [ ] **T-1 h**: §1.4 re-run
 - [ ] **T0 C1**: maintenance fragment, uptime probe paused, classroom deploys disabled, classroom app stopped
 - [ ] **C2**: classroom dump, Quiz pre-migration dump, scratch database restored
-- [ ] **C3**: `import-classroom --apply --final`, exit 0, parity clean
+- [ ] **C3**: `--apply --final`, exit 0, parity clean
 - [ ] **C4**: dropped (M8-04)
 - [ ] **C5**: workspace settings verified, nothing changed
 - [ ] **C6**: redirect fragment, `check-classroom-redirects.sh` green against production
-- [ ] **C7**: `reconcile.repos`, `reconcile.grades` run by hand; no `codespace.sync` needed
-- [ ] **C8**: smoke list green; uptime monitors switched; "done" message sent
+- [ ] **C7**: `reconcile.repos`, `reconcile.grades`, `reconcile.deliveries` run by hand
+- [ ] **C8**: smoke list green; uptime monitors switched; Quiz deploys unfrozen; "done" message sent
 - [ ] **D**: one to two weeks of observation (§4)
-- [ ] **E / M9-01**: 302 changed to 308, final dump stored off the VM, classroom removed, its App uninstalled last, repository archived
+- [ ] **E / M9-01**: 302 changed to 308, final dump encrypted off the VM, every personal-data copy deleted, classroom removed, its App uninstalled last, repository archived
 
-Shell helpers, used everywhere below. On the application VM, as `srv`
+**Shell helpers**, used everywhere below. On the application VM, as `srv`
 (`ssh srv@128.140.71.35`):
 
 ```bash
 export DOCKER_HOST=${DOCKER_HOST:-unix:///run/user/$(id -u)/docker.sock}
 q() { (cd /srv/quiz && docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image "$@"); }   # Quiz
 h() { (cd /srv/heig-classroom && docker compose -f compose.prod.yml --env-file .env.prod "$@"); }                # classroom
-install -d -m 700 /srv/quiz/merge     # every cutover file: dumps, mapping, reports (they name people)
+install -d -m 700 /srv/quiz/merge     # every cutover file: dumps, mapping, reports (they name people), §5.1
+ACTOR=$(grep '^SUPER_ADMIN_EMAIL=' /srv/quiz/.env.prod | cut -d= -f2-)   # the import's --actor, an admin
 ```
 
 As `srvstg` (owner: `sudo machinectl shell srvstg@`):
 
 ```bash
+export DOCKER_HOST=${DOCKER_HOST:-unix:///run/user/$(id -u)/docker.sock}
 s() { (cd ~/quiz-staging && docker compose -f compose.staging.yml --env-file .env.staging --env-file .env.image "$@"); }
+install -d -m 700 ~/merge
+ACTOR=$(grep '^SUPER_ADMIN_EMAIL=' ~/quiz-staging/.env.staging | cut -d= -f2-)
+```
+
+The import, in both shells. Its first argument is the compose helper
+(`q` or `s`), its second the cutover directory on the host, and the rest
+are the import's flags:
+
+```bash
+# PLACEHOLDER (O6): the O6 PR gives the command that runs the compiled
+# import with plain `node` in the image; set IMPORT_CMD to it. The source
+# database is named, never given as a URL with its password.
+IMPORT_CMD=()   # e.g. (node <path from the O6 PR>)
+imp() {
+  local c=$1 dir=$2; shift 2
+  # --user 0: under rootless Docker, container root is the host account
+  # itself (srv or srvstg), the only one that may read and write the 700
+  # cutover directory. The image's `node` maps to a sub-uid that cannot.
+  "$c" run --rm --no-deps -T --user 0 -v "$dir:/merge" app \
+    "${IMPORT_CMD[@]:?IMPORT_CMD: set it from the O6 PR}" \
+    --source-db hgc_cutover --mapping /merge/mapping.json --actor "$ACTOR" "$@"
+}
 ```
 
 ## 1. Before T0 (T-7 to T-1)
@@ -85,10 +116,9 @@ rehearsal whose parity report is clean.
 
 ### 1.2 Organizations still used by classroom (T-7, agent (srv))
 
-These are classroom's organizations and what each still carries:
-
 ```bash
 h exec -T postgres psql -U hgc hgc <<'SQL'
+-- classroom's organizations and what each still carries
 select o.login, o.github_org_id,
        count(distinct c.id) filter (where c.archived_at is null) as live_classrooms,
        count(distinct a.id) filter (where a.state = 'published' and a.archived_at is null) as live_assignments,
@@ -99,13 +129,8 @@ left join assignments a on a.classroom_id = c.id
 left join classroom_journals j on j.classroom_id = c.id
 group by 1, 2 order by 1;
 SQL
-```
-
-And these are the organizations where Quiz's App acts (installed, not
-suspended, active), with their connected classrooms:
-
-```bash
 q exec -T postgres psql -U quiz quiz <<'SQL'
+-- where Quiz's App acts (installed, not suspended, active), with the connected classrooms
 select o.login, o.github_org_id,
        o.installation_id is not null and o.suspended_at is null and o.status = 'active' as app_acts,
        count(l.classroom_id) as connected_classrooms
@@ -118,15 +143,19 @@ Every login in the first list that has live classrooms needs `app_acts = t`
 and at least one connected classroom in the second list. A missing one is a
 task for its teacher: install Quiz's App ("All repositories") and connect
 the Quiz classroom from the classroom's Settings → GitHub (F-GH-02). The
-dry run (§1.3) gives the authoritative answer per classroom: a Mapping
-refusal "the Quiz classroom is not connected to GitHub; its teacher
-connects it to `<org>` first" or "connected to X, not to the classroom's
-organization". A journal of an organization where Quiz's App does not act
-is listed under *Classroom journals* ("imported pending").
+dry run (§1.3) gives the authoritative answer per classroom, as a mapping
+refusal:
+
+- "the Quiz classroom is not connected to GitHub; its teacher connects it
+  to `<org>` first";
+- "… connected to X, not to the classroom's organization".
+
+A journal of an organization where Quiz's App does not act is listed under
+*Classroom journals* ("imported pending").
 
 The App must also subscribe to `pull_request` (M3-07). Owner: GitHub →
 Settings → Developer settings → GitHub Apps → `heig-quiz` → Permissions &
-events. Compare with the events table of
+events, compared with the table in
 [`github-app.md`](../development/github-app.md#permissions-and-events).
 
 Rollback: none needed. Installing Quiz's App changes nothing for classroom
@@ -138,36 +167,30 @@ Rollback: none needed. Installing Quiz's App changes nothing for classroom
 shape of `apps/api/scripts/import-classroom/mapping.ts`: one row per
 classroom, archived ones included, each either `target: {course, classroom}`
 or `drop: true`. The first dry run prints every source classroom with its
-organization under *Mapping*; that output is the list to start from.
+organization under *Mapping*: that output is the list to start from.
 
-**Staging dry run** (T-5; agent (srv), then owner (srvstg)): both dumps go
-through the inbox.
+**Staging dry run** (T-5). Both dumps go through the inbox. First, as srv
+(agent):
 
 ```bash
-# as srv: Quiz's copy, then classroom's, and the mapping
 /srv/quiz/scripts/staging-export.sh
 h exec -T postgres pg_dump -Fc -U hgc hgc > /srv/staging-inbox/.hgc.dump.part \
   && chmod 640 /srv/staging-inbox/.hgc.dump.part && mv /srv/staging-inbox/.hgc.dump.part /srv/staging-inbox/hgc.dump
 install -m 640 -g srvstg /srv/quiz/merge/mapping.json /srv/staging-inbox/mapping.json
 ```
 
+Then as srvstg (owner):
+
 ```bash
-# as srvstg (owner)
 ~/quiz-staging/scripts/staging-refresh.sh
 s exec -T postgres psql -U quiz -d postgres -v ON_ERROR_STOP=1 \
   -c 'DROP DATABASE IF EXISTS hgc_cutover WITH (FORCE)' -c 'CREATE DATABASE hgc_cutover OWNER quiz'
 s exec -T postgres pg_restore -U quiz -d hgc_cutover --no-owner --role=quiz --exit-on-error < /srv/staging-inbox/hgc.dump
-install -d -m 700 ~/merge && cp /srv/staging-inbox/mapping.json ~/merge/
-s run --rm --no-deps -T --user 0 -v "$HOME/merge:/merge" app sh -c \
-  'exec npx --yes tsx@4.23.0 scripts/import-classroom.ts --source "${DATABASE_URL%/quiz}/hgc_cutover" \
-     --mapping /merge/mapping.json --actor "$SUPER_ADMIN_EMAIL" --dry-run --report-json /merge/dry-run.json' \
-  | tee ~/merge/dry-run.txt
+cp /srv/staging-inbox/mapping.json ~/merge/
+imp s ~/merge --dry-run --report-json /merge/dry-run.json | tee ~/merge/dry-run.txt; echo "exit ${PIPESTATUS[0]}"
 ```
 
-(The `npx tsx` form is the stopgap of §1.6. Once O6 lands, use the
-command the fix documents. Staging's `app` is capped at 256 MB, and `compose
-run` keeps the cap: an OOM kill there is a finding for O6, not a data
-problem.)
+The same day, delete the staging copies (§5.1).
 
 **Production dry run** (T-1, agent (srv) after the owner's go). It writes
 in one transaction and rolls it back. It reads classroom through a scratch
@@ -178,134 +201,137 @@ h exec -T postgres pg_dump -Fc -U hgc hgc > /srv/quiz/merge/hgc-dry.dump
 q exec -T postgres psql -U quiz -d postgres -v ON_ERROR_STOP=1 \
   -c 'DROP DATABASE IF EXISTS hgc_cutover WITH (FORCE)' -c 'CREATE DATABASE hgc_cutover OWNER quiz'
 q exec -T postgres pg_restore -U quiz -d hgc_cutover --no-owner --role=quiz --exit-on-error < /srv/quiz/merge/hgc-dry.dump
-imp() {  # the import, in a one-off container of the deployed image, on Quiz's network
-  q run --rm --no-deps -T --user 0 -v /srv/quiz/merge:/merge app sh -c \
-    'exec npx --yes tsx@4.23.0 scripts/import-classroom.ts --source "${DATABASE_URL%/quiz}/hgc_cutover" \
-       --mapping /merge/mapping.json --actor "$SUPER_ADMIN_EMAIL" "$@"' sh "$@"
-}
-imp --dry-run --report-json /merge/dry-run-prod.json | tee /srv/quiz/merge/dry-run-prod.txt; echo "exit ${PIPESTATUS[0]}"
+imp q /srv/quiz/merge --dry-run --report-json /merge/dry-run-prod.json | tee /srv/quiz/merge/dry-run-prod.txt; echo "exit ${PIPESTATUS[0]}"
 ```
 
-**What "clean" means** (the report's sections):
+**What "clean" means**, section by section of the report:
 
-- *Refusals*: none. A dry run lists them without refusing (exit 0).
+- *Refusals*: none. A dry run lists them without refusing (exit 0);
   `--apply` would exit 2.
-- *Pre-flight (source)*: every DATA check `ok`. STATE checks read "would
-  refuse --final" while classroom runs, as expected.
-- *Mapping*: every classroom resolved or dropped; the teachers confirm the
-  resolved course and classroom (D22).
+- *Pre-flight (source)*: every DATA check `ok`. The STATE checks read "would
+  refuse --final" while classroom runs.
+- *Mapping*: every classroom resolved or dropped, and the teachers confirm
+  the resolved course and classroom (D22).
 - *Identity*: `ambiguous` = 0.
 - *To settle by hand*: the missing students and skipped assistants are
   either fixed in Quiz's rosters by T-1 or accepted by the owner (D08
   addendum: nothing is created for them).
-- *Parity*: no `MISSING`, no `RED LINES`. A dry run lists the GitHub-bound
-  checks as "Checks not run".
+- *Parity*: no `MISSING`, no `RED LINES`. The GitHub-bound checks appear
+  under "Checks not run".
 
-**ADR-077 count** (O4). This counts, per classroom, the repositories held
-by a classroom staff member:
+**ADR-077 count** (O4): the repositories held by a staff member of their
+classroom.
 
 ```bash
 h exec -T postgres psql -U hgc hgc <<'SQL'
-select c.name, count(*) as staff_repos
+select c.id, c.name, count(*) as staff_repos
 from student_repos r join assignments a on a.id = r.assignment_id join classrooms c on c.id = a.classroom_id
 where c.teacher_id = r.user_id
    or exists (select 1 from classroom_staff s where s.classroom_id = c.id and s.user_id = r.user_id)
    or exists (select 1 from enrollments e where e.classroom_id = c.id and e.user_id = r.user_id and e.staff)
-group by 1 order by 1;
+group by c.id, c.name order by c.name;
 SQL
 ```
 
-Rollback: drop the scratch database (`DROP DATABASE hgc_cutover WITH
-(FORCE)`). On staging, after any `--apply`, re-run the scrub (§7, step 7)
-or refresh, so staging's ticker leaves the imported projects alone.
+Rollback: none needed. A dry run commits nothing; the scratch database
+stays until E (§5.1).
 
-### 1.4 Choosing T0 (T-7, re-checked at T-1 and T-1 h; agent (srv))
+### 1.4 Choosing T0 (T-7, re-run at T-1 and T-1 h; agent (srv))
 
-T0 must have no classroom deadline (plus grace) within 24 h after T0 (the
-`--final` pre-flight), no Quiz project deadline and no live evaluation in
-[T0, T0 + 2 h], and no workspace session. Set the candidate on your
-workstation, then run:
+Run on the VM with the helpers of §0:
 
 ```bash
 T0='2026-10-14 07:00 Europe/Zurich'      # the candidate (O1)
-ssh srv@128.140.71.35 'cd /srv/heig-classroom && docker compose -f compose.prod.yml --env-file .env.prod exec -T postgres psql -U hgc hgc' <<SQL
--- classroom: live assignments whose deadline is before T0 + 24 h and not frozen (each refuses --final)
+h exec -T postgres psql -U hgc hgc <<SQL
+-- (1) classroom: live, unfrozen assignments with a deadline before T0 + 24 h (the --final pre-flight)
 select c.name as classroom, a.name, a.deadline_at at time zone 'Europe/Zurich' as deadline, a.grace_minutes,
-       a.deadline_applied_at is not null as applied
+       a.deadline_at + make_interval(mins => a.grace_minutes) > now() as grace_ahead
 from assignments a join classrooms c on c.id = a.classroom_id
 where a.state = 'published' and a.archived_at is null and a.frozen_at is null
   and a.deadline_at <= timestamptz '$T0' + interval '24 hours'
 order by a.deadline_at;
--- classroom: review checkpoints due in the window (Quiz dispatches them after the import)
+-- (2) classroom: review checkpoints due in [T0, T0 + 24 h] (informative)
 select a.name, m.name as checkpoint, m.due_at at time zone 'Europe/Zurich' as due
 from assignment_milestones m join assignments a on a.id = m.assignment_id
 where m.dispatched_at is null and m.due_at between timestamptz '$T0' and timestamptz '$T0' + interval '24 hours';
 SQL
-ssh srv@128.140.71.35 'cd /srv/quiz && docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image exec -T postgres psql -U quiz quiz' <<SQL
--- Quiz: evaluations that may be live during the window
+q exec -T postgres psql -U quiz quiz <<SQL
+-- (3) evaluations that may be live in [T0, T0 + 2 h]
 select title, state, mode, opens_at at time zone 'Europe/Zurich' as opens, closes_at at time zone 'Europe/Zurich' as closes
 from evaluations
 where state in ('scheduled', 'lobby', 'running', 'paused')
   and coalesce(opens_at, timestamptz '$T0') < timestamptz '$T0' + interval '2 hours'
   and coalesce(closes_at, 'infinity') > timestamptz '$T0';
--- Quiz: project deadlines (plus grace) in the window
+-- (4) project deadlines (plus grace) in [T0, T0 + 2 h]
 select p.name, p.deadline_at at time zone 'Europe/Zurich' as deadline, p.grace_minutes
 from projects p
 where p.state = 'published' and p.archived_at is null
   and p.deadline_at + make_interval(mins => p.grace_minutes) > timestamptz '$T0'
   and p.deadline_at < timestamptz '$T0' + interval '2 hours';
--- Quiz: online projects (the workspace has no real class yet: expect 0)
+-- (5) a repository's own deadline (plus its project's grace) in [T0, T0 + 2 h]
+select p.name, r.id as repo, r.deadline_at at time zone 'Europe/Zurich' as own_deadline
+from project_repos r join projects p on p.id = r.project_id
+where p.archived_at is null and r.archived_at is null and r.frozen_at is null and r.deadline_at is not null
+  and r.deadline_at + make_interval(mins => p.grace_minutes) > timestamptz '$T0'
+  and r.deadline_at < timestamptz '$T0' + interval '2 hours';
+-- (6) online projects (the workspace has no real class yet): expect 0
 select count(*) as online_projects from projects where work_mode <> 'free' and archived_at is null;
 SQL
 ```
 
-The check passes when the first and the three Quiz queries return no row
-and `online_projects` = 0. A row in the first query whose deadline plus
-grace has already passed is classroom's ticker's to freeze. It must be
-gone by T-1 h.
+**The date passes when:**
+
+- no row of (1) has `grace_ahead = t`. Such a row blocks the date: move
+  T0;
+- every row of (1) with `grace_ahead = f` (already past, waiting for
+  classroom's ticker to freeze it) is gone by T-1 h, or C3 will refuse
+  `deadlines`;
+- (3), (4) and (5) return no row, and (6) returns 0.
+
+Rows of (2) do not block. A checkpoint due during the freeze is dispatched
+by Quiz after the import, late; tell its teacher.
 
 ### 1.5 Secrets (§6.4), T-1, agent (srv)
 
-| Secret | State on 2026-10-09 | Check |
+| Secret | State on 2026-10-09 | Check (counts, never values) |
 | --- | --- | --- |
 | `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_PRIVATE_KEY_PATH` + PEM, `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET` | set, Quiz's own App (D23, M2-06) | `grep -cE '^GITHUB_(APP_ID\|APP_SLUG\|APP_PRIVATE_KEY_PATH\|WEBHOOK_SECRET\|APP_CLIENT_ID\|APP_CLIENT_SECRET)=.' /srv/quiz/.env.prod` → 6; Administration → System status → GitHub App: no failure |
-| `CODESPACE_URL`, `CODESPACE_LAUNCH_SECRET` | set, the workspace is live (M6-04) | `grep -oE '^CODESPACE_(URL\|LAUNCH_SECRET)=.' /srv/quiz/.env.prod` → both; `curl -sI https://code.chevallier.io/ \| head -1` |
+| `CODESPACE_URL`, `CODESPACE_LAUNCH_SECRET` | set, the workspace is live (M6-04) | `grep -cE '^CODESPACE_(URL\|LAUNCH_SECRET)=.' /srv/quiz/.env.prod` → 2 |
+| `SUPER_ADMIN_EMAIL` | set; it is the import's `--actor` | `grep -c '^SUPER_ADMIN_EMAIL=.' /srv/quiz/.env.prod` → 1 |
 | `SCW_*`, `MAIL_FROM_NAME` | set; Quiz's sender is the one kept | System status → *Send me a test e-mail* |
-| `LEGACY_CLASSROOM_COOKIE_SECRET` | **not used**: old unsubscribe links get a plain 302 to Quiz's settings (M8-02 dropped the query) | none |
+| `LEGACY_CLASSROOM_COOKIE_SECRET` | **not used**: an old unsubscribe link gets a plain 302 to Quiz's settings (M8-02 drops the query) | none |
 | Engine VM `PLATFORM_URL`, issuers | Quiz's instances since M6-04 | none at the cutover |
 | Keycloak, classroom's `OIDC_*`, `COOKIE_SECRET` | not needed | none |
-| Vault (ADR-010) | owner | the age-encrypted copy of `/srv/quiz/.env.prod` and `secrets/` is current; add `/srv/heig-classroom/.env.prod` and its `secrets/` (rollback, then E) |
+| Vault (ADR-010) | owner | the age-encrypted copy of `/srv/quiz/.env.prod` and `secrets/` is current; `/srv/heig-classroom/.env.prod` and its `secrets/` are added (rollback, then E) |
 
 Nothing is staged at T0.
 
 ### 1.6 The import's runtime (prerequisite, O6)
 
-`import:classroom` runs `scripts/import-classroom.ts` with `tsx`, a
-devDependency. The image is `pnpm deploy --prod`, so it ships no `tsx`, and
-nothing builds `scripts/` (`apps/api/tsconfig.json`). The commands above
-use `npx --yes tsx@4.23.0` (the pinned version) inside the deployed image.
-That form needs `scripts/` and `src/` present under `/app`, which is
-unproven. It also fetches `tsx` from npm at run time.
+O6 (another PR) compiles the import into the production image: it runs
+with plain `node`, and the source database is resolved against
+`DATABASE_URL`, so no password goes on argv. M8-06 proves it on staging
+with the image production runs, and `IMPORT_CMD` (§0) takes its command.
 
-Before M8-06, a code PR should make the image carry the import. Two ways:
-`tsx` in `dependencies`, or the scripts compiled into `dist/`. M8-06 then
-proves the documented command on staging with the same image that
-production runs. Do not build on the VM (§5 of `deployment.md`).
+### 1.7 Backups and the deploy freeze (T-1)
 
-### 1.7 Backups (T-1, owner and agent (srv))
-
-- Hetzner Backups enabled, last slot under 24 h old (owner, Hetzner
-  console). Optional: a manual snapshot of the VM on T0 morning.
-- Quiz: `cat /srv/quiz/backup-status/last.json` shows `"ok":true` from
-  today.
-- classroom: `ls -lt /srv/heig-classroom/backups | head -3` shows today's
+- Owner: Hetzner Backups is enabled and its last slot is under 24 h old
+  (Hetzner console). Optional: a manual VM snapshot on T0 morning.
+- Agent (srv): `cat /srv/quiz/backup-status/last.json` shows `"ok":true`
+  from today. `ls -lt /srv/heig-classroom/backups | head -3` shows today's
   `hgc-<date>.dump`.
-- Note classroom's image (the rollback precondition, §3):
+- Agent (srv): record what runs (the rollback precondition, §3):
 
 ```bash
-h ps -q app | xargs docker inspect --format '{{.Config.Image}} {{.Image}}' | tee /srv/quiz/merge/classroom-image.txt
-git -C /srv/heig-classroom rev-parse HEAD | tee -a /srv/quiz/merge/classroom-image.txt
+{ h ps -q app | xargs docker inspect --format 'classroom {{.Config.Image}} {{.Image}}'
+  echo "classroom commit $(git -C /srv/heig-classroom rev-parse HEAD)"
+  echo "quiz $(cat /srv/quiz/.env.image)"; } | tee /srv/quiz/merge/images.txt
 ```
+
+- Owner: **freeze Quiz's production deploys** from T-1 until C8 is green.
+  Approve no `production` deployment in that window; a run that waits is
+  rejected or left waiting. C3 and the rollback assume that the image of
+  `images.txt` is the one running.
 
 ### 1.8 Communication (owner)
 
@@ -316,28 +342,29 @@ and the lists of §1.3 to fix (D22).
 
 ## 2. T0: freeze and migrate (target ≤ 1 h)
 
-Target times are M8-06's measured times plus a margin. Fill them in after
-the rehearsal. Run the steps in order. A step whose check fails is a no-go:
-go to its rollback (§3).
+Take the target times from M8-06's measured times plus a margin, and fill
+them in after the rehearsal. Run the steps in order. A step whose check
+fails is a no-go: go to its rollback (§3).
 
-### C1 Freeze classroom (owner, ~5 min)
+### C1 Freeze classroom (owner and agent (srv), ~5 min)
+
+Owner, as srv, installs the maintenance fragment:
 
 ```bash
-# owner, as srv: the maintenance fragment
 cp /srv/quiz/infra/caddy/classroom-maintenance.caddy /etc/caddy/conf.d/classroom.caddy \
   && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && sudo systemctl reload caddy
 ```
 
 - Owner: pause classroom's monitor on the uptime service.
-- Owner: stop classroom's deploys, so a push to `heig-classroom` cannot
-  restart it:
-  `gh workflow disable ci.yml --repo heig-tin-info/heig-classroom`
-- Agent (srv): stop the app and keep it stopped across a reboot. Postgres
-  and `backup` stay up.
+- Owner: disable classroom's deploys, so that a push to `heig-classroom`
+  cannot restart it:
+  `gh workflow disable ci.yml --repo heig-tin-info/heig-classroom`.
+- Agent (srv): stop the app and keep it stopped across a reboot
+  (`restart: always` would bring it back). Postgres and `backup` stay up.
 
 ```bash
 h stop app && h ps -aq app | xargs docker update --restart=no
-T0STAMP=$(date +%F-%H%M); echo "$T0STAMP" > /srv/quiz/merge/t0.txt
+date +%F-%H%M > /srv/quiz/merge/t0.txt
 ```
 
 Check:
@@ -347,10 +374,14 @@ Check:
 h ps app        # no running container
 ```
 
-Rollback: `cp /srv/heig-classroom/Caddyfile /etc/caddy/conf.d/classroom.caddy`
-+ validate + reload; `h ps -aq app | xargs docker update --restart=always && h start app`;
-`gh workflow enable ci.yml --repo heig-tin-info/heig-classroom`; resume
-the monitor.
+Rollback, step by step:
+
+1. Classroom's own fragment back:
+   `cp /srv/heig-classroom/Caddyfile /etc/caddy/conf.d/classroom.caddy`,
+   then validate and reload.
+2. `h ps -aq app | xargs docker update --restart=always && h start app`.
+3. `gh workflow enable ci.yml --repo heig-tin-info/heig-classroom`.
+4. Resume the monitor.
 
 ### C2 Dumps (agent (srv), ~5 min)
 
@@ -364,36 +395,40 @@ q exec -T postgres pg_restore -U quiz -d hgc_cutover --no-owner --role=quiz --ex
   < /srv/quiz/merge/hgc-pre-merge-$TS.dump
 ```
 
-No codespace step: classroom's portal has been stopped since M6-04, and
-its SQLite and volumes are already archived on the engine VM
+There is no codespace step: classroom's portal has been stopped since
+M6-04, and its data is already archived on the engine VM
 (`/root/classroom-codespace`).
 
 Check: `ls -l /srv/quiz/merge/*-pre-merge-$TS.dump` shows two non-empty
-files; `pg_restore -l` lists both
-(`q exec -T postgres pg_restore -l < /srv/quiz/merge/quiz-pre-merge-$TS.dump | head -3`).
+files, and `q exec -T postgres pg_restore -l < /srv/quiz/merge/quiz-pre-merge-$TS.dump | head -3`
+reads the Quiz dump. Then note the run count before C3:
 
-Rollback: nothing was written; C1's rollback.
+```bash
+q exec -T postgres psql -U quiz quiz -Atc 'select count(*) from import_classroom.runs' | tee /srv/quiz/merge/runs-before.txt
+```
+
+Rollback: nothing was written, so C1's rollback.
 
 ### C3 The final import (agent (srv) after the owner's go)
 
-Start it at least 10 minutes after C1's app stop. The pre-flight treats a
+Start it at least 10 minutes after C1's app stop: the pre-flight reads a
 task run or a webhook received within the last 10 minutes as a live
-classroom (`QUIET_MINUTES`). Use `imp` from §1.3.
+classroom (`QUIET_MINUTES`).
 
 ```bash
-imp --apply --final --report-json /merge/final.json | tee /srv/quiz/merge/final.txt; echo "exit ${PIPESTATUS[0]}"
+imp q /srv/quiz/merge --apply --final --report-json /merge/final.json | tee /srv/quiz/merge/final.txt; echo "exit ${PIPESTATUS[0]}"
 ```
 
 | Exit | Report's first line | Meaning | Next |
 | --- | --- | --- | --- |
 | 0 | `apply (final): applied` | committed, parity clean, journals ingested | C5 |
-| 0 | `nothing to do` | this exact import is already in the database | read *Rows written* (0), then C5 |
-| 1 | (an error on stderr) | the script failed: config, connection, a bug. Nothing is committed unless the report says `applied` | fix and re-run if the cause is clear and quick; otherwise roll back |
+| 0 | `nothing to do` | this exact import is already in the database | *Rows written* all 0, then C5 |
+| 1 | (an error on stderr) | the script failed (config, connection, a bug) | authoritative: `select count(*) from import_classroom.runs` against `runs-before.txt`. Equal: nothing committed; fix and re-run if the cause is clear and quick, otherwise roll back. Greater: it committed, so read the report and decide as for exit 3 after a commit |
 | 2 | `REFUSED: nothing written` | a refusal: the mapping, an ambiguous identity, the pre-flight (`source-stopped`, `queues-empty`, `webhooks-processed`, `deadlines`, a DATA check) | `source-stopped` within 10 min: wait and re-run. Anything else: roll back |
 | 3 | `RED LINES: … nothing written` | a parity red line inside the transaction, rolled back | roll back |
 | 3 | `applied`, with *RED LINES* listed | a GitHub-bound check failed **after** the commit (`journals re-ingested` in error). The data stays | owner decides: a journal error (its code) is fixed forward by a Refresh. Anything else: roll back |
 
-The red lines (each is a no-go) are:
+The red lines (each is a no-go):
 
 - a source row neither carried nor deliberately left out (`MISSING`);
 - `courses`, `classrooms`, `github_organizations` or
@@ -403,17 +438,21 @@ The red lines (each is a no-go) are:
   members per group, journals re-ingested `error`.
 
 A task left `running` by a hard stop refuses `source-stopped` for good.
-Look at it in classroom's `scheduled_tasks`. Start classroom again and stop
-it cleanly (`h start app`, wait for the task, `h stop app`), then wait
-10 min and redo C2's classroom dump and restore. `queues-empty` lists the
-jobs left in `pgboss.job`. M8-06 says whether classroom keeps delayed jobs
-there. If it does, the check needs a code fix before T0, not an override.
-Never edit the scratch copy to pass a check.
+Look at it in classroom's `scheduled_tasks`, then:
 
-Check: exit 0; the outcome `applied`; `jq '.parity.redLines | length' /srv/quiz/merge/final.json` → 0;
-`select count(*) from import_classroom.runs` grew by one.
+1. Start classroom again and stop it cleanly (`h start app`, wait for the
+   task, `h stop app`).
+2. Wait 10 min.
+3. Redo C2's classroom dump and restore.
 
-Rollback: before C6, restore Quiz's pre-migration dump (§3, row C3).
+`queues-empty` lists the jobs left in `pgboss.job`. M8-06 says whether
+classroom keeps delayed jobs there. If it does, the check needs a code fix
+before T0, not an override. Never edit the scratch copy to pass a check.
+
+Check: exit 0, outcome `applied`, `jq '.parity.redLines | length' /srv/quiz/merge/final.json` → 0,
+and the run count is one more than `runs-before.txt`.
+
+Rollback: §3, row "C3 committed".
 
 ### C4 Codespace identity remap: dropped
 
@@ -423,52 +462,45 @@ nothing to remap.
 
 ### C5 Workspace settings: verify only (agent (srv))
 
-`CODESPACE_*` are already set (§1.5). Quiz's app does not restart.
+`CODESPACE_*` are already set (§1.5), and Quiz's app does not restart.
 Check: `curl -s https://quiz.chevallier.io/healthz` → `"status":"ok"`. An
-imported project is never online: the import refuses a non-`free` work mode
-(`work-mode` DATA check).
+imported project is never online: the import refuses a non-`free` work
+mode (the `work-mode` DATA check).
 
 ### C6 Redirects (owner, ~5 min)
 
+Owner, as srv:
+
 ```bash
-# owner, as srv
 cp /srv/quiz/infra/caddy/classroom-redirect.caddy /etc/caddy/conf.d/classroom.caddy \
   && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && sudo systemctl reload caddy
 ```
 
-Check (agent (srv), or anywhere with curl ≥ 7.84):
-
-```bash
-/srv/quiz/infra/caddy/check-classroom-redirects.sh https://classroom.chevallier.io   # every row OK, exit 0
-```
-
-Then click one real old link of an imported classroom. It lands on the Quiz
-classroom page (§6.6, M8-02).
+Check (agent (srv)):
+`/srv/quiz/infra/caddy/check-classroom-redirects.sh https://classroom.chevallier.io`
+→ every row OK, exit 0. Then click one real old link of an imported
+classroom: it lands on the Quiz classroom page (§6.6, M8-02).
 
 Rollback: the maintenance fragment again (C1's command), then §3.
 
-### C7 Catch-up (owner in the UI, or agent with an admin session, ~10 min)
+### C7 Catch-up (owner in the UI, ~10 min)
 
-Quiz's App saw every push during the freeze. It acts only on repositories
-the import made known, so it now catches up from the repositories
-themselves (GR-14.3: a push reconciled after its deadline is late, hence
-T0 away from deadlines). In Administration → Scheduled tasks, use **Run
-now** on:
+Quiz's App saw every push during the freeze, but it acts only on
+repositories the import has made known. So Quiz now catches up from the
+repositories themselves (GR-14.3: a push reconciled after its deadline is
+late, hence T0 away from deadlines). In Administration → Scheduled tasks,
+press **Run now** on:
 
-1. `reconcile.repos`: heads, invitations, protection
-   (`POST /app/api/admin/tasks/reconcile.repos/run`);
-2. `reconcile.grades`: CI runs of quiet repositories;
+1. `reconcile.repos`: heads, invitations, protection;
+2. `reconcile.grades`: the CI runs of quiet repositories;
 3. `reconcile.deliveries`: anything Quiz's App received and left
    unprocessed.
 
-`codespace.sync`: none. No imported project is online, and no Quiz project
-changed mode. Check:
+`codespace.sync` is not needed: no imported project is online.
 
-```bash
-q exec -T postgres psql -U quiz quiz -c "select key, last_status, last_run_at from scheduled_tasks where key like 'reconcile.%' order by key"
-```
-
-All three should show `ok` with a `last_run_at` after T0.
+Check (agent (srv)):
+`q exec -T postgres psql -U quiz quiz -c "select key, last_status, last_run_at from scheduled_tasks where key like 'reconcile.%' order by key"`.
+All three show `ok`, with a `last_run_at` after T0.
 
 Rollback: none of its own. The tasks are idempotent.
 
@@ -479,40 +511,71 @@ Rollback: none of its own. The tasks are idempotent.
 | 1 | Sign in with edu-ID as a teacher of an imported classroom | the classroom shows its projects, journal and roster |
 | 2 | A student account with a classroom GitHub link: Settings | the GitHub account is shown linked (the import carried it) |
 | 3 | A test push to the test organization's repository (`heig-quiz-classroom`, `TestCourse-A`) | a `webhook_deliveries` row with `processed_at` set within a minute: `select event, received_at, processed_at, error from webhook_deliveries order by received_at desc limit 5` |
-| 4 | The teacher's project page of an imported project | repositories, scores and states equal classroom's (same ids): spot-check one project with §4's SQL |
+| 4 | The teacher's project page of an imported project | repositories, scores and states equal classroom's (same ids): one spot check with §4's SQL |
 | 5 | An old URL: `https://classroom.chevallier.io/classrooms/<old id>` | 302 → `/legacy/classroom/…` → the Quiz classroom |
 | 6 | System status → *Send me a test e-mail* | received |
 | 7 | An imported journal page as a student | it renders; `select sync_status, count(*) from classroom_journals group by 1` shows no `error` |
-| 8 | ruleset bypass (I57): on one imported repository, GitHub → Settings → Rules → `hgc-protect` / `hgc-deadline-lock` | Quiz's App can act. If only classroom's App is a bypass actor, owner adds `heig-quiz` (or the org's admin) and records it |
+| 8 | Ruleset bypass (I57): on one imported repository, GitHub → Settings → Rules → `hgc-protect` / `hgc-deadline-lock` | Quiz's App can act. If only classroom's App is a bypass actor, the owner adds `heig-quiz` and records it |
 | 9 | `q logs --since 30m app \| grep -iE 'error\|warn' \| tail -50` | nothing new beyond known noise |
 
 Then, owner:
 
 - uptime service: delete classroom's `/healthz` monitor (it now answers
   410). Quiz's monitor is unchanged. Optional: a monitor on
-  `https://classroom.chevallier.io/` expecting 302.
-- the "done" message (appendix A, after).
-- `PROGRESS.md`: M8-07 row, timings, outcome.
+  `https://classroom.chevallier.io/` that expects 302.
+- Quiz's production deploys are unfrozen.
+- the "done" message (appendix A).
+- `PROGRESS.md`: the M8-07 row, timings, outcome.
 
 ## 3. Rollback
 
-Precondition: classroom's image and commit are noted
-(`/srv/quiz/merge/classroom-image.txt`, §1.7). `/srv/heig-classroom` stays
-untouched until E. Classroom's App never moved.
+Precondition: `/srv/quiz/merge/images.txt` (§1.7) names the classroom and
+Quiz images and commits that ran. `/srv/heig-classroom` stays untouched
+until E, and classroom's App never moved.
+
+**What no rollback undoes.** Quiz's App acts on GitHub from C3 on, and
+nothing reverses those actions:
+
+- bot commits (deadline commits, protected-file reverts);
+- deadline locks (`hgc-deadline-lock` rulesets);
+- sync branches and their pull requests;
+- review dispatches;
+- the invitations and protection of `reconcile.repos`;
+- C8's bypass changes.
+
+Classroom, once back, starts from that state.
+
+**Quiz is not frozen.** Between C2 and a restore of the pre-migration dump,
+everything else written in Quiz is lost: evaluations, attempts, pages,
+settings. That is why §1.4 keeps T0 free of evaluations, and why the
+restore is only for the first hours.
 
 | Stage | Rollback | Who |
 | --- | --- | --- |
-| Before T0 | nothing to undo: drop `hgc_cutover`; send a "postponed" note | agent (srv), owner |
-| C1, C2 | C1's rollback: classroom's own fragment (`/srv/heig-classroom/Caddyfile`), `docker update --restart=always`, `h start app`, workflow re-enabled, monitor resumed | owner, agent (srv) |
-| C3 failed (exit 1–3, nothing committed) | C1's rollback. Quiz is unchanged: the report says nothing was written | owner, agent (srv) |
-| C3 committed, before C6 | stop Quiz's app, restore `quiz-pre-merge-$TS.dump` into a recreated database (`deployment.md` §6, *Restore*), start it; then C1's rollback. Quiz loses only what was written since C2 (no evaluation ran, §1.4) | agent (srv) after go |
-| After C6, before the point of no return | maintenance fragment; then **either** the pre-migration restore above (it loses every Quiz write since T0, so use it only within hours) **or** archive the imported projects so Quiz's ticker leaves them alone (`update projects set archived_at = now() where id in (select target_id from import_classroom.id_map where source_table = 'assignments') and archived_at is null`), then C1's rollback. Classroom's App redelivers what it missed (`GET /app/hook/deliveries`). Replay by hand, from `audit_log` since T0, the writes staff made in Quiz to imported data. The cost grows daily: keep D short | owner decides |
+| Before T0 | nothing to undo; send a "postponed" note | owner |
+| C1, C2 | C1's rollback | owner, agent (srv) |
+| C3 failed, nothing committed (the run count equals `runs-before.txt`) | C1's rollback. Quiz is unchanged | owner, agent (srv) |
+| C3 committed, before C6 | maintenance stays; stop Quiz's app, restore `quiz-pre-merge-$TS.dump` into a recreated database (`deployment.md` §6, *Restore*), start it; then C1's rollback. Quiz loses what was written since C2 | agent (srv) after go |
+| After C6, before the point of no return | maintenance fragment again. Then **either** the pre-migration restore above (it loses every Quiz write since C2, so use it only within hours) **or** keep Quiz's data and stop Quiz acting on the imported projects. For the latter, see the steps below the table. Then C1's rollback; classroom's own App redelivers what it missed (`GET /app/hook/deliveries`). The cost grows daily: keep D short | owner decides |
 | After the point of no return (E) | fix forward only | — |
+
+**Keeping Quiz's data after C6.** There is no bulk archive path: the
+product archives one project at a time (F-PROJ-16, which also stops its
+groups through `stopProjects`).
+
+1. Agent (srv) counts the imported projects that are not yet archived
+   (read-only):
+   `q exec -T postgres psql -U quiz quiz -Atc "select count(*) from projects where archived_at is null and id in (select target_id from import_classroom.id_map where source_table = 'assignments')"`.
+2. The owner archives each of them in the UI (project → Settings →
+   Archive). Each archive is audited.
+3. The writes staff made in Quiz to imported data since T0 (`audit_log`)
+   are replayed into classroom by hand.
 
 ## 4. D: observe (1–2 weeks)
 
 Redirects stay **302**: browsers cache 301 and 308. Classroom stays
-stopped and intact. Daily, agent (srv), reporting to the owner:
+stopped and intact, and `hgc_cutover` stays for the spot checks. Daily, the
+agent (srv) runs these checks and reports to the owner:
 
 ```bash
 q exec -T postgres psql -U quiz quiz <<'SQL'
@@ -527,11 +590,11 @@ group by 1;
 -- scheduled tasks in error
 select key, last_status, last_run_at from scheduled_tasks where last_status = 'error';
 SQL
-q logs --since 24h app | grep -ciE 'error'                 # read them if the count grows
+q logs --since 24h app | grep -ciE 'error'      # read them if the count grows
 ```
 
-**Parity spot check** (ids are kept): pick a project id, then compare
-classroom's frozen copy with Quiz:
+**Parity spot check** (ids are kept): pick a project id and compare
+classroom's frozen copy with Quiz.
 
 ```bash
 P=<project id>
@@ -539,53 +602,78 @@ q exec -T postgres psql -U quiz hgc_cutover -c "select count(*), count(frozen_gr
 q exec -T postgres psql -U quiz quiz -c "select count(*), count(frozen_at), sum(teacher_points) from project_repos where project_id = '$P'"
 ```
 
-Watch also: `/healthz` `"attention":false`; the GitHub App's Advanced →
-Recent Deliveries (owner) for non-2xx; teachers' reports; the VM's memory
-(I53: classroom's app no longer runs, so it should drop).
+Also watch:
 
-Go for the point of no return (owner, O7): no rollback-worthy issue open,
-D's checks clean for three consecutive days.
+- `/healthz` stays `"attention":false`;
+- the GitHub App's Advanced → Recent Deliveries shows no non-2xx (owner);
+- teachers' reports;
+- the VM's memory (I53): it should drop, since classroom's app no longer
+  runs.
+
+Go for the point of no return (owner, O7): no rollback-worthy issue is
+open, and D's checks have been clean for three consecutive days.
 
 ## 5. E / M9-01: point of no return and decommission
 
 In this order. Each step is the owner's unless it says otherwise.
 
 1. **Permanent redirects.** Change `302` to `308` in
-   `infra/caddy/classroom-redirect.caddy` (PR, agent). `legacyRule` keeps
-   its own 302s, which depend on identity. Then install the fragment as in
-   C6, and run `check-classroom-redirects.sh`, updated in the same PR.
+   `infra/caddy/classroom-redirect.caddy` (a PR, by an agent).
+   `legacyRule`'s own 302s depend on identity and stay. Install the
+   fragment as in C6 and run `check-classroom-redirects.sh`, updated in the
+   same PR.
 2. **Final dump, encrypted, off the VM** (agent (srv) makes it; the owner
    holds the key and the destination):
    `h exec -T postgres pg_dump -Fc -U hgc hgc | age -r <owner's age recipient> > /srv/quiz/merge/hgc-final-$(date +%F).dump.age`.
-   Copy it to the vault's storage, check that it decrypts and that
-   `pg_restore -l` reads it, then delete the local copies of every
-   `/srv/quiz/merge/*.dump`.
-3. **Remove classroom's stack** (agent (srv) after go):
-   `h down -v` (containers, `pgdata` and `keycloak-data` volumes);
-   `q exec -T postgres psql -U quiz -d postgres -c 'DROP DATABASE hgc_cutover WITH (FORCE)'`;
-   `rm -rf /srv/heig-classroom`. Quiz keeps its own copy of the edu-ID key
+   The owner copies it to the vault's storage, then checks that it
+   decrypts and that `pg_restore -l` reads it.
+3. **Personal-data copies of the cutover** (agent (srv), the same day as
+   step 2): the deletions of §5.1, production rows.
+4. **Remove classroom's stack** (agent (srv) after go):
+   - `h down -v` removes the containers and the `pgdata` and
+     `keycloak-data` volumes;
+   - `rm -rf /srv/heig-classroom`;
+   - remove the line `command="/srv/heig-classroom/deploy.sh"` from
+     `/home/srv/.ssh/authorized_keys`.
+
+   Quiz keeps its own copy of the edu-ID key
    (`/srv/quiz/secrets/eduid-private-key.pem`): never revoke that JWK.
-   Remove the line `command="/srv/heig-classroom/deploy.sh"` from
-   `/home/srv/.ssh/authorized_keys`.
-4. **CI and registry**: delete the `DEPLOY_SSH_KEY` secret and the
-   `DEPLOY_USER` variable of `heig-tin-info/heig-classroom`; delete the
+5. **CI and registry**: delete the `DEPLOY_SSH_KEY` secret and the
+   `DEPLOY_USER` variable of `heig-tin-info/heig-classroom`, and delete the
    GHCR package `heig-classroom` (GitHub → organization → Packages).
-5. **edu-ID**: remove classroom's redirect URI
-   (`https://classroom.chevallier.io/app/auth/callback`) and, if it is a
-   separate client, that client from the SWITCH Resource Registry. Quiz's
-   client and the shared key stay.
-6. **Engine VM** (root): delete `/root/classroom-codespace` (M6-04's
+6. **edu-ID**: in the SWITCH Resource Registry, remove classroom's redirect
+   URI (`https://classroom.chevallier.io/app/auth/callback`), and its
+   client if it is a separate one. Quiz's client and the shared key stay.
+7. **Engine VM** (root): delete `/root/classroom-codespace` (M6-04's
    archive of classroom's portal) and `/etc/codespace/github-app.pem` if it
    remains.
-7. **DNS and fragment**: keep `classroom.chevallier.io` and the redirect
+8. **DNS and fragment**: keep `classroom.chevallier.io` and the redirect
    fragment for at least a year.
-8. **Classroom's GitHub App, last**: uninstall `hgc-prod` from every
+9. **Classroom's GitHub App, last**: uninstall `hgc-prod` from every
    organization, then delete the App.
-9. **Archive** `heig-tin-info/heig-classroom`
-   (`gh repo archive heig-tin-info/heig-classroom`).
-10. **Close**: ADR-035 wanted #143 to close at this step. It was closed
+10. **Archive** `heig-tin-info/heig-classroom`
+    (`gh repo archive heig-tin-info/heig-classroom`).
+11. **Close**: ADR-035 had #143 close at this step, but it was closed
     early, on 2026-10-05, as "not planned". Comment on it with the
     decommission's PR, then mark M9-01 done in `PROGRESS.md`.
+
+### 5.1 Personal-data copies
+
+Every copy the cutover makes holds students' names, addresses and grades.
+Until it is deleted it is **unencrypted at rest**: only modes 700/640 and
+the account boundaries protect it.
+
+| Copy | Where | Deleted by | Deadline | Command |
+| --- | --- | --- | --- | --- |
+| staging scratch database | `hgc_cutover` in staging's PostgreSQL | owner (srvstg) | the day of each staging dry run and of M8-06 | `s exec -T postgres psql -U quiz -d postgres -c 'DROP DATABASE IF EXISTS hgc_cutover WITH (FORCE)'` |
+| staging cutover directory | `~srvstg/merge` | owner (srvstg) | same day | `rm -rf ~/merge` |
+| inbox copies | `/srv/staging-inbox/hgc.dump`, `mapping.json` | agent (srv) | same day | `rm -f /srv/staging-inbox/hgc.dump /srv/staging-inbox/mapping.json` |
+| production scratch database | `hgc_cutover` in Quiz's PostgreSQL | agent (srv) | E, step 3 | `q exec -T postgres psql -U quiz -d postgres -c 'DROP DATABASE IF EXISTS hgc_cutover WITH (FORCE)'` |
+| production cutover directory | `/srv/quiz/merge` (dumps, mapping, reports) | agent (srv) | E, step 3, once the encrypted final dump is verified (it keeps what must be kept) | `rm -rf /srv/quiz/merge` |
+
+The staging import also wrote classroom's data into staging's own Quiz
+database. It goes with the next `staging-refresh.sh`, which the owner runs
+the same day.
 
 ## 6. Appendix A: announcements
 
@@ -636,35 +724,49 @@ on."
 
 ## 7. M8-06: the rehearsal on staging
 
-The rehearsal is §2 on staging, timed, with a fresh dump of both
-databases. Owner as `srvstg` unless noted.
+§2 on staging, timed, with a fresh dump of both databases and the image
+production runs. Owner as `srvstg` unless noted.
 
 1. Agent (srv): the dumps and the mapping into the inbox (§1.3, *Staging
-   dry run*, first block).
+   dry run*, first block). Note the time: it stands for C1.
 2. `staging-refresh.sh`, then `hgc_cutover` restored (§1.3, second block,
-   up to `pg_restore`). Time it.
-3. A dry run (§1.3), then `--apply --final`. Time both. The dump comes
-   from a running classroom, so the STATE checks see a live source frozen
-   in the copy. `source-stopped` passes once the copy is 10 minutes old.
-   A job caught in `pgboss.job` or a task caught `running` refuses
-   `queues-empty` or `source-stopped` for good, and a near deadline refuses
-   `deadlines`. Record each such refusal, check that it is only that, then
-   rehearse with `--apply` alone. Never edit the copy to pass.
+   up to `pg_restore`). Time it as C2.
+3. `imp s ~/merge --dry-run`, then `imp s ~/merge --apply --final`. Time
+   both. The dump comes from a running classroom, so the STATE checks see
+   a live source frozen in the copy:
+   - `source-stopped` passes once the copy is 10 minutes old;
+   - a job caught in `pgboss.job` or a task caught `running` refuses
+     `queues-empty` or `source-stopped` for good;
+   - a near deadline refuses `deadlines`.
+
+   Record each such refusal and check that it is only that. Then rehearse
+   with `--apply` alone. Never edit the copy to pass.
 4. The same command again: expect `nothing to do` (idempotence).
 5. The resolver on the imported data: open
    `https://quiz.dev.chevallier.io/legacy/classroom/classrooms/<old id>`
    and an old project link. Both land on the Quiz pages. M8-03 already
    checked the fragment itself.
-6. Walk C8 rows 1, 4 and 7 on `quiz.dev.chevallier.io` with an
-   allow-listed account (`LOGIN_ALLOWLIST`). Rows that need GitHub stay
-   inert: staging's App acts on no production organization (N-SEC-18), so
-   journals stay `pending` and the post-commit check reports it.
+6. Walk C8 rows 1, 4 and 7 with an allow-listed account
+   (`LOGIN_ALLOWLIST`), and time the end of it as C8.
 7. Re-scrub, so staging's ticker leaves the imported projects alone:
    `s exec -T postgres psql -U quiz -d quiz -v ON_ERROR_STOP=1 < ~/quiz-staging/scripts/staging-scrub.sql`.
-8. Record the dump date, durations (restore, import, total), the parity
-   summary and go/no-go in `PROGRESS.md`, *Rehearsal log*. Fill in §2's
+8. Delete the personal-data copies (§5.1, staging rows), the same day.
+9. Record in `PROGRESS.md`, *Rehearsal log*: the dump date, the durations
+   (restore, import, C1→C8), the parity summary and go/no-go. Fill in §2's
    target times.
 
-No-go if: a red line, a refusal other than the expected STATE ones, an
-ambiguous identity, or C3 longer than 30 min (then build M8-03b, the
-read-only flag, or split the import as D26 planned: O3).
+**Expected on staging, not a no-go**:
+
+- staging's App acts on no production organization (N-SEC-18), so the
+  imported journals stay `pending` and `journals re-ingested` reports
+  them as `warn`;
+- the dry run lists the GitHub-bound checks under "Checks not run";
+- C8's GitHub rows (2, 3 and 8) cannot be walked.
+
+**No-go**:
+
+- a red line other than a journal held by the missing installation;
+- a refusal other than the STATE ones above;
+- an ambiguous identity;
+- a measured freeze C1→C8 over 2 h. Then build M8-03b (the read-only
+  flag) before T0, or split the import as D26 planned (O3).
