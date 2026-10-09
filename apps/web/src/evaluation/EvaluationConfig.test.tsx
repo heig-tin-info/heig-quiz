@@ -291,6 +291,28 @@ describe("EvaluationConfig", () => {
     expect(screen.getByRole("switch", { name: /time limit per student/i })).toBeChecked();
   });
 
+  it("brings the minutes back into 1 to 480 before saving them (8 hours at most)", async () => {
+    const base = makeEvaluationDetail();
+    const detail = { ...base, evaluation: { ...base.evaluation, durationS: 30 * 60 } };
+    const { calls } = mockFetch(routes(detail, { [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(detail) }));
+    renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+      route: "/evaluations/x?step=timing",
+    });
+    const minutes = await screen.findByLabelText(/^minutes$/i);
+    expect(minutes).toHaveAttribute("max", "480");
+    const patches = () => calls.filter((c) => c.method === "PATCH").map((c) => c.body);
+
+    fireEvent.change(minutes, { target: { value: "600" } });
+    fireEvent.blur(minutes);
+    expect(minutes).toHaveValue(480);
+    await waitFor(() => expect(patches()).toEqual([{ durationS: 480 * 60 }]));
+
+    fireEvent.change(minutes, { target: { value: "0" } });
+    fireEvent.blur(minutes);
+    expect(minutes).toHaveValue(1);
+    await waitFor(() => expect(patches()).toEqual([{ durationS: 480 * 60 }, { durationS: 60 }]));
+  });
+
   /*
    * "Time and mode" is the densest form of the flow: a duration, two dates
    * and three segmented controls, plus everything the advanced disclosure

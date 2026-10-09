@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_MCQ_POLICY,
+  EVALUATION_DURATION_MAX_MINUTES,
   EvaluationPatch,
   EvaluationSettings,
   EvaluationSettingsPatch,
   RetakeSettings,
+  TemplatePatch,
   categorizePolicyOf,
   conditionsOf,
   negativeMarkingOf,
@@ -102,6 +104,15 @@ describe("EvaluationPatch", () => {
   it("still validates each field it carries", () => {
     expect(EvaluationPatch.safeParse({ settings: { timing: "whenever" } }).success).toBe(false);
     expect(EvaluationPatch.safeParse({ feedbackPolicy: { when: "later" } }).success).toBe(false);
+  });
+
+  it("caps the time limit at 8 hours (product owner, 2026-10-09)", () => {
+    expect(EVALUATION_DURATION_MAX_MINUTES).toBe(480);
+    expect(EvaluationPatch.safeParse({ durationS: 8 * 3600 }).success).toBe(true);
+    expect(EvaluationPatch.safeParse({ durationS: 8 * 3600 + 1 }).success).toBe(false);
+    expect(TemplatePatch.safeParse({ durationS: 8 * 3600 + 1 }).success).toBe(false);
+    expect(EvaluationPatch.safeParse({ durationS: 30 }).success).toBe(true);
+    expect(EvaluationPatch.safeParse({ durationS: 29 }).success).toBe(false);
   });
 });
 

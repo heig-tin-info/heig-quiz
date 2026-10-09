@@ -382,8 +382,8 @@ export type AuditActorType = (typeof AUDIT_ACTOR_TYPES)[number];
 
 /**
  * Append-only audit log (NFR-05, AU-42), platform-wide: it belongs to no
- * single module, and `src/audit.ts` is the only writer. In production the
- * application SQL role has neither UPDATE nor DELETE on it.
+ * single module, and `src/audit.ts` is the only writer. The trigger of
+ * migration 0096 refuses every UPDATE and DELETE on it (ADR-003 §5).
  *
  * No route reads it: it is forensics, read with `psql` (ADR-003, addendum
  * 2026-09-23). The two indexes serve the two questions asked there — "what

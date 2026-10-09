@@ -187,4 +187,24 @@ describe("a brainstorm poll", () => {
     });
     expect(refused.json().error).toBe("question_keyless");
   });
+
+  it("is listed among the recent polls, and a new run starts with no marks (ADR-071 §3)", async () => {
+    expect((await post(`/app/api/evaluations/${evaluationId}/poll/end`, teacher.headers)).statusCode).toBe(200);
+    const picks = (await get("/app/api/polls/questions", teacher.headers)).json() as {
+      id: string;
+      type: string;
+      useCount: number;
+      outcome: { kind: string };
+    }[];
+    expect(picks.find((p) => p.id === questionId)).toMatchObject({
+      type: "brainstorm",
+      useCount: 1,
+      outcome: { kind: "opinion" },
+    });
+
+    const rerun = await post("/app/api/polls", teacher.headers, { audience: { kind: "anonymous" }, questionId });
+    expect(rerun.statusCode).toBe(201);
+    evaluationId = rerun.json().evaluation.id;
+    expect((await board()).clusters).toEqual([]);
+  });
 });

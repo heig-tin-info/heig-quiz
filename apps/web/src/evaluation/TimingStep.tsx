@@ -1,7 +1,12 @@
 import { CalendarClock, Check, Lock, MonitorPlay, Radio, Timer } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { TransitionRefusal, type EvaluationDetail, type EvaluationPatch } from "@quiz/contracts";
+import {
+  EVALUATION_DURATION_MAX_MINUTES,
+  TransitionRefusal,
+  type EvaluationDetail,
+  type EvaluationPatch,
+} from "@quiz/contracts";
 import {
   clockChoiceOf,
   clockFields,
@@ -285,7 +290,7 @@ export function ConfigSettings({
                 label={t("eval.duration")}
                 type="number"
                 min={1}
-                max={480}
+                max={EVALUATION_DURATION_MAX_MINUTES}
                 size="sm"
                 width="w-24"
                 disabled={disabled}
@@ -293,8 +298,13 @@ export function ConfigSettings({
                 onChange={(e) => setMinutes(e.target.value)}
                 onBlur={() => {
                   const n = Number(minutes);
-                  if (!Number.isFinite(n) || n < 1) return;
-                  const next = Math.round(n) * 60;
+                  if (minutes.trim() === "" || !Number.isFinite(n)) return;
+                  // Brought back into the field's range rather than sent for
+                  // the server to refuse (DESIGN.md: a control never leads
+                  // to a refusal).
+                  const clamped = Math.min(EVALUATION_DURATION_MAX_MINUTES, Math.max(1, Math.round(n)));
+                  setMinutes(String(clamped));
+                  const next = clamped * 60;
                   if (next !== durationS) patch.mutate({ durationS: next });
                 }}
                 className="text-right tabular-nums"

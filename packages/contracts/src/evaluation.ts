@@ -598,6 +598,13 @@ const _feedbackPatchKeys: SameKeys<FeedbackPolicy, Required<FeedbackPolicyPatch>
 void [_settingsPatchKeys, _feedbackPatchKeys];
 
 /**
+ * The longest time limit per student, in minutes: 8 hours (product owner,
+ * 2026-10-09). The patch refuses more, and the timing step caps its field
+ * at it.
+ */
+export const EVALUATION_DURATION_MAX_MINUTES = 480;
+
+/**
  * The fields of an evaluation patch, before the "something to update" rule:
  * the one list {@link EvaluationPatch} and {@link TemplatePatch} are cut from.
  */
@@ -612,7 +619,7 @@ const EvaluationPatchFields = z.object({
   mcqPolicy: McqPolicy.optional(),
   opensAt: z.iso.datetime().nullable().optional(),
   closesAt: z.iso.datetime().nullable().optional(),
-  durationS: z.number().int().min(30).max(24 * 3600).nullable().optional(),
+  durationS: z.number().int().min(30).max(EVALUATION_DURATION_MAX_MINUTES * 60).nullable().optional(),
   ipAllowlist: z.array(z.string().trim().min(1).max(64)).max(32).optional(),
 });
 

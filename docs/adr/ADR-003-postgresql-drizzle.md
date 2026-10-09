@@ -4,7 +4,7 @@
 
 Accepted (2026-07-03, phase 3).
 
-Amended 2026-10-09: §2 records the `uuid` v4 identifiers the code generates (`randomUUID()`), not v7; §4 drops the repository layer that was never built (the modules import `drizzle-orm`). §5 (audit immutability by SQL roles) is not implemented today: the migrations hold no GRANT or REVOKE, and the application connects as the owner role; the product owner decided on 2026-10-09 that the immutability stays and is implemented without data loss, by a database trigger refusing UPDATE and DELETE on `audit_log` rather than by SQL roles; the record will be amended with that migration.
+Amended 2026-10-09: §2 records the `uuid` v4 identifiers the code generates (`randomUUID()`), not v7; §4 drops the repository layer that was never built (the modules import `drizzle-orm`). §5 (audit immutability): enforced by the trigger of migration `0096_audit_log_immutable`, not by SQL roles (the application connects as the owner role, so no GRANT or REVOKE could take the privileges away); the pseudonymization routine of NFR-07 is tracked by issue #681.
 
 ## Context
 
@@ -28,9 +28,14 @@ mechanism (NFR-09), revocable sessions (AU-06), a durable job queue and a simple
    no repository layer. The pre-1.0 risk of Drizzle is contained by the migrations being raw
    SQL files, independent of the ORM's API, and by the pure rules living in
    `packages/domain`, which never touches the database.
-5. Audit immutability **at the database level**: the application SQL role has neither
-   `UPDATE` nor `DELETE` on `audit_log` (NFR-05); only the data protection (FADP)
-   pseudonymization routine, under a dedicated role, may rewrite identity fields (NFR-07).
+5. Audit immutability **at the database level**: the trigger `audit_log_immutable`
+   (migration `0096_audit_log_immutable`) refuses every `UPDATE` and `DELETE` statement on
+   `audit_log`, whatever the role (NFR-05); `INSERT` and `SELECT` are untouched. It guards
+   against the application and against mistakes, not against an owner who drops the
+   trigger; `TRUNCATE` fires no such trigger and nothing truncates the table. The data
+   protection (FADP) pseudonymization routine (NFR-07, not built: issue #681) decides,
+   when it is designed, whether it must rewrite identity fields here and how it passes the
+   trigger.
 
 ## Consequences
 
@@ -62,5 +67,4 @@ there, and nothing else (migration `0009_audit_log_indexes`, audit D-15):
   this attempt, this user".
 
 An admin read route, when it comes, is a new decision: it must go through `staffAccess`
-(or an admin check) like every other read and must not widen the §5 privileges of the
-application role.
+(or an admin check) like every other read and must not weaken the §5 trigger.
