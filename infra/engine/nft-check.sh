@@ -86,20 +86,29 @@ case "${1:-}" in
 			echo "  ..    rollback armed: confirm once every check is green"
 		fi
 		grep -o 'counter packets [0-9]* bytes [0-9]*' <<<"$chain" | sed 's/^/  ..    dropped: /'
-		# A throwaway container on each instance's closed network: the git
-		# channel open, the host's SSH closed, no egress. Not infra/net/test.sh,
-		# which listens on the gateway's 9418 and cannot run beside a portal.
+		# A throwaway container on each instance's closed network: its git
+		# channel open, the other instance's closed (host.nft's cs0/cs1
+		# accept relies on inet codespace for that), the host's SSH closed,
+		# no egress. Not infra/net/test.sh: it listens on the gateway's 9418,
+		# which a live portal holds, and its regression section reloads
+		# inet codespace without isolation.
 		# shellcheck source=SCRIPTDIR/../../apps/codespace/deploy/lib.sh
 		. "$(dirname "${BASH_SOURCE[0]}")/../../apps/codespace/deploy/lib.sh"
 		probe() { pd run --rm --network "$CS_NET" "$CS_ANCHOR_IMAGE" sh -c "$1" >/dev/null 2>&1; }
+		declare -A gw
+		for i in prod staging; do cs_instance "$i"; gw[$i]=$CS_GATEWAY; done
 		for i in prod staging; do
 			cs_instance "$i"
+			other=$([ "$i" = prod ] && echo staging || echo prod)
+			probe true || { fail "$i: cannot start a probe on $CS_NET"; continue; }
 			if probe "nc -z -w 3 $CS_GATEWAY $CS_GIT_PORT"; then pass "$i: git channel $CS_GATEWAY:$CS_GIT_PORT open"
-			else fail "$i: git channel $CS_GATEWAY:$CS_GIT_PORT closed"; fi
+			else fail "$i: git channel $CS_GATEWAY:$CS_GIT_PORT closed (portal running?)"; fi
+			if probe "! nc -z -w 3 ${gw[$other]} $CS_GIT_PORT"; then pass "$i: $other's git channel closed from $CS_NET"
+			else fail "$i: $other's git channel ${gw[$other]}:$CS_GIT_PORT reachable from $CS_NET"; fi
 			if probe "! nc -z -w 3 $CS_GATEWAY 22"; then pass "$i: host SSH closed from $CS_NET"
 			else fail "$i: host SSH reachable from $CS_NET"; fi
-			if probe "! timeout 5 wget -T 3 -q -O /dev/null http://1.1.1.1/"; then pass "$i: no egress from $CS_NET"
-			else fail "$i: 1.1.1.1 reachable from $CS_NET"; fi
+			if probe "! nc -z -w 3 1.1.1.1 80"; then pass "$i: no egress from $CS_NET"
+			else fail "$i: 1.1.1.1:80 reachable from $CS_NET"; fi
 		done
 		;;
 	*) echo "usage: $0 outside | app | vm" >&2; exit 2 ;;

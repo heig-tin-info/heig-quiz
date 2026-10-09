@@ -4263,26 +4263,12 @@ serves now (16a), and what waits for the group repositories (16b).
   owner's: the first apply and confirm on the VM, the restore drill, the
   acceptance runs.
 - **As delivered (rollout)** (engine VM, 2026-10-08/09, with the owner's
-  authorization): slices live (runner's engine-ready log: `cgroupParent`
-  `quiz-runner.slice`; staging portal in `codespace.slice`),
-  `CODESPACE_MEMORY=768m` for both instances. Caddy 2.6.2 masks
-  `token=REDACTED`, the 502 path included. HTTP/3 off in the VM's Caddyfile
-  (UDP 443 never reached Caddy; browsers stalled after one request, #649).
-  Backup: export + restore drill in a scratch dir (zstd, `integrity_check`,
-  no cookie token, `git fsck`, ownership all good); the application VM's
-  `srv` timer pulls daily, first archive 2026-10-08. Host firewall
-  confirmed 2026-10-09 after one rollback: two `nft-check.sh vm` checks
-  failed falsely (`nft | grep -q` under pipefail; `infra/net/test.sh`
-  cannot bind 9418 beside a portal), fixed here by a captured match and a
-  throwaway probe container per network. 2026-10-09 ~07:50: `c-dev`
-  rebuilt on the VM from 1855b8fc (#650), 44 s, image test 51/51, start
-  1.38 s. Acceptance run, 2026-10-09: runner smoke on the VM
-  (`127.0.0.1:3200`) all languages ok, max 1.6 s; then one live staging
-  session (`smoke.mjs --launch`) loaded with 2 CPU spinners and 600 MB held
-  (697/805 MB of its 768m limit, 64% CPU) beside 4 parallel runner smokes
-  (20 runs: c, cpp, python, js, spice): all ok, max 5.3 s (cpp) against
-  `RUNNER_TIMEOUT_MS` 30 s; `memory.events`: `quiz-runner.slice` oom_kill
-  0, `codespace.slice` high 0, max 0, oom_kill 0. Acceptance met.
+  authorization): slices live, `CODESPACE_MEMORY=768m` for both instances;
+  Caddy masks `token=`; HTTP/3 off on the VM (#649). Restore drill passed,
+  first daily pull 2026-10-08. Host firewall confirmed 2026-10-09 after the
+  `nft-check.sh vm` fix (#651). Acceptance met under load (a loaded live
+  session beside parallel runner smokes): no OOM and no `memory.high` in
+  either slice, worst run 5.3 s against `RUNNER_TIMEOUT_MS` 30 s.
   Remaining: re-applying `host.nft` for the removed `udp dport 443`.
 
 ### M6-06 — Quiz `codespace` module

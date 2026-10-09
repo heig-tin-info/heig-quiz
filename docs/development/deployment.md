@@ -314,9 +314,8 @@ Caddyfile's `remote_ip` name the same addresses and move together. ufw
 stays inactive: never enable it beside this table.
 
 No deploy changes it: a production deploy only warns when the checkout's
-file differs from the applied copy, so a merged change to `host.nft` takes
-effect only once re-applied by hand (apply, the three checks, `confirm`).
-**Applying it**, the first time and
+file differs from the applied copy, so a merged change takes effect only
+once re-applied. **Applying it**, the first time and
 after every change, as root on the VM, from the production checkout, in a
 session kept open (`ss -tulpn` first: nothing listening may be left out):
 
