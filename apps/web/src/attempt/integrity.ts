@@ -22,13 +22,12 @@
 import { useCallback, useEffect } from "react";
 
 import { PASTE_MAX_LENGTH } from "@quiz/contracts";
+import { MIN_ABSENCE_MS } from "@quiz/domain";
 
 import { useT, type Dict } from "../i18n";
 import { useToast } from "../notify";
 import type { Report } from "./signals";
 
-/** An absence shorter than this is a slip (a notification, a mis-click): no toast. */
-export const AWAY_NOTICE_MS = 1_000;
 /** At most one toast of each kind per attempt in this interval. */
 export const NOTICE_INTERVAL_MS = 5 * 60_000;
 
@@ -104,16 +103,19 @@ export function useIntegrityNotice(attemptId: string): (kind: IntegrityKind) => 
 /**
  * Journals the page being left and the return to it while `journaled`, and
  * tells the student, when `notify`, as they come back from an absence of at
- * least {@link AWAY_NOTICE_MS}. Journals as well a paste or a drop of a text
- * of at least {@link PASTE_MIN_LENGTH} characters that none of the page's
+ * least `MIN_ABSENCE_MS` (`@quiz/domain`, the teacher's threshold too).
+ * Journals as well a paste or a drop of a text of at least
+ * {@link PASTE_MIN_LENGTH} characters that none of the page's
  * {@link COPIES_KEPT} latest copies holds, and tells the student at once.
  * The listeners only read: an editor (CodeMirror, a form field) still gets
  * the paste, which is never prevented.
  *
  * An absence starts as the tab hides or the window really loses the focus,
  * and ends as the tab shows or the window gets the focus back, whichever
- * comes first. A blur that only moved the focus into an iframe of the page
- * (a question's embedded content) is not one: the focus has settled after
+ * comes first — the merge `integrityIncidents` (`@quiz/domain`) applies to
+ * the journal on the teacher's side. A blur that only moved the focus into
+ * an iframe of the page (a question's embedded content) is not one: the
+ * focus has settled after
  * the blur's own tick, so the check runs on the next. From inside such an
  * iframe, leaving for another application raises nothing on this page, so
  * that absence is only caught if the tab hides, and a paste there is not
@@ -140,7 +142,7 @@ export function useIntegrityJournal(
       if (awaySince === null) return;
       const away = Date.now() - awaySince;
       awaySince = null;
-      if (notify && away >= AWAY_NOTICE_MS) notice("focus");
+      if (notify && away >= MIN_ABSENCE_MS) notice("focus");
     };
     const onVisibility = () => {
       report({ kind: "visibility", details: { state: document.visibilityState } });

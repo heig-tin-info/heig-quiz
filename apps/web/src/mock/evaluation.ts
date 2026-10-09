@@ -19,7 +19,7 @@ import type {
   LobbyName,
   McqScorePolicy,
 } from "@quiz/domain";
-import { TemplatePatch, type DashboardAccess } from "@quiz/contracts";
+import { TemplatePatch, type DashboardAccess, type IntegrityIncident } from "@quiz/contracts";
 import {
   D,
   H,
@@ -1015,6 +1015,51 @@ const evaluationDetail = (e: MockEvaluation) => ({
   courseId: rooms.find((r) => r.id === e.classroomId)?.courseId ?? "",
 });
 
+/** Whether the evaluation keeps the integrity journal (`integrityJournalOn`). */
+const journalOnMock = (e: MockEvaluation) => e.mode !== "poll" && e.settings["logVisibility"] === true;
+
+/**
+ * The integrity incidents of one row (ADR-088 §7), deterministic by its
+ * place in the class: most rows have none; a few left the page once, one
+ * twice with a paste between, one is away right now.
+ */
+function mockIncidents(e: MockEvaluation, row: MockRowState): IntegrityIncident[] {
+  if (row.attemptId === null || row.staff || !journalOnMock(e)) return [];
+  const index = e.rows.indexOf(row);
+  // A few students, each at their own moment.
+  const shift = index * 23_000;
+  switch (index % 8) {
+    case 1:
+      return [{ kind: "left", at: iso(-9 * 60_000 - shift), durationMs: 42_000 }];
+    case 3:
+      return [
+        { kind: "left", at: iso(-14 * 60_000 - shift), durationMs: 125_000 },
+        { kind: "paste", at: iso(-11 * 60_000 - shift), length: 312, afterFocusLoss: true },
+        { kind: "left", at: iso(-4 * 60_000 - shift), durationMs: 6_000 },
+      ];
+    case 6:
+      return row.state === "in_progress" ? [{ kind: "left", at: iso(-37_000), durationMs: null }] : [];
+    default:
+      return [];
+  }
+}
+
+/** `GET /evaluations/:id/incidents`: every row's incidents, in time order. */
+export const evaluationIncidents = (e: MockEvaluation) => ({
+  incidents: e.rows
+    .flatMap((row) =>
+      mockIncidents(e, row).map((incident) => ({
+        attemptId: row.attemptId!,
+        userId: row.userId,
+        displayName: row.displayName,
+        pseudonym: row.pseudonym,
+        incident,
+      })),
+    )
+    .sort((a, b) => Date.parse(a.incident.at) - Date.parse(b.incident.at)),
+  serverNow: iso(0),
+});
+
 export const dashboardView = (e: MockEvaluation, includeAnswers: boolean) => {
   // Every denominator is the CLASS: a teacher's own test walk is a row and
   // not a total (ADR-018).
@@ -1030,6 +1075,7 @@ export const dashboardView = (e: MockEvaluation, includeAnswers: boolean) => {
       serverNow: iso(0),
       // The server's `reopenRefusal`: retakes on, or the correction published.
       reopenable: !retakesOnMock(e) && e.correctionPublishedAt === null,
+      journalOn: journalOnMock(e),
     },
     items: e.items.map((i) => ({
       id: i.id,
@@ -1042,6 +1088,7 @@ export const dashboardView = (e: MockEvaluation, includeAnswers: boolean) => {
     rows: e.rows.map((r) => ({
       ...r,
       cells: r.cells.map((c) => ({ ...c, summary: includeAnswers ? c.summary : null })),
+      incidents: mockIncidents(e, r).length,
     })),
     totals: e.items.map((item) => {
       const done = classRows.filter((r) => {
@@ -1112,6 +1159,7 @@ export const attemptInspect = (e: MockEvaluation, attemptId: string) => {
       }];
     }),
     events: [{ kind: "visibility" as const, at: iso(-120_000), details: null }],
+    incidents: mockIncidents(e, row),
     serverNow: iso(0),
   };
 };

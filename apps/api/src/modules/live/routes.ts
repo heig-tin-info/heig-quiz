@@ -570,6 +570,15 @@ export async function livePlugin(app: FastifyInstance) {
     ),
   );
 
+  /** ADR-088 §7: every attempt's integrity incidents, in time order. */
+  app.get(
+    "/app/api/evaluations/:id/incidents",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: staffEvaluation }, ({ now, scope }) =>
+      service.evaluationIncidents(app.db, scope.evaluation, now),
+    ),
+  );
+
   /**
    * F-DASH-07: one question for the whole class. The evaluation is loaded
    * through the staff predicate first; an item that is not one of its own

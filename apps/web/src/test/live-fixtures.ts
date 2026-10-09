@@ -86,6 +86,7 @@ export function makeRow(index: number, itemIds: string[], overrides: Partial<Das
     maxPoints: itemIds.length,
     cells: itemIds.map((itemId) => makeCell({ itemId })),
     access: { kind: "portal", station: null, alert: null },
+    incidents: 0,
     ...overrides,
   };
 }
@@ -102,6 +103,7 @@ export function makeDashboard(rows = 3, items = 4): DashboardView {
       closesAt: liveAt(20 * 60_000),
       serverNow: liveAt(0),
       reopenable: true,
+      journalOn: true,
     },
     items: itemIds.map((itemId, i) => ({
       id: itemId,

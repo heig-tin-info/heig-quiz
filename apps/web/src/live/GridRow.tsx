@@ -6,6 +6,7 @@ import type { DashboardRow, DashboardView } from "@quiz/contracts";
 import { useT } from "../i18n";
 import { Badge, ClockCountdown, cx, IconButton, T, VerdictCell } from "../ui";
 import { AnswerTip } from "./AnswerTip";
+import { IncidentBadge } from "./Incidents";
 import { cellState, cellValue, completionOf, ownDeadline } from "./cells";
 
 /** Fixed width of a question column: two glyphs and the icon, and no more. */
@@ -171,8 +172,8 @@ export const GridRow = memo(function GridRow({
   showResults: boolean;
   /** A cell: that one answer (F-DASH-05, issue #353). */
   onCell: (row: DashboardRow, itemId: string) => void;
-  /** The row's eye: the whole paper, opened on `inspectItemId`. */
-  onInspect: (row: DashboardRow, itemId: string) => void;
+  /** The row's eye: the whole paper, opened on `inspectItemId` (at its top without one). */
+  onInspect: (row: DashboardRow, itemId?: string) => void;
   onExtend: (row: DashboardRow) => void;
   /** With the name the row shows, for the confirmation that asks first. */
   onClose: (row: DashboardRow, name: string) => void;
@@ -246,6 +247,9 @@ export const GridRow = memo(function GridRow({
               {t("roster.status.staff")}
             </Badge>
           ) : null}
+          {/* The integrity journal (ADR-088 §7): neutral, a count, and the
+              door to the paper, opened at its top: the Journal section. */}
+          <IncidentBadge count={row.incidents} name={name} onOpen={() => onInspect(row)} />
           {/* Where the row stands, pushed to the end of the line so the
               pills line up in one column instead of trailing names of every
               length: handed in or closed once it is over, and while it runs

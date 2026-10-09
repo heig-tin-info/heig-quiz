@@ -386,6 +386,7 @@ describe("LiveDashboard — inspection", () => {
     },
     items: [],
     events: [],
+    incidents: [{ kind: "left", at: new Date().toISOString(), durationMs: 42_000 }],
     serverNow: new Date().toISOString(),
   });
 
@@ -432,6 +433,35 @@ describe("LiveDashboard — inspection", () => {
     const dialog = await screen.findByRole("dialog", { name: /answers of nadia roux 1/i });
     // The whole paper: the footer walks to the next STUDENT.
     expect(within(dialog).getByRole("button", { name: /next student/i })).toBeInTheDocument();
+  });
+
+  it("badges a row with incidents, neutral, and opens its paper's journal (ADR-088 §7)", async () => {
+    const user = userEvent.setup();
+    const view = makeDashboard(3, 4);
+    view.rows[1] = { ...view.rows[1]!, incidents: 1 };
+    setup(view, paperOf(1));
+    await screen.findByText("Nadia Roux 1");
+    // Only the row that has some.
+    expect(screen.getAllByRole("button", { name: /incidents? for/ })).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "1 incident for Nadia Roux 1: open the journal" }));
+    const dialog = await screen.findByRole("dialog", { name: /answers of nadia roux 1/i });
+    expect(within(dialog).getByRole("heading", { name: "Journal" })).toBeInTheDocument();
+    expect(within(dialog).getByText("Left the page")).toBeInTheDocument();
+    expect(within(dialog).getByText(/not proof/)).toBeInTheDocument();
+  });
+
+  it("offers the journal list only when the evaluation keeps the journal", async () => {
+    setup();
+    await screen.findByText("Nadia Roux 0");
+    expect(screen.getByRole("button", { name: /^Journal/ })).toBeInTheDocument();
+  });
+
+  it("offers no journal list when the evaluation keeps no journal", async () => {
+    const view = makeDashboard(3, 4);
+    view.evaluation.journalOn = false;
+    setup(view);
+    await screen.findByText("Nadia Roux 0");
+    expect(screen.queryByRole("button", { name: /^Journal/ })).toBeNull();
   });
 
   it("walks to the next student with the right arrow, in one query each", async () => {

@@ -16,6 +16,7 @@ import {
   Skeleton,
 } from "../ui";
 import { AnswerCard } from "./AnswerCard";
+import { JournalSection } from "./Incidents";
 import { useAttemptInspect } from "./useAttemptInspect";
 
 /**
@@ -176,34 +177,41 @@ export function InspectModal({
           retrying={inspect.isFetching}
           fallback={t("error.server")}
         />
-      ) : inspect.data.items.length === 0 ? (
-        <EmptyState icon={FileQuestion} title={t("live.inspect.noAnswer")} className="py-8" />
       ) : (
-        <ol className="space-y-4">
-          {inspect.data.items.map((entry, index) => {
-            const cell = row.cells.find((c) => c.itemId === entry.item.id) ?? null;
-            return (
-              <li
-                key={entry.item.id}
-                ref={(el) => {
-                  if (el) anchors.current.set(entry.item.id, el);
-                  else anchors.current.delete(entry.item.id);
-                }}
-                className="scroll-mt-2"
-              >
-                <AnswerCard
-                  heading={t("live.grid.question", { n: index + 1 })}
-                  type={entry.item.type}
-                  cell={cell}
-                  maxPoints={entry.item.points}
-                  studentConfig={entry.studentConfig}
-                  answer={entry.answer}
-                  solution={entry.solution}
-                />
-              </li>
-            );
-          })}
-        </ol>
+        <div className="space-y-8">
+          {/* ADR-088 §7: the incidents first, where the row's badge lands —
+              only when there are some (the evaluation's list says the rest). */}
+          {inspect.data.incidents.length > 0 ? <JournalSection incidents={inspect.data.incidents} /> : null}
+          {inspect.data.items.length === 0 ? (
+            <EmptyState icon={FileQuestion} title={t("live.inspect.noAnswer")} className="py-8" />
+          ) : (
+            <ol className="space-y-4">
+              {inspect.data.items.map((entry, index) => {
+                const cell = row.cells.find((c) => c.itemId === entry.item.id) ?? null;
+                return (
+                  <li
+                    key={entry.item.id}
+                    ref={(el) => {
+                      if (el) anchors.current.set(entry.item.id, el);
+                      else anchors.current.delete(entry.item.id);
+                    }}
+                    className="scroll-mt-2"
+                  >
+                    <AnswerCard
+                      heading={t("live.grid.question", { n: index + 1 })}
+                      type={entry.item.type}
+                      cell={cell}
+                      maxPoints={entry.item.points}
+                      studentConfig={entry.studentConfig}
+                      answer={entry.answer}
+                      solution={entry.solution}
+                    />
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </div>
       )}
     </Modal>
   );

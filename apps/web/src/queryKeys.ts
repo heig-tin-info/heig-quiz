@@ -291,6 +291,8 @@ export const attemptInspectKey = (evaluationId: string, attemptId: string | null
 /** Every student paper cached for one evaluation, for a blanket invalidation. */
 export const attemptInspectPrefix = (evaluationId: string) =>
   ["attempt-inspect", evaluationId] as const;
+/** Every attempt's integrity incidents (ADR-088 §7), re-read with the grid. */
+export const evaluationIncidentsKey = (evaluationId: string) => ["evaluation-incidents", evaluationId] as const;
 /** One question's answers for the whole class (F-DASH-07): a snapshot, refreshed by hand. */
 export const itemAnswersKey = (evaluationId: string, itemId: string) =>
   ["item-answers", evaluationId, itemId] as const;

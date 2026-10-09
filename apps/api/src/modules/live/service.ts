@@ -87,6 +87,7 @@ export {
   logAttemptEvent,
   countRecentEvents,
 } from "./autosave.js";
+export { evaluationIncidents } from "./incidents.js";
 export {
   purgeIntegrityJournal,
   purgeAbandonedIntegrityJournal,

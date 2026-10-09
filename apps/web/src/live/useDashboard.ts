@@ -7,7 +7,7 @@ import { api } from "../api";
 import { applyGridEvent, initialGrid, type GridState } from "../realtime/grid";
 import { useEventStream } from "../realtime/useEventStream";
 import { useServerClock, type ServerClock } from "../realtime/useServerClock";
-import { attemptInspectKey, attemptInspectPrefix, dashboardKey } from "../queryKeys";
+import { attemptInspectKey, attemptInspectPrefix, dashboardKey, evaluationIncidentsKey } from "../queryKeys";
 
 /**
  * The live dashboard as one hook: the read model, the stream that moves it,
@@ -71,6 +71,8 @@ export function useDashboard(
     // frames this tab never received, so every paper cached for a tooltip or
     // the inspection modal is suspect too.
     void qc.invalidateQueries({ queryKey: attemptInspectPrefix(id) });
+    // The journal's list is derived from the same journal as the badges.
+    void qc.invalidateQueries({ queryKey: evaluationIncidentsKey(id) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qc, id, includeAnswers, includeResults]);
 

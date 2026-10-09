@@ -87,7 +87,7 @@ export function StudentGrid({
   /** A cell: that student's answer to that question (F-DASH-05). */
   onCell: (row: DashboardRow, itemId: string) => void;
   /** The row's eye: that student's whole paper. */
-  onInspect: (row: DashboardRow, itemId: string) => void;
+  onInspect: (row: DashboardRow, itemId?: string) => void;
   /** A column header: that question for every student (F-DASH-07). */
   onQuestion: (itemId: string) => void;
   onExtend: (row: DashboardRow) => void;

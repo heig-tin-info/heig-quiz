@@ -2,7 +2,7 @@
  * The dashboard read model (F-DASH-01..04) and the inspector of one
  * attempt. Imported through `./service.ts`.
  */
-import { and, asc, desc, eq, gt, inArray } from "drizzle-orm";
+import { and, asc, eq, gt, inArray } from "drizzle-orm";
 
 import type {
   AttemptInspect,
@@ -47,6 +47,8 @@ import { presence } from "../realtime/presence.js";
 import { solutionView, studentView } from "./studentView.js";
 import { type AttemptRecord, type AnswerRecord, answersOf, reopenRefusal } from "./attempt.js";
 import { answerSummarizer, answeredBy, liveGrader, cellStatus } from "./autosave.js";
+import { incidentOut, incidentsFrom, incidentsOf, journalOn } from "./incidents.js";
+import { fullName } from "./names.js";
 import { itemInstance } from "../pool/service.js";
 
 // --- Dashboard read model (F-DASH-01..04) ---------------------------------
@@ -96,6 +98,8 @@ export async function dashboardView(
   for (const a of attemptRows) attemptCounts.set(a.userId, (attemptCounts.get(a.userId) ?? 0) + 1);
   const shown = new Set([...byUser.values()].map((a) => a.id));
   const earlier = new Set(attemptRows.filter((a) => !shown.has(a.id)).map((a) => a.id));
+  // The badge of each row (ADR-088 §7): one query for the whole grid.
+  const incidents = await incidentsOf(db, [...byUser.values()], input.now);
 
   const answerRows =
     shown.size === 0
@@ -169,7 +173,7 @@ export async function dashboardView(
         seatId: entry.seatId,
         userId,
         staff: entry.staff,
-        displayName: `${entry.prenom} ${entry.nom}`.trim() || entry.email,
+        displayName: fullName(entry.prenom, entry.nom, entry.email),
         pseudonym: pseudonyms.get(userId ?? entry.seatId) ?? "—",
         state: (attempt?.state ?? "not_started") as AttemptState,
         online: userId !== null && online.has(userId),
@@ -222,6 +226,7 @@ export async function dashboardView(
           }),
         ),
         access: (userId === null ? undefined : access.get(userId)) ?? PORTAL_ACCESS,
+        incidents: attempt ? (incidents.get(attempt.id)?.length ?? 0) : 0,
       };
     }),
   );
@@ -245,6 +250,7 @@ export async function dashboardView(
       closesAt: isoOrNull(evaluation.closesAt),
       serverNow: iso(input.now),
       reopenable: reopenRefusal(evaluation) === null,
+      journalOn: journalOn(evaluation),
     },
     items: items.map((i) => ({
       id: i.item.id,
@@ -369,19 +375,19 @@ export async function attemptInspect(
         .where(eq(users.id, attempt.userId))
         .limit(1);
   const ownerId = attempt.userId ?? attempt.id;
+  // The attempt's journal, read once, in time order: the incidents are
+  // derived from it, and the raw list shows its latest 200 rows.
   const journal = await db
     .select()
     .from(attemptEvents)
     .where(eq(attemptEvents.attemptId, attempt.id))
-    .orderBy(desc(attemptEvents.at))
-    .limit(200);
+    .orderBy(asc(attemptEvents.at), asc(attemptEvents.id));
+  const incidents = incidentsFrom(journal, attempt, now).map(incidentOut);
   return {
     attempt: {
       id: attempt.id,
       userId: ownerId,
-      displayName: student
-        ? `${student.givenName ?? ""} ${student.familyName ?? ""}`.trim() || student.email
-        : "Guest",
+      displayName: student ? fullName(student.givenName, student.familyName, student.email) : "Guest",
       pseudonym: uniquePseudonyms(evaluation.id, [ownerId]).get(ownerId) ?? "—",
       state: attempt.state,
       startedAt: isoOrNull(attempt.startedAt),
@@ -396,7 +402,11 @@ export async function attemptInspect(
         markedDone: answer?.markedDone ?? false,
       };
     }),
-    events: journal.map((e) => ({ kind: e.kind, at: iso(e.at), details: e.details })),
+    events: journal
+      .slice(-200)
+      .reverse()
+      .map((e) => ({ kind: e.kind, at: iso(e.at), details: e.details })),
+    incidents,
     serverNow: iso(now),
   };
 }
