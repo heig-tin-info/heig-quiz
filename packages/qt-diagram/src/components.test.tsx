@@ -11,6 +11,9 @@ import { DiagramReview } from "./Review.js";
 import type { DiagramConfig } from "./schema.js";
 import { config, REFERENCE, STARTER } from "./test/fixtures.js";
 
+/** The legend of the editor's kind picker (`strings.ts`). */
+const KIND_LEGEND = "Kind of diagram";
+
 /** A host that owns the config, as the question editor does. */
 function EditorHost({
   initial,
@@ -54,7 +57,8 @@ describe("DiagramQuestionEditor", () => {
   it("offers the eight kinds, and changes an empty draft's kind at once", () => {
     const onChange = vi.fn();
     render(<EditorHost initial={config({ reference: emptyScene(), starter: undefined })} onChange={onChange} />);
-    expect(screen.getAllByRole("radio")).toHaveLength(8);
+    // The kinds, not the Diagram / Text choice of the reference's toolbar.
+    expect(within(screen.getByRole("group", { name: KIND_LEGEND })).getAllByRole("radio")).toHaveLength(8);
     fireEvent.click(screen.getByRole("radio", { name: /State machine/ }));
     expect(onChange.mock.lastCall?.[0]).toMatchObject({ kind: "state" });
     expect(screen.queryByRole("alert")).toBeNull();
@@ -80,7 +84,7 @@ describe("DiagramQuestionEditor", () => {
 
   it("locks the kind once the question is published", () => {
     render(<EditorHost initial={config()} onChange={vi.fn()} published />);
-    expect(screen.queryAllByRole("radio")).toHaveLength(0);
+    expect(screen.queryByRole("group", { name: KIND_LEGEND })).toBeNull();
     expect(screen.getByText(/fixed once the question is published/)).toBeInTheDocument();
   });
 
@@ -115,7 +119,7 @@ describe("DiagramQuestionEditor", () => {
     expect(screen.getByText("This diagram is open over the page.")).toBeInTheDocument();
 
     // The text tab works in the layer: typing there edits the reference.
-    fireEvent.click(within(layer).getByRole("tab", { name: "Text" }));
+    fireEvent.click(within(layer).getByRole("radio", { name: "Text" }));
     const text = within(layer).getByRole("textbox", { name: "Text" });
     fireEvent.focus(text);
     fireEvent.change(text, { target: { value: "class Solo" } });

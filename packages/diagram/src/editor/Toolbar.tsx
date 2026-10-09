@@ -2,14 +2,16 @@
  * The editor's toolbar: select, the kind's tools and links as icons, the
  * history and the edits, and the teacher's Diagram / Text tabs.
  */
-import type { JSX } from "react";
+import { useId, type JSX } from "react";
+
+import { Segmented } from "@quiz/ui";
 
 import { KINDS, type DiagramKind, type PlaceTool } from "../kinds.js";
 import type { LinkType } from "../scene.js";
 import { CODECS } from "../codecs/index.js";
 import { LinkIcon, ToolIcon } from "./shapes.js";
 import { linkKey, toolKey, type DiagramStrings } from "./strings.js";
-import { cx, iconButton, lineButton, separator, toolbar } from "./styles.js";
+import { iconButton, lineButton, separator, toolbar } from "./styles.js";
 
 export type Mode = { kind: "select" } | { kind: "place"; tool: PlaceTool } | { kind: "link"; type: LinkType };
 
@@ -36,6 +38,7 @@ const digit = (index: number): string | undefined => (index < 9 ? String(index +
 
 export function Toolbar(p: ToolbarProps): JSX.Element {
   const { mode, strings: s } = p;
+  const paneName = useId();
   const spec = KINDS[p.kind];
   return (
     <div className={toolbar} role="toolbar" aria-label={s.toolbox}>
@@ -72,19 +75,19 @@ export function Toolbar(p: ToolbarProps): JSX.Element {
         </>
       )}
       {p.onPane && CODECS[p.kind] && (
-        <div className="ml-auto flex gap-0.5" role="tablist">
-          {(["draw", "text"] as const).map((pane) => (
-            <button
-              key={pane}
-              type="button"
-              role="tab"
-              aria-selected={p.pane === pane}
-              className={cx(iconButton(p.pane === pane), "w-auto px-2.5 text-[12.5px] font-medium")}
-              onClick={() => p.onPane?.(pane)}
-            >
-              {pane === "draw" ? s.draw : s.code}
-            </button>
-          ))}
+        // Two views of one value, not two panels: a segmented choice, which
+        // the arrows move along (it was a tab list without tab panels).
+        <div className="ml-auto">
+          <Segmented
+            name={paneName}
+            size="sm"
+            value={p.pane}
+            options={[
+              { value: "draw", label: s.draw },
+              { value: "text", label: s.code },
+            ]}
+            onChange={p.onPane}
+          />
         </div>
       )}
     </div>
