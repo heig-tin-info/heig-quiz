@@ -1312,11 +1312,13 @@ function applyConfigPatch(e: MockEvaluation, body: Record<string, unknown>): voi
   // ADR-092: only the forced consequences, no preset (the server's rule).
   const modeChanged = typeof body.mode === "string" && body.mode !== e.mode; // the single no-op exemption
   const from = e.mode;
-  const stored = e.settings as { lobby: LobbyName; allowDrill?: boolean };
   if (modeChanged) e.mode = body.mode as MockEvaluation["mode"];
   if (body.settings) e.settings = { ...e.settings, ...(body.settings as object) };
-  // The drill is frozen at what the old mode gave it.
-  if (modeChanged) e.settings = { ...e.settings, allowDrill: drillAllowedOn(from, stored.allowDrill) };
+  // The drill is frozen at what the old mode gave it, unless the patch set it.
+  if (modeChanged) {
+    const { allowDrill } = e.settings as { allowDrill?: boolean };
+    e.settings = { ...e.settings, allowDrill: drillAllowedOn(from, allowDrill) };
+  }
   const feedback = body.feedbackPolicy as { when?: FeedbackWhen } | undefined;
   if (body.feedbackPolicy || modeChanged) {
     const merged = { ...e.feedbackPolicy, ...((body.feedbackPolicy as object | undefined) ?? {}) } as { when: FeedbackWhen };
