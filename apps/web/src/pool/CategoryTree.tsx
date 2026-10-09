@@ -1,16 +1,14 @@
-import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Layers, ListTree } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import type { CategoryNode, PoolDetail } from "@quiz/contracts";
+import type { CategoryNode } from "@quiz/contracts";
 
-import { api } from "../api";
 import { useT } from "../i18n";
 import { useMoveQuestions, useQuestionDrop, type QuestionDrag } from "./move";
 import { useSearchParam, type Route } from "../router";
 import { NavTree, navRowClass } from "../navTree";
 import { cx, Skeleton, Tip, useTruncated } from "../ui";
-import { poolKey } from "../queryKeys";
+import { usePool } from "./api";
 
 /**
  * The categories of a pool in the application SIDEBAR, under the "Question
@@ -195,10 +193,7 @@ export function SidebarCategories({
   const t = useT();
   const [category, setCategory] = useSearchParam("category", "");
   const move = useMoveQuestions();
-  const detail = useQuery<PoolDetail>({
-    queryKey: poolKey(poolId),
-    queryFn: () => api(`/app/api/pools/${poolId}`),
-  });
+  const detail = usePool(poolId);
   const onCategoriesPage = route.view === "poolCategories";
   const readOnly = detail.data?.role === "reader";
   const onDropQuestions = (drag: QuestionDrag, categoryId: string | null) =>

@@ -47,6 +47,7 @@ export {
 export { breakdownOf, isLocked, markdown } from "./content.js";
 export { ExpandableCanvas, type ExpandableCanvasProps, type ExpandableCanvasStrings } from "./expand.js";
 export { CheckboxField, FieldCell, NumberField, Segmented } from "./fields.js";
+export { prefersReducedMotion, useMediaQuery } from "./media.js";
 export {
   AnswerChip,
   ChoiceMark,

@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 
 import { useT } from "../i18n";
@@ -171,6 +171,66 @@ export function menuPosition(
 }
 
 /**
+ * The placement of a floating panel (the menu, a popover, the notification
+ * inbox) as its style. Not `transform`: `.menu-panel` animates that property
+ * on open and owns it entirely while it plays, so the alignment offset
+ * travels as a custom property the keyframes compose in (style.css).
+ */
+export function panelStyle(pos: MenuPlacement, align: "start" | "end"): CSSProperties {
+  return {
+    top: pos.top,
+    bottom: pos.bottom,
+    left: pos.left,
+    "--menu-x": align === "end" ? "-100%" : "0",
+    transformOrigin: `${pos.up ? "bottom" : "top"} ${align === "end" ? "right" : "left"}`,
+  } as CSSProperties;
+}
+
+/**
+ * `menuPosition` anchors a panel on its trigger and knows nothing of the
+ * panel's own width, so a right-aligned trigger near the left edge (the
+ * overflow button of a page header on a phone) put half the panel off
+ * screen. Measured once it is laid out and nudged back inside, `margin` px
+ * from either edge (8 by default). A layout effect: doing it after paint
+ * would show the panel in the wrong place for one frame.
+ */
+export function usePanelClamp(
+  panel: RefObject<HTMLElement | null>,
+  open: boolean,
+  pos: MenuPlacement | null,
+  align: "start" | "end",
+  margin = 8,
+): void {
+  useLayoutEffect(() => {
+    const el = panel.current;
+    if (!open || !el || !pos) return;
+    const clamp = () => {
+      el.style.marginLeft = "";
+      // Computed from `pos` and the panel's width, never from its rectangle:
+      // the opening animation owns `transform` for 160 ms and drops the
+      // `translateX(-100%)` of a right-aligned panel while it plays, so a
+      // measured rectangle is wrong exactly when this effect runs.
+      const width = el.offsetWidth;
+      const left = align === "end" ? pos.left - width : pos.left;
+      const shift =
+        left < margin
+          ? margin - left
+          : left + width > window.innerWidth - margin
+            ? window.innerWidth - margin - (left + width)
+            : 0;
+      if (shift) el.style.marginLeft = `${shift}px`;
+    };
+    clamp();
+    // The panel's width can land after the first measurement (a font, an icon
+    // or, in dev, a class the stylesheet has not generated yet), and a stale
+    // measurement is worse than none: re-clamp whenever it changes.
+    const observer = new ResizeObserver(clamp);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [panel, open, pos, align, margin]);
+}
+
+/**
  * Overflow menu for tertiary actions. Positioned in a portal from the
  * trigger's rectangle (so it escapes overflow-hidden cards and tables) and
  * closes on outside click, Escape, page scroll or selection. A scroll inside
@@ -235,7 +295,8 @@ export function Menu({
     const onScroll = (e: Event) => {
       // A scroll inside the panel is the user reading a long menu, and one in
       // the first MENU_SCROLL_GRACE ms is the opening click's own scroll.
-      if (panel.current?.contains(e.target as Node)) return;
+      // `window` is not a Node, and `contains` throws on one.
+      if (e.target instanceof Node && panel.current?.contains(e.target)) return;
       if (Date.now() - openedAt.current < MENU_SCROLL_GRACE) return;
       close(false);
     };
@@ -255,43 +316,7 @@ export function Menu({
     if (open && active >= 0) itemRefs.current[active]?.focus();
   }, [open, active]);
 
-  /*
-   * `menuPosition` anchors the panel on the trigger and knows nothing of the
-   * panel's own width, so a right-aligned trigger near the left edge (the
-   * overflow button of a page header on a phone) put half the panel off
-   * screen. Measure once it is laid out and nudge it back inside. A layout
-   * effect: doing it after paint would show the panel in the wrong place for
-   * one frame.
-   */
-  useLayoutEffect(() => {
-    const el = panel.current;
-    if (!open || !el) return;
-    const margin = 8;
-    const clamp = () => {
-      if (!pos) return;
-      el.style.marginLeft = "";
-      // Computed from `pos` and the panel's width, never from its rectangle:
-      // the opening animation owns `transform` for 160 ms and drops the
-      // `translateX(-100%)` of a right-aligned panel while it plays, so a
-      // measured rectangle is wrong exactly when this effect runs.
-      const width = el.offsetWidth;
-      const left = align === "end" ? pos.left - width : pos.left;
-      const shift =
-        left < margin
-          ? margin - left
-          : left + width > window.innerWidth - margin
-            ? window.innerWidth - margin - (left + width)
-            : 0;
-      if (shift) el.style.marginLeft = `${shift}px`;
-    };
-    clamp();
-    // The panel's width can land after the first measurement (a font, an icon
-    // or, in dev, a class the stylesheet has not generated yet), and a stale
-    // measurement is worse than none: re-clamp whenever it changes.
-    const observer = new ResizeObserver(clamp);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [open, pos, align]);
+  usePanelClamp(panel, open, pos, align);
 
   const openAt = (index: number) => {
     if (!anchor.current) return;
@@ -380,20 +405,7 @@ export function Menu({
                 // edge, which squeezed a description into one word per line.
                 items.some((it) => it.description) && "w-80 max-w-[calc(100vw-2rem)]",
               )}
-              style={
-                {
-                  top: pos.top,
-                  bottom: pos.bottom,
-                  left: pos.left,
-                  maxHeight: pos.maxHeight,
-                  // Not `transform`: `.menu-panel` animates that property on
-                  // open, and an animation owns it entirely while it plays.
-                  // The alignment offset travels as a custom property the
-                  // keyframes compose in (style.css).
-                  "--menu-x": align === "end" ? "-100%" : "0",
-                  transformOrigin: `${pos.up ? "bottom" : "top"} ${align === "end" ? "right" : "left"}`,
-                } as React.CSSProperties
-              }
+              style={{ ...panelStyle(pos, align), maxHeight: pos.maxHeight }}
               onClick={(e) => e.stopPropagation()}
             >
               {items.map((it, i) => {

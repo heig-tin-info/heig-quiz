@@ -190,7 +190,6 @@ function ExpectedRow({
     <tr
       data-row={EXPECTED}
       aria-current={current ? "true" : undefined}
-      onClick={() => onOpen(EXPECTED)}
       {...pressable(() => onOpen(EXPECTED), "row")}
       className="group cursor-pointer"
     >
@@ -277,7 +276,6 @@ function AnswerRow({
     <tr
       data-row={key}
       aria-current={current ? "true" : undefined}
-      onClick={() => onOpen(key)}
       {...pressable(() => onOpen(key), "row")}
       className="group cursor-pointer"
     >

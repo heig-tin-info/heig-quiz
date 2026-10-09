@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { usePublicConfig } from "./api";
 import { useT } from "./i18n";
-import { Button, Card, GateFrame } from "./ui";
+import { Button, GateCard } from "./ui";
 
 /**
  * The sign-in of a page reached from outside the app with no session — a
@@ -33,32 +33,23 @@ export function SignInGate({
   const config = usePublicConfig();
   const back = encodeURIComponent(next);
   return (
-    <GateFrame>
-      <Card className="px-6 py-8 text-center">
-        {header}
-        <h1 className="mt-3 text-lg font-bold tracking-tight">{title}</h1>
-        <p className="mt-2 text-sm leading-relaxed text-fg-muted">{body}</p>
-        <Button
-          size="lg"
-          className="mt-6 w-full"
-          onClick={() => window.location.assign(`/app/auth/login?next=${back}`)}
-        >
-          {action}
-        </Button>
-        {config.data?.devLogin ? (
-          <>
-            <Button
-              variant="secondary"
-              size="lg"
-              className="mt-3 w-full"
-              onClick={() => window.location.assign(`/app/auth/dev?next=${back}`)}
-            >
-              {t("landing.devSignin")}
-            </Button>
-            <p className="mt-2 text-xs text-fg-faint">{t("landing.devHint")}</p>
-          </>
-        ) : null}
-      </Card>
-    </GateFrame>
+    <GateCard icon={header} title={title} body={body}>
+      <Button size="lg" className="mt-6 w-full" onClick={() => window.location.assign(`/app/auth/login?next=${back}`)}>
+        {action}
+      </Button>
+      {config.data?.devLogin ? (
+        <>
+          <Button
+            variant="secondary"
+            size="lg"
+            className="mt-3 w-full"
+            onClick={() => window.location.assign(`/app/auth/dev?next=${back}`)}
+          >
+            {t("landing.devSignin")}
+          </Button>
+          <p className="mt-2 text-xs text-fg-faint">{t("landing.devHint")}</p>
+        </>
+      ) : null}
+    </GateCard>
   );
 }

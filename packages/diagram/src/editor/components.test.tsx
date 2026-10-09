@@ -79,14 +79,14 @@ describe("DiagramEditor", () => {
     render(<Host kind="graph" initial={initial} withText />);
     fireEvent.keyDown(screen.getByRole("group", { name: "Diagram" }), { key: "a", ctrlKey: true });
     expect(fireEvent.keyDown(screen.getByRole("textbox", { name: "Name" }), { key: "Escape" })).toBe(false);
-    fireEvent.click(screen.getByRole("tab", { name: "Text" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Text" }));
     expect(fireEvent.keyDown(screen.getByRole("textbox", { name: "Text" }), { key: "Escape" })).toBe(false);
   });
 
   it("applies a text that reads, names the line of one that does not", () => {
     const onChange = vi.fn();
     render(<Host kind="graph" initial={EXAMPLES.graph} onChange={onChange} withText />);
-    fireEvent.click(screen.getByRole("tab", { name: "Text" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Text" }));
     const text = screen.getByRole("textbox", { name: "Text" });
     fireEvent.focus(text);
     fireEvent.change(text, { target: { value: "graph {\n  A -- B\n  ???\n}" } });

@@ -22,31 +22,16 @@
  *
  * Every word arrives translated (`strings`), like every primitive here.
  */
-import { useState, useSyncExternalStore, type ComponentType, type ReactNode } from "react";
+import { useState, type ComponentType, type ReactNode } from "react";
 
 import type { ExpandProps } from "@quiz/core/client";
 
 import { StrokeIcon } from "./icon.js";
+import { useMediaQuery } from "./media.js";
 import { buttonClass, caption, label as labelClass } from "./styles.js";
 
 /** Below this width a canvas with a preview draws in the layer only (docs/spec/04 §4.11, §4.14). */
 const WIDE_QUERY = "(min-width: 1024px)";
-
-function subscribe(onChange: () => void): () => void {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return () => {};
-  const query = window.matchMedia(WIDE_QUERY);
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-}
-
-/** Whether the window is wide enough to draw inline; a host without `matchMedia` (a test) is wide. */
-function useWide(): boolean {
-  return useSyncExternalStore(
-    subscribe,
-    () => typeof window.matchMedia !== "function" || window.matchMedia(WIDE_QUERY).matches,
-    () => true,
-  );
-}
 
 /** Four corners pushed outwards: the pictogram of "expand". */
 function ExpandIcon({ className }: { className?: string | undefined }): ReactNode {
@@ -104,7 +89,8 @@ export function ExpandableCanvas({
   preview,
   locked = false,
 }: ExpandableCanvasProps): ReactNode {
-  const wide = useWide();
+  // Wide enough to draw inline? A host without `matchMedia` (a test) is wide.
+  const wide = useMediaQuery(WIDE_QUERY, true);
   const [expanded, setExpanded] = useState(false);
   const previewing = Expand !== undefined && preview !== undefined && !wide;
 

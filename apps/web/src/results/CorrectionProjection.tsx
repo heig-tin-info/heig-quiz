@@ -1,13 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Eye, EyeOff, ListChecks, Maximize2, Minimize2, Moon, Sun } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { ByQuestion, EvaluationDetail } from "@quiz/contracts";
 import { isEvaluationOpen } from "@quiz/domain";
+import { prefersReducedMotion } from "@quiz/ui";
 
-import { api } from "../api";
 import { useT } from "../i18n";
-import { evaluationKey, resultsByQuestionKey } from "../queryKeys";
 import type { Route } from "../router";
 import { useProjectionTheme } from "../theme";
 import {
@@ -23,6 +20,7 @@ import {
 } from "../ui";
 import { isNotOver } from "./ByQuestionView";
 import { CorrectionQuestion } from "./CorrectionQuestion";
+import { useEvaluation, useResultsByQuestion } from "../evaluation/api";
 
 /**
  * The correction of a graded evaluation, projected in class (F-RES-03,
@@ -60,16 +58,9 @@ export function CorrectionProjection({
   const [explained, setExplained] = useState(false);
   const [current, setCurrent] = useState(0);
 
-  const questions = useQuery<ByQuestion[]>({
-    queryKey: resultsByQuestionKey(evaluationId),
-    queryFn: () => api(`/app/api/evaluations/${evaluationId}/results/by-question`),
-  });
+  const questions = useResultsByQuestion(evaluationId);
   // The title, and nothing else: the screen works without it.
-  const evaluation = useQuery<EvaluationDetail>({
-    queryKey: evaluationKey(evaluationId),
-    queryFn: () => api(`/app/api/evaluations/${evaluationId}`),
-    retry: false,
-  });
+  const evaluation = useEvaluation(evaluationId, { retry: false });
 
   const list = questions.data ?? [];
   const scroller = useRef<HTMLElement>(null);
@@ -79,8 +70,10 @@ export function CorrectionProjection({
     (index: number) => {
       const target = Math.max(0, Math.min(list.length - 1, index));
       setCurrent(target);
-      const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-      sections.current[target]?.scrollIntoView?.({ behavior: reduce ? "auto" : "smooth", block: "start" });
+      sections.current[target]?.scrollIntoView?.({
+        behavior: prefersReducedMotion() ? "auto" : "smooth",
+        block: "start",
+      });
     },
     [list.length],
   );

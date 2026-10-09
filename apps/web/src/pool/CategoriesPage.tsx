@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, ListTree, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import type { CategoryCountNode, PoolCategories, PoolDetail } from "@quiz/contracts";
+import type { CategoryCountNode, PoolCategories } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -33,6 +33,7 @@ import {
 } from "./categories";
 import { MoveCategoryDialog, NewCategoryDialog } from "./CategoryDialogs";
 import { CategoryRow, hoverDrop, type RowProps } from "./CategoryRow";
+import { usePool } from "./api";
 
 /**
  * The categories of ONE pool, as a page of its own (`/pools/:id/categories`):
@@ -168,10 +169,7 @@ export function CategoriesPage({ id, navigate }: { id: string; navigate: (r: Rou
   const [dialog, setDialog] = useState<Dialog>(null);
 
   const poolsRoot = useRootCrumb("pools");
-  const pool = useQuery<PoolDetail>({
-    queryKey: poolKey(id),
-    queryFn: () => api(`/app/api/pools/${id}`),
-  });
+  const pool = usePool(id);
   const data = useQuery<PoolCategories>({
     queryKey: poolCategoriesKey(id),
     queryFn: () => api(`/app/api/pools/${id}/categories`),

@@ -19,7 +19,7 @@ import { api } from "./api";
 import { useT } from "./i18n";
 import { meKey } from "./queryKeys";
 import { ModeBanner } from "./Shell";
-import { Button, Card, FormError, isoDateParts, SectionHeading, SettingRow, useNow } from "./ui";
+import { Button, Card, FormError, formatRemaining, isoDateParts, SectionHeading, SettingRow, useNow } from "./ui";
 
 const PATH = "/app/api/me/super-powers";
 /** The last minutes, when the banner turns to a countdown by the second. */
@@ -34,12 +34,6 @@ function useSuperPowersSwitch(on: boolean) {
     mutationFn: () => api<SuperPowersState>(PATH, { method: on ? "POST" : "DELETE" }),
     onSuccess: () => everything(qc),
   });
-}
-
-/** `m:ss` of a remaining time. */
-function clock(ms: number): string {
-  const seconds = Math.ceil(ms / 1000);
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
 /**
@@ -71,7 +65,7 @@ function TimeLeft({ until }: { until: string }) {
   return (
     <span role="timer" className="flex shrink-0 items-center gap-1.5 font-bold tabular-nums">
       <AlertTriangle aria-hidden className="size-3.5" />
-      {t("superPowers.endsIn", { time: clock(left) })}
+      {t("superPowers.endsIn", { time: formatRemaining(left, t) })}
     </span>
   );
 }

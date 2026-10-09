@@ -27,6 +27,7 @@ import {
   type JournalRevisionContent,
   type JournalRevisionList,
   type JournalStaff,
+  type JournalStudent,
 } from "@quiz/contracts";
 import { journalAssetUrl } from "@quiz/docrender/assets";
 
@@ -38,13 +39,26 @@ import { JOURNAL_ERRORS } from "./words";
 /** `/app/api/classrooms/:id/journal`, the base of every journal route. */
 export const journalBase = (classroomId: string) => `/app/api/classrooms/${classroomId}/journal`;
 
-/** `GET /classrooms/:id/journal` as the staff read it: whether there is a journal, and which. */
-export function useStaffJournal(classroomId: string) {
-  return useQuery<JournalStaff>({
-    queryKey: journalKey(classroomId, "staff"),
-    queryFn: () => api(journalBase(classroomId)),
+/** The payload a journal read asks for: the staff's, or the student's (`?view=student`, which can only narrow, ADR-018). */
+export type JournalView = "staff" | "student";
+interface JournalOf {
+  staff: JournalStaff;
+  student: JournalStudent;
+}
+
+/** The query string of a journal read in `view`: the student payload is asked for, the staff one is the default. */
+export const journalQuery = (view: JournalView): string => (view === "student" ? "?view=student" : "");
+
+/** `GET /classrooms/:id/journal` in the payload `view` names: whether there is a journal, which, and its navigation. */
+export function useClassroomJournal<V extends JournalView>(classroomId: string, view: V) {
+  return useQuery<JournalOf[V]>({
+    queryKey: journalKey(classroomId, view),
+    queryFn: () => api(`${journalBase(classroomId)}${journalQuery(view)}`),
   });
 }
+
+/** `GET /classrooms/:id/journal` as the staff read it: whether there is a journal, and which. */
+export const useStaffJournal = (classroomId: string) => useClassroomJournal(classroomId, "staff");
 
 /** The code of a refused journal write, or null for any other failure. */
 export function journalRefusal(error: unknown): JournalErrorCode | null {

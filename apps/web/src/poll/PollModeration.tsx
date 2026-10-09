@@ -26,8 +26,8 @@ import {
   cx,
   EmptyState,
   Field,
+  FormDialog,
   IconButton,
-  Modal,
   PageError,
   PageHeader,
   Segmented,
@@ -330,26 +330,16 @@ export function PollModeration({ id }: { id: string }) {
       )}
 
       {renaming ? (
-        <Modal
+        <FormDialog
           title={t("poll.ideas.rename")}
           onClose={() => setRenaming(null)}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setRenaming(null)}>
-                {t("common.cancel")}
-              </Button>
-              <Button
-                loading={act.isPending}
-                onClick={() =>
-                  act.mutate(
-                    { action: "rename", key: renaming.key, label: renaming.label.trim() || null },
-                    { onSuccess: () => setRenaming(null) },
-                  )
-                }
-              >
-                {t("common.save")}
-              </Button>
-            </>
+          submitLabel={t("common.save")}
+          submitting={act.isPending}
+          onSubmit={() =>
+            act.mutate(
+              { action: "rename", key: renaming.key, label: renaming.label.trim() || null },
+              { onSuccess: () => setRenaming(null) },
+            )
           }
         >
           <Field
@@ -361,7 +351,7 @@ export function PollModeration({ id }: { id: string }) {
             value={renaming.label}
             onChange={(e) => setRenaming({ ...renaming, label: e.target.value })}
           />
-        </Modal>
+        </FormDialog>
       ) : null}
     </div>
   );

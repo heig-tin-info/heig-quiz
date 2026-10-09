@@ -58,7 +58,7 @@ export function openerOf(row: ActivitySummary, navigate: (r: Route) => void): ()
 /** The click and the keyboard of a row that opens its activity ({@link openerOf}). */
 export function openProps(row: ActivitySummary, navigate: (r: Route) => void, role?: string) {
   const open = openerOf(row, navigate);
-  return { onClick: open, ...pressable(open, role) };
+  return pressable(open, role);
 }
 
 export interface ViewProps {

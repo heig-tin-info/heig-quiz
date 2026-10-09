@@ -1,21 +1,16 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Archive, Copy, DoorClosed, DoorOpen, Plus, Ruler, Shuffle, Trash2, TriangleAlert, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 
-import {
-  GroupMaxSize,
-  type ClassroomDetail,
-  type GroupRandomForm,
-  type GroupSetDetail,
-} from "@quiz/contracts";
+import { GroupMaxSize, type GroupRandomForm, type GroupSetDetail } from "@quiz/contracts";
 
-import { api, ApiError } from "../api";
+import { api, isNotFound } from "../api";
 import { AppLink } from "../AppLink";
 import { useConfirm } from "../confirm";
 import { fromLocalInput, toLocalInput } from "../evaluation/timing";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { classroomGroupSetsKey, classroomKey, groupSetKey } from "../queryKeys";
+import { classroomGroupSetsKey, groupSetKey } from "../queryKeys";
 import { useSearchParam, type Navigate } from "../router";
 import { Trail, useClassroomCrumbs } from "../Trail";
 import {
@@ -92,9 +87,9 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
   const confirm = useConfirm();
   // The project this page was opened from (W9), `?fromProject=<id>`.
   const [project] = useSearchParam("fromProject", "");
-  const [randomOpen, setRandomOpen] = useState(false);
-  const [maxOpen, setMaxOpen] = useState(false);
-  const [opening, setOpening] = useState(false);
+  /** The one dialog open over the board: the random form, the opening, the maximum size. */
+  const [layer, setLayer] = useState<"random" | "open" | "maxSize" | null>(null);
+  const closeLayer = () => setLayer(null);
   /**
    * A refusal over projects — the deletion of a set they name (`set_in_use`),
    * a write reaching a group that has a repository (`has_repo`) — said
@@ -104,10 +99,6 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
 
   const set = useGroupSet(id);
   const crumbs = useClassroomCrumbs(classroomId);
-  const room = useQuery<ClassroomDetail>({
-    queryKey: classroomKey(classroomId),
-    queryFn: () => api(`/app/api/classrooms/${classroomId}`),
-  });
   const { write, confirm: confirmWrite, cancel: cancelWrite } = useGroupSetWrites(id);
   /** A move waiting for the confirmation of its GitHub consequences (ADR-070 §6), the queue held meanwhile. */
   const [asked, setAsked] = useState<({ move: Move } & Asked) | null>(null);
@@ -206,7 +197,7 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
 
   if (set.isLoading) return <PageSkeleton />;
   if (set.isError || !set.data) {
-    if (set.error instanceof ApiError && set.error.status === 404) {
+    if (isNotFound(set.error)) {
       return (
         <QueryError title={t("groups.set.notFound")} query={set} />
       );
@@ -262,9 +253,9 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
     write(setWrite.patch({ openUntil: null })).then(() => toast(t("groups.open.closed"), "success"), failed);
 
   const menuItems: MenuItem[] = [
-    { label: t(detail.set.open ? "groups.open.change" : "groups.open.menu"), icon: DoorOpen, onSelect: () => setOpening(true) },
+    { label: t(detail.set.open ? "groups.open.change" : "groups.open.menu"), icon: DoorOpen, onSelect: () => setLayer("open") },
     ...(detail.set.open ? [{ label: t("groups.open.close"), icon: DoorClosed, onSelect: () => void closeToStudents() }] : []),
-    { label: t("groups.maxSize.menu"), icon: Ruler, onSelect: () => setMaxOpen(true) },
+    { label: t("groups.maxSize.menu"), icon: Ruler, onSelect: () => setLayer("maxSize") },
     { label: t("groups.duplicate"), icon: Copy, onSelect: () => duplicate.mutate() },
     { label: t("groups.delete"), icon: Trash2, danger: true, separator: true, onSelect: () => void onDeleteSet() },
   ];
@@ -325,7 +316,7 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
                 <Plus /> {t("groups.newGroup")}
               </Button>
               {unplaced > 0 ? (
-                <Button onClick={() => setRandomOpen(true)}>
+                <Button onClick={() => setLayer("random")}>
                   <Shuffle /> {t("groups.random")}
                 </Button>
               ) : null}
@@ -403,26 +394,26 @@ export function GroupSetPage({ classroomId, id, navigate }: { classroomId: strin
           onCancel={onCancelConfirm}
         />
       ) : null}
-      {randomOpen ? (
+      {layer === "random" ? (
         <RandomFormDialog
           detail={detail}
           form={(body: GroupRandomForm) => write(setWrite.random(body))}
-          onClose={() => setRandomOpen(false)}
+          onClose={closeLayer}
         />
       ) : null}
-      {opening ? (
+      {layer === "open" ? (
         <OpenDialog
           openUntil={detail.set.open ? detail.set.openUntil : null}
           maxSize={detail.set.maxSize}
           save={(body) => write(setWrite.patch(body))}
-          onClose={() => setOpening(false)}
+          onClose={closeLayer}
         />
       ) : null}
-      {maxOpen ? (
+      {layer === "maxSize" ? (
         <MaxSizeDialog
           value={detail.set.maxSize}
           save={(maxSize) => write(setWrite.patch({ maxSize }))}
-          onClose={() => setMaxOpen(false)}
+          onClose={closeLayer}
         />
       ) : null}
     </div>

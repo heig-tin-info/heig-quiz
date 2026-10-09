@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState, useSyncExternalStore } from "react";
 
 import type { CanvasShortcut, CanvasShortcutsListener } from "@quiz/core/client";
 
-import { Kbd, modKey } from "./ui";
+import { createSignal, Kbd, modKey } from "./ui";
 
 /**
  * The keyboard shortcuts that are LIVE right now, for the strip the sidebar
@@ -34,7 +34,7 @@ let nextId = 0;
 /** The frame's own shortcuts, always ahead of the page's (see `useGlobalShortcuts`). */
 const globals = new Map<number, Shortcut[]>();
 const registry = new Map<number, Shortcut[]>();
-const listeners = new Set<() => void>();
+const signal = createSignal();
 let snapshot: Shortcut[] = [];
 
 function emit(): void {
@@ -46,14 +46,7 @@ function emit(): void {
   const byKeys = new Map<string, Shortcut>();
   for (const s of [...globals.values(), ...registry.values()].flat()) byKeys.set(combinationsOf(s).join(" "), s);
   snapshot = [...byKeys.values()];
-  for (const l of listeners) l();
-}
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
+  signal.emit();
 }
 
 /** Registers `shortcuts` in `into` while the component is mounted and `enabled`. */
@@ -95,7 +88,7 @@ export function useGlobalShortcuts(shortcuts: Shortcut[], enabled = true): void 
 
 /** The live union, for the sidebar strip. Re-renders on every change. */
 export function useActiveShortcuts(): Shortcut[] {
-  return useSyncExternalStore(subscribe, () => snapshot, () => snapshot);
+  return useSyncExternalStore(signal.subscribe, () => snapshot, () => snapshot);
 }
 
 /**

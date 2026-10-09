@@ -1,10 +1,8 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { EvaluationDetail, TemplateDetail } from "@quiz/contracts";
 import type { QUESTION_TABS } from "@quiz/domain";
 
-import { api } from "../api";
 import { editorSlot, useAssistEditor } from "../assist/editor";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
@@ -21,7 +19,8 @@ import { useEditorShortcuts } from "./useEditorShortcuts";
 import { useQuestionActions } from "./useQuestionActions";
 import { useQuestionDraft } from "./useQuestionDraft";
 import { VersionHistory } from "./VersionHistory";
-import { evaluationKey, gradingKey, poolKey, questionKey, templateKey } from "../queryKeys";
+import { evaluationKey, gradingKey, poolKey, questionKey } from "../queryKeys";
+import { useEvaluation, useTemplate } from "../evaluation/api";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -101,18 +100,8 @@ function useOrigin(): Origin | null {
 function useQuestionCrumbs(origin: Origin | null, poolId: string | undefined, poolName: string | undefined): Crumb[] {
   const t = useT();
   const pools = useRootCrumb("pools");
-  const evaluation = useQuery<EvaluationDetail>({
-    queryKey: evaluationKey(origin?.evaluationId ?? ""),
-    enabled: origin?.evaluationId != null,
-    queryFn: () => api(`/app/api/evaluations/${origin!.evaluationId}`),
-    retry: false,
-  });
-  const template = useQuery<TemplateDetail>({
-    queryKey: templateKey(origin?.id ?? ""),
-    enabled: origin?.kind === "template",
-    queryFn: () => api(`/app/api/templates/${origin!.id}`),
-    retry: false,
-  });
+  const evaluation = useEvaluation(origin?.evaluationId ?? null, { retry: false });
+  const template = useTemplate(origin?.kind === "template" ? origin.id : null, { retry: false });
   const evaluationCrumbs = useEvaluationCrumbs(
     evaluation.data?.evaluation.classroomId,
     origin?.id ?? "",

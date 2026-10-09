@@ -3,11 +3,11 @@ import { Bot, Check, KeyRound, TriangleAlert, X } from "lucide-react";
 
 import type { Me, OAuthDecisionResult, OAuthRequestView } from "@quiz/contracts";
 
-import { api, ApiError } from "../api";
+import { api, isNotFound } from "../api";
 import { useT } from "../i18n";
 import { oauthRequestKey } from "../queryKeys";
 import { SignInGate } from "../SignInGate";
-import { Alert, Button, Card, FormError, GateFrame, Skeleton } from "../ui";
+import { Alert, Button, Card, FormError, GateCard, GateFrame, GateIcon, GateSkeleton } from "../ui";
 
 /**
  * The OAuth consent page (ADR-023): claude.ai, ChatGPT or another MCP client
@@ -24,27 +24,16 @@ export function OAuthConsent({ id, me }: { id: string; me: Me | null }) {
     const reason = new URLSearchParams(window.location.search).get("reason") ?? "invalid_request";
     const known = ["invalid_client", "invalid_redirect_uri", "invalid_client_metadata"].includes(reason);
     return (
-      <GateFrame>
-        <Card className="px-6 py-8 text-center">
-          <TriangleAlert className="mx-auto size-8 text-warning" />
-          <h1 className="mt-3 text-lg font-bold tracking-tight">{t("oauth.invalid.title")}</h1>
-          <p className="mt-2 text-sm text-fg-muted">
-            {known ? t(`oauth.invalid.${reason}` as Parameters<typeof t>[0]) : t("oauth.invalid.invalid_request")}
-          </p>
-        </Card>
-      </GateFrame>
+      <GateCard
+        icon={<TriangleAlert className="mx-auto size-8 text-warning" />}
+        title={t("oauth.invalid.title")}
+        body={known ? t(`oauth.invalid.${reason}` as Parameters<typeof t>[0]) : t("oauth.invalid.invalid_request")}
+      />
     );
   }
   if (!me) return <SignInFirst id={id} />;
   if (me.role === "student") {
-    return (
-      <GateFrame>
-        <Card className="px-6 py-8 text-center">
-          <h1 className="text-lg font-bold tracking-tight">{t("oauth.teachersOnly.title")}</h1>
-          <p className="mt-2 text-sm text-fg-muted">{t("oauth.teachersOnly.body")}</p>
-        </Card>
-      </GateFrame>
-    );
+    return <GateCard title={t("oauth.teachersOnly.title")} body={t("oauth.teachersOnly.body")} />;
   }
   return <Consent id={id} me={me} />;
 }
@@ -81,29 +70,15 @@ function Consent({ id, me }: { id: string; me: Me }) {
     onSuccess: (result) => window.location.assign(result.redirectTo),
   });
 
-  if (request.isPending) {
-    return (
-      <GateFrame>
-        <Card className="space-y-3 px-6 py-8">
-          <Skeleton className="mx-auto h-6 w-2/3" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-5/6" />
-        </Card>
-      </GateFrame>
-    );
-  }
+  if (request.isPending) return <GateSkeleton />;
   if (request.isError) {
-    const gone = request.error instanceof ApiError && request.error.status === 404;
+    const gone = isNotFound(request.error);
     return (
-      <GateFrame>
-        <Card className="px-6 py-8 text-center">
-          <TriangleAlert className="mx-auto size-8 text-warning" />
-          <h1 className="mt-3 text-lg font-bold tracking-tight">
-            {gone ? t("oauth.expired.title") : t("error.server")}
-          </h1>
-          {gone ? <p className="mt-2 text-sm text-fg-muted">{t("oauth.expired.body")}</p> : null}
-        </Card>
-      </GateFrame>
+      <GateCard
+        icon={<TriangleAlert className="mx-auto size-8 text-warning" />}
+        title={gone ? t("oauth.expired.title") : t("error.server")}
+        body={gone ? t("oauth.expired.body") : null}
+      />
     );
   }
 
@@ -113,9 +88,7 @@ function Consent({ id, me }: { id: string; me: Me }) {
     <GateFrame>
       <Card className="px-6 py-8">
         <div className="text-center">
-          <span className="inline-flex rounded-full bg-accent-soft p-3">
-            <KeyRound className="size-6 text-accent" />
-          </span>
+          <GateIcon icon={KeyRound} />
           <h1 className="mt-3 text-lg font-bold tracking-tight">
             {t("oauth.consent.title", { client: r.clientName })}
           </h1>

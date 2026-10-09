@@ -1,8 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
 
 import type { PoolSummary } from "@quiz/contracts";
 
-import { api } from "../api";
 import { useT } from "../i18n";
 import type { Route } from "../router";
 import { NavTree, navRowClass, useNavCycle, type NavCycle } from "../navTree";
@@ -10,7 +8,7 @@ import { cx } from "../ui";
 import { SidebarCategories } from "./CategoryTree";
 import { useMoveQuestions, useQuestionDrop, type QuestionDrag } from "./move";
 import { PoolIcon } from "./PoolIcon";
-import { poolsKey } from "../queryKeys";
+import { usePools } from "./api";
 
 /**
  * The "Question pools" section of the application sidebar, and the two
@@ -101,11 +99,7 @@ export function PoolNavTree({
   const currentPool = route.view === "pool" || route.view === "poolCategories" ? route.id : null;
   // The same key the pool screens and the palette use: react-query serves all
   // three from one request.
-  const pools = useQuery<PoolSummary[]>({
-    queryKey: poolsKey,
-    queryFn: () => api("/app/api/pools"),
-    enabled: state === "all",
-  });
+  const pools = usePools({ enabled: state === "all" });
 
   if (state === "active") {
     return currentPool ? (

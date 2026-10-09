@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
+import { prefersReducedMotion } from "@quiz/ui";
 
 /** The step a scene shows when the reader asked for no motion: its end state. */
 export const STILL = 1_000;
-
-const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /**
  * Whether the element is on screen. `once` keeps it true after the first
@@ -37,7 +36,7 @@ export function useInView<T extends Element>(once = false): [RefObject<T | null>
  * once: every scene draws its end state from it.
  */
 export function useStep(period: number, length: number, running: boolean): number {
-  const [still] = useState(reducedMotion);
+  const [still] = useState(prefersReducedMotion);
   const [step, setStep] = useState(0);
   useEffect(() => {
     if (still || !running) return;

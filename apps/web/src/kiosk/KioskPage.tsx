@@ -8,7 +8,7 @@ import { Logo } from "../Header";
 import { useT } from "../i18n";
 import { purgeAllNotepads } from "../notepad/store";
 import { PollQr } from "../poll/PollQr";
-import { Spinner, useNow } from "../ui";
+import { formatRemaining, Spinner, useNow } from "../ui";
 import { useKioskStation } from "./useKioskStation";
 
 /**
@@ -53,11 +53,9 @@ export function KioskPage() {
 function Countdown({ at }: { at: number }) {
   const t = useT();
   const now = useNow(1_000);
-  const left = Math.max(0, Math.ceil((at - now) / 1000));
-  const time = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
   return (
     <p className="text-[clamp(16px,1.4vw,20px)] text-fg-muted tabular-nums">
-      {t("kiosk.expires", { time })}
+      {t("kiosk.expires", { time: formatRemaining(at - now, t) })}
     </p>
   );
 }

@@ -1,18 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import type {
-  EvaluationDetail,
-  GradingQueue,
-  GradingQueueItem,
-  GradingSteps,
-} from "@quiz/contracts";
+import type { GradingQueue, GradingQueueItem, GradingSteps } from "@quiz/contracts";
 import { negativeMarkingOf } from "@quiz/contracts";
 import { negativeMarkingOn, overridePointsRange, scoresNegatively } from "@quiz/domain";
 
 import { api } from "../api";
-import { evaluationKey, gradingQueueKey, gradingStepsKey } from "../queryKeys";
+import { gradingQueueKey, gradingStepsKey } from "../queryKeys";
 import { useGradingProgress } from "./progress";
+import { useEvaluation } from "../evaluation/api";
 
 /** A question of the evaluation as the grading screen needs it. */
 export interface GradingItem extends GradingQueueItem {
@@ -55,10 +51,7 @@ export interface StepState {
  * unmasking: anonymised, the server sends no label at all.
  */
 export function useGradingData(evaluationId: string, itemId: string | null, named: boolean) {
-  const evaluation = useQuery<EvaluationDetail>({
-    queryKey: evaluationKey(evaluationId),
-    queryFn: () => api(`/app/api/evaluations/${evaluationId}`),
-  });
+  const evaluation = useEvaluation(evaluationId);
 
   const items = useMemo<GradingItem[]>(() => {
     const detail = evaluation.data;

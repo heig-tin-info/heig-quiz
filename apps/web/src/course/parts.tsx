@@ -2,14 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Archive, EyeOff, School } from "lucide-react";
 import { useState } from "react";
 
-import type { CourseCondition, CourseDetail, CourseSummary } from "@quiz/contracts";
+import type { ClassroomDetail, CourseCondition, CourseDetail, CourseSummary } from "@quiz/contracts";
 import { courseRoleAllows } from "@quiz/domain";
 
-import { api } from "../api";
+import { api, type ReadOptions } from "../api";
 import { useT } from "../i18n";
 import type { Route } from "../router";
 import { Badge, cx, ToggleChip } from "../ui";
-import { courseConditionsKey, courseKey, coursesKey } from "../queryKeys";
+import { classroomKey, courseConditionsKey, courseKey, coursesKey } from "../queryKeys";
 
 /**
  * The pieces of a course that its two readings share: the card on the
@@ -24,10 +24,25 @@ import { courseConditionsKey, courseKey, coursesKey } from "../queryKeys";
  * with its staff, its classrooms and whether they hid it. The key and the URL
  * in one place, for the pages that read the list.
  */
-export function useCourses() {
+export function useCourses(options: ReadOptions = {}) {
   return useQuery<CourseSummary[]>({
     queryKey: coursesKey,
     queryFn: () => api("/app/api/courses"),
+    ...options,
+  });
+}
+
+/**
+ * A classroom as its staff read it (`GET /classrooms/:id`): its course,
+ * roster and settings. `null` while the id is not known yet: the query waits.
+ * The student's reading is `studentClassroomKey`'s, never this one.
+ */
+export function useClassroom(id: string | null, options: ReadOptions = {}) {
+  return useQuery<ClassroomDetail>({
+    queryKey: classroomKey(id),
+    queryFn: () => api(`/app/api/classrooms/${id}`),
+    ...options,
+    enabled: id !== null && (options.enabled ?? true),
   });
 }
 

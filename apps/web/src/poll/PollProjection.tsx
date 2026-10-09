@@ -4,6 +4,7 @@ import { Check } from "lucide-react";
 
 import type { PollRevealBody, PollTeacherView, WatchSubject } from "@quiz/contracts";
 
+import { endPollConfirmation } from "../activities/actions";
 import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
@@ -245,15 +246,7 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
 
   const endPoll = useCallback(() => {
     void (async () => {
-      if (
-        await confirm({
-          title: t("poll.endConfirm"),
-          confirmLabel: t("poll.end"),
-          danger: true,
-        })
-      ) {
-        act.mutate({ path: "end" });
-      }
+      if (await confirm(endPollConfirmation(t))) act.mutate({ path: "end" });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [confirm, t]);

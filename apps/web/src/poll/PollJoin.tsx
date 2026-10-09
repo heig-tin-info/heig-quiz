@@ -37,7 +37,7 @@ import { Check, Send, SearchX, Sparkles, UserX } from "lucide-react";
 
 import type { Me, PollPublicView } from "@quiz/contracts";
 
-import { api, ApiError } from "../api";
+import { api, isNotFound, refusedWith } from "../api";
 import { useT } from "../i18n";
 import type { Route } from "../router";
 import { isAnswered, QuestionHost } from "../student/QuestionHost";
@@ -57,14 +57,6 @@ import { publicPollKey } from "../queryKeys";
 
 /** How often a running poll is re-read: the reveal must land while reading. */
 const POLL_MS = 3_000;
-
-const errorCode = (error: unknown): string | null =>
-  error instanceof ApiError
-    ? ((error.body as { error?: string })?.error ?? null)
-    : null;
-
-const statusOf = (error: unknown): number | null =>
-  error instanceof ApiError ? error.status : null;
 
 const same = (a: unknown, b: unknown) =>
   JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
@@ -119,7 +111,7 @@ export function PollJoin({
     // the finger. Re-read so the page says so instead of offering a retry
     // that would fail the same way.
     onError: (error) => {
-      if (errorCode(error) === "attempt_closed") void poll.refetch();
+      if (refusedWith(error, "attempt_closed")) void poll.refetch();
     },
   });
 
@@ -212,8 +204,8 @@ export function PollJoin({
   // --- No such poll, or a server that did not answer -----------------------
 
   if (poll.isError || view === null) {
-    if (statusOf(poll.error) === 404) return <NotFound navigate={navigate} />;
-    if (errorCode(poll.error) === "not_on_roster") return <NotOnRoster />;
+    if (isNotFound(poll.error)) return <NotFound navigate={navigate} />;
+    if (refusedWith(poll.error, "not_on_roster")) return <NotOnRoster />;
     return (
       <GateFrame>
         <h1 className="mb-4 text-lg font-bold tracking-tight">
@@ -253,7 +245,7 @@ export function PollJoin({
    */
   const instant = view.question.type === "brainstorm";
   const onChange = instant ? sendInOrder : setDraft;
-  const closedByServer = errorCode(send.error) === "attempt_closed";
+  const closedByServer = refusedWith(send.error, "attempt_closed");
 
   return (
     <div className="flex min-h-dvh flex-col bg-canvas">

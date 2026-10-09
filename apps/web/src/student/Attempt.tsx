@@ -23,7 +23,7 @@ import { Lock, UserX } from "lucide-react";
 
 import type { AttemptEntry } from "@quiz/contracts";
 
-import { ApiError, api, useMe } from "../api";
+import { ApiError, api, refusalCodeOf, useMe } from "../api";
 import { feedbackLink } from "../grading";
 import { useT } from "../i18n";
 import type { Navigate } from "../router";
@@ -34,9 +34,6 @@ import { Player } from "./Player";
 import { Ready } from "./Ready";
 import { attemptEntryKey } from "../queryKeys";
 import { toKiosk } from "../kiosk/navigation";
-
-const errorCode = (error: unknown): string | null =>
-  error instanceof ApiError ? ((error.body as { error?: string })?.error ?? null) : null;
 
 export function AttemptPage({
   evaluationId,
@@ -90,7 +87,7 @@ export function AttemptPage({
   // unacknowledged answers. An explicit access refusal still takes it away.
   const transient = !(entry.error instanceof ApiError) || entry.error.status >= 500;
   if (entry.isError && (!entry.data || !transient)) {
-    const code = errorCode(entry.error);
+    const code = refusalCodeOf(entry.error);
     /*
      * The refusals that are an ANSWER and not a failure: retrying changes
      * nothing, so each one gets a screen with the one way out. `not_found`

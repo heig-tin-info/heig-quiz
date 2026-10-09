@@ -1,4 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
 import {
   CalendarRange,
   ChevronDown,
@@ -15,10 +14,9 @@ import {
 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
-import type { CourseSummary, Me, PoolSummary } from "@quiz/contracts";
+import type { Me } from "@quiz/contracts";
 import { displayName } from "@quiz/domain";
 
-import { api } from "./api";
 import { CommandPalette } from "./CommandPalette";
 import { Logo, UserMenu, useSignOut, ViewModeToggle } from "./Header";
 import { helpTopics, useHelp } from "./help";
@@ -46,11 +44,12 @@ import {
   type TipSide,
 } from "./ui";
 import { usePaletteProjects } from "./paletteProjects";
-import { coursesKey, poolsKey } from "./queryKeys";
 import { BottomNav } from "./BottomNav";
 import { bottomNavShown, sidebarSlots } from "./bottomNavSlots";
 import { useDrillAvailability, type DrillAvailability } from "./drill/api";
 import { AvailableDot } from "./drill/AvailableDot";
+import { usePools } from "./pool/api";
+import { useCourses } from "./course/parts";
 
 /** The viewport widths (Tailwind's `lg`, `xl`) where the sidebar shows, folded, and unfolds. */
 const SIDEBAR_FOLDED = LG_PX;
@@ -217,11 +216,7 @@ function Nav({
   folded?: boolean;
 }) {
   const t = useT();
-  const courses = useQuery<CourseSummary[]>({
-    queryKey: coursesKey,
-    queryFn: () => api("/app/api/courses"),
-    enabled: teacherUi,
-  });
+  const courses = useCourses({ enabled: teacherUi });
   const go = (r: Route) => {
     navigate(r);
     onNavigate?.();
@@ -467,18 +462,10 @@ export function Shell({
 
   // The same query `Nav` runs, deduplicated by react-query on the shared key:
   // the palette lists the classrooms the sidebar lists, at no extra request.
-  const courses = useQuery<CourseSummary[]>({
-    queryKey: coursesKey,
-    queryFn: () => api("/app/api/courses"),
-    enabled: teacherUi,
-  });
+  const courses = useCourses({ enabled: teacherUi });
   // Same shape as the classroom list above: the palette lists the pools a
   // teacher can jump to, on the key the pool screens already use.
-  const pools = useQuery<PoolSummary[]>({
-    queryKey: poolsKey,
-    queryFn: () => api("/app/api/pools"),
-    enabled: teacherUi,
-  });
+  const pools = usePools({ enabled: teacherUi });
   const projects = usePaletteProjects(teacherUi, palette);
   const themeChoice = useThemeChoice();
   const resolvedTheme = useResolvedTheme();

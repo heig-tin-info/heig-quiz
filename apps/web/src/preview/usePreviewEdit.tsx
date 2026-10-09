@@ -20,17 +20,11 @@
  * page reads: refetched when the tab regains focus and on the refresh hints
  * a publish or an update sends, so coming back from the editor is enough.
  */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Pencil, RefreshCw, TriangleAlert } from "lucide-react";
 import { useCallback, useState, type ReactNode } from "react";
 
-import {
-  PreviewStartBody,
-  UpdateVersions,
-  type EvaluationDetail,
-  type EvaluationPreview,
-  type ItemRow,
-} from "@quiz/contracts";
+import { PreviewStartBody, UpdateVersions, type EvaluationPreview, type ItemRow } from "@quiz/contracts";
 import { itemListLock } from "@quiz/domain";
 
 import { api } from "../api";
@@ -41,6 +35,7 @@ import { evaluationKey } from "../queryKeys";
 import { routeToPath } from "../router";
 import type { PlayerSession } from "../student/Player";
 import { Alert, Button } from "../ui";
+import { useEvaluation } from "../evaluation/api";
 
 /** Every item of the evaluation, and only those, on the version the walk shows. */
 function walkMatches(items: readonly ItemRow[], versions: Record<string, number>): boolean {
@@ -68,10 +63,7 @@ export function usePreviewEdit({
   // The versions the walk shows, moved by "Use the new version" alone.
   const [versions, setVersions] = useState(preview.versions);
 
-  const detail = useQuery<EvaluationDetail>({
-    queryKey: evaluationKey(evaluationId),
-    queryFn: () => api(`/app/api/evaluations/${evaluationId}`),
-  });
+  const detail = useEvaluation(evaluationId);
 
   const { dispatch } = session;
   const seed = preview.seed;

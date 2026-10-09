@@ -1,10 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
 import { Globe, History, Library, Lock, Plus, Users } from "lucide-react";
 import { useState } from "react";
 
 import type { Me, PoolSummary } from "@quiz/contracts";
 
-import { api, useMe } from "../api";
+import { useMe } from "../api";
 import { useT, type TFunction } from "../i18n";
 import type { Route } from "../router";
 import {
@@ -29,7 +28,7 @@ import {
 } from "../ui";
 import { PoolFormModal } from "./PoolFormModal";
 import { PoolIcon } from "./PoolIcon";
-import { poolsKey } from "../queryKeys";
+import { usePools } from "./api";
 
 /**
  * The teacher's question pools.
@@ -166,7 +165,6 @@ function PoolRow({
   return (
     <tr
       {...pressable(() => navigate({ view: "pool", id: pool.id }), "row")}
-      onClick={() => navigate({ view: "pool", id: pool.id })}
       className={cx(T.row, T.rowHover, "cursor-pointer")}
     >
       <td className={T.td}>
@@ -243,10 +241,7 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
   // Everything the caller reaches: an admin's own shelf, or every pool of
   // the instance while their Super Powers are on (ADR-054) — the server's
   // call, not a switch here.
-  const pools = useQuery<PoolSummary[]>({
-    queryKey: poolsKey,
-    queryFn: () => api("/app/api/pools"),
-  });
+  const pools = usePools();
   const rows = pools.data ?? [];
   /* No initial sort: the server hands the shelf over in its own order, and
      the reader picks another one by clicking a label. */

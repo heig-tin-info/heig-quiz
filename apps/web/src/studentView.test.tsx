@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   enterStudentView,
@@ -56,6 +56,23 @@ describe("the student view store", () => {
     sessionStorage.setItem("quiz-view-as", "student");
     expect(studentViewOn()).toBe(true);
     expect(leaveStudentView()).toEqual({ view: "home" });
+  });
+
+  it("still enters and leaves in a window that refuses storage (audit 10-03 W3)", () => {
+    // A blocked site-data policy throws on the mere access to `sessionStorage`.
+    const denied = vi.spyOn(window, "sessionStorage", "get").mockImplementation(() => {
+      throw new DOMException("The operation is insecure.", "SecurityError");
+    });
+    try {
+      expect(studentViewOn()).toBe(false);
+      enterStudentView({ view: "evaluation", id: "e1" });
+      expect(studentViewOn()).toBe(true);
+      expect(leaveStudentView()).toEqual({ view: "evaluation", id: "e1" });
+      expect(studentViewOn()).toBe(false);
+      expect(studentViewReturn()).toEqual({ view: "home" });
+    } finally {
+      denied.mockRestore();
+    }
   });
 });
 

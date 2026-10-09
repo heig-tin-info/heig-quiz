@@ -101,7 +101,7 @@ export function GradeTable({
             return (
             <tr
               key={row.userId}
-              {...(open ? { ...pressable(open, "row"), onClick: open } : {})}
+              {...(open ? pressable(open, "row") : {})}
               aria-current={attemptId !== null && attemptId === openId ? "true" : undefined}
               className={cx(T.row, open && cx(T.rowHover, "cursor-pointer"), "aria-[current]:bg-surface-2")}
             >

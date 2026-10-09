@@ -26,6 +26,7 @@ import {
   Badge,
   Button,
   type Column,
+  caseInsensitiveCompare,
   cx,
   Dash,
   ErrorText,
@@ -357,10 +358,7 @@ export function RosterTable({
     roster,
     (r, k) => r[k] ?? "",
     { key: "nom", dir: 1 },
-    (x, y) =>
-      typeof x === "number" && typeof y === "number"
-        ? x - y
-        : String(x).localeCompare(String(y), undefined, { sensitivity: "base" }),
+    caseInsensitiveCompare,
   );
   const columns: Column<SortKey>[] = [
     { key: "nom", label: t("roster.col.lastName") },

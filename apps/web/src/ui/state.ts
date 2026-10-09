@@ -1,34 +1,71 @@
 import { useCallback, useEffect, useState } from "react";
 
+// --- Module state that several surfaces read ---
+
+/**
+ * The change signal of a module store read through `useSyncExternalStore`
+ * (the theme, the student view, the shortcuts, the connection): its readers
+ * `subscribe`, and a write calls `emit` once the new state is in place.
+ */
+export function createSignal(): { subscribe: (listener: () => void) => () => void; emit: () => void } {
+  const listeners = new Set<() => void>();
+  return {
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    emit: () => {
+      for (const listener of listeners) listener();
+    },
+  };
+}
+
 // --- Remembered choices (a viewer's habit, never a state of the data) ---
 
 /**
- * Reading storage may throw — a private window, blocked site data — and a
- * remembered habit is never worth a crash: `null` is "nothing stored".
+ * Where a value is kept: `local` for the browser (a habit), `session` for
+ * this tab alone (the student view, ADR-018).
  */
-export function readStored(key: string): string | null {
+type Area = "local" | "session";
+
+/**
+ * What a refused `sessionStorage` would hold, for the life of the page: the
+ * student view must still enter and leave in a window that blocks storage
+ * (it only no longer survives a reload). A refused `localStorage` keeps
+ * nothing: a habit costs one click.
+ */
+const refusedSession = new Map<string, string>();
+
+/**
+ * Reading storage may throw — a private window, blocked site data, even the
+ * mere access to `sessionStorage` — and that is never worth a crash: `null`
+ * is "nothing stored".
+ */
+export function readStored(key: string, area: Area = "local"): string | null {
   try {
-    return localStorage.getItem(key);
+    return (area === "local" ? localStorage : sessionStorage).getItem(key);
   } catch {
-    return null;
+    return area === "session" ? (refusedSession.get(key) ?? null) : null;
   }
 }
 
-/** Writing may throw for the same reasons, and a quota; losing a habit costs one click. */
-export function writeStored(key: string, value: string): void {
+/** Writing may throw for the same reasons, and a quota. */
+export function writeStored(key: string, value: string, area: Area = "local"): void {
   try {
-    localStorage.setItem(key, value);
+    (area === "local" ? localStorage : sessionStorage).setItem(key, value);
   } catch {
-    // A remembered habit is a convenience, never a requirement.
+    if (area === "session") refusedSession.set(key, value);
   }
 }
 
 /** Removing may throw like the other two; a stale key is harmless. */
-export function removeStored(key: string): void {
+export function removeStored(key: string, area: Area = "local"): void {
   try {
-    localStorage.removeItem(key);
+    (area === "local" ? localStorage : sessionStorage).removeItem(key);
   } catch {
-    // Nothing to clean in a storage that cannot be read either.
+    if (area === "session") refusedSession.delete(key);
   }
 }
 

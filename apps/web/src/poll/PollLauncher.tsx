@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 
 import {
   PollQuestionType,
-  type CourseSummary,
   type PollAudience,
   type PollQuestionPick,
   type PollTeacherView,
@@ -38,7 +37,8 @@ import {
   Skeleton,
   Tabs,
 } from "../ui";
-import { coursesKey, pollQuestionsKey } from "../queryKeys";
+import { pollQuestionsKey } from "../queryKeys";
+import { useCourses } from "../course/parts";
 
 /**
  * "Start a poll" (F-LIVE-13): one question, thrown on the wall, answered by
@@ -195,10 +195,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
     return keyed.length === 0 ? null : { abstention: keyed.some((o) => o.abstention !== null) };
   }, [picks.data]);
   // The same key the sidebar and the palette already hold: no extra request.
-  const courses = useQuery<CourseSummary[]>({
-    queryKey: coursesKey,
-    queryFn: () => api("/app/api/courses"),
-  });
+  const courses = useCourses();
 
   const rooms = useMemo(
     () =>

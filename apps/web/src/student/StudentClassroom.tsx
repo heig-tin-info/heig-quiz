@@ -31,7 +31,7 @@ import { useEffect } from "react";
 
 import type { StudentActivities, StudentActivityCard, StudentClassroomPage } from "@quiz/contracts";
 
-import { api, ApiError } from "../api";
+import { api, isNotFound } from "../api";
 import { StudentGradebook } from "../gradebook/StudentGradebook";
 import { StudentGroups } from "../group/StudentGroups";
 import { useT } from "../i18n";
@@ -107,8 +107,6 @@ export function mostUrgent({ polls, open }: Pick<StudentActivities, "polls" | "o
   ranked.sort((a, b) => a.rank - b.rank || a.due - b.due);
   return ranked[0]?.id ?? null;
 }
-
-const isNotFound = (error: unknown) => error instanceof ApiError && error.status === 404;
 
 export function StudentClassroom({
   id,

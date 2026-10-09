@@ -16,6 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { prefersReducedMotion } from "@quiz/ui";
 
 import { Logo } from "../Header";
 import { type Dict, type Locale, useI18n } from "../i18n";
@@ -369,7 +370,7 @@ function Features() {
   // Hovering pauses the rotation for a while; choosing a tab, a key press or
   // focus inside stops it for good (WCAG 2.2.2), and so does reduced motion.
   const [hovered, setHovered] = useState(false);
-  const [chosen, setChosen] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const [chosen, setChosen] = useState(prefersReducedMotion);
   const paused = hovered || chosen;
   const [ref, inView] = useInView<HTMLElement>();
   const [revealRef, reveal] = useReveal<HTMLDivElement>();

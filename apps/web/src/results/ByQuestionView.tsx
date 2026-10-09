@@ -3,7 +3,7 @@ import { ListChecks } from "lucide-react";
 import type { ByQuestion } from "@quiz/contracts";
 import { displayedRate } from "@quiz/domain";
 
-import { ApiError } from "../api";
+import { refusedWith } from "../api";
 import { useI18n, useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { typeLabel, QuestionReviewHost } from "../questionTypes";
@@ -21,8 +21,7 @@ import { questionAnchor, QuestionSummary } from "./QuestionSummary";
  * (`409 not_over`, ADR-033). Its message is the server's, in English: a
  * screen says `results.notOver` instead.
  */
-export const isNotOver = (error: unknown): boolean =>
-  error instanceof ApiError && (error.body as { error?: string } | null)?.error === "not_over";
+export const isNotOver = (error: unknown): boolean => refusedWith(error, "not_over");
 
 /**
  * F-RES-03: the linear walk through the questions, for the correction in

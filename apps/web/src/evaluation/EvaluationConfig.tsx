@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ArrowRight,
@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { EvaluationPatch, type ClassroomDetail, type EvaluationDetail } from "@quiz/contracts";
+import { EvaluationPatch } from "@quiz/contracts";
 import { EVALUATION_STEPS, isEvaluationOver, itemListLock } from "@quiz/domain";
 
 import { api } from "../api";
@@ -47,7 +47,9 @@ import { missingTiming, TIMING_FIELD_ID } from "./timing";
 import { TimingStep } from "./TimingStep";
 import { SaveAsTemplateDialog, useDuplicateErrorToast } from "./templates";
 import { useConfigPatch } from "./usePatch";
-import { classroomKey, evaluationKey, evaluationsKey } from "../queryKeys";
+import { evaluationKey, evaluationsKey } from "../queryKeys";
+import { useClassroom } from "../course/parts";
+import { useEvaluation } from "./api";
 
 /**
  * The three-screen configuration of docs/spec/08 §8.2: choose the questions,
@@ -93,18 +95,11 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   const [savingTemplate, setSavingTemplate] = useState(false);
   const pane = useItemPane();
 
-  const detail = useQuery<EvaluationDetail>({
-    queryKey: evaluationKey(id),
-    queryFn: () => api(`/app/api/evaluations/${id}`),
-  });
+  const detail = useEvaluation(id);
   const patch = useConfigPatch(evaluationTarget(id));
   const classroomId = detail.data?.evaluation.classroomId ?? null;
   const crumbs = useEvaluationCrumbs(classroomId, id, detail.data?.evaluation.title);
-  const classroom = useQuery<ClassroomDetail>({
-    queryKey: classroomKey(classroomId),
-    enabled: classroomId !== null,
-    queryFn: () => api(`/app/api/classrooms/${classroomId}`),
-  });
+  const classroom = useClassroom(classroomId);
 
   const duplicateFailed = useDuplicateErrorToast();
   const duplicate = useMutation({

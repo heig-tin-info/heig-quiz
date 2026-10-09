@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 
-import { readStored, removeStored, writeStored } from "./ui/state";
+import { createSignal, readStored, removeStored, writeStored } from "./ui/state";
 
 /**
  * Light/dark theme. "system" follows the OS and reacts to its changes; an
@@ -30,17 +30,7 @@ function resolveTheme(choice: ThemeChoice): Theme {
   return choice === "system" ? (media().matches ? "dark" : "light") : choice;
 }
 
-const listeners = new Set<() => void>();
-const emit = () => {
-  for (const listener of listeners) listener();
-};
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-}
+const { subscribe, emit } = createSignal();
 
 /**
  * The choice in force. Storage is the state, not a module variable: the

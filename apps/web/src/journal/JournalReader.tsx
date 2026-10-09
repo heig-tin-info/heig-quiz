@@ -25,11 +25,11 @@ import {
   type JournalRepository,
 } from "@quiz/contracts";
 
-import { api, ApiError } from "../api";
+import { api, isNotFound } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { journalKey, journalPageKey } from "../queryKeys";
+import { journalPageKey } from "../queryKeys";
 import { routeToPath, type Navigate } from "../router";
 import {
   Actions,
@@ -45,7 +45,15 @@ import {
   Skeleton,
   useMinWidth,
 } from "../ui";
-import { journalErrorText, useJournalDeletePage, useJournalRefresh } from "./api";
+import {
+  journalBase,
+  journalErrorText,
+  journalQuery,
+  useClassroomJournal,
+  useJournalDeletePage,
+  useJournalRefresh,
+  type JournalView,
+} from "./api";
 import { AddPageDialog } from "./editor/AddPageDialog";
 import { pageFolder } from "./editor/images";
 import { JournalArticle } from "./JournalArticle";
@@ -87,8 +95,6 @@ import { SYNC_ERRORS, warningText } from "./words";
  * compact header comes in as `header`). It draws no breadcrumb of its own.
  */
 
-type View = "staff" | "student";
-
 /** The editor (M4-06), a chunk of its own: the staff load it on Edit. */
 const JournalEditor = lazy(() => import("./editor/JournalEditor").then((m) => ({ default: m.JournalEditor })));
 
@@ -101,8 +107,6 @@ function findNode(nodes: JournalNavNode[], pred: (node: JournalNavNode) => boole
   }
   return null;
 }
-
-const isNotFound = (error: unknown) => error instanceof ApiError && error.status === 404;
 
 export function JournalReader({
   classroomId,
@@ -130,14 +134,11 @@ export function JournalReader({
 }) {
   const t = useT();
   const toast = useToast();
-  const view: View = studentView ? "student" : "staff";
-  const base = `/app/api/classrooms/${classroomId}/journal`;
-  const narrow = studentView ? "?view=student" : "";
+  const view: JournalView = studentView ? "student" : "staff";
+  const base = journalBase(classroomId);
+  const narrow = journalQuery(view);
 
-  const journal = useQuery<Journal>({
-    queryKey: journalKey(classroomId, view),
-    queryFn: () => api(`${base}${narrow}`),
-  });
+  const journal = useClassroomJournal(classroomId, view);
   const data: Journal | undefined = journal.data;
   const staffJournal = data && data.view === "staff" ? data : null;
   // The staff payload says "no journal" by its mode (ADR-057); a student without one gets a 404.

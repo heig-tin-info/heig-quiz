@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
+import { prefersReducedMotion } from "@quiz/ui";
 
 import { useT, type TFunction } from "../i18n";
 import { cx, useNow, type IconType } from "./layers";
@@ -485,10 +486,9 @@ export function ProgressSegments({
     const el = strip.current;
     const button = el?.querySelectorAll("button")[current];
     if (!scrolls || !el || !button) return;
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     el.scrollTo?.({
       left: button.offsetLeft - (el.clientWidth - button.offsetWidth) / 2,
-      behavior: reduce || !centred.current ? "auto" : "smooth",
+      behavior: prefersReducedMotion() || !centred.current ? "auto" : "smooth",
     });
     centred.current = true;
   }, [scrolls, current, width]);

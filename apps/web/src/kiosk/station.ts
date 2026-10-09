@@ -14,7 +14,7 @@ import {
   type PublicConfig,
 } from "@quiz/contracts";
 
-import { ApiError, api } from "../api";
+import { ApiError, api, refusalCodeOf } from "../api";
 import { readStored, writeStored } from "../ui/state";
 
 /** Why a station cannot show a code: not in the registry (or not named), or the platform is out of reach. */
@@ -133,6 +133,6 @@ export async function pollToken(
   } catch (err) {
     if (!(err instanceof ApiError)) return { error: "authorization_pending" };
     if (err.status === 403) return { error: "not_recognised" };
-    return { error: (err.body as { error?: string } | null)?.error ?? "authorization_pending" };
+    return { error: refusalCodeOf(err) ?? "authorization_pending" };
   }
 }

@@ -544,6 +544,39 @@ describe("Menu", () => {
       within(item).getByText("Clones every student repository into one folder"),
     ).toBeVisible();
   });
+
+  it("closes on a page scroll, whose target is the window, and stays open on its own (audit 10-03 W1)", async () => {
+    const { trigger } = renderMenu();
+    await userEvent.click(trigger);
+    // Past the opening's grace period: a scroll now is the reader leaving.
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 1_000);
+    try {
+      fireEvent.scroll(screen.getByRole("menu"));
+      expect(screen.getByRole("menu")).toBeVisible();
+      // `window` is not a Node: `contains` would throw on it.
+      expect(() => fireEvent.scroll(window)).not.toThrow();
+      expect(screen.queryByRole("menu")).toBeNull();
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("nudges a panel that would hang off the left edge back inside the viewport (audit 10-03 W2)", async () => {
+    const width = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(300);
+    // The trigger, 30 px wide, 10 px from the left edge.
+    const rect = vi
+      .spyOn(Element.prototype, "getBoundingClientRect")
+      .mockReturnValue(DOMRect.fromRect({ x: 10, y: 10, width: 30, height: 30 }));
+    try {
+      await userEvent.click(renderMenu().trigger);
+      // Right-aligned on a trigger ending at 40 px: 300 px wide, it would start
+      // at -260 px; it is shifted to the 8 px margin.
+      expect(screen.getByRole("menu").style.marginLeft).toBe("268px");
+    } finally {
+      width.mockRestore();
+      rect.mockRestore();
+    }
+  });
 });
 
 type DemoTab = "assignments" | "students" | "staff";
@@ -830,12 +863,13 @@ describe("pressable", () => {
   it("activates on Enter and on Space, and Space does not scroll the page", () => {
     const onActivate = vi.fn();
     renderWithProviders(
-      <div {...pressable(onActivate)} onClick={onActivate}>
-        PRG1 2026
-      </div>,
+      <div {...pressable(onActivate)}>PRG1 2026</div>,
     );
     const card = screen.getByRole("button", { name: "PRG1 2026" });
     expect(card).toHaveAttribute("tabindex", "0");
+    fireEvent.click(card);
+    expect(onActivate).toHaveBeenCalledTimes(1);
+    onActivate.mockClear();
     fireEvent.keyDown(card, { key: "Enter" });
     expect(onActivate).toHaveBeenCalledTimes(1);
     const space = fireEvent.keyDown(card, { key: " " });

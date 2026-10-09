@@ -87,7 +87,6 @@ export function GroupSetList({
             <tr
               key={set.id}
               className={`${T.row} ${T.rowHover} cursor-pointer`}
-              onClick={() => open(set)}
               {...pressable(() => open(set), "row")}
             >
               <td className={`${T.td} font-semibold`}>

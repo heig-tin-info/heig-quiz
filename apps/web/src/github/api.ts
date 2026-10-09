@@ -11,11 +11,11 @@ import { useQuery } from "@tanstack/react-query";
 
 import type { GithubAccountState, GithubClassroom, GithubOrg } from "@quiz/contracts";
 
-import { api, ApiError } from "../api";
+import { api, isNotFound } from "../api";
 import { classroomGithubKey, githubOrgsKey, meGithubKey } from "../queryKeys";
 
 /** The route is not there: no App on this platform (or, for a classroom, not ours). */
-export const githubAbsent = (error: unknown): boolean => error instanceof ApiError && error.status === 404;
+export const githubAbsent = isNotFound;
 
 /** `GET /classrooms/:id/github`: the link and its checks, re-read when the Settings open (F-GH-03). */
 export function useClassroomGithub(id: string) {

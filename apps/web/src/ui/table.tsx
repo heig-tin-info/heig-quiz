@@ -16,6 +16,12 @@ export interface SortState<K extends string> {
 const defaultCompare = (x: string | number, y: string | number) =>
   typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y));
 
+/** The comparator of a table of people: numbers as numbers, names regardless of case and accents. */
+export const caseInsensitiveCompare = (x: string | number, y: string | number) =>
+  typeof x === "number" && typeof y === "number"
+    ? x - y
+    : String(x).localeCompare(String(y), undefined, { sensitivity: "base" });
+
 /**
  * Sort state + sorted rows for a client-side table: clicking the active
  * column flips the direction, clicking another selects it ascending.

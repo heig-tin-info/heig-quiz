@@ -78,7 +78,7 @@ describe("the editor's expand layer", () => {
   it("keeps the text tab working inside the layer, and stays open on its Escape", async () => {
     renderEditor();
     const layer = await expandReference();
-    fireEvent.click(within(layer).getByRole("tab", { name: "Text" }));
+    fireEvent.click(within(layer).getByRole("radio", { name: "Text" }));
     const text = within(layer).getByRole("textbox", { name: "Text" });
     fireEvent.focus(text);
     fireEvent.keyDown(text, { key: "Escape" });

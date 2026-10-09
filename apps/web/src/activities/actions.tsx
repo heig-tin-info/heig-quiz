@@ -1,23 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  BarChart3,
-  ClipboardCheck,
-  ClipboardList,
-  GitBranch,
-  MonitorPlay,
-  Presentation,
-  Square,
-  Users,
-} from "lucide-react";
+import { GitBranch, Square, Users } from "lucide-react";
 
-import type { ActivitySummary, EvaluationActivitySummary, PollTeacherView, ProjectActivitySummary } from "@quiz/contracts";
-import { isEvaluationOver } from "@quiz/domain";
+import type { ActivitySummary, PollTeacherView, ProjectActivitySummary } from "@quiz/contracts";
 
 import { api } from "../api";
-import { useConfirm } from "../confirm";
-import { hasDashboard } from "../evaluation/common";
-import { gradingLinks } from "../grading";
-import { useT } from "../i18n";
+import { useConfirm, type ConfirmOptions } from "../confirm";
+import { evaluationLinkItems } from "../evaluation/common";
+import { useT, type TFunction } from "../i18n";
 import { useErrorToast } from "../notify";
 import { repoHref } from "../project/projectPage";
 import { activitiesKey, pollKey } from "../queryKeys";
@@ -25,9 +14,16 @@ import type { Route } from "../router";
 import { IconLink, Menu, type MenuItem } from "../ui";
 import { typeOf } from "./model";
 
+/** The confirmation of ending a poll, on its projection as in a list. */
+export const endPollConfirmation = (t: TFunction): ConfirmOptions => ({
+  title: t("poll.endConfirm"),
+  confirmLabel: t("poll.end"),
+  danger: true,
+});
+
 /**
  * Ending a poll from the Activities section (#190): the projection's own
- * confirmation, word for word, and the same route. Only a poll ends from a
+ * confirmation (`endPollConfirmation`) and the same route. Only a poll ends from a
  * list: closing an exam expires every attempt and starts the grading, and
  * that stays on its dashboard, behind its own confirmation.
  */
@@ -48,12 +44,7 @@ export function useEndPoll(): { end: (row: ActivitySummary) => void; pending: st
   return {
     end: (row) =>
       void (async () => {
-        const ok = await confirm({
-          title: t("poll.endConfirm"),
-          confirmLabel: t("poll.end"),
-          danger: true,
-        });
-        if (ok) mutation.mutate(row.id);
+        if (await confirm(endPollConfirmation(t))) mutation.mutate(row.id);
       })(),
     pending: mutation.isPending ? (mutation.variables ?? null) : null,
   };
@@ -84,7 +75,12 @@ export function ActivityMenu({
 }) {
   const t = useT();
   if (row.kind === "project") return <ProjectRepoLinks row={row} />;
-  const items = evaluationItems(row, t, navigate, onEnd);
+  const items: MenuItem[] = [
+    ...evaluationLinkItems(row, t, navigate),
+    ...(endable(row)
+      ? [{ label: t("poll.end"), icon: Square, danger: true, separator: true, onSelect: () => onEnd?.(row) }]
+      : []),
+  ];
   return (
     // A click in the menu must not also open the row under it.
     <span onClick={(e) => e.stopPropagation()} className="inline-flex">
@@ -117,51 +113,3 @@ function ProjectRepoLinks({ row }: { row: ProjectActivitySummary }) {
   );
 }
 
-function evaluationItems(
-  row: EvaluationActivitySummary,
-  t: ReturnType<typeof useT>,
-  navigate: (r: Route) => void,
-  onEnd: ((row: ActivitySummary) => void) | undefined,
-): MenuItem[] {
-  return row.mode === "poll"
-      ? [
-          {
-            label: t("poll.openProjection"),
-            icon: Presentation,
-            onSelect: () => navigate({ view: "poll", id: row.id }),
-          },
-          ...(endable(row)
-            ? [{ label: t("poll.end"), icon: Square, danger: true, separator: true, onSelect: () => onEnd?.(row) }]
-            : []),
-        ]
-      : [
-          ...(isEvaluationOver(row.state)
-            ? [
-                {
-                  label: t("eval.grading"),
-                  icon: ClipboardCheck,
-                  onSelect: () => navigate(gradingLinks(row.id).grading),
-                },
-                {
-                  label: t("eval.results"),
-                  icon: BarChart3,
-                  onSelect: () => navigate(gradingLinks(row.id).results),
-                },
-              ]
-            : []),
-          ...(hasDashboard(row)
-            ? [
-                {
-                  label: t("eval.dashboard"),
-                  icon: MonitorPlay,
-                  onSelect: () => navigate({ view: "live", id: row.id }),
-                },
-              ]
-            : []),
-          {
-            label: t("eval.configure"),
-            icon: ClipboardList,
-            onSelect: () => navigate({ view: "evaluation", id: row.id }),
-          },
-        ];
-}

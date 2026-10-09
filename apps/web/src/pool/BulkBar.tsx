@@ -1,8 +1,8 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { FolderInput, FolderSymlink, Star, StarOff, Tag, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import type { Category, CategoryNode, PoolDetail, PoolSummary, QuestionRow } from "@quiz/contracts";
+import type { Category, CategoryNode, QuestionRow } from "@quiz/contracts";
 
 import { api } from "../api";
 import { ConceptPicker } from "../concepts/ConceptPicker";
@@ -12,7 +12,8 @@ import { categoryPaths } from "./categories";
 import { useMoveQuestions } from "./move";
 import { useErrorToast, useToast } from "../notify";
 import { Button, Field, FormDialog, Select, SelectionBar, Spinner } from "../ui";
-import { anyPoolKey, poolKey, poolsKey } from "../queryKeys";
+import { anyPoolKey, poolKey } from "../queryKeys";
+import { usePool, usePools } from "./api";
 
 /**
  * What to do with the ticked questions, on the pool screen, in the
@@ -88,18 +89,10 @@ export function BulkBar({
 
   // The pools the teacher may WRITE to, this one excluded: a move to the pool
   // the questions are already in is what the category dialog above is for.
-  const pools = useQuery<PoolSummary[]>({
-    queryKey: poolsKey,
-    queryFn: () => api("/app/api/pools"),
-    enabled: dialog === "pool",
-  });
+  const pools = usePools({ enabled: dialog === "pool" });
   const targets = (pools.data ?? []).filter((p) => p.id !== poolId && p.role !== "reader");
   // The chosen pool's folders, on the key its own screen uses.
-  const target = useQuery<PoolDetail>({
-    queryKey: poolKey(targetPoolId),
-    queryFn: () => api(`/app/api/pools/${targetPoolId}`),
-    enabled: dialog === "pool" && targetPoolId !== "",
-  });
+  const target = usePool(targetPoolId || null, { enabled: dialog === "pool" });
 
   /** Runs one call per question, counts the failures, reports once. */
   const runAll = async (step: (id: string) => Promise<unknown>) => {
