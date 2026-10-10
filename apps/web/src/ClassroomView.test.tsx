@@ -199,16 +199,17 @@ describe("ClassroomView", () => {
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
     const tab = await screen.findByRole("tab", { name: /Activities/ });
     expect(tab).toHaveTextContent(/^Activities$/);
-    const heading = await screen.findByRole("heading", { name: /Evaluations/ });
-    expect(heading.parentElement).toHaveTextContent("Evaluations2");
+    expect(await screen.findByRole("heading", { name: /Evaluations/ })).toBeVisible();
+    expect(await screen.findByText("Test 1")).toBeVisible();
+    expect(screen.getByRole("region", { name: /Evaluations/ })).toHaveTextContent(/Evaluations\s*2/);
   });
 
-  it("draws no Evaluations heading while the classroom has none", async () => {
+  it("keeps the Evaluations heading above the empty state", async () => {
     mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()), [`GET ${EVALUATIONS}`]: ok([]) });
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
     await screen.findByRole("tab", { name: /Activities/ });
     await screen.findByText("No evaluation yet");
-    expect(screen.queryByRole("heading", { name: /Evaluations/ })).toBeNull();
+    expect(screen.getByRole("heading", { name: /Evaluations/ })).toBeVisible();
   });
 
   it("moves between the two tabs and writes the choice to the URL", async () => {

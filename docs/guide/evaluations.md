@@ -4,7 +4,7 @@ An evaluation is an ordered list of questions taken from the pools of a course, 
 
 ## Create an evaluation
 
-Open the classroom and its **Evaluations** tab (see [Classrooms](classrooms.md)), then click **New evaluation**. Give it a **Title** and pick a **Mode**:
+Open the classroom and its **Activities** tab (see [Classrooms](classrooms.md)), then click **New evaluation**. Give it a **Title** and pick a **Mode**:
 
 - **Exam**: graded, taken in one sitting, no feedback before you release the results.
 - **Exercise**: practice, with feedback as soon as a question is validated; it starts Live, open until you close it, and **Scheduled** gives it a deadline.

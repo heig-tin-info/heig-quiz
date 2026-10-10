@@ -3376,7 +3376,6 @@ export const en = {
   "player.ipBlocked": "This evaluation cannot be taken from this network.",
 
   // WP8: evaluation + dashboard
-  "classroom.tab.activities": "Activities",
   "eval.title": "Evaluations",
   "eval.new": "New evaluation",
   "eval.create": "Create evaluation",
@@ -4845,6 +4844,7 @@ export const en = {
   "drill.optIn.done": "You are back in the drill of {name}.",
   "drill.failed": "Could not change the drill",
   // The drill (ADR-041, #317): the teacher's switches.
+  "classroom.tab.activities": "Activities",
   "classroom.drill.desc": "Students practise the questions of past evaluations that allow the drill, at spaced intervals. They are in by default and may opt out; you see their activity.",
   "classroom.drill.on": "Drill on.",
   "classroom.drill.off": "Drill off.",

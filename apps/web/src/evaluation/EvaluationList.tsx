@@ -306,8 +306,12 @@ export function EvaluationList({
           students" stands on the roster tab — one primary per tab, always in
           the same place. The heading is the sibling of the projects' one
           (`ProjectGroup`, M3-10): the tab is "Activities", each list names
-          itself and carries its own count. An empty list shows its empty
-          state instead, and a list that is loading or failed no number. */}
+          itself and carries its own count (none while it loads or failed). */}
+      <SectionHeading
+        icon={ClipboardList}
+        title={<span id="classroom-evaluations">{t("eval.title")}</span>}
+        count={list.data?.length}
+      />
       {list.isLoading ? (
         <Skeleton className="h-40 w-full" />
       ) : list.isError || !list.data ? (
@@ -337,11 +341,6 @@ export function EvaluationList({
         </Card>
       ) : (
         <>
-          <SectionHeading
-            icon={ClipboardList}
-            title={<span id="classroom-evaluations">{t("eval.title")}</span>}
-            count={list.data.length}
-          />
           {/* The pool's control (`GroupBySwitch`). One row has nothing to group. */}
           {list.data.length < 2 ? null : (
             <GroupBySwitch

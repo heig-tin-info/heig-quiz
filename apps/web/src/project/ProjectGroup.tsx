@@ -26,17 +26,16 @@ import {
 type SortKey = "title" | "start" | "deadline";
 
 /**
- * The classroom's projects (F-PROJ-01, M3-10), a group under its evaluations
- * on the same tab: the Evaluations table stays as it was, and this one only
- * exists while the classroom HAS a project. A classroom that never used
+ * The classroom's projects (F-PROJ-01, M3-10), a section under the evaluations'
+ * on the Activities tab (#683): this one only exists while the classroom HAS a project. A classroom that never used
  * GitHub — most of them — reads exactly as before, and so does a platform
  * without the App (the route answers 404). For the same reason nothing is
  * drawn while the list loads: the group's very existence is what is not
  * known yet, and a skeleton that collapses to nothing on most classrooms is
  * a jump on every visit. A failure says so, with a retry.
  *
- * It carries a heading and the evaluations do not: the tab already names
- * the evaluations, and the projects are the second thing on it.
+ * Its heading is the sibling of the evaluations' (`EvaluationList`): each
+ * list names itself and carries its own count.
  *
  * No button: "New ▾ › Project" is in the page header, the tab's one primary.
  * A row is a title, its state, its start and its deadline, and opens the

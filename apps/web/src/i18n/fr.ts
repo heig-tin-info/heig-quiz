@@ -3372,7 +3372,6 @@ export const fr: Record<keyof Dict, string> = {
   "player.ipBlocked": "Cette évaluation ne peut pas être passée depuis ce réseau.",
 
   // WP8: evaluation + dashboard
-  "classroom.tab.activities": "Activités",
   "eval.title": "Évaluations",
   "eval.new": "Nouvelle évaluation",
   "eval.create": "Créer l'évaluation",
@@ -4840,6 +4839,7 @@ export const fr: Record<keyof Dict, string> = {
   "drill.optOut.done": "Vous avez quitté les révisions de {name}.",
   "drill.optIn.done": "Vous avez rejoint à nouveau les révisions de {name}.",
   "drill.failed": "Impossible de modifier les révisions",
+  "classroom.tab.activities": "Activités",
   "classroom.drill.desc": "Les étudiants travaillent, à intervalles espacés, les questions des évaluations passées qui autorisent les révisions. Ils y participent par défaut et peuvent s'en retirer ; vous voyez leur activité.",
   "classroom.drill.on": "Révisions activées.",
   "classroom.drill.off": "Révisions désactivées.",
