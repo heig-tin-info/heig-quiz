@@ -19,7 +19,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useT } from "../i18n";
-import { Button, cx, IconButton, inputClass, inputSize, useLayer, Z } from "../ui";
+import { Button, cx, IconButton, inputClass, inputSize, Segmented, useLayer, Z } from "../ui";
 
 type BlankMode = "any" | "select" | "number" | "regex";
 
@@ -293,35 +293,17 @@ export function BlankPopover({ anchor, body, onApply, onCancel }: BlankPopoverPr
             value={draft.tolerance}
             onChange={(tolerance) => patch({ tolerance })}
           />
-          <div
-            role="radiogroup"
-            aria-label={t("md.blank.toleranceMode")}
-            className="inline-flex h-7 gap-0.5 rounded-full bg-surface-3 p-0.75"
-          >
-            {[
-              { rel: false, label: t("md.blank.absolute") },
-              { rel: true, label: "%" },
-            ].map((option) => (
-              <label
-                key={String(option.rel)}
-                className={cx(
-                  "inline-flex items-center justify-center rounded-full px-2.5 text-xs font-medium transition-colors has-focus-visible:ring-2 has-focus-visible:ring-accent/50",
-                  draft.relative === option.rel
-                    ? "bg-surface text-fg ring-1 ring-line-strong/70"
-                    : "cursor-pointer text-fg-muted hover:text-fg",
-                )}
-              >
-                <input
-                  type="radio"
-                  name={`${group}-tol`}
-                  className="sr-only"
-                  checked={draft.relative === option.rel}
-                  onChange={() => patch({ relative: option.rel })}
-                />
-                {option.label}
-              </label>
-            ))}
-          </div>
+          <Segmented
+            name={`${group}-tol`}
+            size="sm"
+            label={t("md.blank.toleranceMode")}
+            value={draft.relative ? "relative" : "absolute"}
+            onChange={(v) => patch({ relative: v === "relative" })}
+            options={[
+              { value: "absolute", label: t("md.blank.absolute") },
+              { value: "relative", label: "%" },
+            ]}
+          />
         </div>
       ) : null}
 

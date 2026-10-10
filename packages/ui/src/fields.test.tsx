@@ -103,6 +103,11 @@ describe("Segmented", () => {
       expect(screen.getAllByRole("radio")).toHaveLength(2);
     });
 
+    it("does not transition on its first placement", () => {
+      const { container } = render(<Segmented name="k" label="Kind" value="a" options={options} onChange={() => {}} />);
+      expect(thumbOf(container)?.className).not.toContain("duration-200");
+    });
+
     it("slides in ~200 ms, and not at all under reduced motion", async () => {
       const { container } = render(<Segmented name="k" label="Kind" value="a" options={options} onChange={() => {}} />);
       await waitFor(() => expect(thumbOf(container)?.className).toContain("duration-200"));

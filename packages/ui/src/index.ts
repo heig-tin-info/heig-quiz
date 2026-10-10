@@ -28,7 +28,6 @@ export {
   card,
   areaClass,
   codeArea,
-  controlRadius,
   controlSize,
   cx,
   gripClass,

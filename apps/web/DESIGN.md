@@ -779,8 +779,11 @@ live in `ui/state.ts`, each written once.
   `surface` by a thumb that slides under it (~200 ms `ease-out-emphasized`,
   none under `prefers-reduced-motion`; measured from the selected label, the
   native radios unchanged). `md` (34 px, the height of the field beside it)
-  by default; `sm` only inside a table row or in the drill's scale below, and
-  a toolbar never mixes `sm` and `md` controls (ADR-094).
+  by default; `sm` only inside a table row, in the drill's scale below, in
+  the dense chrome whose neighbours are 28 px discs (the header's view
+  switch, the landing header) and in the output viewer's toolbar; a toolbar
+  never mixes `sm` and `md` controls (ADR-094). Icon buttons are discs, not
+  form controls, and stay outside the scale.
   Segmented is ONE choice out of a set small enough to show whole — two or
   three normally, five at most and only with one-word labels (the pool
   toolbar's "Group by"); ToggleChip is any number out of many. One

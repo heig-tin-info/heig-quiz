@@ -253,7 +253,7 @@ const CIRCUIT_BODE = circuitBode(7000);
 const CIRCUIT_BODE_EXPECTED = circuitBode(10_000);
 
 /** A section of the gallery: a heading and a row of specimens. */
-function Row({ title, children }: { title: string; children: React.ReactNode }) {
+export function Row({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
       <SectionHeading title={title} />

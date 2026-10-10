@@ -67,26 +67,35 @@ export const setting = "flex items-center gap-2 text-[13px] text-fg";
  * on one height. `sm` 28 px is for a control inside a table row or a dense
  * strip, `md` 34 px for everything else, `lg` 40 px for a form's lead action.
  *
- * - `height`, `text`, `px`: the control itself.
- * - `iconPad`: the left padding of a field with a leading icon (search).
- * - `icon`: the size of an svg inside a button.
+ * - `height`, `text`, `px`: the one-line box.
+ * - `svg`: the size of an icon inside a button.
+ * - `icon`, `iconLeft`, `iconPad`: a field's leading icon (search), its inset
+ *   and the left padding that clears it (`px` + icon + a gap).
+ * - `edgeRight`, `padRight`: a trailing adornment (a select's chevron, a
+ *   field's unit) at the same inset as the side padding, and the right
+ *   padding that clears it.
  * - `segment`: the option inside a segmented track (`p-0.75` = 3 px of track
  *   on each side, so 22 + 6 = 28, 28 + 6 = 34, 34 + 6 = 40).
  */
 export const controlSize = {
-  sm: { height: "h-7", text: "text-[13px]", px: "px-3", iconPad: "pl-8", icon: "[&_svg]:size-3.5", segment: "h-5.5 text-xs" },
-  md: { height: "h-8.5", text: "text-sm", px: "px-4", iconPad: "pl-9", icon: "[&_svg]:size-4", segment: "h-7 text-[13px]" },
-  lg: { height: "h-10", text: "text-sm", px: "px-5", iconPad: "pl-10", icon: "[&_svg]:size-4", segment: "h-8.5 text-[13px]" },
+  sm: {
+    height: "h-7", text: "text-[13px]", px: "px-3", svg: "[&_svg]:size-3.5",
+    icon: "size-3.5", iconLeft: "left-3", iconPad: "pl-8", edgeRight: "right-3", padRight: "pr-9",
+    segment: "h-5.5 text-xs",
+  },
+  md: {
+    height: "h-8.5", text: "text-sm", px: "px-4", svg: "[&_svg]:size-4",
+    icon: "size-4", iconLeft: "left-4", iconPad: "pl-10", edgeRight: "right-4", padRight: "pr-10",
+    segment: "h-7 text-[13px]",
+  },
+  lg: {
+    height: "h-10", text: "text-sm", px: "px-5", svg: "[&_svg]:size-4",
+    icon: "size-4", iconLeft: "left-5", iconPad: "pl-11", edgeRight: "right-5", padRight: "pr-11",
+    segment: "h-8.5 text-[13px]",
+  },
 } as const;
 
 export type ControlSize = keyof typeof controlSize;
-
-/**
- * The radius of every single-line control: a pill (`--radius-control`). A
- * multi-line field, a card or anything that holds content keeps its soft
- * square (`rounded-field`, `rounded-card`); a wrapped segmented track too.
- */
-export const controlRadius = "rounded-control";
 
 /**
  * Field chrome, with no width, no height, no padding and no radius of its own
@@ -104,14 +113,23 @@ const fieldChrome =
   "border border-line-strong bg-surface text-fg transition-colors placeholder:text-fg-faint hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50 disabled:hover:border-line-strong";
 
 /** A one-line field: the chrome and the pill. Pair it with an {@link inputSize}. */
-export const inputClass = `${controlRadius} ${fieldChrome}`;
+export const inputClass = `rounded-control ${fieldChrome}`;
 
-/** What a one-line field takes from the scale: height, horizontal padding and text size. */
-export const inputSize = {
-  sm: `${controlSize.sm.height} ${controlSize.sm.px} ${controlSize.sm.text}`,
-  md: `${controlSize.md.height} ${controlSize.md.px} ${controlSize.md.text}`,
-  lg: `${controlSize.lg.height} ${controlSize.lg.px} ${controlSize.lg.text}`,
-} as const;
+/** Builds one value per step of the scale, so no row of the table is spelled twice. */
+const bySize = <T>(pick: (size: ControlSize) => T): Record<ControlSize, T> => ({
+  sm: pick("sm"),
+  md: pick("md"),
+  lg: pick("lg"),
+});
+
+/**
+ * The one-line box of the scale: height, side padding and text size. A field,
+ * a select, a search box, a chip and a button wear it; the question types
+ * import it too.
+ */
+export const inputSize = bySize((size) =>
+  cx(controlSize[size].height, controlSize[size].px, controlSize[size].text),
+);
 
 /**
  * A multi-line field, or a field that holds content (a rich-text editor, a
@@ -150,15 +168,11 @@ const BUTTON_VARIANT = {
   "danger-quiet": "border border-danger/40 bg-surface text-danger hover:border-danger hover:bg-danger-soft",
 } as const;
 
-/** The button sizes are the control scale: 28, 34 and 40 px. */
-const BUTTON_SIZE = {
-  sm: `${controlSize.sm.height} ${controlSize.sm.px} ${controlSize.sm.text} ${controlSize.sm.icon}`,
-  md: `${controlSize.md.height} ${controlSize.md.px} ${controlSize.md.text} ${controlSize.md.icon}`,
-  lg: `${controlSize.lg.height} ${controlSize.lg.px} ${controlSize.lg.text} ${controlSize.lg.icon}`,
-} as const;
+/** The button sizes are the control scale: the one-line box and the icon size. */
+const BUTTON_SIZE = bySize((size) => cx(inputSize[size], controlSize[size].svg));
 
 export type ButtonVariant = keyof typeof BUTTON_VARIANT;
-export type ButtonSize = keyof typeof BUTTON_SIZE;
+export type ButtonSize = ControlSize;
 
 /**
  * The class list of a button: a pill in one of seven variants and three

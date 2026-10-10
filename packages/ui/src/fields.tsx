@@ -81,12 +81,19 @@ export function Segmented<T extends string>({
 
   const measure = useCallback(() => {
     const on = track.current?.querySelector<HTMLElement>('[data-on="true"]');
-    setThumb(
-      on ? { left: on.offsetLeft, top: on.offsetTop, width: on.offsetWidth, height: on.offsetHeight } : null,
+    const next = on
+      ? { left: on.offsetLeft, top: on.offsetTop, width: on.offsetWidth, height: on.offsetHeight }
+      : null;
+    // A measurement that changed nothing must not render again.
+    setThumb((prev) =>
+      prev === next || (prev && next && prev.left === next.left && prev.top === next.top && prev.width === next.width && prev.height === next.height)
+        ? prev
+        : next,
     );
   }, []);
 
-  useLayoutEffect(measure, [measure, value, size, wrap, options.length]);
+  const optionKey = options.map((o) => o.value).join("\u0000");
+  useLayoutEffect(measure, [measure, value, size, wrap, optionKey]);
   useEffect(() => {
     const raf = requestAnimationFrame(() => setArmed(true));
     const el = track.current;
@@ -94,13 +101,14 @@ export function Segmented<T extends string>({
     const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
     if (el && ro) {
       ro.observe(el);
-      for (const child of Array.from(el.children)) ro.observe(child);
+      // The labels only: the thumb moves with every measure, observing it would loop.
+      for (const label of Array.from(el.querySelectorAll(":scope > label"))) ro.observe(label);
     }
     return () => {
       cancelAnimationFrame(raf);
       ro?.disconnect();
     };
-  }, [measure, options.length]);
+  }, [measure, optionKey]);
 
   return (
     <div
@@ -234,7 +242,7 @@ export function NumberField({
   placeholder?: string | undefined;
   width?: string;
   /** The control height: `sm` 28 px in a dense row (the default), `md` 34 px in a form. */
-  size?: keyof typeof inputSize;
+  size?: ControlSize;
   /** When the visible label is shared by several rows ("Points" → "Points 2"). */
   "aria-label"?: string | undefined;
 }): ReactNode {

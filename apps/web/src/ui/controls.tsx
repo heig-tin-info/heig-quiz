@@ -104,7 +104,6 @@ export function LinkButton({
  * editor is the field of every other form of the app (ADR-094).
  */
 export { areaClass, controlSize, inputClass, inputSize };
-type InputSize = ControlSize;
 
 /**
  * Label above a control; used by Field, Select and Textarea.
@@ -136,14 +135,14 @@ export function FieldLabel({
 }
 
 /** The input of a `Field`, with its unit laid over the right edge; the input alone when there is none. */
-function SuffixWrap({ suffix, id, children }: { suffix?: string; id: string; children: ReactNode }) {
+function SuffixWrap({ suffix, id, size, children }: { suffix?: string; id: string; size: ControlSize; children: ReactNode }) {
   if (!suffix) return <>{children}</>;
   return (
     <span className="relative block">
       {children}
       <span
         id={`${id}-suffix`}
-        className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-fg-muted"
+        className={cx("pointer-events-none absolute inset-y-0 flex items-center text-xs text-fg-muted", controlSize[size].edgeRight)}
       >
         {suffix}
       </span>
@@ -178,7 +177,7 @@ export function Field({
   /** Stretch label and input to the parent width (grid cells). */
   fullWidth?: boolean;
   /** Control size of the scale: `sm` 28 px for a table row, `md` 34 px by default, `lg` 40 px. */
-  size?: InputSize;
+  size?: ControlSize;
   /**
    * Width utility, on the wrapper so the label shares it. It lives here and
    * not in `className` because two width utilities on the same element are
@@ -193,7 +192,7 @@ export function Field({
       <FieldLabel htmlFor={id} help={help} hint={hint}>
         {label}
       </FieldLabel>
-      <SuffixWrap suffix={suffix} id={id}>
+      <SuffixWrap suffix={suffix} id={id} size={size}>
         <input
           {...props}
           // Added to, never replaced by, a caller's own (`fieldErrorProps`).
@@ -203,7 +202,7 @@ export function Field({
               .join(" ") || undefined
           }
           id={id}
-          className={cx(inputClass, inputSize[size], "w-full", suffix && "pr-10", className)}
+          className={cx(inputClass, inputSize[size], "w-full", suffix && controlSize[size].padRight, className)}
         />
       </SuffixWrap>
       {description ? (
@@ -228,7 +227,7 @@ export function Select({
   label?: string;
   help?: string;
   /** Control size of the scale: `sm` 28 px for a table row, `md` 34 px by default, `lg` 40 px. */
-  size?: InputSize;
+  size?: ControlSize;
   /** Width utility on the wrapper; without it the select sizes to its parent. */
   width?: string;
 }) {
@@ -239,11 +238,11 @@ export function Select({
       <select
         {...props}
         id={id}
-        className={cx(inputClass, inputSize[size], "w-full appearance-none pr-9", className)}
+        className={cx(inputClass, inputSize[size], "w-full appearance-none", controlSize[size].padRight, className)}
       >
         {children}
       </select>
-      <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 text-fg-faint" />
+      <ChevronDown className={cx("pointer-events-none absolute top-1/2 -translate-y-1/2 text-fg-faint", controlSize[size].icon, controlSize[size].edgeRight)} />
     </span>
   );
   if (!label) return control;
@@ -295,20 +294,17 @@ export function SearchInput({
   className = "w-56",
   size = "md",
   ...props
-}: Omit<React.ComponentPropsWithRef<"input">, "size"> & { size?: InputSize }) {
+}: Omit<React.ComponentPropsWithRef<"input">, "size"> & { size?: ControlSize }) {
   const scale = controlSize[size];
   return (
     <label className={cx("relative block", className)}>
       <Search
-        className={cx(
-          "pointer-events-none absolute top-1/2 -translate-y-1/2 text-fg-faint",
-          size === "sm" ? "left-3 size-3.5" : "left-3.5 size-4",
-        )}
+        className={cx("pointer-events-none absolute top-1/2 -translate-y-1/2 text-fg-faint", scale.icon, scale.iconLeft)}
       />
       <input
         type="search"
         {...props}
-        className={cx(inputClass, scale.height, scale.text, scale.iconPad, "w-full pr-4")}
+        className={cx(inputClass, scale.height, scale.text, scale.iconPad, scale.px.replace("px-", "pr-"), "w-full")}
       />
     </label>
   );
@@ -358,7 +354,7 @@ export function ToggleChip({
   tone?: "accent" | "neutral";
   disabled?: boolean;
   /** Size of the control scale; a chip is `sm` (28 px) unless its toolbar is `md`. */
-  size?: InputSize;
+  size?: ControlSize;
   className?: string;
   /** For a chip whose visible label is a bare number ("3" is not a name). */
   "aria-label"?: string;
