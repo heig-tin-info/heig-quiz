@@ -322,8 +322,6 @@ export const PollPublicView = z.object({
   me: z.object({
     /** A session or a guest cookie identifies this browser. */
     identified: z.boolean(),
-    /** No session and the poll is a classroom's: the page must send to login. */
-    loginRequired: z.boolean(),
     joined: z.boolean(),
     /** The answer this browser last sent, to redraw it after a reload. */
     answer: z.unknown().nullable(),

@@ -10,8 +10,9 @@ import { eq, like } from "drizzle-orm";
 import type { InjectOptions } from "fastify";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { auditLog, oauthClients, oauthGrants } from "../../db/schema.js";
+import { auditLog, oauthClients, oauthGrants, oauthRequests } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
+import { AUTHORIZATIONS_PER_HOUR } from "./routes.js";
 import { purgeOAuth } from "./service.js";
 
 let server: TestServer;
@@ -300,6 +301,31 @@ describe("refusals", () => {
     const back = new URL(res.headers.location as string);
     expect(back.searchParams.get("error")).toBe("invalid_request");
     expect(back.searchParams.get("state")).toBe("s");
+  });
+
+  it("meters authorization requests per address: past the limit, nothing is stored (audit L5)", async () => {
+    const { body: client } = await register();
+    const ask = () =>
+      inject({
+        method: "GET",
+        url: authorizeUrl({
+          response_type: "code",
+          client_id: client.client_id,
+          redirect_uri: REDIRECT,
+          code_challenge: pkce().challenge,
+          code_challenge_method: "S256",
+        }),
+        remoteAddress: "203.0.113.20",
+      });
+    for (let i = 0; i < AUTHORIZATIONS_PER_HOUR; i += 1) {
+      expect((await ask()).headers.location).toMatch(/^\/oauth\/authorize\/[0-9a-f-]{36}$/);
+    }
+    const stored = async () =>
+      (await server.app.db.select().from(oauthRequests).where(eq(oauthRequests.clientId, client.client_id))).length;
+    expect(await stored()).toBe(AUTHORIZATIONS_PER_HOUR);
+    const metered = await ask();
+    expect(metered.headers.location).toBe("/oauth/authorize/invalid?reason=temporarily_unavailable");
+    expect(await stored()).toBe(AUTHORIZATIONS_PER_HOUR);
   });
 
   it("refuses to register a plain-http redirect off this machine", async () => {

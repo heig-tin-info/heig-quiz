@@ -127,7 +127,9 @@ opens a `seb`
 session through `openSession` — still the one place session cookies are
 minted — and lands on `/take/<evaluation>`. Every refusal looks the same to
 the client (`/?seb=invalid`); the audit log keeps the reason
-(`auth.seb_refused`: `config_key`, `ticket`, `seat`).
+(`auth.seb_refused`: `config_key`, `ticket`, `seat`) — since 2026-10-11 only
+for a secret that names a pending ticket, at most 60 times per address and
+hour (security audit L5, N-SEC-09).
 
 The Config Key is computed, not stored: the file is a function of its start
 URL, so the start route rebuilds it from the URL it was reached on. The port

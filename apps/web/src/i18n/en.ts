@@ -1121,6 +1121,7 @@ export const en = {
   "oauth.invalid.invalid_client": "This assistant is not known to the portal. Add the connector again from your assistant.",
   "oauth.invalid.invalid_redirect_uri": "The assistant asked to send the answer to an address it did not register. The portal refused, for your safety.",
   "oauth.invalid.invalid_client_metadata": "The assistant's description could not be read. Try again in a moment.",
+  "oauth.invalid.temporarily_unavailable": "Too many connection attempts came from your network. Try again in an hour.",
 
   "palette.open": "Search",
   "palette.openClassroom": "Open classroom {name}",

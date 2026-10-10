@@ -54,6 +54,11 @@ import {
 
 /** Self-registrations per address and hour: DCR is open to anyone, so it is metered. */
 const REGISTRATIONS_PER_HOUR = 30;
+/**
+ * Authorization requests per address and hour: each stores a request before
+ * anybody signs in, and may fetch a client's document (audit L5).
+ */
+export const AUTHORIZATIONS_PER_HOUR = 60;
 
 export async function oauthRoutes(app: FastifyInstance, config: AppConfig) {
   const issuer = config.PUBLIC_URL;
@@ -127,8 +132,10 @@ export async function oauthRoutes(app: FastifyInstance, config: AppConfig) {
   const refuse = (reply: FastifyReply, reason: string) =>
     reply.redirect(`/oauth/authorize/invalid?reason=${encodeURIComponent(reason)}`, 303);
 
+  const authorizations = new FixedWindowLimiter(AUTHORIZATIONS_PER_HOUR, 3_600_000);
   app.get("/app/oauth/authorize", async (req, reply) => {
     const now = app.clock.now();
+    if (authorizations.hit(req.ip, now.getTime()) !== null) return refuse(reply, "temporarily_unavailable");
     const query = AuthorizeQuery.safeParse(req.query ?? {});
     if (!query.success) return refuse(reply, "invalid_request");
     const q = query.data;

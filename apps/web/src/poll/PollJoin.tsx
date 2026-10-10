@@ -177,9 +177,9 @@ export function PollJoin({
    * Joining is not a click. A guest who scanned a QR has already said
    * everything they meant to say by being here, and an account holder even
    * more so; the only join that is a decision is the one that needs a login,
-   * and that one has a screen of its own below.
+   * and that one has a screen of its own (the server's `401 login_required`).
    */
-  const needsJoin = view !== null && !view.me.loginRequired && !view.me.joined;
+  const needsJoin = view !== null && !view.me.joined;
   const joinMutate = join.mutate;
   useEffect(() => {
     if (!needsJoin || joinFired.current) return;
@@ -206,6 +206,9 @@ export function PollJoin({
   if (poll.isError || view === null) {
     if (isNotFound(poll.error)) return <NotFound navigate={navigate} />;
     if (refusedWith(poll.error, "not_on_roster")) return <NotOnRoster />;
+    // A classroom's poll and no session: the server sent nothing of it, and
+    // the one way in is to sign in (audit L3).
+    if (refusedWith(poll.error, "login_required")) return <LoginGate code={code} />;
     return (
       <GateFrame>
         <h1 className="mb-4 text-lg font-bold tracking-tight">
@@ -215,11 +218,6 @@ export function PollJoin({
       </GateFrame>
     );
   }
-
-  // --- The gate: this poll wants to know who is answering ------------------
-
-  if (view.me.loginRequired)
-    return <LoginGate code={code} />;
 
   const ended = view.state === "ended";
   // What the teacher shows — the key, the votes — never closes the vote:
