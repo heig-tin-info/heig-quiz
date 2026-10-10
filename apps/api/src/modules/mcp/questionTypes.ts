@@ -61,7 +61,7 @@ const GUIDES: Record<string, TypeGuide> = {
       "`kind` is `text`, `number`, `date` or `time`; the constraints of that kind only are read.",
       "`prefilters` (trim, lowercase) apply to the answer AND to each `exact` value: write values in lower case.",
       "List every acceptable spelling as its own `exact` matcher, with and without accents or articles when a student may reasonably omit them.",
-      "A `regex` matcher is for families of answers; a `number` matcher takes a `tolerance` (`toleranceMode` abs or rel).",
+      "A `regex` matcher is for families of answers, in RE2 syntax (no backreference, no lookahead or lookbehind); a `number` matcher takes a `tolerance` (`toleranceMode` abs or rel).",
       "A matcher's `points` (0..1) gives partial credit for an almost-right answer.",
       "The `llm` matcher kind is refused at publication: never use it.",
       "With `variables`, a `number` matcher's `value` and `tolerance` may be a `[[…]]` string (`\"[[t]]\"`); a computed text key (`[[…]]` in an `exact` value) is refused.",
@@ -86,7 +86,7 @@ const GUIDES: Record<string, TypeGuide> = {
       "`{{answer}}` is a text blank; `{{answer|other accepted}}` lists alternatives.",
       "`{{=right|wrong1|wrong2}}` is a dropdown: the option after `=` is the correct one.",
       "`{{#3.14:0.01}}` is a number with an absolute tolerance, `{{#3.14:1%}}` a relative one.",
-      "`{{/^regex$/i}}` is a regular expression; `{{2*answer}}` weighs the blank twice.",
+      "`{{/^regex$/i}}` is a regular expression (RE2 syntax: no backreference, no lookaround); `{{2*answer}}` weighs the blank twice.",
       "`\\{{` writes literal braces. The text needs at least one blank.",
     ],
     example: {

@@ -107,6 +107,27 @@ describe("parseCloze — the docs/04 §4.6 grammar table", () => {
     expect(parseCloze("{{#abc}}").template).toBe("{{#abc}}");
   });
 
+  it("refuses a regex blank RE2 cannot run, or runs only at too high a cost (audit H3)", () => {
+    expect(parseCloze("{{/(a)\\1/}}").errors[0]?.message).toBe("cloze.unsupported_regex");
+    expect(parseCloze("{{/a(?=b)/i}}").errors[0]?.message).toBe("cloze.unsupported_regex");
+    expect(parseCloze("{{/(?<=a)b/}}").errors[0]?.message).toBe("cloze.unsupported_regex");
+    expect(parseCloze("{{/(?:.?){999}/}}").errors[0]?.message).toBe("cloze.complex_regex");
+    expect(parseCloze(`{{/${"a".repeat(301)}/}}`).errors[0]?.message).toBe("cloze.invalid_regex");
+    expect(parseCloze("{{/a/ii}}").errors[0]?.message).toBe("cloze.invalid_regex_flags");
+    expect(parseBlankBody("/a(?=b)/")).toBe("cloze.unsupported_regex");
+  });
+
+  it("keeps a refused regex blank as a blank that never matches, its pattern out of the template", () => {
+    // A version published when JavaScript ran the patterns: its numbering and
+    // its sentinel must survive, or the pattern would reach the student.
+    const parse = parseCloze("{{/(sec)\\1ret/}} and {{Newton}}");
+    expect(parse.errors.map((e) => e.message)).toEqual(["cloze.unsupported_regex"]);
+    expect(parse.blanks.map((b) => [b.index, b.kind])).toEqual([[0, "regex"], [1, "text"]]);
+    expect(parse.template).toBe(`${s(0)} and ${s(1)}`);
+    expect(JSON.stringify(clozeStudentTemplate(parse, 1, "item", false))).not.toContain("sec");
+    expect(gradeCloze(parse, ["secsecret", "Newton"], false).perBlank.map((b) => b.ok)).toEqual([false, true]);
+  });
+
   it("treats an unclosed slash form as plain text", () => {
     expect(parseCloze("{{/abc}}").blanks[0]).toMatchObject({ kind: "text", answers: ["/abc"] });
   });
@@ -186,6 +207,15 @@ describe("gradeCloze", () => {
     expect(grade.perBlank.map((b) => b.ok)).toEqual([false, false, false, false]);
     expect([grade.earned, grade.fraction]).toEqual([0, 0]);
     expect(grade.perBlank[0]?.given).toBeNull();
+  });
+
+  it("grades a regex blank in linear time, with its flags and Unicode input", () => {
+    const blanks = parseCloze("{{/(a+)+$/}} {{/galilée/i}} {{/\\p{L}+/u}}");
+    expect(blanks.errors).toEqual([]);
+    const start = performance.now();
+    const grade = gradeCloze(blanks, [`${"a".repeat(400)}!`, "GALILÉE", "Ωμέγα"], false);
+    expect(performance.now() - start).toBeLessThan(100);
+    expect(grade.perBlank.map((b) => b.ok)).toEqual([false, true, true]);
   });
 
   it("honours caseSensitive on text blanks only", () => {

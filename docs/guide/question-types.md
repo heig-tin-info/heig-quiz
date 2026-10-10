@@ -111,7 +111,7 @@ A constraint says what the field accepts, never what the answer is: the student 
 | Matcher | Fields | Accepts |
 | --- | --- | --- |
 | **Exact text** | **Value** | equality after the prefilters |
-| **Regular expression** | **Pattern**, **Flags** | a full match on the prefiltered input; the `i` flag stays the pattern's own |
+| **Regular expression** | **Pattern**, **Flags** | a full match on the prefiltered input; the `i` flag stays the pattern's own. RE2 syntax: a backreference (`\1`) or a lookaround (`(?=…)`, `(?<=…)`) is refused at publication |
 | **Number** | **Value**, **Tolerance**, **Absolute** or **Relative (%)**, optional **Unit** and **Unit required** | a numeric comparison within the tolerance |
 | **Date** | **Value**, **Tolerance (days)** | a date within the window |
 | **Time** | **Value**, **Tolerance (minutes)** | a time within the window |
@@ -169,7 +169,7 @@ The raw syntax is what is stored, and the **Markdown source** button shows it:
 | `{{=Newton\|Maxwell\|Faraday}}` | a dropdown, `=` marks the correct option |
 | `{{#3.14:0.01}}` | a number with an absolute tolerance |
 | `{{#3.14:1%}}` | a number with a relative tolerance |
-| `{{/^[0-9a-f]+$/i}}` | a regular expression |
+| `{{/^[0-9a-f]+$/i}}` | a regular expression, in the RE2 syntax of the short answer |
 | `{{2*Newton}}` | weight 2 for this blank |
 | `\{{` | literal braces in the text |
 

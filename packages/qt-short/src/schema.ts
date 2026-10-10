@@ -20,7 +20,12 @@
  * the schema reads as the number it spells. A v2 config IS a v3 config.
  */
 import { IDENTIFIER_SOURCE } from "@quiz/domain";
-import { ALLOWED_REGEX_FLAGS, isValidPattern, MAX_PATTERN_LENGTH } from "@quiz/domain/short";
+import {
+  ALLOWED_REGEX_FLAGS,
+  MAX_PATTERN_LENGTH,
+  patternProblem,
+  type PatternProblem,
+} from "@quiz/domain/short";
 import { z } from "zod";
 
 export const SHORT_CONFIG_VERSION = 3;
@@ -167,16 +172,26 @@ const ShortConfigShape = z.object({
   matchers: z.array(ShortMatcherSchema).min(1).max(SHORT_MAX_MATCHERS),
 });
 
+/** The i18n key of each reason a regex matcher is refused (the RE2 syntax, `@quiz/domain/short`). */
+const PATTERN_PROBLEM_KEY: Record<PatternProblem, string> = {
+  too_long: "short.invalid_pattern",
+  flags: "short.invalid_pattern",
+  syntax: "short.invalid_pattern",
+  unsupported: "short.unsupported_pattern",
+  too_complex: "short.complex_pattern",
+};
+
 function refineShortConfig(
   config: z.infer<typeof ShortConfigShape>,
   ctx: z.RefinementCtx,
 ): void {
   config.matchers.forEach((matcher, index) => {
-    if (matcher.kind === "regex" && !isValidPattern(matcher.pattern, matcher.flags)) {
+    const problem = matcher.kind === "regex" ? patternProblem(matcher.pattern, matcher.flags) : null;
+    if (problem !== null) {
       ctx.addIssue({
         code: "custom",
         path: ["matchers", index, "pattern"],
-        message: "short.invalid_pattern",
+        message: PATTERN_PROBLEM_KEY[problem],
       });
     }
     // A field that only takes whole numbers cannot expect 3.5.

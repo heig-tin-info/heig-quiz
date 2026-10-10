@@ -19,13 +19,13 @@
  */
 import { shuffle, streamSeed } from "@quiz/core/rng";
 import {
-  ALLOWED_REGEX_FLAGS,
   applyTextOptions,
-  isValidPattern,
   matchExact,
   matchNumber,
   matchRegex,
   normalizeInput,
+  patternProblem,
+  type PatternProblem,
   type ToleranceMode,
 } from "./short.js";
 
@@ -72,7 +72,9 @@ export interface ClozeParse {
 /**
  * Parses the authoring text. Always total: a malformed blank lands in
  * `errors` and is rendered literally, never thrown, because a teacher must be
- * able to leave a question half-written (decision D16).
+ * able to leave a question half-written (decision D16). A regex blank whose
+ * pattern is refused is the exception: it lands in `errors` AND stays a blank,
+ * one that never matches (see `readBlankBody`).
  */
 export function parseCloze(text: string): ClozeParse {
   // An author typing a raw sentinel would otherwise conjure a phantom input in
@@ -101,13 +103,13 @@ export function parseCloze(text: string): ClozeParse {
       i += 2;
       continue;
     }
-    const parsed = parseBlankBody(source.slice(i + 2, end), blanks.length);
-    if (typeof parsed === "string") {
-      errors.push({ at: i, message: parsed });
+    const { blank, error } = readBlankBody(source.slice(i + 2, end), blanks.length);
+    if (error !== null) errors.push({ at: i, message: error });
+    if (blank === null) {
       template += source.slice(i, end + 2);
     } else {
-      blanks.push(parsed);
-      template += clozeSentinel(parsed.index);
+      blanks.push(blank);
+      template += clozeSentinel(blank.index);
     }
     i = end + 2;
   }
@@ -161,13 +163,35 @@ export function matchClozeHole(src: string): { raw: string; body: string | null 
  * the card showed.
  */
 export function parseBlankBody(body: string, index = 0): ClozeBlank | string {
+  const { blank, error } = readBlankBody(body, index);
+  return error ?? blank!;
+}
+
+/**
+ * A body read: its blank, why it is invalid, or BOTH — a `/pattern/flags`
+ * body is a regex blank whatever its pattern, and a refused pattern is an
+ * error beside it. The blank stays so that a version published under an
+ * earlier engine keeps its numbering and its sentinel (audit H3): rendered
+ * literally, its pattern would reach the student in the template.
+ */
+interface BlankRead {
+  blank: ClozeBlank | null;
+  error: string | null;
+}
+
+function readBlankBody(body: string, index: number): BlankRead {
   const { weight, rest } = stripWeight(body);
-  if (rest.trim() === "") return "cloze.empty_blank";
+  if (rest.trim() === "") return { blank: null, error: "cloze.empty_blank" };
   const head: BlankHead = { index, weight };
-  if (rest.startsWith("#")) return parseNumberBlank(rest, head);
+  if (rest.startsWith("#")) return settled(parseNumberBlank(rest, head));
   const regexMatch = REGEX_BLANK.exec(rest);
-  if (regexMatch !== null) return parseRegexBlank(regexMatch[1]!, regexMatch[2]!, head);
-  return parseChoiceBlank(splitAlternatives(rest), head);
+  if (regexMatch !== null) return readRegexBlank(regexMatch[1]!, regexMatch[2]!, head);
+  return settled(parseChoiceBlank(splitAlternatives(rest), head));
+}
+
+/** Every other kind is either a blank or an error, never both. */
+function settled(parsed: ClozeBlank | string): BlankRead {
+  return typeof parsed === "string" ? { blank: null, error: parsed } : { blank: parsed, error: null };
 }
 
 /** What every blank carries whatever its kind: its position and its weight. */
@@ -202,11 +226,19 @@ function parseNumberBlank(rest: string, head: BlankHead): ClozeBlank | string {
   };
 }
 
-/** A regular expression, refused when its flags or its pattern are not allowed. */
-function parseRegexBlank(pattern: string, flags: string, head: BlankHead): ClozeBlank | string {
-  if (!ALLOWED_REGEX_FLAGS.test(flags)) return "cloze.invalid_regex_flags";
-  if (!isValidPattern(pattern, flags)) return "cloze.invalid_regex";
-  return { ...head, kind: "regex", pattern, flags };
+/** The i18n key of each reason a blank's pattern is refused. */
+const REGEX_PROBLEM_KEY: Record<PatternProblem, string> = {
+  too_long: "cloze.invalid_regex",
+  syntax: "cloze.invalid_regex",
+  flags: "cloze.invalid_regex_flags",
+  unsupported: "cloze.unsupported_regex",
+  too_complex: "cloze.complex_regex",
+};
+
+/** A regular expression, with an error when its flags or its pattern are not allowed. */
+function readRegexBlank(pattern: string, flags: string, head: BlankHead): BlankRead {
+  const problem = patternProblem(pattern, flags);
+  return { blank: { ...head, kind: "regex", pattern, flags }, error: problem === null ? null : REGEX_PROBLEM_KEY[problem] };
 }
 
 /**

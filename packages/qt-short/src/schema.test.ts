@@ -77,6 +77,16 @@ describe("ShortConfigSchema", () => {
     expect(result.error?.issues[0]?.message).toBe("short.invalid_pattern");
   });
 
+  it("says why RE2 refuses a pattern: a backreference or lookaround, or a program too large", () => {
+    const messages = (pattern: string) =>
+      ShortConfigSchema.safeParse({ ...base(), matchers: [{ kind: "regex", pattern }] }).error?.issues.map(
+        (issue) => issue.message,
+      );
+    expect(messages("(a)\\1")).toEqual(["short.unsupported_pattern"]);
+    expect(messages("a(?!b)")).toEqual(["short.unsupported_pattern"]);
+    expect(messages("(?:.?){999}")).toEqual(["short.complex_pattern"]);
+  });
+
   it("applies the documented defaults", () => {
     const config = ShortConfigSchema.parse(base());
     expect(config.kind).toBe("text");

@@ -145,6 +145,8 @@ Runs of whitespace inside an answer are always collapsed to a single space. In v
 
 Each matcher may carry `points` as a fraction, default 1, to accept a partially correct answer.
 
+A `regex` pattern (here and in a cloze blank) follows the RE2 syntax, matched in time linear in the input: no backreference (`\1`), no lookahead or lookbehind. Such a pattern, a syntax error, flags outside `imsu`, more than 300 characters or a compiled program above 500 instructions is refused at publication (`short.invalid_pattern`, `short.unsupported_pattern`, `short.complex_pattern`; `cloze.invalid_regex`, `cloze.unsupported_regex`, `cloze.complex_regex`); the student's input is cut to 500 characters before matching (PLAN-MVP D10).
+
 **Editor**: the `kind` is a segmented control, the constraints of that `kind` sit on the same line, to its right; the prefilters are two checkboxes below the list of accepted answers.
 
 **Answer**: `text` string.
