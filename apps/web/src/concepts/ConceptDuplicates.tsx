@@ -1,9 +1,9 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type UseMutationResult } from "@tanstack/react-query";
 import { Check, GitMerge, Pencil, Sparkles } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 
 import type { AdminConcept, ConceptDuplicatesAi } from "@quiz/contracts";
-import { mergeDirection, probableDuplicates, type DuplicatePair as DuplicatePairOf, type DuplicateReason } from "@quiz/domain";
+import { mergeDirection, probableDuplicates, type AiDuplicateKind, type DuplicatePair as DuplicatePairOf, type DuplicateReason } from "@quiz/domain";
 
 import { apiErrorMessage } from "../api";
 import { useI18n, useT } from "../i18n";
@@ -14,7 +14,8 @@ import { ConceptStatusBadge } from "./ConceptStatusBadge";
 import { conceptName, refName, usesLabel } from "./names";
 import { resolvable } from "./ranking";
 
-export type DuplicatePair = DuplicatePairOf<AdminConcept>;
+/** The reason of a pair: the pre-pass's, or, for a model's, one of its kinds (`related` is its own). */
+export type DuplicatePair = Omit<DuplicatePairOf<AdminConcept>, "reason"> & { reason: DuplicateReason | AiDuplicateKind };
 
 /**
  * The probable duplicates of the queue's list (`probableDuplicates`, ADR-081
@@ -28,21 +29,8 @@ export function duplicatePairs(concepts: readonly AdminConcept[]): DuplicatePair
   }));
 }
 
-/** A pair the model proposed (purpose `concepts`), with its reason in the model's words. */
-export interface AiPair {
-  a: AdminConcept;
-  b: AdminConcept;
-  reason: string;
-}
-
-/** The AI's session state, held by the queue so that a paid answer survives a change of filter. */
-export interface AiDuplicates {
-  ask: () => void;
-  pending: boolean;
-  error: unknown;
-  /** The answer, or undefined before the first ask. */
-  result: ConceptDuplicatesAi | undefined;
-}
+/** A pair the model proposed (purpose `concepts`), with its reason, in the model's words, in `ai`. */
+export type AiPair = DuplicatePair & { ai: string };
 
 const pairKey = (a: string, b: string) => (a < b ? `${a}:${b}` : `${b}:${a}`);
 
@@ -54,9 +42,9 @@ const pairKey = (a: string, b: string) => (a < b ? `${a}:${b}` : `${b}:${a}`);
 export function aiPairsOf(result: ConceptDuplicatesAi | undefined, concepts: readonly AdminConcept[], found: readonly DuplicatePair[]): AiPair[] {
   const byId = new Map(concepts.map((c) => [c.id, c]));
   const known = new Set(found.map((p) => pairKey(p.a.id, p.b.id)));
-  return (result?.pairs ?? []).flatMap(({ a, b, reason }) => {
+  return (result?.pairs ?? []).flatMap(({ a, b, kind, reason }) => {
     const [ca, cb] = [byId.get(a), byId.get(b)];
-    return ca && cb && !known.has(pairKey(a, b)) ? [{ a: ca, b: cb, reason }] : [];
+    return ca && cb && !known.has(pairKey(a, b)) ? [{ a: ca, b: cb, reason: kind, ai: reason }] : [];
   });
 }
 
@@ -74,7 +62,9 @@ const REASONS = {
   close: { tone: "amber", mergeable: true, label: "admin.concepts.dup.close", why: "admin.concepts.dup.close.why" },
   // Often two real concepts: the admin checks the qualifiers, a merge is not proposed.
   homonym: { tone: "zinc", mergeable: false, label: "admin.concepts.dup.homonym", why: "admin.concepts.dup.homonym.why" },
-} as const satisfies Record<DuplicateReason, { tone: "red" | "amber" | "zinc"; mergeable: boolean; label: string; why: string }>;
+  // Connected but distinct (the model's kind): never merged.
+  related: { tone: "zinc", mergeable: false, label: "admin.concepts.dup.related", why: "admin.concepts.dup.related.why" },
+} as const satisfies Record<DuplicateReason | AiDuplicateKind, { tone: "red" | "amber" | "zinc"; mergeable: boolean; label: string; why: string }>;
 
 /**
  * The probable duplicates, one row per pair: why the two look alike and,
@@ -91,7 +81,7 @@ export function ConceptDuplicates({
 }: {
   pairs: readonly DuplicatePair[];
   aiPairs: readonly AiPair[];
-  ai: AiDuplicates;
+  ai: UseMutationResult<ConceptDuplicatesAi, Error, void>;
   concepts: readonly AdminConcept[];
   onEdit: (id: string) => void;
 }) {
@@ -112,22 +102,9 @@ export function ConceptDuplicates({
           <p className="text-[13px] text-fg-muted">{t("admin.concepts.dup.hint")}</p>
           <Card>
             <ul className="divide-y divide-line">
-              {pairs.map((pair) => {
-                const reason = REASONS[pair.reason];
-                return (
-                  <PairRow
-                    key={`${pair.a.id}:${pair.b.id}`}
-                    a={pair.a}
-                    b={pair.b}
-                    names={pair.match?.map(withLang)}
-                    badge={<Badge tone={reason.tone}>{t(reason.label)}</Badge>}
-                    why={t(reason.why)}
-                    mergeable={reason.mergeable}
-                    onEdit={onEdit}
-                    onMerge={setMerging}
-                  />
-                );
-              })}
+              {pairs.map((pair) => (
+                <PairRow key={`${pair.a.id}:${pair.b.id}`} pair={pair} onEdit={onEdit} onMerge={setMerging} />
+              ))}
             </ul>
           </Card>
         </>
@@ -164,7 +141,7 @@ function AiSuggestions({
   onMerge,
 }: {
   aiPairs: readonly AiPair[];
-  ai: AiDuplicates;
+  ai: UseMutationResult<ConceptDuplicatesAi, Error, void>;
   onEdit: (id: string) => void;
   onMerge: (direction: { loser: AdminConcept; target: AdminConcept }) => void;
 }) {
@@ -172,37 +149,27 @@ function AiSuggestions({
   return (
     <section aria-label={t("admin.concepts.ai.title")} className="space-y-3 pt-2">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <Button variant="secondary" size="sm" loading={ai.pending} onClick={ai.ask}>
-          <Sparkles /> {t(ai.result ? "admin.concepts.ai.askAgain" : "admin.concepts.ai.ask")}
+        <Button variant="secondary" size="sm" loading={ai.isPending} onClick={() => ai.mutate()}>
+          <Sparkles /> {t(ai.data ? "admin.concepts.ai.askAgain" : "admin.concepts.ai.ask")}
         </Button>
-        <p className="min-w-0 flex-1 basis-64 text-xs text-fg-muted">{t("admin.concepts.ai.hint")}</p>
+        <p className="min-w-0 flex-1 basis-64 text-xs text-fg-muted">
+          {t("admin.concepts.ai.hint")}
+          {ai.data?.truncated ? ` ${t("admin.concepts.ai.truncated")}` : ""}
+        </p>
       </div>
-      {ai.error ? (
+      {ai.isError ? (
         <Alert tone="danger" title={t("admin.concepts.ai.failed")}>
           {apiErrorMessage(ai.error, t("error.llmFailed"))}
         </Alert>
       ) : null}
-      {ai.result && !ai.pending && aiPairs.length === 0 ? (
+      {ai.data && !ai.isPending && aiPairs.length === 0 ? (
         <p className="text-sm text-fg-muted">{t("admin.concepts.ai.none")}</p>
       ) : null}
       {aiPairs.length > 0 ? (
         <Card>
           <ul className="divide-y divide-line">
             {aiPairs.map((pair) => (
-              <PairRow
-                key={`${pair.a.id}:${pair.b.id}`}
-                a={pair.a}
-                b={pair.b}
-                badge={
-                  <Badge tone="accent" icon={Sparkles}>
-                    {t("admin.concepts.ai.badge")}
-                  </Badge>
-                }
-                why={pair.reason}
-                mergeable
-                onEdit={onEdit}
-                onMerge={onMerge}
-              />
+              <PairRow key={`${pair.a.id}:${pair.b.id}`} pair={pair} ai={pair.ai} onEdit={onEdit} onMerge={onMerge} />
             ))}
           </ul>
         </Card>
@@ -212,38 +179,35 @@ function AiSuggestions({
 }
 
 function PairRow({
-  a,
-  b,
-  names: matched,
-  badge,
-  why,
-  mergeable,
+  pair,
+  ai,
   onEdit,
   onMerge,
 }: {
-  a: AdminConcept;
-  b: AdminConcept;
-  /** The labels to show instead of the concepts' names (a translation's matching labels). */
-  names?: string[] | undefined;
-  badge: ReactNode;
-  why: string;
-  mergeable: boolean;
+  pair: DuplicatePair;
+  /** The model's sentence, when the pair is its suggestion. */
+  ai?: string;
   onEdit: (id: string) => void;
   onMerge: (direction: { loser: AdminConcept; target: AdminConcept }) => void;
 }) {
   const t = useT();
   const { locale } = useI18n();
-  const direction = mergeable ? mergeDirection(a, b) : null;
-  const names = matched ?? [conceptName(a, locale), conceptName(b, locale)];
+  const reason = REASONS[pair.reason];
+  const [a, b] = [pair.a, pair.b];
+  const direction = reason.mergeable ? mergeDirection(a, b) : null;
+  const names = pair.match?.map(withLang) ?? [conceptName(a, locale), conceptName(b, locale)];
   const whyId = `dup-${a.id}-${b.id}-why`;
 
   return (
     <li className="flex flex-wrap items-start gap-x-4 gap-y-3 p-4">
       <div className="min-w-0 flex-1 basis-72 space-y-2">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          {badge}
+          <Badge tone={reason.tone} {...(ai === undefined ? {} : { icon: Sparkles })}>
+            {t(reason.label)}
+          </Badge>
+          {ai === undefined ? null : <span className="text-xs font-medium text-fg-muted">{t("admin.concepts.ai.badge")}</span>}
           <span id={whyId} className="text-xs text-fg-muted">
-            {why}
+            {ai ?? t(reason.why)}
           </span>
         </div>
         <ul className="space-y-1">
@@ -264,7 +228,7 @@ function PairRow({
           ))}
         </ul>
       </div>
-      {!mergeable ? null : direction ? (
+      {!reason.mergeable ? null : direction ? (
         <Button
           size="sm"
           variant="secondary"

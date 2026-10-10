@@ -42,6 +42,7 @@ import { columnsOf, conflictOr, loadAliases, perLang, refuseAliasHolder, side, s
 
 export { addAlias, removeAlias } from "./aliases.js";
 export { listAdminConcepts } from "./admin.js";
+export { aiDuplicates } from "./duplicatesAi.js";
 export { mergeConcept } from "./merge.js";
 export { conceptReferenced } from "./referenced.js";
 export { toConcept, toConceptRef } from "./row.js";

@@ -411,6 +411,14 @@ export function filterIds(resolution: LabelResolution): string[] {
 export const DUPLICATE_REASONS = ["alias", "translation", "homonym", "close"] as const;
 export type DuplicateReason = (typeof DUPLICATE_REASONS)[number];
 
+/**
+ * The kinds a model files a pair under (ADR-081 fifth addendum §4, PR4b): the
+ * reasons that need no alias (it never sees them), and `related` — distinct
+ * concepts that are connected, never merged (the relations of step 7).
+ */
+export const AI_DUPLICATE_KINDS = ["translation", "homonym", "close", "related"] as const satisfies readonly (DuplicateReason | "related")[];
+export type AiDuplicateKind = (typeof AI_DUPLICATE_KINDS)[number];
+
 type Label = ResolvableConcept["labels"][number];
 
 /** A live concept and its labels' keys, computed once. */

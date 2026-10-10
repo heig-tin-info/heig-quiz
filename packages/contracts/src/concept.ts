@@ -11,6 +11,7 @@
 import { z } from "zod";
 
 import {
+  AI_DUPLICATE_KINDS,
   CONCEPT_DESCRIPTION_MAX,
   CONCEPT_LABEL_MAX,
   CONCEPT_LABEL_PATTERN,
@@ -90,8 +91,22 @@ export type AdminConceptList = z.infer<typeof AdminConceptList>;
  * live concepts, `a` before `b`, each pair once, with a short reason in the
  * model's words. Nothing is stored.
  */
+export const CONCEPT_AI_PAIRS_MAX = 50;
+export const CONCEPT_AI_REASON_MAX = 200;
 export const ConceptDuplicatesAi = z.object({
-  pairs: z.array(z.object({ a: z.uuid(), b: z.uuid(), reason: z.string() })),
+  pairs: z
+    .array(
+      z.object({
+        a: z.uuid(),
+        b: z.uuid(),
+        /** `related` pairs are connected but distinct; `homonym` and `related` are never offered for a merge. */
+        kind: z.enum(AI_DUPLICATE_KINDS),
+        reason: z.string().min(1).max(CONCEPT_AI_REASON_MAX),
+      }),
+    )
+    .max(CONCEPT_AI_PAIRS_MAX),
+  /** The vocabulary was longer than a call takes: the newest validated concepts were left out. */
+  truncated: z.boolean(),
 });
 export type ConceptDuplicatesAi = z.infer<typeof ConceptDuplicatesAi>;
 

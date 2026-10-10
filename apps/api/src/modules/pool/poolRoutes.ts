@@ -16,7 +16,8 @@ import { DomainError, invalid, rateLimited, readerLang } from "../http.js";
 import { publish } from "../../events.js";
 import { poolChanged, poolPeopleChanged } from "./events.js";
 import * as service from "./service.js";
-import { LLM_CALLS_PER_MINUTE, type PoolRouteContext } from "./routeContext.js";
+import { LLM_CALLS_PER_MINUTE } from "../llm/service.js";
+import type { PoolRouteContext } from "./routeContext.js";
 
 export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { requireTeacher, trace, teacher, inPool, topicsOf } = ctx;

@@ -71,20 +71,16 @@ export function ConceptQueue() {
 
   const found = useMemo(() => duplicatePairs(all ?? []), [all]);
   // Under a search, the pairs of which a concept matches.
-  const pairs = useMemo(() => {
-    if (q === "") return found;
+  const narrowed = useMemo(() => {
+    if (q === "") return () => true;
     const matched = new Set(rankConcepts(q, all ?? [], locale).map((c) => c.id));
-    return found.filter((p) => matched.has(p.a.id) || matched.has(p.b.id));
-  }, [found, all, q, locale]);
+    return (p: { a: AdminConcept; b: AdminConcept }) => matched.has(p.a.id) || matched.has(p.b.id);
+  }, [all, q, locale]);
+  const pairs = useMemo(() => found.filter(narrowed), [found, narrowed]);
   const asked = useMutation({
     mutationFn: async () => ConceptDuplicatesAi.parse(await api("/app/api/admin/concepts/duplicates/ai", { method: "POST" })),
   });
-  const aiPairs = useMemo(() => {
-    const fromModel = aiPairsOf(asked.data, all ?? [], found);
-    if (q === "") return fromModel;
-    const matched = new Set(rankConcepts(q, all ?? [], locale).map((c) => c.id));
-    return fromModel.filter((p) => matched.has(p.a.id) || matched.has(p.b.id));
-  }, [asked.data, found, all, q, locale]);
+  const aiPairs = useMemo(() => aiPairsOf(asked.data, all ?? [], found).filter(narrowed), [asked.data, all, found, narrowed]);
   const edited = all?.find((c) => c.id === editing);
 
   const validate = useMutation({
@@ -136,7 +132,7 @@ export function ConceptQueue() {
         <ConceptDuplicates
           pairs={pairs}
           aiPairs={aiPairs}
-          ai={{ ask: () => asked.mutate(), pending: asked.isPending, error: asked.error, result: asked.data }}
+          ai={asked}
           concepts={all ?? []}
           onEdit={setEditing}
         />

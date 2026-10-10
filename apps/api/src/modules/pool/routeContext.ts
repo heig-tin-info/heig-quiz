@@ -31,9 +31,6 @@ import { GenerateRefusal } from "./generate.js";
 import { ReviewRefusal } from "./review.js";
 import * as service from "./service.js";
 
-/** A held-down wand, not a quota (ADR-059): the gateway's daily cap is the ceiling. */
-export const LLM_CALLS_PER_MINUTE = 10;
-
 
 /**
  * A failure raised by the question-type layer is a client error, not a 500:

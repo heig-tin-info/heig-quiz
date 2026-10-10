@@ -13,7 +13,8 @@ import { rateLimited } from "../http.js";
 import { poolChanged } from "./events.js";
 import { applyReviewFix, reviewVersion } from "./review.js";
 import { ignoreReview, latestVersionOf, poolReviews, reviewJson, reviewOf, setReviewEnabled } from "./reviewStore.js";
-import { LLM_CALLS_PER_MINUTE, type PoolRouteContext } from "./routeContext.js";
+import { LLM_CALLS_PER_MINUTE } from "../llm/service.js";
+import type { PoolRouteContext } from "./routeContext.js";
 
 export function reviewRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { requireTeacher, trace, teacher, inPool, onQuestion } = ctx;

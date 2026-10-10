@@ -398,12 +398,12 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
       const AI = "POST /app/api/admin/concepts/duplicates/ai";
       const stack = concept(20, { status: "validated", labels: { fr: "Pile", en: "Stack" }, questionCount: 3, deletable: false });
       const lifo = concept(21, { labels: { fr: "LIFO", en: "LIFO" } });
-      const aiPair = (a: AdminConcept, b: AdminConcept, reason: string) => ({ a: a.id, b: b.id, reason });
+      const aiPair = (a: AdminConcept, b: AdminConcept, reason: string, kind = "close") => ({ a: a.id, b: b.id, kind, reason });
 
       it("asks on demand only, then shows its pairs below the others, labelled and with their reason", async () => {
         const { calls } = mockFetch({
           [LIST]: ok(page([...all, stack, lifo])),
-          [AI]: ok({ pairs: [aiPair(lifo, stack, "LIFO is the discipline of a stack.")] }),
+          [AI]: ok({ pairs: [aiPair(lifo, stack, "LIFO is the discipline of a stack.")], truncated: false }),
         });
         await open();
         expect(calls.some((c) => c.url.endsWith("/duplicates/ai"))).toBe(false);
@@ -423,7 +423,7 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
       it("merges from an AI pair like from any other", async () => {
         const { calls } = mockFetch({
           [LIST]: ok(page([stack, lifo])),
-          [AI]: ok({ pairs: [aiPair(lifo, stack, "Same thing.")] }),
+          [AI]: ok({ pairs: [aiPair(lifo, stack, "Same thing.")], truncated: false }),
           [mergeOf(lifo)]: ok(stack),
         });
         await open();
@@ -443,12 +443,31 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
               aiPair(typo, pointer, "Already found as close labels."),
               aiPair(ready, { ...stack, id: "c0c0c0c0-0000-4000-8000-0000000000ff" }, "Unknown concept."),
             ],
+            truncated: false,
           }),
         });
         await open();
         await userEvent.click(screen.getByRole("button", { name: /^ask the ai$/i }));
         expect(await screen.findByText("The AI found no further pair.")).toBeInTheDocument();
         expect(screen.queryByText("Already found as close labels.")).toBeNull();
+      });
+
+      it("offers no merge for a homonym or a related pair, and says when the vocabulary was cut", async () => {
+        mockFetch({
+          [LIST]: ok(page([stack, lifo, heap])),
+          [AI]: ok({
+            pairs: [aiPair(lifo, stack, "One word, two meanings.", "homonym"), aiPair(heap, stack, "Both are memory structures.", "related")],
+            truncated: true,
+          }),
+        });
+        await open();
+        await userEvent.click(screen.getByRole("button", { name: /^ask the ai$/i }));
+        expect(await screen.findByText("One word, two meanings.")).toBeInTheDocument();
+        const rows = screen.getAllByRole("listitem").filter((li) => within(li).queryByText("AI suggestion"));
+        expect(rows).toHaveLength(2);
+        for (const row of rows) expect(within(row).queryByRole("button", { name: /merge/i })).toBeNull();
+        expect(screen.getByText("Related")).toBeInTheDocument();
+        expect(screen.getByText(/oldest validated concepts were left out/i)).toBeInTheDocument();
       });
 
       it("says why when the platform has no AI key or the cap is reached, and can be asked again", async () => {
@@ -463,7 +482,7 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
       });
 
       it("is offered even when the comparison finds nothing", async () => {
-        mockFetch({ [LIST]: ok(page([validated, ready])), [AI]: ok({ pairs: [] }) });
+        mockFetch({ [LIST]: ok(page([validated, ready])), [AI]: ok({ pairs: [], truncated: false }) });
         await open();
         expect(await screen.findByText("No probable duplicates")).toBeInTheDocument();
         await userEvent.click(screen.getByRole("button", { name: /^ask the ai$/i }));

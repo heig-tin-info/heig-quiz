@@ -57,12 +57,8 @@ import { actorOf } from "../../audit.js";
 import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
 import { adminGuard, callerOf, teacherGuard } from "../guards.js";
 import { invalid, notFound, rateLimited, readerLang, sendFailure } from "../http.js";
-import { llmArms } from "../llm/service.js";
-import { aiDuplicates } from "./duplicatesAi.js";
+import { llmArms, LLM_CALLS_PER_MINUTE } from "../llm/service.js";
 import * as service from "./service.js";
-
-/** A double click, not a quota: the gateway's daily cap is the ceiling (ADR-059). */
-const ASKS_PER_MINUTE = 5;
 
 export async function conceptPlugin(app: FastifyInstance) {
   const requireTeacher = teacherGuard(app);
@@ -115,9 +111,9 @@ export async function conceptPlugin(app: FastifyInstance) {
   const asks = new Budget();
   app.post("/app/api/admin/concepts/duplicates/ai", { preHandler: requireAdmin }, async (req, reply) => {
     const now = app.clock.now();
-    if (!asks.spend(`concepts:${req.user!.id}`, ASKS_PER_MINUTE, now)) return rateLimited(reply, BUDGET_RETRY_AFTER_S);
+    if (!asks.spend(`concepts:${req.user!.id}`, LLM_CALLS_PER_MINUTE, now)) return rateLimited(reply, BUDGET_RETRY_AFTER_S);
     try {
-      return await aiDuplicates(app.db, app.llmGateway, req.user!.id);
+      return await service.aiDuplicates(app.db, app.llmGateway, req.user!.id, readerLang(req));
     } catch (error) {
       return sendFailure(reply, error, now, llmArms);
     }
