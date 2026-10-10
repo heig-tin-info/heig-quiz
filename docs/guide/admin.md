@@ -40,9 +40,9 @@ The **Concepts** tab of the administration is the curation queue of that vocabul
 
 - **Validate** accepts a proposed concept. It is disabled while the concept has no label in French or in English: the row says which one is missing. Open the concept with **Edit** to add it.
 - **Edit** opens the concept: label, qualifier (what tells *Address (memory)* from *Address (network)*) and description, in both languages. A label another concept already holds is refused.
-- **Delete concept**, in the same sheet, is possible only while nothing refers to the concept. Otherwise it stays disabled and says why: a question uses it, or a deleted question or a merged concept still points to it.
+- **Delete concept** or **Merge into…**, in the same sheet, retire a concept: one or the other, never both. **Delete** is offered while nothing refers to the concept. Once a question uses it, or a deleted question or a merged concept still points to it, **Merge into…** takes its place: search the **validated** concept that stays (it keeps its labels), read how many questions use each and what will happen, and confirm. The questions that used the merged concept now use the one you picked, a question that had both keeps one, and the merged concept leaves the list: its label no longer designates anything. Only a validated concept can be a target, so validate a proposed one first. Save or cancel your edits before merging. A merge cannot be undone from the application: choose the target with care.
 
-Merging two concepts, aliases and the detection of probable duplicates come next. The free tags that questions carried before concepts existed are gone, and so is the administration's former **Concepts** tab where they were sorted. A label the administrator dropped during that sorting (a chapter, a week, a kind of task, noise) still cannot be created again as a concept, by a teacher or by an assistant connected to the platform.
+Aliases and the detection of probable duplicates come next. The free tags that questions carried before concepts existed are gone, and so is the administration's former **Concepts** tab where they were sorted. A label the administrator dropped during that sorting (a chapter, a week, a kind of task, noise) still cannot be created again as a concept, by a teacher or by an assistant connected to the platform.
 
 ## What an administrator sees elsewhere
 

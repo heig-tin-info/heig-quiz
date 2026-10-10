@@ -1559,6 +1559,13 @@ const scenes = [
   { name: "admin-concepts", role: "admin", path: "/admin?tab=concepts" },
   { name: "admin-concepts-sheet", role: "admin", path: "/admin?tab=concepts", fold: true, act: (p) => p.getByRole("button", { name: /^edit récursivité/i }).click() },
   { name: "admin-concepts-sheet-used", role: "admin", path: "/admin?tab=concepts", fold: true, act: (p) => p.getByRole("button", { name: /^edit two's complement/i }).click() },
+  // The merge dialog over the sheet of a used concept, a target picked (what the merge does is said before the confirmation).
+  { name: "admin-concepts-merge", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^edit two's complement/i }).click();
+      await p.getByRole("dialog").getByRole("button", { name: /^merge into/i }).click();
+      await p.getByRole("searchbox", { name: /search a validated concept/i }).fill("pointer");
+      await p.getByRole("radio", { name: /^pointer/i }).first().check({ force: true });
+    } },
   { name: "admin-concepts-empty", role: "admin", path: "/admin?tab=concepts&empty=1" },
   { name: "admin-concepts-error", role: "admin", path: "/admin?tab=concepts&fail=1", settle: 2500 },
   { name: "admin-concepts-loading", role: "admin", path: "/admin?tab=concepts&slow=1", settle: 300 },

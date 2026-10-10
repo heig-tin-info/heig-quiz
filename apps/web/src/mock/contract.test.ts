@@ -1077,4 +1077,22 @@ describe("the mock's curation queue (ADR-081, fifth addendum)", () => {
     expect((await call("DELETE", `/app/api/admin/concepts/${unused.id}`)).status).toBe(204);
     expect((await queue()).concepts.map((c) => c.id)).not.toContain(unused.id);
   });
+
+  it("merges into a validated concept only, moving the usage, and drops the merged one from the queue", async () => {
+    const all = await queue();
+    const winner = all.concepts.find((c) => c.status === "validated" && c.questionCount > 0)!;
+    const loser = all.concepts.find((c) => c.status === "proposed" && c.questionCount > 0)!;
+    const proposed = all.concepts.find((c) => c.status === "proposed" && c.id !== loser.id)!;
+    expect(await call("POST", `/app/api/admin/concepts/${loser.id}/merge`, { into: loser.id })).toMatchObject({ status: 422, body: { error: "concept_merge_self" } });
+    expect(await call("POST", `/app/api/admin/concepts/${loser.id}/merge`, { into: proposed.id })).toMatchObject({
+      status: 422,
+      body: { error: "concept_merge_target_not_validated" },
+    });
+    const merged = await call("POST", `/app/api/admin/concepts/${loser.id}/merge`, { into: winner.id });
+    expect(merged.status).toBe(200);
+    expect(issuesOf(Concept, merged.body)).toEqual([]);
+    const after = (await queue()).concepts;
+    expect(after.map((c) => c.id)).not.toContain(loser.id);
+    expect(await call("POST", `/app/api/admin/concepts/${loser.id}/merge`, { into: winner.id })).toMatchObject({ status: 409, body: { error: "concept_merged" } });
+  });
 });

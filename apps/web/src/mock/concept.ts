@@ -9,6 +9,7 @@
  */
 import {
   ConceptCreate,
+  ConceptMerge,
   ConceptPatch,
   type AdminConcept,
   type AdminConceptList,
@@ -161,6 +162,28 @@ on("POST", "/app/api/admin/concepts/:id/validate", (m): Concept => {
   }
   c.status = "validated";
   return c;
+});
+
+/**
+ * The merge (ADR-081 fifth addendum §2): into a validated concept only; the
+ * usage moves, earlier merges are re-pointed, the merged one leaves the queue.
+ */
+on("POST", "/app/api/admin/concepts/:id/merge", (m, raw): Concept => {
+  const body = ConceptMerge.safeParse(raw);
+  if (!body.success) throw new MockPayload(400, { error: "validation", message: body.error.message });
+  const loser = concepts.find((x) => x.id === m.groups!.id);
+  const winner = concepts.find((x) => x.id === body.data.into);
+  if (loser && loser === winner) throw refuse(422, "concept_merge_self", "A concept is not merged into itself");
+  if (!loser || !winner) throw refuse(404, "not_found", "No such concept");
+  if (loser.status === "merged" || winner.status === "merged") throw refuse(409, "concept_merged", "A merged concept is not merged again");
+  if (winner.status !== "validated") throw refuse(422, "concept_merge_target_not_validated", "A concept is merged into a validated one only");
+  const moved = usage.get(loser.id) ?? 0;
+  usage.set(winner.id, (usage.get(winner.id) ?? 0) + moved);
+  usage.delete(loser.id);
+  for (const c of concepts) if (c.mergedInto === loser.id) c.mergedInto = winner.id;
+  loser.status = "merged";
+  loser.mergedInto = winner.id;
+  return winner;
 });
 
 on("DELETE", "/app/api/admin/concepts/:id", (m) => {

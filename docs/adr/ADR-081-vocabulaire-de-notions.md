@@ -419,6 +419,12 @@ is the first pull request; merge, aliases and probable duplicates follow.
    earlier `merged_into` chains are re-pointed, soft-deleted questions are
    included, and `copyQuestionConcepts` is locked against the merge. The audit
    keeps the moved question ids. There is no undo button.
+   As built: `POST /admin/concepts/:id/merge` (`concept/merge.ts` owns the
+   detail), 422 `concept_merge_target_not_validated`; earlier chains are
+   re-pointed, `setQuestionConcepts` and `copyQuestionConcepts` share-lock in
+   id order against the merge's `FOR UPDATE`, and the audit `concept.merge`
+   records the loser's former status and the question ids moved or already
+   linked. Step 7's course-concept links will join this transaction.
 3. **Aliases** have no language. An alias whose key equals another live
    concept's label is refused unless the admin confirms explicitly.
 4. **Probable duplicates** are proposed from labels and qualifiers only, when

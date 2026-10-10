@@ -21,7 +21,7 @@ import {
   Skeleton,
 } from "../ui";
 import { ConceptSheet } from "./ConceptSheet";
-import { conceptName } from "./names";
+import { conceptName, usesLabel } from "./names";
 import { rankConcepts } from "./ranking";
 
 type Filter = "all" | "proposed" | "validated";
@@ -34,7 +34,7 @@ const missingLangs = (c: AdminConcept): ConceptLang[] => CONCEPT_LANGS.filter((l
  * vocabulary, the concepts teachers proposed first, each with how many
  * questions of the instance use it. The screen's one primary action is
  * **Validate**; a concept is renamed, completed in its other language or
- * deleted (when nothing uses it) from its sheet.
+ * deleted (when nothing uses it) or merged into a validated concept from its sheet.
  *
  * The vocabulary is loaded whole, as the pickers load it: the filter is a
  * status, the search is `rankConcepts`, the one rule of the picker.
@@ -57,10 +57,9 @@ export function ConceptQueue() {
   const rows = useMemo(() => {
     const byStatus = (all ?? []).filter((c) => filter === "all" || c.status === filter);
     if (q === "") return byStatus;
-    const byId = new Map(byStatus.map((c) => [c.id, c]));
     // The proposed ones stay ahead of the validated ones, as without a search (the picker's `first`).
     const proposedIds = new Set(byStatus.filter((c) => c.status === "proposed").map((c) => c.id));
-    return rankConcepts(q, byStatus, locale, proposedIds).flatMap((c) => byId.get(c.id) ?? []);
+    return rankConcepts(q, byStatus, locale, proposedIds);
   }, [all, filter, q, locale]);
   const edited = all?.find((c) => c.id === editing);
 
@@ -136,7 +135,7 @@ export function ConceptQueue() {
         </Card>
       )}
 
-      {edited ? <ConceptSheet concept={edited} locale={locale} onClose={() => setEditing(null)} /> : null}
+      {edited ? <ConceptSheet concept={edited} concepts={all ?? []} locale={locale} onClose={() => setEditing(null)} /> : null}
     </section>
   );
 }
@@ -178,11 +177,7 @@ function ConceptRow({
         {description ? <p className="line-clamp-2 text-xs text-fg-muted">{description}</p> : null}
         <p className="flex flex-wrap gap-x-2 text-xs text-fg-muted">
           <span className="tabular-nums">
-            {c.questionCount === 0
-              ? t("admin.concepts.uses.none")
-              : c.questionCount === 1
-                ? t("admin.concepts.uses.one")
-                : t("admin.concepts.uses", { n: c.questionCount })}
+            {usesLabel(t, c.questionCount)}
           </span>
           {c.creator ? <span>· {t("admin.concepts.by", { name: c.creator })}</span> : null}
           <span>

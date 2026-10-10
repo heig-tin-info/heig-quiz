@@ -41,6 +41,7 @@ import { droppedKeys, insertProposed, refuseInputs } from "./links.js";
 import { columnsOf, conflictOr, perLang, side, sideOf, toConcept, toConceptRef, toResolvable } from "./row.js";
 
 export { listAdminConcepts } from "./admin.js";
+export { mergeConcept } from "./merge.js";
 export { conceptReferenced } from "./referenced.js";
 export { toConcept, toConceptRef } from "./row.js";
 export {
