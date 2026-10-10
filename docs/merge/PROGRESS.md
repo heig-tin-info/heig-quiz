@@ -17,10 +17,11 @@ cited below is in [`09-tasks.md`](09-tasks.md) while its task is open, and in
   dropped. The breadcrumb app-wide is merged (#576). The import runs from
   the production image (#655, the runbook's O6). The projects and the
   import go live together (D26) at the cutover (D20).
-- **Next actions**: the rehearsal on staging (M8-06, runbook §7), which is
-  also the import's dry run on a production dump (M8-01), then the cutover
-  (M8-07) once the runbook's open decisions O1–O5, the owner's, are
-  settled. M6-07's code is merged; proof B is done for evaluations (2026-10-10, Config Key
+- **Next actions**: the cutover (M8-07, runbook §2), rehearsed on staging
+  on 2026-10-10 (M8-06, go: rehearsal log below) and dry-run in production
+  the same day; T0 is Sunday 2026-10-11 09:00 Europe/Zurich, with the
+  owner's decisions O3, O4, O5 (`W=12`) and O8 (roster options) as
+  suggested in the runbook unless they say otherwise. M6-07's code is merged; proof B is done for evaluations (2026-10-10, Config Key
   enforced in production) and waits for the project flow (a real SEB, the owner, on staging); M6-08 and M6-09 are to do. Quiz's production App
   exists (registered by hand); staging's, `heig-quiz-staging`, exists
   since 2026-10-06 (M2-06). Teachers create their Quiz classrooms; the
@@ -189,8 +190,8 @@ In the critical path only if D09 finds online assignments in production.
 | M8-03 | Caddy fragments | done | — | `merge/M8-03-caddy-fragments` | #598 | `infra/caddy/` maintenance and redirect fragments with their curl matrix: card M8-03, "As delivered". |
 | M8-04 | Codespace identity remap | dropped | M6 in scope | | | Product owner, 2026-10-09: classroom's portal never served a real class, and it has been stopped and disabled since M6-04 (SQLite and volumes archived in `/root/classroom-codespace` on the engine VM); Quiz's portal started empty. Nothing to remap; runbook step C4 |
 | M8-05 | Cutover runbook | done | M8-01…03 | `merge/M8-05-cutover-runbook` | #653 | [`10-cutover-runbook.md`](10-cutover-runbook.md) replaces 06 §6.5 B–E and §6.7, and its finding O6 (the production image could not run the import) was fixed by #655: card M8-05, "As delivered". |
-| M8-06 | Rehearsal on staging | todo | M8-05, D22, #655 deployed | | | Runbook §7 |
-| M8-07 | Cutover | todo | M8-06 go, D20, runbook O1–O5 | | | Runbook §2 |
+| M8-06 | Rehearsal on staging | done | M8-05, D22, #655 deployed | `merge/M8-06-rehearsal` | | Rehearsed 2026-10-10 by the product owner (srvstg) with the agent (srv): go. Findings folded into the runbook (§0 memory override and `ROSTER`, O8, §2 target times, §7 expectations): see the rehearsal log below |
+| M8-07 | Cutover | todo | M8-06 go, D20, runbook O1–O5, O8 | | | Runbook §2. T0 chosen: Sunday 2026-10-11 09:00 Europe/Zurich, short notice, `W=12` (Prog-A's Labo-02 is due that evening) |
 
 ## M9 — Decommission
 
@@ -202,3 +203,4 @@ In the critical path only if D09 finds online assignments in production.
 
 | Date | Dump date | Duration | Parity report | Go / no-go | Notes |
 | --- | --- | --- | --- | --- | --- |
+| 2026-10-10 | both dumps 2026-10-10 17:37 UTC (classroom live, 6.5 MB; Quiz 7 MB) | C2 (refresh, scratch database, restore) 17 s; dry run 18 s; C3 `--apply --final --window-hours 12 --assistants staff --missing-students enroll` 17 s, exit 3 after the commit; idempotence `nothing to do`; resolver and C8 rows 1, 4, 7 walked with Super Powers, done 19:10 UTC. C1→C8 wall clock 1 h 33, of which the import steps under 1 min and the rest the two findings below | identity 86 by swiss_edu_id, 3 by address, 38 new, 0 ambiguous; parity equal on every table (528 repositories across 34 projects, 170 frozen grades, 902 push receipts, 7 groups, 12 members, 153 enrollments); red lines: the two journals (Prog-C, VisIndus) refused `forbidden` by staging's App, expected (§7); the two journals Quiz already had kept and `ok` | **go** | (1) `compose run` inherits staging's 256 MB cap: first import attempt exit 139, heap out of memory; fixed with the §0 override. (2) Staging's edu-ID client has its own sector, so the owner's login created a second account without seats: resolver 404 and empty course list until Super Powers; fix requested from SWITCH (same `sector_identifier_uri`). Same-day production dry run (T-1): clean under the same options, `deadlines` ok with `W=12`. Personal-data copies deleted the same day. |
