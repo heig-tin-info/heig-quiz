@@ -16,6 +16,15 @@ Amended 2026-10-10 (product owner): labels only — the `owner` role reads "Teac
 ("Enseignant") on screen; the stored role, the routes and the error codes
 (`owner_required`, `last_owner`) are unchanged.
 
+Amended 2026-10-10 (security audit findings M1 and L1; product owner's standing
+decisions; the poll exemption and "a correction published while an exercise runs
+does not lock grading" are the orchestrator's calls, pending the product owner's
+confirmation): §3, §9 and their consequence on §2 — deleting an evaluation
+that holds students' work or reached them, and any grading write on a released
+evaluation, join the owner's acts. These are the first routes whose needed role
+depends on the state of the entity they load; the check stays in the loader,
+before the body. The gradebook's derived absence follows (ADR-074 §9).
+
 Scope: what a member of a course's staff may do on the course, its classrooms and
 its evaluations; who reaches them is unchanged (`staffAccess`, invariant 6).
 
@@ -54,7 +63,10 @@ entity (404 when it fails, invariant 6), and a role that says what the caller ma
    loader (`withCourseRole`, the twin of the pools' `withRole`), after the 404 and before
    the body is parsed: an assistant's malformed body is the same 403 as a well-formed one.
    The pure rules are `effectiveCourseRole`, `courseRoleAllows` and `staffChangeRefusal`
-   in `@quiz/domain` (`courseRole.ts`).
+   in `@quiz/domain` (`courseRole.ts`). Amended 2026-10-10: the role a route needs may
+   depend on the entity it loaded (an evaluation's deletion and its grading writes, §3);
+   it is still decided in the loader, after the 404 and before the body, so an
+   assistant's malformed body, or wrong confirmation title, is the same 403.
 
 3. **What only an owner may do:**
 
@@ -68,10 +80,28 @@ entity (404 when it fails, invariant 6), and a role that says what the caller ma
    | `POST /evaluations/:id/release`, `/unrelease`, `/publish-correction`; `POST /projects/:id/release` (F-PROJ-14) | what reaches the students as final |
    | `POST /courses/:id/conditions`, `PATCH /courses/:id/conditions/:cid`, `PUT /courses/:id/conditions/order`, `POST /courses/:id/conditions/:cid/archive\|unarchive` (amended 2026-10-09) | the course's catalog of conditions, a course setting (F-ORG-16, ADR-079 §5); its list stays every member's |
    | `PUT /courses/:id/concepts` (amended 2026-10-10) | the concepts the course declares, a course setting (F-ORG-12, ADR-081 sixth addendum); reading it (in `GET /courses/:id`) stays every member's, and no student route returns it |
+   | `DELETE /evaluations/:id` once the evaluation is released, its correction published, or one attempt of a student seat exists — a poll's attempts (votes) do not count, only its release (amended 2026-10-10; the poll exemption pending the product owner's confirmation) | the deletion cascades to attempts, answers, gradings, released grades, gradebook columns and marks, and drill cards: what students did, or were shown as final. A staff rehearsal (ADR-018) is not a student's attempt |
+   | Every grading write on a released evaluation: `POST /evaluations/:id/grading/run`, `/grading/validate-batch`, `/items/:itemId/regrade`; `POST /answers/:answerId/gradings`; `POST /gradings/:id/override`, `/validate` (amended 2026-10-10) | after the release a correction changes a published grade (F-GRADE-09, F-NOTIF-07), which is the owner's as the release is. A correction published while an exercise runs (ADR-050) is no release and triggers nothing: its answers are still graded by every member (pending the product owner's confirmation) |
+
+   The rule of the two state-dependent rows is pure, in `@quiz/domain`
+   (`evaluationDeletionRole`, `evaluationGradingRole`); the evaluation's payloads carry
+   the deletion's (`deletionRole` of `EvaluationSummary` and `EvaluationDetail`), so the
+   screens apply the server's rule. The delete decides it again inside its transaction,
+   on the row locked `FOR UPDATE`: creating an attempt takes `FOR KEY SHARE` on that row
+   (its foreign key), so an attempt created between the loader's count and the delete,
+   within the same request, is either counted or finds the evaluation gone (amended
+   2026-10-10). The grading role, by contrast, is decided once, in the loader: a release
+   committing between the loader and the write lets an assistant's write already in
+   flight, or a pass started before the release, land on the released evaluation. No lock
+   closes that window; such a change sets `modifiedAfterRelease` (F-GRADE-09), which the
+   results page shows, and it is accepted as such.
 
    Everything else stays open to every member: hiding the course for oneself, templates,
    a classroom's settings (rename, archive, GitHub, journal, drill), the roster, the
-   evaluations and their settings, grading, validating, regrading, reopening.
+   evaluations and their settings, deleting an evaluation no student took (and a poll
+   not released), grading, validating and regrading until the release, reopening
+   (amended 2026-10-10: grading, validating and regrading were open whatever the
+   release; deletion was open whatever the evaluation held).
 
 4. **The accepted loophole.** An assistant may set an evaluation's feedback policy to
    `immediate`, which shows students their results without a release. Closing it would
@@ -110,7 +140,13 @@ entity (404 when it fails, invariant 6), and a role that says what the caller ma
    (`courseRoleAllows`), and hides what only an owner may do instead of drawing buttons
    that can only fail (header actions on Classrooms, Linked pools and Members; Edit and
    Delete in the course settings, with one line saying why; the unlink; a classroom's
-   Delete; Release, Unrelease and Publish the correction). A classroom's detail names its
+   Delete; Release, Unrelease and Publish the correction). Amended 2026-10-10: an
+   evaluation's Delete (in the classroom's list and in its configuration's menu) is
+   greyed out, with one line saying why, when the reader's role does not reach its
+   `deletionRole` (`useCourseRole` with `courseRoleAllows`); the grading panel of a
+   released evaluation is read-only for an assistant — no validate, adjust, re-grade or
+   pass, in the palette either — with one line saying why, and its one primary action
+   walks the questions. A classroom's detail names its
    course already; `EvaluationDetail` carries its `courseId`, because a classroom's course
    cannot be found in the list once the classroom is archived (the list's classrooms are
    the live ones). The server refuses anyway.

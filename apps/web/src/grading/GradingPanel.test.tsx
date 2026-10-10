@@ -14,6 +14,7 @@ import {
   makeSteps,
 } from "../test/grading-fixtures";
 import { elapse, flowingClock } from "../test/clock";
+import { makeCourseSummary } from "../test/fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 
 /*
@@ -57,6 +58,8 @@ function routes(
   const read = typeof entries === "function" ? entries : () => entries;
   return {
     [`GET ${EVAL}`]: ok(makeEvaluationDetail()),
+    // The reader's role on the evaluation's course (`c1`), ADR-068.
+    "GET /app/api/courses": ok([makeCourseSummary()]),
     [`GET ${QUEUE("i1")}`]: () => ok(makeQueue(read())),
     [`GET ${QUEUE("i2")}`]: ok(makeQueue([validated("a1", 3)])),
     [`GET ${EVAL}/grading/steps`]: ok(
@@ -576,6 +579,36 @@ describe("GradingPanel — edit, come back, re-grade", () => {
     expect(await within(sheet).findByRole("radio", { name: /v2/ })).toBeChecked();
     // The evaluation's release reaches the sheet (its wording: RegradeSheet.test.tsx).
     expect(within(sheet).getByText("The results are released")).toBeVisible();
+  });
+
+  it("is read-only for an assistant once released, saying why; the questions still walk (ADR-068 §3)", async () => {
+    const base = makeEvaluationDetail();
+    const released = makeEvaluationDetail({
+      evaluation: { ...base.evaluation, state: "released", releasedAt: "2026-09-02T08:00:00.000Z" },
+    });
+    const { calls } = mockFetch(
+      routes([proposal("a1", 2)], {
+        [`GET ${EVAL}`]: ok(released),
+        "GET /app/api/courses": ok([makeCourseSummary({ myRole: "assistant" })]),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    expect(
+      await screen.findByText("The results are released: only a teacher of the course may change a grade now."),
+    ).toBeVisible();
+    const expected = await expectedRow();
+    expect(within(expected).queryByRole("button", { name: /Re-grade/ })).toBeNull();
+    expect(within(rowOf("a1")).queryByRole("button", { name: "Validate" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Validate/ })).toBeNull();
+    // The primary, a labelled button beside the question bar's arrow.
+    const next = screen.getAllByRole("button", { name: "Next question" }).find((b) => b.textContent?.trim() === "Next question");
+    expect(next).toBeEnabled();
+
+    await userEvent.click(rowOf("a1"));
+    const panel = await screen.findByRole("dialog", { name: "Anonymous answer" });
+    expect(within(panel).queryByRole("button", { name: /Adjust|Validate/ })).toBeNull();
+    await userEvent.keyboard("v");
+    expect(calls.some((c) => c.url.endsWith("/validate"))).toBe(false);
   });
 });
 

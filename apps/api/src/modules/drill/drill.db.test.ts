@@ -234,7 +234,7 @@ describe("the life of a card (ADR-041 §1–3)", () => {
     const app = await appAt();
     const a = await world(app, { mode: "exercise", students: 1 });
     await sit(app, a);
-    await evaluationService.deleteEvaluation(db, await reload(db, a.evaluationId));
+    await evaluationService.deleteEvaluation(db, await reload(db, a.evaluationId), "owner");
     expect(await cardsOf({ userId: a.studentIds[0]! })).toHaveLength(0);
 
     const b = await world(app, { mode: "exercise", students: 1 });

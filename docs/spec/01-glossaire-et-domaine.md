@@ -73,7 +73,7 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Create a private pool, edit its questions | No | Yes | Yes |
 | Read the public pool | No | Yes | Yes |
 | Edit a shared pool | No | According to the role on the pool | With Super Powers, else as a teacher |
-| Create, launch, drive, grade an evaluation | No | On own classrooms | With Super Powers, else as a teacher |
+| Create, launch, drive, grade an evaluation | No | On own classrooms; grading after the release by an owner of the course (ADR-068, amended 2026-10-10) | With Super Powers, else as a teacher |
 | Create, instantiate, delete an evaluation template | No | On own courses | With Super Powers, else as a teacher |
 | See the grades of a classroom | Own grades | On own classrooms | With Super Powers, else as a teacher |
 | Configure the institutional LLM gateway | No | No | Yes |
@@ -84,12 +84,12 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Create, publish, sync, lock, grade and release a project; form its groups and group sets | No | On own classrooms | With Super Powers, else as a teacher |
 | Accept a project, see own repository and score | Own classrooms, own repository or own group's | No | No |
 | See and export a classroom's gradebook, choose its columns and weights | Own cells, the mean once published | On own classrooms | With Super Powers, else as a teacher |
-| Delete a classroom or an evaluation and its data | No | On own classrooms | With Super Powers, else as a teacher |
+| Delete a classroom or an evaluation and its data | No | On own classrooms; a classroom, or an evaluation released, with its correction published or a student attempt (a poll: released), by an owner of the course (ADR-068, amended 2026-10-10) | With Super Powers, else as a teacher |
 | Act as a student (a one-time link, ADR-034) | No | No | With Super Powers |
 
 Roles on a shared pool: `reader` may read and copy into their own pool, `contributor` may create and publish versions, `owner` manages members and deletes.
 
-A course may have several teachers. They all reach its classrooms; each seat is `owner` or `assistant` (ADR-068): an owner also manages the staff, the course, its linked pools, its classrooms' creation and deletion, and the release of results.
+A course may have several teachers. They all reach its classrooms; each seat is `owner` or `assistant` (ADR-068): an owner also manages the staff, the course, its linked pools, its classrooms' creation and deletion, and the release of results; since 2026-10-10 also the deletion of an evaluation that students took or that reached them (released, or its correction published; a poll only once released), and every grading change once an evaluation is released.
 
 **Super Powers** (ADR-054): an admin reaches everyone's content only after switching them on
 from the settings, for one fixed hour of the server's clock, in that browser session only

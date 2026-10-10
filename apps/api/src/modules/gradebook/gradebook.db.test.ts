@@ -511,6 +511,27 @@ describe("the staff's marks (D06, 2026-10-05)", () => {
     }
   });
 
+  it("leaves a mark over a DERIVED absence of a released column to an owner too, without an override (amended 2026-10-10)", async () => {
+    const assistant = await server.signIn("teacher");
+    await db().insert(courseStaff).values({ courseId: seed.courseId, userId: assistant.id, role: "assistant" });
+    try {
+      // s2 never took the released exam E1: the release published an a1.0, derived.
+      expect(cellOf(await staffTable(), 2, "E1")).toMatchObject({ kind: "absent", source: "derived", hasGrade: false });
+      const score = { kind: "score", points: 8, max: 10 } as const;
+      const refused = await call("PUT", markUrl("evaluation", "E1", seats[2]!), assistant.headers, score);
+      expect([refused.statusCode, refused.json().error]).toEqual([403, "owner_required"]);
+      expect(cellOf(await staffTable(), 2, "E1")).toMatchObject({ source: "derived", mark: null });
+      // The owner needs no override: no real grade lies beneath.
+      expect((await call("PUT", markUrl("evaluation", "E1", seats[2]!), teacher.headers, score)).statusCode).toBe(200);
+      const clear = await call("DELETE", markUrl("evaluation", "E1", seats[2]!), assistant.headers);
+      expect([clear.statusCode, clear.json().error]).toEqual([403, "owner_required"]);
+      expect((await call("DELETE", markUrl("evaluation", "E1", seats[2]!), teacher.headers)).statusCode).toBe(200);
+      expect(cellOf(await staffTable(), 2, "E1")).toMatchObject({ source: "derived", mark: null });
+    } finally {
+      await db().delete(courseStaff).where(eq(courseStaff.userId, assistant.id));
+    }
+  });
+
   it("fills the empty cell of a project never accepted with the teacher's score, by the project's own scale", async () => {
     const res = await call("PUT", markUrl("project", "P1", seats[1]!), teacher.headers, { kind: "score", points: 15, max: 20 });
     expect(res.statusCode, res.body).toBe(200);

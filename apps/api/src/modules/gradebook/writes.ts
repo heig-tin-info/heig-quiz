@@ -15,7 +15,8 @@
  * `409 grade_exists`. Replacing a mark already there needs no override (it
  * was one); clearing one is explicit (`DELETE`). On a RELEASED column that
  * override is an owner's act, as the release is (ADR-068, ADR-074 §9): an
- * assistant gets `403 owner_required`.
+ * assistant gets `403 owner_required`; so is a mark over the absence a
+ * release derived (amended 2026-10-10).
  */
 import { randomUUID } from "node:crypto";
 
@@ -105,8 +106,10 @@ const studentUserIds = async (db: Db | Tx, classroomId: string) => (await claime
  * A mark over a real grade is deliberate (`grade_exists` without `override`
  * for a new one), and on a RELEASED column publishing, changing or clearing
  * it is the owner's, as the release is (ADR-068, ADR-074 §9): `403
- * owner_required` for an assistant. A cell with no real grade beneath, and a
- * column not released, stay open to every member.
+ * owner_required` for an assistant. So is a mark over a DERIVED absence (a
+ * released exam not taken, an a1.0 the release published, amended
+ * 2026-10-10) — which is no real grade, so it asks no override. An empty
+ * cell, and a column not released, stay open to every member.
  */
 async function guardOverride(
   db: Db,
@@ -116,14 +119,16 @@ async function guardOverride(
   ctx: WriteContext,
 ): Promise<void> {
   const beneath = (await entry.staffCells(db, [{ enrollmentId: seat.id, userId: seat.userId ?? "" }])).get(seat.id);
-  if (!beneath?.hasGrade) return;
-  if (replacing && !override) {
+  if (beneath?.hasGrade && replacing && !override) {
     throw new GradebookError("grade_exists", "A grade already stands there: set the mark with override to replace it", {
       activityId: entry.activityId,
       enrollmentId: seat.id,
     });
   }
-  if (entry.released && !ctx.owner) throw new GradebookError("owner_required", "Only an owner of this course may alter a released grade");
+  const published = beneath?.hasGrade === true || beneath?.source === "derived";
+  if (published && entry.released && !ctx.owner) {
+    throw new GradebookError("owner_required", "Only an owner of this course may alter a released grade");
+  }
 }
 
 /** A mark as the audit records it. */

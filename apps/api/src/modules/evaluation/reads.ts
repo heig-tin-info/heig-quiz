@@ -21,6 +21,8 @@ import {
   type RetakeSettings,
 } from "@quiz/contracts";
 import {
+  type CourseRoleName,
+  evaluationDeletionRole,
   isConfigEditable,
   poolRoleAllows,
   negativeMarkingOn,
@@ -229,6 +231,39 @@ export async function attemptCount(db: DbOrTx, evaluationId: string): Promise<nu
     .where(eq(attempts.evaluationId, evaluationId));
   return row?.n ?? 0;
 }
+
+/** The attempts of anyone but a staff seat (ADR-018): a student's, or a poll guest's. */
+const isStudentAttempt = sql`not ${isStaffAttempt}`;
+
+/**
+ * The role deleting this evaluation needs (`evaluationDeletionRole`, ADR-068
+ * §3 amended 2026-10-10), from the row as given — inside the delete's
+ * transaction, the row it locked.
+ */
+export async function deletionRole(db: DbOrTx, row: EvaluationRecord): Promise<CourseRoleName> {
+  return deletionRoleOf(row, (await attemptCounts(db, row.id)).students);
+}
+
+/** Every attempt row of the evaluation, and those of a student seat (or a poll guest). */
+async function attemptCounts(db: DbOrTx, evaluationId: string): Promise<{ all: number; students: number }> {
+  const [row] = await db
+    .select({
+      all: count(),
+      students: sql<number>`count(*) filter (where ${isStudentAttempt})`.mapWith(Number),
+    })
+    .from(attempts)
+    .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
+    .where(eq(attempts.evaluationId, evaluationId));
+  return { all: row?.all ?? 0, students: row?.students ?? 0 };
+}
+
+const deletionRoleOf = (row: EvaluationRecord, studentAttempts: number): CourseRoleName =>
+  evaluationDeletionRole({
+    mode: row.mode,
+    released: row.releasedAt !== null,
+    correctionPublished: row.correctionPublishedAt !== null,
+    studentAttempts,
+  });
 
 /** The frozen version of every item, joined with the question it came from. */
 export interface JoinedItem {
@@ -596,7 +631,8 @@ export async function evaluationDetail(
   lang: ConceptLang,
 ): Promise<EvaluationDetail> {
   const items = await itemRows(db, row.id);
-  const attemptsSoFar = await attemptCount(db, row.id);
+  const counted = await attemptCounts(db, row.id);
+  const attemptsSoFar = counted.all;
   return {
     evaluation: toEvaluation(row),
     items,
@@ -604,6 +640,7 @@ export async function evaluationDetail(
     totalPoints: evaluationTotal(items),
     staleItems: staleOf(items),
     attemptCount: attemptsSoFar,
+    deletionRole: deletionRoleOf(row, counted.students),
     editable: isConfigEditable(row.state, attemptsSoFar),
     self: await selfOf(db, row, viewer.id),
     editableQuestionIds: await editableQuestionIdsOf(db, items, viewer),
@@ -630,15 +667,18 @@ export async function listEvaluations(
     totalPointsByEvaluation(db, ids),
   ]);
   // Students, not attempt rows: a retake (F-EVAL-15) is not a second student.
+  // The staff's rehearsals are counted apart for the deletion's role (ADR-068 §3).
   const attemptStats = await db
     .select({
       evaluationId: attempts.evaluationId,
       n: sql<number>`count(distinct coalesce(${attempts.userId}, ${attempts.guestId}))`.mapWith(Number),
+      students: sql<number>`count(*) filter (where ${isStudentAttempt})`.mapWith(Number),
     })
     .from(attempts)
+    .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
     .where(inArray(attempts.evaluationId, ids))
     .groupBy(attempts.evaluationId);
-  const tries = new Map(attemptStats.map((s) => [s.evaluationId, s.n]));
+  const tries = new Map(attemptStats.map((s) => [s.evaluationId, s]));
   const templateRevisions = await templateRevisionsOf(db, rows);
   return rows.map((r) => ({
     id: r.id,
@@ -648,7 +688,8 @@ export async function listEvaluations(
     state: r.state,
     itemCount: itemCounts.get(r.id) ?? 0,
     totalPoints: totals.get(r.id) ?? 0,
-    attemptCount: tries.get(r.id) ?? 0,
+    attemptCount: tries.get(r.id)?.n ?? 0,
+    deletionRole: deletionRoleOf(r, tries.get(r.id)?.students ?? 0),
     opensAt: isoOrNull(r.opensAt),
     closesAt: isoOrNull(r.closesAt),
     createdAt: iso(r.createdAt),

@@ -44,6 +44,7 @@ import {
   findAccessibleClassroom,
   loadEvaluation,
   loadTemplate,
+  requireCourseRole,
   teacherGuard,
 } from "../guards.js";
 import { notFound, readerLang, teacherRoute } from "../http.js";
@@ -105,6 +106,21 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
   };
   const staffEvaluation = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
     loadEvaluation(app, req, reply, p.id);
+  /**
+   * The delete's loader (ADR-068 §3, amended 2026-10-10): the role it needs
+   * depends on the evaluation's state — an owner's once a student attempt, a
+   * release or a published correction exists (`evaluationDeletionRole`) —
+   * and is checked before the body, so an assistant naming the wrong title
+   * is still `403 owner_required`, never `409 confirm_mismatch`. The caller's
+   * role travels on, for the delete to decide again under the row's lock.
+   */
+  const deletableEvaluation = async (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => {
+    const scope = await staffEvaluation(req, reply, p);
+    if (!scope) return null;
+    const needed = await service.deletionRole(app.db, scope.evaluation);
+    const role = await requireCourseRole(app, req, reply, scope.classroom.courseId, needed);
+    return role && { ...scope, role };
+  };
 
   /**
    * One write of the evaluation's content (B-09): what is legal depends on
@@ -214,14 +230,14 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
     "/app/api/evaluations/:id",
     { preHandler: requireTeacher },
     teacher(
-      { params: IdParam, body: EvaluationDelete, optionalBody: true, load: staffEvaluation },
+      { params: IdParam, body: EvaluationDelete, optionalBody: true, load: deletableEvaluation },
       async ({ req, reply, body, scope }) => {
         // Naming the evaluation is the confirmation: a destructive action is
         // never one click away from a live grid.
         if (body.confirmTitle !== scope.evaluation.title) {
           return reply.code(409).send({ error: "confirm_mismatch" });
         }
-        await service.deleteEvaluation(app.db, scope.evaluation);
+        await service.deleteEvaluation(app.db, scope.evaluation, scope.role);
         await trace(req, "evaluation.delete", "evaluation", scope.evaluation.id, {
           title: scope.evaluation.title,
         });

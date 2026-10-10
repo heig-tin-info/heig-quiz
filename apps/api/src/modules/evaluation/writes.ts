@@ -27,6 +27,8 @@ import {
   conditionsAllowedFor,
   CONFIG_LIVE_STATES,
   configLock,
+  courseRoleAllows,
+  type CourseRoleName,
   isConfigFieldWritable,
   isFeedbackAllowed,
   logVisibilityDefault,
@@ -56,7 +58,7 @@ import {
   questionRefused,
 } from "./shared.js";
 import { assertStaysScheduled } from "./stateMachine.js";
-import { attemptCount as countAttempts, byId, settingsOf, feedbackOf, preferredMcqPolicy } from "./reads.js";
+import { attemptCount as countAttempts, byId, deletionRole, settingsOf, feedbackOf, preferredMcqPolicy } from "./reads.js";
 import { latestPublished, type CopyHome } from "./items.js";
 
 /**
@@ -369,8 +371,22 @@ export async function patchEvaluation(
   return (await byId(db, row.id))!;
 }
 
-export async function deleteEvaluation(db: Db, row: EvaluationRecord): Promise<void> {
-  await db.delete(evaluations).where(eq(evaluations.id, row.id));
+/**
+ * The delete, with its role decided again under the row's lock (ADR-068 §3,
+ * amended 2026-10-10): the route's loader counted the attempts already, but
+ * a student may start between that count and the delete, within the same
+ * request. The row is locked `FOR UPDATE` before the count, and creating an attempt takes
+ * `FOR KEY SHARE` on that row (its foreign key), which conflicts: an attempt
+ * inserted first is counted here, one inserted after waits and then finds no
+ * evaluation. `role` is the caller's.
+ */
+export async function deleteEvaluation(db: Db, row: EvaluationRecord, role: CourseRoleName): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [locked] = await tx.select().from(evaluations).where(eq(evaluations.id, row.id)).for("update");
+    if (!locked) return;
+    if (!courseRoleAllows(role, await deletionRole(tx, locked))) throw new EvaluationError("owner_required");
+    await tx.delete(evaluations).where(eq(evaluations.id, row.id));
+  });
 }
 
 // --- Narrow writers for the other modules ----------------------------------

@@ -32,6 +32,7 @@ import {
   TRUSTED_CLIENTS,
 } from "@quiz/domain";
 
+import { CourseRole } from "./common.js";
 import { ConceptRef } from "./concept.js";
 
 /** F-EVAL-01. `poll` is accepted by the column and refused by every route (decision D7). */
@@ -416,6 +417,13 @@ export const EvaluationSummary = z.object({
   itemCount: z.number().int(),
   totalPoints: z.number(),
   attemptCount: z.number().int(),
+  /**
+   * The course role deleting the evaluation needs (`evaluationDeletionRole`,
+   * ADR-068 §3 amended 2026-10-10): `owner` once a student attempt, a release
+   * or a published correction exists. The screens offer Delete only to a
+   * reader whose role allows it; the server decides again when it deletes.
+   */
+  deletionRole: CourseRole,
   opensAt: z.iso.datetime().nullable(),
   closesAt: z.iso.datetime().nullable(),
   createdAt: z.iso.datetime(),
@@ -488,6 +496,8 @@ export const EvaluationDetail = z.object({
   /** Item ids whose frozen version is not the latest published one. */
   staleItems: z.array(z.uuid()),
   attemptCount: z.number().int(),
+  /** As {@link EvaluationSummary}. */
+  deletionRole: CourseRole,
   /** False once an attempt exists: the structure is frozen (F-EVAL-03). */
   editable: z.boolean(),
   /** The reader's own seat and test attempt (ADR-018). */

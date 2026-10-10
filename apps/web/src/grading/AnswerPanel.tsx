@@ -54,10 +54,15 @@ interface PanelProps {
   onClose: () => void;
   /** One row up or down the table, the expected row included (↑ / ↓). */
   onMove: (delta: number) => void;
-  onAdjust: (on: boolean) => void;
-  onValidate: (entry: GradingEntry) => void;
+  /**
+   * The grading writes, each absent when the reader may not make it (an
+   * assistant once the results are released, ADR-068 §3): no button, and no
+   * grading form, then.
+   */
+  onAdjust?: ((on: boolean) => void) | undefined;
+  onValidate?: ((entry: GradingEntry) => void) | undefined;
   validating: boolean;
-  onRegrade: () => void;
+  onRegrade?: (() => void) | undefined;
   onEdit?: (() => void) | undefined;
 }
 
@@ -106,16 +111,20 @@ export function AnswerPanel(props: PanelProps) {
         actions={moves}
         onClose={props.onClose}
         footer={
-          <>
-            {props.onEdit ? (
-              <Button variant="secondary" onClick={props.onEdit}>
-                <PencilLine /> {t("grading.editQuestion")}
-              </Button>
-            ) : null}
-            <Button variant="secondary" onClick={props.onRegrade}>
-              <RefreshCcw /> {t("grading.regrade.open")}
-            </Button>
-          </>
+          props.onEdit || props.onRegrade ? (
+            <>
+              {props.onEdit ? (
+                <Button variant="secondary" onClick={props.onEdit}>
+                  <PencilLine /> {t("grading.editQuestion")}
+                </Button>
+              ) : null}
+              {props.onRegrade ? (
+                <Button variant="secondary" onClick={props.onRegrade}>
+                  <RefreshCcw /> {t("grading.regrade.open")}
+                </Button>
+              ) : null}
+            </>
+          ) : null
         }
       >
         <ExpectedBody {...props} />
@@ -254,9 +263,11 @@ function EntryPanel({
     onSuccess: () => {
       invalidate();
       toast(t("grading.override.done"), "success");
-      onAdjust(false);
+      onAdjust?.(false);
     },
   });
+  // The grading form, only where the reader may grade.
+  const adjusting = adjust && onAdjust !== undefined;
 
   const status = grading
     ? [
@@ -283,9 +294,9 @@ function EntryPanel({
       actions={moves}
       onClose={onClose}
       footer={
-        adjust ? (
+        !onAdjust && !onValidate ? null : adjusting ? (
           <>
-            <Button variant="ghost" onClick={() => onAdjust(false)}>
+            <Button variant="ghost" onClick={() => onAdjust?.(false)}>
               {t("common.cancel")}
             </Button>
             <Button type="submit" form={formId} loading={save.isPending}>
@@ -294,11 +305,13 @@ function EntryPanel({
           </>
         ) : (
           <>
-            <Button variant="secondary" disabled={path === null} onClick={() => onAdjust(true)}>
-              <PencilLine /> {t("grading.override")}
-            </Button>
+            {onAdjust ? (
+              <Button variant="secondary" disabled={path === null} onClick={() => onAdjust(true)}>
+                <PencilLine /> {t("grading.override")}
+              </Button>
+            ) : null}
             {/* A placeholder (an essay at 0) is graded, never validated unread. */}
-            {rowAction(entry) === "validate" ? (
+            {rowAction(entry) === "validate" && onValidate ? (
               <Button loading={validating} onClick={() => onValidate(entry)}>
                 <Check /> {t("grading.validate")}
               </Button>
@@ -348,7 +361,7 @@ function EntryPanel({
             <MarkdownView size="sm" source={ownExplanation} />
           </NotePanel>
         ) : null}
-        {adjust && path !== null ? (
+        {adjusting && path !== null ? (
           <Section title={t("grading.override.title")}>
             {/* Keyed on the entry: another answer is another form. */}
             <AdjustForm

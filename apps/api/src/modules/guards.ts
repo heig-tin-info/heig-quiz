@@ -312,16 +312,25 @@ export function withRoleStep<P, S>(
   };
 }
 
-/** {@link withRoleStep} with {@link requireCourseRole}'s 403 (owner or assistant, ADR-068). */
+/**
+ * {@link withRoleStep} with {@link requireCourseRole}'s 403 (owner or
+ * assistant, ADR-068). `needed` may depend on the loaded entity: a grading
+ * write is the owner's once the evaluation is released (§3, amended
+ * 2026-10-10).
+ */
 export function withCourseRole<P, S>(
   app: FastifyInstance,
   load: (req: FastifyRequest, reply: FastifyReply, params: P) => Promise<S | null>,
   courseIdOf: (scope: S) => string,
-  needed: CourseRole | undefined,
+  needed: CourseRole | ((scope: S) => CourseRole) | undefined,
 ) {
   return withRoleStep(
     load,
-    needed && (async (req, reply, scope) => (await requireCourseRole(app, req, reply, courseIdOf(scope), needed)) !== null),
+    needed &&
+      (async (req, reply, scope) => {
+        const role = typeof needed === "function" ? needed(scope) : needed;
+        return (await requireCourseRole(app, req, reply, courseIdOf(scope), role)) !== null;
+      }),
   );
 }
 
@@ -1280,12 +1289,14 @@ interface AnswerScope {
   answer: typeof answers.$inferSelect;
   attempt: typeof attempts.$inferSelect;
   evaluation: typeof evaluations.$inferSelect;
+  /** The evaluation's course, for the role step of a grading write (ADR-068). */
+  courseId: string;
 }
 
 /** `/answers/:answerId/…` — teacher side (the grading panel). */
 export const staffAnswer = routeLoader(async (app, req, answerId: string): Promise<AnswerScope | null> => {
   const [row] = await app.db
-    .select({ answer: answers, attempt: attempts, evaluation: evaluations })
+    .select({ answer: answers, attempt: attempts, evaluation: evaluations, courseId: courses.id })
     .from(answers)
     .innerJoin(attempts, eq(answers.attemptId, attempts.id))
     .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))
@@ -1299,12 +1310,14 @@ export const staffAnswer = routeLoader(async (app, req, answerId: string): Promi
 interface GradingScope {
   grading: typeof gradings.$inferSelect;
   evaluation: typeof evaluations.$inferSelect;
+  /** As {@link AnswerScope}. */
+  courseId: string;
 }
 
 /** `/gradings/:id/…` — the same motif, from the grading itself. */
 export const staffGrading = routeLoader(async (app, req, gradingId: string): Promise<GradingScope | null> => {
   const [row] = await app.db
-    .select({ grading: gradings, evaluation: evaluations })
+    .select({ grading: gradings, evaluation: evaluations, courseId: courses.id })
     .from(gradings)
     .innerJoin(attempts, eq(gradings.attemptId, attempts.id))
     .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))

@@ -3,7 +3,7 @@ import { ClipboardList, Copy, FileStack, FolderGit2, Plus, Trash2 } from "lucide
 import { useState } from "react";
 
 import { EvaluationMode, EvaluationState, type EvaluationSummary } from "@quiz/contracts";
-import { templatePullable } from "@quiz/domain";
+import { courseRoleAllows, templatePullable } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -42,7 +42,7 @@ import {
   useInstantiate,
 } from "./templates";
 import { PullTemplateDialog, TemplateBehindBadge } from "./templatePull";
-import { useClassroom } from "../course/parts";
+import { useClassroom, useCourseRole } from "../course/parts";
 import { useEvaluations } from "./api";
 
 /**
@@ -254,6 +254,7 @@ export function EvaluationList({
   /** The row being saved as a template of the course (ADR-031). */
   const [savingTemplate, setSavingTemplate] = useState<EvaluationSummary | null>(null);
   const classroom = useClassroom(classroomId);
+  const myRole = useCourseRole(classroom.data?.course.id);
 
   const list = useEvaluations(classroomId);
 
@@ -422,11 +423,16 @@ export function EvaluationList({
                                     onSelect: () => setSavingTemplate(row),
                                   },
                                 ]),
+                            // Students' work or a release makes it an owner's
+                            // act (ADR-068 §3): greyed out, saying why.
                             {
                               label: t("eval.delete"),
                               icon: Trash2,
                               danger: true,
                               separator: true,
+                              ...(courseRoleAllows(myRole, row.deletionRole)
+                                ? {}
+                                : { disabled: true, description: t("eval.delete.ownerOnly") }),
                               onSelect: async () => {
                                 if (
                                   await confirm({

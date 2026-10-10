@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { EvaluationSummary } from "@quiz/contracts";
 
+import { makeCourseSummary } from "../test/fixtures";
 import { EVALUATION_ID, id, liveAt } from "../test/live-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 import { EvaluationList, NewEvaluationModal } from "./EvaluationList";
@@ -26,6 +27,7 @@ function summary(over: Partial<EvaluationSummary> = {}): EvaluationSummary {
     itemCount: 4,
     totalPoints: 7,
     attemptCount: 0,
+    deletionRole: "assistant",
     opensAt: null,
     closesAt: null,
     createdAt: liveAt(-3600_000),
@@ -110,6 +112,36 @@ describe("EvaluationList", () => {
     await waitFor(() => expect(screen.getByRole("menu")).toBeInTheDocument());
     expect(screen.queryByRole("menuitem", { name: "Grading" })).not.toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Results" })).not.toBeInTheDocument();
+  });
+
+  it("greys out Delete for an assistant where only a teacher of the course may delete, saying why (ADR-068 §3)", async () => {
+    const user = userEvent.setup();
+    const course = id("course", 1);
+    mockFetch({
+      [`GET /app/api/classrooms/${CLASSROOM}`]: ok({
+        id: CLASSROOM,
+        name: "A",
+        period: "",
+        archivedAt: null,
+        course: { id: course, name: "Programmation C", code: "PRG1" },
+        roster: [],
+      }),
+      "GET /app/api/courses": ok([makeCourseSummary({ id: course, myRole: "assistant" })]),
+      ...list([
+        summary({ state: "released", title: "Released quiz", deletionRole: "owner" }),
+        summary({ id: id("evaluation", 2), title: "Draft quiz" }),
+      ]),
+    });
+    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
+
+    await user.click(await screen.findByRole("button", { name: /Released quiz/ }));
+    const refused = await screen.findByRole("menuitem", { name: /Delete evaluation/ });
+    await waitFor(() => expect(refused).toBeDisabled());
+    expect(refused).toHaveTextContent("only a teacher of the course may delete it");
+
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: /Draft quiz/ }));
+    expect(await screen.findByRole("menuitem", { name: "Delete evaluation" })).toBeEnabled();
   });
 
   it("asks the page for the dialog from the empty state, and has no button of its own", async () => {

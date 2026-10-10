@@ -3,7 +3,8 @@
  *
  * Teacher only, from the first line to the last: nothing here is reachable
  * with a student session, and an evaluation another teacher owns answers 404,
- * never 403 (invariant 6). Every body is parsed by a schema from
+ * never 403 (invariant 6); a write on a released evaluation is the course
+ * owner's, a 403 (ADR-068 §3, amended 2026-10-10). Every body is parsed by a schema from
  * `@quiz/contracts` (invariant 7) and every write is audited (invariant 9).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
@@ -22,9 +23,10 @@ import {
   RegradeBody,
   ValidateGradingBody,
 } from "@quiz/contracts";
+import { evaluationGradingRole } from "@quiz/domain";
 
 import { tracer, type AuditAction } from "../../audit.js";
-import { loadEvaluation, staffAnswer, staffGrading, teacherGuard } from "../guards.js";
+import { loadEvaluation, staffAnswer, staffGrading, teacherGuard, withCourseRole } from "../guards.js";
 import { notFound, teacherRoute } from "../http.js";
 import { joinedItem, joinedItems } from "../evaluation/service.js";
 import { listVersions } from "../pool/service.js";
@@ -49,6 +51,19 @@ export async function gradingPlugin(app: FastifyInstance) {
   const gradingOf = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
     staffGrading(app, req, reply, p.id);
 
+  /**
+   * The same loaders for a WRITE, with the role step of ADR-068 §3 (amended
+   * 2026-10-10): once the evaluation is released, a correction changes a
+   * published grade, which is the owner's as the release is
+   * (`evaluationGradingRole`) — `403 owner_required` for an assistant,
+   * before the body. Before the release every member grades.
+   */
+  const gradingRole = (scope: { evaluation: { releasedAt: Date | null } }) =>
+    evaluationGradingRole({ released: scope.evaluation.releasedAt !== null });
+  const gradedEvaluation = withCourseRole(app, staffEvaluation, (s) => s.classroom.courseId, gradingRole);
+  const gradedAnswer = withCourseRole(app, answerOf, (s) => s.courseId, gradingRole);
+  const gradedGrading = withCourseRole(app, gradingOf, (s) => s.courseId, gradingRole);
+
   // --- The automatic pass ------------------------------------------------
 
   /**
@@ -61,7 +76,7 @@ export async function gradingPlugin(app: FastifyInstance) {
     "/app/api/evaluations/:id/grading/run",
     { preHandler: requireTeacher },
     teacher(
-      { params: IdParam, body: GradingRunBody, optionalBody: true, load: staffEvaluation },
+      { params: IdParam, body: GradingRunBody, optionalBody: true, load: gradedEvaluation },
       async ({ req, reply, body, scope }) => {
         const items = await joinedItems(app.db, scope.evaluation.id);
         const known = new Set(items.map((i) => i.item.id));
@@ -152,7 +167,7 @@ export async function gradingPlugin(app: FastifyInstance) {
         params: AnswerIdParam,
         body: ManualGradingBody,
         load: async (req, reply, p) => {
-          const scope = await answerOf(req, reply, p);
+          const scope = await gradedAnswer(req, reply, p);
           if (!scope) return null;
           const cell = await service.cellOfAnswer(app.db, p.answerId);
           if (cell) return { evaluation: scope.evaluation, cell };
@@ -173,7 +188,7 @@ export async function gradingPlugin(app: FastifyInstance) {
     "/app/api/gradings/:id/override",
     { preHandler: requireTeacher },
     teacher(
-      { params: GradingIdParam, body: ManualGradingBody, load: gradingOf },
+      { params: GradingIdParam, body: ManualGradingBody, load: gradedGrading },
       ({ req, now, body, scope }) =>
         applyOverride(
           req,
@@ -195,7 +210,7 @@ export async function gradingPlugin(app: FastifyInstance) {
     "/app/api/gradings/:id/validate",
     { preHandler: requireTeacher },
     teacher(
-      { params: GradingIdParam, body: ValidateGradingBody, optionalBody: true, load: gradingOf },
+      { params: GradingIdParam, body: ValidateGradingBody, optionalBody: true, load: gradedGrading },
       async ({ req, now, body, scope }) => {
         if (body.points !== undefined) {
           await service.assertPointsInRange(app.db, scope.evaluation, scope.grading, body.points);
@@ -212,7 +227,7 @@ export async function gradingPlugin(app: FastifyInstance) {
     "/app/api/evaluations/:id/grading/validate-batch",
     { preHandler: requireTeacher },
     teacher(
-      { params: IdParam, body: BatchValidateBody, optionalBody: true, load: staffEvaluation },
+      { params: IdParam, body: BatchValidateBody, optionalBody: true, load: gradedEvaluation },
       async ({ req, now, body, scope }) => {
         const validated = await service.batchValidate(
           app.db,
@@ -270,7 +285,7 @@ export async function gradingPlugin(app: FastifyInstance) {
     "/app/api/evaluations/:id/items/:itemId/regrade",
     { preHandler: requireTeacher },
     teacher(
-      { params: ItemParam, body: RegradeBody, load: staffEvaluation },
+      { params: ItemParam, body: RegradeBody, load: gradedEvaluation },
       async ({ req, reply, now, params, body, scope }) => {
         const item = await joinedItem(app.db, scope.evaluation.id, params.itemId);
         if (!item) return notFound(reply);

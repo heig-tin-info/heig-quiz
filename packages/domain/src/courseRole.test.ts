@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { courseRoleAllows, effectiveCourseRole, staffChangeRefusal } from "./courseRole.js";
+import {
+  courseRoleAllows,
+  effectiveCourseRole,
+  evaluationDeletionRole,
+  evaluationGradingRole,
+  staffChangeRefusal,
+} from "./courseRole.js";
 
 describe("effectiveCourseRole", () => {
   it("makes an owner of an admin with Super Powers, seat or none", () => {
@@ -43,5 +49,34 @@ describe("staffChangeRefusal", () => {
     expect(staffChangeRefusal({ owners: 1, targetRole: "owner", next: "owner" })).toBeNull();
     expect(staffChangeRefusal({ owners: 1, targetRole: "assistant", next: "remove" })).toBeNull();
     expect(staffChangeRefusal({ owners: 1, targetRole: "assistant", next: "owner" })).toBeNull();
+  });
+});
+
+describe("evaluationDeletionRole", () => {
+  const blank = { mode: "exam", released: false, correctionPublished: false, studentAttempts: 0 } as const;
+
+  it("leaves an evaluation no student took to every member", () => {
+    for (const mode of ["exam", "exercise", "poll"] as const) {
+      expect(evaluationDeletionRole({ ...blank, mode })).toBe("assistant");
+    }
+  });
+
+  it("needs an owner once a student attempt, a release or a published correction exists", () => {
+    expect(evaluationDeletionRole({ ...blank, studentAttempts: 1 })).toBe("owner");
+    expect(evaluationDeletionRole({ ...blank, mode: "exercise", studentAttempts: 3 })).toBe("owner");
+    expect(evaluationDeletionRole({ ...blank, released: true })).toBe("owner");
+    expect(evaluationDeletionRole({ ...blank, mode: "exercise", correctionPublished: true })).toBe("owner");
+  });
+
+  it("does not count a poll's votes, only its release", () => {
+    expect(evaluationDeletionRole({ ...blank, mode: "poll", studentAttempts: 40 })).toBe("assistant");
+    expect(evaluationDeletionRole({ ...blank, mode: "poll", studentAttempts: 40, released: true })).toBe("owner");
+  });
+});
+
+describe("evaluationGradingRole", () => {
+  it("is every member's until the release, the owner's after it", () => {
+    expect(evaluationGradingRole({ released: false })).toBe("assistant");
+    expect(evaluationGradingRole({ released: true })).toBe("owner");
   });
 });

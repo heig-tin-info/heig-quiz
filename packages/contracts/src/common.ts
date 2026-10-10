@@ -6,6 +6,16 @@
  */
 import { z } from "zod";
 
+import { COURSE_ROLES } from "@quiz/domain";
+
+/**
+ * What a seat on a course's staff may do (ADR-068): an `owner` runs the
+ * course — its staff, its pools, its classrooms, the release of results —
+ * and an `assistant` does the day-to-day work in it.
+ */
+export const CourseRole = z.enum(COURSE_ROLES);
+export type CourseRole = z.infer<typeof CourseRole>;
+
 /** `/…/:id` — the only path shape the loaders of `guards.ts` accept. */
 export const IdParam = z.object({ id: z.uuid() });
 export type IdParam = z.infer<typeof IdParam>;

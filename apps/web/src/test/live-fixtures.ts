@@ -195,6 +195,7 @@ export function makeEvaluationDetail(overrides: Partial<EvaluationDetail> = {}):
     totalPoints: items.reduce((sum, i) => sum + i.points, 0),
     staleItems: [],
     attemptCount: 0,
+    deletionRole: "assistant",
     editable: true,
     self: { seat: false, staffSeat: false, attemptId: null },
     editableQuestionIds: items.map((i) => i.questionId),

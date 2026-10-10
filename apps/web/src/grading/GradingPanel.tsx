@@ -1,6 +1,9 @@
-import { BarChart3, CheckCheck, Play } from "lucide-react";
+import { BarChart3, CheckCheck, Lock, Play } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
+import { courseRoleAllows, evaluationGradingRole } from "@quiz/domain";
+
+import { useCourseRole } from "../course/parts";
 import { useT } from "../i18n";
 import { useSearchParam, type Route } from "../router";
 import { Trail, useEvaluationCrumbs } from "../Trail";
@@ -101,10 +104,21 @@ export function GradingPanel({
     evaluationId,
     data.evaluation.data?.evaluation.title,
   );
+  // ADR-068 §3 (amended 2026-10-10): once released, a correction is the
+  // owner's; an assistant reads the panel without its writes, whose
+  // callbacks are then left out below. `needed === "owner"` comes first so
+  // that an evaluation not released is never read-only while the course list
+  // (the reader's role) still loads; a released one offers no write until it
+  // has.
+  const released = data.evaluation.data?.evaluation.releasedAt != null;
+  const needed = evaluationGradingRole({ released });
+  const myRole = useCourseRole(data.evaluation.data?.courseId);
+  const readOnly = needed === "owner" && !courseRoleAllows(myRole, needed);
+  const regrade = readOnly ? undefined : () => setRegrading(true);
   const actions = useGradingActions({
     evaluationId,
     navigate,
-    onRegrade: item ? () => setRegrading(true) : undefined,
+    onRegrade: item ? regrade : undefined,
   });
 
   const first = entries[0];
@@ -190,9 +204,12 @@ export function GradingPanel({
   };
   const selectedEntry = entries.find((e) => entryKey(e) === selected) ?? null;
   // V takes what the batch would take, one row at a time: never a placeholder.
-  const validateOne = (entry: (typeof entries)[number]) => {
-    if (entry.grading && canBatch(entry)) actions.validate.mutate(entry.grading.id);
-  };
+  const validateOne = readOnly
+    ? undefined
+    : (entry: (typeof entries)[number]) => {
+        if (entry.grading && canBatch(entry)) actions.validate.mutate(entry.grading.id);
+      };
+  const adjustRow = readOnly ? undefined : (key: string) => open(key, true);
 
   useGradingKeys({
     panel: panel === null ? "none" : pane ? "pane" : "sheet",
@@ -203,10 +220,10 @@ export function GradingPanel({
       if (selected) open(selected);
     },
     onValidate: () => {
-      if (selectedEntry) validateOne(selectedEntry);
+      if (selectedEntry) validateOne?.(selectedEntry);
     },
     onAdjust: () => {
-      if (selectedEntry) open(entryKey(selectedEntry), true);
+      if (selectedEntry) adjustRow?.(entryKey(selectedEntry));
     },
   });
 
@@ -277,21 +294,26 @@ export function GradingPanel({
       explanation={data.explanation}
       onClose={close}
       onMove={move}
-      onAdjust={(on) => setPanel((p) => (p ? { ...p, adjust: on } : p))}
+      onAdjust={readOnly ? undefined : (on) => setPanel((p) => (p ? { ...p, adjust: on } : p))}
       onValidate={validateOne}
       validating={actions.validate.isPending}
       // A sheet never opens another sheet: the panel steps aside.
-      onRegrade={() => {
-        setPanel(null);
-        setRegrading(true);
-      }}
+      onRegrade={
+        regrade &&
+        (() => {
+          setPanel(null);
+          regrade();
+        })
+      }
       onEdit={onEdit}
     />
   ) : null;
+  const isLast = index === items.length - 1;
 
   return (
     <Page pane={answer ? pane : null}>
       {header}
+      {readOnly ? <Alert icon={Lock} title={t("grading.ownerOnly")} /> : null}
       <QuestionBar items={items} index={index} states={data.states} onJump={goTo} />
       <GradingToolbar
         view={view}
@@ -304,7 +326,12 @@ export function GradingPanel({
         }}
         primary={
           <PrimaryButton
-            action={primaryAction(entries, rows, index === items.length - 1)}
+            // Read-only, the screen's one action walks the questions.
+            action={
+              readOnly
+                ? { kind: isLast ? "results" : "next" }
+                : primaryAction(entries, rows, isLast)
+            }
             busy={actions.batch.isPending}
             onValidate={(n) => void actions.validateBatch(scope, n)}
             onNext={() => goTo(index + 1)}
@@ -312,7 +339,7 @@ export function GradingPanel({
           />
         }
       />
-      {waiting > 0 ? (
+      {waiting > 0 && !readOnly ? (
         <Alert
           icon={Play}
           title={t(waiting === 1 ? "grading.pass.waiting.one" : "grading.pass.waiting", {
@@ -351,9 +378,10 @@ export function GradingPanel({
               onSort={(key) => setSort(nextSort(shownSort, key))}
               selected={selected}
               onOpen={open}
+              onAdjust={adjustRow}
               onValidate={validateOne}
               validating={actions.validate.isPending}
-              onRegrade={() => setRegrading(true)}
+              onRegrade={regrade}
               newVersion={item.stale}
               onEdit={onEdit}
               empty={

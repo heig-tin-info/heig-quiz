@@ -7,9 +7,7 @@
  */
 import { z } from "zod";
 
-import { COURSE_ROLES } from "@quiz/domain";
-
-import { PersonRef, teacherChoiceWith } from "./common.js";
+import { CourseRole, PersonRef, teacherChoiceWith } from "./common.js";
 import { ConceptRef } from "./concept.js";
 import { ConditionKind, EvaluationCondition } from "./evaluation.js";
 import { CoursePoolMode, PoolColor, PoolIcon } from "./pool.js";
@@ -148,14 +146,6 @@ const CourseRef = z.object({
   code: z.string(),
 });
 type CourseRef = z.infer<typeof CourseRef>;
-
-/**
- * What a seat on a course's staff may do (ADR-068): an `owner` runs the
- * course — its staff, its pools, its classrooms, the release of results —
- * and an `assistant` does the day-to-day work in it.
- */
-export const CourseRole = z.enum(COURSE_ROLES);
-export type CourseRole = z.infer<typeof CourseRole>;
 
 /**
  * `POST /courses/:id/staff`: the account picked among the candidates

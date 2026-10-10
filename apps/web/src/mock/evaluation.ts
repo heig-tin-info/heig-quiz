@@ -1,5 +1,6 @@
 /** Section 3 of the mock — see `index.ts` for the layout. */
 import { countsAsCompleted,
+  evaluationDeletionRole,
   evaluationTotal,
   configLock,
   isConfigEditable,
@@ -892,6 +893,14 @@ export const evaluationOr404 = (id: string) => {
 /** The server's total: bonus items left out (ADR-052). */
 const totalPointsOf = (e: MockEvaluation) => evaluationTotal(e.items);
 const attemptCountOf = (e: MockEvaluation) => e.rows.filter((r) => r.attemptId !== null).length;
+/** Like the server: the staff's rehearsals do not count (ADR-068 §3). */
+const deletionRoleOf = (e: MockEvaluation) =>
+  evaluationDeletionRole({
+    mode: e.mode,
+    released: e.releasedAt !== null,
+    correctionPublished: e.correctionPublishedAt !== null,
+    studentAttempts: e.rows.filter((r) => !r.staff && r.attemptId !== null).length,
+  });
 
 export const toEvaluation = (e: MockEvaluation) => ({
   id: e.id,
@@ -953,6 +962,7 @@ const evaluationSummary = (e: MockEvaluation) => ({
   itemCount: e.items.length,
   totalPoints: totalPointsOf(e),
   attemptCount: attemptCountOf(e),
+  deletionRole: deletionRoleOf(e),
   opensAt: e.opensAt,
   closesAt: e.closesAt,
   createdAt: e.createdAt,
@@ -1015,6 +1025,7 @@ const evaluationDetail = (e: MockEvaluation) => ({
   items: e.items.map(itemRow),
   ...itemListFacts(e),
   attemptCount: attemptCountOf(e),
+  deletionRole: deletionRoleOf(e),
   editable: isConfigEditable(e.state, attemptCountOf(e)),
   self: selfOf(e),
   roster: rosterOf(e),
