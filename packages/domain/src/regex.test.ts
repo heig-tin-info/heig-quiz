@@ -6,17 +6,34 @@
 import { setFlagsFromString } from "node:v8";
 import { runInNewContext } from "node:vm";
 
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
+  buildClock,
   CACHE_WEIGHT_LIMIT,
+  CONFIG_BUILD_MS,
   configPatternProblems,
   MAX_PATTERN_LENGTH,
   MAX_PROGRAM_SIZE,
   PATTERN_WEIGHT_LIMIT,
   patternProblem,
+  SINGLE_BUILD_MS,
   testPattern,
 } from "./regex.js";
+
+/*
+ * Coverage, always on in this package, slows a build some twentyfold: the
+ * measured guards would refuse here what they accept in production. The
+ * clock they read is therefore stopped for this file, and the guards are
+ * tested on their own with a clock that runs as fast as they need.
+ */
+const realNow = buildClock.now;
+beforeAll(() => {
+  buildClock.now = () => 0;
+});
+afterAll(() => {
+  buildClock.now = realNow;
+});
 
 /**
  * Milliseconds a call takes: the best of three, so that a busy machine (the
@@ -105,7 +122,16 @@ describe("what a build may cost, read before the build", () => {
     expect(patternProblem(unseen("\\P{Lu}\\p{^L}".repeat(6)), "i")).toBe("too_complex");
     // A repetition copies a property into every state of the one-pass matcher.
     expect(patternProblem(unseen("\\PL{480}"), "i")).toBe("too_complex");
-    expect(patternProblem(unseen("\\p{L}{1,100}"), "i")).toBeNull();
+    expect(patternProblem(unseen("\\p{L}{1,50}"), "i")).toBeNull();
+    expect(patternProblem(unseen("\\p{L}{1,51}"), "i")).toBe("too_complex");
+  });
+
+  it("counts the ranges of any class its repetitions copy, not only the properties", () => {
+    // 260 separate ranges, copied 480 times into the one-pass matcher: about 3 ms built.
+    const wide = `[${Array.from({ length: 260 }, (_, j) => String.fromCodePoint(0x100 + j * 2)).join("")}]`;
+    expect(elapsed(() => expect(patternProblem(unseen(`${wide}{480}`), "")).toBe("too_complex"))).toBeLessThan(50);
+    expect(patternProblem(unseen(`${wide}{20}`), "")).toBeNull();
+    expect(patternProblem(unseen("[a-z\\d[:alpha:]]{1,100}"), "")).toBeNull();
   });
 
   it("refuses a large program before building it", () => {
@@ -160,6 +186,44 @@ describe("what one question may cost, read before any build", () => {
   });
 });
 
+describe("the measured build time, whatever the estimate missed", () => {
+  /** A clock that moves `step` milliseconds each time it is read. */
+  function steppingClock(step: number): () => void {
+    let now = 0;
+    buildClock.now = () => (now += step);
+    return () => {
+      buildClock.now = () => 0;
+    };
+  }
+
+  it("refuses a pattern whose build took too long, and never builds it again", () => {
+    const stop = steppingClock(SINGLE_BUILD_MS + 1);
+    const pattern = unseen("cheap");
+    try {
+      expect(patternProblem(pattern)).toBe("too_complex");
+    } finally {
+      stop();
+    }
+    // Cached: the clock stopped, the refusal stays.
+    expect(patternProblem(pattern)).toBe("too_complex");
+    expect(testPattern("cheap", pattern, "i")).toBe(false);
+  });
+
+  it("stops building a question's patterns once their builds took the budget", () => {
+    // Each build reads as 2 × step, each pattern of the question as 3 × step.
+    const step = Math.floor(SINGLE_BUILD_MS / 2) - 1;
+    const stop = steppingClock(step);
+    const fits = Math.floor(CONFIG_BUILD_MS / (3 * step));
+    try {
+      const patterns = Array.from({ length: fits + 2 }, () => ({ pattern: unseen("cheap"), flags: "i" }));
+      expect(configPatternProblems(patterns)).toBe("too_costly");
+      expect(configPatternProblems(patterns.slice(0, fits))).toEqual(Array(fits).fill(null));
+    } finally {
+      stop();
+    }
+  });
+});
+
 describe("what the cache keeps", () => {
   it("weighs each program by the classes it holds and its one-pass matcher", () => {
     // The weight is read inside re2js (pinned): `\p{L}{1,50}` is one-pass,
@@ -189,11 +253,14 @@ describe("what the cache keeps", () => {
       heaviestAccepted((count) => "\\P{Lu}".repeat(count)),
       heaviestAccepted((count) => "\\p{^L}".repeat(count)),
       heaviestAccepted((count) => `\\PL{${count}}`),
+      // An alternation of literals: re2js's prefilter (dropped) and one-pass tables.
+      heaviestAccepted((count) => `(?:ab|cd){${count}}`),
+      heaviestAccepted((count) => `(?:abcdefgh|ijklmnop){${count}}`),
     ];
     gc();
     const before = process.memoryUsage().heapUsed;
-    // Half as much again as the cache may hold, at the most one pattern weighs.
-    for (let i = 0; i < Math.ceil((1.5 * CACHE_WEIGHT_LIMIT) / PATTERN_WEIGHT_LIMIT); i++) {
+    // Three times what the cache may hold, at the most one pattern weighs.
+    for (let i = 0; i < Math.ceil((3 * CACHE_WEIGHT_LIMIT) / PATTERN_WEIGHT_LIMIT); i++) {
       expect(testPattern("abc", unseen(heavy[i % heavy.length]!), "i")).toBe(false);
     }
     gc();

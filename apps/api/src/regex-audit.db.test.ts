@@ -29,14 +29,20 @@ beforeAll(async () => {
 async function question(
   type: string,
   name: string,
-  versions: { number: number | null; config: unknown }[],
+  versions: { number: number | null; config: unknown; variables?: { rows: unknown[] } }[],
   deletedAt: Date | null = null,
 ): Promise<string> {
   const id = randomUUID();
   await db.insert(questions).values({ id, poolId, type, internalName: name, deletedAt });
-  await db
-    .insert(questionVersions)
-    .values(versions.map((v) => ({ id: randomUUID(), questionId: id, number: v.number, config: v.config })));
+  await db.insert(questionVersions).values(
+    versions.map((v) => ({
+      id: randomUUID(),
+      questionId: id,
+      number: v.number,
+      config: v.config,
+      variables: (v.variables ?? null) as never,
+    })),
+  );
   return id;
 }
 
@@ -69,7 +75,28 @@ describe("auditRegexPatterns", () => {
     const report = formatRegexAudit(audit);
     expect(report).toContain("Regex / fixed later");
     expect(report).toContain("v1\tshort matcher 2\tunsupported\t/(a)\\1/i");
-    expect(report.split("\n").at(-1)).toBe("2 pattern(s) in 2 question(s) never match under RE2 (4 published versions read).");
+    expect(report.split("\n").at(-1)).toBe(
+      "2 finding(s) in 2 question(s): never matching under RE2, or to fix before publishing again (4 published versions read).",
+    );
+  });
+
+  it("lists a question over the build budget and a computed regex blank, each acceptable alone", async () => {
+    await db.delete(questions);
+    const costly = Array.from({ length: 50 }, (_, i) => `{{/${"\\p{Ll}".repeat(10)}${i}/i}}`).join(" ");
+    const budget = await question("cloze", "too costly together", [{ number: 1, config: { text: costly } }]);
+    const variables = { rows: [{ name: "h", expr: "randint(1, 9)", format: "int" }] };
+    const computed = await question("cloze", "computed regex", [
+      { number: 1, config: { text: "{{/a[[h]]b/}} {{#[[h]]}}" }, variables },
+    ]);
+    // Without variables, `[[` is only text.
+    await question("cloze", "brackets as text", [{ number: 1, config: { text: "{{/[[:alpha:]]+/}}" } }]);
+
+    const audit = await auditRegexPatterns(db);
+    expect(audit.findings.map((f) => [f.questionId, f.where, f.problem, f.pattern])).toEqual([
+      [computed, "blank 1", "computed_regex_key", "a[[h]]b"],
+      [budget, "question", "config_too_complex", ""],
+    ]);
+    expect(formatRegexAudit(audit)).toContain("cloze question\tconfig_too_complex\t-");
   });
 
   it("says so when every pattern compiles, and reads configs of any shape", async () => {

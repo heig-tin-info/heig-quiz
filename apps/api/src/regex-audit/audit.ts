@@ -1,7 +1,10 @@
 /**
  * Which published `short` and `cloze` versions hold a regex pattern the RE2
  * engine refuses (ADR-099, security audit H3): JavaScript-only syntax (a
- * backreference, a lookaround), or a program too large. Such a pattern was
+ * backreference, a lookaround), a program too large, patterns that together
+ * pass the build budget of one question, or — in a parameterized cloze — a
+ * regex blank holding a `[[…]]` reference, a pattern of its own built for
+ * every student (ADR-056 §10). Such a pattern was
  * accepted while JavaScript's backtracking `RegExp` ran the matchers. Under
  * RE2 the version stays readable, but that matcher or blank never matches,
  * so a student's right answer there is graded wrong until the teacher
@@ -15,7 +18,7 @@
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import { parseCloze } from "@quiz/domain/cloze";
-import { DEFAULT_REGEX_FLAGS, patternProblem, type PatternProblem } from "@quiz/domain/regex";
+import { configPatternProblems, DEFAULT_REGEX_FLAGS, type PatternProblem } from "@quiz/domain/regex";
 
 import type { Db } from "../db/client.js";
 import { pools, questions, questionVersions } from "../db/schema.js";
@@ -29,9 +32,10 @@ export interface RegexFinding {
   /** The question's latest published version: the one new evaluations take. */
   latest: boolean;
   deleted: boolean;
-  /** `matcher 2` of a short answer, `blank 3` of a cloze, counted from 1. */
+  /** `matcher 2` of a short answer, `blank 3` of a cloze, counted from 1; `question` for the whole. */
   where: string;
-  problem: PatternProblem;
+  /** Why it never matches, or why it should not be published again. */
+  problem: PatternProblem | "config_too_complex" | "computed_regex_key";
   pattern: string;
   flags: string;
 }
@@ -84,6 +88,7 @@ export async function auditRegexPatterns(db: Db): Promise<RegexAudit> {
         deletedAt: questions.deletedAt,
         version: questionVersions.number,
         config: questionVersions.config,
+        variables: questionVersions.variables,
       })
       .from(questionVersions)
       .innerJoin(questions, eq(questions.id, questionVersions.questionId))
@@ -97,26 +102,31 @@ export async function auditRegexPatterns(db: Db): Promise<RegexAudit> {
 
   const findings = rows.flatMap((row) => {
     const type = row.type as RegexFinding["type"];
-    const patterns = type === "short" ? shortPatterns(row.config) : clozePatterns(row.config);
-    return patterns.flatMap(({ where, pattern, flags }): RegexFinding[] => {
-      const problem = patternProblem(pattern, flags);
-      if (problem === null) return [];
-      return [
-        {
-          pool: row.pool,
-          questionId: row.questionId,
-          question: row.question,
-          type,
-          version: row.version!,
-          latest: latest.get(row.questionId) === row.version,
-          deleted: row.deletedAt !== null,
-          where,
-          problem,
-          pattern,
-          flags,
-        },
-      ];
+    const finding = (where: string, problem: RegexFinding["problem"], pattern = "", flags = ""): RegexFinding => ({
+      pool: row.pool,
+      questionId: row.questionId,
+      question: row.question,
+      type,
+      version: row.version!,
+      latest: latest.get(row.questionId) === row.version,
+      deleted: row.deletedAt !== null,
+      where,
+      problem,
+      pattern,
+      flags,
     });
+    const patterns = type === "short" ? shortPatterns(row.config) : clozePatterns(row.config);
+    const parameterized = (row.variables?.rows.length ?? 0) > 0;
+    // A template's `[[…]]` is replaced per student: the template's own pattern says nothing.
+    const computed = type === "cloze" && parameterized ? patterns.filter((p) => p.pattern.includes("[[")) : [];
+    const fixed = patterns.filter((p) => !computed.includes(p));
+    const problems = configPatternProblems(fixed);
+    return [
+      ...computed.map((p) => finding(p.where, "computed_regex_key", p.pattern, p.flags)),
+      ...(problems === "too_costly"
+        ? [finding("question", "config_too_complex")]
+        : fixed.flatMap((p, i) => (problems[i] ? [finding(p.where, problems[i], p.pattern, p.flags)] : []))),
+    ];
   });
   return { versions: rows.length, findings };
 }
@@ -129,14 +139,14 @@ export function formatRegexAudit({ versions, findings }: RegexAudit): string {
       `v${f.version}${f.latest ? " latest" : ""}${f.deleted ? " deleted" : ""}`,
       `${f.type} ${f.where}`,
       f.problem,
-      `/${f.pattern}/${f.flags}`,
+      f.pattern === "" ? "-" : `/${f.pattern}/${f.flags}`,
     ].join("\t"),
   );
   const questionCount = new Set(findings.map((f) => f.questionId)).size;
   lines.push(
     findings.length === 0
       ? `Every regex pattern of the ${versions} published short and cloze versions compiles under RE2.`
-      : `${findings.length} pattern(s) in ${questionCount} question(s) never match under RE2 (${versions} published versions read).`,
+      : `${findings.length} finding(s) in ${questionCount} question(s): never matching under RE2, or to fix before publishing again (${versions} published versions read).`,
   );
   return lines.join("\n");
 }

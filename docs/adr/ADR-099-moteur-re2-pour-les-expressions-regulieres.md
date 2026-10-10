@@ -39,11 +39,14 @@ blanks, each acceptable alone, built on every draft save.
 2. **Bounds, each checked before the next costs anything:** D10's limits; a
    static estimate read on the pattern's text — program size at most twice
    the bound below, at most 2 000 code points folded one by one, at most ten
-   Unicode property escapes written and a hundred copies of them made by
-   repetitions — so the slowest pattern accepted builds in about 2 ms; the
-   compiled program at most 500 instructions; its weight in memory (its
-   instructions and class runes, and those of the one-pass matcher, which is
-   dropped when it alone would pass the bound) at most 250 kB. Compiled
+   Unicode property escapes written, at most 50 000 class ranges copied by
+   repetitions (a property counting as a thousand) — so the slowest pattern
+   accepted builds in about 2 ms; the compiled program at most 500
+   instructions; its weight in memory (its instructions, class runes and
+   one-pass tables) at most 250 kB. re2js's prefilter for alternations of
+   literals is dropped (it only rules out unanchored searches early, and
+   every source here is anchored), and so is a one-pass matcher that alone
+   would pass the bound (the match stays linear without it). Compiled
    patterns and refusals are cached, least recently used first out once the
    weights pass 48 MB; the weights are calibrated so that a cache full of the
    heaviest accepted families holds about half of that. The weight reads
@@ -51,12 +54,21 @@ blanks, each acceptable alone, built on every draft save.
 3. **One question's budget.** Publication first sums the estimated build
    time of all the patterns of one question (its matchers, its blanks) and
    refuses past 25 ms (`regex.config_too_complex`), building none of them.
-4. **No computed regex.** A cloze regex blank of a parameterized question
+4. **The measured time is the invariant, the estimate the filter.** The
+   estimate prices what re2js is known to do; whatever it does that the
+   estimate misses is cut by the clock: a build over 50 ms is refused as too
+   complex (and never retried), and a question stops building once its
+   builds have taken 100 ms, refused as `regex.config_too_complex`. Both are
+   about ten and four times what the estimate admits, a margin so that a
+   pause of the process or a coverage run does not refuse a legitimate
+   pattern. A draft save thus costs at most about 150 ms, however re2js
+   evolves.
+5. **No computed regex.** A cloze regex blank of a parameterized question
    may not hold a `[[…]]` reference (`cloze.computed_regex_key`), as a
    `short` text or regex key may not (ADR-056 §10, `short.computed_text_key`):
    every student's instance would be a pattern of its own, built cold at the
    first grade. That gap predates this record.
-5. **Where the refusal applies.** A pattern RE2 refuses is a publication
+6. **Where the refusal applies.** A pattern RE2 refuses is a publication
    issue (the types' `publicationIssues`, also returned with a draft's issues
    and checked by the MCP tools before they publish), with one key per reason
    shared by both types: `regex.invalid`, `regex.invalid_flags`,
@@ -64,7 +76,8 @@ blanks, each acceptable alone, built on every draft save.
    which every read goes through, never compile: a version published under
    the old engine stays readable, served and graded; its refused matcher or
    blank never matches. A one-shot read-only command,
-   `node dist/regex-audit.js`, lists those versions before the deploy.
+   `node dist/regex-audit.js`, lists those versions before the deploy, with
+   the questions over the budget and the computed regex blanks.
 
 ## Consequences
 
@@ -77,6 +90,10 @@ blanks, each acceptable alone, built on every draft save.
 - A rare legitimate pattern is refused as too complex (a CJK range under `i`,
   `.{0,300}`, eleven Unicode classes); the teacher drops the flag or narrows
   the repetition.
+- The measured guard trades a little determinism for a hard ceiling: a
+  build stalled past 50 ms (ten times the costliest the estimate admits) is
+  refused for the life of the process, including at grading. Only a stall
+  of the whole process does that to a legitimate pattern; a restart lifts it.
 - The residual cost is the cold build: about 2 ms for the slowest pattern,
   25 ms for the costliest question, paid once per process and per pattern
   (after a restart, or when a question's patterns change), and a question's
