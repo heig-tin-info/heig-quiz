@@ -25,6 +25,8 @@ them; the student exit follows F-RES-04 and spec 05 §5.7.
 
 Amended 2026-10-09: the consequence on the student's global Grades page records M5-04's decision instead of deferring to it.
 
+Amended 2026-10-10 (security audit L1, following [ADR-068](ADR-068-roles-de-l-equipe-du-cours.md) §3 of the same day): §9 only — a mark over a derived absence of a released column is an owner's act.
+
 ## Context
 
 D06 made the gradebook one table per classroom: a column per evaluation or
@@ -115,8 +117,12 @@ to students only if the teacher publishes it. Two gaps remained.
    exception (orchestrator, 2026-10-05, following the owner-only release and
    correction publication of ADR-068 §3): publishing, **changing or clearing a mark over a real grade on a
    released column** (a published correction; `override: true`) is an
-   **owner's** act, `403 owner_required` for an assistant. Marks on a column not released, and an
-   absence over an empty cell, stay open to every member; what makes a grade
+   **owner's** act, `403 owner_required` for an assistant. So is setting, changing or
+   clearing a mark over a **derived absence** of a released column (amended 2026-10-10,
+   security audit L1: the a1.0 the release published is a released grade, though
+   `hasGrade` stays false so the owner's mark there asks no override and F-GBOOK-01 is
+   unchanged). Marks on a column not released, and a mark over an empty cell, stay open
+   to every member; what makes a grade
    final stays the activity's own release. An **archived** classroom's
    gradebook is read-only (`409 classroom_archived`). The settings are audited
    (`gradebook.column_updated`, `gradebook.mean_published`,

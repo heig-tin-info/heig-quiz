@@ -38,6 +38,7 @@ const summary = (over: Partial<EvaluationSummary>): EvaluationSummary => ({
   itemCount: 4,
   totalPoints: 7,
   attemptCount: 0,
+  deletionRole: "assistant",
   opensAt: null,
   closesAt: null,
   createdAt: new Date(0).toISOString(),

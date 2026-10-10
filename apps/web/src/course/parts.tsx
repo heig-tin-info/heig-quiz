@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Archive, EyeOff, School } from "lucide-react";
 import { useState } from "react";
 
-import type { ClassroomDetail, CourseCondition, CourseDetail, CourseSummary } from "@quiz/contracts";
+import type { ClassroomDetail, CourseCondition, CourseDetail, CourseRole, CourseSummary } from "@quiz/contracts";
 import { courseRoleAllows } from "@quiz/domain";
 
 import { api, type ReadOptions } from "../api";
@@ -55,8 +55,16 @@ export function useClassroom(id: string | null, options: ReadOptions = {}) {
  * (`owner_required`).
  */
 export function useIsCourseOwner(courseId: string | null | undefined): boolean {
-  const role = useCourses().data?.find((c) => c.id === courseId)?.myRole ?? null;
-  return courseRoleAllows(role, "owner");
+  return courseRoleAllows(useCourseRole(courseId), "owner");
+}
+
+/**
+ * The caller's role on the course, from the same list (null while it loads
+ * or without a seat): for an action whose needed role depends on its target
+ * (`courseRoleAllows(role, row.deletionRole)`, ADR-068 §3).
+ */
+export function useCourseRole(courseId: string | null | undefined): CourseRole | null {
+  return useCourses().data?.find((c) => c.id === courseId)?.myRole ?? null;
 }
 
 /**

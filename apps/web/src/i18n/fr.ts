@@ -3546,6 +3546,7 @@ export const fr: Record<keyof Dict, string> = {
   "templatePull.doneDeprecated": "Questions mises à jour depuis le modèle (rév. {revision}). Celles-ci utilisent une version marquée obsolète : {names}.",
   "eval.delete": "Supprimer l'évaluation",
   "eval.deleteConfirm": "Supprimer « {name} » ? Ses questions, ses tentatives et ses résultats partent avec.",
+  "eval.delete.ownerOnly": "Des étudiants l'ont passée, ou ses résultats ou son corrigé sont publiés : seul un enseignant du cours peut la supprimer.",
   "eval.resetAttempt": "Réinitialiser ma tentative de test",
   "eval.resetAttempt.title": "Supprimer votre tentative de test ?",
   "eval.resetAttempt.message": "Vos réponses, votre journal et les notes de ce test partent avec. Seule votre propre tentative est touchée.",
@@ -3969,6 +3970,7 @@ export const fr: Record<keyof Dict, string> = {
   // WP10: grading + results
   "grading.title": "Correction",
   "grading.subtitle": "Validez les propositions, ajustez ce qui le demande, puis publiez.",
+  "grading.ownerOnly": "Les résultats sont publiés : seul un enseignant du cours peut désormais modifier une note.",
   "grading.loadFailed": "Le panneau de correction n'a pas pu être chargé.",
   "grading.run": "Lancer la correction",
   "grading.run.started": "Correction lancée.",

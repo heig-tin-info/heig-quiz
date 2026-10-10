@@ -52,11 +52,17 @@ export interface GradingTableProps {
   sort: Sort | null;
   onSort: (key: string) => void;
   selected: string | null;
-  /** Opens the panel on a row (`EXPECTED` for the key); `adjust` focuses its form. */
-  onOpen: (key: string, adjust?: boolean) => void;
-  onValidate: (entry: GradingEntry) => void;
+  /** Opens the panel on a row (`EXPECTED` for the key). */
+  onOpen: (key: string) => void;
+  /**
+   * The grading writes, each absent when the reader may not make it (an
+   * assistant once the results are released, ADR-068 §3): no button then.
+   * `onAdjust` opens the panel on a row's grading form.
+   */
+  onAdjust?: ((key: string) => void) | undefined;
+  onValidate?: ((entry: GradingEntry) => void) | undefined;
   validating: boolean;
-  onRegrade: () => void;
+  onRegrade?: (() => void) | undefined;
   /**
    * A published version newer than the frozen one exists: Re-grade is then a
    * filled secondary button, "New version" — never the accent, which stays
@@ -245,7 +251,7 @@ function ExpectedRow({
               <PencilLine />
             </IconButton>
           ) : null}
-          {newVersion ? (
+          {!onRegrade ? null : newVersion ? (
             <Tip label={t("grading.regrade.newer")}>
               <Button
                 size="sm"
@@ -272,6 +278,7 @@ function AnswerRow({
   named,
   selected,
   onOpen,
+  onAdjust,
   onValidate,
   validating,
 }: GradingTableProps & { entry: GradingEntry }) {
@@ -352,12 +359,14 @@ function AnswerRow({
           {action === "grade" ? (
             // A 0-point placeholder (an essay) is never validated unread: its
             // one action opens it on the grading form.
-            <Button size="sm" variant="secondary" onClick={() => onOpen(key, true)}>
-              <PencilLine /> {t("grading.grade")}
-            </Button>
+            onAdjust ? (
+              <Button size="sm" variant="secondary" onClick={() => onAdjust(key)}>
+                <PencilLine /> {t("grading.grade")}
+              </Button>
+            ) : null
           ) : (
             <>
-              {action === "validate" ? (
+              {action === "validate" && onValidate ? (
                 <Button
                   size="sm"
                   variant="secondary"
@@ -367,9 +376,11 @@ function AnswerRow({
                   <Check /> {t("grading.validate")}
                 </Button>
               ) : null}
-              <Button size="sm" variant="ghost" onClick={() => onOpen(key, true)}>
-                {t("grading.override")}
-              </Button>
+              {onAdjust ? (
+                <Button size="sm" variant="ghost" onClick={() => onAdjust(key)}>
+                  {t("grading.override")}
+                </Button>
+              ) : null}
             </>
           )}
         </span>

@@ -63,6 +63,7 @@ export {
   trustedClients,
   drillAllowed,
   attemptCount,
+  deletionRole,
   joinedItems,
   joinedItem,
   parameterizedItems,

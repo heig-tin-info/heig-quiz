@@ -1427,6 +1427,11 @@ const scenes = [
   { name: "grading-empty", role: "teacher", path: "/evaluations/closed/grading?empty=1", settle: 800 },
   { name: "grading-error", role: "teacher", path: "/evaluations/closed/grading?fail=1", settle: 2500 },
   { name: "grading-loading", role: "teacher", path: "/evaluations/closed/grading?slow=1", settle: 300 },
+  // ADR-068 §3 (amended 2026-10-10): released, the panel is an owner's to
+  // change; an assistant reads it, one line saying why, and an evaluation
+  // students took offers them a greyed-out Delete.
+  { name: "grading-released-assistant", role: "teacher", path: "/evaluations/released/grading?assistant=1" },
+  { name: "eval-list-delete-assistant", role: "teacher", path: "/classrooms/r1?assistant=1", fold: true, act: (p) => openRowMenu(p, /^(Actions for|Actions pour) Test d/) },
 
   { name: "results", role: "teacher", path: "/evaluations/closed/results" },
   { name: "results-released", role: "teacher", path: "/evaluations/released/results" },

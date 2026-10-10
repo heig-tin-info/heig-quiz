@@ -33,8 +33,10 @@ you archive it.
 have signed in once (an address typed in full works too), and takes a
 role. Every member of the staff reaches every classroom of the course. A
 **teacher** also runs it: the staff and their roles, the course's name and
-deletion, its linked pools, creating and deleting classrooms, and
-publishing results. An **assistant** does the rest. On **Members**, a
+deletion, its linked pools, creating and deleting classrooms,
+publishing results, changing a grade once results are published, and
+deleting an evaluation students took or whose results are published. An
+**assistant** does the rest. On **Members**, a
 teacher changes a role or removes someone from a person's row, and anyone
 leaves the course from their own. A course keeps at least one teacher.
 

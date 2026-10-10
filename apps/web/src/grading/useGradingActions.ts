@@ -39,7 +39,10 @@ export function useGradingActions({
 }: {
   evaluationId: string;
   navigate: (r: Route) => void;
-  /** Absent while no question is on screen. */
+  /**
+   * Absent while no question is on screen, and when the reader may not grade
+   * (an assistant once the results are released, ADR-068 §3).
+   */
   onRegrade: (() => void) | undefined;
 }) {
   const t = useT();
@@ -103,16 +106,18 @@ export function useGradingActions({
       group: "navigate",
       run: openResults,
     },
-    {
-      id: "grading:run",
-      effect: "write",
-      label: t("grading.run"),
-      icon: CheckCheck,
-      group: "action",
-      run: () => run.mutate(undefined),
-    },
+    // The palette's two writes travel with `onRegrade`: absent, the reader
+    // may not grade here (ADR-068 §3), or there is no question to grade.
     ...(onRegrade
       ? [
+          {
+            id: "grading:run",
+            effect: "write" as const,
+            label: t("grading.run"),
+            icon: CheckCheck,
+            group: "action" as const,
+            run: () => run.mutate(undefined),
+          },
           {
             id: "grading:regrade",
             effect: "write" as const,

@@ -27,6 +27,9 @@ export type DbOrTx = Db | Tx;
  */
 const REFUSALS = {
   illegal_transition: [409],
+  // ADR-068 §3 (amended 2026-10-10): a delete re-decided under the row's
+  // lock, once a student attempt landed after the route's own role step.
+  owner_required: [403, "Only an owner of this course may do that"],
   locked: [409, "an attempt exists: the structure is frozen"],
   // #86: `running` or `paused` locks the configuration until it closes, all
   // but the title, the access control and the feedback policy; time is

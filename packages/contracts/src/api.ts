@@ -11,7 +11,7 @@ import { LOCALES, TRUSTED_CLIENTS, type Locale } from "@quiz/domain";
 import { McqPolicy } from "./evaluation.js";
 import type { TeacherCodespaceGrant } from "./codespace.js";
 import type { UserRole } from "./admin.js";
-import type { CourseRole } from "./org.js";
+import type { CourseRole } from "./common.js";
 import type { PoolColor } from "./pool.js";
 
 /** Display format for date-times; null falls back to ISO (`2026-09-01 08:00`). */

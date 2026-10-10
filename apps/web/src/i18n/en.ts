@@ -3553,6 +3553,7 @@ export const en = {
   "templatePull.doneDeprecated": "Questions updated from the template (rev. {revision}). These use a version marked outdated: {names}.",
   "eval.delete": "Delete evaluation",
   "eval.deleteConfirm": "Delete “{name}”? Its items, attempts and results go with it.",
+  "eval.delete.ownerOnly": "Students took it, or its results or correction are published: only a teacher of the course may delete it.",
   "eval.resetAttempt": "Reset my test attempt",
   "eval.resetAttempt.title": "Delete your test attempt?",
   "eval.resetAttempt.message": "Your answers, your journal and the grades of this test go with it. Only your own attempt is touched.",
@@ -3976,6 +3977,7 @@ export const en = {
   // WP10: grading + results
   "grading.title": "Grading",
   "grading.subtitle": "Validate the proposals, adjust what needs it, then publish.",
+  "grading.ownerOnly": "The results are released: only a teacher of the course may change a grade now.",
   "grading.loadFailed": "Could not load the grading panel.",
   "grading.run": "Run grading",
   "grading.run.started": "Grading started.",

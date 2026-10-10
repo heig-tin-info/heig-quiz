@@ -14,7 +14,7 @@ import {
 import { useState } from "react";
 
 import { EvaluationPatch } from "@quiz/contracts";
-import { EVALUATION_STEPS, isEvaluationOver, itemListLock } from "@quiz/domain";
+import { courseRoleAllows, EVALUATION_STEPS, isEvaluationOver, itemListLock } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -48,7 +48,7 @@ import { TimingStep } from "./TimingStep";
 import { SaveAsTemplateDialog, useDuplicateErrorToast } from "./templates";
 import { useConfigPatch } from "./usePatch";
 import { evaluationKey, evaluationsKey } from "../queryKeys";
-import { useClassroom } from "../course/parts";
+import { useClassroom, useCourseRole } from "../course/parts";
 import { useEvaluation } from "./api";
 
 /**
@@ -100,6 +100,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   const classroomId = detail.data?.evaluation.classroomId ?? null;
   const crumbs = useEvaluationCrumbs(classroomId, id, detail.data?.evaluation.title);
   const classroom = useClassroom(classroomId);
+  const myRole = useCourseRole(detail.data?.courseId);
 
   const duplicateFailed = useDuplicateErrorToast();
   const duplicate = useMutation({
@@ -317,6 +318,10 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
                 icon: Trash2,
                 danger: true,
                 separator: self.attemptId === null || !self.staffSeat,
+                // Students' work or a release makes it an owner's act (ADR-068 §3).
+                ...(courseRoleAllows(myRole, data.deletionRole)
+                  ? {}
+                  : { disabled: true, description: t("eval.delete.ownerOnly") }),
                 onSelect: async () => {
                   if (
                     await confirm({

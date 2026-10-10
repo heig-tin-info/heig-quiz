@@ -9,14 +9,27 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import type { CourseDetail, CourseSummary, EvaluationDetail } from "@quiz/contracts";
+import type { CourseDetail, CourseSummary, EvaluationDetail, EvaluationSummary } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
-import { auditLog, classrooms, courseStaff, courses, evaluations, userEmails } from "../../db/schema.js";
+import {
+  answers,
+  attempts,
+  auditLog,
+  classrooms,
+  courseStaff,
+  courses,
+  enrollments,
+  evaluations,
+  gradings,
+  userEmails,
+} from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
-import { reload, seedLive } from "../../test/live.js";
+import { reload, seedLive, type Seeded } from "../../test/live.js";
+import * as evaluationService from "../evaluation/service.js";
 import { applyState } from "../evaluation/service.js";
+import * as live from "../live/service.js";
 
 type Caller = Awaited<ReturnType<TestServer["signIn"]>>;
 
@@ -135,6 +148,11 @@ describe("owner-only course routes", () => {
     expect((await send("POST", `/app/api/courses/${courseId}/hide`, assistant)).statusCode).toBe(204);
     expect((await send("POST", `/app/api/courses/${courseId}/unhide`, assistant)).statusCode).toBe(204);
     expect((await send("PATCH", `/app/api/classrooms/${classroomId}`, assistant, { name: "PRG1-A2" })).statusCode).toBe(200);
+    // A draft no student took is every member's to create and to delete (§3, amended 2026-10-10).
+    const draft = await send("POST", `/app/api/classrooms/${classroomId}/evaluations`, assistant, { title: "Brouillon", mode: "exam" });
+    expect(draft.statusCode, draft.body).toBe(201);
+    const deleted = await send("DELETE", `/app/api/evaluations/${draft.json().id}`, assistant, { confirmTitle: "Brouillon" });
+    expect(deleted.statusCode).toBe(204);
     expect((await send("POST", `/app/api/classrooms/${classroomId}/archive`, assistant)).statusCode).toBe(204);
     expect((await send("GET", `/app/api/courses/${courseId}`, assistant)).statusCode).toBe(200);
   });
@@ -377,5 +395,138 @@ describe("what reaches the students", () => {
     expect(refused.statusCode).toBe(403);
     expect(refused.json().error).toBe("owner_required");
     expect((await publish(owner)).statusCode).toBe(200);
+  });
+});
+
+describe("deleting an evaluation (ADR-068 §3, amended 2026-10-10)", () => {
+  /** An evaluation of the owner's course, the assistant seated on it. */
+  async function seeded(mode: "exam" | "exercise" = "exam") {
+    const seed = await seedLive(server.app.db, { teacherId: owner.id, questions: 1, mode });
+    await server.app.db.insert(courseStaff).values({ courseId: seed.courseId, userId: assistant.id, role: "assistant" });
+    return seed;
+  }
+  const attemptBy = (evaluationId: string, userId: string) =>
+    server.app.db.insert(attempts).values({ id: randomUUID(), evaluationId, userId, seed: 1 });
+  const remove = (id: string, caller: Caller, confirmTitle = "Test évaluation") =>
+    send("DELETE", `/app/api/evaluations/${id}`, caller, { confirmTitle });
+  /** The role the payloads say a deletion needs: the detail's, and the list row's. */
+  async function deletionRoles(seed: Seeded) {
+    const detail = (await send("GET", `/app/api/evaluations/${seed.evaluationId}`, assistant)).json() as EvaluationDetail;
+    const list = (await send("GET", `/app/api/classrooms/${seed.classroomId}/evaluations`, assistant)).json() as EvaluationSummary[];
+    return [detail.deletionRole, list.find((e) => e.id === seed.evaluationId)?.deletionRole];
+  }
+
+  it("lets an assistant delete one no student took, a staff rehearsal aside (ADR-018)", async () => {
+    const seed = await seeded();
+    await server.app.db.insert(enrollments).values({
+      id: randomUUID(),
+      classroomId: seed.classroomId,
+      nom: "Assistant",
+      prenom: "A",
+      email: assistant.email,
+      userId: assistant.id,
+      claimedAt: new Date(),
+      staff: true,
+    });
+    await attemptBy(seed.evaluationId, assistant.id);
+    expect(await deletionRoles(seed)).toEqual(["assistant", "assistant"]);
+    expect((await remove(seed.evaluationId, assistant)).statusCode).toBe(204);
+    expect(await evaluationService.byId(server.app.db, seed.evaluationId)).toBeNull();
+  });
+
+  it("keeps one a student took to an owner, refused before the body: the wrong title is a 403 too", async () => {
+    const seed = await seeded();
+    await attemptBy(seed.evaluationId, seed.studentIds[0]!);
+    expect(await deletionRoles(seed)).toEqual(["owner", "owner"]);
+    expect((await remove(seed.evaluationId, outsider)).statusCode).toBe(404);
+    for (const title of ["wrong", "Test évaluation"]) {
+      const refused = await remove(seed.evaluationId, assistant, title);
+      expect([refused.statusCode, refused.json().error]).toEqual([403, "owner_required"]);
+    }
+    // The owner still names it.
+    expect((await remove(seed.evaluationId, owner, "wrong")).json().error).toBe("confirm_mismatch");
+    expect((await remove(seed.evaluationId, owner)).statusCode).toBe(204);
+  });
+
+  it("keeps a released one, or one whose correction is published, to an owner, attempts or none", async () => {
+    for (const published of [{ releasedAt: new Date() }, { correctionPublishedAt: new Date() }]) {
+      const seed = await seeded("exercise");
+      await server.app.db.update(evaluations).set(published).where(eq(evaluations.id, seed.evaluationId));
+      expect(await deletionRoles(seed)).toEqual(["owner", "owner"]);
+      expect((await remove(seed.evaluationId, assistant)).statusCode).toBe(403);
+      expect((await remove(seed.evaluationId, owner)).statusCode).toBe(204);
+    }
+  });
+
+  it("leaves a poll with votes to every member, until it is released", async () => {
+    const voted = await seeded();
+    await server.app.db.update(evaluations).set({ mode: "poll" }).where(eq(evaluations.id, voted.evaluationId));
+    await attemptBy(voted.evaluationId, voted.studentIds[0]!);
+    expect((await remove(voted.evaluationId, assistant)).statusCode).toBe(204);
+
+    const released = await seeded();
+    await server.app.db
+      .update(evaluations)
+      .set({ mode: "poll", releasedAt: new Date() })
+      .where(eq(evaluations.id, released.evaluationId));
+    expect((await remove(released.evaluationId, assistant)).statusCode).toBe(403);
+  });
+
+  it("decides again under the row's lock: a student attempt landing after the role step wins", async () => {
+    const seed = await seeded();
+    const loaded = await reload(server.app.db, seed.evaluationId);
+    await attemptBy(seed.evaluationId, seed.studentIds[0]!);
+    await expect(evaluationService.deleteEvaluation(server.app.db, loaded, "assistant")).rejects.toMatchObject({
+      code: "owner_required",
+      status: 403,
+    });
+    expect(await evaluationService.byId(server.app.db, seed.evaluationId)).not.toBeNull();
+  });
+});
+
+describe("grading after the release (ADR-068 §3, amended 2026-10-10)", () => {
+  /** A closed exam of the owner's course, one student's answer graded, the assistant seated on it. */
+  async function graded() {
+    const db = server.app.db;
+    const seed = await seedLive(db, { teacherId: owner.id, questions: 1, students: 1 });
+    await db.insert(courseStaff).values({ courseId: seed.courseId, userId: assistant.id, role: "assistant" });
+    const now = () => server.clock.now();
+    let evaluation = await applyState(db, await reload(db, seed.evaluationId), "running", now());
+    const participant = (await live.participantOf(db, evaluation, seed.studentIds[0]!))!;
+    const created = await live.ensureAttempt(db, evaluation, participant, now());
+    const attempt = await live.beginAttempt(db, evaluation, created, participant, now());
+    await live.saveAnswer(db, { evaluation, attempt, itemId: seed.itemIds[0]!, payload: "nope", revision: 1, now: now() });
+    evaluation = await live.closeEvaluation(db, evaluation, now());
+    expect((await send("POST", `/app/api/evaluations/${seed.evaluationId}/grading/run`, owner)).statusCode).toBe(202);
+    const [answer] = await db.select().from(answers).where(eq(answers.attemptId, attempt.id));
+    const [grading] = await db.select().from(gradings).where(eq(gradings.attemptId, attempt.id));
+    return { id: seed.evaluationId, itemId: seed.itemIds[0]!, answerId: answer!.id, gradingId: grading!.id };
+  }
+
+  /** Every grading write of the panel, with a body an owner would send. */
+  const writes = (g: Awaited<ReturnType<typeof graded>>): [string, Payload | undefined][] => [
+    [`/app/api/evaluations/${g.id}/grading/run`, undefined],
+    [`/app/api/evaluations/${g.id}/grading/validate-batch`, {}],
+    [`/app/api/evaluations/${g.id}/items/${g.itemId}/regrade`, {}],
+    [`/app/api/answers/${g.answerId}/gradings`, { points: 0, comment: "Revu" }],
+    [`/app/api/gradings/${g.gradingId}/override`, { points: 0, comment: "Revu" }],
+    [`/app/api/gradings/${g.gradingId}/validate`, {}],
+  ];
+
+  it("lets an assistant grade until the release, then answers 403 owner_required before the body; the owner grades on", async () => {
+    const g = await graded();
+    const override = `/app/api/gradings/${g.gradingId}/override`;
+    expect((await send("POST", override, assistant, { points: 0, comment: "Revu" })).statusCode).toBe(200);
+    expect((await send("POST", `/app/api/evaluations/${g.id}/grading/validate-batch`, assistant, {})).statusCode).toBe(200);
+
+    expect((await send("POST", `/app/api/evaluations/${g.id}/release`, owner, { confirm: true })).statusCode).toBe(200);
+    for (const [url, body] of writes(g)) {
+      for (const payload of [body, { points: "malformed" }]) {
+        const refused = await send("POST", url, assistant, payload);
+        expect([refused.statusCode, refused.json().error], url).toEqual([403, "owner_required"]);
+      }
+    }
+    const [latest] = await server.app.db.select().from(gradings).where(eq(gradings.answerId, g.answerId)).orderBy(desc(gradings.createdAt)).limit(1);
+    expect((await send("POST", `/app/api/gradings/${latest!.id}/override`, owner, { points: 0, comment: "Après publication" })).statusCode).toBe(200);
   });
 });

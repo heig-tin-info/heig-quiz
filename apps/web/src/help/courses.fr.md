@@ -34,8 +34,10 @@ enseignants qui se sont déjà connectés (une adresse tapée en entier marche
 aussi), et prend un rôle. Tous les membres de l'équipe accèdent à toutes les
 classes du cours. Un **enseignant** le dirige en plus : l'équipe et ses
 rôles, le nom et la suppression du cours, ses banques liées, la création et
-la suppression des classes, et la publication des résultats. Un **assistant**
-fait le reste. Sous **Membres**, un enseignant change un rôle ou retire
+la suppression des classes, la publication des résultats, la modification
+d'une note une fois les résultats publiés, et la suppression d'une
+évaluation que des étudiants ont passée ou dont les résultats sont publiés.
+Un **assistant** fait le reste. Sous **Membres**, un enseignant change un rôle ou retire
 quelqu'un depuis sa ligne, et chacun quitte le cours depuis la sienne. Un
 cours garde au moins un enseignant.
 
