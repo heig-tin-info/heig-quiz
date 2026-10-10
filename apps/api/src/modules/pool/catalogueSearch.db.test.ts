@@ -161,6 +161,11 @@ describe("the search", () => {
     expect(await names(reader, "caesar")).toEqual(["Cæsar"]);
   });
 
+  it("folds Central-European letters like the TypeScript fold: Dvořák, Škoda", async () => {
+    await newPool("Dvořák et Škoda", { isPublic: true });
+    for (const q of ["dvorak", "DVOŘÁK", "skoda", "škoda"]) expect(await names(reader, q)).toContain("Dvořák et Škoda");
+  });
+
   it("reads published, non-deleted questions only", async () => {
     const pool = await newPool("Pool E", { isPublic: true });
     await tag(await question(pool, "draft", false), "Concept brouillon", "Draft concept");

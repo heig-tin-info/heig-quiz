@@ -28,9 +28,9 @@ export interface NightPassSpec<T> {
   promptChars: (item: T) => number;
   maxTokens: number;
   /** One call. An `LlmError` other than a fatal one counts as a failure. */
-  run: (item: T) => Promise<void>;
+  run: (item: T) => Promise<unknown>;
   /** A failed call, recorded so the next night tries again. */
-  onFailure?: (item: T) => Promise<void>;
+  onFailure?: (item: T) => Promise<unknown>;
   /** The counts, in the task's words. */
   report: (done: number, failed: number) => string;
 }

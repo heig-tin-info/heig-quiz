@@ -135,6 +135,8 @@ export const CatalogueQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(60),
 });
 export type CatalogueQuery = z.infer<typeof CatalogueQuery>;
+/** What the client sends: every field optional, the defaults are the server's. */
+export type CatalogueQueryInput = z.input<typeof CatalogueQuery>;
 
 export const PoolCreate = z.object({
   name: z.string().trim().min(1).max(200),

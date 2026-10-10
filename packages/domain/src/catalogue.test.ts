@@ -27,3 +27,9 @@ describe("catalogueTerms", () => {
     expect(catalogueTerms("a".repeat(500))[0]!.folded).toHaveLength(100);
   });
 });
+
+describe("foldText ligatures", () => {
+  it("spells the ligatures out, in both cases", () => {
+    expect(foldText("Œuvre Æsir Straße")).toBe("oeuvre aesir strasse");
+  });
+});

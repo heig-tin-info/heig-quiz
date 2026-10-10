@@ -154,7 +154,7 @@ export async function runNightDomains(db: Db, gateway: LlmGateway, now: Date): P
     promptChars: () => SYSTEM.length + MAX_CONCEPTS * 80,
     maxTokens: MAX_TOKENS,
     // A failed call is tried again the next night: the key stays out of date.
-    run: async ({ id, labels }) => void (await refreshDomain(db, gateway, id, labels, { userId: null, now })),
+    run: ({ id, labels }) => refreshDomain(db, gateway, id, labels, { userId: null, now }),
     report: (done) => `${done} inferred`,
   });
 }

@@ -13,7 +13,7 @@
 import { and, asc, desc, eq, sql, type SQL } from "drizzle-orm";
 
 import type { CatalogueQuery, PoolSummary } from "@quiz/contracts";
-import { catalogueTerms, type CatalogueTerm } from "@quiz/domain";
+import { catalogueTerms, FOLD_LIGATURES, foldText, type CatalogueTerm } from "@quiz/domain";
 
 import { qualified, type Db } from "../../db/client.js";
 import { concepts, pools, questionConcepts, questions } from "../../db/schema.js";
@@ -21,16 +21,26 @@ import { poolAccess, type Caller } from "../guards.js";
 import { livePublishedQuestion } from "./domain.js";
 import { listPools, memberCountOf, subscriberCountOf, usedCount } from "./pools.js";
 
-/** The ligatures `foldText` spells out, upper and lower case. */
-const LIGATURES: [string, string][] = [["œ", "oe"], ["Œ", "oe"], ["æ", "ae"], ["Æ", "ae"], ["ß", "ss"], ["ẞ", "ss"]];
-
-const ACCENTED = "àáâãäåçèéêëìíîïñòóôõöùúûüýÿ";
-const PLAIN = "aaaaaaceeeeiiiinooooouuuuyy";
+/**
+ * The accented letters the SQL fold maps, DERIVED from `foldText` so the two
+ * cannot disagree: the candidates that fold to exactly one other letter
+ * (Western and Central European), in both cases. A letter NFKD leaves whole
+ * (ø, ł, đ) stays itself in both folds.
+ */
+const CANDIDATES = [..."àáâãäåāăąçćĉċčďèéêëēĕėęěĝğġģĥìíîïĩīĭįĵķĺļľñńņňòóôõöōŏőŕŗřśŝşšţťùúûüũūŭůűųŵýÿŷźżž"];
+export const ACCENTED = CANDIDATES.filter((c) => foldText(c).length === 1 && foldText(c) !== c);
+export const PLAIN = ACCENTED.map(foldText);
+/** The upper-case forms of the ligatures: the SQL text is folded before `lower()` (locale-proof). */
+const UPPER_LIGATURES = FOLD_LIGATURES.map(([from, to]) => [from.toUpperCase(), to] as const).filter(([from]) => from.length === 1);
 
 /** The column as text compared lower-case and without accents (the SQL twin of `foldText`). */
 const folded = (column: SQL | ReturnType<typeof qualified>) => {
-  const spelled = LIGATURES.reduce<SQL>((text, [from, to]) => sql`replace(${text}, ${from}, ${to})`, sql`coalesce(${column}, '')`);
-  return sql`lower(translate(${spelled}, ${ACCENTED + ACCENTED.toUpperCase()}, ${PLAIN + PLAIN.toUpperCase()}))`;
+  const spelled = [...FOLD_LIGATURES, ...UPPER_LIGATURES].reduce<SQL>(
+    (text, [from, to]) => sql`replace(${text}, ${from}, ${to})`,
+    sql`coalesce(${column}, '')`,
+  );
+  const from = ACCENTED.join("") + ACCENTED.join("").toUpperCase();
+  return sql`lower(translate(${spelled}, ${from}, ${PLAIN.join("") + PLAIN.join("")}))`;
 };
 
 const likeOf = (text: string) => `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;

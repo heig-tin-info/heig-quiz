@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BellPlus, Check, Globe } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import type { PoolSummary } from "@quiz/contracts";
+import type { CatalogueQueryInput, PoolSummary } from "@quiz/contracts";
 
 import { api, useMe } from "../api";
 import { useT } from "../i18n";
@@ -64,7 +64,7 @@ export function PoolCatalogue({ navigate }: { navigate: (r: Route) => void }) {
   const q = useDebounced(typed.trim());
   const list = useQuery<PoolSummary[]>({
     queryKey: poolCatalogueKey(q),
-    queryFn: () => api(`/app/api/pools/catalogue?q=${encodeURIComponent(q)}`),
+    queryFn: () => api(`/app/api/pools/catalogue?${new URLSearchParams({ q } satisfies CatalogueQueryInput)}`),
     placeholderData: (previous) => previous,
   });
   const rows = list.data ?? [];

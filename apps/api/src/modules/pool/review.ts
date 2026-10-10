@@ -194,8 +194,8 @@ export async function runNightReview(db: Db, gateway: LlmGateway, now: Date): Pr
     items: () => nightCandidates(db, now, NIGHT_BATCH),
     promptChars: (v) => JSON.stringify(v.config).length + v.explanation.length + SYSTEM.length,
     maxTokens: MAX_TOKENS,
-    run: (version) => reviewVersion(db, gateway, { ...version, id: version.versionId, number: version.number! }, null, now).then(() => undefined),
-    onFailure: async (version) => void (await saveReview(db, version.versionId, { state: "failed", findings: [], model: null, at: now })),
+    run: (version) => reviewVersion(db, gateway, { ...version, id: version.versionId, number: version.number! }, null, now),
+    onFailure: (version) => saveReview(db, version.versionId, { state: "failed", findings: [], model: null, at: now }),
     report: (reviewed, failed) => `${reviewed} reviewed, ${failed} failed`,
   });
 }
