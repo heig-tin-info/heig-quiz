@@ -37,6 +37,7 @@ Open decisions for the owner (each blocks the step named):
 | O5 | **Deadline window.** The `--final` pre-flight refuses a live assignment whose deadline (plus grace) falls within `--window-hours` of the run, 24 by default. The window only has to cover the freeze and the catch-up (C1→C8, ≤ 2 h by the M8-03b threshold) with a margin. When the next classroom deadline falls the same evening, 24 h would refuse a morning T0 for nothing: pass `--window-hours 12` at C3, and use `W=12` in §1.4. | T0 | 24 h; 12 h when the next deadline is the same evening, at least 12 h after T0 |
 | O6 | **The import's runtime.** The production image runs the import as `node dist/import-classroom.js` (#655, §1.6). | M8-06 | #655 merged and deployed |
 | O7 | **The point of no return.** D lasts one to two weeks. | E | T0 + 7 days if C8 and D's checks are clean |
+| O8 | **Roster options at C3.** The D08 addendum (2026-10-05) made `--missing-students report` and `--assistants skip` the defaults, with the rosters fixed by hand before the final import. The production dry run of 2026-10-10 lists, under the defaults, 47 students absent from the Quiz rosters (TSA 15, MI-2026 21, VisIndus 6, Prog-A 3, Prog-D 2, Prog-C 1), 4 assistants without a seat, and 12 members of the group projects of TSA and VisIndus not placed. With `--missing-students enroll --assistants staff` (the options M8-06 rehearsed) nothing is left to settle; the price is 19 MI-2026 lines whose account already holds another line of the classroom (another address): they are created unclaimed with a conflict flag the teacher resolves (AU-21). | C3 | the explicit options, `ROSTER` below; by hand only if the teachers fix the 51 lines before T-1 h |
 
 D20 and D22 are settled (08-decisions.md); only their date (O1) and their
 inputs (O2, the mapping) remain.
@@ -55,7 +56,7 @@ dry run, the day before T0.
 - [ ] **T-7 [T-2]**: T0 chosen (O1) and checked with §1.4; announcement 1 sent (appendix A)
 - [ ] **T-7 [T-2]**: the organization list (§1.2); teachers asked to install Quiz's App and connect their classrooms
 - [ ] **T-5 [T-1]**: M8-06 rehearsed on fresh dumps (§7), go written in `PROGRESS.md`; its personal-data copies deleted the same day (§5.1)
-- [ ] **T-3 [T-1]**: rosters fixed by hand (`lists.missingStudents`, `lists.skippedAssistants`); mapping validated (D22); O3, O4 and O5 settled
+- [ ] **T-3 [T-1]**: rosters fixed by hand (`lists.missingStudents`, `lists.skippedAssistants`) or O8 settled on the explicit options; mapping validated (D22); O3, O4 and O5 settled
 - [ ] **T-1 [T-1]**: a production dry run (§1.3), clean; §1.4 re-run; secrets checked (§1.5); backups checked and image tags recorded (§1.7); **Quiz deploys frozen** until C8 (§1.7); announcement 2 sent
 - [ ] **T-1 h**: §1.4 re-run
 - [ ] **T0 C1**: maintenance fragment, uptime probe paused, classroom deploys disabled, classroom app stopped
@@ -83,8 +84,27 @@ As `srvstg` (owner: `sudo machinectl shell srvstg@`):
 
 ```bash
 export DOCKER_HOST=${DOCKER_HOST:-unix:///run/user/$(id -u)/docker.sock}
-s() { (cd ~/quiz-staging && docker compose -f compose.staging.yml --env-file .env.staging --env-file .env.image "$@"); }
 install -d -m 700 ~/merge
+# compose.staging.yml caps `app` at 256 MB with a 192 MB heap, and `compose
+# run` inherits the cap: the import dies of "heap out of memory" on
+# classroom's data (M8-06, 2026-10-10). This override lifts it for the
+# import's container only; the running staging app keeps its cap.
+cat > ~/merge/import-override.yml <<'EOF'
+services:
+  app:
+    mem_limit: 768m
+    memswap_limit: 768m
+    environment:
+      NODE_OPTIONS: --max-old-space-size=640
+EOF
+s() { (cd ~/quiz-staging && docker compose -f compose.staging.yml -f ~/merge/import-override.yml --env-file .env.staging --env-file .env.image "$@"); }
+```
+
+The roster options of O8, passed to every dry run and to C3 so that the
+reports compare (empty after a by-hand fix):
+
+```bash
+ROSTER="--assistants staff --missing-students enroll"
 ```
 
 The import (#655), in both shells. Its first argument is the compose
@@ -347,9 +367,13 @@ and the lists of §1.3 to fix (D22).
 
 ## 2. T0: freeze and migrate (target ≤ 1 h)
 
-Take the target times from M8-06's measured times plus a margin, and fill
-them in after the rehearsal. Run the steps in order. A step whose check
-fails is a no-go: go to its rollback (§3).
+Target times, from M8-06 (2026-10-10, dumps of 6.5 MB and 7 MB): C2's
+dump, scratch database and restore under 1 min; C3's import 20 s, after
+the 10 min quiet (the production dry run of the same day: restore 5 s,
+import 14 s); the resolver and the smoke rows a few minutes. The freeze
+C1→C8 is bounded by the 10 min quiet and the smoke list, far under the
+M8-03b threshold: M8-03b is not built. Run the steps in order. A step
+whose check fails is a no-go: go to its rollback (§3).
 
 ### C1 Freeze classroom (owner and agent (srv), ~5 min)
 
@@ -421,7 +445,7 @@ task run or a webhook received within the last 10 minutes as a live
 classroom (`QUIET_MINUTES`).
 
 ```bash
-imp q /srv/quiz/merge --apply --final --window-hours "$W" --report-json /merge/final.json | tee /srv/quiz/merge/final.txt; echo "exit ${PIPESTATUS[0]}"   # W as in §1.4 (O5)
+imp q /srv/quiz/merge --apply --final --window-hours "$W" $ROSTER --report-json /merge/final.json | tee /srv/quiz/merge/final.txt; echo "exit ${PIPESTATUS[0]}"   # W as in §1.4 (O5), ROSTER as in §0 (O8)
 ```
 
 | Exit | Report's first line | Meaning | Next |
@@ -744,7 +768,10 @@ the day before T0. The owner works as `srvstg` unless a step says otherwise.
    dry run*, first block). Note the time: it stands for C1.
 2. `staging-refresh.sh`, then `hgc_cutover` restored (§1.3, second block,
    up to `pg_restore`). Time it as C2.
-3. `imp s ~/merge --dry-run`, then `imp s ~/merge --apply --final --window-hours "$W"` (O5). Time
+3. `imp s ~/merge --dry-run --window-hours "$W" $ROSTER`, then
+   `imp s ~/merge --apply --final --window-hours "$W" $ROSTER` (O5, O8),
+   with the `s` helper of §0 (the memory override: without it the import
+   dies of "heap out of memory" after ten seconds, exit 139). Time
    both. The dump comes from a running classroom, so the STATE checks see
    a live source frozen in the copy:
    - `source-stopped` passes once the copy is 10 minutes old;
@@ -760,7 +787,17 @@ the day before T0. The owner works as `srvstg` unless a step says otherwise.
    and an old project link. Both land on the Quiz pages. M8-03 already
    checked the fragment itself.
 6. Walk C8 rows 1, 4 and 7 with an allow-listed account
-   (`LOGIN_ALLOWLIST`), and time the end of it as C8.
+   (`LOGIN_ALLOWLIST`), and time the end of it as C8. The account must
+   reach the imported classrooms: an edu-ID `sub` is pairwise per sector
+   (user, issuer and the client's `sector_identifier_uri`), so a staging
+   client registered under its own sector gets another `sub` than
+   production's for the same person, and a login on staging after a
+   refresh creates a NEW account, with no seat, next to the copied one
+   (M8-06, 2026-10-10: the resolver answered 404 and the course list was
+   empty until Super Powers were switched on). Either the staging client
+   shares production's sector identifier (`deployment.md` §8; requested
+   from SWITCH on 2026-10-10) or the tester switches Super Powers on
+   (ADR-054).
 7. Re-scrub, so staging's ticker leaves the imported projects alone:
    `s exec -T postgres psql -U quiz -d quiz -v ON_ERROR_STOP=1 < ~/quiz-staging/scripts/staging-scrub.sql`.
 8. Delete the personal-data copies (§5.1, staging rows), the same day.
@@ -771,8 +808,14 @@ the day before T0. The owner works as `srvstg` unless a step says otherwise.
 **Expected on staging, not a no-go**:
 
 - staging's App acts on no production organization (N-SEC-18), so the
-  imported journals stay `pending` and `journals re-ingested` reports
-  them as `warn`;
+  journals the import creates end at `sync_status = error` with the code
+  `forbidden` ("the classroom's organization has no installation"): the
+  post-commit ingestion ran and was refused. `journals re-ingested`
+  reports each as `red`, the import exits 3 after the commit, and the
+  same journals are `red` again on the idempotence run. It is the "journal
+  held by the missing installation" of the no-go list below, not a no-go.
+  A journal the Quiz classroom already had is kept as it is and reads
+  `ok`;
 - the dry run lists the GitHub-bound checks under "Checks not run";
 - C8's GitHub rows (2, 3 and 8) cannot be walked.
 

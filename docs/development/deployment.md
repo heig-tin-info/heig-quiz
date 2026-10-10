@@ -1095,6 +1095,13 @@ Docker daemon.
 # DNS at Gandi: quiz.dev.chevallier.io CNAME portal.heig.chevallier.io, TTL 300.
 # SWITCH Resource Registry: add the redirect URI
 #   https://quiz.dev.chevallier.io/app/auth/callback
+# and give the staging client PRODUCTION's sector identifier URI
+# (https://quiz.chevallier.io). edu-ID's `sub` is pairwise per sector, and
+# the login matches an account by `sub` alone: under its own sector staging
+# gives the same person another `sub`, so every login after a refresh
+# creates a second account, without the copied one's seats (M8-06,
+# 2026-10-10). Never change production's value: it would detach every
+# account from its `sub`.
 
 # On the application VM, as an administrator (sudo).
 sudo useradd --create-home --shell /bin/bash srvstg     # also allocates its /etc/subuid and /etc/subgid ranges
