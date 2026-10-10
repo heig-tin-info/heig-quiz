@@ -1656,8 +1656,6 @@ export const en = {
   // under `qt.mcq.e`. The formulas themselves are the help topic
   // `mcq-policies`.
   "mcq.policy.title": "Multiple-answer scoring",
-  "mcq.policy.settingsHint":
-    "The default for the evaluations you create. Each evaluation keeps its own.",
   // One word each wherever one word will do: these are the pills of a
   // segmented control in a 288 px column now, and the sentence that used to
   // name them is the description right under it.
@@ -3629,7 +3627,6 @@ export const en = {
   "eval.feedback.inClassHint": "“Right away” is not offered in class: the answers would reach students while others are still working.",
   "eval.feedback.showKey": "Show the expected answer",
   "eval.feedback.showExplanation": "Show the explanation",
-  "eval.feedback.showTeacherComment": "Show your comment",
   "eval.launch.openLobby": "Open the waiting room",
   "eval.launch.schedule": "Schedule",
   "eval.launch.opensAtMissing": "Choose when it opens before scheduling it.",

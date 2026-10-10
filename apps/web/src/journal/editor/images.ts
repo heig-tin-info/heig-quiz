@@ -3,7 +3,7 @@
  * picked into a page is stored in the journal's assets, beside the page,
  * and inserted with a RELATIVE path — never as a platform asset
  * (`asset:<id>`) — so that the page keeps its pictures when it moves to a
- * repository (Move to GitHub, M4-11).
+ * repository if the journal ever moves to one.
  *
  * Where: an `images/` folder next to the page (`semaine-01/index.md` puts
  * its pictures in `semaine-01/images/`). One folder per page's folder, not

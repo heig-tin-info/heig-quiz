@@ -1644,8 +1644,6 @@ export const fr: Record<keyof Dict, string> = {
 
   // --- Politiques de notation des QCM (docs/04 §4.4) ---
   "mcq.policy.title": "Notation des réponses multiples",
-  "mcq.policy.settingsHint":
-    "La valeur par défaut des évaluations que vous créez. Chacune garde la sienne.",
   "mcq.policy.inherit": "Héritée",
   "mcq.policy.all_or_nothing": "Exact",
   "mcq.policy.true_false": "Vrai-faux",
@@ -3622,7 +3620,6 @@ export const fr: Record<keyof Dict, string> = {
   "eval.feedback.inClassHint": "« Immédiat » n'est pas proposé en classe : les réponses arriveraient pendant que d'autres travaillent encore.",
   "eval.feedback.showKey": "Montrer la réponse attendue",
   "eval.feedback.showExplanation": "Montrer l'explication",
-  "eval.feedback.showTeacherComment": "Montrer votre commentaire",
   "eval.launch.openLobby": "Ouvrir la salle d'attente",
   "eval.launch.schedule": "Planifier",
   "eval.launch.opensAtMissing": "Choisissez quand elle ouvre avant de la planifier.",

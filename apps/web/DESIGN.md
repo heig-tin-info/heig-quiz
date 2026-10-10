@@ -188,7 +188,7 @@ Two pairs stay below their target, on purpose:
 - Focus: 2 px accent ring at 2 px offset, on every interactive element. It is
   declared once in `style.css` on `:focus-visible`; no component restyles it,
   except the mode banner (below), whose dark fill would swallow a red ring,
-  and the cells of the pool's tag heat (below), whose box would clip it.
+  and the cells of the pool's concept heat (below), whose box would clip it.
 
 ## Long-form reading (the journal)
 
@@ -333,7 +333,7 @@ leaves the first tab reachable, so a hand-edited URL cannot take the whole
 strip out of the Tab order.
 
 The index arithmetic behind those keys is written once, in `ui/menu.tsx`:
-`listboxIndex` for a vertical list (the menu, the palette, and the tag,
+`listboxIndex` for a vertical list (the menu, the palette, and the concept,
 teacher and filter comboboxes through `useCombobox` — arrows wrap, and
 Home/End only where the list owns them, since in a text field they move the
 caret) and `rovingIndex` for a horizontal roving strip (`Tabs`,
@@ -760,7 +760,7 @@ live in `ui/state.ts`, each written once.
   scale, ADR-094), 13 px, an optional leading icon.
   Containers lay them out with `flex flex-wrap gap-2`. Not a column of
   checkboxes, which is the shape of independent SETTINGS: the filter sheet
-  holds SETS — the type of a question, a difficulty, a tag — the reader wants
+  holds SETS — the type of a question, a difficulty, a concept — the reader wants
   to see what is on at a glance, and two-word labels beside small boxes
   collide the moment the sheet is narrower than the longest of them. It is
   a real `aria-pressed` button, so the state and the label are never
@@ -907,13 +907,13 @@ live in `ui/state.ts`, each written once.
   150 ms of grace out, so the pointer can travel the 6 px gap) for what a
   pointer brushes past. A hover popover is still clickable, because a touch
   screen has no hover at all. A bare label is a `Tip`, not this.
-- Combobox (`ui/combobox.tsx`): a text field with a list under it — the tag
+- Combobox (`ui/combobox.tsx`): a text field with a list under it — the concept
   field, the teacher picker, the pool search's `tag:` / `type:` completions.
   `useCombobox` holds the ARIA combobox with virtual focus: `role="combobox"`,
   `aria-expanded`, `aria-activedescendant` naming the highlighted option, the
   caret never leaving the input; ArrowUp/ArrowDown wrap through
   `listboxIndex`, Home/End stay the caret's, Enter picks a highlighted row
-  and otherwise belongs to the field (a form submits, a tag is added),
+  and otherwise belongs to the field (a form submits, a concept is added),
   Escape closes. Two kinds, because they open for different reasons. A
   **picker** follows the focus: focus or an arrow opens it, its loading and
   empty rows show, and it outlives the blur by 120 ms so a click on a row
@@ -928,7 +928,7 @@ live in `ui/state.ts`, each written once.
   palette's and the sidebar's: 14 px, `field` radius, the highlighted row the
   `accent-soft` chip in semibold `accent`, the others `fg-muted` with a
   `surface-2` hover; `mousemove` (never `mouseenter`) moves the highlight.
-  What a pick does — close, stay open for another tag — is the call site's.
+  What a pick does — close, stay open for another concept — is the call site's.
 - Toast: bottom-right, above the phone's bottom bar when it is up
   (`--bottom-nav-h`), the floating action button (`--fab-h`) and a docked
   tool (`--tool-dock-h`), `surface` + hairline + overlay shadow. Tones
@@ -1582,7 +1582,7 @@ A row with a `colSpan` needs care: a cell spanning a column the container has
 hidden leaves that row one column wider than every other one, and the table
 shears. An inline edit row gets one cell per column, empty ones included.
 
-Applied today: the pool table (version, updated, tags), the roster (last
+Applied today: the pool table (version, updated, concepts), the roster (last
 sign-in, accommodation, e-mail), the evaluation list (attempts, points,
 questions) and the grade table (duration, e-mail).
 
@@ -1843,11 +1843,11 @@ surfaces, so its rules are written here.
 - The ring sits BESIDE the pressable part of the row, not inside it: a
   focusable thing nested in a button is one control too many.
 
-## The pool's tag heat (Tags tab, "Heat")
+## The pool's concept heat (Concepts tab, "Heat")
 
-A squarified treemap of the pool's tags (`pool/TagsTab.tsx`, layout in
-`pool/treemap.ts`): one cell per tag a question wears, its AREA the tag's
-share of the summed question counts. The area is the whole message, so the
+A squarified treemap of the pool's concepts (`pool/ConceptsTab.tsx`, layout
+in `pool/treemap.ts`): one cell per concept a question carries, its AREA the
+concept's share of the summed question counts. The area is the whole message, so the
 chart has no colour yet: every cell is `surface` (`surface-2` on hover) and
 the hairlines between them are the box's `line` fill showing through a 1 px
 gap — the hairline language of a table, not a border per cell, which would
@@ -1856,13 +1856,14 @@ draw them 2 px where two cells meet.
 - **The box**: the page's width, 288 px tall on a phone and 416 px from
   `sm`, `rounded-card` with a `line` border. It is measured, so the layout
   runs on its real aspect and a square cell stays square.
-- **A cell is a button**: `#tag` at 13 px / 600 over the count in `fg-muted`
+- **A cell is a button**: the concept's name at 13 px / 600 over the count in `fg-muted`
   at 12 px, both truncated; under 44 × 40 px only the count is drawn. Its
-  accessible name and `title` carry the tag and both counts in words. The
+  accessible name and `title` carry the concept and its count in words. The
   box clips, so the focus ring is drawn INSIDE the cell (`-2px` offset)
   instead of the usual 2 px outside, which an edge cell would lose.
-- **A tag no question wears has no area**: it is in the table, never in the
-  heat; a caption under the box says so.
+- **A concept no question carries has no area**: it is in the table, never
+  in the heat; the caption under the box says the area is proportional to the
+  number of questions.
 
 ## Correction projection (the graded evaluation on a beamer)
 
