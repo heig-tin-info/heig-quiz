@@ -9,14 +9,14 @@ import { DomainError } from "../http.js";
 import { coursePools, courseStaff, pools } from "../../db/schema.js";
 import { accessRevoked } from "../realtime/bus.js";
 import { derivedVisibility, questionCount, poolJson, poolRolesOf } from "./pools.js";
-import type { Caller } from "../guards.js";
+import { countingCoursePool, type Caller } from "../guards.js";
 
 export async function poolsOfCourse(db: Db, courseId: string) {
   const rows = await db
     .select({ pool: pools, visibility: derivedVisibility, questionCount, mode: coursePools.mode })
     .from(coursePools)
     .innerJoin(pools, eq(coursePools.poolId, pools.id))
-    .where(eq(coursePools.courseId, courseId))
+    .where(and(eq(coursePools.courseId, courseId), countingCoursePool))
     .orderBy(asc(pools.name));
   return rows.map((r) => ({ ...poolJson(r.pool, r.visibility), questionCount: r.questionCount, mode: r.mode }));
 }

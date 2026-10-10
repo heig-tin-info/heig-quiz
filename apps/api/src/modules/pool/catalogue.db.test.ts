@@ -342,6 +342,10 @@ describe("the rule is stated, not trusted from the rows (ADR-095, invariant 6)",
     await server.app.db.insert(poolSubscriptions).values({ poolId: stray, userId: third.id });
     await server.app.db.insert(coursePools).values({ courseId: course, poolId: stray, mode: "read" });
 
+    // The course page does not list the orphan link either.
+    const courseView = await call(other, "GET", `/app/api/courses/${course}`);
+    expect(courseView.statusCode).toBe(200);
+    expect(JSON.stringify(courseView.json())).not.toContain(stray);
     for (const who of [third, other]) {
       expect((await call(who, "GET", `/app/api/pools/${stray}`)).statusCode).toBe(404);
       expect(await shelfIds(who)).not.toContain(stray);
