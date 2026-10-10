@@ -7,18 +7,7 @@ import { imposedConditions, MAX_CONDITION_LENGTH, MAX_CONDITIONS } from "@quiz/d
 import { useCourseConditions } from "../course/parts";
 import { useT, type TFunction } from "../i18n";
 import { ConditionLine, imposedText } from "../student/ConditionsList";
-import {
-  Actions,
-  Badge,
-  Button,
-  Checkbox,
-  cx,
-  Disclosure,
-  inputClass,
-  inputSize,
-  type MenuItem,
-  Select,
-} from "../ui";
+import { Actions, Badge, Button, Checkbox, Disclosure, type MenuItem, Select, TextInput } from "../ui";
 import type { ConfigPatch, ConfigView } from "./editTarget";
 
 /**
@@ -282,11 +271,12 @@ export function ConditionRow({
   return (
     <li className="flex flex-wrap items-center gap-2 py-2.5">
       <KindSelect value={condition.kind} disabled={disabled} onChange={(kind) => onChange({ ...condition, kind })} />
-      <input
+      <TextInput
         aria-label={`${t("eval.conditions.text")} ${index + 1}`}
         maxLength={MAX_CONDITION_LENGTH}
         disabled={disabled}
-        className={cx(inputClass, inputSize.sm, "min-w-0 flex-1 basis-56")}
+        size="sm"
+        className="min-w-0 flex-1 basis-56"
         value={text}
         onChange={(e) => setText(e.target.value)}
         onBlur={commit}
@@ -322,12 +312,13 @@ function AddCondition({ disabled, onAdd }: { disabled: boolean; onAdd: (conditio
       }}
     >
       <KindSelect value={kind} disabled={disabled} onChange={setKind} />
-      <input
+      <TextInput
         aria-label={t("eval.conditions.text")}
         placeholder={t("eval.conditions.placeholder")}
         maxLength={MAX_CONDITION_LENGTH}
         disabled={disabled}
-        className={cx(inputClass, inputSize.sm, "min-w-0 flex-1 basis-56")}
+        size="sm"
+        className="min-w-0 flex-1 basis-56"
         value={text}
         onChange={(e) => setText(e.target.value)}
       />

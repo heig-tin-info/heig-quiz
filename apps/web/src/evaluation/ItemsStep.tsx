@@ -51,11 +51,10 @@ import {
   EmptyState,
   FormError,
   IconButton,
-  inputClass,
-  inputSize,
   PANE_GAP,
   SectionHeading,
   Tip,
+  TextInput,
 } from "../ui";
 import { BonusLabel } from "../BonusLabel";
 import { ConceptNames } from "../concepts/refs";
@@ -147,7 +146,7 @@ function PointsField({
   // control, the unit is beside it.
   return (
     <span className="flex items-center gap-1.5">
-      <input
+      <TextInput
         type="number"
         min={0}
         step={0.5}
@@ -159,7 +158,8 @@ function PointsField({
         onKeyDown={(e) => {
           if (e.key === "Enter") e.currentTarget.blur();
         }}
-        className={cx(inputClass, inputSize.sm, "w-16 text-right tabular-nums")}
+        size="sm"
+        className="w-16 text-right tabular-nums"
       />
       <span className="text-xs text-fg-faint">{t("eval.questions.pointsShort")}</span>
     </span>

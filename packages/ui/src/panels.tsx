@@ -6,7 +6,8 @@
 import { useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { buttonClass, card, cx, hint } from "./styles.js";
+import { card, cx, hint } from "./styles.js";
+import { Button } from "./controls.js";
 
 /**
  * The block an editor lets the host move (`EditorProps.aside`).
@@ -97,14 +98,13 @@ export function TryPanel({
 }): ReactNode {
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <button
-        type="button"
-        className={buttonClass("secondary", "sm")}
+      <Button
+        size="sm"
         disabled={disabled || running}
         onClick={onTry}
       >
         {running ? runningLabel : label}
-      </button>
+      </Button>
       {status === null ? null : (
         <p role="status" className={status.tone === "danger" ? "text-[13px] text-danger" : hint}>
           {status.text}

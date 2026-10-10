@@ -22,7 +22,8 @@ import { patchItem, setInitial } from "./ops.js";
 import { nextSession } from "./session.js";
 import { CardinalityIcon, LinkIcon } from "./shapes.js";
 import { labelKey, linkKey, type DiagramStrings } from "./strings.js";
-import { checkRow, cx, field, iconButton, input, inspector, lineButton, textarea, tip } from "./styles.js";
+import { checkRow, cx, field, iconButton, inspector, lineButton, textarea, tip } from "./styles.js";
+import { TextInput } from "@quiz/ui";
 
 /** A field to focus once the inspector shows: the name, or a line of the body. */
 export type FocusRequest = { field: "name" } | { field: "body"; line: number } | null;
@@ -140,7 +141,7 @@ export function Inspector({ kind, scene, item, onEdit, onReverse, focus, onFocus
         {!LINK_STYLE[item.type].label && (
           <label className={field}>
             <span>{s[labelKey(kind)]}</span>
-            <input className={input} value={item.name ?? ""} maxLength={NAME_MAX} {...text} onChange={(e) => edit({ name: e.target.value })} />
+            <TextInput size="sm" className="font-mono" value={item.name ?? ""} maxLength={NAME_MAX} {...text} onChange={(e) => edit({ name: e.target.value })} />
           </label>
         )}
         {spec.ends === "multiplicity" &&
@@ -149,8 +150,9 @@ export function Inspector({ kind, scene, item, onEdit, onReverse, focus, onFocus
               <span className="truncate" title={endName(end)}>
                 {endName(end)}
               </span>
-              <input
-                className={input}
+              <TextInput
+                size="sm"
+                className="font-mono"
                 value={item[end] ?? ""}
                 list={`${listId}-m`}
                 maxLength={LABEL_MAX}
@@ -178,14 +180,15 @@ export function Inspector({ kind, scene, item, onEdit, onReverse, focus, onFocus
     <div className={inspector} role="group" aria-label={item.name ?? ""}>
       <label className={field}>
         <span>{s.name}</span>
-        <input ref={nameRef} className={input} value={item.name ?? ""} maxLength={NAME_MAX} {...text} onChange={(e) => edit({ name: e.target.value })} />
+        <TextInput ref={nameRef} size="sm" className="font-mono" value={item.name ?? ""} maxLength={NAME_MAX} {...text} onChange={(e) => edit({ name: e.target.value })} />
       </label>
       {item.t === "class" && (
         <>
           <label className={field}>
             <span>{s.stereotype}</span>
-            <input
-              className={input}
+            <TextInput
+              size="sm"
+              className="font-mono"
               value={item.stereo ?? ""}
               placeholder={s.stereotypeNone}
               list={`${listId}-s`}

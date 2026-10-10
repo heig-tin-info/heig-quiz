@@ -24,8 +24,6 @@ import {
   ErrorText,
   Field,
   IconButton,
-  inputClass,
-  inputSize,
   PageHeader,
   PersonAvatar,
   QueryError,
@@ -39,6 +37,7 @@ import {
   Tabs,
   useSortableTable,
   type Column,
+  TextInput,
 } from "./ui";
 import { SystemSection } from "./AdminSystem";
 import { TasksSection } from "./AdminTasks";
@@ -295,14 +294,15 @@ function WorkspaceGrant({ id, email, grant }: { id: string; email: string; grant
         label={t("admin.workspace.enable", { email })}
         onChange={(enabled) => save.mutate({ enabled })}
       />
-      <input
+      <TextInput
         type="number"
         min={0}
         max={MAX_ACTIVE_SESSIONS_LIMIT}
         inputMode="numeric"
         aria-label={t("admin.workspace.quota", { email })}
         title={t("admin.workspace.quotaHint")}
-        className={cx(inputClass, inputSize.sm, "w-16 text-right tabular-nums")}
+        size="sm"
+        className="w-16 text-right tabular-nums"
         value={quota}
         disabled={save.isPending}
         onChange={(e) => setQuota(e.target.value)}

@@ -57,21 +57,21 @@ import {
   gripClass,
   GripIcon,
   hint,
-  inputClass,
-  inputSize,
+  IconButton,
   IssueList,
   label,
   patchAt,
+  PlusIcon,
   PromptField,
   removeAt,
   sectionClass,
   sectionTitle,
-  PlusIcon,
   Segmented,
+  TextInput,
   TrashIcon,
   WandIcon,
 } from "@quiz/ui";
-import { choiceLetter, iconButtonClass, Pastille, Tip } from "./ui.js";
+import { choiceLetter, Pastille, Tip } from "./ui.js";
 
 /** The choices drag up and down only. */
 const restrictToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 });
@@ -315,12 +315,12 @@ export function McqEditor({
           <label className={label} htmlFor="mcq-max">
             {s.maxSelections}
           </label>
-          <input
+          <TextInput
             id="mcq-max"
             type="number"
             min={1}
             max={MCQ_MAX_CHOICES}
-            className={cx(inputClass, inputSize.md, "w-28 tabular-nums")}
+            className="w-28 tabular-nums"
             value={config.maxSelections ?? ""}
             disabled={disabled}
             onChange={(e) => {
@@ -372,13 +372,9 @@ export function McqEditor({
    */
   const addButton = (
     <Tip label={s.addChoice} align="end">
-      <button
-        type="button"
-        className={cx(
-          iconButtonClass,
-          "mt-1.25 border border-line text-fg-muted hover:border-line-strong",
-        )}
-        aria-label={s.addChoice}
+      <IconButton
+        label={s.addChoice}
+        className="mt-1.25 border border-line text-fg-muted hover:border-line-strong"
         disabled={disabled || config.choices.length >= MCQ_MAX_CHOICES}
         onClick={() => {
           const added = addChoice();
@@ -386,7 +382,7 @@ export function McqEditor({
         }}
       >
         <PlusIcon />
-      </button>
+      </IconButton>
     </Tip>
   );
 
@@ -644,10 +640,9 @@ function ChoiceRow({
           className={cx("min-w-0 flex-1", invalid && "rounded-field ring-1 ring-danger")}
         />
       ) : (
-        <input
-          type="text"
+        <TextInput
           id={choiceId(index)}
-          className={cx(inputClass, inputSize.md, "min-w-0 flex-1", invalid && "border-danger")}
+          className="min-w-0 flex-1"
           aria-label={`${s.choiceText} ${letter}`}
           aria-invalid={invalid || undefined}
           value={choice.text}
@@ -666,30 +661,29 @@ function ChoiceRow({
 
       {wand !== null && wand !== "slot" ? (
         <Tip label={`${s.generateChoice} ${letter}`}>
-          <button
-            type="button"
-            className={cx(iconButtonClass, "mt-1.25 hover:text-accent", wand.generating && "animate-pulse text-accent")}
-            aria-label={`${s.generateChoice} ${letter}`}
+          <IconButton
+            label={`${s.generateChoice} ${letter}`}
+            className={cx("mt-1.25 hover:text-accent", wand.generating && "animate-pulse text-accent")}
             aria-busy={wand.generating || undefined}
             disabled={disabled || wand.waiting}
             onClick={wand.onGenerate}
           >
             <WandIcon />
-          </button>
+          </IconButton>
         </Tip>
       ) : wand === "slot" ? (
         <span aria-hidden className="size-7 shrink-0" />
       ) : null}
 
-      <button
-        type="button"
-        className={cx(iconButtonClass, "mt-1.25 hover:bg-danger-soft hover:text-danger")}
-        aria-label={`${s.removeChoice} ${letter}`}
+      <IconButton
+        label={`${s.removeChoice} ${letter}`}
+        danger
+        className="mt-1.25"
         disabled={disabled || !removable}
         onClick={onRemove}
       >
         <TrashIcon />
-      </button>
+      </IconButton>
 
       {trailing ?? <span aria-hidden className="size-7 shrink-0" />}
     </li>

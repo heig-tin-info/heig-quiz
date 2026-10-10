@@ -44,8 +44,8 @@ selection with no motion.
    field beside it). The rule: **`sm` when every neighbour is 28 px** (table rows,
    dense popovers, editor toolbars, the drill's confidence scale, the
    header); otherwise `md`. A toolbar never mixes an `sm` control with `md`
-   ones. Icon buttons (`IconButton`, 28 or
-   32 px discs) are not form controls and stay outside the scale; the page
+   ones. Icon buttons (`IconButton`, 24, 28 or
+   32 px discs, one component in `@quiz/ui` that `apps/web`'s tooltip one wraps) are not form controls and stay outside the scale; the page
    help button is on it (34 px).
 4. **An animated thumb.** The selected option of a `Segmented` is marked by a
    thumb that slides under it: its box is measured from the selected label,
@@ -66,10 +66,31 @@ selection with no motion.
   `inputClass`.
 - A field that holds content (rich text, formula, notepad, source) wears
   `areaClass`, not the pill.
-- Follow-up, not decided here: the raw `<select>`, `<input>` and `<button>` of
-  the `qt-*` packages move onto the shared components, then a guard-rail test
-  fails on a raw `<select>`, a `rounded-full` or a literal height beside
-  `inputClass` (issue #552, plan steps 6 and 7).
+- The question types and `apps/web` share the bare elements: `TextInput`,
+  `Select`, `Button` and `IconButton` in `packages/ui/src/controls.tsx`;
+  `apps/web`'s `Field`, `Select` (with a label) and `Button` (with a spinner)
+  wrap them, so nothing is written twice. A `qt-*` package no longer writes
+  `<select>`, a one-line `<input>` or a `buttonClass(...)` button by hand.
+- A guard-rail test (`apps/web/src/ui/controlsGuard.test.ts`) fails on a raw
+  `<select>`, on a raw one-line `<input>` (a checkbox, radio, file, range or
+  hidden input is native by type), on a `<button>` written from `buttonClass(...)`,
+  on a `Button`, `Select`, `IconButton` or `TextInput` that `apps/web` imports
+  from `@quiz/ui` instead of its own `ui`, and on a `rounded-full` or a literal
+  height beside `inputClass` or on a control of the scale. Its allow-list
+  names each legitimate exception with its exact count and its reason: a field with no chrome of
+  its own (the palette's band, the cursor of a token field, a page title or a
+  column title edited in place). A field is marked invalid by `aria-invalid`, which
+  the field chrome styles; no caller writes `border-danger` beside it.
+- Left raw on purpose, by role rather than by element: canvas hit areas and
+  toolbar toggles (`aria-pressed` tools, palette tiles, the drag grip),
+  list items that are drop or pick targets, a card that is itself the button
+  (the expandable preview), and the code, prompt and notepad textareas, which
+  are content surfaces (`areaClass`).
+- `RadioRow` stays. It is a native radio list whose rows carry a title and a
+  second line (a regrade version, an exam to pair, a GitHub organization):
+  content, not a one-line control, so neither `Segmented` (short labels on
+  one track) nor a pill fits it. Issue #552 had planned to absorb it; the
+  inventory showed its uses are lists of rows.
 - The dev gallery (`/dev/ui`) shows every control, measured in the browser.
 
 ## Alternatives considered

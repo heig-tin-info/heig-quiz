@@ -19,7 +19,7 @@
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react";
 
 import { fmt } from "@quiz/core/client";
-import { buttonClass, cx, inputClass, inputSize, lockedBlock, PlusIcon, TrashIcon } from "@quiz/ui";
+import { Button, cx, IconButton, lockedBlock, PlusIcon, TextInput, TrashIcon } from "@quiz/ui";
 
 import type { CodeLanguage } from "./schema.js";
 
@@ -148,12 +148,13 @@ export function ArgsInput({
             >
               argv[{i + 1}]
             </label>
-            <input
+            <TextInput
               id={`${id}-${i}`}
               ref={(el) => {
                 inputs.current[i] = el;
               }}
-              className={cx(inputClass, inputSize.sm, "min-w-0 flex-1 font-mono")}
+              size="sm"
+              className="min-w-0 flex-1 font-mono"
               aria-label={fmt(s.argument, { n: i + 1 })}
               spellCheck={false}
               autoComplete="off"
@@ -162,32 +163,30 @@ export function ArgsInput({
               onChange={(e) => onChange(value.map((a, j) => (j === i ? e.target.value : a)))}
               onKeyDown={onKeyDown(i)}
             />
-            <button
-              type="button"
-              // `px-0!`: the sm size sets `px-3`, which would leave the icon 4 px wide.
-              className={buttonClass("ghost", "sm", "w-7 px-0!")}
-              aria-label={fmt(s.removeArgument, { n: i + 1 })}
+            <IconButton
+              danger
+              label={fmt(s.removeArgument, { n: i + 1 })}
               title={fmt(s.removeArgument, { n: i + 1 })}
               disabled={disabled}
               onClick={() => remove(i)}
             >
               <TrashIcon />
-            </button>
+            </IconButton>
           </li>
         ))}
       </ol>
       {value.length === 0 ? (
         <div>
-          <button
+          <Button
             ref={addButton}
-            type="button"
-            className={buttonClass("ghost", "sm")}
+            variant="ghost"
+            size="sm"
             disabled={disabled}
             onClick={() => insertAfter(-1)}
           >
             <PlusIcon />
             {s.addArgument}
-          </button>
+          </Button>
         </div>
       ) : null}
       {/* With no argument the preview would only repeat argv[0]. */}

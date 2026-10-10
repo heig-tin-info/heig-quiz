@@ -45,7 +45,7 @@ import type { CodeAnswer, CodeStudent } from "./schema.js";
 import { PLAYER_STRINGS, type CodePlayerStrings } from "./strings.js";
 import {
   badge,
-  buttonClass,
+  Button,
   card,
   cx,
   HeadRow,
@@ -292,16 +292,16 @@ export function CodePlayer({
                 s={s}
               />
               {canFreeTry ? (
-                <button
-                  type="button"
-                  className={buttonClass(freeOpen ? "subtle" : "secondary", "sm")}
+                <Button
+                  variant={freeOpen ? "subtle" : "secondary"}
+                  size="sm"
                   aria-expanded={freeOpen}
                   aria-controls={`${ids}-free`}
                   onClick={() => setFreeOpen((open) => !open)}
                 >
                   <TerminalIcon />
                   {s.freeTry}
-                </button>
+                </Button>
               ) : null}
             </div>
           ) : null}

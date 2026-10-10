@@ -3,16 +3,7 @@
  * `label`, `inputClass`, `buttonClass()`, `badge()`… — lives in `@quiz/ui`; what is left
  * here is the circuit's own chrome, in the same semantic tokens (DESIGN.md).
  */
-import { cx, inputClass, inputSize } from "@quiz/ui";
-
-/**
- * A native `<select>` of a dense row, in the field chrome and at the 28 px
- * control height, with room on the right for the browser's own arrow.
- * `apps/web`'s `Select` draws its own chevron over an `appearance-none`
- * control; a leaf package shares the TOKENS, not the icon set, so this one
- * keeps the platform arrow.
- */
-export const selectSm = cx(inputClass, inputSize.sm, "pr-8");
+import { cx } from "@quiz/ui";
 
 /**
  * A palette chip: the KIND IS THE CONTROL.

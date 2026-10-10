@@ -21,7 +21,7 @@ import { LockedEditor } from "./LockedEditor.js";
 import { initialRegions } from "./segments.js";
 import type { ProgramStudent } from "./schema.js";
 import type { CodePlayerStrings } from "./strings.js";
-import { buttonClass, cx, hint, markdown } from "@quiz/ui";
+import { Button, cx, hint, markdown } from "@quiz/ui";
 
 /** Where a run is, for the one line the player shows while it gets there. */
 export type CodeRunStage = "loading" | "compiling" | "running";
@@ -348,9 +348,10 @@ export function RunButton({
   const cooling = cooldown?.cooling === true && state.status !== "running";
   const seconds = cooling ? Math.max(1, Math.ceil(cooldown.remainingMs / 1000)) : 0;
   return (
-    <button
-      type="button"
-      className={buttonClass(variant, "sm", cx("relative overflow-hidden", className))}
+    <Button
+      variant={variant}
+      size="sm"
+      className={cx("relative overflow-hidden", className)}
       disabled={disabled || cooling}
       onClick={onClick}
     >
@@ -369,7 +370,7 @@ export function RunButton({
           </>
         ) : null}
       </span>
-    </button>
+    </Button>
   );
 }
 

@@ -2,7 +2,7 @@ import { ArrowRight, CalendarRange, ChevronLeft, ChevronRight } from "lucide-rea
 import { useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
 
 import { useI18n, useT } from "../i18n";
-import { Button, inputClass, inputSize } from "./controls";
+import { Button, TextInput } from "./controls";
 import { fromLocalInput, isoDateTime, toLocalInput, weekStartsOn } from "./dates";
 import { cx } from "./layers";
 import { Popover } from "./popover";
@@ -345,12 +345,13 @@ function RangePanel({
   const timeInput = (which: "start" | "end", name: string) => (
     <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-fg-muted">
       <span className="truncate">{name}</span>
-      <input
+      <TextInput
         type="time"
         aria-label={t("ui.range.time", { label: name })}
         value={which === "start" ? draft.startTime : draft.endTime}
         onChange={(e) => setDraft({ ...draft, [which === "start" ? "startTime" : "endTime"]: e.target.value })}
-        className={cx(inputClass, inputSize.sm, "w-full tabular-nums")}
+        size="sm"
+        className="w-full tabular-nums"
       />
     </label>
   );

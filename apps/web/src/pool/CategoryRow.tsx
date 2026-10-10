@@ -14,7 +14,7 @@ import type { DragEvent, KeyboardEvent } from "react";
 import type { CategoryCountNode } from "@quiz/contracts";
 
 import { useT, type TFunction } from "../i18n";
-import { cx, inputClass, inputSize, Menu, type MenuItem } from "../ui";
+import { cx, Menu, type MenuItem, TextInput } from "../ui";
 import {
   findCategory,
   neighbourMoves,
@@ -161,7 +161,7 @@ function CategoryName(props: RowProps) {
   const t = useT();
   if (props.editing === node.id) {
     return (
-      <input
+      <TextInput
         autoFocus
         aria-label={t("pool.categoryName")}
         defaultValue={node.name}
@@ -175,7 +175,8 @@ function CategoryName(props: RowProps) {
           }
         }}
         onBlur={(e) => props.onRename(node, e.currentTarget.value)}
-        className={cx(inputClass, inputSize.sm, "min-w-0 flex-1 font-medium")}
+        size="sm"
+        className="min-w-0 flex-1 font-medium"
       />
     );
   }

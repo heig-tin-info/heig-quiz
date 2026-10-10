@@ -17,8 +17,6 @@ import {
   Card,
   cx,
   EmptyState,
-  inputClass,
-  inputSize,
   QueryError,
   RelativeTime,
   SectionHeading,
@@ -26,6 +24,7 @@ import {
   T,
   TableHead,
   type Tone,
+  TextInput,
 } from "./ui";
 
 const STATUS_TONE: Record<KioskDevice["status"], Tone> = {
@@ -251,8 +250,9 @@ function NameForm({
         if (label !== "") onSave(label);
       }}
     >
-      <input
-        className={cx(inputClass, inputSize.sm, "w-36 @2xl:w-56")}
+      <TextInput
+        size="sm"
+        className="w-36 @2xl:w-56"
         aria-label={t("admin.kiosk.name")}
         placeholder={t("admin.kiosk.namePlaceholder")}
         maxLength={KIOSK_LABEL_MAX}

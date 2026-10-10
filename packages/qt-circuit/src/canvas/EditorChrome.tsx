@@ -13,13 +13,13 @@ import { LIBRARY, formatValue, valueIssue, type ComponentKind, type PortId } fro
 import type { Orientation, Schematic, SchematicComponent, Wire } from "../schema.js";
 
 import { fmt, plural } from "@quiz/core/client";
+import { TextInput } from "@quiz/ui";
 import type { CanvasStrings } from "./canvasStrings.js";
 import {
   cx,
   draftLine,
   fieldError,
   fieldInput,
-  fieldInputInvalid,
   fieldLabel,
   iconButton,
   inspector,
@@ -393,8 +393,9 @@ export function Inspector({
         <>
           <label className="flex flex-col gap-1">
             <span className={fieldLabel}>{s.fieldName}</span>
-            <input
-              className={nameOk ? fieldInput : fieldInputInvalid}
+            <TextInput
+              size="sm"
+              className={fieldInput}
               value={nameText}
               spellCheck={false}
               autoComplete="off"
@@ -453,8 +454,9 @@ function ValueField({
         <span className={fieldLabel}>
           {strings.fieldValue} <span className="font-mono">({role.unit})</span>
         </span>
-        <input
-          className={issue === null ? fieldInput : fieldInputInvalid}
+        <TextInput
+          size="sm"
+          className={fieldInput}
           value={component.value}
           spellCheck={false}
           autoComplete="off"

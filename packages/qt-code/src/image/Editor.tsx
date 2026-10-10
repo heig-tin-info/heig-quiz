@@ -17,16 +17,16 @@ import type { EditorProps } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 import {
   AdvancedDisclosure,
-  buttonClass,
+  Button,
   EditorSection,
   hint,
   IssueList,
   NumberField,
   Segmented,
   TryPanel,
+  type TryState as UiTryState,
   tryStatusOf,
   useReferenceTry,
-  type TryState as UiTryState,
 } from "@quiz/ui";
 
 import {
@@ -353,9 +353,8 @@ function ReferenceImage({
         />
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          className={buttonClass("secondary", "sm")}
+        <Button
+          size="sm"
           disabled={disabled || stale || encoded === null || isTarget}
           onClick={() => {
             // The dimensions travel with the pixels (ADR-021).
@@ -363,7 +362,7 @@ function ReferenceImage({
           }}
         >
           {s.useAsTarget}
-        </button>
+        </Button>
         {note === null ? null : (
           <p role="status" className={stale || !complete ? "text-[13px] text-danger" : hint}>
             {note}

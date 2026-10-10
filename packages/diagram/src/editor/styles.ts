@@ -51,7 +51,7 @@ export const handle = "fill-surface stroke-accent stroke-[1.6] cursor-move";
 export const inspector =
   "absolute top-3 right-3 z-10 flex max-h-[calc(100%-1.5rem)] w-72 flex-col gap-2 overflow-y-auto rounded-card border border-line bg-surface-2 p-3 text-[12.5px]";
 export const field = "grid grid-cols-[84px_1fr] items-center gap-2 text-fg-muted";
-export const input =
+const input =
   "w-full rounded-field border border-line bg-surface px-2 py-1 font-mono text-[12.5px] text-fg focus-visible:outline-2 focus-visible:outline-accent";
 export const textarea = cx(input, "resize-y leading-relaxed [white-space:pre] overflow-x-auto");
 export const checkRow = "flex items-center gap-2 text-fg";

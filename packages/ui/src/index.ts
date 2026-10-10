@@ -49,6 +49,7 @@ export {
 } from "./styles.js";
 export { breakdownOf, isLocked, markdown } from "./content.js";
 export { ExpandableCanvas, type ExpandableCanvasProps, type ExpandableCanvasStrings } from "./expand.js";
+export { Button, IconButton, iconButtonClass, type IconButtonSize, Select, TextInput } from "./controls.js";
 export { CheckboxField, FieldCell, NumberField, Segmented } from "./fields.js";
 export { prefersReducedMotion, useMediaQuery } from "./media.js";
 export {

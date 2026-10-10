@@ -208,7 +208,3 @@ export function Tip({
     </span>
   );
 }
-
-/** Round control the size of a row: the bin, and the `+` that adds one. */
-export const iconButtonClass =
-  "inline-flex size-7 shrink-0 items-center justify-center rounded-full text-fg-faint transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-40";

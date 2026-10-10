@@ -64,6 +64,7 @@ import {
   RowListHeader,
   sectionTitle,
   Segmented,
+  Select,
   setting,
   textareaClass,
   TryPanel,
@@ -72,7 +73,7 @@ import {
   useReferenceTry,
 } from "@quiz/ui";
 
-import { chip, selectSm } from "./styles.js";
+import { chip } from "./styles.js";
 
 /**
  * What the host answers "Simulate the reference" with.
@@ -583,9 +584,10 @@ function StimulusFields({
 
       <div className="mt-3 flex flex-wrap items-end gap-3">
         <FieldCell label={s.load} htmlFor={`${ids}-load-${i}`}>
-          <select
+          <Select
             id={`${ids}-load-${i}`}
-            className={cx(selectSm, "w-32")}
+            size="sm"
+            width="w-32"
             disabled={disabled}
             value={stimulus.load.kind}
             onChange={(e) => patch({ load: defaultLoad(e.target.value as Load["kind"]) })}
@@ -593,7 +595,7 @@ function StimulusFields({
             <option value="open">{s.loadOpen}</option>
             <option value="resistor">{s.loadResistor}</option>
             <option value="capacitor">{s.loadCapacitor}</option>
-          </select>
+          </Select>
         </FieldCell>
         {stimulus.load.kind === "resistor" ? (
           <NumberField

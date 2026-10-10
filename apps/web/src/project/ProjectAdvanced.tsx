@@ -2,17 +2,7 @@ import type { ProjectSourceDetail } from "@quiz/contracts";
 
 import { GroupSetPicker } from "../group/GroupSetPicker";
 import { useT } from "../i18n";
-import {
-  cx,
-  FieldError,
-  fieldErrorProps,
-  inputClass,
-  inputSize,
-  Segmented,
-  SettingRow,
-  Switch,
-  ToggleChip,
-} from "../ui";
+import { FieldError, fieldErrorProps, Segmented, SettingRow, Switch, ToggleChip, TextInput } from "../ui";
 import { chosenBranches, chosenProtected, FIELD_ID, type ProjectDraft, type ProjectField } from "./newProject";
 import { ProtectedFiles } from "./ProtectedFiles";
 
@@ -45,7 +35,7 @@ function NumberRow({
   return (
     <div>
       <SettingRow title={title} desc={desc}>
-        <input
+        <TextInput
           id={id}
           type="number"
           aria-label={title}
@@ -53,7 +43,8 @@ function NumberRow({
           max={max}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className={cx(inputClass, inputSize.sm, "w-20 text-right tabular-nums")}
+          size="sm"
+          className="w-20 text-right tabular-nums"
           {...fieldErrorProps(id, message)}
         />
         <span className="text-[13px] text-fg-muted">{unit}</span>

@@ -25,14 +25,14 @@ import {
 import { explainMatcher } from "./explain.js";
 import { shortEditorStrings, type ShortEditorStringKey } from "./strings.js";
 import {
-  buttonClass,
+  Button,
+  CloseIcon,
   caption,
   CheckboxField,
   cx,
   FieldCell,
   hint,
-  inputClass,
-  inputSize,
+  IconButton,
   IssueList,
   label,
   NumberField,
@@ -40,7 +40,9 @@ import {
   removeAt,
   sectionClass,
   Segmented,
+  Select,
   textareaClass,
+  TextInput,
 } from "@quiz/ui";
 
 type ShortEditorProps = EditorProps<ShortConfig> & {
@@ -155,13 +157,12 @@ function NumberOrReferenceField({
   }
   return (
     <FieldCell label={label} htmlFor={id} {...rowCell(index)}>
-      <input
+      <TextInput
         id={id}
-        type="text"
         inputMode="decimal"
         spellCheck={false}
         autoComplete="off"
-        className={cx(inputClass, inputSize.md, "w-full text-right tabular-nums sm:w-28")}
+        className="w-full text-right tabular-nums sm:w-28"
         value={text}
         disabled={disabled}
         onChange={(e) => {
@@ -204,10 +205,9 @@ function MatcherFields({
     case "exact":
       return (
         <FieldCell label={s.value} htmlFor={id("value")} {...rowCell(index, wide)}>
-          <input
+          <TextInput
             id={id("value")}
-            type="text"
-            className={cx(inputClass, inputSize.md, "w-full")}
+            className="w-full"
             value={matcher.value}
             disabled={disabled}
             onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
@@ -218,20 +218,18 @@ function MatcherFields({
       return (
         <>
           <FieldCell label={s.pattern} htmlFor={id("pattern")} {...rowCell(index, wide)}>
-            <input
+            <TextInput
               id={id("pattern")}
-              type="text"
-              className={cx(inputClass, inputSize.md, "w-full font-mono text-[13px]")}
+              className="w-full font-mono text-[13px]"
               value={matcher.pattern}
               disabled={disabled}
               onChange={(e) => onPatch({ ...matcher, pattern: e.target.value })}
             />
           </FieldCell>
           <FieldCell label={s.flags} htmlFor={id("flags")} {...rowCell(index)}>
-            <input
+            <TextInput
               id={id("flags")}
-              type="text"
-              className={cx(inputClass, inputSize.md, "w-full font-mono text-[13px] sm:w-20")}
+              className="w-full font-mono text-[13px] sm:w-20"
               value={matcher.flags}
               disabled={disabled}
               onChange={(e) => onPatch({ ...matcher, flags: e.target.value })}
@@ -263,9 +261,9 @@ function MatcherFields({
             onChange={(tolerance) => onPatch({ ...matcher, tolerance })}
           />
           <FieldCell label={s.toleranceMode} htmlFor={id("mode")} {...rowCell(index)}>
-            <select
+            <Select
               id={id("mode")}
-              className={cx(inputClass, inputSize.md, "w-full sm:w-36")}
+              width="w-full sm:w-36"
               value={matcher.toleranceMode}
               disabled={disabled}
               onChange={(e) =>
@@ -274,13 +272,12 @@ function MatcherFields({
             >
               <option value="abs">{s.toleranceAbs}</option>
               <option value="rel">{s.toleranceRel}</option>
-            </select>
+            </Select>
           </FieldCell>
           <FieldCell label={s.unit} htmlFor={id("unit")} {...rowCell(index)}>
-            <input
+            <TextInput
               id={id("unit")}
-              type="text"
-              className={cx(inputClass, inputSize.md, "w-full sm:w-24")}
+              className="w-full sm:w-24"
               value={matcher.unit ?? ""}
               disabled={disabled}
               onChange={(e) => {
@@ -311,10 +308,10 @@ function MatcherFields({
             htmlFor={id("value")}
             {...rowCell(index, "col-span-2 sm:col-span-1")}
           >
-            <input
+            <TextInput
               id={id("value")}
               type="date"
-              className={cx(inputClass, inputSize.md, "w-full sm:w-40")}
+              className="w-full sm:w-40"
               value={matcher.value}
               disabled={disabled}
               onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
@@ -341,10 +338,10 @@ function MatcherFields({
             htmlFor={id("value")}
             {...rowCell(index, "col-span-2 sm:col-span-1")}
           >
-            <input
+            <TextInput
               id={id("value")}
               type="time"
-              className={cx(inputClass, inputSize.md, "w-full sm:w-32")}
+              className="w-full sm:w-32"
               value={matcher.value}
               disabled={disabled}
               onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
@@ -472,20 +469,20 @@ function ConstraintFields({
       return (
         <>
           <FieldCell label={s.from} htmlFor="short-from">
-            <input
+            <TextInput
               id="short-from"
               type="date"
-              className={cx(inputClass, inputSize.md, "w-40")}
+              className="w-40"
               value={constraints.from ?? ""}
               disabled={disabled}
               onChange={(e) => onPatch(withBound(constraints, "from", e.target.value || undefined))}
             />
           </FieldCell>
           <FieldCell label={s.to} htmlFor="short-to">
-            <input
+            <TextInput
               id="short-to"
               type="date"
-              className={cx(inputClass, inputSize.md, "w-40")}
+              className="w-40"
               value={constraints.to ?? ""}
               disabled={disabled}
               onChange={(e) => onPatch(withBound(constraints, "to", e.target.value || undefined))}
@@ -582,10 +579,9 @@ export function ShortEditor({
           <label className={label} htmlFor="short-placeholder">
             {s.placeholder}
           </label>
-          <input
+          <TextInput
             id="short-placeholder"
-            type="text"
-            className={cx(inputClass, inputSize.md, "w-full")}
+            className="w-full"
             value={config.placeholder ?? ""}
             disabled={disabled}
             onChange={(e) => {
@@ -644,9 +640,9 @@ export function ShortEditor({
                       htmlFor={`${rowId}-kind`}
                       {...rowCell(index, "col-span-2 sm:col-span-1")}
                     >
-                      <select
+                      <Select
                         id={`${rowId}-kind`}
-                        className={cx(inputClass, inputSize.md, "w-full sm:w-44")}
+                        width="w-full sm:w-44"
                         value={matcher.kind}
                         disabled={disabled}
                         onChange={(e) =>
@@ -658,7 +654,7 @@ export function ShortEditor({
                             {s[MATCHER_LABEL[kind]]}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     </FieldCell>
                     <MatcherFields
                       matcher={matcher}
@@ -675,13 +671,13 @@ export function ShortEditor({
                         {...rowCell(index, "col-span-2 sm:col-span-1")}
                       >
                         <div className="flex items-center gap-2">
-                          <input
+                          <TextInput
                             id={`${rowId}-points`}
                             type="number"
                             min={0}
                             max={1}
                             step={0.25}
-                            className={cx(inputClass, inputSize.md, "w-20 tabular-nums")}
+                            className="w-20 tabular-nums"
                             aria-describedby={`${rowId}-points-hint`}
                             value={matcher.points}
                             disabled={disabled}
@@ -703,31 +699,30 @@ export function ShortEditor({
                   )}
                   <IssueList issues={issuesAt(issues, "matchers", index)} />
                 </div>
-                <button
-                  type="button"
-                  className={buttonClass("secondary", "sm", "mt-6 w-7 px-0! text-fg-muted! hover:text-danger!")}
-                  aria-label={`${s.removeMatcher} ${index + 1}`}
+                <IconButton
+                  danger
+                  label={`${s.removeMatcher} ${index + 1}`}
+                  className="mt-6"
                   // A graded question keeps one accepted answer; a poll may
                   // have none (an opinion poll, `keylessConfigSchema`).
                   disabled={disabled || config.matchers.length <= (ungraded ? 0 : 1)}
                   onClick={() => setMatchers(removeAt(config.matchers, index))}
                 >
-                  ×
-                </button>
+                  <CloseIcon />
+                </IconButton>
               </li>
             );
           })}
         </ol>
         <IssueList issues={issuesAt(issues, "matchers").filter((i) => i.path.length === 1)} />
         <div>
-          <button
-            type="button"
-            className={buttonClass("secondary", "sm")}
+          <Button
+            size="sm"
             disabled={disabled || config.matchers.length >= SHORT_MAX_MATCHERS}
             onClick={() => setMatchers([...config.matchers, blankMatcher("exact")])}
           >
             {s.addMatcher}
-          </button>
+          </Button>
         </div>
       </section>
     </div>

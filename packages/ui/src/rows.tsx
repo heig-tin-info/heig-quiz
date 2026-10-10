@@ -6,7 +6,9 @@
 import type { ReactNode } from "react";
 
 import { CheckboxField, FieldCell, NumberField } from "./fields.js";
-import { badge, buttonClass, cx, inputClass, inputSize, sectionTitle } from "./styles.js";
+import { badge, sectionTitle } from "./styles.js";
+import { Button, IconButton, TextInput } from "./controls.js";
+import { CloseIcon } from "./icon.js";
 
 /** The list with the row at `index` merged with `patch`; the others untouched. */
 export function patchAt<T>(list: readonly T[], index: number, patch: Partial<T>): T[] {
@@ -37,14 +39,14 @@ export function RowListHeader({
     <div className="flex flex-wrap items-center gap-2">
       <h3 className={sectionTitle}>{title}</h3>
       <span className={badge()}>{count}</span>
-      <button
-        type="button"
-        className={buttonClass("secondary", "sm", "ml-auto")}
+      <Button
+        size="sm"
+        className="ml-auto"
         disabled={addDisabled}
         onClick={onAdd}
       >
         {addLabel}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -84,15 +86,9 @@ export function RemoveRowButton({
   onClick: () => void;
 }): ReactNode {
   return (
-    <button
-      type="button"
-      className={buttonClass("ghost", "sm")}
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      ×
-    </button>
+    <IconButton danger label={label} disabled={disabled} onClick={onClick}>
+      <CloseIcon />
+    </IconButton>
   );
 }
 
@@ -152,9 +148,10 @@ export function RowHead({
   return (
     <div className="flex flex-wrap items-end gap-3">
       <FieldCell label={nameLabel} htmlFor={nameId} className="min-w-40 flex-1">
-        <input
+        <TextInput
           id={nameId}
-          className={cx(inputClass, inputSize.sm, "w-full font-medium")}
+          size="sm"
+          className="w-full font-medium"
           aria-label={nameAriaLabel}
           disabled={disabled}
           value={name}
