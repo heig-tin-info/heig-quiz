@@ -5,7 +5,7 @@ import type { AdminConcept, Concept, ConceptMerge } from "@quiz/contracts";
 
 import { api, refusalCodeOf } from "../api";
 import { useI18n, useT } from "../i18n";
-import { Button, FormError, Modal, RadioRow, SearchInput } from "../ui";
+import { Button, Checkbox, FormError, Modal, RadioRow, SearchInput } from "../ui";
 import { conceptName, usesLabel } from "./names";
 import { rankConcepts } from "./ranking";
 
@@ -35,6 +35,8 @@ export function ConceptMergeDialog({
   const { locale } = useI18n();
   const [typed, setTyped] = useState("");
   const [picked, setPicked] = useState<string | null>(null);
+  // Off by default (ADR-081 §6): the merged label is dropped unless the admin keeps it as an alias.
+  const [keepAlias, setKeepAlias] = useState(false);
   const name = conceptName(concept, locale);
 
   const targets = useMemo(() => candidates.filter((c) => c.status === "validated" && c.id !== concept.id), [candidates, concept.id]);
@@ -47,12 +49,16 @@ export function ConceptMergeDialog({
     onSuccess: onMerged,
   });
 
+  // What happens to the questions, then to the merged label: dropped, or kept as an alias.
   const effect = (into: string) =>
-    concept.questionCount === 0
-      ? t("admin.concepts.merge.effect.none", { name, target: into })
-      : concept.questionCount === 1
-        ? t("admin.concepts.merge.effect.one", { name, target: into })
-        : t("admin.concepts.merge.effect", { n: concept.questionCount, name, target: into });
+    [
+      concept.questionCount === 0
+        ? t("admin.concepts.merge.effect.none", { name })
+        : concept.questionCount === 1
+          ? t("admin.concepts.merge.effect.one", { name, target: into })
+          : t("admin.concepts.merge.effect", { n: concept.questionCount, name, target: into }),
+      t(keepAlias ? "admin.concepts.merge.effect.keep" : "admin.concepts.merge.effect.drop", { name, target: into }),
+    ].join(" ");
 
   const describe = (error: unknown) => {
     switch (refusalCodeOf(error)) {
@@ -79,7 +85,7 @@ export function ConceptMergeDialog({
             variant="danger"
             loading={merge.isPending}
             disabled={target === undefined}
-            onClick={() => target && merge.mutate({ into: target.id })}
+            onClick={() => target && merge.mutate({ into: target.id, keepAsAlias: keepAlias })}
           >
             {t("admin.concepts.merge.confirm")}
           </Button>
@@ -109,9 +115,21 @@ export function ConceptMergeDialog({
           </fieldset>
         )}
         {target ? (
-          <p role="status" className="text-sm">
-            {effect(conceptName(target, locale))}
-          </p>
+          <>
+            <p role="status" className="text-sm">
+              {effect(conceptName(target, locale))}
+            </p>
+            <div className="space-y-1">
+              <Checkbox
+                checked={keepAlias}
+                onChange={(e) => setKeepAlias(e.target.checked)}
+                label={t("admin.concepts.merge.keepAlias", { name, target: conceptName(target, locale) })}
+              />
+              <p className="pl-[26px] text-xs text-fg-muted">
+                {t("admin.concepts.merge.keepAlias.hint", { name, target: conceptName(target, locale) })}
+              </p>
+            </div>
+          </>
         ) : null}
         <FormError error={merge.error} describe={describe} />
       </div>

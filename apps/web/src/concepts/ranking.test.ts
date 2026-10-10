@@ -8,7 +8,7 @@ let seq = 0;
 const concept = (
   fr: string,
   en: string | null,
-  over: Partial<Pick<Concept, "status" | "qualifiers">> = {},
+  over: Partial<Pick<Concept, "status" | "qualifiers" | "aliases">> = {},
 ): Concept => ({
   id: `c0c0c0c0-0000-4000-8000-${String((seq += 1)).padStart(12, "0")}`,
   status: "validated",
@@ -16,6 +16,7 @@ const concept = (
   labels: { fr, en },
   qualifiers: { fr: "", en: "" },
   descriptions: { fr: "", en: "" },
+  aliases: [],
   createdBy: null,
   createdAt: "2026-10-01T08:00:00.000Z",
   ...over,
@@ -31,7 +32,7 @@ const network = concept("Adresse", "Address", {
   qualifiers: { fr: "réseau", en: "network" },
 });
 const recursion = concept("Récursivité", null, { status: "proposed" });
-const array = concept("Tableau", "Array");
+const array = concept("Tableau", "Array", { aliases: ["Vecteur"] });
 const ALL = [pointer, pointerArithmetic, pointers2, memory, network, recursion, array];
 
 const ids = (cs: Concept[]) => cs.map((c) => c.id);
@@ -61,6 +62,17 @@ describe("rankConcepts", () => {
 
   it("orders as before without a pool (the admin's map dialog)", () => {
     expect(ids(rankConcepts("pointeur", ALL, "fr")).slice(0, 1)).toEqual([pointer.id]);
+  });
+});
+
+describe("aliases", () => {
+  it("rank the concept they name as a direct match, and a close alias as a proposal", () => {
+    expect(rankConcepts("vecteurs", ALL, "fr")[0]!.id).toBe(array.id);
+    expect(rankConcepts("vecteru", ALL, "fr")[0]!.id).toBe(array.id);
+  });
+
+  it("make a typed word name a concept, so nothing is created", () => {
+    expect(namesAConcept("Vecteur", ALL)).toBe(true);
   });
 });
 

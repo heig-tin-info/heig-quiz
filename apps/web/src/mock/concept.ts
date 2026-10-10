@@ -8,6 +8,7 @@
  * admin dropped (`c01`, dropped as a chapter label, is one from the start).
  */
 import {
+  ConceptAliasAdd,
   ConceptCreate,
   ConceptMerge,
   ConceptPatch,
@@ -18,8 +19,9 @@ import {
   type ConceptRef,
   type TagDropReason,
 } from "@quiz/contracts";
-import { conceptKey, qualifiedConceptKey, splitQualifiedLabel } from "@quiz/domain";
+import { checkAlias, cleanConceptLabel, conceptKey, mergedAliases, qualifiedConceptKey, splitQualifiedLabel } from "@quiz/domain";
 
+import { resolvable } from "../concepts/ranking";
 import { D, flags, H, iso, MockPayload, on, refuse, role } from "./runtime";
 
 let conceptSeq = 0;
@@ -34,6 +36,7 @@ const concept = (
   labels: { fr: fr[0], en: en[0] },
   qualifiers: { fr: fr[1] ?? "", en: en[1] ?? "" },
   descriptions: { fr: fr[2] ?? "", en: en[2] ?? "" },
+  aliases: [],
   createdBy: null,
   createdAt: iso(-3 * D),
 });
@@ -50,6 +53,9 @@ const concepts: Concept[] = [
   concept("proposed", [null], ["Hash table", "", "Keys mapped to buckets by a hash function."]),
   concept("proposed", ["Complément à deux"], ["Two's complement"]),
 ];
+
+concepts[0]!.aliases = ["Référence mémoire", "Pointer variable"];
+concepts[6]!.aliases = ["Tas"];
 
 /** The questions each concept's links hold, beyond those the mock's own questions name (`seedConceptIds`). */
 const usage = new Map<string, number>();
@@ -181,9 +187,46 @@ on("POST", "/app/api/admin/concepts/:id/merge", (m, raw): Concept => {
   usage.set(winner.id, (usage.get(winner.id) ?? 0) + moved);
   usage.delete(loser.id);
   for (const c of concepts) if (c.mergedInto === loser.id) c.mergedInto = winner.id;
+  const { moved: movedAliases, added } = mergedAliases(resolvable(loser), resolvable(winner), body.data.keepAsAlias);
+  winner.aliases = [...winner.aliases, ...movedAliases, ...added].sort((a, b) => a.localeCompare(b));
+  loser.aliases = [];
   loser.status = "merged";
   loser.mergedInto = winner.id;
   return winner;
+});
+
+const resolvables = () => concepts.map(resolvable);
+
+/** A curated alias (ADR-081 §6): a collision with another concept's label or alias is a 409 until forced. */
+on("POST", "/app/api/admin/concepts/:id/aliases", (m, raw): Concept => {
+  const c = concepts.find((x) => x.id === m.groups!.id);
+  if (!c) throw refuse(404, "not_found", "No such concept");
+  if (c.status === "merged") throw refuse(409, "concept_merged", "A merged concept has no aliases");
+  const body = ConceptAliasAdd.safeParse(raw);
+  if (!body.success) throw new MockPayload(400, { error: "validation", message: body.error.message });
+  const all = resolvables();
+  const check = checkAlias(body.data.alias, all.find((x) => x.id === c.id)!, all);
+  if (check.kind === "redundant") {
+    throw check.of === "label"
+      ? refuse(422, "alias_redundant", "An alias equal to the concept's own label is pointless")
+      : refuse(409, "alias_exists", "The concept already has this alias");
+  }
+  if (check.kind === "collides" && !body.data.force) {
+    throw refuse(409, "alias_collision", "This alias would make an input ambiguous", {
+      collisions: check.with.map((hit) => ({ concept: conceptRefs([hit.id])[0]!, via: hit.via })),
+    });
+  }
+  c.aliases = [...c.aliases, cleanConceptLabel(body.data.alias)].sort((a, b) => a.localeCompare(b));
+  return c;
+});
+
+on("DELETE", "/app/api/admin/concepts/:id/aliases/:alias", (m): Concept => {
+  const c = concepts.find((x) => x.id === m.groups!.id);
+  if (!c) throw refuse(404, "not_found", "No such concept");
+  const key = conceptKey(decodeURIComponent(m.groups!.alias!));
+  if (!c.aliases.some((a) => conceptKey(a) === key)) throw refuse(404, "not_found", "No such alias");
+  c.aliases = c.aliases.filter((a) => conceptKey(a) !== key);
+  return c;
 });
 
 on("DELETE", "/app/api/admin/concepts/:id", (m) => {

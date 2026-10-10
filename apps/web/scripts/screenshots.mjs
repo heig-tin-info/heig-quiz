@@ -1565,6 +1565,18 @@ const scenes = [
       await p.getByRole("dialog").getByRole("button", { name: /^merge into/i }).click();
       await p.getByRole("searchbox", { name: /search a validated concept/i }).fill("pointer");
       await p.getByRole("radio", { name: /^pointer/i }).first().check({ force: true });
+      await p.getByRole("checkbox", { name: /as an alias of/i }).check({ force: true });
+    } },
+  // Curated aliases (fifth addendum, PR3): the sheet's Aliases section, then the collision warning an alias equal to another concept's label raises.
+  { name: "admin-concepts-aliases", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^edit pointer$/i }).click();
+      await p.getByRole("group", { name: /^aliases$/i }).scrollIntoViewIfNeeded();
+    } },
+  { name: "admin-concepts-alias-collision", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^edit pointer$/i }).click();
+      await p.getByRole("textbox", { name: /^new alias$/i }).fill("array");
+      await p.getByRole("button", { name: /^add alias$/i }).click();
+      await p.getByRole("dialog", { name: /already designates another concept/i }).waitFor();
     } },
   { name: "admin-concepts-empty", role: "admin", path: "/admin?tab=concepts&empty=1" },
   { name: "admin-concepts-error", role: "admin", path: "/admin?tab=concepts&fail=1", settle: 2500 },

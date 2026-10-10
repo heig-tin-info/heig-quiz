@@ -1,4 +1,4 @@
-import { CalendarRange, Check, LayoutDashboard, LayoutGrid, List, Loader2, Minus, Search } from "lucide-react";
+import { CalendarRange, Check, CircleAlert, LayoutDashboard, LayoutGrid, List, Loader2, Minus, Search, X } from "lucide-react";
 import { useId } from "react";
 import type { ReactNode } from "react";
 
@@ -312,6 +312,48 @@ export function SearchInput({
  * the label without the two ever getting separated. Containers lay them out
  * with `flex flex-wrap gap-2`.
  */
+/**
+ * A value in a removable pill: a filter of a search bar, an alias of a
+ * concept. `remove` names the action ("Remove alias"); the cross is labelled
+ * `remove — label`. A `warning` dashes the pill and says why beside the label.
+ */
+export function Chip({
+  label,
+  remove,
+  warning,
+  onRemove,
+  disabled,
+}: {
+  label: string;
+  remove: string;
+  warning?: string | undefined;
+  onRemove: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <span
+      title={warning}
+      className={cx(
+        "inline-flex h-6 items-center gap-1 rounded-full pl-2.5 pr-1 text-xs font-medium",
+        warning ? "border border-dashed border-fg-faint bg-surface text-fg-muted" : "bg-surface-3 text-fg-muted",
+      )}
+    >
+      {warning ? <CircleAlert className="size-3 shrink-0 text-warning" aria-hidden /> : null}
+      {label}
+      {warning ? <span className="font-normal text-fg-faint">· {warning}</span> : null}
+      <button
+        type="button"
+        disabled={disabled}
+        aria-label={`${remove} — ${label}`}
+        onClick={onRemove}
+        className="rounded-full p-0.5 text-fg-faint transition-colors hover:bg-line-strong hover:text-fg"
+      >
+        <X className="size-3" />
+      </button>
+    </span>
+  );
+}
+
 export function ToggleChip({
   label,
   icon: Icon,

@@ -15,6 +15,7 @@ const concept = (
 ): ResolvableConcept => ({
   id,
   mergedInto,
+  aliases: [],
   labels: labels.map(([label, qualifier = ""]) => ({ label, qualifier })),
 });
 

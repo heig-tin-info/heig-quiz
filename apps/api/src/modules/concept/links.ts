@@ -25,7 +25,7 @@ import { audit, type AuditActor } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
 import { concepts, conceptTagSortings, questionConcepts, questions } from "../../db/schema.js";
 import { DomainError } from "../http.js";
-import { columnsOf, conflictOr, perLang, side, toConcept, toConceptRef, toResolvable, type ConceptRow } from "./row.js";
+import { columnsOf, conflictOr, loadAliases, perLang, refuseAliasHolder, side, toConcept, toConceptRef, toResolvable, type ConceptRow } from "./row.js";
 
 /** Who writes, and how: whether an unknown label creates a concept, in which language. */
 export interface ConceptWriteContext {
@@ -87,6 +87,8 @@ export async function insertProposed(
   lang: ConceptLang,
   input: { label: string; qualifier: string; description: string },
 ): Promise<ConceptRow> {
+  // A qualified label is a homonym, told apart as labels are: no alias can clash with it.
+  if (!input.qualifier) await refuseAliasHolder(tx, [input.label], null);
   const id = randomUUID();
   const sides = perLang((l) =>
     l === lang ? side(input.label, input.qualifier, input.description) : side(null, "", ""),
@@ -130,7 +132,8 @@ export async function resolveForWrite(
 ): Promise<ConceptWrite> {
   const rows = await db.select().from(concepts);
   const dropped = ctx.create ? await droppedKeys(db) : new Map<string, TagDropReason>();
-  const plan = planConceptWrite(inputs, rows.map(toResolvable), { create: ctx.create, dropped });
+  const aliases = await loadAliases(db);
+  const plan = planConceptWrite(inputs, rows.map((r) => toResolvable(r, aliases)), { create: ctx.create, dropped });
   if (plan.kind === "refused") {
     const byId = new Map(rows.map((r) => [r.id, r]));
     throw refuseInputs(plan.errors.map((e) => toInputError(e, byId, ctx.lang)));
@@ -138,7 +141,7 @@ export async function resolveForWrite(
   const created = plan.creates.length === 0 ? [] : await createAll(db, ctx, plan.creates);
   return {
     ids: plan.targets.map((t) => (t.kind === "existing" ? t.id : created[t.index]!.id)),
-    created: created.map(toConcept),
+    created: created.map((c) => toConcept(c)),
   };
 }
 

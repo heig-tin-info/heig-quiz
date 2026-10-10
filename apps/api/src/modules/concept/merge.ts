@@ -17,26 +17,36 @@
  *    taken again; its old label no longer resolves (a bare label matches the
  *    live concepts only), while its id still resolves to the winner.
  *
+ * 5. the loser's curated aliases move to the winner, so none resolves to
+ *    the loser; one the winner answers to already is dropped. With
+ *    `keepAsAlias` (the caller always says; by default §6 drops the label) the
+ *    loser's labels become aliases of the winner too. The rule is
+ *    `mergedAliases` of `@quiz/domain`; the audit records what moved, was
+ *    added and was dropped.
+ *
  * The winner keeps its labels, qualifiers, descriptions and status. The audit
  * lists the loser's former status and the question ids moved and those that
- * already had the winner, so a reviewed SQL undo is possible; there is no undo button.
+ * already had the winner, and the aliases moved, added and dropped, so a
+ * reviewed SQL undo is possible; there is no undo button.
  */
 import { asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Concept } from "@quiz/contracts";
+import { conceptKey, mergedAliases } from "@quiz/domain";
 
 import { audit } from "../../audit.js";
 import type { Db } from "../../db/client.js";
-import { concepts, questionConcepts } from "../../db/schema.js";
+import { conceptAliases, concepts, questionConcepts } from "../../db/schema.js";
 import { DomainError, notFoundError } from "../http.js";
-import { perLang, sideOf, toConcept } from "./row.js";
+import { loadAliases, perLang, sideOf, toConcept, toResolvable } from "./row.js";
 import type { ConceptContext } from "./service.js";
 
 export async function mergeConcept(
   db: Db,
-  ctx: Omit<ConceptContext, "caller">,
+  ctx: ConceptContext,
   loserId: string,
   winnerId: string,
+  keepAsAlias: boolean,
 ): Promise<Concept> {
   if (loserId === winnerId) throw new DomainError("concept_merge_self", 422, "A concept is not merged into itself");
   return db.transaction(async (tx) => {
@@ -81,6 +91,19 @@ export async function mergeConcept(
       .set({ mergedInto: winnerId, updatedAt: ctx.now })
       .where(eq(concepts.mergedInto, loserId))
       .returning({ id: concepts.id });
+    const aliases = await loadAliases(tx, [loserId, winnerId]);
+    const { moved: aliasesMoved, added: aliasesAdded, dropped: aliasesDropped } = mergedAliases(
+      toResolvable(loser, aliases),
+      toResolvable(winner, aliases),
+      keepAsAlias,
+    );
+    await tx.delete(conceptAliases).where(eq(conceptAliases.conceptId, loserId));
+    const gained = [...aliasesMoved, ...aliasesAdded];
+    if (gained.length > 0) {
+      await tx.insert(conceptAliases).values(
+        gained.map((text) => ({ conceptId: winnerId, key: conceptKey(text), text, createdBy: ctx.caller.id, createdAt: ctx.now })),
+      );
+    }
     // Step 7's course-concept links join here (ADR-081 fifth addendum).
     await tx
       .update(concepts)
@@ -103,8 +126,11 @@ export async function mergeConcept(
         moved,
         alreadyLinked,
         repointed: repointed.map((r) => r.id).sort(),
+        aliasesMoved,
+        aliasesAdded,
+        aliasesDropped,
       },
     });
-    return toConcept(winner);
+    return toConcept(winner, (await loadAliases(tx, [winnerId])).get(winnerId));
   });
 }

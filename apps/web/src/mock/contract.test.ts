@@ -79,6 +79,7 @@ import {
   JournalRevisionContent,
   KioskDevice,
   Concept,
+  AliasCollision,
   ConceptExists,
   ConceptList,
   ConceptWriteRefusal,
@@ -1083,16 +1084,36 @@ describe("the mock's curation queue (ADR-081, fifth addendum)", () => {
     const winner = all.concepts.find((c) => c.status === "validated" && c.questionCount > 0)!;
     const loser = all.concepts.find((c) => c.status === "proposed" && c.questionCount > 0)!;
     const proposed = all.concepts.find((c) => c.status === "proposed" && c.id !== loser.id)!;
-    expect(await call("POST", `/app/api/admin/concepts/${loser.id}/merge`, { into: loser.id })).toMatchObject({ status: 422, body: { error: "concept_merge_self" } });
-    expect(await call("POST", `/app/api/admin/concepts/${loser.id}/merge`, { into: proposed.id })).toMatchObject({
+    expect(await call("POST", `/app/api/admin/concepts/${loser.id}/merge`, { into: loser.id, keepAsAlias: false })).toMatchObject({ status: 422, body: { error: "concept_merge_self" } });
+    expect(await call("POST", `/app/api/admin/concepts/${loser.id}/merge`, { into: proposed.id, keepAsAlias: false })).toMatchObject({
       status: 422,
       body: { error: "concept_merge_target_not_validated" },
     });
-    const merged = await call("POST", `/app/api/admin/concepts/${loser.id}/merge`, { into: winner.id });
+    const merged = await call("POST", `/app/api/admin/concepts/${loser.id}/merge`, { into: winner.id, keepAsAlias: false });
     expect(merged.status).toBe(200);
     expect(issuesOf(Concept, merged.body)).toEqual([]);
     const after = (await queue()).concepts;
     expect(after.map((c) => c.id)).not.toContain(loser.id);
-    expect(await call("POST", `/app/api/admin/concepts/${loser.id}/merge`, { into: winner.id })).toMatchObject({ status: 409, body: { error: "concept_merged" } });
+    expect(await call("POST", `/app/api/admin/concepts/${loser.id}/merge`, { into: winner.id, keepAsAlias: false })).toMatchObject({ status: 409, body: { error: "concept_merged" } });
+  });
+
+  it("adds, refuses and removes aliases as the API does, and keeps a merged label on request", async () => {
+    const all = await queue();
+    const pointer = all.concepts.find((c) => c.labels.fr === "Pointeur")!;
+    const tableau = all.concepts.find((c) => c.labels.fr === "Tableau")!;
+    const url = `/app/api/admin/concepts/${tableau.id}/aliases`;
+    const collision = await call("POST", url, { alias: "pointers" });
+    expect(collision.status).toBe(409);
+    expect(issuesOf(AliasCollision, collision.body)).toEqual([]);
+    expect((collision.body as AliasCollision).collisions[0]).toMatchObject({ via: "label", concept: { id: pointer.id } });
+    expect(await call("POST", url, { alias: "array" })).toMatchObject({ status: 422, body: { error: "alias_redundant" } });
+    const forced = await call("POST", url, { alias: "pointers", force: true });
+    expect(forced.status).toBe(200);
+    expect(issuesOf(Concept, forced.body)).toEqual([]);
+    expect((forced.body as Concept).aliases).toContain("pointers");
+    expect(await call("POST", url, { alias: "Pointers" })).toMatchObject({ status: 409, body: { error: "alias_exists" } });
+    const removed = await call("DELETE", `${url}/pointers`);
+    expect(removed.status).toBe(200);
+    expect((removed.body as Concept).aliases).not.toContain("pointers");
   });
 });

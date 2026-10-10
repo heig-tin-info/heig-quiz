@@ -37,6 +37,12 @@ export const Concept = z.object({
   /** `mémoire` in `adresse (mémoire)`: what tells homonyms apart (ADR-081 §5); `""` when none. */
   qualifiers: perLang(z.string()),
   descriptions: perLang(z.string()),
+  /**
+   * The curated aliases (ADR-081 §6, fifth addendum): other names it answers
+   * to, as the admin wrote them, with no language. A typed input that is
+   * neither a label nor an id resolves through them, client and server alike.
+   */
+  aliases: z.array(z.string()),
   /** The teacher who proposed it; null once their account is gone. */
   createdBy: z.uuid().nullable(),
   createdAt: z.iso.datetime(),
@@ -209,5 +215,47 @@ export type ConceptExists = z.infer<typeof ConceptExists>;
 // ---------------------------------------------------------------------------
 
 /** `POST /admin/concepts/:id/merge`: the validated concept that absorbs the one in the path. */
-export const ConceptMerge = z.object({ into: z.uuid() });
+export const ConceptMerge = z.object({
+  into: z.uuid(),
+  /**
+   * Keeps the merged concept's labels as aliases of the target (ADR-081 §6):
+   * its label is dropped unless asked, so the caller says which, always.
+   */
+  keepAsAlias: z.boolean(),
+});
 export type ConceptMerge = z.infer<typeof ConceptMerge>;
+
+// ---------------------------------------------------------------------------
+// Curated aliases (ADR-081 §6, fifth addendum 2026-10-10)
+// ---------------------------------------------------------------------------
+
+/** An alias: a name like a label, bounded and holding a letter or a digit so that its key is never empty. */
+export const ConceptAliasText = z
+  .string()
+  .trim()
+  .min(1)
+  .max(CONCEPT_LABEL_MAX)
+  .regex(CONCEPT_LABEL_PATTERN, "an alias needs a letter or a digit");
+
+/**
+ * `POST /admin/concepts/:id/aliases`. `force` confirms an alias that collides
+ * (`AliasCollision`): the admin has seen which concepts it would make ambiguous.
+ */
+export const ConceptAliasAdd = z.object({ alias: ConceptAliasText, force: z.boolean().optional() });
+export type ConceptAliasAdd = z.infer<typeof ConceptAliasAdd>;
+
+/**
+ * The 409 `alias_collision` of an alias whose key is the label (`label`) or
+ * an alias (`alias`) of another concept that is not merged: typed, it would
+ * be ambiguous for every teacher. Resent with `force`, it is stored.
+ */
+export const AliasCollision = z.object({
+  error: z.literal("alias_collision"),
+  message: z.string().optional(),
+  collisions: z.array(z.object({ concept: ConceptRef, via: z.enum(["label", "alias"]) })).min(1),
+});
+export type AliasCollision = z.infer<typeof AliasCollision>;
+
+/** `DELETE /admin/concepts/:id/aliases/:alias` — the alias as written; the server computes its key. */
+export const ConceptAliasParams = z.object({ id: z.uuid(), alias: ConceptAliasText });
+export type ConceptAliasParams = z.infer<typeof ConceptAliasParams>;

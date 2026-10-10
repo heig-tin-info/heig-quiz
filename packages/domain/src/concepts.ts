@@ -88,7 +88,8 @@ export function conceptKey(label: string): string {
 }
 
 /**
- * The label a teacher typed, cleaned for display as a new concept's label:
+ * The label a teacher typed, cleaned for display as a new concept's label
+ * (an alias is cleaned the same way):
  * the leading `#` and surrounding spaces dropped, inner spaces collapsed.
  * Case and accents are kept — they are the label, the key ignores them.
  */
@@ -240,8 +241,12 @@ export interface ResolvableConcept {
   mergedInto: string | null;
   /** Its label and qualifier in each language that has a label. */
   labels: readonly { label: string; qualifier: string }[];
-  /** Other names it answers to, bare (curated aliases, ADR-081 §6); none by default. */
-  aliases?: readonly string[];
+  /**
+   * Other names it answers to, bare (curated aliases, ADR-081 §6). An alias is matched exactly like a label: an input whose key is
+   * a label's or an alias's resolves, and the same key on two concepts is
+   * ambiguous.
+   */
+  aliases: readonly string[];
 }
 
 /**
@@ -292,7 +297,7 @@ export function resolveConceptLabel(
 
   const names: ConceptNames[] = live.map((c) => ({
     id: c.id,
-    names: [...c.labels.map((l) => l.label), ...(c.aliases ?? [])],
+    names: [...c.labels.map((l) => l.label), ...c.aliases],
   }));
   const matches = closeConcepts(input, names);
   const exact = matches.filter((m) => m.kind === "exact");
@@ -300,6 +305,71 @@ export function resolveConceptLabel(
   if (exact.length > 1)
     return { kind: "ambiguous", candidates: exact.map((m) => m.id) };
   return { kind: "unknown", candidates: matches.map((m) => m.id) };
+}
+
+/**
+ * Why an alias is refused or needs the admin's confirmation (ADR-081 §6,
+ * fifth addendum). The alias is compared by {@link conceptKey} with the BARE
+ * labels and the aliases of the other concepts that are not merged — the very
+ * names {@link resolveConceptLabel} matches an unqualified input against — so
+ * an alias that would make some input ambiguous is found here, before it is
+ * stored.
+ */
+export type AliasCheck =
+  /** The alias is a name the concept already has (a label, or the same alias): nothing to store. */
+  | { kind: "redundant"; of: "label" | "alias" }
+  /** Other concepts answer to this key already: stored only when forced. */
+  | { kind: "collides"; with: { id: string; via: "label" | "alias" }[] }
+  | { kind: "free" };
+
+export function checkAlias(
+  alias: string,
+  self: ResolvableConcept,
+  concepts: readonly ResolvableConcept[],
+): AliasCheck {
+  const key = conceptKey(alias);
+  if (self.labels.some((l) => conceptKey(l.label) === key)) return { kind: "redundant", of: "label" };
+  if (self.aliases.some((a) => conceptKey(a) === key)) return { kind: "redundant", of: "alias" };
+  const hits: { id: string; via: "label" | "alias" }[] = [];
+  for (const c of concepts) {
+    if (c.id === self.id || c.mergedInto) continue;
+    if (c.labels.some((l) => conceptKey(l.label) === key)) hits.push({ id: c.id, via: "label" });
+    else if (c.aliases.some((a) => conceptKey(a) === key)) hits.push({ id: c.id, via: "alias" });
+  }
+  return hits.length > 0 ? { kind: "collides", with: hits } : { kind: "free" };
+}
+
+/**
+ * What a merge does with aliases (ADR-081 §6, fifth addendum), as the texts
+ * the winner ends up with: the loser's aliases `moved` to it, its labels
+ * `added` as aliases when `keepLabels` (qualified ones as `label (qualifier)`),
+ * and the loser's aliases `dropped` because the winner answers to their key
+ * already (a label or an alias, the names {@link checkAlias} calls redundant).
+ * A label the winner answers to is simply not added. Each key is taken once.
+ */
+export function mergedAliases(
+  loser: ResolvableConcept,
+  winner: ResolvableConcept,
+  keepLabels: boolean,
+): { moved: string[]; added: string[]; dropped: string[] } {
+  const known = new Set([...winner.labels.map((l) => conceptKey(l.label)), ...winner.aliases.map(conceptKey)]);
+  const out = { moved: [] as string[], added: [] as string[], dropped: [] as string[] };
+  for (const alias of loser.aliases) {
+    const key = conceptKey(alias);
+    if (known.has(key)) out.dropped.push(alias);
+    else out.moved.push(alias);
+    known.add(key);
+  }
+  if (keepLabels) {
+    for (const { label, qualifier } of loser.labels) {
+      const text = qualifier ? `${label} (${qualifier})` : label;
+      const key = conceptKey(text);
+      if (known.has(key)) continue;
+      known.add(key);
+      out.added.push(text);
+    }
+  }
+  return { moved: out.moved.sort(), added: out.added.sort(), dropped: out.dropped.sort() };
 }
 
 /**

@@ -73,7 +73,7 @@ const merge = (who: Who, id: string, into: string) =>
     method: "POST",
     url: `/app/api/admin/concepts/${id}/merge`,
     headers: who.headers,
-    payload: { into },
+    payload: { into, keepAsAlias: false },
   });
 
 beforeAll(async () => {
@@ -153,6 +153,9 @@ describe("POST /admin/concepts/:id/merge", () => {
       moved: [a],
       alreadyLinked: [b],
       repointed: [old],
+      aliasesMoved: [],
+      aliasesAdded: [],
+      aliasesDropped: [],
     });
   });
 
@@ -211,7 +214,7 @@ describe("POST /admin/concepts/:id/merge", () => {
     expect((await merge(teacher, loser, winner)).statusCode).toBe(403);
     expect((await merge(student, loser, winner)).statusCode).toBe(403);
     expect(
-      (await server.app.inject({ method: "POST", url: `/app/api/admin/concepts/${loser}/merge`, payload: { into: winner } }))
+      (await server.app.inject({ method: "POST", url: `/app/api/admin/concepts/${loser}/merge`, payload: { into: winner, keepAsAlias: false } }))
         .statusCode,
     ).toBe(401);
     const [row] = await db().select().from(concepts).where(eq(concepts.id, loser));

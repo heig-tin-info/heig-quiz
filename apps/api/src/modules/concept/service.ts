@@ -38,8 +38,9 @@ import { concepts } from "../../db/schema.js";
 import type { Caller } from "../guards.js";
 import { DomainError, notFoundError } from "../http.js";
 import { droppedKeys, insertProposed, refuseInputs } from "./links.js";
-import { columnsOf, conflictOr, perLang, side, sideOf, toConcept, toConceptRef, toResolvable } from "./row.js";
+import { columnsOf, conflictOr, loadAliases, perLang, refuseAliasHolder, side, sideOf, toConcept, toConceptRef, toResolvable } from "./row.js";
 
+export { addAlias, removeAlias } from "./aliases.js";
 export { listAdminConcepts } from "./admin.js";
 export { mergeConcept } from "./merge.js";
 export { conceptReferenced } from "./referenced.js";
@@ -69,7 +70,8 @@ export async function listConcepts(db: Db): Promise<Concept[]> {
     .from(concepts)
     .where(ne(concepts.status, "merged"))
     .orderBy(asc(sql`lower(coalesce(${concepts.labelFr}, ${concepts.labelEn}))`), asc(concepts.id));
-  return rows.map(toConcept);
+  const aliases = await loadAliases(db);
+  return rows.map((r) => toConcept(r, aliases.get(r.id)));
 }
 
 /**
@@ -92,7 +94,8 @@ export async function resolveLabels(
 ): Promise<ConceptResolution[]> {
   const rows = await db.select().from(concepts);
   const byId = new Map(rows.map((r) => [r.id, toConceptRef(r, lang)]));
-  const vocabulary = rows.map(toResolvable);
+  const aliases = await loadAliases(db);
+  const vocabulary = rows.map((r) => toResolvable(r, aliases));
   const concept = (id: string) => byId.get(id)!;
   const dropped = await stopList(db, caller);
 
@@ -191,6 +194,12 @@ export async function patchConcept(db: Db, ctx: ConceptContext, id: string, patc
         return reason === null ? [] : [{ input: label, error: "concept_dropped" as const, reason }];
       });
       if (refused.length > 0) throw refuseInputs(refused);
+      const renamed = CONCEPT_LANGS.flatMap((lang) => {
+        const { label, qualifier } = sides[lang];
+        // A qualified label is a homonym, told apart as labels are: no alias can clash with it.
+        return label === null || qualifier !== "" || label === sideOf(current, lang).label ? [] : [label];
+      });
+      await refuseAliasHolder(tx, renamed, id);
 
       const [row] = await tx
         .update(concepts)
@@ -200,7 +209,7 @@ export async function patchConcept(db: Db, ctx: ConceptContext, id: string, patc
       await audit(tx, { ...ctx.actor, action: "concept.edit", subjectType: "concept", subjectId: id, payload: patch });
       return row!;
     });
-    return toConcept(row);
+    return toConcept(row, (await loadAliases(db, [id])).get(id));
   } catch (error) {
     throw await conflictOr(db, error, keys);
   }
@@ -238,13 +247,14 @@ export async function validateConcept(db: Db, ctx: Omit<ConceptContext, "caller"
     });
     return row!;
   });
-  return toConcept(row);
+  return toConcept(row, (await loadAliases(db, [id])).get(id));
 }
 
 /**
  * Deletes a concept nothing refers to (ADR-081 second addendum §2, third
  * addendum §7): a concept merged into it, or a question linked to it makes the foreign key refuse, answered 409
- * `concept_in_use`; a missing one is a 404. A concept a question uses is
+ * `concept_in_use`; a missing one is a 404. Its curated aliases go with it
+ * (cascade): they are not references. A concept a question uses is
  * merged, never deleted. `conceptReferenced` mirrors these two foreign keys
  * for the admin's queue.
  */

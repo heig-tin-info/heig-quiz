@@ -2,15 +2,24 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { GitMerge, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import { CONCEPT_LANGS, ConceptPatch, type AdminConcept, type ConceptLang } from "@quiz/contracts";
+import {
+  CONCEPT_LANGS,
+  ConceptPatch,
+  type AdminConcept,
+  type AliasCollision,
+  type Concept,
+  type ConceptAliasAdd,
+  type ConceptLang,
+} from "@quiz/contracts";
+import { CONCEPT_LABEL_MAX } from "@quiz/domain";
 
-import { api, refusalCodeOf } from "../api";
+import { api, ApiError, refusalCodeOf } from "../api";
 import { useConfirm } from "../confirm";
 import { useT, type Locale } from "../i18n";
 import { adminConceptsKey, conceptsKey } from "../queryKeys";
-import { Button, Field, FormError, Sheet, Textarea } from "../ui";
+import { Button, Chip, Field, FormError, Sheet, Textarea } from "../ui";
 import { ConceptMergeDialog } from "./ConceptMergeDialog";
-import { conceptName } from "./names";
+import { conceptName, refName } from "./names";
 
 type Side = { label: string; qualifier: string; description: string };
 type Sides = Record<ConceptLang, Side>;
@@ -35,6 +44,123 @@ function patchOf(was: Sides, now: Sides) {
     if (Object.keys(changed).length > 0) patch[lang] = changed;
   }
   return patch;
+}
+
+/**
+ * The curated aliases (ADR-081 §6, fifth addendum): chips with a remove
+ * button, and a field to add one. Each change is saved at once, apart from
+ * the labels' Save (it is a separate decision, audited alone). An alias that
+ * is the label or an alias of another concept comes back as a 409
+ * `alias_collision`: a confirmation names those concepts, and "Add anyway"
+ * sends it again with `force`.
+ */
+function Aliases({ concept }: { concept: AdminConcept }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const confirm = useConfirm();
+  const [typed, setTyped] = useState("");
+  const base = `/app/api/admin/concepts/${concept.id}/aliases`;
+  const changed = () => {
+    void qc.invalidateQueries({ queryKey: adminConceptsKey });
+    void qc.invalidateQueries({ queryKey: conceptsKey });
+  };
+  const add = useMutation({
+    mutationFn: (body: ConceptAliasAdd) => api<Concept>(base, { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      setTyped("");
+      changed();
+    },
+  });
+  const remove = useMutation({
+    mutationFn: (alias: string) => api<Concept>(`${base}/${encodeURIComponent(alias)}`, { method: "DELETE" }),
+    onSuccess: changed,
+  });
+  const describe = (error: unknown) => {
+    switch (refusalCodeOf(error)) {
+      case "alias_redundant":
+        return t("admin.concepts.error.aliasRedundant");
+      case "alias_exists":
+        return t("admin.concepts.error.aliasExists");
+      case "concept_merged":
+        return t("admin.concepts.error.merged");
+      default:
+        return t("admin.concepts.error.alias");
+    }
+  };
+  const submit = async () => {
+    const alias = typed.trim();
+    if (alias === "") return;
+    try {
+      await add.mutateAsync({ alias });
+    } catch (error) {
+      if (!(error instanceof ApiError) || refusalCodeOf(error) !== "alias_collision") return;
+      const { collisions } = error.body as AliasCollision;
+      const ok = await confirm({
+        title: t("admin.concepts.aliases.collision.title", { alias }),
+        message: (
+          <>
+            <ul className="list-disc pl-4">
+              {collisions.map(({ concept: other, via }) => (
+                <li key={other.id}>
+                  {t(via === "label" ? "admin.concepts.aliases.collision.label" : "admin.concepts.aliases.collision.alias", {
+                    name: refName(other),
+                  })}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2">{t("admin.concepts.aliases.collision.body")}</p>
+          </>
+        ),
+        confirmLabel: t("admin.concepts.aliases.collision.confirm"),
+        cancelLabel: t("admin.concepts.aliases.collision.cancel"),
+      });
+      if (ok) await add.mutateAsync({ alias, force: true }).catch(() => undefined);
+    }
+  };
+  // A collision is answered by the confirmation, not by a message under the field.
+  const failure = refusalCodeOf(add.error) === "alias_collision" ? null : add.error;
+
+  return (
+    <fieldset className="space-y-3">
+      <legend className="mb-1 text-base font-bold tracking-tight">{t("admin.concepts.aliases")}</legend>
+      <p className="text-xs text-fg-muted">{t("admin.concepts.aliases.desc")}</p>
+      {concept.aliases.length === 0 ? (
+        <p className="text-sm text-fg-muted">{t("admin.concepts.aliases.none")}</p>
+      ) : (
+        <ul className="flex flex-wrap gap-1.5">
+          {concept.aliases.map((alias) => (
+            <li key={alias}>
+              <Chip
+                label={alias}
+                remove={t("admin.concepts.aliases.remove")}
+                disabled={remove.isPending}
+                onRemove={() => remove.mutate(alias)}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex items-end gap-2">
+        <Field
+          label={t("admin.concepts.aliases.field")}
+          fullWidth
+          maxLength={CONCEPT_LABEL_MAX}
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void submit();
+            }
+          }}
+        />
+        <Button variant="secondary" loading={add.isPending} disabled={typed.trim() === ""} onClick={() => void submit()}>
+          {t("admin.concepts.aliases.add")}
+        </Button>
+      </div>
+      <FormError error={failure ?? remove.error} describe={describe} />
+    </fieldset>
+  );
 }
 
 /**
@@ -176,6 +302,7 @@ export function ConceptSheet({
             />
           </fieldset>
         ))}
+        <Aliases concept={concept} />
         {!concept.deletable && dirty ? (
           <p id="concept-merge-why" className="text-[13px] text-fg-muted">
             {t("admin.concepts.merge.unsaved")}

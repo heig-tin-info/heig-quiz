@@ -19,7 +19,7 @@ let seq = 0;
 const concept = (
   fr: string | null,
   en: string | null,
-  over: Partial<Pick<Concept, "status" | "qualifiers" | "descriptions">> = {},
+  over: Partial<Pick<Concept, "status" | "qualifiers" | "descriptions" | "aliases">> = {},
 ): Concept => ({
   id: `c0c0c0c0-0000-4000-8000-${String((seq += 1)).padStart(12, "0")}`,
   status: "validated",
@@ -27,6 +27,7 @@ const concept = (
   labels: { fr, en },
   qualifiers: { fr: "", en: "" },
   descriptions: { fr: "", en: "" },
+  aliases: [],
   createdBy: null,
   createdAt: "2026-10-01T08:00:00.000Z",
   ...over,
@@ -34,6 +35,7 @@ const concept = (
 
 const array = concept("Tableau", "Array", {
   descriptions: { fr: "", en: "Elements of one type, contiguous in memory." },
+  aliases: ["Vecteur"],
 });
 const pointer = concept("Pointeur", "Pointer");
 const memoryAddress = concept("Adresse", "Address", {
@@ -186,20 +188,37 @@ describe("ConceptPicker", () => {
     expect(await screen.findByText("Linked list")).toBeInTheDocument();
   });
 
-  it("picks the existing concept when the label is taken (409 concept_exists), and says so", async () => {
+  it("never attaches a concept that only answers to the typed name as an alias (409 concept_exists)", async () => {
     const { user, onChange } = setup({
       create: fail(409, {
         error: "concept_exists",
-        message: "A concept with this label already exists",
-        concept: pointer,
+        message: "A concept answers to this label as an alias",
+        concept: { ...pointer, aliases: ["Pointr"] },
       }),
     });
     await user.type(combobox(), "pointr");
     await user.click(await screen.findByRole("option", { name: "Create “pointr”" }));
     await user.click(screen.getByRole("button", { name: "Create" }));
 
-    await waitFor(() => expect(onChange).toHaveBeenLastCalledWith([pointer.id]));
-    expect(screen.getByRole("status")).toHaveTextContent("“Pointer” already existed: it was added instead.");
+    expect(await screen.findByText("Another concept already answers to this name.")).toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("picks the existing concept when the label is taken (409 concept_exists), and says so", async () => {
+    const taken = concept("Pointr", "Pointr");
+    const { user, onChange } = setup({
+      create: fail(409, {
+        error: "concept_exists",
+        message: "A concept with this label already exists",
+        concept: taken,
+      }),
+    });
+    await user.type(combobox(), "pointr");
+    await user.click(await screen.findByRole("option", { name: "Create “pointr”" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() => expect(onChange).toHaveBeenLastCalledWith([taken.id]));
+    expect(screen.getByRole("status")).toHaveTextContent("“Pointr” already existed: it was added instead.");
     expect(screen.queryByLabelText("Label")).toBeNull();
   });
 
@@ -227,6 +246,14 @@ describe("ConceptPicker", () => {
     const { user } = setup();
     await user.type(combobox(), "Pointer");
     expect((await optionTexts()).some((x) => x?.startsWith("Create"))).toBe(false);
+  });
+
+  it("finds a concept by one of its aliases, first, and offers no creation", async () => {
+    const { user } = setup();
+    await user.type(combobox(), "vecteurs");
+    const texts = await optionTexts();
+    expect(texts[0]).toMatch(/^Array/);
+    expect(texts.some((x) => x?.startsWith("Create"))).toBe(false);
   });
 
   it('says a typed concept is already on the question rather than "no match"', async () => {

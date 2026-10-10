@@ -16,6 +16,7 @@ const concept = (n: number, extra: Partial<AdminConcept> = {}): AdminConcept => 
   labels: { fr: "Recursion", en: "Recursion" },
   qualifiers: { fr: "", en: "" },
   descriptions: { fr: "", en: "" },
+  aliases: [],
   createdBy: null,
   createdAt: "2026-10-01T08:00:00.000Z",
   questionCount: 0,
@@ -160,6 +161,87 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
     expect(await within(sheet).findByText(/another concept already has this label/i)).toBeInTheDocument();
   });
 
+  describe("the aliases of a concept (ADR-081 §6)", () => {
+    const withAlias = concept(6, {
+      status: "validated",
+      labels: { fr: "Dépassement", en: "Overflow" },
+      aliases: ["Débordement"],
+      questionCount: 2,
+      deletable: false,
+    });
+    const aliasUrl = (c: AdminConcept) => `/app/api/admin/concepts/${c.id}/aliases`;
+    const openSheet = async () => {
+      await userEvent.click(await screen.findByRole("button", { name: /edit overflow/i }));
+      return screen.findByRole("dialog");
+    };
+
+    it("lists the aliases as chips, and removes one by its key", async () => {
+      const { calls } = mockFetch({
+        [LIST]: ok(page([withAlias])),
+        [`DELETE ${aliasUrl(withAlias)}/${encodeURIComponent("Débordement")}`]: ok({ ...withAlias, aliases: [] }),
+      });
+      renderWithProviders(<ConceptQueue />);
+      const sheet = await openSheet();
+      const group = within(sheet).getByRole("group", { name: "Aliases" });
+      expect(within(group).getByText("Débordement")).toBeInTheDocument();
+      await userEvent.click(within(group).getByRole("button", { name: "Remove alias — Débordement" }));
+      await waitFor(() => expect(calls.some((c) => c.method === "DELETE" && c.url.endsWith(`/aliases/${encodeURIComponent("Débordement")}`))).toBe(true));
+    });
+
+    it("adds an alias, apart from the labels' Save", async () => {
+      const { calls } = mockFetch({
+        [LIST]: ok(page([withAlias])),
+        [`POST ${aliasUrl(withAlias)}`]: ok({ ...withAlias, aliases: ["Débordement", "Trop-plein"] }),
+      });
+      renderWithProviders(<ConceptQueue />);
+      const sheet = await openSheet();
+      const add = within(sheet).getByRole("button", { name: "Add alias" });
+      expect(add).toBeDisabled();
+      await userEvent.type(within(sheet).getByRole("textbox", { name: "New alias" }), "Trop-plein");
+      await userEvent.click(add);
+      await waitFor(() => expect(calls.find((c) => c.method === "POST")?.body).toEqual({ alias: "Trop-plein" }));
+      expect(within(sheet).getByRole("button", { name: /^save$/i })).toBeDisabled();
+    });
+
+    it("names the colliding concept and adds only after the admin confirms", async () => {
+      const collision = {
+        error: "alias_collision",
+        collisions: [{ via: "label", concept: { id: validated.id, label: "Pointer", qualifier: "", status: "validated" } }],
+      };
+      let posts = 0;
+      const { calls } = mockFetch({
+        [LIST]: ok(page([withAlias, validated])),
+        [`POST ${aliasUrl(withAlias)}`]: () =>
+          ++posts === 1 ? fail(409, collision) : ok({ ...withAlias, aliases: ["Débordement", "pointers"] }),
+      });
+      renderWithProviders(<ConceptQueue />);
+      const sheet = await openSheet();
+      await userEvent.type(within(sheet).getByRole("textbox", { name: "New alias" }), "pointers");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Add alias" }));
+
+      const warning = await screen.findByRole("dialog", { name: /already designates another concept/i });
+      expect(warning).toHaveTextContent("\u201cpointers\u201d already designates another concept");
+      expect(warning).toHaveTextContent("Pointer: its label");
+      expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
+
+      await userEvent.click(within(warning).getByRole("button", { name: "Add anyway" }));
+      await waitFor(() => expect(calls.filter((c) => c.method === "POST")[1]?.body).toEqual({ alias: "pointers", force: true }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: /already designates/i })).toBeNull());
+    });
+
+    it("says why an alias equal to the label is refused", async () => {
+      mockFetch({
+        [LIST]: ok(page([withAlias])),
+        [`POST ${aliasUrl(withAlias)}`]: fail(422, { error: "alias_redundant" }),
+      });
+      renderWithProviders(<ConceptQueue />);
+      const sheet = await openSheet();
+      await userEvent.type(within(sheet).getByRole("textbox", { name: "New alias" }), "overflow");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Add alias" }));
+      expect(await within(sheet).findByText("This is already a label of the concept.")).toBeInTheDocument();
+    });
+  });
+
   describe("merging a concept into a validated one", () => {
     const target = concept(5, { status: "validated", labels: { fr: "Récursion", en: "Recursive call" }, questionCount: 3, deletable: false });
     const mergeOf = (c: AdminConcept) => `POST /app/api/admin/concepts/${c.id}/merge`;
@@ -197,10 +279,31 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
       expect(within(dialog).getByRole("status")).toHaveTextContent(
         "The 4 questions that use Héritage will use Pointer. The label Héritage will no longer designate a concept.",
       );
+      await userEvent.click(within(dialog).getByRole("checkbox"));
+      expect(within(dialog).getByRole("status")).toHaveTextContent(
+        "The 4 questions that use Héritage will use Pointer. Héritage will remain an alias of Pointer.",
+      );
+      await userEvent.click(within(dialog).getByRole("checkbox"));
       await userEvent.click(within(dialog).getByRole("button", { name: /^merge$/i }));
-      await waitFor(() => expect(calls.find((c) => c.url.endsWith("/merge"))?.body).toEqual({ into: validated.id }));
+      await waitFor(() => expect(calls.find((c) => c.url.endsWith("/merge"))?.body).toEqual({ into: validated.id, keepAsAlias: false }));
       // The queue is read again: the merged concept is gone from the next answer.
       await waitFor(() => expect(calls.filter((c) => c.method === "GET" && c.url.endsWith("/admin/concepts")).length).toBeGreaterThan(1));
+    });
+
+    it("drops the merged label by default, and keeps it as an alias when asked", async () => {
+      const { calls } = mockFetch({
+        [LIST]: ok(page([halfDone, validated])),
+        [mergeOf(halfDone)]: ok(validated),
+      });
+      renderWithProviders(<ConceptQueue />);
+      const dialog = await openDialog(halfDone);
+      expect(within(dialog).queryByRole("checkbox")).toBeNull();
+      await userEvent.click(within(dialog).getByRole("radio", { name: /pointer/i }));
+      const keep = within(dialog).getByRole("checkbox", { name: "Keep Héritage as an alias of Pointer" });
+      expect(keep).not.toBeChecked();
+      await userEvent.click(keep);
+      await userEvent.click(within(dialog).getByRole("button", { name: /^merge$/i }));
+      await waitFor(() => expect(calls.find((c) => c.url.endsWith("/merge"))?.body).toEqual({ into: validated.id, keepAsAlias: true }));
     });
 
     it("searches the targets with the picker's rule", async () => {
