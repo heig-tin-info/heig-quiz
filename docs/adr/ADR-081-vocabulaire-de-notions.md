@@ -15,7 +15,7 @@ the [fourth addendum](#fourth-addendum-2026-10-10-the-tag-sorting-is-retired)
 [fifth addendum](#fifth-addendum-2026-10-10-the-curation-of-the-vocabulary)
 (curation, step 5: its queue, the merge and the aliases are implemented; the probable duplicates are not) and the
 [sixth addendum](#sixth-addendum-2026-10-10-the-concepts-of-a-course-steps-7-9)
-(the concepts of a course, steps 7a and 7b implemented). The work is tracked by #599, under a parent issue that groups #557
+(the concepts of a course, steps 7a, 7b and 9a implemented). The work is tracked by #599, under a parent issue that groups #557
 and #578. Steps (a) and (b) of the transition (addendum §1) are implemented;
 the **cut-over, step (c), is implemented** by the cut-over PR of #599 (#648):
 questions, the pool's filter and Notions tab, the bulk bar, move and copy,
@@ -505,8 +505,8 @@ after a review of the spec. It makes §8 precise. Delivery, in dependency
 order: 7a the course's list (this addendum's §1–§4, implemented), 7b the pool
 filter by course (§8, implemented), 7c relations with the merge-cycle policy, 7d coverage in
 the filters, 8a Suggest concepts (implemented, §6), 9a the teacher's mastery on the course's
-concepts, 9b the student's mastery (its own ADR first). §5 to §7 are the
-decided plan, not yet built, except 8a (§6); §8 describes 7b as built.
+concepts (implemented, §9), 9b the student's mastery (its own ADR first). §5 to §7 are the
+decided plan, not yet built, except 8a (§6) and 9a (§9); §8 describes 7b as built.
 
 1. **A plain list.** A course declares a set of concepts: no chapter, level,
    weight or order (they would be columns of the table, not another model).
@@ -600,7 +600,7 @@ decided plan, not yet built, except 8a (§6); §8 describes 7b as built.
      own concept write, like the picker) and a new label opens the picker's
      create form filled in. A new label travels as `{ label, qualifier }`,
      each within its maximum, and so does the `asked` of a "did you mean".
-7. **Mastery (9a, 9b, not built).** The teacher's mastery shows the course's
+7. **Mastery (9a built, §9; 9b not built).** The teacher's mastery shows the course's
    concepts with coverage, "no evidence" rows and an "outside the course"
    bucket, with no student by concept matrix in v1. The student's mastery
    (F-DRILL-05) shows course concepts only, rolled up, validated concepts
@@ -631,3 +631,37 @@ decided plan, not yet built, except 8a (§6); §8 describes 7b as built.
    `courseId` under the same rule. **Picker (§5):** the question editor's
    `ConceptPicker` and the bulk bar's rank the concepts of those courses
    first, beside the pool's own (`first` set), so a pool ranks concepts one way.
+9. **The teacher's mastery on the course's concepts (9a, as built).**
+   `GET /classrooms/:id/drill/mastery` (staff of the classroom, the drill
+   teacher routes' own access and 404/403) now answers
+   `DrillClassroomMastery`: `declared`, `concepts`, `outside`. No migration,
+   no student by concept matrix, nothing for a student.
+   - **Coverage in one place.** `coverage(db, conceptIds)` in
+     `concept/courseConcepts.ts` gives, for each concept, the concepts it
+     covers, itself included (today only itself). `conceptsCoveredByCourse`
+     and the mastery both go through it; **7d widens this one function** to
+     the narrower concepts and every reader follows (the pool filter, the
+     picker, this mastery; 9b will).
+   - **Counting.** One read of the classroom's reviewed cards by concept,
+     rolled up in memory. A card counts toward **every** listed concept that
+     covers one of its question's concepts (the cards of a concept are
+     counted once per line, the students likewise, the retrievability is the
+     FSRS mean now of those cards). A listed concept no card counts toward is
+     a line with `retrievability: null` and 0 cards: "No evidence yet",
+     never drawn as 0 %. A card no listed concept covers, or whose question
+     has no concept, falls in `outside` (distinct cards and students, their
+     mean, and a line per concept, `concept: null` for none); `outside` is
+     null when nothing is outside. Lines are weakest first, the lines
+     without evidence last. Only reviewed cards that are not suspended count:
+     a card whose evaluation no longer lets its key reach the student
+     (`keyReleased`, the rule that serves it: a withdrawn release) is left
+     out, which ADR-098 §7 will apply to the student's side too. Two more
+     constant-size reads (the evaluations and the latest attempts) carry it.
+   - **No list, flat view.** A course listing no concept gets
+     `declared: false` and the former flat per-concept lines (`concept: null`
+     gathering the questions without any); the screen says to declare the
+     course's concepts in its Settings.
+   - **Web.** The Drill tab's section reads "Mastery on the course's
+     concepts" with bars as before, a no-evidence line in muted italics
+     without bar, and "Outside the course's list" as a folded card.
+

@@ -20,10 +20,12 @@
  *     their reviews with it (the cascade of 28 (a));
  *   - each read is a bounded number of queries, whatever the class size.
  */
-import { and, eq, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 
 import type {
   ConceptLang,
+  ConceptRef,
+  DrillClassroomMastery,
   DrillConceptMastery,
   DrillProgress,
   DrillQuestionConfidence,
@@ -44,8 +46,18 @@ import { drillRetrievability } from "@quiz/domain/drillSchedule";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { concepts, drillCards, drillReviews, enrollments, questionConcepts, questions } from "../../db/schema.js";
-import { byLabel, toConceptRef } from "../concept/service.js";
+import {
+  attempts,
+  concepts,
+  drillCards,
+  drillReviews,
+  enrollments,
+  evaluations,
+  questionConcepts,
+  questions,
+} from "../../db/schema.js";
+import { byLabel, courseConceptsOf, coverage, toConceptRef } from "../concept/service.js";
+import { keyReleased } from "./review.js";
 
 const DAY_MS = 86_400_000;
 
@@ -205,49 +217,138 @@ export async function classroomProgress(
 }
 
 /**
- * Per concept, the mean retrievability now of the classroom's reviewed
- * cards, over its current student seats (ADR-041 §10, item 10; ADR-081
- * third addendum §8: today's classification of past reviews, labelled in
- * `lang`). One query; the retrievability is FSRS's (`drillRetrievability`),
- * computed here rather than re-derived in SQL. A card's state is its last
- * review's, so a card of a student who opted out stands as it was before
- * (28 (k)). Weakest concept first; `concept` null gathers the questions
- * without any.
+ * The mastery on the course's concepts (#599 step 9a, ADR-081 sixth
+ * addendum; ADR-041 §15): the mean retrievability now of the classroom's
+ * reviewed cards, over its current student seats, labelled in `lang`
+ * (today's classification of past reviews). One read of cards × concepts,
+ * the rest rolled up in memory; the retrievability is FSRS's
+ * (`drillRetrievability`). A card's state is its last review's, so a card of
+ * a student who opted out stands as it was before (28 (k)).
+ *
+ * Counting rules:
+ *   - a card counts toward EVERY listed course concept that covers one of
+ *     its question's concepts (`coverage`, the one place 7d widens);
+ *   - a card no listed concept covers, or whose question has no concept,
+ *     goes to `outside`, line by concept;
+ *   - a listed concept no card counts toward is a line with a null
+ *     retrievability ("no evidence");
+ *   - a card never reviewed, or suspended (its evaluation does not let the
+ *     key reach the student, `keyReleased`: a withdrawn release), is left out;
+ *   - a course listing no concept gets the flat per-concept view, weakest
+ *     first, `concept` null gathering the questions without any.
  */
 export async function classroomMastery(
   db: Db,
-  classroomId: string,
+  classroom: { id: string; courseId: string },
   now: Date,
   lang: ConceptLang,
-): Promise<DrillConceptMastery[]> {
-  const rows = await db
-    .select({ card: drillCards, concept: concepts })
-    .from(drillCards)
-    .innerJoin(enrollments, and(studentSeat(classroomId), eq(enrollments.userId, drillCards.userId)))
-    .leftJoin(questionConcepts, eq(questionConcepts.questionId, drillCards.questionId))
-    .leftJoin(concepts, eq(concepts.id, questionConcepts.conceptId))
-    .where(and(eq(drillCards.classroomId, classroomId), isNotNull(drillCards.lastReviewAt)));
+): Promise<DrillClassroomMastery> {
+  const [rows, listed] = await Promise.all([
+    db
+      .select({ card: drillCards, concept: concepts })
+      .from(drillCards)
+      .innerJoin(enrollments, and(studentSeat(classroom.id), eq(enrollments.userId, drillCards.userId)))
+      .leftJoin(questionConcepts, eq(questionConcepts.questionId, drillCards.questionId))
+      .leftJoin(concepts, eq(concepts.id, questionConcepts.conceptId))
+      .where(and(eq(drillCards.classroomId, classroom.id), isNotNull(drillCards.lastReviewAt))),
+    courseConceptsOf(db, classroom.courseId, lang),
+  ]);
 
-  type Entry = { concept: DrillConceptMastery["concept"]; cards: Set<string>; students: Set<string>; sum: number };
-  const groups = new Map<string | null, Entry>();
+  // One entry per card, with the concepts of its question.
+  type Entry = { card: (typeof rows)[number]["card"]; concepts: ConceptRef[] };
+  const cards = new Map<string, Entry>();
   for (const { card, concept } of rows) {
-    const key = concept?.id ?? null;
-    let entry = groups.get(key);
-    if (!entry) {
-      entry = { concept: concept ? toConceptRef(concept, lang) : null, cards: new Set(), students: new Set(), sum: 0 };
-      groups.set(key, entry);
-    }
-    entry.cards.add(card.id);
-    entry.students.add(card.userId);
-    entry.sum += drillRetrievability(card, now);
+    const entry = cards.get(card.id) ?? { card, concepts: [] };
+    if (concept) entry.concepts.push(toConceptRef(concept, lang));
+    cards.set(card.id, entry);
   }
-  return [...groups.values()]
-    .map((e) => ({ concept: e.concept, cards: e.cards.size, students: e.students.size, retrievability: e.sum / e.cards.size }))
-    .sort(
-      (a, b) =>
-        a.retrievability - b.retrievability ||
-        (a.concept === null ? 1 : b.concept === null ? -1 : byLabel(a.concept, b.concept)),
-    );
+
+  // Suspended cards out: two more reads, whatever the number of cards.
+  const evaluationIds = [...new Set([...cards.values()].map((c) => c.card.evaluationId))];
+  if (evaluationIds.length > 0) {
+    const [found, latest] = await Promise.all([
+      db.select().from(evaluations).where(inArray(evaluations.id, evaluationIds)),
+      db
+        .selectDistinctOn([attempts.evaluationId, attempts.userId], {
+          evaluationId: attempts.evaluationId,
+          userId: attempts.userId,
+          state: attempts.state,
+        })
+        .from(attempts)
+        .where(inArray(attempts.evaluationId, evaluationIds))
+        .orderBy(attempts.evaluationId, attempts.userId, desc(attempts.attemptNumber)),
+    ]);
+    const byEvaluation = new Map(found.map((e) => [e.id, e]));
+    const state = new Map(latest.map((a) => [`${a.evaluationId}:${a.userId}`, a.state]));
+    for (const [id, { card }] of cards) {
+      const evaluation = byEvaluation.get(card.evaluationId);
+      if (!evaluation || !keyReleased(evaluation, state.get(`${card.evaluationId}:${card.userId}`))) cards.delete(id);
+    }
+  }
+
+  type Acc = { concept: ConceptRef | null; cards: Set<string>; students: Set<string>; sum: number };
+  const fresh = (concept: ConceptRef | null): Acc => ({ concept, cards: new Set(), students: new Set(), sum: 0 });
+  const add = (acc: Acc, { card }: Entry, r: number) => {
+    acc.cards.add(card.id);
+    acc.students.add(card.userId);
+    acc.sum += r;
+  };
+  const line = (a: Acc): DrillConceptMastery => ({
+    concept: a.concept,
+    cards: a.cards.size,
+    students: a.students.size,
+    retrievability: a.cards.size === 0 ? null : a.sum / a.cards.size,
+  });
+  // Weakest first, the lines without evidence last; then by label, "no concept" last.
+  const order = (a: DrillConceptMastery, b: DrillConceptMastery) =>
+    (a.retrievability ?? 2) - (b.retrievability ?? 2) ||
+    (a.concept === null ? 1 : b.concept === null ? -1 : byLabel(a.concept, b.concept));
+  const lineOf = (m: Map<string | null, Acc>, c: ConceptRef | null) => {
+    let acc = m.get(c?.id ?? null);
+    if (!acc) m.set(c?.id ?? null, (acc = fresh(c)));
+    return acc;
+  };
+
+  const covered = await coverage(
+    db,
+    listed.map((c) => c.id),
+  );
+  const declared = listed.length > 0;
+  const listedAccs = new Map<string, Acc>(listed.map((c) => [c.id, fresh(c)]));
+  const flat = new Map<string | null, Acc>();
+  const outside = fresh(null);
+  const outsideLines = new Map<string | null, Acc>();
+
+  for (const entry of cards.values()) {
+    const r = drillRetrievability(entry.card, now);
+    const own = new Set(entry.concepts.map((c) => c.id));
+    const each = entry.concepts.length > 0 ? entry.concepts : [null];
+    if (!declared) {
+      for (const c of each) add(lineOf(flat, c), entry, r);
+      continue;
+    }
+    const hits = listed.filter((l) => (covered.get(l.id) ?? [l.id]).some((id) => own.has(id)));
+    for (const l of hits) add(listedAccs.get(l.id)!, entry, r);
+    if (hits.length === 0) {
+      add(outside, entry, r);
+      for (const c of each) add(lineOf(outsideLines, c), entry, r);
+    }
+  }
+
+  if (!declared) return { declared, concepts: [...flat.values()].map(line).sort(order), outside: null };
+  return {
+    declared,
+    concepts: [...listedAccs.values()].map(line).sort(order),
+    outside:
+      outside.cards.size === 0
+        ? null
+        : {
+            cards: outside.cards.size,
+            students: outside.students.size,
+            retrievability: outside.sum / outside.cards.size,
+            concepts: [...outsideLines.values()].map(line).sort(order),
+          },
+  };
 }
 
 /**

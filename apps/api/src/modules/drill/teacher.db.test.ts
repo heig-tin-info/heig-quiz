@@ -18,12 +18,12 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { DrillConceptMastery, DrillProgress, DrillStudentActivity } from "@quiz/contracts";
+import { DrillClassroomMastery, DrillProgress, DrillStudentActivity } from "@quiz/contracts";
 import { drillRecallCounts, type DrillReviewFact } from "@quiz/domain";
 import { drillRetrievability } from "@quiz/domain/drillSchedule";
 import { registerForTests } from "@quiz/registry/server";
 
-import { classrooms, concepts, drillCards, drillReviews, enrollments, questionConcepts } from "../../db/schema.js";
+import { classrooms, concepts, courseStaff, drillCards, drillReviews, enrollments, evaluations, questionConcepts } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
@@ -315,7 +315,10 @@ describe("the teacher's view of the drill: mastery per concept", () => {
 
     const res = await get(`${base()}/mastery`, { ...teacher, headers: { ...teacher.headers, "accept-language": "fr" } });
     expect(res.statusCode).toBe(200);
-    const rows = (res.json() as unknown[]).map((t) => DrillConceptMastery.parse(t));
+    const body = DrillClassroomMastery.parse(res.json());
+    // The course lists no concept: the flat view of today, with its hint on the client.
+    expect(body).toMatchObject({ declared: false, outside: null });
+    const rows = body.concepts;
     const pointers = rows.find((t) => t.concept?.id === pointersId)!;
     const loops = rows.find((t) => t.concept?.id === loopsId)!;
     // French for the reader; a concept without a French label falls back to English.
@@ -327,5 +330,87 @@ describe("the teacher's view of the drill: mastery per concept", () => {
     expect(loops.retrievability).toBeCloseTo(r(a1), 6);
     // Every question has a concept: no `null` entry.
     expect(rows.map((t) => t.concept?.id)).toEqual([pointersId, loopsId]);
+  });
+
+  const putConcepts = (ids: string[], who: Session = teacher) =>
+    server.app.inject({
+      method: "PUT",
+      url: `/app/api/courses/${seed.courseId}/concepts`,
+      headers: who.headers,
+      payload: { conceptIds: ids },
+    });
+  const mastery = async (lang = "en", who: Session = teacher) => {
+    const res = await get(`${base()}/mastery`, { ...who, headers: { ...who.headers, "accept-language": lang } });
+    expect(res.statusCode).toBe(200);
+    return DrillClassroomMastery.parse(res.json());
+  };
+
+  it("counts a card toward every listed concept that covers it, shows an unexercised one as no evidence, and gathers the rest outside", async () => {
+    const db = server.app.db;
+    const at = new Date(NOW);
+    const [pointers, loops] = (await db.select().from(concepts)).filter((c) => c.keyEn === "pointer" || c.keyEn === "loop");
+    const memoryId = randomUUID();
+    const idleId = randomUUID();
+    await db.insert(concepts).values([
+      { id: memoryId, status: "validated", labelEn: "memory", keyEn: "memory", createdAt: at, updatedAt: at },
+      { id: idleId, status: "validated", labelEn: "idle", keyEn: "idle", createdAt: at, updatedAt: at },
+    ]);
+    // q0 carries pointers (listed) and memory (listed): it counts toward both.
+    await db.insert(questionConcepts).values({ questionId: seed.questionIds[0]!, conceptId: memoryId });
+    expect((await putConcepts([pointers!.id, memoryId, idleId])).statusCode).toBe(200);
+
+    const body = await mastery("fr");
+    expect(body.declared).toBe(true);
+    const byId = new Map(body.concepts.map((c) => [c.concept!.id, c]));
+    expect(byId.get(pointers!.id)).toMatchObject({ cards: 2, students: 2 });
+    expect(byId.get(memoryId)).toMatchObject({ cards: 2, students: 2 });
+    expect(byId.get(memoryId)!.retrievability).toBeCloseTo(byId.get(pointers!.id)!.retrievability!, 9);
+    // Listed, exercised by nothing: no evidence, last.
+    expect(byId.get(idleId)).toMatchObject({ cards: 0, students: 0, retrievability: null });
+    expect(body.concepts.at(-1)!.concept!.id).toBe(idleId);
+    // Labels in the reader's language.
+    expect(byId.get(pointers!.id)!.concept!.label).toBe("pointeurs");
+    // q1 (loops, not listed) is outside, once; the rest of the class is not.
+    expect(body.outside).toMatchObject({ cards: 1, students: 1 });
+    expect(body.outside!.concepts.map((c) => c.concept?.id)).toEqual([loops!.id]);
+    expect(body.outside!.concepts[0]).toMatchObject({ cards: 1, students: 1 });
+  });
+
+  it("puts a card whose question has no concept outside, and no outside bucket when nothing is", async () => {
+    const db = server.app.db;
+    const [q1] = [seed.questionIds[1]!];
+    await db.delete(questionConcepts).where(eq(questionConcepts.questionId, q1));
+    const body = await mastery();
+    expect(body.outside).toMatchObject({ cards: 1 });
+    expect(body.outside!.concepts).toEqual([expect.objectContaining({ concept: null, cards: 1 })]);
+    // Attach it to a listed concept: nothing is left outside.
+    const [first] = body.concepts;
+    await db.insert(questionConcepts).values({ questionId: q1, conceptId: first!.concept!.id });
+    expect((await mastery()).outside).toBeNull();
+  });
+
+  it("leaves out a suspended card (the evaluation no longer shows its key)", async () => {
+    const db = server.app.db;
+    const [before] = await db.select().from(evaluations).where(eq(evaluations.id, seed.evaluationId));
+    try {
+      await db
+        .update(evaluations)
+        .set({ feedbackPolicy: { ...(before!.feedbackPolicy as object), showKey: false } })
+        .where(eq(evaluations.id, seed.evaluationId));
+      const body = await mastery();
+      expect(body.concepts.every((c) => c.cards === 0 && c.retrievability === null)).toBe(true);
+      expect(body.outside).toBeNull();
+    } finally {
+      await db.update(evaluations).set({ feedbackPolicy: before!.feedbackPolicy }).where(eq(evaluations.id, seed.evaluationId));
+    }
+    expect((await mastery()).concepts.some((c) => c.cards > 0)).toBe(true);
+  });
+
+  it("is read by an assistant, a 404 for a stranger and refused to a student", async () => {
+    const assistant = await server.signIn("teacher");
+    await server.app.db.insert(courseStaff).values({ courseId: seed.courseId, userId: assistant.id, role: "assistant" });
+    expect((await mastery("en", assistant)).declared).toBe(true);
+    expect((await get(`${base()}/mastery`, stranger)).statusCode).toBe(404);
+    expect((await get(`${base()}/mastery`, alice)).statusCode).toBe(403);
   });
 });

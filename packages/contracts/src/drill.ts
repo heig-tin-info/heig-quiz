@@ -214,20 +214,50 @@ export const DrillProgress = z.object({ weeks: z.array(DrillWeek) });
 export type DrillProgress = z.infer<typeof DrillProgress>;
 
 /**
- * `GET /classrooms/:id/drill/mastery`: per concept, the mean retrievability
- * now of the classroom's reviewed cards (ADR-041 §10, item 10; ADR-081 third
- * addendum §8: today's classification, labelled in the reader's language).
- * No minimum group size within a classroom (06, question 28 (l)). `concept`
- * null gathers the questions without any concept.
+ * One line of the teacher's mastery: the reviewed cards counted toward a
+ * concept, the students behind them, and their mean retrievability now
+ * (ADR-041 §15). `retrievability` is null when no card counts: "no
+ * evidence", which is not a low mastery. `concept` null gathers the
+ * questions without any concept.
  */
 export const DrillConceptMastery = z.object({
   concept: ConceptRef.nullable(),
   cards: z.number().int(),
   students: z.number().int(),
-  /** 0 to 1. */
-  retrievability: z.number(),
+  /** 0 to 1; null when `cards` is 0. */
+  retrievability: z.number().nullable(),
 });
 export type DrillConceptMastery = z.infer<typeof DrillConceptMastery>;
+
+/**
+ * `GET /classrooms/:id/drill/mastery` (#599 step 9a; ADR-081 sixth addendum;
+ * ADR-041 §15): the mastery on the course's concepts. Staff only; no
+ * student-by-concept matrix, no minimum group size within a classroom (06,
+ * question 28 (l)).
+ *
+ *   - `declared`: the course lists concepts. Then `concepts` has one line per
+ *     listed concept, labelled in the reader's language, with its coverage
+ *     (a card counts toward every listed concept that covers one of its
+ *     question's concepts), and `outside` totals the cards no listed concept
+ *     covers, line by concept (null when there is none).
+ *   - not `declared`: `concepts` is the flat per-concept view of the
+ *     classroom's reviewed cards and `outside` is null.
+ *
+ * Only reviewed cards that are not suspended count.
+ */
+export const DrillClassroomMastery = z.object({
+  declared: z.boolean(),
+  concepts: z.array(DrillConceptMastery),
+  outside: z
+    .object({
+      cards: z.number().int(),
+      students: z.number().int(),
+      retrievability: z.number(),
+      concepts: z.array(DrillConceptMastery),
+    })
+    .nullable(),
+});
+export type DrillClassroomMastery = z.infer<typeof DrillClassroomMastery>;
 
 // --- Confidence (ADR-085 §8, part 2 of issue #453) ---------------------------
 

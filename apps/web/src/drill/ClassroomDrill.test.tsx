@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { DrillProgress, DrillStudentActivity, DrillConceptMastery } from "@quiz/contracts";
+import type { DrillProgress, DrillStudentActivity, DrillClassroomMastery } from "@quiz/contracts";
 
 import { makeClassroomDetail } from "../test/fixtures";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
@@ -69,15 +69,31 @@ const WEEKS: DrillProgress = {
   ],
 };
 
-const MASTERY: DrillConceptMastery[] = [
-  {
-    concept: { id: "00000000-0000-4000-8000-0000000000a1", label: "Adresse", qualifier: "mémoire", status: "validated" },
-    cards: 40,
-    students: 12,
-    retrievability: 0.58,
+const ADDRESS = { id: "00000000-0000-4000-8000-0000000000a1", label: "Adresse", qualifier: "mémoire", status: "validated" } as const;
+const LOOP = { id: "00000000-0000-4000-8000-0000000000a2", label: "Boucle", qualifier: "", status: "validated" } as const;
+const IDLE = { id: "00000000-0000-4000-8000-0000000000a3", label: "Récursivité", qualifier: "", status: "validated" } as const;
+
+/** A course that lists three concepts, one exercised by nothing, and an outside bucket. */
+const MASTERY: DrillClassroomMastery = {
+  declared: true,
+  concepts: [
+    { concept: ADDRESS, cards: 40, students: 12, retrievability: 0.58 },
+    { concept: LOOP, cards: 9, students: 4, retrievability: 0.9 },
+    { concept: IDLE, cards: 0, students: 0, retrievability: null },
+  ],
+  outside: {
+    cards: 5,
+    students: 3,
+    retrievability: 0.8,
+    concepts: [{ concept: null, cards: 5, students: 3, retrievability: 0.8 }],
   },
-  { concept: null, cards: 5, students: 3, retrievability: 0.8 },
-];
+};
+const FLAT: DrillClassroomMastery = {
+  declared: false,
+  concepts: [{ concept: ADDRESS, cards: 40, students: 12, retrievability: 0.58 }],
+  outside: null,
+};
+const NONE: DrillClassroomMastery = { declared: false, concepts: [], outside: null };
 
 const base = "/app/api/classrooms/r1/drill";
 
@@ -134,14 +150,34 @@ describe("the classroom's Drill tab", () => {
     expect(names()).toEqual(["Bernard Ada", "Alder Ada", "Cattaneo Ada"]);
   });
 
-  it("shows the mastery per concept, weakest first, the questions without one named as such", async () => {
+  it("shows the course's concepts, a line without evidence apart, and the outside bucket folded", async () => {
+    const user = userEvent.setup();
     mockFetch({ [`GET ${base}/activity`]: ok(ROWS), [`GET ${base}/mastery`]: ok(MASTERY) });
     renderWithProviders(<ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} onSettings={vi.fn()} />);
-    expect(await screen.findByRole("heading", { name: "Mastery per concept" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Mastery on the course's concepts" })).toBeVisible();
     expect(screen.getByText("Adresse (mémoire)")).toBeVisible();
     expect(screen.getByText("58%")).toBeVisible();
-    expect(screen.getByText("Without a concept")).toBeVisible();
     expect(screen.getByText("40 cards · 12 students")).toBeVisible();
+    // No evidence is said, not drawn as 0%.
+    expect(screen.getByText("Récursivité")).toBeVisible();
+    expect(screen.getByText("No evidence yet")).toBeVisible();
+    expect(screen.queryByText("0%")).toBeNull();
+    // Outside the list: folded until opened.
+    const outside = screen.getByRole("button", { name: /Outside the course's list/ });
+    expect(outside).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Without a concept")).toBeNull();
+    await user.click(outside);
+    expect(await screen.findByText("Without a concept")).toBeVisible();
+    expect(screen.queryByText(/lists no concept/)).toBeNull();
+  });
+
+  it("falls back to the flat view, with the hint to declare the course's concepts", async () => {
+    mockFetch({ [`GET ${base}/activity`]: ok(ROWS), [`GET ${base}/mastery`]: ok(FLAT) });
+    renderWithProviders(<ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} onSettings={vi.fn()} />);
+    expect(await screen.findByRole("heading", { name: "Mastery per concept" })).toBeVisible();
+    expect(screen.getByText(/lists no concept/)).toBeVisible();
+    expect(screen.getByText("58%")).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Outside/ })).toBeNull();
   });
 
   it("opens a student's weekly progression in a sheet, with the opt-out said", async () => {
@@ -177,7 +213,7 @@ describe("the classroom's Drill tab", () => {
     const user = userEvent.setup();
     mockFetch({
       [`GET ${base}/activity`]: ok(ROWS),
-      [`GET ${base}/mastery`]: ok([]),
+      [`GET ${base}/mastery`]: ok(NONE),
       [`GET ${base}/progress?student=${SEAT.Cattaneo}`]: ok({ weeks: WEEKS.weeks.map((w) => ({ ...w, reviews: 0, recall: none })) }),
     });
     renderWithProviders(<ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} onSettings={vi.fn()} />);

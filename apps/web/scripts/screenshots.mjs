@@ -270,6 +270,7 @@ const scenes = [
   // drill on with nothing yet (r2) and the drill off (r3).
   { name: "classroom-drill", role: "teacher", path: "/classrooms/r1?tab=drill" },
   { name: "classroom-drill-student", role: "teacher", path: "/classrooms/r1?tab=drill", fold: true, act: async (p) => { await p.getByRole("button", { name: /^(Progression of|Progression de)/ }).first().click(); await p.getByText(/^(Reviews per week|Révisions par semaine)$/).first().waitFor(); } },
+  { name: "classroom-drill-outside", role: "teacher", path: "/classrooms/r1?tab=drill", act: async (p) => { await p.getByRole("button", { name: /(Outside the course|Hors de la liste)/ }).click(); await p.getByText(/^(Without a concept|Sans notion)$/).first().waitFor(); } },
   { name: "classroom-drill-none", role: "teacher", path: "/classrooms/r2?tab=drill" },
   { name: "classroom-drill-off", role: "teacher", path: "/classrooms/r3?tab=drill" },
   // ADR-085 §8: the 2×2 per question is on `classroom-drill`; here no question has ten students yet.

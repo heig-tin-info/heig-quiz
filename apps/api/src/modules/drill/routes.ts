@@ -205,12 +205,12 @@ export async function drillPlugin(app: FastifyInstance) {
     ),
   );
 
-  /** Mastery per concept: the mean retrievability of the classroom's reviewed cards. */
+  /** Mastery on the course's concepts (#599 step 9a). */
   app.get(
     "/app/api/classrooms/:id/drill/mastery",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: staffClassroom }, ({ req, now, scope }) =>
-      service.classroomMastery(app.db, scope.room.id, now, readerLang(req)),
+      service.classroomMastery(app.db, scope.room, now, readerLang(req)),
     ),
   );
 

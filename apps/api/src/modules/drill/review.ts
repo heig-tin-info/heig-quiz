@@ -217,7 +217,7 @@ type Context = Awaited<ReturnType<typeof loadContext>>;
  *     and, since ADR-050, as soon as the teacher publishes the correction of
  *     the running exercise, which that rule counts as the release.
  */
-function keyReleased(evaluation: EvaluationRecord, latestAttemptState: string | undefined): boolean {
+export function keyReleased(evaluation: EvaluationRecord, latestAttemptState: string | undefined): boolean {
   if (evaluation.mode === "exam") return evaluation.releasedAt !== null;
   if (evaluation.mode !== "exercise") return false;
   return latestAttemptState !== undefined && keyShownTo(evaluation, latestAttemptState);
