@@ -715,6 +715,13 @@
       "when": 1791635437125,
       "tag": "0101_pool_domain",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1791646541270,
+      "tag": "0102_drop_sorting_vestiges",
+      "breakpoints": true
     }
   ]
 }

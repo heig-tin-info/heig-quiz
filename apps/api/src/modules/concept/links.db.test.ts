@@ -68,9 +68,7 @@ async function drop(tag: string, reason: "organisational" | "task_kind" | "noise
   await db().insert(conceptTagSortings).values({
     poolId,
     tag,
-    decision: "drop",
     dropReason: reason,
-    decidedBy: admin.id,
     decidedAt: now,
   });
 }

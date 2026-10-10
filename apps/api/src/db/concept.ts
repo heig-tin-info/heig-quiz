@@ -17,7 +17,6 @@ import {
   check,
   foreignKey,
   index,
-  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -27,9 +26,6 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { CONCEPT_STATUSES, TAG_DROP_REASONS } from "@quiz/contracts";
-
-/** `concept`: the tag mapped to a concept (no such row remains). `drop`: it is not one (ADR-081 §1). */
-const TAG_SORTING_DECISIONS = ["concept", "drop"] as const;
 
 import { users } from "./auth.js";
 import { pools, questions } from "./pool.js";
@@ -78,11 +74,10 @@ export const concepts = pgTable(
 /**
  * The stop list of `concept_dropped` (ADR-081, third addendum §4): one row
  * per (pool, tag) the admin dropped in the former tag sorting, with its
- * reason. Since step (d) (fourth addendum) the sorting workflow is retired,
- * migration 0098 kept only the `drop` rows, and nothing writes the table; a
- * pool's rows go with the pool. The checks of the sorting still hold: a
- * decision is taken at an instant, and a `drop` names its reason and no
- * concept (the `concept` shape remains legal but no row has it).
+ * reason. Since step (d) (fourth addendum) the sorting workflow is retired
+ * and nothing writes the table; a pool's rows go with the pool. Every row is
+ * a drop, so the table keeps no decision, concept, proposal or author: only
+ * the tag, its reason and when it was dropped.
  */
 export const conceptTagSortings = pgTable(
   "concept_tag_sortings",
@@ -91,32 +86,11 @@ export const conceptTagSortings = pgTable(
       .notNull()
       .references(() => pools.id, { onDelete: "cascade" }),
     tag: text("tag").notNull(),
-    decision: text("decision", { enum: TAG_SORTING_DECISIONS }),
-    conceptId: uuid("concept_id").references(() => concepts.id),
-    dropReason: text("drop_reason", { enum: TAG_DROP_REASONS }),
-    /** The model's raw answer for the pair; null when the admin decided without one. */
-    proposal: jsonb("proposal"),
-    decidedBy: uuid("decided_by").references(() => users.id, { onDelete: "set null" }),
-    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    dropReason: text("drop_reason", { enum: TAG_DROP_REASONS }).notNull(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [
-    primaryKey({ columns: [t.poolId, t.tag] }),
-    // A decision is taken at an instant; without one, the row is the model's proposal and nobody's decision.
-    check(
-      "concept_tag_sortings_decided_ck",
-      sql`(${t.decision} is null) = (${t.decidedAt} is null)
-        and (${t.decision} is not null or (${t.proposal} is not null and ${t.decidedBy} is null))`,
-    ),
-    // A decision carries exactly what it needs: its concept, or its reason.
-    check(
-      "concept_tag_sortings_decision_ck",
-      sql`(${t.conceptId} is not null) = (${t.decision} is not distinct from 'concept')
-        and (${t.dropReason} is not null) = (${t.decision} is not distinct from 'drop')`,
-    ),
-    index("concept_tag_sortings_concept_idx").on(t.conceptId),
-  ],
+  (t) => [primaryKey({ columns: [t.poolId, t.tag] })],
 );
 
 /**

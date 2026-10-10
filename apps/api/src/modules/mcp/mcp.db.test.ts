@@ -226,7 +226,7 @@ describe("an authoring session", () => {
     // A label the admin dropped is refused before anything is created, even with creation asked.
     await server.app.db
       .insert(conceptTagSortings)
-      .values({ poolId: pool.id, tag: "vocabulaire", decision: "drop", dropReason: "task_kind", decidedAt: new Date() });
+      .values({ poolId: pool.id, tag: "vocabulaire", dropReason: "task_kind" });
     const dropped = await call("create_question", {
       poolId: pool.id,
       type: "mcq",

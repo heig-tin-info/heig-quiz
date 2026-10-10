@@ -387,7 +387,7 @@ addendum §1(d), second addendum §1 to §5 and third addendum §3 where named.
 3. **Only the stop list remains.** Migration 0098 deletes every
    `concept_tag_sortings` row that is not a `drop`: the `concept` and pending
    rows have no reader left, and their foreign key would make every concept
-   born of a tag undeletable. The `drop` rows stay, frozen: they are the
+   born of a tag undeletable. The `drop` rows stay, frozen (migration 0102 later drops the columns only the other rows used: `decision`, `concept_id`, `proposal`, `decided_by`, `updated_at`): they are the
    stop list of `concept_dropped` (third addendum §4). `concept_sort_runs` is
    dropped, and so is the LLM purpose `sort` (no database check nor contract
    parsed it).
