@@ -133,15 +133,6 @@ export const CODESPACE_SYNC_QUEUE = "codespace.sync";
 export const POLL_AI_QUEUE = "poll.ai";
 
 /**
- * The model pass that proposes the sorting of the existing tags (ADR-081,
- * second addendum §3): `{ lease }`, sent once the admin's start claimed the
- * one row of `concept_sort_runs`. A `standard` queue, no dedupe, no retry:
- * the lease keeps two runs apart, a failure is recorded on the run, and the
- * admin starts another (`modules/concept/propose.ts`).
- */
-export const CONCEPT_SORT_QUEUE = "concept.sort";
-
-/**
  * No `singletonKey`, on purpose (#273). Our queues are pg-boss `standard`
  * queues (`createQueue` passes no policy, and pg-boss 12 refuses to change a
  * policy after creation), on which a key without `singletonSeconds` dedupes

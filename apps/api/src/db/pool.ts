@@ -209,41 +209,6 @@ export const questions = pgTable(
 );
 
 /**
- * The tag vocabulary of a pool: one row per distinct tag, with the optional
- * one-line description a teacher wrote for it. FROZEN since the cut-over to
- * concepts (ADR-081 third addendum): nothing writes it; the sorting of the
- * late pairs reads it, and it is dropped once no pair is pending.
- */
-export const poolTags = pgTable(
-  "pool_tags",
-  {
-    poolId: uuid("pool_id")
-      .notNull()
-      .references(() => pools.id, { onDelete: "cascade" }),
-    tag: text("tag").notNull(),
-    description: text("description").notNull().default(""),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [primaryKey({ columns: [t.poolId, t.tag] })],
-);
-
-/**
- * The free tags of a question before the concepts (ADR-081). FROZEN since
- * the cut-over (third addendum): nothing writes it; the admin's sorting
- * reads it for the late pairs, and it is dropped once no pair is pending.
- */
-export const questionTags = pgTable(
-  "question_tags",
-  {
-    questionId: uuid("question_id")
-      .notNull()
-      .references(() => questions.id, { onDelete: "cascade" }),
-    tag: text("tag").notNull(),
-  },
-  (t) => [primaryKey({ columns: [t.questionId, t.tag] }), index("question_tags_tag_idx").on(t.tag)],
-);
-
-/**
  * One row per version of a question, plus exactly one draft (`number is
  * null`). Publishing turns the draft into version `max + 1` and opens a new
  * draft with the same content, in one transaction.

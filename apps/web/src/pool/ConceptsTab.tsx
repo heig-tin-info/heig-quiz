@@ -4,7 +4,7 @@ import { useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 import type { PoolConcept } from "@quiz/contracts";
 
 import { ConceptLabel } from "../concepts/refs";
-import { refName } from "../concepts/sorting";
+import { refName } from "../concepts/names";
 import { useT } from "../i18n";
 import {
   Badge,

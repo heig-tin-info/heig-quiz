@@ -1,7 +1,7 @@
 /**
  * A concept's row as the `concept` module's services read and write it: the
  * columns of each language, and the JSON a route answers with. Shared by
- * the registry (`service.ts`) and the sorting of the tags (`sorting.ts`).
+ * the registry (`service.ts`) and the links (`links.ts`).
  */
 import { and, inArray, ne, or } from "drizzle-orm";
 
@@ -15,7 +15,7 @@ import { DomainError } from "../http.js";
 export type ConceptRow = typeof concepts.$inferSelect;
 
 /** The columns of one language, and the unique index of its key. */
-export const COLUMNS = {
+const COLUMNS = {
   fr: {
     label: "labelFr",
     qualifier: "qualifierFr",
@@ -90,7 +90,7 @@ export function toConcept(row: ConceptRow): Concept {
  * The concepts, not merged, that hold one of `keys` in its language: who
  * answers a write that hit a key's unique index (addendum §3).
  */
-export async function holdersOf(db: Db | Tx, keys: Record<ConceptLang, readonly string[]>): Promise<ConceptRow[]> {
+async function holdersOf(db: Db | Tx, keys: Record<ConceptLang, readonly string[]>): Promise<ConceptRow[]> {
   const held = (["fr", "en"] as const)
     .filter((lang) => keys[lang].length > 0)
     .map((lang) => inArray(concepts[COLUMNS[lang].key], [...keys[lang]]));

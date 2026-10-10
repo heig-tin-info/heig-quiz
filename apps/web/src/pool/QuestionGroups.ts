@@ -17,7 +17,7 @@
  */
 import type { QuestionRow } from "@quiz/contracts";
 
-import { refName } from "../concepts/sorting";
+import { refName } from "../concepts/names";
 
 export type GroupBy = "none" | "type" | "concepts" | "category";
 

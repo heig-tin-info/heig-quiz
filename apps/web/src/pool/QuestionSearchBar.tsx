@@ -3,7 +3,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { ConceptRef } from "@quiz/contracts";
 
-import { conceptName, refName } from "../concepts/sorting";
+import { conceptName, refName } from "../concepts/names";
 import { useConcepts } from "../concepts/useConcepts";
 import { fuzzyFilter } from "../fuzzy";
 import { formatSpan, useI18n, useT } from "../i18n";

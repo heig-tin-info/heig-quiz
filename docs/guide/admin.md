@@ -1,6 +1,6 @@
 # Administration
 
-The administration screen has one main job: deciding who reaches the teacher interface. It also keeps the platform's shared vocabulary of concepts in order. Everything else, courses, pools and evaluations, is managed by the teachers themselves.
+The administration screen has one main job: deciding who reaches the teacher interface. Everything else, courses, pools and evaluations, is managed by the teachers themselves.
 
 ## Who reaches it
 
@@ -34,21 +34,9 @@ Where the platform has kiosk stations, the **People** tab also lists the school'
 
 ## Concepts
 
-Questions are classified by concepts (*Notions* in the French interface): one vocabulary for the whole platform, each concept with a label in French and in English. Teachers pick concepts in the question editor and may create a new one, which stays **Proposed** until you review it (see [Question pools](pools.md#the-properties-panel)).
+Questions are classified by concepts (*Notions* in the French interface): one vocabulary for the whole platform, each concept with a label in French and in English. Teachers pick concepts in the question editor and may create a new one, which stays **Proposed** (see [Question pools](pools.md#the-properties-panel)).
 
-The **Concepts** tab of the administration is where the free tags questions carried before concepts existed were sorted. Each tag of each pool is a row: it becomes a concept, or it is dropped. Spellings of one word (`pointeur`, `Pointeurs`) are grouped, and each group shows its tags, their pools, their question counts and up to two statement excerpts. **Show** switches between **To sort**, **Sorted** and **All**; the search field finds a tag or a pool. Tick rows, then choose a decision for them:
-
-- **Map to a concept**: an existing concept, found by its label.
-- **New concept**: a label in French and in English, an optional qualifier for a homonym (*address (memory)*) and a description. It is created **Validated** when you accept, since you have just reviewed it.
-- **Drop**, with its reason: **Organisational label** (a chapter, a week, an exam), **Kind of task** (reading or writing code, vocabulary) or **Noise** (a typo, a test, a leftover). A dropped label cannot be created again as a concept, by a teacher or by an assistant connected to the platform.
-
-Nothing is written until **Accept** (the tab's one primary action), which applies the chosen decisions and adds the concept to every question that wears the tag. **Propose with AI** first lets the model suggest a decision for every row still to sort, in the background, with a progress line; it needs an AI key (see the **AI** tab) and counts against the daily cap. A suggestion shows as **Suggested by the model** and is only a suggestion: you accept it, change it or leave it. Without an AI key the tab works the same, by hand.
-
-The sorting of the existing tags is done, but a tag a question still wears and that nobody has decided on stays listed under **To sort**, so nothing is lost: accepting it adds its concept to the questions that still wear it. A row already sorted is read-only, so that re-applying a decision never overwrites a teacher's later edits.
-
-The tab shows the tag names, pool names and excerpts of every pool, private ones included, without Super Powers: it is a one-off curation of the platform's vocabulary, not the reading of a colleague's work.
-
-<!-- screenshot: refresh after cut-over -->
+The administration has no screen for the vocabulary yet; a curation screen (validate, merge, aliases) is planned. The free tags that questions carried before concepts existed are gone, and so is the administration's former **Concepts** tab where they were sorted. A label the administrator dropped during that sorting (a chapter, a week, a kind of task, noise) still cannot be created again as a concept, by a teacher or by an assistant connected to the platform.
 
 ## What an administrator sees elsewhere
 

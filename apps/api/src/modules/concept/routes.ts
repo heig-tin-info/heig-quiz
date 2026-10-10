@@ -16,20 +16,8 @@
  *   `concept_merged` or `concept_exists`, 422 `concept_label_missing`, 404
  *   for an unknown id.
  *
- * The admin's, with the admin role alone — no Super Powers (ADR-081 second
- * addendum §4, an exception to ADR-054 §2 for the sorting only):
+ * The admin's, with the admin role alone:
  *
- * - `GET /app/api/admin/concept-sorting`: every (pool, tag) pair to sort.
- * - `POST /app/api/admin/concept-sorting/accept`: the decisions, in one
- *   transaction, and the links of a pair accepted into a concept; 409
- *   `concept_exists` (with `conflicts`), 409 `sorting_locked` (with
- *   `items`) for a pair already accepted, 422 `tag_unknown`,
- *   `concept_not_found` or `concept_batch_conflict` (with `items`).
- * - `POST /app/api/admin/concept-sorting/propose`: starts the model pass
- *   that proposes the sorting (`./propose.ts`); 202 with the run; 409
- *   `concept_sort_running` while one is alive, 409 `llm_not_configured`
- *   without a usable model.
- * - `GET /app/api/admin/concept-sorting/run`: the last run, null before the first.
  * - `POST /app/api/admin/concepts/:id/validate`: 422
  *   `concept_label_missing`, 409 `concept_merged`, 404.
  * - `DELETE /app/api/admin/concepts/:id`: 204; 409 `concept_in_use`, 404.
@@ -38,21 +26,16 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import {
   ConceptCreate,
-  type ConceptSortRunStatus,
   type ConceptList,
   ConceptPatch,
   ConceptResolveQuery,
   type ConceptResolveResponse,
   IdParam,
-  TagSortingAccept,
-  type TagSortingAcceptResponse,
-  type TagSortingList,
 } from "@quiz/contracts";
 
 import { actorOf } from "../../audit.js";
 import { adminGuard, callerOf, teacherGuard } from "../guards.js";
 import { invalid, notFound, readerLang, sendFailure } from "../http.js";
-import { llmArms } from "../llm/service.js";
 import * as service from "./service.js";
 
 export async function conceptPlugin(app: FastifyInstance) {
@@ -97,36 +80,6 @@ export async function conceptPlugin(app: FastifyInstance) {
     } catch (error) {
       return sendFailure(reply, error, now);
     }
-  });
-
-  app.get("/app/api/admin/concept-sorting", { preHandler: requireAdmin }, async () => {
-    return { rows: await service.listTagSortings(app.db) } satisfies TagSortingList;
-  });
-
-  app.post("/app/api/admin/concept-sorting/accept", { preHandler: requireAdmin }, async (req, reply) => {
-    const now = app.clock.now();
-    const body = TagSortingAccept.safeParse(req.body);
-    if (!body.success) return invalid(reply, body.error);
-    try {
-      const ctx = { userId: callerOf(req).id, actor: actorOf(req), now };
-      return (await service.acceptTagSortings(app.db, ctx, body.data.items)) satisfies TagSortingAcceptResponse;
-    } catch (error) {
-      return sendFailure(reply, error, now);
-    }
-  });
-
-  app.post("/app/api/admin/concept-sorting/propose", { preHandler: requireAdmin }, async (req, reply) => {
-    const now = app.clock.now();
-    try {
-      const run = await service.startSortRun(app, { userId: callerOf(req).id, actor: actorOf(req), now });
-      return reply.code(202).send({ run } satisfies ConceptSortRunStatus);
-    } catch (error) {
-      return sendFailure(reply, error, now, llmArms);
-    }
-  });
-
-  app.get("/app/api/admin/concept-sorting/run", { preHandler: requireAdmin }, async () => {
-    return { run: await service.lastSortRun(app, app.clock.now()) } satisfies ConceptSortRunStatus;
   });
 
   app.post("/app/api/admin/concepts/:id/validate", { preHandler: requireAdmin }, async (req, reply) => {

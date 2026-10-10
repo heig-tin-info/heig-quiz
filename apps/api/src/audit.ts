@@ -60,20 +60,14 @@ export type AuditAction =
    * changed a label, qualifier or description (`payload`: the patch, per
    * language). `delete`: the admin deleted a concept nothing referred to,
    * before the cut-over (second addendum §2; `payload.status`,
-   * `payload.labels`). `sort`: the admin accepted or changed sorting
-   * decisions of existing tags (second addendum §5; subject the POOL, one
-   * row per pool of the batch; `payload.decisions`: `tag`, `decision`,
-   * `conceptId`, `reason`). `validate`: the admin validated a concept, or
-   * created one validated while sorting (`payload.created`; `payload.labels`).
-   * `sort_propose`: the admin started the model pass that proposes the
-   * sorting (second addendum §3; subject the one run, `default`;
-   * `payload.startedAt`).
+   * `payload.labels`). `validate`: the admin validated a concept
+   * (`payload.labels`). The tag sorting's `sort` and
+   * `sort_propose` rows of the past stay in the log, no longer written
+   * (ADR-081, step (d)).
    */
   | "concept.delete"
   | "concept.edit"
   | "concept.propose"
-  | "concept.sort"
-  | "concept.sort_propose"
   | "concept.validate"
   | "course.create"
   | "course.delete"

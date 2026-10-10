@@ -9,13 +9,15 @@ open. Amended the same day by the [addendum](#addendum-2026-10-08-transition-res
 product owner before step 3 of #599, and by the
 [second addendum](#second-addendum-2026-10-08-sorting-the-existing-tags)
 (sorting the existing tags) and the
-[third addendum](#third-addendum-2026-10-08-the-cut-over) (the cut-over). The work is tracked by #599, under a parent issue that groups #557
+[third addendum](#third-addendum-2026-10-08-the-cut-over) (the cut-over) and
+the [fourth addendum](#fourth-addendum-2026-10-10-the-tag-sorting-is-retired)
+(the tag sorting retired, step (d)). The work is tracked by #599, under a parent issue that groups #557
 and #578. Steps (a) and (b) of the transition (addendum §1) are implemented;
 the **cut-over, step (c), is implemented** by the cut-over PR of #599 (#648):
 questions, the pool's filter and Notions tab, the bulk bar, move and copy,
 polls, the drill, the MCP tools, the teacher assistant and the seed read and
-write concepts. Step (d), dropping `question_tags` and `pool_tags`, comes
-later, once no (pool, tag) pair is pending (third addendum §3). The links to
+write concepts. Step (d), dropping `question_tags` and `pool_tags`, is
+implemented by the [fourth addendum](#fourth-addendum-2026-10-10-the-tag-sorting-is-retired). The links to
 courses (§8), aliases, relations, the curation screen and the model's help
 in the picker (#557) are not implemented.
 
@@ -366,3 +368,32 @@ where named.
    alphabetical meaning left) and reads mastery per concept, labelled in the
    reader's language; past reviews are regrouped under today's
    classification (§9).
+
+## Fourth addendum 2026-10-10: the tag sorting is retired
+
+Settled with the product owner (option A of #599, step (d)). It amends
+addendum §1(d), second addendum §1 to §5 and third addendum §3 where named.
+
+1. **Step (d) is done.** `question_tags` and `pool_tags` are dropped
+   (migration 0098). Their only readers were the sorting workflow and the
+   late-pair links of third addendum §3.
+2. **The sorting workflow is retired** (amends second addendum and third
+   addendum §3): the admin's Concepts tab, the routes `/admin/concept-sorting`
+   (list, accept, propose, run), the model pass `concept.sort` and its job,
+   and the audit kinds `concept.sort` and `concept.sort_propose` are removed.
+   Past audit rows keep their action strings. The late pairs of third addendum
+   §3 are no longer listed nor accepted: a tag nobody sorted before the drop
+   is simply gone.
+3. **Only the stop list remains.** Migration 0098 deletes every
+   `concept_tag_sortings` row that is not a `drop`: the `concept` and pending
+   rows have no reader left, and their foreign key would make every concept
+   born of a tag undeletable. The `drop` rows stay, frozen: they are the
+   stop list of `concept_dropped` (third addendum §4). `concept_sort_runs` is
+   dropped, and so is the LLM purpose `sort` (no database check nor contract
+   parsed it).
+4. **A stray concept is deleted, not migrated.** A concept that came out of a
+   kind-of-task tag the 2026-10-08 decision drops (§1, §11 as amended in
+   #600) is deleted through `DELETE /admin/concepts/:id` once unused; a
+   concept still linked to questions is first unlinked by the PO's reviewed
+   one-off SQL. Merging waits for the curation screen (step 5 of the
+   transition), and no migration deletes data of concepts.

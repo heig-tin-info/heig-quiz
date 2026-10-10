@@ -6,10 +6,9 @@
 
 /**
  * Why a call is made: the `purpose` column of `llm_calls` (ADR-058 §1;
- * `assist`, the teacher assistant, ADR-080; `sort`, the admin's sorting of
- * the existing tags into concepts, ADR-081 second addendum §3).
+ * `assist`, the teacher assistant, ADR-080).
  */
-export const LLM_PURPOSES = ["test", "grade", "generate", "review", "poll", "assist", "sort"] as const;
+export const LLM_PURPOSES = ["test", "grade", "generate", "review", "poll", "assist"] as const;
 export type LlmPurpose = (typeof LLM_PURPOSES)[number];
 
 export interface LlmModel {

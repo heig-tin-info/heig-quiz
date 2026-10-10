@@ -11,7 +11,10 @@ and `superpowers.disabled`, the settings section and the red banner of
 resolution order), ADR-032 (context), ADR-034 §2 (who issues the link) and
 removes the `?scope=all` switch of the pool list (#63). §2 has one scoped
 exception: the sorting of the existing tags into concepts is open to the
-admin role without Super Powers ([ADR-081, second addendum §4](ADR-081-vocabulaire-de-notions.md#second-addendum-2026-10-08-sorting-the-existing-tags)).
+admin role without Super Powers ([ADR-081, second addendum §4](ADR-081-vocabulaire-de-notions.md#second-addendum-2026-10-08-sorting-the-existing-tags)); that exception lapsed with #599 step (d)
+([ADR-081, fourth addendum](ADR-081-vocabulaire-de-notions.md#fourth-addendum-2026-10-10-the-tag-sorting-is-retired)),
+the tag sorting being retired. The admin-only validate and delete routes of
+concepts remain, on the admin role, as they do not read anyone's content.
 
 ## Context
 

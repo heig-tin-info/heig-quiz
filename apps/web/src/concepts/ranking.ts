@@ -8,7 +8,7 @@ import { closeConcepts, resolveConceptLabel, type ResolvableConcept } from "@qui
 
 import { fuzzyScore } from "../fuzzy";
 import type { Locale } from "../i18n";
-import { conceptName } from "./sorting";
+import { conceptName } from "./names";
 
 const namesOf = (c: Concept) => [c.labels.fr, c.labels.en].filter((l): l is string => l !== null);
 
