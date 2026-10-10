@@ -9,7 +9,7 @@
  */
 import type { ClassroomDetail, DrillStudentActivity, DrillConceptMastery } from "@quiz/contracts";
 
-import { refName } from "../concepts/sorting";
+import { refName } from "../concepts/names";
 import { drillRecallRate, drillRecallTrend } from "@quiz/domain";
 import { Dumbbell, Tag } from "lucide-react";
 import { useState } from "react";

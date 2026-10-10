@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, CalendarClock, Library, ShieldCheck, Sparkles, Tags, Trash2, UserPlus, Users } from "lucide-react";
+import { Activity, CalendarClock, Library, ShieldCheck, Sparkles, Trash2, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -45,7 +45,6 @@ import { TasksSection } from "./AdminTasks";
 import { LlmSection } from "./AdminLlm";
 import { KioskSection } from "./AdminKiosk";
 import { UsersSection } from "./AdminUsers";
-import { ConceptsSection } from "./concepts/ConceptsSection";
 import { adminTeachersKey } from "./queryKeys";
 import { useSearchParam } from "./router";
 
@@ -59,9 +58,8 @@ const nameOf = (r: AdminTeacher): [string, string] => [r.givenName ?? "", r.fami
  * (the teacher grants, the kiosk stations where the platform has them —
  * `KioskSection`, ADR-051 — then every account), the system status
  * (F-ADMIN-07, next to the tasks it points to) and the scheduled tasks
- * (F-ADMIN-06), the LLM gateway (ADR-058), and the sorting of the existing
- * tags into concepts (`ConceptsSection`, ADR-081). The people stay first and the default: the page's one
- * primary action, "Grant", is there. A tab is one entry of `ADMIN_TABS`
+ * (F-ADMIN-06) and the LLM gateway (ADR-058). The people stay first and the
+ * default: the page's one primary action, "Grant", is there. A tab is one entry of `ADMIN_TABS`
  * (`router.ts`) and one panel below.
  */
 export function AdminPage() {
@@ -80,7 +78,6 @@ export function AdminPage() {
           { value: "system", label: t("admin.tab.system"), icon: Activity },
           { value: "tasks", label: t("admin.tab.tasks"), icon: CalendarClock },
           { value: "llm", label: t("admin.tab.llm"), icon: Sparkles },
-          { value: "concepts", label: t("admin.tab.concepts"), icon: Tags },
         ]}
       />
       <TabPanel idPrefix="admin" value={tab} className="space-y-6">
@@ -94,10 +91,8 @@ export function AdminPage() {
           <SystemSection onOpenTasks={() => setTab("tasks")} />
         ) : tab === "tasks" ? (
           <TasksSection />
-        ) : tab === "llm" ? (
-          <LlmSection />
         ) : (
-          <ConceptsSection />
+          <LlmSection />
         )}
       </TabPanel>
     </div>

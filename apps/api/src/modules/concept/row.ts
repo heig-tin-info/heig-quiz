@@ -1,7 +1,7 @@
 /**
  * A concept's row as the `concept` module's services read and write it: the
  * columns of each language, and the JSON a route answers with. Shared by
- * the registry (`service.ts`) and the sorting of the tags (`sorting.ts`).
+ * the registry (`service.ts`) and the links (`links.ts`).
  */
 import { and, inArray, ne, or } from "drizzle-orm";
 

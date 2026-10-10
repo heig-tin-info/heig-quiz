@@ -10,7 +10,7 @@ import { useI18n, useT, type Locale } from "../i18n";
 import { conceptsKey } from "../queryKeys";
 import { Button, ComboboxList, ComboboxOption, cx, ErrorText, Field, Tip, useCombobox } from "../ui";
 import { namesAConcept, rankConcepts } from "./ranking";
-import { conceptSide } from "./sorting";
+import { conceptSide } from "./names";
 import { useConcepts } from "./useConcepts";
 
 /**

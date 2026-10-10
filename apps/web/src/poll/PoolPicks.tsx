@@ -10,7 +10,7 @@ import { activeFilterCount, EMPTY_FILTERS, questionQuery, type QuestionFilters }
 import { PoolListTail } from "../pool/PoolListStates";
 import { QuestionSearchBar } from "../pool/QuestionSearchBar";
 import { useFilterVocabulary } from "../pool/useFilterVocabulary";
-import { refName } from "../concepts/sorting";
+import { refName } from "../concepts/names";
 import { pollPoolQuestionsKey } from "../queryKeys";
 import { Button, EmptyState, QueryError, Segmented, Skeleton } from "../ui";
 import { PickRow } from "./PickRow";

@@ -14,8 +14,8 @@ and #578. Steps (a) and (b) of the transition (addendum §1) are implemented;
 the **cut-over, step (c), is implemented** by the cut-over PR of #599 (#648):
 questions, the pool's filter and Notions tab, the bulk bar, move and copy,
 polls, the drill, the MCP tools, the teacher assistant and the seed read and
-write concepts. Step (d), dropping `question_tags` and `pool_tags`, comes
-later, once no (pool, tag) pair is pending (third addendum §3). The links to
+write concepts. Step (d), dropping `question_tags` and `pool_tags`, is
+implemented by the [fourth addendum](#fourth-addendum-2026-10-10-the-tag-sorting-is-retired). The links to
 courses (§8), aliases, relations, the curation screen and the model's help
 in the picker (#557) are not implemented.
 
@@ -366,3 +366,28 @@ where named.
    alphabetical meaning left) and reads mastery per concept, labelled in the
    reader's language; past reviews are regrouped under today's
    classification (§9).
+
+## Fourth addendum 2026-10-10: the tag sorting is retired
+
+Settled with the product owner (option A of #599, step (d)). It amends
+addendum §1(d), second addendum §1 to §5 and third addendum §3 where named.
+
+1. **Step (d) is done.** `question_tags` and `pool_tags` are dropped
+   (migration 0098). Their only readers were the sorting workflow and the
+   late-pair links of third addendum §3.
+2. **The sorting workflow is retired** (amends second addendum and third
+   addendum §3): the admin's Concepts tab, the routes `/admin/concept-sorting`
+   (list, accept, propose, run), the model pass `concept.sort` and its job,
+   and the audit kinds `concept.sort` and `concept.sort_propose` are removed.
+   Past audit rows keep their action strings. The late pairs of third addendum
+   §3 are no longer listed nor accepted: a tag nobody sorted before the drop
+   is simply gone.
+3. **`concept_tag_sortings` stays**, frozen: its `drop` rows are the stop list
+   of `concept_dropped` (third addendum §4), and its `concept_id` restricts
+   the deletion of a concept a decision maps to. `concept_sort_runs` and the
+   LLM purpose `sort` also stay, unused; dropping them is a later cleanup.
+4. **Concepts that came out of the kind-of-task tags are curated as
+   concepts**, one by one, if any exist: the drop of the 2026-10-08 decision
+   (§1, §11 as amended in #600) applied to the sorting, which this addendum
+   removes, so a stray concept is now merged or deleted through the concept
+   routes, not by a migration.

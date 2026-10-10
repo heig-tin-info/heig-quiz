@@ -1,8 +1,7 @@
 /**
  * The vocabulary of concepts (ADR-081, addendum 2026-10-08): one for the
  * whole instance, owned by the `concept` module, with its links to
- * questions. Nothing reads or writes the links yet (third addendum §1): the
- * tags of the `pool` module stay the source of truth until the cut-over.
+ * questions (the free tags they replaced are gone, step (d)).
  *
  * Uniqueness lives in the indexes, because only the database can enforce it
  * under concurrency (addendum §3): two teachers creating `pointeur` and
@@ -28,14 +27,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import {
-  CONCEPT_SORT_RUN_ERRORS,
-  CONCEPT_SORT_RUN_STATES,
-  CONCEPT_STATUSES,
-  TAG_DROP_REASONS,
-  TAG_SORTING_DECISIONS,
-  type TagSortingProposal,
-} from "@quiz/contracts";
+import { CONCEPT_STATUSES, TAG_DROP_REASONS, TAG_SORTING_DECISIONS } from "@quiz/contracts";
 
 import { users } from "./auth.js";
 import { pools, questions } from "./pool.js";
@@ -83,14 +75,14 @@ export const concepts = pgTable(
 
 /**
  * The sorting of the existing tags (ADR-081, second addendum 2026-10-08 §1):
- * one row per (pool, tag), so a homonym can go to two concepts. It reads
- * `question_tags` and `pool_tags` by join and never writes them; a pool's
- * rows go with the pool.
+ * one row per (pool, tag), so a homonym can go to two concepts. FROZEN since
+ * step (d): the sorting workflow is retired and `question_tags` / `pool_tags`
+ * are dropped, nothing writes this table. The `drop` rows are still read —
+ * they are the stop list of `concept_dropped` (third addendum §4) — and
+ * `concept_id` restricts the deletion of a concept a decision maps to.
  *
- * Two hands write a row: the model's job fills `proposal`; the admin's
- * accept fills the decision columns and keeps the proposal beside it. A row
- * is accepted exactly when it has a decision — there is no separate state —
- * and is otherwise the model's proposal alone. The checks keep it so: a
+ * A row is accepted exactly when it has a decision, and is otherwise the
+ * model's proposal alone. The checks keep it so: a
  * decision is taken at an instant, a row without one holds a proposal and
  * nobody's decision, a `concept` decision names its concept and no reason, a
  * `drop` names its reason and no concept. `concept_id` restricts deletion:
@@ -107,7 +99,7 @@ export const conceptTagSortings = pgTable(
     conceptId: uuid("concept_id").references(() => concepts.id),
     dropReason: text("drop_reason", { enum: TAG_DROP_REASONS }),
     /** The model's raw answer for the pair; null when the admin decided without one. */
-    proposal: jsonb("proposal").$type<TagSortingProposal>(),
+    proposal: jsonb("proposal"),
     decidedBy: uuid("decided_by").references(() => users.id, { onDelete: "set null" }),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -132,7 +124,9 @@ export const conceptTagSortings = pgTable(
 );
 
 /**
- * The model pass that proposes the sorting (second addendum §3): ONE row
+ * The model pass that proposed the sorting (second addendum §3), RETIRED
+ * with the sorting workflow (step (d)): nothing reads or writes it; its table
+ * is dropped by a later migration. It had ONE row
  * (`id = 'default'`), the last run. A run is started by claiming the row:
  * one conditional upsert that succeeds only when no run is `running`, or
  * when the running one's heartbeat went silent — its process died — so a
@@ -144,7 +138,7 @@ export const conceptSortRuns = pgTable(
   "concept_sort_runs",
   {
     id: text("id").primaryKey().default("default"),
-    state: text("state", { enum: CONCEPT_SORT_RUN_STATES }).notNull(),
+    state: text("state").notNull(),
     /** The admin who started it, billed for its calls; null once their account is gone. */
     startedBy: uuid("started_by").references(() => users.id, { onDelete: "set null" }),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
@@ -154,7 +148,7 @@ export const conceptSortRuns = pgTable(
     groupsTotal: integer("groups_total").notNull().default(0),
     /** Batches whose call failed without stopping the run: their pairs kept what they had. */
     batchesFailed: integer("batches_failed").notNull().default(0),
-    error: text("error", { enum: CONCEPT_SORT_RUN_ERRORS }),
+    error: text("error"),
   },
   (t) => [
     check("concept_sort_runs_singleton", sql`${t.id} = 'default'`),

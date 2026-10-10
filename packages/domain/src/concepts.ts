@@ -304,66 +304,11 @@ export function filterIds(resolution: LabelResolution): string[] {
   return [];
 }
 
-/** One tag of one pool, with the number of live questions that wear it. */
-export interface PoolTagCount {
-  poolId: string;
-  tag: string;
-  count: number;
-}
-
-/** The tags of every pool that share one {@link conceptKey}. */
-export interface TagGroup<T extends PoolTagCount> {
-  /** The shared key; the tag itself, lowercased, when its key is empty. */
-  key: string;
-  /** The questions of the whole group: the sum of its pairs' counts. */
-  count: number;
-  /** Most worn first, then by tag, then by pool. */
-  pairs: T[];
-}
-
-/** The key a tag is grouped under: its {@link conceptKey}, or the tag itself when that is empty. */
-export function tagGroupKey(tag: string): string {
-  return conceptKey(tag) || tag.trim().toLowerCase();
-}
-
-/**
- * The deterministic pre-pass of the sorting of the existing tags (ADR-081,
- * second addendum §3): the (pool, tag) pairs of every pool grouped by
- * {@link conceptKey}, so `pointeur` in one pool and `Pointeurs` in another
- * are reviewed, and later proposed to the model, together. A group never
- * decides anything: a homonym (`pile`) still gets one decision per pair.
- * Groups come most worn first, then by key, so the order is stable.
- */
-export function groupTagsByConceptKey<T extends PoolTagCount>(
-  pairs: readonly T[],
-): TagGroup<T>[] {
-  const groups = new Map<string, TagGroup<T>>();
-  for (const pair of pairs) {
-    const key = tagGroupKey(pair.tag);
-    const group = groups.get(key) ?? { key, count: 0, pairs: [] };
-    group.count += pair.count;
-    group.pairs.push(pair);
-    groups.set(key, group);
-  }
-  const byText = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
-  for (const group of groups.values()) {
-    group.pairs.sort(
-      (a, b) =>
-        b.count - a.count || byText(a.tag, b.tag) || byText(a.poolId, b.poolId),
-    );
-  }
-  return [...groups.values()].sort(
-    (a, b) => b.count - a.count || byText(a.key, b.key),
-  );
-}
-
-/** The longest label, and qualifier, a concept takes (the contracts' bound, and the model pass's). */
+/** The longest label, and qualifier, a concept takes (the contracts' bound). */
 export const CONCEPT_LABEL_MAX = 120;
 export const CONCEPT_QUALIFIER_MAX = 120;
 /** The longest description of one language of a concept. */
 export const CONCEPT_DESCRIPTION_MAX = 500;
-/** The longest free-text hint of a sorting proposal (`broader`, `note`). */
-export const CONCEPT_HINT_MAX = 200;
 /** A label must hold a letter or a digit, so that its key is never empty. */
 export const CONCEPT_LABEL_PATTERN = /[\p{L}\p{N}]/u;
 
@@ -373,90 +318,3 @@ export function cleanConceptQualifier(qualifier: string): string {
 }
 
 export type ConceptLanguage = "fr" | "en";
-export const CONCEPT_LANGUAGES: readonly ConceptLanguage[] = ["fr", "en"];
-
-/** One language of a new concept, as asked. */
-export interface NewConceptSideInput {
-  label: string;
-  qualifier?: string | undefined;
-  description?: string | undefined;
-}
-
-/** One language of a new concept, cleaned, with its {@link qualifiedConceptKey}. */
-export interface NewConceptSide {
-  label: string;
-  qualifier: string;
-  description: string;
-  key: string;
-}
-
-/** One concept to create, and the items that asked for it. */
-export interface NewConceptGroup<T> {
-  sides: Record<ConceptLanguage, NewConceptSide>;
-  items: T[];
-}
-
-export type NewConceptGrouping<T> =
-  | { kind: "ok"; concepts: NewConceptGroup<T>[] }
-  /** Two concepts of the batch would share one language's key but not the other's. */
-  | { kind: "clash"; items: T[] };
-
-/**
- * The new concepts a batch of decisions asks for (ADR-081, second addendum
- * §2): requests with the same keys in both languages are ONE concept, with
- * the first request's labels and qualifiers and, per language, the first
- * non-empty description. Two concepts that would share a key in one language
- * only cannot both exist (the key is unique per language): a clash naming
- * the items of every concept involved. Groups keep the order of their first
- * request.
- */
-export function groupNewConcepts<T>(
-  requests: readonly {
-    item: T;
-    fr: NewConceptSideInput;
-    en: NewConceptSideInput;
-  }[],
-): NewConceptGrouping<T> {
-  const byKeys = new Map<string, NewConceptGroup<T>>();
-  for (const request of requests) {
-    const sides = {} as Record<ConceptLanguage, NewConceptSide>;
-    for (const lang of CONCEPT_LANGUAGES) {
-      const label = cleanConceptLabel(request[lang].label);
-      const qualifier = cleanConceptQualifier(request[lang].qualifier ?? "");
-      sides[lang] = {
-        label,
-        qualifier,
-        description: request[lang].description ?? "",
-        key: qualifiedConceptKey(label, qualifier),
-      };
-    }
-    const keys = JSON.stringify([sides.fr.key, sides.en.key]);
-    const group = byKeys.get(keys);
-    if (!group) {
-      byKeys.set(keys, { sides, items: [request.item] });
-      continue;
-    }
-    group.items.push(request.item);
-    for (const lang of CONCEPT_LANGUAGES) {
-      if (!group.sides[lang].description)
-        group.sides[lang].description = sides[lang].description;
-    }
-  }
-  const concepts = [...byKeys.values()];
-  const uses = new Map<string, number>();
-  const use = (lang: ConceptLanguage, key: string) => `${lang}:${key}`;
-  for (const c of concepts) {
-    for (const lang of CONCEPT_LANGUAGES) {
-      const k = use(lang, c.sides[lang].key);
-      uses.set(k, (uses.get(k) ?? 0) + 1);
-    }
-  }
-  const clashing = concepts.filter((c) =>
-    CONCEPT_LANGUAGES.some(
-      (lang) => uses.get(use(lang, c.sides[lang].key))! > 1,
-    ),
-  );
-  return clashing.length > 0
-    ? { kind: "clash", items: clashing.flatMap((c) => c.items) }
-    : { kind: "ok", concepts };
-}

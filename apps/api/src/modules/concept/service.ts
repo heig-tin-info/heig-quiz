@@ -41,8 +41,6 @@ import { droppedKeys, insertProposed, refuseInputs } from "./links.js";
 import { columnsOf, conflictOr, perLang, side, sideOf, toConcept, toConceptRef, toResolvable } from "./row.js";
 
 export { toConcept, toConceptRef } from "./row.js";
-export { acceptTagSortings, listTagSortings, type SortingContext } from "./sorting.js";
-export { lastSortRun, startSortRun } from "./propose.js";
 export {
   byLabel,
   conceptsOf,

@@ -1551,11 +1551,7 @@ const scenes = [
   // ADR-081 (second addendum): the sorting of the existing tags, a group
   // selected with its decision pending, each decision's layer, and the
   // 409 of a new concept whose label is taken.
-  { name: "admin-concepts", role: "admin", path: "/admin?tab=concepts" },
-  { name: "admin-concepts-empty", role: "admin", path: "/admin?tab=concepts&empty=1" },
-  { name: "admin-concepts-error", role: "admin", path: "/admin?tab=concepts&fail=1", settle: 2500 },
   {
-    name: "admin-concepts-selected",
     role: "admin",
     path: "/admin?tab=concepts",
     fold: true,
@@ -1569,14 +1565,12 @@ const scenes = [
   },
   // One pair of a group ticked: the group's box mixed, Accept off and why.
   {
-    name: "admin-concepts-partial",
     role: "admin",
     path: "/admin?tab=concepts",
     fold: true,
     act: (p) => p.getByRole("checkbox", { name: /pointeurs in Info1|pointeurs dans Info1/ }).check(),
   },
   {
-    name: "admin-concepts-map",
     role: "admin",
     path: "/admin?tab=concepts",
     fold: true,
@@ -1587,7 +1581,6 @@ const scenes = [
     },
   },
   {
-    name: "admin-concepts-new",
     role: "admin",
     path: "/admin?tab=concepts",
     fold: true,
@@ -1597,7 +1590,6 @@ const scenes = [
     },
   },
   {
-    name: "admin-concepts-conflict",
     role: "admin",
     path: "/admin?tab=concepts",
     fold: true,
@@ -1613,14 +1605,12 @@ const scenes = [
   // Second addendum §3: the model's proposals, a suggested group ready to
   // accept, and a run of "Propose with AI" under way.
   {
-    name: "admin-concepts-suggested",
     role: "admin",
     path: "/admin?tab=concepts",
     fold: true,
     act: (p) => p.getByRole("checkbox", { name: /tag of pointeur|tags de pointeur/ }).check(),
   },
   {
-    name: "admin-concepts-running",
     role: "admin",
     path: "/admin?tab=concepts",
     fold: true,

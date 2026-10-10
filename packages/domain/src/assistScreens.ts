@@ -20,7 +20,7 @@ import { ASSIST_MAX_WRITES, type AssistPendingWrite } from "./assistWrites.js";
 export const COURSE_TABS = ["classrooms", "templates", "pools", "members", "settings"] as const;
 export type CourseTab = (typeof COURSE_TABS)[number];
 /** The Administration page's tabs (`?tab=`). */
-export const ADMIN_TABS = ["people", "system", "tasks", "llm", "concepts"] as const;
+export const ADMIN_TABS = ["people", "system", "tasks", "llm"] as const;
 export type AdminTab = (typeof ADMIN_TABS)[number];
 /** The classroom's sections that live in `?tab=`; the others are routes of their own. */
 export const CLASSROOM_QUERY_TABS = ["evaluations", "roster", "drill"] as const;

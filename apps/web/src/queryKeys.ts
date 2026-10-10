@@ -44,14 +44,6 @@ export const adminTasksKey = [...adminTeachersKey, "tasks"] as const;
  */
 export const adminLlmKey = [...adminTeachersKey, "llm"] as const;
 export const adminLlmUsageKey = [...adminTeachersKey, "llm-usage"] as const;
-/**
- * The sorting of the existing tags (ADR-081, second addendum): every (pool,
- * tag) pair and its decision. Under `adminTeachersKey`, so another
- * administrator's `admin` hint refreshes it.
- */
-export const adminConceptSortingKey = [...adminTeachersKey, "concept-sorting"] as const;
-/** The last run of the model pass that proposes the sorting (second addendum §3), polled while it runs. */
-export const adminConceptSortRunKey = [...adminTeachersKey, "concept-sort-run"] as const;
 /** The instance's vocabulary of concepts, merged ones left out (ADR-081). */
 export const conceptsKey = ["concepts"] as const;
 /** The kiosk station registry (ADR-051 §5). */
