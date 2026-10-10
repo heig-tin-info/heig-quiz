@@ -104,6 +104,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-079 — The conditions of an evaluation: announced by the teacher, imposed by the platform](ADR-079-conditions-de-l-evaluation.md)
 - [ADR-084 — A text before an item: the intro of an evaluation item](ADR-084-texte-avant-un-item.md)
 - [ADR-085 — Confidence in the drill: stated beside the review, never part of a score](ADR-085-confiance-dans-l-entrainement.md)
+- [ADR-098 — Student concept mastery: a level per course concept, from reviewed cards only](ADR-098-maitrise-des-notions-par-l-etudiant.md)
 - [ADR-086 — Scheduled or Live: who drives the clock, a safety deadline, and a limit cut at the window's end](ADR-086-planifiee-ou-en-direct.md)
 - [ADR-088 — The exam integrity journal: leaving the page and pasting from outside, recorded lightly, never proof](ADR-088-journal-d-integrite.md)
 - [ADR-091 — Partial retake of an exercise](ADR-091-reprise-partielle-d-un-exercice.md)
